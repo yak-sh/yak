@@ -7,7 +7,7 @@
 // shot is loosed then at the creature it was aimed at, and lands when it gets
 // there (play.ts `FLIGHT`). An ability takes what its shape covers (`takenBy`).
 import { aimOf as chooseAim, takenBy as coverTargets } from '@yaks/game'
-import type { Point } from './aim.ts'
+import type { Point } from '@yaks/stage/aim'
 import type { Ability } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { sizeOf } from './figure.ts'

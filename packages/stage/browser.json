@@ -1,0 +1,50 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "entries": [
+    ".",
+    "./pace",
+    "./aim",
+    "./cam",
+    "./render",
+    "./soft",
+    "./parts",
+    "./halo",
+    "./flames",
+    "./instances",
+    "./light",
+    "./puppet",
+    "./ears",
+    "./bus",
+    "./sound",
+    "./samples",
+    "./fx",
+    "./air"
+  ],
+  "imports": {
+    "@yaks/stage": "./mod.ts",
+    "@yaks/stage/pace": "./pace.ts",
+    "@yaks/stage/aim": "./aim.ts",
+    "@yaks/stage/cam": "./cam.ts",
+    "@yaks/stage/render": "./render.ts",
+    "@yaks/stage/soft": "./soft.ts",
+    "@yaks/stage/parts": "./parts.ts",
+    "@yaks/stage/halo": "./halo.ts",
+    "@yaks/stage/flames": "./flames.ts",
+    "@yaks/stage/instances": "./instances.ts",
+    "@yaks/stage/light": "./light.ts",
+    "@yaks/stage/puppet": "./puppet.ts",
+    "@yaks/stage/ears": "./ears.ts",
+    "@yaks/stage/bus": "./bus.ts",
+    "@yaks/stage/sound": "./sound.ts",
+    "@yaks/stage/samples": "./samples.ts",
+    "@yaks/stage/fx": "./fx.ts",
+    "@yaks/stage/air": "./air.ts",
+    "three": "npm:three@^0.186.1"
+  }
+}

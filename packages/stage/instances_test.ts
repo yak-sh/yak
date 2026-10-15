@@ -6,21 +6,24 @@ import { assertEquals } from '@std/assert'
 import { cuboids } from '@yaks/voxel/boxes'
 import { instances } from './instances.ts'
 import { out, pack } from '@yaks/voxel/mesh'
-import { seedDesigns } from './designs_fixture.ts'
-
-seedDesigns()
 
 test('building template is shared between chunks and disposed after both leave', async () => {
   let scene = new THREE.Scene(), material = new THREE.MeshBasicMaterial()
   let calls = 0
-  let shared = instances(scene, material, () => {
-    calls++
-    return Promise.resolve(
-      pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])),
-    )
-  })
+  let shared = instances(
+    scene,
+    material,
+    () => {
+      calls++
+      return Promise.resolve(
+        pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])),
+      )
+    },
+    (kind, seed, turn, near) => `${kind}:${seed}:${turn}:${near}`,
+    (kind) => kind.split('#')[0],
+  )
   let placed = (x: number) => [{
-    kind: 'smithy.plaster',
+    kind: 'wall#plaster',
     seed: 0,
     turn: 0,
     at: [x, 5, 64] as [number, number, number],
@@ -43,6 +46,13 @@ test('building template is shared between chunks and disposed after both leave',
   shared.drop('b')
   assertEquals(scene.children.length, 0)
   assertEquals(disposed, 1)
+  shared.invalidate(new Set(['wall']))
+  let c = shared.prepare(placed(96), true)
+  await c.ready
+  c.draw('c')
+  c.release()
+  assertEquals(calls, 2)
+  shared.drop('c')
   shared.dispose()
   material.dispose()
 })

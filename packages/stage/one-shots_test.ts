@@ -1,7 +1,7 @@
 // One-shots start with the event and replace repeats from the same source.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { oneShots, recorded, type Voice } from './voices.ts'
+import { oneShots, recorded, type Voice } from './samples.ts'
 
 let clip = (...channels: number[][]) =>
   ({

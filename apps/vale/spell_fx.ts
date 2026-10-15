@@ -5,7 +5,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { SpellElement } from './abilities.ts'
-import type { bits } from './fx.ts'
+import type { bits } from '@yaks/stage/fx'
 
 type Pool = Pick<ReturnType<typeof bits>, 'emit'>
 

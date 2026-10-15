@@ -3,7 +3,7 @@ import { test } from '@yaks/testing'
 import { seedBuildings } from './buildings_fixture.ts'
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import * as THREE from 'three'
-import { aim } from './cam.ts'
+import { aim } from '@yaks/stage/cam'
 import { chunk } from './chunks.ts'
 import { fights } from '@yaks/voxel/mesh'
 import { spotOf } from './regions.ts'
@@ -88,7 +88,9 @@ test('the cave has matching cold and grown layers and a clear camera', () => {
     lift: 0,
   }
   let camera = new THREE.PerspectiveCamera()
-  aim(cam, camera, target, v, 1)
+  aim(cam, camera, target, (p) =>
+    p.y < floorUnder(v, p.x, p.y, p.z) + 0.3 ||
+    p.y > roofOver(v, p.x, target.y, p.z) - 0.3, 1)
   assert(
     camera.position.y <
       roofOver(v, camera.position.x, target.y, camera.position.z),

@@ -2,7 +2,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import * as THREE from 'three'
-import { depth, moveLook, NEAR, steer } from './cam.ts'
+import { depth, moveLook, NEAR, steer } from '@yaks/stage/cam'
 import type { Intent } from './input.ts'
 import { stride } from './stride.ts'
 import { flat } from './terrain.ts'

@@ -3,7 +3,7 @@
 // (`read`) and gets one answer: which way to move or turn, what was pressed
 // since the last frame, and how far the view was dragged.
 
-import { cursor, type Point } from './aim.ts'
+import { cursor, type Point } from '@yaks/stage/aim'
 
 export type Intent = {
   /** World point beneath the mouse, filled by the stage before simulation. */

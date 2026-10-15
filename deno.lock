@@ -2372,6 +2372,11 @@
           "jsr:@std/path@1"
         ]
       },
+      "packages/stage": {
+        "dependencies": [
+          "npm:three@~0.186.1"
+        ]
+      },
       "packages/sync": {
         "dependencies": [
           "jsr:@std/assert@1"

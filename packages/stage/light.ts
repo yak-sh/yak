@@ -2,11 +2,12 @@
 // baked once per shape and turn into the unused high bits of its edge flags;
 // soft.ts brings it up at dusk. Its facing keeps light inside the walls and
 // under the ceiling, while the distance makes each source brightest nearby.
-import type { Glow } from './kit.ts'
 import { type Out, type Vec } from '@yaks/voxel/mesh'
 
+export type LightSource = { at: Vec; size: number }
+
 /** How much of the nearby lamps a face sees, before the day's light changes. */
-export let warmth = (at: Vec, normal: Vec, glows: Glow[]) => {
+export let warmth = (at: Vec, normal: Vec, glows: LightSource[]): number => {
   let light = 0
   for (let g of glows) {
     let dx = g.at[0] - at[0], dy = g.at[1] - at[1], dz = g.at[2] - at[2]
@@ -36,7 +37,7 @@ export let warmth = (at: Vec, normal: Vec, glows: Glow[]) => {
  */
 
 /** Store a building's warm light in each vertex's edge-flag high nibble. */
-export let light = (mesh: Out, glows: Glow[]) => {
+export let light = (mesh: Out, glows: LightSource[]): Out => {
   for (let i = 0; i < mesh.pos.length / 3; i++) {
     let p = i * 3, n = i * 4
     let at: Vec = [mesh.pos[p], mesh.pos[p + 1], mesh.pos[p + 2]]

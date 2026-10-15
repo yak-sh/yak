@@ -544,6 +544,9 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/game](./game)** — deterministic game rules over values: randomness,
   progression, paths, combat, timed effects and peer motion. Safe in a worker;
   each game owns its graph and world.
+- **[@yaks/stage](./stage)** — Three.js presentation over supplied values:
+  renderer and frame loop, voxel materials and rigs, effects, cameras, picking
+  and positional sound; no graph or game-world dependencies.
 - **[@yaks/voxel](./voxel)** — voxel and box meshing into packed quads,
   distance-based chunk detail and cached heightfield charts. Plain values, no
   renderer or graph, safe in a worker.

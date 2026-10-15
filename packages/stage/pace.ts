@@ -10,7 +10,7 @@
  * assertEquals([0, 17, 34, 50, 67].filter((t) => slower(t, 30)), [0, 34, 67])
  * ```
  */
-export let pace = () => {
+export let pace = (): (now: number, rate: number) => boolean => {
   let next = 0
   return (now: number, rate: number): boolean => {
     if (now + 1 < next) return false

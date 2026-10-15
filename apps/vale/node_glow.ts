@@ -2,8 +2,8 @@
 // texture and a capped number of sprites keep the effect bounded on phones.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { bits } from './fx.ts'
-import { halo } from './halo.ts'
+import type { bits } from '@yaks/stage/fx'
+import { halo } from '@yaks/stage/halo'
 import { GRADES, type Rarity } from './rarity.ts'
 import { hashOf } from '@yaks/game'
 import type { Seen } from './work.ts'

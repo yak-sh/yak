@@ -1,0 +1,35 @@
+{
+  "name": "@yaks/stage",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./pace": "./pace.ts",
+    "./aim": "./aim.ts",
+    "./cam": "./cam.ts",
+    "./render": "./render.ts",
+    "./soft": "./soft.ts",
+    "./parts": "./parts.ts",
+    "./halo": "./halo.ts",
+    "./flames": "./flames.ts",
+    "./instances": "./instances.ts",
+    "./light": "./light.ts",
+    "./puppet": "./puppet.ts",
+    "./ears": "./ears.ts",
+    "./bus": "./bus.ts",
+    "./sound": "./sound.ts",
+    "./samples": "./samples.ts",
+    "./fx": "./fx.ts",
+    "./air": "./air.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Three.js scenes, voxel materials, animated box rigs, effects, orbit cameras, picking and positional sound over caller-supplied values.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  },
+  "imports": {
+    "three": "npm:three@^0.186.1"
+  }
+}

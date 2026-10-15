@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { fireLevel } from './bus.ts'
+import { duckLevel as fireLevel } from '@yaks/stage/bus'
 
 test('speech ducks fire alone, and restores it at rest', () => {
   assertEquals(fireLevel(false), 1)

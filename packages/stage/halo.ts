@@ -1,5 +1,4 @@
-// One soft radial texture for the vale's lamps and the magic carried by a
-// hero. The scene makes coloured, additive sprites from this shared map.
+// One soft radial texture for lamps and other glowing objects. The scene makes coloured, additive sprites from this shared map.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 

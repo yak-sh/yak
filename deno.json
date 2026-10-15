@@ -197,6 +197,7 @@
     "./packages/testing",
     "./packages/fp",
     "./packages/voxel",
+    "./packages/stage",
     "./packages/logic",
     "./packages/tracker",
     "./packages/timing",

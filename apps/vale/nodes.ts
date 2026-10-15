@@ -12,7 +12,7 @@
 // gives, or a station makes, flies from it to the hero.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { bits, overlay } from './fx.ts'
+import type { bits, overlay } from '@yaks/stage/fx'
 import { STATIONS } from './craft.ts'
 import { chipOf, GATHER, type Look } from './gather.ts'
 import { type Glyph, glyphText } from './glyphs.ts'
@@ -37,7 +37,7 @@ import { model } from './props.ts'
 import { GRADES, tint } from './rarity.ts'
 import { naturalEid, nodeRarity } from './gather.ts'
 import { hashOf, noise, rand, stream } from '@yaks/game'
-import { geometry, sight, soft } from './soft.ts'
+import { geometry, sight, soft } from '@yaks/stage/soft'
 import { among, off, type Stood } from './stand.ts'
 import { CHUNK, chunkOf, type Vale } from './terrain.ts'
 import { TRADES } from './trades.ts'

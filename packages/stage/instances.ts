@@ -4,18 +4,31 @@
 // cannot dispose geometry another one is waiting to use.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Chunk } from './chunks.ts'
 import type { Packed, Vec } from '@yaks/voxel/mesh'
-import { modelKey } from './props.ts'
 import { geometry } from './soft.ts'
 
-type Place = Chunk['buildings'][number]
-type Template = (
+export type Place = { kind: string; seed: number; turn: number; at: Vec }
+export type Template = (
   kind: string,
   seed: number,
   turn: number,
   near: boolean,
 ) => Promise<Packed>
+
+/** A prepared placement set retains its geometry until released, even before drawing. */
+export type Prepared = {
+  ready: Promise<void[]>
+  draw: (key: string) => void
+  release: () => void
+}
+
+/** The repeated geometry currently held by chunks in a scene. */
+export type Instances = {
+  prepare: (placed: Place[], near: boolean) => Prepared
+  drop: (key: string) => void
+  invalidate: (kinds: Set<string>) => void
+  dispose: () => void
+}
 
 type Batch = {
   id: string
@@ -36,14 +49,16 @@ export let instances = (
   scene: THREE.Scene,
   material: THREE.Material,
   template: Template,
-) => {
+  modelKey: (kind: string, seed: number, turn: number, near: boolean) => string,
+  family: (kind: string) => string,
+): Instances => {
   let batches = new Map<string, Batch>()
   let chunks = new Map<string, string[]>()
   let versions = new Map<string, number>()
   let gone = false
   let key = (p: Place, near: boolean) =>
     `${modelKey(p.kind, p.seed, p.turn, near)}@${
-      versions.get(p.kind.split('.')[0]) ?? 0
+      versions.get(family(p.kind)) ?? 0
     }`
   let forget = (b: Batch) => {
     if (b.pending || b.places.size || batches.get(b.id) != b) return

@@ -1,38 +1,33 @@
-// One volume control per kind of sound. Its setting is kept in this browser;
-// the gain belongs in the audio graph, so a change reaches sounds in flight.
+// One volume control per kind of sound. Its owner supplies the setting and
+// persistence; the gain belongs in the audio graph so changes reach sounds in flight.
 let clamp = (value: number, fallback: number) =>
   Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback
 
-/** Relative fire level while speech is actually present. */
-export let fireLevel = (voice: boolean) => voice ? 0.22 : 1
+/** One volume control and its audio-graph gain. */
+export interface Bus {
+  readonly level: number
+  set(value: number): void
+  into(ctx: AudioContext, out: AudioNode): GainNode
+}
 
 export let bus = (
-  name: string,
   fallback: number,
-  { storage, boost = 1 }: {
-    storage?: Pick<Storage, 'getItem' | 'setItem'>
+  { save, boost = 1 }: {
+    save?: (level: number) => void
     boost?: number
   } = {},
-) => {
-  let key = `mossvale.${name}.level`
+): Bus => {
   let level = fallback
   let gain: GainNode | null = null
   // Hearing compresses amplitude: spread audible changes across the slider.
   let amplitude = () => boost * level ** 3
-  try {
-    let saved = (storage ?? localStorage).getItem(key)
-    if (saved != null) level = clamp(Number(saved), fallback)
-  } catch { /* A page without storage keeps its setting for this visit. */ }
   return {
     get level() {
       return level
     },
     set: (value: number) => {
       level = clamp(value, fallback)
-      try {
-        let store = storage ?? localStorage
-        store.setItem(key, String(level))
-      } catch { /* A page without storage keeps its setting for this visit. */ }
+      save?.(level)
       if (gain) {
         let at = gain.context.currentTime
         gain.gain.cancelScheduledValues(at)
@@ -50,3 +45,7 @@ export let bus = (
     },
   }
 }
+
+/** A relative level while a higher-priority channel is active. */
+export let duckLevel = (active: boolean, level = 0.22): number =>
+  active ? level : 1

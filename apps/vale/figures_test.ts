@@ -2,12 +2,13 @@
 // `fights`): not within a part, and not between two parts standing square to
 // each other as it is built. Every creature, the people who give quests, and
 // heroes in each weight of armour with each weapon.
+import { puppet } from '@yaks/stage/puppet'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { HANDLES, WEIGHTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
-import { FIGURES, puppet } from './figure.ts'
+import { FIGURES } from './figure.ts'
 import { BUILD, CHILD, hero, person, type Puppet } from './figures.ts'
 import { fights, type Out, out, pack, place } from '@yaks/voxel/mesh'
 import { seedDesigns } from './designs_fixture.ts'

@@ -1,6 +1,6 @@
 // One mouse-weighted interaction owns both its prompt and the E action.
 // A click holds a reachable target; without a pointer, work keeps priority.
-import type { Point } from './aim.ts'
+import type { Point } from '@yaks/stage/aim'
 import type { Frame } from './play.ts'
 import type { Job } from './work.ts'
 

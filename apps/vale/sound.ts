@@ -15,47 +15,17 @@
 // require, and while muted.
 // @ts-types="npm:@types/three@^0.186.0"
 import type * as THREE from 'three'
-import {
-  type Ear,
-  ear,
-  FALLOFF,
-  type Falloff,
-  hear,
-  NEAR,
-  QUIET,
-} from './ears.ts'
-import { bus, fireLevel } from './bus.ts'
+import { type Ear, ear, NEAR } from '@yaks/stage/ears'
+import { bus, duckLevel as fireLevel } from '@yaks/stage/bus'
+import { type From, type Keep, sources as sourceBank } from '@yaks/stage/sound'
+import { looping, recorded, type Voice } from '@yaks/stage/samples'
 import { ambience, type Noise, noises, where } from './noises.ts'
 import { music } from './music.ts'
-import { load, loaded, looping, watch } from './samples.ts'
+import { load, loaded, watch } from './samples.ts'
 import type { Frame, Vec3 } from './play.ts'
 import type { Vale } from './terrain.ts'
 import * as voices from './voices.ts'
-import type { Voice } from './voices.ts'
 
-/** Where a sound is made: at the hero or creature with this eid (or a kept
- * sound's id), at a point, or nowhere, straight to the ears. */
-export type From = string | Vec3 | null
-
-/** A sound that keeps going into `into` once made, until it is stopped by
- * what this returns. */
-export type Keep = (ctx: AudioContext, into: AudioNode) => () => void
-
-// A panner where something is, while it sounds, and `into` it, the loudness
-// its falloff has up close: `until` it has sounded its last; `fixed` at a
-// point, or following what its id names; `end` stops the sound kept there.
-type Source = {
-  id: string
-  pan: PannerNode
-  into: AudioNode
-  until: number
-  fixed: boolean
-  shots: ReturnType<typeof voices.oneShots>
-  end?: () => void
-}
-
-// How long a source is kept after its last sound: HRTF rings a moment.
-let TAIL = 0.5
 // How loud each sound a level keeps making is at its source, and how it
 // falls away (ears.ts): fire and water fade quickly, so neither carries
 // across the buildings around a village hearth.
@@ -73,17 +43,34 @@ let FROG = { every: 7, within: 5 }
 let ctx: AudioContext | null = null
 // The last stop before the speakers: all three buses play into it.
 let out: AudioNode | null = null
+// Existing player settings stay app-owned until T-64325 moves them to the store.
+let volume = (name: string, fallback: number, boost = 1) => {
+  let key = `mossvale.${name}.level`, value = fallback
+  try {
+    let saved = localStorage.getItem(key)
+    if (saved != null && Number.isFinite(Number(saved))) {
+      value = Math.max(0, Math.min(1, Number(saved)))
+    }
+  } catch { /* This visit still has a volume control. */ }
+  return bus(value, {
+    boost,
+    save: (level) => {
+      try {
+        localStorage.setItem(key, String(level))
+      } catch { /* This visit only. */ }
+    },
+  })
+}
 let levels = {
-  music: bus('music', 0.6),
-  effects: bus('effects', 1),
-  voice: bus('voice', 1, { boost: 2 }),
+  music: volume('music', 0.6),
+  effects: volume('effects', 1),
+  voice: volume('voice', 1, 2),
 }
 type Channel = 'effects' | 'voice'
 let destination: Record<Channel, AudioNode | null> = {
   effects: null,
   voice: null,
 }
-let sourceKey = (id: string, channel: Channel) => `${channel}/${id}`
 let loops: Record<keyof typeof LOOP, AudioBuffer> | null = null
 let fireGains = new Set<GainNode>()
 let voiceDucking = false
@@ -94,9 +81,7 @@ try {
 
 let ears: Ear | null = null
 let spots = new Map<string, Vec3>()
-let sources = new Map<string, Source>()
-let direct: ReturnType<typeof voices.oneShots> | null = null
-let points = 0
+let sources: ReturnType<typeof sourceBank<Channel>> | null = null
 let heard = noises()
 
 // Where the last stop plays: the context's own speakers, or a node the page
@@ -119,7 +104,10 @@ let wake = () => {
     out = limit
     destination.effects = levels.effects.into(ctx, limit)
     destination.voice = levels.voice.into(ctx, limit)
-    direct = voices.oneShots(destination.effects!)
+    sources = sourceBank<Channel>(ctx, {
+      effects: destination.effects!,
+      voice: destination.voice!,
+    }, 'effects')
     speakers = ctx.destination
     loops = {
       fire: voices.fire(ctx),
@@ -143,69 +131,13 @@ document.addEventListener('visibilitychange', () => {
   else ctx.resume()
 })
 
-// A source or the ears, put where they are this frame. Set outright, not
-// automated: a frame moves them a few centimetres, and a panner whose
-// position is automated works its sound out anew at every sample.
-let put = (ps: AudioParam[], vs: number[]) =>
-  ps.forEach((p, i) => p.value = vs[i])
-let move = (pan: PannerNode, at: Vec3) =>
-  put([pan.positionX, pan.positionY, pan.positionZ], at)
-let listenAt = (l: AudioListener, e: Ear) => {
-  if (!l.positionX) {
-    // Firefox turns its listener only the old way.
-    l.setPosition(...e.at)
-    l.setOrientation(...e.forward, ...e.up)
-    return
-  }
-  put([
-    l.positionX,
-    l.positionY,
-    l.positionZ,
-    l.forwardX,
-    l.forwardY,
-    l.forwardZ,
-    l.upX,
-    l.upY,
-    l.upZ,
-  ], [...e.at, ...e.forward, ...e.up])
-}
-
-let panner = (
-  id: string,
-  at: Vec3,
-  fixed: boolean,
-  falloff: Falloff = FALLOFF,
-  channel: Channel = 'effects',
-) => {
-  let pan = new PannerNode(ctx!, falloff.pan)
-  let into = new GainNode(ctx!, { gain: falloff.near })
-  move(pan, at)
-  into.connect(pan).connect(destination[channel]!)
-  let s: Source = {
-    id,
-    pan,
-    into,
-    until: 0,
-    fixed,
-    shots: voices.oneShots(into),
-  }
-  sources.set(sourceKey(id, channel), s)
-  return s
-}
-
-/** Make `v` at `from`: not at all while muted or asleep, or when it would be
- * too faint to hear. */
-let make = (from: From, v: Voice, key?: string) => {
+let make = (from: From, voice: Voice, key?: string) => {
   if (!ctx || !out || muted) return
-  if (from == null) return direct!.play(v, key)
-  let id = typeof from == 'string' ? from : `@${points++}`
-  let at = typeof from == 'string' ? spots.get(from) : from
-  if (!at || (ears && hear(ears, at).gain * v.loud < QUIET)) return
-  let s = sources.get(sourceKey(id, 'effects')) ??
-    panner(id, at, typeof from != 'string')
-  s.until = Math.max(s.until, ctx.currentTime + v.dur + TAIL)
-  s.shots.play(v, key)
+  sources?.make(from, voice, key)
 }
+
+let keep = (...args: Parameters<NonNullable<typeof sources>['keep']>) =>
+  sources?.keep(...args) ?? (() => {})
 
 // A decoded sample plays through the same source, falloff and effects bus as
 // its procedural voice. Until it arrives, the procedural voice still sounds.
@@ -217,36 +149,7 @@ let sampled = (name: string, fallback: Voice, gain: number): Voice => {
     void load(ctx, name)
     return pending
   }
-  return voices.recorded(b, fallback, gain, name)
-}
-
-// A kept sound ends: it fades, and its source goes once it has.
-let end = (s: Source) => {
-  s.end?.()
-  s.end = undefined
-  s.until = ctx!.currentTime + 1 + TAIL
-}
-
-/** Keep a sound going at `id`, where the frames put it, falling away as
- * `falloff` says, until it is let go by what this returns, or what it is at
- * is gone. */
-let keep = (
-  id: string,
-  sound: Keep,
-  falloff: Falloff = FALLOFF,
-  channel: Channel = 'effects',
-) => {
-  let at = spots.get(id)
-  if (!ctx || !at) return () => {}
-  let s = sources.get(sourceKey(id, channel)) ??
-    panner(id, at, false, falloff, channel)
-  if (s.end) end(s)
-  let stop = sound(ctx, s.into)
-  s.end = stop
-  s.until = Infinity
-  return () => {
-    if (s.end == stop) end(s)
-  }
+  return recorded(b, fallback, gain, name)
 }
 
 // A level's own sound, looping, faded in, and faded out when it ends.
@@ -402,25 +305,12 @@ export let sound = {
     spots = f && me ? where(f, me) : new Map()
     for (let [id, at] of partySpots) if (!spots.has(id)) spots.set(id, at)
     ears = ear(camera, me ? spots.get(me) : undefined)
-    listenAt(ctx.listener, ears)
     music.at(ears.at)
     let around = ambience(v, ears.at)
     for (let a of around) spots.set(a.id, a.at)
-    direct?.prune()
-    let t = ctx.currentTime
-    for (let [key, s] of sources) {
-      s.shots.prune()
-      let at = s.fixed ? undefined : spots.get(s.id)
-      if (at) move(s.pan, at)
-      else if (s.end) end(s)
-      if (t > s.until) {
-        s.into.disconnect()
-        s.pan.disconnect()
-        sources.delete(key)
-      }
-    }
+    sources?.listen(ears, spots)
     for (let a of around) {
-      if (!sources.get(sourceKey(a.id, 'effects'))?.end) {
+      if (!sources?.playing(a.id)) {
         keep(a.id, loop(a.kind), LOOP[a.kind].falloff)
       }
     }

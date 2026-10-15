@@ -6,23 +6,7 @@
 // `high` metres up), and how they move: flung out at `speed`, `up` at the
 // start (down if less than nothing), pulled down by `fall`, gone after `life`
 // seconds. None of it is state.
-// @ts-types="npm:@types/three@^0.186.0"
-import * as THREE from 'three'
-import { bits } from './fx.ts'
-
-type Air = {
-  color: number
-  glow?: boolean
-  rate: number
-  spread: number
-  low: number
-  high: number
-  speed: number
-  up: number
-  fall: number
-  life: number
-  size: number
-}
+import type { Air } from '@yaks/stage/air'
 
 let air = (
   color: number,
@@ -200,45 +184,4 @@ export let AIRS: Record<string, Air> = {
     life: 1.5,
     size: 0.05,
   }),
-}
-
-/** The air over `scene`: `tick` sends what drifts in the air named, if
- * any, round `at`, and lets what drifts in any other it sent settle, so a
- * hero walking from one region to the next sees the one air give way to the
- * other. */
-export let airOf = (scene: THREE.Scene) => {
-  let blowing = new Map<
-    string,
-    { pool: ReturnType<typeof bits>; owed: number }
-  >()
-  let p = new THREE.Vector3()
-  return {
-    tick: (at: THREE.Vector3, dt: number, name?: string) => {
-      let a = name ? AIRS[name] : undefined
-      if (a && name && !blowing.has(name)) {
-        let pool = bits(scene, !a.glow, Math.ceil(a.rate * a.life * 1.2))
-        blowing.set(name, { pool, owed: 0 })
-      }
-      for (let [n, b] of blowing) {
-        let air = AIRS[n]
-        if (n == name) b.owed += air.rate * Math.min(dt, 0.1)
-        for (; b.owed >= 1; b.owed--) {
-          let r = air.spread * Math.sqrt(Math.random()), t = Math.random() * 7
-          p.set(
-            at.x + Math.cos(t) * r,
-            at.y + air.low + Math.random() * (air.high - air.low),
-            at.z + Math.sin(t) * r,
-          )
-          b.pool.emit(p, air.color, 1, {
-            speed: air.speed,
-            up: air.up,
-            fall: air.fall,
-            life: air.life,
-            size: air.size,
-          })
-        }
-        b.pool.tick(dt)
-      }
-    },
-  }
 }

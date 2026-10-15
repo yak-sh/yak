@@ -1,4 +1,4 @@
-// The joinery every figure is built from (figures.ts, figure.ts): a part is
+// The joinery a rig is built from: a part is
 // a few soft boxes (boxes.ts) turning about a pivot, and a figure is parts
 // hung on parts. A limb is two parts bending at a knee or an elbow (`limb`),
 // its halves overlapping at the joint so a bend opens no gap.
@@ -83,7 +83,10 @@ let square = (from: THREE.Object3D, to: THREE.Object3D) => {
  * assertAlmostEquals(Math.max(...xs), 0.1 + STEP, 1e-9)
  * ```
  */
-export let knit = (root: THREE.Object3D, material: THREE.Material) => {
+export let knit = (
+  root: THREE.Object3D,
+  material: THREE.Material,
+): THREE.SkinnedMesh<THREE.BufferGeometry, THREE.Material> => {
   let bones: THREE.Bone[] = []
   root.traverse((o) => {
     if (o instanceof THREE.Bone && o.userData.boxes) bones.push(o)
@@ -158,13 +161,14 @@ export let fit = (boxes: Box[], k: Vec): Box[] =>
   ])
 
 /** A colour, darker (`k` under 1) or lighter. */
-export let shade = (hex: number, k: number) => {
+export let shade = (hex: number, k: number): number => {
   let c = new THREE.Color(hex)
   c.multiplyScalar(k)
   return c.getHex()
 }
 
-export let ease = (t: number) => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2
+export let ease = (t: number): number =>
+  t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2
 
 /** How far into a blow: rising to 1 at `peak` of the swing, and back.
  *
@@ -173,7 +177,7 @@ export let ease = (t: number) => t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2
  * assertEquals([lunge(0), lunge(0.4), lunge(1)], [0, 1, 0])
  * ```
  */
-export let lunge = (swing: number, peak = 0.4) =>
+export let lunge = (swing: number, peak = 0.4): number =>
   swing < peak ? ease(swing / peak) : 1 - ease((swing - peak) / (1 - peak))
 
 /** A leg's step in a walk, `s` and `c` the sine and cosine of how far
@@ -190,7 +194,7 @@ export let lunge = (swing: number, peak = 0.4) =>
  * assertEquals(leg[1].rotation.x, 0)
  * ```
  */
-export let stride = (leg: Leg, s: number, c: number, amp: number) => {
+export let stride = (leg: Leg, s: number, c: number, amp: number): void => {
   let [hip, knee] = Array.isArray(leg) ? leg : [leg]
   hip.rotation.x = s * amp
   if (knee) knee.rotation.x = Math.max(0, -c) * amp * 1.5

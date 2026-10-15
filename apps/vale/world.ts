@@ -13,14 +13,16 @@
 // finest chunk was grown from is kept in the page's vale for its walkers.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { airOf } from './air.ts'
+import { AIRS } from './air.ts'
+import { airOf } from '@yaks/stage/air'
+import { modelKey } from './props.ts'
 import type { Glow } from './buildings/kit.ts'
 import type { Chunk } from './chunks.ts'
 import { doors, type Hung } from './doors.ts'
-import { type Fire, flames } from './flames.ts'
+import { type Fire, flames } from '@yaks/stage/flames'
 import { paletteOf } from './ground.ts'
-import { halo as glowTexture } from './halo.ts'
-import { instances } from './instances.ts'
+import { halo as glowTexture } from '@yaks/stage/halo'
+import { instances } from '@yaks/stage/instances'
 import { levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
 import type { ChunkProps } from './nature_mesh.ts'
 import type { Packed, Vec } from '@yaks/voxel/mesh'
@@ -28,7 +30,7 @@ import { KINDS } from './props.ts'
 import { lerp, smooth } from '@yaks/game'
 import { blend } from './regions.ts'
 import { type Building, cutaway } from './solid.ts'
-import { cut, CUTS, geometry, night, sight, soft } from './soft.ts'
+import { cut, CUTS, geometry, night, sight, soft } from '@yaks/stage/soft'
 import { day } from './day.ts'
 import { COARSER, type Want, wanted } from '@yaks/voxel/stream'
 import {
@@ -243,7 +245,13 @@ export let world = (v: Vale, mesh: Mesher): World => {
     pending: number
   }
   let makeRender = (): Render => ({
-    buildings: instances(scene, ground, mesh.template),
+    buildings: instances(
+      scene,
+      ground,
+      mesh.template,
+      modelKey,
+      (kind) => kind.split('.')[0],
+    ),
     hanging: doors(scene, ground),
     used: 0,
     pending: 0,
@@ -591,7 +599,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   // their baked light, so this does not grow with the village.
   let nearby = new THREE.PointLight(0xffb45c, 0, 7, 1.8)
   scene.add(nearby)
-  let drift = airOf(scene)
+  let drift = airOf(scene, AIRS)
   // How far each building's roof and upper floors have faded, from the
   // height they fade over.
   let fades = new Map<Building, { from: number; k: number }>()

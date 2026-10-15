@@ -12,13 +12,14 @@
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
+import { puppet } from '@yaks/stage/puppet'
 import { labels } from '@yaks/game'
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { ABILITIES } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { BEASTS } from './beasts.ts'
-import { type Figure, FIGURES, puppet } from './figure.ts'
+import { type Figure, FIGURES } from './figure.ts'
 import { skull } from './danger.ts'
 import {
   type Act,
@@ -29,8 +30,8 @@ import {
   person,
   type Puppet,
 } from './figures.ts'
-import type { bits, overlay } from './fx.ts'
-import { halo } from './halo.ts'
+import type { bits, overlay } from '@yaks/stage/fx'
+import { halo } from '@yaks/stage/halo'
 import { focus, type Gaze, gaze, neck } from './gaze.ts'
 import { type Hand, handOf, kitOf } from './gear.ts'
 import { ITEMS, itemVersion, meshed, onGround, type Thing } from './items.ts'
@@ -41,7 +42,7 @@ import type { Drop, Frame } from './play.ts'
 import { GRADES, type Rarity } from './rarity.ts'
 import { follow, type Remote } from '@yaks/game'
 import { floorAt } from './sim.ts'
-import { geometry, soft } from './soft.ts'
+import { geometry, soft } from '@yaks/stage/soft'
 import { groundAt, type Vale } from './terrain.ts'
 import { signsNear } from './ways.ts'
 

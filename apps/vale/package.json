@@ -9,6 +9,7 @@
     "@yaks/ux": "platform",
     "@yaks/vocab": "platform",
     "@yaks/voxel": "platform",
+    "@yaks/stage": "platform",
     "@preact/signals": "^2.9.0",
     "marked": "18.0.6",
     "preact": "^10.29.1",

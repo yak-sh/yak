@@ -13,6 +13,12 @@
 // saved position.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
+import {
+  frameLoop,
+  keepUp,
+  quality,
+  renderer as makeRenderer,
+} from '@yaks/stage/render'
 import { ABILITIES, type Ability, useAbilities } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import { bar } from './bar.ts'
@@ -21,9 +27,9 @@ import { useBeasts, useDens } from './beasts.ts'
 import { useNames } from './names.ts'
 import { FIGURES, sizeOf } from './figure.ts'
 import { pendingSpawns } from './spawn.ts'
-import { aim, bearing, type Cam, depth, moveLook, steer } from './cam.ts'
+import { aim, bearing, type Cam, depth, moveLook, steer } from '@yaks/stage/cam'
 import { cast } from './cast.ts'
-import { groundRay, pickRay } from './aim.ts'
+import { groundRay, pickRay } from '@yaks/stage/aim'
 import { chatbox } from './chatbox.ts'
 import { companion } from './companion.ts'
 import { companionView } from './companion-view.ts'
@@ -35,7 +41,8 @@ import { map } from './map.ts'
 import { menu } from './menu.ts'
 import { dressVale } from './ui-style.ts'
 import { BUILD, hero, type Puppet, stature } from './figures.ts'
-import { bits, type Kind, overlay } from './fx.ts'
+import { type Kind } from './fx.ts'
+import { bits, overlay } from '@yaks/stage/fx'
 import { glyphText } from './glyphs.ts'
 import {
   capacity,
@@ -50,7 +57,7 @@ import { releaseNotice } from './release.ts'
 import { guide, tasksOf, tracked } from './journal.ts'
 import { journal } from './journalbook.ts'
 import { pack } from './pack.ts'
-import { pace } from './pace.ts'
+import { pace } from '@yaks/stage/pace'
 import { parties } from './party.ts'
 import { partybox } from './partybox.ts'
 import { character } from './character.ts'
@@ -67,10 +74,10 @@ import type { Held } from './rules.ts'
 import { HOME, levelOf, LEVELS, type Spot } from './levels.ts'
 import { connect, type Hero, type Me, vocabulary } from './net.ts'
 import { type Event, type Frame, game, type Vec3 } from './play.ts'
-import { FOES } from './soft.ts'
+import { FOES } from '@yaks/stage/soft'
 import type { Place } from './place.ts'
 import { formOf, SKILLS } from './skills.ts'
-import { within } from './solid.ts'
+import { walled, within } from './solid.ts'
 import { sound } from './sound.ts'
 import { spellFx } from './spell_fx.ts'
 import { icon, refreshSprites } from './sprites.ts'
@@ -81,9 +88,11 @@ import { COARSER } from '@yaks/voxel/stream'
 import {
   type Affects,
   CHUNK,
+  floorUnder,
   groundAt,
   hearthNear,
   hearthOf,
+  roofOver,
   vale,
   VOXEL,
   withoutSpent,
@@ -110,16 +119,12 @@ let glass = document.querySelector<HTMLElement>('.Hud')!
 releaseNotice(glass, gate)
 
 let phone = matchMedia('(pointer: coarse)').matches
-let renderer = new THREE.WebGLRenderer({
+let renderer = makeRenderer(
   canvas,
-  antialias: true,
-  powerPreference: 'high-performance',
-})
-renderer.setPixelRatio(Math.min(devicePixelRatio, phone ? 1.6 : 2))
-renderer.setSize(innerWidth, innerHeight, false)
-renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFShadowMap
-renderer.toneMapping = THREE.ACESFilmicToneMapping
+  innerWidth,
+  innerHeight,
+  Math.min(devicePixelRatio, phone ? 1.6 : 2),
+)
 // Its depth fits each level's fog as the level is shown (cam.ts `depth`).
 let camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight)
 let fit = () => {
@@ -875,48 +880,10 @@ let talkToPeer = () => {
 
 let last: Frame | null = null
 let job: Job | null = null
-let then = performance.now()
 let paint = pace()
-// The page keeps up with the screen before it keeps its looks: while frames
-// run slow it draws fewer pixels, then plainer shadows, then none.
-let EASE = [
-  () => renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25)),
-  () => renderer.setPixelRatio(1),
-  () => {
-    w.sun.shadow.mapSize.set(1024, 1024)
-    w.sun.shadow.map?.dispose()
-    w.sun.shadow.map = null
-  },
-  () => renderer.setPixelRatio(0.75),
-  () => {
-    renderer.shadowMap.enabled = false
-    w.sun.castShadow = false
-    w.scene.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        for (let m of Array.isArray(o.material) ? o.material : [o.material]) {
-          m.needsUpdate = true
-        }
-      }
-    })
-  },
-]
-let paced = { t: 0, n: 0, eased: 0 }
-let keepUp = (spent: number) => {
-  if (starting || !playing) return
-  paced.t += spent
-  paced.n++
-  if (paced.t < 3) return
-  if (paced.t / paced.n > 1 / 45 && paced.eased < EASE.length) {
-    EASE[paced.eased++]()
-  }
-  paced.t = paced.n = 0
-}
-
-let loop = (t: number) => {
-  requestAnimationFrame(loop)
-  let dt = Math.min(0.05, (t - then) / 1000)
-  keepUp((t - then) / 1000)
-  then = t
+let adapt = keepUp(quality(renderer, w.sun, w.scene, devicePixelRatio))
+let loop = frameLoop((t, dt, elapsed) => {
+  if (!starting && playing) adapt(elapsed)
   let now = net.now()
   w.tick(now / 1000, dt)
   depth(camera, w.fog)
@@ -1226,7 +1193,17 @@ let loop = (t: number) => {
   // upper floors too (soft.ts).
   feet.set(cam.x, cam.y, cam.z)
   let home = within(v, feet.x, feet.y, feet.z)
-  aim(cam, camera, target, v, dt, home)
+  aim(
+    cam,
+    camera,
+    target,
+    (p) =>
+      p.y < floorUnder(v, p.x, p.y, p.z) + 0.3 ||
+      p.y > roofOver(v, p.x, target.y, p.z) - 0.3 ||
+      walled(v, p.x, p.y, p.z, home),
+    dt,
+    home ? 0.85 : 0,
+  )
   let foes = (last?.mobs ?? []).filter((m) => m.aim && !m.down && m.near < 8)
     .sort((a, b) => a.near - b.near).slice(0, FOES).map((m) => {
       let size = sizeOf(m.beast)
@@ -1294,7 +1271,7 @@ let loop = (t: number) => {
   glow.tick(dt, camera)
   marks.tick()
   if (paint(t, playing ? frameRate : 30)) renderer.render(w.scene, camera)
-}
+}, performance.now())
 // The level's shaders compile off the page's thread where the browser can
 // (KHR_parallel_shader_compile), so the gate paints meanwhile, and the frame
 // runs once they are ready.

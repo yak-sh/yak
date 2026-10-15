@@ -2,7 +2,7 @@
 // its last 10, and clearer in front of its speaker than behind them. Asked
 // for within earshot and let go past 34 m, so a voice at the edge does not
 // flap. The call and the microphone are voicebox.ts's.
-import { FALLOFF, type Falloff } from './ears.ts'
+import { FALLOFF, type Falloff } from '@yaks/stage/ears'
 import type { Body } from './sim.ts'
 
 /** Where a voice is heard out to, and where it is let go. */

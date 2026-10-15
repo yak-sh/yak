@@ -5,7 +5,7 @@ import { ABILITIES } from './abilities.ts'
 import { HANDLES } from './arms.ts'
 import { type Kit, kitOf } from './gear.ts'
 import { beastId } from './beasts.ts'
-import { cursor, groundRay, landing, pickRay } from './aim.ts'
+import { cursor, groundRay, landing, pickRay } from '@yaks/stage/aim'
 import { aimOf, takenBy } from './strike.ts'
 
 seedDesigns()

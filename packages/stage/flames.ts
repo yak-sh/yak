@@ -8,7 +8,9 @@ export type Fire = { at: Vec; size: number }
 
 /** Hang a flame mesh in `scene`, sized as fires come into sight, and return
  * its motion for each frame. */
-export let flames = (scene: THREE.Scene) => {
+export type Flames = (t: number, focus: THREE.Vector3, fires: Fire[]) => void
+
+export let flames = (scene: THREE.Scene): Flames => {
   let shape = new THREE.BoxGeometry(1, 1, 1)
   let material = new THREE.MeshBasicMaterial({
     color: 0xffffff,

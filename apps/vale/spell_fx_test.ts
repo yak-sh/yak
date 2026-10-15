@@ -3,7 +3,7 @@
 import * as THREE from 'three'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type bits } from './fx.ts'
+import { type bits } from '@yaks/stage/fx'
 import { spellFx } from './spell_fx.ts'
 
 type Call = Parameters<ReturnType<typeof bits>['emit']>

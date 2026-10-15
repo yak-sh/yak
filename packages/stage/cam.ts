@@ -9,10 +9,15 @@
 // (`depth`).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Intent } from './input.ts'
-import { clamp } from '@yaks/game'
-import { type Building, walled } from './solid.ts'
-import { floorUnder, roofOver, type Vale } from './terrain.ts'
+export type CameraIntent = {
+  orbit: [number, number]
+  turn: number
+  zoom: number
+  look: boolean
+  snap: boolean
+  faceMove: boolean
+}
+let clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
 
 export type Cam = {
   /** which way it looks from, round the hero: 0 looks from +z */
@@ -46,7 +51,7 @@ export let NEAR = 0.5
 
 /** Fit `camera`'s depth to what it can see: from NEAR out to the far edge of
  * the level's fog, past which nothing shows. */
-export let depth = (camera: THREE.PerspectiveCamera, fog: THREE.Fog) => {
+export let depth = (camera: THREE.PerspectiveCamera, fog: THREE.Fog): void => {
   if (camera.near == NEAR && camera.far == fog.far) return
   camera.near = NEAR
   camera.far = fog.far
@@ -55,8 +60,6 @@ export let depth = (camera: THREE.PerspectiveCamera, fog: THREE.Fog) => {
 
 // How fast it swings behind the hero when asked.
 let SNAP = 12
-// How far it looks down, at least, into a building the hero is in.
-let INDOORS = 0.85
 
 /** Turn the camera for a frame: as the hands turned and pulled it, or round
  * behind a hero facing `yaw` when asked. Holding the stick sideways cannot
@@ -88,7 +91,12 @@ let INDOORS = 0.85
  * assertAlmostEquals(turned.yaw, 0.6)
  * ```
  */
-export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
+export let steer = (
+  cam: Cam,
+  i: CameraIntent,
+  yaw: number,
+  dt: number,
+): void => {
   let [dx, dy] = i.orbit
   cam.yaw += dx - i.turn * dt
   cam.pitch = clamp(cam.pitch + dy, 0.1, 1.3)
@@ -114,8 +122,12 @@ export let steer = (cam: Cam, i: Intent, yaw: number, dt: number) => {
 /** Free orbit changes the view, not where the keys say forward is. A turning
  * key changes both the camera and the hero's heading this frame. The stick
  * keeps moving in screen space so its direction remains direct on touch. */
-export let moveLook = (cam: Cam, i: Intent, yaw: number, dt: number) =>
-  cam.orbiting && !i.faceMove ? yaw - Math.PI - i.turn * dt : cam.yaw
+export let moveLook = <I extends CameraIntent>(
+  cam: Cam,
+  i: I,
+  yaw: number,
+  dt: number,
+) => cam.orbiting && !i.faceMove ? yaw - Math.PI - i.turn * dt : cam.yaw
 
 /** Which way the camera looks, in whole degrees clockwise from north (-z).
  *
@@ -126,40 +138,20 @@ export let moveLook = (cam: Cam, i: Intent, yaw: number, dt: number) =>
  * assertEquals(bearing(Math.PI / 2 + 4 * Math.PI), 270)
  * ```
  */
-export let bearing = (yaw: number) =>
+export let bearing = (yaw: number): number =>
   (Math.round(-yaw * 180 / Math.PI) % 360 + 360) % 360
 
-/** Put `camera` where the camera stands, looking at `target`: its distance
- * back, or nearer when the level is in the way, shaken by a blow; looking
- * down into `home`, the building the hero is in, if any.
- *
- * ```ts
- * import { assert } from '@std/assert'
- * import * as THREE from 'three'
- * import { flat } from './terrain.ts'
- * import { seedBuildings } from './buildings_fixture.ts'
- * seedBuildings()
- * let v = flat(5, [], [{ kind: 'hall.plaster', x: 30, z: 30, seed: 0 }])
- * let home = v.buildings(30, 30, 0)[0]
- * let cam = {
- *   yaw: 0, pitch: 1.1, dist: 9, reach: 9, x: 30, y: 7, z: 30,
- *   shake: 0, snap: false, orbiting: false, lift: 0,
- * }
- * let camera = new THREE.PerspectiveCamera()
- * aim(cam, camera, new THREE.Vector3(30, home.floors[0] + 1.5, 30),
- *   v, 1, home)
- * assert(cam.reach > 1.2)
- * ```
- */
+/** Orbit around target, shortening the arm immediately when blocked and
+ * easing it back out. The caller supplies collision and the minimum pitch. */
 export let aim = (
   cam: Cam,
   camera: THREE.Camera,
   target: THREE.Vector3,
-  v: Vale,
+  blocked: (point: THREE.Vector3) => boolean,
   dt: number,
-  home: Building | null = null,
-) => {
-  cam.lift += ((home ? INDOORS : 0) - cam.lift) * (1 - Math.exp(-dt * 3))
+  lift = 0,
+): void => {
+  cam.lift += (lift - cam.lift) * (1 - Math.exp(-dt * 3))
   let pitch = Math.max(cam.pitch, cam.lift)
   let cp = Math.cos(pitch)
   let dir = new THREE.Vector3(
@@ -171,9 +163,7 @@ export let aim = (
   for (let d = CLOSEST; d <= cam.dist; d += 0.4) {
     let p = target.clone().addScaledVector(dir, d)
     if (
-      p.y < floorUnder(v, p.x, p.y, p.z) + 0.3 ||
-      p.y > roofOver(v, p.x, target.y, p.z) - 0.3 ||
-      walled(v, p.x, p.y, p.z, home)
+      blocked(p)
     ) {
       clear = Math.max(CLOSEST, d - 0.6)
       break

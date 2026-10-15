@@ -1,3 +1,5 @@
+import { clips as clipLoader } from '@yaks/stage/samples'
+
 // Hosted builder outputs supply every sound clip. A missing or undecodable
 // blob leaves the procedural voice in place.
 let clips: Record<string, string> = {}
@@ -75,115 +77,33 @@ let address = (name: string): Promise<string> => {
   })
 }
 
-type State = {
-  buffers: Map<string, { hash: string; buffer: AudioBuffer }>
-  pending: Map<string, Promise<AudioBuffer | null>>
-}
-let states = new WeakMap<BaseAudioContext, State>()
-let loops = new WeakMap<AudioBuffer, AudioBuffer>()
-let state = (ctx: BaseAudioContext) => {
-  let found = states.get(ctx)
-  if (found) return found
-  let made: State = { buffers: new Map(), pending: new Map() }
-  states.set(ctx, made)
-  return made
-}
+let decoded = clipLoader((error) => reportError(error))
+let url = (hash: string) => new URL(`api/blob/${hash}`, document.baseURI)
 
 export let loaded = (ctx: BaseAudioContext, name: string) =>
-  state(ctx).buffers.get(name)?.hash == clips[name]
-    ? state(ctx).buffers.get(name)?.buffer
-    : undefined
+  clips[name] ? decoded.loaded(ctx, url(clips[name])) : undefined
 
-// Analyze one-shots without changing the buffer loops and music share.
-let bounds = new WeakMap<AudioBuffer, { offset: number; dur: number }>()
-export let audible = (buffer: AudioBuffer) => {
-  let cached = bounds.get(buffer)
-  if (cached) return cached
-  let channels = Array.from(
-    { length: buffer.numberOfChannels },
-    (_, ch) => buffer.getChannelData(ch),
-  )
-  let peak = 0
-  for (let data of channels) {
-    for (let value of data) {
-      peak = Math.max(peak, Math.abs(value))
-    }
-  }
-  // Ignore codec noise, but keep quiet clips and their attack and decay.
-  let threshold = Math.max(0.0001, peak * 0.01)
-  let first = buffer.length, last = -1
-  for (let data of channels) {
-    for (let i = 0; i < data.length; i++) {
-      if (Math.abs(data[i]) < threshold) continue
-      first = Math.min(first, i)
-      last = Math.max(last, i)
-    }
-  }
-  let found = {
-    offset: last < 0 ? 0 : first / buffer.sampleRate,
-    dur: last < 0 ? 0 : (last + 1 - first) / buffer.sampleRate,
-  }
-  bounds.set(buffer, found)
-  return found
-}
-
-/** Overlap a recording's end with its start, then loop at adjacent samples. */
-export let blendLoop = (input: Float32Array, fade: number) => {
-  let length = input.length - fade
-  let output = input.slice(0, length)
-  for (let i = 0; i < fade; i++) {
-    let mix = (i + 1) / (fade + 1)
-    output[i] = input[length + i] * (1 - mix) + input[i] * mix
-  }
-  return output
-}
-
-/** A decoded ambient clip made seamless once, shared by its nearby sources. */
-export let looping = (ctx: AudioContext, source: AudioBuffer) => {
-  let cached = loops.get(source)
-  if (cached) return cached
-  let fade = Math.min(
-    Math.floor(source.sampleRate * 0.7),
-    Math.floor(source.length / 4),
-  )
-  if (!fade) return source
-  let out = ctx.createBuffer(
-    source.numberOfChannels,
-    source.length - fade,
-    source.sampleRate,
-  )
-  for (let ch = 0; ch < source.numberOfChannels; ch++) {
-    out.copyToChannel(blendLoop(source.getChannelData(ch), fade), ch)
-  }
-  loops.set(source, out)
-  return out
-}
-
+// Waiting for a graph output is app-specific; decoding its URL is not.
+let pending = new WeakMap<
+  AudioContext,
+  Map<string, Promise<AudioBuffer | null>>
+>()
 export let load = (ctx: AudioContext, name: string) => {
-  let s = state(ctx)
   let ready = loaded(ctx, name)
   if (ready) return Promise.resolve(ready)
-  let pending = s.pending.get(name)
-  if (pending) return pending
+  let group = pending.get(ctx)
+  if (!group) pending.set(ctx, group = new Map())
+  let found = group.get(name)
+  if (found) return found
   let work = (async () => {
     try {
       let hash = await address(name)
-      let response = await fetch(
-        new URL(`api/blob/${hash}`, document.baseURI),
-      )
-      if (!response.ok) throw new Error(`Sound ${name}: ${response.status}`)
-      let buffer = await ctx.decodeAudioData(await response.arrayBuffer())
-      if (clips[name] != hash) return null
-      audible(buffer)
-      s.buffers.set(name, { hash, buffer })
-      return buffer
-    } catch (error) {
-      reportError(error)
-      return null
+      let buffer = await decoded.load(ctx, url(hash))
+      return clips[name] == hash ? buffer : null
     } finally {
-      s.pending.delete(name)
+      group.delete(name)
     }
   })()
-  s.pending.set(name, work)
+  group.set(name, work)
   return work
 }

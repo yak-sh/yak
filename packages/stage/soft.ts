@@ -1,4 +1,4 @@
-// The soft look. Every voxel in the vale is drawn by this one material: three's
+// The soft look. Every voxel in a scene is drawn by this one material: three's
 // Lambert, taught three things in its shader.
 //
 //   Rounded edges. A face knows which of its edges are convex and where
@@ -15,17 +15,17 @@
 //   toward a grazing edge; and each light that reaches it, the sun and the
 //   fire, is a tight bright highlight on it that slides as it turns. Both
 //   take the metal's own colour, so a tinted metal shines its tint, and both
-//   follow the day's light as world.ts moves it. A few sums a pixel, and none
+//   follow the day's light as the scene moves it. A few sums a pixel, and none
 //   for anything matte.
 //
-//   A flash. A creature or a player glows for a moment when struck.
+//   A flash. A mesh glows for a moment when struck.
 //
 //   A line of sight. The ground and what stands on it thin away where, as the
-//   camera sees them, they cover the hero or nearby attackers, and right
+//   camera sees them, they cover the subject or nearby attackers, and right
 //   around the camera (`see`). The clearance is round but ends above the
 //   ground, so a tree in the way shows the fight without hollowing the land.
 //   It is a stipple, pixels left out in an even pattern, so nothing needs
-//   sorting. The roof and upper floors of a building the hero is in or behind
+//   sorting. The roof and upper floors of a building the subject is in or behind
 //   thin away the same way, over a height within its box (`cut`).
 //
 //   No seams. A vertex is placed in the world before it is seen from the
@@ -38,7 +38,7 @@ import type { Packed } from '@yaks/voxel/mesh'
 
 /** How many boxes a see-through material fades at once. */
 export let CUTS = 3
-/** The nearest attackers whose silhouettes the woods also leave clear. */
+/** The nearest subjects whose silhouettes the woods also leave clear. */
 export let FOES = 3
 
 /** A geometry over what a mesher wrote, packed (mesh.ts `pack`): the arrays
@@ -261,7 +261,7 @@ outgoingLight += vec3(1., .32, .08) * vWarmth * (.18 + .82 * night);
 
 /** A soft material: `speckle` is how much each voxel's shade wobbles, and a
  * material that can `see` through (the ground's) thins away between the
- * camera and the hero once `sight` says where they are. */
+ * camera and the subject once `sight` says where both are. */
 export let soft = (
   opts: {
     speckle?: number
@@ -269,7 +269,7 @@ export let soft = (
     opacity?: number
     see?: boolean
   } = {},
-) => {
+): THREE.MeshLambertMaterial => {
   let m = new THREE.MeshLambertMaterial({
     vertexColors: true,
     transparent: opts.transparent ?? false,
@@ -329,7 +329,7 @@ export let soft = (
 }
 
 /** The sight a see-through material keeps clear: from the camera (`from`)
- * of the hero standing at `feet`, `tall` metres tall, and the nearest foes
+ * of the subject standing at `feet`, `tall` metres tall, and the nearest foes
  * aiming at them. A foe's fourth coordinate is its clearance radius. */
 export let sight = (
   m: THREE.Material,
@@ -337,7 +337,7 @@ export let sight = (
   feet: THREE.Vector3,
   tall: number,
   foes: THREE.Vector4[] = [],
-) => {
+): void => {
   let u = m.userData.soft
   if (!u) return
   u.seeFrom.value.copy(from)
@@ -353,7 +353,7 @@ export let sight = (
 export let cut = (
   m: THREE.Material,
   boxes: { lo: THREE.Vector3Tuple; hi: THREE.Vector3Tuple; fade: number }[],
-) => {
+): void => {
   let u = m.userData.soft
   if (!u) return
   u.cutLo.value.forEach((lo: THREE.Vector4, i: number) => {
@@ -364,7 +364,11 @@ export let cut = (
 }
 
 /** How strongly a soft material glows its flash colour, 0 to 1. */
-export let flash = (m: THREE.Material, amount: number, color?: THREE.Color) => {
+export let flash = (
+  m: THREE.Material,
+  amount: number,
+  color?: THREE.Color,
+): void => {
   let u = m.userData.soft
   if (!u) return
   u.flashing.value = amount
@@ -372,7 +376,7 @@ export let flash = (m: THREE.Material, amount: number, color?: THREE.Color) => {
 }
 
 /** How much the day's light has fallen, shared by every soft mesh. */
-export let night = (m: THREE.Material, amount: number) => {
+export let night = (m: THREE.Material, amount: number): void => {
   let u = m.userData.soft
   if (u) u.night.value = amount
 }

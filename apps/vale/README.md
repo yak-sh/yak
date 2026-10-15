@@ -56,8 +56,11 @@ dependencies marked `platform` come from the current source packages shipped
 with that compiler, not an older registry release. `@yaks/game` owns the
 value-only rules (randomness, progression, effects, combat, paths, targeting,
 shots, ownership and remote motion); Vale reads its graph and supplies its own
-world, designs and policies. Its vocabulary and saved rows do not move. Preact,
-signals, Three.js and marked are ordinary npm dependencies.
+world, designs and policies. Its vocabulary and saved rows do not move.
+`@yaks/stage` owns presentation: renderer and loop, voxel materials and rigs,
+effects, camera, picking and positional sound; Vale supplies its designs,
+collision, voices and settings. Preact, signals, Three.js and marked are
+ordinary npm dependencies.
 
 The grammar, completion, drafts, network client, Markdown and voice packages
 join the same compiled page runtime. The creature-build subscription uses server

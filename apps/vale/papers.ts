@@ -6,12 +6,12 @@
 // so over a station (nodes.ts).
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { overlay } from './fx.ts'
+import type { overlay } from '@yaks/stage/fx'
 import { glyphText } from './glyphs.ts'
 import { type Box, cuboids } from '@yaks/voxel/boxes'
 import { type Out, out, pack } from '@yaks/voxel/mesh'
 import { type Board, boardsNear } from './notices.ts'
-import { geometry, sight, soft } from './soft.ts'
+import { geometry, sight, soft } from '@yaks/stage/soft'
 import type { Spot, Vale } from './terrain.ts'
 import type { Job } from './work.ts'
 

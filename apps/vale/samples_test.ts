@@ -5,15 +5,7 @@ import { shop } from '../../packages/builders/testing.ts'
 import vale from './vocab.json' with { type: 'json' }
 import { beastOf, useBeasts } from './beasts.ts'
 import { kindOf, useSpawnKinds } from './spawn.ts'
-import {
-  accept,
-  blendLoop,
-  catalog,
-  load,
-  loaded,
-  type Row,
-  SOUNDS,
-} from './samples.ts'
+import { accept, catalog, load, loaded, type Row, SOUNDS } from './samples.ts'
 
 test('sound samples retry a missing blob and share a successful load', async () => {
   accept([
@@ -114,14 +106,6 @@ test('hosted audio outputs supply every sound clip', () => {
     ]),
     { water: 'water-blob', forge: 'forge-blob' },
   )
-})
-
-test('an ambient overlap meets at neighboring source samples', () => {
-  let input = new Float32Array([0, 1, 2, 3, 4, 5, 6, 7])
-  let output = blendLoop(input, 2)
-  assertEquals(output.length, 6)
-  assertEquals(output[0], 4)
-  assertEquals(output[5], 5)
 })
 
 test('the sound query projects current main outputs through qualified references', async () => {

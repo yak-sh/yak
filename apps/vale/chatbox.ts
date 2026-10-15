@@ -38,7 +38,7 @@ import {
   MAX,
   writer,
 } from './chat.ts'
-import type { overlay } from './fx.ts'
+import type { overlay } from '@yaks/stage/fx'
 import type { Opener } from './hud.ts'
 import type { Me, Net } from './net.ts'
 import type { Frame } from './play.ts'

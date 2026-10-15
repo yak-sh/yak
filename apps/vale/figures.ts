@@ -1,9 +1,9 @@
 // The people of the vale, and how they move: the heroes and the people who
-// give quests, each a little jointed figure of soft boxes (parts.ts), and the
+// give quests, each a little jointed figure of soft boxes (@yaks/stage/parts), and the
 // animation that walks, swings, rolls and fells them. A creature's figure is
-// data, moved by the one animator in figure.ts. A puppet is told what it is
+// data, moved by @yaks/stage/puppet. A puppet is told what it is
 // doing (`Act`) every frame and poses itself; it keeps no state of the world.
-// Each is drawn as one skinned mesh, its parts the bones (parts.ts `knit`).
+// Each is drawn as one skinned mesh (@yaks/stage/parts `knit`).
 //
 // People are built like children, the way they are in Portal Knights: a big
 // head, a short straight middle, short arms and legs bending at elbow and
@@ -18,9 +18,10 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '@yaks/voxel/boxes'
+import type { Act as StageAct, Puppet as StagePuppet } from '@yaks/stage/puppet'
 import type { Pose } from './abilities.ts'
 import type { Hand } from './gear.ts'
-import { halo } from './halo.ts'
+import { halo } from '@yaks/stage/halo'
 import { ITEMS } from './items.ts'
 import type { Vec } from '@yaks/voxel/mesh'
 import {
@@ -33,46 +34,14 @@ import {
   shade,
   stride,
   topple,
-} from './parts.ts'
+} from '@yaks/stage/parts'
 import { lerp } from '@yaks/game'
-import { flash, soft } from './soft.ts'
+import { flash, soft } from '@yaks/stage/soft'
 import { LAND } from './strike.ts'
 
-/** What a figure is doing this frame. */
-export type Act = {
-  /** metres a second over the ground */
-  speed: number
-  /** off the ground */
-  air: boolean
-  /** how far through a blow or a bite, 0 to 1, or -1 for none */
-  swing: number
-  /** how a hero's blow is posed, when not their weapon's own */
-  pose?: Pose
-  /** the hand a hero's blow is struck with: the other, every other blow,
-   * for one with a blade in each (gear.ts `handOf`) */
-  hand?: Hand
-  /** how freshly struck, 1 just now to 0 */
-  hurt: number
-  /** how far through a roll, 0 to 1, or -1 for none */
-  roll: number
-  /** how far the head is turned from the body to look at someone, in
-   * radians */
-  look?: number
-  down: boolean
-  /** seconds, for idling */
-  t: number
-}
-
-/** A figure made up to be drawn and moved: the people's, built by `person`,
- * or a creature's, from its figure (figure.ts `puppet`). It keeps no state of
- * the world; it is told what it is doing every frame. */
-export type Puppet = {
-  root: THREE.Group
-  material: THREE.Material
-  /** where a name plate sits, above the root */
-  height: number
-  animate: (a: Act, dt: number) => void
-}
+/** Mossvale's hero poses extend the values consumed by a stage puppet. */
+export type Act = StageAct & { pose?: Pose; hand?: Hand }
+export type Puppet = StagePuppet<Act>
 
 // Stitch a figure's parts into the one mesh it is drawn as.
 let sewn = (f: Puppet): Puppet => {
@@ -202,7 +171,7 @@ let COATS: Record<string, (c: number, trim: number, gem: number) => Box[]> = {
 
 /** How one of the people is built, in metres. A torso's boxes and the armour
  * over them are drawn for a child's torso, and a head's and its hat for a
- * child's head, and each is fit to the build's own (parts.ts `fit`). */
+ * child's head, and each is fit to the build's own (@yaks/stage/parts `fit`). */
 export type Build = {
   /** ground to hip */
   hips: number

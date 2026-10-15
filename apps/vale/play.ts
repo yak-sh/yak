@@ -29,7 +29,7 @@
 //     neither moves nor bites (`heldOf`). A fall is a `slain` row, one per
 //     player who helped, and the loot it leaves is each player's own.
 import { nearby } from './interact.ts'
-import { landing as castLanding, type Point } from './aim.ts'
+import { landing as castLanding, type Point } from '@yaks/stage/aim'
 import { abilitiesOf, again, BLEEDS, WARD, type Went } from './abilities.ts'
 import { effect } from './ability-effects.ts'
 import {
