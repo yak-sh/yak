@@ -998,16 +998,23 @@ let served = (space: Space, app: App, env: HostEnv) => ({
  */
 export let releaseOf = (app: App) => app.declaration ?? String(app.version ?? 0)
 
+/** Which store holds an app's rows and what it is told of the app on every
+ * call: what {@link appStore} opens, for a caller that opens it elsewhere
+ * (files.ts `serves`). */
+export let storeAt = (space: Space, app: App, env: HostEnv = {}) => ({
+  name: storeName(space, app),
+  app: { ...served(space, app, env), release: releaseOf(app) },
+})
+
 export let appStore = (
   ns: Namespace,
   space: Space,
   app: App,
   env: HostEnv = {},
-): Door =>
-  storeOf(ns, storeName(space, app), {
-    ...served(space, app, env),
-    release: releaseOf(app),
-  })
+): Door => {
+  let at = storeAt(space, app, env)
+  return storeOf(ns, at.name, at.app)
+}
 
 /** Prepare a declaration without selecting it for ordinary Store requests.
  * The directory's pointer moves only when record() commits. */

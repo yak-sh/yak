@@ -89,6 +89,12 @@ export let at = (eid: string, path: string, source = '') =>
 export let blobAt = (eid: string, sha: string) =>
   generation(`https://files.invalid/blob/${eid}/${sha}`)
 
+// Whether an app's rows still name the bytes at `sha` as representation `rep`
+// (files.ts `serves`). Both are in the key: one upload may be framed under
+// more than one representation, and each is its own answer.
+export let servableAt = (eid: string, sha: string, rep: string) =>
+  generation(`https://files.invalid/servable/${eid}/${sha}/${rep}`)
+
 // A compiler-owned package file (shared.ts), the same for every app.
 export let packageAt = (path: string) =>
   generation(`https://files.invalid${path}`)

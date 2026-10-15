@@ -1,5 +1,6 @@
-// The app gateway decides who may read before asking Files for cached bytes.
-// The versioned representation, conditions and seeks all use that one door.
+// The app gateway decides who may read before asking Files whether a blob is
+// still served or for its cached bytes. The versioned representation,
+// conditions and seeks all use that one door.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as apps from './apps.ts'
@@ -10,7 +11,8 @@ import { state } from './testing.ts'
 import { doorOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { appVocab } from './vocab.ts'
-import { appStore } from './directory.ts'
+import { appStore, storeAt } from './directory.ts'
+import { servableAt } from './cache.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
 test('private app blobs keep the cache behind authorization', async () => {
@@ -29,10 +31,11 @@ test('private app blobs keep the cache behind authorization', async () => {
   )
   assertEquals(upload.status, 200)
   let file: { url: string } = await upload.json()
-  let calls: Request[] = []
+  let asked: Request[] = [], calls: Request[] = []
   env.FILES = {
     fetch: (req) => {
-      calls.push(req)
+      asked.push(req)
+      if (new URL(req.url).pathname.startsWith('/blob/')) calls.push(req)
       return files.fetch(req, env)
     },
   }
@@ -44,7 +47,7 @@ test('private app blobs keep the cache behind authorization', async () => {
 
   let stranger = await apps.fetch(visit(file.url), env)
   assertEquals(stranger.status, 401)
-  assertEquals(calls.length, 0)
+  assertEquals(asked.length, 0)
 
   let whole = await get()
   assertEquals(whole.status, 200)
@@ -181,4 +184,54 @@ test('a dropped representation write never redirects to an absent file', async (
   assertEquals(result.status, 503)
   assertEquals(result.headers.get('location'), null)
   assertEquals(await graph.query('.representation'), [])
+})
+
+test('a yes to whether a blob is served is kept, a no or a failure is not', async () => {
+  using scenario = platform()
+  let { env } = scenario
+  let { space, app } = await seeded(env, 'public')
+  let upload = await apps.fetch(
+    visit('/cookbook/api/blob', {
+      method: 'POST',
+      headers: { cookie: await as(ADA), 'content-type': 'image/png' },
+      body: new Uint8Array([1, 2, 3]),
+    }),
+    env,
+  )
+  let file: { url: string } = await upload.json()
+  let [sha, rep] = file.url.split('/').slice(-2)
+  let at = storeAt(space, app, env)
+  let ask = (rep: string) =>
+    files.fetch(
+      new Request(servableAt(app.eid, sha, rep), {
+        headers: { [files.STORE]: JSON.stringify(at) },
+      }),
+      env,
+    )
+  let kept = (r: Response) =>
+    r.headers.get('cache-control')!.startsWith('public')
+  let yes = await ask(rep)
+  assertEquals([(await yes.json()).address, kept(yes)], [sha, true])
+  let no = await ask('0'.repeat(64))
+  assertEquals([no.status, kept(no)], [404, false])
+  let ns = env.STORE
+  let get = ns.get.bind(ns)
+  ns.get = (id) =>
+    String(id) == at.name
+      ? {
+        fetch: () =>
+          Promise.reject(
+            new Error(
+              'Durable Object is overloaded. Requests queued for too long.',
+            ),
+          ),
+      }
+      : get(id)
+  let failed = await ask(rep)
+  assertEquals([failed.status, kept(failed)], [503, false])
+  assertEquals(
+    String(await files.servableOf(env, app, at, sha, rep).catch((e) => e)),
+    'Error: Durable Object is overloaded. Requests queued for too long.',
+  )
+  assertEquals((await apps.fetch(visit(file.url), env)).status, 503)
 })

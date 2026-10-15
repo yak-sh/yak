@@ -47,6 +47,7 @@ import {
   directory,
   META,
   type Space,
+  storeAt,
   storeName,
   url as urlOf,
 } from './directory.ts'
@@ -1374,10 +1375,21 @@ let gave = async (
     })
   }
   // Whether the bytes are served at all is the store's to say (`servable`).
-  // That read is the store's, one per request, so the reader's browser keeps
-  // what it was given: a page that loads its images on every view asks the
-  // store once, not on every view, and no shared cache answers anyone else.
-  let rep = await servable((q) => graph.query(q), app, sha, eid)
+  // For an app anyone may read, Files keeps a yes (files.ts `serves`), so a
+  // burst of image reads is not a burst of store reads; a no from it, and
+  // every read of a private or sandboxed app's, is asked here as the reader.
+  // The reader's browser keeps what it was given.
+  let read = () => servable((q) => graph.query(q), app, sha, eid)
+  let rep
+  try {
+    rep = !sandboxed(app) && mode(app.access) != 'private'
+      ? await files.servableOf(env, app, storeAt(space, app, env), sha, eid) ??
+        await read()
+      : await read()
+  } catch (e) {
+    caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
+    return json(503, 'blob_unavailable')
+  }
   if (!rep) return json(404, 'no_such_file')
   let response: Served = {
     mime: rep.media_type,
