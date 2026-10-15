@@ -11,7 +11,7 @@
 // What it does with what it took is not written here: unzip.ts turns the bytes
 // into files, and then the three tools an agent would call do the rest —
 // `app_new` where the name is new, the write half of `app_files`, `app_deploy`
-// (tools.ts `call`, `wrote`). So a drop lands under the same ceilings, the same
+// (tools.ts `call`, `wrote`). So a drop lands under the same room, the same
 // member guard and the same version bump as everything else, and there is no
 // second implementation of a deploy to keep in step with the first.
 //
@@ -27,7 +27,8 @@ import { dropped, nothingHere } from './pages.ts'
 import { hostOf, route, SLUG } from './route.ts'
 import { whoIs } from './session.ts'
 import { call, inApp, wrote } from './tools.ts'
-import { type Entry, MAX, unzip } from './unzip.ts'
+import { type Entry, unzip } from './unzip.ts'
+import { FILES } from './meter.ts'
 import { writes } from '@yaks/member'
 import { caught } from './defects.ts'
 
@@ -58,12 +59,12 @@ let titled = (slug: string) =>
 
 // The files a drop carries: a zip is its entries, and anything else is itself,
 // at its own name.
-let opened = async (file: File): Promise<Entry[]> => {
+let opened = async (file: File, room: number): Promise<Entry[]> => {
   let bytes = new Uint8Array(await file.arrayBuffer())
   if (!/\.zip$/i.test(file.name) && file.type != 'application/zip') {
     return [{ path: basename(file.name), bytes }]
   }
-  return await unzip(bytes.buffer as ArrayBuffer)
+  return await unzip(bytes.buffer as ArrayBuffer, room)
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -103,12 +104,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     if (!(file instanceof File) || !file.size) {
       return no('Pick a file first — a .zip of the app, or one index.html.')
     }
-    if (file.size > MAX) {
-      return no(
-        `That file is ${Math.round(file.size / 1024 / 1024)} MB, and ${
-          MAX / 1024 / 1024
-        } MB is the most one drop may be.`,
-      )
+    let room = FILES[space.tier ?? 'free']
+    if (file.size > room) {
+      return no('That file is more than this space has room for.')
     }
     let asked = String(form.get('slug') ?? '').trim().toLowerCase()
     let slug = asked || slugged(file.name)
@@ -124,7 +122,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
           'starting with a letter or a digit.',
       )
     }
-    let files = await opened(file)
+    let files = await opened(file, room)
     let ctx = { env, dir, person: who.person! }
     // A name nobody has taken is a new app; a name that is somebody's is an
     // update of it, which is what dropping the same zip twice means. app_new

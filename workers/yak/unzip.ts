@@ -18,7 +18,7 @@
 //   another compression method   only stored and deflate are read
 //   a password                   there is no password to give it
 //   a path that escapes          `../`, an absolute path, a backslash
-//   more than the ceiling        counted as it inflates, not as it claims
+//   more than there is room for  counted as it inflates, not as it claims
 //
 // And two conveniences, because a zip made on a desktop is never bare: a
 // single top-level folder is stripped when every entry shares it (unzipping
@@ -29,11 +29,6 @@
 import { refuse } from './tool.ts'
 
 export type Entry = { path: string; bytes: Uint8Array<ArrayBuffer> }
-
-// The most one drop may unpack to: an app's files are pages, not an archive.
-// It is counted on the way out of the decompressor, so a small zip that claims
-// to be a large one is refused by what it produces.
-export let MAX = 20 * 1024 * 1024
 
 let LOCAL = 0x04034b50
 let CENTRAL = 0x02014b50
@@ -115,9 +110,7 @@ let index = (v: DataView, bytes: Uint8Array) => {
 let big = () =>
   refuse(
     'limit',
-    `That unpacks to more than ${
-      MAX / 1024 / 1024
-    } MB — an app is pages and pictures, not an archive.`,
+    'That unpacks to more than this space has room for.',
   )
 
 // The runtime's own inflate, with the ceiling counted as the bytes come out.
@@ -149,11 +142,13 @@ let inflate = async (packed: Uint8Array<ArrayBuffer>, room: number) => {
 /**
  * The files in a zip, in the order it holds them. Throws a sentence at the
  * first thing it will not take, so a person reads one clear no rather than a
- * list of them.
+ * list of them. `max` is the room there is for what it unpacks to, counted
+ * as it inflates, so a small zip that claims to be a large one is refused by
+ * what it produces; the space's exact accounting follows at the write.
  */
 export let unzip = async (
   buf: ArrayBuffer,
-  max = MAX,
+  max: number,
 ): Promise<Entry[]> => {
   let bytes = new Uint8Array(buf)
   let v = new DataView(buf)

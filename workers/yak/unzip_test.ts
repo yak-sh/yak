@@ -8,17 +8,17 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { zipped } from './probe.ts'
-import { escapes, MAX, unzip } from './unzip.ts'
+import { escapes, unzip } from './unzip.ts'
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
-let read = async (entries: Parameters<typeof zipped>[0], max = MAX) =>
+let read = async (entries: Parameters<typeof zipped>[0], max = Infinity) =>
   await unzip((await zipped(entries)).buffer as ArrayBuffer, max)
 
 let refuses = async (
   entries: Parameters<typeof zipped>[0],
   saying: string,
-  max = MAX,
+  max = Infinity,
 ) => {
   await assertRejects(
     async () => {
@@ -105,12 +105,12 @@ test('a method nobody reads is refused, and named', () =>
 test('an encrypted entry is refused', () =>
   refuses([{ path: 'index.html', content: 'x', flags: 1 }], 'password'))
 
-test('more than the ceiling is refused', () =>
+test('more than the room is refused', () =>
   refuses([{ path: 'big.txt', content: 'x'.repeat(600) }], 'more than', 500))
 
 // The ceiling is counted on the way out of the decompressor, so a zip that
 // lies about its size is still stopped by what it produces.
-test('a zip that unpacks past the ceiling is refused', () =>
+test('a zip that unpacks past the room is refused', () =>
   refuses(
     [{ path: 'big.txt', content: 'x'.repeat(2000), deflate: true, size: 10 }],
     'more than',
@@ -133,7 +133,7 @@ test('bytes that are not a zip are refused', async () => {
   let page = new TextEncoder().encode('<h1>not a zip</h1>')
   await assertRejects(
     async () => {
-      await unzip(page.buffer as ArrayBuffer)
+      await unzip(page.buffer as ArrayBuffer, Infinity)
     },
     Error,
     "isn't a zip",

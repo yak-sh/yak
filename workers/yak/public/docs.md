@@ -59,8 +59,8 @@ cannot describe; otherwise the platform derives the level.
 An `icon.svg` beside `index.html`, square and without `<text>`, is drawn as the
 app's icon on a home screen. `upload` takes a file and returns where its bytes
 live, addressed by their own SHA-256, and a row that points at them is what a
-gallery draws. One upload is 20 MB at most, so downscale a photo on the page
-before sending it.
+gallery draws. An upload is held to the space's room and the app's `blob` word,
+so downscale a photo on the page to keep it quick to send.
 
 Deeper: <https://yaks.app/docs/files.md> — releases, `yak-release`,
 `app_deploy`'s `reload`, the app's icon, uploads, pictures, and a gallery that

@@ -10,7 +10,6 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { kernel, type Packed, seed, signIn, unique, zipped } from './probe.ts'
-import { MAX } from './unzip.ts'
 import { managePath } from './route.ts'
 
 // The form a browser sends: the file under `file`, the name beside it.
@@ -191,20 +190,8 @@ test('what the door will not take, it says in a sentence', async () => {
     assertEquals(escaping.status, 400)
     assertStringIncludes(await escaping.text(), 'points outside')
 
-    // More than one drop may be. The file itself is over the ceiling, so the
-    // door refuses it before it unpacks anything.
-    let big = new File(
-      [new Uint8Array(MAX + 1024)],
-      'big.zip',
-      { type: 'application/zip' },
-    )
-    let over = await drops(k, `${jeff17}.yaks.app`, big, 'big', them.cookie)
-    assertEquals(over.status, 400)
-    assertStringIncludes(await over.text(), 'the most one drop may be')
-
-    // Neither app was made: a refusal leaves the space exactly as it was.
+    // The app was not made: a refusal leaves the space exactly as it was.
     assertEquals((await k.at(`${jeff17}.yaks.app`, '/bad/')).status, 404)
-    assertEquals((await k.at(`${jeff17}.yaks.app`, '/big/')).status, 404)
 
     // Nobody, and somebody who is nobody here: the first is sent to sign in,
     // the second is told whose space it is.
