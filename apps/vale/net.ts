@@ -122,8 +122,7 @@ export let connect = (
   // A bag watch knows gatherings without their place, including while the
   // next area's watch is loading. Every known gathering spends its node.
   let gathered = c.watch('.gathered', { remote: false })
-  let skew = 0
-  let now = () => Date.now() + skew
+  let now = () => c.wire!.now()
   let hero: string | null = null
 
   // A fire-and-forget effect: both local admission and a held server write
@@ -480,17 +479,9 @@ export let connect = (
         look: { player: hero, ...lookOf(look), at: now() },
       })
     },
-    /** who is looking, and the store's clock against ours */
+    /** who is looking */
     me: async (): Promise<Me> => {
-      let t0 = Date.now()
       let r = await fetch(new URL('me', base)).catch(() => null)
-      let t1 = Date.now()
-      let date = Date.parse(r?.headers.get('date') ?? '')
-      // The header is to the second: trust it only past a second's doubt.
-      if (date) {
-        let off = date + 500 - (t0 + t1) / 2
-        if (Math.abs(off) > 1500) skew = off
-      }
       if (r?.status == 404) {
         return {
           person: null,

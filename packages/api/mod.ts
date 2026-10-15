@@ -86,6 +86,7 @@ export {
 } from './subs.ts'
 export {
   attach,
+  clockReply,
   decode,
   type Incoming,
   queue,

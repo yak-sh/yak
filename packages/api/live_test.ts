@@ -1,8 +1,10 @@
 /// <reference lib="deno.ns" />
 import { equal, test, until } from '@yaks/testing'
+import { assert } from '@std/assert'
 import { parse } from '@yaks/query'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { api } from './route.ts'
 import { loadVocab } from '@yaks/vocab'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
 
@@ -187,4 +189,43 @@ test('caller views select live values and refresh when another entity changes a 
   equal(heard.pop()?.bundles?.[0].seen, { x: 13 })
   equal(await f.subs.snapshot('.seen.x>=10 .count'), { count: 2 })
   await f.subs.drop(f.writer)
+})
+
+test('a real upgraded socket answers clock probes with epoch timestamps', async () => {
+  let f = fixture()
+  let server = Deno.serve(
+    { hostname: '127.0.0.1', port: 0, onListen: () => {} },
+    api({ graph: f.g }),
+  )
+  let socket = new WebSocket(`ws://127.0.0.1:${server.addr.port}/ws`)
+  let closed = new Promise<void>((resolve) =>
+    socket.addEventListener('close', () => resolve(), { once: true })
+  )
+  try {
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener('open', () => resolve(), { once: true })
+      socket.addEventListener(
+        'error',
+        () => reject(new Error('clock socket failed')),
+        { once: true },
+      )
+    })
+    let answer = new Promise<Record<string, unknown>>((resolve) => {
+      socket.addEventListener('message', (e) => resolve(JSON.parse(e.data)), {
+        once: true,
+      })
+    })
+    let before = Date.now()
+    socket.send(JSON.stringify({ clock: 12.5 }))
+    let reply = await answer
+    equal(Object.keys(reply).sort(), ['clock', 'received', 'sent'])
+    equal(reply.clock, 12.5)
+    assert(typeof reply.received == 'number' && reply.received >= before)
+    assert(typeof reply.sent == 'number' && reply.sent >= reply.received)
+    assert(reply.sent <= Date.now())
+  } finally {
+    socket.close()
+    await closed
+    await server.shutdown()
+  }
 })

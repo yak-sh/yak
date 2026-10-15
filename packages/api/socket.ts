@@ -119,6 +119,23 @@ export let decode = (data: unknown): Incoming => {
   }
 }
 
+/** Answer a finite client clock token directly, outside subscription/ack queues.
+ * `received` is epoch milliseconds captured at the socket's message boundary;
+ * `now` supplies epoch milliseconds immediately before sending the reply.
+ * Returns false for messages that are not valid clock requests. */
+export let clockReply = (
+  socket: Pick<Socket, 'send'>,
+  value: unknown,
+  received: number,
+  now: () => number = Date.now,
+): boolean => {
+  if (!value || typeof value != 'object' || !('clock' in value)) return false
+  let clock = value.clock
+  if (typeof clock != 'number' || !Number.isFinite(clock)) return false
+  socket.send(JSON.stringify({ clock, received, sent: now() }))
+  return true
+}
+
 let gate = (subs: Subs, to: Sink, now?: () => number) => {
   let bySink = gates.get(subs)
   if (!bySink) gates.set(subs, bySink = new WeakMap())
@@ -367,10 +384,12 @@ export let attach = (
   socket.addEventListener('open', q.flush)
   socket.addEventListener('message', (e) => {
     if (shut) return
+    let received = (now ?? Date.now)()
     let input = decode(e.data)
     let msg = 'value' in input && input.value && typeof input.value == 'object'
       ? input.value as Record<string, unknown>
       : undefined
+    if (clockReply(socket, msg, received, now)) return
     if (typeof msg?.ack == 'string') return q.ack(msg.ack)
     if (
       msg?.acks === true &&

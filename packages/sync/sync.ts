@@ -115,6 +115,9 @@ export type Sync = {
   /** Ask one subscription, or every subscription, for a fresh full frame from
    * the server. */
   refresh: (id?: string) => void
+  /** Store epoch milliseconds, calibrated over the socket on first use. Starts
+   * locally until a reply; retains its last offset while disconnected. */
+  now: () => number
   /** whether the socket is open right now */
   connected: () => boolean
   /** whether this subscription has successfully applied an answer on the
@@ -434,6 +437,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       opts.replica?.unsubscribe(id)
       if (ready) notify(id, false)
     },
+    now: w.now,
     connected: w.connected,
     ready: (id) => states.get(id)?.ready ?? false,
     onReady: (fn) => {

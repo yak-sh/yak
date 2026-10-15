@@ -7,7 +7,7 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { test, until } from '@yaks/testing'
 import { map as queryMap } from '@yaks/query'
-import { subscriptions as subscribed } from '@yaks/api'
+import { type Subs, subscriptions as subscribed } from '@yaks/api'
 import {
   type Bundle,
   derivedEid,
@@ -108,6 +108,56 @@ let ask = (id: string, query: string) =>
   JSON.stringify({ subscribe: query, id })
 let send = (live: Sockets, ws: Wire, message: unknown) =>
   live.message(ws, JSON.stringify(message))
+
+test('hibernating clock probes do not recover attachments or touch subscriptions and storage', () => {
+  let untouched = new Proxy({}, {
+    get: () => {
+      throw new Error('clock exchange touched durable state')
+    },
+  })
+  let ws = wire()
+  ws.deserializeAttachment = () => {
+    throw new Error('clock read attachment')
+  }
+  let live = sockets(untouched as Subs, {
+    storage: untouched as ReturnType<typeof durable>,
+    acceptWebSocket: () => {},
+    getWebSockets: () => [ws],
+  })
+  let before = Date.now()
+  send(live, ws, { clock: 12.5 })
+  let [reply] = ws.sent as unknown as {
+    clock: number
+    received: number
+    sent: number
+  }[]
+  assertEquals(reply.clock, 12.5)
+  assert(reply.received >= before)
+  assert(reply.sent >= reply.received && reply.sent <= Date.now())
+  assertEquals(ws.writes(), 0)
+  ws.closing()
+  send(live, ws, { clock: 0 })
+  assertEquals(ws.sent.length, 1)
+})
+
+test('a hibernating clock reply bypasses a held acknowledgement and preserves it', () => {
+  let ctx = hibernation()
+  let [g, live] = instance(store(), ctx)
+  let ws = wire()
+  ctx.live.push(ws)
+  send(live, ws, { subscribe: '.kind=product', id: 'p', acks: true })
+  let [first] = ws.sent.splice(0)
+  g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  assertEquals(ws.sent, [])
+  let writes = ws.writes()
+  send(live, ws, { clock: 0 })
+  assertEquals(ws.sent.length, 1)
+  assertEquals((ws.sent[0] as unknown as { clock: number }).clock, 0)
+  assertEquals(ws.writes(), writes)
+  send(live, ws, { ack: first.ack })
+  assertEquals(ws.sent[1].id, 'p')
+  assertEquals((ws.sent[1].bundles as Bundle[])[0].entity.eid, 'p1')
+})
 
 test('a subscription is answered, and a commit pushes to the socket', () => {
   let ctx = hibernation()

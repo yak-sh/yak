@@ -92,6 +92,7 @@ import {
 import {
   api,
   type Authenticate,
+  clockReply,
   decode,
   type Frame,
   type Handler,
@@ -4754,24 +4755,35 @@ export class Store {
 
   /** A frame from a client: a subscription opened or closed. */
   webSocketMessage(ws: Wire, data: string | ArrayBuffer): Promise<void> {
-    return this.#traced('ws message', () => this.#socketMessage(ws, data))
+    let received = Date.now()
+    return this.#traced(
+      'ws message',
+      () => this.#socketMessage(ws, data, received),
+    )
   }
 
   #socketMessage(
     ws: Wire,
     data: string | ArrayBuffer,
+    received: number,
   ): void | Promise<void> {
     let run = async (): Promise<void> => {
+      let input = decode(data)
+      // Keep the dormancy gate below, but answer clock probes before booting
+      // the graph or recovering any subscription/ack attachments.
+      if (
+        ws.readyState == 1 &&
+        clockReply(ws, 'value' in input ? input.value : null, received)
+      ) return
       await this.#ensureStarted()
       if (this.#draft) {
-        return this.#draft.then(() => this.#socketMessage(ws, data))
+        return this.#draft.then(() => this.#socketMessage(ws, data, received))
       }
       // A hibernated socket outlives a deploy, so one can wake an object
       // whose schema refused to stand. The page must reopen the socket.
       if (this.#unbuilt) return void this.#hangUp(ws)
       try {
         let prof = this.#profile
-        let input = decode(data)
         let message = 'value' in input ? input.value : null
         if (message && typeof message == 'object') {
           if ('subscribe' in message) this.#spoke(message.subscribe)

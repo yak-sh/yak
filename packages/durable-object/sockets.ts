@@ -20,6 +20,7 @@
 
 import {
   type Ask,
+  clockReply,
   decode,
   fault,
   type Frame,
@@ -555,7 +556,11 @@ export let sockets = (
     message: (ws, data, scope) => {
       if (closed.has(ws)) return
       if (!open(ws)) return
+      let received = Date.now()
       let input = decode(data)
+      if (clockReply(ws, 'value' in input ? input.value : null, received)) {
+        return
+      }
       let run = () => {
         let held = ws.deserializeAttachment() as Held | null
         let msg = 'value' in input ? input.value : undefined

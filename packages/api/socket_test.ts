@@ -7,12 +7,76 @@ import { assert, assertEquals } from '@std/assert'
 import { fake, req, shopGraph } from './testing.ts'
 import { api } from './route.ts'
 import { attach, queue, sink } from './socket.ts'
-import { subscriptions } from './subs.ts'
+import { type Subs, subscriptions } from './subs.ts'
 
 let ids = (frames: { bundles?: { entity: { eid: string } }[] }[]) =>
   frames.flatMap((f) => (f.bundles ?? []).map((b) => b.entity.eid))
 
 let ws = () => req('/ws', { headers: { upgrade: 'websocket' } })
+
+test('clock replies echo finite tokens with epoch receipt and send times without subscriptions', () => {
+  let socket = fake()
+  let epoch = 1_800_000_000_000
+  let now = () => epoch += 7
+  let untouched = new Proxy({} as Subs, {
+    get: () => {
+      throw new Error('clock exchange touched subscriptions')
+    },
+  })
+  attach(untouched, socket, undefined, now)
+  for (let clock of [0, -10, 12.5]) {
+    let received = epoch + 7
+    socket.emit('message', JSON.stringify({ clock }))
+    assertEquals<unknown>(socket.taken(), [{
+      clock,
+      received,
+      sent: received + 7,
+    }])
+  }
+})
+
+test('clock replies bypass a held subscription acknowledgement without releasing it', () => {
+  let graph = shopGraph()
+  let socket = fake()
+  attach(subscriptions(graph), socket, undefined, () => 1_800_000_000_000)
+  socket.emit(
+    'message',
+    JSON.stringify({ subscribe: '.book', id: 'b', acks: true }),
+  )
+  let [first] = socket.taken()
+  assertEquals(typeof first.ack, 'string')
+  graph.apply([{ entity: { eid: 'b1' }, book: { price: 1 } }])
+  assertEquals(socket.sent, [])
+  socket.emit('message', JSON.stringify({ clock: 123.5 }))
+  assertEquals<unknown>(socket.taken(), [{
+    clock: 123.5,
+    received: 1_800_000_000_000,
+    sent: 1_800_000_000_000,
+  }])
+  socket.emit('message', JSON.stringify({ ack: first.ack }))
+  assertEquals(ids(socket.taken()), ['b1'])
+})
+
+test('a clock request must carry a finite number', () => {
+  let socket = fake()
+  attach(subscriptions(shopGraph()), socket)
+  for (
+    let raw of [
+      '{"clock":"123"}',
+      '{"clock":null}',
+      '{"clock":true}',
+      '{"clock":{}}',
+      '{"clock":1e999}',
+      '{"clock":-1e999}',
+      '{"clock":NaN}',
+    ]
+  ) {
+    socket.emit('message', raw)
+    let [frame] = socket.taken()
+    assert(frame.refused, raw)
+    assertEquals('clock' in frame, false)
+  }
+})
 
 test('subscriber queue stops when the socket closes during a flush', () => {
   let open = false

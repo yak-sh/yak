@@ -19,6 +19,7 @@
 import type { Bundle, Eid } from '@yaks/graph'
 import { coalesced } from '@yaks/graph/bundle'
 import type { Coverage } from './coverage.ts'
+import { clock } from './clock.ts'
 
 /** The part of a WebSocket this package uses. The standard `WebSocket`
  * satisfies it, and so does any stand-in a test or a caller provides. */
@@ -104,6 +105,8 @@ export type WireOpts = {
   url: string
   /** the socket constructor (default: the global `WebSocket`) */
   connect?: Connect
+  /** Local epoch milliseconds for clock measurements (default: a monotonic epoch). */
+  time?: () => number
   /** how a reconnect is scheduled (default: `setTimeout`) */
   timer?: Timer
   /** the first reconnect delay in ms, doubling to `most` (default: 250) */
@@ -138,6 +141,9 @@ export type Wire = {
    * the next connection is told what is being said as it stands (`again`).
    */
   relay: (bundles: Bundle[]) => void
+  /** Store epoch milliseconds; first use opens the socket and starts calibration.
+   * Until the first reply this is the local epoch; across outages it holds the offset. */
+  now: () => number
   /** whether the socket is open right now */
   connected: () => boolean
   /** close the socket and stop reconnecting */
@@ -187,6 +193,30 @@ export let wire = (opts: WireOpts): Wire => {
   let n = 0
   let waiting: Bundle[] = []
   let draining = false
+  let agreed = clock(opts.time)
+  let timing = false
+  let trip: number | undefined
+  let rounds = 0
+  let clockGeneration = 0
+  let clockTimer: ReturnType<typeof setTimeout> | undefined
+  let stopClock = () => {
+    clockGeneration++
+    if (clockTimer !== undefined) clearTimeout(clockTimer)
+    clockTimer = undefined
+    trip = undefined
+  }
+  let probe = () => {
+    if (!timing || closed || socket?.readyState != OPEN) return
+    trip = agreed.read()
+    send({ clock: trip })
+    let generation = clockGeneration
+    let next = () => {
+      if (generation == clockGeneration) probe()
+    }
+    let ms = rounds++ < 7 ? 1000 : 30_000
+    if (opts.timer) opts.timer(next, ms)
+    else clockTimer = setTimeout(next, ms)
+  }
 
   let send = (msg: unknown) => {
     if (socket && socket.readyState == OPEN) socket.send(JSON.stringify(msg))
@@ -268,6 +298,9 @@ export let wire = (opts: WireOpts): Wire => {
       waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
       told = false
+      agreed.reset()
+      rounds = 0
+      probe()
       // Said before anything is asked, so no answer hands back an older copy.
       let said = opts.again?.() ?? []
       if (said.length) s.send(JSON.stringify({ relay: said }))
@@ -316,7 +349,15 @@ export let wire = (opts: WireOpts): Wire => {
     s.addEventListener('message', (e) => {
       if (socket != s || closed) return
       try {
-        let packet = JSON.parse(String(e.data)) as
+        let value = JSON.parse(String(e.data))
+        if (value && typeof value == 'object' && 'clock' in value) {
+          if (trip !== undefined && value.clock === trip) {
+            agreed.sample(trip, value.received, value.sent)
+            trip = undefined
+          }
+          return
+        }
+        let packet = value as
           | Frame
           | { frames: Frame[]; ack?: string }
         if ('frames' in packet) {
@@ -342,6 +383,7 @@ export let wire = (opts: WireOpts): Wire => {
     s.addEventListener('close', () => {
       if (socket != s) return
       socket = null
+      stopClock()
       waiting = []
       inbox = []
       for (let id of asks.keys()) {
@@ -377,9 +419,18 @@ export let wire = (opts: WireOpts): Wire => {
       waiting = coalesced([...waiting, ...bundles])
       flush()
     },
+    now: () => {
+      if (!closed && !timing) {
+        timing = true
+        open()
+        probe()
+      }
+      return agreed.now()
+    },
     connected: () => socket?.readyState == OPEN,
     close: () => {
       closed = true
+      stopClock()
       waiting = []
       let s = socket
       socket = null

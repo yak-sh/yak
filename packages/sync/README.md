@@ -347,6 +347,34 @@ subscribe on their id to retry. The first successful frame after reconnecting
 replaces prior membership, adding missing entities to `gone`. Cached data alone
 never makes a subscription ready on a new connection.
 
+### The store's clock
+
+`link.now()` returns epoch milliseconds on the store's clock. First use opens
+its existing socket (even without a subscription) and starts calibration;
+subsequent calls are cheap local reads. With `@yaks/client`, use
+`client.wire.now()` on a client configured with a server URL.
+
+Until the first reply it returns the local epoch. During disconnection it keeps
+the last offset, and refines it again after reconnect. Do not use it as a
+readiness signal or a security authority. Corrections can move time in either
+direction: use a local monotonic timer for measuring an animation's elapsed
+time, and this clock for shared epoch deadlines such as a wave's start.
+
+Calibration sends `{clock: departure}` and receives
+`{clock: departure, received, sent}` directly on `/ws`, outside subscription
+queues and acknowledgments. All four timestamps are milliseconds. The client
+subtracts server processing time from the round trip, estimates the offset
+NTP-style, and uses the least-delayed of the last eight trips. It samples each
+second initially, then every 30 seconds while connected. Its local epoch is
+anchored to `performance.now()`, so changing the page's wall clock does not
+corrupt measurements. Closing the Sync stops calibration; apps which never call
+`now()` send no clock probes. The box's `@yaks/api` server and yaks.app app
+stores implement the same exchange.
+
+Like NTP, this estimates rather than guarantees simultaneity: asymmetric network
+delay contributes error. It is not an HTTP `Date` header's second-granularity
+guess, nor a simulation lockstep protocol.
+
 `wire(options)` provides this socket behavior without installing a graph plugin;
 its `land` callback receives frames after membership bookkeeping. It also
 exposes `relay(bundles)` for peer writes. `backoff` calculates the next

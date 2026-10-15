@@ -2,7 +2,7 @@
 // source's raw batch feed invalidates the page's own query; the answer is
 // read through page-graph, where ownership and cross-store composition live.
 // A lost source closes the page socket so @yaks/sync reconnects and refills.
-import { type Frame, queue, refusal } from '@yaks/api'
+import { clockReply, type Frame, queue, refusal } from '@yaks/api'
 import { workerUpgrade } from '@yaks/workerd'
 import { type App, appStore, type Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -161,8 +161,10 @@ export let pageSocket = async (
   front.addEventListener('open', out.flush)
   front.addEventListener('close', close)
   front.addEventListener('message', (e) => {
+    let received = Date.now()
     try {
       let msg = JSON.parse(String(e.data)) as {
+        clock?: unknown
         id?: string
         subscribe?: string | true
         unsubscribe?: string
@@ -170,6 +172,7 @@ export let pageSocket = async (
         acks?: boolean
         relay?: unknown[]
       }
+      if (clockReply(front, msg, received)) return
       if (typeof msg.ack == 'string') return out.ack(msg.ack)
       if (msg.acks === true) out.enable()
       if (typeof msg.subscribe == 'string' || msg.subscribe === true) {

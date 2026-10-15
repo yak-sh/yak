@@ -85,12 +85,12 @@ writer's presence after that writer disconnects.
 
 ## Exports
 
-| Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/api`        | `api`, `Options`, `Handler`, `Route`, `routed`, `Filter`; `Authenticate`, `signed`, `PeerWriter`; `ask`, `write`, `pour`, `poured`, `CHUNK`, `WriteContext`; `published`; `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`, `Opening`; `attach`, `decode`, `Incoming`, `queue`, `receive`, `sink`, `Socket`, `Upgrade`; `denoUpgrade`, `denoListen`, `Listen`, `Listener`, `Addr`; `json`, `refusal`, `refuse`, `fault`, `Refusal`, `Unauthorized`; `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`; `timed` |
-| `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/api`        | `api`, `Options`, `Handler`, `Route`, `routed`, `Filter`; `Authenticate`, `signed`, `PeerWriter`; `ask`, `write`, `pour`, `poured`, `CHUNK`, `WriteContext`; `published`; `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`, `Opening`; `attach`, `clockReply`, `decode`, `Incoming`, `queue`, `receive`, `sink`, `Socket`, `Upgrade`; `denoUpgrade`, `denoListen`, `Listen`, `Listener`, `Addr`; `json`, `refusal`, `refuse`, `fault`, `Refusal`, `Unauthorized`; `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`; `timed` |
+| `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 ## Query answers
 
@@ -464,6 +464,8 @@ do not close the socket or disturb other subscriptions.
 → { ack: "<token>" }
 → { unsubscribe: "<id>" }
 → { relay: Bundle[] }
+→ { clock: <finite number> }
+← { clock: <echoed number>, received: <epoch ms>, sent: <epoch ms> }
 ← { id, bundles, gone?, coverage?, peers?, peerCoverage?, peerGone? }
 ← { id, count } | { id, distinct } | { id, tally }
 ← { id, relay: Bundle[] } | { id, transient: TransientFrame[] }
@@ -471,10 +473,45 @@ do not close the socket or disturb other subscriptions.
 ← { frames: [{ id, … }, …], ack: "<token>" }
 ```
 
+A **clock exchange** samples the server clock on the existing socket. The client
+sends a finite numeric `clock` token (its request timestamp); the server echoes
+it with `received` and `sent`, epoch milliseconds from `Date.now()` at receipt
+and send. Clock replies go directly to that socket, without a subscription, ack
+or durable read/write. Invalid clock tokens are not clock exchanges and follow
+ordinary message validation.
+
+`clockReply(socket, value, received, now?)` handles a decoded clock request and
+returns whether it replied. Hosts with their own socket message boundary capture
+`received` before dispatch and call it before subscription recovery or ack
+queues. An injected `now` must return epoch milliseconds.
+
+```ts
+import { clockReply } from '@yaks/api'
+import { equal } from '@yaks/testing'
+
+const replies: unknown[] = []
+const socket = { send: (text: string) => replies.push(JSON.parse(text)) }
+equal(
+  clockReply(
+    socket,
+    { clock: 12.5 },
+    1_800_000_000_000,
+    () => 1_800_000_000_002,
+  ),
+  true,
+)
+equal(replies, [{
+  clock: 12.5,
+  received: 1_800_000_000_000,
+  sent: 1_800_000_000_002,
+}])
+equal(clockReply(socket, { clock: '12.5' }, 1_800_000_000_000), false)
+```
+
 An **ack** is the token a client echoes after applying a frame. With
 `acks:
-true`, non-relay frames wait for their ack before more non-relay frames
-are sent. `frames: true` groups adjacent non-relay frames under one ack;
+true`, subscription frames wait for their ack before more subscription
+frames are sent. `frames: true` groups adjacent non-relay frames under one ack;
 acknowledge only after applying the whole group. Relay-only frames carry no ack
 or replay state. On reconnect, clients reopen subscriptions and resend relayed
 values.

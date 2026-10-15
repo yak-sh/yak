@@ -520,10 +520,10 @@ grouped approximately by function, **not** by dependency order.
   secrets in D1, encrypted under a key the caller holds, meeting @yaks/secrets'
   vault shape without importing it.
 - **[@yaks/sync](./sync)** — Send local graph changes to a server and reconcile
-  or revert optimistic updates. Deletion batches wait for the server. Schema
-  keywords `sync` and `durable` separately describe delivery and intended
-  lifetime. There is no durable offline write queue or automatic retry of failed
-  writes.
+  or revert optimistic updates. `now()` estimates store time from measured
+  socket round trips. Deletion batches wait for the server. Schema keywords
+  `sync` and `durable` separately describe delivery and intended lifetime. There
+  is no durable offline write queue or automatic retry of failed writes.
 
 - **[@yaks/canvas](./canvas)** — the user interface stored as data: a `canvas`
   of `card`s each `pin`ned at a position, the `camera` a window looks through, a

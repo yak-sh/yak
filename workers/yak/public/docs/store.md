@@ -333,6 +333,23 @@ arrives; never append to what you drew last time.
       draw(await query('.task.status=open&?doc'))
       let stop = subscribe('.task.status=open&?doc', draw)
 
+### A shared clock for pages
+
+For shared deadlines, use `link.now()` on a Sync from `@yaks/sync`, or
+`client.wire.now()` on an `@yaks/client` configured with a server URL. It
+returns epoch milliseconds on the app store's clock, calibrated over the same
+`./api/ws` socket the client already uses. No extra HTTP request or `Date`
+header is needed, and the box's `@yaks/api` server speaks the same protocol.
+
+The first call starts calibration; before a reply it returns local time.
+Thereafter each call is a local read of the estimated store time. Measured round
+trips refine the offset (excluding server work, preferring low-delay samples).
+While offline it keeps the last offset and resamples on reconnect. Call the
+client's `close()` when finished to stop its socket and clock probes.
+Corrections can move time forward or backward; use a local monotonic timer for
+elapsed durations, and this clock for agreed epoch deadlines. Network asymmetry
+still limits precision; it is not an authority for enforcing rules.
+
 ## Who may read, who may write
 
 An app's `access` is one of three settings, given by `app_new` and `app_set`:
