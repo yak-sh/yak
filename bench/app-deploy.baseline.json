@@ -8,25 +8,25 @@
   "tolerance": 0.25,
   "benches": [
     {
-      "name": "yaks.app/files → live",
+      "name": "yaks.app/ship → live",
       "unit": "ms",
       "resolution": 1,
       "better": "lower",
-      "median": 2106
+      "median": 3307
     },
     {
-      "name": "yaks.app/deploy",
+      "name": "yaks.app/ship deploy",
       "unit": "ms",
       "resolution": 1,
       "better": "lower",
-      "median": 2730
+      "median": 1406
     },
     {
-      "name": "yaks.app/one file → live",
+      "name": "yaks.app/edit → live",
       "unit": "ms",
       "resolution": 1,
       "better": "lower",
-      "median": 1684
+      "median": 3050
     }
   ]
 }

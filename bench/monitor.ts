@@ -24,8 +24,8 @@ import type { Regression, Run } from '@yaks/benchmark'
 import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
 
-/** Every suite this box measures itself; the CI and deploy suites are timed
- * where they run. */
+/** Every suite this box measures itself; the CI and platform deploy suites are
+ * timed where they run. */
 export let SUITES = [
   'pages',
   'web-client',
@@ -40,7 +40,15 @@ export let SUITES = [
   'harness-window',
   'harness-switch',
   'throughput',
+  'app-deploy',
 ]
+
+/** A suite whose check reads rows something else records: the monitor takes a
+ * fresh measurement first, so each daily run (and each confirming run) times
+ * real deploys on yaks.app as a throwaway account. */
+export let MEASURE: Record<string, string[]> = {
+  'app-deploy': ['bench/run.ts', 'app-deploy', 'time'],
+}
 
 /** One suite's check: its run, or why it could not run. */
 export type Outcome =
@@ -166,6 +174,23 @@ let web = async (): Promise<string | undefined> => {
 /** `deno task bench:check <suite>` in this checkout, read back from the run
  * it writes. */
 let check = async (suite: string): Promise<Outcome> => {
+  if (MEASURE[suite]) {
+    let timed = await new Deno.Command(Deno.execPath(), {
+      args: ['run', '-A', ...MEASURE[suite]],
+      cwd: root,
+      stdout: 'inherit',
+      stderr: 'piped',
+    }).output()
+    if (!timed.success) {
+      let said = new TextDecoder().decode(timed.stderr)
+      await Deno.stderr.write(timed.stderr)
+      return {
+        verdict: 'failed',
+        error: said.trim().split('\n').slice(-12).join('\n') ||
+          `exit ${timed.code}`,
+      }
+    }
+  }
   let results = `${root}bench/${suite}.results.json`
   await Deno.remove(results).catch(() => {})
   let child = await new Deno.Command(Deno.execPath(), {

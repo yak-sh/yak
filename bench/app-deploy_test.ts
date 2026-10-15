@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { records, type Row, run, suite } from './app-deploy.ts'
+import { GATED, records, type Row, run, suite } from './app-deploy.ts'
 import { type Baseline, Regressed } from '@yaks/benchmark'
 import { assertRejects } from '@std/assert'
 import { medians, stages, stats } from '../bin/app-deploy-time.ts'
@@ -15,19 +15,20 @@ let row = (
   host: 'yaks.app',
   version: null,
   runs: 5,
-  files3: { call: stat(live - 100), live: stat(live) },
-  deploy: { call: stat(live) },
-  single: { call: stat(live - 100), live: stat(live) },
+  ship: { write: stat(live / 2), deploy: stat(live / 2), live: stat(live) },
+  edit: { write: stat(live / 2), deploy: stat(live / 2), live: stat(live) },
   ...more,
 })
 
-test('app deploy records: JSONL, blank lines, corrupt rows refused', () => {
+test('app deploy records: JSONL, blank lines, corrupt rows refused, staged-era rows unread', () => {
   let a = row(3000), b = row(2500, 1)
   assertEquals(
     records(`\n${JSON.stringify(a)}\n\n${JSON.stringify(b)}\n`),
     [a, b],
   )
   assertEquals(records(' \n'), [])
+  let old = { ...a, files3: { call: stat(1), live: stat(1) } }
+  assertEquals(records(JSON.stringify(old)), [])
   for (
     let bad of [
       null,
@@ -36,8 +37,8 @@ test('app deploy records: JSONL, blank lines, corrupt rows refused', () => {
       { ...a, host: '' },
       { ...a, runs: 0 },
       { ...a, version: 7 },
-      { ...a, deploy: {} },
-      { ...a, files3: { ...a.files3, live: { median: -1, p95: 1, n: 1 } } },
+      { ...a, edit: {} },
+      { ...a, ship: { ...a.ship, live: { median: -1, p95: 1, n: 1 } } },
     ]
   ) {
     assertThrows(() => records(JSON.stringify(bad)), Error, ':1: invalid')
@@ -74,47 +75,59 @@ let options = (base: Baseline) => ({
   },
 })
 
+// A baseline banking exactly this row's gated medians.
+let banked = (r: Row): Baseline => ({
+  version: 1,
+  suite: 'app-deploy',
+  metric: 'latest-host-medians',
+  workload: 1,
+  runtime: 'Cloudflare Workers',
+  cpu: 'Cloudflare',
+  tolerance: 0.25,
+  benches: Object.entries(GATED).map(([name, of]) => ({
+    name: `${r.host}/${name}`,
+    unit: 'ms',
+    resolution: 1,
+    better: 'lower' as const,
+    median: of(r),
+  })),
+})
+
+let slots = {
+  'ship → live': ['ship', 'live'],
+  'ship deploy': ['ship', 'deploy'],
+  'edit → live': ['edit', 'live'],
+} as const
+
+// The row with one gated number, by name, set to `ms`.
+let setting = (r: Row, name: keyof typeof GATED, ms: number): Row => {
+  let [k, p] = slots[name]
+  return { ...r, [k]: { ...r[k], [p]: stat(ms) } }
+}
+
 test('app deploy suite: each banked workload refuses a synthetic regression', async () => {
-  let base: Baseline = JSON.parse(
-    await Deno.readTextFile(
-      new URL('./app-deploy.baseline.json', import.meta.url),
-    ),
-  )
-  let normal = row(2106, 1, {
-    deploy: { call: stat(2730) },
-    single: { call: stat(1584), live: stat(1684) },
-  })
+  let normal = row(2000, 1)
+  let base = banked(normal)
   assertEquals((await run(options(base), [normal]))?.verdict, 'passed')
-  let slower = [
-    { ...normal, files3: { ...normal.files3, live: stat(2106 * 1.3) } },
-    { ...normal, deploy: { call: stat(2730 * 1.3) } },
-    { ...normal, single: { ...normal.single, live: stat(1684 * 1.3) } },
-  ]
-  for (let [i, slow] of slower.entries()) {
+  for (let name of Object.keys(GATED) as (keyof typeof GATED)[]) {
+    let slow = setting(normal, name, GATED[name](normal) * 1.3)
     let error = await assertRejects(() => run(options(base), [slow]), Regressed)
     assertEquals((error as Regressed).result.regressions.map((r) => r.name), [
-      base.benches[i].name,
+      `yaks.app/${name}`,
     ])
   }
 })
 
 test('app deploy limits retain integer millisecond rounding', async () => {
-  let base: Baseline = JSON.parse(
-    await Deno.readTextFile(
-      new URL('./app-deploy.baseline.json', import.meta.url),
-    ),
+  let normal = row(2106, 1)
+  let base = banked(normal)
+  // 25% over 2106 is 2632.5, which rounds to 2633 and passes; 2634 does not.
+  let at = setting(normal, 'ship → live', 2633)
+  assertEquals((await run(options(base), [at]))?.verdict, 'passed')
+  await assertRejects(
+    () => run(options(base), [setting(normal, 'ship → live', 2634)]),
+    Regressed,
   )
-  for (let [files, deploy] of [[2633, 2730], [2106, 3413]]) {
-    let atLimit = row(files, 1, {
-      deploy: { call: stat(deploy) },
-      single: { call: stat(1584), live: stat(1684) },
-    })
-    assertEquals((await run(options(base), [atLimit]))?.verdict, 'passed')
-    let over = files == 2633
-      ? { ...atLimit, files3: { ...atLimit.files3, live: stat(files + 1) } }
-      : { ...atLimit, deploy: { call: stat(deploy + 1) } }
-    await assertRejects(() => run(options(base), [over]), Regressed)
-  }
 })
 
 test('app deploy suite checks only the latest host, with new hosts unbanked', async () => {
@@ -124,43 +137,32 @@ test('app deploy suite checks only the latest host, with new hosts unbanked', as
     row(9000, 2, { host: 'yaks.fyi' }),
   ])!
   let current = await work.collect(0)
-  assertEquals(Object.keys(current), [
-    'yaks.fyi/files → live',
-    'yaks.fyi/deploy',
-    'yaks.fyi/one file → live',
-  ])
   assertEquals(
-    (current['yaks.fyi/files → live'] as { value: number }).value,
+    Object.keys(current),
+    Object.keys(GATED).map((n) => `yaks.fyi/${n}`),
+  )
+  assertEquals(
+    (current['yaks.fyi/ship → live'] as { value: number }).value,
     9000,
   )
   assertEquals(suite([]), null)
 
-  let base: Baseline = JSON.parse(
-    await Deno.readTextFile(
-      new URL('./app-deploy.baseline.json', import.meta.url),
-    ),
-  )
-  let staging = {
-    ...base.benches[0],
-    name: 'yaks.fyi/files → live',
-    median: 100,
-  }
-  base.benches.push(staging)
+  let normal = row(2000, 1)
+  let base = banked(normal)
   // Staging's old slow measurement does not change a later production verdict.
+  base.benches.push({
+    ...base.benches[0],
+    name: 'yaks.fyi/ship → live',
+    median: 100,
+  })
   assertEquals(
-    (await run(options(base), [
-      row(9000, 1, { host: 'yaks.fyi' }),
-      row(2106, 2, {
-        deploy: { call: stat(2730) },
-        single: { call: stat(1584), live: stat(1684) },
-      }),
-    ]))?.verdict,
+    (await run(options(base), [row(9000, 1, { host: 'yaks.fyi' }), normal]))
+      ?.verdict,
     'passed',
   )
   assertEquals(
-    (await run(options(base), [
-      row(9000, 3, { host: 'new.example' }),
-    ]))?.verdict,
+    (await run(options(base), [row(9000, 3, { host: 'new.example' })]))
+      ?.verdict,
     'measured',
   )
 

@@ -4,28 +4,36 @@ What a person waits for when they deploy an app on yaks.app, and the ratchet
 that keeps it from growing (goal V-34987, task T-34986).
 
 ```sh
-TOKEN_FILE=~/.yak/grant deno task app-deploy:time   # on the box; records
-deno task app-deploy:gate                            # anywhere; reads
+deno task app-deploy:time    # on the box; signs in a throwaway, records
+deno task app-deploy:gate    # anywhere; reads
 ```
 
-`app-deploy:time` mints a throwaway app in `SPACE` (default `jeff`) on `HOST`
-(default `yaks.app`), then `RUNS` (default 5) times: writes three small files
-with `app_files` and polls the app URL until the new bytes answer; calls
-`app_deploy`; writes one file and polls again. The app is deleted forever at the
-end. One row per run of the script is appended to `bench/app-deploys.jsonl`:
-median and p95 per step, plus the median `Server-Timing` per stage from the
-answers, so a number that moved says which hop moved it. Commit the row with the
-next change.
+`app-deploy:time` signs in as a throwaway account (`NAME`, default
+`app-deploy-bench`; `yak admin throwaway`) on `HOST` (default `yaks.app`) and
+mints a one-hour grant narrowed to that account's own space, so it never touches
+the owner's account or an account key. The grant stays in memory, is never
+printed, and is revoked at the end. Then `RUNS` (default 5) times it ships three
+small files (`app_files` stages them, `app_deploy` puts them live) and polls the
+app URL until the new bytes answer, then ships a one-file change the same way.
+The app is deleted forever at the end. One row per run of the script is appended
+to `bench/app-deploys.jsonl`: median and p95 of the write call, the deploy call
+and the whole change until live, plus the median `Server-Timing` per stage from
+the answers, so a number that moved says which hop moved it. Commit the row with
+the next change.
 
-The token is a `grant` from the connector, an hour long and narrowed to the
-space, read from `TOKEN_FILE` and never printed. Staging (`HOST=yaks.fyi`) is
-the right host once it can sign someone in; until it can mail (T-34979) it
-cannot, so production with a throwaway app is the default.
+Before `app_files` writes were staged until `app_deploy`, the rows measured
+`files → live`, `deploy` and `one file → live`. Those rows (the `files3` ones)
+stay in the file and are never compared with these; the gated numbers have new
+names (`ship → live`, `ship deploy`, `edit → live`).
+
+`bin/bench-monitor` runs this suite daily with the others: it takes a fresh
+measurement, checks it, measures again to confirm a regression, and files a bug
+for a confirmed one.
 
 `app-deploy:gate` reads the committed rows through
 [@yaks/benchmark](../packages/benchmark/README.md), checking the latest row
 against that host's entries in `bench/app-deploy.baseline.json`. It checks three
-medians: files → live, deploy, and one file → live. The baseline preserves each
+medians: ship → live, ship deploy, and edit → live. The baseline preserves each
 host's banked minimum with a 25% tolerance; host names are part of the bench
 names, so rows from different hosts are never compared. A check writes
 `bench/app-deploy.results.json` and never changes the baseline. No rows pass as
@@ -43,16 +51,3 @@ deno task bench:ratchet app-deploy
 
 Acceptance reads the recorded rows; it does not mint an app or run a deploy. It
 retains baseline entries for other hosts. Review and commit the baseline diff.
-
-## Baseline
-
-2026-09-08, production, 5 runs, before `Server-Timing` on the write doors:
-
-| step      | call median | live median | live p95 |
-| --------- | ----------: | ----------: | -------: |
-| files (3) |     3561 ms |     3718 ms |  4046 ms |
-| deploy    |     3871 ms |             |  4501 ms |
-| one file  |     2108 ms |     2338 ms |  3398 ms |
-
-A plain GET from the same box took 190–520 ms, so the write call is the cost and
-the bytes are live 150–250 ms after it answers.

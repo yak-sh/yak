@@ -1,33 +1,63 @@
 #!/usr/bin/env -S deno run --allow-read --allow-write --allow-env --allow-net
 // What an app deploy costs the person making it, timed the way they feel it:
-// an app_files write of a small app until its bytes answer live at the app URL,
-// an app_deploy, and a one-file update until live. RUNS of each, medians and
-// p95 appended as one row to bench/app-deploys.jsonl, which
-// the app-deploy suite checks. Every answer's `Server-Timing` is kept too
-// (median per stage), so a row that moved says which hop moved it.
+// an app_files write of a small app and an app_deploy, until its bytes answer
+// live at the app URL (ship), then a one-file change deployed the same way
+// (edit). RUNS of each, medians and p95 appended as one row to
+// bench/app-deploys.jsonl, which the app-deploy suite checks. Every answer's
+// `Server-Timing` is kept too (median per stage), so a row that moved says
+// which hop moved it.
 //
-//   TOKEN_FILE=/path/to/grant deno task app-deploy:time
+//   deno task app-deploy:time
 //
-// The token is a `grant` (an hour, narrowed to SPACE), read from a file and
-// never printed. HOST defaults to production because staging (yaks.fyi) cannot
-// sign anyone in until it can mail (T-34979); pass HOST=yaks.fyi once it can.
-// The app is a throwaway, deleted forever at the end — this records; it never
-// commits or pushes.
+// It signs in as a throwaway account (`yak admin throwaway`, NAME) and mints a
+// one-hour grant narrowed to that account's own space for the run: never the
+// owner's account, never an account key. The grant is read from `yak grant`'s
+// answer, kept in memory, never printed, and revoked at the end. HOST defaults
+// to production because staging (yaks.fyi) cannot sign anyone in until it can
+// mail (T-34979). The app is a throwaway, deleted forever at the end; this
+// records and never commits or pushes.
 import { RECORD, type Row, type Stat } from '../bench/app-deploy.ts'
 
-// Read when the bench runs, not when a test imports the helpers below.
-let token = async () => {
-  let file = Deno.env.get('TOKEN_FILE')
-  if (!file) throw new Error('TOKEN_FILE: the path of a grant, unset')
-  return (await Deno.readTextFile(file)).trim()
-}
-let space = Deno.env.get('SPACE') ?? 'jeff'
+let who = Deno.env.get('NAME') ?? 'app-deploy-bench'
+let space = who
 let host = Deno.env.get('HOST') ?? 'yaks.app'
 let app = Deno.env.get('APP') ?? `bench-${Date.now().toString(36)}`
 let runs = Number(Deno.env.get('RUNS') ?? 5)
 let record = Deno.env.get('RECORD') ?? RECORD
 let mcp = `https://${host}/mcp`
 let id = 0
+
+// `yak` as the throwaway: its connector tools, answered as JSON. It signs the
+// account in when it has no connection yet.
+let yak = async (...args: string[]) => {
+  let out = await new Deno.Command('yak', {
+    args: ['--host', host, '--as', who, '--json', ...args],
+    stdout: 'piped',
+    stderr: 'piped',
+  }).output()
+  if (!out.success) {
+    throw new Error(new TextDecoder().decode(out.stderr).trim().slice(0, 300))
+  }
+  return new TextDecoder().decode(out.stdout)
+}
+
+// The run's grant, minted once. Its token only ever sits in `grant`.
+let grant = ''
+let mint = async () => {
+  let said = await yak('grant', '--space', space).catch(async () => {
+    await new Deno.Command('yak', {
+      args: ['admin', 'throwaway', who],
+      stdout: 'null',
+      stderr: 'null',
+    }).output()
+    return await yak('grant', '--space', space)
+  })
+  let body: string = JSON.parse(said).result?.[0]?.content?.body ?? ''
+  let m = body.match(/^yak login (\S+)/)
+  if (!m) throw new Error('grant: no token in the answer')
+  grant = m[1]
+}
+let token = () => grant
 
 // `name;dur=N` entries → ms by stage.
 export let stages = (header: string | null) =>
@@ -44,7 +74,7 @@ let call = async (name: string, args: Record<string, unknown>) => {
     headers: {
       'content-type': 'application/json',
       accept: 'application/json, text/event-stream',
-      authorization: `Bearer ${await token()}`,
+      authorization: `Bearer ${token()}`,
     },
     body: JSON.stringify({
       jsonrpc: '2.0',
@@ -117,9 +147,11 @@ let TRIPS = ['hops', 'r2']
 let table = (row: Row) =>
   [
     `${row.host} v${row.version ?? '?'} runs=${row.runs}`,
-    `files → live   ${row.files3.live.median} ms (call ${row.files3.call.median}, p95 ${row.files3.live.p95})`,
-    `deploy         ${row.deploy.call.median} ms (p95 ${row.deploy.call.p95})`,
-    `one file → live ${row.single.live.median} ms (call ${row.single.call.median}, p95 ${row.single.live.p95})`,
+    ...(['ship', 'edit'] as const).map((k) =>
+      `${k.padEnd(5)} → live ${row[k].live.median} ms (write ${
+        row[k].write.median
+      }, deploy ${row[k].deploy.median}, p95 ${row[k].live.p95})`
+    ),
     ...Object.entries(row.timing ?? {}).flatMap(([tool, by]) => [
       `  ${tool}: ${
         Object.entries(by).filter(([k]) => !TRIPS.includes(k))
@@ -129,40 +161,59 @@ let table = (row: Row) =>
     ]),
   ].join('\n')
 
+type Lap = { write: number[]; deploy: number[]; live: number[] }
+type Hops = Record<string, number>[]
+
+// One change until it is live: app_files stages it, app_deploy releases it,
+// and the clock stops when `path` answers with `marker`.
+let ship = async (
+  lap: Lap,
+  hops: { files: Hops; deploy: Hops },
+  files: Record<string, unknown>,
+  path: string,
+  marker: string,
+) => {
+  let t0 = performance.now()
+  hops.files.push(await call('app_files', { app, space, ...files }))
+  let t1 = performance.now()
+  hops.deploy.push(await call('app_deploy', { app, space }))
+  lap.write.push(t1 - t0)
+  lap.deploy.push(performance.now() - t1)
+  lap.live.push(await live(path, marker, t0))
+}
+
+let summary = (lap: Lap) => ({
+  write: stats(lap.write),
+  deploy: stats(lap.deploy),
+  live: stats(lap.live),
+})
+
 export let main = async () => {
   console.log(`app ${space}.${host}/${app}/ runs=${runs}`)
+  await mint()
   await call('app_new', { slug: app, title: 'bench (throwaway)', space })
   let version = (await fetch(`https://${host}/`, { method: 'HEAD' })).headers
     .get('x-yak-version')
 
-  let write: number[] = [], deploy: number[] = [], single: number[] = []
-  let wcall: number[] = [], scall: number[] = []
-  let wt: Record<string, number>[] = [], dt: Record<string, number>[] = []
-  let st: Record<string, number>[] = []
+  let first: Lap = { write: [], deploy: [], live: [] }
+  let edit: Lap = { write: [], deploy: [], live: [] }
+  let hops = {
+    ship: { files: [], deploy: [] },
+    edit: { files: [], deploy: [] },
+  }
   try {
     for (let i = 0; i < runs; i++) {
       let m = `w${i}-${Math.random().toString(36).slice(2)}`
-      let t0 = performance.now()
-      wt.push(await call('app_files', { app, space, files: three(m) }))
-      wcall.push(performance.now() - t0)
-      write.push(await live('index.html', m, t0))
-
-      t0 = performance.now()
-      dt.push(await call('app_deploy', { app, space }))
-      deploy.push(performance.now() - t0)
+      await ship(first, hops.ship, { files: three(m) }, 'index.html', m)
 
       let s = `s${i}-${Math.random().toString(36).slice(2)}`
-      t0 = performance.now()
-      st.push(
-        await call('app_files', {
-          app,
-          space,
-          path: 'app.js',
-          content: `console.log('${s}')`,
-        }),
+      await ship(
+        edit,
+        hops.edit,
+        { path: 'app.js', content: `console.log('${s}')` },
+        'app.js',
+        s,
       )
-      scall.push(performance.now() - t0)
-      single.push(await live('app.js', s, t0))
     }
   } finally {
     // The throwaway goes whatever happened above; a delete that fails must not
@@ -179,6 +230,8 @@ export let main = async () => {
         }`,
       )
     }
+    // The grant ends itself, and nothing else: a revoke by the token it names.
+    await call('grant', { revoke: grant }).catch(() => {})
   }
 
   let row: Row = {
@@ -186,13 +239,13 @@ export let main = async () => {
     host,
     version,
     runs,
-    files3: { call: stats(wcall), live: stats(write) },
-    deploy: { call: stats(deploy) },
-    single: { call: stats(scall), live: stats(single) },
+    ship: summary(first),
+    edit: summary(edit),
     timing: {
-      app_files: medians(wt),
-      app_deploy: medians(dt),
-      single_file: medians(st),
+      ship_files: medians(hops.ship.files),
+      ship_deploy: medians(hops.ship.deploy),
+      edit_files: medians(hops.edit.files),
+      edit_deploy: medians(hops.edit.deploy),
     },
   }
   await Deno.writeTextFile(record, JSON.stringify(row) + '\n', { append: true })

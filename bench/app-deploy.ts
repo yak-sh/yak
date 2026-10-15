@@ -7,14 +7,17 @@ import {
 } from '@yaks/benchmark'
 
 export type Stat = { median: number; p95: number; n: number }
+// One change a person makes: `write` and `deploy` are the two calls (app_files
+// stages, app_deploy puts it live) and `live` is from the first call until the
+// new bytes answer at the app's address.
+export type Ship = { write: Stat; deploy: Stat; live: Stat }
 export type Row = {
   at: string
   host: string
   version: string | null
   runs: number
-  files3: { call: Stat; live: Stat }
-  deploy: { call: Stat }
-  single: { call: Stat; live: Stat }
+  ship: Ship
+  edit: Ship
   // Where the call's time went, from `Server-Timing` on the answers (median
   // ms per stage) — what to read when a number above moved.
   timing?: Record<string, Record<string, number>>
@@ -22,11 +25,14 @@ export type Row = {
 
 export let RECORD = new URL('./app-deploys.jsonl', import.meta.url)
 
-// The three gated numbers, by name: what a person waits for.
+// The three gated numbers, by name: what a person waits for. A name's meaning
+// never changes: rows before writes were staged until app_deploy measured
+// `files → live`, `deploy` and `one file → live`, and those rows stay in the
+// record, unread (`records`).
 export let GATED = {
-  'files → live': (r: Row) => r.files3.live.median,
-  'deploy': (r: Row) => r.deploy.call.median,
-  'one file → live': (r: Row) => r.single.live.median,
+  'ship → live': (r: Row) => r.ship.live.median,
+  'ship deploy': (r: Row) => r.ship.deploy.median,
+  'edit → live': (r: Row) => r.edit.live.median,
 }
 
 let stat = (s: unknown): s is Stat =>
@@ -36,19 +42,22 @@ let stat = (s: unknown): s is Stat =>
     return typeof v == 'number' && Number.isFinite(v) && v >= 0
   })
 
+// Rows from before writes were staged (`files3`) are history of another
+// measurement: kept in the file, never compared with these.
 export let records = (text: string): Row[] =>
   text.split('\n').flatMap((line, i) => {
     if (!line.trim()) return []
     try {
       let r = JSON.parse(line)
+      if (r?.files3) return []
       if (
         !r || typeof r.at != 'string' || !Number.isFinite(Date.parse(r.at)) ||
         typeof r.host != 'string' || !r.host ||
         (r.version !== null && typeof r.version != 'string') ||
         !Number.isInteger(r.runs) || r.runs < 1 ||
-        !stat(r.files3?.call) || !stat(r.files3?.live) ||
-        !stat(r.deploy?.call) ||
-        !stat(r.single?.call) || !stat(r.single?.live)
+        !['ship', 'edit'].every((k) =>
+          ['write', 'deploy', 'live'].every((p) => stat(r[k]?.[p]))
+        )
       ) throw new Error('invalid app deploy record')
       return [r as Row]
     } catch {
