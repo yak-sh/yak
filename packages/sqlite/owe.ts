@@ -285,7 +285,11 @@ let upkeep = (
 }
 
 // The highest id among the next `n` rows of `source` past `cursor`, or null
-// when there are none: where the window that takes them ends.
+// when there are none: where the window that takes them ends. A window's
+// bounds are bound, never written into its text, so every window of one piece
+// of work runs one prepared statement, where a text of its own would be
+// compiled once and kept, pushing what a store repeats out of the driver's
+// bounded cache.
 let next = (driver: Driver, source: string, cursor: number, n: number) => {
   let [{ hi }] = driver.query(select({
     cols: [as(fn('max', col('entity')), 'hi')],
@@ -293,9 +297,9 @@ let next = (driver: Driver, source: string, cursor: number, n: number) => {
       select({
         cols: [col('entity')],
         from: table(source),
-        where: gt(col('entity'), lit(cursor)),
+        where: gt(col('entity'), val(cursor)),
         order: [col('entity')],
-        limit: lit(n),
+        limit: val(n),
       }),
       'w',
     ),
@@ -305,7 +309,7 @@ let next = (driver: Driver, source: string, cursor: number, n: number) => {
 
 // The rows of `source` a window takes: past `cursor`, up to `hi`.
 let window = (cursor: number, hi: number) =>
-  and(gt(col('entity'), lit(cursor)), le(col('entity'), lit(hi)))
+  and(gt(col('entity'), val(cursor)), le(col('entity'), val(hi)))
 
 // What the triggers of work being done behind a cursor read it through: the
 // owed row itself, so there is one copy of how far it has got. A row that is
@@ -394,6 +398,8 @@ let windows: {
     let guarded = here.get(w.triggers[0]?.name)?.sql?.includes(key(w))
     if (!here.has(w.name) || !guarded) return true
     let hi = next(driver, w.source, w.cursor, fill)
+    // Filled: the triggers keeping it behind the cursor give way to the ones
+    // it keeps for good, each under the name it just gave up.
     if (hi == null) {
       for (let t of w.triggers) {
         driver.query({
@@ -402,8 +408,8 @@ let windows: {
           name: t.name,
           ifExists: true,
         })
+        driver.query(t)
       }
-      erect(driver, w.triggers)
       return true
     }
     driver.query({
@@ -478,7 +484,7 @@ let windows: {
     driver.query({
       t: 'delete',
       from: w.name,
-      where: le(col('entity'), lit(hi)),
+      where: le(col('entity'), val(hi)),
     })
     return false
   },
