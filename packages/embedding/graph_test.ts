@@ -4,7 +4,16 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile, screen as compileScreen, tally } from '@yaks/sql'
+import {
+  among,
+  col,
+  compile,
+  render,
+  select,
+  table,
+  tally,
+  val,
+} from '@yaks/sql'
 import { add } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { extend, meaning, plugins, schema } from './graph.ts'
@@ -12,18 +21,23 @@ import { TABLE } from './ddl.ts'
 import { mem, none, shop, stocked } from './testing.ts'
 
 let hash = { embedder: { provider: 'hash' } }
+// Databases are fixtures, built once: the tests below only read them. Raising
+// the vector table is SQLite's own work and takes longer than the budget.
+let db = await stocked()
+let raised = open(':memory:')
+add(raised, schema())
 
 test('the schema raises the vectors, and plugins add no rule to apply()', () => {
-  let sql = open(':memory:')
-  add(sql, schema())
   assertEquals(plugins(), [])
-  assertEquals(tally(sql, TABLE), 0)
-  // Adding it again changes nothing.
-  add(sql, schema())
+  assertEquals(tally(raised, TABLE), 0)
 })
 
-test('the extension a config builds answers .near over these vectors', async () => {
-  let db = await stocked()
+test('adding the schema again changes nothing', () => {
+  add(raised, schema())
+  assertEquals(tally(raised, TABLE), 0)
+})
+
+test('the extension a config builds answers .near over these vectors', () => {
   let [near] = extend({ storage: { statements: db } }, hash)
   let q = compile(parse('.near=book-1&.order=similar'), shop, {
     extend: [near],
@@ -31,8 +45,7 @@ test('the extension a config builds answers .near over these vectors', async () 
   assertEquals(db.query(q).map((r) => String(r.eid))[0], 'book-2')
 })
 
-test('the neighbourhood the config bounded is the one it gets', async () => {
-  let db = await stocked()
+test('the neighbourhood the config bounded is the one it gets', () => {
   let [near] = extend({ storage: { statements: db } }, {
     ...hash,
     neighbours: 1,
@@ -59,10 +72,9 @@ test('no embedder named is no space to rank in, and no extension', () => {
   )
 })
 
-test('a key that has not arrived still names the space it will fill', async () => {
+test('a key that has not arrived still names the space it will fill', () => {
   // Waiting for a key is the sweep's problem: what a query needs is the model
   // name, and the config says that whether or not the environment has a token.
-  let db = await stocked()
   let [near] = extend({ storage: { statements: db } }, {
     embedder: { provider: 'gpu', model: 'hash-64', key: undefined },
   })
@@ -73,7 +85,6 @@ test('a key that has not arrived still names the space it will fill', async () =
 })
 
 test('a phrase search sees an embedder that arrives after composition', async () => {
-  let db = await stocked()
   let options: { embedder?: { provider: string } } = {}
   let find = meaning(
     { storage: { statements: db }, vocab: shop, graph: none },
@@ -84,27 +95,31 @@ test('a phrase search sees an embedder that arrives after composition', async ()
   assert((await find('dragon')).length > 0)
 })
 
-test('a phrase search ranks only among what a filter line admits', async () => {
-  let db = await stocked()
-  let screen = (q: string) => compileScreen(parse(q), shop)
-  let find = meaning(
-    { storage: { statements: db, screen }, vocab: shop, graph: none },
+// A storage's filter line, here a list of entity names: what it admits is its
+// own business, the search only ranks among it.
+let screen = (line: string) =>
+  render(select({
+    cols: [col('id')],
+    from: table('entity'),
+    where: among(col('eid'), line.split(',').map(val)),
+  }))
+let ranked = (words: string, within?: string, storage = {}) =>
+  meaning(
+    { storage: { statements: db, ...storage }, vocab: shop, graph: none },
     hash,
-  )
-  let ranked = async (within?: string) =>
-    (await find('dragon burglar', { within })).map((h) => h.entity)
-  assertEquals((await ranked()).length, 4)
-  assertEquals(await ranked('.book.price>15'), ['book-2'])
-  await assertRejects(
-    () =>
-      meaning({ storage: { statements: db }, vocab: shop, graph: none }, hash)(
-        'dragon',
-        { within: '.book' },
-      ),
-    Error,
-    'cannot narrow',
+  )(words, { within }).then((hits) => hits.map((h) => h.entity))
+
+test('a phrase search ranks only among what a filter line admits', async () => {
+  assertEquals(
+    await ranked('dragon burglar', 'book-3,review-4', {
+      screen,
+    }),
+    ['book-3', 'review-4'],
   )
 })
+
+test('a filter line needs storage that can narrow a search', () =>
+  assertRejects(() => ranked('dragon', '.book'), Error, 'cannot narrow'))
 
 test('SQL facets reject storage without a statement capability', () => {
   assertThrows(() => extend({ storage: {} }, hash), Error, 'no SQL statements')
