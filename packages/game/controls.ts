@@ -90,7 +90,7 @@ export let pollGamepads = (): (Pad | null)[] => {
 export let gamepad = (
   pads: readonly (Pad | null)[],
   bindings?: GamepadBindings,
-) => {
+): { move: [number, number]; look: [number, number]; held: string[] } => {
   let move: [number, number] = [0, 0],
     look: [number, number] = [0, 0],
     held = new Set<string>()
@@ -162,7 +162,15 @@ export let lookDrag = (button: number, type: string, swapped: boolean) =>
 export let mouseButtons = (state: () => Mouse = (() => {
   let value = { buttons: 0, far: 0, chorded: false }
   return () => value
-})()) => {
+})()): {
+  down: (button: number) => void
+  move: (mask: number, distance: number) => void
+  up: (button: number) => number | undefined
+  walk: () => boolean
+  chorded: () => boolean
+  active: () => boolean
+  cancel: () => void
+} => {
   let bit = (button: number) => button == 0 ? 1 : button == 2 ? 2 : 0
   return {
     down: (button: number) => {
@@ -194,6 +202,20 @@ export let mouseButtons = (state: () => Mouse = (() => {
   }
 }
 
+/** Browser resource handle; the values themselves remain in Controls. */
+export type Hands = {
+  press: (action: string) => void
+  swapped: () => boolean
+  swap: () => void
+  pointer: () => [number, number]
+  hidesCursor: () => boolean
+  hideCursor: () => void
+  strafes: () => boolean
+  strafe: () => void
+  dispose: () => void
+  read: (dt?: number) => Intent
+}
+
 /** Attach browser resources. Call read once per frame; dispose releases every listener. */
 export let listen = (
   stage: HTMLElement,
@@ -208,7 +230,7 @@ export let listen = (
     get: () => ControlsBundle
     onChange: (bundle: ControlsBundle) => void
   },
-) => {
+): Hands => {
   let s: ControlsState
   let depth = 0
   let transaction = <T>(fn: () => T): T => {

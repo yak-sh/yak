@@ -4,17 +4,23 @@
  * that stays, and a line that says what something is, are ink, so colour only
  * ever marks a change. `two` sets the lines in two columns where there is
  * room for them. */
-import { block, type Colors, type Specimen } from '@yaks/ui'
+import { block, type Colors, type Part, type Specimen } from '@yaks/ui'
 import type { Sheet } from '@yaks/tui/theme'
 import { h } from 'preact'
 
-export let Stats = block('div', 'Stats', {
-  Stat: 'span',
-  Mark: 'span',
-  Words: 'span',
-  Better: 'em',
-  Worse: 'em',
-})
+export let Stats:
+  & Part
+  & Record<'Stat' | 'Mark' | 'Words' | 'Better' | 'Worse', Part> = block(
+    'div',
+    'Stats',
+    {
+      Stat: 'span',
+      Mark: 'span',
+      Words: 'span',
+      Better: 'em',
+      Worse: 'em',
+    },
+  )
 export let description =
   'Numbers, a line each, coloured only where one would change.'
 export let sheet = (c: Colors): Sheet => ({
