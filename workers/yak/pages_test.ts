@@ -56,9 +56,13 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
 })
 
 test('pages: the sign-in card names the app it hands back to', async () => {
-  let lead = async (back: string | null) =>
-    parseHTML(await askEmail(null, back, undefined, undefined, 200, env).text())
-      .document.querySelector('main > p')?.textContent
+  let lead = async (back: string | null) => {
+    let html = await askEmail(null, back, undefined, undefined, 200, env).text()
+    // The card is the subject, not parsing the shared head's stylesheet on
+    // every return address. Keep its actual markup and direct-child check.
+    let card = html.slice(html.indexOf('<main>'), html.indexOf('</main>') + 7)
+    return parseHTML(card).document.querySelector('main > p')?.textContent
+  }
   assertEquals(
     await lead('https://ada.yaks.fyi/potluck/'),
     'Sign in to continue to ada.yaks.fyi/potluck.',
