@@ -6,19 +6,21 @@ reporter's UUID so a queue or spool resend is the same sample. Grouping runs
 downstream and atomically links it and adds its hits to `bug.hits`. All
 references may name entities in other stores.
 
-| Export      | Owns                                                        |
-| ----------- | ----------------------------------------------------------- |
-| `.`         | Fault keys, grouping patches, regression and retention      |
-| `./vocab`   | Tracker words, RAM computations and SQL-derived expressions |
-| `./report`  | Capture, transport and `coalesce`                           |
-| `./page`    | Classic browser capture script and twenty breadcrumbs       |
-| `./effects` | `error_group`, `bug_notify`, `bug_follow`, `error_trim`     |
-| `./views`   | Bug pages, list rows, error frames and the Bugs destination |
-| `./tools`   | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
-| `./service` | Spool record admission and acknowledgement                  |
-| `./remote`  | Signed remote reads, bug marks and durable error delivery   |
-| `./poll`    | A polled watch of the platform tracker's bugs, with marks   |
-| `./fixtime` | Time to fix: first seen (or regressed) to resolved          |
+| Export         | Owns                                                        |
+| -------------- | ----------------------------------------------------------- |
+| `.`            | Fault keys, grouping patches, regression and retention      |
+| `./vocab`      | Tracker words, RAM computations and SQL-derived expressions |
+| `./report`     | Capture, transport and `coalesce`                           |
+| `./page`       | Classic browser capture script and twenty breadcrumbs       |
+| `./effects`    | `error_group`, `bug_notify`, `bug_follow`, `error_trim`     |
+| `./views`      | Bug pages, list rows, error frames and the Bugs destination |
+| `./tools`      | `bug_list`, `bug_show`, `bug_resolve`, `bug_archive`        |
+| `./service`    | Spool record admission and acknowledgement                  |
+| `./remote`     | Signed remote reads, bug marks and durable error delivery   |
+| `./poll`       | A polled watch of the platform tracker's bugs, with marks   |
+| `./fixtime`    | Time to fix: first seen (or regressed) to resolved          |
+| `./graph`      | The precondition refusing an unexplained resolution         |
+| `./resolution` | A resolution's explanation: its check and how it reads      |
 
 ```ts
 import { normalize } from '@yaks/tracker'
@@ -26,6 +28,31 @@ import { normalize } from '@yaks/tracker'
 normalize('T-42 failed at /srv/app.ts:10:3 after 300 tries')
 // '# failed at # after # tries'
 ```
+
+## Resolving a bug
+
+Every resolved bug says why it stopped. Whoever resolves one writes the
+explanation on its mark,
+`resolved{at, by, via, broke, cause, since, fix,
+recur}`: what broke and whom it
+reached, in plain words (`broke`); why (`cause`); the commits that introduced it
+(`since`) and fixed it (`fix`), each by its full sha; and whether it can come
+back, and why (`recur`). A bug that stopped on its own has no `fix`, and its
+`recur` says why it is believed to be a one-off. The `./graph` facet refuses a
+bug's resolution without `cause` and `recur`, or with a commit named by anything
+but a full sha, at every door. The tool asks for `broke` too:
+
+```sh
+yak bug resolve <bug> --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'
+```
+
+The tracker resolves bugs itself in two places, and says why there too: a probe
+that passes again (workers/tracker `monitor`), and an app version deployed
+without the bug (`deployed`). A fixer resolves its bug as its last step
+([heal](../heal/README.md)). The resolved letter, the bug's page, `yak bug show`
+and `yak admin errors` read the same explanation (`explained` in
+`./resolution`). Bugs resolved before explanations were kept have none, and say
+so.
 
 ## Host interface
 
@@ -104,11 +131,15 @@ its `command` and host `roles`, yaks.app its `space` and `app` slugs and whose
 space it is (`account`). A regression's letter answers the opening's thread, and
 `bug_follow` adds one reply there when a bug is resolved or archived, and one
 when a fixer takes it (`taken{at, by, via, task}`, once per opening); a bug that
-opened without a letter stays quiet. Bugs become notified only after their
-occasion's letter has its `delivered` mark; an earlier occasion's delivery
-cannot mark a later regression notified. Space replies own their own notified
-mark. Archived bugs still count but never notify. Retention keeps the newest
-hundred plus the first occurrence of each commit (or version without a commit).
+opened without a letter stays quiet. The resolved reply says how long the bug
+was open, whom it reached and the resolution's explanation, its commits linked
+into the `repo` option's web pages (`"repo": "https://github.com/yak-sh/yak"`);
+a resolution without an explanation sends nothing until one is written. Bugs
+become notified only after their occasion's letter has its `delivered` mark; an
+earlier occasion's delivery cannot mark a later regression notified. Space
+replies own their own notified mark. Archived bugs still count but never notify.
+Retention keeps the newest hundred plus the first occurrence of each commit (or
+version without a commit).
 
 ## Browsing
 
@@ -329,18 +360,19 @@ these rows with `valueIn(answer).rows` from `@yaks/tools/value`. Neither read
 applies those rows to the box graph. Remote queries, ordering and limits run in
 the Worker before selecting the returned bugs. Remote show takes a global bug
 eid, since numbered ids belong to their own store. Resolve and archive accept
-the same source selection. A box mark reaches the configured Worker under the
-bug's global eid before returning the local patch. Missing credentials,
-unavailable transport or a refused remote mark refuse the command without
-marking the box copy. Without a remote configuration, box marks remain local. A
-`yaks.app` mark requires remote configuration and marks only the Worker; its
-acknowledgement does not import the bug into the box graph. Retrying a mark is
-safe, including when the box copy is already marked.
+the same source selection, and a resolution carries its explanation to each
+store it marks. A box mark reaches the configured Worker under the bug's global
+eid before returning the local patch. Missing credentials, unavailable transport
+or a refused remote mark refuse the command without marking the box copy.
+Without a remote configuration, box marks remain local. A `yaks.app` mark
+requires remote configuration and marks only the Worker; its acknowledgement
+does not import the bug into the box graph. Retrying a mark is safe, including
+when the box copy is already marked.
 
 ```sh
 yak bug list --source yaks.app --limit 20
 yak bug list '.bug.status=resolved' --source yaks.app
 yak bug show <global-bug-eid> --source yaks.app
-yak bug resolve <global-bug-eid> --source yaks.app
+yak bug resolve <global-bug-eid> --source yaks.app --broke '…' --cause '…' --fix <sha> --recur '…'
 yak bug archive <box-bug-id>
 ```

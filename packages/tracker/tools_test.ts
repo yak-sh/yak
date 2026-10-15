@@ -32,7 +32,7 @@ await remote.graph.apply([
     entity: { eid: ids[i] },
     doc: { title: `platform problem ${i}` },
     bug: { fault: `test-${i}`, hits },
-    ...i == 2 ? { resolved: {} } : {},
+    ...i == 2 ? { resolved: { cause: 'c', recur: 'r' } } : {},
   })),
   {
     entity: { eid: ids[3] },
@@ -181,6 +181,12 @@ test('authenticated bugs reads expose no write route', async () => {
 
 // Each mark fixture keeps one global bug in the Worker and, optionally, a box
 // copy. Calls validate the declared inputs and apply the returned patches.
+let why = {
+  broke: 'Marking failed for one person.',
+  cause: 'A race between two marks.',
+  fix: 'f'.repeat(40),
+  recur: 'No: marks are serialized.',
+}
 let marking = async (
   config = { remote: { url: 'https://tracker.test', secret: 'test-only' } },
   transport?: typeof fetch,
@@ -213,11 +219,13 @@ let marking = async (
   return {
     box: graphOnBox,
     worker: worker.graph,
+    // A resolution is explained unless a test says otherwise.
     call: async (name: string, args: Record<string, unknown>) => {
       let tool = tools.find((t) => t.name == name)!
+      let said = name == 'bug_resolve' ? why : {}
       let patches = await tool.run({
         entity: { eid: ids[4] },
-        call: { args: validateToolInput(tool, args) },
+        call: { args: validateToolInput(tool, { ...said, ...args }) },
       }, graphOnBox)
       await graphOnBox.apply(patches, { trusted: true })
       return patches
@@ -238,6 +246,24 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
     ok((await shared.worker.get([ids[0]], [name]))[0][name])
     equal((await shared.worker.read('.bug.status=open')).length, 0)
   })
+  if (verb == 'resolve') {
+    test('a box resolution carries its explanation to both stores', async () => {
+      for (let store of [shared.box, shared.worker]) {
+        let [row] = await store.get([ids[0]], ['resolved'])
+        equal(row.resolved, { ...row.resolved as object, ...why })
+      }
+    })
+    let bare = await marking()
+    test('a resolution without its cause and recur is refused', async () => {
+      await throws(() =>
+        bare.call('bug_resolve', {
+          bug: ids[0],
+          cause: undefined,
+          recur: undefined,
+        }), 'cause')
+      ok(!(await bare.box.get([ids[0]], ['resolved']))[0].resolved)
+    })
+  }
   let retry = await marking(undefined, undefined, true, true, name)
   await retry.call(`bug_${verb}`, { bug: ids[0] })
   test(`an already marked box bug still delivers ${verb} to the Worker`, async () => {

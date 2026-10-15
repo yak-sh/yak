@@ -26,6 +26,10 @@ export type Options = {
   store?: string
   /** Tracker web address for links in notification letters. */
   url?: string
+  /** The web root of the repository a resolution's commits link into
+   * (`https://github.com/yak-sh/yak`); without it a letter names them by
+   * sha alone. */
+  repo?: string
   /** Capture sources (`error.tags.source`) forwarded here by a tracker that
    * writes their letters itself: a bug every kept occurrence of which came
    * from one is marked seen here without a letter, so it sends one letter. */
@@ -166,7 +170,8 @@ let address = (g: Desk, row: Bundle, options: Options) => {
 /** A bug says in its thread when a fixer takes it and when it is resolved or
  * archived, once per mark; a fixer's word once per opening, so taking it again
  * before it reopens says nothing new. Only a bug that has a thread hears: one
- * that opened unannounced stays quiet. */
+ * that opened unannounced stays quiet. A resolution is told with its
+ * explanation and whom the bug reached, and a bare one waits for it. */
 export let follow = async (
   g: Desk,
   eid: string,
@@ -182,6 +187,7 @@ export let follow = async (
     ? 'taken'
     : undefined
   if (!row?.bug || !mark) return
+  if (mark == 'resolved' && !comp(row, 'resolved').cause) return
   let at = comp(row, mark).at
   if (options.since && str(at) < options.since) return
   let back = comp(row, 'regressed').at
@@ -207,6 +213,10 @@ export let follow = async (
     mark,
     str(comp(head, 'doc').title),
     address(g, row, options),
+    {
+      errors: mark == 'resolved' ? await g.read(occurrences(eid)) : [],
+      repo: options.repo,
+    },
   )
   await g.apply([{
     entity: { eid: said },

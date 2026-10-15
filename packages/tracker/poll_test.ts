@@ -20,8 +20,8 @@ let worker = (count: number) => {
         value: bugs.filter((b) => b.entity.eid > after).slice(0, limit),
       })
     },
-    mark: (bug, name, task) => {
-      marks.push([name, bug, task].filter(Boolean).join(' '))
+    mark: (bug, name, said) => {
+      marks.push([name, bug, ...Object.values(said)].join(' '))
       return Promise.resolve(true)
     },
   }
@@ -43,12 +43,12 @@ test('a poll answers every page of the platform tracker, and marks reach it', as
   let open = await polled(poll(remote, '.bug', { doors }))
   equal(open.value.length, 230)
   await open.mutate([
-    { entity: { eid: 'a' }, resolved: {} },
+    { entity: { eid: 'a' }, resolved: { at: 'now', cause: 'race' } },
     { entity: { eid: 'b' }, archived: {} },
     { entity: { eid: 'c' }, doc: { title: 'no mark' } },
     { entity: { eid: 'd' }, taken: { task: 'T-7' } },
   ])
-  equal(marks, ['resolved a', 'archived b', 'taken d T-7'])
+  equal(marks, ['resolved a race', 'archived b', 'taken d T-7'])
   open.close()
 })
 

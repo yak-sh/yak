@@ -30,6 +30,7 @@ import { monitor } from './monitor.ts'
 import { activate } from './mail.ts'
 import type { Bundle } from '@yaks/graph'
 import { sha256 } from '@yaks/graph/sha256'
+import type { Explanation } from '@yaks/tracker/resolution'
 import {
   FIT,
   follow,
@@ -130,6 +131,7 @@ export class Tracker {
       // writes the letters for the box's own bugs, and a space's tracker for
       // its apps' failures the platform also records (`source: app`).
       url: 'https://tracker.yak.sh',
+      repo: 'https://github.com/yak-sh/yak',
       side: 'yaks.app',
       forwarded: ['box', 'app'],
       ...env.MAIL
@@ -428,8 +430,8 @@ export class Tracker {
   }
   bugs = (ticket: string, app: string) =>
     this.rpc(ticket, `/bugs?app=${encodeURIComponent(app)}`)
-  resolve = (ticket: string, bug: string) =>
-    this.rpc(ticket, '/resolve', { bug })
+  resolve = (ticket: string, bug: string, said: Explanation) =>
+    this.rpc(ticket, '/resolve', { bug, ...said })
   archive = (ticket: string, bug: string) =>
     this.rpc(ticket, '/archive', { bug })
   deployed = (ticket: string, app: string, version?: number) =>

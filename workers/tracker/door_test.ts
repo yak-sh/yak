@@ -1,5 +1,5 @@
 // Scope tickets cannot cross stores or impersonate platform administration.
-import { equal, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { ram } from '@yaks/ram'
 import { capture } from '@yaks/tracker/report'
 import { options, platform, store, vocab } from './core.ts'
@@ -134,11 +134,17 @@ test('scoped RPC reads, resolves, archives and never exposes trusted intake', as
     mark: true,
     exp: Date.now() / 1000 + 60,
   }, secret)
+  let bug = bugs[0].entity.eid
+  let bare = await route(request('/resolve', marker, { bug }))
+  equal([bare.status, (await g.unseen()).length], [400, 1])
+  ok((await bare.json()).error.includes('resolved.cause'))
   equal(
-    (await route(request('/resolve', marker, { bug: bugs[0].entity.eid })))
-      .status,
+    (await route(
+      request('/resolve', marker, { bug, cause: 'a race', recur: 'no' }),
+    )).status,
     200,
   )
+  equal(((await g.graph.get([bug]))[0].resolved as Comp).cause, 'a race')
   equal((await g.unseen()).length, 0)
   equal(
     (await route(request('/archive', marker, { bug: bugs[0].entity.eid })))

@@ -121,30 +121,30 @@ export let delivery =
 // The Worker's door for each mark, by the mark's name.
 let doors = { resolved: 'resolve', archived: 'archive', taken: 'take' }
 
-/// marking('a', 'resolved') -> { door: 'resolve', body: '{"bug":"a"}' }
+/// marking('a', 'resolved', { cause: 'a race', recur: 'no' }) -> { door: 'resolve', body: '{"bug":"a","cause":"a race","recur":"no"}' }
 /// marking('b', 'archived') -> { door: 'archive', body: '{"bug":"b"}' }
-/// marking('d', 'taken', 'T-7') -> { door: 'take', body: '{"bug":"d","task":"T-7"}' }
+/// marking('d', 'taken', { task: 'T-7' }) -> { door: 'take', body: '{"bug":"d","task":"T-7"}' }
 /** The Worker's door a mark goes to, and what it says there: the bug, and
- * with `taken` the fixer's `task`. */
+ * what the mark says (a resolution's explanation, a fixer's `task`). */
 export let marking = (
   bug: string,
   name: keyof typeof doors,
-  task?: string,
+  said: Record<string, string> = {},
 ): { door: string; body: string } => ({
   door: doors[name],
-  body: JSON.stringify(task ? { bug, task } : { bug }),
+  body: JSON.stringify({ bug, ...said }),
 })
 
 /** Mark a Worker copy, returning false when the Worker does not hold it. A
- * `taken` mark names the fixer's `task`. */
+ * resolution carries its explanation and `taken` the fixer's `task`. */
 export let mark = async (
   remote: Remote,
   bug: string,
   name: keyof typeof doors,
   go: typeof fetch = fetch,
-  task?: string,
+  said: Record<string, string> = {},
 ): Promise<boolean> => {
-  let { door, body } = marking(bug, name, task)
+  let { door, body } = marking(bug, name, said)
   let response = await request(
     remote,
     door,
@@ -164,11 +164,19 @@ export let mark = async (
     if (answer?.error == 'tracker route not found') {
       throw Error(`Remote tracker has no ${door} door (404)`)
     }
-  } else {
+  } else if (response.ok) {
     await response.body?.cancel()
   }
   if (!response.ok) {
-    throw Error(`Remote tracker refused the mark (${response.status})`)
+    // A refusal says why (an unexplained resolution); a failure only fails.
+    let why = response.status == 400
+      ? (await response.json().catch(() => null))?.error
+      : undefined
+    throw Error(
+      `Remote tracker refused the mark (${response.status})${
+        why ? `: ${why}` : ''
+      }`,
+    )
   }
   return true
 }

@@ -35,7 +35,9 @@ export let monitor = async (
   } catch {
     broken = 'MCP probe unavailable'
   }
-  let check = async (key: string, reason: string) => {
+  // A probe that passes again resolves its outage, saying so: nobody looked
+  // into why it failed, and the next failure is caught the same way.
+  let check = async (key: string, reason: string, back: string) => {
     if (reason) {
       await tracker.ingest(capture(Error(reason), {
         sink: () => {},
@@ -50,15 +52,23 @@ export let monitor = async (
         eq('bug.status', 'open'),
         fields('entity.eid'),
       ))
-      for (let bug of bugs) await tracker.mark(bug.entity.eid, 'resolved')
+      for (let bug of bugs) {
+        await tracker.mark(bug.entity.eid, 'resolved', {
+          cause: `Not investigated: ${back} at ${
+            new Date(now).toISOString()
+          }, so the outage ended.`,
+          recur: 'It can: the next failed check is recorded on this bug.',
+        })
+      }
     }
   }
-  await check(fault, broken)
+  await check(fault, broken, "yaks.app's MCP endpoint answered again")
   // No heartbeat yet means the box reporter is not activated, not a failure.
   if (last != null) {
     await check(
       'tracker|box-heartbeat',
       now - last > 300_000 ? 'Box heartbeat overdue' : '',
+      "the box's heartbeat arrived again",
     )
   }
 }

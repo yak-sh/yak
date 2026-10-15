@@ -49,7 +49,10 @@ edge is reused. A replay or another follower reads the task and its claim and
 writes nothing. The request is a `session{operator}` with `fixer{bug}`, an
 `entry{session}` with `content{body}` and `using{provider, model, effort}`, and
 a `claim{session}` on the task. No process starts inside the follower;
-[spawn](../spawn/README.md) handles that request.
+[spawn](../spawn/README.md) handles that request. The entry names the task and
+the fixer's last step: once the fix is live, resolve the bug with its
+explanation through `cli`'s `bug resolve`, which the tracker requires of every
+resolution ([tracker](../tracker/README.md#resolving-a-bug)).
 
 Four gates precede the request; a gate refusing it still leaves the task filed:
 
@@ -66,16 +69,18 @@ a gate refuses the request, completion stays until a later pass can start the
 fixer. Ordinary occurrences and old regression marks do not reopen completed
 work. Cancelled tasks remain cancelled.
 
-A completed task resolves its bug; a cancelled task archives it. The follower
-keeps resolved and archived bugs in its answer. A tracker resolution completes
-its task; archival cancels it. Cancelling work after completion still archives
-its bug. Only open bugs file tasks or request fixers. A running fixer that holds
-a bug's task marks the bug `taken{task}` in its tracker, as soon as heal starts
-it and again on a replay that finds no mark for the bug's current opening, so
-the bug's letter thread hears a fixer started. [Tracker](../tracker/README.md)
-owns these marks: resolution allows a later regression to reopen the bug;
-archival stops its notifications. A regression newer than completion stays open
-even while a fixer gate holds the task completed.
+A cancelled task archives its bug. A completed task resolves nothing: a
+resolution needs its explanation, which only the resolver can give, so its bug
+stays open until someone resolves it explained. The follower keeps resolved and
+archived bugs in its answer. A tracker resolution completes its task; archival
+cancels it. Cancelling work after completion still archives its bug. Only open
+bugs file tasks or request fixers. A running fixer that holds a bug's task marks
+the bug `taken{task}` in its tracker, as soon as heal starts it and again on a
+replay that finds no mark for the bug's current opening, so the bug's letter
+thread hears a fixer started. [Tracker](../tracker/README.md) owns these marks:
+resolution allows a later regression to reopen the bug; archival stops its
+notifications. A regression newer than completion stays open even while a fixer
+gate holds the task completed.
 
 The follower writes each mark through the same client's `/apply` door, with
 `optimistic: false` to await tracker admission. Its task and `about` edge are
@@ -114,7 +119,8 @@ service.
     "effort": "high",
     "project": "P-19",
     "cap": 2,
-    "cooldown": 1800000
+    "cooldown": 1800000,
+    "cli": "yak --config /home/me/.yak/tracker.json"
   }
 }
 ```
@@ -125,7 +131,9 @@ paths. `remote` is the platform tracker Worker, the same `{url, secret}` as
 follower has nothing to do. `provider`, `model` and `project` are ids or names.
 `cap` defaults to 2; `cooldown` defaults to 1800000 ms; a changed tracker answer
 starts a pass within a second, and `every` (default 60000 ms) re-checks the
-gates and task marks when nothing changed. Every key is optional. Without
+gates and task marks when nothing changed. `cli` is the command line a fixer
+runs the tracker's tools with (default `yak`): on a box whose tracker keeps a
+config of its own, `yak --config` naming it. Every key is optional. Without
 `provider`, bugs still get tasks, but no fixer is requested. A host running
 without duties runs no follower.
 

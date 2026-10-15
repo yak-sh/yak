@@ -15,15 +15,17 @@ let fixture = async () => {
       ['open', 'resolved', 'archived'].map((state) => ({
         entity: { eid: `${fault}|${state}` },
         bug: { fault },
-        ...state == 'open' ? {} : { [state]: {} },
+        ...state == 'open'
+          ? {}
+          : { [state]: state == 'resolved' ? { cause: 'c', recur: 'r' } : {} },
       }))
     ),
     { entity: { eid: 'unrelated' }, bug: { fault: 'other' } },
   ], { trusted: true })
   let writes: Bundle[] = [], selected: Bundle[] = []
   let read = tracker.graph.read
-  tracker.mark = (eid, name) => {
-    let patch = { entity: { eid }, [name]: {} }
+  tracker.mark = (eid, name, said) => {
+    let patch = { entity: { eid }, [name]: { ...said } }
     writes.push(patch)
     storage.tx((tx) => tx.patch([patch]))
     return Promise.resolve()

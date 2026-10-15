@@ -273,6 +273,38 @@
         }
       }
     },
+    "resolved": {
+      "component": true,
+      "extends": true,
+      "type": "object",
+      "description": "Why a bug stopped, as whoever resolved it explained it. The tracker refuses a bug's resolution without its cause and recur.",
+      "properties": {
+        "broke": {
+          "type": "string",
+          "description": "What broke and whom it reached, in plain words for someone who never saw the error."
+        },
+        "cause": {
+          "type": "string",
+          "description": "Why it broke. For one nobody investigated, that nobody did and what is known."
+        },
+        "since": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The commit that introduced it, by its full sha, when known."
+        },
+        "fix": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The commit that fixed it, by its full sha. Absent when nothing was changed: it stopped on its own."
+        },
+        "recur": {
+          "type": "string",
+          "description": "Whether it can happen again, and why. When nothing was fixed, why it is believed to be a one-off."
+        }
+      }
+    },
     "error_group": {
       "effect": true,
       "description": "Group each ungrouped occurrence, atomically counting and linking it.",
@@ -298,14 +330,15 @@
     },
     "bug_follow": {
       "effect": true,
-      "description": "Tell a bug's letter thread when a fixer takes the bug and when it is resolved or archived, once per mark, and once per opening for taken.",
+      "description": "Tell a bug's letter thread when a fixer takes the bug and when it is resolved or archived, once per mark, and once per opening for taken. A resolution is told with its explanation, and waits for one.",
       "created": [
         "resolved",
         "archived",
         "taken"
       ],
       "changed": [
-        "taken.at"
+        "taken.at",
+        "resolved.cause"
       ],
       "active": ".bug .resolved|.bug .archived|.bug .taken"
     },
@@ -377,7 +410,7 @@
       "noun": "bug",
       "verb": "resolve",
       "title": "Resolve bugs",
-      "description": "Mark that the problem stopped happening. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
+      "description": "Mark that the problem stopped happening, explained: what broke and whom it reached, why, the commits that introduced and fixed it, and whether it can come back. Box marks reach the configured remote tracker before the local mark; yaks.app marks only the platform tracker.",
       "input": {
         "bug": {
           "type": "string",
@@ -390,11 +423,34 @@
             "yaks.app"
           ],
           "description": "Mark box bugs (default), including their remote copy when configured, or the platform tracker on yaks.app."
+        },
+        "broke": {
+          "type": "string",
+          "description": "What broke and whom it reached, in plain words for someone who never saw the error: a sentence or two."
+        },
+        "cause": {
+          "type": "string",
+          "description": "Why it broke: a sentence or two."
+        },
+        "since": {
+          "type": "string",
+          "description": "The full sha of the commit that introduced it, when known."
+        },
+        "fix": {
+          "type": "string",
+          "description": "The full sha of the commit that fixed it. Leave it out when nothing was changed because it stopped on its own."
+        },
+        "recur": {
+          "type": "string",
+          "description": "Whether it can happen again, and why. When nothing was fixed, why it is believed to be a one-off."
         }
       },
       "idempotent": true,
       "required": [
-        "bug"
+        "bug",
+        "broke",
+        "cause",
+        "recur"
       ],
       "positional": [
         "bug"

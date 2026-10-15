@@ -173,23 +173,33 @@ async (request: Request): Promise<Response> => {
     } catch {
       return json({ error: 'bug global eid required' }, 400)
     }
-    // Only a fixer's mark names its task: a short name, not a body of text.
-    let keys = name == 'taken' ? ['bug', 'task'] : ['bug']
+    // A fixer's mark names its task, a short name; a resolution says why, a
+    // few sentences each. Neither is a body of text.
+    let said: Record<string, number> = name == 'taken'
+      ? { task: 100 }
+      : name == 'resolved'
+      ? { broke: 2000, cause: 2000, since: 64, fix: 64, recur: 2000 }
+      : {}
     if (
       !body || typeof body != 'object' || Array.isArray(body) ||
-      Object.keys(body).some((key) => !keys.includes(key)) ||
+      Object.keys(body).some((key) => key != 'bug' && !(key in said)) ||
       typeof body.bug != 'string' || !minted(body.bug) ||
-      body.task != undefined &&
-        (typeof body.task != 'string' || body.task.length > 100)
+      Object.entries(said).some(([key, most]) =>
+        body[key] != undefined &&
+        (typeof body[key] != 'string' || body[key].length > most)
+      )
     ) {
       return json({ error: 'bug global eid required' }, 400)
     }
+    let { bug, ...rest } = body
     try {
-      await tracker.mark(body.bug, name, body.task)
+      await tracker.mark(bug, name, rest)
     } catch (error) {
       if (error instanceof CallError && error.code == 'bug') {
         return json({ error: 'bug not found' }, 404)
       }
+      // An unexplained resolution is the caller's to fix, and says so.
+      if (status(error) < 500) return json({ error: String(error) }, 400)
       throw error
     }
     return json({ ok: true })

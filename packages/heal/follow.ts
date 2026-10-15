@@ -89,6 +89,23 @@ export let follow = (
     return (await g.get([...new Set([...linked, taskEid(evidence)])]))
       .find((row) => row.task)
   }
+  // What a fixer does last: resolve its bug in the tracker, explained, which
+  // completes the task once the follower hears it. A bug is resolved only
+  // with its explanation, so the fixer, who knows why, writes it.
+  let last = (bug: string, url: string) =>
+    [
+      'Once the fix is live, your last step is to resolve the bug with its ' +
+      'explanation, which completes this task:',
+      `${options.cli ?? 'yak'} bug resolve ${bug}${
+        /^https?:/.test(url) ? '' : ` --source ${url}`
+      } --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'`,
+      'Write each for the owner in plain words, a sentence or two: what ' +
+      'broke and whom it reached, why it broke, and whether it can come ' +
+      'back. --since is the full sha of the commit that introduced it, left ' +
+      'out when unknown; --fix the one that fixed it. If nothing needed ' +
+      'changing because it was a one-off, leave out --fix and say in ' +
+      '--recur why it is believed to be one.',
+    ].join('\n\n')
   let reconcile = (bug: Bundle, url: string, mutate: Client['mutate']) =>
     fix(async () => {
       if (!bug.bug) return
@@ -118,15 +135,13 @@ export let follow = (
         let reopen = !!task.completed &&
           moment(comp(bug, 'regressed')?.at) >
             moment(comp(task, 'completed')?.at)
-        let mark = task.cancelled
-          ? 'archived'
-          : task.completed && !reopen
-          ? 'resolved'
-          : undefined
-        if (mark && !bug[mark]) {
+        // Cancelled work archives its bug. Completed work resolves nothing:
+        // a resolution needs its explanation, which the resolver writes on
+        // the bug itself, and that resolution completes the task above.
+        if (task.cancelled) {
           await mutate([{
             entity: { eid: bug.entity.eid },
-            [mark]: {},
+            archived: {},
             // A new regression or someone else's mark invalidates this answer.
             $was: {
               bug: { fault: token(comp(bug, 'bug')?.fault) },
@@ -141,7 +156,7 @@ export let follow = (
         }
         if (task.cancelled || bug.resolved) return
         if (task.completed && !reopen) return
-        return { task, bug: evidence, reopen }
+        return { task, bug: evidence, reopen, last: last(evidence, url) }
       }
       if (bug.resolved || bug.archived) return
       let project = await home()
@@ -168,6 +183,7 @@ export let follow = (
       return {
         task,
         bug: evidence,
+        last: last(evidence, url),
         writes: [
           task,
           link(eid, 'about', evidence),

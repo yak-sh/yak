@@ -6,7 +6,8 @@ import { human } from '@yaks/id'
 import { answers, arrived, automated, sender } from '@yaks/mail/answers'
 import { CallError } from '@yaks/tools/errors'
 import { whom } from '@yaks/tracker/brief'
-import { fixes, opened, span, spread } from '@yaks/tracker/fixtime'
+import { fixes, fixtime, opened, span, spread } from '@yaks/tracker/fixtime'
+import { explained } from '@yaks/tracker/resolution'
 import { type Options, routes } from '@yaks/tracker/routes'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { spawn, wasInterrupted } from './subprocess.ts'
@@ -359,6 +360,19 @@ export let errors = async (
       }, median ${span(median!)}, worst ${span(worst.ms)} (${named(worst.of)})`
       : `Time to fix: no bug resolved in the last ${last}`,
   )
+  // Each fix beside the bug it closed, newest first, as its resolver
+  // explained it.
+  let resolvedAt = (b: Bundle) => text(object(b.resolved).at)
+  for (
+    let row of fixed.toSorted((a, b) =>
+      resolvedAt(b).localeCompare(resolvedAt(a))
+    )
+  ) {
+    let ms = fixtime(row), lines = explained(row)
+    out(`Resolved${ms == undefined ? '' : ` in ${span(ms)}`}: ${named(row)}`)
+    for (let [label, said] of lines) out(`  ${label}: ${line(said)}`)
+    if (!lines.length) out('  No explanation was recorded.')
+  }
   let oldest = rows.reduce<Bundle | undefined>(
     (a, b) => !a || opened(b) < opened(a) ? b : a,
     undefined,

@@ -142,7 +142,7 @@ check('a regression and a resolve answer the opening letter', async (g) => {
   let [opening] = await letters(g)
   await put(g, [{
     entity: row.entity,
-    resolved: { at: '2026-10-02T00:01:00Z' },
+    resolved: { at: '2026-10-02T00:01:00Z', cause: 'a race', recur: 'no' },
   }])
   await follow(g, row)
   await follow(g, row)
@@ -161,6 +161,43 @@ check('a regression and a resolve answer the opening letter', async (g) => {
     equal(comp(m, 'doc').title, `Re: ${comp(opening, 'doc').title}`)
   }
 })
+
+check(
+  'a resolution is told with its explanation, and a bare one waits for it',
+  async (g) => {
+    let row = bug()
+    row.bug = { ...comp(row, 'bug'), first: at }
+    await put(g, [row, ...occurrence(row, crypto.randomUUID())])
+    await replay(g, row)
+    let resolve = async (resolved: Record<string, string>) => {
+      await put(g, [{ entity: row.entity, resolved }])
+      await followed(g, row.entity.eid, {
+        ...options,
+        repo: 'https://github.com/yak-sh/yak',
+      })
+      return (await letters(g)).map((m) => str(comp(m, 'doc').body)).slice(1)
+    }
+    equal(await resolve({ at: '2026-10-02T00:04:10Z' }), [])
+    let [body] = await resolve({
+      broke: 'Saving a drill failed for one test account.',
+      cause: 'The query door timed out under a cold start.',
+      since: 'a'.repeat(40),
+      fix: 'b'.repeat(40),
+      recur: 'No: the door now waits for the store to warm.',
+    })
+    for (
+      let said of [
+        'Resolved 2026-10-02 00:04:10 UTC, 4m after it opened.',
+        'Saving a drill failed for one test account.',
+        'test accounts only',
+        'The query door timed out under a cold start.',
+        `[aaaaaaa](https://github.com/yak-sh/yak/commit/${'a'.repeat(40)})`,
+        `[bbbbbbb](https://github.com/yak-sh/yak/commit/${'b'.repeat(40)})`,
+        'No: the door now waits for the store to warm.',
+      ]
+    ) ok(body.includes(said), said)
+  },
+)
 
 check('a fixer taking the bug is said once per opening', async (g) => {
   let row = bug()

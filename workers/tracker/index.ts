@@ -6,6 +6,7 @@ import { type Env, worker } from './worker.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import type { Message } from './queue.ts'
+import type { Explanation } from '@yaks/tracker/resolution'
 
 export class Tracker extends DurableObject<Env> {
   tracker: ObjectStore
@@ -28,8 +29,8 @@ export class Tracker extends DurableObject<Env> {
   bugs(ticket: string, app: string) {
     return this.tracker.bugs(ticket, app)
   }
-  resolve(ticket: string, bug: string) {
-    return this.tracker.resolve(ticket, bug)
+  resolve(ticket: string, bug: string, said: Explanation) {
+    return this.tracker.resolve(ticket, bug, said)
   }
   archive(ticket: string, bug: string) {
     return this.tracker.archive(ticket, bug)

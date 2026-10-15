@@ -67,7 +67,7 @@ let trackerVocab = loadVocab([
     'archived',
   ),
   pick(docDoc, 'doc'),
-  pick(trackerDoc, 'bug', 'error', 'during', 'regressed', 'taken'),
+  pick(trackerDoc, 'bug', 'error', 'during', 'regressed', 'taken', 'resolved'),
   pick(mailDoc, 'notified'),
 ], [kernelKeywords])
 let trackerGraph = () =>
@@ -205,6 +205,7 @@ test('the tracker follower files task, evidence edge and fixer atomically', asyn
   equal(comp(entry, 'entry').session, fixer.entity.eid)
   equal(comp(entry, 'using'), { provider, model, effort: 'high' })
   ok(String(comp(entry, 'content').body).includes('missing row'))
+  ok(String(comp(entry, 'content').body).includes(`yak bug resolve ${bug} `))
   equal(
     written.find((row) =>
       row.entity.eid == edgeEid(task.entity.eid, 'about', bug)
@@ -704,52 +705,54 @@ let finished = async (mark: string) => {
   return f
 }
 
-for (
-  let [taskMark, bugMark] of [
-    ['completed', 'resolved'],
-    ['cancelled', 'archived'],
-  ]
-) {
-  let f = await finished(taskMark)
-  test(`the follower marks a ${taskMark} task's tracker bug ${bugMark}`, async () => {
-    await f.run()
-    equal(f.trackerCommits.length, 1)
-    let [saved] = await f.tracker.get([bug])
-    ok(saved[bugMark])
-    equal(comp(saved, 'bug').status, bugMark)
-    equal(f.commits, [])
-    f.close()
-  })
-}
+let cancelledWork = await finished('cancelled')
+test("the follower marks a cancelled task's tracker bug archived", async () => {
+  await cancelledWork.run()
+  equal(cancelledWork.trackerCommits.length, 1)
+  let [saved] = await cancelledWork.tracker.get([bug])
+  equal(comp(saved, 'bug').status, 'archived')
+  equal(cancelledWork.commits, [])
+  cancelledWork.close()
+})
 
-let markReplay = await finished('completed')
+// A resolution is explained by whoever resolves the bug; completed work has
+// no explanation to give, so its bug stays open until one is written.
+let completedWork = await finished('completed')
+test("a completed task leaves its tracker bug open for the fixer's explained resolution", async () => {
+  await completedWork.run()
+  equal(completedWork.trackerCommits, [])
+  equal(comp((await completedWork.tracker.get([bug]))[0], 'bug').status, 'open')
+  completedWork.close()
+})
+
+let markReplay = await finished('cancelled')
 await markReplay.run()
 markReplay.trackerCommits.length = 0
-test('replaying a resolved task writes neither store', async () => {
+test('replaying an archived task writes neither store', async () => {
   await markReplay.run()
   equal(markReplay.trackerCommits, [])
   equal(markReplay.commits, [])
   markReplay.close()
 })
 
-let down = await finished('completed')
+let down = await finished('cancelled')
 down.breakTracker(true)
 test('a tracker down at its owed mark reports the failure and writes nothing', async () => {
   await down.run()
   equal(down.errors.length, 1)
   equal(down.trackerCommits, [])
-  ok(!(await down.tracker.get([bug]))[0].resolved)
+  ok(!(await down.tracker.get([bug]))[0].archived)
   down.close()
 })
 
-let markRetry = await finished('completed')
+let markRetry = await finished('cancelled')
 markRetry.breakTracker(true)
 await markRetry.run()
 markRetry.breakTracker(false)
 test('an owed tracker mark survives downtime and a follower restart', async () => {
   await markRetry.run()
   equal(markRetry.trackerCommits.length, 1)
-  ok((await markRetry.tracker.get([bug]))[0].resolved)
+  ok((await markRetry.tracker.get([bug]))[0].archived)
   markRetry.close()
 })
 
@@ -761,7 +764,7 @@ await put(archivedLater.g, [{
   cancelled: {},
 }])
 archivedLater.trackerCommits.length = 0
-test('cancelling resolved work archives its bug once', async () => {
+test('cancelling completed work archives its bug once', async () => {
   await archivedLater.run()
   await archivedLater.run()
   equal(archivedLater.trackerCommits.length, 1)
@@ -780,44 +783,14 @@ await put(heldRegression.tracker, [{
   regressed: { at: '2026-10-02T00:00:03Z' },
 }])
 heldRegression.trackerCommits.length = 0
-test('a fixer gate never resolves a regression using its older task completion', async () => {
+test('a fixer gate leaves a regressed task completed and its bug open', async () => {
   await heldRegression.run()
   equal(heldRegression.trackerCommits, [])
   ok((await heldRegression.g.get([taskEid(bug)]))[0].completed)
   heldRegression.close()
 })
 
-let cycle = await fixture({ cooldown: 0 })
-await cycle.run()
-await put(cycle.g, [
-  { entity: { eid: taskEid(bug) }, completed: { at: '2026-10-02T00:00:02Z' } },
-  { entity: (await rows(cycle.g, 'fixer'))[0].entity, exit: {} },
-])
-await cycle.run()
-await put(cycle.tracker, [{
-  entity: { eid: 'cycle-occurrence' },
-  error: {
-    fault: 'missing row',
-    at: '2026-10-02T00:00:03Z',
-    commit: 'c'.repeat(40),
-  },
-}])
-await group(cycle.tracker, 'cycle-occurrence')
-await cycle.replay()
-let [reopened] = await cycle.g.get([taskEid(bug)])
-test('work reopened by a regression resolves on its next completion', async () => {
-  await put(cycle.g, [{
-    entity: reopened.entity,
-    completed: { at: '2026-10-02T00:00:11Z' },
-  }])
-  cycle.trackerCommits.length = 0
-  await cycle.replay()
-  equal(cycle.trackerCommits.length, 1)
-  ok((await cycle.tracker.get([bug]))[0].resolved)
-  cycle.close()
-})
-
-let elsewhere = await finished('completed')
+let elsewhere = await finished('cancelled')
 let emptyTracker = trackerGraph()
 let emptySeen = watches(emptyTracker)
 test('the follower marks the bug only in the tracker that holds its eid', async () => {
@@ -843,7 +816,7 @@ let transport = await remote()
 await transport.run()
 await put(transport.g, [{
   entity: { eid: taskEid(bug) },
-  completed: { at: '2026-10-02T00:00:02Z' },
+  cancelled: { at: '2026-10-02T00:00:02Z' },
 }])
 let owed: Bundle[] = []
 let sendMark = () =>
@@ -855,9 +828,9 @@ transport.down(true)
 await throws(sendMark, 'tracker is down')
 transport.down(false)
 test('the headless client admits a retried mark through the tracker API', async () => {
-  ok(!transport.watch.value[0].resolved)
+  ok(!transport.watch.value[0].archived)
   await transport.watch.mutate(owed, { optimistic: false })
-  ok((await transport.tracker.get([bug]))[0].resolved)
+  ok((await transport.tracker.get([bug]))[0].archived)
   equal(transport.posts(), 1)
   transport.watch.close()
   transport.close()
@@ -867,7 +840,7 @@ let lost = await remote()
 await lost.run()
 await put(lost.g, [{
   entity: { eid: taskEid(bug) },
-  completed: { at: '2026-10-02T00:00:02Z' },
+  cancelled: { at: '2026-10-02T00:00:02Z' },
 }])
 lost.lose()
 await throws(
@@ -877,7 +850,7 @@ await throws(
 await lost.ready()
 lost.trackerCommits.length = 0
 test('a lost tracker acknowledgement replays without another write', async () => {
-  ok((await lost.tracker.get([bug]))[0].resolved)
+  ok((await lost.tracker.get([bug]))[0].archived)
   await follow(lost.g)(lost.watch.value[0], url, lost.watch.mutate)
   equal(lost.posts(), 1)
   equal(lost.trackerCommits, [])
@@ -885,8 +858,8 @@ test('a lost tracker acknowledgement replays without another write', async () =>
   lost.close()
 })
 
-let raced = await finished('completed')
-test('a tracker regression during mark admission rejects the old completion', async () => {
+let raced = await finished('cancelled')
+test('a tracker regression during mark admission rejects the stale answer', async () => {
   let [before] = await raced.tracker.get([bug])
   await put(raced.tracker, [{
     entity: before.entity,
@@ -902,9 +875,8 @@ test('a tracker regression during mark admission rejects the old completion', as
       ),
     'regressed.at',
   )
-  await raced.replay()
   equal(raced.trackerCommits, [])
-  ok(!(await raced.tracker.get([bug]))[0].resolved)
+  ok(!(await raced.tracker.get([bug]))[0].archived)
   raced.close()
 })
 

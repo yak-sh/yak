@@ -55,7 +55,7 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
 let vocab = loadVocab([
   pick(kernelDoc, 'entity', 'created', 'updated', 'resolved', 'archived'),
   pick(docDoc, 'doc'),
-  pick(trackerDoc, 'bug', 'regressed', 'taken'),
+  pick(trackerDoc, 'bug', 'regressed', 'taken', 'resolved'),
 ], [kernelKeywords])
 
 /** A headless tracker subscription. Closing it releases the whole client. */

@@ -167,7 +167,11 @@ await remote.graph.apply(
       first: '2026-09-25T21:35:26Z',
       last: new Date(now - ages[i] * hour).toISOString(),
     },
-    ...(i == 106 ? { resolved: {} } : i == 107 ? { archived: {} } : {}),
+    ...(i == 106
+      ? { resolved: { cause: 'A typo in the route.', recur: 'No.' } }
+      : i == 107
+      ? { archived: {} }
+      : {}),
   })),
   { trusted: true },
 )
@@ -282,7 +286,16 @@ test('errors says whom each bug reached, a person apart from a probe', () => {
 })
 
 test('errors times the fixes resolved in its window and the longest open bug', () => {
-  let [fixed, open] = all.said.slice(totalAt(all.said) + 1)
+  let [fixed, ...rest] = all.said.slice(totalAt(all.said) + 1)
+  let open = rest.find((l) => l.startsWith('Open longest'))!
+  let [head, ...why] = rest.slice(0, rest.indexOf(open))
+  assertMatch(head, new RegExp(`^Resolved in \\d+d\\d*h?: ${ids[106]} `))
+  assertEquals(why, [
+    '  What broke: Error: bug 106',
+    '  Why: A typo in the route.',
+    '  Fixed in: nothing changed: it stopped on its own',
+    '  Can it come back: No.',
+  ])
   assertMatch(
     fixed,
     new RegExp(

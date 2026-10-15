@@ -29,14 +29,19 @@ export type Polled = {
 export type Doors = {
   /** a page of the bugs `params` asks for (`limit`, `query`) */
   bugs: (params: URLSearchParams, signal: AbortSignal) => Promise<Read>
-  /** a mark on one bug, the fixer's `task` with `taken` */
-  mark: (bug: string, name: Mark, task?: string) => Promise<unknown>
+  /** a mark on one bug and what it says: a resolution's explanation, the
+   * fixer's `task` with `taken` */
+  mark: (
+    bug: string,
+    name: Mark,
+    said: Record<string, string>,
+  ) => Promise<unknown>
 }
 
 /** The Worker's doors over the signed transport (./remote.ts), through `go`. */
 export let signed = (remote: Remote, go: typeof fetch = fetch): Doors => ({
   bugs: (params, signal) => read({ remote }, 'bugs', params, signal, go),
-  mark: (bug, name, task) => mark(remote, bug, name, go, task),
+  mark: (bug, name, said) => mark(remote, bug, name, go, said),
 })
 
 export type PollOpts = {
@@ -71,6 +76,14 @@ let markOf = (b: Bundle): Mark | undefined =>
     : b.taken
     ? 'taken'
     : undefined
+
+/** What a mark says beside its stamps, which the Worker writes itself. */
+let saying = (mark: unknown): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(mark ?? {}).filter(([k, v]) =>
+      typeof v == 'string' && !['at', 'by', 'via'].includes(k)
+    ),
+  )
 
 /**
  * Poll the platform tracker's bugs until closed.
@@ -173,8 +186,7 @@ export let poll = (
     mutate: async (bundles) => {
       for (let b of bundles) {
         let name = markOf(b)
-        let task = (b.taken as { task?: string } | undefined)?.task
-        if (name) await doors.mark(b.entity.eid, name, task)
+        if (name) await doors.mark(b.entity.eid, name, saying(b[name]))
       }
       return bundles
     },

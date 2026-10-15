@@ -20,6 +20,7 @@ import { ingest } from '@yaks/tracker/intake'
 import { timingDoc } from '@yaks/timing/vocab'
 import { caught, origin, type Sink } from '@yaks/tracker/report'
 import { bug, bugs, runs } from '@yaks/tracker/tools'
+import { type Explanation, resolutions } from '@yaks/tracker/resolution'
 import {
   absent,
   after,
@@ -69,7 +70,7 @@ export let store = (storage: Storage, config: Config) => {
       }
     },
   })
-  let g = graph({ vocab, storage, plugins: [fx] })
+  let g = graph({ vocab, storage, plugins: [fx, resolutions()] })
   fx.handle({
     ...handlers({ graph: g }, config),
     ...config.sender ? { mail_post: sending({ sender: config.sender }) } : {},
@@ -83,10 +84,12 @@ export let store = (storage: Storage, config: Config) => {
         limit(Math.min(Math.max(count, 1), 100)),
       ),
     )
+  // What a mark says beside the bug: a resolution's explanation, or the task
+  // a fixer took it for.
   let mark = async (
     bug: string,
     name: 'resolved' | 'archived' | 'taken',
-    task?: string,
+    said: Partial<Explanation> & { task?: string } = {},
   ): Promise<void> => {
     // A fixer's mark has no tool: only heal writes it, through this door.
     if (name == 'taken') {
@@ -94,12 +97,12 @@ export let store = (storage: Storage, config: Config) => {
       if (!row?.bug) throw new CallError('bug', `not a bug: ${bug}`)
       return void await g.apply([{
         entity: { eid: bug },
-        taken: task ? { task } : {},
+        taken: said.task ? { task: said.task } : {},
       }], { trusted: true })
     }
     let call: Bundle = {
       entity: { eid: crypto.randomUUID() },
-      call: { args: { bug } },
+      call: { args: { ...said, bug } },
     }
     let patch = await runs()
       [`bug_${name == 'resolved' ? 'resolve' : 'archive'}`](call, g)
@@ -213,11 +216,18 @@ export let store = (storage: Storage, config: Config) => {
         ))
         if (!current) old.push(bug)
       }
+      // Nobody looked at why; the new version simply has not hit it.
+      let release = version == null ? 'a new version' : `version ${version}`
       if (old.length) {
         await g.apply(
           old.map((bug) => ({
             entity: bug.entity,
-            resolved: {},
+            resolved: {
+              cause:
+                `Not investigated: the app deployed ${release}, and it has not happened in it.`,
+              recur:
+                'It can: if it happens in a version it has not happened in before, it reopens.',
+            },
           })),
           { trusted: true },
         )

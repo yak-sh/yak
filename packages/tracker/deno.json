@@ -4,6 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
+    "./graph": "./graph.ts",
+    "./resolution": "./resolution.ts",
     "./intake": "./intake.ts",
     "./report": "./report.ts",
     "./page": "./page.js",

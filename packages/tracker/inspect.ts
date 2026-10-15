@@ -33,6 +33,7 @@ import { comp, type Crumb, type Frame, str } from './model.ts'
 import { count, figure, headline, place, sha, thrown, whom } from './brief.ts'
 import { spread, tags, type Tally } from './spread.ts'
 import { Histogram } from './Histogram.ts'
+import { fixtime, span } from './fixtime.ts'
 import {
   frameAt,
   occurrences,
@@ -43,6 +44,7 @@ import {
   standing,
   where,
 } from './reading.ts'
+import { explained } from './resolution.ts'
 
 /** How many of a list show before the rest is asked for. */
 let FEW = 3
@@ -289,6 +291,37 @@ let Occurrences = (
   )
 }
 
+// A resolution beside the bug it closed: when, how long the bug was open, and
+// why it stopped, as its resolver explained it.
+let Resolved = ({ io, e }: { io: Io; e: Bundle }): JSX.Element => {
+  let lines = explained(e), open = fixtime(e)
+  return h(
+    Section,
+    {},
+    h(
+      Section.Title,
+      {},
+      'Resolved',
+      h(Section.Note, {}, at(io, str(comp(e, 'resolved').at))),
+      open == undefined ? null : h(Section.Note, {}, `${span(open)} to fix`),
+    ),
+    lines.length
+      ? h(
+        Pairs,
+        {},
+        lines.map(([k, v]) => [
+          h(Pairs.Key, { key: `${k}-key` }, k),
+          h(Pairs.Value, { key: k }, v),
+        ]),
+      )
+      : h(
+        Section.Sub,
+        {},
+        'No explanation was recorded: it was resolved before resolutions were explained.',
+      ),
+  )
+}
+
 let BugPage = ({ e, io, got }: Props): JSX.Element => {
   let bug = comp(e, 'bug'), owner = e.entity.eid
   let errors = [...got.errors?.rows ?? []].sort((a, b) =>
@@ -315,6 +348,7 @@ let BugPage = ({ e, io, got }: Props): JSX.Element => {
         bug.first ? ['since ', at(io, str(bug.first))] : null,
       ],
     }),
+    e.resolved ? h(Resolved, { io, e }) : null,
     h(
       Section,
       {},

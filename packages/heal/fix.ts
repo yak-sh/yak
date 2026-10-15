@@ -23,6 +23,10 @@ export type Options = {
   /** how long after a fixer starts before another starts for the same fault
    * (ms, default 30 minutes) */
   cooldown?: number
+  /** the command line a fixer runs the tracker's tools with, which opens the
+   * graph holding the tracker's bugs (default `yak`; on a box whose tracker
+   * keeps a config of its own, `yak --config <that config>`) */
+  cli?: string
 }
 
 /** How long a fixer counts as running before its process has appeared: the
@@ -63,12 +67,14 @@ let serially = () => {
   }
 }
 
-/** A work item, its evidence, and writes that must land with its fixer. */
+/** A work item, its evidence, and writes that must land with its fixer.
+ * `last` is what its fixer is told to do last: resolve the bug, explained. */
 export type Work = {
   task: Bundle
   bug: string
   writes?: Bundle[]
   reopen?: boolean
+  last?: string
 }
 
 /** Decide and write through one graph. Gate refusals still commit `writes`. */
@@ -92,7 +98,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
   }
 
   let request = async (work: Work): Promise<Bundle[]> => {
-    let { task, bug, reopen } = work
+    let { task, bug, reopen, last } = work
     if (
       !options.provider || task.cancelled ||
       (!reopen && (task.completed || task.claim))
@@ -117,7 +123,10 @@ export let fixing = (g: Graph, options: Options = {}) => {
         entity: { eid: uuid() },
         entry: { session },
         content: {
-          body: [human(g.vocab)(task), title].filter(Boolean).join(' — '),
+          body: [
+            [human(g.vocab)(task), title].filter(Boolean).join(' — '),
+            last,
+          ].filter(Boolean).join('\n\n'),
         },
         using: {
           provider,

@@ -11,6 +11,7 @@ import { comp, type Frame, str } from './model.ts'
 import { count, headline, moment, sha, thrown } from './brief.ts'
 import { tags } from './spread.ts'
 import { frameAt, openBugs, pip, said, standing, where } from './reading.ts'
+import { explained } from './resolution.ts'
 
 export { occurrences, openBugs, relatedTraces } from './reading.ts'
 
@@ -150,7 +151,8 @@ let inline = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node =>
   )
 
 // A lone bug or error in a terminal (`yak bug resolve B-7`): what it says,
-// where, how often and since when. The browser's page is ./inspect.ts.
+// where, how often and since when, and a resolved bug's explanation. The
+// browser's page is ./inspect.ts.
 let page = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
   let s = shown(ctx), bug = comp(e, 'bug'), error = comp(e, 'error')
   let { type, message } = thrown(headline(said(e)))
@@ -192,6 +194,9 @@ let page = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
     ),
     said(e) != headline(said(e))
       ? h('p', null, h('span', { class: 'Value Value-text' }, said(e)))
+      : null,
+    e.bug
+      ? explained(e).map(([label, line]) => h('p', null, `${label}: ${line}`))
       : null,
     frames.length
       ? h(

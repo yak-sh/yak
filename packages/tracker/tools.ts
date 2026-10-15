@@ -20,6 +20,7 @@ import { CallError } from '@yaks/tools/errors'
 import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
 import { mark as upstream } from './remote.ts'
+import { explanation } from './resolution.ts'
 
 let one = (g: Graph, eid: string): Bundle | Promise<Bundle> =>
   after(g.get([eid]), ([row]) => {
@@ -86,15 +87,17 @@ export let runs = (
         fields('entity.eid'),
       ))
       if (!remote && !bug) throw new CallError('bug', `not a bug: ${eid}`)
+      // A resolution carries its explanation to each store it marks.
+      let said = name == 'resolved' ? explanation(args) : {}
       if (remote || options.remote) {
         try {
-          let held = await upstream(options.remote ?? {}, eid, name, go)
+          let held = await upstream(options.remote ?? {}, eid, name, go, said)
           if (!held && remote) throw Error('Remote tracker bug not found')
         } catch (error) {
           throw new CallError('remote', (error as Error).message)
         }
       }
-      if (bug) return [{ entity: bug.entity, [name]: {} }]
+      if (bug) return [{ entity: bug.entity, [name]: said }]
       return answer(call, { bug: eid, mark: name })
     }
   let remote = async (

@@ -8,6 +8,8 @@ import type { Bundle } from '@yaks/graph'
 import { comp, type Crumb, type Frame, str } from './model.ts'
 import { count, headline, sha, whom } from './brief.ts'
 import { frameAt, said, where } from './reading.ts'
+import { explained } from './resolution.ts'
+import { fixtime, span } from './fixtime.ts'
 import { tags, tally } from './spread.ts'
 
 /** What a letter is addressed by: the bug's name, its page and the moment it
@@ -269,32 +271,62 @@ export let letter = (
 
 // What a mark says in the bug's thread.
 let word = (bug: Bundle, mark: Mark, at: string): string => {
-  let task = str(comp(bug, 'taken').task)
+  let task = str(comp(bug, 'taken').task), open = fixtime(bug)
   return mark == 'taken'
     ? `A fixer started on it ${at}${
       task ? `, working ${task}` : ''
     }. You hear here when it is resolved.`
     : mark == 'resolved'
-    ? `Resolved ${at}. If it happens again in a new release, it reopens and you hear here.`
+    ? `Resolved ${at}${
+      open == undefined ? '' : `, ${span(open)} after it opened`
+    }.`
     : `Archived ${at}. It stays quiet even if it happens again.`
 }
 
 export type Mark = 'taken' | 'resolved' | 'archived'
 
+/// commit('https://github.com/yak-sh/yak/')('9917d09d30a68730b83661652bdcaecc38670809') -> '[9917d09](https://github.com/yak-sh/yak/commit/9917d09d30a68730b83661652bdcaecc38670809)'
+/// commit()('9917d09d30a68730b83661652bdcaecc38670809') -> '9917d09'
+/** A commit as a letter names it: its short sha, linked into the repository's
+ * web pages when there is one. */
+export let commit = (repo?: string) => (full: string): string =>
+  repo
+    ? `[${sha(full)}](${repo.replace(/\/+$/, '')}/commit/${full})`
+    : sha(full)
+
+/** What a resolution says: its explanation, and whom the bug reached beside
+ * what broke. */
+export let resolution = (
+  bug: Bundle,
+  errors: Bundle[],
+  repo?: string,
+): string[] => {
+  let lines = explained(bug, commit(repo))
+  if (lines.length && errors.length) {
+    lines.splice(1, 0, ['Whom it reached', reached(errors)])
+  }
+  return lines.map(([label, line]) => `- **${label}:** ${line}`)
+}
+
 /** A later word in the bug's thread: a fixer took it, or it was resolved or
- * archived. */
+ * archived. A resolution says why, from its explanation; `errors` are the
+ * bug's retained occurrences, which say whom it reached, and `repo` is the
+ * web root its commits link into. */
 export let followUp = (
   bug: Bundle,
   mark: Mark,
   thread: string,
   to: Address,
+  { errors = [], repo }: { errors?: Bundle[]; repo?: string } = {},
 ): { title: string; body: string } => {
   let b = comp(bug, 'bug'), at = when(str(comp(bug, mark).at))
+  let why = mark == 'resolved' ? resolution(bug, errors, repo) : []
   return {
     title: thread.startsWith('Re: ') ? thread : `Re: ${thread}`,
     body: [
       word(bug, mark, at),
       '',
+      ...why.length ? [...why, ''] : [],
       `${count(Number(b.hits ?? 1), 'hit')} in all, the last ${
         when(str(b.last))
       }.`,
