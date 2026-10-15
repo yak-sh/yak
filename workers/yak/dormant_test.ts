@@ -9,7 +9,7 @@ import { declared, platform, slot } from './testing.ts'
 import type { Wire } from '@yaks/durable-object'
 
 test('trash makes a store dormant across every wake and restore keeps its data', async () => {
-  using p = platform('dormant probe')
+  await using p = platform('dormant probe')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
   let space = await dir.own('dormant-owner', 'dormant')
   await dir.apply({
@@ -106,7 +106,7 @@ test('trash makes a store dormant across every wake and restore keeps its data',
 })
 
 test('directory recovery delivers trash before the dormant store boots', async () => {
-  using p = platform('missed trash probe')
+  await using p = platform('missed trash probe')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
   let space = await dir.own('missed-owner', 'missed')
   await dir.apply({
@@ -142,7 +142,7 @@ test('directory recovery delivers trash before the dormant store boots', async (
 })
 
 test('an app store wake makes zero directory calls and directory SQL statements', async () => {
-  using p = platform('wake directory probe')
+  await using p = platform('wake directory probe')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
   let space = await dir.own('wake-owner', 'wake')
   await dir.apply({

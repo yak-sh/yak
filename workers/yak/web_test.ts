@@ -19,7 +19,7 @@ let assets = {
 }
 
 test('app web is member-only even for open apps; mounts the store and signed-in person', async () => {
-  using p = platform({ ASSETS: assets })
+  await using p = platform({ ASSETS: assets })
   let { env } = p
   let { dir, space, app } = await seeded(env, 'open')
   await dir.apply(
@@ -81,7 +81,7 @@ test('app web is member-only even for open apps; mounts the store and signed-in 
 })
 
 test('app vocab speaks the shared docs+keywords wire; census is a normal query', async () => {
-  using p = platform({ ASSETS: assets })
+  await using p = platform({ ASSETS: assets })
   let { env } = p
   await seeded(env, 'private')
   let cookie = await as(ADA)
@@ -106,7 +106,7 @@ test('app vocab speaks the shared docs+keywords wire; census is a normal query',
 })
 
 test('unnumbered app entity links resolve short handles through the store wire', async () => {
-  using p = platform({ ASSETS: assets })
+  await using p = platform({ ASSETS: assets })
   let { env } = p
   await seeded(env, 'private')
   let cookie = await as(ADA)

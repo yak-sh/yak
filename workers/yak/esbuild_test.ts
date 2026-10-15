@@ -95,9 +95,9 @@ let scenario = async (
       return (await dir.app(space, 'cookbook'))!.source!.split('/').pop()!
     },
     seconds,
-    [Symbol.dispose]: () => {
+    [Symbol.asyncDispose]: () => {
       globalThis.fetch = was
-      p[Symbol.dispose]()
+      return p[Symbol.asyncDispose]()
     },
   }
 }
@@ -110,7 +110,7 @@ let compiles = (ask: Ask): Partial<Answer> => ({
 })
 
 test('TypeScript and npm imports compile at deploy, and serve as JavaScript', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({
     'index.html': PAGE,
     'main.ts': `import * as THREE from 'three'\nlet n: number = 1`,
@@ -167,7 +167,7 @@ test('TypeScript and npm imports compile at deploy, and serve as JavaScript', as
 })
 
 test('a deploy reuses unchanged compiled entries', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({
     'index.html': PAGE,
     'main.ts': 'let n: number = 1',
@@ -220,7 +220,7 @@ test('a deploy reuses unchanged compiled entries', async () => {
 })
 
 test('a changed lock or previously plain script replans a release', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({
     'index.html': PAGE + '<script type="module" src="plain.js"></script>',
     'main.ts': 'let n: number = 1',
@@ -243,7 +243,7 @@ test('a changed lock or previously plain script replans a release', async () => 
 
 test('a compile that fails refuses the deploy, and the last release serves', async () => {
   let broken = false
-  using s = await scenario((ask) =>
+  await using s = await scenario((ask) =>
     broken
       ? { errors: ['main.ts:1:9: Expected ";" but found "number"'] }
       : compiles(ask)
@@ -262,7 +262,7 @@ test('a compile that fails refuses the deploy, and the last release serves', asy
 
 test('draft files stay private through a refused deploy and rollback', async () => {
   let broken = false
-  using s = await scenario((ask) =>
+  await using s = await scenario((ask) =>
     broken ? { errors: ['main.ts cannot compile'] } : compiles(ask)
   )
   let page = (name: string) => `<h1>${name}</h1>${PAGE}`
@@ -295,7 +295,7 @@ test('draft files stay private through a refused deploy and rollback', async () 
 })
 
 test('concurrent first edits share one private draft', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({ 'index.html': '<h1>old</h1>', 'main.ts': 'let n = 1' })
   await s.tool('app_deploy')
   await Promise.all([
@@ -316,7 +316,7 @@ test('concurrent first edits share one private draft', async () => {
 })
 
 test('a released app stages changed files over its source', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({
     'index.html': '<h1>old</h1>',
     'style.css': 'h1{color:blue}',
@@ -360,7 +360,7 @@ test('a released app stages changed files over its source', async () => {
 })
 
 test('an edit crossing deployment is replayed into the next draft', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({ 'index.html': '<h1>old</h1>' })
   await s.tool('app_deploy')
   await s.write({ 'style.css': 'body{}' })
@@ -394,7 +394,7 @@ test('an edit crossing deployment is replayed into the next draft', async () => 
 })
 
 test('a page that no longer needs compiling serves as written', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
   await s.tool('app_deploy')
   await s.write({ 'index.html': '<h1>no scripts</h1>' })
@@ -403,7 +403,7 @@ test('a page that no longer needs compiling serves as written', async () => {
 })
 
 test('an app with nothing to compile never calls the compiler', async () => {
-  using s = await scenario(compiles)
+  await using s = await scenario(compiles)
   await s.write({
     'index.html': '<script type="module" src="app.js"></script>',
     'app.js': `import { apply } from './api/client.js'`,
@@ -421,7 +421,7 @@ test('an app with nothing to compile never calls the compiler', async () => {
 
 test('a compile too big for the compiler says so, and the last release serves', async () => {
   let fails: (() => Response) | null = null
-  using s = await scenario((ask) => fails ? fails() : compiles(ask))
+  await using s = await scenario((ask) => fails ? fails() : compiles(ask))
   await s.write({ 'index.html': PAGE, 'main.ts': 'let n: number = 1' })
   await s.tool('app_deploy')
   await s.write({ 'main.ts': 'let n: number = 2' })
@@ -450,7 +450,7 @@ test('a compile too big for the compiler says so, and the last release serves', 
 })
 
 test('with no compiler bound, a deploy that needs one is refused in a sentence', async () => {
-  using s = await scenario(compiles, false)
+  await using s = await scenario(compiles, false)
   await s.write({ 'worker.ts': 'export default {}' })
   await assertRejects(
     () => s.tool('app_deploy'),
@@ -466,7 +466,7 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
   let second = shared('b')
   let pageCode = (path: string) =>
     `export { n } from 'https://yaks.app/${path}'`
-  using s = await scenario((ask) => ({
+  await using s = await scenario((ask) => ({
     ...compiles(ask),
     pages: Object.fromEntries(ask.pages.map((entry) => [
       entry,
@@ -568,7 +568,7 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
 
 test('compiler assets cannot replace an app-owned path', async () => {
   let path = '__packages/@yaks/kit/Button.css'
-  using s = await scenario((ask) => ({
+  await using s = await scenario((ask) => ({
     ...compiles(ask),
     assets: { [path]: '.Kit {}' },
   }))

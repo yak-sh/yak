@@ -748,7 +748,7 @@ let binned = {
 
 for (let [what, [out, back]] of Object.entries(binned)) {
   test(`a trashed ${what} fires no wakes, and catches up once restored`, async () => {
-    using p = probe()
+    await using p = probe()
     let k = { ...await seeded(p.env), env: p.env }
     let name = storeName(k.space, k.app)
     await metaOf(appStore(p.env.STORE, k.space, k.app)).apply([{

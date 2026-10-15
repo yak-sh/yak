@@ -195,7 +195,7 @@ let fixture = async () => {
     rows: (q: string) => meta(env).query(q),
     done: () => {
       globalThis.fetch = was
-      scenario[Symbol.dispose]()
+      return scenario[Symbol.asyncDispose]()
     },
   }
 }
@@ -253,7 +253,7 @@ test('app bindings survive redeploy, removal and trash until permanent deletion'
     }
     assertEquals((await k.rows('.binding')).length, 0)
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -285,7 +285,7 @@ test('rollback selects the kept files and worker without uploading or minting a 
     await page.body?.cancel()
     assertEquals(k.asked.length, 1)
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -308,7 +308,7 @@ test('a vpc_services door needs a tunnel, and the script never holds it', async 
     let bindings = k.uploads[0].bindings as Record<string, unknown>[]
     assertEquals(bindings.filter((b) => b.type == 'vpc_service'), [])
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -334,7 +334,7 @@ test('a static app may deploy its browser entry.js', async () => {
     // It built no worker, so the page asks the dispatch namespace for none.
     assertEquals(k.asked, [])
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -352,7 +352,7 @@ for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
       assertEquals(k.resources.size, 0)
       assertEquals(k.state.scripts.size, 0)
     } finally {
-      k.done()
+      await k.done()
     }
   })
 }
@@ -411,7 +411,7 @@ test('a refused provisioning scope keeps draft files private and uploads no work
       await k.tool('app_deploy')
       assertEquals(k.uploads.length, 1)
     } finally {
-      k.done()
+      await k.done()
     }
   }
 })
@@ -430,7 +430,7 @@ test('a missing explicit main refuses before resource creation, upload or deleti
     assertEquals(k.uploads, [])
     assertEquals(await k.rows('.binding'), [])
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -471,7 +471,7 @@ test('JSONC takes precedence over JSON and neither config is served publicly', a
       await response.body?.cancel()
     }
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -500,7 +500,7 @@ test('malformed JSONC keeps the prior worker and never falls back to JSON', asyn
     assertEquals(k.uploads.length, 1)
     assertEquals((await k.rows('.binding')).length, 3)
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -522,7 +522,7 @@ test('a partial resource creation is recorded and reused on retry', async () => 
     )
     assertEquals((await k.rows('.binding')).length, 3)
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -555,7 +555,7 @@ test('permanent deletion empties R2 and keeps ownership through a failed retry',
       1,
     )
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -613,7 +613,7 @@ export default { fetch() { return new Response(value) } }`,
     assertEquals(browser.status, 200, 'entry.js is now an ordinary app file')
     await browser.body?.cancel()
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -631,7 +631,7 @@ test('explicit worker.js and entry.js are valid server sources', async () => {
       assertEquals([...form.keys()], ['metadata', '__yak_entry.js', main])
     }
   } finally {
-    k.done()
+    await k.done()
   }
 })
 
@@ -644,6 +644,6 @@ test('invalid main leaves the prior script intact even with no default source', 
     await assertRejects(() => k.tool('app_deploy'), Error, 'refused main:')
     assertEquals(k.calls, [])
   } finally {
-    k.done()
+    await k.done()
   }
 })

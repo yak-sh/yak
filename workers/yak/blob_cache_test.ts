@@ -16,7 +16,7 @@ import { representation } from '@yaks/blob'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
 test('private app blobs keep the cache behind authorization', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   await seeded(env, 'private')
   let cookie = await as(ADA)
@@ -79,7 +79,7 @@ test('private app blobs keep the cache behind authorization', async () => {
 })
 
 test('an anonymous blob read revives a removed immutable representation', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env, 'open')
   let ctx = state()
@@ -149,7 +149,7 @@ test('an anonymous blob read revives a removed immutable representation', async 
 })
 
 test('a dropped representation write never redirects to an absent file', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   let { space, app } = await seeded(env, 'open')
   let graph = metaOf(appStore(env.STORE, space, app, env))

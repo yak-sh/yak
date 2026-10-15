@@ -6,7 +6,7 @@ import { build, fake } from './builder.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
 import { call } from './tools.ts'
 
-using p = platform()
+await using p = platform()
 let { dir, space } = await seeded(p.env)
 let ctx = { env: p.env, dir, person: ADA }
 await call(ctx, 'app_files', {

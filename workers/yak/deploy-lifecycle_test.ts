@@ -32,7 +32,7 @@ let fixture = async (env: Env) => {
 }
 
 test('deploy reload marks survive recording, and pointer notices follow the commit', async () => {
-  using scenario = platform('reload-secret')
+  await using scenario = platform('reload-secret')
   let { env } = scenario
   let store = env.STORE as unknown as Namespace
   let versions: number[] = []
@@ -118,7 +118,7 @@ test('deploy reload marks survive recording, and pointer notices follow the comm
 
 for (let mode of ['network', 'non-ok']) {
   test(`a ${mode} release notice cannot fail a committed deploy`, async () => {
-    using scenario = platform('reload-secret')
+    await using scenario = platform('reload-secret')
     let store = scenario.env.STORE as unknown as Namespace
     let notices = 0
     let STORE: Namespace = {
@@ -157,7 +157,7 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
 })
 
 test('updates carry every crossed required source mark but exclude the installed and later releases', async () => {
-  using scenario = platform('reload-secret')
+  await using scenario = platform('reload-secret')
   let f = await fixture(scenario.env)
   // The source accepted this vocabulary before the platform reserved cost.
   // Seed its stored declaration; every release below keeps its own bytes.
@@ -292,7 +292,7 @@ test('updates carry every crossed required source mark but exclude the installed
 })
 
 test('rollback selects kept bytes without minting or changing deploys, then deploy allocates above history', async () => {
-  using scenario = platform('rollback-secret')
+  await using scenario = platform('rollback-secret')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
@@ -393,7 +393,7 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
 })
 
 test('worker errors after rollback and an in-flight pointer move name the routed bytes', async () => {
-  using scenario = platform('rollback-errors')
+  await using scenario = platform('rollback-errors')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
@@ -447,7 +447,7 @@ test('worker errors after rollback and an in-flight pointer move name the routed
 })
 
 test('legacy source-less rollback keeps deploy rows unchanged and remains undoable', async () => {
-  using scenario = platform('rollback-legacy')
+  await using scenario = platform('rollback-legacy')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
