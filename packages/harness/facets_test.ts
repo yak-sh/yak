@@ -5,7 +5,7 @@ import { compose } from '@yaks/cli/host'
 import { close as closeCli, opened } from '../cli/local.ts'
 import { commands as localCommands } from '../cli/subcommands.ts'
 import { argsOf, type Bundle, mint, namedTool, offered } from '@yaks/graph'
-import { answerOf, toolEid, worded } from '@yaks/tools'
+import { answerOf, faulted, toolEid, worded } from '@yaks/tools'
 import { toolDefinition } from '@yaks/vocab/tools'
 import { inputSchemaOf } from '@yaks/mcp/tools'
 import { connect } from '../mcp/testing.ts'
@@ -243,5 +243,24 @@ test('JSON Schema tool uses identical metadata and constraints through MCP and p
   } finally {
     await c.close()
     h.close()
+  }
+})
+
+test('session new through the runner answers the session it opened', async () => {
+  let h = await compose(at(), ['graph'], undefined, {})
+  try {
+    await h.runner.ensure(['session_new'])
+    let call = {
+      entity: { eid: mint() },
+      call: {
+        to: toolEid('session_new'),
+        args: { tui: true, model: 'gpt-6-astra' },
+      },
+    }
+    let landed = await h.runner.call(call)
+    assertEquals(faulted(landed, call.entity.eid), false)
+    assert(answerOf(landed, call.entity.eid).some((b) => b.session))
+  } finally {
+    await h.close()
   }
 })

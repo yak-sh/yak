@@ -36,6 +36,7 @@
       ],
       "noun": "session",
       "verb": "new",
+      "applied": true,
       "title": "Start a session here",
       "description": "Start an agent work session on this machine with an instruction, and run it until it settles. With --tui, an instruction is optional: an empty session opens in the terminal, ready for a message.",
       "input": {
@@ -85,6 +86,7 @@
       ],
       "noun": "session",
       "verb": "send",
+      "applied": true,
       "title": "Say more to a session here",
       "description": "Add an instruction to an agent work session and run it on this machine until it settles. Returns the session; under `--tui` the terminal holds it as the harness.",
       "input": {

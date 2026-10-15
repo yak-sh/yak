@@ -122,6 +122,9 @@ export type ToolDefinition = {
   /** Unmatched words preserved for another schema to parse. */
   forward?: string
   readOnly?: boolean
+  /** the tool wrote its own changes and answers rows the graph already holds,
+   * so the runner records the call and does not write the answer */
+  applied?: boolean
   destructive?: boolean
   idempotent?: boolean
   openWorld?: boolean
@@ -184,6 +187,7 @@ export const toolDefinitionSchema: Record<string, unknown> = {
     outputSchema: { type: 'object' },
     ...GRAMMAR.properties,
     readOnly: { type: 'boolean' },
+    applied: { type: 'boolean' },
     destructive: { type: 'boolean' },
     idempotent: { type: 'boolean' },
     openWorld: { type: 'boolean' },
@@ -316,6 +320,7 @@ let HINTS = [
   'positional',
   'forward',
   'readOnly',
+  'applied',
   'destructive',
   'idempotent',
   'openWorld',
