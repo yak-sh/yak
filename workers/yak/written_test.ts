@@ -1,126 +1,333 @@
-// What an app's files hold between deploys, held through app_files: a write
-// stores each file once at its address, one sent again sends only what did
-// not land, a path answers its own past and is put back without moving bytes,
-// and two writers at once lose neither write.
-import { test } from '@yaks/testing'
-import {
-  assert,
-  assertEquals,
-  assertMatch,
-  assertStringIncludes,
-} from '@std/assert'
-import { platform } from './testing.ts'
-import * as dirPart from './directory.ts'
-import { call, type Ctx } from './tools.ts'
+// File edits on their storage seams, not a platform boot. The directory below
+// commits the same bundles through the real RAM transaction and $was guard;
+// the bucket holds actual bytes. Connector wording and access live with the
+// app_files tests in mcp_deploy_test.ts and files_read_test.ts.
+import { clock, test } from '@yaks/testing'
+import { assert, assertEquals, assertThrows } from '@std/assert'
+import type { Objects } from '@yaks/blob'
+import { guard } from '@yaks/graph/guard'
+import { Stale } from '@yaks/graph/errors'
+import type { Bundle } from '@yaks/graph/bundle'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import type { App, Directory, Space } from './directory.ts'
 import { addressed, sha256 } from './versions.ts'
+import {
+  type Change,
+  deleting,
+  drafting,
+  history,
+  modifying,
+  replaced,
+  restoring,
+  type Written,
+} from './written.ts'
 
 let ADA = 'a0000000-0000-4000-8000-0000000000ad'
+let APP = 'a0000000-0000-4000-8000-000000000001'
+let WHO = { person: ADA, role: 'owner' as const }
+let SPACE = { slug: 'ada' } as Space
 let encode = (text: string) => new TextEncoder().encode(text)
-let sha = (text: string) => sha256(encode(text))
+// Content addressing is an input to modifying, as it is at the tool's door.
+let contents = Object.fromEntries(
+  await Promise.all(
+    ['one', 'two', 'three', 'left', 'right'].map(async (text) => [
+      text,
+      {
+        bytes: encode(text),
+        sha: await sha256(encode(text)),
+        size: text.length,
+      },
+    ]),
+  ),
+)
+let sha = (text: string) => contents[text].sha
 
-// A space with one app nothing has deployed, and the doors these tests use.
-let made = async (p: ReturnType<typeof platform>) => {
-  let dir = dirPart.directory({ fetch: (r) => dirPart.fetch(r, p.env) }, true)
-  let ctx: Ctx = { env: p.env, dir, person: ADA }
-  await call(ctx, 'space_new', { slug: 'ada', title: 'Ada' })
-  await call(ctx, 'app_new', { space: 'ada', slug: 'notes', title: 'Notes' })
-  let files = (op: string, more: Record<string, unknown> = {}) =>
-    call(ctx, 'app_files', { space: 'ada', app: 'notes', op, ...more })
-  let write = (sent: Record<string, string>) =>
-    call(ctx, 'app_files', {
-      space: 'ada',
-      app: 'notes',
-      files: Object.entries(sent).map(([path, content]) => ({ path, content })),
-    })
-  let read = async (path: string) => (await files('read', { path })).text
-  // Every put the bucket is asked for, from here on.
+// Only the two components this seam reads/writes, with the same nullable
+// properties as the directory. Real storage owns atomicity and preconditions.
+let vocab = loadVocab({
+  $defs: Object.fromEntries(
+    Object.entries({
+      app: {
+        draft: 'string',
+        source: 'string',
+        version: 'number',
+        fence: 'string',
+      },
+      written: {
+        app: 'string',
+        draft: 'string',
+        path: 'string',
+        sha: 'string',
+        was: 'string',
+        size: 'number',
+        at: 'string',
+        by: 'string',
+      },
+    }).map(([name, props]) => [name, {
+      component: true,
+      type: 'object',
+      properties: Object.fromEntries(
+        Object.entries(props).map(([key, type]) => [key, { type }]),
+      ),
+    }]),
+  ),
+})
+
+let made = () => {
+  let time = clock(Date.parse('2026-10-15T12:00:00Z'))
+  let store = ram(vocab)
+  store.tx((tx) =>
+    tx.patch([{
+      entity: { eid: APP },
+      app: { version: 0 },
+    }])
+  )
+  let app = (): App =>
+    ({
+      eid: APP,
+      slug: 'notes',
+      ...(store.get([APP])[0].app as object),
+    }) as App
+  let collisions = 0
+  let skew = 0
+  let dir = {
+    app: async () => app(),
+    written: async (_app: App, draft?: string): Promise<Written[]> =>
+      store.read(`.written.app=${APP}`).filter((b) =>
+        !draft || (b.written as { draft?: string }).draft == draft
+      ).map((b) =>
+        ({
+          eid: b.entity.eid,
+          draft: null,
+          sha: null,
+          was: null,
+          size: null,
+          at: null,
+          by: null,
+          ...(b.written as object),
+        }) as Written
+      ),
+    stamp: async ({ entities }: { entities: Bundle[] }) => {
+      try {
+        return store.tx((tx) => {
+          guard(entities, tx, vocab)
+          tx.patch(entities)
+          return entities
+        })
+      } catch (e) {
+        if (e instanceof Stale) collisions++
+        throw e
+      }
+    },
+  } as unknown as Directory
+  let bytes = new Map<string, Uint8Array<ArrayBuffer>>()
   let puts: string[] = []
-  let put = p.env.BLOBS.put.bind(p.env.BLOBS)
-  p.env.BLOBS.put = (key, value) => {
-    puts.push(key)
-    return put(key, value)
+  let raw: Objects = {
+    has: async (key) => bytes.has(key),
+    put: async (key, value) => {
+      puts.push(key)
+      bytes.set(key, new Uint8Array(value))
+    },
+    read: async (key) => bytes.get(key) ?? null,
+    get: async (key) => {
+      let value = bytes.get(key)
+      if (!value) throw new Error(`no blob at ${key}`)
+      return value
+    },
+    load: async (key) => {
+      let value = bytes.get(key)
+      return value ? { bytes: value, version: key } : null
+    },
+    open: async (key) => {
+      let value = bytes.get(key)
+      return value
+        ? {
+          size: value.byteLength,
+          version: key,
+          read: async (range) =>
+            new Response(
+              range ? value.slice(range.from, range.to + 1) : value,
+            ).body!,
+        }
+        : null
+    },
+    delete: async (keys) => {
+      for (let key of [keys].flat()) bytes.delete(key)
+    },
+    list: async (prefix) =>
+      [...bytes.keys()].filter((k) => k.startsWith(prefix)).sort(),
+    uploaded: async () => {
+      throw new Error('edits do not sweep')
+    },
   }
-  let app = async () => (await dir.app((await dir.space('ada'))!, 'notes'))!
-  return { dir, ctx, files, write, read, puts, app }
+  let edit = <T>(act: Parameters<typeof modifying<T>>[5]) =>
+    modifying(
+      raw,
+      dir,
+      SPACE,
+      app(),
+      WHO,
+      act,
+      () => new Date(time.now() + skew).toISOString(),
+    )
+  let write = (sent: Record<string, string>) =>
+    edit(async () => ({
+      changes: Object.entries(sent).map(([path, text]) => ({
+        path,
+        ...contents[text],
+      })),
+      value: null,
+    }))
+  let draft = () => drafting(raw, dir, app())
+  let read = async (path: string) => {
+    let d = await draft()
+    return new TextDecoder().decode(await d.view.get(`${d.root}/${path}`))
+  }
+  let past = (path: string) => history(dir, app(), path)
+  let restore = async (
+    path: string,
+    asked: { sha?: string; at?: number } = {},
+  ) => {
+    let d = await draft()
+    let all = await past(path)
+    let { want } = restoring(all, d.files[path] ?? null, asked)
+    assert(want)
+    assert(await raw.has(addressed(want)))
+    let change: Change = {
+      path,
+      sha: want,
+      size: all.find((w) => w.sha == want)?.size,
+    }
+    return edit(async () => ({ changes: [change], value: null }))
+  }
+  let remove = (path: string) =>
+    edit(async (d, _app, attempt) => deleting(d, path, attempt))
+  return {
+    write,
+    read,
+    puts,
+    past,
+    restore,
+    remove,
+    draft,
+    time,
+    collisions: () => collisions,
+    skew: (ms: number) => {
+      skew = ms
+    },
+  }
 }
 
 test('a write sent again sends only what did not land, and says so', async () => {
-  await using p = platform('written-resend')
-  let { write, puts } = await made(p)
+  let { write, puts } = made()
   let first = await write({ 'a.txt': 'one', 'b.txt': 'two' })
-  assertStringIncludes(first.text, 'wrote 2 files')
+  assertEquals(first.wrote, ['a.txt', 'b.txt'])
   assertEquals(
     puts.sort(),
-    [addressed(await sha('one')), addressed(await sha('two'))].sort(),
+    [addressed(sha('one')), addressed(sha('two'))].sort(),
   )
-  // The same call again, as a write cut off and resent is, with one more.
   puts.length = 0
   let again = await write({ 'a.txt': 'one', 'b.txt': 'two', 'c.txt': 'three' })
-  assertEquals(puts, [addressed(await sha('three'))])
-  assertEquals(again.value, { wrote: ['c.txt'], already: ['a.txt', 'b.txt'] })
-  assertStringIncludes(again.text, 'wrote 1 of 3 files')
-  assertStringIncludes(again.text, 'b.txt — 3 bytes')
-  assertStringIncludes(again.text, 'already there')
+  assertEquals(puts, [addressed(sha('three'))])
+  assertEquals({ wrote: again.wrote, already: again.already }, {
+    wrote: ['c.txt'],
+    already: ['a.txt', 'b.txt'],
+  })
 })
 
 test('a path answers its own past, and is put back without moving bytes', async () => {
-  await using p = platform('written-history')
-  let { files, write, read, puts } = await made(p)
+  let { write, read, puts, past, restore, time } = made()
   await write({ 'page.html': 'one' })
-  await new Promise((done) => setTimeout(done, 5))
-  let between = new Date().toISOString()
-  await new Promise((done) => setTimeout(done, 5))
+  await time.advance(5)
+  let between = time.now()
+  await time.advance(5)
   await write({ 'page.html': 'two' })
-  let past = (await files('history', { path: 'page.html' })).text
-  assertStringIncludes(past, `now — 3 B, sha256 ${await sha('two')}`)
-  assertMatch(
-    past,
-    new RegExp(`- until \\S+ — 3 B, sha256 ${await sha('one')}`),
-  )
-  // Undo the last write, with nothing to remember: no byte moves.
+  let all = await past('page.html')
+  assertEquals([all[0].sha, all[0].size], [sha('two'), 3])
+  assertEquals(replaced(all), [{ sha: sha('one'), at: all[0].at, by: ADA }])
   puts.length = 0
-  await files('restore', { path: 'page.html' })
-  assertEquals(puts, [])
+  await time.advance(1)
+  await restore('page.html')
   assertEquals(await read('page.html'), 'one')
-  // A restore is a write, so it can itself be undone, by sha or by moment.
-  await files('restore', { path: 'page.html', sha: await sha('two') })
+  await time.advance(1)
+  await restore('page.html', { sha: sha('two') })
   assertEquals(await read('page.html'), 'two')
-  await files('restore', { path: 'page.html', at: between })
+  await time.advance(1)
+  await restore('page.html', { at: between })
   assertEquals(await read('page.html'), 'one')
-  // Four writes took something away; the first took nothing.
-  assertEquals(
-    (await files('history', { path: 'page.html' })).text.split('\n- ').length,
-    5,
-  )
+  assertEquals((await past('page.html')).length, 5)
+  assertEquals(replaced(await past('page.html')).length, 4)
+  assertEquals(puts, [])
 })
 
 test('a file deleted comes back, and a delete sent again says so', async () => {
-  await using p = platform('written-delete')
-  let { files, write, read } = await made(p)
+  let { write, remove, restore, read, draft } = made()
   await write({ 'a.txt': 'one', 'b.txt': 'two' })
-  await files('delete', { path: 'a.txt' })
-  let listed = (await files('list')).value as { files: { path: string }[] }
-  assertEquals(listed.files.map((f) => f.path), ['b.txt'])
-  assertStringIncludes(
-    (await files('delete', { path: 'a.txt' })).text,
-    'already deleted a.txt',
-  )
-  await files('restore', { path: 'a.txt' })
+  assertEquals((await remove('a.txt')).value, true)
+  assertEquals(Object.keys((await draft()).files), ['b.txt'])
+  assertEquals((await remove('a.txt')).value, false)
+  await restore('a.txt')
   assertEquals(await read('a.txt'), 'one')
+  assertThrows(
+    () =>
+      deleting(
+        { files: {}, rows: [] } as unknown as Awaited<ReturnType<typeof draft>>,
+        'missing.txt',
+      ),
+    Error,
+    'no file missing.txt',
+  )
 })
 
 test('two writers at once lose neither write', async () => {
-  await using p = platform('written-race')
-  let { files, write, read } = await made(p)
+  let { write, read, past, collisions } = made()
   await Promise.all([write({ 'a.txt': 'one' }), write({ 'b.txt': 'two' })])
   assertEquals(await read('a.txt'), 'one')
   assertEquals(await read('b.txt'), 'two')
-  // Two writes of one path: the later one stands, the other is its past.
+  let before = collisions()
   await Promise.all([write({ 'a.txt': 'left' }), write({ 'a.txt': 'right' })])
   let now = await read('a.txt')
   assert(['left', 'right'].includes(now), now)
-  let past = (await files('history', { path: 'a.txt' })).text
+  assert(collisions() > before, 'same-head writes must exercise the retry')
+  let all = await past('a.txt')
   for (let text of ['left', 'right']) {
-    assertStringIncludes(past, await sha(text))
+    assert(all.some((w) => w.sha == sha(text)))
   }
+  assertEquals(
+    replaced(all).map((w) => w.sha).sort(),
+    [sha('one'), sha(now == 'left' ? 'right' : 'left')].sort(),
+  )
+})
+
+test('edits sort after their persisted head when the clock stops or moves back', async () => {
+  let { write, read, past, time, skew } = made()
+  await write({ 'a.txt': 'one' })
+  let first = (await past('a.txt'))[0].at!
+  skew(-60_000)
+  await write({ 'a.txt': 'left' })
+  await write({ 'a.txt': 'right' })
+  assertEquals(await read('a.txt'), 'right')
+  let all = await past('a.txt')
+  assertEquals(
+    all.map((w) => w.at),
+    [2, 1, 0].map((ms) => new Date(Date.parse(first) + ms).toISOString()),
+  )
+  assertEquals(
+    restoring(all, sha('right'), { at: Date.parse(first) }).want,
+    sha('one'),
+  )
+  assertEquals(
+    restoring(all, sha('right'), { at: Date.parse(first) + 1 }).want,
+    sha('left'),
+  )
+  skew(0)
+  await time.advance(60_000)
+  await write({ 'a.txt': 'two' })
+  assertEquals((await past('a.txt'))[0].at, new Date(time.now()).toISOString())
+  assertEquals(await read('a.txt'), 'two')
+  // A separate app starts at its own clock, not another draft's future stamp.
+  let other = made()
+  await other.write({ 'b.txt': 'three' })
+  assertEquals((await other.past('b.txt'))[0].at, first)
 })

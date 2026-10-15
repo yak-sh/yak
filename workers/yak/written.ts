@@ -70,7 +70,9 @@ export type Written = {
 export let AGE = 30 * 24 * 60 * 60_000
 
 // Which of two writes came last: the later time, and between two in the same
-// millisecond the greater eid, so every reader folds them the same way.
+// millisecond the greater eid, so every reader folds them the same way. New
+// edits advance past their draft's last stamp; this tie-break still resolves
+// historical rows written before that guarantee.
 let after = (a: Written, b: Written) =>
   (a.at ?? '') != (b.at ?? '') ? (a.at ?? '') > (b.at ?? '') : a.eid > b.eid
 
@@ -146,6 +148,8 @@ export type Change = {
  * A change that leaves a path as the draft already holds it is left out: a
  * write sent again after it was cut off puts and records only what did not
  * land, and says which were there (`already`). Answers which paths it wrote.
+ * `now` is the writer's clock; persisted draft stamps order edits even when
+ * that clock stops or moves backwards.
  */
 export let modifying = async <T>(
   raw: Objects,
@@ -158,6 +162,7 @@ export let modifying = async <T>(
     app: App,
     attempt: number,
   ) => Promise<{ changes: Change[]; value: T }>,
+  now = () => new Date().toISOString(),
 ): Promise<{ value: T; wrote: string[]; already: string[] }> => {
   // Bytes this call already put, so a write that goes round again does not
   // send them twice.
@@ -185,7 +190,15 @@ export let modifying = async <T>(
       )
       if (!todo.length) return { value, wrote: [], already }
       let id = row.draft ?? mint()
-      let at = new Date().toISOString()
+      // A retry has reread the winner. Its rows must sort after that winner
+      // even if the clock has not ticked: derived eids are not write order.
+      // Advance only from this draft's persisted stamp, never an isolate-wide
+      // counter (which would keep pushing unrelated apps into the future).
+      let lastAt = draft.rows.reduce((last, w) => {
+        let at = Date.parse(w.at ?? '')
+        return Number.isFinite(at) ? Math.max(last, at) : last
+      }, -Infinity)
+      let at = new Date(Math.max(Date.parse(now()), lastAt + 1)).toISOString()
       // Each row is named for the row it supersedes, so two writers who read
       // the same state of a path race for one eid: the first lands, and the
       // guard sends the other round to write over it.
@@ -233,6 +246,35 @@ export let modifying = async <T>(
     }
   }
   throw refuse('conflict', `app ${app.slug} changed during edit; retry`)
+}
+
+/** A delete sent again is already done if this draft records its deletion,
+ * or if a competing writer deleted it while the caller retried. */
+export let deleting = (draft: Draft, path: string, attempt = 0) => {
+  if (path in draft.files) return { changes: [{ path }], value: true }
+  if (attempt || draft.rows.some((w) => w.path == path && !w.sha)) {
+    return { changes: [], value: false }
+  }
+  throw refuse('missing', `no file ${path}`)
+}
+
+/** The sha a restore selects: an explicit sha the path held, its value at a
+ * moment, or the most recent value different from what stands now. The
+ * caller supplies the door's parsed time and words its own missing answer. */
+export let restoring = (
+  rows: Written[],
+  now: string | null,
+  asked: { sha?: string; at?: number } = {},
+) => {
+  let gone = replaced(rows)
+  let then = asked.at != null ? heldAt(rows, asked.at) : undefined
+  let want = asked.sha != null
+    ? [...gone.map((w) => w.sha), ...rows.map((w) => w.sha)]
+      .find((sha) => sha == asked.sha)
+    : asked.at != null
+    ? then
+    : gone.find((w) => w.sha != now)?.sha
+  return { then, want }
 }
 
 /** What one path has held, newest first: every write to it the app keeps. */

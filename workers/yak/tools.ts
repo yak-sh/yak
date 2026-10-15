@@ -279,12 +279,13 @@ import {
 } from './versions.ts'
 import {
   type Change,
+  deleting,
   type Draft,
   drafting,
-  heldAt,
   history,
   modifying,
   replaced,
+  restoring,
   served,
   when,
   type Written,
@@ -3101,15 +3102,7 @@ let OURS: Row[] = [
           space,
           app,
           who,
-          (d, _app, attempt) => {
-            if (path in d.files) {
-              return Promise.resolve({ changes: [{ path }], value: true })
-            }
-            if (attempt || d.rows.some((w) => w.path == path && !w.sha)) {
-              return Promise.resolve({ changes: [], value: false })
-            }
-            throw refuse('missing', `no file ${path}`)
-          },
+          (d, _app, attempt) => Promise.resolve(deleting(d, path, attempt)),
         )
         if (!who.administrative) scheduleUse(ctx.env, app.eid)
         return {
@@ -3168,15 +3161,10 @@ let OURS: Row[] = [
               'has replaced it, so what is there is what there has been',
           )
         }
-        let then = args.at != null
-          ? heldAt(all, when(text(args.at, 'at')).getTime())
-          : undefined
-        let want = args.sha != null
-          ? [...gone.map((w) => w.sha), ...all.map((w) => w.sha)]
-            .find((sha) => sha == text(args.sha, 'sha'))
-          : args.at != null
-          ? then
-          : gone.find((w) => w.sha != now)?.sha
+        let { then, want } = restoring(all, now, {
+          ...args.at != null ? { at: when(text(args.at, 'at')).getTime() } : {},
+          ...args.sha != null ? { sha: text(args.sha, 'sha') } : {},
+        })
         if (!want) {
           throw refuse(
             'missing',
