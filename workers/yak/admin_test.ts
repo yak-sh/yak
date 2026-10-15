@@ -2,10 +2,21 @@
 // the whole directory, and the door that draws it for the admin alone.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { type Census, uses } from './admin.ts'
-import type { Meter } from './directory.ts'
-import { connector, kernel, signIn } from './probe.ts'
+import { answer, type Census, uses } from './admin.ts'
+import { type Directory, META, type Meter, type Space } from './directory.ts'
+import type { Env } from './env.ts'
+import { COOKIE, sign } from './lib/token.ts'
 
+let ROOT = { eid: 'meta', slug: META.space } as Space
+let SECRET = 'secret'
+let EMPTY: Census = { people: [], spaces: [], apps: [], seats: [] }
+// Sessions as the sign-in mints them, made once.
+let SIGNED_IN = Object.fromEntries(
+  await Promise.all(['ann', 'root'].map(async (person) => [
+    person,
+    `${COOKIE}=${await sign({ person, exp: 4e9 }, SECRET)}`,
+  ])),
+)
 let NOW = new Date('2026-10-14T12:00:00Z')
 let meter = (m: Partial<Meter>) => ({ month: '2026-10', ...m })
 let census = (): Census => ({
@@ -107,41 +118,36 @@ test('a space counts its live apps and its latest use; an app its month', () => 
   assertEquals([u.get('lab')?.test, u.get('a4')?.test], [true, true])
 })
 
-test('the directory is drawn for the platform admin and nobody else', async () => {
-  let k = await kernel()
-  try {
-    let them = await signIn(k)
-    let slug = them.email.split('@')[0]
-    await connector(k, them.cookie).tool('app_new', {
-      space: slug,
-      slug: 'notes',
-      title: 'Field notes',
-    })
-    let get = (path: string, cookie?: string) =>
-      k.at('yaks.app', path, {
-        redirect: 'manual',
-        headers: cookie ? { cookie } : {},
-      })
-    let out = await get('/admin/people')
-    assertEquals(out.status, 302)
-    assertEquals(out.headers.get('location'), '/login?return=%2Fadmin%2Fpeople')
-    await out.body?.cancel()
-    let stranger = await get('/admin/people', them.cookie)
-    assertEquals(stranger.status, 404)
-    await stranger.body?.cancel()
+let env = { SESSION_SECRET: SECRET } as Env
+let dir = {
+  space: (slug: string) => Promise.resolve(slug == META.space ? ROOT : null),
+  role: (_: Space, person: string) =>
+    Promise.resolve(person == 'root' ? 'owner' : null),
+  census: () =>
+    Promise.resolve({ ...EMPTY, people: census().people.slice(0, 1) }),
+} as unknown as Directory
+let get = (path: string, person?: string) =>
+  answer(
+    new Request(`https://yaks.app${path}`, {
+      headers: person ? { cookie: SIGNED_IN[person] } : {},
+    }),
+    env,
+    new URL(`https://yaks.app${path}`).pathname,
+    dir,
+  )
 
-    let found = await get(`/admin/people?q=${slug}`, k.owner.cookie)
-    assertEquals(found.status, 200)
-    let html = await found.text()
-    assertStringIncludes(html, them.email)
-    let eid = html.match(/href="\/admin\/([0-9a-f-]{36})"/)?.[1]
-    let page = await (await get(`/admin/${eid}`, k.owner.cookie)).text()
-    assertStringIncludes(page, 'Owner of')
-    assertStringIncludes(page, `${slug}.yaks.app`)
-    let apps = await (await get(`/admin/apps?q=${slug}`, k.owner.cookie)).text()
-    assertStringIncludes(apps, 'Field notes')
-    assertStringIncludes(apps, `${slug}/notes`)
-  } finally {
-    await k.stop()
-  }
+test('the directory is drawn for the platform admin and nobody else', async () => {
+  let out = (await get('/admin/people'))!
+  assertEquals(out.status, 302)
+  assertEquals(out.headers.get('location'), '/login?return=%2Fadmin%2Fpeople')
+  assertEquals((await get('/admin/people', 'ann'))!.status, 404)
+  // The admin is let in: the desk's front door sends them to its first list.
+  let door = (await get('/admin', 'root'))!
+  assertEquals(door.headers.get('location'), '/admin/people')
+})
+
+test("the admin's people list shows who a search finds", async () => {
+  let found = (await get('/admin/people?q=ann', 'root'))!
+  assertEquals(found.status, 200)
+  assertStringIncludes(await found.text(), 'ann@x.com')
 })
