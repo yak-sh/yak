@@ -80,6 +80,23 @@ let call = async (
   return { heard, said: await p.said() }
 }
 
+// A script throws, and the browser places it at `filename`, line `lineno`.
+let threw = async (filename: string, lineno: number) => {
+  let p = page({})
+  let error = new ReferenceError("Can't find variable: __firefox__")
+  await p.heard.get('error')!({ target: p.win, error, filename, lineno })
+  return await p.said()
+}
+
+test("a browser's own script failing on the page's first line is not filed", async () =>
+  equal(await threw(`${at}#top`, 1), []))
+
+test("the page's own scripts failing are filed, wherever they sit", async () =>
+  equal([await threw(at, 300), await threw(`${at}app.js`, 1)].flat(), [
+    "Can't find variable: __firefox__",
+    "Can't find variable: __firefox__",
+  ]))
+
 let link = { tagName: 'LINK', href: file }
 
 test('a stylesheet whose file answers was dropped, not missing', async () =>

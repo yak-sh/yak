@@ -82,6 +82,14 @@
       ? e.target
       : null
 
+  // A browser that runs a script of its own in the page, as Firefox on iPhone
+  // does (`__firefox__`), has a failure there placed at the page's own
+  // address, on the first line of its snippet. None of the page's scripts are
+  // on that line: this one is woven ahead of all of them (apps.ts `reported`),
+  // and its own text runs many lines.
+  let here = location.href.split('#')[0]
+  let foreign = (e) => e.lineno == 1 && (e.filename || '').split('#')[0] == here
+
   // The page's own fetch, from before the wrapper below.
   let plain = globalThis.fetch
 
@@ -131,6 +139,7 @@
         sorry,
       )
     }
+    if (foreign(e)) return
     broke({
       message: said(e.error) || e.message,
       stack: e.error && e.error.stack,
