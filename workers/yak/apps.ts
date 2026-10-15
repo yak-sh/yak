@@ -1310,6 +1310,9 @@ let gave = async (
   // A representation outlives a deleted upload (@yaks/blob never deletes
   // one) and Files may still hold the bytes in its cache, so the same read
   // asks whether a row still names them, and a deleted upload stops here.
+  // That read is the store's, one per request, so the reader's browser keeps
+  // what it was given: a page that loads its images on every view asks the
+  // store once, not on every view, and no shared cache answers anyone else.
   let rows = await graph.query(
     `.entity.eid=${eid} .representation|${naming(sha)}`,
   ) as {
@@ -1330,7 +1333,7 @@ let gave = async (
     mime: rep.media_type,
     name: rep.name,
     etag: `"${eid}"`,
-    cache: app.access == 'private' ? 'private' : 'revalidate',
+    cache: app.access == 'private' ? 'private' : 'browser',
   }
   try {
     let bytes = await fencedVia(

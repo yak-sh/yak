@@ -106,7 +106,7 @@ let cachedBytes = (() => {
     mime: 'video/mp4',
     name: 'theme.mp4',
     etag: '"representation"',
-    cache: 'revalidate',
+    cache: 'browser',
   }
   let at = 'https://blob.invalid/movie.mp4'
   let request = (headers: HeadersInit = {}, method = 'GET') =>
@@ -150,7 +150,10 @@ test('cached bytes keep range and condition semantics under the response fence',
   let whole = await get('whole')
   assertEquals(whole.status, 200)
   assertEquals(whole.headers.get('content-type'), 'video/mp4')
-  assertEquals(whole.headers.get('cache-control'), 'private, no-cache')
+  assertEquals(
+    whole.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
   assertEquals(whole.headers.get('etag'), '"representation"')
   assertEquals(new Uint8Array(await whole.arrayBuffer()), body)
 
@@ -189,6 +192,9 @@ test('immutable and private policies follow the representation', () => {
   )
   let private_ = served(bytes, { mime: 'image/png', cache: 'private' })
   assertEquals(private_.headers.get('cache-control'), 'private, no-store')
-  let revalidate = served(bytes, { cache: 'revalidate' })
-  assertEquals(revalidate.headers.get('cache-control'), 'private, no-cache')
+  let browser = served(bytes, { cache: 'browser' })
+  assertEquals(
+    browser.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
 })

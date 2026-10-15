@@ -95,7 +95,10 @@ test('a named media upload stays seekable when its metadata changes', async () =
     first.headers.get('content-disposition') ?? '',
     /filename\*=UTF-8''%E6%97%85/,
   )
-  assertEquals(first.headers.get('cache-control'), 'private, no-cache')
+  assertEquals(
+    first.headers.get('cache-control'),
+    'private, max-age=31536000, immutable',
+  )
   let etag = first.headers.get('etag')!
   await first.body?.cancel()
   let part = await get(file.url, { range: 'bytes=2-4', 'if-range': etag })
@@ -186,12 +189,15 @@ test('the file door: a page uploads bytes and gets an address', async () => {
     // page that just picked it can hold its space open before it renders.
     assertEquals([file.w, file.h], [1600, 900])
 
-    // The bytes come back whole, as what they are, cached forever — a content
-    // address can never name different bytes.
+    // The bytes come back whole, as what they are, kept by this browser — a
+    // representation's address can never name different bytes or headers.
     let got = await fetch(`${mine.origin}${file.url}`)
     assertEquals(got.status, 200)
     assertEquals(got.headers.get('content-type'), 'image/png')
-    assertEquals(got.headers.get('cache-control'), 'private, no-cache')
+    assertEquals(
+      got.headers.get('cache-control'),
+      'private, max-age=31536000, immutable',
+    )
     assertEquals(new Uint8Array(await got.arrayBuffer()), png)
 
     // And it is a row: the app's own store knows what the file is called, and

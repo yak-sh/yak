@@ -475,16 +475,18 @@ inline filename disposition. Documents keep
 script-src 'none'`; audio and video keep
 their origin with `script-src 'none'` so a browser's native player can fetch
 them. A mutable response revalidates. A versioned public response can use
-`cache: 'immutable'` for a one-year cache; an app response can use `revalidate`
-or `private` so access changes take effect. `validator(address, meta)` makes the
-ETag for bytes and metadata. Scripts are blocked; the policy does not mean an
-HTML or SVG document cannot render. `ranged(bytes, request, headers)` serves the
-same byte-range behavior when a caller supplies its own response headers.
-`servedOpen` and `rangedOpen` accept an opened object and stream the selected
-span without loading the whole file; conditional responses and HEAD need no body
-read. `mimeOf(name)` gives deployed files and named uploads one media type
-lookup. `servedVia(read, meta, request)` applies the same headers and
-conditional handling when a cache or another store supplies the byte response.
+`cache: 'immutable'` for a one-year cache; an app response can use `browser`,
+kept a year by the reader's own browser and by no shared cache, or `private`,
+kept by none, so a deletion or an access change stops every later read.
+`validator(address, meta)` makes the ETag for bytes and metadata. Scripts are
+blocked; the policy does not mean an HTML or SVG document cannot render.
+`ranged(bytes, request, headers)` serves the same byte-range behavior when a
+caller supplies its own response headers. `servedOpen` and `rangedOpen` accept
+an opened object and stream the selected span without loading the whole file;
+conditional responses and HEAD need no body read. `mimeOf(name)` gives deployed
+files and named uploads one media type lookup. `servedVia(read, meta, request)`
+applies the same headers and conditional handling when a cache or another store
+supplies the byte response.
 
 ```ts
 import { equal } from '@yaks/testing'
