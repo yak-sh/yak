@@ -12,6 +12,8 @@ import { toolsDoc } from '@yaks/tools'
 import { ram } from '@yaks/ram'
 import { comp, connect, result, shop, shopGraph, text } from './testing.ts'
 import { roster } from './server.ts'
+import { core, translated } from './tools.ts'
+import { z } from 'zod'
 import { rosterLine, rosterVersion } from './roster.ts'
 
 let MEMBER = derivedEid('fixture:m1')
@@ -22,6 +24,15 @@ let spring: Bundle = {
   doc: { title: 'The Left Hand of Spring' },
   book: { price: 12, status: 'shelved' },
 }
+
+// The names the generic tools answered to before, as [tool, old, now].
+let FORMER = [
+  ['graph_apply', 'change', 'bundles'],
+  ['graph_apply', 'entities', 'bundles'],
+  ['graph_query', 'filter', 'q'],
+  ['graph_query', 'query', 'q'],
+  ['search', 'text', 'words'],
+]
 
 let bundles = (out: unknown): Bundle[] => {
   assert(Array.isArray(out), 'expected bundles')
@@ -84,18 +95,13 @@ test('a read-only door lists no write, and its reads take its scope', async () =
   await client.close()
 })
 
-test("a door's own way to narrow a read is said where the query is written", async () => {
+test("a door's own way to narrow a read is said where the query is written", () => {
   let narrow = 'Add .in=<shelf> to q to read one shelf.'
-  let client = await connect({ narrow })
-  let tools = (await client.listTools()).tools as {
-    name: string
-    description: string
-  }[]
+  let tools = core({ vocab: shop, narrow })
   let of = (name: string) => tools.find((t) => t.name == name)!.description
   assert(of('graph_query').endsWith(narrow))
   assert(!of('graph_show').includes(narrow))
   assert(!of('graph_apply').includes(narrow))
-  await client.close()
 })
 
 // A directory reviewing a connector asks a tool that queries something to name
@@ -178,20 +184,31 @@ test('a batch applied comes back as it landed, and reads back', async () => {
   assertEquals(found[0].doc, { title: 'The Left Hand of Spring' })
 })
 
+// Connected beside the tests, so each times only its call. A read is the
+// door's cheapest call: every tool's arguments are translated at the same
+// place, and the write's old names are held by `translated` itself.
+let oldList = shopGraph()
+let oldClient = await connect({ graph: oldList, actor: ada })
+let wrote = await called(oldClient, 'graph_apply', { change: [spring] })
+
 test('a client listed before an argument was renamed is still answered', async () => {
-  let client = await connect({ actor: ada })
-  let [wrote] = bundles(result(
-    await called(client, 'graph_apply', { change: [spring] }),
-  ))
-  assertEquals(wrote.entity.eid, 'b1')
+  assertEquals(bundles(result(wrote)).map((b) => b.entity.eid), ['b1'])
   let found = bundles(result(
-    await called(client, 'graph_query', { query: '.book.price<20' }),
+    await called(oldClient, 'graph_query', { query: '.book.price<20' }),
   ))
   assertEquals(found.map((b) => b.entity.eid), ['b1'])
-  // A call missing the argument altogether is told which one.
-  let none = await called(client, 'graph_apply', {})
-  assertEquals(none.isError, true)
-  assertStringIncludes(text(none), 'bundles: Required')
+  for (let [tool, old, now] of FORMER) {
+    assertEquals(translated(tool, { [old]: 1 }), { [now]: 1 }, old)
+  }
+})
+
+test('a call missing its argument altogether is told which one', () => {
+  let apply = core({ vocab: shop }).find((t) => t.name == 'graph_apply')!
+  let told = z.object(apply.input!).safeParse({})
+  assertEquals(
+    told.error?.issues.map((i) => `${i.path}: ${i.message}`),
+    ['bundles: Required'],
+  )
 })
 
 test('a checked batch says what would land and keeps none of it', async () => {
