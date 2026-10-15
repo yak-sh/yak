@@ -13,7 +13,14 @@
 // text index over one, and a big table's refit are written down instead, for
 // the effects worker to do in windows (./owe.ts).
 
-import { type Column, type Driver, render, type Stmt } from '@yaks/sql/core'
+import {
+  catalogue,
+  type Column,
+  type Driver,
+  render,
+  type SchemaObject,
+  type Stmt,
+} from '@yaks/sql/core'
 import { type Derived, field, lit, tagOf } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { sha256 } from '@yaks/graph/sha256'
@@ -21,7 +28,7 @@ import { installed, meta, PRINTED, printed } from './meta.ts'
 import { unit } from './unit.ts'
 import { build } from './owe.ts'
 import { plan } from './plan.ts'
-import { standing } from './ddl.ts'
+import { declares, standing } from './ddl.ts'
 import { tables } from './layout.ts'
 
 /** The print of a composed schema: a store's own print (`Store.print`) and
@@ -55,10 +62,24 @@ let added = (c: Column): Column => {
 
 /** The `add column` statements the tables `stmts` create are missing where
  * they already stand: `create table if not exists` does nothing to a table
- * that is there, so a column a table gained after it was made arrives here. */
-export let grow = (driver: Driver, stmts: Stmt[]): Stmt[] =>
-  stmts.flatMap((s) => {
+ * that is there, so a column a table gained after it was made arrives here.
+ * `held` is the schema as it stood before `stmts` ran (`catalogue`): a table
+ * it lacks was made whole by the first statement naming it, and one it holds
+ * as a statement declares it has every column, so neither is asked about. */
+export let grow = (
+  driver: Driver,
+  stmts: Stmt[],
+  held: readonly SchemaObject[] = catalogue(driver),
+): Stmt[] => {
+  let stood = new Map(held.map((o) => [o.name, o.sql]))
+  let made = new Set<string>()
+  return stmts.flatMap((s) => {
     if (s.t != 'create table') return []
+    if (!stood.has(s.name) && !made.has(s.name)) {
+      made.add(s.name)
+      return []
+    }
+    if (declares(stood.get(s.name) ?? null, s)) return []
     let has = new Set(
       driver.query({ t: 'pragma', name: 'table_info', arg: s.name })
         .map((r) => String(r.name)),
@@ -70,6 +91,7 @@ export let grow = (driver: Driver, stmts: Stmt[]): Stmt[] =>
       add: added(c),
     }))
   })
+}
 
 /** Run `stmts`, each of which only adds what is missing, then the columns
  * their standing tables lack, in one unit under the write lock. An index over
@@ -78,8 +100,9 @@ export let grow = (driver: Driver, stmts: Stmt[]): Stmt[] =>
  * (./owe.ts). */
 export let add = (driver: Driver, stmts: Stmt[]): Error[] =>
   unit(driver, () => {
+    let held = catalogue(driver)
     let left = build(driver, stmts)
-    for (let s of grow(driver, stmts)) driver.query(s)
+    for (let s of grow(driver, stmts, held)) driver.query(s)
     return left
   })
 

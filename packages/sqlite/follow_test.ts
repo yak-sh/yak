@@ -52,6 +52,19 @@ test('a file is added the columns its tables lack', () => {
   ])
 })
 
+test('a pass reads the columns only of tables that stood declared otherwise', () => {
+  let db = fresh(), asked: unknown[] = []
+  let query = db.query.bind(db)
+  db.query = (s) => {
+    if (s.t == 'pragma' && s.name == 'table_info') asked.push(s.arg)
+    return query(s)
+  }
+  let made = (cols: CreateTable['cols']) => ({ ...log(cols), name: 'made' })
+  add(db, [log([]), made([]), made([{ name: 'at', type: 'text' }])])
+  assertEquals(asked, ['made'])
+  assertEquals(columns(db, 'made'), ['id', 'at'])
+})
+
 test('an unfinished pass leaves its print for the next opener, and so does forget', () => {
   let db = fresh()
   let print = printOf('store', [])

@@ -446,6 +446,12 @@ export let standing = (driver: Driver, vocab: Vocab): Standing =>
 // declaration already has every column and constraint fitting would check.
 let declarations = new WeakMap<Vocab, Map<string, string>>()
 let declaration = (sql: string) => sql.replace(/^create table /i, '')
+
+/** Whether a table SQLite keeps the CREATE text `sql` of stands as `s`
+ * declares it, every column and constraint included. */
+export let declares = (sql: string | null, s: CreateTable): boolean =>
+  sql != null &&
+  declaration(sql) == declaration(render({ ...s, ifNot: false }).sql)
 let declared = (vocab: Vocab) => {
   let held = declarations.get(vocab)
   if (!held) {
