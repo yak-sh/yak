@@ -25,7 +25,12 @@ import {
 import { FREE, monthOf } from './meter.ts'
 import type { Listed } from './tools.ts'
 import { minted } from './mcp-probe.ts'
-import { token } from '@yaks/graph'
+import { graph, token } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { archetypeDoc, archetypes } from '@yaks/archetype'
+import { scope, unasked } from './agent.ts'
+import { asking, screened } from './listing.ts'
 
 test(
   'a platform secret alias derives before the reach hands it to the store',
@@ -121,70 +126,57 @@ test('graph_query answers a count and a tally as their value', async () => {
 // A line naming only its app reads nothing, and an empty answer reads as an
 // empty app; the refusal hands over a line that reads what the app keeps.
 test('a read naming only an app says what to read in it', async () => {
-  let k = await kernel()
-  try {
-    let agent = connector(k, (await signIn(k)).cookie)
-    await agent.tool('app_new', { slug: 'chores', title: 'chores' })
-    await agent.tool('app_files', {
-      app: 'chores',
-      files: [{ path: 'vocab.json', content: vocabFile({ chore: {} }) }],
-    })
-    await agent.tool('app_deploy', { app: 'chores' })
-    await agent.tool('graph_apply', {
-      bundles: [{
-        entity: { eid: '$c' },
-        chore: {},
-        doc: { title: 'sweep' },
-      }],
-    })
-    let refused = await assertRejects(
-      () => agent.tool('graph_query', { q: '.in=chores' }),
-      Error,
-    )
-    let line = refused.message.match(/'([^']+&\.in=chores)'/)?.[1]
-    assertEquals(line, '.chore&?doc&.in=chores')
-    let rows = JSON.parse(await agent.tool('graph_query', { q: line }))
-    assertEquals(rows.map((r: { doc: { title: string } }) => r.doc.title), [
-      'sweep',
-    ])
-  } finally {
-    await k.stop()
-  }
+  let refused = unasked('chores', 'chores', {
+    chore: {},
+    sweep: { tool: {} },
+    doc: { extends: 'chore' },
+  })
+  let line = refused.match(/'([^']+&\.in=chores)'/)?.[1]
+  assertEquals(line, '.chore&?doc&.in=chores')
+  // The line it hands over is one the read takes, and it finds the rows.
+  let vocab = loadVocab({
+    $defs: {
+      chore: { component: true },
+      doc: { component: true, properties: { title: { type: 'string' } } },
+    },
+  })
+  let chores = graph({ vocab, storage: ram(vocab) })
+  await chores.apply([{
+    entity: { eid: 'c' },
+    chore: {},
+    doc: { title: 'sweep' },
+  }])
+  let { said, line: asked } = scope(line!)
+  assertEquals(said, 'chores')
+  assertEquals(
+    (await chores.read(asked)).map((b) => (b.doc as { title: string }).title),
+    ['sweep'],
+  )
 })
 
 // A line naming no component reads what the app keeps, and the store's own
 // rows (its archetypes, its effects queue, who may reach it) stay out of the
 // answer unless the line names one.
+let kept = loadVocab([archetypeDoc, {
+  $defs: {
+    item: { component: true, properties: { name: { type: 'string' } } },
+  },
+}])
+let store = graph({
+  vocab: kept,
+  storage: ram(kept),
+  plugins: [archetypes()],
+})
+store.apply([{ entity: { eid: 'milk' }, item: { name: 'milk' } }])
+
 test('a read naming no component answers only what the app keeps', async () => {
-  let k = await kernel()
-  try {
-    let agent = connector(k, (await signIn(k)).cookie)
-    await agent.tool('app_new', { slug: 'list', title: 'list' })
-    await agent.tool('app_files', {
-      app: 'list',
-      files: [{
-        path: 'vocab.json',
-        content: vocabFile({ item: { name: txt } }),
-      }],
-    })
-    await agent.tool('app_deploy', { app: 'list' })
-    await agent.tool('graph_apply', {
-      app: 'list',
-      entities: [{ entity: { eid: '$i' }, item: { name: 'milk' } }],
-    })
-    let read = async (q: string) =>
-      JSON.parse(await agent.tool('graph_query', { q }))
-    for (let q of ['.in=list&.limit=5', '*&.in=list', '.limit=50']) {
-      assertEquals(
-        (await read(q)).map((r: { kind: string }) => r.kind),
-        ['item'],
-        q,
-      )
-    }
-    assert((await read('.archetype&.in=list')).length > 0)
-  } finally {
-    await k.stop()
+  let words = screened((w) => !!kept.comp(w), false)
+  let read = async (q: string) =>
+    (await store.read(asking(q, words))).map((b) => b.entity.eid)
+  for (let q of ['.limit=5', '*', '.limit=50']) {
+    assertEquals(await read(q), ['milk'], q)
   }
+  assertEquals((await read('.archetype')).length > 0, true)
 })
 
 // An entity spans apps (T-32699): a read that names no app asks every store

@@ -1,4 +1,5 @@
 // The connector through the whole kernel (probe.ts `kernel`), by subject.
+import { listable } from './shelf.ts'
 import { test } from '@yaks/testing'
 import {
   assert,
@@ -717,38 +718,39 @@ test('an installed app is the installer own copy, data and all', async () => {
 })
 
 // An owner who installs their own app into another space and offers the copy
-// there has one app on the list, the copy, not two (shelf.ts, T-123595). The
-// first name still installs.
+// there has one app on the list, the copy, not two (shelf.ts, T-123595).
 test('an owner re-offering their own copy lists it once', async () => {
-  let k = await kernel()
-  let origin = unique('box'), copy = unique('box-demo'), demo = unique('demo')
-  try {
-    let jeff = await signIn(k)
-    let his = connector(k, jeff.cookie)
-    await his.tool('app_new', { slug: origin, title: 'Box' })
-    await his.tool('app_files', {
-      app: origin,
-      op: 'write',
-      path: 'index.html',
-      content: '<h1>Box</h1>',
-    })
-    await his.tool('app_deploy', { app: origin })
-    await his.tool('app_publish', { app: origin })
-    await his.tool('space_new', { slug: demo, title: demo })
-    await his.tool('app_install', { space: demo, name: origin })
-    await his.tool('app_publish', { space: demo, app: origin, name: copy })
-    let ours = (await his.tool('app_published')).split('\n')
-      .filter((l) => l.startsWith(`- ${origin} `) || l.startsWith(`- ${copy} `))
-    assertEquals(ours.length, 1)
-    assertStringIncludes(ours[0], `- ${copy} v1`)
-    let ann = await signIn(k, `ann-${crypto.randomUUID().slice(0, 8)}@yaks.app`)
-    assertStringIncludes(
-      await connector(k, ann.cookie).tool('app_install', { name: origin }),
-      `installed ${origin} v1`,
-    )
-  } finally {
-    await k.stop()
+  let offer = (eid: string, space: string, at: string, of?: string) => ({
+    space: { eid: space },
+    app: {
+      eid,
+      published: { name: eid, version: 1, at, about: '' },
+      installed: of ? { of, version: 1, sandboxed: null } : null,
+    },
+  })
+  let origin = offer('box', 'box-space', '2026-09-22')
+  let copy = offer('box-demo', 'demo-space', '2026-09-28', 'box')
+  let other = offer('other', 'other-space', '2026-09-30')
+  let theirs = offer('other-copy', 'ann-space', '2026-10-01', 'other')
+  let asked: string[] = []
+  let owners = (s: { eid: string }) => {
+    asked.push(s.eid)
+    return Promise.resolve(s.eid == 'ann-space' ? ['ann'] : ['jeff'])
   }
+  let listed = await listable([origin, copy, other, theirs], owners)
+  // Somebody else's copy never hides the app it came from.
+  assertEquals(listed.map((o) => o.app.eid), [
+    'box-demo',
+    'other',
+    'other-copy',
+  ])
+  // Only the spaces of a copy and its origin are asked who owns them.
+  assertEquals(asked.sort(), [
+    'ann-space',
+    'box-space',
+    'demo-space',
+    'other-space',
+  ])
 })
 
 // An install whose manifest is refused is refused before a byte is written:

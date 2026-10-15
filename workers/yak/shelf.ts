@@ -72,3 +72,20 @@ export let shelf = <O extends Shelved>(
   )
   return offers.filter(({ app }) => !hidden.has(app.eid))
 }
+
+/** The offers to list, asking `owners` for the people of only the spaces a
+ * copy and its origin are paired across. */
+export let listable = async <O extends Shelved>(
+  all: O[],
+  owners: (space: O['space']) => Promise<string[]>,
+): Promise<O[]> => {
+  let spaces = [...new Set(pairs(all).flat().map(({ space }) => space))]
+  return shelf(
+    all,
+    new Map(
+      await Promise.all(
+        spaces.map(async (s) => [s.eid, await owners(s)] as const),
+      ),
+    ),
+  )
+}

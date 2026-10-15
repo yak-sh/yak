@@ -17,7 +17,7 @@ import {
   unique,
   vocabFile,
 } from './probe.ts'
-import { sha256 } from './versions.ts'
+import { deployedOver, sha256, type Version } from './versions.ts'
 
 test('a trashed app releases its component to another app in the space', async () => {
   let k = await kernel()
@@ -575,39 +575,28 @@ test(
 
 // A deploy after a rollback goes out over the version the rollback restored,
 // and putting it back returns there, never to the version the person left.
-test('a rollback after a rollback returns to what was live', async () => {
-  let k = await kernel()
-  try {
-    let space = unique('backback')
-    let { cookie } = await seed(k, [{ slug: space, apps: ['list'] }])
-    let agent = connector(k, cookie)
-    let app = { space, app: 'list' }
-    let served = async () =>
-      await (await k.at(`${space}.yaks.app`, '/list/')).text()
-    for (let content of ['<h1>good</h1>', '<h1>broken</h1>']) {
-      await agent.tool('app_files', { ...app, path: 'index.html', content })
-      await agent.tool('app_deploy', app)
-    }
-    await agent.tool('app_rollback', app)
-    await agent.tool('app_files', {
-      ...app,
-      path: 'index.html',
-      content: '<h1>broken again</h1>',
-    })
-    await agent.tool('app_deploy', app)
-
-    // The list says what v3 changed over the version it went out over.
-    assertMatch(
-      await agent.tool('app_versions', app),
-      /- v3 \(live\) \S+ — changed index\.html \(over v1\)/,
-    )
-    let back = await agent.tool('app_rollback', app)
-    assertStringIncludes(back, 'back to v1, live now')
-    assertStringIncludes(back, `app_rollback(app: 'list', version: 3)`)
-    assertStringIncludes(await served(), '<h1>good</h1>')
-  } finally {
-    await k.stop()
-  }
+test('a rollback after a rollback returns to what was live', () => {
+  let v = (version: number): Version => ({
+    eid: `v${version}`,
+    version,
+    at: '',
+    files: {},
+    worker: '',
+    source: null,
+  })
+  let all = [v(3), v(2), v(1)]
+  // Deploy v1, deploy v2, roll back to v1, then deploy v3 over v1.
+  let moves = [
+    [null, 'v1'],
+    ['v1', 'v2'],
+    ['v2', 'v1'],
+    ['v1', 'v3'],
+  ].map(([from, to], i) => ({
+    switched: { from, to: to!, source: null, at: `2026-10-01T00:00:0${i}Z` },
+  }))
+  assertEquals(deployedOver(all, moves, v(3))?.version, 1)
+  // Rolled back to v1, v1 itself was first deployed over nothing.
+  assertEquals(deployedOver(all, moves, v(1)), undefined)
 })
 
 // With no token there is nothing to read, and the agent is told so in one

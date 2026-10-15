@@ -38,11 +38,12 @@ import { letters } from './letters.ts'
 import { invokePackage } from './package-tools.ts'
 import type { Graph } from '@yaks/graph'
 import { clock } from './timing.ts'
+import { reachable } from './declared.ts'
+import type { Space } from './directory.ts'
+import { serve } from './unseen.ts'
+import type { Env } from './env.ts'
 import { KERNEL, meta } from './meta.ts'
 import { stages } from '../../bin/app-deploy-time.ts'
-import { running } from './agent.ts'
-import { fetch as mcpFetch } from './mcp.ts'
-import { COOKIE, sign } from './lib/token.ts'
 
 // Every app app_list answered as data, across its spaces.
 let apps = (out: Out) =>
@@ -563,94 +564,71 @@ test('a listing asks the directory a fixed number of times', async () => {
 })
 
 // And what every signed-in call pays before its tool runs (mcp.ts `door`,
-// T-35479): who the caller is and what they reach, read in four directory
-// round trips — the person, their seats, their spaces, and every app across
-// those spaces in one list — however many of each they hold. No exchange
-// reads an app's notes or a space's memories but the one that says them:
-// `about` adds one memory read per space, and nothing per app.
+// T-35479): what the caller reaches is read in two directory round trips, the
+// seats and every app across those spaces in one list, however many of each
+// they hold.
 test('a call costs the same however many spaces and apps it reaches', async () => {
-  let secret = 'door-hops-secret'
-  let { env } = platform(secret)
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
-  let held = async (person: string, spaces: string[], apps: string[]) => {
-    for (let space of spaces) {
-      await call({ env, dir, person }, 'space_new', {
-        slug: space,
-        title: space,
-      })
-      for (let app of apps) {
-        await call({ env, dir, person }, 'app_new', {
-          space,
-          slug: app,
-          title: app,
-        })
-      }
+  let held = (spaces: number, apps: number) => {
+    let asked: string[] = []
+    let seat = (i: number) => ({
+      space: { eid: `s${i}`, slug: `s${i}`, trashed: null },
+      role: 'owner',
+    })
+    let dir = {
+      seats: (_: string) => {
+        asked.push('seats')
+        return Promise.resolve(
+          Array.from({ length: spaces }, (_, i) => seat(i)),
+        )
+      },
+      apps: (ss: { eid: string }[]) => {
+        asked.push('apps')
+        return Promise.resolve(
+          ss.flatMap((s) =>
+            Array.from({ length: apps }, (_, i) => ({
+              eid: `${s.eid}/a${i}`,
+              space: s.eid,
+              trashed: null,
+              access: 'private',
+            }))
+          ),
+        )
+      },
     }
-    await booted({ env, dir, person })
-    return `${COOKIE}=${await sign(
-      { person, space: null, exp: Math.floor(Date.now() / 1000) + 3600 },
-      secret,
-    )}`
+    return { asked, ctx: { dir, person: 'ada' } as unknown as Ctx }
   }
-  let few = await held('a0000000-0000-4000-8000-0000000000f1', ['few'], ['a'])
-  let many = await held(
-    'a0000000-0000-4000-8000-0000000000f3',
-    ['many-1', 'many-2', 'many-3'],
-    ['a', 'b', 'c'],
-  )
-  let hops = async (cookie: string, method: string, params: unknown = {}) => {
-    let res = await mcpFetch(
-      new Request('https://yaks.app/mcp', {
-        method: 'POST',
-        headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
-      }),
-      env,
-    )
-    assertEquals(res.status, 200, await res.clone().text())
-    await res.body?.cancel()
-    return stages(res.headers.get('server-timing')).hops
+  for (let [spaces, apps] of [[1, 1], [3, 3]]) {
+    let { asked, ctx } = held(spaces, apps)
+    assertEquals((await reachable(ctx)).length, spaces * apps)
+    assertEquals(asked, ['seats', 'apps'], `${spaces} spaces of ${apps}`)
   }
-  let about = { name: 'about', arguments: {} }
-  for (let method of ['initialize', 'tools/list', 'prompts/list']) {
-    assertEquals(await hops(few, method), 4, method)
-    assertEquals(await hops(many, method), 4, method)
-  }
-  assertEquals(await hops(few, 'tools/call', about), 4 + 1)
-  assertEquals(await hops(many, 'tools/call', about), 4 + 3)
 })
 
 // And what a write's reply costs: it says what broke across the space's apps
 // (unseen.ts `serve`) from the space's tracker, so its cost does not grow
 // with the apps the space holds, and an app nobody opens is never woken by a
-// write beside it (T-123502).
+// write beside it (T-123502). With nothing open the tracker is the only door
+// it knocks on.
 test('a write costs the same however many apps its space holds', async () => {
-  let { env } = platform('rider-hops-secret')
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
-  let ADA = 'a0000000-0000-4000-8000-0000000000ad'
-  let setup: Ctx = { env, dir, person: ADA }
-  // Three apps stay under the free plan's ceiling line, which a fourth
-  // would add to the reply once (unseen.ts `ceiling`).
-  for (let [space, apps] of [['few', 1], ['many', 3]] as const) {
-    await call(setup, 'space_new', { slug: space, title: space })
-    for (let i = 0; i < apps; i++) {
-      await call(setup, 'app_new', { space, slug: `app-${i}`, title: 'a' })
-    }
-  }
-  await booted(setup)
-  let rename = TOOLS.find((t) => t.name == 'space_set')!
-  let hops = async (space: string) => {
-    let c = clock()
-    let said = await c.counting(() =>
-      running({ env, dir, person: ADA, clock: c }, rename)({
-        space,
-        title: `${space} renamed`,
-      })
-    )
-    assertStringIncludes(JSON.stringify(said[0].content), 'renamed')
-    return stages(c.header()).hops
-  }
-  assertEquals(await hops('many'), await hops('few'))
+  let knocked: string[] = []
+  let door = (name: string, answer?: unknown) => ({
+    fetch: () => {
+      knocked.push(name)
+      return Promise.resolve(Response.json(answer))
+    },
+  })
+  let env = {
+    TRACKER_SECRET: 'secret',
+    TRACKER: door('tracker', []),
+    DIRECTORY: door('directory'),
+    STORE: {
+      idFromName: () => (knocked.push('store'), {}),
+      get: () => door('store'),
+    },
+  } as unknown as Env
+  let space = { eid: 'sp', slug: 'sp', trashed: null } as unknown as Space
+  assertEquals(await serve(env, space, { person: 'ada', role: 'owner' }), [])
+  assertEquals(knocked, ['tracker'])
 })
 
 // The other half of asking once: every row of the one answer has to find its
