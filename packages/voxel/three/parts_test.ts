@@ -3,7 +3,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { equal, test } from '@yaks/testing'
-import { STEP } from '@yaks/voxel/mesh'
+import { STEP } from '../mesh.ts'
 import { knit, partOf } from './parts.ts'
 
 let root = new THREE.Group()

@@ -2,8 +2,8 @@
 // posed from values each frame. The caller owns world state and game rules.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Box } from '@yaks/voxel/boxes'
-import type { Vec } from '@yaks/voxel/mesh'
+import type { Box } from '../boxes.ts'
+import type { Vec } from '../mesh.ts'
 import { knit, lunge, partOf } from './parts.ts'
 import { flash, soft } from './soft.ts'
 

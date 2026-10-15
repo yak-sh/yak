@@ -1,9 +1,9 @@
 # @yaks/stage
 
-Three.js presentation primitives over values: draw voxel meshes, animate box
-rigs, orbit a camera, pick ground and objects, and play positional sound. A
-stage knows neither a graph nor a game's world. The app reads its graph and
-hands it geometry, animation, collision callbacks, clip URLs and volume values.
+Three.js presentation primitives over values: draw ordinary geometry, orbit a
+camera, pick ground and objects, and play positional sound. A stage knows
+neither a graph nor a game's world. The app reads its graph and hands it
+geometry, animation, collision callbacks, clip URLs and volume values.
 
 ## A frame and a camera
 
@@ -21,13 +21,12 @@ let point = groundRay(
 console.log(point) // { x: 0, y: 0, z: 4 }
 ```
 
-`/render` creates a voxel-friendly WebGL renderer. `frameLoop` schedules the
-next frame and supplies both elapsed seconds and a simulation step capped at 50
-ms; the page decides when to start it.
-`keepUp(quality(renderer, sun,
-scene, density))` lowers pixel density and then
-shadows over successive slow windows. Call it only while the app wants frame
-performance measured.
+`/render` creates a WebGL renderer. `frameLoop` schedules the next frame and
+supplies both elapsed seconds and a simulation step capped at 50 ms; the page
+decides when to start it. `keepUp(quality(renderer, sun,
+scene, density))`
+lowers pixel density and then shadows over successive slow windows. Call it only
+while the app wants frame performance measured.
 
 `/cam` takes a camera state and a small camera intent, not an input controller.
 `aim` takes a `blocked(point)` callback and an optional minimum pitch. The app
@@ -36,14 +35,12 @@ heightfield or a collection of bounding spheres.
 
 ## Geometry and animation
 
-- `/soft`: packed-quad geometry and the voxel material, including cutaway,
-  lighting and flash uniforms.
-- `/parts`: assemble and move box-model parts from `@yaks/voxel`.
-- `/puppet`: animate a caller-supplied box rig from actions and attachment
-  values. Creature designs, equipment and animation policy stay with the app.
-- `/instances`: batches of repeated geometry, keyed by a model-key function the
-  caller supplies.
-- `/light`: bake lamp light into packed quads.
+- `/instances`: batches of repeated ordinary `THREE.BufferGeometry`, keyed by a
+  model-key function the caller supplies. Templates return a promise of owned
+  geometry; stage retains it while prepared or drawn placements need it,
+  disposes it after the last placement leaves. Attribute arrays and upload
+  callbacks remain the caller’s policy. A template finishing after disposal is
+  disposed too.
 - `/fx`, `/air`, `/halo`, `/flames`: particles, projected labels, glow,
   instanced air and flames. The app supplies colors, textures and motion.
 
@@ -55,10 +52,12 @@ and falls back to a supplied voice when a clip is unavailable. `/bus` controls
 volume by kind from supplied settings and an optional change callback; it never
 chooses where settings are persisted.
 
-Three.js is an ordinary npm dependency shared by the page and stage. Stage also
-uses `@yaks/voxel`; it has no graph or application dependencies. The platform
-compiler serves the browser exports from `browser.json`. An app opts in with
-`"@yaks/stage": "platform"` in its `package.json` dependencies.
+Three.js is an ordinary npm dependency shared by the page and stage. Stage has
+no voxel, graph or application dependencies. Points are plain `[x, y, z]`
+values. Voxel materials, packed-quad geometry, box rigs, puppets and baked lamp
+light live in `@yaks/voxel/three`. The platform compiler serves the browser
+exports from `browser.json`. An app opts in with `"@yaks/stage": "platform"` in
+its `package.json` dependencies.
 
 Mossvale (`apps/vale`) is a consumer. Its vocabulary, saved heroes, world,
 procedural voices and design subscriptions remain in the app. The larger

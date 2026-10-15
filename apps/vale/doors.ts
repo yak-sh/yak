@@ -20,7 +20,7 @@ import {
   type Vox,
 } from '@yaks/voxel/mesh'
 import { type Building, opensFor } from './solid.ts'
-import { geometry } from '@yaks/stage/soft'
+import { geometry } from '@yaks/voxel/three'
 
 // A leaf's voxel edge, in metres, and how far it swings, in radians.
 let E = 0.125

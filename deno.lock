@@ -2471,6 +2471,11 @@
           "npm:ajv@^8.17.1"
         ]
       },
+      "packages/voxel": {
+        "dependencies": [
+          "npm:three@~0.186.1"
+        ]
+      },
       "packages/wake": {
         "dependencies": [
           "jsr:@hexagon/croner@^10.0.1",

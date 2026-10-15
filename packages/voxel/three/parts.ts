@@ -11,8 +11,8 @@
 // flank, a hand round a hilt.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { type Box, drawn, moved, type Solid, worn } from '@yaks/voxel/boxes'
-import { out, pack, place, type Vec } from '@yaks/voxel/mesh'
+import { type Box, drawn, moved, type Solid, worn } from '../boxes.ts'
+import { out, pack, place, type Vec } from '../mesh.ts'
 import { geometry } from './soft.ts'
 
 /** A limb: the part at the hip or shoulder, and the one below the joint. */

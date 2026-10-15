@@ -1,9 +1,9 @@
 // The people of the vale, and how they move: the heroes and the people who
-// give quests, each a little jointed figure of soft boxes (@yaks/stage/parts), and the
+// give quests, each a little jointed figure of soft boxes (@yaks/voxel/three), and the
 // animation that walks, swings, rolls and fells them. A creature's figure is
-// data, moved by @yaks/stage/puppet. A puppet is told what it is
+// data, moved by @yaks/voxel/three. A puppet is told what it is
 // doing (`Act`) every frame and poses itself; it keeps no state of the world.
-// Each is drawn as one skinned mesh (@yaks/stage/parts `knit`).
+// Each is drawn as one skinned mesh (@yaks/voxel/three `knit`).
 //
 // People are built like children, the way they are in Portal Knights: a big
 // head, a short straight middle, short arms and legs bending at elbow and
@@ -18,7 +18,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Box } from '@yaks/voxel/boxes'
-import type { Act as StageAct, Puppet as StagePuppet } from '@yaks/stage/puppet'
+import type { Act as VoxelAct, Puppet as VoxelPuppet } from '@yaks/voxel/three'
 import type { Pose } from './abilities.ts'
 import type { Hand } from './gear.ts'
 import { halo } from '@yaks/stage/halo'
@@ -34,14 +34,14 @@ import {
   shade,
   stride,
   topple,
-} from '@yaks/stage/parts'
+} from '@yaks/voxel/three'
 import { lerp } from '@yaks/game'
-import { flash, soft } from '@yaks/stage/soft'
+import { flash, soft } from '@yaks/voxel/three'
 import { LAND } from './strike.ts'
 
 /** Mossvale's hero poses extend the values consumed by a stage puppet. */
-export type Act = StageAct & { pose?: Pose; hand?: Hand }
-export type Puppet = StagePuppet<Act>
+export type Act = VoxelAct & { pose?: Pose; hand?: Hand }
+export type Puppet = VoxelPuppet<Act>
 
 // Stitch a figure's parts into the one mesh it is drawn as.
 let sewn = (f: Puppet): Puppet => {
@@ -171,7 +171,7 @@ let COATS: Record<string, (c: number, trim: number, gem: number) => Box[]> = {
 
 /** How one of the people is built, in metres. A torso's boxes and the armour
  * over them are drawn for a child's torso, and a head's and its hat for a
- * child's head, and each is fit to the build's own (@yaks/stage/parts `fit`). */
+ * child's head, and each is fit to the build's own (@yaks/voxel/three `fit`). */
 export type Build = {
   /** ground to hip */
   hips: number

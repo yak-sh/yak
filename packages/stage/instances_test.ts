@@ -3,11 +3,9 @@
 import * as THREE from 'three'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { cuboids } from '@yaks/voxel/boxes'
 import { instances } from './instances.ts'
-import { out, pack } from '@yaks/voxel/mesh'
 
-test('building template is shared between chunks and disposed after both leave', async () => {
+test('ordinary geometry template is shared between chunks and disposed after both leave', async () => {
   let scene = new THREE.Scene(), material = new THREE.MeshBasicMaterial()
   let calls = 0
   let shared = instances(
@@ -16,7 +14,7 @@ test('building template is shared between chunks and disposed after both leave',
     () => {
       calls++
       return Promise.resolve(
-        pack(cuboids(out(), [[[0, 0, 0], [1, 1, 1], 0x807060]])),
+        new THREE.SphereGeometry(1, 4, 2),
       )
     },
     (kind, seed, turn, near) => `${kind}:${seed}:${turn}:${near}`,
@@ -54,5 +52,34 @@ test('building template is shared between chunks and disposed after both leave',
   assertEquals(calls, 2)
   shared.drop('c')
   shared.dispose()
+  material.dispose()
+})
+
+test('a template finishing after disposal releases its geometry without drawing', async () => {
+  let scene = new THREE.Scene(), material = new THREE.MeshBasicMaterial()
+  let finish!: (geometry: THREE.BufferGeometry) => void
+  let pending = new Promise<THREE.BufferGeometry>((resolve) => finish = resolve)
+  let shared = instances(
+    scene,
+    material,
+    () => pending,
+    (kind) => kind,
+    (kind) => kind,
+  )
+  let prepared = shared.prepare([{
+    kind: 'sphere',
+    seed: 0,
+    turn: 0,
+    at: [0, 0, 0],
+  }], true)
+  shared.dispose()
+  let geometry = new THREE.SphereGeometry(1, 4, 2), disposed = 0
+  geometry.addEventListener('dispose', () => disposed++)
+  finish(geometry)
+  await prepared.ready
+  prepared.draw('late')
+  prepared.release()
+  assertEquals(disposed, 1)
+  assertEquals(scene.children.length, 0)
   material.dispose()
 })

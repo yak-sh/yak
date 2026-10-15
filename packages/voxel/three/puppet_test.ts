@@ -1,7 +1,7 @@
 // A rig's rest pose is restored each frame, its named roles move, and falling
 // places its lowest point on the ground without changing the app's input.
 import { equal, test } from '@yaks/testing'
-import type { Box } from '@yaks/voxel/boxes'
+import type { Box } from '../boxes.ts'
 import { puppet, type Rig } from './puppet.ts'
 
 let leg = (name: string, x: number, phase: number) => ({

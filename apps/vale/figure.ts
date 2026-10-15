@@ -1,6 +1,6 @@
 // Mossvale's figure design rows and the lookup used by game rules. Drawing
-// and animation of those values belong to @yaks/stage/puppet.
-import type { Rig } from '@yaks/stage/puppet'
+// and animation of those values belong to @yaks/voxel/three.
+import type { Rig } from '@yaks/voxel/three'
 import { comp } from './bundle.ts'
 import type { Bundle } from './net.ts'
 

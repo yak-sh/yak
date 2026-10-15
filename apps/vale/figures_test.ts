@@ -2,7 +2,7 @@
 // `fights`): not within a part, and not between two parts standing square to
 // each other as it is built. Every creature, the people who give quests, and
 // heroes in each weight of armour with each weapon.
-import { puppet } from '@yaks/stage/puppet'
+import { puppet } from '@yaks/voxel/three'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import * as THREE from 'three'

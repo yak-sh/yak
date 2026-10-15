@@ -30,7 +30,7 @@ import { KINDS } from './props.ts'
 import { lerp, smooth } from '@yaks/game'
 import { blend } from './regions.ts'
 import { type Building, cutaway } from './solid.ts'
-import { cut, CUTS, geometry, night, sight, soft } from '@yaks/stage/soft'
+import { cut, CUTS, geometry, night, sight, soft } from '@yaks/voxel/three'
 import { day } from './day.ts'
 import { COARSER, type Want, wanted } from '@yaks/voxel/stream'
 import {
@@ -113,6 +113,18 @@ let release = (a: THREE.BufferAttribute) =>
 
 let bytes = (p: Packed) =>
   Object.values(p).reduce((n, a) => n + a.byteLength, 0)
+
+// Static voxel arrays can leave the CPU after upload. Stage owns only the
+// resulting geometry's retention and disposal, not its packed representation.
+let uploaded = (p: Packed) => {
+  let g = geometry(p)
+  g.userData.bytes = bytes(p)
+  for (let a of Object.values(g.attributes)) {
+    if (a instanceof THREE.BufferAttribute) release(a)
+  }
+  if (g.index) release(g.index)
+  return g
+}
 
 // The light through the day: sky overhead, the horizon and fog, the sun's
 // colour and strength, and the fill from the sky.
@@ -248,7 +260,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     buildings: instances(
       scene,
       ground,
-      mesh.template,
+      (...args) => mesh.template(...args).then(uploaded),
       modelKey,
       (kind) => kind.split('.')[0],
     ),
@@ -302,12 +314,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
     ck: number,
     material = ground,
   ) => {
-    let g = geometry(p)
-    g.userData.bytes = bytes(p)
-    for (let a of Object.values(g.attributes)) {
-      if (a instanceof THREE.BufferAttribute) release(a)
-    }
-    if (g.index) release(g.index)
+    let g = uploaded(p)
     let m = new THREE.Mesh(g, material)
     m.position.set(ci * CHUNK, 0, ck * CHUNK)
     m.matrixAutoUpdate = false

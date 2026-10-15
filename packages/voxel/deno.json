@@ -7,11 +7,18 @@
     "./boxes": "./boxes.ts",
     "./stream": "./stream.ts",
     "./chartbook": "./chartbook.ts",
-    "./chartsheet": "./chartsheet.ts"
+    "./chartsheet": "./chartsheet.ts",
+    "./three": "./three/mod.ts"
   },
   "license": "Apache-2.0",
-  "description": "Voxel and box meshing into packed quads, chunk detail selection and cached heightfield charts, over plain values and safe in workers.",
+  "description": "Worker-safe voxel geometry, chunk detail and heightfield charts, with Three.js materials, box rigs and baked light at /three.",
   "publish": {
-    "exclude": ["**/*_test.ts", "./browser.json"]
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  },
+  "imports": {
+    "three": "npm:three@^0.186.1"
   }
 }

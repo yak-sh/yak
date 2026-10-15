@@ -2,8 +2,9 @@
 
 Voxel geometry over plain values. Mesh a voxel grid or a set of boxes into
 packed quads, select chunks by distance and detail, and cache heightfield charts
-for a map. The package has no runtime dependencies, renderer, graph or game
-world; its exports run in a page or a worker.
+for a map. The root and geometry subpaths have no runtime dependencies,
+renderer, graph or game world and run in a page or a worker. The `/three`
+subpath draws these values with Three.js; nothing in the root imports it.
 
 The page reads its game's graph and passes values here. A renderer consumes the
 packed arrays; a game supplies chunk and sheet sizes. There are no stored words
@@ -16,6 +17,25 @@ shapes (`box`, `ball`, `blob`) and the packed representation.
 `@yaks/voxel/boxes` turns box models into that representation, including flush
 surfaces, worn pieces and shaped surfaces. Both are also exported from
 `@yaks/voxel`.
+
+## Three.js presentation
+
+`@yaks/voxel/three` exports the voxel look, separately from the worker-safe
+root:
+
+- `geometry` takes ownership of packed quad arrays without copying.
+- `soft`, `sight`, `cut`, `flash` and `night` provide the voxel material and its
+  cutaway, lighting and flash uniforms.
+- `partOf`, `knit` and the other box-part helpers assemble jointed box models.
+- `puppet` animates a caller-supplied `Rig` from `Act` values. Creature designs,
+  equipment and animation policy stay with the app.
+- `light` and `warmth` bake lamp light into packed quads.
+
+Three.js is shared with the page and `@yaks/stage` by the platform compiler.
+Stage knows no voxels: for its instancing cache, adapt a packed-quad template
+with `(...args) => template(...args).then(geometry)`. No voxel adapter or
+material is imported by stage. The rendering exports require the browser facet;
+worker meshers continue to import `@yaks/voxel/mesh` or the root.
 
 ## Chunk detail
 

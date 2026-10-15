@@ -7,7 +7,7 @@
 // measured for collision (`bulk`) at every visible detail.
 import { BUILDINGS, useBuildings } from './buildings.ts'
 import { type Glow, type Raised, spin, spun } from './buildings/kit.ts'
-import { light } from '@yaks/stage/light'
+import { light } from '@yaks/voxel/three'
 import type { Bundle } from './net.ts'
 import {
   blob,

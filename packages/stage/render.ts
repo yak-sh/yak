@@ -1,7 +1,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 
-/** The shared voxel renderer. Sizing and density are values supplied by the page. */
+/** The shared WebGL renderer. Sizing and density are values supplied by the page. */
 export let renderer = (
   canvas: HTMLCanvasElement,
   width: number,

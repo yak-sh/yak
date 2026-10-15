@@ -2,7 +2,7 @@
 // baked once per shape and turn into the unused high bits of its edge flags;
 // soft.ts brings it up at dusk. Its facing keeps light inside the walls and
 // under the ceiling, while the distance makes each source brightest nearby.
-import { type Out, type Vec } from '@yaks/voxel/mesh'
+import { type Out, type Vec } from '../mesh.ts'
 
 export type LightSource = { at: Vec; size: number }
 

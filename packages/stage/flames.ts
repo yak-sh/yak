@@ -2,9 +2,8 @@
 // instanced mesh, whether its building has just streamed in or out.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Vec } from '@yaks/voxel/mesh'
 
-export type Fire = { at: Vec; size: number }
+export type Fire = { at: [number, number, number]; size: number }
 
 /** Hang a flame mesh in `scene`, sized as fires come into sight, and return
  * its motion for each frame. */

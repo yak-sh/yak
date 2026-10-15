@@ -12,7 +12,7 @@
 // A figure is made when someone arrives and dropped when they go; each frame
 // moves it to where the frame says it is, smoothing what arrives in steps (a
 // peer's position comes when their page sends it, not on this page's beat).
-import { puppet } from '@yaks/stage/puppet'
+import { puppet } from '@yaks/voxel/three'
 import { labels } from '@yaks/game'
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
@@ -42,7 +42,7 @@ import type { Drop, Frame } from './play.ts'
 import { GRADES, type Rarity } from './rarity.ts'
 import { follow, type Remote } from '@yaks/game'
 import { floorAt } from './sim.ts'
-import { geometry, soft } from '@yaks/stage/soft'
+import { geometry, soft } from '@yaks/voxel/three'
 import { groundAt, type Vale } from './terrain.ts'
 import { signsNear } from './ways.ts'
 

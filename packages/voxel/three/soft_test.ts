@@ -2,8 +2,8 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import { equal, test } from '@yaks/testing'
-import { cuboids } from '@yaks/voxel/boxes'
-import { out, pack } from '@yaks/voxel/mesh'
+import { cuboids } from '../boxes.ts'
+import { out, pack } from '../mesh.ts'
 import { cut, flash, geometry, night, sight, soft } from './soft.ts'
 
 test('packed geometry keeps the mesher arrays and their bounds', () => {

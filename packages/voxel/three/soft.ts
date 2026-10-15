@@ -34,7 +34,7 @@
 //   its corners at whole voxels, which float32 adds exactly.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Packed } from '@yaks/voxel/mesh'
+import type { Packed } from '../mesh.ts'
 
 /** How many boxes a see-through material fades at once. */
 export let CUTS = 3

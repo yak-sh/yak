@@ -1,19 +1,18 @@
-// Shared building shapes for the chunks now in view. A variant is meshed in
-// a worker once for each visible run, and one instanced mesh draws all its
-// placements. Pending chunks hold the shape too, so streaming a chunk away
+// Shared geometry for the chunks now in view. A variant is prepared once
+// for each visible run, and one instanced mesh draws all its placements. Pending chunks hold the shape too, so streaming a chunk away
 // cannot dispose geometry another one is waiting to use.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Packed, Vec } from '@yaks/voxel/mesh'
-import { geometry } from './soft.ts'
 
-export type Place = { kind: string; seed: number; turn: number; at: Vec }
+type Point = [number, number, number]
+
+export type Place = { kind: string; seed: number; turn: number; at: Point }
 export type Template = (
   kind: string,
   seed: number,
   turn: number,
   near: boolean,
-) => Promise<Packed>
+) => Promise<THREE.BufferGeometry>
 
 /** A prepared placement set retains its geometry until released, even before drawing. */
 export type Prepared = {
@@ -33,18 +32,14 @@ export type Instances = {
 type Batch = {
   id: string
   pending: number
-  places: Map<string, Vec[]>
+  places: Map<string, Point[]>
   ready: Promise<void>
   geometry: THREE.BufferGeometry | null
   mesh: THREE.InstancedMesh | null
 }
 
-let bytes = (p: Packed) =>
-  Object.values(p).reduce((n, a) => n + a.byteLength, 0)
-
-let release = (a: THREE.BufferAttribute) =>
-  a.onUpload(() => a.array = a.array.slice(0, 0))
-
+/** Templates transfer geometry ownership to the cache, which disposes it when
+ * no prepared or drawn set retains it. Attribute and upload policy stay with callers. */
 export let instances = (
   scene: THREE.Scene,
   material: THREE.Material,
@@ -81,13 +76,11 @@ export let instances = (
       let own = b
       batches.set(id, b)
       b.ready = template(p.kind, p.seed, p.turn, near).then((p) => {
-        if (gone || batches.get(id) != own) return
-        own.geometry = geometry(p)
-        own.geometry.userData.bytes = bytes(p)
-        for (let a of Object.values(own.geometry.attributes)) {
-          if (a instanceof THREE.BufferAttribute) release(a)
+        if (gone || batches.get(id) != own) {
+          p.dispose()
+          return
         }
-        if (own.geometry.index) release(own.geometry.index)
+        own.geometry = p
       })
     }
     b.pending++
@@ -127,7 +120,7 @@ export let instances = (
     chunks.delete(key)
   }
   let prepare = (placed: Place[], near: boolean) => {
-    let at = new Map<string, Vec[]>()
+    let at = new Map<string, Point[]>()
     let used = new Map<string, Batch>()
     for (let p of placed) {
       let id = key(p, near)

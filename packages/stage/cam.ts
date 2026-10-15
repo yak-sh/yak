@@ -45,8 +45,7 @@ export let CLOSEST = 1.2
 
 /** How near the camera sees, in metres: as far out as the hero's nearest side
  * ever comes, at its closest, so the depth buffer is as fine as it can be
- * (mesh.ts `STEP`). Nearer than that, a wall the camera backs against is
- * seen through anyway (soft.ts `see`). */
+ * Nearer surfaces are clipped by the camera. */
 export let NEAR = 0.5
 
 /** Fit `camera`'s depth to what it can see: from NEAR out to the far edge of

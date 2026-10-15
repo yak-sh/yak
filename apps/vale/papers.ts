@@ -11,7 +11,7 @@ import { glyphText } from './glyphs.ts'
 import { type Box, cuboids } from '@yaks/voxel/boxes'
 import { type Out, out, pack } from '@yaks/voxel/mesh'
 import { type Board, boardsNear } from './notices.ts'
-import { geometry, sight, soft } from '@yaks/stage/soft'
+import { geometry, sight, soft } from '@yaks/voxel/three'
 import type { Spot, Vale } from './terrain.ts'
 import type { Job } from './work.ts'
 
