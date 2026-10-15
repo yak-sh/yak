@@ -15,6 +15,7 @@ import { EDGE_URI, edgeKeywords } from '@yaks/edge'
 import { print } from '@yaks/tui/print'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
+import { renderToString } from 'preact-render-to-string'
 import { type ComponentChild, h, render } from 'preact'
 import { Float } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
@@ -285,18 +286,21 @@ let SAID: Bundle = {
   comment: { target: 't1' },
 }
 
+// The page as markup, split at its Links section: what a page's parts draw
+// needs no document to be read, so there is none to build. The host is built
+// beside the test, so it times only the page.
+let commented = host([T1, NOTE, SAID])
+
 test('a comment is drawn once on its page: a note under its heading, any other among the links', () => {
-  using t = host([T1, NOTE, SAID])
-  using p = mount(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  let t = commented
+  let page = renderToString(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
+  let [facts, links] = page.split('data-section="Links"')
   let drawn = (eid: string) =>
-    p.root.querySelectorAll(`a[href="${pagePath(eid)}"]`).length
+    page.split(`<a href="${pagePath(eid)}">`).length - 1
   assertEquals(drawn('c1'), 1)
   assertEquals(drawn('c2'), 1)
-  assert(p.text('[data-facts]').includes('owner should be required'))
-  assertEquals(
-    p.text(`[data-section="Links"] a[href="${pagePath('c2')}"]`),
-    'N-c2',
-  )
+  assert(facts.includes('owner should be required'))
+  assert(links.includes(`<a href="${pagePath('c2')}">N-c2</a>`))
 })
 
 test('a note under a heading is a comment on the entity that is an open task', async () => {
