@@ -122,6 +122,8 @@ stronger.
   content) is separate from tests; run the parts your change touches
   (`deno task check:types`, …).
 - Piping a run eats its exit code: read `${pipestatus[1]}` before acting.
+- A run doesn't type-check (`--no-check`); the gate does. `deno check` the files
+  you changed, test files included, before landing.
 - Each run lives in a directory of its own (bin/scratch.ts): `TMPDIR`,
   `TASKS_HOME`, `PROCESS_DIR`, `HARNESS_HOME` and `HARNESS_WORKTREE_DIR` point
   inside it, and it's removed when the run ends. Run tests with machine effects
