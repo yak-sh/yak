@@ -363,7 +363,9 @@ bucket_name = "yak-model-receipts"
 # the next view of every file paid a full miss (two tiers, the Worker, the
 # bucket: about 600 ms). What Files answers under one address never changes
 # (a release's bytes are immutable), and cache.ts `GENERATION` is how a change
-# to the answer itself moves to new addresses. Site's pages live 30 seconds.
+# to the answer itself moves to new addresses. Site keeps a page 30 seconds
+# and then answers it once more while asking again; a directory write that
+# changes an app's pages purges them before it answers (page-cache.ts).
 [cache]
 enabled = true
 cross_version_cache = true
@@ -383,8 +385,9 @@ cross_version_cache = true
 # So the default entrypoint is the gateway and never cached: it runs on every
 # request, resolves the space and app, and decides who is asking. `Files` is
 # behind it, addressed by the app's EID (cache.ts `at`), and holds only bytes.
-# `Site` is behind it too, but receives only canonical public apex pages under
-# a path that includes the apex identity (site.ts `at`).
+# `Site` is behind it too, and receives only the apex's public pages and the
+# pages an app serves to anyone, each under a path naming the hostname that
+# answers it (site.ts `at`, page-cache.ts `pageAt`), and never a credential.
 #
 # Turning `enabled` on for `default` is the one edit in this file that would
 # leak one tenant's pages to another. cache.ts `sealed` is the second line of

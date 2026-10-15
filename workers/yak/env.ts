@@ -15,6 +15,7 @@ import type { D1Like } from '@yaks/d1'
 import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
+import type { Purges } from './purge.ts'
 import type { Limiter } from './rate.ts'
 import type { Sandboxes } from '@yaks/machine/cloudflare'
 import type { Workspaces } from './workspaces.ts'
@@ -264,8 +265,11 @@ export type Env = {
   // refuses the hop, files.ts `door` reads the module in-process and nothing
   // is cached.
   FILES?: Fetcher
-  // The apex's public home and gallery, cached behind the uncached gateway.
-  SITE?: Fetcher
+  // The cached public pages behind the uncached gateway (site.ts): the apex's
+  // home and gallery, and every public page an app serves. Its `purge` takes
+  // pages out of its cache (purge.ts); the in-process stand-in has none, and
+  // no cache either.
+  SITE?: Fetcher & Partial<Purges>
   // yak-esbuild, whose container compiles an app's TypeScript and npm imports
   // at deploy (esbuild.ts). Absent in a test run and the workerd probes.
   ESBUILD?: Fetcher

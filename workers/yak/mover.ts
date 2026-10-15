@@ -44,6 +44,7 @@ import { frozenMove, takeMove } from '@yaks/builders'
 import { keyEid } from '@yaks/key'
 import { commitRule } from './git-move.ts'
 import { platformRule } from './platform-move.ts'
+import { workerRule } from './worker-move.ts'
 /** A rule's name: where its stamp is kept in a store's memory, and the
  * `BOUNDARIES` entry its live release adds. */
 export type Mark = `yak/store/${string}`
@@ -166,6 +167,7 @@ export let RULES: Rule[] = [
   takeRule,
   commitRule,
   platformRule,
+  workerRule,
 ]
 
 /** How far one rule got in one store. `after` is the last row it moved past;

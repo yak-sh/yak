@@ -225,6 +225,7 @@ export let directoryConfig: Config = {
     'yak/directory',
     'yak/trash',
     'yak/meter',
+    { use: 'yak/pages', facets: ['graph'] },
     { use: 'yak/attribution', words: ['browser', 'attribute_writes'] },
     'yak/git',
     'yak/wrap',
@@ -272,6 +273,7 @@ export let domains = {
     graph: './facets/meter-graph.ts',
     effects: './facets/meter-effects.ts',
   },
+  'yak/pages': { graph: './facets/pages-graph.ts' },
   'yak/attribution': {
     vocab: './facets/attribution-vocab.ts',
     effects: './facets/attribution-effects.ts',
