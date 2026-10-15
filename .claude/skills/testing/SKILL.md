@@ -107,7 +107,11 @@ stronger.
   platform's wall clock on the gate. Nothing joins the list: a new or renamed
   test is held to 1 ms. `--write` takes off what got fast and lowers the
   records; `--from=<dir>` does it from a gate's kept times (its `suite-timings`
-  artifact).
+  artifact). A time over the line is measured again with each file loaded a
+  second time in the same runtime, so a test that can't run twice fails there.
+- A red gate's verdict closes its tests step, and `gh run view --log` cuts that
+  step short: read the job's whole log, `gh api
+  repos/yak-sh/yak/actions/jobs/<job id>/logs`.
 - `deno task test` and `deno task check` are timed against a baseline
   (bench/suites.md); the `benchmark:` line closing a run is that timing,
   report-only, not a test result.
