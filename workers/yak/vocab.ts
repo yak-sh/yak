@@ -5,9 +5,12 @@ import { refuse } from './tool.ts'
 import { type Host, url } from './host.ts'
 import {
   changed,
+  kept as durableValue,
   type Keywords,
   metaDoc,
+  ms,
   type PropSchema,
+  said as syncValue,
   same,
   storable,
   typesOf,
@@ -379,7 +382,7 @@ let growing = (
  */
 export type Homes = Record<
   string,
-  { at: string; props: Record<string, PropSchema> }
+  { at: string; props: Record<string, PropSchema>; schema?: PropSchema }
 >
 
 /**
@@ -395,7 +398,7 @@ export type Homes = Record<
  * alone: `search` and every other keyword belong to the property, and the store
  * that plants it is the one that reads them (T-37546).
  *
- * The one refusal is a shape conflict — the same property with two types —
+ * A conflicting lifetime is refused before growth. A shape conflict — the same property with two types —
  * because the rows already written under the home's type are the record of
  * what that property is, and no manifest may rewrite them.
  */
@@ -408,6 +411,23 @@ export let homed = (next: VocabDoc, homes: Homes) => {
     if (!home) {
       mine[name] = schema
       continue
+    }
+    // A name does not override its home's lifetime. Refuse before any
+    // properties are grown: otherwise a relayed cursor can silently become
+    // stored data (or the reverse) merely because another app named it first.
+    let declaredSync = syncValue(schema.sync)
+    let homeSync = syncValue(home.schema?.sync)
+    let declaredDurable = durableValue(schema.durable)
+    let homeDurable = durableValue(home.schema?.durable)
+    let sameDurable = declaredDurable == homeDurable ||
+      (ms(declaredDurable) != null && ms(declaredDurable) == ms(homeDurable))
+    if (declaredSync != homeSync || !sameDurable) {
+      throw refuse(
+        'arguments',
+        `vocab.json: ${name} declares sync: ${declaredSync}, durable: ${declaredDurable} ` +
+          `here, but sync: ${homeSync}, durable: ${homeDurable} in ${home.at}, where ${name} lives — ` +
+          'a borrowed component keeps its home’s lifetime; use a distinct name for a different aspect',
+      )
     }
     uses[name] = home.at
     let add: Record<string, PropSchema> = {}

@@ -732,7 +732,7 @@ let homesIn = async (ctx: Ctx, space: Space, slug: string, app?: App) => {
     if (at == slug || walled.has(at)) continue
     for (let [name, schema] of Object.entries(doc.$defs ?? {})) {
       if (name in homes || name in ours) continue
-      homes[name] = { at, props: schema.properties ?? {} }
+      homes[name] = { at, props: schema.properties ?? {}, schema }
     }
   }
   return { said, homes }
@@ -1079,6 +1079,7 @@ let published = async (
         [...names].map((name) => [name, {
           at: app.slug,
           props: defs[name]?.properties ?? {},
+          schema: defs[name] ?? current[name],
         }]),
       )
       for (
