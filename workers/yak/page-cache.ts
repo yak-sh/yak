@@ -30,6 +30,7 @@
 // from what the kept page says it was, gives the browser the app's own cache
 // rule, and answers a revalidation with a 304.
 import { mode } from '@yaks/member'
+import { KEPT } from './cache.ts'
 import type { App } from './directory.ts'
 import { bearing } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -40,11 +41,6 @@ import { hostOf, MOUNT } from './route.ts'
 import type { Clock } from './timing.ts'
 import { scheduleUse } from './used.ts'
 import { seen, viewed } from './views.ts'
-
-// How long Site holds an answer before asking again, and how long past that a
-// visitor may still be answered from it while it is asked (stale while it
-// revalidates). Purges keep it right; this keeps a missed purge brief.
-export let KEPT = 'public, max-age=30, stale-while-revalidate=86400'
 
 // Bumped when how a page is woven changes and kept pages must not wait out
 // their freshness: every key moves, and the old pages are never read again.

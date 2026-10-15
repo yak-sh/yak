@@ -38,7 +38,7 @@ import {
 } from './asset_url.ts'
 import * as files from './files.ts'
 import { inside, keyed, prefixOf, VERSION } from './files.ts'
-import { blobPrefix, servable } from './blob-key.ts'
+import { blobPrefix } from './blob-key.ts'
 import {
   type Access,
   type App,
@@ -1373,11 +1373,17 @@ let gave = async (
       },
     })
   }
-  // Whether the bytes are served at all is the store's to say (`servable`).
-  // That read is the store's, one per request, so the reader's browser keeps
-  // what it was given: a page that loads its images on every view asks the
-  // store once, not on every view, and no shared cache answers anyone else.
-  let rep = await servable((q) => graph.query(q), app, sha, eid)
+  // Whether the bytes are served at all is the store's to say (`servable`),
+  // and Files keeps its answer for everyone this app lets read (files.ts
+  // `serves`), so a burst of image reads is not a burst of store reads. The
+  // reader's browser keeps what it was given.
+  let rep
+  try {
+    rep = await files.servableOf(env, app, storeName(space, app), sha, eid)
+  } catch (e) {
+    caught(e, { request: 'GET /api/blob', space: space.slug, app: app.slug })
+    return json(503, 'blob_unavailable')
+  }
   if (!rep) return json(404, 'no_such_file')
   let response: Served = {
     mime: rep.media_type,

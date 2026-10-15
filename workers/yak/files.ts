@@ -1,9 +1,9 @@
 // The cached half of serving an app's files and blobs: bytes out of R2, and
-// nothing else. This part knows an app's eid, the R2 prefix its bytes live
-// under, and their address. It does not know who is asking, and that is the whole
-// point — Cloudflare's cache sits in front of this entrypoint (cache.ts), so
-// anything this part could learn about a person would end up shared with
-// strangers.
+// whether the app's rows still name an upload's bytes. This part knows an
+// app's eid, the R2 prefix its bytes live under, its store, and their address.
+// It does not know who is asking, and that is the whole point — Cloudflare's
+// cache sits in front of this entrypoint (cache.ts), so anything this part
+// could learn about a person would end up shared with strangers.
 //
 // The access decision stays in apps.ts `served()`, in front, on the uncached
 // gateway, run on every single request. What is cached here is the same for
@@ -16,8 +16,17 @@
 // default entrypoint, so no request from the internet arrives here — a caller
 // has to be this Worker.
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { type Loaded, mimeOf, type Objects, rangedOpen } from '@yaks/blob'
-import { at, blobAt, immutable } from './cache.ts'
+import {
+  type Loaded,
+  mimeOf,
+  type Objects,
+  rangedOpen,
+  type Representation,
+} from '@yaks/blob'
+import { servable } from './blob-key.ts'
+import { at, blobAt, immutable, KEPT, servableAt } from './cache.ts'
+import { storeOf } from './door.ts'
+import { answered, KERNEL, metaOf } from './meta.ts'
 import { seedy } from './seed.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
@@ -35,6 +44,10 @@ export let MAX = 20 * 1024 * 1024
 // prefix are the same answer — so keying on it would throw away a warm cache
 // for a rename that changed nothing a visitor sees.
 export let PREFIX = 'x-yak-prefix'
+
+// The store that holds an app's rows, which is the app's for life, so the
+// same answer whatever it is called: told, like the prefix, not keyed.
+export let STORE = 'x-yak-store'
 
 // The bytes' version, handed back so the gateway can build an ETag without
 // hashing a response body. A release index carries its SHA; older files use
@@ -319,6 +332,69 @@ export let blobBytes = (
     }),
   )
 
+/** The representation `rep` of the bytes at `sha` that an app still serves,
+ * or none (blob-key.ts `servable`), as this part keeps it. A store that could
+ * not say throws what it said. */
+export let servableOf = async (
+  env: Env,
+  app: { eid: string },
+  store: string,
+  sha: string,
+  rep: string,
+): Promise<Representation | null> => {
+  let r = await door(env).fetch(
+    new Request(servableAt(app.eid, sha, rep), { headers: { [STORE]: store } }),
+  )
+  if (r.ok) return await r.json() as Representation
+  if (r.status == 404) {
+    await r.body?.cancel()
+    return null
+  }
+  throw await answered(r)
+}
+
+// Whether an app's rows still name an upload's bytes, asked before a frozen
+// blob address is served (apps.ts `gave`) and once the gateway has decided the
+// caller may read the app at all. The answer is the store's and the same for
+// everyone let ask, so it is read as the kernel and kept like a public page
+// (`KEPT`): a page loading a hundred images, or a hundred visitors loading
+// one, costs the store one read per address per location every half minute,
+// not one per request (T-124546), and an upload deleted meanwhile stops being
+// served within that freshness. Not found is kept too, so it replaces a kept
+// answer once that goes stale. A store that fails is answered, never kept: a
+// stale answer goes on serving behind it, and the gateway reports the failure
+// as the store threw it.
+let serves = async (req: Request, env: Env, path: string) => {
+  let match = /^\/servable\/([^/]+)\/([0-9a-f]{64})\/([0-9a-f-]+)$/.exec(path)
+  let store = req.headers.get(STORE)
+  if (!match || !store) {
+    return new Response(null, {
+      status: 400,
+      headers: { 'cache-control': 'private, no-store' },
+    })
+  }
+  let [, app, sha, rep] = match
+  let graph = metaOf(storeOf(env.STORE, store), KERNEL)
+  let found
+  try {
+    found = await servable(
+      (q) => graph.query(q, { trusted: true }),
+      { eid: app },
+      sha,
+      rep,
+    )
+  } catch (e) {
+    let { name, message } = e as Error
+    return Response.json(
+      { error: name, message },
+      { status: 503, headers: { 'cache-control': 'private, no-store' } },
+    )
+  }
+  return found
+    ? Response.json(found, { headers: { 'cache-control': KEPT } })
+    : new Response(null, { status: 404, headers: { 'cache-control': KEPT } })
+}
+
 // The inner door. The gateway has already decided this request may be served;
 // everything here is about which bytes.
 //
@@ -328,6 +404,9 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return shared.fetch(req, env)
   }
   if (url.pathname.startsWith('/blob/')) return blob(req, env, url.pathname)
+  if (url.pathname.startsWith('/servable/')) {
+    return serves(req, env, url.pathname)
+  }
   // `/<app eid>/<the app's own path>` (cache.ts `at`): the eid is the cache
   // key's tenant discriminator and is not part of the file's name.
   let eid = url.pathname.slice(1).split('/')[0] ?? ''

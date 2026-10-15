@@ -55,6 +55,12 @@ import { type Host, url } from './host.ts'
 // keys. Metadata and access are decided by the gateway, outside this cache.
 export let immutable = { 'cache-control': `public, max-age=${YEAR}, immutable` }
 
+// An answer that can change, kept briefly: how long a cache holds it before
+// asking again, and how long past that it may still answer while it asks
+// (stale while it revalidates). A public page is kept so (page-cache.ts), and
+// so is whether a blob is still served (files.ts `serves`).
+export let KEPT = 'public, max-age=30, stale-while-revalidate=86400'
+
 // A browser may keep the exact asset it fetched, while a shared cache must
 // never retain the app gateway's response for a person. The inner Files entry
 // still caches the tenant-keyed bytes under `immutable` above.
@@ -88,6 +94,12 @@ export let at = (eid: string, path: string, source = '') =>
 // can reuse another entry.
 export let blobAt = (eid: string, sha: string) =>
   generation(`https://files.invalid/blob/${eid}/${sha}`)
+
+// Whether an app's rows still name the bytes at `sha` as representation `rep`
+// (files.ts `serves`). Both are in the key: one upload may be framed under
+// more than one representation, and each is its own answer.
+export let servableAt = (eid: string, sha: string, rep: string) =>
+  generation(`https://files.invalid/servable/${eid}/${sha}/${rep}`)
 
 // A compiler-owned package file (shared.ts), the same for every app.
 export let packageAt = (path: string) =>
