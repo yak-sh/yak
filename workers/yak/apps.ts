@@ -25,7 +25,7 @@
 // per app: a page in a loop is a bug to see once, not a write flood. What the
 // door refused on purpose never becomes one (unseen.ts `refusal`): a
 // signed-out visitor sent to sign in is the platform working.
-import { apex, spaceHost, url as hostUrl } from './host.ts'
+import { apex, type Host, spaceHost, url as hostUrl } from './host.ts'
 import { r2Objects } from './lib/objects.ts'
 import { BUILD, joining, NOBODY, NOT_A_WRITER, posting } from './build.ts'
 import { browserImmutable } from './cache.ts'
@@ -250,8 +250,8 @@ let MEMBER: Record<string, string> = {
 let WAITING = 'you have an invitation to this app waiting — accept it from ' +
   'the letter yaks.app sent you, then come back'
 
-let waiting = async (
-  dir: ReturnType<typeof directory>,
+export let waiting = async (
+  dir: Pick<ReturnType<typeof directory>, 'invite'>,
   space: Space,
   app: App,
   person: string,
@@ -264,6 +264,29 @@ let waiting = async (
   let held = mine ?? all
   return held && (what == 'not_a_reader' || held.role != 'viewer')
 }
+
+/** What a signed-in person is told when an app refuses them: the click in
+ * their letter if the owner already let them in, else who can let them in. */
+export let refusedSaid = async (
+  dir: Parameters<typeof waiting>[0],
+  space: Space,
+  app: App,
+  person: string,
+  what: string,
+) => await waiting(dir, space, app, person, what) ? WAITING : MEMBER[what]
+
+/** The page for a signed-in person an app's pages are shut to: that their
+ * invitation waits, if the owner let them in, else that nothing is here. */
+export let shut = async (
+  dir: Parameters<typeof waiting>[0],
+  space: Space,
+  app: App,
+  person: string,
+  env: Host,
+) =>
+  await waiting(dir, space, app, person, 'not_a_reader')
+    ? invitedTo(app.title || app.slug, env)
+    : nothingHere(env)
 
 let json = (
   status: number,
@@ -1531,9 +1554,7 @@ let api = async (
       ? json(
         403,
         what,
-        await waiting(dir, space, app, who.person, what)
-          ? WAITING
-          : MEMBER[what],
+        await refusedSaid(dir, space, app, who.person, what),
       )
       : json(
         401,
@@ -2963,9 +2984,7 @@ let served = async (
   // The worker passed, and the files are not this visitor's to see.
   if (!own && !file) {
     if (!who.person) return redirect(signInAt(req.url, env), 303)
-    return await waiting(dir, space, app, who.person, 'not_a_reader')
-      ? invitedTo(app.title || app.slug, env)
-      : nothingHere(env)
+    return await shut(dir, space, app, who.person, env)
   }
   // File pages already pass through woven(). Worker pages use the same
   // reporter, without buffering or changing their navigation and asset URLs.

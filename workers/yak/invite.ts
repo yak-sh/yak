@@ -101,6 +101,36 @@ export let allowed = async (
   await stamp(env, { entities: [await room(env, dir, space, person)] })
 }
 
+/** The article a role takes: an editor, an owner, a viewer. */
+export let an = (role: Role) => role == 'viewer' ? 'a' : 'an'
+
+/**
+ * What member_add tells the inviter once the invitation stands. Asked again
+ * for somebody who never accepted, that is the news when they say they cannot
+ * get in, so the answer says so first.
+ */
+export let invitedWords = (o: {
+  email: string
+  role: Role
+  place: Place
+  /** the invitation was already there, and another letter goes */
+  standing: boolean
+  note?: string
+}) => {
+  let { space, app } = o.place
+  return `${o.email} ${
+    o.standing ? 'had not accepted yet, and stays' : 'is'
+  } invited as ${an(o.role)} ${o.role} of ` +
+    (app
+      ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
+      : space.slug) +
+    ` — ${o.standing ? 'another letter' : 'the invitation'}${
+      o.note ? ' and your note are' : ' is'
+    } on its way to them. It is theirs once they accept it from ` +
+    `the letter, signed in with that address; until then nothing ` +
+    `of ${space.slug} is in their reach, and member_remove withdraws it`
+}
+
 // Their words, marked as theirs: quoted the way a letter quotes, so a reader
 // can tell what the person wrote from what the platform did.
 let quoted = (said: string) =>

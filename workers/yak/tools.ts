@@ -247,7 +247,7 @@ import {
   tooManySpaces,
 } from './meter.ts'
 import { type Held, holding } from './held.ts'
-import { room, send } from './invite.ts'
+import { an, invitedWords, room, send } from './invite.ts'
 import { aloud, peopleIn, shown } from './people.ts'
 import {
   addressed,
@@ -2239,9 +2239,6 @@ let noteOf = (v: unknown) => {
   }
   return said
 }
-
-// The article a role takes: an editor, an owner, a viewer.
-let an = (role: Role) => role == 'viewer' ? 'a' : 'an'
 
 // How many of these one person gets in an hour. A few is plenty: feedback is
 // a person noticing something, not a stream, and the fourth in an hour is
@@ -5473,21 +5470,13 @@ let OURS: Row[] = [
         ),
       )
       return {
-        // Asked again for somebody who never accepted: that is the news when
-        // they say they cannot get in, so the answer says so first.
-        text:
-          `${email} ${
-            standing ? 'had not accepted yet, and stays' : 'is'
-          } invited as ${an(want)} ${want} of ` +
-          (app
-            ? `${space.slug}/${app.slug} and nothing else in ${space.slug}`
-            : space.slug) +
-          ` — ${standing ? 'another letter' : 'the invitation'}${
-            note ? ' and your note are' : ' is'
-          } on its way to them. It is theirs once they accept it from ` +
-          `the letter, signed in with that address; until then nothing ` +
-          `of ${space.slug} is in their reach, and member_remove ` +
-          `withdraws it`,
+        text: invitedWords({
+          email,
+          role: want,
+          place: { space, app },
+          standing: !!standing,
+          note,
+        }),
         space,
       }
     },

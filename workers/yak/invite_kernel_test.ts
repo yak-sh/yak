@@ -6,10 +6,15 @@ import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
-  assertObjectMatch,
+  assertMatch,
   assertStringIncludes,
 } from '@std/assert'
-import { SUBJECT } from './invite.ts'
+import { acceptLink, door, invitedWords, SUBJECT } from './invite.ts'
+import { refusedSaid, shut, waiting } from './apps.ts'
+import { people } from './pages.ts'
+import { aloud, peopleIn, type Person, shown } from './people.ts'
+import type { App, Directory, Held, Space } from './directory.ts'
+import type { Env } from './env.ts'
 import {
   accepted,
   clickInvite,
@@ -17,12 +22,12 @@ import {
   type Kernel,
   kernel,
   letter,
-  letters,
   meta,
   signIn,
 } from './probe.ts'
 import { HELLO } from './mcp-probe.ts'
-import type { Listed } from './tools.ts'
+
+let SECRET = 'secret'
 
 // A person's dashboard, as their browser opens it.
 let desk = (k: Kernel, cookie: string) =>
@@ -131,143 +136,141 @@ test('an invitation reaches nobody until its person accepts it', async () => {
   }
 })
 
-test('a friend who has not accepted is told the invitation waits', async () => {
-  let k = await kernel()
-  try {
-    let jeff = await signIn(k)
-    let his = connector(k, jeff.cookie)
-    let host = `${jeff.email.split('@')[0]}.yaks.app`
-    await his.tool('app_new', {
-      slug: 'diary',
-      title: 'Diary',
-      access: 'private',
-    })
-    await his.tool('app_files', {
-      app: 'diary',
-      files: [{ path: 'index.html', content: '<h1>Diary</h1>' }],
-    })
-    await his.tool('app_deploy', { app: 'diary' })
-    let [ana, bo] = [await signIn(k), await signIn(k)]
-    await his.tool('member_add', { email: ana.email, app: 'diary' })
-    // Her letter's link, opened before she signs in, says who invited her to
-    // which app, and wears the platform's face rather than the private app's
-    // own, which is not hers to see yet.
-    let offer = await (await clickInvite(k, ana.email)).text()
-    assertStringIncludes(offer, `invited you to use Diary.`)
-    assertStringIncludes(offer, `href="https://${host}/diary/"`)
-    assertStringIncludes(offer, '/connector-512.png')
+// The people and places of the two tests below, and a directory that holds
+// them: the seams that decide what a friend and an owner are told, without a
+// kernel.
+let JEFF = 'jeff-eid'
+let space = { eid: 'sp', slug: 'jeff', title: 'Jeff' } as Space
+let diary = {
+  eid: 'ap',
+  slug: 'diary',
+  title: 'Diary',
+  space: 'sp',
+  access: 'private',
+} as App
+let emailOf = (person: string) => `${person}@x.test`
 
-    let page = (cookie: string) =>
-      k.at(host, '/diary/', { headers: { cookie } }).then((r) => r.text())
-    let write = (cookie: string) =>
-      k.at(host, '/diary/api/apply', {
-        method: 'POST',
-        headers: { cookie, 'content-type': 'application/json' },
-        body: JSON.stringify({ entities: [{ doc: { title: 'hi' } }] }),
-      }).then((r) => r.text())
-    let me = (cookie: string) =>
-      k.at(host, '/diary/api/me', { headers: { cookie } }).then((r) => r.json())
-    assertStringIncludes(await page(ana.cookie), 'Your invitation is waiting')
-    assertStringIncludes(await write(ana.cookie), 'invitation to this app')
-    // A page asking who is looking hears it too, before she types.
-    assertObjectMatch(await me(ana.cookie), { writes: false, invited: true })
-    // Somebody nobody invited learns nothing about the app.
-    assertStringIncludes(await page(bo.cookie), 'Nothing here yet')
-    assert(!(await write(bo.cookie)).includes('invitation'))
-    assertObjectMatch(await me(bo.cookie), { invited: false })
-    // Asked again, the owner hears she never accepted.
-    assertStringIncludes(
-      await his.tool('member_add', { email: ana.email, app: 'diary' }),
-      'had not accepted yet',
+test('a friend who has not accepted is told the invitation waits', async () => {
+  // ana is invited to the diary and has not accepted; bo was never invited.
+  let invites = new Map([['ap/ana', { eid: 'inv', role: 'editor' }]])
+  let dir = {
+    invite: (to: string, person: string) =>
+      Promise.resolve(invites.get(`${to}/${person}`) ?? null),
+    invitation: (eid: string) =>
+      Promise.resolve(
+        eid == 'inv'
+          ? { eid, to: 'ap', person: 'ana', role: 'editor', by: JEFF }
+          : null,
+      ),
+    appAt: (eid: string) =>
+      Promise.resolve(eid == 'ap' ? { space, app: diary } : null),
+    at: () => Promise.resolve(null),
+    emailAt: (person: string) => Promise.resolve(emailOf(person)),
+    nameAt: () => Promise.resolve('Jeff'),
+    grant: () => Promise.resolve(null),
+    apply: (b: unknown) => Promise.resolve(void applied.push(b)),
+  } as unknown as Directory
+  let applied: unknown[] = []
+  let click = async (person: string | null) =>
+    door(
+      new Request(
+        await acceptLink(SECRET, { invite: 'inv', to: 'ap' }, {}),
+      ),
+      {} as Env,
+      dir,
+      person,
+      SECRET,
     )
 
-    let diary = `href="https://${host}/diary/"`
-    assert(!(await desk(k, ana.cookie)).includes(diary))
+  // Her letter's link, opened before she signs in, says who invited her to
+  // which app, and wears the platform's face rather than the private app's
+  // own, which is not hers to see yet.
+  let offer = await (await click(null)).text()
+  assertStringIncludes(offer, 'invited you to use Diary.')
+  assertStringIncludes(offer, 'href="https://jeff.yaks.app/diary/"')
+  assertStringIncludes(offer, '/connector-512.png')
 
-    await accepted(k, ana.email, ana.cookie)
-    assertStringIncludes(await page(ana.cookie), '<h1>Diary</h1>')
-    assertObjectMatch(await me(ana.cookie), { writes: true, invited: false })
-    // Her dashboard lists the app she was let into; nobody else's does.
-    let hers = await desk(k, ana.cookie)
-    assertStringIncludes(hers, 'Shared with you')
-    assertStringIncludes(hers, diary)
-    assert(!(await desk(k, bo.cookie)).includes(diary))
-  } finally {
-    await k.stop()
-  }
+  // Refused at the app, she is told her invitation waits; the stranger is
+  // told whose it is to grant, and sees nothing of the app.
+  assertStringIncludes(
+    await refusedSaid(dir, space, diary, 'ana', 'not_a_writer'),
+    'invitation to this app',
+  )
+  assert(!await waiting(dir, space, diary, 'bo', 'not_a_writer'))
+  assert(
+    !(await refusedSaid(dir, space, diary, 'bo', 'not_a_writer')).includes(
+      'invitation',
+    ),
+  )
+  let page = await shut(dir, space, diary, 'ana', {})
+  assertEquals(page.status, 403)
+  assertStringIncludes(await page.text(), 'Your invitation is waiting')
+  assertStringIncludes(
+    await (await shut(dir, space, diary, 'bo', {})).text(),
+    'Nothing here yet',
+  )
+  // Asked again, the owner hears she never accepted.
+  assertStringIncludes(
+    invitedWords({
+      email: emailOf('ana'),
+      role: 'editor',
+      place: { space, app: diary },
+      standing: true,
+    }),
+    'had not accepted yet',
+  )
+
+  // Her click, signed in as her, takes the invitation and writes her grant.
+  assertEquals((await click('ana')).status, 303)
+  assertMatch(JSON.stringify(applied), /"tombstone".*"grant".*"person":"ana"/)
 })
 
 test('the owner and their assistant see who is in and who has not accepted', async () => {
-  let k = await kernel()
-  try {
-    let jeff = await signIn(k)
-    let his = connector(k, jeff.cookie)
-    await his.tool('app_new', { slug: 'diary', title: 'Diary' })
-    let [ana, bo, cy] = [await signIn(k), await signIn(k), await signIn(k)]
-    await his.tool('member_add', { email: ana.email, app: 'diary' })
-    await his.tool('member_add', { email: bo.email })
-    await his.tool('member_add', { email: cy.email, role: 'viewer' })
-    await accepted(k, ana.email, ana.cookie)
-    await accepted(k, bo.email, bo.cookie)
-    let today = new Date().toISOString().slice(0, 10)
+  let row = (
+    held: Held['held'],
+    person: string,
+    role: Held['role'],
+    on: string,
+    sent: string | null = null,
+  ): Held => ({ eid: `${person}/${on}`, held, on, person, role, sent })
+  let dir = {
+    held: () =>
+      Promise.resolve([
+        row('seat', JEFF, 'owner', 'sp'),
+        row('seat', 'bo', 'editor', 'sp'),
+        row('grant', 'ana', 'editor', 'ap'),
+        row('invite', 'cy', 'viewer', 'sp', '2026-10-14T09:00:00Z'),
+      ]),
+    persons: (ids: string[]) =>
+      Promise.resolve(
+        new Map(ids.map((id) => [id, { name: id, email: emailOf(id) }])),
+      ),
+  } as unknown as Directory
+  let [here] = await peopleIn(dir, [space], [diary])
+  let [bo, ana, cy] = ['bo', 'ana', 'cy'].map(emailOf)
 
-    // The words name who has yet to accept, which is what someone may be
-    // waiting on, and count the rest; the value names everyone.
-    let listed = await his.answer('app_list')
-    assertStringIncludes(listed.text, `${cy.email} (viewer`)
-    assertStringIncludes(listed.text, `letter sent ${today}`)
-    assertStringIncludes(listed.text, '2 other people')
-    assert(!listed.text.includes(bo.email) && !listed.text.includes(ana.email))
-    let [space] = (listed.value as { spaces: Listed[] }).spaces
-    let emails = (them?: { email: string | null; role: string }[]) =>
-      them?.map((p) => `${p.email} ${p.role}`)
-    assert(emails(space.members)!.includes(`${bo.email} editor`))
-    assertEquals(emails(space.invited), [`${cy.email} viewer`])
-    assertEquals(emails(space.apps[0].guests), [`${ana.email} editor`])
-    // Asked, the words name them too: everyone in the space, or whoever can
-    // open the one app asked about.
-    let everyone = await his.tool('app_list', { people: true })
-    assertStringIncludes(everyone, `${bo.email} (editor)`)
-    assertStringIncludes(everyone, `Guests of Diary: ${ana.email} (editor)`)
-    let diary = await his.tool('app_list', { app: 'diary' })
-    for (let them of [ana, bo, cy]) assertStringIncludes(diary, them.email)
-    // A member reads the apps, not who else was let in, even asking.
-    let bos = await connector(k, bo.cookie).answer('app_list', {
-      people: true,
-    })
-    assert(!bos.text.includes(cy.email) && !bos.text.includes(ana.email))
-    let jeffs = (bos.value as { spaces: Listed[] }).spaces
-      .find((s) => s.slug == space.slug)!
-    assert(!jeffs.members && !jeffs.invited && !jeffs.apps[0].guests)
+  // The words name who has yet to accept, which is what someone may be
+  // waiting on, and count the rest; the value names everyone.
+  let said = aloud(here, JEFF).join('\n')
+  assertStringIncludes(said, `${cy} (viewer of the whole space`)
+  assertStringIncludes(said, 'letter sent 2026-10-14')
+  assertStringIncludes(said, '2 other people')
+  assert(!said.includes(bo) && !said.includes(ana))
+  let emails = (them: Person[]) =>
+    them.map((p) => shown(p)).map((p) => `${p.email} ${p.role}`)
+  assert(emails(here.members).includes(`${bo} editor`))
+  assertEquals(emails(here.invited), [`${cy} viewer`])
+  assertEquals(emails(here.apps[0].guests), [`${ana} editor`])
+  // Asked, the words name them too: everyone in the space, and whoever can
+  // open the app.
+  let named = aloud(here, JEFF, {}, true).join('\n')
+  assertStringIncludes(named, `${bo} (editor)`)
+  assertStringIncludes(named, `Guests of Diary: ${ana} (editor)`)
 
-    let page = await k.at('yaks.app', '/manage/people', {
-      headers: { cookie: jeff.cookie },
-    }).then((r) => r.text())
-    for (let them of [ana, bo, cy]) assertStringIncludes(page, them.email)
-    assertStringIncludes(page, 'not accepted yet')
-    let eid = /name="again" value="([^"]+)"/.exec(page)![1]
-    let before = letters(k, cy.email).length
-    let again = await k.at('yaks.app', '/manage/people', {
-      method: 'POST',
-      redirect: 'manual',
-      headers: {
-        cookie: jeff.cookie,
-        origin: 'https://yaks.app',
-        'content-type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({ again: eid }),
-    })
-    await again.body?.cancel()
-    assertEquals(again.status, 303)
-    await letter(k, cy.email, '/invite?t=', before)
-    let back = new URL(again.headers.get('location')!)
-    assertStringIncludes(
-      await k.at('yaks.app', back.pathname + back.search, {
-        headers: { cookie: jeff.cookie },
-      }).then((r) => r.text()),
-      'Sent again.',
-    )
-  } finally {
-    await k.stop()
-  }
+  // The People page lists all of them, and offers another letter to the one
+  // who has not accepted.
+  let page = people({ space: 'jeff', apps: [], people: here })
+  for (let them of [ana, bo, cy]) assertStringIncludes(page, them)
+  assertStringIncludes(page, 'not accepted yet')
+  assertStringIncludes(page, 'name="again" value="cy/sp"')
 })

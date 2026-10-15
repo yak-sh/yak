@@ -1223,7 +1223,7 @@ let connections = (at: DeskPage, env: Host) => {
 // (people.ts): a list for the space and one for each app anybody is a guest of
 // or invited to, each row drawn by its renderer (render/held.ts), and beside
 // an invitation the button that sends its letter again (apps.ts `saved`).
-let people = (at: DeskPage) => {
+export let people = (at: DeskPage) => {
   let r = at.people
   if (!r) return ''
   let again = (p: Person) =>
