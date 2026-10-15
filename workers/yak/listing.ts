@@ -14,7 +14,7 @@
 // what was asked for. Anything that is not a row listing (an aggregate, a
 // count) passes through as it came.
 
-import { clauses, conjoin, parse } from '@yaks/query'
+import { type Clause, clauses, conjoin, parse } from '@yaks/query'
 import type { Personal } from '@yaks/member'
 
 // The platform's bookkeeping about a row — who wrote it and when, whether it
@@ -115,13 +115,31 @@ export let asking = (
   let aspect = Object.entries(personal).some(([name, owner]) =>
     owner == 'entity' && names(line, name)
   )
+  // A row of storage holds nothing but its own storage component, so a line
+  // that asks for some other component never reaches one: probing each costs
+  // a lookup per candidate row for nothing.
+  let spared = holds(parse(ask)) ? STORAGE : []
   let screen = words.filter((k) =>
-    !names(line, k) &&
+    !spared.includes(k) && !names(line, k) &&
     !(k == 'person' && aspect) &&
     !(k == 'refusal' && names(line, 'entry'))
   ).map((k) => `!${k}`)
   return line.slice(0, line.length - ask.length) + conjoin(ask, ...screen)
 }
+
+// Whether every row a clause matches holds some component: a present test
+// (`.a`, `.a=1`) does; an absent one (`!a`), an optional one (`?a`), a negated
+// one and a bare word do not; and an `or` holds one only if each alternative
+// does.
+let holds = (c: Clause): boolean =>
+  c.kind == 'pred'
+    ? c.op != '?' && c.op != '!=' && !c.not &&
+      !(c.op == '=' && c.value?.kind == 'scalar' && c.value.raw == '')
+    : c.kind == 'and'
+    ? c.clauses.some(holds)
+    : c.kind == 'or'
+    ? c.clauses.every(holds)
+    : false
 
 // The rule itself, over rows: what this filter line's answer carries. A
 // projection's row is narrowed on purpose, so one carrying nothing but its

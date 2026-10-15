@@ -172,6 +172,17 @@ test("the platform's rows are left out of the question too", () => {
   assertEquals(asking('?'), '?')
 })
 
+// Storage rows hold only their own component, so a line asking for another
+// never reaches them and pays no lookup to screen them (T-124491).
+test('storage is screened only from a line that names no component', () => {
+  let words = ['archetype', 'effect']
+  assertEquals(asking('.recipe', words), '.recipe')
+  assertEquals(asking('.a|.b', words), '.a|.b')
+  assertEquals(asking('!recipe', words), '!recipe&!archetype&!effect')
+  assertEquals(asking('.a|!b', words), '(.a|!b)&!archetype&!effect')
+  assertEquals(asking('*', words), '*&!archetype&!effect')
+})
+
 test('query screening excludes refusals from all alternatives and counts', async () => {
   let vocab = loadVocab([toolsDoc, {
     $defs: {
