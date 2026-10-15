@@ -2730,13 +2730,6 @@ export class Store {
   // release (`#select`).
   #version = () => this.#bind.CF_VERSION_METADATA?.id ?? null
 
-  // The Worker version this incarnation runs, and the last deploy it
-  // restarted for (running.ts `behind`): after a deploy, "live at 100%" says where the
-  // Worker is, and only the object can say where it is.
-  async #running() {
-    return ran(this.#bind.CF_VERSION_METADATA, this.#ctx.storage)
-  }
-
   // ---- the mover (mover.ts, D-45640) ---------------------------------------
   //
   // Rows brought into a new shape after this object has booted, from its
@@ -3904,7 +3897,10 @@ export class Store {
       if (seq == null) {
         return Response.json({
           physical: inspectStorage(this.#sql),
-          running: await this.#running(),
+          // The Worker version this incarnation runs, and the last deploy it
+          // restarted for (running.ts `behind`): after a deploy, "live at 100%"
+          // says where the Worker is, and only the object can say where it is.
+          running: await ran(this.#bind.CF_VERSION_METADATA, this.#ctx.storage),
         })
       }
       let n = Number(seq)
