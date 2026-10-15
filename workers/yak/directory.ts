@@ -255,6 +255,9 @@ export type App = {
   // (apps.ts `PLATFORM_THEME`/`PLATFORM_BACKGROUND`), so an app that asked
   // for neither is never colourless.
   theme: { themeColor: string | null; backgroundColor: string | null } | null
+  // Whether its pages in folders resolve relative URLs from the app's root
+  // rather than their own folder (`rooted`, apps.ts `asset`).
+  rooted?: boolean
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 
@@ -407,6 +410,7 @@ export type Row = {
   seeded?: { at?: string | null; version?: number | null }
   trashed?: { at?: string | null; by?: Id | null }
   theme?: { theme_color?: string | null; background_color?: string | null }
+  rooted?: Record<string, never>
   hostname?: {
     name: string
     serves: Id
@@ -742,7 +746,7 @@ export let stamp = async (
 // because `appOf` reads all of it and a filter that forgets one answers null
 // where there is a value.
 let ABOUT = '?doc&?former&?home&?meter&?published&?installed&?gallery' +
-  '&?screenshot&?seeded&?trashed&?theme'
+  '&?screenshot&?seeded&?trashed&?theme&?rooted'
 
 // And what every read of a space asks for, for the same reason.
 let SPACE_ABOUT = '?doc&?plan&?meter&?notified&?trashed&?stripe&?fee&?former' +
@@ -873,6 +877,7 @@ export let appOf = (r: Row): App => ({
       backgroundColor: r.theme.background_color ?? null,
     }
     : null,
+  rooted: r.rooted != null,
 })
 
 let hostOf = (r: Row): Host => ({

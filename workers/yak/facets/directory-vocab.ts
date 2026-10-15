@@ -316,4 +316,24 @@ export let useDoc: VocabDoc = {
     },
   },
 }
-export let docs: VocabDoc[] = [directoryDoc, sweepDoc, useDoc]
+// How the directory serves an app, in words no app's manifest needs kept
+// from it: they only ever sit on the directory's own app rows.
+export let servingDoc: VocabDoc = {
+  title: 'directory-serving',
+  reserved: false,
+  $defs: {
+    // An app whose pages in folders resolve their relative URLs from the
+    // app's root, the base every page had until each page was based at its
+    // own folder (apps.ts `asset`). Worn by the apps whose pages were written
+    // against the old base (app-grep found one, thecompanygardener's
+    // openai-math, T-124410); nothing else wears it.
+    rooted: {
+      description:
+        "An app whose pages in folders resolve relative URLs from the app's root.",
+      component: true,
+      type: 'object',
+      properties: {},
+    },
+  },
+}
+export let docs: VocabDoc[] = [directoryDoc, sweepDoc, useDoc, servingDoc]
