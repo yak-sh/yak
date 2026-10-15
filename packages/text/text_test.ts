@@ -252,30 +252,32 @@ test('adjacent and nested emphasis preserve elements rather than delimiter text'
   }
 })
 
-test('independent lists keep their boundaries and restart numbering', () => {
-  for (let tag of ['ul', 'ol']) {
-    let node = h(
-      'div',
-      null,
-      h(tag, null, h('li', null, 'one')),
-      h('custom', null, h(tag, null, h('li', null, 'two'))),
-    )
-    let lists = html(markdown(node)).querySelectorAll(tag)
-    assertEquals(lists.length, 2)
-    assertEquals([...lists].map((list) => list.children.length), [1, 1])
-  }
-  let node = h(
-    'ul',
+let lists = ['ul', 'ol'].map((tag) => ({
+  tag,
+  parsed: html(markdown(h(
+    'div',
     null,
-    h('li', null, h('p', null, 'one'), h('p', null, 'two')),
-  )
+    h(tag, null, h('li', null, 'one')),
+    h('custom', null, h(tag, null, h('li', null, 'two'))),
+  ))),
+}))
+let paragraphed = h(
+  'ul',
+  null,
+  h('li', null, h('p', null, 'one'), h('p', null, 'two')),
+)
+let paragraphedHTML = html(markdown(paragraphed))
+test('independent lists keep their boundaries and restart numbering', () => {
+  for (let { tag, parsed } of lists) {
+    let found = parsed.querySelectorAll(tag)
+    assertEquals(found.length, 2)
+    assertEquals([...found].map((list) => list.children.length), [1, 1])
+  }
   assertEquals(
-    [...html(markdown(node)).querySelectorAll('li > p')].map((el) =>
-      el.textContent
-    ),
+    [...paragraphedHTML.querySelectorAll('li > p')].map((el) => el.textContent),
     ['one', 'two'],
   )
-  assertEquals(plain(node), '- one\n  \n  two')
+  assertEquals(plain(paragraphed), '- one\n  \n  two')
 })
 
 test('render resolves views and property context, and missing views are empty', () => {

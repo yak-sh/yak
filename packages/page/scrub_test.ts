@@ -38,7 +38,11 @@ test('a frozen page renders from its own bytes', () => {
 })
 
 test('the archive says what the page called itself', () => {
-  assertEquals(scrub(page).title, 'A Page')
+  assertEquals(
+    scrub('<html><head><title>  A Page  </title></head><body>hi</body></html>')
+      .title,
+    'A Page',
+  )
   assertEquals(scrub('<p>no title</p>').title, undefined)
   assertEquals(scrub('<title>  </title>').title, undefined)
 })

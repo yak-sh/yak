@@ -88,10 +88,11 @@ let pending = (s: Client, kept: Stash) => {
   return Object.assign(d, { answer })
 }
 
-let optimisticStore = store()
+// One store for the tests that need no fresh one, each in a place of its own.
+let shared = store()
 test('optimistic draft visibility keeps its stash until the receipt accepts', async () => {
   let kept = stash()
-  let a = pending(optimisticStore, kept)
+  let a = pending(shared, kept)
   try {
     a.type('pending', 'precious words')
     assertEquals(a.text('pending'), 'precious words')
@@ -106,7 +107,7 @@ test('optimistic draft visibility keeps its stash until the receipt accepts', as
 for (let failure of ['refused', 'unknown']) {
   test(`a ${failure} spend keeps its words through typing and reload`, async () => {
     let kept = stash()
-    let a = pending(optimisticStore, kept)
+    let a = pending(shared, kept)
     let place = `spend-${failure}`
     try {
       a.type(place, 'precious words')
@@ -122,7 +123,7 @@ for (let failure of ['refused', 'unknown']) {
       assertEquals(a.text(place), 'precious wordsnew words')
       a.close()
       let reloaded = desk({
-        ...optimisticStore,
+        ...shared,
         mutate: () => new Promise(() => {}),
       }, {
         by: () => jo,
@@ -142,13 +143,13 @@ for (let failure of ['refused', 'unknown']) {
 
 test('a reload during a spend recovers the words hidden by optimistic clearing', async () => {
   let kept = stash()
-  let a = pending(optimisticStore, kept)
+  let a = pending(shared, kept)
   a.type('reload-spend', 'keep this')
   await a.answer()
   a.spend('reload-spend')
   a.close()
   let reloaded = desk({
-    ...optimisticStore,
+    ...shared,
     mutate: () => new Promise(() => {}),
   }, {
     by: () => jo,
@@ -189,13 +190,13 @@ test('a send without draft identity keeps recovery until its companion write acc
 
 test('a closed desk receipt leaves a replacement desk recovery copy alone', async () => {
   let kept = stash()
-  let old = pending(optimisticStore, kept)
+  let old = pending(shared, kept)
   let place = 'replacement-desk'
   old.type(place, 'precious words')
   await old.answer()
   old.spend(place)
   old.close()
-  let next = pending(optimisticStore, kept)
+  let next = pending(shared, kept)
   try {
     next.type(place, 'precious words with newer typing')
     let copy = kept.getItem(`draft:${place}`)
@@ -209,7 +210,7 @@ test('a closed desk receipt leaves a replacement desk recovery copy alone', asyn
 
 test('a closed desk receipt reconciles its unchanged recovery baseline', async () => {
   let kept = stash()
-  let old = pending(optimisticStore, kept)
+  let old = pending(shared, kept)
   let place = 'closed-baseline'
   old.type(place, 'first')
   old.type(place, 'newer')
@@ -217,7 +218,7 @@ test('a closed desk receipt reconciles its unchanged recovery baseline', async (
   await old.answer()
   let copy = JSON.parse(kept.getItem(`draft:${place}`)!)
   assertEquals([copy.text, copy.over], ['newer', 'first'])
-  let next = pending(optimisticStore, kept)
+  let next = pending(shared, kept)
   try {
     assertEquals(next.text(place), 'newer')
   } finally {
@@ -286,18 +287,17 @@ test('a discard keeps what another interface typed meanwhile', async () => {
 })
 
 test('restoring another draft source preserves subsequent typing', async () => {
-  let s = store(), d = desk(s, { by: () => jo, pace: 0 })
+  let d = desk(shared, { by: () => jo, pace: 0 }), place = 'restored'
   try {
-    d.type('command', 'ship it')
+    d.type(place, 'ship it')
     await Promise.resolve()
-    assertEquals(await d.spend('command'), true)
-    d.type('command', 'next')
-    d.restore('command', 'ship it')
-    assertEquals(d.text('command').includes('ship it'), true)
-    assertEquals(d.text('command').includes('next'), true)
+    assertEquals(await d.spend(place), true)
+    d.type(place, 'next')
+    d.restore(place, 'ship it')
+    assertEquals(d.text(place).includes('ship it'), true)
+    assertEquals(d.text(place).includes('next'), true)
   } finally {
     d.close()
-    s.close()
   }
 })
 

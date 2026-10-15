@@ -350,7 +350,11 @@ export let desk = (
         batch(() => {
           for (let b of rows) {
             let d = b.draft as { place?: string; text?: string; rev?: number }
-            if (d?.place) step(d.place, (h) => heard(h, word(d)))
+            if (!d?.place) continue
+            // A watch answers every draft at each change; one no newer than
+            // what is held changes nothing here.
+            let h = get(d.place), next = heard(h, word(d))
+            if (next !== h) step(d.place, () => next)
           }
         })
       hear(watch.value)

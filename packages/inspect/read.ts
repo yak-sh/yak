@@ -299,8 +299,11 @@ export let brief = (v: string): string =>
 export let relation = (b: Bundle, relations: string[]): string | undefined =>
   comps(b).map(([name]) => name).find((n) => relations.includes(n))
 
+// One formatter for every count: toLocaleString builds a new one each call.
+let grouped = new Intl.NumberFormat('en-US')
+
 /** A number, grouped for reading: 12345 reads 12,345. */
-export let count = (n: number): string => n.toLocaleString('en-US')
+export let count = (n: number): string => grouped.format(n)
 
 /**
  * A property's type as it reads, off its `_prop` row.

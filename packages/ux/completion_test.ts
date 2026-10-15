@@ -1,19 +1,31 @@
 import { assert, assertEquals } from '@std/assert'
 import { client } from '@yaks/client'
-import { signal } from '@preact/signals'
+import { type Signal, signal } from '@preact/signals'
 import { desk, draftDoc, drafts } from '@yaks/draft'
 import { mint } from '@yaks/graph'
 import { test, tick } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { parseHTML } from 'linkedom'
 import { h, render } from 'preact'
-import { completion, type Result } from './completion.ts'
+import { completion, type Drafts, type Result } from './completion.ts'
 import { docs, uxDoc } from './vocab.ts'
 
+let writer = mint()
 let kept = () =>
   desk(client(loadVocab([draftDoc]), [drafts()], { vault: false }), {
-    by: () => 'writer',
+    by: () => writer,
   })
+// Drafts kept only in this interface, for a test whose subject is not where
+// a host keeps them.
+let typedHere = (): Drafts => {
+  let texts = new Map<string, Signal<string>>()
+  let at = (place: string) =>
+    texts.get(place) ?? texts.set(place, signal('')).get(place)!
+  return {
+    text: (place) => at(place).value,
+    type: (place, text) => at(place).value = text,
+  }
+}
 let sharedVocab = loadVocab(docs)
 let offers = (text: string, caret: number): Result => ({
   from: 0,
@@ -98,11 +110,11 @@ test('connected completion keeps its caret local and clears bound spent drafts',
   }
 })
 
+let localVocab = loadVocab({ $defs: { Local: uxDoc.$defs!.Completion } })
 test('completion can use a host-named state component and replace only the offered span', () => {
-  let vocab = loadVocab({ $defs: { Local: uxDoc.$defs!.Completion } })
-  let front = client(vocab, [], { vault: false })
+  let front = client(localVocab, [], { vault: false })
   let c = completion(front, {
-    drafts: kept(),
+    drafts: typedHere(),
     component: 'Local',
     complete: () => ({
       from: 4,

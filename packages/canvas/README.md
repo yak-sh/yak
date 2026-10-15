@@ -32,7 +32,8 @@ import { ram } from '@yaks/ram'
 let vocab = loadVocab([canvasDoc])
 let g = graph({ storage: ram(vocab), vocab, plugins: [canvas()] })
 await g.apply([{ entity: { eid: 'workspace' }, canvas: {} }])
-console.log(await g.read('.canvas'))
+let [workspace] = await g.read('.canvas')
+workspace.entity.eid // 'workspace'
 ```
 
 Layout state is stored as graph entities, so other clients and tools can query
