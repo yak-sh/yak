@@ -65,6 +65,12 @@ let tags = <N>(
   b.trashed ? tag(h, 'in the trash', true) : null,
 ]
 
+// What "Last active" measures, said where it is read.
+let ACTIVE =
+  "The last sign-in, tool call (an assistant's included), page view, request " +
+  'or store write by them or in what they own, to the hour.'
+let noted = (key: string) => key == 'Last active' ? { title: ACTIVE } : null
+
 // A row: its name, stretched over the row as its link, a line under it, and
 // what it uses, each figure under the word for it.
 let row = <N>(
@@ -94,7 +100,7 @@ let row = <N>(
       'dl',
       { class: 'Directory_Uses' },
       ...figures.map(([key, value]) =>
-        h('div', null, h('dt', null, key), h('dd', null, value))
+        h('div', null, h('dt', noted(key), key), h('dd', null, value))
       ),
     ),
   )
@@ -113,7 +119,7 @@ let facts = <N>(h: H<N>, all: [string, Child<N>][]) =>
     'dl',
     { class: 'Fields Directory_Facts' },
     ...all.filter(([, v]) => v !== '' && v != null).map(([key, value]) =>
-      h('div', null, h('dt', null, key), h('dd', null, value))
+      h('div', null, h('dt', noted(key), key), h('dd', null, value))
     ),
   )
 

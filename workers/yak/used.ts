@@ -104,6 +104,18 @@ export let scheduleUse = (
   retain?: (work: Promise<void>) => void,
 ): void => schedule(env, used(eid), retain)
 
+/** The person who did it is active too: their calls and page views count. */
+export let scheduleBy = (
+  env: Partial<Env>,
+  who: { person: string | null; administrative?: boolean },
+  eid: string,
+  retain?: (work: Promise<void>) => void,
+): void => {
+  if (who.administrative) return
+  scheduleUse(env, eid, retain)
+  if (who.person) scheduleUse(env, who.person, retain)
+}
+
 export let recordUse = (ns: Namespace, eid: string): Promise<string | null> =>
   receipt(ns, used(eid))
 

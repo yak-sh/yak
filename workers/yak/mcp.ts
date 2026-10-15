@@ -111,6 +111,7 @@ import { source, within } from './rate.ts'
 import * as appAddress from './app-address.ts'
 import { opened as unseal, seal } from './lib/token.ts'
 import { foresee } from './unseen.ts'
+import { scheduleUse } from './used.ts'
 
 type Rpc = {
   jsonrpc: '2.0'
@@ -761,6 +762,11 @@ let answered = async (
   // have (C-32905 item 5). Within the request a line is read once, until the
   // request itself writes to the directory.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  // The person is active whatever the call does: an assistant's tool calls
+  // are theirs (the directory's "last active", used.ts).
+  if (rpc.method == 'tools/call' && auth.person) {
+    scheduleUse(env, auth.person)
+  }
   let ctx: Ctx = {
     env,
     // A grant narrowed to one space is narrowed here, over the directory every

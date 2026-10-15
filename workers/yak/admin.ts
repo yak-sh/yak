@@ -78,8 +78,8 @@ let appSpace = (r: Row) => idOf(r.app!.space)
  * models and voice cost in it this month, its database and files, its apps
  * and the latest use of it or of any of them. An app: this month's requests,
  * its database and files and its latest use. A person: their budget over the
- * spaces they own, those spaces' storage and apps, and the later of their last
- * use and last sign-in. A space is a test space when everyone seated in it is
+ * spaces they own, those spaces' storage and apps, and the latest of their last
+ * use (a tool call, a page view), last sign-in and their spaces' latest use. A space is a test space when everyone seated in it is
  * a test account, and its apps are test apps.
  */
 export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
@@ -134,7 +134,11 @@ export let uses = (c: Census, now = new Date()): Map<string, Uses> => {
       spend: budget(owned, now),
       storage: sum(owned.map((s) => out.get(s.eid)?.storage ?? 0)),
       apps: sum(owned.map((s) => out.get(s.eid)?.apps ?? 0)),
-      active: latest(r.used?.at, r.signed_in?.at),
+      active: latest(
+        r.used?.at,
+        r.signed_in?.at,
+        ...owned.map((s) => out.get(s.eid)?.active),
+      ),
       test: isTestAddress(r.email?.address ?? ''),
     })
   }

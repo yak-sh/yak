@@ -3,7 +3,7 @@ import { derivedEid, graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { useDoc } from './facets/directory-vocab.ts'
-import { recordUse, scheduleUse, using } from './used.ts'
+import { recordUse, scheduleBy, scheduleUse, using } from './used.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import { PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, meta } from './meta.ts'
@@ -355,6 +355,27 @@ let spoken = await (async () => {
   }))
   return { app: app.eid, installed, asked, rows: await rows(), refused }
 })()
+
+test('a person who calls or visits is active too; an administrator is not', async () => {
+  let eids: string[] = []
+  let env = {
+    STORE: {
+      idFromName: (name: string) => name,
+      get: () => ({
+        fetch: async (r: Request) => {
+          eids.push((await r.json()).eid)
+          return Response.json({ at: '2999-01-01T00:00:00Z' })
+        },
+      }),
+    },
+  }
+  let work: Promise<void>[] = []
+  let retain = (w: Promise<void>) => work.push(w)
+  scheduleBy(env, { person: 'p1' }, 'a1', retain)
+  scheduleBy(env, { person: 'root', administrative: true }, 'a2', retain)
+  await Promise.all(work)
+  equal(eids.sort(), ['a1', 'p1'])
+})
 
 test('a query in a retired spelling records its app and spelling once', () => {
   equal(spoken.installed, 200)

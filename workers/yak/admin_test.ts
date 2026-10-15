@@ -91,7 +91,7 @@ test('a person uses what the spaces they own use, from one budget', () => {
     spend: { spent: 1.5, limit: 3.2 },
     storage: 1120,
     apps: 2,
-    active: null,
+    active: '2026-10-14T10:00:00Z',
     test: false,
   })
   assertEquals(u.get('bot')?.active, '2026-10-14T09:00:00Z')

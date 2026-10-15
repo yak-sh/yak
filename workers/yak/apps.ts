@@ -141,7 +141,7 @@ import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { free, refusedVisit } from './meter.ts'
-import { scheduleUse } from './used.ts'
+import { scheduleBy } from './used.ts'
 import { modifying, sha256 } from './versions.ts'
 import {
   DAYS,
@@ -2518,9 +2518,7 @@ let firstly = async (
   // and the address is another app's: a page view is counted against whoever
   // actually served it (views.ts).
   let page = await c.time('first', () => ahead(env, space, home, req, who))
-  if (page && page.status < 400 && !who.administrative) {
-    scheduleUse(env, home.eid)
-  }
+  if (page && page.status < 400) scheduleBy(env, who, home.eid)
   return page && { page, app: home }
 }
 
@@ -2990,7 +2988,7 @@ let served = async (
         '/pay/checkout',
       ].includes(apiPath) ||
         apiPath.startsWith('/blob') || apiPath.startsWith('/files/'))
-    ) scheduleUse(env, app.eid)
+    ) scheduleBy(env, who, app.eid)
     return wall(reporting(answer, req, at))
   }
   // A private app hides its page too, not only its data (C-32607 item 5):
@@ -3073,7 +3071,7 @@ let served = async (
   // HTML is not a page, and the platform's own pages — the space index, the
   // trash, a wrong address — never come back through here.
   viewed(env, req, page, seen(space, app))
-  if (page.status < 400 && !who.administrative) scheduleUse(env, app.eid)
+  if (page.status < 400) scheduleBy(env, who, app.eid)
   return wall(reporting(page, req, at))
 }
 
