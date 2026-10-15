@@ -121,32 +121,43 @@ test('reference answers isolate caller mutations, including bound origin fragmen
   same(q)
 })
 
+// A text extension that counts the queries it begins and keeps the last
+// screen it was given.
+type Begun = { begun: number; screen?: Screen }
+let text = (said: Begun): Extension => ({
+  name: 'text',
+  begin: (s) => {
+    said.begun++
+    said.screen = s
+  },
+  compile: { text: () => val(true) },
+})
+
 test('unused extensions begin each query with its current screen', () => {
-  let begun = 0, screen: Screen | undefined
-  let extension: Extension = {
-    name: 'text',
-    begin: (s) => {
-      begun++
-      screen = s
-    },
-    compile: { text: () => val(true) },
-  }
-  let opts: BindOpts = { extend: [extension], references: { [eid(1)]: 1 } }
+  let said: Begun = { begun: 0 }
+  let opts: BindOpts = { extend: [text(said)], references: { [eid(1)]: 1 } }
   compile(query(eid(1)), vocab, opts)
   opts.references = { [eid(2)]: 9 }
   compile(query(eid(2)), vocab, opts)
-  equal(begun, 2)
+  equal(said.begun, 2)
   equal(
-    screen!()!.params,
+    said.screen!()!.params,
     render(bind(query(eid(2)), vocab, { references: opts.references })).params,
   )
-  equal(begun, 2)
+  equal(said.begun, 2)
+})
+
+test('an extension that comes to compile predicates is asked every time', () => {
+  let said: Begun = { begun: 0 }
+  let extension = text(said)
+  let opts: BindOpts = { extend: [extension], references: { [eid(2)]: 9 } }
+  let q = and(eq('link.left', eid(3)))
+  compile(q, vocab, opts)
   let intercepted = 0
   extension.compile.pred = () => val(++intercepted)
-  let q = and(eq('link.left', eid(3)))
   equal(compile(q, vocab, opts).params, [1])
   equal(compile(q, vocab, opts).params, [2])
-  equal(begun, 4)
+  equal(said.begun, 3)
 })
 
 test('a begin hook that intercepts a warmed predicate runs once', () => {
