@@ -105,15 +105,26 @@ test('every secret in a batch seals with only secret and provisional vocabulary'
   assertEquals(reported, [])
 })
 
-test('a secret keeps its handle when its value changes, and writing the handle back changes nothing', async () => {
-  let { g, vault } = setup()
-  await g.apply([sealed('A', 'one')])
-  let first = (await row(g, 'A'))!.value
-  await g.apply([sealed('A', first)])
-  assertEquals(await reveal(vault, 'A'), 'one')
+// A graph where A was written once, and the handle it keeps for A.
+let written = async () => {
+  let at = setup()
+  await at.g.apply([sealed('A', 'one')])
+  return { ...at, first: (await row(at.g, 'A'))!.value }
+}
+
+let rotating = await written()
+test('a secret keeps its handle when its value changes', async () => {
+  let { g, vault, first } = rotating
   await g.apply([sealed('A', 'two')])
   assertEquals((await row(g, 'A'))!.value, first)
   assertEquals(await reveal(vault, 'A'), 'two')
+})
+
+let restating = await written()
+test('a secret written back as its handle changes nothing', async () => {
+  let { g, vault, first } = restating
+  await g.apply([sealed('A', first)])
+  assertEquals(await reveal(vault, 'A'), 'one')
 })
 
 test('one value under two names is two handles', async () => {
@@ -309,15 +320,25 @@ test('a retryable failure that outlasts every try is reported', async () => {
   assertEquals(reported.length, 1)
 })
 
-test('a secret inside a call is its handle there too, and sealed when the call applies it', async () => {
-  let { g, vault } = setup()
-  let [call] = await g.apply([{
-    entity: { eid: 'c1' },
-    call: { args: { bundles: [sealed('A', 'hidden')] } },
-  }])
-  let args = (call.call as Record<string, { bundles: Bundle[] }>).args
-  assert(!JSON.stringify(args).includes('hidden'))
-  let [bundle] = args.bundles
+// A call whose arguments carry a secret's value, recorded, and the bundles its
+// arguments carry as recorded.
+let calling = {
+  entity: { eid: 'c1' },
+  call: { args: { bundles: [sealed('A', 'hidden')] } },
+}
+let carried = (call: Bundle) =>
+  (call.call as Record<string, { bundles: Bundle[] }>).args.bundles
+
+let recording = setup()
+test('a secret inside a call is its handle there too', async () => {
+  let [call] = await recording.g.apply([calling])
+  assert(!JSON.stringify(carried(call)).includes('hidden'))
+})
+
+let called = setup()
+let [bundle] = carried((await called.g.apply([calling]))[0])
+test('a secret inside a call is sealed when the call applies it', async () => {
+  let { g, vault } = called
   await g.apply([bundle])
   assertEquals(await reveal(vault, 'A'), 'hidden')
   assertEquals(
