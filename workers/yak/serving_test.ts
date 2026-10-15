@@ -2157,19 +2157,26 @@ test("an app worker's own request is woven no scripts, and no badge", () => {
 })
 
 test('a drawing that fails leaves the app wearing the platform tile', async () => {
-  let app = { access: 'public' } as App
+  let tile = new Uint8Array([1, 2, 3])
+  let asked: string[] = []
+  let env = {
+    ASSETS: {
+      fetch: (req: Request) => {
+        asked.push(new URL(req.url).pathname)
+        return Promise.resolve(new Response(tile))
+      },
+    },
+  } as unknown as Env
   let r = (await apps.unwritten(
     new Request('https://ada.yaks.app/cookbook/icon.png'),
-    { ASSETS } as unknown as Env,
-    app,
+    env,
+    { access: 'public' } as App,
     '/icon.png',
     '/cookbook/',
   ))!
   assertEquals(r.headers.get('content-type'), 'image/png')
-  assertEquals(
-    new Uint8Array(await r.arrayBuffer()),
-    await Deno.readFile(new URL('./public/connector-512.png', import.meta.url)),
-  )
+  assertEquals(new Uint8Array(await r.arrayBuffer()), tile)
+  assertEquals(asked, ['/connector-512.png'])
 })
 
 test('a public app is cached for everyone, an open or private one for its readers', () => {
