@@ -118,6 +118,15 @@ test(
       let over = one(reads, (r) => r.status != 200)
       assertEquals([over.status, over.retry], [429, '60'])
       assertEquals((await read('198.51.100.6', them.cookie)).status, 200)
+
+      // A file read by its address is not the app's data: the same stranger,
+      // past the number, still gets the answer the file has (here, none).
+      let file = await k.at(
+        `${rated58}.yaks.app`,
+        `/board/api/blob/${'0'.repeat(64)}/${'1'.repeat(64)}`,
+        { headers: from('198.51.100.6') },
+      )
+      assertEquals(file.status, 404)
     } finally {
       await k.stop()
     }
