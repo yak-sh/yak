@@ -227,6 +227,7 @@ import { taskDoc } from '@yaks/task'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
 
 const vocab = loadVocab(
   [kernelDoc, edgeDoc, taskDoc, sessionDoc, toolsDoc, modelDoc],
@@ -257,7 +258,12 @@ await g.apply([
 ])
 await wake(g, 'x') // what session_wake runs
 const [told] = (await transcript(g, 's')).slice(-1)
-console.log(told.content, told.using) // what finished, and the request for a turn
+// What finished, and the request for a turn.
+equal(told.content, {
+  body: '#x (done), which #y waits on, has finished; nothing it waits on is ' +
+    'open.',
+})
+equal(told.using, { provider: p })
 ```
 
 ## Running a transcript
