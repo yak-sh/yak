@@ -3,13 +3,17 @@ import type { Handlers } from '@yaks/effects'
 import { Unsent } from '@yaks/mail'
 import type { Options } from './store.ts'
 import { ANY, letter } from '../lapsed.ts'
-import { mail } from '../mail.ts'
+import { type Mail, mail } from '../mail.ts'
 import { caught } from '../defects.ts'
 
 type Lapse = { person?: string; agent?: string; known?: string | null }
 
-export let effects = (_host: unknown, options: Options): Handlers => {
+export let effects = (
+  _host: unknown,
+  options: Options & { mail?: Mail },
+): Handlers => {
   let at = options.store
+  let send = options.mail ?? mail(at.env)
   if (!at.meta) return {}
   return {
     tell_lapsed: async (event, tx) => {
@@ -20,7 +24,7 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       let to = (person?.email as { address?: string } | undefined)?.address
       if (!to) return
       try {
-        await mail(at.env)({ to, ...letter(lapse.agent ?? ANY, at.env) })
+        await send({ to, ...letter(lapse.agent ?? ANY, at.env) })
       } catch (error) {
         // A letter that never left is tried again later; one that may have
         // left is reported and never sent twice.
