@@ -182,12 +182,15 @@ test('server watches dedupe and dispose independently from locally evaluated wat
   c.close()
 })
 
+// A server answer painted once, its readiness heard from then on.
+let painted = fixture()
+let paint = painted.c.watch('.near=somewhere', server)
+painted.frame({ id: 's1', bundles: [row('old')] })
+let states: boolean[] = []
+paint.subscribe(() => states.push(paint.ready))
 test('disconnect/refusal keep server paint but readiness awaits a successful reset', () => {
-  let { c, frame, sockets, trouble, reopen } = fixture()
-  let w = c.watch('.near=somewhere', server)
-  frame({ id: 's1', bundles: [row('old')] })
-  let states: boolean[] = []
-  w.subscribe(() => states.push(w.ready))
+  let { c, frame, sockets, trouble, reopen } = painted
+  let w = paint
   reopen()
   assertEquals(w.ready, false)
   assertEquals(ids(w.value), ['old'])
@@ -342,17 +345,31 @@ test('projected/full owners share fields, and departures unload only the release
   c.close()
 })
 
-test('omission cannot erase another projected owner, explicit null is authoritative', () => {
-  let { c, frame } = fixture()
-  let p = c.watch('body', server)
-  frame({
+// One owner projects `a`'s body; another watches the whole of it.
+let owners = () => {
+  let f = fixture()
+  let p = f.c.watch('body', server)
+  f.frame({
     id: 's1',
     bundles: [{ entity: { eid: 'a' }, doc: { body: 'kept' } }],
     coverage: { a: { doc: ['body'] } },
   })
-  c.watch('whole', server)
+  f.c.watch('whole', server)
+  return { ...f, p }
+}
+
+let omitted = owners()
+test('omission cannot erase another projected owner', () => {
+  let { c, frame } = omitted
   frame({ id: 's2', bundles: [row('a')] })
   assertEquals(comp(c.ent('a'), 'doc').body, 'kept')
+  c.close()
+})
+
+let nulled = owners()
+nulled.frame({ id: 's2', bundles: [row('a')] })
+test('explicit null is authoritative over another projected owner', () => {
+  let { c, frame, p } = nulled
   frame({
     id: 's2',
     bundles: [{ ...row('a'), doc: { title: 'a', body: null } }],
@@ -562,11 +579,12 @@ test('answer metadata bounds include empty answers, long keys and coverage; evic
   c.close()
 })
 
+let retaining = fixture({ retention: 0 })
+let retained = retaining.c.watch('opaque', server)
+retaining.frame({ id: 's1', bundles: [row('a')] })
 test('retained membership never restores evicted payloads or crosses semantic options', () => {
-  let { c, frame } = fixture({ retention: 0 })
-  let w = c.watch('opaque', server)
-  frame({ id: 's1', bundles: [row('a')] })
-  w.close()
+  let { c, frame } = retaining
+  retained.close()
   assertEquals(c.watch('opaque', server).value, [])
   frame({ id: 's2', bundles: [row('a')] })
   assertEquals(c.watch('opaque', { ...server, now: 123 }).value, [])
@@ -606,15 +624,23 @@ test('late answer hydration cannot revive an empty reply or an obsolete epoch', 
   }
 })
 
+// A projected owner of `a`'s title, and a full owner that loaded its body.
+let restoring = fixture()
+let restoredProjection = restoring.c.watch('projected', server)
+restoring.frame({
+  id: 's1',
+  bundles: [row('a')],
+  coverage: { a: { doc: ['title'] } },
+})
+let restoredFull = restoring.c.watch('full', server)
+restoring.frame({
+  id: 's2',
+  bundles: [{ ...row('a'), doc: { title: 'a', body: 'other owner' } }],
+})
 test('a restored projected answer cannot acquire another owners body coverage', async () => {
-  let { c, frame } = fixture()
-  let p = c.watch('projected', server)
-  frame({ id: 's1', bundles: [row('a')], coverage: { a: { doc: ['title'] } } })
-  let full = c.watch('full', server)
-  frame({
-    id: 's2',
-    bundles: [{ ...row('a'), doc: { title: 'a', body: 'other owner' } }],
-  })
+  let { c } = restoring
+  let p = restoredProjection
+  let full = restoredFull
   p.close()
   let again = c.watch('projected', server)
   assertEquals(ids(again.value), ['a'])
@@ -655,18 +681,33 @@ for (let disk of ['memory', 'indexedDB']) {
   )
 }
 
-test('identity-only projections restore as members without invented loaded properties', async () => {
-  let disk = wireStash()
-  let { c, frame } = fixture({ wireVault: disk, epoch: 'boot' })
-  await c.ready
+// An identity-only answer: a member with no properties covered.
+let identities = (
+  { c, frame }: ReturnType<typeof fixture>,
+) => {
   let w = c.watch('ids only', server)
   frame({ id: 's1', bundles: [{ entity: { eid: 'a' } }], coverage: { a: {} } })
+  return w
+}
+let identifying = fixture({ wireVault: wireStash(), epoch: 'boot' })
+await identifying.c.ready
+test('identity-only projections are members without invented loaded properties', () => {
+  let { c } = identifying
+  let w = identities(identifying)
   assertEquals(ids(w.value), ['a'])
   assertEquals(c.cache.loaded('a', 'doc', 'title'), false)
-  w.close()
-  await c.cache.idle()
   c.close()
-  let next = fixture({ wireVault: disk, epoch: 'boot' }).c
+})
+
+// Persist that answer once; the restore reads it back.
+let identityDisk = wireStash()
+let persisting = fixture({ wireVault: identityDisk, epoch: 'boot' })
+await persisting.c.ready
+identities(persisting).close()
+await persisting.c.cache.idle()
+persisting.c.close()
+test('identity-only projections restore as members without invented loaded properties', async () => {
+  let next = fixture({ wireVault: identityDisk, epoch: 'boot' }).c
   let cold = next.watch('ids only', server)
   await next.ready
   assertEquals(ids(cold.value), ['a'])

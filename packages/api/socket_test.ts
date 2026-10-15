@@ -362,22 +362,34 @@ test('a subscriber opts into acknowledgements through the socket', () => {
   assertEquals(ids(socket.taken()), ['b1'])
 })
 
-test('a socket subscribes, hears its set, and hears every change', () => {
+// A socket subscribed to cheap books, over a shop holding one.
+let subscribing = () => {
   let graph = shopGraph()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let socket = fake()
   attach(subscriptions(graph), socket)
+  let subscribe = () =>
+    socket.emit(
+      'message',
+      JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
+    )
+  return { graph, socket, subscribe }
+}
 
-  socket.emit(
-    'message',
-    JSON.stringify({ subscribe: '.book.price<20', id: 'c' }),
-  )
+let opening = subscribing()
+test('a socket subscribes and hears its set', () => {
+  let { socket, subscribe } = opening
+  subscribe()
   assertEquals(ids(socket.taken()), ['b1'])
+})
 
+let hearing = subscribing()
+hearing.subscribe()
+hearing.socket.taken()
+test('a socket hears every change its subscription selects, and no other', () => {
+  let { graph, socket } = hearing
   graph.apply([{ entity: { eid: 'b2' }, book: { price: 9 } }])
   assertEquals(ids(socket.taken()), ['b2'])
-
-  // and nothing the query does not select
   graph.apply([{ entity: { eid: 'b3' }, book: { price: 99 } }])
   assertEquals(socket.taken(), [])
 })

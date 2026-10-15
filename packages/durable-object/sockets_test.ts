@@ -1122,7 +1122,9 @@ test('changing a decoded watch map preserves its remaining interests', () => {
   assertEquals(ws.sent.map((f) => f.id), ['kept', '__proto__'])
 })
 
-let packedFixture = (() => {
+// A socket whose attachment holds its watches as a stored map and a packed
+// change to it: `old` removed, `current` added.
+let packedFixture = () => {
   let storage = ram(shop), ctx = hibernation(), ws = wire()
   ctx.live.push(ws)
   holds(ctx.storage).write('packed', { old: '.doc.title=old' })
@@ -1132,13 +1134,20 @@ let packedFixture = (() => {
   })
   let [g, live] = instance(storage, ctx)
   return { ws, g, live }
-})()
+}
 
+let packed = packedFixture()
 test('compressed watch changes restore their exact interests', () => {
-  let { ws, g, live } = packedFixture
+  let { ws, live } = packed
   live.wake()
   assertEquals(ws.sent.map((f) => f.id), ['current'])
-  ws.sent.length = 0
+})
+
+let unpacked = packedFixture()
+unpacked.live.wake()
+unpacked.ws.sent.length = 0
+test('a watch restored from compressed changes hears what it selects', () => {
+  let { ws, g } = unpacked
   g.apply([{ entity: { eid: 'p' }, product: { price: 1 } }])
   assertEquals(ws.sent.map((f) => [f.id, f.bundles?.[0].entity.eid]), [
     ['current', 'p'],

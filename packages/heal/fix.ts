@@ -77,23 +77,30 @@ export type Work = {
   last?: string
 }
 
+// The fixers not yet exited, with what tells a running one from a start that
+// failed.
+let unexited = and(
+  present('fixer'),
+  absent('exit'),
+  want('process'),
+  want('created'),
+)
+
 /** Decide and write through one graph. Gate refusals still commit `writes`. */
 export let fixing = (g: Graph, options: Options = {}) => {
   let serial = serially()
-  let home = () => named(g, options.project, 'project')
-  let blocked = async ({ task, bug }: Work) => {
+  // The home project, resolved once per decision: the work and its gates ask.
+  let homed: Promise<string | undefined> | undefined
+  let home = () => homed ??= named(g, options.project, 'project')
+  let blocked = async ({ task }: Work, history: Bundle[]) => {
     let project = str(comp(task, 'filed')?.project)
     for (let p of new Set([await home(), project])) {
       if (p && comp(await one(g, p), 'nofix')) return true
     }
     let now = Date.now()
-    let running = (await g.read(
-      and(present('fixer'), absent('exit'), want('process'), want('created')),
-    )).filter((f) => f.process || young(f, STARTING, now))
+    let running = (await g.read(unexited))
+      .filter((f) => f.process || young(f, STARTING, now))
     if (running.length >= (options.cap ?? 2)) return true
-    let history = await g.read(
-      and(eq('fixer.bug', bug), want('created')),
-    )
     return history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))
   }
 
@@ -103,8 +110,9 @@ export let fixing = (g: Graph, options: Options = {}) => {
       !options.provider || task.cancelled ||
       (!reopen && (task.completed || task.claim))
     ) return []
-    if (!reopen && (await g.read(and(eq('fixer.bug', bug)))).length) return []
-    if (await blocked(work)) return []
+    let history = await g.read(and(eq('fixer.bug', bug), want('created')))
+    if (!reopen && history.length) return []
+    if (await blocked(work, history)) return []
     let provider = await named(g, options.provider, 'provider')
     if (!provider) throw new Error(`not a provider: ${options.provider}`)
     let model = await named(g, options.model, 'model')
@@ -148,6 +156,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
 
   let fix = (read: () => Promise<Work | undefined>) =>
     serial(async () => {
+      homed = undefined
       let work = await read()
       if (!work) return
       let rows = [...(work.writes ?? []), ...await request(work)]

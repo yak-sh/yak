@@ -115,22 +115,25 @@ test('shared query answers stay separate for each person', () => {
   equal(foreign.includes('red'), false)
   equal(foreign.includes('blue'), true)
 })
-let moved = fixture()
+// An answer bob opened and dropped, retained for his next open.
+let retain = (only?: string, references = false) => {
+  let f = fixture(only, references), first = f.ear()
+  f.subs.open(first.sink, 'books', '.book&*', { person: 'bob' })
+  f.subs.drop(first.sink)
+  return f
+}
+let moved = retain()
 test('a retained scoped answer follows trusted ownership changes', () => {
-  let { g, subs, ear } = moved, first = ear(), next = ear()
-  subs.open(first.sink, 'books', '.book&*', { person: 'bob' })
-  subs.drop(first.sink)
+  let { g, subs, ear } = moved, next = ear()
   g.apply([{ entity: { eid: 'secret' }, draft: { by: 'bob' } }], {
     trusted: true,
   })
   subs.open(next.sink, 'books', '.book&*', { person: 'bob' })
   equal(JSON.stringify(next.take()).includes('unsent'), true)
 })
-let enclosed = fixture()
+let enclosed = retain()
 test('a retained scoped answer removes public rows made private by the server', () => {
-  let { g, subs, ear } = enclosed, first = ear(), next = ear()
-  subs.open(first.sink, 'books', '.book&*', { person: 'bob' })
-  subs.drop(first.sink)
+  let { g, subs, ear } = enclosed, next = ear()
   g.apply([{
     entity: { eid: 'alice' },
     draft: { by: 'alice', text: 'private' },

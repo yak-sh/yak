@@ -855,7 +855,8 @@ test('a query joins stored and peer branches without losing projection', () => {
   assertEquals(joined.relay?.[0].browsing, { x: 2 })
 })
 
-test('async peer reads keep successive membership moves in order', async () => {
+// A watcher of near books over a graph whose peer reads wait to be released.
+let delaying = () => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let release: (() => void)[] = []
@@ -870,6 +871,11 @@ test('async peer reads keep successive membership moves in order', async () => {
   let writer = ear(), watcher = ear()
   subs.open(watcher.to, 'near', '.book&.browsing.x<10')
   watcher.take()
+  return { subs, release, writer, watcher }
+}
+let successive = delaying()
+test('async peer reads keep successive membership moves in order', async () => {
+  let { subs, release, writer, watcher } = successive
   let first = subs.relay(writer.to, [{
     entity: { eid: 'b1' },
     browsing: { x: 2 },

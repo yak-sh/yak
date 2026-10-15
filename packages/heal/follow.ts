@@ -82,13 +82,16 @@ export let follow = (
   // without one they are read with a command.
   let base = (at: string) => at.replace(/\/$/, '')
   let web = options.trackers?.find((at) => /^https?:/.test(at))
-  // The bug's work item: the derived task, or one an about edge links.
-  let taskOf = async (evidence: string) => {
+  // Where the bug's work item may be: the derived task, or one an about edge
+  // links. A pass writes only the derived task and its edge, so one read of
+  // the links serves the whole pass.
+  let linked = async (evidence: string) => {
     let edges = await g.read(and(present('about'), eq('edge.to', evidence)))
-    let linked = edges.map((edge) => str(comp(edge, 'edge')?.from))
-    return (await g.get([...new Set([...linked, taskEid(evidence)])]))
-      .find((row) => row.task)
+    let from = edges.map((edge) => str(comp(edge, 'edge')?.from))
+    return [...new Set([...from, taskEid(evidence)])]
   }
+  let taskIn = async (eids: string[]) =>
+    (await g.get(eids)).find((row) => row.task)
   // What a fixer does last: resolve its bug in the tracker, explained, which
   // completes the task once the follower hears it. A bug is resolved only
   // with its explanation, so the fixer, who knows why, writes it.
@@ -106,12 +109,16 @@ export let follow = (
       'changing because it was a one-off, leave out --fix and say in ' +
       '--recur why it is believed to be one.',
     ].join('\n\n')
-  let reconcile = (bug: Bundle, url: string, mutate: Client['mutate']) =>
+  let reconcile = (
+    bug: Bundle,
+    url: string,
+    mutate: Client['mutate'],
+    eids: string[],
+  ) =>
     fix(async () => {
-      if (!bug.bug) return
       let evidence = bug.entity.eid
       let eid = taskEid(evidence)
-      let task = await taskOf(evidence)
+      let task = await taskIn(eids)
       if (task) {
         let close = bug.archived && !task.cancelled
           ? 'cancelled'
@@ -195,8 +202,10 @@ export let follow = (
   // after, so a tracker that cannot take the mark yet (an older Worker during
   // a deploy) never holds back a fixer. A later pass sends what failed.
   return async (bug: Bundle, url: string, mutate: Client['mutate']) => {
-    await reconcile(bug, url, mutate)
-    if (!bug.bug || bug.resolved || bug.archived) return
-    await take(g, bug, await taskOf(bug.entity.eid), mutate)
+    if (!bug.bug) return
+    let eids = await linked(bug.entity.eid)
+    await reconcile(bug, url, mutate, eids)
+    if (bug.resolved || bug.archived) return
+    await take(g, bug, await taskIn(eids), mutate)
   }
 }

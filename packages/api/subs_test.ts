@@ -44,27 +44,40 @@ let jobs = loadVocab({
   },
 })
 
-let marked = (() => {
+// An open job, its status subscription opened once.
+let marked = () => {
   let g = graph({ vocab: jobs, storage: ram(jobs) })
   g.apply([{ entity: { eid: 'job' }, job: {} }])
   let subs = subscriptions(g)
   let first = ear()
   subs.open(first.to, 'open', '.job.status=open')
   return { g, subs, first }
-})()
+}
 
-test('status subscriptions follow marks while live and while retained', () => {
-  let { g, subs, first } = marked
+let retained = marked()
+test('status subscriptions follow marks while retained', () => {
+  let { g, subs, first } = retained
   assertEquals(first.take().map(ids), [['job']])
   subs.drop(first.to)
   g.apply([{ entity: { eid: 'job' }, completed: {} }])
   let next = ear()
   subs.open(next.to, 'open', '.job.status=open')
   assertEquals(next.take().map(ids), [[]])
+})
+
+// Reopened on the answer it retained while the job was completed.
+let live = marked()
+live.subs.drop(live.first.to)
+live.g.apply([{ entity: { eid: 'job' }, completed: {} }])
+let reopened = ear()
+live.subs.open(reopened.to, 'open', '.job.status=open')
+reopened.take()
+test('status subscriptions follow marks while live', () => {
+  let { g } = live
   g.apply([{ entity: { eid: 'job' }, completed: null }])
-  assertEquals(next.take().map(ids), [['job']])
+  assertEquals(reopened.take().map(ids), [['job']])
   g.apply([{ entity: { eid: 'job' }, cancelled: {} }])
-  assertEquals(next.take().map((frame) => frame.gone), [['job']])
+  assertEquals(reopened.take().map((frame) => frame.gone), [['job']])
 })
 
 test('a subscription opens on the set it already selects', () => {
@@ -300,11 +313,12 @@ let author = (eid: string, title: string) => ({
   doc: { title },
 })
 
+let projected = shop()
+projected.apply([
+  { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { price: 12 } },
+])
 test('a projection sends what it names, and says what that covers', () => {
-  let graph = shop()
-  graph.apply([
-    { entity: { eid: 'b1' }, doc: { title: 'Dune' }, book: { price: 12 } },
-  ])
+  let graph = projected
   let subs = subscriptions(graph)
   let { to, take } = ear()
   subs.open(to, 'cheap', '.book.price<20&.fields=doc.title')
@@ -421,9 +435,10 @@ test('the raw feed carries the batch exactly as it was applied', () => {
   assertEquals(one.$actor, undefined)
 })
 
+let windowed = shop()
+windowed.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
 test('a windowed query re-reads its whole answer', () => {
-  let graph = shop()
-  graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
+  let graph = windowed
   let subs = subscriptions(graph)
   let { to, take } = ear()
   // `.limit` pages newest-first, so this set can change when an entity the
@@ -1253,9 +1268,13 @@ for (let async of [false, true]) {
   })
 }
 
+let translated = costView(shop())
+translated.apply([{
+  entity: { eid: 'b1' },
+  book: { price: 12, status: 'draft' },
+}])
 test('caller projections translate coverage as well as field values', () => {
-  let g = costView(shop()), subs = subscriptions(g), e = ear()
-  g.apply([{ entity: { eid: 'b1' }, book: { price: 12, status: 'draft' } }])
+  let g = translated, subs = subscriptions(g), e = ear()
   subs.open(e.to, 'cost', '.book&.fields=book.cost', { speaks: { shop: 0 } })
   let [f] = e.take()
   equal(f.bundles?.map((b) => comp(b, 'book')), [{ cost: 12 }])

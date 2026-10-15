@@ -145,11 +145,12 @@ test('snapshots replace absent wire fields and preserve local/none on gone', asy
   c.close()
 })
 
+let evicting = fixture({ retention: 0 })
+let evicted = evicting.c.watch('.doc')
+evicting.frame('s1', [row('a', 75)])
 test('eviction physically drops payloads and restore keeps identity, not a tombstone', async () => {
-  let { c, frame } = fixture({ retention: 0 })
-  let w = c.watch('.doc')
-  frame('s1', [row('a', 75)])
-  w.close()
+  let { c, frame } = evicting
+  evicted.close()
   assertEquals(c.ent('a'), undefined)
   assertEquals(await c.graph.read(''), [])
   let again = c.watch('.doc')
@@ -209,15 +210,16 @@ test('an accepted write stays in its matching watch until the socket answers', a
   c.close()
 })
 
+let first = Promise.withResolvers<Response>()
+let second = Promise.withResolvers<Response>()
+let calls = 0
+let overlapping = fixture({
+  retention: 0,
+  fetch: () => ++calls === 1 ? first.promise : second.promise,
+  report: () => {},
+})
 test('overlapping pending writes release only their own pins; uncertain transport stays pinned', async () => {
-  let first = Promise.withResolvers<Response>()
-  let second = Promise.withResolvers<Response>()
-  let calls = 0
-  let { c } = fixture({
-    retention: 0,
-    fetch: () => ++calls === 1 ? first.promise : second.promise,
-    report: () => {},
-  })
+  let { c } = overlapping
   c.mutate([write('a')])
   c.mutate([{ entity: { eid: 'a' }, doc: { title: 'second' } }])
   first.resolve(Response.json([]))
@@ -467,15 +469,18 @@ test('a newer epoch supersedes an outstanding older hydration', async () => {
   c.close()
 })
 
+let refusal = Promise.withResolvers<Response>()
+let refusing = fixture({
+  retention: 0,
+  fetch: () => refusal.promise,
+  report: () => {},
+})
+let refused = refusing.c.watch('.doc')
+refusing.frame('s1', [row('a')])
 test('refusal releases pending protection after restoring the old image', async () => {
-  let response = Promise.withResolvers<Response>()
-  let { c, frame } = fixture({
-    retention: 0,
-    fetch: () => response.promise,
-    report: () => {},
-  })
-  let w = c.watch('.doc')
-  frame('s1', [row('a')])
+  let response = refusal
+  let { c } = refusing
+  let w = refused
   c.mutate([{ entity: { eid: 'a' }, doc: { title: 'edited' } }])
   w.close()
   assertEquals(comp(c.ent('a'), 'doc').title, 'edited')
