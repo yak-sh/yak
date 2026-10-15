@@ -2828,7 +2828,10 @@ let served = async (
     ? publicDirectory(direct, copyOf(env), undefined, copied)
     : direct
   let dir = directory(serving, edge)
-  let reading = c.time('space', () => dir.space(r.space!))
+  let routing = edge ? c.time('route', () => dir.page(r.space!, r.app)) : null
+  let reading = routing
+    ? routing.then((route) => route.space)
+    : c.time('space', () => dir.space(r.space!))
   if (!edge) {
     let page = await asked(visitor, env, c)
     if (page) {
@@ -2924,7 +2927,9 @@ let served = async (
   }
   // The app at the address and the space's front page, in one read: every
   // rung below that needs the front page (rung 1½, rung 3) has it already.
-  let { app, home } = await c.time('app', () => dir.routing(space!, r.app))
+  let { app, home } = routing
+    ? await routing
+    : await c.time('app', () => dir.routing(space!, r.app))
   // In the trash (erase.ts, T-34430): the address is held for it and answers
   // nothing while it waits. Not a 410 and not a redirect — to the web this is
   // an address with nothing at it, which is what a delete has always meant —

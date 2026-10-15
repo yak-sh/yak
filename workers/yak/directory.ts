@@ -1215,6 +1215,26 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let row = await one(`.space.slug=${slug}&${SPACE_ABOUT}`)
       return row ? spaceOf(row) : null
     },
+    // The anonymous page needs the space and its two possible apps together.
+    // Filtering through app.space avoids an earlier trip just to learn the
+    // space eid; the same authoritative snapshot answers the whole route.
+    page: async (slug: string, app?: string | null) => {
+      let at = `.app.space.space.slug=${slug}`
+      let which = app
+        ? `((${at}&.app.slug=${app})|(${at}&.home))`
+        : `${at}&.home`
+      let rows = await query(
+        `(.space.slug=${slug}&${SPACE_ABOUT})|(${which}&${ABOUT})`,
+        true,
+      )
+      let space = rows.find((row) => row.space)
+      let apps = rows.filter((row) => row.app).map(appOf)
+      return {
+        space: space ? spaceOf(space) : null,
+        app: apps.find((one) => one.slug == app) ?? null,
+        home: apps.find((one) => one.home && !one.trashed) ?? null,
+      }
+    },
     // A subdomain the space has left, still pointing at it (T-34658) — what
     // `former` is to an app, one level up. Asked only after `space` has
     // answered nobody, so a space is never found by an address it still lives

@@ -86,7 +86,11 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
       // The real door only publishes a revision when the caller requests it.
       let q = new URL(req.url).searchParams.get('q')!
       let answer = Response.json(
-        q.startsWith('.space.slug=') ? [rows[0]] : [rows[1]],
+        q.startsWith('(.space.slug=')
+          ? rows
+          : q.startsWith('.space.slug=')
+          ? [rows[0]]
+          : [rows[1]],
         {
           headers: req.headers.has(EPOCH)
             ? { [EPOCH]: String(f.copy.revision) }
@@ -165,10 +169,10 @@ let publicPage = await (async () => {
   }
 })()
 test('directory serving: a known public page answers within 25ms when DIRECTORY never does', () => {
-  equal(publicPage.fills, 2)
+  equal(publicPage.fills, 1)
   ok(publicPage.waited)
   equal([publicPage.status, publicPage.got], [200, publicPage.body])
-  equal(publicPage.reads, 4)
+  equal(publicPage.reads, 2)
   equal(publicPage.files, 2) // Rendered anew, not an old page response.
 })
 
@@ -268,7 +272,7 @@ for (
   )
   let previous = await (await f.page()).text()
   await continuations()
-  let old = mutationCopy.puts.slice(-2)
+  let old = mutationCopy.puts.slice(-1)
   let before = mutationCopy.copy.revision
   // A deploy selects server-owned release fields, so use the trusted door.
   await mutations.stamp({
@@ -301,9 +305,9 @@ for (
   let body = await recovered.text()
   let status = recovered.status
   test(`directory serving: ${name} commits fence previously known page routing`, () => {
-    equal(old.length, 2)
+    equal(old.length, 1)
     ok(after > before)
-    equal(late, [false, false])
+    equal(late, [false])
     ok(pending, 'a committed mutation must not resurrect old routing')
     if (name == 'setting') {
       equal(current.theme?.themeColor, '#123456')
