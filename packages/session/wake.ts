@@ -24,7 +24,6 @@ import { human } from '@yaks/id'
 import {
   dependencies,
   dependents,
-  openDeps,
   settled,
   statusOf as taskStatus,
 } from '@yaks/task'
@@ -47,11 +46,20 @@ let holds = (g: Graph) =>
 export let cleanEnd = (row: Bundle | undefined): boolean =>
   !!row?.process && comp(row, 'exit')?.code === 0 && !row[STOP_ENTRY]
 
+// What says whether a transcript's run is over: a managed one's process, how
+// it exited, and whether it was asked to stop.
+let SEEN = ['process', 'exit', STOP_ENTRY]
+
 /** Whether a transcript's run is over, so that a request starts its next: a
  * native transcript has settled, and a managed one ended cleanly
- * ({@link cleanEnd}) with its ending read in, every request it had answered. */
-export let resting = async (g: Graph, session: Eid): Promise<boolean> => {
-  let row = await one(g, session, ['process', 'exit', STOP_ENTRY])
+ * ({@link cleanEnd}) with its ending read in, every request it had answered.
+ * `seen` is the session's row, where the caller has read it already. */
+export let resting = async (
+  g: Graph,
+  session: Eid,
+  seen?: Bundle,
+): Promise<boolean> => {
+  let row = seen ?? await one(g, session, SEEN)
   return row?.process
     ? cleanEnd(row) && !await requested(g, session)
     : await currentStatus(g, session) == 'settled'
@@ -101,20 +109,27 @@ export let requested = async (g: Graph, session: Eid): Promise<boolean> =>
 let finished = (b: Bundle): Comp | undefined =>
   comp(b, 'cancelled') ?? comp(b, 'completed')
 
-// The dependencies of a held task that finished since its claim was taken, by
-// somebody other than its holder: what the holder has not been told. Where an
-// instant is not known, a finished dependency counts.
-let news = async (g: Graph, task: Bundle): Promise<Bundle[]> => {
+// A held task's dependencies, read once for all a wake says of them: how many
+// are still open (one the graph does not hold counts, since it cannot be shown
+// to have finished), and the news, those that finished since its claim was
+// taken, by somebody other than its holder: what the holder has not been told.
+// Where an instant is not known, a finished dependency counts.
+type Deps = { left: number; news: Bundle[] }
+let looked = async (g: Graph, task: Bundle): Promise<Deps> => {
+  let ids = await dependencies(g, task.entity.eid)
+  let over = (ids.length ? await g.get(ids) : [])
+    .filter((b) => settled(taskStatus(g.vocab, b)))
   let claim = comp(task, CLAIM)
   let since = claim?.at == null ? '' : String(claim.at)
-  let deps = await g.get(await dependencies(g, task.entity.eid))
-  return deps.filter((b) => {
-    let mark = finished(b)
-    let holder = claim?.session
-    return settled(taskStatus(g.vocab, b)) && mark?.by != holder &&
-      mark?.via != holder &&
-      (!since || mark?.at == null || String(mark.at) >= since)
-  })
+  let holder = claim?.session
+  return {
+    left: ids.length - over.length,
+    news: over.filter((b) => {
+      let mark = finished(b)
+      return mark?.by != holder && mark?.via != holder &&
+        (!since || mark?.at == null || String(mark.at) >= since)
+    }),
+  }
 }
 
 // What a wake tells of a held task: the dependencies that finished, and those
@@ -138,9 +153,10 @@ let named = (session: Eid, task: Eid, { done, gone }: Told) =>
 let untold = async (
   g: Graph,
   task: Bundle,
+  deps: Deps,
   gone: Bundle[] = [],
 ): Promise<Told | undefined> => {
-  let told = { done: await news(g, task), gone }
+  let told = { done: deps.news, gone }
   if (!told.done.length && !gone.length) return
   let session = String(comp(task, CLAIM)?.session)
   let [said] = await g.get([named(session, task.entity.eid, told)], ['entry'])
@@ -167,7 +183,8 @@ export let waits = async (
   let [row] = await g.get([task])
   if (!row?.task || comp(row, CLAIM)?.session != session) return false
   if (settled(taskStatus(g.vocab, row))) return false
-  return await openDeps(g, task) > 0 || !!await untold(g, row)
+  let deps = await looked(g, row)
+  return deps.left > 0 || !!await untold(g, row, deps)
 }
 
 /**
@@ -183,16 +200,15 @@ export let parked = async (g: Graph, session: Eid): Promise<boolean> => {
   return false
 }
 
-// The line a wake says: what finished, what it waits on no more, and what is
-// left.
-let telling = async (g: Graph, task: Bundle, { done, gone }: Told) => {
+// The line a wake says: what finished, what it waits on no more, and how many
+// of its dependencies are left.
+let telling = (g: Graph, task: Bundle, { done, gone }: Told, left: number) => {
   let id = human(g.vocab)
   let and = (them: string[]) =>
     them.length > 1
       ? `${them.slice(0, -1).join(', ')} and ${them.at(-1)}`
       : them[0]
   let them = done.map((b) => `${id(b)} (${taskStatus(g.vocab, b)})`)
-  let left = await openDeps(g, task.entity.eid)
   return [
     done.length && `${and(them)}, which ${id(task)} waits on, ` +
       `${done.length > 1 ? 'have' : 'has'} finished`,
@@ -222,8 +238,8 @@ export let rouse = async (
   gone: Record<Eid, Bundle[]> = {},
 ): Promise<void> => {
   if (!holds(g)) return
-  let row = await one(g, session, ['exit'])
-  if (!await resting(g, session)) return
+  let row = await one(g, session, SEEN)
+  if (!await resting(g, session, row)) return
   let [asked] = await g.read(
     `.entry.session=${session}&.using&.order=-entry.seq&.limit=1`,
   )
@@ -233,12 +249,13 @@ export let rouse = async (
   let wakes: Bundle[] = []
   for (let task of held) {
     if (settled(taskStatus(g.vocab, task))) continue
-    let told = await untold(g, task, gone[task.entity.eid])
+    let deps = await looked(g, task)
+    let told = await untold(g, task, deps, gone[task.entity.eid])
     if (!told) continue
     wakes.push({
       entity: { eid: named(session, task.entity.eid, told) },
       entry: { session },
-      content: { body: await telling(g, task, told) },
+      content: { body: telling(g, task, told, deps.left) },
       using,
       $was: { entry: { session: null } },
     })

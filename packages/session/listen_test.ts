@@ -247,23 +247,26 @@ test('a held item may reach a native transcript at work of its project or of one
   equal(await heirs(desk, await desk.get(['to-loose'])), [])
 })
 
+// A project whose persona two native transcripts wear, one at rest and one
+// mid-turn, news and a letter held for it, and a knock at the one at rest.
+let rest = office()
+await rest.apply([
+  { entity: { eid: 'p' }, project: {} },
+  { entity: { eid: 'operator' }, persona: { home: 'p' } },
+  ...transcript('resting', 'operator', 'settled'),
+  ...transcript('working', 'operator', 'working'),
+  { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
+  { entity: { eid: 'alert' }, mail: { from: 'a@example.com', target: 'p' } },
+  {
+    entity: { eid: 'nudge' },
+    knock: { target: 'resting' },
+    doc: { body: 'you' },
+  },
+])
+
 test('a native transcript at rest hears only what is addressed to it, never what is held for its project', async () => {
-  let g = office()
-  await g.apply([
-    { entity: { eid: 'p' }, project: {} },
-    { entity: { eid: 'operator' }, persona: { home: 'p' } },
-    ...transcript('resting', 'operator', 'settled'),
-    ...transcript('working', 'operator', 'working'),
-    { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
-    { entity: { eid: 'alert' }, mail: { from: 'a@example.com', target: 'p' } },
-    {
-      entity: { eid: 'nudge' },
-      knock: { target: 'resting' },
-      doc: { body: 'you' },
-    },
-  ])
   let heard = async (s: string) =>
-    (await pending(g, s)).map(({ item }) => item.entity.eid).sort()
+    (await pending(rest, s)).map(({ item }) => item.entity.eid).sort()
   equal(await heard('resting'), ['nudge'])
   equal(await heard('working'), ['alert', 'news'])
 })
