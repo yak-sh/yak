@@ -777,6 +777,21 @@ let asked = async (req: Request, env: Env, q: string) => {
   }
 }
 
+/** A person's consent to an authorize request: the grant written, and where
+ * the client's code is sent. The grant this replaces stays until the client
+ * exchanges the new grant's code (`tokenExchangeCallback` below, connected.ts
+ * `replace`), so a sign-in abandoned at the client leaves the old one working
+ * (T-121901). */
+export let consent = (env: Env, ask: AuthRequest, person: string) =>
+  api(env).completeAuthorization({
+    request: ask,
+    userId: person,
+    metadata: {},
+    scope: ask.scope,
+    props: { person } satisfies Props,
+    revokeExistingGrants: false,
+  })
+
 // Consent granted: the grant is written and the browser is sent home to the
 // client with its code.
 let allow = async (
@@ -788,16 +803,7 @@ let allow = async (
 ) => {
   let ask = await asked(req, env, q)
   if (ask instanceof Response) return ask
-  let { redirectTo } = await api(env).completeAuthorization({
-    request: ask,
-    userId: person,
-    metadata: {},
-    scope: ask.scope,
-    props: { person } satisfies Props,
-    // The grant this replaces stays until the client exchanges the new
-    // grant's code (`tokenExchangeCallback` below, connected.ts `replace`).
-    revokeExistingGrants: false,
-  })
+  let { redirectTo } = await consent(env, ask, person)
   return redirect(redirectTo, set)
 }
 

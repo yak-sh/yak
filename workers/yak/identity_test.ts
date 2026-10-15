@@ -33,6 +33,10 @@ import { COOKIE, cookieValue, sign, verify } from './lib/token.ts'
 import { SENDS } from './signin.ts'
 import { managePath } from './route.ts'
 import { replace } from './connected.ts'
+import { consent } from './identity.ts'
+import type { Env } from './env.ts'
+import { kv } from './testing.ts'
+import { getOAuthApi } from '@cloudflare/workers-oauth-provider'
 import type { Agent } from './connected.ts'
 
 // Styling and attribute order do not change the sign-in form's contract.
@@ -934,25 +938,55 @@ test('a connector keeps its door until the person closes it', async () => {
 })
 
 // Connecting an assistant again replaces its grant, but only once the new one
-// is in the client's hands (T-121901): until the exchange runs `replace`, the
-// connection the person already had stands.
+// is in the client's hands (T-121901): a second consent leaves the grant the
+// person already had standing, and only the exchange of the new grant's code
+// (`replace`) takes it away.
 test('connecting again keeps the old grant until the new one is taken', async () => {
-  let held = new Map(
-    ['old', 'new', 'other'].map((id) => [id, {
-      id,
-      clientId: id == 'other' ? 'xyz' : 'abc',
+  let store = kv()
+  let env = { OAUTH_KV: store } as unknown as Env
+  let oauth = getOAuthApi<Env>({
+    apiRoute: '/api',
+    apiHandler: { fetch: () => new Response() },
+    defaultHandler: { fetch: () => new Response() },
+    authorizeEndpoint: '/oauth/authorize',
+    tokenEndpoint: '/oauth/token',
+  }, env)
+  let back = 'https://probe.invalid/cb'
+  let { clientId } = await oauth.createClient({
+    redirectUris: [back],
+    tokenEndpointAuthMethod: 'none',
+  })
+  // The grant the person already holds for this assistant, as the provider
+  // keeps one (its stored shape, which every grant ever written still has).
+  let old = 'held-grant'
+  await store.put(
+    `grant:p:${old}`,
+    JSON.stringify({
+      id: old,
+      clientId,
       userId: 'p',
-      createdAt: 0,
+      scope: ['graph'],
       metadata: {},
-      scope: [],
-    }]),
+      createdAt: 0,
+      redirectUri: back,
+    }),
   )
-  let oauth = {
-    listUserGrants: () => Promise.resolve({ items: [...held.values()] }),
-    revokeGrant: (id: string) => (held.delete(id), Promise.resolve()),
-  }
-  assertEquals(await replace(oauth, 'p', 'new'), ['old'])
-  assertEquals([...held.keys()], ['new', 'other'])
+  let held = async () =>
+    (await oauth.listUserGrants('p')).items.map((g) => g.id)
+  await consent(env, {
+    responseType: 'code',
+    clientId,
+    redirectUri: back,
+    scope: ['graph'],
+    state: '',
+    codeChallenge: 'c'.repeat(43),
+    codeChallengeMethod: 'S256',
+  }, 'p')
+  let both = await held()
+  let taken = both.find((id) => id != old)!
+  assertEquals(both.sort(), [old, taken].sort())
+  assertEquals(await replace(oauth, 'p', taken), [old])
+  assertEquals(await held(), [taken])
 })
 
 // The sign-in box is for somebody signed out (T-34209). A browser carrying a
