@@ -23,23 +23,33 @@ let item = (...cols: CreateTable['cols']): CreateTable => ({
 
 let reading = (id: number) =>
   select({ cols: [col('value')], from: table('item'), where: by({ id }) })
-// The statements the test reuses are prepared here, by a write and a read.
-let reused = durable()
-let reusedSql = driver(reused)
-reusedSql.query(item({ name: 'id', type: 'integer', pk: true }, {
-  name: 'value',
-  type: 'text',
-}))
-reusedSql.query(insert('item', { id: 0, value: 'zero' }))
-reusedSql.query(reading(0))
-
-test('statement reuse resets rows and bindings, including after a failed step', () => {
-  using d = reused
-  let sql = reusedSql
+// A table holding `one`, its write and read statements already prepared.
+let items = () => {
+  let d = durable()
+  let sql = driver(d)
+  sql.query(item({ name: 'id', type: 'integer', pk: true }, {
+    name: 'value',
+    type: 'text',
+  }))
   sql.query(insert('item', { id: 1, value: 'one' }))
+  sql.query(reading(1))
+  return { d, sql, read: (id: number) => sql.query(reading(id)) }
+}
+
+let failing = items()
+test('a statement whose step failed is prepared again and binds afresh', () => {
+  using _ = failing.d
+  let { sql, read } = failing
   assertThrows(() => sql.query(insert('item', { id: 1, value: 'duplicate' })))
   sql.query(insert('item', { id: 2, value: 'two' }))
-  let read = (id: number) => sql.query(reading(id))
+  assertEquals(read(2), [{ value: 'two' }])
+})
+
+let reused = items()
+reused.sql.query(insert('item', { id: 2, value: 'two' }))
+test('statement reuse resets rows and bindings', () => {
+  using d = reused.d
+  let { read } = reused
   assertEquals(read(1), [{ value: 'one' }])
   assertEquals(read(3), [])
   assertEquals(read(2), [{ value: 'two' }])

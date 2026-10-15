@@ -30,7 +30,14 @@ import { type Fake, pair } from '../sync/testing.ts'
 import { group } from '@yaks/tracker'
 import { computed, trackerDoc } from '@yaks/tracker/vocab'
 import { healDoc } from './vocab.ts'
-import { follow, type Options, service, taskEid, track } from './service.ts'
+import {
+  follow,
+  type Options,
+  PLATFORM,
+  service,
+  taskEid,
+  track,
+} from './service.ts'
 
 let url = 'http://tracker.test'
 let provider = identityEid('provider', ['codex'])
@@ -297,27 +304,35 @@ for (let gate of ['provider', 'nofix', 'cap', 'cooldown']) {
   })
 }
 
-let regressed = await fixture({ cooldown: 0 })
-await regressed.run()
-await put(regressed.g, [
-  { entity: { eid: taskEid(bug) }, completed: { at: '2026-10-02T00:00:02Z' } },
-  { entity: (await rows(regressed.g, 'fixer'))[0].entity, exit: {} },
-])
-await put(regressed.tracker, [
-  { entity: { eid: bug }, resolved: { at: '2026-10-02T00:00:02Z' } },
-  {
-    entity: { eid: 'occurrence' },
-    error: {
-      fault: 'missing row',
-      at: '2026-10-02T00:00:03Z',
-      commit: 'b'.repeat(40),
+// Completed work whose resolved bug came back.
+let regression = async () => {
+  let f = await fixture({ cooldown: 0 })
+  await f.run()
+  await put(f.g, [
+    {
+      entity: { eid: taskEid(bug) },
+      completed: { at: '2026-10-02T00:00:02Z' },
     },
-  },
-])
-await group(regressed.tracker, 'occurrence')
-regressed.commits.length = 0
-test('a tracker regression starts a new fixer on its completed task once', async () => {
-  await regressed.run()
+    { entity: (await rows(f.g, 'fixer'))[0].entity, exit: {} },
+  ])
+  await put(f.tracker, [
+    { entity: { eid: bug }, resolved: { at: '2026-10-02T00:00:02Z' } },
+    {
+      entity: { eid: 'occurrence' },
+      error: {
+        fault: 'missing row',
+        at: '2026-10-02T00:00:03Z',
+        commit: 'b'.repeat(40),
+      },
+    },
+  ])
+  await group(f.tracker, 'occurrence')
+  f.commits.length = 0
+  return f
+}
+
+let regressed = await regression()
+test('a tracker regression starts a new fixer on its completed task', async () => {
   await regressed.replay()
   equal(regressed.commits.length, 1)
   equal(await count(regressed.g, 'task'), 1)
@@ -327,6 +342,16 @@ test('a tracker regression starts a new fixer on its completed task once', async
   let held = (await regressed.g.get([String(comp(task, 'claim').session)]))[0]
   equal(comp(held, 'fixer').bug, bug)
   regressed.close()
+})
+
+let restarted = await regression()
+await restarted.replay()
+restarted.commits.length = 0
+test('a tracker regression starts its new fixer once', async () => {
+  await restarted.replay()
+  equal(restarted.commits, [])
+  equal(await count(restarted.g, 'fixer'), 2)
+  restarted.close()
 })
 
 let done = await fixture({ cooldown: 0 })
@@ -416,7 +441,7 @@ await put(migrated.g, [{
   filed: { project: other },
 }, link(old, 'about', bug)])
 test('the follower reuses a task already linked to its tracker bug', async () => {
-  await migrated.run()
+  await migrated.replay()
   equal(await count(migrated.g, 'task'), 1)
   ok((await migrated.g.get([old]))[0].claim)
   migrated.close()
@@ -880,37 +905,43 @@ test('a tracker regression during mark admission rejects the stale answer', asyn
   raced.close()
 })
 
-// What the service opens when the platform is followed, and the body of the
-// platform bug's task. The store is set up here; the pass is the timed part.
+let ordered = await fixture({ provider: undefined })
+test('the platform tracker is followed first', async () => {
+  let opened: string[] = []
+  await service(ordered.host, {
+    ...ordered.config,
+    remote: { url: 'https://tracker.example' },
+    open: (at) => {
+      opened.push(at)
+      return { ...ordered.config.open!(at), value: [] }
+    },
+  })
+  equal(opened, [PLATFORM, url])
+  ordered.close()
+})
+
+// The body of the platform bug's task, filed by a follower that knows which
+// trackers have a web of their own.
 let platform = async (trackers: string[]) => {
   let f = await fixture({ trackers, provider: undefined })
-  let opened: string[] = []
+  let [row] = await f.tracker.get([bug])
+  let reconcile = follow(f.g, f.config)
   return async () => {
-    await service(f.host, {
-      ...f.config,
-      remote: { url: 'https://tracker.example' },
-      open: (at) => {
-        opened.push(at)
-        return f.config.open!(at)
-      },
-    })
+    await reconcile(row, PLATFORM, (rows) => put(f.tracker, rows))
     let [task] = await f.g.get([taskEid(bug)])
     f.close()
-    return { opened, body: String(comp(task, 'doc').body) }
+    return String(comp(task, 'doc').body)
   }
 }
 
 let withWeb = await platform([url])
-test('the platform tracker is followed first, its task linking its page on the tracker web', async () => {
-  let { opened, body } = await withWeb()
-  equal(opened, ['yaks.app', url])
-  ok(body.includes(`(${url}/?q=.bug&side=yaks.app&bug=${bug})`))
+test("a platform bug's task links its page on the tracker web", async () => {
+  ok((await withWeb()).includes(`(${url}/?q=.bug&side=yaks.app&bug=${bug})`))
 })
 
 let noWeb = await platform([])
 test("with no tracker web, a platform bug's task names the command that reads it", async () => {
-  let { body } = await noWeb()
-  ok(body.includes(`yak bug show ${bug} --source yaks.app`))
+  ok((await noWeb()).includes(`yak bug show ${bug} --source yaks.app`))
 })
 
 let held = await fixture({ provider: undefined })
