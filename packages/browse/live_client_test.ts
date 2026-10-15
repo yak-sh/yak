@@ -66,45 +66,59 @@ let writing = () => {
   return { c, response }
 }
 
-// Prepare the host response; the timed contract starts with the local write.
+// The host never answers this write: the case is its local half alone.
+let optimistic = writing()
+test('the browser replica writes optimistically and waits for the host', async () => {
+  let { c } = optimistic
+  try {
+    let receipt = Promise.resolve(c.box.mutate([write('write-local', 'local')]))
+    assertEquals(c.box.ent('write-local')?.doc, { title: 'local' })
+    let settled = false
+    receipt.then(() => settled = true)
+    await Promise.resolve()
+    assertEquals(settled, false)
+  } finally {
+    c.box.close()
+  }
+})
+
+// A write already made as the file loads, its host response held: the case
+// is the answer landing.
 let stamped = writing()
 let applied = [{
   ...row('write-stamps', 'server'),
   created: { by: 'owner', at: '2026-10-11T00:00:00.000Z' },
 }]
 let stampedResponse = Response.json(applied)
-test('the browser replica writes optimistically and resolves with stamped server bundles', async () => {
+let stampedReceipt = Promise.resolve(
+  stamped.c.box.mutate([write('write-stamps', 'local')]),
+)
+test('the browser replica resolves a write with its stamped server bundles', async () => {
   let { c, response } = stamped
   try {
-    let receipt = Promise.resolve(
-      c.box.mutate([write('write-stamps', 'local')]),
-    )
-    assertEquals(c.box.ent('write-stamps')?.doc, { title: 'local' })
-    let settled = false
-    receipt.then(() => settled = true)
-    await Promise.resolve()
-    assertEquals(settled, false)
     response.resolve(stampedResponse)
-    assertEquals(await receipt, applied)
+    assertEquals(await stampedReceipt, applied)
+    assertEquals(c.box.ent('write-stamps')?.doc, { title: 'server' })
     assertEquals(c.box.ent('write-stamps')?.created, applied[0].created)
   } finally {
     c.box.close()
   }
 })
 
+// Each write is made as the file loads, its host response held: the case is
+// the refusal, or the lost response, landing.
 for (let refusal of [true, false]) {
   let failed = writing()
+  let receipt = Promise.resolve(
+    failed.c.box.mutate([write('failed-write', 'keep')]),
+  )
+  let refused = refusal &&
+    Response.json({ error: 'Refused', message: 'no' }, { status: 400 })
   test(`the browser replica rejects ${refusal ? 'refused' : 'unknown'} writes`, async () => {
     let { c, response } = failed
     try {
-      let receipt = Promise.resolve(
-        c.box.mutate([write('failed-write', 'keep')]),
-      )
-      if (refusal) {
-        response.resolve(Response.json({ error: 'Refused', message: 'no' }, {
-          status: 400,
-        }))
-      } else response.reject(new TypeError('response lost'))
+      if (refused) response.resolve(refused)
+      else response.reject(new TypeError('response lost'))
       let error = refusal
         ? await assertRejects(() => receipt, WriteRefused)
         : await assertRejects(() => receipt, WriteUnknown)
@@ -188,8 +202,9 @@ test('a refusal is reported, and lands no rows', async () => {
   assertEquals(c.members('a'), [])
 })
 
+let speaking = replica()
 test('a test server speaks through receive, as changes', () => {
-  let { c, frames } = replica()
+  let { c, frames } = speaking
   c.open('a', '.doc')
   c.receive({
     sub: 'a',
