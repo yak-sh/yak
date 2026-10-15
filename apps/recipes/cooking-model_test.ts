@@ -56,11 +56,13 @@ test('Cooking interleaves unequal recipe lists and preserves empty or duplicate 
   )
 })
 
+// A snapshot taken as the file loads, of a source the case then edits.
+let n = 0
+const source = recipes()
+const taken = snapshotSession(source, () => `id-${++n}`)
+const before = JSON.stringify(taken.bundles)
 test('Cooking snapshots survive source edits and source deletion without changing identities', () => {
-  let n = 0
-  const source = recipes()
-  const { eid, bundles } = snapshotSession(source, () => `id-${++n}`)
-  const before = JSON.stringify(bundles)
+  const { eid, bundles } = taken
   source[0].title = 'Edited'
   source[0].ingredients.push('Pepper')
   source[0].steps[0] = 'Different'
@@ -71,6 +73,9 @@ test('Cooking snapshots survive source edits and source deletion without changin
   const snapshots = bundles.filter((r) => 'cook_recipe' in r)
   equal(snapshots.map((r) => r.cook_recipe?.recipe), ['soup', 'bread'])
   equal(cookingIngredients([...snapshots].reverse())[0].title, 'Soup')
+})
+
+test('Cooking refuses an empty or repeated recipe selection', () => {
   throws(() => snapshotSession([]))
   throws(() => snapshotSession([recipes()[0], recipes()[0]]))
 })
