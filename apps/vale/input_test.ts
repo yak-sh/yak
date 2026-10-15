@@ -31,6 +31,13 @@ probeTest('left touch walks right while right touch orbits', (p) => {
   pointer('pointerdown', 2, 700, 100)
   pointer('pointermove', 2, 740, 100)
   let i = p.hands.read()
+  equal(i.move, [1, 0])
+  equal(i.faceMove, true)
+  equal(i.look, true)
+  assertAlmostEquals(i.orbit[0], -0.36)
+})
+
+test('a stride faces a screen-right walk while the view orbits', () => {
   let body: Body = {
     x: 20,
     y: 5,
@@ -40,19 +47,9 @@ probeTest('left touch walks right while right touch orbits', (p) => {
     speed: 0,
     gait: 'idle',
   }
-  let stepped = stride(
-    ground,
-    body,
-    i.move,
-    i.orbit[0],
-    0.1,
-    5,
-    false,
-    i.look,
-    i.faceMove,
-  )
+  let stepped = stride(ground, body, [1, 0], -0.36, 0.1, 5, false, true, true)
   ok(stepped.x > body.x)
-  assertAlmostEquals(stepped.yaw, Math.PI / 2 + i.orbit[0])
+  assertAlmostEquals(stepped.yaw, Math.PI / 2 - 0.36)
 })
 
 for (
@@ -100,28 +97,28 @@ probeTest('Vale screen abilities and key hints use adapter bindings', (p) => {
   equal(movement(['KeyA'], true).move, [-1, 0])
 })
 
-probeTest(
-  'Vale maps pointer taps and cursor projection without owning controls state',
-  (p) => {
+for (let [button, verb] of [[2, 'dodge'], [0, 'strike']] as const) {
+  probeTest(`Vale maps a button ${button} tap to ${verb}`, (p) => {
     p.hands.hideCursor()
-    for (let [button, verb] of [[2, 'dodge'], [0, 'strike']] as const) {
-      p.send('pointerdown', {
-        button,
-        buttons: button == 0 ? 1 : 2,
-        clientX: 200,
-        clientY: 150,
-      })
-      p.send('pointerup', { button, buttons: 0, clientX: 200, clientY: 150 })
-      let i = p.hands.read()
-      equal(i[verb], true)
-      if (button == 0) equal(i.pick, cursor(200, 150, 800, 600, false))
-    }
-    p.send('pointermove', { clientX: 600, clientY: 450 })
-    equal(p.hands.pointer(), cursor(600, 450, 800, 600, false))
-    ok(p.changes.length > 0)
-    ok(p.changes.every((b) => b.entity.eid == 'test-consumer:pilot-controls'))
-  },
-)
+    p.send('pointerdown', {
+      button,
+      buttons: button == 0 ? 1 : 2,
+      clientX: 200,
+      clientY: 150,
+    })
+    p.send('pointerup', { button, buttons: 0, clientX: 200, clientY: 150 })
+    let i = p.hands.read()
+    equal(i[verb], true)
+    if (button == 0) equal(i.pick, cursor(200, 150, 800, 600, false))
+  })
+}
+
+probeTest('Vale projects the cursor without owning controls state', (p) => {
+  p.send('pointermove', { clientX: 600, clientY: 450 })
+  equal(p.hands.pointer(), cursor(600, 450, 800, 600, false))
+  ok(p.changes.length > 0)
+  ok(p.changes.every((b) => b.entity.eid == 'test-consumer:pilot-controls'))
+})
 
 for (
   let [button, verb] of [

@@ -233,11 +233,18 @@ export let listen = (
 ): Hands => {
   let s: ControlsState
   let depth = 0
+  // Controls are JSON values, as the consumer's graph keeps them, so one
+  // serialization is both the snapshot a transaction compares against and the
+  // private copy it edits. structuredClone costs several times as much.
+  let load = (row: ControlsBundle) => {
+    let text = JSON.stringify({ ...initial(), ...row.Controls })
+    s = JSON.parse(text)
+    return text
+  }
   let transaction = <T>(fn: () => T): T => {
     if (depth) return fn()
     let row = options.get()
-    s = { ...initial(), ...structuredClone(row.Controls ?? {}) }
-    let before = JSON.stringify(s)
+    let before = load(row)
     depth++
     try {
       return fn()
@@ -278,7 +285,7 @@ export let listen = (
     let action = options.tap?.[button]
     if (action) pressed.add(action)
   }
-  s = { ...initial(), ...structuredClone(options.get().Controls ?? {}) }
+  load(options.get())
   let isLook = (button: number, type: string) =>
     lookDrag(button, type, s.swapped)
   let held = sequence('held'), pressed = sequence('pressed')
@@ -328,7 +335,14 @@ export let listen = (
 
   let base = document.createElement('div')
   glass.append(base)
-  let paint = () =>
+  // Every event and every frame's read is a transaction; the stick is drawn
+  // again only when what it shows has changed, and never once disposed.
+  let painted: string | undefined
+  let mounted = true
+  let paint = () => {
+    let shown = JSON.stringify(s.stick)
+    if (!mounted || shown == painted) return
+    painted = shown
     render(
       h(
         Stick,
@@ -344,6 +358,7 @@ export let listen = (
       ),
       base,
     )
+  }
   let rest = () => {
     s.stick = null
   }
@@ -540,6 +555,7 @@ export let listen = (
       }),
     dispose: () => {
       for (let remove of listeners) remove()
+      mounted = false
       transaction(() => {
         clear()
         unlock()

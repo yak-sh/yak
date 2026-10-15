@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { everforest, sheet } from '@yaks/ui'
 import { print } from '@yaks/tui/print'
-import { h } from 'preact'
+import { h, type VNode } from 'preact'
 import { render } from 'npm:preact-render-to-string@6.7.0'
 import { Grid, kit, Stats, Stick } from './hud.ts'
 
@@ -26,22 +26,27 @@ test('HUD inventory cells distinguish a supplied pick from a passive display', (
   ok(other.includes('aria-current="false"'))
 })
 
-test('HUD stat comparisons preserve supplied content in both hosts', () => {
-  let node = h(
-    Stats,
-    { mod: 'two' },
-    h(
-      Stats.Stat,
-      {},
-      h(Stats.Mark, {}, '⚔'),
-      h(Stats.Words, {}, 'Attack 13 → ', h(Stats.Better, {}, '14')),
-    ),
-    h(Stats.Stat, {}, 'Health 91 → ', h(Stats.Worse, {}, '80')),
-  )
-  let html = render(node), text = plain(print(node, 80, dress))
+let comparison = h(
+  Stats,
+  { mod: 'two' },
+  h(
+    Stats.Stat,
+    {},
+    h(Stats.Mark, {}, '⚔'),
+    h(Stats.Words, {}, 'Attack 13 → ', h(Stats.Better, {}, '14')),
+  ),
+  h(Stats.Stat, {}, 'Health 91 → ', h(Stats.Worse, {}, '80')),
+)
+
+test('HUD stat comparisons mark better and worse in the browser', () => {
+  let html = render(comparison)
   ok(html.includes('Stats-two'))
   ok(html.includes('Stats_Better'))
   ok(html.includes('Stats_Worse'))
+})
+
+test('HUD stat comparisons keep their words in the terminal', () => {
+  let text = plain(print(comparison, 80, dress))
   ok(text.includes('Attack 13 → 14'))
   ok(text.includes('Health 91 → 80'))
 })
@@ -65,22 +70,30 @@ test('HUD touch stick displays supplied pixels and recenters when resting', () =
   equal(print(h(Stick, { rest: false }), 80, dress), '')
 })
 
-for (
-  let [name, words] of Object.entries({
-    Grid: ['⚔', '24', '12', 'Weapon', 'Nothing'],
-    Stats: ['Weapon power', 'Health', '13 →', '14', '0.52 s'],
-  })
-) {
-  // Specimens are fixture values; serialization and painting remain measured.
-  let samples = kit[name].specimens()
-  test(`HUD ${name} specimens carry their words in both hosts`, () => {
-    let html = samples.map(([, node]) => render(node)).join('\n')
-    let text = samples.map(([, node]) => plain(print(node, 80, dress))).join(
-      '\n',
-    )
-    for (let word of words) {
-      ok(html.includes(word), `${name}: browser ${word}`)
-      ok(text.includes(word), `${name}: terminal ${word}`)
+// Specimens are fixture values; serialization and painting remain measured.
+let hosts = {
+  browser: (node: VNode) => render(node),
+  terminal: (node: VNode) => plain(print(node, 80, dress)),
+}
+// Each specimen, by its title, and the words it shows.
+let words: Record<string, Record<string, string[]>> = {
+  Grid: {
+    'Cell, Picture, Tier, Need, Count: a bag': ['⚔', '24', '12'],
+    'wide: Label, Name, empty': ['⚔', 'Weapon', 'Nothing'],
+  },
+  Stats: {
+    'A piece’s own': ['Weapon power', 'Health'],
+    'two: what would change, Better and Worse': ['13 →', '14', '0.52 s'],
+  },
+}
+for (let [name, titled] of Object.entries(words)) {
+  let samples = new Map(kit[name].specimens())
+  for (let [title, shows] of Object.entries(titled)) {
+    for (let [host, show] of Object.entries(hosts)) {
+      test(`HUD ${name} "${title}" carries its words in the ${host}`, () => {
+        let shown = show(samples.get(title)!)
+        for (let word of shows) ok(shown.includes(word), `${title}: ${word}`)
+      })
     }
-  })
+  }
 }
