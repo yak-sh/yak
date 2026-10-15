@@ -1,4 +1,4 @@
-import { equal, test, until } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
@@ -274,23 +274,22 @@ test('a native transcript at rest hears only what is addressed to it, never what
 test('a listener told once waits for something to say, says it and ends', async () => {
   let g = office()
   await g.apply([{ entity: { eid: 'me' }, session: { id: 'me' } }])
-  let reads = 0
   let lines: string[] = []
-  let ended = false
-  listen(
-    { ...g, read: (q) => (reads++, g.read(q)) },
-    null,
-    'me',
-    { out: (line) => lines.push(line), every: 1, once: true },
-  ).then(() => ended = true)
-  await until(() => reads > 20) // a few reads with nothing to say
-  equal(ended, false)
+  let waiting = Promise.withResolvers<void>()
+  let again = Promise.withResolvers<void>()
+  let ended = listen(g, null, 'me', {
+    out: (line) => lines.push(line),
+    every: () => (waiting.resolve(), again.promise),
+    once: true,
+  })
+  await waiting.promise // a read with nothing to say, and it waits
   await g.apply([{
     entity: { eid: 'mail' },
     knock: { target: 'me' },
     doc: { body: 'a reply' },
   }])
-  await until(() => ended)
+  again.resolve()
+  await ended
   equal(lines.length, 1)
   equal((await g.get(['mail']))[0].notified != null, true)
 })

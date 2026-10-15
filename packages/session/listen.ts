@@ -336,8 +336,8 @@ export let said = (
 export type Ear = {
   /** where each line goes; the command line prints it */
   out: (line: string) => void
-  /** how long to wait between reads */
-  every: number
+  /** how long to wait between reads, in milliseconds, or what to wait for */
+  every: number | (() => Promise<void>)
   /** end after the first read that says anything */
   once?: boolean
   /** stops the loop when it aborts; a command under a monitor stops when its
@@ -345,9 +345,9 @@ export type Ear = {
   stop?: AbortSignal
 }
 
-let pause = (ms: number, stop?: AbortSignal) =>
-  new Promise<void>((done) => {
-    let timer = setTimeout(done, ms)
+let pause = (every: Ear['every'], stop?: AbortSignal) =>
+  typeof every == 'function' ? every() : new Promise<void>((done) => {
+    let timer = setTimeout(done, every)
     stop?.addEventListener('abort', () => (clearTimeout(timer), done()), {
       once: true,
     })
