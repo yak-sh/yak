@@ -3,7 +3,7 @@ import '../testing.ts'
 import { h } from 'preact'
 import { type Bundle, Disclosure, disclosureAt } from '@yaks/ux'
 import { parse } from '@yaks/query'
-import { cache, clearResolved } from '../live.ts'
+import { cache, clearResolved, type Comps } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { inspectIo } from './inspect.tsx'
 import { extend } from './registry.ts'
@@ -32,7 +32,8 @@ test("a view's own page state, set through the inspector's io, redraws it", asyn
 // The page an inspector view's link to `b` opens, held until it is `b`'s own.
 let opens = async (b: Bundle) => {
   let eid = b.entity.eid
-  cache.value = { [eid]: b }
+  // A numberless entity is stored as it arrives; Comps still demands a num.
+  cache.value = { [eid]: b as Comps }
   clearResolved()
   let wire = host(() => ({ bundles: [b] }))
   let mounted = mount(h(Page, { at: inspectIo.link(eid) }))
