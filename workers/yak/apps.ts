@@ -333,6 +333,15 @@ let rejection = (error: unknown, tags: Record<string, string>) =>
     error instanceof Error ? error.message : String(error),
   )
 
+// Whether the app's own page asked: client.js names the release its page runs,
+// and a page's plain fetch says it came from this origin. Anything else (curl,
+// an agent's HTTP tool, another site) wrote its own line, which may not be the
+// app's at all: a form encoder turns the page's `.followon&?doc` into
+// `.followon=&%3Fdoc=` (T-124645). Its refusal is that caller's to read.
+let fromPage = (req: Request) =>
+  req.headers.has('x-yak-version') ||
+  req.headers.get('sec-fetch-site') == 'same-origin'
+
 // What the page's own code got wrong, as the store refused it: a break in the
 // app, filed here at its door because the page may catch the refusal and the
 // browser reporter deliberately files no 4xx (unseen.ts `refusal`). The page
@@ -346,6 +355,7 @@ let mistaken = async (
   e: unknown,
   entrypoint: string,
 ) => {
+  if (!fromPage(req)) return
   try {
     let raw = req.headers.get('x-yak-version')
     let version = raw != null && /^[0-9]+$/.test(raw) &&

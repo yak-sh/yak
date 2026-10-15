@@ -270,9 +270,17 @@ test('a refusal the door meant is not a break', async () => {
 
     // A page can catch and show a query error. Its 400 is an app bug, even
     // though an access denial at the same door is an expected refusal.
-    let query = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book')
+    let query = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book', {
+      headers: { 'sec-fetch-site': 'same-origin' },
+    })
     assertEquals(query.status, 400)
     assertStringIncludes(await query.text(), 'unknown prop: .book')
+    // The same door asked by a client of its own, with the line re-encoded
+    // as a form the page never wrote: that caller hears the no, and the app
+    // has no break.
+    let outside = await k.at(`${club60}.yaks.app`, '/runs/api/query?.book=')
+    assertEquals(outside.status, 400)
+    assertStringIncludes(await outside.text(), '.book= is written !book')
     await meta(k).apply([{
       entity: { eid: eids[`${club60}/runs`] },
       app: { access: 'private' },
@@ -285,6 +293,7 @@ test('a refusal the door meant is not a break', async () => {
     assert(!told.includes('not_a_writer'), 'the refusal filed nothing')
     assert(!told.includes('unhandled rejection'), 'nor its uncaught throw')
     assert(!told.includes('refused our key'), "the app's own no filed nothing")
+    assert(!told.includes('is written'), "an outside caller's no filed nothing")
     assertMatch(told, /boom is not a function/)
     assertMatch(told, /undefined is not an object/)
     assertStringIncludes(
@@ -377,8 +386,9 @@ test('a break names the version the app is serving', async () => {
         url: `https://${jeff61}.yaks.app/recipes/`,
       }),
     })).body?.cancel()
-    await (await k.at(`${jeff61}.yaks.app`, '/recipes/api/query?.book'))
-      .body?.cancel()
+    await (await k.at(`${jeff61}.yaks.app`, '/recipes/api/query?.book', {
+      headers: { 'sec-fetch-site': 'same-origin' },
+    })).body?.cancel()
 
     let told = await agent.tool('app_errors', app)
     assertMatch(
