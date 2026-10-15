@@ -16,14 +16,18 @@ let historical = {
   via: 'instrument',
 }
 let now = '2026-10-11T12:00:00.000Z'
-let fixture = () => {
+// The graph starts with the actors, and with whatever else a case holds.
+let fixture = (held: Bundle[] = []) => {
   let journal: Bundle[] = []
   let storage = memory()
   storage.tx((tx) =>
-    tx.patch(['then', 'instrument', 'caller'].map((eid) => ({
-      entity: { eid },
-      doc: { title: eid },
-    })))
+    tx.patch([
+      ...['then', 'instrument', 'caller'].map((eid) => ({
+        entity: { eid },
+        doc: { title: eid },
+      })),
+      ...held,
+    ])
   )
   let g = graph({
     vocab: books,
@@ -57,19 +61,20 @@ let fixture = () => {
       return 0
     },
   }
+  let restoring = restorable(command, async (args) => {
+    await restoreInto(
+      g,
+      args.bundles as Bundle[],
+      { by: 'caller' },
+      {
+        check: args.check === true,
+        stamp: args.stamp as boolean | undefined,
+      },
+    )
+    return 0
+  })
   let line = (flags: string[], bundles: Bundle[], remote = false) =>
-    cli([restorable(command, async (args) => {
-      await restoreInto(
-        g,
-        args.bundles as Bundle[],
-        { by: 'caller' },
-        {
-          check: args.check === true,
-          stamp: args.stamp as boolean | undefined,
-        },
-      )
-      return 0
-    })], {
+    cli([restoring], {
       argv: [
         'graph',
         'apply',
@@ -121,11 +126,11 @@ test('a checked restoration rolls its changes back', async () => {
 })
 
 test('an explicit stamp repair preserves the supplied provenance', async () => {
-  let { g, line } = fixture()
-  await g.apply([{
+  let { g, line } = fixture([{
     entity: { eid: 'sale' },
     doc: { title: 'Sale' },
-    $actor: { by: 'caller' },
+    created: { at: now, by: 'caller' },
+    updated: { at: now, by: 'caller' },
   }])
   assertEquals(
     await line(['--restore', '--stamp=false'], [{
@@ -138,7 +143,12 @@ test('an explicit stamp repair preserves the supplied provenance', async () => {
     by: 'then',
     at: historical.at,
   })
+})
+
+test('a stamp choice without restoration is refused', async () => {
+  let { g, line, ordinary } = fixture()
   assertEquals(await line(['--stamp=false'], patch('ordinary')), 2)
+  assertEquals(ordinary(), 0)
   assertEquals(await g.get(['ordinary']), [])
 })
 

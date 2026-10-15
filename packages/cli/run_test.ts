@@ -467,12 +467,16 @@ let t: Tool = {
 }
 let said = (argv: string[]) => argsFor(t, argv, reads)
 
-test('JSON schema arguments provide typed options validation and defaults', async () => {
+test('JSON schema arguments provide typed options and defaults', async () => {
   assertEquals(
     await said(['root', '-n', '3', '-a', '--status=done']),
     { scope: 'root', limit: 3, all: true, status: 'done' },
   )
   assertEquals(await said(['root']), { scope: 'root', limit: 20 })
+  assertEquals((await said(['--', '--literal'])).scope, '--literal')
+})
+
+test('JSON schema arguments refuse what the schema does not allow', async () => {
   await assertRejects(() => said(['root', '--limit=0']), Usage, 'Invalid tool')
   await assertRejects(() => said([]), Usage, 'Invalid tool')
   await assertRejects(
@@ -481,16 +485,18 @@ test('JSON schema arguments provide typed options validation and defaults', asyn
     'Invalid tool',
   )
   await assertRejects(
-    () => said(['root', '--unknown']),
-    Usage,
-    'Unknown option',
-  )
-  await assertRejects(
     () => said(['root', '--limit=1.5']),
     Usage,
     'Invalid tool',
   )
-  assertEquals((await said(['--', '--literal'])).scope, '--literal')
+})
+
+test('an option the schema does not declare is refused', async () => {
+  await assertRejects(
+    () => said(['root', '--unknown']),
+    Usage,
+    'Unknown option',
+  )
 })
 
 test('declaration is JSON Schema validated without component association', () => {

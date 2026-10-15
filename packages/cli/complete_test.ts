@@ -85,37 +85,49 @@ test('a shell hook’s words are the same question as a line', async () => {
   ])
 })
 
-test('offered entity words round-trip through the grammar in both flag forms', async () => {
-  let names = ['Bristleboar', 'Big boar', 'Boar "king"', 'Boar\\den']
-  let beast: Grammar = {
-    name: 'spawn',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        beast: { type: 'string', ref: 'beast' },
-        on: { type: 'boolean' },
-      },
-      required: ['beast'],
+// A name may hold a space, a quote or a backslash: whatever completion offers
+// for it, put back on the line, is read by the grammar as the name itself.
+let names = ['Bristleboar', 'Big boar', 'Boar "king"', 'Boar\\den']
+let beast: Grammar = {
+  name: 'spawn',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      beast: { type: 'string', ref: 'beast' },
+      on: { type: 'boolean' },
     },
-    positional: ['beast'],
+    required: ['beast'],
+  },
+  positional: ['beast'],
+}
+let beasts: Lookup = { ids: () => names }
+
+let roundTrips = async (prefix: string) => {
+  let offers = await complete([beast], prefix, beasts)
+  let last = tokensIn(prefix, true).at(-1)!
+  let read: string[] = []
+  for (let offer of offers) {
+    let words = tokensIn(prefix.slice(0, last.from) + offer).map((w) => w.value)
+    let found = commandFor([beast], words)!
+    read.push(String((await argsFor(found.verb, found.args)).beast))
   }
-  for (
-    let prefix of ['spawn b', 'spawn --beast b', 'spawn --beast=b', 'spawn "b']
-  ) {
-    let offers = await complete([beast], prefix, { ids: () => names })
-    assertEquals(offers.length, names.length)
-    for (let offer of offers) {
-      let last = tokensIn(prefix, true).at(-1)!
-      let line = prefix.slice(0, last.from) + offer
-      let words = tokensIn(line).map((w) => w.value)
-      let found = commandFor([beast], words)!
-      let result = await argsFor(found.verb, found.args)
-      assertEquals(names.includes(String(result.beast)), true)
-    }
-  }
+  assertEquals(read.sort(), [...names].sort())
+}
+
+test('offered entity words round-trip through the grammar as a positional', async () => {
+  await roundTrips('spawn b')
+  await roundTrips('spawn "b')
+})
+
+test('offered entity words round-trip through the grammar in both flag forms', async () => {
+  await roundTrips('spawn --beast b')
+  await roundTrips('spawn --beast=b')
+})
+
+test('a shell hook is offered entity words as they are', async () => {
   assertEquals(
-    await complete([beast], ['spawn', '--beast', 'B'], { ids: () => names }),
-    names.sort(),
+    await complete([beast], ['spawn', '--beast', 'B'], beasts),
+    [...names].sort(),
   )
 })
 
