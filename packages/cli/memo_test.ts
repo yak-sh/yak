@@ -8,18 +8,21 @@ import {
   sourceImports,
 } from './memo.ts'
 
-let sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
+// The digest, kept for each text it has read: the cases hash the same few
+// files and memos again and again.
+let hashes = new Map<string, string>()
+let sha256 = (text: string) => {
+  let hash = hashes.get(text)
+  if (hash === undefined) {
+    hash = createHash('sha256').update(text).digest('hex')
+    hashes.set(text, hash)
+  }
+  return hash
+}
 
 // A file's time, read off its contents: the same contents, the same time.
-let stamps = new Map<string, number>()
-let stamped = (text: string) => {
-  let at = stamps.get(text)
-  if (at === undefined) {
-    at = Date.parse('2026-01-01') + parseInt(sha256(text).slice(0, 6), 16)
-    stamps.set(text, at)
-  }
-  return at
-}
+let EPOCH = Date.parse('2026-01-01')
+let stamped = (text: string) => EPOCH + parseInt(sha256(text).slice(0, 6), 16)
 
 let start = (
   source = 'import type from "./words.json" with {type:"json"}',

@@ -55,6 +55,23 @@ export const toolCheck = (schema: Record<string, unknown>): Check => {
 export const errorsText = (errors: OutputUnit[]): string =>
   errors.map((e) => `${e.instanceLocation || '#'} ${e.error}`).join('; ')
 
+// What `structuredClone` makes of a value, made here for the plain objects and
+// arrays arguments are: the platform's clone costs more than every other step
+// of a check together. Anything else is still the platform's to copy, or to
+// refuse.
+const copied = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(copied)
+  if (value === null) return value
+  if (!['object', 'function', 'symbol'].includes(typeof value)) return value
+  const proto = Object.getPrototypeOf(value)
+  if (proto !== Object.prototype && proto !== null) {
+    return structuredClone(value)
+  }
+  return Object.fromEntries(
+    Object.entries(value as object).map(([key, v]) => [key, copied(v)]),
+  )
+}
+
 // An argument left out takes the `default` its schema declares, the way a
 // command line's `--limit` does, down through nested object properties.
 const filled = (schema: unknown, value: unknown): void => {
@@ -65,7 +82,7 @@ const filled = (schema: unknown, value: unknown): void => {
   for (const [key, prop] of Object.entries(props ?? {})) {
     if (!prop || typeof prop != 'object') continue
     if (into[key] === undefined && 'default' in prop) {
-      into[key] = structuredClone((prop as { default: unknown }).default)
+      into[key] = copied((prop as { default: unknown }).default)
     }
     filled(prop, into[key])
   }
@@ -81,7 +98,7 @@ export const validateToolInput = (
     throw new Error('Tool cannot declare both input and inputSchema')
   }
   const check = toolCheck(tool.inputSchema)
-  const value = structuredClone(args)
+  const value = copied(args) as Record<string, unknown>
   filled(tool.inputSchema, value)
   const errors = check(value)
   if (errors.length) {

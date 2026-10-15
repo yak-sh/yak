@@ -350,10 +350,12 @@ export let remember = async <T>(
   let locks = new Map<string, { [specifier: string]: string }>()
   let scanned = new Set<string>()
   // Its stat before its contents: a write after the read moves the stat kept.
+  // A file the stat found absent is absent, and is not asked again.
   let watch = (path: string) => {
     if (!sources.has(path)) {
-      stats.set(path, stat(path))
-      sources.set(path, read(path))
+      let at = stat(path)
+      stats.set(path, at)
+      sources.set(path, at == 'absent' ? null : read(path))
     }
     return sources.get(path)!
   }
