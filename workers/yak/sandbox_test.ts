@@ -128,11 +128,12 @@ let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
 test('the machine tools write, run and read, and a ship copies out', async () => {
   // The build leaves a .js and a .wasm in pkg/, which the globs find, and a
   // site in dist/, a page per route and its assets, which the listing walks.
+  let dist = ['about/index.html', '_astro/app.js']
   let { ctx, box, env, space } = await bench((cmd) =>
     cmd.startsWith('find ')
       ? {
         stdout: cmd.includes('./dist')
-          ? '0\t./dist\tabout/index.html\n0\t./dist\t_astro/app.js\n'
+          ? dist.map((f) => `0\t./dist\t${f}\n`).join('')
           : '0\t./pkg/chess.js\t\n1\t./pkg/chess_bg.wasm\t\n',
       }
       : { stdout: 'Finished `release` profile', stderr: 'warning: unused' }
@@ -198,6 +199,21 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
     apps.fetch(new Request(`https://ada.yaks.app/chess/site/${path}`), env)
   assertStringIncludes(await (await site('about/')).text(), '<h1>About</h1>')
   assertEquals(await (await site('_astro/app.js')).text(), 'boot()')
+
+  // A new build shipped to replace the folder leaves none of the last one.
+  dist = ['about/index.html', '_astro/app2.js']
+  box.files.set('/workspace/dist/_astro/app2.js', 'boot2()')
+  let again = await tool('sandbox_ship').run(ctx, {
+    app: 'chess',
+    paths: ['dist'],
+    into: 'site',
+    replace: true,
+  })
+  assertStringIncludes(again.text, 'deleted 1 the build no longer makes')
+  let listed = await tool('app_files').run(ctx, { app: 'chess', op: 'list' })
+  assertStringIncludes(listed.text, 'site/_astro/app2.js')
+  assert(!listed.text.includes('site/_astro/app.js '), listed.text)
+  assertStringIncludes(listed.text, 'chess.js')
 
   // Every one of those touched the same container, under the space's own id.
   assertEquals([...box.alive], [named(space, ADA)])

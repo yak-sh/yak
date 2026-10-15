@@ -1952,6 +1952,51 @@ export let wrote = async (
 }
 
 /**
+ * Delete each file under `folder` that `kept` does not name, into its own
+ * history as app_files' delete does (versions.ts `replaced`): a build shipped
+ * over the last one leaves none of the last one's files behind. Answers the
+ * paths it deleted.
+ */
+let swept = (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  folder: string,
+  kept: string[],
+) => {
+  let keep = new Set(kept)
+  return modifying(
+    r2Objects(env.BLOBS),
+    directory(bound(env.DIRECTORY, dirPart.fetch, env)),
+    space,
+    app,
+    who,
+    (app) => prefixOf(space, app),
+    async (draft, app, _attempt, editFiles) => {
+      let prefix = fileKey(space, { ...app, source: draft }, '')
+      let archive = `${space.slug}/${app.slug}/`
+      let under = await editFiles.list(`${prefix}${folder}/`)
+      let gone = own(under.map((k) => k.slice(prefix.length)))
+        .filter((path) => !keep.has(path))
+      let at = new Date()
+      await Promise.all(gone.map((path) =>
+        replaced(
+          editFiles,
+          prefix,
+          path,
+          who.person ?? '',
+          at,
+          archive,
+          () => editFiles.delete(prefix + path),
+        )
+      ))
+      return gone
+    },
+  )
+}
+
+/**
  * What a write says about the bytes it stored: how many there are, their
  * sha256, for a `.json` file whether they parse, and for an icon.svg what it
  * becomes.
@@ -3253,6 +3298,13 @@ let OURS: Row[] = [
           'a folder of the app to copy into, e.g. dist; left out, the ' +
             'files land at the app root',
         ),
+        replace: {
+          type: 'boolean',
+          description: 'with into: the folder then holds exactly what this ' +
+            'ships, and each file in it the build no longer makes is ' +
+            "deleted (kept in its history), so an earlier build's hashed " +
+            'files do not pile up',
+        },
       },
       required: ['app', 'paths'],
     },
@@ -3263,6 +3315,13 @@ let OURS: Row[] = [
         throw refuse('arguments', 'paths: at least one file to copy in')
       }
       let into = args.into == null ? '' : appFolder(text(args.into, 'into'))
+      let replace = args.replace === true
+      if (replace && !into) {
+        throw refuse(
+          'arguments',
+          'replace: needs into, the folder of the app the build replaces',
+        )
+      }
       let files = await bench(ctx, space, async ({ provider, ref }) => {
         // One listing expands every glob and walks every folder at once, so
         // a whole build costs one command rather than one per path.
@@ -3286,11 +3345,18 @@ let OURS: Row[] = [
         return files
       })
       let paths = await wrote(ctx.env, space, app, who, files)
+      let gone = replace
+        ? await swept(ctx.env, space, app, who, into, paths)
+        : []
       return {
         text: `shipped ${paths.length} ${
           paths.length == 1 ? 'file' : 'files'
-        } → ${url(space, app, ctx.env)}: ${
-          capped(paths.join(', '))
+        } → ${url(space, app, ctx.env)}: ${capped(paths.join(', '))}${
+          gone.length
+            ? `; deleted ${gone.length} the build no longer makes: ${
+              capped(gone.join(', '))
+            }`
+            : ''
         }; staged for app_deploy`,
         space,
       }
