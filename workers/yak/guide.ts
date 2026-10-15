@@ -74,7 +74,7 @@ packages in a package.json beside index.html, and app_deploy compiles them.
 A site any tool builds (Vite, Astro, Eleventy, SvelteKit) serves as built: build
 it in the sandbox, ship the output into a folder, and name that folder in a
 wrangler.jsonc, {"assets": {"directory": "dist"}}
-(https://yaks.app/docs/code.md). Four steps:
+(${url(env, '/docs/code.md')}). Four steps:
 
 1. app_new — the app. Leave the space argument out: signing in gave them
    one, and every tool uses it unless they have several.
