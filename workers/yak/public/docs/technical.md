@@ -77,10 +77,16 @@ memory: an app whose six page scripts bundle three.js, Preact and the platform
 toolkit, the largest to 1.5 MB, peaks near 300 MB. A compile that runs out of it
 is refused, and `app_deploy` says so.
 
+<!-- files.ts `resolve` and `rootOf`; apps.ts `asset` weaves the base. -->
+
 Files are served from R2 through Cloudflare's cache. A cached file can be
-returned from the edge without reading R2. Paths without a file extension
-receive `index.html`, which supports client-side routing and direct loads of
-nested URLs.
+returned from the edge without reading R2. Every HTML file is a page at the
+address a static host gives it: `about.html` at `/about`, `docs/index.html` at
+`/docs/`. A page that is not there is the app's `404.html`, answered 404, and
+without one a path without a file extension receives `index.html`, which
+supports client-side routing and direct loads of nested URLs. A `wrangler.jsonc`
+naming `assets.directory` serves one folder of the app, so a build can sit
+beside its source.
 
 <!-- versions.ts KEEP = 20 -->
 

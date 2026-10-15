@@ -223,8 +223,8 @@ Read it before you build something somebody may already have made.
   published name, adding `-2`, `-3`, and so on until free. The source's slug
   goes first on purpose — an app is written at its own address, and a copy that
   reads like the app is easier to reason about. (A page written relatively works
-  either way; the platform gives every page a `<base href>` pointing at the
-  app's own address.)
+  either way; the platform gives every page a `<base href>` pointing at its own
+  folder under the app's address.)
 - An explicit `as` already taken in the space — by an app, or by an address an
   app has moved away from and still redirects from — is refused. The default
   skips those addresses.

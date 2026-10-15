@@ -4,11 +4,13 @@ The platform is yaks.app, written the way its address is: lowercase, with the
 `.app`. An app built on yaks.app is a yaks app.
 
 A yaks app is an `index.html` and whatever files sit beside it, served live at
-`<space>.yaks.app/<app>/`. There is no build step and no framework: what you
-write is what the browser gets, except TypeScript and npm imports, which
-`app_deploy` compiles. Every app comes with its own store, a graph of entities,
-and a small client for reading and writing it from the page. Apps in the same
-space can work with one entity across those stores.
+`<space>.yaks.app/<app>/`. No build step is needed: what you write is what the
+browser gets, except TypeScript and npm imports, which `app_deploy` compiles.
+Every other HTML file is a page at its own address, and a site any tool builds
+serves as built from a folder of the app
+([code](https://yaks.app/docs/code.md)). Every app comes with its own store, a
+graph of entities, and a small client for reading and writing it from the page.
+Apps in the same space can work with one entity across those stores.
 
 Make one with `app_new`, write files with `app_files` (the whole set in one
 call, as `files: [{path, content}, ...]`), then `app_deploy`, and give the

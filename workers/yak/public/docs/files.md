@@ -89,6 +89,34 @@ still revalidate; they show the current release. A page with its own `<base>`
 keeps its chosen URL behavior. App access is checked whenever a request reaches
 the server, including a request for an older release.
 
+## Pages and their addresses
+
+Every HTML file is a page, at the address a static host gives it:
+
+    index.html          /<app>/
+    about.html          /<app>/about, and /<app>/about.html
+    docs/index.html     /<app>/docs/ (and /<app>/docs is sent there)
+    404.html            any page that is not there, answered 404
+
+A path with no file behind it and no extension, `/<app>/recipes/42`, is a route:
+without a `404.html` the app's `index.html` answers it, so a page that draws
+itself at a place opens there. A missing stylesheet, script or picture is a 404,
+never a page.
+
+Each page resolves its relative URLs from its own folder, as anywhere on the
+web: `docs/index.html` names `../style.css`, and reaches the client at
+`../api/client.js`.
+
+**Serving a folder.** A `wrangler.jsonc` beside `index.html` can name a folder
+of the app for its addresses to serve, in Cloudflare's own words:
+
+    { "assets": { "directory": "dist" } }
+
+Then `dist/index.html` is `/<app>/`, and nothing outside `dist/` is on the web.
+That is how a build sits beside the source that made it, and the code page shows
+one from the sandbox to the address: <https://yaks.app/docs/code.md>.
+`app_deploy` refuses a folder with no files in it.
+
 ## Releases and open pages
 
 `app_deploy` makes the draft a new release. An already-open page keeps its

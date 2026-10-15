@@ -80,8 +80,9 @@ export let NO_ARGS = { type: 'object' as const, properties: {} }
 // and where it lives. Every caller of `about` is told this, signed in or not.
 export let what = (env: Host = {}) =>
   `yaks.app is a place to make small web apps by asking for one. A yaks app
-is an index.html and whatever files sit beside it — no build step, no
-framework, no install — served live at its own address,
+is an index.html and whatever files sit beside it — no build step needed,
+though a site any tool builds serves as built too — served live at its own
+address,
 ${
     spaceHost(env, 'yourname')
   }/<app>/. It opens on a phone, it keeps its data in a store

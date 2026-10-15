@@ -698,12 +698,16 @@ lands where its pages look for it:
 A file, or what a glob matched, lands under its own name below the folder its
 matches share, so `pkg/*.wasm` lands beside `index.html` and `dist/*` lands as
 `dist` does. `into: 'dist'` puts the lot under that folder of the app instead of
-its root. Two different files landing on one path are refused.
+its root. Two different files landing on one path are refused. `replace: true`,
+with `into`, makes that folder hold exactly what this ships: each file an
+earlier build left there is deleted, into its history like any delete.
 
 **Its network reaches the package registries and nothing else**: crates.io,
 PyPI, npm, the Go module proxy, Ubuntu's archive, and yaks.app itself. Any other
 address is refused, so a build fetches what it needs from a registry, not from a
-URL.
+URL. A scaffolder that downloads its template from GitHub (`npm create astro`)
+cannot; one that carries its templates in its package (`npm create vite`,
+`npx sv create`) can, and otherwise write the template's few files yourself.
 
 **One sandbox at a time.** Your sandbox is private to you in each space, and one
 person holds one awake at a time on the free plan, two on the Plus plan. A
@@ -741,6 +745,48 @@ soon after the sandbox would have slept. It is never more than you are: it
 carries no permission of its own, only your membership, and only in this space.
 Nothing else about it needs handling — do not print it, and do not write it into
 a file the app serves.
+
+## A site a tool builds
+
+A site made with Vite, Astro, Eleventy, SvelteKit or any other tool that writes
+a folder of files builds in the sandbox and serves as built:
+
+1. Write the project into the sandbox, then install and build in one
+   `sandbox_shell` command. Its files last until the sandbox sleeps, five
+   minutes after its last command, so build and ship in one sitting.
+2. Ship the output into a folder of the app, in place of the last build, and the
+   source beside it, so the next build starts from what this one did:
+
+       sandbox_ship(app, paths: ['site/dist'], into: 'dist', replace: true)
+       sandbox_ship(app, paths: ['site/src'], into: 'src')
+       sandbox_ship(app, paths: ['site/package.json', 'site/package-lock.json'])
+
+3. Name the folder the app serves in `wrangler.jsonc`:
+   `{"assets": {"directory": "dist"}}`, so `dist/index.html` is the app's front
+   page and the source is not on the web
+   ([files](https://yaks.app/docs/files.md)).
+4. `app_deploy`. Only the pages inside that folder are read for scripts to
+   compile, and a bundler's output needs none.
+
+The app lives at `/<app>/`, not at the root of its host, so build for that:
+
+- **Vite**: `vite build --base=./` makes every URL relative, so the build works
+  at any address the app is served or installed at.
+- **SvelteKit**: `@sveltejs/adapter-static`, whose URLs are relative already. A
+  route is a page like `about.html`, served at `/<app>/about`.
+- **Eleventy**: links relative to each page (`../style.css`), or `pathPrefix`
+  set to `/<app>/`.
+- **Astro**: `base: '/<app>'` in `astro.config.mjs`. Its URLs are absolute, so a
+  copy installed at another address, or the app made a space's front page, needs
+  a build of its own.
+
+A bundler cannot see `./api/client.js`, which the platform serves beside the app
+rather than the project holding it, so a bundled script loads it when it runs,
+from the page's address:
+
+    let { apply, query } = await import(
+      /* @vite-ignore */ new URL('api/client.js', document.baseURI).href
+    )
 
 ---
 

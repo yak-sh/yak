@@ -104,11 +104,14 @@ app_files:
     base64 in place of content writes one that is not text (an image, the
     .wasm a worker.js imports). Edits stay private until app_deploy releases
     them with the app's vocabulary and worker; released files serve at
-    <space>.yaks.app/<app>/<path>, index.html for the directory. An app's
-    data lives in its own store, never localStorage: a page uses
+    <space>.yaks.app/<app>/<path>, index.html for the directory, another
+    page at its own name (about.html at /about), and a 404.html for a page
+    that is not there. An app's data lives in its own store, never
+    localStorage: a page uses
     `import { apply, query, search } from './api/client.js'`. Each page gets
-    a `<base>` at the app's own address, so relative URLs still work in a
-    copy installed elsewhere. A write returns its byte count and SHA-256,
+    a `<base>` at its own folder under the app's address, so relative URLs
+    still work in a copy installed elsewhere; a page in a folder reaches the
+    client at ../api/client.js. A write returns its byte count and SHA-256,
     and for a .json file whether it parses and where it does not; a picture
     that does not decode is refused. The app's home-screen icon is an
     icon.svg written as content (a square viewBox, no <text>), which the
@@ -135,7 +138,8 @@ sandbox_shell:
   title: Run a build command
   description: >-
     Run one command in this space's build sandbox, a Linux container for
-    what a browser cannot do alone: compile to WebAssembly, run a generator,
+    what a browser cannot do alone: compile to WebAssembly, build a site
+    with any tool (Vite, Astro, Eleventy, SvelteKit), run a generator,
     minify an asset. html, css and js need none of it. Installed: Rust
     1.98.1 with wasm32-unknown-unknown, wasm-bindgen 0.2.128 and wasm-opt
     132; Python 3.13.15 with pip; Go 1.27.1; Zig 0.16.0, also the C and C++
@@ -210,7 +214,9 @@ sandbox_ship:
     or glob match lands under its own name, below the deepest folder its
     matches share: pkg/*.wasm lands beside index.html, and dist/* lands as
     dist does. into names a folder of the app to land them under instead of
-    its root. Two different files landing on one path are refused. The app
+    its root, and replace: true makes that folder hold exactly this build,
+    deleting each file an earlier build left there (kept in its history).
+    Two different files landing on one path are refused. The app
     keeps the artifact independently of the temporary sandbox. This call
     does not itself destroy the sandbox. Binary files are copied as bytes,
     so a .wasm arrives intact. Waking the sandbox is metered by the second,

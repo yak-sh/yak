@@ -25,12 +25,14 @@ Write that import as a relative path, and never write the app's own name into
 any of the app's files. The code is _copied_ when somebody installs your app, so
 a page carrying `/chores/api/client.js` is a 404 the moment the copy lands at
 `/chore-chart/` — and it renders as bare HTML with nothing to explain why. The
-platform gives every HTML page it serves a `<base href>` at the app's own
-address (inside `<head>` if there is one, else after the doctype; a page with a
-`<base>` of its own keeps it), which is what makes `./api/client.js` and
-`./style.css` resolve from any depth the page is opened at — a pretty path like
-`/recipes/42` included, where a relative URL would otherwise resolve against
-`/recipes/42/`.
+platform gives every HTML page it serves a `<base href>` at its own folder under
+the app's address (inside `<head>` if there is one, else after the doctype; a
+page with a `<base>` of its own keeps it), so a relative URL means what it means
+anywhere on the web, wherever the app is served. `index.html`'s folder is the
+app's, which is what makes `./api/client.js` and `./style.css` resolve from a
+pretty path like `/recipes/42` too, where the app's `index.html` answers and a
+relative URL would otherwise resolve against `/recipes/42/`. A page in a folder,
+`admin/index.html`, reaches the same client at `../api/client.js`.
 
 `store(base)` is the same six functions at an address you name. Every app in a
 space shares one hostname, so a sibling app is a path — with or without its
