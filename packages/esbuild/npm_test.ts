@@ -75,3 +75,50 @@ test('what cannot be installed is said, package by package', async () => {
     'no version of game satisfies ^3',
   ])
 })
+
+let { get: reuseGet } = registry({
+  reuse: {
+    '1.0.0': {
+      'package.json': manifest(),
+      'a.js': 'first',
+      'b.js': 'second',
+    },
+    '2.0.0': { 'package.json': manifest(), 'a.js': 'new' },
+  },
+})
+let reusePacked = await Promise.all(['1.0.0', '2.0.0'].map(async (v) => {
+  let tgz = new Uint8Array(
+    await (await reuseGet(`https://registry.test/reuse/-/${v}.tgz`))
+      .arrayBuffer(),
+  )
+  return {
+    tgz,
+    from: { url: `https://registry.test/reuse/-/${v}.tgz`, sha256: v },
+  }
+}))
+let reuseHold = (fs: Files, i: number) =>
+  fs.hold('reuse', reusePacked[i].tgz, reusePacked[i].from)
+
+test('tarball reuse preserves each compile’s writes, deletions and package replacement', () => {
+  let first = new Files()
+  reuseHold(first, 0)
+  assertEquals(first.read('node_modules/reuse/a.js'), 'first')
+  first.write('node_modules/reuse/a.js', 'local')
+  first.delete('node_modules/reuse/b.js')
+  let next = new Files()
+  reuseHold(next, 0)
+  assertEquals(next.read('node_modules/reuse/a.js'), 'first')
+  assertEquals(next.read('node_modules/reuse/b.js'), 'second')
+  assertEquals(first.read('node_modules/reuse/a.js'), 'local')
+  assertEquals(first.read('node_modules/reuse/b.js'), null)
+  next.write('node_modules/reuse/a.js', 'other local')
+  assertEquals(first.read('node_modules/reuse/a.js'), 'local')
+  let newer = new Files()
+  reuseHold(newer, 1)
+  assertEquals(newer.read('node_modules/reuse/a.js'), 'new')
+  assertEquals(newer.read('node_modules/reuse/b.js'), null)
+  reuseHold(next, 1)
+  assertEquals(next.read('node_modules/reuse/a.js'), 'new')
+  assertEquals(next.read('node_modules/reuse/b.js'), null)
+  assertEquals(first.read('node_modules/reuse/a.js'), 'local')
+})

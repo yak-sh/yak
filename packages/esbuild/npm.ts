@@ -52,6 +52,41 @@ type Packed = {
   from?: Tarball
   root: string
   holds: Set<string>
+  decoded: Map<string, string>
+  key?: string
+}
+
+// Only registry tarball content is shared across compiles. A Files keeps its
+// own path overrides and a copy of the index, so writes/deletes never change
+// another compile. Retain compressed bytes and only text actually read.
+let held = new Map<string, Packed>()
+let bytes = 0
+let LIMIT = 16 << 20
+let size = (pack: Packed) =>
+  pack.tgz.byteLength +
+  [...pack.holds].reduce((n, path) => n + path.length * 2, 0) +
+  [...pack.decoded].reduce(
+    (n, [path, text]) => n + (path.length + text.length) * 2,
+    0,
+  )
+let sizes = new Map<string, number>()
+let keep = (pack: Packed) => {
+  let key = pack.key
+  if (!key) return
+  bytes -= sizes.get(key) ?? 0
+  held.delete(key)
+  sizes.delete(key)
+  let n = size(pack)
+  if (n > LIMIT) return
+  while (bytes + n > LIMIT) {
+    let oldest = held.keys().next().value!
+    bytes -= sizes.get(oldest)!
+    held.delete(oldest)
+    sizes.delete(oldest)
+  }
+  held.set(key, pack)
+  sizes.set(key, n)
+  bytes += n
 }
 
 let PACKAGE = /^node_modules\/(?:@[^/]+\/)?[^/]+\//
@@ -70,12 +105,20 @@ export class Files {
   }
 
   read(path: string): string | null {
-    let held = this.#files.get(path)
-    if (held != null) return held
+    let own = this.#files.get(path)
+    if (own != null) return own
     let dir = PACKAGE.exec(path)?.[0] ?? ''
     let pack = this.#packages.get(dir)
     let rest = path.slice(dir.length)
     if (!pack?.holds.has(rest)) return null
+    let decoded = pack.decoded.get(rest)
+    if (decoded != null) {
+      this.#files.set(path, decoded)
+      // Touch the immutable cached index, not the local deletion copy.
+      let cached = pack.key ? held.get(pack.key) : undefined
+      if (cached) keep(cached)
+      return decoded
+    }
     let out: string | null = null
     walk(
       pack.tgz,
@@ -85,7 +128,12 @@ export class Files {
         return true
       },
     )
-    if (out != null) this.#files.set(path, out)
+    if (out != null) {
+      this.#files.set(path, out)
+      pack.decoded.set(rest, out)
+      let cached = pack.key ? held.get(pack.key) : undefined
+      if (cached) keep(cached)
+    }
     return out
   }
 
@@ -120,6 +168,19 @@ export class Files {
   /** Install a package from its gzipped tarball, as `node_modules/<name>/`,
    * reading only its package.json now, and `from` where it came from. */
   hold(name: string, tgz: Uint8Array, from?: Tarball) {
+    let dir = `node_modules/${name}/`
+    // A replacement also replaces any text already read from that package.
+    for (let path of this.#files.keys()) {
+      if (path.startsWith(dir)) this.#files.delete(path)
+    }
+    let cached = from ? held.get(from.sha256) : undefined
+    if (cached) {
+      keep(cached)
+      this.#packages.set(dir, { ...cached, from, holds: new Set(cached.holds) })
+      let manifest = cached.decoded.get('package.json')
+      if (manifest != null) this.#files.set(dir + 'package.json', manifest)
+      return
+    }
     let files: string[] = []
     let holds: string[] = []
     let manifests: Record<string, string> = {}
@@ -130,15 +191,22 @@ export class Files {
       return !!size && /^(?:[^/]+\/)?package\.json$/.test(path)
     }, (path, bytes) => void (manifests[path] = decode(bytes)))
     let root = rooted(files)
-    let dir = `node_modules/${name}/`
     let manifest = manifests[root + 'package.json']
     if (manifest != null) this.#files.set(dir + 'package.json', manifest)
-    this.#packages.set(dir, {
+    let pack: Packed = {
       tgz,
       from,
       root,
       holds: new Set(holds.map((path) => path.slice(root.length))),
-    })
+      decoded: new Map(
+        Object.entries(manifests).map((
+          [path, text],
+        ) => [path.slice(root.length), text]),
+      ),
+      key: from?.sha256,
+    }
+    keep(pack)
+    this.#packages.set(dir, { ...pack, holds: new Set(pack.holds) })
   }
 }
 
