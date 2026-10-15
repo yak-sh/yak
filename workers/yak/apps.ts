@@ -40,6 +40,7 @@ import * as files from './files.ts'
 import { inside, keyed, prefixOf, VERSION } from './files.ts'
 import { blobPrefix, naming } from './blob-key.ts'
 import {
+  type Access,
   type App,
   appStore,
   daysLeft,
@@ -740,6 +741,24 @@ export let unwritten = async (
     },
   })
 }
+
+/**
+ * Who may open an app's page. Its members, and anyone at all where the app is
+ * public; the app's own worker coming back through its grant (`itself`) on any
+ * app. A stranger to a private app is sent to sign in and handed back to the
+ * page; someone signed in who is nobody there gets the same nothing-here a
+ * wrong address gets, whether the app exists being its owner's to tell.
+ */
+export let pageDoor = (
+  access: Access,
+  who: Pick<Who, 'person' | 'role'>,
+  itself: boolean,
+): 'page' | 'sign-in' | 'nothing' =>
+  itself || reads(mode(access), who.role)
+    ? 'page'
+    : who.person
+    ? 'nothing'
+    : 'sign-in'
 
 // A folder asked for without its slash, sent to it: the location is relative,
 // so it holds at any mount, and the query goes with it.
@@ -2955,7 +2974,8 @@ let served = async (
   // that code may do as the app is `env.APP` and nothing else; its `env.STORE`
   // is still the visitor, so a worker that only passes a store read on refuses
   // exactly what the page would have.
-  let mayRead = !!itself || reads(mode(app.access), who.role)
+  let door = pageDoor(app.access, who, !!itself)
+  let mayRead = door == 'page'
   // Both at once, because they are two halves of one answer and neither
   // needs the other's result (T-33176). The app's own worker answers first
   // where it has one and the file is what it falls back to, so asking the
@@ -2986,8 +3006,8 @@ let served = async (
     : await c.time('worker', () => ran(env, space!, app!, req, who))
   // The worker passed, and the files are not this visitor's to see.
   if (!own && !file) {
-    if (!who.person) return redirect(signInAt(req.url, env), 303)
-    return await shut(dir, space, app, who.person, env)
+    if (door == 'sign-in') return redirect(signInAt(req.url, env), 303)
+    return await shut(dir, space, app, who.person!, env)
   }
   // File pages already pass through woven(). Worker pages use the same
   // reporter, without buffering or changing their navigation and asset URLs.

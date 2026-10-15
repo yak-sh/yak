@@ -35,10 +35,12 @@ import { test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
 import {
+  type Access,
   type App,
   appOf,
   appStore,
   directory,
+  type Role,
   type Row,
   type Space,
   spaceOf,
@@ -2175,4 +2177,18 @@ test('a public app is cached for everyone, an open or private one for its reader
   assertEquals(rule('public'), 'public, no-cache')
   assertStringIncludes(rule('open'), 'private')
   assertStringIncludes(rule('private'), 'private')
+})
+
+test('a private app opens its page to its members, and sends a stranger to sign in', () => {
+  let door = (access: Access, person: string | null, role: Role | null) =>
+    apps.pageDoor(access, { person, role }, false)
+  assertEquals(door('private', 'p', 'viewer'), 'page')
+  assertEquals(door('private', null, null), 'sign-in')
+  assertEquals(door('private', 'p', null), 'nothing')
+  assertEquals(door('public', null, null), 'page')
+  // The app's own worker, coming back through its grant, is let in.
+  assertEquals(
+    apps.pageDoor('private', { person: null, role: null }, true),
+    'page',
+  )
 })
