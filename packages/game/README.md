@@ -111,7 +111,30 @@ those values; the package holds no graph. `busy()` gives keys and gamepads to
 another control while typing. Screen buttons use `press(action)`. Call
 `dispose()` to remove listeners, release pointer lock, cancel gestures and
 unmount the stick. `cursor(x, y, locked)` belongs to the consumer's screen
-projection. There is no world picking in the package.
+projection. Accepted primary mouse, touch and pen taps return that press
+position as `pick`; the app projects it onto its world. There is no world
+picking in the package.
+
+`touchStick` defaults to `true`: touches in the left 45% of the stage move the
+touch stick, while touches elsewhere tap or drag to look. A point-and-build game
+passes `touchStick: false` so taps and look drags work across the whole stage.
+For example, the browser attachment for a game that has no movement stick is:
+
+```ts ignore
+// `stage`, `glass`, and `state` are the page's elements and controlled bundle doors.
+import { listen } from '@yaks/game/controls'
+
+let hands = listen(stage, glass, () => false, {
+  ...state,
+  axes: {},
+  turns: {},
+  keys: {},
+  tap: { 0: 'select' },
+  touchStick: false,
+  cursor: (x, y) => [x, y],
+})
+// Read hands.read().pick to project a tap, and dispose when the page unmounts.
+```
 
 The root and `/rules` never import the browser controls or HUD. A worker can
 continue to use the rules with no DOM, Preact or UI dependency.

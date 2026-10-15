@@ -28,6 +28,7 @@ let movement = (
 let probeTest = (
   name: string,
   run: Parameters<typeof controlsProbe<ReturnType<typeof listen>>>[1],
+  options: { touchStick?: boolean } = {},
 ) =>
   test(
     name,
@@ -36,6 +37,7 @@ let probeTest = (
         listen(stage, glass, busy, {
           ...state,
           ...bindings,
+          ...options,
           keys: { KeyF: 'activate', Space: 'hop' },
           tap: { 0: 'activate', 2: 'evade' },
           cursor: (x, y, locked) => locked ? [0, 0] : [x / 800, y / 600],
@@ -282,6 +284,49 @@ mouseTest(
     equal(p.locked(), true)
     equal(p.requests(), 1)
   },
+)
+
+probeTest(
+  'touch taps can pick left-hand sites with the movement stick disabled',
+  (p) => {
+    p.send('pointerdown', { pointerType: 'touch', clientX: 100, clientY: 150 })
+    equal(p.row().Controls?.stick, null)
+    p.send('pointerup', {
+      pointerType: 'touch',
+      clientX: 101,
+      clientY: 150,
+      buttons: 0,
+    })
+    let intent = p.hands.read()
+    equal(intent.actions, ['activate'])
+    equal(intent.pick, [0.125, 0.25])
+    equal(intent.move, [0, 0])
+    equal(p.hands.read().pick, undefined)
+  },
+  { touchStick: false },
+)
+
+probeTest(
+  'left-hand touch drags still look without movement or a tap when the stick is disabled',
+  (p) => {
+    p.send('pointerdown', { pointerType: 'touch', clientX: 100, clientY: 150 })
+    p.send('pointermove', { pointerType: 'touch', clientX: 120, clientY: 160 })
+    let intent = p.hands.read()
+    equal(intent.move, [0, 0])
+    equal(intent.look, true)
+    assertAlmostEquals(intent.orbit[0], -0.18)
+    assertAlmostEquals(intent.orbit[1], 0.09)
+    p.send('pointerup', {
+      pointerType: 'touch',
+      clientX: 120,
+      clientY: 160,
+      buttons: 0,
+    })
+    let released = p.hands.read()
+    equal(released.actions, [])
+    equal(released.pick, undefined)
+  },
+  { touchStick: false },
 )
 
 // A touch probe: `touch(type, id, x, y)` sends one finger's pointer event.

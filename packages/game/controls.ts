@@ -224,6 +224,8 @@ export let listen = (
   options: MotionBindings & {
     keys: Record<string, string>
     tap?: Record<number, string>
+    /** Reserve left-hand touches for movement; false leaves the whole stage for taps and look drags. */
+    touchStick?: boolean
     gamepad?: GamepadBindings
     poll?: () => (Pad | null)[]
     cursor: (x: number, y: number, locked: boolean) => [number, number]
@@ -421,7 +423,10 @@ export let listen = (
         })
       }
     }
-    if (e.pointerType == 'touch' && !s.stick && e.clientX < innerWidth * 0.45) {
+    if (
+      options.touchStick !== false && e.pointerType == 'touch' && !s.stick &&
+      e.clientX < innerWidth * 0.45
+    ) {
       s.stick = { id: e.pointerId, x: e.clientX, y: e.clientY, dx: 0, dy: 0 }
       return
     }
@@ -503,10 +508,11 @@ export let listen = (
       if (!mouse.active()) unlock()
       return
     }
-    // Touch and pen use their s.pointer release; a tap on the right of a phone
-    // is a blow too, where the thumb already is.
+    // Touch and pen keep the press pick like a mouse. Movement and look drags
+    // never become taps, whichever side of the stage they started on.
     if (d && d.far < 8 && e.type == 'pointerup') {
       pressButton(d.button)
+      if (d.button == 0) s.click = s.press_at
     }
   }
   on(stage, 'pointerup', up)
