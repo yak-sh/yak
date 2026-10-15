@@ -9,6 +9,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
 import catalog from './public/_compiler/packages.json' with { type: 'json' }
 import * as apps from './apps.ts'
+import { writeResources } from './esbuild.ts'
 import type { Env } from './env.ts'
 import { ADA, platform, seeded, visit } from './serving-probe.ts'
 import { call, type Ctx } from './tools.ts'
@@ -567,19 +568,26 @@ test('package assets serve with their MIME and survive reuse and rollback', asyn
 
 test('compiler assets cannot replace an app-owned path', async () => {
   let path = '__packages/@yaks/kit/Button.css'
-  await using s = await scenario((ask) => ({
-    ...compiles(ask),
-    assets: { [path]: '.Kit {}' },
-  }))
-  await s.write({
-    'index.html': PAGE,
-    'main.ts': 'let n: number = 1',
-    [path]: '.App {}',
-  })
+  let prefix = 'ada/cookbook/'
+  let app = new TextEncoder().encode('.App {}')
+  let files = new Map([[prefix + path, app]])
+  let writes: string[] = []
+  let blobs = {
+    put: (key: string, bytes: Uint8Array<ArrayBuffer>) => {
+      writes.push(key)
+      files.set(key, bytes)
+      return Promise.resolve()
+    },
+  }
   await assertRejects(
-    () => s.tool('app_deploy'),
+    () =>
+      writeResources(blobs, prefix, ['index.html', 'main.ts', path], [path], {
+        pages: { 'main.ts': '/* main.ts */' },
+        assets: { [path]: '.Kit {}' },
+      }),
     Error,
     'conflicts with app path',
   )
-  assertEquals(await s.tool('app_files', { op: 'read', path }), '.App {}')
+  assertEquals(new TextDecoder().decode(files.get(prefix + path)), '.App {}')
+  assertEquals(writes, [])
 })

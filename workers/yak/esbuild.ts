@@ -20,6 +20,7 @@
 // A compile that fails refuses the deploy with the compiler's own lines, and
 // nothing here has moved: the last release's worker and pages still serve.
 import type { Answer, Ask, Plan } from '@yaks/esbuild'
+import type { Objects } from '@yaks/blob'
 import { plan, Unplanned } from '@yaks/esbuild'
 import type { App, Space } from './directory.ts'
 import type { Module } from './dispatch.ts'
@@ -193,6 +194,48 @@ let asked = async (env: Env, ask: Ask, app: App): Promise<Answer> => {
   )
 }
 
+/** Validate the compiler's resources before writing any of its output. An
+ * app-owned path, or an invalid shared path, leaves all files untouched. */
+export let writeResources = async (
+  blobs: Pick<Objects, 'put'>,
+  prefix: string,
+  paths: string[],
+  assets: string[],
+  answer: Pick<Answer, 'pages' | 'assets' | 'shared'>,
+) => {
+  // Shared modules are platform assets, never owned or swept by an app.
+  // Upload them before selecting this release; older releases keep referring
+  // to their own immutable URLs when a later catalog produces different ones.
+  for (let path of Object.keys(answer.shared ?? {})) {
+    if (!sharedPath(path)) {
+      throw refuse('arguments', `invalid compiler shared resource: ${path}`)
+    }
+  }
+  for (let path of assets) {
+    if (
+      !path.startsWith('__packages/') ||
+      /[\\?#%]/.test(path) ||
+      path.split('/').some((p) => !p || p == '.' || p == '..') ||
+      paths.includes(path)
+    ) {
+      throw refuse(
+        'arguments',
+        `compiler resource conflicts with app path: ${path}`,
+      )
+    }
+  }
+  await Promise.all(
+    Object.entries({ ...answer.pages, ...answer.assets }).map(([path, code]) =>
+      blobs.put(prefix + BUILT + path, encode(code))
+    ),
+  )
+  await Promise.all(
+    Object.entries(answer.shared ?? {}).map(([path, code]) =>
+      blobs.put(path, encode(code))
+    ),
+  )
+}
+
 /**
  * Compile what this release of the app needs compiled, refusing the release
  * when it cannot be. `config` is the app's parsed wrangler config, and `keys`
@@ -336,42 +379,12 @@ export let compiled = async (
   let assets = pending.worker || pending.pages.length
     ? Object.keys(answer.assets ?? {})
     : old?.assets ?? []
-  // Shared modules are platform assets, never owned or swept by an app.
-  // Upload them before selecting this release; older releases keep referring
-  // to their own immutable URLs when a later catalog produces different ones.
-  for (let path of Object.keys(answer.shared ?? {})) {
-    if (!sharedPath(path)) {
-      throw refuse('arguments', `invalid compiler shared resource: ${path}`)
-    }
-  }
-  for (let path of assets) {
-    if (
-      !path.startsWith('__packages/') ||
-      /[\\?#%]/.test(path) ||
-      path.split('/').some((p) => !p || p == '.' || p == '..') ||
-      paths.includes(path)
-    ) {
-      throw refuse(
-        'arguments',
-        `compiler resource conflicts with app path: ${path}`,
-      )
-    }
-  }
+  await writeResources(blobs, prefix, paths, assets, answer)
   let builtWorker = answer.worker
     ? { main: answer.worker.main, bytes: encode(answer.worker.code) }
     : oldWorker && old?.worker?.main
     ? { main: old.worker.main, bytes: oldWorker }
     : null
-  await Promise.all(
-    Object.entries({ ...answer.pages, ...answer.assets }).map(([path, code]) =>
-      blobs.put(prefix + BUILT + path, encode(code))
-    ),
-  )
-  await Promise.all(
-    Object.entries(answer.shared ?? {}).map(([path, code]) =>
-      blobs.put(path, encode(code))
-    ),
-  )
   if (answer.worker) {
     await blobs.put(prefix + MODULE, encode(answer.worker.code))
   }
