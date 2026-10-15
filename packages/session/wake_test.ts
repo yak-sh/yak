@@ -16,7 +16,6 @@ import { processDoc } from '@yaks/process'
 import { modelDoc } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { sessionDoc } from './comp.ts'
-import { transcript } from './react.ts'
 import { statusComputed, textOf } from './status.ts'
 import { running } from './run.ts'
 import { runs } from './tools.ts'
@@ -89,8 +88,11 @@ let world = async (...setup: Bundle[][]) => {
   }
 }
 
-let entries = async (g: ReturnType<typeof graph>, session: string) =>
-  (await transcript(g, session)).map(textOf)
+// What a transcript was last told, and how many entries it holds.
+let newest = async (g: ReturnType<typeof graph>, session: string) =>
+  (await g.read(`.entry.session=${session}&.order=-entry.seq&.limit=1&*`))[0]
+let count = async (g: ReturnType<typeof graph>, session: string) =>
+  (await g.read(`.entry.session=${session}&.fields=entity.eid`)).length
 
 test('a native transcript parked on a task takes a turn when a dependency finishes', async () => {
   let w = await world([
@@ -113,14 +115,14 @@ test('a native transcript parked on a task takes a turn when a dependency finish
     { entity: { eid: 'y' }, claim: { session: 's1' } },
   ])
   await w.finish('x')
-  let [turn] = (await transcript(w.g, 's1')).slice(-1)
+  let [turn] = [await newest(w.g, 's1')]
   // The turn asked for carries the `using` in force, and says which finished.
   assertEquals((turn.using as Comp).provider, P)
   assert(textOf(turn).includes('#x'), textOf(turn))
   // Told once: rousing it again says nothing new.
-  let before = (await entries(w.g, 's1')).length
+  let before = await count(w.g, 's1')
   await rouse(w.g, 's1')
-  assertEquals((await entries(w.g, 's1')).length, before)
+  assertEquals(await count(w.g, 's1'), before)
 })
 
 // A managed run as @yaks/spawn leaves it: asked through a command-line
@@ -166,7 +168,7 @@ let doneBy = (...tasks: string[]): Bundle[] =>
   tasks.map((eid) => ({ entity: { eid }, completed: { by: 'm1' } }))
 
 let last = async (w: Awaited<ReturnType<typeof world>>) =>
-  textOf((await transcript(w.g, 'm1')).at(-1)!)
+  textOf(await newest(w.g, 'm1'))
 
 test('a managed run that ends waiting on a dependency is parked', async () => {
   let w = await world(managed('m1', 0))
@@ -177,7 +179,7 @@ test('a managed run that ends waiting on a dependency is parked', async () => {
 test('a managed run parked on a task is woken when a dependency finishes', async () => {
   let w = await world(managed('m1', 0))
   await w.finish('x')
-  let [wake] = (await transcript(w.g, 'm1')).slice(-1)
+  let [wake] = [await newest(w.g, 'm1')]
   assertEquals((wake.using as Comp).provider, CLI)
   assert(textOf(wake).includes('#x'))
 })
@@ -203,15 +205,15 @@ test('the last run ends with nothing left to wait on, and lets go', async () => 
 
 test('a dependency link going away after the dependency finished tells nothing', async () => {
   let w = await world(managed('m1', 0), doneBy('z'))
-  let told = (await entries(w.g, 'm1')).length
+  let told = await count(w.g, 'm1')
   await w.drop(edgeEid('y', 'contains', 'z'), { from: 'y', to: 'z' })
-  assertEquals((await entries(w.g, 'm1')).length, told)
+  assertEquals(await count(w.g, 'm1'), told)
 })
 
 test('a managed run parked on a task is woken when a dependency link goes away', async () => {
   let w = await world(managed('m1', 0))
   await w.drop(edgeEid('y', 'requires', 'x'), { from: 'y', to: 'x' })
-  let [wake] = (await transcript(w.g, 'm1')).slice(-1)
+  let [wake] = [await newest(w.g, 'm1')]
   assertEquals((wake.using as Comp).provider, CLI)
   assert(textOf(wake).includes('no longer waits on #x'), textOf(wake))
 })
@@ -221,7 +223,7 @@ test('a managed run parked on a task is woken when a dependency it waits on is d
   assertEquals(await w.claim('y'), 'm1')
   // The link goes with x: only what the commit found says which ends it had.
   await w.drop('x', { from: 'y', to: 'x' })
-  let [wake] = (await transcript(w.g, 'm1')).slice(-1)
+  let [wake] = [await newest(w.g, 'm1')]
   assertEquals((wake.using as Comp).provider, CLI)
   assert(textOf(wake).includes('no longer waits on #x'), textOf(wake))
 })

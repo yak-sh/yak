@@ -60,6 +60,15 @@ export let tracked = (): { g: Graph; fx: ReturnType<typeof effects> } => {
   return { g, fx }
 }
 
+/** A graph over an empty store with the session plugin alone: a write is
+ * numbered into its transcript and kept, and no effect follows it. */
+export let bare = (): Graph =>
+  graph({
+    storage: ram(host, { number: true }),
+    vocab: host,
+    plugins: [sessions()],
+  })
+
 /** The fake provider, printing claude's output format: the shipped reader
  * under test, driven by a shell script that needs no model (./fake.sh). */
 export let fake: Adapter = {

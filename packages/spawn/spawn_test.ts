@@ -26,7 +26,7 @@ import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
 import { checkoutOf, down, follow, type Opts, start } from './run.ts'
 import { sessionEnv } from '@yaks/session'
-import { asking, fake, launching, tracked, until } from './testing.ts'
+import { asking, bare, fake, launching, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
@@ -372,7 +372,7 @@ test('a restart adopts the run and reads its log on from where it stands', async
 // A session asked to work `y`, which requires `x`, holding `y`. Its provider
 // starts no process: what it was told to carry on is kept in `started`.
 let parking = async (end?: Bundle[]) => {
-  let g = tracked()
+  let g = { g: bare() }
   let { launch, started, first } = launching()
   let stopping = new AbortController()
   let opts = {

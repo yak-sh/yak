@@ -297,11 +297,25 @@ for (
     assertEquals((await reply(g, call)).length, 0)
   })
   test(`${name}: what is held for a project is fed to its transcript at work, never one at rest`, async () => {
-    let g = await fresh(store())
+    let g = bare(store())
     await g.apply([
       { entity: { eid: 'p' }, project: {} },
       { entity: { eid: 'operator' }, persona: { home: 'p' } },
-      { entity: { eid: 'native' }, session: { persona: 'operator' } },
+      {
+        entity: { eid: 'native' },
+        session: { id: 'native', persona: 'operator' },
+      },
+      {
+        entity: { eid: 'start' },
+        entry: { session: 'native' },
+        content: { body: 'start' },
+        using: {},
+      },
+      {
+        entity: { eid: 'knock' },
+        knock: { target: 'native' },
+        doc: { body: 'child finished' },
+      },
       { entity: { eid: 'resting' }, session: { persona: 'operator' } },
       {
         entity: { eid: 'asked' },
