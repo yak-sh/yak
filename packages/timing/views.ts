@@ -151,6 +151,15 @@ let spanPage = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>) => {
         '.',
       )
       : null,
+    c.query
+      ? h(
+        'section',
+        { class: 'Section' },
+        h('h2', { class: 'Section_Title' }, 'Query'),
+        h('p', { class: 'Section_Sub' }, 'What was asked, every value masked.'),
+        h('code', { 'data-query': '' }, str(c.query)),
+      )
+      : null,
     ran.length
       ? h(
         'section',

@@ -62,6 +62,7 @@ export let project = (
           ...e.plugin != null ? { plugin: e.plugin } : {},
           ...e.package != null ? { package: e.package } : {},
           ...e.outcome != null ? { outcome: e.outcome } : {},
+          ...e.query != null ? { query: e.query } : {},
         },
         elapsed: {
           start: (e.start ?? e.time) - start,

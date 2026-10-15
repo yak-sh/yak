@@ -1,6 +1,6 @@
 // Query projection, name resolution and caller views over committed storage.
 // A read-only graph and the writable graph use the same read pipeline.
-import { and, eq, list, parse, want } from '@yaks/query/core'
+import { and, eq, list, mask, parse, want } from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 import { type Context, context, during, live, peek, scope } from '@yaks/trace'
@@ -464,6 +464,10 @@ export let retained = <T extends ReadTx>(tx: T, owner: () => Context): T =>
     ]),
   ) as T
 
+// The query line a span keeps: masked, bounded, and none for a built tree.
+let line = (q: Query) =>
+  typeof q == 'string' ? mask(q).slice(0, 512) : undefined
+
 /** Trace the shared read pipeline at its graph boundary. */
 export let queries = (
   owner: () => object,
@@ -480,6 +484,7 @@ export let queries = (
           name: 'read',
           package: '@yaks/graph',
           parent: readOpts?.parent,
+          query: line(query),
         }),
         () => read(query, readOpts),
         'ok',
@@ -497,6 +502,7 @@ export let queries = (
           name: 'rows',
           package: '@yaks/graph',
           parent: readOpts?.parent,
+          query: line(query),
         }),
         () => rows(query, readOpts),
         'ok',

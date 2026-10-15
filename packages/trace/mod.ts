@@ -37,6 +37,8 @@ export type Event = {
   readonly counts?: Counts
   /** A `sql` span's statement as text, every value in it masked */
   readonly sql?: string
+  /** A `query` span's yaks query line, every value in it masked */
+  readonly query?: string
 }
 
 export type Activity = {
@@ -48,6 +50,9 @@ export type Activity = {
   /** A `sql` span's statement as text, every value in it masked (bound
    * parameters and literals read `?`) and its length bounded by the producer */
   sql?: string
+  /** A `query` span's yaks query line, every value in it masked and its
+   * length bounded by the producer */
+  query?: string
 }
 export type End = { outcome?: Outcome; counts?: Counts }
 export type Span = {
@@ -183,6 +188,7 @@ let create = (): Channel => {
     package: a.package,
     plugin: a.plugin,
     sql: a.sql,
+    query: a.query,
   })
   let out: Channel = {
     get active() {

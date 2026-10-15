@@ -94,6 +94,20 @@ test('projection creates separately measured spans with global parent references
   equal(during, { space: eid })
 })
 
+test('a read span keeps its masked query line', () => {
+  let rows = project([{
+    id: '1.1',
+    kind: 'query',
+    name: 'read',
+    stage: 'end',
+    start: 1,
+    time: 2,
+    duration: 1,
+    query: '.Completion .order=-created.at',
+  }], { eid, origin })
+  equal(rows[1].span?.query, '.Completion .order=-created.at')
+})
+
 test('different traces have different span identities and external parents are omitted', () => {
   let spans: Event[] = [{
     id: '1.1',

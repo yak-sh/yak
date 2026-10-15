@@ -141,6 +141,11 @@
           "type": "string",
           "stamped": true,
           "description": "How the measured operation ended."
+        },
+        "query": {
+          "type": "string",
+          "stamped": true,
+          "description": "A read's yaks query line, every value in it masked."
         }
       }
     },
