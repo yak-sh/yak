@@ -386,7 +386,13 @@ export let browser = (k: Kernel, host: string, cookie?: string) => {
     let url = new URL(req.url)
     let sent: Record<string, string> = {}
     for (
-      let h of ['content-type', 'content-length', 'x-yak-name', 'x-yak-version']
+      let h of [
+        'content-type',
+        'content-length',
+        'x-yak-name',
+        'x-yak-state',
+        'x-yak-version',
+      ]
     ) {
       let v = req.headers.get(h)
       if (v) sent[h] = v

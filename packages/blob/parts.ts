@@ -9,9 +9,11 @@
 //
 // An upload is named by the SHA-256 of its bytes, the address they are kept
 // under once whole, so sending the same file again, from any device, resumes
-// the same upload. When every part is in, the bucket assembles them under that
-// address and the result is hashed where it landed: bytes that are not what
-// their name says are deleted, so a key never holds another file's bytes.
+// the same upload. Each part is hashed as it passes, on from the hash state
+// the sender says the bytes before it left (sha256.ts), and its ledger entry
+// keeps both states. The parts are assembled only when those states chain
+// from SHA-256's start to the address, so the bytes under a key are always
+// the bytes its name says, with nothing read back to check.
 //
 // An upload nobody finishes is the bucket's to forget: R2 aborts one after
 // seven days, and a lifecycle rule on the ledger's prefix expires its entries
@@ -19,6 +21,7 @@
 // prefix counts them.
 
 import { type Objects, patient } from './object.ts'
+import { hasher, START } from './sha256.ts'
 
 /** A bucket's multipart upload, as R2's Workers binding offers it. */
 export type Multipart = {
@@ -30,18 +33,22 @@ export type Multipart = {
 export type Assembly = {
   uploadPart: (
     n: number,
-    value: ReadableStream<Uint8Array> | Uint8Array,
+    value: ReadableStream<Uint8Array>,
   ) => Promise<{ partNumber: number; etag: string }>
   complete: (
     parts: { partNumber: number; etag: string }[],
-  ) => Promise<unknown>
+  ) => Promise<{ size: number }>
   abort: () => Promise<void>
 }
 
 /** The most parts one upload has. */
 export let MOST = 10_000
 
-/** How many of the whole's first bytes `finish` hands back: enough for a
+/** Every part size is a whole number of these, so a sender records its hash
+ * state once per MiB and holds the state at every part's start. */
+export let MiB = 1024 * 1024
+
+/** How many of the whole's first bytes `post` hands back: enough for a
  * picture's header and a file's signature (`sizeOf`, `contentType`). */
 export let HEAD = 256 * 1024
 
@@ -51,38 +58,39 @@ export class Gone extends Error {}
 /** A part, or a whole, that is not what it was said to be. */
 export class Wrong extends Error {}
 
-/** Where an upload stands: the size of each part but the last, the parts
- * still to send, and whether the whole is already kept. */
-export type Standing = { part: number; need: number[]; stored: boolean }
-
 /** What a finished upload holds: its length and its first bytes. */
 export type Whole = { bytes: number; head: Uint8Array<ArrayBuffer> }
 
+/** Where an upload stands: the size of every part but the last, the parts
+ * still to send, and the whole once none are. */
+export type Standing = { part: number; need: number[]; whole?: Whole }
+
 /** One upload in parts, as {@link parts} answers it. */
 export type Parts = {
-  stand: (bytes: number) => Promise<Standing>
+  post: (bytes: number) => Promise<Standing>
   put: (
     n: number,
-    body: ReadableStream<Uint8Array> | Uint8Array,
+    body: ReadableStream<Uint8Array>,
     length: number,
+    from?: string,
   ) => Promise<void>
-  finish: () => Promise<Whole>
 }
 
 /**
  * The part size for `bytes`: `part`, unless that would take more than
- * {@link MOST} parts. Every part but the last is this size, which R2 requires.
+ * {@link MOST} parts, in whole {@link MiB}. Every part but the last is this
+ * size, which R2 requires.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
- * import { sized } from '@yaks/blob'
+ * import { MiB, sized } from '@yaks/blob'
  *
- * equal(sized(20_000, 8), 8)
- * equal(sized(200_000, 8), 20)
+ * equal(sized(20 * MiB, 8 * MiB), 8 * MiB)
+ * equal(sized(100_000 * MiB, 8 * MiB), 10 * MiB)
  * ```
  */
 export let sized = (bytes: number, part: number): number =>
-  Math.max(part, Math.ceil(bytes / MOST))
+  bytes <= part * MOST ? part : Math.ceil(bytes / MOST / MiB) * MiB
 
 // R2's "the specified multipart upload does not exist": aborted, expired, or
 // an id it never gave out.
@@ -92,58 +100,22 @@ let lost = (e: unknown) => {
   if (Object(e).code != NO_UPLOAD) throw e
 }
 
-let hex = (sum: ArrayBuffer) =>
-  [...new Uint8Array(sum)].map((b) => b.toString(16).padStart(2, '0')).join('')
-
-type DigestStream = WritableStream<Uint8Array> & {
-  digest: Promise<ArrayBuffer>
-}
-
-/**
- * The SHA-256 of a stream, its length, and its first `keep` bytes, in one
- * read. A Worker hashes as the bytes go by (`crypto.DigestStream`); anywhere
- * else the stream is gathered first, which is fine for the tests and the box
- * and is no way to hash a file bigger than memory.
- *
- * ```ts
- * import { equal } from '@yaks/testing'
- * import { address, digest, encode } from '@yaks/blob'
- *
- * let read = await digest(new Response('hello').body!, 2)
- * equal(read, { sha: address('hello'), bytes: 5, head: encode('he') })
- * ```
- */
-export let digest = async (
-  stream: ReadableStream<Uint8Array>,
-  keep = 0,
-): Promise<{ sha: string; bytes: number; head: Uint8Array<ArrayBuffer> }> => {
-  let head = new Uint8Array(keep)
-  let bytes = 0
-  let tap = new TransformStream<Uint8Array, Uint8Array>({
-    transform: (chunk, out) => {
-      if (bytes < keep) head.set(chunk.subarray(0, keep - bytes), bytes)
-      bytes += chunk.byteLength
-      out.enqueue(chunk)
-    },
-  })
-  let streaming = (crypto as unknown as {
-    DigestStream?: new (algorithm: string) => DigestStream
-  }).DigestStream
-  let sum: ArrayBuffer
-  if (streaming) {
-    let d = new streaming('SHA-256')
-    await stream.pipeThrough(tap).pipeTo(d)
-    sum = await d.digest
-  } else {
-    let all = await new Response(stream.pipeThrough(tap)).arrayBuffer()
-    sum = await crypto.subtle.digest('SHA-256', all)
-  }
-  return { sha: hex(sum), bytes, head: head.slice(0, Math.min(keep, bytes)) }
+// A stream R2 will take a part from: one whose length is known, which a
+// Worker's own FixedLengthStream says. Anywhere else the stream is read.
+let fixed = (stream: ReadableStream<Uint8Array>, length: number) => {
+  let Fixed = (globalThis as {
+    FixedLengthStream?: new (length: number) => TransformStream<
+      Uint8Array,
+      Uint8Array
+    >
+  }).FixedLengthStream
+  return Fixed ? stream.pipeThrough(new Fixed(length)) : stream
 }
 
 let range = (n: number) => Array.from({ length: n }, (_, i) => i + 1)
 
 type Ticket = { id: string; bytes: number; part: number; at: number }
+type Receipt = { from: string; to: string; etag: string; at: number }
 
 /**
  * The upload of the bytes named `sha` into `key`, in parts of `part` bytes
@@ -151,13 +123,13 @@ type Ticket = { id: string; bytes: number; part: number; at: number }
  * `ledger`. `objects` is the bucket keyed by name and `bucket` the same
  * bucket's multipart upload.
  *
- * - `stand(bytes)` says where the upload stands, beginning it if nothing is
- *   under way. Once `need` is empty, `finish` makes it whole.
- * - `put(n, body, length)` keeps part `n`, refusing a length that is not the
- *   part's before reading it. A part sent twice is kept once.
- * - `finish()` assembles the parts, checks that they hash to `sha`, and
- *   answers the whole's length and first bytes; for bytes already kept it
- *   only reads them.
+ * - `post(bytes)` says where the upload stands, beginning it if nothing is
+ *   under way, and once nothing is missing makes it whole: `whole` is set,
+ *   and `need` is empty.
+ * - `put(n, body, length, from)` keeps part `n`, hashed on from `from`, the
+ *   state the bytes before it leave ({@link START} for the first). A length
+ *   that is not the part's is refused before anything is read, and a part
+ *   sent twice is kept once.
  *
  * {@link Gone} says the upload is not under way, so it is begun again;
  * {@link Wrong} says what was sent is not what was said.
@@ -176,73 +148,116 @@ export let parts = (
 
   // The uploads begun for these bytes, newest first: two tabs may begin one
   // each, and whoever comes next carries on the newer.
-  let tickets = async (): Promise<Ticket[]> =>
-    Object.entries(await objects.uploaded(begun)).map(([k, at]) => {
-      let [bytes, part, ...id] = k.slice(begun.length).split('.')
-      return {
-        id: decodeURIComponent(id.join('.')),
-        bytes: +bytes,
-        part: +part,
-        at,
-      }
-    }).sort((a, b) => b.at - a.at)
+  let tickets = (held: Record<string, number>): Ticket[] =>
+    Object.entries(held).filter(([k]) => k.startsWith(begun))
+      .map(([k, at]) => {
+        let [bytes, part, ...id] = k.slice(begun.length).split('.')
+        let t = {
+          id: decodeURIComponent(id.join('.')),
+          bytes: +bytes,
+          part: +part,
+        }
+        return { ...t, at }
+      }).sort((a, b) => b.at - a.at)
 
-  // Each part's tag as the bucket gave it, the newest where a part was sent
-  // again: the bucket keeps the last part sent under a number.
-  let receipts = async (t: Ticket) => {
+  // Each part's states and tag, the newest where a part was sent again: the
+  // bucket keeps the last part sent under a number.
+  let receipts = (held: Record<string, number>, t: Ticket) => {
     let prefix = landed(t)
-    let got = new Map<number, { etag: string; at: number }>()
-    for (let [k, at] of Object.entries(await objects.uploaded(prefix))) {
-      let [n, ...etag] = k.slice(prefix.length).split('.')
+    let got = new Map<number, Receipt>()
+    for (let [k, at] of Object.entries(held)) {
+      if (!k.startsWith(prefix)) continue
+      let [n, from, to, ...etag] = k.slice(prefix.length).split('.')
       let was = got.get(+n)
       if (!was || was.at <= at) {
-        got.set(+n, { etag: decodeURIComponent(etag.join('.')), at })
+        got.set(+n, { from, to, etag: decodeURIComponent(etag.join('.')), at })
       }
     }
     return got
   }
 
-  let missing = (t: Ticket, have: Map<number, unknown>) =>
-    range(count(t)).filter((n) => !have.has(n))
+  // Everything the ledger says of these bytes, in one listing.
+  let book = () => objects.uploaded(`${ledger}${sha}`)
 
-  let drop = async (t: Ticket) =>
-    objects.delete([ticket(t), ...await objects.list(landed(t))])
+  let drop = (held: Record<string, number>, t: Ticket) =>
+    objects.delete([
+      ticket(t),
+      ...Object.keys(held).filter((k) => k.startsWith(landed(t))),
+    ])
 
-  let head = async (): Promise<Whole> => {
+  let whole = async (): Promise<Whole | null> => {
     let held = await objects.open(key)
-    if (!held) throw new Gone(`nothing is kept at ${key}`)
+    if (!held) return null
     let to = Math.min(HEAD, held.size) - 1
-    let first = to < 0 ? new Uint8Array() : new Uint8Array(
+    let head = to < 0 ? new Uint8Array() : new Uint8Array(
       await new Response(await held.read({ from: 0, to })).arrayBuffer(),
     )
-    return { bytes: held.size, head: first }
+    return { bytes: held.size, head }
+  }
+
+  // The parts made whole, when their states chain from the start to `sha`.
+  let assemble = async (
+    held: Record<string, number>,
+    t: Ticket,
+    have: Map<number, Receipt>,
+  ) => {
+    let chain = range(count(t)).map((n) => have.get(n)!)
+    let up = bucket.resumeMultipartUpload(key, t.id)
+    if (
+      chain.some((r, i) => r.from != (i ? chain[i - 1].to : START)) ||
+      chain[chain.length - 1].to != sha
+    ) {
+      await up.abort().catch(lost)
+      await drop(held, t)
+      throw new Wrong(`the parts sent do not hash to ${sha}`)
+    }
+    try {
+      await up.complete(
+        chain.map((r, i) => ({ partNumber: i + 1, etag: r.etag })),
+      )
+    } catch (e) {
+      // Another request finished it first, or the bucket refused the parts:
+      // whole already, or begun again.
+      let done = await whole()
+      if (done) return done
+      await up.abort().catch(lost)
+      await drop(held, t)
+      throw new Gone(`the parts of ${sha} could not be assembled: ${e}`)
+    }
+    let done = await whole()
+    if (!done) throw new Error(`no object at ${key} once assembled`)
+    await drop(held, t)
+    return done
   }
 
   return {
-    stand: async (bytes: number): Promise<Standing> => {
-      if (await objects.has(key)) {
-        return { part: sized(bytes, at.part), need: [], stored: true }
+    post: async (bytes: number): Promise<Standing> => {
+      let part = sized(bytes, at.part)
+      let [done, held] = await Promise.all([whole(), book()])
+      if (done) return { part, need: [], whole: done }
+      let [t] = tickets(held).filter((t) => t.bytes == bytes)
+      if (!t) {
+        let { uploadId } = await patient(() =>
+          bucket.createMultipartUpload(key)
+        )
+        let fresh = { id: uploadId, bytes, part, at: 0 }
+        await objects.put(ticket(fresh), new Uint8Array())
+        return { part, need: range(count(fresh)) }
       }
-      let [t] = (await tickets()).filter((t) => t.bytes == bytes)
-      if (t) {
-        return {
-          part: t.part,
-          need: missing(t, await receipts(t)),
-          stored: false,
-        }
-      }
-      let { uploadId } = await patient(() => bucket.createMultipartUpload(key))
-      let fresh = { id: uploadId, bytes, part: sized(bytes, at.part), at: 0 }
-      await objects.put(ticket(fresh), new Uint8Array())
-      return { part: fresh.part, need: range(count(fresh)), stored: false }
+      let have = receipts(held, t)
+      let need = range(count(t)).filter((n) => !have.has(n))
+      if (need.length) return { part: t.part, need }
+      return { part: t.part, need, whole: await assemble(held, t, have) }
     },
 
     put: async (
       n: number,
-      body: ReadableStream<Uint8Array> | Uint8Array,
+      body: ReadableStream<Uint8Array>,
       length: number,
+      from = START,
     ): Promise<void> => {
-      let [t] = await tickets()
+      let held = await objects.uploaded(begun)
+      let [t] = tickets(held)
       if (!t) throw new Gone(`no upload of ${sha} is under way`)
       let last = count(t)
       if (!(Number.isInteger(n) && n >= 1 && n <= last)) {
@@ -252,49 +267,37 @@ export let parts = (
       if (length != size) {
         throw new Wrong(`part ${n} is ${size} bytes, not ${length}`)
       }
+      if (!/^[0-9a-f]{64}$/.test(from)) {
+        throw new Wrong(`part ${n} needs the hash state it starts from`)
+      }
+      let hash = hasher(from)
+      // The part hashed as the bucket reads it.
+      let reader = body.getReader()
+      let passing = new ReadableStream<Uint8Array>({
+        pull: async (out) => {
+          let read = await reader.read()
+          if (read.done) return out.close()
+          let value = read.value
+          hash.add(value)
+          out.enqueue(value)
+        },
+        cancel: (why) => reader.cancel(why),
+      })
       let sent
       try {
-        sent = await bucket.resumeMultipartUpload(key, t.id).uploadPart(n, body)
+        sent = await bucket.resumeMultipartUpload(key, t.id)
+          .uploadPart(n, fixed(passing, length))
       } catch (e) {
         lost(e)
-        await drop(t)
+        await drop(await book(), t)
         throw new Gone(`the upload of ${sha} has expired`)
       }
+      let to = hash.end(n == last ? t.bytes : undefined)
       let etag = encodeURIComponent(sent.etag)
-      await objects.put(`${landed(t)}${n}.${etag}`, new Uint8Array())
-    },
-
-    finish: async (): Promise<Whole> => {
-      if (await objects.has(key)) return head()
-      let [t] = await tickets()
-      if (!t) throw new Gone(`no upload of ${sha} is under way`)
-      let have = await receipts(t)
-      let need = missing(t, have)
-      if (need.length) throw new Wrong(`parts ${need.join(', ')} are missing`)
-      let up = bucket.resumeMultipartUpload(key, t.id)
-      try {
-        await up.complete(
-          [...have].sort(([a], [b]) => a - b)
-            .map(([n, { etag }]) => ({ partNumber: n, etag })),
-        )
-      } catch (e) {
-        // Another request finished it first, or the bucket refused the parts:
-        // whole already, or begun again.
-        if (await objects.has(key)) return head()
-        await up.abort().catch(lost)
-        await drop(t)
-        throw new Gone(`the parts of ${sha} could not be assembled: ${e}`)
-      }
-      let whole = await objects.open(key)
-      if (!whole) throw new Error(`no object at ${key} once assembled`)
-      let read = await digest(await whole.read(), HEAD)
-      if (read.sha != sha) {
-        await objects.delete(key)
-        await drop(t)
-        throw new Wrong(`the parts hash to ${read.sha}, not ${sha}`)
-      }
-      await drop(t)
-      return { bytes: read.bytes, head: read.head }
+      await objects.put(
+        `${landed(t)}${n}.${from}.${to}.${etag}`,
+        new Uint8Array(),
+      )
     },
   }
 }
@@ -330,9 +333,7 @@ export let memoryMultipart = (
     },
     resumeMultipartUpload: (key, id) => ({
       uploadPart: async (partNumber, value) => {
-        let bytes = value instanceof Uint8Array
-          ? new Uint8Array(value)
-          : new Uint8Array(await new Response(value).arrayBuffer())
+        let bytes = new Uint8Array(await new Response(value).arrayBuffer())
         let etag = `${partNumber}.${++n}`
         held(key, id).parts.set(partNumber, { bytes, etag })
         return { partNumber, etag }

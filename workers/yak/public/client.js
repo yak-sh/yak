@@ -254,10 +254,16 @@ let blocks = (h, w, b, at, end) => {
   }
 }
 
-// A multiple of 64, so only the last chunk leaves part of a block over.
-let CHUNK = 4 * 1024 * 1024
+// A file is read a MiB at a time, a multiple of 64, so only the last read
+// leaves part of a block over. Every part the door asks for is a whole number
+// of MiB, so the state after each MiB is the state some part starts from.
+let MIB = 1024 * 1024
 
-export let digest = async (blob) => {
+let hex = (h) => [...h].map((v) => v.toString(16).padStart(8, '0')).join('')
+
+// The file's SHA-256, and the hash state after each whole MiB of it, the
+// first being the state before any bytes.
+let hashed = async (blob) => {
   let h = new Uint32Array([
     0x6a09e667,
     0xbb67ae85,
@@ -270,12 +276,14 @@ export let digest = async (blob) => {
   ])
   let w = new Uint32Array(64)
   let size = blob.size
+  let states = [hex(h)]
   let rest = new Uint8Array(0)
-  for (let at = 0; at < size; at += CHUNK) {
-    let b = new Uint8Array(await blob.slice(at, at + CHUNK).arrayBuffer())
+  for (let at = 0; at < size; at += MIB) {
+    let b = new Uint8Array(await blob.slice(at, at + MIB).arrayBuffer())
     let whole = b.length - (b.length % 64)
     blocks(h, w, b, 0, whole)
     rest = b.subarray(whole)
+    if (b.length == MIB) states.push(hex(h))
   }
   // The tail: what was left, a 1 bit, zeros, and the length in bits as 64.
   let tail = new Uint8Array(rest.length < 56 ? 64 : 128)
@@ -285,8 +293,10 @@ export let digest = async (blob) => {
   view.setUint32(tail.length - 8, Math.floor(size / 2 ** 29))
   view.setUint32(tail.length - 4, (size * 8) >>> 0)
   blocks(h, w, tail, 0, tail.length)
-  return [...h].map((v) => v.toString(16).padStart(8, '0')).join('')
+  return { sha: hex(h), states }
 }
+
+export let digest = async (blob) => (await hashed(blob)).sha
 
 // A file at least this big goes up in parts, several at once; anything
 // smaller is one request, which is quicker below it (measured, T-124790).
@@ -406,7 +416,8 @@ export let store = (base) => {
         })
       )
     }
-    let at = `blob/${await digest(file)}`
+    let { sha, states } = await hashed(file)
+    let at = `blob/${sha}`
     let stand = () =>
       again(() =>
         ask(at, {
@@ -425,6 +436,9 @@ export let store = (base) => {
           again(() =>
             ask(`${at}/${n}`, {
               method: 'PUT',
+              // Where the hash stood before this part, so the door hashes it
+              // on from there as it passes.
+              headers: { 'x-yak-state': states[(n - 1) * part / MIB] },
               body: file.slice((n - 1) * part, n * part),
             })
           ))

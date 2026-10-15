@@ -1337,19 +1337,23 @@ export let PART = 8 * 1024 * 1024
 //                                        part size and the parts still to
 //                                        send; once none are, it is finished
 //                                        and answers as `POST blob` does
-//   PUT  blob/<sha>/<n>                  part n, `part` bytes but the last
+//   PUT  blob/<sha>/<n>                  part n, `part` bytes but the last,
+//                                        `x-yak-state` the SHA-256 state the
+//                                        bytes before it leave
 //
 // Every call is safe to send again, so a page that lost its connection, or
 // its tab, asks where it stands and sends what is missing. The ceiling and
-// the space's room are checked against the size it declares, and the bytes
-// are hashed once whole, so what lands is what it said.
+// the space's room are checked against the size it declares, and the parts'
+// states must chain to the address before they are assembled, so what lands
+// is what it said. `writer` is whom the rows are written as, asked only when
+// there are rows to write.
 let inParts = async (
   req: Request,
   env: Env,
   space: Space,
   app: App,
   store: Door,
-  headers: Record<string, string>,
+  writer: () => Promise<Record<string, string>>,
   path: string,
   max = MAX,
 ) => {
@@ -1364,17 +1368,16 @@ let inParts = async (
     ledger: uploadPrefix(app),
     part: PART,
   })
-  let tags = {
-    request: `${req.method} /api/blob/<sha>${n ? '/<n>' : ''}`,
-    space: space.slug,
-    app: app.slug,
-  }
   try {
     if (n != null) {
       if (req.method != 'PUT') return json(405, 'method_not_allowed')
       if (!/^[1-9][0-9]*$/.test(n)) return json(404, 'no_such_file')
-      let length = Number(req.headers.get('content-length') ?? NaN)
-      await up.put(Number(n), req.body ?? new Uint8Array(), length)
+      await up.put(
+        Number(n),
+        req.body ?? new Response('').body!,
+        Number(req.headers.get('content-length') ?? NaN),
+        req.headers.get('x-yak-state') ?? undefined,
+      )
       return Response.json({ n: Number(n) })
     }
     if (req.method != 'POST') return json(405, 'method_not_allowed')
@@ -1386,16 +1389,12 @@ let inParts = async (
     let bytes = Number(said.bytes)
     if (!(Number.isInteger(bytes) && bytes > 0)) return json(400, 'no_bytes')
     if (bytes > max) return json(413, 'too_large')
-    let standing = await up.stand(bytes)
-    if (!standing.stored) {
-      let stopped = await fullFiles(env, space, [{ key, bytes }])
-      if (stopped) return json(413, 'space_full', stopped)
-    }
-    if (standing.need.length) {
-      return Response.json({ part: standing.part, need: standing.need })
-    }
-    let whole = await up.finish()
-    let graph = metaOf(store, headers)
+    // Bytes the app already holds count nothing (usage.ts `fullFiles`).
+    let stopped = await fullFiles(env, space, [{ key, bytes }])
+    if (stopped) return json(413, 'space_full', stopped)
+    let { part, need, whole } = await up.post(bytes)
+    if (!whole) return Response.json({ part, need })
+    let graph = metaOf(store, await writer())
     let name = String(said.name ?? '').slice(0, 200)
     let mime = String(said.mime ?? '').split(';')[0].trim().slice(0, 120)
     let file = await described(
@@ -1409,7 +1408,11 @@ let inParts = async (
       name,
       whole.bytes,
     )
-    return recorded(graph, file, whole.bytes, tags)
+    return recorded(graph, file, whole.bytes, {
+      request: 'POST /api/blob/<sha>',
+      space: space.slug,
+      app: app.slug,
+    })
   } catch (e) {
     if (e instanceof Gone) return json(409, 'upload_gone', e.message)
     if (e instanceof Wrong) return json(400, 'refused', e.message)
@@ -2110,7 +2113,7 @@ let api = async (
       space,
       app,
       store,
-      { ...headers, ...(await named(env, who, app)) },
+      async () => ({ ...headers, ...(await named(env, who, app)) }),
       path.slice('/blob/'.length),
       writes(who.role) ? MAX : VISIT_UPLOAD,
     )

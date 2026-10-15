@@ -495,17 +495,25 @@ The endpoints, for a client of your own:
     → {"part": 8388608, "need": [1, 2, 3, 4, 5]}
 
     PUT ./api/blob/9f2a…/3         ← part 3: from byte 2 × part, part bytes
+    x-yak-state: 1f83d9ab…         ← the hash state after bytes 0 to 2 × part
     → {"n": 3}
 
     POST ./api/blob/9f2a…          ← again, once every part is in
     → {"eid": "9f2a…", "url": "/photos/api/blob/9f2a…/…",
        "mime": "video/mp4", "bytes": 41943040}
 
-`need` lists the parts not received yet, and every part but the last is `part`
-bytes. Every call may be sent again. A POST when nothing is missing assembles
-the parts and answers what `POST ./api/blob` answers. The whole is hashed once
-it is assembled, and parts that do not hash to the address are dropped with a
-`400`; so is a part of the wrong length. `409 upload_gone` says the upload is no
+`need` lists the parts not received yet. Every part but the last is `part`
+bytes, a whole number of MiB. Every call may be sent again. A POST when nothing
+is missing assembles the parts and answers what `POST ./api/blob` answers.
+
+Each part is hashed as it arrives, on from the SHA-256 state its `x-yak-state`
+names: the eight 32-bit words of the hash after every byte before the part, as
+64 hex characters, which a SHA-256 written to be fed in pieces holds between
+them. The first part starts from SHA-256's own initial value
+(`6a09e667bb67ae85…5be0cd19`). The parts are assembled only when each one's
+state follows on from the one before it and the last ends at the address, so the
+bytes kept are the bytes the address names; parts that do not are dropped with a
+`400`, as is a part of the wrong length. `409 upload_gone` says the upload is no
 longer under way (seven days passed): POST again to begin it anew. The ceilings
 are checked against `bytes`, with the same `too_large` and `space_full`.
 

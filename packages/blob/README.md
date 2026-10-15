@@ -84,7 +84,8 @@ use the same driver so their writes participate in the same transaction.
 | `sqliteBlobs`, `blobSchema`, `Layout`                                                             | SQLite text storage                                      |
 | `fileBlobs`, `objectBlobs`, `Bucket`, `patient`                                                   | Filesystem and object storage                            |
 | `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                    | A bucket keyed by name: read, delete, list               |
-| `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `digest`, `Gone`, `Wrong`, `MOST`   | Resumable uploads in parts, checked against their hash   |
+| `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB`      | Resumable uploads in parts, checked against their hash   |
+| `hasher`, `fold`, `START`                                                                         | SHA-256 carried from one piece of bytes to the next      |
 | `blobRead`, `hydrate`                                                                             | SQL and post-read text resolution                        |
 | `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactStore`, `artifactBytes`, `artifactDoc` | Artifact storage, verified reads and declarations        |
 | `Size`, `sizeOf`, `mediaTypeOf`, `contentType`, `mediaType`, `matchesMediaType`, `mimeOf`         | Image dimensions, signatures and media types             |
@@ -289,19 +290,21 @@ SHA-256 is `sha` into `key` in parts of `part` bytes, through the bucket's own
 **multipart** upload (S3's protocol, which R2 speaks; `Multipart` is that slice
 of R2's binding). Its **ledger** is empty objects under `ledger` whose keys
 record the upload under way and each part that landed, which R2's binding has no
-call to list. So an upload cut short resumes: `stand(bytes)` says which parts
-are still needed, beginning the upload if none is under way.
-`put(n, body,
-length)` keeps part `n`. Once nothing is needed, `finish()`
-assembles the parts, hashes the whole where it landed, and answers its length
-and first bytes. Assembled bytes that do not hash to `sha` are deleted and throw
-`Wrong`, as does a part of the wrong length. `Gone` says the upload is not under
-way, so it is begun again. `memoryMultipart(put)` holds the parts in memory for
-a bucket with no multipart of its own.
+call to list. So an upload cut short resumes: `post(bytes)` says which parts are
+still `need`ed, beginning the upload if none is under way, and once none are it
+assembles them and answers the `whole`: its length and first bytes.
+
+`put(n, body, length, from)` keeps part `n`, hashing it as it passes on from
+`from`, the SHA-256 **state** the bytes before it leave (`START` for the first).
+The ledger keeps each part's state before and after, and the parts are assembled
+only when those chain from `START` to `sha`, so nothing is read back to check
+the whole. A broken chain, or a part of the wrong length, throws `Wrong`. `Gone`
+says the upload is not under way, so it is begun again. `memoryMultipart(put)`
+holds the parts in memory for a bucket with no multipart of its own.
 
 ```ts
 import { equal } from '@yaks/testing'
-import { addressOf, type Bucket, bucketObjects, encode } from '@yaks/blob'
+import { addressOf, type Bucket, bucketObjects, fold, START } from '@yaks/blob'
 import { memoryMultipart, parts } from '@yaks/blob'
 
 let held = new Map<string, Uint8Array>()
@@ -330,27 +333,36 @@ let bucket: Bucket = {
         .map(([key, b]) => ({ key, size: b.length, uploaded: new Date() })),
     }),
 }
-let file = encode('ten bytes!')
+let file = new Uint8Array(150).fill(7)
 let sha = await addressOf(file)
 let up = parts(bucketObjects(bucket), memoryMultipart(bucket.put), {
   key: sha,
   sha,
   ledger: 'uploads/',
-  part: 4,
+  part: 64,
 })
-equal((await up.stand(10)).need, [1, 2, 3])
-await up.put(3, file.slice(8), 2) // a connection drops here
-equal((await up.stand(10)).need, [1, 2])
-await up.put(1, file.slice(0, 4), 4)
-await up.put(2, file.slice(4, 8), 4)
-equal((await up.finish()).bytes, 10)
+let send = (n: number) => {
+  let bytes = file.slice((n - 1) * 64, n * 64)
+  let from = fold(START, file.slice(0, (n - 1) * 64))
+  return up.put(n, new Response(bytes).body!, bytes.length, from)
+}
+equal((await up.post(150)).need, [1, 2, 3])
+await send(3) // and then the connection drops
+equal((await up.post(150)).need, [1, 2])
+await send(1)
+await send(2)
+equal((await up.post(150)).whole?.bytes, 150)
 equal(held.get(sha), file)
 ```
 
 R2 takes parts of at least 5 MiB, every one but the last the same size, and
-10,000 of them (`MOST`); `sized(bytes, part)` grows the part for a file that
-would need more. `digest(stream, keep)` hashes a stream as it passes, with
-`crypto.DigestStream` in a Worker, and keeps its first bytes.
+10,000 of them (`MOST`). `sized(bytes, part)` grows the part in whole `MiB` for
+a file that would need more. A part's state is a whole number of 64-byte blocks
+in, so a part size is too.
+
+`hasher(from?)` hashes bytes a piece at a time with `add`; `end()` answers the
+state after them, and `end(total)` the finished digest, `total` being every byte
+hashed since `START`. `fold(from, bytes, total?)` is the same over one buffer.
 
 ## Reading it back
 
