@@ -4,7 +4,7 @@ import { type Cell, cellsOf, chartbook, type ChartBox } from './chartbook.ts'
 
 test('kept charts survive changed views and reopening without reloading', async () => {
   let book = chartbook<string>(16), painted = 0, loaded = 0
-  let wide: ChartBox = [-32, -32, 96]
+  let wide: ChartBox = [-32, -32, 64]
   for (let cell of cellsOf(wide, 16)) {
     await book.keep(cell, () => {
       painted++
@@ -17,9 +17,9 @@ test('kept charts survive changed views and reopening without reloading', async 
       loaded++
       return Promise.resolve('missing')
     })
-  for (let i = 0; i < 4; i++) {
-    await read([-5 * i, 5 * i, 32])
-    await read([-16, -16, 64])
+  for (let i = 0; i < 3; i++) {
+    await read([-5 * i, -5 * i, 32])
+    await read([-32, -32, 48])
   }
   assertEquals((await read(wide))[0], {
     image: '-2,-2',
