@@ -1469,21 +1469,23 @@ test("a stranger past the rate still gets the app's files and images", async () 
       return Promise.resolve({ success: false })
     },
   }
-  for (let { req, path } of rateFiles) {
-    assertEquals(
-      await apps.apiAllowed(req, path, null, false, limit),
-      true,
-      path,
-    )
-  }
+  assertEquals(
+    await Promise.all(
+      rateFiles.map(({ req, path }) =>
+        apps.apiAllowed(req, path, null, false, limit)
+      ),
+    ),
+    rateFiles.map(() => true),
+  )
   assertEquals(asked, [])
-  for (let { req, path } of rateData) {
-    assertEquals(
-      await apps.apiAllowed(req, path, null, false, limit),
-      false,
-      path,
-    )
-  }
+  assertEquals(
+    await Promise.all(
+      rateData.map(({ req, path }) =>
+        apps.apiAllowed(req, path, null, false, limit)
+      ),
+    ),
+    rateData.map(() => false),
+  )
   assertEquals(asked, Array(3).fill('203.0.113.9'))
 })
 
