@@ -10,9 +10,18 @@
 // only once their purge has. Every door writes the directory through here, so
 // none has to remember to. A purge lost to a crash between the two leaves a
 // page no longer than its short lifetime (page-cache.ts `KEPT`).
+//
+// A release sends its purge as it begins, not as it commits (T-124483): a
+// purge takes up to most of a second to land, longer when rate limited, and
+// so it runs beside the release's own work instead of after it. Raising the
+// fence (versions.ts `fenced`) purges the app's pages, and while the fence
+// is up Site keeps none of them (page-cache.ts `keep`), so the commit has
+// nothing new to purge: it answers once that first purge has landed, which
+// by then it almost always has.
 import type { Bundle, Hook, Plugin, Tx } from '@yaks/graph'
 import type { Options } from './store.ts'
 import { APP_PARTS, idOf, SPACE_PARTS, spaceOf } from '../directory.ts'
+import { background, caught } from '../defects.ts'
 import { overVisits } from '../meter.ts'
 import { appTag, purge, spaceTag } from '../purge.ts'
 
@@ -101,15 +110,61 @@ export let owed = async (
   return [...tags]
 }
 
+/**
+ * The apps whose release fence a batch raised (a release beginning) or
+ * lowered (its commit, or its refusal).
+ *
+ * ```ts
+ * import { fences } from './pages-graph.ts'
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(
+ *   fences([
+ *     { entity: { eid: 'a' }, app: { fence: '1:x' } },
+ *     { entity: { eid: 'b' }, app: { version: 2, fence: null } },
+ *     { entity: { eid: 'c' }, app: { version: 2 } },
+ *   ]),
+ *   [{ eid: 'a', up: true }, { eid: 'b', up: false }],
+ * )
+ * ```
+ */
+export let fences = (applied: Bundle[]) =>
+  applied.flatMap((b) => {
+    let app = b.app as { fence?: string | null } | null | undefined
+    return b.tombstone || app?.fence === undefined
+      ? []
+      : [{ eid: b.entity.eid, up: !!app.fence }]
+  })
+
 export let plugins = (_host: unknown, options: Options): Plugin[] => {
+  // The purge each release sent as it began, by app, true once it landed.
+  let begun = new Map<string, Promise<boolean>>()
   let effect: Hook = Object.assign(
     async (applied: Bundle[], tx: Tx) => {
       let { env, meta } = options.store
-      if (!meta || !env.SITE?.purge) return applied
-      await purge(
-        env.SITE,
-        await owed(applied, async (eids) => await tx.get(eids)),
-      )
+      let site = env.SITE
+      if (!meta || !site?.purge) return applied
+      let tags = await owed(applied, async (eids) => await tx.get(eids))
+      let waits: Promise<unknown>[] = []
+      for (let { eid, up } of fences(applied)) {
+        let tag = appTag(eid)
+        if (up) {
+          let sent = purge(site, [tag]).then(() => true, (e) => {
+            caught(e, { request: 'release purge', app: eid })
+            return false
+          })
+          begun.set(eid, sent)
+          background(sent.then(() => {}))
+          continue
+        }
+        let sent = begun.get(eid)
+        begun.delete(eid)
+        if (!sent || !tags.includes(tag)) continue
+        // Committed: its pages went as it began and none was kept since, so
+        // it waits on that purge, and sends its own only if that one failed.
+        tags = tags.filter((t) => t != tag)
+        waits.push(sent.then((ok) => ok ? undefined : purge(site, [tag])))
+      }
+      await Promise.all([purge(site, tags), ...waits])
       return applied
     },
     { keys: [...PARTS, 'tombstone'] },

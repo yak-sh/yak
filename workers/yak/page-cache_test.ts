@@ -6,9 +6,11 @@
 // `edged`; the booted kernel is not needed to decide what is kept.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Tx } from '@yaks/graph'
 import type { Env } from './env.ts'
-import { owed } from './facets/pages-graph.ts'
+import { owed, plugins } from './facets/pages-graph.ts'
+import type { Options } from './facets/store.ts'
+import type { Purged } from './purge.ts'
 import {
   asked,
   keep,
@@ -194,4 +196,72 @@ test('an answer that sets a cookie is never kept', async () => {
   let ok = new Response('hi')
   assertEquals((await kept(keep(cookie, space, app))).status, 204)
   assertEquals((await kept(keep(ok, space, app))).status, 200)
+})
+
+test('a page of an app mid-release is not kept, and nor is its pass', async () => {
+  let fence: string | null = '1:x'
+  let g = gateway(() => keep(page('one'), space, { ...app, fence }))
+  assertEquals(await g.get(), null)
+  assertEquals(await g.get(), null)
+  // Asked both times, so the release's own page is kept as soon as it commits.
+  assertEquals([g.site.asks(), g.site.held.size], [2, 0])
+  fence = null
+  assertEquals(await (await g.get())!.text(), '<body>one</body>')
+  assertEquals(g.site.held.size, 1)
+})
+
+// The directory's writes, as its hook sees them, over a Site whose purges
+// land when the test says.
+let directory = (said: Purged = { success: true, errors: [] }) => {
+  let sent: string[][] = []
+  let landed = Promise.withResolvers<void>()
+  let site = {
+    purge: async (tags: string[]) => {
+      sent.push(tags)
+      await landed.promise
+      return said
+    },
+  }
+  let [plugin] = plugins(null, {
+    store: { env: { SITE: site }, meta: true },
+  } as unknown as Options)
+  let rows = {
+    get: () =>
+      Promise.resolve([{
+        entity: { eid: 'a' },
+        app: { slug: 'cookbook', space: 's' },
+      }]),
+  } as unknown as Tx
+  let write = async (b: Bundle) => await plugin.hooks!.effect!([b], rows)
+  return { sent, land: () => landed.resolve(), write }
+}
+// More turns than a write that waited on nothing needs to answer.
+let flush = async () => {
+  for (let i = 0; i < 100; i++) await null
+}
+let fenced = { entity: { eid: 'a' }, app: { fence: '1:x' } }
+let committed = {
+  entity: { eid: 'a' },
+  app: { version: 2, source: 'r2', fence: null },
+}
+
+test("a release's purge is sent as it begins, and its commit waits on that one", async () => {
+  let d = directory()
+  await d.write(fenced)
+  assertEquals(d.sent, [['app:a']])
+  let answered = false
+  let commit = d.write(committed).then(() => answered = true)
+  await flush()
+  assertEquals(answered, false)
+  d.land()
+  await commit
+  assertEquals(d.sent, [['app:a']])
+})
+
+test('a release whose first purge failed purges again as it commits', async () => {
+  let d = directory({ success: false, errors: [{ code: 0, message: 'no' }] })
+  d.land()
+  await d.write(fenced)
+  await d.write(committed).catch(() => {})
+  assertEquals(d.sent, [['app:a'], ['app:a']])
 })

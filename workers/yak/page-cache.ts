@@ -50,8 +50,12 @@ export let KEPT = 'public, max-age=30, stale-while-revalidate=86400'
 // their freshness: every key moves, and the old pages are never read again.
 let GENERATION = 1
 
+// What Site says of a pass for now only (`passed`), which no cache holds.
+let UNKEPT = 'private, no-store'
+
 // Between served() and Site, and Site and the gateway; never a browser's.
 let KEEP = 'x-yak-keep'
+let NOW = 'x-yak-now'
 let SEEN = 'x-yak-seen'
 let BROWSER = 'x-yak-browser-cache'
 
@@ -114,15 +118,20 @@ export let shareable = (req: Request) => {
 }
 
 /** An answer Site may keep: which app it was a page of (none, for a space's
- * own 404), for the gateway's count, and the tags its purge names. */
+ * own 404), for the gateway's count, and the tags its purge names. An app
+ * mid-release (its fence up, versions.ts `fenced`) had its pages purged as
+ * the release began, and its commit purges nothing more
+ * (facets/pages-graph.ts), so a page of it kept now would outlive the
+ * release: it passes, and only for now. */
 export let keep = (
   page: Response,
   space: { eid: string; slug: string },
-  app: { eid: string; slug: string } | null,
+  app: { eid: string; slug: string; fence?: string | null } | null,
 ) => {
   if (![200, 404].includes(page.status) || page.headers.has('set-cookie')) {
     return passed()
   }
+  if (app?.fence) return passed(true)
   let headers = new Headers(page.headers)
   headers.set(
     KEEP,
@@ -153,8 +162,10 @@ export let unkept = (req: Request, env: Env, at: string) => {
   }
 }
 
-/** An address no kept page may answer: the gateway serves it itself. */
-export let passed = () => new Response(null, { status: 204 })
+/** An address no kept page may answer: the gateway serves it itself. A pass
+ * `now` holds for this answer only: neither Site nor the gateway keeps it. */
+export let passed = (now = false) =>
+  new Response(null, { status: 204, headers: now ? { [NOW]: '1' } : {} })
 
 /** Site's half: served()'s anonymous answer as Site keeps it, or the pass
  * every other answer is. */
@@ -164,7 +175,7 @@ export let kept = async (answer: Response) => {
     await answer.body?.cancel()
     return new Response(null, {
       status: 204,
-      headers: { 'cache-control': KEPT },
+      headers: { 'cache-control': answer.headers.has(NOW) ? UNKEPT : KEPT },
     })
   }
   let headers = new Headers(answer.headers)
@@ -200,7 +211,7 @@ export let asked = async (req: Request, env: Env, c: Clock) => {
   let said = got.headers.get(SEEN)
   if (!said) {
     await got.body?.cancel()
-    remember(site, key)
+    if (got.headers.get('cache-control') != UNKEPT) remember(site, key)
     return null
   }
   let headers = new Headers(got.headers)
