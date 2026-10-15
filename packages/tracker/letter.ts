@@ -243,6 +243,7 @@ export let letter = (
 ): { title: string; body: string } => {
   let newest = errors[0]
   let back = comp(bug, 'regressed')
+  let call = asked(request), commit = built(errors)
   let facts = [
     back.at
       ? `**Regressed:** ${when(str(back.at))}, after it was resolved`
@@ -250,9 +251,9 @@ export let letter = (
     `**Ran on:** ${ran(errors) || 'not recorded'}`,
     `**Reached:** ${reached(errors)}`,
     `**How often:** ${often(bug, errors, to.now)}`,
-    asked(request) ? `**Request:** ${asked(request)}` : '',
+    call ? `**Request:** ${call}` : '',
     `**Code:** ${where(bug, newest) || 'not recorded'}`,
-    built(errors) ? `**Commit:** ${built(errors)}` : '',
+    commit ? `**Commit:** ${commit}` : '',
   ].filter(Boolean)
   return {
     title: subject(bug, errors, to.name),

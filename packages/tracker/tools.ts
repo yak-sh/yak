@@ -21,6 +21,7 @@ import { comp, str } from './model.ts'
 import { type Options, read } from './routes.ts'
 import { mark as upstream } from './remote.ts'
 import { explanation } from './resolution.ts'
+import { occurring } from './reading.ts'
 
 let one = (g: Graph, eid: string): Bundle | Promise<Bundle> =>
   after(g.get([eid]), ([row]) => {
@@ -45,7 +46,7 @@ export let bug = (g: Graph, input: string): Bundle[] | Promise<Bundle[]> =>
     ([eid]) =>
       after(one(g, eid), (row) =>
         after(
-          g.read(and(eq('error.bug', eid), every(), order('-error.at'))),
+          g.read(occurring(eid)),
           (occurrences) => {
             let requests = [
               ...new Set(

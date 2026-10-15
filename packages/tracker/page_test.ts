@@ -91,11 +91,11 @@ let threw = async (filename: string, lineno: number) => {
 test("a browser's own script failing on the page's first line is not filed", async () =>
   equal(await threw(`${at}#top`, 1), []))
 
-test("the page's own scripts failing are filed, wherever they sit", async () =>
-  equal([await threw(at, 300), await threw(`${at}app.js`, 1)].flat(), [
-    "Can't find variable: __firefox__",
-    "Can't find variable: __firefox__",
-  ]))
+test("the page's own script failing past its first line is filed", async () =>
+  equal(await threw(at, 300), ["Can't find variable: __firefox__"]))
+
+test("a script file of the page's failing on its first line is filed", async () =>
+  equal(await threw(`${at}app.js`, 1), ["Can't find variable: __firefox__"]))
 
 let link = { tagName: 'LINK', href: file }
 

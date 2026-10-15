@@ -1,13 +1,26 @@
 // How a bug and an error read, whatever draws them: the whole message, where
 // it happened, whether it is still broken, and the queries a page asks.
 import type { Bundle } from '@yaks/graph'
+import { type And, and, eq, every, order } from '@yaks/query'
 import { comp, type Frame, str, title } from './model.ts'
 import { place, spot } from './brief.ts'
 
 /** Worst first is historical occurrence count, not the retained sample size. */
 export let openBugs = '.bug.status=open * .order=-bug.hits'
+/** A bug's retained occurrences, newest first, as the query line a page asks. */
 export let occurrences = (eid: string): string =>
   `.error.bug=${eid} * .order=-error.at`
+/** The same occurrences as a tree, for a read that need not parse a line that
+ * changes with every bug.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { parse } from '@yaks/query'
+ * equal(occurring('b'), parse(occurrences('b')))
+ * ```
+ */
+export let occurring = (eid: string): And =>
+  and(eq('error.bug', eid), every(), order('-error.at'))
 
 /** A bug's page on the box's tracker web when it lives on another side (the
  * platform tracker, `yaks.app`), read through by global eid; one of its

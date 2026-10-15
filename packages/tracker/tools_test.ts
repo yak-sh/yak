@@ -87,7 +87,7 @@ test('platform bug list applies the caller query and order at the remote store',
     query: '.bug .order=bug.hits',
     limit: 2,
   })
-  equal(valueIn(answer)?.source, 'yaks.app', JSON.stringify(answer))
+  equal(valueIn(answer)?.source, 'yaks.app')
   equal(rows(answer).map((b) => b.entity.eid), [ids[0], ids[1]])
 })
 test('platform bug show reads retained occurrences without local ids or writes', async () => {
@@ -138,12 +138,13 @@ test('remote reads refuse box numbers and invalid limits explicitly', async () =
     ),
   )
 })
-test('missing platform bugs and unavailable configuration are explicit failures', async () => {
+test('a platform bug the Worker does not hold is an explicit refusal', async () =>
   ok(
     (await ask('bug_show', { source: 'yaks.app', bug: ids[4] })).some((b) =>
       b.refusal
     ),
-  )
+  ))
+test('platform bug reads without a configured Worker fail explicitly', async () => {
   await throws(() =>
     runs().bug_list({
       entity: { eid: ids[4] },
@@ -187,6 +188,8 @@ let why = {
   fix: 'f'.repeat(40),
   recur: 'No: marks are serialized.',
 }
+// What a Worker no attempt reaches answers each one.
+let offline = Error('offline')
 let marking = async (
   config = { remote: { url: 'https://tracker.test', secret: 'test-only' } },
   transport?: typeof fetch,
@@ -311,7 +314,7 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
       [
         'unavailable',
         config,
-        (() => Promise.reject(Error('offline'))) as typeof fetch,
+        (() => Promise.reject(offline)) as typeof fetch,
         true,
       ],
       [

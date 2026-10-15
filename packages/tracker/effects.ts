@@ -10,7 +10,7 @@ import { type Enrich, group, reframe, trim } from './group.ts'
 import { enrichFrames } from './frames.ts'
 import { sourceFrames, type SourceOptions } from '@yaks/code/source'
 import { followUp, letter, type Mark } from './letter.ts'
-import { occurrences, remoteBug } from './reading.ts'
+import { occurring, remoteBug } from './reading.ts'
 import { tags } from './spread.ts'
 import { human } from '@yaks/id'
 
@@ -127,7 +127,7 @@ export let notify = async (
     if (exists.delivered) await g.apply([receipt(row)], { trusted: true })
     return
   }
-  let errors = await g.read(occurrences(eid))
+  let errors = await g.read(occurring(eid))
   if (elsewhere(options, errors)) {
     return void await g.apply([receipt(row)], { trusted: true })
   }
@@ -214,7 +214,7 @@ export let follow = async (
     str(comp(head, 'doc').title),
     address(g, row, options),
     {
-      errors: mark == 'resolved' ? await g.read(occurrences(eid)) : [],
+      errors: mark == 'resolved' ? await g.read(occurring(eid)) : [],
       repo: options.repo,
     },
   )

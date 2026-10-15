@@ -36,19 +36,20 @@ test('a request outlasts a Worker that stops answering for half a minute', async
   equal(clients.length, 7)
 })
 
-test('a request that fails every attempt names how', async () => {
-  let down = (
-    failure: () => Error,
-  ) => ((() => Promise.reject(failure())) as typeof fetch)
+// A Worker every attempt fails the same way.
+let down = (failure: Error) => (() => Promise.reject(failure)) as typeof fetch
+
+test('a request that times out every attempt says it was not answered in time', async () =>
   equal(
-    await bugs(down(timeout)),
+    await bugs(down(timeout())),
     'TimeoutError: Remote tracker did not answer in time',
-  )
+  ))
+
+test('a request whose connection fails every attempt says the tracker is unavailable', async () =>
   equal(
-    await bugs(down(() => TypeError('reset'))),
+    await bugs(down(TypeError('reset'))),
     'Error: Remote tracker is unavailable',
-  )
-})
+  ))
 
 test("the caller's own deadline ends a request without another attempt", async () => {
   let { go, clients } = worker(timeout())
