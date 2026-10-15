@@ -74,6 +74,9 @@ let vocab = loadVocab({
   ),
 })
 
+// Match asynchronous storage answers, including rejected synchronous faults.
+let answer = <T>(read: () => T): Promise<T> => Promise.resolve().then(read)
+
 let made = () => {
   let time = clock(Date.parse('2026-10-15T12:00:00Z'))
   let store = ram(vocab)
@@ -92,74 +95,87 @@ let made = () => {
   let collisions = 0
   let skew = 0
   let dir = {
-    app: async () => app(),
-    written: async (_app: App, draft?: string): Promise<Written[]> =>
-      store.read(`.written.app=${APP}`).filter((b) =>
-        !draft || (b.written as { draft?: string }).draft == draft
-      ).map((b) =>
-        ({
-          eid: b.entity.eid,
-          draft: null,
-          sha: null,
-          was: null,
-          size: null,
-          at: null,
-          by: null,
-          ...(b.written as object),
-        }) as Written
+    app: () => Promise.resolve(app()),
+    written: (_app: App, draft?: string): Promise<Written[]> =>
+      answer(() =>
+        store.read(`.written.app=${APP}`).filter((b) =>
+          !draft || (b.written as { draft?: string }).draft == draft
+        ).map((b) =>
+          ({
+            eid: b.entity.eid,
+            draft: null,
+            sha: null,
+            was: null,
+            size: null,
+            at: null,
+            by: null,
+            ...(b.written as object),
+          }) as Written
+        )
       ),
-    stamp: async ({ entities }: { entities: Bundle[] }) => {
-      try {
-        return store.tx((tx) => {
-          guard(entities, tx, vocab)
-          tx.patch(entities)
-          return entities
-        })
-      } catch (e) {
-        if (e instanceof Stale) collisions++
-        throw e
-      }
-    },
+    stamp: ({ entities }: { entities: Bundle[] }) =>
+      answer(() => {
+        try {
+          return store.tx((tx) => {
+            guard(entities, tx, vocab)
+            tx.patch(entities)
+            return entities
+          })
+        } catch (e) {
+          if (e instanceof Stale) collisions++
+          throw e
+        }
+      }),
   } as unknown as Directory
   let bytes = new Map<string, Uint8Array<ArrayBuffer>>()
   let puts: string[] = []
   let raw: Objects = {
-    has: async (key) => bytes.has(key),
-    put: async (key, value) => {
-      puts.push(key)
-      bytes.set(key, new Uint8Array(value))
-    },
-    read: async (key) => bytes.get(key) ?? null,
-    get: async (key) => {
-      let value = bytes.get(key)
-      if (!value) throw new Error(`no blob at ${key}`)
-      return value
-    },
-    load: async (key) => {
-      let value = bytes.get(key)
-      return value ? { bytes: value, version: key } : null
-    },
-    open: async (key) => {
-      let value = bytes.get(key)
-      return value
-        ? {
-          size: value.byteLength,
-          version: key,
-          read: async (range) =>
-            new Response(
-              range ? value.slice(range.from, range.to + 1) : value,
-            ).body!,
-        }
-        : null
-    },
-    delete: async (keys) => {
-      for (let key of [keys].flat()) bytes.delete(key)
-    },
-    list: async (prefix) =>
-      [...bytes.keys()].filter((k) => k.startsWith(prefix)).sort(),
-    uploaded: async () => {
-      throw new Error('edits do not sweep')
-    },
+    has: (key) => Promise.resolve(bytes.has(key)),
+    put: (key, value) =>
+      answer(() => {
+        puts.push(key)
+        bytes.set(key, new Uint8Array(value))
+      }),
+    read: (key) => Promise.resolve(bytes.get(key) ?? null),
+    get: (key) =>
+      answer(() => {
+        let value = bytes.get(key)
+        if (!value) throw new Error(`no blob at ${key}`)
+        return value
+      }),
+    load: (key) =>
+      answer(() => {
+        let value = bytes.get(key)
+        return value ? { bytes: value, version: key } : null
+      }),
+    open: (key) =>
+      answer(() => {
+        let value = bytes.get(key)
+        return value
+          ? {
+            size: value.byteLength,
+            version: key,
+            read: (range) =>
+              Promise.resolve(
+                new Response(
+                  range ? value.slice(range.from, range.to + 1) : value,
+                ).body!,
+              ),
+          }
+          : null
+      }),
+    delete: (keys) =>
+      answer(() => {
+        for (let key of [keys].flat()) bytes.delete(key)
+      }),
+    list: (prefix) =>
+      Promise.resolve(
+        [...bytes.keys()].filter((k) => k.startsWith(prefix)).sort(),
+      ),
+    uploaded: () =>
+      answer(() => {
+        throw new Error('edits do not sweep')
+      }),
   }
   let edit = <T>(act: Parameters<typeof modifying<T>>[5]) =>
     modifying(
@@ -172,13 +188,15 @@ let made = () => {
       () => new Date(time.now() + skew).toISOString(),
     )
   let write = (sent: Record<string, string>) =>
-    edit(async () => ({
-      changes: Object.entries(sent).map(([path, text]) => ({
-        path,
-        ...contents[text],
-      })),
-      value: null,
-    }))
+    edit(() =>
+      Promise.resolve({
+        changes: Object.entries(sent).map(([path, text]) => ({
+          path,
+          ...contents[text],
+        })),
+        value: null,
+      })
+    )
   let draft = () => drafting(raw, dir, app())
   let read = async (path: string) => {
     let d = await draft()
@@ -199,10 +217,10 @@ let made = () => {
       sha: want,
       size: all.find((w) => w.sha == want)?.size,
     }
-    return edit(async () => ({ changes: [change], value: null }))
+    return edit(() => Promise.resolve({ changes: [change], value: null }))
   }
   let remove = (path: string) =>
-    edit(async (d, _app, attempt) => deleting(d, path, attempt))
+    edit((d, _app, attempt) => answer(() => deleting(d, path, attempt)))
   return {
     write,
     read,
