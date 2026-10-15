@@ -35,6 +35,7 @@
 import { declarationOf, keepDeclaration } from './declaration.ts'
 import type { Reload } from '@yaks/platform'
 import { configured, deployWorker } from './deploy_worker.ts'
+import type { Config } from './wrangler_app.ts'
 import { compiled } from './esbuild.ts'
 import { bindingLines, bindings } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
@@ -1875,7 +1876,7 @@ let instead = (path: string) =>
  * made (T-34264). Neither is `content: string` — a `.wasm` would not survive
  * a decode — which is why this takes bytes. Answers their app-relative paths.
  */
-export let wrote = async (
+export let wroteAt = async (
   env: Env,
   space: Space,
   app: App,
@@ -1893,10 +1894,17 @@ export let wrote = async (
     app,
     who,
     (app) => prefixOf(space, app),
-    async (draft, app, _attempt, editFiles) => {
+    async (draft, app, _attempt, editFiles, fresh) => {
       let edit = { ...app, source: draft }
       let prefix = fileKey(space, edit, '')
       let archive = `${space.slug}/${app.slug}/`
+      // The wrangler config the app serves by, asked for beside the puts so
+      // it adds no wait; a never-released app's fresh draft holds nothing else.
+      let config = configAfter(
+        files,
+        fresh && !app.version ? null : editFiles,
+        prefix,
+      )
       let stopped = await c.time(
         'quota',
         () =>
@@ -1964,12 +1972,47 @@ export let wrote = async (
       let paths = files.map((f) =>
         fileKey(space, edit, f.path).slice(prefix.length)
       )
-      return paths
+      return { paths, config: await config }
     },
-  ).then((paths) => {
+  ).then((done) => {
     if (!who.administrative) scheduleUse(env, app.eid)
-    return paths
+    return done
   })
+}
+
+export let wrote = async (...args: Parameters<typeof wroteAt>) =>
+  (await wroteAt(...args)).paths
+
+const WRANGLERS = ['wrangler.jsonc', 'wrangler.json']
+
+/**
+ * The wrangler config an app serves by once `files` have landed: what the
+ * call wrote, else what the draft already holds. `held` is the draft's view,
+ * or null when it holds nothing to ask. The draft is listed first, so an app
+ * with no wrangler file costs two listings and no reads.
+ */
+let configAfter = async (
+  files: { path: string; bytes: Uint8Array }[],
+  held: Objects | null,
+  prefix: string,
+) => {
+  let wrote = new Map(files.map((f) => [f.path, f.bytes]))
+  let named = held
+    ? new Set((await held.list(prefix)).map((k) => k.slice(prefix.length)))
+    : new Set<string>()
+  let had = new Map(
+    await Promise.all(
+      WRANGLERS.filter((p) => named.has(p)).map(async (p) =>
+        [p, await held!.read(prefix + p)] as const
+      ),
+    ),
+  )
+  return (await configured((p) =>
+    Promise.resolve(
+      (wrote.get(p) ?? had.get(p) ?? null) as Uint8Array<ArrayBuffer> | null,
+    )
+  ))
+    .config
 }
 
 /**
@@ -2038,16 +2081,10 @@ export let stored = (path: string, bytes: Uint8Array, sha: string) =>
 
 /**
  * Where a file answers once a write has landed, in a sentence: its address,
- * or that it is source only, when the app's wrangler config serves a folder
- * (files.ts `servedAt`). Read after the write, so a wrangler file written in
- * the same call counts.
+ * or that it is source only, when the app's wrangler `config` serves a folder
+ * (files.ts `servedAt`).
  */
-let whereAfter = async (ctx: Ctx, space: Space, app: App) => {
-  let now = await ctx.dir.app(space, app.slug) ?? app
-  let source = prefixOf(space, now)
-  let view = draftFiles(r2Objects(ctx.env.BLOBS), now.draft, source)
-  let root = working(now, source)
-  let { config } = await configured((p) => view.read(`${root}/${p}`))
+let placing = (ctx: Ctx, space: Space, app: App, config: Config) => {
   let at = url(space, app, ctx.env)
   let dir = config.assets?.directory
   let where = (path: string) => {
@@ -3041,7 +3078,9 @@ let OURS: Row[] = [
         let paths = Object.keys(files).sort()
         let unreleased = !live || !same(live.files, files)
         let version = app.version ?? 0
-        let { config } = await configured((p) => view.read(prefix + p))
+        let { config } = await configured((p) =>
+          p in files ? view.read(prefix + p) : Promise.resolve(null)
+        )
         let dir = config.assets?.directory
         let source = dir
           ? paths.filter((path) => servedAt(config, path) == null)
@@ -3227,8 +3266,15 @@ let OURS: Row[] = [
               'goes back 30 days',
           )
         }
-        let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes }], c)
-        let where = await whereAfter(ctx, space, app)
+        let { paths: [p], config } = await wroteAt(
+          ctx.env,
+          space,
+          app,
+          who,
+          [{ path, bytes }],
+          c,
+        )
+        let where = placing(ctx, space, app, config)
         return {
           text: `put ${p} back to what it was until ${want.at} → ` +
             `${where(p)} — ${
@@ -3259,7 +3305,7 @@ let OURS: Row[] = [
           args.replace,
           key.slice(prefix.length),
         ))
-        let [p] = await wrote(
+        let { paths: [p], config } = await wroteAt(
           ctx.env,
           space,
           app,
@@ -3267,7 +3313,7 @@ let OURS: Row[] = [
           [{ path, bytes: now }],
           c,
         )
-        let where = await whereAfter(ctx, space, app)
+        let where = placing(ctx, space, app, config)
         return {
           text: `patched ${p} → ${where(p)} — ${
             stored(p, now, await sha256(now))
@@ -3279,12 +3325,16 @@ let OURS: Row[] = [
       if (op == 'fetch') {
         let path = text(args.path, 'path')
         let got = await c.time('fetch', () => fetched(text(args.url, 'url')))
-        let [p] = await wrote(ctx.env, space, app, who, [{
-          path,
-          bytes: got.bytes,
-        }], c)
+        let { paths: [p], config } = await wroteAt(
+          ctx.env,
+          space,
+          app,
+          who,
+          [{ path, bytes: got.bytes }],
+          c,
+        )
         let sha = await sha256(got.bytes)
-        let where = await whereAfter(ctx, space, app)
+        let where = placing(ctx, space, app, config)
         return {
           // The integrity hash so a page that goes on loading this from a
           // CDN can be pinned to the very bytes we got; the mime is what the
@@ -3305,7 +3355,7 @@ let OURS: Row[] = [
         path: text(args.path, 'path'),
         bytes: bytesOf(args),
       }]
-      let paths = await wrote(ctx.env, space, app, who, sent, c)
+      let { paths, config } = await wroteAt(ctx.env, space, app, who, sent, c)
       // What landed, per file: the measurement the caller checks its own
       // transcription against.
       let each = await Promise.all(
@@ -3313,7 +3363,7 @@ let OURS: Row[] = [
           stored(paths[i], f.bytes, await sha256(f.bytes))
         ),
       )
-      let where = await whereAfter(ctx, space, app)
+      let where = placing(ctx, space, app, config)
       return {
         text: paths.length == 1
           ? `wrote ${paths[0]} → ${where(paths[0])} — ${

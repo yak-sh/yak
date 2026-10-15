@@ -422,7 +422,13 @@ export let modifying = async <T>(
   app: App,
   who: Who,
   source: (app: App) => string,
-  act: (draft: string, app: App, attempt: number, files: Objects) => Promise<T>,
+  act: (
+    draft: string,
+    app: App,
+    attempt: number,
+    files: Objects,
+    fresh: boolean,
+  ) => Promise<T>,
 ): Promise<T> => {
   let row = app
   for (let n = 0; n < 3; n++) {
@@ -434,6 +440,7 @@ export let modifying = async <T>(
       row,
       n,
       draftFiles(blobs, draft, source(row), fresh),
+      fresh,
     )
     let after = await waiting(dir, space, row, who)
     if (
