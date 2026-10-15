@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Recipe Box</title>
+    <link rel="stylesheet" href="./photos.css">
     <style>
     :root {
       --bg: #33493C;
@@ -397,6 +398,14 @@
 
     <script type="module">
     import { apply, me, subscribe } from './api/client.js'
+    import { renderPhotos, wirePhotos } from './photos.js'
+    let photos = null
+    window.addEventListener('beforeunload', (e) => {
+      if (photos?.api.hasUnsaved()) {
+        e.preventDefault()
+        e.returnValue = ''
+      }
+    })
 
     const CATS = [
       'Mains',
@@ -443,7 +452,20 @@
       } else location.hash = hash
     }
     function onRoute() {
-      route = parseHash()
+      const next = parseHash()
+      if (
+        photos && findCard(next.card)?.eid !== photos.eid && photos.api.hasUnsaved()
+      ) {
+        if (
+          !confirm(
+            'Photos are still uploading or a caption has not saved. Leave anyway?',
+          )
+        ) {
+          history.replaceState(null, '', cardHash(findCard(route.card)))
+          return
+        }
+      }
+      route = next
       editing = null
       armedDelete = null
       render()
@@ -461,7 +483,7 @@
     } catch (e) {}
 
     function canWrite() {
-      return !who || who.writes
+      return !!who?.writes
     }
 
     function esc(s) {
@@ -543,7 +565,7 @@
     me().then((w) => {
       who = w
       render()
-    }).catch(() => {})
+    }).catch(fail)
 
     // ---- actions ----
     async function saveForm() {
@@ -637,6 +659,15 @@
       renderTabs()
       const m = $('main')
       const open = findCard(route.card)
+      let restoreFocus = () => {}
+      if (photos && open?.eid !== photos.eid) {
+        photos.api.destroy({ discard: true })
+        photos = null
+      }
+      if (photos) {
+        restoreFocus = photos.api.preserveFocus()
+        photos.root.remove()
+      }
       if (editing) m.innerHTML = formHTML()
       else if (route.card) m.innerHTML = detailHTML(open)
       else m.innerHTML = listHTML()
@@ -644,6 +675,19 @@
         ? open.title + ' \u00b7 Recipe Box'
         : 'Recipe Box'
       wire()
+      if (open) {
+        if (!photos) {
+          const root = renderPhotos(open.eid, [], canWrite())
+          photos = {
+            eid: open.eid,
+            root,
+            api: wirePhotos(root, open.eid, [], fail),
+          }
+        }
+        photos.api.setWritable(canWrite())
+        m.querySelector('.pad')?.append(photos.root)
+        restoreFocus()
+      }
     }
 
     function countLine() {

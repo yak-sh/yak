@@ -1,0 +1,105 @@
+.recipe-photos {
+  color: var(--ink);
+  font-family: var(--mono);
+  padding-bottom: 8px;
+}
+.recipe-photos-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+  margin: 12px 0;
+}
+.recipe-photo {
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 3px;
+}
+.recipe-photo img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  background: var(--card-edge);
+  border-radius: 2px;
+}
+.recipe-photo figcaption {
+  padding-top: 10px;
+}
+.recipe-photo label,
+.recipe-photos-upload label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+.recipe-photo input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--card);
+  border: 0;
+  border-bottom: 1px solid var(--rule-blue);
+  border-radius: 0;
+  padding: 8px 2px;
+}
+.recipe-photo input:focus-visible,
+.recipe-photos button:focus-visible,
+.recipe-photos input[type=file]:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.recipe-photos-upload {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--rule-blue);
+}
+.recipe-photos-upload label {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.recipe-photos input[type=file] {
+  width: 100%;
+  font: inherit;
+  padding: 6px 0;
+}
+.recipe-photos button {
+  min-height: 44px;
+}
+.recipe-photos button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
+.recipe-photos-empty,
+.recipe-photos-status,
+.recipe-photo-status {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.recipe-photo-status {
+  display: block;
+  margin-top: 6px;
+}
+.recipe-photos-error,
+.recipe-photo-error,
+.recipe-photo-image-error {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--rule-red);
+  overflow-wrap: anywhere;
+}
+.recipe-photos [hidden] {
+  display: none;
+}
+.recipe-photos-status:empty {
+  margin: 0;
+}

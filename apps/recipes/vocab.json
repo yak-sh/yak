@@ -2,13 +2,50 @@
   "$defs": {
     "recipe": {
       "properties": {
-        "category": { "type": "string" },
-        "serves": { "type": "string" },
-        "duration": { "type": "string" },
-        "ingredients": { "type": "string" },
-        "steps": { "type": "string" },
-        "notes": { "type": "string" }
+        "category": {
+          "type": "string"
+        },
+        "serves": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "string"
+        },
+        "ingredients": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "photo": {
+      "description": "A photo attached to a recipe; its uploaded bytes are a shared platform blob and its caption and order belong to this attachment.",
+      "properties": {
+        "recipe": {
+          "type": "string",
+          "ref": "recipe",
+          "death": "cascade"
+        },
+        "blob": {
+          "type": "string",
+          "ref": "blob",
+          "death": "keep"
+        },
+        "caption": {
+          "type": "string"
+        },
+        "ord": {
+          "type": "number"
+        }
       }
     }
+  },
+  "blob": {
+    "maxLength": 10485760,
+    "contentMediaType": "image/*"
   }
 }
