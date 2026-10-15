@@ -12,6 +12,7 @@ import { docDoc } from '@yaks/doc'
 import { type Client, desk, draftDoc, drafts, type Stash } from './mod.ts'
 
 let jo = mint()
+let al = mint()
 let store = () =>
   client(loadVocab([draftDoc, docDoc]), [drafts()], { vault: false })
 
@@ -286,8 +287,10 @@ test('a discard keeps what another interface typed meanwhile', async () => {
   assertEquals([a.text('p'), b.text('p')], ['b', 'b'])
 })
 
+// At the desk's own pace, what is typed just after a send waits its turn, as
+// it does under a person's fingers.
 test('restoring another draft source preserves subsequent typing', async () => {
-  let d = desk(shared, { by: () => jo, pace: 0 }), place = 'restored'
+  let d = desk(shared, { by: () => al }), place = 'restored'
   try {
     d.type(place, 'ship it')
     await Promise.resolve()
