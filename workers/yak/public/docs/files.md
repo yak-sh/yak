@@ -474,7 +474,7 @@ never received, is `404 no_such_file`.
 
 ## Big files go up in parts, and resume
 
-`upload` sends a file of 16 MiB or more in parts, four at a time, and an upload
+`upload` sends a file of 32 MiB or more in parts, four at a time, and an upload
 that is cut short carries on instead of starting over. A part that fails because
 the connection dropped or the phone went to sleep is sent again once the browser
 is back online. If the tab closed, uploading the same file again, from any tab

@@ -298,9 +298,11 @@ let hashed = async (blob) => {
 
 export let digest = async (blob) => (await hashed(blob)).sha
 
-// A file at least this big goes up in parts, several at once; anything
-// smaller is one request, which is quicker below it (measured, T-124790).
-let SPLIT = 16 * 1024 * 1024
+// A file at least this big goes up in parts, several at once, which from
+// here on send faster than one request, and their fixed second or two of
+// beginning and assembling is about a tenth of the upload (measured, T-124790).
+// Anything smaller is one request.
+let SPLIT = 32 * 1024 * 1024
 let LANES = 4
 
 // Sent again while what failed was the way there, not the answer: no

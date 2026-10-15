@@ -119,7 +119,7 @@ bytes are a picture that declares its size (png, jpeg, gif, webp). `mime` is the
 blob's own `type`; `name` defaults to `file.name` and is sent percent-encoded.
 The bytes are stored under their SHA-256, so `eid` is that hash and the same
 file twice is one upload and one row. Which files the app takes, by size and
-type, is its `vocab.json`'s to say ([files](./files.md)). A file of 16 MiB or
+type, is its `vocab.json`'s to say ([files](./files.md)). A file of 32 MiB or
 more goes up in parts, several at once, and resumes where it stopped: uploading
 the same file again sends only the parts that had not arrived
 ([files](./files.md)).
