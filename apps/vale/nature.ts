@@ -1,7 +1,7 @@
 // Which wild props are resources. Terrain grows these from its feature data;
 // gathering gives them the same identity and lifecycle as placed nodes.
 // The value is the lode that sets this prop's trade and possible materials.
-import type { Vec } from './mesh.ts'
+import type { Vec } from '@yaks/voxel/mesh'
 import { CHUNK, chunkOf, type Prop, standAt, type Vale } from './terrain.ts'
 import { off, step } from './stand.ts'
 

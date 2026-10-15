@@ -4,8 +4,8 @@
 // are drawn only near the player. A worker runs this without three.js, and
 // the page turns each packed chunk into meshes and keeps its ground.
 import { groundChunk } from './ground.ts'
-import { cuboids } from './boxes.ts'
-import { out, pack, type Packed, place, type Vec } from './mesh.ts'
+import { cuboids } from '@yaks/voxel/boxes'
+import { out, pack, type Packed, place, type Vec } from '@yaks/voxel/mesh'
 import { KINDS, model } from './props.ts'
 import { type Natural, naturalAt } from './nature.ts'
 import { baseline, natureMesh } from './nature_mesh.ts'

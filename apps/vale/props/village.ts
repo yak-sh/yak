@@ -1,6 +1,6 @@
 // The village's well, fire, notice board, lamps and road signs. Homes and
 // workplaces are buildings (buildings.ts), in each land's materials.
-import { ball, box, key, type Vox } from '../mesh.ts'
+import { ball, box, key, type Vox } from '@yaks/voxel/mesh'
 import { DRESSES } from '../buildings/dress.ts'
 import type { Dress, Paint } from '../buildings/kit.ts'
 import { FOUND, type Kind, type Model, TIMBER } from './kit.ts'

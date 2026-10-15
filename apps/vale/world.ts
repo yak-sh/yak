@@ -23,14 +23,14 @@ import { halo as glowTexture } from './halo.ts'
 import { instances } from './instances.ts'
 import { levelOf, LEVELS, SIZE, type Spot } from './levels.ts'
 import type { ChunkProps } from './nature_mesh.ts'
-import type { Packed, Vec } from './mesh.ts'
+import type { Packed, Vec } from '@yaks/voxel/mesh'
 import { KINDS } from './props.ts'
 import { lerp, smooth } from '@yaks/game'
 import { blend } from './regions.ts'
 import { type Building, cutaway } from './solid.ts'
 import { cut, CUTS, geometry, night, sight, soft } from './soft.ts'
 import { day } from './day.ts'
-import { COARSER, type Want, wanted } from './stream.ts'
+import { COARSER, type Want, wanted } from '@yaks/voxel/stream'
 import {
   adopt,
   type Affects,
@@ -458,6 +458,7 @@ export let world = (v: Vale, mesh: Mesher): World => {
   let stream = () => {
     if (gone) return
     let list = wanted(
+      CHUNK,
       focus.x,
       focus.z,
       fog.far,

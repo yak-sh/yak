@@ -17,12 +17,12 @@
 // before them, both hands up, or both blades across the foe.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Box } from './boxes.ts'
+import type { Box } from '@yaks/voxel/boxes'
 import type { Pose } from './abilities.ts'
 import type { Hand } from './gear.ts'
 import { halo } from './halo.ts'
 import { ITEMS } from './items.ts'
-import type { Vec } from './mesh.ts'
+import type { Vec } from '@yaks/voxel/mesh'
 import {
   ease,
   fit,

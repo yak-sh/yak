@@ -3,7 +3,7 @@
 // soft.ts brings it up at dusk. Its facing keeps light inside the walls and
 // under the ceiling, while the distance makes each source brightest nearby.
 import type { Glow } from './kit.ts'
-import { type Out, type Vec } from '../mesh.ts'
+import { type Out, type Vec } from '@yaks/voxel/mesh'
 
 /** How much of the nearby lamps a face sees, before the day's light changes. */
 export let warmth = (at: Vec, normal: Vec, glows: Glow[]) => {

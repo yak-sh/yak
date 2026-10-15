@@ -1,46 +1,45 @@
 import { assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
-import { cellsOf, chartbook } from './chartbook.ts'
-import { pan, zoom } from './mapview.ts'
+import { type Cell, cellsOf, chartbook, type ChartBox } from './chartbook.ts'
 
-test('grown charts survive pan, zoom and reopening without loading terrain', async () => {
-  let book = chartbook<string>(), painted = 0, loaded = 0
-  let wide: [number, number, number] = [-256, -256, 1024]
-  for (let cell of cellsOf(wide)) {
+test('kept charts survive changed views and reopening without reloading', async () => {
+  let book = chartbook<string>(16), painted = 0, loaded = 0
+  let wide: ChartBox = [-256, -256, 1024]
+  for (let cell of cellsOf(wide, 16)) {
     await book.keep(cell, () => {
       painted++
       return cell.join(',')
     })
   }
-  let near: [number, number, number] = [0, 0, 160]
+  let near: ChartBox = [0, 0, 160]
   let read = (box: typeof near) =>
     book.read(box, () => true, () => {
       loaded++
       return Promise.resolve('missing')
     })
   for (let i = 0; i < 20; i++) {
-    await read(pan(near, i / 100, -i / 100))
-    await read(zoom(near, 2))
+    await read([-1.6 * i, 1.6 * i, 160])
+    await read([-80, -80, 320])
   }
   assertEquals((await read(wide))[0], {
     image: '-16,-16',
     box: [-256, -256, 16],
   })
-  assertEquals([painted, loaded], [cellsOf(wide).length, 0])
+  assertEquals([painted, loaded], [cellsOf(wide, 16).length, 0])
   await book.keep([0, 0], () => {
     painted++
     return 'duplicate'
   })
-  assertEquals(painted, cellsOf(wide).length)
+  assertEquals(painted, cellsOf(wide, 16).length)
   book.clear()
   await read(near)
   assertEquals(loaded, 100)
 })
 
 test('unexplored ground is never requested; overlapping requests share charts', async () => {
-  let book = chartbook<string>(), calls: string[] = []
+  let book = chartbook<string>(16), calls: string[] = []
   let done = () => {}, ready = new Promise<void>((resolve) => done = resolve)
-  let load = async (cell: [number, number]) => {
+  let load = async (cell: Cell) => {
     calls.push(cell.join(','))
     await ready
     return cell.join(',')
@@ -55,7 +54,7 @@ test('unexplored ground is never requested; overlapping requests share charts', 
 })
 
 test('a failed chart retries and a retired failure cannot evict its replacement', async () => {
-  let book = chartbook<string>(), fail = (_: Error) => {}
+  let book = chartbook<string>(16), fail = (_: Error) => {}
   let pending = book.keep(
     [0, 0],
     () => new Promise<string>((_, reject) => fail = reject),
@@ -76,5 +75,27 @@ test('a failed chart retries and a retired failure cannot evict its replacement'
 })
 
 test('chart placement covers negative coordinates without extra boundary cells', () => {
-  assertEquals(cellsOf([-16, -16, 32]), [[-1, -1], [0, -1], [-1, 0], [0, 0]])
+  assertEquals(cellsOf([-16, -16, 32], 16), [[-1, -1], [0, -1], [-1, 0], [
+    0,
+    0,
+  ]])
+})
+
+test('chartbooks use the supplied chunk size for cells, placement and reuse', async () => {
+  let book = chartbook<string>(5), loaded: Cell[] = []
+  let load = (cell: Cell) => {
+    loaded.push(cell)
+    return Promise.resolve(cell.join(','))
+  }
+  assertEquals(cellsOf([-5, -5, 10], 5), [[-1, -1], [0, -1], [-1, 0], [0, 0]])
+  assertEquals(await book.read([-5, -5, 10], () => true, load), [
+    { image: '-1,-1', box: [-5, -5, 5] },
+    { image: '0,-1', box: [0, -5, 5] },
+    { image: '-1,0', box: [-5, 0, 5] },
+    { image: '0,0', box: [0, 0, 5] },
+  ])
+  assertEquals(await book.read([0, 0, 5], () => true, load), [
+    { image: '0,0', box: [0, 0, 5] },
+  ])
+  assertEquals(loaded, [[-1, -1], [0, -1], [-1, 0], [0, 0]])
 })

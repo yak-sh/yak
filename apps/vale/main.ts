@@ -77,7 +77,7 @@ import { icon, refreshSprites } from './sprites.ts'
 import { station } from './station.ts'
 import { pageState } from './page-state.ts'
 import { voices } from './voicebox.ts'
-import { COARSER } from './stream.ts'
+import { COARSER } from '@yaks/voxel/stream'
 import {
   type Affects,
   CHUNK,

@@ -1,0 +1,17 @@
+{
+  "name": "@yaks/voxel",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./mesh": "./mesh.ts",
+    "./boxes": "./boxes.ts",
+    "./stream": "./stream.ts",
+    "./chartbook": "./chartbook.ts",
+    "./chartsheet": "./chartsheet.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Voxel and box meshing into packed quads, chunk detail selection and cached heightfield charts, over plain values and safe in workers.",
+  "publish": {
+    "exclude": ["**/*_test.ts", "./browser.json"]
+  }
+}

@@ -1,13 +1,13 @@
 // A view scales sheets of explored ground. Each chunk's fixed-detail pixels
 // are copied once; no charting, resampling or image loading happens on zoom.
 import { chartVersion, groundCoverage, groundView } from './grown.ts'
-import { chartsheet } from './chartsheet.ts'
+import { chartsheet } from '@yaks/voxel/chartsheet'
 import { SIZE } from './levels.ts'
 import type { Box } from './mapview.ts'
 import { CHUNK } from './terrain.ts'
 
 let sheets = () =>
-  chartsheet(() => {
+  chartsheet(SIZE, () => {
     let image = document.createElement('canvas')
     image.width = image.height = SIZE
     let ctx = image.getContext('2d')!

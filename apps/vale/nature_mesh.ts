@@ -1,9 +1,9 @@
 // Worker-built geometry for natural resources, rebuilt one chunk at a time
 // when gathering changes their visible state. It uses the chunk's voxel edge
 // so a spent or rare resource has the same detail as its first mesh.
-import { cuboids } from './boxes.ts'
+import { cuboids } from '@yaks/voxel/boxes'
 import { LODES, naturalEid, nodeRarity } from './gather.ts'
-import { type Out, out, pack, type Packed, place } from './mesh.ts'
+import { type Out, out, pack, type Packed, place } from '@yaks/voxel/mesh'
 import { type Natural, NATURE } from './nature.ts'
 import { model } from './props.ts'
 import { GRADES, type Rarity } from './rarity.ts'

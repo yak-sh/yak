@@ -12,7 +12,7 @@
 // stay where it is placed. A model a vale places is built on sixteenths of a
 // metre, so its planes fall in few places past the ground's grid and a free
 // step is always near.
-import { cuboids } from './boxes.ts'
+import { cuboids } from '@yaks/voxel/boxes'
 import {
   type Out,
   out,
@@ -20,7 +20,7 @@ import {
   profileOf,
   STEP,
   type Vec,
-} from './mesh.ts'
+} from '@yaks/voxel/mesh'
 import { modelProfile } from './props.ts'
 import {
   foundation,
@@ -200,8 +200,8 @@ export let propAt = (v: Vale, p: Prop): Thing => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { cuboids } from './boxes.ts'
- * import { out } from './mesh.ts'
+ * import { cuboids } from '@yaks/voxel/boxes'
+ * import { out } from '@yaks/voxel/mesh'
  * let post = cuboids(out(), [[[-0.25, 0, -0.25], [0.5, 2.1, 0.5], 0x8a6a4a]])
  * assertEquals(thingAt([10, 5, 20], [post], 0.25), [{
  *   room: [[9.75, 5, 19.75], [10.25, 7.1, 20.25]],

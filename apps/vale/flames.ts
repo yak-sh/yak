@@ -2,7 +2,7 @@
 // instanced mesh, whether its building has just streamed in or out.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Vec } from './mesh.ts'
+import type { Vec } from '@yaks/voxel/mesh'
 
 export type Fire = { at: Vec; size: number }
 

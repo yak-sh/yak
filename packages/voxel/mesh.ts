@@ -52,7 +52,7 @@ export let out = (): Out => ({
 let COPIED: ('nrm' | 'col' | 'edge' | 'bw')[] = ['nrm', 'col', 'edge', 'bw']
 
 /** Copy triangles into `into`, moved by `at`. */
-export let place = (into: Out, from: Out, at: Vec) => {
+export let place = (into: Out, from: Out, at: Vec): void => {
   let base = into.pos.length / 3
   for (let i = 0; i < from.pos.length; i += 3) {
     into.pos.push(
@@ -284,7 +284,7 @@ export let METAL = 1
 export let metal = (hex: number) => hex % 0x1000000 + METAL * 0x1000000
 
 /** What a colour is made of: `MATTE` or `METAL`. */
-export let materialOf = (hex: number) => Math.floor(hex / 0x1000000)
+export let materialOf = (hex: number): number => Math.floor(hex / 0x1000000)
 
 /** A face's two in-plane axes, by the axis its normal lies on: x → (z, y),
  * y → (x, z), z → (x, y). soft.ts derives the same pair from the normal. */
@@ -333,7 +333,7 @@ export let quad = (
   ao: [number, number, number, number] = [3, 3, 3, 3],
   cell = 0.5,
   material = MATTE,
-) => {
+): void => {
   let [ua, va] = axes(axis)
   let base = o.pos.length / 3
   let bu = Math.min(0.5, round / du), bv = Math.min(0.5, round / dv)
@@ -414,7 +414,7 @@ export let box = (
   [x0, y0, z0]: Vec,
   [x1, y1, z1]: Vec,
   color: number,
-) => {
+): Vox => {
   for (let x = x0; x <= x1; x++) {
     for (let y = y0; y <= y1; y++) {
       for (let z = z0; z <= z1; z++) v.set(key(x, y, z), color)
@@ -430,7 +430,7 @@ export let ball = (
   [cx, cy, cz]: Vec,
   r: number,
   pick: (x: number, y: number, z: number) => number | null,
-) => {
+): Vox => {
   let R = Math.ceil(r)
   for (let x = -R; x <= R; x++) {
     for (let y = -R; y <= R; y++) {
@@ -469,7 +469,7 @@ export let blob = (
   at: Vec = [0, 0, 0],
   round = 0.22,
   cell = size,
-) => {
+): Out => {
   // The voxels as a grid over their bounds and one more all round, 1 where
   // solid: each face asks a score of its neighbours, and a grid answers
   // sooner than the map. A neighbour's cell is a step along its axis.

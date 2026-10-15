@@ -1,7 +1,7 @@
 // A walk through the same ground, stairs, furniture and doors as the hero.
 // The world grows from coordinates, so a route can be found once per pair of
 // places and shared for as long as that page keeps its world.
-import type { Vec } from './mesh.ts'
+import type { Vec } from '@yaks/voxel/mesh'
 import { fits, floorAt } from './sim.ts'
 import type { Vale } from './terrain.ts'
 

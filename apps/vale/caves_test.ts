@@ -5,7 +5,7 @@ import { assert, assertAlmostEquals, assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { aim } from './cam.ts'
 import { chunk } from './chunks.ts'
-import { fights } from './mesh.ts'
+import { fights } from '@yaks/voxel/mesh'
 import { spotOf } from './regions.ts'
 import { type Body, walk } from './sim.ts'
 import {

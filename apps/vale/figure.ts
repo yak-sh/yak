@@ -13,10 +13,10 @@
 // measured by its bulk, so a figure twice the size moves twice as far.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import type { Box } from './boxes.ts'
+import type { Box } from '@yaks/voxel/boxes'
 import { comp } from './bundle.ts'
 import type { Act, Puppet } from './figures.ts'
-import type { Vec } from './mesh.ts'
+import type { Vec } from '@yaks/voxel/mesh'
 import type { Bundle } from './net.ts'
 import { knit, lunge, partOf } from './parts.ts'
 import { flash, soft } from './soft.ts'
@@ -214,7 +214,7 @@ let lift = (fall: Fall, box: THREE.Box3, at: THREE.Vector3) => {
  *
  * ```ts
  * import { assertAlmostEquals, assertEquals } from '@std/assert'
- * import type { Box } from './boxes.ts'
+ * import type { Box } from '@yaks/voxel/boxes'
  * let leg = (name: string, x: number, phase: number) => ({
  *   name, pivot: [x, 0.4, 0] as [number, number, number],
  *   boxes: [[[-0.05, -0.4, -0.05], [0.1, 0.42, 0.1], 0x604830]] as Box[],

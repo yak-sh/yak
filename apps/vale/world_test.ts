@@ -5,13 +5,13 @@ import * as THREE from 'three'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { seedBuildings } from './buildings_fixture.ts'
-import { cuboids } from './boxes.ts'
+import { cuboids } from '@yaks/voxel/boxes'
 import type { Chunk } from './chunks.ts'
 import { SIZE } from './levels.ts'
-import { out, pack, type Packed } from './mesh.ts'
+import { out, pack, type Packed } from '@yaks/voxel/mesh'
 import { CHUNK, chunkOf, flat } from './terrain.ts'
 import { world } from './world.ts'
-import { wanted } from './stream.ts'
+import { wanted } from '@yaks/voxel/stream'
 import { seedThemes } from './themes_fixture.ts'
 
 seedThemes()
@@ -156,7 +156,8 @@ test('new ground draws before detail and keeps a worker free while travelling', 
   w.focus.set(128, 5, 128)
   await w.near()
   let close =
-    wanted(128, 128, w.fog.far, () => undefined).filter((c) => c.d < 24).length
+    wanted(CHUNK, 128, 128, w.fog.far, () => undefined).filter((c) => c.d < 24)
+      .length
   assert(w.chunks[2] >= close)
   assertEquals(sent.slice(0, 4).every((a) => a.lod == 2), true)
   for (let n = 0; fine.length < 3 && n < 50; n++) await Promise.resolve()

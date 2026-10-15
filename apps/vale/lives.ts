@@ -2,7 +2,7 @@
 // in a building the land placed, so moving a plot moves its people with it.
 import { PLANS } from './buildings.ts'
 import { STATIONS } from './craft.ts'
-import type { Vec } from './mesh.ts'
+import type { Vec } from '@yaks/voxel/mesh'
 import { type Giver, GIVERS } from './quests.ts'
 import { spotOf } from './regions.ts'
 import type { Building } from './solid.ts'

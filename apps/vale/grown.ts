@@ -5,14 +5,14 @@
 // If workers fail, gameplay can grow locally and reports the reason. Missing
 // map ground always stays off the page thread.
 import { chartPatch, chartRegions } from './chart.ts'
-import { chartbook } from './chartbook.ts'
+import { chartbook } from '@yaks/voxel/chartbook'
 import { coverage } from './chartcover.ts'
 import type { Spot } from './levels.ts'
 import type { Box } from './mapview.ts'
 import { veil } from './mapfog.ts'
 import { type Chunk, chunk } from './chunks.ts'
 import type { Answer, Ask } from './grow.ts'
-import { pack, type Packed } from './mesh.ts'
+import { pack, type Packed } from '@yaks/voxel/mesh'
 import type { Bundle } from './net.ts'
 import { model } from './props.ts'
 import {
@@ -38,7 +38,7 @@ let themes: Bundle[] = []
 let buildingDesigns: Bundle[] | null = null
 // The map's pixels depend on both sets of designs.
 export let chartVersion = 0
-let charts = chartbook<Uint8ClampedArray<ArrayBuffer>>()
+let charts = chartbook<Uint8ClampedArray<ArrayBuffer>>(CHUNK)
 export let groundCoverage = coverage()
 
 let loadGround = (cell: Spot) => {

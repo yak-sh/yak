@@ -1,7 +1,7 @@
 // A route cannot end above every supporting floor near its destination.
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import type { Vec } from './mesh.ts'
+import type { Vec } from '@yaks/voxel/mesh'
 import { adopt, flat, type Vale } from './terrain.ts'
 import { fits } from './sim.ts'
 import { walk } from './walk.ts'

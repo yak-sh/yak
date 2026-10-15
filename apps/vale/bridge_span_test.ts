@@ -6,7 +6,7 @@ import { assert, assertEquals } from '@std/assert'
 import * as THREE from 'three'
 import { chunk } from './chunks.ts'
 import { groundChunk } from './ground.ts'
-import { fights, out } from './mesh.ts'
+import { fights, out } from '@yaks/voxel/mesh'
 import { boundaryAt } from './regions.ts'
 import { fits } from './sim.ts'
 import {

@@ -11,8 +11,8 @@
 // flank, a hand round a hilt.
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
-import { type Box, drawn, moved, type Solid, worn } from './boxes.ts'
-import { out, pack, place, type Vec } from './mesh.ts'
+import { type Box, drawn, moved, type Solid, worn } from '@yaks/voxel/boxes'
+import { out, pack, place, type Vec } from '@yaks/voxel/mesh'
 import { geometry } from './soft.ts'
 
 /** A limb: the part at the hip or shoulder, and the one below the joint. */
@@ -70,7 +70,7 @@ let square = (from: THREE.Object3D, to: THREE.Object3D) => {
  * ```ts
  * import { assertAlmostEquals, assertEquals } from '@std/assert'
  * import * as THREE from 'three'
- * import { STEP } from './mesh.ts'
+ * import { STEP } from '@yaks/voxel/mesh'
  * let root = new THREE.Group()
  * let flank = partOf([[[-0.3, 0, -0.5], [0.6, 0.4, 1], 0x806040]], [0, 1, 0])
  * // A thigh hung beside the flank, its outer side in the flank's plane.

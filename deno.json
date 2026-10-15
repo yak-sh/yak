@@ -196,6 +196,7 @@
     "./packages/rtc",
     "./packages/testing",
     "./packages/fp",
+    "./packages/voxel",
     "./packages/logic",
     "./packages/tracker",
     "./packages/timing",

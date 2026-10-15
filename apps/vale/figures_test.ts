@@ -9,7 +9,7 @@ import { HANDLES, WEIGHTS } from './arms.ts'
 import { BEASTS } from './beasts.ts'
 import { FIGURES, puppet } from './figure.ts'
 import { BUILD, CHILD, hero, person, type Puppet } from './figures.ts'
-import { fights, type Out, out, pack, place } from './mesh.ts'
+import { fights, type Out, out, pack, place } from '@yaks/voxel/mesh'
 import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()

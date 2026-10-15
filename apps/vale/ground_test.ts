@@ -2,7 +2,7 @@ import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import * as THREE from 'three'
 import { groundChunk } from './ground.ts'
-import { out } from './mesh.ts'
+import { out } from '@yaks/voxel/mesh'
 import { flat, NONE } from './terrain.ts'
 
 test('mountain steps above a cave retain their exposed sides and open space', () => {

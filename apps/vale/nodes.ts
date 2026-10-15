@@ -19,7 +19,7 @@ import { type Glyph, glyphText } from './glyphs.ts'
 import { ITEMS, meshed, type Thing } from './items.ts'
 import { LIFT } from './laid.ts'
 import { nodeGlow } from './node_glow.ts'
-import { type Box, cuboids } from './boxes.ts'
+import { type Box, cuboids } from '@yaks/voxel/boxes'
 import { baseline, type ChunkProps, natureMesh } from './nature_mesh.ts'
 import {
   ball,
@@ -31,7 +31,7 @@ import {
   pack,
   place,
   type Vox,
-} from './mesh.ts'
+} from '@yaks/voxel/mesh'
 import type { Vec3 } from './play.ts'
 import { model } from './props.ts'
 import { GRADES, tint } from './rarity.ts'

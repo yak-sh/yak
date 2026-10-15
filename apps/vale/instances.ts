@@ -5,7 +5,7 @@
 // @ts-types="npm:@types/three@^0.186.0"
 import * as THREE from 'three'
 import type { Chunk } from './chunks.ts'
-import type { Packed, Vec } from './mesh.ts'
+import type { Packed, Vec } from '@yaks/voxel/mesh'
 import { modelKey } from './props.ts'
 import { geometry } from './soft.ts'
 

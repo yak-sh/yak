@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStrictEquals } from '@std/assert'
 import { seedBuildings } from './buildings_fixture.ts'
-import { fights, key, pack, profileOf, unkey } from './mesh.ts'
+import { fights, key, pack, profileOf, unkey } from '@yaks/voxel/mesh'
 import { KINDS, model, modelKey } from './props.ts'
 import { walk } from './sim.ts'
 import { groundAt, hearthNear, propsNear, vale } from './terrain.ts'

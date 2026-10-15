@@ -1,8 +1,8 @@
 // Paint an item design's boxes in the world’s colors. Geometry and paint are
 // independent of the canvas owner, so the page and its worker draw alike.
-import type { Box } from './boxes.ts'
+import type { Box } from '@yaks/voxel/boxes'
 import type { Thing, View } from './items.ts'
-import { materialOf, METAL } from './mesh.ts'
+import { materialOf, METAL } from '@yaks/voxel/mesh'
 
 type P = [number, number]
 type Vec = [number, number, number]
@@ -99,7 +99,7 @@ let order = (look: Box[], see: (v: Vec) => Vec): Box[] => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { metal } from './mesh.ts'
+ * import { metal } from '@yaks/voxel/mesh'
  * import type { Box, View } from './items.ts'
  * let span = (fs: Face[], i: number) => {
  *   let vs = fs.flatMap((f) => f.at.map((p) => p[i]))

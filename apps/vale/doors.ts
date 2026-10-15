@@ -9,7 +9,16 @@
 import * as THREE from 'three'
 import type { Door } from './buildings/kit.ts'
 import { shade } from './buildings/kit.ts'
-import { blob, box, key, metal, out, pack, type Vec, type Vox } from './mesh.ts'
+import {
+  blob,
+  box,
+  key,
+  metal,
+  out,
+  pack,
+  type Vec,
+  type Vox,
+} from '@yaks/voxel/mesh'
 import { type Building, opensFor } from './solid.ts'
 import { geometry } from './soft.ts'
 

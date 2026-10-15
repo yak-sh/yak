@@ -11,7 +11,7 @@
 // (stream.ts) never shows a crack between them.
 import { Top } from './features.ts'
 import { type Level, levelOf, LEVELS } from './levels.ts'
-import { type Out, quad, rgb, type Vec } from './mesh.ts'
+import { type Out, quad, rgb, type Vec } from '@yaks/voxel/mesh'
 import { BRIDGE_UNIT, NONE, type Patch } from './terrain.ts'
 
 let TOPS: Record<number, number> = {

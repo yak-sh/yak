@@ -1,22 +1,21 @@
 // A page's fixed-detail charts. Growth supplies cells before the map opens;
 // missing explored cells are requested once, independently of its viewport.
-import type { Spot } from './levels.ts'
-import type { Box } from './mapview.ts'
-import { CHUNK, chunkKey } from './terrain.ts'
+export type Cell = [number, number]
+export type ChartBox = [number, number, number]
 
-export type Chart<T> = { image: T; box: Box }
+export type Chart<T> = { image: T; box: ChartBox }
 
 /** Chunk cells intersecting a square, including negative coordinates. */
-export let cellsOf = ([x, z, side]: Box): Spot[] => {
-  let cells: Spot[] = []
+export let cellsOf = ([x, z, side]: ChartBox, chunkSize: number): Cell[] => {
+  let cells: Cell[] = []
   for (
-    let ck = Math.floor(z / CHUNK);
-    ck < Math.ceil((z + side) / CHUNK);
+    let ck = Math.floor(z / chunkSize);
+    ck < Math.ceil((z + side) / chunkSize);
     ck++
   ) {
     for (
-      let ci = Math.floor(x / CHUNK);
-      ci < Math.ceil((x + side) / CHUNK);
+      let ci = Math.floor(x / chunkSize);
+      ci < Math.ceil((x + side) / chunkSize);
       ci++
     ) {
       cells.push([ci, ck])
@@ -25,12 +24,23 @@ export let cellsOf = ([x, z, side]: Box): Spot[] => {
   return cells
 }
 
+/** A cache of completed and concurrent chunk charts. */
+export type Chartbook<T> = {
+  keep: (cell: Cell, make: () => T | Promise<T>) => Promise<T>
+  clear: () => void
+  read: (
+    box: ChartBox,
+    visible: (cell: Cell) => boolean,
+    load: (cell: Cell) => Promise<T>,
+  ) => Promise<Chart<T>[]>
+}
+
 /** Keep both completed charts and concurrent requests until designs change. */
-export let chartbook = <T>() => {
+export let chartbook = <T>(chunkSize: number): Chartbook<T> => {
   type Held = { ready: boolean; image?: T; pending: Promise<T> }
-  let kept = new Map<number, Held>()
-  let keep = (cell: Spot, make: () => T | Promise<T>) => {
-    let key = chunkKey(...cell)
+  let kept = new Map<string, Held>()
+  let keep = ([ci, ck]: Cell, make: () => T | Promise<T>) => {
+    let key = `${ci},${ck}`
     let got = kept.get(key)
     if (!got) {
       let hold: Held = {
@@ -53,19 +63,19 @@ export let chartbook = <T>() => {
     keep,
     clear: () => kept.clear(),
     read: async (
-      box: Box,
-      visible: (cell: Spot) => boolean,
-      load: (cell: Spot) => Promise<T>,
+      box: ChartBox,
+      visible: (cell: Cell) => boolean,
+      load: (cell: Cell) => Promise<T>,
     ): Promise<Chart<T>[]> => {
-      let cells = cellsOf(box).filter(visible)
+      let cells = cellsOf(box, chunkSize).filter(visible)
       let charts = new Array<Chart<T>>(cells.length),
         pending: Promise<void>[] = []
       for (let [i, cell] of cells.entries()) {
-        let hold = kept.get(chunkKey(...cell))
+        let hold = kept.get(`${cell[0]},${cell[1]}`)
         let put = (image: T) => {
           charts[i] = {
             image,
-            box: [cell[0] * CHUNK, cell[1] * CHUNK, CHUNK],
+            box: [cell[0] * chunkSize, cell[1] * chunkSize, chunkSize],
           }
         }
         if (hold?.ready) put(hold.image!)

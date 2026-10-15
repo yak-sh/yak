@@ -195,7 +195,7 @@ export let moved = (solids: Solid[], f: (v: Vec) => Vec): Solid[] =>
 /** Solids drawn as one, soft on every edge, as if built of voxels `cell`
  * across, of whatever each one's colour says it is made of (mesh.ts
  * `metal`): each face only where it shows. */
-export let drawn = (o: Out, solids: Solid[], cell = 0.1) => {
+export let drawn = (o: Out, solids: Solid[], cell = 0.1): Out => {
   for (let [i, s] of solids.entries()) {
     let c = rgb(s.hex)
     let cs = [...c, ...c, ...c, ...c]
@@ -268,5 +268,5 @@ export let drawn = (o: Out, solids: Solid[], cell = 0.1) => {
  * assertEquals(fights(pack(band)), [])
  * ```
  */
-export let cuboids = (o: Out, boxes: Box[], cell = 0.1, round = 0.035) =>
+export let cuboids = (o: Out, boxes: Box[], cell = 0.1, round = 0.035): Out =>
   drawn(o, worn(boxes, round), cell)

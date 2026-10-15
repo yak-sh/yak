@@ -3,9 +3,9 @@
 import * as THREE from 'three'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { cuboids } from './boxes.ts'
+import { cuboids } from '@yaks/voxel/boxes'
 import { instances } from './instances.ts'
-import { out, pack } from './mesh.ts'
+import { out, pack } from '@yaks/voxel/mesh'
 import { seedDesigns } from './designs_fixture.ts'
 
 seedDesigns()

@@ -12,7 +12,7 @@
 // face its square (terrain.ts). What cannot stand where a plan puts it (a
 // piece through a wall, a table on the stairs, a chest before a door, a
 // window over the chimney) throws as the building is raised, naming both.
-import { key, unkey, type Vec, type Vox } from '../mesh.ts'
+import { key, unkey, type Vec, type Vox } from '@yaks/voxel/mesh'
 import type { Craft } from '../trades.ts'
 
 /** A voxel's edge, in metres. */

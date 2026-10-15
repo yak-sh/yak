@@ -18,7 +18,7 @@ import {
   spin,
   type Use,
 } from './buildings/kit.ts'
-import { unkey, type Vec, type Vox } from './mesh.ts'
+import { unkey, type Vec, type Vox } from '@yaks/voxel/mesh'
 import type { Craft } from './trades.ts'
 import type { Vale } from './terrain.ts'
 
@@ -29,7 +29,7 @@ import type { Vale } from './terrain.ts'
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { key } from './mesh.ts'
+ * import { key } from '@yaks/voxel/mesh'
  * let v = new Map([[key(0, 0, 0), 1], [key(0, 1, 0), 1], [key(0, 4, 0), 1]])
  * let s = solidOf(v)
  * assertEquals([...s.runs], [LOW, 2, 4, 5])

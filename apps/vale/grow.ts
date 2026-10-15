@@ -8,7 +8,7 @@
 import { chart } from './chart.ts'
 import { veil } from './mapfog.ts'
 import { type Chunk, chunk } from './chunks.ts'
-import { buffers, pack, type Packed } from './mesh.ts'
+import { buffers, pack, type Packed } from '@yaks/voxel/mesh'
 import type { Bundle } from './net.ts'
 import { model } from './props.ts'
 import { installBuildingDesigns, installThemeDesigns, vale } from './terrain.ts'

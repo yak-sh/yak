@@ -2,11 +2,11 @@
 // module holds the current index and the drawing functions shared by every
 // consumer; a design update replaces the index before the next frame.
 import type { Slot } from './arms.ts'
-import { type Box, cuboids } from './boxes.ts'
+import { type Box, cuboids } from '@yaks/voxel/boxes'
 import { comp, str } from './bundle.ts'
-import { type Out, out } from './mesh.ts'
+import { type Out, out } from '@yaks/voxel/mesh'
 import type { Bundle } from './net.ts'
-export type { Box } from './boxes.ts'
+export type { Box } from '@yaks/voxel/boxes'
 
 /** How a thing's picture sees it (sprites.ts), its front toward +z: from a
  * corner above, the most of it at once; from the `front`, for what is worn

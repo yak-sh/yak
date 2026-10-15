@@ -1,5 +1,5 @@
 // Stone markers on the bridge decks over the world's rivers.
-import { box, type Vox } from '../mesh.ts'
+import { box, type Vox } from '@yaks/voxel/mesh'
 import { type Kind, type Model } from './kit.ts'
 
 let bridgepost = (): Model => {

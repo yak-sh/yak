@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { cellsOf } from './chartbook.ts'
+import { cellsOf } from '@yaks/voxel/chartbook'
 import { coverage } from './chartcover.ts'
 import { SIZE } from './levels.ts'
 import { WORLD } from './mapview.ts'
@@ -35,7 +35,7 @@ test('candidate regions contain every sampled owner along warped borders and fro
 
 test('coverage retains explored slivers outside the region lattice cell', () => {
   let cover = coverage(), known = new Set(['mossvale']), bent = false
-  for (let cell of cellsOf([-32, 48, 320])) {
+  for (let cell of cellsOf([-32, 48, 320], CHUNK)) {
     let visible = regionsIn(cell).has('mossvale')
     assertEquals(cover(cell, known), visible)
     if (
@@ -52,7 +52,7 @@ test('WORLD cells far from explored ground need no detailed sampling', () => {
     samples++
     throw new Error('unknown ground must be pruned before sampling')
   })
-  for (let cell of cellsOf([WORLD[0], WORLD[1], SIZE])) {
+  for (let cell of cellsOf([WORLD[0], WORLD[1], SIZE], CHUNK)) {
     assertEquals(cover(cell, new Set(['mossvale'])), false)
   }
   assertEquals(samples, 0)
@@ -74,7 +74,9 @@ test('grown region metadata bypasses geometry and retires with the charts', () =
 })
 
 test('new exploration resumes a boundary scan without sampling any pixel twice', () => {
-  let cell = cellsOf([-32, 48, 320]).find((cell) => regionsIn(cell).size > 1)!
+  let cell = cellsOf([-32, 48, 320], CHUNK).find((cell) =>
+    regionsIn(cell).size > 1
+  )!
   assert(cell)
   let ids = [...regionsIn(cell)], visits = new Map<string, number>()
   let cover = coverage((x, z) => {

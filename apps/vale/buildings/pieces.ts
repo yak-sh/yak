@@ -8,7 +8,7 @@
 // a shell just over its one voxel. Wood is the dress's timber, stone its
 // stone; iron, water, coals and cloth are what they are everywhere, and iron,
 // steel and brass shine (mesh.ts `metal`).
-import { box, key, metal, type Vox } from '../mesh.ts'
+import { box, key, metal, type Vox } from '@yaks/voxel/mesh'
 import { paint, type Piece, shade } from './kit.ts'
 
 let IRON = metal(0x3e3e46)
