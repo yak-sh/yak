@@ -1,7 +1,7 @@
 // The runner as a person runs it: a process of its own over a directory of
 // test modules and pages, its record of passes kept in the directory.
-import { equal, match, ok, test } from './mod.ts'
-import type { Times } from './run.ts'
+import { cleanup, equal, match, ok, test, tick } from './mod.ts'
+import { one, type Times } from './run.ts'
 import { fenceName, fences } from './examples.ts'
 
 let MAIN = new URL('./main.ts', import.meta.url).pathname
@@ -191,4 +191,26 @@ test('later', () => {}, { skip: true })`,
   } finally {
     await Deno.remove(at, { recursive: true })
   }
+})
+
+// A test as the runner holds one, its body being `body`.
+let declared = (body: () => unknown) =>
+  one({ name: 't', body, tags: [], skip: false, file: '' }, 1000)
+
+test('a test closes what it opened, last first, before its time is taken', async () => {
+  let closed: string[] = []
+  let ran = await declared(async () => {
+    cleanup(() => closed.push('opened first'))
+    await tick()
+    cleanup(() => closed.push('opened last'))
+  })
+  ok(ran.ok)
+  equal(closed, ['opened last', 'opened first'])
+  let stuck = await declared(() =>
+    cleanup(() => {
+      throw new Error('would not close')
+    })
+  )
+  equal(stuck.ok, false)
+  equal(String(stuck.errors[0]), 'Error: would not close')
 })

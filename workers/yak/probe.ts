@@ -189,7 +189,7 @@ let boot = async (
   // package's npm import does not resolve, so nothing here imports the
   // kernel's modules but this.
   await (readied ??= import('./wrangler.ts').then((w) => w.ready()))
-  let [{ handler }, { emailed, limiter, platform }, { within }] = await Promise
+  let [{ handler }, { emailed, limiter, lasting }, { within }] = await Promise
     .all([
       import('./kernel.ts'),
       import('./testing.ts'),
@@ -199,7 +199,7 @@ let boot = async (
   let log = Deno.makeTempFileSync({ prefix: 'yak-mail-' })
   let cf = cloudflare(log)
   let { vars: own, ratelimits } = toml()
-  let p = platform(secret, {
+  let p = lasting(secret, {
     ...own,
     ...vars(secret, cf.url),
     // What the runtime binds beside the config: this deploy's id, and the

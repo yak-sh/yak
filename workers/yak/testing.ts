@@ -38,6 +38,7 @@ import { Builder } from './build.ts'
 import { ram } from '@yaks/ram'
 import type { Load } from '@yaks/host'
 import { group } from '@yaks/tracker'
+import { cleanup } from '@yaks/testing'
 import {
   options as trackerOptions,
   store as trackerStore,
@@ -829,9 +830,22 @@ export let limiter = (limit: number, period: number): Limiter => {
 /**
  * One platform: a Store per name the kernel builds, the bucket its files are
  * in, and the platform's own assets off disk (the client an app imports, the
- * guide the builder reads).
+ * guide the builder reads). Made in a test, it closes as the test ends, inside
+ * the test's time, so what it left running never reaches the next test.
  */
 export let platform = (
+  secret: string,
+  vars: Partial<Env> = {},
+  load?: Load,
+) => {
+  let p = lasting(secret, vars, load)
+  cleanup(p[Symbol.asyncDispose])
+  return p
+}
+
+/** A platform that lasts until its holder closes it, as the kernel a test
+ * process shares does (probe.ts). */
+export let lasting = (
   secret: string,
   vars: Partial<Env> = {},
   load?: Load,

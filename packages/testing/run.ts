@@ -1,7 +1,7 @@
 // Runs collected tests one at a time, in the order they were declared, and
 // says how each went in the lines `deno test` prints (`name ... ok (12ms)`),
 // which what watches a run reads.
-import type { Test } from './suite.ts'
+import { closing, type Test } from './suite.ts'
 
 /** How one test went. */
 export type Outcome = {
@@ -54,7 +54,7 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
   let errors: unknown[] = []
   try {
     await Promise.race([
-      (async () => await test.body())(),
+      closing(test.body),
       new Promise((_, no) =>
         timer = later(
           () => no(new Error(`the test did not end within ${timeout}ms`)),
