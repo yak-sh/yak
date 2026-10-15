@@ -1,8 +1,9 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import {
   inside,
   ours,
+  procfs,
   reap,
   running,
   scratch,
@@ -15,13 +16,61 @@ import {
 // Every case builds its own base and removes it — the hygiene this module is
 // about, practiced. The base lands under TMPDIR, so a case that dies mid-way
 // still leaves nothing the run directory does not already own.
-let base = (names: string[], body: (dir: string) => void) => {
+let base = async <T>(
+  names: string[],
+  body: (dir: string) => T | Promise<T>,
+): Promise<T> => {
   let dir = Deno.makeTempDirSync({ prefix: 'scratch-base-' })
   for (let name of names) Deno.mkdirSync(`${dir}/${name}`)
   try {
-    body(dir)
+    return await body(dir)
   } finally {
     Deno.removeSync(dir, { recursive: true })
+  }
+}
+
+// A box of the test's own. Its process table is a map, a signal ends what it
+// reaches unless the process is deaf to it, time moves when the test says, and
+// the child a run starts plays here with the environment the run hands it.
+type Running = {
+  env: Record<string, string>
+  cwd: string
+  cmd: string
+  deaf?: Deno.Signal
+}
+let rig = ({ tmp = '/nowhere', child = (_: Record<string, string>) => {} }: {
+  tmp?: string
+  child?: (env: Record<string, string>) => number | void
+} = {}) => {
+  let table = new Map<number, Running>()
+  let next = 100
+  let signals: string[] = []
+  return {
+    ...clock(),
+    tmp,
+    signals,
+    spawn: (p: Partial<Running> = {}) => {
+      table.set(++next, { env: {}, cwd: '/', cmd: 'sleep 30', ...p })
+      return next
+    },
+    ps: () =>
+      [...table].map(([pid, { env, cwd }]) => ({
+        pid,
+        cwd,
+        env: Object.entries(env).map(([k, v]) => `${k}=${v}`),
+      })),
+    command: (pid: number) => table.get(pid)?.cmd ?? '',
+    running: (pid: number) => table.has(pid),
+    kill: (pid: number, signal: Deno.Signal) => {
+      signals.push(`${pid} ${signal}`)
+      if (table.get(pid)?.deaf != signal) table.delete(pid)
+    },
+    start: (_: string[], env: Record<string, string>) => {
+      let code = child(env) || 0
+      let status = { success: !code, code, signal: null }
+      return { status: Promise.resolve(status), kill: () => {} }
+    },
+    gitLocal: () => Promise.resolve([]),
   }
 }
 
@@ -64,82 +113,77 @@ test('this very process is running; pid 0 names no process', () => {
   assertEquals(running(0), false)
 })
 
+// procfs as Linux writes it: environ and cmdline are split by NULs, cwd is a
+// link that marks a removed directory ' (deleted)', and stat has the state
+// after the command's closing parenthesis. This process is never in the table.
+test('procfs reads the process table, and a zombie no longer runs', () =>
+  base(['42', String(Deno.pid)], (root) => {
+    let write = (path: string, text: string) =>
+      Deno.writeTextFileSync(`${root}/${path}`, text)
+    write('42/environ', 'HOME=/h\0TMPDIR=/env/t\0')
+    write('42/cmdline', 'sleep\x0030\0')
+    write('42/stat', '42 (a) b) Z 1')
+    Deno.symlinkSync('/cwd (deleted)', `${root}/42/cwd`)
+    write(`${Deno.pid}/environ`, 'TMPDIR=/env\0')
+    let box = procfs(root)
+    let ps = box.ps()
+    assertEquals([inside('/env', ps), inside('/cwd', ps)], [[42], [42]])
+    assertEquals([box.command(42), box.running(42)], ['sleep 30', false])
+  }))
+
 // The predicate above decides an exit code, and it was the exit code that
 // failed runs which had leaked nothing — so the wiring gets its own proof.
 // The run leaks by hand: a command that mkdirs a `tasks-*` entry in the base
 // is exactly the spawn site writing past TMPDIR that the guard is for.
-let leaks = async (base: string, env: Record<string, string>) => {
-  let stray = `${base}/tasks-e2e-${crypto.randomUUID().slice(0, 8)}`
+let leaks = async (dir: string, env: Record<string, string>, stray: string) => {
   let said: string[] = []
-  try {
-    let code = await scratch(['mkdir', stray], env, (l) => said.push(l))
-    return [code, said.join('\n')] as const
-  } finally {
-    try {
-      Deno.removeSync(stray, { recursive: true })
-    } catch { /* the run never got that far */ }
-  }
+  let box = rig({ tmp: dir, child: () => Deno.mkdirSync(`${dir}/${stray}`) })
+  let code = await scratch(['mkdir'], env, (l) => said.push(l), box)
+  return [code, said.join('\n')] as const
 }
 
-test(
-  'a stray fails a named base and only warns on the shared one',
-  async () => {
-    // The run's environment is the whole of its child's, so the one name
-    // mkdir needs is carried across by hand.
-    let home = { PATH: Deno.env.get('PATH') ?? '' }
-    let dir = Deno.makeTempDirSync({ prefix: 'scratch-e2e-' })
-    try {
-      let [code, err] = await leaks(dir, { ...home, TMPDIR: dir })
-      assertEquals(code, 1)
-      assertStringIncludes(err, 'leaked outside the run directory')
+test('a stray fails a named base and only warns on the shared one', () =>
+  base([], async (dir) => {
+    let [code, err] = await leaks(dir, { TMPDIR: dir }, 'tasks-e2e-a')
+    assertEquals(code, 1)
+    assertStringIncludes(err, 'leaked outside the run directory')
 
-      // No TMPDIR: the base is /tmp, which this box shares with CI and every
-      // other worktree, so the entry is reported and the run still passes.
-      let [shared, warning] = await leaks('/tmp', home)
-      assertEquals(shared, 0)
-      assertStringIncludes(warning, 'appeared beside the run directory')
-      assertStringIncludes(warning, 'Not failing')
-    } finally {
-      Deno.removeSync(dir, { recursive: true })
-    }
-  },
-)
+    // No TMPDIR: the base is the box's shared one, also CI's and every other
+    // worktree's, so the entry is reported and the run still passes.
+    let [shared, warning] = await leaks(dir, {}, 'tasks-e2e-b')
+    assertEquals(shared, 0)
+    assertStringIncludes(warning, 'appeared beside the run directory')
+    assertStringIncludes(warning, 'Not failing')
+  }))
 
-test('a default scratch run leaves another dead run directory alone', async () => {
-  let path = '/tmp/tasks-run-' +
-    (1_000_000_000 + Math.floor(Math.random() * 1_000_000_000))
-  Deno.mkdirSync(path)
-  try {
-    Deno.writeTextFileSync(path + '/work', 'another session')
+test('a default scratch run leaves another dead run directory alone', () =>
+  base(['tasks-run-4242'], async (tmp) => {
+    let work = `${tmp}/tasks-run-4242/work`
+    Deno.writeTextFileSync(work, 'another session')
+    assertEquals(await scratch(['true'], {}, () => {}, rig({ tmp })), 0)
+    assertEquals(Deno.readTextFileSync(work), 'another session')
+  }))
+
+test('scratch lends every machine state directory inside its own run', () =>
+  base([], async (root) => {
+    // A fresh runner's named base may not exist, even its parent.
+    let dir = `${root}/missing/base`
+    let env: Record<string, string> = {}
+    let box = rig({ child: (given) => void (env = given) })
     assertEquals(
-      await scratch(['true'], { PATH: Deno.env.get('PATH') ?? '' }),
+      await scratch(
+        ['env'],
+        {
+          TMPDIR: dir,
+          PROCESS_DIR: '/live/processes',
+          HARNESS_WORKTREE_DIR: '/live/worktrees',
+          HARNESS_DB: '/live/yak.db',
+        },
+        () => {},
+        box,
+      ),
       0,
     )
-    assertEquals(Deno.readTextFileSync(path + '/work'), 'another session')
-  } finally {
-    Deno.removeSync(path, { recursive: true })
-  }
-})
-
-test('scratch lends every machine state directory inside its own run', async () => {
-  let root = Deno.makeTempDirSync()
-  // A fresh runner's named base may not exist, even its parent.
-  let dir = `${root}/missing/base`
-  let out = root + '/env.json'
-  try {
-    let code =
-      'Deno.writeTextFileSync(Deno.args[0], JSON.stringify(Deno.env.toObject()))'
-    assertEquals(
-      await scratch([Deno.execPath(), 'eval', code, out], {
-        ...Deno.env.toObject(),
-        TMPDIR: dir,
-        PROCESS_DIR: '/live/processes',
-        HARNESS_WORKTREE_DIR: '/live/worktrees',
-        HARNESS_DB: '/live/yak.db',
-      }),
-      0,
-    )
-    let env = JSON.parse(Deno.readTextFileSync(out))
     assertEquals(env.TMPDIR.startsWith(`${dir}/tasks-run-`), true)
     assertEquals([...Deno.readDirSync(dir)], [])
     for (
@@ -153,10 +197,7 @@ test('scratch lends every machine state directory inside its own run', async () 
     ) {
       assertEquals(env[name].startsWith(env.TMPDIR + '/'), true)
     }
-  } finally {
-    Deno.removeSync(root, { recursive: true })
-  }
-})
+  }))
 
 test('scratch git fixtures do not inherit the caller repository', async () => {
   let root = Deno.makeTempDirSync({ prefix: 'scratch-git-' })
@@ -219,52 +260,45 @@ test('scratch git fixtures do not inherit the caller repository', async () => {
 
 // A test's server outlives a test killed before its `finally`, in a session of
 // its own; what still marks it is the run in its environment or its cwd.
-let sleeper = (env: Record<string, string>, cwd?: string) =>
-  new Deno.Command('sleep', { args: ['30'], env, cwd, clearEnv: true }).spawn()
+let run = '/base/tasks-run-1'
 
 test('reap ends what runs in a run directory and leaves the rest', async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'scratch-reap-' })
-  let path = { PATH: Deno.env.get('PATH') ?? '' }
-  let marked = sleeper({ ...path, YAK_CONFIG: `${dir}/yak.json` })
-  let working = sleeper(path, dir)
-  let other = sleeper(path)
-  try {
-    assertEquals(inside(dir).sort(), [marked.pid, working.pid].sort())
-    let ended = await reap(dir)
-    assertEquals(
-      ended.map((l) => Number(l.split(' ')[0])).sort(),
-      [
-        marked.pid,
-        working.pid,
-      ].sort(),
-    )
-    assertStringIncludes(ended[0], 'sleep 30')
-    assertEquals((await marked.status).signal, 'SIGTERM')
-    assertEquals(running(other.pid), true)
-  } finally {
-    for (let p of [marked, working, other]) {
-      try {
-        p.kill('SIGKILL')
-      } catch { /* ended */ }
-      await p.status
-    }
-    Deno.removeSync(dir, { recursive: true })
-  }
+  let box = rig()
+  let marked = box.spawn({ env: { YAK_CONFIG: `${run}/yak.json` } })
+  let working = box.spawn({ cwd: `${run}/repo`, cmd: 'deno serve' })
+  let others = [box.spawn({ cwd: `${run}0` }), box.spawn()]
+  assertEquals(await reap(run, box), [
+    `${marked} sleep 30`,
+    `${working} deno serve`,
+  ])
+  assertEquals(box.signals, [`${marked} SIGTERM`, `${working} SIGTERM`])
+  assertEquals(others.map(box.running), [true, true])
 })
 
-test('a run ends a detached process it left behind and says so', async () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'scratch-left-' })
-  let said: string[] = []
-  try {
-    let code = await scratch(
-      ['sh', '-c', 'setsid sleep 30 >/dev/null 2>&1 &'],
-      { PATH: Deno.env.get('PATH') ?? '', TMPDIR: dir },
-      (l) => said.push(l),
-    )
-    assertEquals(code, 0)
-    assertStringIncludes(said.join('\n'), '1 process still ran')
-    assertEquals(inside(`${dir}/tasks-run-${Deno.pid}`), [])
-  } finally {
-    Deno.removeSync(dir, { recursive: true })
-  }
+test('reap cuts off what outlasts its wait, and what started meanwhile', async () => {
+  let box = rig()
+  let deaf = box.spawn({ cwd: run, deaf: 'SIGTERM' })
+  let reaping = reap(run, box, 1000)
+  await box.advance(950)
+  let late = box.spawn({ cwd: run, cmd: 'late' })
+  assertEquals(box.signals, [`${deaf} SIGTERM`])
+  await box.advance(50)
+  assertEquals(box.signals, [
+    `${deaf} SIGTERM`,
+    `${deaf} SIGKILL`,
+    `${late} SIGKILL`,
+  ])
+  assertEquals(await reaping, [`${deaf} sleep 30`, `${late} late`])
 })
+
+test('a run ends a detached process it left behind and says so', () =>
+  base([], async (dir) => {
+    let said: string[] = []
+    let box = rig({ child: (env) => void box.spawn({ env }) })
+    assertEquals(
+      await scratch(['sh'], { TMPDIR: dir }, (l) => said.push(l), box),
+      0,
+    )
+    assertStringIncludes(said.join('\n'), '1 process still ran')
+    assertEquals(inside(`${dir}/tasks-run-${Deno.pid}`, box.ps()), [])
+  }))

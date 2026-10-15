@@ -576,10 +576,8 @@
       "unlisted: a package it would publish that jsr.io has no page for": 1.7
     },
     "bin/scratch_test.ts": {
-      "a default scratch run leaves another dead run directory alone": 2.6,
       "a stray fails a named base and only warns on the shared one": 7.7,
-      "scratch git fixtures do not inherit the caller repository": 45.1,
-      "scratch lends every machine state directory inside its own run": 28.7
+      "scratch git fixtures do not inherit the caller repository": 45.1
     },
     "bin/test_runner_test.ts": {
       "a phase ends with its runner killed outright": 99.8,

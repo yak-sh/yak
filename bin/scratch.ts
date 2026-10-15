@@ -17,9 +17,8 @@
 // cannot clean up after itself). Shared /tmp is never swept. Each door first
 // ends the processes still running in the directory, since a test's server
 // outlives a test killed before its `finally`, and its launcher's child sits
-// in a session of its own. Afterwards the
-// run reports any new `tasks-*`
-// entry that appeared in the base directory: that is a spawn site writing to a
+// in a session of its own. Afterwards the run reports any new `tasks-*` entry
+// that appeared in the base directory: that is a spawn site writing to a
 // hard-coded `/tmp` instead of TMPDIR, and it is how /tmp filled to 0 bytes
 // free on this box three times (T-20558).
 //
@@ -30,10 +29,129 @@
 // the shared `/tmp`, where this box runs CI and several worktrees at once: a
 // `tasks-*` entry there may be another run's, so it prints as a warning
 // naming the rule and the run passes (T-37656).
+//
+// Everything a run does to the box beyond its directories goes through a
+// `Machine`: the processes it reads and signals, the clock it waits on, the
+// command it starts and Git's list. The default is this box, through procfs.
+
+let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
+
+/** A process as procfs shows it to a run: the environment it was started
+ * with, as `NAME=value` entries, and where it works. */
+export type Proc = { pid: number; env: string[]; cwd: string }
+
+/** The box a run acts on. A test hands in one of its own. */
+export type Machine = {
+  /** The base a caller who names none shares with the whole box. */
+  tmp: string
+  /** The processes now running, but this one. */
+  ps: () => Proc[]
+  /** A process's command line, empty once it is gone. */
+  command: (pid: number) => string
+  /** Whether a process has yet to exit. */
+  running: (pid: number) => boolean
+  /** Send a process a signal; one already gone is no error. */
+  kill: (pid: number, signal: Deno.Signal) => void
+  /** The clock a run waits on, in ms. */
+  now: () => number
+  /** Run `fn` after `ms`; answers a cancel. */
+  after: (ms: number, fn: () => void) => () => void
+  /** Start a command on this terminal, `env` its whole environment. */
+  start: (
+    argv: string[],
+    env: Record<string, string>,
+  ) => Pick<Deno.ChildProcess, 'status' | 'kill'>
+  /** The variables Git reads as one repository's own
+   * (`git rev-parse --local-env-vars`). */
+  gitLocal: () => Promise<string[]>
+}
+
+/** The processes of a box through Linux procfs at `root`, the same door
+ * bin/test.ts uses to watch a process group. */
+export let procfs = (
+  root = '/proc',
+): Pick<Machine, 'ps' | 'command' | 'running'> => {
+  let read = (pid: number, file: string) => {
+    try {
+      return decode(Deno.readFileSync(`${root}/${pid}/${file}`))
+    } catch {
+      return undefined
+    }
+  }
+  return {
+    ps: () => {
+      let names: string[]
+      try {
+        names = [...Deno.readDirSync(root)].map((e) => e.name)
+      } catch {
+        return []
+      }
+      let procs: Proc[] = []
+      for (let name of names) {
+        let pid = Number(name)
+        if (!pid || pid == Deno.pid) continue
+        let cwd = ''
+        try {
+          cwd = Deno.readLinkSync(`${root}/${pid}/cwd`)
+            .replace(/ \(deleted\)$/, '')
+        } catch { /* gone, or not ours to read */ }
+        procs.push({ pid, env: read(pid, 'environ')?.split('\0') ?? [], cwd })
+      }
+      return procs
+    },
+    command: (pid) => read(pid, 'cmdline')?.replaceAll('\0', ' ').trim() ?? '',
+    // A zombie has exited; only its parent's wait is left.
+    running: (pid) => {
+      let stat = read(pid, 'stat')
+      return stat != null && stat[stat.lastIndexOf(')') + 2] != 'Z'
+    },
+  }
+}
+
+let here = procfs()
+
+/** Whether a process on this box has yet to exit. */
+export let running = here.running
+
+/** This box. */
+export let machine: Machine = {
+  tmp: '/tmp',
+  ...here,
+  kill: (pid, signal) => {
+    try {
+      Deno.kill(pid, signal)
+    } catch { /* already gone */ }
+  },
+  now: () => Date.now(),
+  after: (ms, fn) => {
+    let id = setTimeout(fn, ms)
+    return () => clearTimeout(id)
+  },
+  start: (argv, env) =>
+    new Deno.Command(argv[0], {
+      args: argv.slice(1),
+      clearEnv: true,
+      env,
+      stdin: 'inherit',
+      stdout: 'inherit',
+      stderr: 'inherit',
+    }).spawn(),
+  gitLocal: async () => {
+    let out = await new Deno.Command('git', {
+      args: ['rev-parse', '--local-env-vars'],
+      stdout: 'piped',
+      stderr: 'piped',
+    }).output()
+    if (!out.success) throw new Error(decode(out.stderr))
+    return decode(out.stdout).trim().split('\n')
+  },
+}
 
 /** Where temp dirs land for a process that has not been given a run dir. */
-export let tmpBase = (env: { TMPDIR?: string } = Deno.env.toObject()) =>
-  env.TMPDIR || '/tmp'
+export let tmpBase = (
+  env: { TMPDIR?: string } = Deno.env.toObject(),
+  tmp = machine.tmp,
+) => env.TMPDIR || tmp
 
 /** Whether the base is this run's alone — the caller named it, so nobody
  * else mints there and a stray can be blamed on this run. */
@@ -49,57 +167,22 @@ export let tasksEntries = (base: string) => {
   return names
 }
 
-// Linux procfs, the same door bin/test.ts uses to watch a process group.
-export let running = (pid: number) => {
-  try {
-    return Deno.statSync(`/proc/${pid}`).isDirectory
-  } catch {
-    return false
-  }
-}
-
-let proc = (pid: number, file: string) => {
-  try {
-    return new TextDecoder().decode(Deno.readFileSync(`/proc/${pid}/${file}`))
-  } catch {
-    return undefined
-  }
-}
-
-// A zombie has exited; only its parent's wait is left.
-let living = (pid: number) => {
-  let stat = proc(pid, 'stat')
-  return stat != null && stat[stat.lastIndexOf(')') + 2] != 'Z'
-}
-
+/// inside('/run', [{ pid: 1, env: ['TMPDIR=/run/t'], cwd: '/' }]) -> [1]
+/// inside('/run', [{ pid: 2, env: [], cwd: '/run' }]) -> [2]
+/// inside('/run', [{ pid: 3, env: ['TMPDIR=/run2'], cwd: '/run2/a' }]) -> []
 /**
  * The processes still living in a run directory: a test's server, the worker
  * its launcher handed off, a child whose test was killed before its `finally`.
  * Whatever session or parent each has ended up with, it carries the run in its
  * environment (TMPDIR and the state directories) or works inside it.
  */
-export let inside = (dir: string): number[] => {
+export let inside = (dir: string, procs: Proc[]): number[] => {
   let within = (path: string) => path == dir || path.startsWith(dir + '/')
-  let pids: number[] = []
-  let names: string[]
-  try {
-    names = [...Deno.readDirSync('/proc')].map((e) => e.name)
-  } catch {
-    return pids
-  }
-  for (let name of names) {
-    let pid = Number(name)
-    if (!pid || pid == Deno.pid) continue
-    let env = proc(pid, 'environ')?.split('\0') ?? []
-    let cwd = ''
-    try {
-      cwd = Deno.readLinkSync(`/proc/${pid}/cwd`).replace(/ \(deleted\)$/, '')
-    } catch { /* gone, or not ours to read */ }
-    if (within(cwd) || env.some((e) => within(e.slice(e.indexOf('=') + 1)))) {
-      pids.push(pid)
-    }
-  }
-  return pids
+  return procs
+    .filter(({ env, cwd }) =>
+      within(cwd) || env.some((e) => within(e.slice(e.indexOf('=') + 1)))
+    )
+    .map((p) => p.pid)
 }
 
 /**
@@ -108,23 +191,22 @@ export let inside = (dir: string): number[] => {
  * holds a port and a deleted graph, and nothing else will ever end it.
  * Answers each process found, by pid and command line.
  */
-export let reap = async (dir: string, wait = 10_000): Promise<string[]> => {
+export let reap = async (
+  dir: string,
+  m: Machine = machine,
+  wait = 10_000,
+): Promise<string[]> => {
   let found = new Map<number, string>()
   let ask = (signal: Deno.Signal) => {
-    for (let pid of inside(dir)) {
-      if (!found.has(pid)) {
-        let line = proc(pid, 'cmdline')?.replaceAll('\0', ' ').trim() ?? ''
-        found.set(pid, line.slice(0, 160))
-      }
-      try {
-        Deno.kill(pid, signal)
-      } catch { /* already gone */ }
+    for (let pid of inside(dir, m.ps())) {
+      if (!found.has(pid)) found.set(pid, m.command(pid).slice(0, 160))
+      m.kill(pid, signal)
     }
   }
   let settle = async (ms: number) => {
-    let end = Date.now() + ms
-    while ([...found.keys()].some(living) && Date.now() < end) {
-      await new Promise((r) => setTimeout(r, 50))
+    let end = m.now() + ms
+    while ([...found.keys()].some(m.running) && m.now() < end) {
+      await new Promise<void>((r) => m.after(50, r))
     }
   }
   ask('SIGTERM')
@@ -193,8 +275,9 @@ export let scratch = async (
   argv: string[],
   env: Record<string, string> = Deno.env.toObject(),
   say: (line: string) => void = console.error,
+  m: Machine = machine,
 ): Promise<number> => {
-  let base = tmpBase(env)
+  let base = tmpBase(env, m.tmp)
   let mine = ours(env)
   if (mine) Deno.mkdirSync(base, { recursive: true })
   // One read of the base serves both: a shared /tmp holds thousands of entries.
@@ -202,46 +285,30 @@ export let scratch = async (
   // A dead PID proves no process owns it, not that this run owns its files.
   // The default /tmp is shared with other sessions.
   if (mine) {
-    for (let name of stale(before)) ended(await reap(`${base}/${name}`), say)
-    sweep(base, running, before)
+    for (let name of stale(before, m.running)) {
+      ended(await reap(`${base}/${name}`, m), say)
+    }
+    sweep(base, m.running, before)
   }
-  let dir = `${base}/tasks-run-${Deno.pid}`
-  Deno.mkdirSync(dir, { recursive: true })
 
   // Git hooks export repository-local coordinates. A fixture's `git -C`
   // does not override GIT_DIR: `init --bare` can reinitialize the caller's
   // checkout instead. Use Git's own list, including command-scope config,
   // so every descendant discovers only the scratch repository it asks for.
-  let local = await new Deno.Command('git', {
-    args: ['rev-parse', '--local-env-vars'],
-    stdout: 'piped',
-    stderr: 'piped',
-  }).output()
-  if (!local.success) {
-    Deno.removeSync(dir, { recursive: true })
-    throw new Error(new TextDecoder().decode(local.stderr))
-  }
   let clean = { ...env }
-  for (let name of new TextDecoder().decode(local.stdout).trim().split('\n')) {
-    delete clean[name]
-  }
+  for (let name of await m.gitLocal()) delete clean[name]
 
-  let child = new Deno.Command(argv[0], {
-    args: argv.slice(1),
-    clearEnv: true,
-    env: {
-      ...clean,
-      TMPDIR: dir,
-      TASKS_HOME: `${dir}/tasks`,
-      PROCESS_DIR: `${dir}/processes`,
-      HARNESS_HOME: `${dir}/harness`,
-      HARNESS_WORKTREE_DIR: `${dir}/harness/worktrees`,
-      HARNESS_DB: `${dir}/harness/yak.db`,
-    },
-    stdin: 'inherit',
-    stdout: 'inherit',
-    stderr: 'inherit',
-  }).spawn()
+  let dir = `${base}/tasks-run-${Deno.pid}`
+  Deno.mkdirSync(dir, { recursive: true })
+  let child = m.start(argv, {
+    ...clean,
+    TMPDIR: dir,
+    TASKS_HOME: `${dir}/tasks`,
+    PROCESS_DIR: `${dir}/processes`,
+    HARNESS_HOME: `${dir}/harness`,
+    HARNESS_WORKTREE_DIR: `${dir}/harness/worktrees`,
+    HARNESS_DB: `${dir}/harness/yak.db`,
+  })
 
   // Hand the signal to the run and wait for it: the directory is only safe to
   // remove once the processes writing into it are done. A shell reads 130/143
@@ -266,7 +333,7 @@ export let scratch = async (
     Deno.removeSignalListener(signal, handler)
   }
 
-  ended(await reap(dir), say)
+  ended(await reap(dir, m), say)
   let held: unknown
   try {
     Deno.removeSync(dir, { recursive: true })

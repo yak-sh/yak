@@ -242,28 +242,58 @@ export let runtimeStack = (
   to = runtimeRoot() ? Deno.env.get('YAK_RUNTIME_ROOT') : undefined,
 ): string => from && to ? stack.replaceAll(to + '/', from + '/') : stack
 
+/// alive(Deno.pid) -> true
+/// alive(1) -> true
+/// alive(2 ** 31 - 1) -> false
+/** Whether a pid names a process: one this user may not signal still does. */
+export let alive = (pid: number): boolean => {
+  try {
+    Deno.kill(pid, 0)
+    return true
+  } catch (error) {
+    return !(error instanceof Deno.errors.NotFound)
+  }
+}
+
+/** What a child watching its launcher reads and does; a test gives its own. */
+export type Watch = {
+  /** how often it looks, in ms */
+  every?: number
+  /** its parent's pid */
+  ppid?: () => number
+  /** whether a pid names a process */
+  alive?: (pid: number) => boolean
+  /** how it ends once the launcher is gone */
+  end?: () => void
+  /** run `fn` after `ms`, never holding the process open; answers a cancel */
+  timer?: (fn: () => void, ms: number) => () => void
+}
+
+let unref = (fn: () => void, ms: number) => {
+  let id = setTimeout(fn, ms)
+  Deno.unrefTimer(id)
+  return () => clearTimeout(id)
+}
+
 /** End as the launcher would have asked, once it is gone. A launcher killed
  * outright forwards nothing, and its child, in a session of its own, would
  * outlive it holding the port and the graph. A gone launcher is a SIGTERM
  * not yet sent, so the child sends it to itself and winds down as usual. An
  * independent worker has a launcher of its own, so outliving the command that
  * started it is untouched. */
-export let orphaned = (launcher: number, every = 1000) => {
-  let alive = () => {
-    try {
-      Deno.kill(launcher, 0)
-      return true
-    } catch (error) {
-      return !(error instanceof Deno.errors.NotFound)
-    }
+export let orphaned = (launcher: number, {
+  every = 1000,
+  ppid = () => Deno.ppid,
+  alive: lives = alive,
+  end = () => Deno.kill(Deno.pid, 'SIGTERM'),
+  timer = unref,
+}: Watch = {}): () => void => {
+  let check = () => {
+    if (ppid() != launcher && !lives(launcher)) return end()
+    cancel = timer(check, every)
   }
-  let timer = setInterval(() => {
-    if (Deno.ppid == launcher || alive()) return
-    clearInterval(timer)
-    Deno.kill(Deno.pid, 'SIGTERM')
-  }, every)
-  Deno.unrefTimer(timer)
-  return () => clearInterval(timer)
+  let cancel = timer(check, every)
+  return () => cancel()
 }
 
 /** Run a persistent CLI command from immutable sources, forwarding its terminal
