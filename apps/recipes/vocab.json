@@ -1,0 +1,14 @@
+{
+  "$defs": {
+    "recipe": {
+      "properties": {
+        "category": { "type": "string" },
+        "serves": { "type": "string" },
+        "duration": { "type": "string" },
+        "ingredients": { "type": "string" },
+        "steps": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}
