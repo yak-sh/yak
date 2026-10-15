@@ -217,7 +217,7 @@
         }
       }
     },
-    "player": {
+    "defender": {
       "component": true,
       "type": "object",
       "description": "A page defending a run, the site it points at and its latest heartbeat.",
@@ -373,7 +373,7 @@
     "command": {
       "component": true,
       "type": "object",
-      "description": "A player\u2019s purchase or wave command, consumed serially by the elected coordinator.",
+      "description": "A defender\u2019s purchase or wave command, consumed serially by the elected coordinator.",
       "properties": {
         "run": {
           "type": "string",
@@ -381,9 +381,9 @@
           "death": "cascade",
           "index": true
         },
-        "player": {
+        "defender": {
           "type": "string",
-          "ref": "player",
+          "ref": "defender",
           "death": "keep",
           "index": true
         },
@@ -484,11 +484,11 @@
       "type": "object",
       "sync": "peers",
       "durable": "connection",
-      "description": "The coordinator\u2019s answer to a player\u2019s order, relayed to that player\u2019s page.",
+      "description": "The coordinator\u2019s answer to a defender\u2019s order, relayed to that defender\u2019s page.",
       "properties": {
-        "player": {
+        "defender": {
           "type": "string",
-          "ref": "player",
+          "ref": "defender",
           "death": "keep"
         },
         "message": {

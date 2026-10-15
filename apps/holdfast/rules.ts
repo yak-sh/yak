@@ -39,7 +39,7 @@ export const view = (rows: Row[], runId: string) => {
     towers: rows.filter((r) => r.tower?.run == runId),
     creeps: rows.filter((r) => r.creep?.run == runId),
     shots: rows.filter((r) => r.shot?.run == runId),
-    players: rows.filter((r) => r.player?.run == runId),
+    players: rows.filter((r) => r.defender?.run == runId),
     waves,
     cleared,
     spent,

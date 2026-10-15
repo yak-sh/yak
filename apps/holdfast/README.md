@@ -72,8 +72,9 @@ resources; the graph remains the source of play and camera choices.
 
 ### Authored designs
 
-`seed.ts` supplies initial values as store rows. Existing rows are read from the
-store rather than replaced during play:
+`seed.json` installs the authored designs once per store; `seed.ts` is the typed
+source and a fill-missing fallback for existing stores. Existing rows are read
+from the store rather than replaced during play:
 
 - `map_design{name, path, slots, gold, lives}` describes a route, build sites,
   starting purse and gate lives.
@@ -102,11 +103,11 @@ Neither total is a second stored balance.
 
 ### Relayed play
 
-`player{run, slot, at}` is connection-lifetime presence: a page playing the run,
-its pointed site and its heartbeat. Other pages draw that site as a coloured
-ring.
+`defender{run, slot, at}` is connection-lifetime presence: a page playing the
+run, its pointed site and its heartbeat. Other pages draw that site as a
+coloured ring.
 
-The lexically first recently awake player is elected with `@yaks/game`'s
+The lexically first recently awake defender is elected with `@yaks/game`'s
 `ownerOf`. That page advances the run; the others render the relayed values:
 
 - `conductor{run, wave, started, spawned, leaked, bounty, at}` tracks the active
@@ -123,10 +124,11 @@ page to take over after a disconnect. With no page advancing the run, the live
 wave expires; its stored towers and completed-wave ledger remain, and that wave
 can be started again.
 
-`command{run, player, action, slot, design, at}` relays an order to the elected
-page. It processes orders serially against fresh graph snapshots and returns
-`reply{run, player, message, at}`. Both are connection-lifetime peer values. The
-server relays the battle; it does not run a real-time simulation loop.
+`command{run, defender, action, slot, design, at}` relays an order to the
+elected page. It processes orders serially against fresh graph snapshots and
+returns `reply{run, defender, message, at}`. Both are connection-lifetime peer
+values. The server relays the battle; it does not run a real-time simulation
+loop.
 
 ### Page-only choices
 

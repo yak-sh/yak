@@ -32,7 +32,7 @@ type Simulation = {
   pulse: number
   uncertain?: boolean
 }
-type Reply = { run: string; player: string; message: string; at: number }
+type Reply = { run: string; defender: string; message: string; at: number }
 
 async function boot() {
   for (
@@ -89,7 +89,7 @@ async function boot() {
       },
     },
   )
-  let page = mint(), player = mint(), help = mint(), controls = mint()
+  let page = mint(), defender = mint(), help = mint(), controls = mint()
   let now = () => front.wire!.now()
   let rows = () => front.read(parse('*')) as Row[]
   let row = (id: string) => (front.ent(id) ?? { entity: { eid: id } }) as Row
@@ -199,7 +199,7 @@ async function boot() {
         entity: { eid: mint() },
         command: {
           run: s.run,
-          player,
+          defender,
           action,
           slot: s.slot,
           design: s.design,
@@ -218,8 +218,8 @@ async function boot() {
     void local('Build', { slot })
     if (state().run && who.writes) {
       void mutate([{
-        entity: { eid: player },
-        player: { run: state().run, slot, at: now() },
+        entity: { eid: defender },
+        defender: { run: state().run, slot, at: now() },
       }])
     }
   }
@@ -288,7 +288,9 @@ async function boot() {
     },
     leave: () => {
       void local('Build', { run: '', slot: -1, message: '', pending: false })
-      void front.mutate([{ entity: { eid: player }, player: null }] as Bundle[])
+      void front.mutate(
+        [{ entity: { eid: defender }, defender: null }] as Bundle[],
+      )
       followRun('')
       history.replaceState(null, '', location.pathname)
     },
@@ -327,8 +329,8 @@ async function boot() {
     if (s.run && who.writes && time - (sim.pulse ?? 0) > 800) {
       void local('Simulation', { pulse: time })
       void mutate([{
-        entity: { eid: player },
-        player: { run: s.run, slot: s.slot, at: time },
+        entity: { eid: defender },
+        defender: { run: s.run, slot: s.slot, at: time },
       }])
     }
     let intent = hands.read(dt)
@@ -379,14 +381,14 @@ async function boot() {
     }
     if (!s.run || !who.writes || sim.busy) return
     let players = rows().filter((r) =>
-      r.player?.run === s.run && time - r.player!.at < 3500
+      r.defender?.run === s.run && time - r.defender!.at < 3500
     )
     let owner = ownerOf(
       players.map((r) => [r.entity.eid, { x: 0, z: 0, awake: true }] as const),
       { x: 0, z: 0 },
       1,
     )
-    if (owner !== player) return
+    if (owner !== defender) return
     let plan = fixedStep(
       Math.max(0, stamp - (sim.then ?? stamp)),
       sim.remainder ?? 0,
@@ -429,7 +431,7 @@ async function boot() {
             command: null,
             reply: {
               run: s.run,
-              player: c.player,
+              defender: c.defender,
               message: c.action === 'wave'
                 ? 'The wave is coming. Hold the line!'
                 : 'Team order complete.',
@@ -450,7 +452,7 @@ async function boot() {
             command: null,
             reply: {
               run: s.run,
-              player: c.player,
+              defender: c.defender,
               message: error.message,
               at: time,
             },
@@ -465,7 +467,7 @@ async function boot() {
       await local('Simulation', { busy: false })
     }
   }
-  let replies = front.watch(`.reply.player=${player}`, { remote: false })
+  let replies = front.watch(`.reply.defender=${defender}`, { remote: false })
   replies.subscribe((batch) => {
     let latest = [...batch].sort((a, b) =>
       (b.reply as Reply).at - (a.reply as Reply).at

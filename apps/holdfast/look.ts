@@ -571,11 +571,14 @@ export let draw = (
     item.rotation.set(now * 0.006, now * 0.009, 0)
   }
   for (let row of rows) {
-    let player = row.player
-    if (player?.run != runId || player.slot == null || now - player.at > 8000) {
+    let defender = row.defender
+    if (
+      defender?.run != runId || defender.slot == null ||
+      now - defender.at > 8000
+    ) {
       continue
     }
-    let slot = map.slots[player.slot]
+    let slot = map.slots[defender.slot]
     if (!slot) continue
     let id = `point/${row.entity.eid}`
     active.add(id)

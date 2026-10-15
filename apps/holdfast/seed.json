@@ -1,0 +1,1009 @@
+[
+  {
+    "entity": { "eid": "88cbd568-c109-40be-94b5-614179bf8377" },
+    "map_design": {
+      "name": "The Orchard",
+      "path": [
+        [-12, 0, -7],
+        [-7, 0, -7],
+        [-7, 0, 5],
+        [0, 0, 5],
+        [0, 0, -4],
+        [8, 0, -4],
+        [8, 0, 8]
+      ],
+      "slots": [
+        [-9, -3],
+        [-4, -3],
+        [-4, 2],
+        [-10, 5],
+        [-4, 8],
+        [3, 2],
+        [3, -7],
+        [8, -7],
+        [5, 6],
+        [11, 2]
+      ],
+      "gold": 250,
+      "lives": 20
+    }
+  },
+  {
+    "entity": { "eid": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74" },
+    "map_design": {
+      "name": "Riverbend",
+      "path": [
+        [-13, 0, 5],
+        [-9, 0, 5],
+        [-9, 0, -5],
+        [-2, 0, -5],
+        [-2, 0, 4],
+        [5, 0, 4],
+        [5, 0, -7],
+        [12, 0, -7]
+      ],
+      "slots": [
+        [-12, 0],
+        [-6, 1],
+        [-6, -8],
+        [1, -2],
+        [1, 7],
+        [8, 0],
+        [8, -4],
+        [11, 4],
+        [-6, 8],
+        [-12, -7]
+      ],
+      "gold": 265,
+      "lives": 20
+    }
+  },
+  {
+    "entity": { "eid": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6" },
+    "map_design": {
+      "name": "The Switchback",
+      "path": [
+        [-13, 0, -8],
+        [10, 0, -8],
+        [10, 0, -1],
+        [-9, 0, -1],
+        [-9, 0, 7],
+        [12, 0, 7]
+      ],
+      "slots": [
+        [-8, -5],
+        [-2, -5],
+        [4, -5],
+        [7, 2],
+        [1, 3],
+        [-5, 3],
+        [-12, 3],
+        [-3, 10],
+        [5, 10],
+        [13, 2]
+      ],
+      "gold": 280,
+      "lives": 18
+    }
+  },
+  {
+    "entity": { "eid": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b" },
+    "enemy_design": {
+      "name": "Hare",
+      "hp": 30,
+      "speed": 2.3,
+      "armour": 0,
+      "bounty": 6,
+      "figure": { "tint": "#e7a75b", "size": 0.7 }
+    }
+  },
+  {
+    "entity": { "eid": "e07fe161-d29e-4476-8233-807e585b44ce" },
+    "enemy_design": {
+      "name": "Bramble",
+      "hp": 19,
+      "speed": 1.6,
+      "armour": 0,
+      "bounty": 4,
+      "figure": { "tint": "#86aa65", "size": 0.6 }
+    }
+  },
+  {
+    "entity": { "eid": "162faadf-55e1-4305-8324-cba903974ad4" },
+    "enemy_design": {
+      "name": "Ironback",
+      "hp": 95,
+      "speed": 1.1,
+      "armour": 65,
+      "bounty": 12,
+      "figure": { "tint": "#8c9ba8", "size": 1 }
+    }
+  },
+  {
+    "entity": { "eid": "44fac756-8289-42fd-8b99-91ff57869b17" },
+    "enemy_design": {
+      "name": "Stoneheart",
+      "hp": 420,
+      "speed": 0.7,
+      "armour": 35,
+      "bounty": 35,
+      "figure": { "tint": "#ba8d85", "size": 1.5 }
+    }
+  },
+  {
+    "entity": { "eid": "89ae5167-ed94-4778-a840-dc1d0b2b8381" },
+    "tower_design": {
+      "name": "Ranger",
+      "cost": 55,
+      "range": 5.3,
+      "rate": 1.5,
+      "damage": 15,
+      "splash": 0,
+      "slow": 0,
+      "speed": 22,
+      "pierce": 0,
+      "upgrade": "7c4a9b9d-cfeb-4cba-a437-4592e393bd0c",
+      "figure": { "kind": "arrow", "tint": "#d4b565", "tier": 1 }
+    }
+  },
+  {
+    "entity": { "eid": "7c4a9b9d-cfeb-4cba-a437-4592e393bd0c" },
+    "tower_design": {
+      "name": "Ranger II",
+      "cost": 80,
+      "range": 5.8999999999999995,
+      "rate": 1.7399999999999998,
+      "damage": 29,
+      "splash": 0,
+      "slow": 0,
+      "speed": 22,
+      "pierce": 0,
+      "upgrade": "9c3aa834-8925-4e26-b188-bf77b7e48d75",
+      "figure": { "kind": "arrow", "tint": "#d4b565", "tier": 2 }
+    }
+  },
+  {
+    "entity": { "eid": "9c3aa834-8925-4e26-b188-bf77b7e48d75" },
+    "tower_design": {
+      "name": "Ranger III",
+      "cost": 130,
+      "range": 6.5,
+      "rate": 1.98,
+      "damage": 42,
+      "splash": 0,
+      "slow": 0,
+      "speed": 22,
+      "pierce": 0,
+      "upgrade": null,
+      "figure": { "kind": "arrow", "tint": "#d4b565", "tier": 3 }
+    }
+  },
+  {
+    "entity": { "eid": "d99bbbf4-1840-4b41-bebc-31a65cff95b5" },
+    "tower_design": {
+      "name": "Bombard",
+      "cost": 95,
+      "range": 5,
+      "rate": 0.55,
+      "damage": 38,
+      "splash": 2.2,
+      "slow": 0,
+      "speed": 11,
+      "pierce": 0,
+      "upgrade": "61110e2b-87ee-4a9f-8bbc-c883981c90e5",
+      "figure": { "kind": "cannon", "tint": "#de8a59", "tier": 1 }
+    }
+  },
+  {
+    "entity": { "eid": "61110e2b-87ee-4a9f-8bbc-c883981c90e5" },
+    "tower_design": {
+      "name": "Bombard II",
+      "cost": 125,
+      "range": 5.6,
+      "rate": 0.638,
+      "damage": 72,
+      "splash": 2.4000000000000004,
+      "slow": 0,
+      "speed": 11,
+      "pierce": 0,
+      "upgrade": "005721ea-c615-4bbf-a471-a82f48ba5d07",
+      "figure": { "kind": "cannon", "tint": "#de8a59", "tier": 2 }
+    }
+  },
+  {
+    "entity": { "eid": "005721ea-c615-4bbf-a471-a82f48ba5d07" },
+    "tower_design": {
+      "name": "Bombard III",
+      "cost": 180,
+      "range": 6.2,
+      "rate": 0.7260000000000001,
+      "damage": 106,
+      "splash": 2.6,
+      "slow": 0,
+      "speed": 11,
+      "pierce": 0,
+      "upgrade": null,
+      "figure": { "kind": "cannon", "tint": "#de8a59", "tier": 3 }
+    }
+  },
+  {
+    "entity": { "eid": "24215b72-4f49-4b49-a49b-8d15506fd47d" },
+    "tower_design": {
+      "name": "Winterglass",
+      "cost": 75,
+      "range": 4.6,
+      "rate": 0.9,
+      "damage": 9,
+      "splash": 0.9,
+      "slow": 0.4,
+      "speed": 16,
+      "pierce": 0,
+      "upgrade": "62b29454-ac03-4d1e-8070-0f475d491ca5",
+      "figure": { "kind": "frost", "tint": "#80c8d3", "tier": 1 }
+    }
+  },
+  {
+    "entity": { "eid": "62b29454-ac03-4d1e-8070-0f475d491ca5" },
+    "tower_design": {
+      "name": "Winterglass II",
+      "cost": 90,
+      "range": 5.199999999999999,
+      "rate": 1.044,
+      "damage": 17,
+      "splash": 1.1,
+      "slow": 0.48000000000000004,
+      "speed": 16,
+      "pierce": 0,
+      "upgrade": "e823c7e2-7936-4299-9a9e-46138d442b67",
+      "figure": { "kind": "frost", "tint": "#80c8d3", "tier": 2 }
+    }
+  },
+  {
+    "entity": { "eid": "e823c7e2-7936-4299-9a9e-46138d442b67" },
+    "tower_design": {
+      "name": "Winterglass III",
+      "cost": 145,
+      "range": 5.8,
+      "rate": 1.1880000000000002,
+      "damage": 25,
+      "splash": 1.3,
+      "slow": 0.56,
+      "speed": 16,
+      "pierce": 0,
+      "upgrade": null,
+      "figure": { "kind": "frost", "tint": "#80c8d3", "tier": 3 }
+    }
+  },
+  {
+    "entity": { "eid": "17dba9dc-9990-4e22-a68b-fbbbf80bd770" },
+    "tower_design": {
+      "name": "Starwell",
+      "cost": 110,
+      "range": 5.5,
+      "rate": 0.75,
+      "damage": 57,
+      "splash": 0,
+      "slow": 0,
+      "speed": 20,
+      "pierce": 1,
+      "upgrade": "b6fb8eb5-592b-4258-a0b7-895f502f05c5",
+      "figure": { "kind": "arcane", "tint": "#b396d9", "tier": 1 }
+    }
+  },
+  {
+    "entity": { "eid": "b6fb8eb5-592b-4258-a0b7-895f502f05c5" },
+    "tower_design": {
+      "name": "Starwell II",
+      "cost": 140,
+      "range": 6.1,
+      "rate": 0.8699999999999999,
+      "damage": 108,
+      "splash": 0,
+      "slow": 0,
+      "speed": 20,
+      "pierce": 1,
+      "upgrade": "19ec2d1d-c75f-4d64-8e15-5372668fe806",
+      "figure": { "kind": "arcane", "tint": "#b396d9", "tier": 2 }
+    }
+  },
+  {
+    "entity": { "eid": "19ec2d1d-c75f-4d64-8e15-5372668fe806" },
+    "tower_design": {
+      "name": "Starwell III",
+      "cost": 220,
+      "range": 6.7,
+      "rate": 0.99,
+      "damage": 160,
+      "splash": 0,
+      "slow": 0,
+      "speed": 20,
+      "pierce": 1,
+      "upgrade": null,
+      "figure": { "kind": "arcane", "tint": "#b396d9", "tier": 3 }
+    }
+  },
+  {
+    "entity": { "eid": "4c14d942-4074-8c4a-a141-2cbacad96f04" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 1,
+      "groups": [
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 9,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "3296e893-df8c-8773-8077-352d7ca3df94" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 2,
+      "groups": [
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 11,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "72a1a829-fa01-86ad-9cff-24b956df384a" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 3,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 13,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "50ec2a9d-32b6-858e-a735-66656a18173c" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 4,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 15,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 4,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 1,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "13dac7e6-a397-816e-b903-99c03142725e" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 5,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 17,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 5,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "3f42387b-70da-8070-86d4-e26fda68a184" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 6,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 19,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 6,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "2220dbd4-5642-8e1d-a41c-e240cf5d6cad" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 7,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 21,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 7,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "ca68dfdd-af8f-859f-a08a-97c4efcb53b0" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 8,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 23,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 8,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 2,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "662efe7c-9fda-825a-80ed-976fd9b9500d" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 9,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 25,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 9,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "340e2da4-fa7c-86fe-bf36-e361e5efa10c" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 10,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 27,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 10,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "1f86a1ce-7521-82ca-afea-1bbbe3988f8b" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 11,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 29,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 11,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "cddce072-7a62-89e2-961c-ff28678f93a7" },
+    "wave_design": {
+      "map": "88cbd568-c109-40be-94b5-614179bf8377",
+      "n": 12,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 31,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 12,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 3,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "aa4882c2-c433-82e5-af92-2a6e3f27bafb" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 1,
+      "groups": [
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 10,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "0ecb0311-7ce8-8d0e-9f08-90b908928875" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 2,
+      "groups": [
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 12,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "8d6a4632-d4fd-85fd-86c0-31701a24b0ff" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 3,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 14,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "10fe901f-797c-8999-ad39-8bf806f8241e" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 4,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 16,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 5,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 1,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "a9d13998-033d-810c-b11a-93e19987fdbe" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 5,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 18,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 6,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "9e720736-d744-8b20-bd46-d565354ff1ac" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 6,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 20,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 7,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "3f59f60a-886a-87b4-8b51-5b9598253e73" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 7,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 22,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 8,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "b6311c4c-e841-871a-9374-081bcc45fd4b" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 8,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 24,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 9,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 2,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "f3db8a10-9c25-8404-a73c-110603ad7e90" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 9,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 26,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 10,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "20d64e44-33e2-832c-ae1d-cc8a663eb8a9" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 10,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 28,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 11,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "ff940d34-8525-87da-9044-a55df4b78c97" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 11,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 30,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 12,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "63dc7bcb-38be-85cb-8c61-9ab58f3dd865" },
+    "wave_design": {
+      "map": "209d96eb-d9ab-42ad-a0dc-6e5c82592b74",
+      "n": 12,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 32,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 13,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 3,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "5ceb6f9a-7ca6-8cd9-9f17-5b017a4b254f" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 1,
+      "groups": [
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 11,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "0ccdf346-e7e3-81c9-bbf2-fbab9f9d9ef7" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 2,
+      "groups": [
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 13,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "a58e3d54-2b98-8f07-9d5f-f14b476946c6" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 3,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 15,
+          "gap": 0.65
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "0d3b3939-6cf5-80f8-9375-bc055ce0cd15" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 4,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 17,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 6,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 1,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "b3cccae9-4a9f-8ffe-991e-2392aa041904" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 5,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 19,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 7,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "9617af9f-0e86-8a86-8018-1abd193fb888" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 6,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 21,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 8,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "cadce4ba-7981-8208-a24f-a4e2ffdddb31" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 7,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 23,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 9,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "592c6936-ebdf-81b5-97f6-816149fc3a0a" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 8,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 25,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 10,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 2,
+          "gap": 1.8
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "d1de03e4-ae04-8a96-af38-2c51a473b6fa" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 9,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 27,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 11,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "83dd689d-2379-8841-bd1a-d39fd84ceec1" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 10,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 29,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 12,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "fb7645e1-3df9-8e62-871d-5a56bbf96c45" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 11,
+      "groups": [
+        {
+          "enemy": "e07fe161-d29e-4476-8233-807e585b44ce",
+          "count": 31,
+          "gap": 0.35
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 13,
+          "gap": 0.35
+        }
+      ]
+    }
+  },
+  {
+    "entity": { "eid": "8749e0dd-4857-81dc-bfd0-9b316b217272" },
+    "wave_design": {
+      "map": "4eb69a58-3de0-441e-9bd6-d39b9b2275d6",
+      "n": 12,
+      "groups": [
+        {
+          "enemy": "162faadf-55e1-4305-8324-cba903974ad4",
+          "count": 33,
+          "gap": 0.65
+        },
+        {
+          "enemy": "9b2af82b-9b51-4b45-b52a-52c5e093ec9b",
+          "count": 14,
+          "gap": 0.35
+        },
+        {
+          "enemy": "44fac756-8289-42fd-8b99-91ff57869b17",
+          "count": 3,
+          "gap": 1.8
+        }
+      ]
+    }
+  }
+]

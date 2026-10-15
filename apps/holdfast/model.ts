@@ -84,10 +84,10 @@ export type Row = {
   creep?: Creep | null
   shot?: Shot | null
   firing?: { run: string; at: number }
-  player?: { run: string; slot: number | null; at: number }
+  defender?: { run: string; slot: number | null; at: number }
   command?: {
     run: string
-    player: string
+    defender: string
     action: string
     slot?: number
     design?: string
