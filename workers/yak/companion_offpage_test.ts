@@ -23,7 +23,7 @@ let read = (door: ReturnType<typeof appStore>, line: string, who = ADA_OWNS) =>
 
 test('a companion works off-page across pause, restart and retry', async () => {
   using time = new FakeTime('2026-09-28T00:00:00.000Z')
-  using p = platform()
+  await using p = platform()
   let k = await seeded(p.env)
   let name = storeName(k.space, k.app)
   let door = appStore(p.env.STORE, k.space, k.app)

@@ -74,7 +74,7 @@ test('directory use survives platform writes and excludes administrative work', 
 })
 
 let visits = await (async () => {
-  using p = platform('directory use proof')
+  await using p = platform('directory use proof')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
   let space = await dir.own(VISITOR, 'used-proof')
   await dir.apply({
@@ -301,7 +301,7 @@ test('background receipt defect delivery does not delay the response', () => {
 })
 
 let spoken = await (async () => {
-  using p = platform('retired spelling proof')
+  await using p = platform('retired spelling proof')
   let dir = directory({ fetch: (r) => directoryFetch(r, p.env) }, true)
   let space = await dir.own(VISITOR, 'retired-proof')
   await dir.apply({

@@ -29,7 +29,7 @@ let built = async () => {
 }
 
 test('app_files gives addresses only for files the app serves', async () => {
-  using s = await built()
+  await using s = await built()
   let wrote = await s.files({
     'wrangler.jsonc': '{"assets": {"directory": "dist"}}',
     'dist/about/index.html': '<h1>about</h1>',
@@ -54,7 +54,7 @@ test('app_files gives addresses only for files the app serves', async () => {
 })
 
 test('app_deploy says which folder the app serves', async () => {
-  using s = await built()
+  await using s = await built()
   await s.files({
     'wrangler.jsonc': '{"assets": {"directory": "dist"}}',
     'dist/index.html': '<h1>home</h1>',

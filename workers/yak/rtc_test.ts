@@ -168,7 +168,7 @@ test('a lease nobody renewed closes its call at Realtime and drops its row', asy
     let { tracks } = await at(sessionId) as { tracks: Track[] }
     assertEquals(tracks.map((t) => t.status), ['inactive'])
   } finally {
-    p[Symbol.dispose]()
+    await p[Symbol.asyncDispose]()
     await cf.stop()
     Deno.removeSync(log)
   }

@@ -20,7 +20,7 @@ import type { Who } from './session.ts'
 import { tallying } from './lib/hops.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
-  using p = platform()
+  await using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env)
   await noted({
@@ -110,7 +110,7 @@ test('app_errors says a break once, and its id archives every time', () => {
 })
 
 test('app_errors shows a session error from its content', async () => {
-  using p = platform()
+  await using p = platform()
   let { env } = p
   let { dir, space, app } = await seeded(env)
   let store = metaOf(appStore(env.STORE, space, app))

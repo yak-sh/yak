@@ -145,7 +145,7 @@ let app = async (
     read,
     kernel,
     call: (name: string, args: Comp) => kernel('/call', { name, args }),
-    [Symbol.dispose]: () => p[Symbol.dispose](),
+    [Symbol.asyncDispose]: () => p[Symbol.asyncDispose](),
   }
 }
 
@@ -218,7 +218,7 @@ for (
   }]
 ) {
   test(`the hosted creature builder wires sounds ${sounds ? 'over junk' : 'when omitted'}`, async () => {
-    using v = await creature(sounds)
+    await using v = await creature(sounds)
     let outputs = await until(async () => {
       let rows = await v.read('.built.current=true&*')
       return rows.length == 3 ? rows : null
@@ -257,7 +257,7 @@ for (
   ]
 ) {
   test(`the hosted creature builder records ${rejected.name} as a failed build`, async () => {
-    using v = await creature(undefined, rejected.hp, rejected.step)
+    await using v = await creature(undefined, rejected.hp, rejected.step)
     let [build] = await until(async () => {
       let rows = await v.read('.build&.failed&*')
       return rows.length ? rows : null

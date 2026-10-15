@@ -10,7 +10,7 @@ let doc = (type = 'string') => ({
 })
 
 test('release door reads immutable JSON/YAML vocab, caches pairs, and follows the fresh app version', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   let { app } = await seeded(env)
   files.held.set('sha/old', bytes(JSON.stringify(doc())))
@@ -72,7 +72,7 @@ test('release door reads immutable JSON/YAML vocab, caches pairs, and follows th
 })
 
 test('release door gates readers and validates the page version', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env } = scenario
   let { app } = await seeded(env)
   let get = (tail = '', method = 'GET') =>
@@ -89,7 +89,7 @@ test('release door gates readers and validates the page version', async () => {
 })
 
 test('crossing a required release raises the reload level even with equal vocab and only cosmetic file changes', async () => {
-  using scenario = platform()
+  await using scenario = platform()
   let { env, files } = scenario
   let { app } = await seeded(env)
   files.held.set('sha/words', bytes(JSON.stringify(doc())))

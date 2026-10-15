@@ -107,7 +107,7 @@ let commandFixture = async () => {
 let commandScene = await commandFixture()
 
 test('a command that takes an argument runs in its store', async () => {
-  using p = commandScene.p
+  await using p = commandScene.p
   let {
     env,
     dir,

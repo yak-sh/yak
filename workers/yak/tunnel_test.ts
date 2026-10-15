@@ -105,7 +105,7 @@ let adopt = { space: 'ada', do: 'adopt', tunnel: T, service: S }
 test('only the platform adopts a pair, since its ids name the platform’s resources', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
-  using _ = scenario
+  await using _ = scenario
   assertEquals((await door(ADA, adopt)).body.error.code, 'not_platform')
   assertEquals((await door(null, adopt)).status, 403)
   assertEquals((await door(JEFF, { ...adopt, service: 'x' })).status, 400)
@@ -121,7 +121,7 @@ test('only the platform adopts a pair, since its ids name the platform’s resou
 test('an adopted pair rotates only its gateway, and disconnecting leaves the tunnel alone', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
-  using _ = scenario
+  await using _ = scenario
   await door(JEFF, adopt)
   let rotated = (await door(ADA, { space: 'ada', do: 'rotate' })).body
   assertEquals(rotated.token, undefined)
@@ -138,7 +138,7 @@ test('an adopted pair rotates only its gateway, and disconnecting leaves the tun
 
 test('no gateway can be uploaded without the workers token, so no tunnel is made', async () => {
   let { scenario, door } = await spaces({ CF_ACCOUNT: 'acct' })
-  using _ = scenario
+  await using _ = scenario
   assertEquals((await door(JEFF, adopt)).body.error.code, 'no_token')
   assertEquals((await door(ADA, { space: 'ada' })).body.tunnel, null)
 })
@@ -146,7 +146,7 @@ test('no gateway can be uploaded without the workers token, so no tunnel is made
 test('connect makes a pair and its gateway, answering the token once', async () => {
   using cf = account()
   let { scenario, door, gateway } = await spaces()
-  using _ = scenario
+  await using _ = scenario
   let connect = { space: 'ada', do: 'connect', port: '5173' }
   let made = (await door(ADA, connect)).body
   assertEquals(made.tunnel, { id: T, service: S, adopted: false })

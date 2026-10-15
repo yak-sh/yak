@@ -299,7 +299,7 @@ let owned = async (env: Env) => {
 }
 
 let idlePreview = await (async () => {
-  using p = platform('idle preview')
+  await using p = platform('idle preview')
   let g = meta(p.env)
   let now = new Date()
   let old = new Date(now.getTime() - 8 * day).toISOString()

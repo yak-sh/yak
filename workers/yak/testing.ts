@@ -1028,7 +1028,6 @@ export let platform = (
     recovery,
     ring,
     settled,
-    [Symbol.dispose]: () => void close(),
     [Symbol.asyncDispose]: close,
   }
 }

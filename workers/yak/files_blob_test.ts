@@ -101,7 +101,7 @@ test('R2 reads snapshot a buffer before hashing it', async () => {
 })
 
 test('R2 writes own input views and returned buffers', async () => {
-  using _cleanup = scenario
+  await using _cleanup = scenario
   // R2 owns writes, including a view into a caller's larger buffer.
   for (
     let input of [
