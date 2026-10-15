@@ -4,7 +4,7 @@
 // friend can't get in" has the same first step on both (T-123886). It is the
 // owner's alone: an invitation names an address the owner typed, and that is
 // nobody else's to read.
-import type { App, Directory, Held, Space } from './directory.ts'
+import type { App, Directory, Held, Role, Space } from './directory.ts'
 import type { Host } from './host.ts'
 import { manageAt } from './route.ts'
 
@@ -53,6 +53,24 @@ export let peopleIn = async (
       invited: at(app.eid, 'invite'),
     })),
   }))
+}
+
+/** Who is in each space among `seats` its holder owns, by space eid, with
+ * those spaces' apps among `apps`. A space they are only a member of has no
+ * entry: who else is in it, and who the owner invited, is the owner's alone
+ * to read. */
+export let peopleOwned = async (
+  dir: Directory,
+  seats: { space: Space; role: Role }[],
+  apps: App[],
+): Promise<Map<string, People>> => {
+  let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space)
+  let all = await peopleIn(
+    dir,
+    owned,
+    apps.filter((a) => owned.some((s) => s.eid == a.space)),
+  )
+  return new Map(all.map((r) => [r.space.eid, r]))
 }
 
 // What to call someone in a sentence: their address, which is what member_add

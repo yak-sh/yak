@@ -111,6 +111,26 @@ export let lapse = async (
 }
 
 /**
+ * The token door's reading of a refresh the provider refused (`res`, its
+ * answer to `form` from `client`): one refused because the sign-in it names
+ * is gone is a lapse ({@link lapse}); anything else is nobody's news.
+ */
+export let refusedRefresh = async (
+  oauth: Clients,
+  store: Rows,
+  form: URLSearchParams,
+  client: string,
+  res: Response,
+) => {
+  let said: unknown = await res.json().catch(() => null)
+  let error = said && typeof said == 'object' && 'error' in said
+    ? said.error
+    : undefined
+  let named = unheld(form, client, error)
+  if (named) await lapse(oauth, store, named.person, named.client)
+}
+
+/**
  * Connecting an assistant again ends its lapse, and the lapse of an
  * assistant nobody knew, so the next one is news again.
  */

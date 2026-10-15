@@ -248,7 +248,7 @@ import {
 } from './meter.ts'
 import { type Held, holding } from './held.ts'
 import { an, invitedWords, room, send } from './invite.ts'
-import { aloud, peopleIn, shown } from './people.ts'
+import { aloud, peopleOwned, shown } from './people.ts'
 import {
   addressed,
   BUILT,
@@ -4412,12 +4412,7 @@ let OURS: Row[] = [
       // Who is in each space the caller owns and in each of its apps, and who
       // has yet to accept (people.ts): the owner's to read, as on their
       // dashboard's People page, and two reads however many there are.
-      let owned = seats.filter((s) => s.role == 'owner').map((s) => s.space)
-      let people = peopleIn(
-        ctx.dir,
-        owned,
-        living.filter((a) => owned.some((s) => s.eid == a.space)),
-      ).then((all) => new Map(all.map((r) => [r.space.eid, r])))
+      let people = peopleOwned(ctx.dir, seats, living)
       let bound = await bindings(ctx.env, living)
       // What is broken in each app, as each space's tracker holds it: one read
       // a space, all at once, and no app's store woken to list it (T-123502).

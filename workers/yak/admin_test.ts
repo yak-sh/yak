@@ -14,7 +14,7 @@ let EMPTY: Census = { people: [], spaces: [], apps: [], seats: [] }
 let SIGNED_IN = Object.fromEntries(
   await Promise.all(['ann', 'root'].map(async (person) => [
     person,
-    `${COOKIE}=${await sign({ person, exp: 4e9 }, SECRET)}`,
+    `${COOKIE}=${await sign({ person, space: null, exp: 4e9 }, SECRET)}`,
   ])),
 )
 let NOW = new Date('2026-10-14T12:00:00Z')

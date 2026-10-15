@@ -88,7 +88,7 @@ import {
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
 import { agentsOf, disconnect, replace, servicesOf } from './connected.ts'
-import { closed, lapse, reconnected, unheld } from './lapsed.ts'
+import { closed, reconnected, refusedRefresh } from './lapsed.ts'
 import {
   consented as handoffConsented,
   consenting as handoffConsenting,
@@ -1281,22 +1281,6 @@ let presented = async (req: Request) => {
   }
 }
 
-// A refresh the provider refused, read off what was sent and what came back:
-// when it named a sign-in its person no longer holds, they are told how to
-// connect that assistant again (lapsed.ts). Never in the way of the answer.
-let lapsing = async (
-  env: Env,
-  read: Awaited<ReturnType<typeof presented>>,
-  res: Response,
-) => {
-  let said: unknown = await res.json().catch(() => null)
-  let error = said && typeof said == 'object' && 'error' in said
-    ? said.error
-    : undefined
-  let named = read && unheld(read.form, read.named[0], error)
-  if (named) await lapse(grants(env), meta(env), named.person, named.client)
-}
-
 // A secret a public client was never issued, dropped before the provider sees
 // it (T-34416). ChatGPT registers itself `token_endpoint_auth_method: none`
 // and then puts a `client_secret` in the token request anyway — an empty one
@@ -1412,8 +1396,21 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let res = await new OAuthProvider<Env>(opts(env))
     .fetch(sent, env, context() as never)
   if (read && res.status == 400) {
+    // A refresh refused for a sign-in its person no longer holds tells them
+    // how to connect that assistant again (lapsed.ts). Never in the way of
+    // the answer.
+    let refused = res.clone()
     background(
-      lapsing(env, read, res.clone())
+      Promise.resolve()
+        .then(() =>
+          refusedRefresh(
+            grants(env),
+            meta(env),
+            read.form,
+            read.named[0],
+            refused,
+          )
+        )
         .catch((e) => caught(e, { request: 'POST /oauth/token' })),
     )
   }

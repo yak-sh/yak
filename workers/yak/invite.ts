@@ -30,7 +30,7 @@ import { reachChanged } from './declared.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
 import { type Host, spaceHost, url as hostUrl } from './host.ts'
-import { mail } from './mail.ts'
+import { type Mail, mail } from './mail.ts'
 import { counted, refusedSpend } from './meter.ts'
 import { closed, invited, lost } from './pages.ts'
 import { INVITE } from './route.ts'
@@ -163,6 +163,7 @@ export let send = async (
     name?: string
     note?: string
   },
+  post: Mail = mail(env),
 ): Promise<boolean> => {
   let { space, app } = o.place
   let host = spaceHost(env, space.slug)
@@ -174,7 +175,7 @@ export let send = async (
     invite: o.invite,
     to: app ? app.eid : space.eid,
   }, env)
-  let sent = await mail(env)({
+  let sent = await post({
     to: o.email,
     subject: SUBJECT,
     body: (o.name ? `Hi ${o.name},\n\n` : '') +

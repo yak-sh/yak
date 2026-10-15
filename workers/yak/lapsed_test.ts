@@ -8,7 +8,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { effects as lapsedEffects } from './facets/lapsed-effects.ts'
-import { closed, lapse, reconnected } from './lapsed.ts'
+import { closed, lapse, reconnected, refusedRefresh } from './lapsed.ts'
 import type { Clients } from './connected.ts'
 import type { Letter } from './mail.ts'
 import type { Stored } from './graph.ts'
@@ -73,7 +73,9 @@ let fixture = () => {
       let before = new Set(rows.keys())
       write(b as Write[])
       for (let eid of rows.keys()) {
-        if (!before.has(eid)) await tell_lapsed(row(eid) as never, tx)
+        if (!before.has(eid)) {
+          await tell_lapsed(row(eid) as never, tx, undefined as never)
+        }
       }
     },
   } as unknown as Parameters<typeof lapse>[1]
@@ -93,6 +95,7 @@ let fixture = () => {
   } as unknown as Clients
   return {
     sent,
+    oauth,
     held,
     store,
     rows: () => [...rows.values()],
@@ -151,4 +154,24 @@ test('a refresh naming somebody the directory does not know writes nobody', asyn
   await f.refused('11111111-2222-3333-4444-555555555555')
   equal(f.sent, [])
   equal(f.rows(), [])
+})
+
+test("the token door's refused refresh owes the letter only for a lost sign-in", async () => {
+  let f = fixture()
+  let form = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: `${ME}:gone:secret`,
+  })
+  let answered = (error: string) =>
+    refusedRefresh(
+      f.oauth,
+      f.store,
+      form,
+      CLAUDE,
+      Response.json({ error }, { status: 400 }),
+    )
+  await answered('invalid_request')
+  equal(f.sent, [])
+  await answered('invalid_grant')
+  equal(f.sent.length, 1)
 })

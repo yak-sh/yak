@@ -53,6 +53,7 @@ import {
 import * as dirPart from './directory.ts'
 import { ahead, bearing, granted, itsApp, ran } from './dispatch.ts'
 import { bound, type Env } from './env.ts'
+import type { Mail } from './mail.ts'
 import { pilled, standing } from './gallery.ts'
 import { checkout, portal } from './billing.ts'
 import { connecting, connectionsOf, enabled } from './connections.ts'
@@ -275,6 +276,26 @@ export let refusedSaid = async (
   person: string,
   what: string,
 ) => await waiting(dir, space, app, person, what) ? WAITING : MEMBER[what]
+
+/** Whether a page asking who is looking (`/me`) hears that an invitation
+ * waits for them: signed in, unable to write here, and let in by the owner,
+ * so the page can say so before they type. */
+export let invitedHere = async (
+  dir: Parameters<typeof waiting>[0],
+  space: Space,
+  app: App,
+  person: string | null,
+  mayRead: boolean,
+  mayPost: boolean,
+) =>
+  !!person && !mayPost &&
+  !!await waiting(
+    dir,
+    space,
+    app,
+    person,
+    mayRead ? 'not_a_writer' : 'not_a_reader',
+  )
 
 /** The page for a signed-in person an app's pages are shut to: that their
  * invitation waits, if the owner let them in, else that nothing is here. */
@@ -1659,13 +1680,7 @@ let api = async (
       signIn: person
         ? null
         : signInAt(req.headers.get('referer') || req.url, env),
-      invited: !!person && !mayPost && !!await waiting(
-        dir,
-        space,
-        app,
-        person,
-        mayRead ? 'not_a_writer' : 'not_a_reader',
-      ),
+      invited: await invitedHere(dir, space, app, person, mayRead, mayPost),
     })
   }
   // The app's platform doors use the same refusals and visitor limits as
@@ -2125,7 +2140,10 @@ type Owner = Who & { person: string }
 // of a space they hold a seat in and do not own, and each app they are a guest
 // of. What is in the trash opens onto nothing, so it is left out, and an app
 // of a space they own is on that space's own page.
-let shared = async (dir: ReturnType<typeof directory>, person: string) => {
+export let shared = async (
+  dir: ReturnType<typeof directory>,
+  person: string,
+) => {
   let [seats, granted] = await Promise.all([
     dir.seats(person),
     dir.granted(person),
@@ -2296,12 +2314,13 @@ let closed = async (
 // owner pressing the button: nothing when it went, else what to say. An
 // invitation that is gone (accepted or withdrawn since the page was drawn)
 // or is somebody else's space's says so and sends nothing.
-let again = async (
+export let again = async (
   env: Env,
   dir: ReturnType<typeof directory>,
   space: Space,
-  who: Owner,
+  who: Pick<Owner, 'person'>,
   eid: string,
+  post?: Mail,
 ): Promise<{ say: string; no: boolean } | null> => {
   let invite = await dir.invitation(eid)
   let place = invite && await placeOf(dir, invite.to)
@@ -2322,7 +2341,7 @@ let again = async (
     email,
     role: invite.role,
     by: who.person,
-  })
+  }, post)
   return sent ? null : {
     say: "The letter couldn't be sent just now. Try again in a minute.",
     no: true,
