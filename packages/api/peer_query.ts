@@ -22,6 +22,9 @@ let peer = (v: Vocab, path: string[], facet = false) =>
 let uses = (v: Vocab, clauses: Clause[]): boolean =>
   clauses.some((c) => {
     if (c.kind == 'and' || c.kind == 'or') return uses(v, c.clauses)
+    if (c.kind == 'refs' && c.op == '=' && c.value) {
+      return v.refProps().some(([comp]) => syncOf(v, comp) == 'peers')
+    }
     if (c.kind == 'pred') {
       return peer(v, c.path, bare(c)) ||
         !!c.where && uses(v, [c.where])
@@ -139,4 +142,17 @@ export let peerPlan = (q: And, v: Vocab): {
     durable: { kind: 'and', clauses: [...clauses, { kind: 'every' }] },
     ...(ref ? { ref } : {}),
   }
+}
+
+/** Targets needed by the in-memory backlink matcher beside candidate rows. */
+export let peerTargets = (q: And): string[] => {
+  let targets = new Set<string>()
+  let walk = (clauses: Clause[]) => {
+    for (let c of clauses) {
+      if (c.kind == 'and' || c.kind == 'or') walk(c.clauses)
+      else if (c.kind == 'refs' && c.op == '=' && c.value) targets.add(c.value)
+    }
+  }
+  walk(q.clauses)
+  return [...targets]
 }

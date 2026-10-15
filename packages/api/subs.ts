@@ -63,7 +63,7 @@ import { type And, bare, drifts, parse } from '@yaks/query'
 import { paceOf, saveOf, syncOf } from '@yaks/vocab'
 import { published } from './publish.ts'
 import { cares, type Interest, interest } from './interest.ts'
-import { peerPlan } from './peer_query.ts'
+import { peerPlan, peerTargets } from './peer_query.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
 import { type PeerWriter, saving } from './save.ts'
@@ -1675,7 +1675,15 @@ export let subscriptions = (graph: Graph, opts: {
     })
   }
   let candidatesOf = (sub: Sub): Bundle[] | Promise<Bundle[]> => {
-    if (!sub.durable) return []
+    let targets = peerTargets(sub.ast ?? parse(sub.query))
+    if (!sub.durable) {
+      return targets.length
+        ? after(
+          graph.get(targets, undefined, { ...sub.opts, native: true }),
+          (roots) => roots.map(stored),
+        )
+        : []
+    }
     let read = () =>
       after(
         graph.read(sub.durable!, {
@@ -1683,7 +1691,14 @@ export let subscriptions = (graph: Graph, opts: {
           durable: true,
           native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
         }),
-        (rows) => rows.map(stored),
+        (rows) => {
+          return targets.length
+            ? after(
+              graph.get(targets, undefined, { ...sub.opts, native: true }),
+              (roots) => [...rows, ...roots].map(stored),
+            )
+            : rows.map(stored)
+        },
       )
     if (sub.opts?.now != null || moving(sub.durable)) return read()
     let key = JSON.stringify([sub.durable, sub.opts ?? null])
@@ -1736,12 +1751,21 @@ export let subscriptions = (graph: Graph, opts: {
     scope?: Set<Eid>,
     scoped?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
+    let targets = peerTargets(sub.ast ?? parse(sub.query))
     let candidates = scope
-      ? scoped ??
-        after(
+      ? after(
+        scoped ?? after(
           graph.get([...scope], undefined, { native: true }),
           (rows) => rows.map(stored),
-        )
+        ),
+        (rows) =>
+          targets.length
+            ? after(
+              graph.get(targets, undefined, { ...sub.opts, native: true }),
+              (roots) => [...rows, ...roots].map(stored),
+            )
+            : rows,
+      )
       : sub.candidates ??
         (sub.candidates = candidatesOf(sub))
     if (scope) {
