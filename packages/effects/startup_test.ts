@@ -136,17 +136,17 @@ for (let singleOwner of [false, true]) {
 // A deployment already owed the run; a new registry is its next wake.
 let deployed = proc({ singleOwner: true }, store())
 await deployed.fx.startup(deployed.g)
+let woken = proc({ singleOwner: true, now: () => 0 }, deployed.storage)
+woken.fx.handle({
+  boot: (e, _tx, _write, attempt) => {
+    equal(e.kind, 'started')
+    equal(attempt!.last(), false)
+    throw Error('try again')
+  },
+})
 test('deployment startup survives a wake and records failure for retry', async () => {
-  let next = proc({ singleOwner: true, now: () => 0 }, deployed.storage)
-  next.fx.handle({
-    boot: (e, _tx, _write, attempt) => {
-      equal(e.kind, 'started')
-      equal(attempt!.last(), false)
-      throw Error('try again')
-    },
-  })
-  await work(next)
-  match(await rows(next.g), [{
+  await work(woken)
+  match(await rows(woken.g), [{
     state: 'pending',
     attempts: 1,
     next: new Date(1000).toISOString(),
@@ -162,18 +162,18 @@ interrupted.fx.handle({
   },
 })
 await work(interrupted)
+let retried = proc({ singleOwner: true, now: () => 1000 }, interrupted.storage)
+retried.fx.handle({
+  boot: (e, _tx, _write, attempt) => {
+    equal(e.kind, 'started')
+    equal(attempt!.last(), true)
+    retried.seen.push(e.entity.eid)
+  },
+})
 test('a later wake retries recorded startup with the remaining attempt allowance', async () => {
-  let next = proc({ singleOwner: true, now: () => 1000 }, interrupted.storage)
-  next.fx.handle({
-    boot: (e, _tx, _write, attempt) => {
-      equal(e.kind, 'started')
-      equal(attempt!.last(), true)
-      next.seen.push(e.entity.eid)
-    },
-  })
-  await work(next)
-  equal(next.seen, ['store'])
-  equal(await rows(next.g), [])
+  await work(retried)
+  equal(retried.seen, ['store'])
+  equal(await rows(retried.g), [])
 })
 
 check(

@@ -78,6 +78,12 @@ let host = (max = 2, refuse = false) => {
     }),
   }
 }
+// Joining the empty pool is fixture setup; the write must start its own runs.
+let joined = async (max = 2, refuse = false) => {
+  let h = host(max, refuse)
+  await h.fx.work(h.g, undefined, 0)
+  return h
+}
 let notified = async (
   h: ReturnType<typeof host>,
   mixed = false,
@@ -90,7 +96,6 @@ let notified = async (
     queueMicrotask(run as () => void)
     return 0 as unknown as ReturnType<typeof setTimeout>
   })
-  await h.fx.work(h.g, undefined, 0)
   let queued: (() => void | Promise<void>)[] = []
   await h.g.apply(mixed ? h.seed : h.seed.slice(0, 1), {
     ...(deferred ? { deferEffects: (run) => void queued.push(run) } : {}),
@@ -105,8 +110,8 @@ let notified = async (
   return { during, after: h.facts(), ...(deferred ? { before } : {}) }
 }
 for (let mixed of [false, true]) {
-  await notified(host(mixed ? 1 : 2), mixed)
-  let h = host(mixed ? 1 : 2)
+  await notified(await joined(mixed ? 1 : 2), mixed)
+  let h = await joined(mixed ? 1 : 2)
   test(`a host holds committed writer claims until completion and hears once (${mixed})`, async () => {
     equal(await notified(h, mixed), {
       during: {
@@ -126,9 +131,8 @@ for (let mixed of [false, true]) {
     })
   })
 }
-let refused = host(2, true)
+let refused = await joined(2, true)
 test('a rolled-back claim invokes no handler and sends no lifetime notification', async () => {
-  await refused.fx.work(refused.g, undefined, 0)
   await throws(() => refused.g.apply(refused.seed), 'refused')
   equal(refused.facts(), {
     nudges: 0,
@@ -139,8 +143,8 @@ test('a rolled-back claim invokes no handler and sends no lifetime notification'
   })
 })
 
-await notified(host(), false, true)
-let deferred = host()
+await notified(await joined(), false, true)
+let deferred = await joined()
 test('an enclosing transaction notifies and starts claims only when it releases observers', async () => {
   equal(await notified(deferred, false, true), {
     before: { nudges: 0, snapshots: [], ran: [], done: false, attempts: [1] },
@@ -160,9 +164,8 @@ test('an enclosing transaction notifies and starts claims only when it releases 
     },
   })
 })
-let rolledBack = host()
+let rolledBack = await joined()
 test('discarding observers after an outer rollback starts and notifies nothing', async () => {
-  await rolledBack.fx.work(rolledBack.g, undefined, 0)
   let queued: (() => void | Promise<void>)[] = []
   await throws(() =>
     rolledBack.g.storage.tx(() => {

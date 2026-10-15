@@ -92,6 +92,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import {
   after as cursorAfter,
+  type And,
   and,
   eq,
   fields,
@@ -108,6 +109,32 @@ export { effectDoc } from './docs.ts'
 
 /** The pool's component, by the name ./vocab.json declares it. */
 export let EFFECT = 'effect'
+
+// The queries every pass asks, built once: storage keeps what it compiled
+// against the tree it was given, so a tree built afresh each pass is compiled
+// afresh each pass.
+let PENDING = and(
+  eq(`${EFFECT}.state`, 'pending'),
+  window(1),
+  fields('entity.eid'),
+)
+let HEADS = new Map<string, And>()
+// The next pending run of one handler: the first, or the first after `cursor`.
+let head = (handler: string, cursor?: Eid) => {
+  let q = HEADS.get(handler)
+  if (!q) {
+    q = and(
+      eq(`${EFFECT}.handler`, handler),
+      eq(`${EFFECT}.state`, 'pending'),
+      window(1),
+    )
+    HEADS.set(handler, q)
+  }
+  return cursor ? and(...q.clauses, cursorAfter(cursor)) : q
+}
+
+// One pass, then out. Already aborted, so one serves every call.
+let ONCE = AbortSignal.abort()
 
 /** The most attempts a run gets where its declaration does not say: the
  * first, and two more. */
@@ -328,6 +355,13 @@ type Held = Run & {
 
 /** The pool over one registry: what a commit owes, and the worker. */
 export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
+  // A pass admits at most this many candidates, even when concurrency is
+  // unlimited; any other window than a whole number of them cannot make
+  // bounded progress, so it is refused before anything is built.
+  let page = opts.page ?? 32
+  if (!Number.isSafeInteger(page) || page < 1) {
+    throw new RangeError('effect page must be a positive integer')
+  }
   let me = opts.owner ?? crypto.randomUUID()
   let clock = opts.now ?? (() => Date.now())
   let hold = opts.lease ?? 60_000
@@ -562,12 +596,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
 
   // One pass over what is owed: every row this process can run that nobody
   // holds and whose backoff is up, claimed and started. Returns the runs.
-  // A pass admits at most this many candidates, even when concurrency is
-  // unlimited. Separate handler windows keep one backlog from owning the pass.
-  let page = opts.page ?? 32
-  if (!Number.isSafeInteger(page) || page < 1) {
-    throw new RangeError('effect page must be a positive integer')
-  }
+  // Separate handler windows keep one backlog from owning the pass.
   let turn = 0
   let cursors = new Map<string, Eid>()
   let exhausted = new Set<string>()
@@ -609,10 +638,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     // An empty pool needs one bounded identity seek, regardless of how many
     // handlers this host serves. Pending work still uses its fair windows.
     if (
-      !(await g.read(
-        and(eq(`${EFFECT}.state`, 'pending'), window(1), fields('entity.eid')),
-        { storageOrder: true },
-      )).length
+      !(await g.read(PENDING, { storageOrder: true })).length
     ) {
       cursors.clear()
       exhausted.clear()
@@ -676,15 +702,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         if (drained.has(name)) continue
         // One candidate, then the next handler's, not the rest of this backlog.
         let cursor = cursors.get(name)
-        let [b] = await g.read(
-          and(
-            eq(`${EFFECT}.handler`, name),
-            eq(`${EFFECT}.state`, 'pending'),
-            window(1),
-            ...(cursor ? [cursorAfter(cursor)] : []),
-          ),
-          { storageOrder: true },
-        )
+        let [b] = await g.read(head(name, cursor), { storageOrder: true })
         // Revisit a drained handler's head next pass: a writer can owe it a
         // new run while another handler still has thousands left to examine.
         // Finding it empty spends no budget, so idle handlers cannot crowd a
@@ -1054,7 +1072,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
     },
     startup,
-    work: async (g, signal = AbortSignal.abort(), options = Infinity) => {
+    work: async (g, signal = ONCE, options = Infinity) => {
       let requested = typeof options == 'number' ? { passes: options } : options
       let passes = requested.passes ?? Infinity
       graph = g
