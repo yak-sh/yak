@@ -1,20 +1,22 @@
 // The Purger's pacing (purge.ts `purger`): purges spend Cloudflare's bucket,
 // wait a token out when it is empty, and carry every tag owed meanwhile.
-import { test, tick } from '@yaks/testing'
+import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { purger, Unpurged } from './purge.ts'
 
 // A Site that refuses the purges `refuses` names (by count) for rate, on a
 // clock that moves only when the purger waits. Every purge is held in flight
-// until `go`.
+// until `go`, and `flying` settles once the first one is.
 let site = (refuses: number[] = []) => {
   let t = 0, sent: { at: number; tags: string[] }[] = []
   let held = Promise.withResolvers<void>()
+  let flying = Promise.withResolvers<void>()
   let purge = purger(
     {
       purge: async (tags) => {
         let refused = refuses.includes(sent.length)
         sent.push({ at: t, tags })
+        flying.resolve()
         await held.promise
         return (refused
           ? {
@@ -27,7 +29,12 @@ let site = (refuses: number[] = []) => {
     (ms) => Promise.resolve(void (t += ms)),
     () => t,
   )
-  return { purge, sent, go: () => held.resolve() }
+  return {
+    purge,
+    sent,
+    go: () => held.resolve(),
+    flying: flying.promise,
+  }
 }
 
 test('a full bucket purges at once, and an empty one waits a token', async () => {
@@ -38,9 +45,9 @@ test('a full bucket purges at once, and an empty one waits a token', async () =>
 })
 
 test('a refused purge waits a token and goes again with what was owed since', async () => {
-  let { purge, sent, go } = site([0])
+  let { purge, sent, go, flying } = site([0])
   let first = purge(['app:a'])
-  await tick()
+  await flying
   let later = purge(['app:b'])
   go()
   await Promise.all([first, later])
@@ -51,9 +58,9 @@ test('a refused purge waits a token and goes again with what was owed since', as
 })
 
 test('the third refusal is reported to every writer waiting on it', async () => {
-  let { purge, sent, go } = site([0, 1, 2])
+  let { purge, sent, go, flying } = site([0, 1, 2])
   let first = purge(['app:a'])
-  await tick()
+  await flying
   let later = purge(['app:b'])
   go()
   await Promise.all([first, later].map((p) => assertRejects(() => p, Unpurged)))
