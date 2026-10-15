@@ -1,0 +1,16 @@
+{
+  "dependencies": {
+    "@yaks/client": "platform",
+    "@yaks/game": "platform",
+    "@yaks/graph": "platform",
+    "@yaks/query": "platform",
+    "@yaks/stage": "platform",
+    "@yaks/sync": "platform",
+    "@yaks/ui": "platform",
+    "@yaks/ux": "platform",
+    "@yaks/vocab": "platform",
+    "@yaks/voxel": "platform",
+    "preact": "^10.29.1",
+    "three": "^0.186.1"
+  }
+}

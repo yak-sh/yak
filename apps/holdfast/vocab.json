@@ -1,0 +1,509 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Holdfast",
+  "description": "A cooperative tower defense with a shared purse and relayed battles.",
+  "$defs": {
+    "map_design": {
+      "component": true,
+      "type": "object",
+      "description": "A defense map: the route creeps follow, building sites and starting purse and lives.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "slots": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "gold": {
+          "type": "number"
+        },
+        "lives": {
+          "type": "number"
+        }
+      }
+    },
+    "wave_design": {
+      "component": true,
+      "type": "object",
+      "description": "An authored wave for a map; groups enter in order with gap seconds between creeps.",
+      "properties": {
+        "map": {
+          "type": "string",
+          "ref": "map_design",
+          "death": "keep",
+          "index": true
+        },
+        "n": {
+          "type": "number"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "enemy_design": {
+      "component": true,
+      "type": "object",
+      "description": "An enemy\u2019s combat values and replaceable visual figure.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "hp": {
+          "type": "number"
+        },
+        "speed": {
+          "type": "number"
+        },
+        "armour": {
+          "type": "number"
+        },
+        "bounty": {
+          "type": "number"
+        },
+        "figure": {
+          "type": "object"
+        }
+      }
+    },
+    "tower_design": {
+      "component": true,
+      "type": "object",
+      "description": "A tower tier, its purchase price, attacks and next tier; pierce is the fraction of armour ignored.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "range": {
+          "type": "number"
+        },
+        "rate": {
+          "type": "number"
+        },
+        "damage": {
+          "type": "number"
+        },
+        "splash": {
+          "type": "number"
+        },
+        "slow": {
+          "type": "number"
+        },
+        "speed": {
+          "type": "number"
+        },
+        "pierce": {
+          "type": "number"
+        },
+        "figure": {
+          "type": "object"
+        },
+        "upgrade": {
+          "type": "string",
+          "ref": "tower_design",
+          "death": "keep",
+          "index": true
+        }
+      }
+    },
+    "run": {
+      "component": true,
+      "type": "object",
+      "description": "One shared defense of a map. Gold and lives are derived from its ledgers.",
+      "properties": {
+        "map": {
+          "type": "string",
+          "ref": "map_design",
+          "death": "keep",
+          "index": true
+        },
+        "seed": {
+          "type": "number"
+        }
+      }
+    },
+    "tower": {
+      "component": true,
+      "type": "object",
+      "description": "A built tower on one numbered site. Upgrading changes its design; selling removes it.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "design": {
+          "type": "string",
+          "ref": "tower_design",
+          "death": "keep",
+          "index": true
+        },
+        "slot": {
+          "type": "number"
+        },
+        "policy": {
+          "type": "string",
+          "enum": [
+            "first",
+            "strongest",
+            "nearest"
+          ]
+        }
+      }
+    },
+    "spent": {
+      "component": true,
+      "type": "object",
+      "description": "A purchase or sale in the shared purse; sales have negative gold and retain their tower reference.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "gold": {
+          "type": "number"
+        },
+        "tower": {
+          "type": "string",
+          "ref": "tower",
+          "death": "keep",
+          "index": true
+        }
+      }
+    },
+    "cleared": {
+      "component": true,
+      "type": "object",
+      "description": "The final leaks and bounty for one finished wave, including a losing wave.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "wave": {
+          "type": "number"
+        },
+        "leaked": {
+          "type": "number"
+        },
+        "bounty": {
+          "type": "number"
+        }
+      }
+    },
+    "player": {
+      "component": true,
+      "type": "object",
+      "description": "A page defending a run, the site it points at and its latest heartbeat.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "slot": {
+          "type": "number"
+        },
+        "at": {
+          "type": "number"
+        }
+      },
+      "sync": "peers",
+      "durable": "connection"
+    },
+    "conductor": {
+      "component": true,
+      "type": "object",
+      "description": "The current wave\u2019s shared progress, continued by the next elected page if its conductor leaves.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "wave": {
+          "type": "number"
+        },
+        "started": {
+          "type": "number"
+        },
+        "spawned": {
+          "type": "number"
+        },
+        "leaked": {
+          "type": "number"
+        },
+        "bounty": {
+          "type": "number"
+        },
+        "at": {
+          "type": "number"
+        }
+      },
+      "sync": "peers",
+      "durable": "5s"
+    },
+    "creep": {
+      "component": true,
+      "type": "object",
+      "description": "A moving enemy in this run and wave; along is metres along the map route, at is the shared clock.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "design": {
+          "type": "string",
+          "ref": "enemy_design",
+          "death": "keep",
+          "index": true
+        },
+        "wave": {
+          "type": "number"
+        },
+        "along": {
+          "type": "number"
+        },
+        "hp": {
+          "type": "number"
+        },
+        "at": {
+          "type": "number"
+        },
+        "slow_until": {
+          "type": "number"
+        },
+        "slow": {
+          "type": "number"
+        }
+      },
+      "sync": "peers",
+      "durable": "5s"
+    },
+    "shot": {
+      "component": true,
+      "type": "object",
+      "description": "A hit decided when released and resolved at lands on the shared clock; pierce keeps the release-time armour rule.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "tower": {
+          "type": "string",
+          "ref": "tower",
+          "death": "keep",
+          "index": true
+        },
+        "creep": {
+          "type": "string",
+          "ref": "creep",
+          "death": "keep",
+          "index": true
+        },
+        "lands": {
+          "type": "number"
+        },
+        "damage": {
+          "type": "number"
+        },
+        "splash": {
+          "type": "number"
+        },
+        "slow": {
+          "type": "number"
+        },
+        "pierce": {
+          "type": "number"
+        }
+      },
+      "sync": "peers",
+      "durable": "5s"
+    },
+    "firing": {
+      "component": true,
+      "type": "object",
+      "description": "The last shared-clock firing time of a tower, independent of a page\u2019s ownership.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "at": {
+          "type": "number"
+        }
+      },
+      "sync": "peers",
+      "durable": "5s"
+    },
+    "command": {
+      "component": true,
+      "type": "object",
+      "description": "A player\u2019s purchase or wave command, consumed serially by the elected coordinator.",
+      "properties": {
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        },
+        "player": {
+          "type": "string",
+          "ref": "player",
+          "death": "keep",
+          "index": true
+        },
+        "action": {
+          "type": "string"
+        },
+        "slot": {
+          "type": "number"
+        },
+        "design": {
+          "type": "string",
+          "ref": "tower_design",
+          "death": "keep",
+          "index": true
+        },
+        "at": {
+          "type": "number"
+        }
+      },
+      "sync": "peers",
+      "durable": "connection"
+    },
+    "Build": {
+      "component": true,
+      "type": "object",
+      "description": "The page\u2019s current defense, pointed site, selected design and feedback.",
+      "properties": {
+        "run": {
+          "type": "string"
+        },
+        "slot": {
+          "type": "number"
+        },
+        "design": {
+          "type": "string"
+        },
+        "map": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "pending": {
+          "type": "boolean",
+          "description": "An order or new defense is awaiting its answer on this page."
+        }
+      },
+      "sync": "none",
+      "durable": "connection"
+    },
+    "Simulation": {
+      "component": true,
+      "type": "object",
+      "description": "The page\u2019s fixed-step accumulator.",
+      "properties": {
+        "then": {
+          "type": "number"
+        },
+        "remainder": {
+          "type": "number"
+        },
+        "busy": {
+          "type": "boolean"
+        },
+        "pulse": {
+          "type": "number"
+        },
+        "paint": {
+          "type": "number"
+        },
+        "uncertain": {
+          "type": "boolean",
+          "description": "A server write outcome is unknown; reload to reconcile before this page advances play."
+        }
+      },
+      "sync": "none",
+      "durable": "connection"
+    },
+    "Presentation": {
+      "component": true,
+      "type": "object",
+      "description": "Page-only rendered resources and smoothed values; never part of the shared game.",
+      "properties": {
+        "view": {
+          "type": "object",
+          "description": "Orbit yaw, pitch and zoom chosen on this page."
+        },
+        "frame": {
+          "type": "number",
+          "description": "Last display timestamp, bounding rendering work independently of simulation."
+        }
+      },
+      "sync": "none",
+      "durable": "connection"
+    },
+    "reply": {
+      "component": true,
+      "type": "object",
+      "sync": "peers",
+      "durable": "connection",
+      "description": "The coordinator\u2019s answer to a player\u2019s order, relayed to that player\u2019s page.",
+      "properties": {
+        "player": {
+          "type": "string",
+          "ref": "player",
+          "death": "keep"
+        },
+        "message": {
+          "type": "string"
+        },
+        "at": {
+          "type": "number"
+        },
+        "run": {
+          "type": "string",
+          "ref": "run",
+          "death": "cascade",
+          "index": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,952 @@
+/* Holdfast owns its layout and theme; the controls remain the shared kit. */
+:root {
+  color-scheme: light;
+  --bg: #f3efdf;
+  --surface: #fffbee;
+  --surface2: #e9e6d5;
+  --text: #253e34;
+  --heading: #193a2f;
+  --muted: #576657;
+  --dim: #879184;
+  --accent: #315b43;
+  --accent2: #284b38;
+  --border: #c9cebb;
+  --border2: #abb7a3;
+  --positive: #2c6548;
+  --negative: #9e432f;
+  --number: #8a6228;
+  --time: #6a5c39;
+  --link: #315b43;
+  --gap: 16px;
+  --radius: 6px;
+  --font: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, monospace;
+  --size: 15px;
+  --small: 13px;
+  font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
+  background: #d7e1c7;
+  color: var(--text);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  overscroll-behavior: none;
+}
+canvas {
+  display: block;
+}
+.Stage,
+#stage,
+canvas[data-stage] {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+#hud,
+.Hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+.Holdfast {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  line-height: 1.4;
+}
+.Holdfast h1,
+.Holdfast h2,
+.Holdfast h3,
+.Holdfast p {
+  margin: 0;
+}
+.Holdfast h1,
+.Holdfast h2,
+.Holdfast h3 {
+  color: var(--heading);
+}
+.Holdfast .Button {
+  min-height: 44px;
+  cursor: pointer;
+  font: inherit;
+}
+.Holdfast .Button:disabled {
+  cursor: default;
+}
+.Holdfast .Button:focus-visible {
+  outline: 3px solid #b17f36;
+  outline-offset: 4px;
+}
+.Holdfast .Button-go {
+  font-weight: 650;
+}
+.Eyebrow,
+.SectionLabel {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+.Eyebrow {
+  color: var(--muted);
+}
+.Camp {
+  isolation: isolate;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  pointer-events: auto;
+}
+.Camp_Sheen {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(90deg, #f4f0e4 0%, #f4f0e4f5 24%, #f4f0e4dd 39%,
+    #f4f0e455 59%, transparent 76%);
+  pointer-events: none;
+}
+.Camp_Content {
+  width: min(590px, 50vw);
+  margin: auto 0;
+  padding: 40px 22px 40px max(36px, calc((100vw - 1320px) / 2));
+}
+.Camp .Wordmark {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(52px, 6.3vw, 84px);
+  font-weight: 500;
+  line-height: 1.06;
+  letter-spacing: -0.055em;
+  margin: 14px 0 8px;
+}
+.Camp_Tag {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(20px, 2.3vw, 28px);
+}
+.Camp_Intro {
+  max-width: 440px;
+  margin-top: 17px !important;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.65;
+}
+.Camp_Divider {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 28px 0 11px;
+}
+.Camp_Coop {
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.Maps {
+  display: grid;
+  gap: 8px;
+}
+.Holdfast .Map {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding: 13px 14px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fffcf080;
+  color: var(--text);
+  transition: background 140ms, border-color 140ms, transform 140ms;
+}
+.Holdfast .Map:hover {
+  background: var(--surface);
+  transform: translateX(2px);
+}
+.Holdfast .Map[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--surface);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.Map_Number {
+  font-family: Georgia, serif;
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+}
+.Map_Words {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+}
+.Map_Name {
+  font-size: 15px;
+  font-weight: 650;
+}
+.Map_Description {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.Map_Level {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.Camp_Start {
+  margin-top: 20px;
+}
+.Holdfast .Start {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 8px;
+  letter-spacing: 0.02em;
+}
+.Camp_Aside {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 10px !important;
+}
+.Fieldnotes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 13px;
+  margin-top: 29px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+}
+.Fieldnotes_Title {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin-bottom: 1px;
+}
+.Camp_View {
+  position: absolute;
+  right: 6vw;
+  bottom: 46px;
+  display: grid;
+  gap: 5px;
+  text-align: right;
+  color: #eee8ce;
+  text-shadow: 0 1px 4px #142c28;
+  pointer-events: none;
+}
+.Camp_ViewMark {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+.Camp_ViewNote {
+  font-family: Georgia, serif;
+  font-size: 18px;
+  font-style: italic;
+}
+.Notice {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text);
+  box-shadow: 0 5px 20px #233e3110;
+  max-width: 560px;
+  pointer-events: auto;
+}
+.Camp .Notice {
+  margin-top: 14px;
+}
+.Battle {
+  position: absolute;
+  inset: 0;
+}
+.Topbar {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  padding: 14px 20px;
+  border: 1px solid #ffffff90;
+  border-radius: 12px;
+  background: #fffbeef0;
+  box-shadow: 0 6px 30px #233e3110;
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+.RunTitle {
+  min-width: 140px;
+}
+.RunTitle .Eyebrow {
+  font-size: 13px;
+}
+.RunTitle h1 {
+  font-family: Georgia, serif;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.RunStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding-left: 24px;
+  border-left: 1px solid var(--border);
+}
+.RunStats .Stats_Stat {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  white-space: nowrap;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.RunStats .Stats_Mark {
+  color: var(--number);
+  font-size: 18px;
+}
+.RunStats .Quantity {
+  color: var(--heading);
+  font-size: 21px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.Company {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.Company_Count {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.Holdfast .Invite {
+  border-radius: 7px;
+  font-size: 13px;
+}
+.Holdfast .Leave {
+  font-size: 13px;
+}
+.Battle_Status {
+  position: absolute;
+  top: 107px;
+  right: 20px;
+  left: 20px;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.Tactics {
+  position: absolute;
+  left: 24px;
+  top: 108px;
+  max-width: min(360px, calc(100vw - 48px));
+  pointer-events: auto;
+  z-index: 3;
+}
+.Tactics > section > .Button {
+  font-size: 13px;
+  background: #fffbeee8;
+  border-radius: 7px;
+  padding-inline: 12px;
+  box-shadow: 0 3px 15px #233e3110;
+}
+.Tactics_Content {
+  margin-top: 6px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  box-shadow: 0 8px 30px #233e3120;
+  max-height: min(440px, calc(100dvh - 230px));
+  overflow-y: auto;
+}
+.Tactics_Content h2 {
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 500;
+}
+.Tactics_Content h3 {
+  font-size: 13px;
+  margin-top: 16px;
+}
+.Tactics_Content p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: 11px;
+}
+.CounterGuide {
+  margin-top: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+.CounterGuide p {
+  margin-top: 3px;
+}
+.Sites {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+.Holdfast .Sites .Button {
+  min-width: 44px;
+  padding-inline: 10px;
+  font-size: 13px;
+  border-radius: 5px;
+}
+.Holdfast .Sites .Button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--surface);
+}
+.Workshop {
+  position: absolute;
+  left: 20px;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  width: min(660px, calc(100vw - 40px));
+  background: #fffbeef5;
+  border: 1px solid #ffffffe0;
+  border-radius: 12px;
+  padding: 15px 17px 12px;
+  box-shadow: 0 8px 40px #233e3120;
+  backdrop-filter: blur(14px);
+  pointer-events: auto;
+}
+.Workshop_Header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.Workshop_Hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+.Blueprints {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.Holdfast .Blueprint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  padding: 10px;
+  min-height: 83px;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: #ffffff40;
+  color: var(--text);
+  border-radius: 7px;
+}
+.Holdfast .Blueprint[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: #dae6d2;
+  box-shadow: inset 0 -2px var(--accent);
+}
+.Holdfast .Blueprint:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.Blueprint_Icon {
+  width: 23px;
+  font-size: 27px;
+  line-height: 1;
+  text-align: center;
+}
+.Blueprint_Icon-arrow {
+  color: #5e7141;
+}
+.Blueprint_Icon-cannon {
+  color: #8b674b;
+}
+.Blueprint_Icon-frost {
+  color: #3e7184;
+}
+.Blueprint_Icon-arcane {
+  color: #77628d;
+}
+.Blueprint_Words {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.Blueprint_Words strong {
+  font-size: 13px;
+  line-height: 1.2;
+}
+.Blueprint_Role {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 400;
+  white-space: nowrap;
+}
+.Blueprint_Price {
+  width: 100%;
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--number);
+}
+.BuildDetail {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.BuildDetail_Words h2 {
+  font-family: Georgia, serif;
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1.25;
+}
+.BuildDetail_Words p {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 4px;
+}
+.BuildActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.BuildActions .Button {
+  font-size: 13px;
+  padding-inline: 12px;
+  border-radius: 6px;
+}
+.Maxed {
+  font-size: 13px;
+  color: var(--positive);
+}
+.WaveOrder {
+  position: absolute;
+  right: 23px;
+  bottom: max(26px, env(safe-area-inset-bottom));
+  text-align: right;
+  pointer-events: auto;
+}
+.WaveOrder .Eyebrow {
+  color: #eee8ce;
+  margin-bottom: 10px;
+  text-shadow: 0 1px 4px #142c28;
+}
+.WaveOrder .Button {
+  min-width: 176px;
+  border-radius: 8px;
+  min-height: 50px;
+  box-shadow: 0 5px 24px #233e3120;
+}
+.WaveOrder_Info {
+  font-size: 13px;
+  background: #fffbeee8;
+  padding: 12px;
+  border-radius: 8px;
+}
+.Outcome,
+.Waiting {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100vw - 40px));
+  padding: 35px;
+  border-radius: 15px;
+  background: #fffbeef5;
+  border: 1px solid #ffffff;
+  box-shadow: 0 20px 90px #183a3030;
+  text-align: center;
+  pointer-events: auto;
+}
+.Outcome_Mark {
+  display: block;
+  color: var(--number);
+  font-size: 42px;
+  margin-bottom: 15px;
+}
+.Outcome h2 {
+  font-size: 43px;
+  font-family: Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  margin: 12px 0;
+}
+.Outcome > p:not(.Eyebrow),
+.Waiting p {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.Outcome_Actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 25px;
+}
+.Outcome .Button {
+  border-radius: 7px;
+}
+.Waiting h1 {
+  font-family: Georgia, serif;
+  font-weight: 500;
+  margin: 15px 0;
+}
+.Waiting .Button {
+  margin-top: 18px;
+}
+@media (min-width: 1450px) {
+  .Camp_Content {
+    width: 630px;
+  }
+}
+@media (max-width: 1060px) {
+  .Topbar {
+    gap: 16px;
+    padding: 12px 16px;
+  }
+  .RunStats {
+    gap: 14px;
+    padding-left: 16px;
+  }
+  .Company {
+    gap: 6px;
+  }
+  .Company_Count {
+    display: none;
+  }
+  .Workshop {
+    width: min(620px, calc(100vw - 260px));
+  }
+  .Blueprints {
+    gap: 5px;
+  }
+  .Holdfast .Blueprint {
+    padding: 8px;
+  }
+  .Blueprint_Icon {
+    width: 100%;
+    text-align: left;
+    font-size: 23px;
+  }
+  .BuildDetail {
+    gap: 8px;
+  }
+  .BuildActions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .BuildDetail_Words h2 {
+    font-size: 17px;
+  }
+}
+@media (max-width: 760px) {
+  .Camp_Content {
+    width: min(470px, 64vw);
+    padding: 30px 22px;
+  }
+  .Camp .Wordmark {
+    font-size: 55px;
+  }
+  .Camp_Tag {
+    font-size: 22px;
+  }
+  .Camp_Intro {
+    font-size: 13px;
+  }
+  .Camp_Coop {
+    display: none;
+  }
+  .Camp_Divider {
+    margin-top: 20px;
+  }
+  .Map_Description {
+    font-size: 13px;
+  }
+  .Map_Level {
+    display: none;
+  }
+  .Camp_View {
+    right: 25px;
+    bottom: 30px;
+    max-width: 140px;
+  }
+  .Camp_ViewNote {
+    font-size: 16px;
+  }
+  .Topbar {
+    left: 12px;
+    right: 12px;
+    top: max(12px, env(safe-area-inset-top));
+    flex-wrap: wrap;
+    gap: 5px 12px;
+    padding: 10px 12px;
+  }
+  .RunTitle {
+    min-width: 0;
+    flex: 1;
+  }
+  .RunTitle h1 {
+    font-size: 19px;
+  }
+  .RunStats {
+    order: 3;
+    width: 100%;
+    justify-content: space-between;
+    padding: 7px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    gap: 8px;
+  }
+  .RunStats .Stats_Stat {
+    font-size: 13px;
+  }
+  .RunStats .Quantity {
+    font-size: 18px;
+  }
+  .Company {
+    margin-left: 0;
+  }
+  .Holdfast .Invite {
+    font-size: 13px;
+    padding-inline: 10px;
+  }
+  .Holdfast .Leave {
+    font-size: 13px;
+    min-width: 0;
+    padding-inline: 7px;
+  }
+  .Battle_Status {
+    top: 163px;
+    left: 12px;
+    right: 12px;
+  }
+  .Notice {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+  .Tactics {
+    left: 13px;
+    top: 119px;
+  }
+  .Tactics > section > .Button {
+    min-height: 36px;
+    font-size: 13px;
+  }
+  .Workshop {
+    left: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: calc(100vw - 24px);
+    padding: 11px 12px;
+  }
+  .Workshop_Header {
+    margin-bottom: 8px;
+  }
+  .Workshop_Header .Eyebrow {
+    font-size: 13px;
+  }
+  .Workshop_Hint {
+    font-size: 13px;
+  }
+  .Blueprints {
+    gap: 5px;
+  }
+  .Holdfast .Blueprint {
+    min-height: 82px;
+    padding: 8px 6px 6px;
+    display: grid;
+    gap: 4px;
+  }
+  .Blueprint_Icon {
+    font-size: 22px;
+  }
+  .Blueprint_Words strong {
+    font-size: 13px;
+  }
+  .Blueprint_Role {
+    display: none;
+  }
+  .Blueprint_Price {
+    font-size: 13px;
+    text-align: left;
+  }
+  .BuildDetail {
+    margin-top: 8px;
+    padding-top: 8px;
+    min-height: 51px;
+  }
+  .BuildDetail_Words h2 {
+    font-size: 16px;
+  }
+  .BuildDetail_Words p {
+    font-size: 13px;
+    max-width: 185px;
+  }
+  .BuildActions {
+    gap: 2px;
+  }
+  .BuildActions .Button {
+    padding-inline: 8px;
+    font-size: 13px;
+  }
+  .WaveOrder {
+    right: 13px;
+    bottom: max(260px, calc(env(safe-area-inset-bottom) + 248px));
+  }
+  .WaveOrder .Eyebrow {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  .WaveOrder .Button {
+    min-width: 157px;
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .WaveOrder_Info {
+    font-size: 13px;
+  }
+  .Outcome {
+    padding: 25px;
+  }
+  .Outcome h2 {
+    font-size: 35px;
+  }
+  .Outcome .Eyebrow {
+    font-size: 13px;
+  }
+}
+@media (max-width: 520px) {
+  .Camp {
+    display: block;
+    padding-top: min(23vh, 175px);
+  }
+  .Camp_Sheen {
+    background: linear-gradient(180deg, transparent 0, #f4f0e455 16vh, #f4f0e4f5
+      29vh, #f4f0e4 43vh);
+  }
+  .Camp_Content {
+    width: 100%;
+    margin: 0;
+    padding: 22px 23px 34px;
+  }
+  .Camp .Eyebrow {
+    font-size: 13px;
+  }
+  .Camp .Wordmark {
+    font-size: 57px;
+    margin-top: 8px;
+  }
+  .Camp_Tag {
+    font-size: 21px;
+  }
+  .Camp_Intro {
+    font-size: 13px;
+    line-height: 1.55;
+    margin-top: 13px !important;
+  }
+  .Camp_View {
+    display: none;
+  }
+  .Camp_Divider {
+    margin: 20px 0 9px;
+  }
+  .Holdfast .Map {
+    padding: 10px 11px;
+    gap: 11px;
+  }
+  .Map_Number {
+    font-size: 20px;
+  }
+  .Map_Name {
+    font-size: 14px;
+  }
+  .Map_Description {
+    font-size: 13px;
+  }
+  .Maps {
+    gap: 6px;
+  }
+  .Camp_Start {
+    margin-top: 14px;
+  }
+  .Fieldnotes {
+    margin-top: 22px;
+  }
+  .Tactics_Content {
+    max-height: calc(100dvh - 370px);
+  }
+}
+@media (max-height: 650px) and (min-width: 761px) {
+  .Camp_Content {
+    padding-top: 25px;
+    padding-bottom: 25px;
+  }
+  .Camp_Intro {
+    display: none;
+  }
+  .Fieldnotes {
+    display: none;
+  }
+  .Camp_Divider {
+    margin-top: 17px;
+  }
+  .Camp .Wordmark {
+    font-size: 60px;
+  }
+  .Map_Description {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .Holdfast .Map {
+    transition: none;
+  }
+}
+
+.Holdfast .Map,
+.Holdfast .Blueprint {
+  white-space: normal;
+}
+.Blueprint_Words strong {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .Blueprint_Words strong {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+}
