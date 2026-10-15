@@ -422,10 +422,11 @@ let mapped = (
   at: string,
   bare: string,
   source: string | null | undefined,
+  base = at,
 ) => {
   let id = releaseId(source)
   return id && !hasBase(html)
-    ? assetMaps(html, at, bare, id, assetReserved)
+    ? assetMaps(html, at, bare, id, assetReserved, base)
     : html
 }
 let released = (
@@ -434,6 +435,7 @@ let released = (
   at: string,
   bare: string,
   source: string | null | undefined,
+  base = at,
 ) => {
   let id = releaseId(source)
   if (!id || hasBase(html)) return page
@@ -445,7 +447,7 @@ let released = (
     }) => {
       let ref = el.getAttribute(attr)
       if (!ref) return
-      let next = assetUrl(ref, at, bare, id, assetReserved)
+      let next = assetUrl(ref, at, bare, id, assetReserved, base)
       if (next != ref) el.setAttribute(attr, next)
     },
   })
@@ -781,6 +783,13 @@ let asset = async (
   // router passing a path on) reaches the browser inside the worker's answer,
   // which is woven the platform's scripts on its way out (`served`), so it
   // gets none here, or the browser would run each of them twice.
+  // A page resolves its relative URLs from its own folder, as anywhere on
+  // the web: about/index.html's `../style.css` is the app's. A route, and the
+  // 404 page at any depth, answer with a page at the root, so their base is
+  // the mount. An app whose folder pages were written against the root base
+  // keeps it (`rooted`).
+  let file = got.headers.get(files.FILE) ?? ''
+  let base = at + (app.rooted ? '' : file.slice(0, file.lastIndexOf('/') + 1))
   let page = await woven(
     env,
     await got.text(),
@@ -789,6 +798,7 @@ let asset = async (
     app,
     sandbox ? await sandbox() : '',
     bearing(req) ? null : free(space),
+    base,
   )
   if (sandbox) {
     return new Response(page, {
@@ -829,14 +839,16 @@ let woven = async (
   app: App,
   tags: string,
   badged: boolean | null,
+  base = at,
 ) => {
-  let own = pinned(at, mapped(original, at, bare, app.source), app)
+  let own = pinned(at, mapped(original, at, bare, app.source, base), app)
   let page = released(
-    new Response(based(at, tags ? intoHead(own, tags) : own)),
+    new Response(based(base, tags ? intoHead(own, tags) : own)),
     original,
     at,
     bare,
     app.source,
+    base,
   )
   if (badged != null) {
     page = await reported(env, at, page, app.version ?? 0, badged)

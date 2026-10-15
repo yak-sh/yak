@@ -65,7 +65,7 @@ import { withKinds } from './kinds.ts'
 import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
-import { MAX, mimeOf, prefixOf, warm } from './files.ts'
+import { configOf, MAX, mimeOf, prefixOf, warm } from './files.ts'
 import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { failedScript } from './asset_url.ts'
@@ -1547,7 +1547,10 @@ export let recoverRelease = async (
   let all = await versions(ctx.dir, current)
   let live = all[0]
   if (!live || live.version != report.version) return
-  let path = failedScript(report, live, request, mount)
+  let folder = live.source
+    ? (await configOf(r2Objects(ctx.env.BLOBS), live.source)).assets?.directory
+    : undefined
+  let path = failedScript(report, live, request, mount, folder)
   if (!path) return
   let target = deployedOver(all, await ctx.dir.switches(current), live)
   if (!target) return

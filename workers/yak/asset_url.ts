@@ -16,7 +16,8 @@ export let assetPath = (path: string) => {
 }
 
 /** A browser resource failure naming a file of this release. The entry
- * script is reported even when a dependency, rather than the entry, is absent. */
+ * script is reported even when a dependency, rather than the entry, is absent.
+ * `folder` is the one the app serves (wrangler's `assets.directory`). */
 export let failedScript = (
   report: { version?: number | null; message: string },
   release: {
@@ -26,6 +27,7 @@ export let failedScript = (
   },
   request: string,
   mount: string,
+  folder = '',
 ) => {
   if (report.version != release.version) return null
   let match = /^failed to load script (\S+)$/.exec(report.message)
@@ -42,7 +44,7 @@ export let failedScript = (
       if (!asset || asset.release != releaseId(release.source)) return null
       path = asset.path.slice(1)
     }
-    path = decodeURIComponent(path)
+    path = (folder ? `${folder}/` : '') + decodeURIComponent(path)
     return Object.hasOwn(release.files, path) ? path : null
   } catch {
     return null
@@ -59,22 +61,25 @@ export let apiOut = (asset: string) =>
     ? '../'.repeat(asset.split('/').length) + asset.slice('/api/'.length)
     : null
 
-/** Point a local static reference at its release without moving navigation. */
+/** Point a local static reference at its release without moving navigation.
+ * `base` is where the page resolves it from: the mount, or the page's own
+ * folder under it. */
 let local = (
   ref: string,
   mount: string,
   bare: string,
   reserved: (path: string) => boolean,
+  base = mount,
 ) => {
   if (!ref || ref.startsWith('#')) return null
-  let base = new URL(mount, 'https://app.invalid')
+  let from = new URL(base, 'https://app.invalid')
   let url
   try {
-    url = new URL(ref, base)
+    url = new URL(ref, from)
   } catch {
     return null
   }
-  if (url.origin != base.origin) return null
+  if (url.origin != from.origin) return null
   if (reserved(url.pathname)) return null
   let path = url.pathname.startsWith(mount)
     ? url.pathname.slice(mount.length)
@@ -101,8 +106,9 @@ export let assetUrl = (
   bare: string,
   release: string,
   reserved: (path: string) => boolean = () => false,
+  base = mount,
 ) => {
-  let found = local(ref, mount, bare, reserved)
+  let found = local(ref, mount, bare, reserved, base)
   return found && /\.[a-z0-9]+$/i.test(found.path) &&
       !/\.html?$/i.test(found.path)
     ? versioned(mount, release, found)
@@ -115,9 +121,10 @@ let mapUrl = (
   bare: string,
   release: string,
   reserved: (path: string) => boolean,
+  base: string,
 ) => {
   if (!/^(?:\/|\.\.?\/)/.test(ref)) return ref
-  let found = local(ref, mount, bare, reserved)
+  let found = local(ref, mount, bare, reserved, base)
   return found && !/\.html?$/i.test(found.path)
     ? versioned(mount, release, found)
     : ref
@@ -143,6 +150,7 @@ export let assetMaps = (
   bare: string,
   release: string,
   reserved: (path: string) => boolean = () => false,
+  base = mount,
 ) =>
   html.replace(
     /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi,
@@ -159,7 +167,8 @@ export let assetMaps = (
         return whole
       }
       if (!map || typeof map != 'object' || Array.isArray(map)) return whole
-      let move = (url: string) => mapUrl(url, mount, bare, release, reserved)
+      let move = (url: string) =>
+        mapUrl(url, mount, bare, release, reserved, base)
       map.imports = mapEntries(map.imports, move)
       if (map.scopes && typeof map.scopes == 'object') {
         map.scopes = Object.fromEntries(

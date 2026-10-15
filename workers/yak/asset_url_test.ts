@@ -94,6 +94,27 @@ test('release URLs keep local assets under their mount', () => {
     assetUrl('./main.js', '/cookbook/~ticket/', '/cookbook/', id),
     `/cookbook/~ticket/api/assets/${id}/main.js`,
   )
+  // A page in a folder resolves from that folder, and its release path is
+  // the file's own from the app's address.
+  let about = (ref: string) =>
+    assetUrl(ref, at, at, id, () => false, `${at}about/`)
+  assertEquals(about('../styles/main.css'), file)
+  assertEquals(about('./me.png'), `${at}api/assets/${id}/about/me.png`)
+  assertEquals(about('../../elsewhere.js'), '../../elsewhere.js')
+})
+
+test("a script failure in a served folder is that folder's file", () => {
+  let release = { version: 2, files: { 'dist/assets/app.js': 'sha' } }
+  assertEquals(
+    failedScript(
+      { version: 2, message: 'failed to load script /vite/assets/app.js' },
+      release,
+      'https://ada.yaks.app/vite/api/report',
+      '/vite/',
+      'dist',
+    ),
+    'dist/assets/app.js',
+  )
 })
 
 test('local import-map values, URL keys, and scopes follow a release', () => {

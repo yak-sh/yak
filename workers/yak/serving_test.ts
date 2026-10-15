@@ -2015,9 +2015,15 @@ test('an open visitor cannot choose generated media, and the editor browser can'
 
 // A build's pages (T-124410): every HTML file answers at the address a static
 // host gives it, and a page that is not there is the app's own 404.html.
-let site = async (written: Record<string, string>) => {
+let site = async (written: Record<string, string>, rooted = false) => {
   let scenario = platform()
-  await seeded(scenario.env)
+  let { dir, app } = await seeded(scenario.env)
+  if (rooted) {
+    await dir.apply(
+      { entities: [{ entity: { eid: app.eid }, rooted: {} }] },
+      ADA_OWNS,
+    )
+  }
   for (let [path, body] of Object.entries(written)) {
     scenario.files.held.set(
       `ada/cookbook/${path}`,
@@ -2046,6 +2052,12 @@ test("a build's pages answer at their own addresses", async () => {
   assertStringIncludes((await text('/about'))[1], 'about')
   assertStringIncludes((await text('/about.html'))[1], 'about')
   assertStringIncludes((await text('/docs/'))[1], 'docs')
+  // Each page resolves its relative URLs from its own folder.
+  assertStringIncludes(
+    (await text('/docs/'))[1],
+    '<base href="/cookbook/docs/">',
+  )
+  assertStringIncludes((await text('/about'))[1], '<base href="/cookbook/">')
   // A folder without its slash is sent to it, query and all.
   let folder = await s.at('/docs?q=1')
   assertEquals(folder.status, 307)
@@ -2060,6 +2072,14 @@ test("a build's pages answer at their own addresses", async () => {
   let css = await s.at('/gone.css')
   assertEquals(css.status, 404)
   assert(!(await css.text()).includes('lost'))
+})
+
+test('an app marked rooted keeps every page based at its root', async () => {
+  using s = await site({ 'admin/index.html': doc('admin') }, true)
+  assertStringIncludes(
+    await (await s.at('/admin/')).text(),
+    '<base href="/cookbook/">',
+  )
 })
 
 test('an app without a 404.html still opens its index at a route', async () => {

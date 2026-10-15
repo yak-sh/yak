@@ -27,8 +27,10 @@ Every app is served a client at `./api/client.js` with six functions, all
 talking to the app's own store: `apply` saves, `query` lists, `search` searches,
 `subscribe` is a query that keeps calling back as rows change, `upload` saves
 bytes, and `me` reports who is looking. Write every address in the app as a
-relative path: the platform gives each page a `<base href>` at the app's own
-address, so the same files work wherever the app is served or installed.
+relative path from the page's own folder: the platform gives each page a
+`<base href>` at its folder under the app's address, so the same files work
+wherever the app is served or installed. A page in a folder reaches the client
+at `../api/client.js`.
 
     import { apply, me, query, search, subscribe, upload }
       from './api/client.js'

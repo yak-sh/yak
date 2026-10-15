@@ -60,8 +60,11 @@ export let prefixOf = (
 
 // Which file answered, told back to the gateway: its path inside the served
 // folder (`about/index.html`, `404.html`), which is where the page's own
-// relative URLs start from.
+// relative URLs start from. Encoded as a URL path, since a header carries no
+// other characters and the gateway writes it into a base href.
 export let FILE = 'x-yak-file'
+let encoded = (path: string) =>
+  path.split('/').map(encodeURIComponent).join('/')
 
 // A path whose last segment names no file type is a page's address, not a
 // file's: `/about` may be about.html, and a path behind no page at all is a
@@ -436,7 +439,7 @@ let served = (
       'content-type': type,
       'content-length': String(file.bytes.byteLength),
       [VERSION]: file.version,
-      ...(path == null ? {} : { [FILE]: path }),
+      ...(path == null ? {} : { [FILE]: encoded(path) }),
       ...immutable,
     },
   })
