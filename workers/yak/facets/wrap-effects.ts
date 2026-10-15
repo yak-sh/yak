@@ -4,7 +4,7 @@
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
 import { seeded } from '../wake.ts'
-import { DAILY, ROW } from '../rewrap.ts'
+import { DAILY, forward, ROW } from '../rewrap.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
   let at = options.store
@@ -19,13 +19,12 @@ export let effects = (_host: unknown, options: Options): Handlers => {
         },
         sweep: { kind: 'wrap' },
       }], Date.now())
-      // A paused pass (an explicit `at: null`) stays paused.
-      let [row] = await at.graph.read(`.entity.eid=${ROW} ?wake`)
-      if (!(row?.wake as { at?: string | null } | undefined)?.at) return
-      await at.graph.apply([{
-        entity: { eid: ROW },
-        wake: { at: new Date().toISOString() },
-      }])
+      await at.graph.apply(
+        forward(
+          (await at.graph.read(`.entity.eid=${ROW} ?wake`))[0],
+          Date.now(),
+        ),
+      )
     },
   }
 }

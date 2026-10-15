@@ -31,10 +31,22 @@ import {
 import { WRAPPER } from './wrangler_app.ts'
 import { caught } from './defects.ts'
 import type { Env } from './env.ts'
+import type { Bundle } from '@yaks/graph'
 
 /** The directory's wrap row, and the daily pass it is seeded with. */
 export let ROW = 'yak-wrap'
 export let DAILY = '10 5 * * *'
+
+/** The write that brings the wrap pass forward to `now`, for the wrap row as
+ * the directory holds it: none where someone paused it (an explicit
+ * `at: null`) or it is not there. */
+export let forward = (
+  row: Bundle | undefined,
+  now: number,
+): Bundle[] =>
+  (row?.wake as { at?: string | null } | undefined)?.at
+    ? [{ entity: { eid: ROW }, wake: { at: new Date(now).toISOString() } }]
+    : []
 
 let ENC = new TextEncoder()
 let DEC = new TextDecoder()

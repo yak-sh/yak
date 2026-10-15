@@ -2,13 +2,10 @@
 // back, what it writes, and what it leaves alone; and the directory bringing
 // it forward at each version of the Worker.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import { shim, WRAP, wrapping } from './dispatch.ts'
-import { parts, rewrapped, ROW } from './rewrap.ts'
+import { DAILY, forward, parts, rewrapped, ROW } from './rewrap.ts'
 import type { Env } from './env.ts'
-import { platform } from './testing.ts'
-import { KERNEL, meta } from './meta.ts'
-import { PLATFORM_STORE } from './door.ts'
 
 let env = { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env
 let AT = '/client/v4/accounts/acct/workers/dispatch/namespaces/yak-apps/scripts'
@@ -210,29 +207,18 @@ test('a pass takes at most so many, and says how many are left', async () => {
   assertEquals(out, { rewrapped: 2, failed: 0, left: 1 })
 })
 
-test('each version of the Worker brings the wrap pass forward, once', async () => {
-  let p = platform('wrap pass', { CF_VERSION_METADATA: { id: 'v1' } })
-  let at = async () =>
-    ((await meta(p.env).query(`.entity.eid=${ROW}`))[0].wake as { at: string })
-      .at
-  let LATER = '2031-01-01T05:10:00.000Z'
-  let later = () =>
-    meta(p.env).apply([{ entity: { eid: ROW }, wake: { at: LATER } }], KERNEL)
-  // The directory's deployment seeds the row, from the start-up runs its pool
-  // works once the pass is done.
-  await meta(p.env).query('.wake')
-  await p.settled()
-  await at()
-  await later()
-  assertEquals(await at(), LATER)
-  // The request that finds the new version arms the pass; its alarm runs it.
-  p.env.CF_VERSION_METADATA = { id: 'v2' }
-  await at()
-  await p.object(PLATFORM_STORE).alarm()
-  await p.settled()
-  assert(await at() < LATER)
-  await later()
-  await p.object(PLATFORM_STORE).alarm()
-  await p.settled()
-  assertEquals(await at(), LATER)
+test('each version of the Worker brings the wrap pass forward, once', () => {
+  let now = Date.parse('2026-10-14T12:00:00Z')
+  let held = (at: string | null) => ({
+    entity: { eid: ROW },
+    wake: { every: DAILY, at },
+  })
+  // Wherever the daily left it, the release has it run now.
+  assertEquals(forward(held('2031-01-01T05:10:00.000Z'), now), [{
+    entity: { eid: ROW },
+    wake: { at: '2026-10-14T12:00:00.000Z' },
+  }])
+  // A pass someone paused stays paused.
+  assertEquals(forward(held(null), now), [])
+  assertEquals(forward(undefined, now), [])
 })
