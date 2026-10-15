@@ -371,12 +371,13 @@ export let pruned = async (
       ).map(([key]) => key),
     )
     // What is left of drafts kept as their own bytes, once nothing reads them.
+    // No write puts a key there any more, so none is in flight.
     let drafts = `${space}.drafts/${app.eid}/`
     let active = old(app) ? `${app.draft}/` : null
     await blobs.delete(
-      Object.entries(await blobs.uploaded(drafts)).filter(([key, landed]) =>
-        !(active && key.startsWith(active)) && now - landed >= GRACE
-      ).map(([key]) => key),
+      (await blobs.list(drafts)).filter((key) =>
+        !(active && key.startsWith(active))
+      ),
     )
     let paths = new Map<string, Written[]>()
     for (let row of await dir.written(app)) {
