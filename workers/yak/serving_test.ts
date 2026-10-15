@@ -34,18 +34,27 @@ import type { Wire } from '@yaks/durable-object'
 import { test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
-import { appStore, directory, stamp, storeName } from './directory.ts'
+import {
+  type App,
+  appStore,
+  directory,
+  type Row,
+  spaceOf,
+  stamp,
+  storeName,
+} from './directory.ts'
+import { pageScript } from './page-script.ts'
 import * as dirPart from './directory.ts'
 import { granting, scriptName } from './dispatch.ts'
 import type { Env } from './env.ts'
-import { analytics, dataset, declared } from './testing.ts'
+import { analytics, assets, bucket, dataset, declared } from './testing.ts'
 import { emptied, trash, trashSpace } from './erase.ts'
 import { call, type Ctx, type Listed, wrote } from './tools.ts'
 import { archive, openIn, serve } from './unseen.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { sweep } from './usage.ts'
-import { FREE, monthOf, PLUS, size } from './meter.ts'
+import { FREE, free, monthOf, PLUS, size } from './meter.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
 
 // The app's own graph, driven the way `public/client.js` drives it.
@@ -85,6 +94,10 @@ let client = (env: Env, cookie?: string) => {
 
 let CAKE = 'c0000000-0000-4000-8000-00000000cake'.replace('cake', '0001')
 
+// The platform's own scripts, read once.
+let ASSETS = assets(new URL('./public/', import.meta.url))
+await pageScript(ASSETS, '/', 0, true)
+
 // ---- the tests -------------------------------------------------------------
 
 test('a page is served with its base and its reporter', async () => {
@@ -111,21 +124,13 @@ test('a page is served with its base and its reporter', async () => {
 // The badge is the platform's, decided as a page is served: the same file
 // wears it while its space is on the free plan and sheds it on the Plus plan.
 test('a free space wears the badge, and the Plus plan sheds it', async () => {
-  using scenario = platform()
-  let { env, files } = scenario
-  let { space } = await seeded(env)
-  files.held.set(
-    'ada/cookbook/index.html',
-    new TextEncoder().encode('<!doctype html><head></head><body>hi</body>'),
-  )
-  let badged = async () =>
-    (await (await apps.fetch(visit('/cookbook/'), env)).text())
+  let space = (plan: object) =>
+    spaceOf({ entity: { eid: 's' }, space: { slug: 'ada' }, ...plan } as Row)
+  let badged = async (plan: object) =>
+    (await pageScript(ASSETS, '/cookbook/', 1, free(space(plan)))).tags
       .includes('Made with ')
-  assert(await badged(), 'the free plan')
-  await stamp(env, {
-    entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
-  })
-  assert(!await badged(), 'the Plus plan')
+  assert(await badged({}), 'the free plan')
+  assert(!await badged({ plan: { tier: 'plus' } }), 'the Plus plan')
 })
 
 // A deployed page names its module under its release (asset_url.ts), and the
@@ -481,33 +486,32 @@ test('an app that wrote an icon.svg and no icon.png is served the svg drawn', as
   let drawing = new Uint8Array([0x89, 0x50, 0x4e, 0x47])
   let asked: string[] = []
   let up = true
-  using scenario = platform({
+  let b = bucket()
+  let env = {
+    BLOBS: b.r2,
     RASTER: {
-      fetch: async (req) => {
+      fetch: async (req: Request) => {
         asked.push(await req.text())
         return up
           ? new Response(drawing)
           : new Response('down', { status: 500 })
       },
     },
-  })
-  let { env, files } = scenario
-  await seeded(env)
+  } as unknown as Env
   let svg = '<svg viewBox="0 0 1 1"/>'
-  files.held.set('ada/cookbook/icon.svg', new TextEncoder().encode(svg))
-  let icon = await apps.fetch(visit('/cookbook/icon.png'), env)
-  assertEquals(icon.headers.get('content-type'), 'image/png')
-  assertEquals(new Uint8Array(await icon.arrayBuffer()), drawing)
+  b.held.set('ada/cookbook/icon.svg', new TextEncoder().encode(svg))
+  let icon = () =>
+    fileDoor.fileBytes(env, 'eid', 'ada/cookbook', '/icon.png', '')
+  let got = await icon()
+  assertEquals(got.headers.get('content-type'), 'image/png')
+  assertEquals(new Uint8Array(await got.arrayBuffer()), drawing)
   assertEquals(asked, [svg])
-  // A drawing that fails leaves the app wearing the platform's tile, never a
-  // broken image, until a later request draws it.
+  // A drawing that fails is not kept, and the gateway serves the platform's
+  // tile (apps.ts `unwritten`) until a later request draws it.
   up = false
-  let tile = await apps.fetch(visit('/cookbook/icon.png'), env)
-  assertEquals(tile.status, 200)
-  assertEquals(
-    new Uint8Array(await tile.arrayBuffer()),
-    await Deno.readFile(new URL('./public/connector-512.png', import.meta.url)),
-  )
+  let down = await icon()
+  assertEquals(down.status, 503)
+  assertEquals(down.headers.get('cache-control'), 'no-store')
 })
 
 test("an app's own colours, set through app_set, win over the platform's", async () => {
@@ -1265,23 +1269,20 @@ test('worker HTML carries its reporter without changing its page or headers', as
 // A worker that answers with its own page reads it through the files door
 // and hands it on; the platform's scripts are woven into what leaves, once.
 test("a worker's own page runs each platform script once", async () => {
-  let k: Awaited<ReturnType<typeof router>>
-  using made = k = await router(async () =>
-    apps.fetch(
-      visit('/', {
-        headers: {
-          'x-yak-grant': await granting(
-            k.env.SESSION_SECRET!,
-            storeName(k.space, k.app),
-            { person: null, role: null },
-          ),
-        },
-      }),
-      k.env,
-    )
+  let env = { ASSETS } as unknown as Env
+  let app = { version: 1, source: null } as App
+  // What the files door hands a worker's call: the page with no scripts.
+  let handed = await apps.woven(env, doc('own'), '/', '/', app, '', null)
+  assertEquals(woven(handed), [])
+  // What leaves the worker.
+  let page = await apps.reported(
+    env,
+    '/',
+    new Response(handed, { headers: { 'content-type': 'text/html' } }),
+    1,
+    true,
   )
-  made.put('ada/cookbook/index.html', '<!doctype html><body>own</body>')
-  let scripts = woven(await (await made.at('/cookbook/menu')).text())
+  let scripts = woven(await page.text())
   assert(scripts.length > 0)
   assertEquals(new Set(scripts).size, scripts.length)
 })
@@ -2014,83 +2015,89 @@ test('an open visitor cannot choose generated media, and the editor browser can'
 })
 
 // A build's pages (T-124410): every HTML file answers at the address a static
-// host gives it, and a page that is not there is the app's own 404.html.
-let site = async (written: Record<string, string>, rooted = false) => {
-  let scenario = platform()
-  let { dir, app } = await seeded(scenario.env)
-  if (rooted) {
-    await dir.apply(
-      { entities: [{ entity: { eid: app.eid }, rooted: {} }] },
-      ADA_OWNS,
-    )
-  }
+// host gives it, and a page that is not there is the app's own 404.html. The
+// files door says which file answered (`FILE`), and `baseOf` where its
+// relative URLs start from.
+let site = (written: Record<string, string>) => {
+  let b = bucket()
   for (let [path, body] of Object.entries(written)) {
-    scenario.files.held.set(
-      `ada/cookbook/${path}`,
-      new TextEncoder().encode(body),
-    )
+    b.held.set(`ada/cookbook/${path}`, new TextEncoder().encode(body))
   }
-  return {
-    [Symbol.dispose]: () => scenario[Symbol.dispose](),
-    at: (path: string) => apps.fetch(visit(`/cookbook${path}`), scenario.env),
+  let env = { BLOBS: b.r2 } as unknown as Env
+  return async (path: string) => {
+    let r = await fileDoor.fileBytes(env, 'eid', 'ada/cookbook', path, '')
+    return {
+      status: r.status,
+      file: r.headers.get(fileDoor.FILE),
+      location: r.headers.get('location'),
+      type: r.headers.get('content-type') ?? '',
+      body: await r.text(),
+    }
   }
 }
 let doc = (text: string) => `<!doctype html><head></head><body>${text}</body>`
 
-test("a build's pages answer at their own addresses", async () => {
-  using s = await site({
+// What a path of a build answers: its status, the file that answered, and the
+// text of the page. One request a test, which is what keeps each cheap.
+let build = () =>
+  site({
     'index.html': doc('home'),
     'about.html': doc('about'),
     'docs/index.html': doc('docs'),
     '404.html': doc('lost'),
     'style.css': 'body {}',
   })
-  let text = async (path: string) => {
-    let r = await s.at(path)
-    return [r.status, await r.text()] as const
-  }
-  assertStringIncludes((await text('/about'))[1], 'about')
-  assertStringIncludes((await text('/about.html'))[1], 'about')
-  assertStringIncludes((await text('/docs/'))[1], 'docs')
-  // Each page resolves its relative URLs from its own folder.
-  assertStringIncludes(
-    (await text('/docs/'))[1],
-    '<base href="/cookbook/docs/">',
-  )
-  assertStringIncludes((await text('/about'))[1], '<base href="/cookbook/">')
-  // A folder without its slash is sent to it, query and all.
-  let folder = await s.at('/docs?q=1')
-  assertEquals(folder.status, 307)
-  assertEquals(folder.headers.get('location'), 'docs/?q=1')
-  // A page that is not there is the app's 404, woven like any page.
-  let [status, lost] = await text('/nowhere/at/all')
-  assertEquals(status, 404)
-  assertStringIncludes(lost, 'lost')
-  assertStringIncludes(lost, '<base href="/cookbook/">')
-  assertEquals((await text('/gone.html'))[0], 404)
-  // A missing file is still no page.
-  let css = await s.at('/gone.css')
-  assertEquals(css.status, 404)
-  assert(!(await css.text()).includes('lost'))
+let pages: [string, string, [number, string, string]][] = [
+  ['/about', 'a page answers without its extension', [
+    200,
+    'about.html',
+    'about',
+  ]],
+  ['/about.html', 'a page answers at its own file name', [
+    200,
+    'about.html',
+    'about',
+  ]],
+  ['/docs/', 'a folder answers at its index', [200, 'docs/index.html', 'docs']],
+  ['/nowhere/at/all', "a page that is not there is the app's 404", [
+    404,
+    '404.html',
+    'lost',
+  ]],
+  ['/gone.html', "a page file that is not there is the app's 404", [
+    404,
+    '404.html',
+    'lost',
+  ]],
+]
+for (let [path, name, want] of pages) {
+  test(`a build's pages: ${name}`, async () => {
+    let r = await build()(path)
+    assertEquals([r.status, r.file, r.body.replace(/<[^>]*>/g, '')], want)
+  })
+}
+
+test('a folder without its slash is sent to it', async () => {
+  let r = await build()('/docs')
+  assertEquals([r.status, r.location], [307, 'docs/'])
 })
 
-test('an app marked rooted keeps every page based at its root', async () => {
-  using s = await site({ 'admin/index.html': doc('admin') }, true)
-  assertStringIncludes(
-    await (await s.at('/admin/')).text(),
-    '<base href="/cookbook/">',
-  )
+test('a file that is not there is no page', async () => {
+  let css = await build()('/gone.css')
+  assertEquals([css.status, css.file, css.body.includes('lost')], [
+    404,
+    null,
+    false,
+  ])
 })
 
 test('an app without a 404.html still opens its index at a route', async () => {
-  using s = await site({ 'index.html': doc('home') })
-  let route = await s.at('/recipes/42')
-  assertEquals(route.status, 200)
-  assertStringIncludes(await route.text(), 'home')
+  let route = await site({ 'index.html': doc('home') })('/recipes/42')
+  assertEquals([route.status, route.file], [200, 'index.html'])
 })
 
-test('assets.directory serves a folder of the app, and nothing beside it', async () => {
-  using s = await site({
+let assetsOf = () =>
+  site({
     'wrangler.jsonc': '{ "assets": { "directory": "./dist" } }',
     'index.html': doc('the source page'),
     'src/main.ts': 'export {}',
@@ -2098,14 +2105,22 @@ test('assets.directory serves a folder of the app, and nothing beside it', async
     'dist/about/index.html': doc('built about'),
     'dist/assets/app.js': 'console.log(1)',
   })
-  assertStringIncludes(await (await s.at('/')).text(), 'the build')
-  assertStringIncludes(await (await s.at('/about/')).text(), 'built about')
-  let js = await s.at('/assets/app.js')
-  assertEquals(js.status, 200)
-  assertMatch(js.headers.get('content-type') ?? '', /javascript/)
-  for (let path of ['/src/main.ts', '/dist/index.html', '/wrangler.jsonc']) {
-    let r = await s.at(path)
-    assertEquals(r.status, 404, path)
-    assert(!(await r.text()).includes('the source page'), path)
-  }
+
+test('assets.directory serves the folder of the app: its pages', async () => {
+  let at = assetsOf()
+  assertStringIncludes((await at('/about/')).body, 'built about')
 })
+
+test('assets.directory serves the folder of the app: its files', async () => {
+  let js = await assetsOf()('/assets/app.js')
+  assertEquals(js.status, 200)
+  assertMatch(js.type, /javascript/)
+})
+
+for (const path of ['/src/main.ts', '/dist/index.html', '/wrangler.jsonc']) {
+  test(`assets.directory serves nothing beside its folder: ${path}`, async () => {
+    let r = await assetsOf()(path)
+    assertEquals(r.status, 404)
+    assert(!r.body.includes('the source page'))
+  })
+}

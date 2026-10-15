@@ -66,6 +66,19 @@ export let FILE = 'x-yak-file'
 let encoded = (path: string) =>
   path.split('/').map(encodeURIComponent).join('/')
 
+/// baseOf('/cookbook/', 'docs/index.html', false) -> '/cookbook/docs/'
+/// baseOf('/cookbook/', 'about.html', false) -> '/cookbook/'
+/// baseOf('/cookbook/', '404.html', false) -> '/cookbook/'
+/// baseOf('/cookbook/', 'admin/index.html', true) -> '/cookbook/'
+/** Where a page resolves its relative URLs from, as anywhere on the web: its
+ * own folder under the mount `at`, so about/index.html's `../style.css` is the
+ * app's. A route, and the 404 page at any depth, answer with a page at the
+ * root, so their base is the mount. An app whose folder pages were written
+ * against the root base keeps it (`rooted`). `file` is the path that answered
+ * (`FILE`). */
+export let baseOf = (at: string, file: string, rooted: boolean) =>
+  at + (rooted ? '' : file.slice(0, file.lastIndexOf('/') + 1))
+
 // A path whose last segment names no file type is a page's address, not a
 // file's: `/about` may be about.html, and a path behind no page at all is a
 // route (T-32769), `/recipes/42` asking the app's index.html to open at a

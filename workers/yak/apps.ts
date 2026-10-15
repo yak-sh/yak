@@ -410,7 +410,7 @@ let platformFile = (req: Request, env: Env, path: string) =>
 // A page of a space on the free plan wears the badge too (public/badge.js,
 // meter.ts `free`): decided as it is served, so every version and release an
 // app serves wears it, and none of their files change.
-let reported = async (
+export let reported = async (
   env: Env,
   at: string,
   page: Response,
@@ -815,13 +815,7 @@ let asset = async (
   // router passing a path on) reaches the browser inside the worker's answer,
   // which is woven the platform's scripts on its way out (`served`), so it
   // gets none here, or the browser would run each of them twice.
-  // A page resolves its relative URLs from its own folder, as anywhere on
-  // the web: about/index.html's `../style.css` is the app's. A route, and the
-  // 404 page at any depth, answer with a page at the root, so their base is
-  // the mount. An app whose folder pages were written against the root base
-  // keeps it (`rooted`).
-  let file = got.headers.get(files.FILE) ?? ''
-  let base = at + (app.rooted ? '' : file.slice(0, file.lastIndexOf('/') + 1))
+  let base = files.baseOf(at, got.headers.get(files.FILE) ?? '', !!app.rooted)
   let page = await woven(
     env,
     await got.text(),
@@ -863,7 +857,7 @@ let asset = async (
 // behind the cache because the same file is a different document at each
 // mount, and one cached copy of the bytes serving every mount beats one copy
 // per mount.
-let woven = async (
+export let woven = async (
   env: Env,
   original: string,
   at: string,
