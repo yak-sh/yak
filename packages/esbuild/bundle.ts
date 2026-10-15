@@ -53,7 +53,8 @@ export type Input = {
 }
 
 /** esbuild's process ended under a build. That is the compiler's room, not
- * the app's code: a process killed for memory ends this way. */
+ * the app's code: a process killed for memory ends this way, and so does one
+ * stopped with the container it runs in. */
 export class Stopped extends Error {
   override name = 'Stopped'
 }

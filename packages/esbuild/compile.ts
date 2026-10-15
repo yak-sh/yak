@@ -261,7 +261,8 @@ export let compile = async (
 }
 
 /** The compiler's server: a {@link Job} in, its {@link Answer} out, and 507
- * when esbuild's process ended under the build, almost always for memory. */
+ * when esbuild's process ended under the build, killed for memory or stopped
+ * with its host. */
 export default {
   fetch: async (req: Request): Promise<Response> => {
     if (req.method != 'POST') return new Response('POST a job', { status: 405 })

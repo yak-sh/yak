@@ -73,11 +73,13 @@ origin compile to the same bytes on any host.
 The module's default export is a server's `fetch`, for `deno serve`. A host
 posts it a **job** (`Job`): `{ask, catalog, origin?, shared?}`, the app's ask
 and the host's toolkit catalog (below). The server responds with the answer as
-JSON, or with 507 when esbuild's process ended under the build. That is the
-compiler running out of memory, not a mistake in the app's code, so `compile`
-throws `Stopped` instead of answering, and the next build starts esbuild again.
-yaks.app runs this server in a container of its own, behind a Worker that adds
-the catalog to each ask.
+JSON, or with 507 when esbuild's process ended under the build: killed for
+memory, or stopped with the host it runs on. Neither is a mistake in the app's
+code, so `compile` throws `Stopped` instead of answering, and the next build
+starts esbuild again. yaks.app runs this server in a container of its own,
+behind a Worker that adds the catalog to each ask, tells the two apart by how
+the container ended, and sends a compile again when its container was replaced
+under it.
 
 A host opts into shared browser modules with `shared: true` once it can store
 and serve `Answer.shared`. Jobs omitting this flag return fully bundled pages
