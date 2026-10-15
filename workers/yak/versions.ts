@@ -43,6 +43,7 @@
 // With one key space the sweep is one pass for the whole bucket rather than one
 // per app: an object another app still names is not the first app's to free.
 import type { Blobs as Pins, Objects } from '@yaks/blob'
+import { lanes } from '@yaks/fp'
 import { mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
@@ -84,6 +85,12 @@ export let KEEP = 20
 // belong to a deploy still in flight; a day is far longer than that gap and
 // costs one more day of bytes nobody wants.
 export let GRACE = 24 * 60 * 60_000
+
+// How many bucket calls a pass over many keys keeps in flight. One request
+// holds six open at a time and queues the rest, so six is the most that helps.
+// One at a time, the daily sweep's reads of every history log ran end to end
+// for minutes, long enough for a deploy to cut it off (T-123781).
+export let LANES = 6
 
 /** Where a compiled page script is kept, by its source's path (esbuild.ts):
  * served at the source's address (files.ts), and made again by every deploy. */
@@ -959,18 +966,15 @@ export let pruned = async (
     )
     let namedFiles = new Set<string>()
     let legacy: string[] = []
-    for (let source of sources) {
+    await lanes(LANES)([...sources], async (source) => {
       namedFiles.add(source + META)
       let index = await indexOf(blobs, `${source}/`)
-      if (!index) {
-        legacy.push(`${source}/`)
-        continue
-      }
+      if (!index) return void legacy.push(`${source}/`)
       for (let file of Object.values(index)) {
         namedFiles.add(file.key.startsWith(SHA) ? file.key : space + file.key)
         if (file.sha) named.add(file.sha)
       }
-    }
+    })
     await blobs.delete(
       Object.entries(await blobs.uploaded(stage)).filter(([key, landed]) =>
         !namedFiles.has(key) &&
@@ -985,7 +989,7 @@ export let pruned = async (
         !(active && key.startsWith(`${active}/`)) && now - landed >= GRACE
       ).map(([key]) => key),
     )
-    for (let key of await blobs.list(`${prefix}history/`)) {
+    await lanes(LANES)(await blobs.list(`${prefix}history/`), async (key) => {
       let all = entries(await blobs.read(key))
       let keep = trimmed(all, now)
       if (keep.length != all.length) {
@@ -997,7 +1001,7 @@ export let pruned = async (
         } else await blobs.delete(key)
       }
       for (let w of keep) named.add(w.sha)
-    }
+    })
     // And every version the app can be put back to — all of them, since none is
     // ever buried: the oldest rollback it offers has to have its bytes.
     for (let v of releases) {

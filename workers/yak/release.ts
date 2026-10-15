@@ -3,11 +3,13 @@
 // app row selects it. Keys are relative to the space so a space rename carries
 // them without rewriting the manifest.
 import type { Objects } from '@yaks/blob'
+import { lanes } from '@yaks/fp'
 import { token } from '@yaks/graph/sha256'
 import {
   addressed,
   BUILT,
   type Files,
+  LANES,
   own,
   pins,
   releaseOf,
@@ -81,11 +83,6 @@ let pinned = async (raw: Objects, source: string): Promise<Index> => {
   )
   return index
 }
-// How many files one pass holds in hand at once: the bucket answers six calls
-// at a time per request anyway, and an app's whole file set read at once could
-// outgrow the isolate's memory.
-let BATCH = 6
-
 /**
  * An app still served in place from its own prefix (`<space>/<app>/`, made
  * before a release had an index) given a release like any other: each file
@@ -111,16 +108,14 @@ export let promoted = async (
   if (!paths.length) return 0
   let pin = pins(raw, prefix)
   let index: Index = {}
-  for (let at = 0; at < paths.length; at += BATCH) {
-    await Promise.all(
-      paths.slice(at, at + BATCH).map(async (path) => {
-        let bytes = await raw.get(prefix + path)
-        let sha = await sha256(bytes)
-        await pin.put(sha, bytes)
-        index[path] = { key: addressed(sha), sha }
-      }),
-    )
-  }
+  // A lane holds one file at a time, so the whole set is never in hand at
+  // once to outgrow the isolate's memory.
+  await lanes(LANES)(paths, async (path) => {
+    let bytes = await raw.get(prefix + path)
+    let sha = await sha256(bytes)
+    await pin.put(sha, bytes)
+    index[path] = { key: addressed(sha), sha }
+  })
   let space = prefix.slice(0, prefix.indexOf('/'))
   let source = releaseOf({ slug: space }, app)
   await raw.put(source + META, encode(index))

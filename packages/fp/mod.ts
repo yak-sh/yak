@@ -161,6 +161,39 @@ export let over = <T>(
 ): null | Promise<null> =>
   each(items, null, (_, item) => after(fn(item), always(null)))
 
+/// let open = 0, most = 0
+/// let busy = () =>
+///   (most = Math.max(most, ++open), Promise.resolve().then(() => open--))
+/// lanes(2)([1, 2, 3, 4, 5], busy) ~> null
+/// most -> 2
+/// let ran: number[] = []
+/// let fails = (n: number) => (ran.push(n), Promise.reject(new Error('no')))
+/// lanes(1)([1, 2, 3], fails) throws 'no'
+/// ran -> [1]
+/**
+ * `fn` run over the items `n` at a time, for what it does: `over` with that
+ * many in flight. A lane takes the next item as soon as its last one settles,
+ * so one slow item holds up only its own lane, and the first failure stops
+ * every lane taking more and is thrown.
+ */
+export let lanes =
+  (n: number) =>
+  async <T>(items: T[], fn: (item: T) => unknown): Promise<null> => {
+    let next = 0
+    let lane = async () => {
+      while (next < items.length) {
+        try {
+          await fn(items[next++])
+        } catch (e) {
+          next = items.length
+          throw e
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(n, items.length) }, lane))
+    return null
+  }
+
 let step = (x: unknown, f: Fn): unknown => after(x, (v) => v == null ? v : f(v))
 
 /// pipe(inc, inc)(2) -> 4

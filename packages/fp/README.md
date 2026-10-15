@@ -101,8 +101,11 @@ a promise.
 Both wait for a step's promise before proceeding. A pipe also waits for a
 promise before testing for nil or applying its next function.
 
+`lanes(n)` is `over` with `n` items in flight: each lane takes the next item
+when its last one settles, and the first failure stops them all and is thrown.
+
 ```ts
-import { after, each, inc, isPromise, over, pipe } from '@yaks/fp'
+import { after, each, inc, isPromise, lanes, over, pipe } from '@yaks/fp'
 import { equal } from '@yaks/testing'
 
 equal(after(1, inc), 2)
@@ -118,6 +121,9 @@ equal(
   null,
 )
 equal(seen, [1, 2])
+let doubled: number[] = []
+equal(await lanes(2)([1, 2, 3], async (n) => void doubled.push(n * 2)), null)
+equal(doubled, [2, 4, 6])
 equal(await pipe(inc, (n: number) => Promise.resolve(n), inc)(1), 3)
 equal(await pipe(() => Promise.resolve(null), inc)(1), null)
 ```
