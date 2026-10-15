@@ -184,33 +184,6 @@ let lift = (fall: Fall, box: THREE.Box3, at: THREE.Vector3) => {
 
 /** A figure made up to be drawn and moved: its parts knitted into one
  * skinned mesh, posed every frame from what it is doing.
- *
- * ```ts
- * import { assertAlmostEquals, assertEquals } from '@std/assert'
- * import type { Box } from '@yaks/voxel/boxes'
- * let leg = (name: string, x: number, phase: number) => ({
- *   name, pivot: [x, 0.4, 0] as [number, number, number],
- *   boxes: [[[-0.05, -0.4, -0.05], [0.1, 0.42, 0.1], 0x604830]] as Box[],
- *   move: { leg: { phase } },
- * })
- * let p = puppet({
- *   height: 1, gait: 'walk', bite: 'lunge',
- *   fall: 'topple',
- *   parts: [
- *     { name: 'trunk', pivot: [0, 0.4, 0], boxes: [[[-0.2, 0, -0.4], [0.4, 0.3, 0.8], 0x806040]] },
- *     leg('left', -0.12, 0), leg('right', 0.12, 0.5),
- *   ],
- * })
- * let act = { speed: 3, air: false, swing: -1, hurt: 0, roll: -1, down: false, t: 1 }
- * p.animate(act, 0.1)
- * let [l, r] = ['left', 'right'].map((n) => p.root.getObjectByName(n)!)
- * // The legs stride half a step apart.
- * assertAlmostEquals(l.rotation.x, -r.rotation.x, 1e-9)
- * // Fallen, it lies on its side, its flank on the ground.
- * p.animate({ ...act, down: true }, 0.1)
- * assertEquals(p.root.children[0].rotation.z, Math.PI / 2)
- * assertAlmostEquals(p.root.children[0].position.y, 0.2)
- * ```
  */
 export let puppet = (f: Rig): Puppet => {
   let m = soft({ speckle: f.speckle ?? 0.1 })

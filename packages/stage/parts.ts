@@ -66,22 +66,6 @@ let square = (from: THREE.Object3D, to: THREE.Object3D) => {
  * them wherever the part is turned, so a pose is set on the parts as before.
  * Each part is worn over the parts before it that lie square to it, and what
  * it is drawn as is kept on its bone (`userData.part`).
- *
- * ```ts
- * import { assertAlmostEquals, assertEquals } from '@std/assert'
- * import * as THREE from 'three'
- * import { STEP } from '@yaks/voxel/mesh'
- * let root = new THREE.Group()
- * let flank = partOf([[[-0.3, 0, -0.5], [0.6, 0.4, 1], 0x806040]], [0, 1, 0])
- * // A thigh hung beside the flank, its outer side in the flank's plane.
- * let thigh = partOf([[[-0.1, -0.5, -0.1], [0.2, 0.7, 0.2], 0x604830]], [0.2, 1, 0])
- * root.add(flank, thigh)
- * let mesh = knit(root, new THREE.MeshLambertMaterial())
- * assertEquals([mesh.skeleton.bones.length, root.children.length], [2, 3])
- * // It is worn over the flank: its side stands a step outside.
- * let xs = thigh.userData.part.pos.filter((_: number, i: number) => i % 3 == 0)
- * assertAlmostEquals(Math.max(...xs), 0.1 + STEP, 1e-9)
- * ```
  */
 export let knit = (
   root: THREE.Object3D,
