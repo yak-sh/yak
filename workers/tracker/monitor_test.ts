@@ -39,9 +39,18 @@ let fixture = async () => {
 }
 let healthy =
   (() => Promise.resolve(new Response(null, { status: 405 }))) as typeof fetch
+// An app's door that sends nothing: its fetch ends at the deadline, with the
+// error `AbortSignal.timeout` aborts one with.
+let late = new DOMException('timed out', 'TimeoutError')
+let hangs =
+  ((url: string) =>
+    url.includes('/api/me')
+      ? Promise.reject(late)
+      : healthy(url)) as typeof fetch
 let recovered = await fixture()
 await monitor(recovered.tracker, now, healthy, now)
 let recovering = await fixture()
+let hanging = await fixture()
 
 test('healthy monitor after recovery reads no historical bugs and writes nothing', async () => {
   recovered.writes.length = 0
@@ -74,15 +83,11 @@ test('monitor recovery resolves only open faults and selects their identities', 
 })
 
 test('a door that hangs past the deadline files the uptime bug naming it', async () => {
-  let { tracker } = await fixture()
+  let { tracker } = hanging
   let filed: Bundle[] = []
   tracker.ingest = (rows) => (filed.push(...rows), Promise.resolve())
-  let hangs =
-    ((url: string) =>
-      url.includes('/api/me')
-        ? Promise.reject(new DOMException('timed out', 'TimeoutError'))
-        : healthy(url)) as typeof fetch
-  await monitor(tracker, now, hangs, now)
+  // No heartbeat yet: only the doors are asked.
+  await monitor(tracker, undefined, hangs, now)
   let [row] = JSON.parse(JSON.stringify(filed.filter((b) => b.error)))
   equal([row.error.fault, row.error.level, row.exception.value], [
     uptime,
