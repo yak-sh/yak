@@ -273,6 +273,21 @@ export let tokensIn = (
   return words
 }
 
+// One property's schema on its own, made once for each property: a check is
+// compiled once for each schema object (@yaks/vocab `toolCheck`), and a
+// partial walk checks a value at every keystroke.
+let lones = new WeakMap<object, Map<string, Record<string, unknown>>>()
+let lone = (props: Record<string, Prop>, name: string) => {
+  let made = lones.get(props) ?? new Map<string, Record<string, unknown>>()
+  lones.set(props, made)
+  let schema = made.get(name)
+  if (!schema) {
+    schema = { type: 'object', properties: { [name]: props[name] } }
+    made.set(name, schema)
+  }
+  return schema
+}
+
 /** The single argument walk used by parsing and completion. A partial walk
  * reports the property still awaiting a value, without requiring the schema's
  * remaining mandatory properties. */
@@ -310,9 +325,7 @@ export let scanned = (
     ) {
       let value = valueOf(name, raw, props[name])
       validateToolInput(
-        {
-          inputSchema: { type: 'object', properties: { [name]: props[name] } },
-        },
+        { inputSchema: lone(props, name) },
         { [name]: value },
         (message) => new Usage(message),
       )
@@ -389,9 +402,7 @@ export let scanned = (
         ? words.flatMap((w) => valueOf(rest, w, prop))
         : words.join(' ')
       validateToolInput(
-        {
-          inputSchema: { type: 'object', properties: { [rest]: prop } },
-        },
+        { inputSchema: lone(props, rest) },
         { [rest]: value },
         (message) => new Usage(message),
       )

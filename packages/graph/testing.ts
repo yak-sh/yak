@@ -198,12 +198,10 @@ export let memory = (): Storage => {
     },
   }
 
+  // A patch replaces a component and never changes one in place, so a row's
+  // record of components is all a snapshot copies.
   let snapshot = () =>
-    new Map(
-      [...rows].map((
-        [k, r],
-      ) => [k, { ...r, comps: structuredClone(r.comps) }]),
-    )
+    new Map([...rows].map(([k, r]) => [k, { ...r, comps: { ...r.comps } }]))
 
   return {
     install: () => {},

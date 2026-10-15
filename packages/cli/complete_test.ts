@@ -114,10 +114,11 @@ let roundTrips = async (prefix: string) => {
   assertEquals(read.sort(), [...names].sort())
 }
 
-test('offered entity words round-trip through the grammar as a positional', async () => {
-  await roundTrips('spawn b')
-  await roundTrips('spawn "b')
-})
+test('offered entity words round-trip through the grammar as a positional', () =>
+  roundTrips('spawn b'))
+
+test('offered entity words round-trip through the grammar inside an open quote', () =>
+  roundTrips('spawn "b'))
 
 test('offered entity words round-trip through the grammar in both flag forms', async () => {
   await roundTrips('spawn --beast b')
