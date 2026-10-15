@@ -20,6 +20,7 @@ test('village fire is near the square but not beyond surrounding buildings', () 
   // gain is a small fraction of what is heard beside the hearth.
   let { refDistance, rolloffFactor, distanceModel } = NEAR.pan
   assert(distanceModel == 'exponential')
+  assert(refDistance != null && rolloffFactor != null)
   let volume = (d: number) =>
     (Math.max(d, refDistance) / refDistance) ** -rolloffFactor
   assert(volume(8) > 0.1 && volume(28) < 0.02)
