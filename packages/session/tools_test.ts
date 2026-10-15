@@ -203,6 +203,21 @@ test('a session that exists is handed back what it was in the middle of', async 
   )
 })
 
+test('only an operator session is told to keep its listener running', async () => {
+  let body = async (operator: boolean) =>
+    comp(
+      (await tools.session_context!(
+        ...asked({ session: 'abc' }, [row(
+          { entity: { eid: 's1' }, session: { id: 'abc', operator } },
+          'session.id',
+        )]),
+      ) as Bundle[])[1],
+      'content',
+    ).body as string
+  assert((await body(true)).includes('yak session listen --session abc --once'))
+  assert(!(await body(false)).includes('listen'))
+})
+
 test('session context resumes a numbered transcript through an ordinary write', async () => {
   let g = locked(store())
   await g.apply([{ entity: { eid: ids.run1 }, session: { ended: true } }])

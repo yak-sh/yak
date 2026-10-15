@@ -105,6 +105,12 @@ let idIn = (args: Record<string, unknown>): string =>
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 
+/** What an operator session is told so its owner's mail and knocks wake it. */
+export let wakes = (id: string): string =>
+  `Keep \`yak session listen --session ${id} --once\` running as a ` +
+  `background command, and start it again each time it ends, so your ` +
+  `owner's mail and knocks wake you.`
+
 /** One entity as a person reads it: its id, and its title where it has one. */
 export let line = (vocab: Vocab, b: Bundle): string => {
   let id = human(vocab)(b)
@@ -304,6 +310,7 @@ export let runs = (
             ...held.length
               ? held.map((b) => `- ${line(host.vocab, b)}`)
               : ['nothing'],
+            ...comp(found, SESSION).operator == true ? [wakes(id)] : [],
           ].join('\n'),
         },
         output: { source: call.entity.eid },
