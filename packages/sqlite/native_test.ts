@@ -95,11 +95,18 @@ let original = new Error('row conversion failed')
 failed.prepare = (text: string) => {
   let statement = prepare(text)
   if (text == fault && ++attempts == 1) {
-    // Fault exactly after sqlite3_step returned SQLITE_ROW, before all()
-    // resets it. No fake SQLite error: without eviction the next SAVEPOINT
-    // actually throws "cannot open savepoint - SQL statements in progress".
-    statement.getRowObject = () => () => {
-      throw original
+    // Fault once, exactly after sqlite3_step returned SQLITE_ROW, before
+    // all() resets it. No fake SQLite error: left there, the statement makes
+    // the next SAVEPOINT throw "cannot open savepoint - SQL statements in
+    // progress". A retry would decode the row the fault spared.
+    let decoder = statement.getRowObject.bind(statement)
+    let faults = 1
+    statement.getRowObject = () => {
+      let decode = decoder()
+      return (...row) => {
+        if (faults-- > 0) throw original
+        return decode(...row)
+      }
     }
   }
   return statement
@@ -121,7 +128,7 @@ test('failed row decoding releases a cached write before rollback and the next s
     )
     assertEquals(scan(sql, 'sample'), [])
     assertEquals(sql.query(insert(2)), [{ value: 2 }])
-    assertEquals(attempts, 2, 'failed statement was re-prepared, not retried')
+    assertEquals(attempts, 1, 'failed statement was kept, not prepared again')
     tx({ t: 'release', name: 'nested' }, { t: 'release', name: 'next' })
   } finally {
     failed.close()

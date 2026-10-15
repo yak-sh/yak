@@ -141,13 +141,15 @@ let refs = (e: Expr): string[] => {
 // projection can share its compiled function across statements and databases.
 type Decoder = ReturnType<Statement['getRowObject']>
 let decoders = new Map<string, Decoder>()
-let status: ReturnType<typeof bindStatus> | undefined
-let bindStatus = () =>
+// What a kept statement asks of SQLite that @db/sqlite does not bind.
+let steps: ReturnType<typeof bindSteps> | undefined
+let bindSteps = () =>
   Deno.dlopen(sqlitePath, {
     sqlite3_stmt_status: {
       parameters: ['pointer', 'i32', 'i32'],
       result: 'i32',
     },
+    sqlite3_reset: { parameters: ['pointer'], result: 'i32' },
   })
 let decoder = (names: string[], compile: Statement['getRowObject']) => {
   let key = JSON.stringify(names)
@@ -163,7 +165,8 @@ export let prepared = (db: Database) => {
   // SQLite integers are 64-bit. The library's default reader truncates them
   // to 32 bits; safe JS integers must round-trip through every driver caller.
   db.int64 = true
-  let recompiled = (status ??= bindStatus()).symbols.sqlite3_stmt_status
+  let { sqlite3_stmt_status: recompiled, sqlite3_reset: reset } =
+    (steps ??= bindSteps()).symbols
   let commands = new WeakSet<ReturnType<Database['prepare']>>()
   let prepare = (sql: string) => {
     let statement = db.prepare(sql)
@@ -235,16 +238,14 @@ export let prepared = (db: Database) => {
       }
       return statement.all(...params)
     } catch (error) {
-      // @db/sqlite resets all() on success, but an exception while decoding
-      // a row can leave a RETURNING statement at SQLITE_ROW. Retaining it
-      // then prevents every later SAVEPOINT on this connection. Evict only
-      // the failed statement; never retry SQL with possible side effects.
-      // Finalizing a statement whose step failed reports that same failure
-      // again, so the step's error is the one thrown.
-      cache.delete(sql)
-      try {
-        statement.finalize()
-      } catch { /* the step's error, repeated */ }
+      // @db/sqlite resets a statement when its step succeeds, but leaves one
+      // whose step failed where it stopped: a RETURNING statement whose row
+      // failed to decode is still at SQLITE_ROW, and would prevent every
+      // later SAVEPOINT on this connection. Reset, it is done, and stays
+      // kept: a statement that fails, as a refused write does, is often asked
+      // again. Resetting reports the step's failure again, so the step's
+      // error is the one thrown; nothing with possible side effects retries.
+      reset(statement.unsafeHandle)
       throw error
     }
   }
