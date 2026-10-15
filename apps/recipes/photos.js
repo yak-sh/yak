@@ -1,4 +1,7 @@
-import { apply, subscribe, upload, was } from './api/client.js'
+// The platform serves this module beside the page; it is absent from the repo.
+let { apply, subscribe, upload, was } = await import(
+  new URL('./api/client.js', import.meta.url).href
+)
 
 // Standalone DOM island: render once, append it, then wirePhotos(root, …).
 // Never replace this root on an unrelated recipe/cooking subscription update.
