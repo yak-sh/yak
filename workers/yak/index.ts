@@ -164,6 +164,7 @@ type Purging = { purge(o: { tags: string[] }): Promise<Purged> }
 // `purge` is called as a method of the binding, never through `call` or
 // `apply`: an RPC stub answers every property as a method of the far side.
 export class Purger extends DurableObject<Env> {
+  declare env: Env
   #purge = purger({ purge: (tags) => this.env.SITE!.purge!(tags) })
 
   purge(tags: string[]): Promise<void> {
