@@ -3,7 +3,8 @@
 // an app_files write of a small app and an app_deploy, until its bytes answer
 // live at the app URL (ship), then a one-file change deployed the same way
 // (edit). RUNS of each, medians and p95 appended as one row to
-// bench/app-deploys.jsonl, which the app-deploy suite checks. Every answer's
+// bench/app-deploys.jsonl (or $APP_DEPLOY_RECORD, which the monitor sets to
+// its own state), which the app-deploy suite checks. Every answer's
 // `Server-Timing` is kept too (median per stage), so a row that moved says
 // which hop moved it.
 //
@@ -23,7 +24,7 @@ let space = who
 let host = Deno.env.get('HOST') ?? 'yaks.app'
 let app = Deno.env.get('APP') ?? `bench-${Date.now().toString(36)}`
 let runs = Number(Deno.env.get('RUNS') ?? 5)
-let record = Deno.env.get('RECORD') ?? RECORD
+let record = RECORD
 let mcp = `https://${host}/mcp`
 let id = 0
 

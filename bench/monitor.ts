@@ -142,6 +142,10 @@ let git = async (...args: string[]) => {
 }
 let home = Deno.env.get('HOME') ?? '/tmp'
 let STATE = `${home}/.cache/yak/bench/monitor.json`
+/** Where the monitor's app-deploy rows go, beside its state, so a daily run
+ * leaves the checkout clean. The suite's baseline stays in the repo. */
+export let RECORDS = `${home}/.cache/yak/bench/app-deploys.jsonl`
+let env = { APP_DEPLOY_RECORD: RECORDS }
 let load = async (): Promise<State> => {
   try {
     return JSON.parse(await Deno.readTextFile(STATE))
@@ -178,6 +182,7 @@ let check = async (suite: string): Promise<Outcome> => {
     let timed = await new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', ...MEASURE[suite]],
       cwd: root,
+      env,
       stdout: 'inherit',
       stderr: 'piped',
     }).output()
@@ -196,6 +201,7 @@ let check = async (suite: string): Promise<Outcome> => {
   let child = await new Deno.Command(Deno.execPath(), {
     args: ['run', '-A', 'bench/run.ts', 'check', suite],
     cwd: root,
+    env,
     stdout: 'inherit',
     stderr: 'piped',
   }).output()

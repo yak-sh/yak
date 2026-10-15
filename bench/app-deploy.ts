@@ -23,7 +23,10 @@ export type Row = {
   timing?: Record<string, Record<string, number>>
 }
 
-export let RECORD = new URL('./app-deploys.jsonl', import.meta.url)
+// By hand, rows go to the tracked file; the monitor points
+// APP_DEPLOY_RECORD at its own state, outside the repo.
+export let RECORD: string | URL = Deno.env.get('APP_DEPLOY_RECORD') ??
+  new URL('./app-deploys.jsonl', import.meta.url)
 
 // The three gated numbers, by name: what a person waits for. A name's meaning
 // never changes: rows before writes were staged until app_deploy measured
