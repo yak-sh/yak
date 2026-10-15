@@ -64,9 +64,11 @@ export let publicDirectory = (
       headers.set(EPOCH, '1')
       let direct = via.fetch(new Request(req, { headers }))
       return new Promise<Response>((resolve, reject) => {
+        let settled = false
         let cancel = time.after(Math.max(0, began + 25 - time.now()), () => {
           void copy.get(key).then((body) => {
-            if (body == null) return
+            if (body == null || settled) return
+            settled = true
             door.stale = true
             used()
             resolve(new Response(body))
@@ -74,7 +76,10 @@ export let publicDirectory = (
         })
         void direct.then((answer) => {
           cancel()
-          resolve(answer)
+          if (!settled) {
+            settled = true
+            resolve(answer)
+          }
           let epoch = answer.headers.get(EPOCH)
           if (answer.ok && epoch != null && /^\d+$/.test(epoch)) {
             background(
@@ -85,7 +90,10 @@ export let publicDirectory = (
           }
         }, (e) => {
           cancel()
-          reject(e)
+          if (!settled) {
+            settled = true
+            reject(e)
+          }
         })
       })
     },

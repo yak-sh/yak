@@ -149,3 +149,29 @@ test('directory deadline: a browser seal is anonymous but a person seal is not',
     false,
   )
 })
+
+// Once authority won, a copy already in flight must not taint its page.
+let directWinner = await (async () => {
+  let time = clock(), used = 0
+  let direct = Promise.withResolvers<Response>()
+  let copy = Promise.withResolvers<string | null>()
+  let f = fixture()
+  let door = publicDirectory(
+    { fetch: () => direct.promise },
+    { ...f.copy, get: () => copy.promise },
+    time,
+    () => {
+      used++
+    },
+  )
+  let reading = door.fetch(req())
+  await time.advance(25)
+  direct.resolve(new Response('authority'))
+  let answer = await reading
+  copy.resolve('late copy')
+  await flush()
+  return { body: await answer.text(), stale: !!door.stale, used }
+})()
+test('directory deadline: a late copy cannot make an authoritative winner uncacheable', () => {
+  assertEquals(directWinner, { body: 'authority', stale: false, used: 0 })
+})
