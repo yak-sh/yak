@@ -409,12 +409,14 @@ non-idempotent interruption handling still apply. `max`, `defer`, and
 `Attempt.progressed` keep their meaning. Overlapping calls to `work` on the same
 registry share its running set.
 
-To record and deliver start-up runs together, call
-`work(g, undefined, {startup: true, passes: 1})`. Free slots receive their
-attempts in the same commit as their new runs, before handlers start; overflow
-remains pending for a later pass. Start-up admission shares the first pass's
-bounded window. `startup(g)` continues to record runs without invoking handlers.
-A numeric third argument to `work` still bounds its discovery passes.
+To owe and deliver start-up runs together, call
+`work(g, undefined, {startup: true, passes: 1})`. A run given a free slot starts
+at once and keeps no row unless it fails: the host owes the pass again until it
+has ended, which is the run's crash recovery, and a failure is written as the
+row its retry reads. Overflow is recorded pending for a later pass. Start-up
+admission shares the first pass's bounded window. `startup(g)` records runs
+without invoking handlers. A numeric third argument to `work` still bounds its
+discovery passes.
 
 ```ts
 import { graph } from '@yaks/graph'

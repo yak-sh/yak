@@ -167,8 +167,10 @@ export let POOL = '@yaks/effects'
 export type PoolOpts = {
   /** One process exclusively owns this store (for example a Durable Object).
    * Drain recorded runs without claims, presence leases, sweeps, or expiration
-   * duties. Persist attempts and outcomes for crash
-   * recovery and retries. Never enable this for a shared box store. */
+   * duties. Persist attempts and outcomes for crash recovery and retries,
+   * but for a start-up run started at once, whose recovery is the host's
+   * pass and which writes only a failure. Never enable this for a shared box
+   * store. */
   singleOwner?: boolean
   /** When start-up runs are owed: on joining the pool (`join`, the default
    * for shared workers), or only when the host calls startup (`manual`, the
@@ -397,8 +399,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   }
 
   // One claimed run: the event rebuilt from what the target holds now, the
-  // handler, and the outcome written back under the same claim.
-  let start = (g: Access, eid: Eid, row: Comp, cause?: string) => {
+  // handler, and the outcome written back under the same claim. A run with
+  // no row (`kept` false, a single-owner start-up run, `starting`) writes
+  // only a failure, as the row a retry reads.
+  let start = (
+    g: Access,
+    eid: Eid,
+    row: Comp,
+    cause?: string,
+    kept = true,
+  ) => {
     let s = handled(String(row.handler))
     let c = peek(g)
     let span: Span | undefined
@@ -422,10 +432,15 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
     let tries = held.attempts
     let settle = (patch: Comp) =>
-      swap(g, eid, { lease_token: held.token, attempts: held.attempts }, {
-        ...patch,
-        attempts: tries,
-      })
+      kept
+        ? swap(g, eid, { lease_token: held.token, attempts: held.attempts }, {
+          ...patch,
+          attempts: tries,
+        })
+        : g.apply([{
+          entity: { eid },
+          [EFFECT]: { ...row, ...patch, attempts: tries },
+        }], { trusted: true })
     // A success puts the count back at this attempt, the first: only a run
     // that has failed before has anything to write.
     let attempt: Attempt = {
@@ -492,13 +507,15 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         )
         if (peek(g) && span?.active) span.end({ counts: { runs: 1 } })
         // Pool bookkeeping follows the completed handler, not its trace.
-        await scope(undefined, () =>
-          swap(
-            g,
-            eid,
-            { lease_token: held.token, attempts: held.attempts },
-            null,
-          ))
+        if (kept) {
+          await scope(undefined, () =>
+            swap(
+              g,
+              eid,
+              { lease_token: held.token, attempts: held.attempts },
+              null,
+            ))
+        }
       } catch (err) {
         if (peek(g) && span?.active) {
           span.end({ outcome: outcome(err), counts: { runs: 1 } })
@@ -882,43 +899,50 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // Start-up work: a run of each `start` effect this process has the code
   // for, its target this process. The host may owe these explicitly rather
   // than on joining, so a store waking need not be a store starting.
+  //
+  // A single-owner host owes its start-up pass until the runs it started
+  // there have ended, so a run it starts at once keeps no row: the pass is
+  // its crash recovery, and only a failure is written down, for the retry.
+  // What waits for a slot is a row, like any run owed for later.
   let starting = async (
     g: Access,
     immediate = false,
   ): Promise<Promise<void>[]> => {
     let at = stamp(clock())
     let mine: Owed[] = []
-    let rows: Bundle[] = ctx.slots()
-      .filter((s) => s.kind == 'started' && s.run)
-      .map((s) => {
-        let ours = immediate && member && !disabled.has(s.id) && limit(s) > 0 &&
-          mine.length < page &&
-          running.size + admitting + mine.length < max
-        let eid = mint()
-        let row: Comp = {
-          handler: s.id,
-          target: me,
-          kind: 'started',
-          state: 'pending',
-          attempts: ours ? 1 : 0,
-          at,
-          generation: 0,
-          ...(ours ? claim() : {}),
-        }
-        if (ours) mine.push({ eid, row })
-        return { entity: { eid }, [EFFECT]: row }
-      })
+    let rows: Bundle[] = []
+    for (let s of ctx.slots()) {
+      if (s.kind != 'started' || !s.run) continue
+      let ours = immediate && member && !disabled.has(s.id) && limit(s) > 0 &&
+        mine.length < page &&
+        running.size + admitting + mine.length < max
+      let eid = mint()
+      let row: Comp = {
+        handler: s.id,
+        target: me,
+        kind: 'started',
+        state: 'pending',
+        attempts: ours ? 1 : 0,
+        at,
+        generation: 0,
+        ...(ours ? claim() : {}),
+      }
+      if (ours) mine.push({ eid, row })
+      if (!ours || !opts.singleOwner) {
+        rows.push({ entity: { eid }, [EFFECT]: row })
+      }
+    }
     let reserved = mine.length
     admitting += reserved
     try {
-      if (!rows.length) return []
-      let applied = await g.apply(rows, { trusted: true })
+      let applied = rows.length ? await g.apply(rows, { trusted: true }) : []
       let committed = new Set(applied.map((b) => b.entity.eid))
       return mine.flatMap(({ eid, row }) => {
-        if (!committed.has(eid)) return []
+        let kept = !opts.singleOwner
+        if (kept && !committed.has(eid)) return []
         admitting--
         reserved--
-        return [start(g, eid, row)]
+        return [start(g, eid, row, undefined, kept)]
       })
     } finally {
       admitting -= reserved

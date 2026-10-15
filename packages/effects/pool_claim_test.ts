@@ -300,15 +300,58 @@ let delivered = async (w: ReturnType<typeof worker>) => {
 for (let singleOwner of [false, true]) {
   await delivered(worker([], { singleOwner, startup: 'join' }))
   let host = worker([], { singleOwner, startup: 'join' })
+  // A single-owner host owes the pass again until it ends, so the runs it
+  // starts keep no row; a shared worker's claims are rows the others read.
   test(`explicit startup records its claims with the runs without doubling joining startup (${singleOwner})`, async () => {
     equal(await delivered(host), {
       seen: ['a', 'b'],
-      snapshots: [[1, 1], [1, 1]],
+      snapshots: singleOwner ? [[], []] : [[1, 1], [1, 1]],
       claims: 0,
       left: [],
     })
   })
 }
+
+let retried = async (w: ReturnType<typeof worker>, clock: { now: number }) => {
+  let seen: string[] = [], fail = true
+  w.fx.handle({
+    alpha: () => {
+      seen.push('a')
+      if (fail) throw Error('not yet')
+    },
+    beta: () => void seen.push('b'),
+  })
+  await w.p.work(w.g, undefined, { startup: true, passes: 1 })
+  let kept = (await w.g.read('.effect')).map((b) => {
+    let { handler, state, attempts, next } = b.effect as Comp
+    return { handler, state, attempts, next }
+  })
+  fail = false
+  clock.now = 1000
+  await w.p.work(w.g, undefined, 1)
+  return { seen, kept, left: await w.g.read('.effect') }
+}
+let failing = () => {
+  let clock = { now: 0 }
+  return [
+    worker([], { singleOwner: true, now: () => clock.now }),
+    clock,
+  ] as const
+}
+await retried(...failing())
+let failingHost = failing()
+test('a single-owner startup run that fails is the row its retry reads', async () => {
+  equal(await retried(...failingHost), {
+    seen: ['a', 'b', 'a'],
+    kept: [{
+      handler: 'alpha',
+      state: 'pending',
+      attempts: 1,
+      next: new Date(1000).toISOString(),
+    }],
+    left: [],
+  })
+})
 
 let overflow = async (w: ReturnType<typeof worker>) => {
   let seen: string[] = [],
@@ -337,7 +380,7 @@ let overflowHost = worker([], { singleOwner: true, max: 1 })
 test('startup persists capacity overflow pending for a later fair pass', async () => {
   equal(await overflow(overflowHost), {
     seen: ['a', 'b'],
-    attempts: [1, 0],
+    attempts: [0],
     left: [],
   })
 })
@@ -358,8 +401,8 @@ let failedStart = async (w: ReturnType<typeof worker>) => {
   await w.p.work(w.g, undefined, { startup: true, passes: 1 })
   return { failed, retried: seen }
 }
-await failedStart(worker([], { singleOwner: true }))
-let failedStartHost = worker([], { singleOwner: true })
+await failedStart(worker([]))
+let failedStartHost = worker([])
 test('failed startup persistence starts nothing and releases capacity for retry', async () => {
   equal(await failedStart(failedStartHost), { failed: [], retried: ['a', 'b'] })
 })
