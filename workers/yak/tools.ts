@@ -65,7 +65,7 @@ import { withKinds } from './kinds.ts'
 import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
-import { configOf, MAX, mimeOf, prefixOf, warm } from './files.ts'
+import { configOf, MAX, mimeOf, prefixOf, servedAt, warm } from './files.ts'
 import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { failedScript } from './asset_url.ts'
@@ -1359,10 +1359,16 @@ let published = async (
     ? `\noffered as ${offer.name} is still v${offer.version}, so anyone ` +
       'installing it gets that code — app_publish again to offer this one'
     : ''
+  let serves = parsed.config.assets?.directory
   return {
     version,
+    serves,
     said: ran +
       trailing +
+      (serves
+        ? `\nserves ${serves}/ — its front page is ${serves}/index.html; ` +
+          'files outside it are source only, not on the web'
+        : '') +
       (closed
         ? `\nclosed ${closed} ${
           closed == 1 ? 'break' : 'breaks'
@@ -1433,7 +1439,9 @@ let released = async (
     confirm?: boolean
     expectedVersion?: number
   } = {},
-): Promise<{ version: number; said: string; review?: DeployReview }> => {
+): Promise<
+  { version: number; said: string; serves?: string; review?: DeployReview }
+> => {
   let c = ctx.clock ?? clock()
   let standing = await waiting(ctx.dir, space, app, who)
   if (expectedVersion != null && standing.version != expectedVersion) {
@@ -2014,6 +2022,30 @@ export let stored = (path: string, bytes: Uint8Array, sha: string) =>
     ? ', drawn as the 512×512 icon.png a home screen shows, unless the app ' +
       'has an icon.png of its own'
     : '')
+
+/**
+ * Where a file answers once a write has landed, in a sentence: its address,
+ * or that it is source only, when the app's wrangler config serves a folder
+ * (files.ts `servedAt`). Read after the write, so a wrangler file written in
+ * the same call counts.
+ */
+let whereAfter = async (ctx: Ctx, space: Space, app: App) => {
+  let now = await ctx.dir.app(space, app.slug) ?? app
+  let source = prefixOf(space, now)
+  let view = draftFiles(r2Objects(ctx.env.BLOBS), now.draft, source)
+  let root = working(now, source)
+  let { config } = await configured((p) => view.read(`${root}/${p}`))
+  let at = url(space, app, ctx.env)
+  let dir = config.assets?.directory
+  let where = (path: string) => {
+    if (!dir) return `${at}${path}`
+    let addr = servedAt(config, path)
+    return addr == null
+      ? `source only, not on the web (the app serves ${dir}/)`
+      : `${at}${addr}`
+  }
+  return Object.assign(where, { dir })
+}
 
 // A declaration file's verdict, in its own language: a `.json` through
 // JSON.parse, whose error carries the position — "at position 45971" names the
@@ -2996,6 +3028,11 @@ let OURS: Row[] = [
         let paths = Object.keys(files).sort()
         let unreleased = !live || !same(live.files, files)
         let version = app.version ?? 0
+        let { config } = await configured((p) => view.read(prefix + p))
+        let dir = config.assets?.directory
+        let source = dir
+          ? paths.filter((path) => servedAt(config, path) == null)
+          : []
         // Every fact in the value said in the words too: claude.ai's model
         // reads only the words, and app_deploy's base is this version.
         return {
@@ -3003,6 +3040,12 @@ let OURS: Row[] = [
             ...paths.length
               ? paths.map((path) => `${path} — sha256 ${files[path]}`)
               : ['(no files)'],
+            ...dir
+              ? [
+                `The app serves ${dir}/; these are source only, not on the ` +
+                `web: ${source.join(', ') || '(none)'}`,
+              ]
+              : [],
             !live
               ? 'Nothing is released yet.'
               : unreleased
@@ -3015,6 +3058,7 @@ let OURS: Row[] = [
             files: paths.map((path) => ({ path, sha: files[path] })),
             unreleased,
             version,
+            ...dir && { serves: dir, sourceOnly: source },
           },
         }
       }
@@ -3171,9 +3215,10 @@ let OURS: Row[] = [
           )
         }
         let [p] = await wrote(ctx.env, space, app, who, [{ path, bytes }], c)
+        let where = await whereAfter(ctx, space, app)
         return {
           text: `put ${p} back to what it was until ${want.at} → ` +
-            `${url(space, app, ctx.env)}${p} — ${
+            `${where(p)} — ${
               stored(p, bytes, want.sha)
             }. This is itself a write, so op history now has the bytes it ` +
             'replaced. Staged for app_deploy.',
@@ -3209,8 +3254,9 @@ let OURS: Row[] = [
           [{ path, bytes: now }],
           c,
         )
+        let where = await whereAfter(ctx, space, app)
         return {
-          text: `patched ${p} → ${url(space, app, ctx.env)}${p} — ${
+          text: `patched ${p} → ${where(p)} — ${
             stored(p, now, await sha256(now))
           }; staged for app_deploy`,
           space,
@@ -3225,14 +3271,15 @@ let OURS: Row[] = [
           bytes: got.bytes,
         }], c)
         let sha = await sha256(got.bytes)
+        let where = await whereAfter(ctx, space, app)
         return {
           // The integrity hash so a page that goes on loading this from a
           // CDN can be pinned to the very bytes we got; the mime is what the
           // response claimed, and mimeOf(path) is what the app will serve.
           text:
-            `fetched ${args.url} → ${url(space, app, ctx.env)}${p} — ${
-              stored(p, got.bytes, sha)
-            }${got.mime ? `, ${got.mime}` : ''}, integrity sha256-${sri(sha)}` +
+            `fetched ${args.url} → ${where(p)} — ${stored(p, got.bytes, sha)}${
+              got.mime ? `, ${got.mime}` : ''
+            }, integrity sha256-${sri(sha)}` +
             (mimeOf(p) == 'application/octet-stream'
               ? ' — the app serves it as application/octet-stream; give the ' +
                 'path a known extension to serve it as anything else'
@@ -3253,13 +3300,16 @@ let OURS: Row[] = [
           stored(paths[i], f.bytes, await sha256(f.bytes))
         ),
       )
+      let where = await whereAfter(ctx, space, app)
       return {
         text: paths.length == 1
-          ? `wrote ${paths[0]} → ${url(space, app, ctx.env)}${paths[0]} — ${
+          ? `wrote ${paths[0]} → ${where(paths[0])} — ${
             each[0]
           }; staged for app_deploy`
           : `wrote ${paths.length} files → ${url(space, app, ctx.env)}:\n` +
-            paths.map((p, i) => `${p} — ${each[i]}`).join('\n') +
+            paths.map((p, i) =>
+              `${p}${where.dir ? ` → ${where(p)}` : ''} — ${each[i]}`
+            ).join('\n') +
             '\nStaged for app_deploy.',
         space,
       }
@@ -3407,7 +3457,7 @@ let OURS: Row[] = [
       if (args.confirm != null && typeof args.confirm != 'boolean') {
         throw refuse('invalid', 'confirm must be a boolean')
       }
-      let { version, said, review } = await released(
+      let { version, said, serves, review } = await released(
         ctx,
         space,
         app,
@@ -3438,7 +3488,7 @@ let OURS: Row[] = [
           }` +
           said,
         space,
-        value: { deployed: true, version },
+        value: { deployed: true, version, ...serves && { serves } },
       }
     },
   },

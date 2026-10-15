@@ -145,6 +145,22 @@ export let configOf = (blobs: Objects, prefix: string): Promise<Config> => {
 export let rootOf = (prefix: string, config: Config) =>
   config.assets?.directory ? `${prefix}/${config.assets.directory}` : prefix
 
+/**
+ * The address under the app a file answers at, or null when it is source only
+ * (outside the served folder). A folder's index.html answers at the folder.
+ */
+///
+/// servedAt({ assets: { directory: 'dist' } }, 'dist/about/index.html') -> 'about/'
+/// servedAt({ assets: { directory: 'dist' } }, 'dist/app.js') -> 'app.js'
+/// servedAt({ assets: { directory: 'dist' } }, 'src/main.ts') -> null
+/// servedAt({}, 'index.html') -> ''
+export let servedAt = (config: Config, path: string) => {
+  let root = rootOf('', config)
+  let inside = `/${path}`
+  if (!inside.startsWith(`${root}/`)) return null
+  return inside.slice(root.length + 1).replace(/(^|\/)index\.html$/, '$1')
+}
+
 type Found = { path: string; file: Loaded; status: 200 | 404 }
 
 /**
