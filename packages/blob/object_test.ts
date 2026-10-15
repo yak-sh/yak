@@ -10,11 +10,10 @@ import { type Bucket, bucketObjects, objectBlobs, patient } from './object.ts'
 // The stand-in a test runs against: the same methods over a Map, because no
 // test should need a network or a cloud account to prove the wiring. A listing
 // pages two keys at a time, so a store that stopped at the first page shows.
-let fake = (): Bucket & { keys: () => string[]; deletes: number } => {
+let fake = (): Bucket & { keys: () => string[] } => {
   let held = new Map<string, Uint8Array>()
   return {
     keys: () => [...held.keys()],
-    deletes: 0,
     head: (key) => {
       let bytes = held.get(key)
       return Promise.resolve(
@@ -47,8 +46,7 @@ let fake = (): Bucket & { keys: () => string[]; deletes: number } => {
       held.set(key, new Uint8Array(value as ArrayBuffer))
       return Promise.resolve(null)
     },
-    delete(keys) {
-      this.deletes++
+    delete: (keys) => {
       for (let key of [keys].flat()) held.delete(key)
       return Promise.resolve()
     },
@@ -126,22 +124,31 @@ test('a store keyed by name reads, deletes and lists every page', async () => {
 })
 
 test('a store keyed by name deletes a thousand keys in one call', async () => {
+  // The keys '0' to '2000': more than two calls' worth.
+  let keys = Object.keys(Array(2001).fill(0)), calls: string[][] = []
   let bucket = fake()
-  let files = bucketObjects(bucket)
-  let keys = Array.from({ length: 2001 }, (_, i) => `k/${i}`)
-  for (let key of keys) await files.put(key, encode(key))
-  await files.delete(keys)
-  assertEquals([bucket.keys(), bucket.deletes], [[], 3])
+  bucket.delete = (batch) => Promise.resolve(void calls.push(batch as string[]))
+  await bucketObjects(bucket).delete(keys)
+  assertEquals(calls.map((call) => [call[0], call.at(-1), call.length]), [
+    ['0', '999', 1000],
+    ['1000', '1999', 1000],
+    ['2000', '2000', 1],
+  ])
 })
 
 test('a busy bucket is asked again, and only while busy', async () => {
+  let waits: number[] = []
   let asked = (answers: unknown[]) => {
     let n = 0
     let call = () =>
       n < answers.length ? Promise.reject(answers[n++]) : Promise.resolve(n)
-    return () => patient(call, 3, 0)
+    return () =>
+      patient(call, 3, 100, (ms) => Promise.resolve(void waits.push(ms)))
   }
   assertEquals(await asked([{ code: 10058 }, { code: 10001 }])(), 2)
+  // Each wait doubles from `wait`, jittered by up to half either way.
+  let scaled = waits.map((ms, i) => ms / 100 / 2 ** i)
+  assertEquals(scaled.map((x) => x >= 0.5 && x < 1.5), [true, true])
   await assertRejects(
     asked([{ code: 10058 }, { code: 10058 }, 'third']),
     'third',

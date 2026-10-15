@@ -16,6 +16,7 @@
 // caller chooses the key, and it also deletes and lists, since files are
 // replaced and swept where content-addressed bytes are not.
 
+import { sleep } from '@yaks/fp'
 import type { Blobs } from './store.ts'
 
 /**
@@ -69,31 +70,34 @@ let busy = (e: unknown) => BUSY.includes(Object(e).code)
  * of uploads to one space is enough for R2 to refuse some of them. Each wait
  * doubles from `wait` milliseconds, jittered so calls that collided once do not
  * collide again, and after `tries` the bucket's last answer is thrown. Any
- * other refusal is thrown at once. Every call the stores below make to a bucket
- * goes through it; a stream is read once, so a caller putting one cannot.
+ * other refusal is thrown at once. `pause` spends each wait, a timer unless the
+ * caller brings its own. Every call the stores below make to a bucket goes
+ * through it; a stream is read once, so a caller putting one cannot.
  *
  * ```ts
  * import { patient } from '@yaks/blob'
  * import { equal } from '@yaks/testing'
  *
- * let calls = 0
+ * let calls = 0, waits: number[] = []
  * let list = () =>
  *   ++calls < 3 ? Promise.reject({ code: 10058 }) : Promise.resolve(['a/x'])
- * equal(await patient(list, 5, 0), ['a/x'])
+ * let pause = (ms: number) => Promise.resolve(void waits.push(ms))
+ * equal(await patient(list, 5, 100, pause), ['a/x'])
+ * equal(waits.length, 2)
  * ```
  */
 export let patient = async <T>(
   call: () => Promise<T>,
   tries = 5,
   wait = 100,
+  pause: (ms: number) => Promise<void> = sleep,
 ): Promise<T> => {
   for (let i = 1;; i++) {
     try {
       return await call()
     } catch (e) {
       if (i >= tries || !busy(e)) throw e
-      let ms = wait * 2 ** (i - 1) * (0.5 + Math.random())
-      await new Promise((ok) => setTimeout(ok, ms))
+      await pause(wait * 2 ** (i - 1) * (0.5 + Math.random()))
     }
   }
 }

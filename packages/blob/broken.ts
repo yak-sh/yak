@@ -57,51 +57,80 @@ let ADAM7 = [
   [0, 1, 1, 2],
 ]
 
-// The scanlines the inflated data must hold, pass by pass: how many, and each
-// one's length, a filter byte then its pixels.
-let lines = (w: number, h: number, bits: number, interlaced: boolean) =>
-  (interlaced ? ADAM7 : [[0, 0, 1, 1]]).flatMap(([x, y, dx, dy]) => {
+/** What is wrong with the pixel data read so far, or `undefined`. */
+export type Scan = (chunk?: Uint8Array) => string | undefined
+
+/**
+ * A reader of a picture's inflated pixel data, a chunk at a time, held to the
+ * scanlines a header of `w` × `h` at `bits` per pixel needs (in Adam7's seven
+ * passes when `interlaced`): each scanline's filter byte read on the way past,
+ * and the total held to what the header promised. It says what is wrong as
+ * soon as a chunk shows it, and called with no chunk, whether the data ended
+ * short.
+ */
+export let scanlines = (
+  w: number,
+  h: number,
+  bits: number,
+  interlaced: boolean,
+): Scan => {
+  // How many scanlines each pass holds, and each one's length: a filter byte
+  // then its pixels.
+  let rows = (interlaced ? ADAM7 : [[0, 0, 1, 1]]).flatMap(([x, y, dx, dy]) => {
     let pw = Math.ceil((w - x) / dx), ph = Math.ceil((h - y) / dy)
     return pw > 0 && ph > 0
       ? [{ n: ph, len: 1 + Math.ceil(pw * bits / 8) }]
       : []
   })
-
-// The pixel data inflated, each scanline's filter byte read on the way past,
-// and the total held to what the header promised.
-let inflates = async (
-  idat: Uint8Array[],
-  rows: { n: number; len: number }[],
-) => {
   let need = rows.reduce((t, r) => t + r.n * r.len, 0)
   let got = 0, pass = 0, row = 0, at = 0
-  let stream = new Blob(idat as BlobPart[]).stream()
-    .pipeThrough(new DecompressionStream('deflate'))
+  return (chunk) => {
+    if (!chunk) {
+      return got < need
+        ? `its pixel data is ${got} bytes where its header needs ${need}`
+        : undefined
+    }
+    if (got + chunk.length > need) {
+      return `its pixel data inflates past the ${need} bytes its header needs`
+    }
+    got += chunk.length
+    for (let i = 0; i < chunk.length;) {
+      if (at == 0 && chunk[i] > 4) {
+        return `a scanline names filter ${chunk[i]}, and PNG has 0 to 4`
+      }
+      let step = Math.min(rows[pass].len - at, chunk.length - i)
+      i += step
+      at += step
+      if (at == rows[pass].len) {
+        at = 0
+        if (++row == rows[pass].n) row = 0, pass++
+      }
+    }
+  }
+}
+
+// The pixel data inflated into `scan`, which is handed the end as well. The
+// chunks are written to the inflater and its output read by hand: a Blob's
+// stream piped through it and iterated costs a small picture four times as
+// long. A refusal reaches the reader, so the writes' own are dropped, and
+// stopping early cancels it.
+let inflates = async (idat: Uint8Array[], scan: Scan) => {
+  let inflater = new DecompressionStream('deflate')
+  let writer = inflater.writable.getWriter()
+  for (let data of idat) writer.write(data as BufferSource).catch(() => {})
+  writer.close().catch(() => {})
+  let reader = inflater.readable.getReader()
   try {
-    for await (let chunk of stream) {
-      if (got + chunk.length > need) {
-        return `its pixel data inflates past the ${need} bytes its header needs`
-      }
-      got += chunk.length
-      for (let i = 0; i < chunk.length;) {
-        if (at == 0 && chunk[i] > 4) {
-          return `a scanline names filter ${chunk[i]}, and PNG has 0 to 4`
-        }
-        let step = Math.min(rows[pass].len - at, chunk.length - i)
-        i += step
-        at += step
-        if (at == rows[pass].len) {
-          at = 0
-          if (++row == rows[pass].n) row = 0, pass++
-        }
-      }
+    for (;;) {
+      let read = await reader.read()
+      let wrong = scan(read.value)
+      if (wrong || read.done) return wrong
     }
   } catch {
     return 'its pixel data does not inflate'
+  } finally {
+    reader.cancel().catch(() => {})
   }
-  return got < need
-    ? `its pixel data is ${got} bytes where its header needs ${need}`
-    : undefined
 }
 
 let png = async (b: Uint8Array) => {
@@ -133,7 +162,10 @@ let png = async (b: Uint8Array) => {
   if (method || filter || interlace > 1) return 'its header names no method'
   if (colour == 3 && !palette) return 'it is indexed and has no palette'
   if (!idat.length) return 'it has no IDAT chunk'
-  return await inflates(idat, lines(w, h, channels * depth, interlace == 1))
+  return await inflates(
+    idat,
+    scanlines(w, h, channels * depth, interlace == 1),
+  )
 }
 
 let svg = (b: Uint8Array) => {
