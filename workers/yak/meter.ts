@@ -344,18 +344,25 @@ export let added = (
   return out
 }
 
+/** Whether a space's hourly reading is past its monthly request units. It
+ * stays past until the UTC month turns or the plan changes; an absent
+ * reading is not. */
+export let overVisits = (space: Space, now = new Date()) => {
+  let limit = ceilings(space.tier, space.slug)
+  return !!limit && requestUnits(spent(space, now)) >= limit.requests
+}
+
 /** The serving quota uses the existing hourly reading, not a per-hit write.
- * Keep refusing an over-limit reading until the UTC month turns or the plan
- * changes; an absent reading permits serving. Management stays outside this
- * gate, so an owner can still change plans or work on their apps. */
+ * Management stays outside this gate, so an owner can still change plans or
+ * work on their apps. */
 export let refusedVisit = (
   space: Space,
   req: Request,
   env: Host = {},
   now = new Date(),
 ): Response | null => {
-  let limit = ceilings(space.tier, space.slug)
-  if (!limit || requestUnits(spent(space, now)) < limit.requests) return null
+  if (!overVisits(space, now)) return null
+  let limit = ceilings(space.tier, space.slug)!
   let reset = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
   )

@@ -131,6 +131,7 @@ import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { APP_JSON, type Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
+import { asked, keep, passed } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
 import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
@@ -139,7 +140,15 @@ import { full, fullFiles } from './usage.ts'
 import { free, refusedVisit } from './meter.ts'
 import { scheduleUse } from './used.ts'
 import { modifying, sha256 } from './versions.ts'
-import { DAYS, NOT_ON, type Stats, stats, statsOf, viewed } from './views.ts'
+import {
+  DAYS,
+  NOT_ON,
+  seen,
+  type Stats,
+  stats,
+  statsOf,
+  viewed,
+} from './views.ts'
 import { own as connection } from './connections.ts'
 import { envDoor, fetchDoor } from './outbound.ts'
 import { modelRun, recovery } from './models.ts'
@@ -2407,6 +2416,12 @@ let saved = async (
 // `home` is the app wearing `home`, globs and all, as routing read it beside
 // the addressed app (directory.ts `routing`), and null for the spaces that
 // have no front page at all.
+// Whether the home app's router asked to see this path first (`home.first`),
+// which it never may for a platform path.
+let claims = (home: App | null, path: string): home is App =>
+  !PLATFORM_PATHS.some((p) => covers(p, path)) &&
+  !!home?.first.some((g) => covers(g, path))
+
 let firstly = async (
   env: Env,
   space: Space,
@@ -2415,9 +2430,7 @@ let firstly = async (
   who: Who,
   c: Clock,
 ) => {
-  let path = new URL(req.url).pathname
-  if (PLATFORM_PATHS.some((p) => covers(p, path))) return null
-  if (!home || !home.first.some((g) => covers(g, path))) return null
+  if (!claims(home, new URL(req.url).pathname)) return null
   // The app comes back beside the answer because the answer is the HOME app's
   // and the address is another app's: a page view is counted against whoever
   // actually served it (views.ts).
@@ -2427,6 +2440,9 @@ let firstly = async (
   }
   return page && { page, app: home }
 }
+
+/** An address as Site keeps it (page-cache.ts): served to nobody, fresh. */
+export let edged = (req: Request, env: Env) => served(req, env, clock(), true)
 
 export let fetch = (req: Request, env: Env): Promise<Response> => {
   let c = clock()
@@ -2488,7 +2504,17 @@ export let fetch = (req: Request, env: Env): Promise<Response> => {
 // (`firstly` below). Empty for almost every space, and it can only ever move
 // a path from the app that owns it to the home app — never off the platform's
 // own (rung 1), and never onto a space that asked for nothing.
-let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
+//
+// `edge` is the same order served for Site's cache (page-cache.ts): an
+// anonymous visitor, the directory read fresh, nothing counted, and every
+// answer that is not the same page for everyone passed back unfinished,
+// before any app's own code runs for it.
+let served = async (
+  req: Request,
+  env: Env,
+  c: Clock,
+  edge = false,
+): Promise<Response> => {
   let url = new URL(req.url)
   let r = route(hostOf(req, env), url.pathname, env)
   if (r.space == null) {
@@ -2496,7 +2522,13 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
       ? manage(req, env)
       : nothingAt(url.pathname, env)
   }
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  // A page any visitor could be sent is answered from Site's cache, with no
+  // directory read at all.
+  if (!edge) {
+    let page = await asked(req, env, c)
+    if (page) return page
+  }
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), edge)
   let space = await c.time('space', () => dir.space(r.space!))
   // Not a space here — but it may be where one used to be (T-34658): a rename
   // moves `space.slug` and keeps the old subdomain pointing at it, whole path
@@ -2675,6 +2707,12 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // the page afresh and never shows a token in the address bar. On an app
   // that is not sandboxed the segment names nothing.
   let walls = sandboxed(app)
+  // Site keeps a public app's own files and nothing else: a private app's
+  // pages are its members', a sandboxed page carries its visitor's token, and
+  // an app's worker may answer each visitor differently.
+  if (edge && (walls || app.access != 'public' || app.worker !== '')) {
+    return passed()
+  }
   let paper = tokenOf(path)
   if (paper) {
     let reads = req.method == 'GET' || req.method == 'HEAD'
@@ -2764,6 +2802,7 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // Nor for a sandboxed page's own request: its token is its app's alone,
   // and the router would be acting as the person who holds it.
   if (!front && !bearing(req) && !paper && !webPath(path)) {
+    if (edge && claims(home, url.pathname)) return passed()
     let early = await firstly(env, space, home, req, who, c)
     // The answer is the home app's, so it reports as the home app — and is
     // counted as the home app's page view — at the bare hostname, which is
@@ -2930,8 +2969,10 @@ let served = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   // nothing answers is nothing, not a listing.
   if (page.status == 404 && url.pathname == '/') {
     await page.body?.cancel()
-    return await index(req, env, dir, space)
+    return edge ? passed() : await index(req, env, dir, space)
   }
+  // Site's page is counted by the gateway that sends it (page-cache.ts).
+  if (edge) return keep(reporting(page, req, at), space, app)
   // Count the page served (views.ts, T-34496). Last, once, and only for
   // what an app answered: the `/api/` doors returned above, a file that is not
   // HTML is not a page, and the platform's own pages — the space index, the
@@ -3004,12 +3045,3 @@ let storing = async (
   )
   return stored(at, keys, true)
 }
-
-// One page view's identity: which app it was a page of, and the address it was
-// served under. The eid is the data point's one index, so every query groups
-// by the app and a rename never loses a day of history.
-let seen = (space: Space, app: App) => ({
-  app: app.eid,
-  space: space.slug,
-  slug: app.slug,
-})
