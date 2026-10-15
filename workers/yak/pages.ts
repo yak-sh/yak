@@ -856,9 +856,10 @@ let sharedWith = (at: DeskPage, env: Host) =>
     }</div>`
     : ''
 
-// The person's apps, then what was shared with them; with none of their own,
-// what was shared comes first, above the way to make one.
-let library = (at: DeskPage, env: Host) => {
+/** The apps view: the person's apps, each marked where it broke with what to
+ * ask about it, then what was shared with them; with none of their own, what
+ * was shared comes first, above the way to make one. */
+export let library = (at: DeskPage, env: Host) => {
   let broken = at.apps.filter((a) => a.errors?.length)
   return `${connectCard(at)}${
     at.apps.length

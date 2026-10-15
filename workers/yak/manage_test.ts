@@ -3,20 +3,25 @@
 // use the browser's cookie and form paths, including the boundaries that keep
 // another person, and another page, from changing this account.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { parseHTML } from 'linkedom'
+import {
+  assert,
+  assertEquals,
+  assertMatch,
+  assertStringIncludes,
+} from '@std/assert'
 import {
   client,
   connector,
   kernel,
   meta,
-  seed,
   sessionAt,
   signIn,
   stripeKey,
-  unique,
 } from './probe.ts'
 import { MANAGE, managePath } from './route.ts'
+import type { App } from './directory.ts'
+import { library } from './pages.ts'
+import { folds, type Plain, plain, type Seen } from './unseen.ts'
 
 test('the dashboard is at the apex, whatever serves the space', async () => {
   let k = await kernel()
@@ -220,57 +225,45 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
   }
 })
 
-test('an app that throws is marked on the dashboard, with what to ask', async () => {
-  let k = await kernel()
-  try {
-    let space = unique('fixme')
-    let { cookie } = await seed(k, [{ slug: space, apps: ['chores', 'notes'] }])
-    let agent = connector(k, cookie)
-    let app = { space, app: 'chores' }
-    await agent.tool('app_files', {
-      ...app,
-      files: [{ path: 'index.html', content: '<h1>Chores</h1>' }],
-    })
-    await agent.tool('app_deploy', app)
-    for (let i = 0; i < 2; i++) {
-      await (await k.at(`${space}.yaks.app`, '/chores/api/report', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          message: 'chores is not a function',
-          url: `https://${space}.yaks.app/chores/`,
-        }),
-      })).body?.cancel()
-    }
-    let page = async () =>
-      parseHTML(
-        await (await k.at('yaks.app', managePath('apps', space), {
-          headers: { cookie },
-        })).text(),
-      ).document
-
-    let doc = await page()
-    let marks = [...doc.querySelectorAll('.Apps_Tag-warn')]
-    assertEquals(marks.map((m) => m.textContent), ['1 error'])
-    assertEquals(
-      marks[0].closest('.Apps_Item')?.querySelector('strong')?.textContent,
-      'chores',
-    )
-    let fix = doc.querySelector(marks[0].getAttribute('href')!)!
-    assertStringIncludes(fix.textContent!, 'chores is not a function')
-    assertStringIncludes(fix.textContent!, '2 times')
-    assertEquals(
-      fix.querySelector('.Pick')?.textContent,
-      'Fix the errors in my chores app on yaks.app',
+test('an app that throws is marked on the dashboard, with what to ask', () => {
+  // Two reports of one throw, as the tracker holds them, are one break.
+  let chores = { eid: 'a1', slug: 'chores' } as App
+  let report = (eid: string): Seen => ({
+    app: chores,
+    hit: {
+      kind: 'error',
+      entity: { eid },
+      error: {
+        message: 'chores is not a function',
+        at: `2026-10-14T00:0${eid}`,
+      },
+    },
+  })
+  let page = (errors: Plain[]) =>
+    library(
+      {
+        space: 'fixme',
+        apps: [
+          { eid: 'a1', slug: 'chores', title: 'chores', errors },
+          { eid: 'a2', slug: 'notes', title: 'notes' },
+        ],
+      } as Parameters<typeof library>[0],
+      {},
     )
 
-    // Fixed, as the assistant says it: the mark goes with it.
-    let id = (await agent.tool('app_errors', app)).split(' ')[1]
-    await agent.tool('app_errors', { ...app, fixed: [id] })
-    assertEquals((await page()).querySelector('.Apps_Tag-warn, .Fix'), null)
-  } finally {
-    await k.stop()
-  }
+  let html = page(folds([report('1'), report('2')]).map(plain))
+  // One mark, on the app that broke, linking to what to do about it.
+  assertEquals(html.match(/Apps_Tag-warn[^>]*>[^<]*/g)?.length, 1)
+  assertMatch(
+    html,
+    /<strong>chores<\/strong>.*?<a class="Apps_Tag Apps_Tag-warn" href="#fix-chores">1 error<\/a>/s,
+  )
+  let fix = html.slice(html.indexOf('id="fix-chores"'))
+  assertStringIncludes(fix, 'chores is not a function')
+  assertStringIncludes(fix, '2 times')
+  assertStringIncludes(fix, 'Fix the errors in my chores app on yaks.app')
+  // Fixed, as the assistant says it: nothing is left to mark.
+  assert(!/Apps_Tag-warn|class="Card Fix"/.test(page([])))
 })
 
 test(
