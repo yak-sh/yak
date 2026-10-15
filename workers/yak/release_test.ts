@@ -3,8 +3,9 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
-import { prepare, releaseFiles, staged } from './release.ts'
+import { prepare, promoted, releaseFiles, staged } from './release.ts'
 import { encode, indexOf } from './release_index.ts'
+import type { App, Directory } from './directory.ts'
 import { addressed, sha256 } from './versions.ts'
 
 let memory = () => {
@@ -172,4 +173,40 @@ test('copying a legacy release leaves its source index untouched', async () => {
     text(await releaseFiles(files).read(`${copy}/index.html`)),
     'original',
   )
+})
+
+test('an app served in place is promoted to a release once', async () => {
+  let { files, held } = memory()
+  let stamped: unknown[] = []
+  let dir = {
+    stamp: (m: { entities: unknown[] }) =>
+      Promise.resolve(void stamped.push(...m.entities)),
+  } as unknown as Directory
+  let app = { eid: 'e1', slug: 'garden', version: 7 } as App
+  let prefix = 'yourname/garden/'
+  await files.put(`${prefix}index.html`, bytes('page'))
+  await files.put(`${prefix}esbuild/app.js`, bytes('compiled'))
+  await files.put(`${prefix}history/index.html.json`, bytes('[]'))
+  await files.put(`${prefix}blobs/${'0'.repeat(64)}`, bytes('upload'))
+  await files.put('yourname/.declarations/e1/legacy/7.json', bytes('{}'))
+  assertEquals(await promoted(files, dir, prefix, app), 2)
+  let source = (stamped[0] as { app: { source: string } }).app.source
+  assertEquals(source.startsWith('yourname/.releases/e1/'), true)
+  let release = source.split('/').pop()
+  assertEquals(
+    text(await files.read(`yourname/.declarations/e1/${release}/7.json`)),
+    '{}',
+  )
+  let served = releaseFiles(files)
+  assertEquals(text(await served.read(`${source}/index.html`)), 'page')
+  assertEquals(text(await served.read(`${source}/esbuild/app.js`)), 'compiled')
+  assertEquals(await served.list(`${source}/`), [
+    `${source}/esbuild/app.js`,
+    `${source}/index.html`,
+  ])
+  assertEquals(held.has(addressed(await sha256(bytes('page')))), true)
+  // An app with a source, or with nothing in place, is left alone.
+  assertEquals(await promoted(files, dir, prefix, { ...app, source }), 0)
+  assertEquals(await promoted(files, dir, 'yourname/empty/', app), 0)
+  assertEquals(stamped.length, 1)
 })

@@ -58,7 +58,9 @@
 // leaves a space still named but emptied, which asking again finishes; the
 // other order would leave a billable custom hostname and a bucket full of
 // bytes with nothing left pointing at them.
-import { r2Objects } from './lib/objects.ts'
+import { r2Objects, r2RawObjects } from './lib/objects.ts'
+import { promoted } from './release.ts'
+import { caught } from './defects.ts'
 import { receiptPrefix } from './blob-key.ts'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
@@ -788,6 +790,19 @@ export let collected = async (env: Env, now = new Date()) => {
   // whole bucket at once, and rather than only on a deploy because an app that
   // stopped deploying would then keep its pins forever.
   let blobs = r2Objects(env.BLOBS)
+  // An app still served in place from its own prefix gets a release first
+  // (release.ts `promoted`), so its next edit and deploy name shas. One app
+  // that cannot be promoted is reported and left for tomorrow's run.
+  let promotions = 0
+  let raw = r2RawObjects(env.BLOBS)
+  for (let { prefix, app } of standing) {
+    if (prefix == `${META.space}/${META.app}/`) continue
+    try {
+      if (await promoted(raw, dir, prefix, app)) promotions++
+    } catch (e) {
+      caught(e, { request: 'promote', app: app.eid })
+    }
+  }
   // First the pins the old per-app key still holds, carried into that one key
   // space (versions.ts `moved`) — before the mark, so nothing is marked out of
   // a key space the sweep does not read.
@@ -802,6 +817,7 @@ export let collected = async (env: Env, now = new Date()) => {
   }
   let unpinned = await pruned(dir, blobs, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
+  if (promotions) console.log(`yak-trash: ${promotions} apps given a release`)
   if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
   if (notes) console.log(`yak-trash: ${notes} AGENTS.md renamed to ${NOTES}`)
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)

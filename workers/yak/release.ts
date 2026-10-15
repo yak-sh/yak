@@ -3,8 +3,18 @@
 // app row selects it. Keys are relative to the space so a space rename carries
 // them without rewriting the manifest.
 import type { Objects } from '@yaks/blob'
-import { addressed, type Files, own, pins, sha256 } from './versions.ts'
+import { token } from '@yaks/graph/sha256'
+import {
+  addressed,
+  BUILT,
+  type Files,
+  own,
+  pins,
+  releaseOf,
+  sha256,
+} from './versions.ts'
 import { encode, type Index, indexOf, META } from './release_index.ts'
+import type { App, Directory } from './directory.ts'
 
 let release = (key: string) =>
   /^([^/]+)\/\.releases\/[^/]+\/[^/]+\//.exec(key)?.[0]
@@ -71,6 +81,76 @@ let pinned = async (raw: Objects, source: string): Promise<Index> => {
   )
   return index
 }
+// How many files one pass holds in hand at once: the bucket answers six calls
+// at a time per request anyway, and an app's whole file set read at once could
+// outgrow the isolate's memory.
+let BATCH = 6
+
+/**
+ * An app still served in place from its own prefix (`<space>/<app>/`, made
+ * before a release had an index) given a release like any other: each file
+ * named by the SHA-256 of its bytes and pinned under it once, the index
+ * written, and the app's source pointed at it. Its pages answer the same bytes
+ * as before, and its next edit and deploy name shas rather than copying them.
+ * The prefix's own keys stay until a later pass lets them go.
+ *
+ * An app with a source, a draft or a release in flight is left alone, and so
+ * is one that moved while its files were read: the source only moves from
+ * nothing, guarded, so a second run or a racing edit changes nothing. Answers
+ * how many files the release names.
+ */
+export let promoted = async (
+  raw: Objects,
+  dir: Directory,
+  prefix: string,
+  app: App,
+): Promise<number> => {
+  if (app.source || app.draft || app.fence) return 0
+  let paths = (await raw.list(prefix)).map((key) => key.slice(prefix.length))
+    .filter((path) => own([path]).length || path.startsWith(BUILT))
+  if (!paths.length) return 0
+  let pin = pins(raw, prefix)
+  let index: Index = {}
+  for (let at = 0; at < paths.length; at += BATCH) {
+    await Promise.all(
+      paths.slice(at, at + BATCH).map(async (path) => {
+        let bytes = await raw.get(prefix + path)
+        let sha = await sha256(bytes)
+        await pin.put(sha, bytes)
+        index[path] = { key: addressed(sha), sha }
+      }),
+    )
+  }
+  let space = prefix.slice(0, prefix.indexOf('/'))
+  let source = releaseOf({ slug: space }, app)
+  await raw.put(source + META, encode(index))
+  // An app's declarations are kept under its source's name (declaration.ts),
+  // so each one it has goes under the new name before the source moves.
+  let named = `${space}/.declarations/${app.eid}/`
+  let declared = await raw.list(`${named}legacy/`)
+  await Promise.all(declared.map(async (key) =>
+    raw.put(
+      `${named}${source.split('/').pop()}/${key.split('/').pop()}`,
+      await raw.get(key),
+    )
+  ))
+  await dir.stamp({
+    entities: [{
+      entity: { eid: app.eid },
+      app: { source },
+      $was: {
+        app: {
+          source: token(null),
+          draft: token(null),
+          fence: token(null),
+          version: token(app.version),
+        },
+      },
+    }],
+  })
+  return paths.length
+}
+
 export let prepare = async (raw: Objects, source: string): Promise<Index> => {
   let prior = await indexed(raw, `${source}/`)
   if (complete(prior)) return prior
