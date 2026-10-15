@@ -530,3 +530,20 @@ test('/ws upgrades through the host and serves that socket', async () => {
   }))
   assertEquals(ids(socket.taken()), ['b1'])
 })
+
+test('an upgraded /ws socket answers clock probes with epoch timestamps', async () => {
+  let socket = fake()
+  let handler = api({
+    graph: shopGraph(),
+    upgrade: () => ({ socket, response: new Response(null, { status: 101 }) }),
+  })
+  await handler(ws())
+  let before = Date.now()
+  socket.emit('message', JSON.stringify({ clock: 12.5 }))
+  let [reply] = socket.taken() as unknown as Record<string, unknown>[]
+  assertEquals(Object.keys(reply).sort(), ['clock', 'received', 'sent'])
+  assertEquals(reply.clock, 12.5)
+  assert(typeof reply.received == 'number' && reply.received >= before)
+  assert(typeof reply.sent == 'number' && reply.sent >= reply.received)
+  assert(reply.sent <= Date.now())
+})

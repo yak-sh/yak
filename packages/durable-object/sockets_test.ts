@@ -74,11 +74,15 @@ let wire = () => {
 // hibernation, which is why a woken object can find them again.
 let hibernation = () => {
   let live: Wire[] = []
+  let storage: ReturnType<typeof durable> | undefined
   return {
     live,
     // what an incarnation put off: its timers, which run before it can sleep
     owed: [] as (() => void)[],
-    storage: durable(),
+    // opened by the first socket whose queries outgrow its attachment
+    get storage() {
+      return storage ??= durable()
+    },
     acceptWebSocket: (ws: Wire) => void live.push(ws),
     getWebSockets: () => live,
   }
@@ -140,23 +144,19 @@ test('hibernating clock probes do not recover attachments or touch subscriptions
   assertEquals(ws.sent.length, 1)
 })
 
-test('a hibernating clock reply bypasses a held acknowledgement and preserves it', () => {
+// A socket whose snapshot awaits its ACK, with a commit's frame held behind it.
+let heldFixture = (() => {
+  let ctx = hibernation()
+  let [g, live] = instance(ram(shop), ctx)
   let ws = wire()
-  let g = graph({ storage: ram(shop), vocab: shop })
-  // Small subscriptions stay on the attachment: no SQLite fixture is needed.
-  let storage = new Proxy({}, {
-    get: () => {
-      throw new Error('small clock subscription touched durable storage')
-    },
-  }) as ReturnType<typeof durable>
-  let live = sockets(subscriptions(g), {
-    storage,
-    acceptWebSocket: () => {},
-    getWebSockets: () => [ws],
-  })
+  ctx.live.push(ws)
   send(live, ws, { subscribe: '.kind=product', id: 'p', acks: true })
   let [first] = ws.sent.splice(0)
   g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  return { ws, live, first }
+})()
+test('a hibernating clock reply bypasses a held acknowledgement and preserves it', () => {
+  let { ws, live, first } = heldFixture
   assertEquals(ws.sent, [])
   let writes = ws.writes()
   send(live, ws, { clock: 0 })

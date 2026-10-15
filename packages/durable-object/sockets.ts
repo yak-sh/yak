@@ -128,42 +128,53 @@ export let SETTLE = 1000
 // retain keys alone so their holder's close can still clear them. The 2KB
 // attachment bounds how many keys survive alongside subscriptions.
 let KEYS = 16
-let bytes = new TextEncoder()
 let open = (ws: Wire) => ws.readyState == 1
 
 let copy = <T>(values: Record<string, T> = {}): Record<string, T> =>
   Object.assign(Object.create(null), values)
 
-let fits = (held: Held, subs = held.subs ?? {}) => {
-  // Batched delivery checks each group before sending it; reserve enough
-  // space for its longest individual snapshot as watches are added.
-  let longest: string | undefined
+let bytes = new TextEncoder()
+let size = (value: unknown) => bytes.encode(JSON.stringify(value)).length
+let within = (value: unknown) => size(value) <= CAP
+
+// The watch whose id takes the most room among those sent snapshots (a raw
+// feed, `true`, is sent none).
+let longest = (subs: Record<string, Ask>) => {
+  let most: string | undefined
   let width = 0
   for (let [id, ask] of Object.entries(subs)) {
-    let size = bytes.encode(JSON.stringify(id)).length
-    if (ask !== true && (longest === undefined || size > width)) {
-      longest = id
-      width = size
+    if (ask === true) continue
+    let wide = size(id)
+    if (most === undefined || wide > width) {
+      most = id
+      width = wide
     }
   }
-  // Serial ACKs retain every snapshot already delivered while the next one
-  // waits. Reserve the complete chain so later delivery cannot exceed the cap.
-  let seen = held.acks && !held.frames
-    ? [
-      ...new Set([
-        ...held.seen ?? [],
-        ...Object.entries(subs).filter(([, ask]) => ask !== true).map(([id]) =>
-          id
-        ),
-      ]),
-    ]
-    : longest === undefined
-    ? held.seen
-    : [longest]
-  let full = held.acks ? { ...held, owed: '0'.repeat(36), seen } : held
-  return bytes.encode(JSON.stringify(held)).length <= CAP &&
-    bytes.encode(JSON.stringify(full)).length <= CAP
+  return most
 }
+
+// The snapshots the attachment must have room to remember while an ACK is
+// owed. Serial ACKs retain every snapshot already delivered while the next one
+// waits: reserve the complete chain so later delivery cannot exceed the cap.
+// Batched delivery checks each group before sending it: reserve enough space
+// for its longest individual snapshot as watches are added.
+let owing = (held: Held, subs: Record<string, Ask>) => {
+  if (held.frames) {
+    let most = longest(subs)
+    return most === undefined ? held.seen : [most]
+  }
+  let chain = new Set(held.seen)
+  for (let [id, ask] of Object.entries(subs)) if (ask !== true) chain.add(id)
+  return [...chain]
+}
+
+// Whether the attachment holds this, and with ACKs on, still holds it once a
+// delivery is owed. Every delivered frame asks, so only the reservation the
+// socket's own mode needs is measured.
+let fits = (held: Held, subs = held.subs ?? {}) =>
+  within(held) &&
+  (!held.acks ||
+    within({ ...held, owed: '0'.repeat(36), seen: owing(held, subs) }))
 
 let delivery = (
   ws: Wire,
@@ -474,9 +485,11 @@ export let sockets = (
         for (let id of snapshots(frames)) seen.add(id)
         delivery(ws, token, [...seen], asks(ws))
       },
+      // An ACK that let the next frame out was recorded by `sent` already.
       acked: (owed) => {
-        if (!owed) seen.clear()
-        delivery(ws, owed, [...seen], asks(ws))
+        if (owed) return
+        seen.clear()
+        delivery(ws, undefined, [], asks(ws))
       },
     })
     // A snapshot already on the wire before eviction needs its ACK, not a
