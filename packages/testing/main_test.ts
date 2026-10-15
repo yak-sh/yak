@@ -1,6 +1,6 @@
 // The runner as a person runs it: a process of its own over a directory of
 // test modules and pages, its record of passes kept in the directory.
-import { cleanup, equal, match, ok, test, tick } from './mod.ts'
+import { cleanup, equal, match, ok, test } from './mod.ts'
 import { one, type Times } from './run.ts'
 import { fenceName, fences } from './examples.ts'
 
@@ -201,7 +201,7 @@ test('a test closes what it opened, last first, before its time is taken', async
   let closed: string[] = []
   let ran = await declared(async () => {
     cleanup(() => closed.push('opened first'))
-    await tick()
+    await Promise.resolve()
     cleanup(() => closed.push('opened last'))
   })
   ok(ran.ok)
