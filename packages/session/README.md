@@ -217,55 +217,15 @@ dependency that finished while it ran is told at once.
 the holder is to be woken for, and `unanswered(graph, session)` lists what a
 transcript was told that its last turn or run was not given.
 
-```ts
-import { graph, identityEid } from '@yaks/graph'
-import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
-import { kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { ram } from '@yaks/ram'
-import { sessionDoc, transcript, wake } from '@yaks/session'
-import { taskDoc } from '@yaks/task'
-import { modelDoc } from '@yaks/model'
-import { toolsDoc } from '@yaks/tools/vocab'
-import { loadVocab } from '@yaks/vocab'
-import { equal } from '@yaks/testing'
+When `x` finishes, a transcript parked on `y` which requires `x` receives that
+news and a request for another turn, carrying its previous provider choice. The
+complete executable scenario, including those exact assertions, is beside `wake`
+in [`wake_test.ts`](./wake_test.ts).
 
-const vocab = loadVocab(
-  [kernelDoc, edgeDoc, taskDoc, sessionDoc, toolsDoc, modelDoc],
-  [kernelKeywords, edgeKeywords],
-)
-const p = identityEid('provider', ['claude'])
-const storage = ram(vocab)
-// A transcript parked on y, whose dependency x has finished.
-storage.tx((tx) =>
-  tx.patch([
-    { entity: { eid: p }, provider: { name: 'claude' } },
-    { entity: { eid: 'x' }, task: {}, completed: {} },
-    { entity: { eid: 'y' }, task: {}, claim: { session: 's' } },
-    link('y', 'requires', 'x'),
-    { entity: { eid: 's' }, session: {} },
-    {
-      entity: { eid: 's:in' },
-      entry: { session: 's' },
-      content: { body: 'work y' },
-      using: { provider: p },
-    },
-    {
-      entity: { eid: 's:out' },
-      entry: { session: 's' },
-      content: { body: 'waiting on x' },
-      output: {},
-    },
-  ])
-)
-const g = graph({ storage, vocab })
-await wake(g, 'x') // what session_wake runs
-const [told] = (await transcript(g, 's')).slice(-1)
-// What finished, and the request for a turn.
-equal(told.content, {
-  body: '#x (done), which #y waits on, has finished; nothing it waits on is ' +
-    'open.',
-})
-equal(told.using, { provider: p })
+```ts
+import { wake } from '@yaks/session'
+
+// await wake(graph, 'x') // what session_wake runs when x finishes
 ```
 
 ## Running a transcript

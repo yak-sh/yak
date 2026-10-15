@@ -20,7 +20,8 @@ import { sessionDoc } from './comp.ts'
 import { statusComputed, textOf } from './status.ts'
 import { running } from './run.ts'
 import { runs } from './tools.ts'
-import { rouse } from './wake.ts'
+import { rouse, wake } from './wake.ts'
+import { transcript } from './react.ts'
 import { test } from '@yaks/testing'
 
 let vocab = loadVocab([
@@ -295,4 +296,43 @@ test('a managed run wrapping up keeps the task it is parked on', async () => {
   assertEquals(said.slice(1).map((b) => [b.entity.eid, b.claim]), [
     ['x', null],
   ])
+})
+
+// The README's dependency-wake example: fixture construction lives here, so
+// its budget measures waking and reading the transcript, not loading vocab.
+let exampleRows: Bundle[] = [
+  { entity: { eid: CLI }, provider: { name: 'claude' } },
+  { entity: { eid: 'x' }, task: {}, completed: {} },
+  { entity: { eid: 'y' }, task: {}, claim: { session: 's' } },
+  link('y', 'requires', 'x'),
+  { entity: { eid: 's' }, session: {} },
+  {
+    entity: { eid: 's:in' },
+    entry: { session: 's' },
+    content: { body: 'work y' },
+    using: { provider: CLI },
+  },
+  {
+    entity: { eid: 's:out' },
+    entry: { session: 's' },
+    content: { body: 'waiting on x' },
+    output: {},
+  },
+]
+
+// Each module load owns a fresh graph; neither delivery nor its answer is
+// precomputed. The runner's second load gets another parked transcript.
+let exampleStorage = memory()
+exampleStorage.tx((tx) => tx.patch(exampleRows))
+let exampleGraph = graph({ storage: exampleStorage, vocab })
+
+test('a dependency wake carries completion news and the parked provider choice', async () => {
+  let g = exampleGraph
+  await wake(g, 'x')
+  let told = (await transcript(g, 's')).at(-1)!
+  assertEquals(told.content, {
+    body:
+      '#x (done), which #y waits on, has finished; nothing it waits on is open.',
+  })
+  assertEquals(told.using, { provider: CLI })
 })
