@@ -108,7 +108,7 @@ import { answered } from './meta.ts'
 import { ending } from './billing.ts'
 import { moved, own, type Pinner, SHA, versions } from './versions.ts'
 import { drafting, pruned, served } from './written.ts'
-import { entries, histories, old, oldPaths } from './carried.ts'
+import { entries, histories, old, oldPaths, vacated } from './carried.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -811,10 +811,12 @@ export let collected = async (env: Env, now = new Date()) => {
   for (let { prefix } of standing) carried += await moved(blobs, prefix)
   // Then each app's files in the shape a write keeps them now (carried.ts):
   // a draft kept as its own bytes becomes `written` rows, and so does each
-  // old history log, a bounded number a run. One app that cannot be carried
+  // old history log, a bounded number a run, and the copies an app once
+  // served in place keeps beside its release go. One app that cannot be carried
   // is reported and left for tomorrow's run. The mark below reads each app as
   // it now stands, so a release made here names its files today.
   let logs = 0
+  let vacancies = 0
   let have = new Set(
     Object.keys(await raw.uploaded(SHA)).map((key) => key.slice(SHA.length)),
   )
@@ -824,6 +826,7 @@ export let collected = async (env: Env, now = new Date()) => {
       if (old(one.app)) {
         one.app = (await drafting(raw, dir, one.space, one.app)).app
       }
+      vacancies += await vacated(raw, one.prefix, one.app)
       logs += await histories(
         raw,
         dir,
@@ -842,6 +845,9 @@ export let collected = async (env: Env, now = new Date()) => {
   if (promotions) console.log(`yak-trash: ${promotions} apps given a release`)
   if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
   if (logs) console.log(`yak-trash: ${logs} history logs carried to rows`)
+  if (vacancies) {
+    console.log(`yak-trash: ${vacancies} files served in place let go`)
+  }
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
 }

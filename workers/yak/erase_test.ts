@@ -494,9 +494,17 @@ test(
     )
     assertEquals((await dir.apps(space)).map((a) => a.slug), ['live', 'fresh'])
     // The bytes went with the row, and only that app's.
+    // The one kept serves from the release it was given (release.ts
+    // `promoted`).
     let keys = await r2Objects(env.BLOBS).list('ada/')
     assertEquals(keys.some((k) => k.startsWith('ada/old/')), false)
-    assertEquals(keys.some((k) => k.startsWith('ada/fresh/')), true)
+    let kept = (await dir.app(space, 'fresh'))!
+    assertEquals(
+      new TextDecoder().decode(
+        (await r2Objects(env.BLOBS).read(`${kept.source}/index.html`))!,
+      ),
+      '<h1>fresh</h1>',
+    )
     assertEquals(await r2Objects(env.BLOBS).list(receiptPrefix(old)), [])
     assertEquals(
       await r2Objects(env.BLOBS).has(receiptPrefix(fresh) + 'recording'),

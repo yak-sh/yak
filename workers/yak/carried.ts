@@ -18,6 +18,7 @@ import { token } from '@yaks/graph/sha256'
 import type { App, Directory } from './directory.ts'
 import {
   addressed,
+  BUILT,
   type Files,
   LANES,
   own,
@@ -124,6 +125,23 @@ export let adopted = async (
   }])
   await raw.delete(keys)
   return { ...app, draft }
+}
+
+/**
+ * The files an app once served in place still keeps under its own prefix,
+ * let go once it has a source: its release names their bytes at their
+ * addresses (release.ts `promoted`), and nothing reads the prefix's copies.
+ * What a page uploaded and the logs not yet carried stay. Answers how many
+ * keys it deleted.
+ */
+export let vacated = async (raw: Objects, prefix: string, app: App) => {
+  if (!app.source) return 0
+  let keys = (await raw.list(prefix)).filter((key) => {
+    let path = key.slice(prefix.length)
+    return own([path]).length > 0 || path.startsWith(BUILT)
+  })
+  await raw.delete(keys)
+  return keys.length
 }
 
 /**

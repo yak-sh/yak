@@ -13,7 +13,7 @@ import { platform } from './testing.ts'
 import * as dirPart from './directory.ts'
 import { call, type Ctx } from './tools.ts'
 import { r2RawObjects } from './lib/objects.ts'
-import { histories } from './carried.ts'
+import { histories, vacated } from './carried.ts'
 import { addressed, pinned, sha256 } from './versions.ts'
 import { drafting } from './written.ts'
 
@@ -160,6 +160,13 @@ test('an old history log becomes rows once, and answers as it did', async () => 
     )
   assertEquals(await carry(), 1)
   assertEquals(await carry(), 0)
+  // The copies it served in place go; its release holds the bytes, and what
+  // a page uploaded stays.
+  await raw.put(`${prefix}blobs/${'0'.repeat(64)}`, encode('photo'))
+  assertEquals(await vacated(raw, prefix, draft.app), 1)
+  assertEquals(await raw.has(`${prefix}page.html`), false)
+  assertEquals(await raw.has(`${prefix}blobs/${'0'.repeat(64)}`), true)
+  assertEquals(await read('page.html'), 'three')
   assertEquals(await raw.has(addressed(await sha('one'))), true)
   let past = (await files('history', { path: 'page.html' })).text
   for (let text of ['one', 'two', 'three']) {
