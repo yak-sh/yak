@@ -571,11 +571,31 @@ export let saveOf = (v: Vocab, comp: string): string | null =>
 export let expireOf = (v: Vocab, comp: string): string | null =>
   v.comp(comp)?.expire ?? null
 
+// What each list of documents and keywords was loaded into, by the identity of
+// each: a vocabulary never changes once loaded, so the same documents load into
+// the same one, and what every package keeps per vocabulary (compiled checks,
+// query plans, table layouts) is worked out once for every graph that speaks
+// it. A document is not edited once loaded; an edit is a new document.
+type Loaded = { next: WeakMap<object, Loaded>; vocab?: Vocab }
+let loaded: Loaded = { next: new WeakMap() }
+let KEYWORDS = {}
+
+/** The vocabulary these documents declare, with these keywords: the same
+ * object for the same documents and keywords. */
 export let loadVocab = (
   input: VocabDoc | VocabDoc[],
   keywords: Keywords[] = [],
 ): Vocab => {
   let docs = Array.isArray(input) ? input : [input]
+  let at = [...docs, KEYWORDS, ...keywords].reduce((at: Loaded, key) => {
+    let next = at.next.get(key)
+    if (!next) at.next.set(key, next = { next: new WeakMap() })
+    return next
+  }, loaded)
+  return at.vocab ??= composed(docs, keywords)
+}
+
+let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
   let compWords = new Set(keywords.flatMap((k) => k.comp ?? []))
   let propWords = new Set(keywords.flatMap((k) => k.prop ?? []))
   // Merge every document's component entries into one table; a name declared

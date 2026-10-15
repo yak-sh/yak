@@ -52,11 +52,15 @@ equal(vocab.aim('book.price'), [{ comp: 'book', prop: 'price' }])
 equal(vocab.prop('book', 'price')?.scalar, 'number')
 equal(vocab.check('book', { price: 12 }), [])
 equal(vocab.check('book', { price: 'twelve' }).length, 1)
+equal(loadVocab(catalog) === vocab, true)
 ```
 
 `loadVocab` accepts one vocabulary document or an array. It checks component
 markers, duplicate names, property types, status and component search lists.
-Call `storable` separately for the checks a storage adapter needs.
+Call `storable` separately for the checks a storage adapter needs. The same
+documents and keywords load into the same vocabulary, so what a package works
+out per vocabulary is worked out once. A document is not edited once loaded; an
+edit is a new document.
 
 ## Exports
 
