@@ -744,37 +744,13 @@ export let stamp = async (
 // which is why those are bare.
 // What every read of an app asks for beside the app row itself, in one place
 // because `appOf` reads all of it and a filter that forgets one answers null
-// where there is a value. What a page can show of an app or a space is in
-// these too (facets/pages-graph.ts).
-export let APP_PARTS = [
-  'doc',
-  'former',
-  'home',
-  'meter',
-  'published',
-  'installed',
-  'gallery',
-  'screenshot',
-  'seeded',
-  'trashed',
-  'theme',
-  'rooted',
-]
-let ABOUT = APP_PARTS.map((part) => `?${part}`).join('&')
+// where there is a value.
+let ABOUT = '?doc&?former&?home&?meter&?published&?installed&?gallery' +
+  '&?screenshot&?seeded&?trashed&?theme&?rooted'
 
 // And what every read of a space asks for, for the same reason.
-export let SPACE_PARTS = [
-  'doc',
-  'plan',
-  'meter',
-  'notified',
-  'trashed',
-  'stripe',
-  'fee',
-  'former',
-  'tunnel',
-]
-let SPACE_ABOUT = SPACE_PARTS.map((part) => `?${part}`).join('&')
+let SPACE_ABOUT = '?doc&?plan&?meter&?notified&?trashed&?stripe&?fee&?former' +
+  '&?tunnel'
 
 // The plan as a whole row, however little of it is written: a property nobody
 // has filled reads empty, the way `meterOf` does, so nothing downstream tests

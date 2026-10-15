@@ -116,14 +116,6 @@ export let COUNTRY = 'blob4'
 export let FROM = 'blob5'
 export let CLIENT = 'blob6'
 
-/** One page view's identity: which app it was a page of, and the address it
- * was served under. The eid is the data point's one index, so every query
- * groups by the app and a rename never loses a day of history. */
-export let seen = (
-  space: { slug: string },
-  app: { eid: string; slug: string },
-) => ({ app: app.eid, space: space.slug, slug: app.slug })
-
 /** A request as the runtime hands it over, with Cloudflare's own facts on it. */
 type Visited = Request & { cf?: { country?: string } }
 

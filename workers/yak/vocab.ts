@@ -59,8 +59,6 @@ let configured = Object.fromEntries(
   ) => [
     kind,
     (config.plugins ?? []).flatMap((plug): Taken<'vocab'> => {
-      // A plugin that declares no words (yak/pages, which only purges).
-      if (facetsOf(plug)?.includes('vocab') === false) return []
       let plugin = used(plug), facet = vocabFacets[plugin]
       if (!facet) throw new Error(`no vocabulary facet for ${plugin}`)
       return [[facet, given(plug), plugin, chosen(plug), facetsOf(plug)]]

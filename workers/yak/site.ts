@@ -1,10 +1,6 @@
-// The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
-// the apex's two pages drawn from directory listings, each for at most thirty
-// seconds, and every public page an app serves (page-cache.ts), keyed by the
-// address it answers. The uncached gateway sends only canonical,
-// uncredentialed requests here.
-import { edged } from './apps.ts'
-import { kept, visitor } from './page-cache.ts'
+// The apex's two pages drawn from directory listings. The uncached gateway
+// sends only their canonical, uncredentialed paths here; the Site entrypoint
+// caches each rendered answer for at most thirty seconds (wrangler.toml).
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -37,8 +33,6 @@ let checksum = async (body: string) =>
   ].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
-  let asked = req.method == 'GET' ? visitor(req.url) : null
-  if (asked) return await kept(await edged(asked, env))
   let root = `/${encodeURIComponent(apex(env))}`
   let path = new URL(req.url).pathname
   if (

@@ -20,7 +20,6 @@ import { egress } from './sandbox.ts'
 export { WorkspaceStore as Workspaces } from './workspaces.ts'
 import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
-import type { Purged } from './purge.ts'
 import { hosting } from './inference.ts'
 import type { Inference, InferenceReceipt, Mark } from '@yaks/model'
 
@@ -101,14 +100,8 @@ export class Files extends WorkerEntrypoint {
 // Only the gateway reaches this entrypoint, and only with canonical apex
 // paths and no caller credentials. Its cache holds the public listing pages;
 // the review and identity doors remain on the uncached default entrypoint.
-//
-// `purge` is how a page leaves that cache (purge.ts): an RPC, which the cache
-// never answers, and the only place a purge of Site's own cache can be made,
-// since a purge reaches just the entrypoint that calls it. The directory
-// calls it through the SITE binding after a write that changes a page.
 export class Site extends WorkerEntrypoint {
   declare env: Env
-  declare ctx: { cache?: Purging }
 
   fetch(req: Request): Promise<Response> {
     return entry(
@@ -118,22 +111,7 @@ export class Site extends WorkerEntrypoint {
       req,
     )
   }
-
-  purge(tags: string[]): Promise<Purged> {
-    return entry(this.env, 'Site purge', async () => {
-      // A runtime without the cache has nothing kept to take out.
-      if (!this.ctx.cache) return { success: true, errors: [] }
-      let { success, errors } = await this.ctx.cache.purge({ tags })
-      return {
-        success,
-        errors: errors.map(({ code, message }) => ({ code, message })),
-      }
-    })
-  }
 }
-
-// What the runtime lends an entrypoint whose cache is on (wrangler.toml).
-type Purging = { purge(o: { tags: string[] }): Promise<Purged> }
 
 // An app's worker calling out (outbound.ts): the namespace's outbound Worker,
 // yak-out (outbound/), hands each fetch back here with the CALLER dispatch.ts
