@@ -28,6 +28,21 @@ export type Options = {
   define?: Record<string, string>
   /** A package import replaced by a hosted module URL. */
   external?: (specifier: string, importer: string) => string | undefined
+  /** Also answer the module graph the build read, as `Built.inputs`. */
+  graph?: boolean
+}
+
+/** One file a build read: whether esbuild read it as an ES module or as
+ * CommonJS, and each import, by the file it resolved to and the specifier it
+ * was written as. An import left unresolved is `external`. */
+export type Input = {
+  format?: 'esm' | 'cjs'
+  imports: {
+    path: string
+    kind: esbuild.ImportKind
+    original?: string
+    external?: boolean
+  }[]
 }
 
 /** esbuild's process ended under a build. That is the compiler's room, not
@@ -36,11 +51,13 @@ export class Stopped extends Error {
   override name = 'Stopped'
 }
 
-/** Built entries: the first module, every emitted file, and warnings. */
+/** Built entries: the first module, every emitted file, warnings, and the
+ * files read, by path, when the build was asked for its graph. */
 export type Built = {
   code: string
   files: Record<string, string>
   warnings: string[]
+  inputs?: Record<string, Input>
 }
 
 let PACKAGE_TRIES = [...TRIES, '.json']
@@ -189,7 +206,7 @@ export let bundle = async (
 let built = async (
   files: Source,
   entry: string | Record<string, string>,
-  { node = false, minify = false, define, external }: Options,
+  { node = false, minify = false, define, external, graph = false }: Options,
 ): Promise<Built> => {
   let out = await esbuild.build({
     entryPoints: typeof entry == 'string' ? [entry] : entry,
@@ -208,6 +225,7 @@ let built = async (
     absWorkingDir: '/',
     // Errors and warnings come back in the answer; nothing is printed.
     logLevel: 'silent',
+    metafile: graph,
     ...define ? { define } : {},
   })
   return {
@@ -217,8 +235,19 @@ let built = async (
       file.text,
     ])),
     warnings: out.warnings.map((w) => w.text),
+    ...out.metafile ? { inputs: inputs(out.metafile) } : {},
   }
 }
+
+// The metafile's paths without the `virtual:` namespace every file is read in.
+let bare = (path: string) => path.replace(/^virtual:/, '')
+let inputs = (meta: esbuild.Metafile) =>
+  Object.fromEntries(
+    Object.entries(meta.inputs).map(([path, input]) => [bare(path), {
+      format: input.format,
+      imports: input.imports.map((i) => ({ ...i, path: bare(i.path) })),
+    }]),
+  )
 
 /** Stop esbuild's process, which otherwise outlives the last build. */
 export let stop = (): Promise<void> => esbuild.stop()

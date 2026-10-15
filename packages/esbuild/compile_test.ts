@@ -5,6 +5,7 @@ import compiler, { compile, type Job } from './compile.ts'
 import type { Answer, Ask } from './plan.ts'
 import { type Catalog, seed } from './platform.ts'
 import { Files } from './npm.ts'
+import { registry } from './registry_fixture_test.ts'
 import { shared } from './shared.ts'
 
 // A toolkit package from the catalog, so no compile here reaches a registry.
@@ -202,8 +203,57 @@ let independent = async () => {
   equal(states.independent, true)
 }
 
+// An npm package the page and a toolkit package both import, at two pinned
+// versions: one module per compile, whichever subpath imports it.
+let counter = (v: number) => ({
+  'package.json': JSON.stringify({
+    version: `${v}.0.0`,
+    exports: { '.': './index.js', './more': './more.js' },
+  }),
+  'index.js': `export let state = { v: ${v} }`,
+  'more.js': "export { state as more } from './index.js'",
+})
+let npm = async () => {
+  let { get } = registry({
+    counter: { '1.0.0': counter(1), '2.0.0': counter(2) },
+  })
+  let stage: Catalog = {
+    '@yaks/stage': {
+      files: {
+        'package.json': JSON.stringify({ exports: { '.': './mod.ts' } }),
+        'mod.ts': "export { state } from 'counter'",
+      },
+      dependencies: { counter: '*' },
+      version: `sha256:${'c'.repeat(64)}`,
+    },
+  }
+  let pinned = (version: string) =>
+    compile(
+      {
+        files: {
+          'package.json': JSON.stringify({
+            dependencies: { '@yaks/stage': 'platform', counter: version },
+          }),
+          'main.ts': "import { state } from 'counter'\n" +
+            "import { more } from 'counter/more'\n" +
+            "import { state as staged } from '@yaks/stage'\n" +
+            'export let one = state === staged && state === more && state.v',
+        },
+        pages: ['main.ts'],
+      },
+      stage,
+      'https://yaks.app',
+      { get },
+    )
+  let [first, second] = await Promise.all([pinned('1.0.0'), pinned('2.0.0')])
+  equal([first.errors, second.errors], [[], []])
+  equal((await run(first.pages['main.ts'], first.shared)).one, 1)
+  equal((await run(second.pages['main.ts'], second.shared)).one, 2)
+  equal(Object.keys(first.shared!).filter((path) => path in second.shared!), [])
+}
+
 test('the server compiles a posted job into one module per page', async () => {
-  await Promise.all([posted(), singletons(), independent()])
+  await Promise.all([posted(), singletons(), independent(), npm()])
 })
 
 test("a worker keeps its runtime's imports and bundles the rest", async () => {

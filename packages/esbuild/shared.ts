@@ -1,9 +1,12 @@
-// Browser packages compiled apart from app entries. A dependency group's URL
-// names all its emitted bytes and resources; package cycles share a splitting
-// build so there is one instance and no cycle between content-addressed URLs.
-// Completed groups are retained under a byte budget across compiler jobs.
+// Browser packages compiled apart from app entries: toolkit packages, Preact
+// and Signals, and each npm package more than one of a page's consumers would
+// otherwise carry (./common.ts). A dependency group's URL names all its
+// emitted bytes and resources; package cycles share a splitting build so there
+// is one instance and no cycle between content-addressed URLs. Completed
+// groups are retained under a byte budget across compiler jobs.
 import { parse } from 'es-module-lexer/js'
-import { bundle, type Options, packaged } from './bundle.ts'
+import { bundle, type Options, packaged, Stopped } from './bundle.ts'
+import { type Common, common } from './common.ts'
 import { packageOf } from './graph.ts'
 import type { Files } from './npm.ts'
 import { type Catalog, located, type Seed } from './platform.ts'
@@ -109,32 +112,81 @@ let exports = (fs: Files, name: string) => {
   return out
 }
 
-/** Compile browser toolkit packages, Preact and Signals per source/dependency
- * identity. All returned paths live under the host's `__packages/` root. */
+// What the pages share beyond the packages already shared, read from one
+// build of every consumer's entries. Only a toolkit package depending on an
+// npm package can carry one beside the pages, so the build runs only then. A
+// build that fails shares nothing more: the failing entry's own build says why.
+let carried = async (
+  fs: Files,
+  pages: string[],
+  stops: string[],
+  catalog: Catalog,
+  setup: Seed,
+): Promise<Common> => {
+  let toolkits = Object.keys(setup.platform)
+  let npm = toolkits.some((name) =>
+    Object.entries(catalog[name].dependencies).some(([dep, version]) =>
+      version != 'platform' && !singletons.includes(dep)
+    )
+  )
+  if (!npm) return { entries: {}, uses: {} }
+  let consumers = {
+    '': pages,
+    ...Object.fromEntries(
+      toolkits.map((name) => [name, Object.values(exports(fs, name))]),
+    ),
+  }
+  let files = [...new Set(Object.values(consumers).flat())]
+  try {
+    let { inputs } = await bundle(
+      fs,
+      Object.fromEntries(files.map((path, i) => [`entry-${i}`, path])),
+      { define: production.define, graph: true },
+    )
+    return common(inputs!, consumers, new Set(stops))
+  } catch (e) {
+    if (e instanceof Stopped) throw e
+    return { entries: {}, uses: {} }
+  }
+}
+
+/** Compile browser toolkit packages, Preact, Signals and the npm packages more
+ * than one of the pages' consumers imports, per source/dependency identity.
+ * All returned paths live under the host's `__packages/` root. */
 export let shared = async (
   fs: Files,
   setup: Seed,
   catalog: Catalog,
   origin: string,
+  pages: string[] = [],
 ): Promise<Shared> => {
   let names = Object.keys(setup.platform)
   for (let name of singletons) {
     if (fs.read(`node_modules/${name}/package.json`) != null) names.push(name)
   }
+  let npm = await carried(fs, pages, names, catalog, setup)
+  names.push(...Object.keys(npm.entries))
   let has = new Set(names)
   let deps = (name: string) => {
     let pkg = JSON.parse(fs.read(`node_modules/${name}/package.json`)!)
-    return Object.keys({
-      ...pkg.dependencies,
-      ...pkg.peerDependencies,
-      ...catalog[name]?.dependencies,
-    }).filter((dep) => has.has(dep)).sort()
+    return [
+      ...new Set([
+        ...Object.keys({
+          ...pkg.dependencies,
+          ...pkg.peerDependencies,
+          ...catalog[name]?.dependencies,
+        }),
+        ...npm.uses[name] ?? [],
+      ]),
+    ].filter((dep) => has.has(dep)).sort()
   }
   let result: Shared = { files: {}, urls: {} }
   for (let group of groups(names, deps)) {
     let own = new Set(group)
     let entries: Record<string, string> = {}
-    for (let name of group) Object.assign(entries, exports(fs, name))
+    for (let name of group) {
+      Object.assign(entries, npm.entries[name] ?? exports(fs, name))
+    }
     let resources: Record<string, string> = {}
     let sources: Record<string, string> = {}
     for (let name of group) {

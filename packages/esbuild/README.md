@@ -83,7 +83,8 @@ A host opts into shared browser modules with `shared: true` once it can store
 and serve `Answer.shared`. Jobs omitting this flag return fully bundled pages
 and app-local resources, so a compiler rollout keeps answering older hosts.
 Direct `compile` calls enable sharing by default; the fourth argument
-`{shared: false}` selects fully bundled pages.
+`{shared: false}` selects fully bundled pages, and its `get` replaces `fetch`
+for reaching the npm registry.
 
 ## Platform toolkit sources
 
@@ -128,15 +129,24 @@ references to the original package module's absolute logical location, such as
 compiled output. Comments, strings and the app's own module URLs are unchanged.
 
 A page imports toolkit packages, Preact and Preact Signals as **shared
-modules**: browser modules compiled separately from the app's entry. Each
-package's concrete browser exports are entries of one splitting build,
-preserving module identity across subpaths. Packages with cyclic dependencies
-share one build. Other npm packages stay bundled into their consumer. Toolkit
-dependency groups import one another through absolute URLs on `origin`, so two
-apps using the same sources and npm pins reuse the same modules. Preact's main,
-hooks, compat and JSX exports share one instance; Signals and its core import
-that same Preact instance. Preact server-rendering adapters need an optional
-renderer peer and are refused as shared browser imports.
+modules**: browser modules compiled separately from the app's entry. An npm
+package is a shared module too when more than one of a page's **consumers**
+imports it, directly or through npm packages bundled into it: the page scripts
+are one consumer, and each toolkit package and each shared npm package is
+another. A page and a toolkit package that both import `three` load one `three`.
+A package only one consumer imports stays bundled into it, where esbuild keeps
+only what it uses. So does one an ES module URL cannot stand in for: something
+`require`s it, or an import of it names a CommonJS or non-script file. A toolkit
+package's or Preact's concrete browser exports are the entries of its splitting
+build, and a shared npm package's entries are the specifiers of it that anything
+imports, so each package's subpaths share one instance. Packages with cyclic
+dependencies share one build. Dependency groups import one another through
+absolute URLs on `origin`. A group's URL names its emitted bytes, so two apps
+with the same sources, npm pins and imported specifiers reuse the same modules,
+and another pinned version is another module. Preact's main, hooks, compat and
+JSX exports share one instance; Signals and its core import that same Preact
+instance. Preact server-rendering adapters need an optional renderer peer and
+are refused as shared browser imports.
 
 `Answer.shared` maps `__packages/<sha256>/<path>` to emitted modules and runtime
 resources. Each group's `modules.json` records its exported specifiers, keeping

@@ -69,6 +69,7 @@ let install = async (
   ask: Ask,
   setup: Seed,
   catalog: Catalog,
+  get?: typeof fetch,
 ) => {
   let pkg = ask.files['package.json'] ?? null
   let ranges = dependencies(pkg)
@@ -76,7 +77,7 @@ let install = async (
     setup.dependencies,
     pins(ask.files['package-lock.json'] ?? null),
   )
-  let { installed, warnings } = await npm.install(fs, want)
+  let { installed, warnings } = await npm.install(fs, want, get)
   if (warnings.length) {
     throw new Error(warnings.map((w) => `npm: ${w}`).join('\n'))
   }
@@ -144,12 +145,13 @@ let checked = (
 /** Compile what an ask names. Never throws for the app's own mistakes: those
  * are the answer's `errors`. Throws {@link Stopped} when esbuild's process
  * ends under a build, which is the compiler's room and not the app's code.
- * The host supplies its toolkit catalog separately from the app's ask. */
+ * The host supplies its toolkit catalog separately from the app's ask, and
+ * `get` is how the npm registry is fetched. */
 export let compile = async (
   ask: Ask,
   catalog: Catalog = {},
   origin = 'https://yaks.app',
-  options: { shared?: boolean } = {},
+  options: { shared?: boolean; get?: typeof fetch } = {},
 ): Promise<Answer> => {
   let answer: Answer = {
     pages: {},
@@ -166,7 +168,7 @@ export let compile = async (
       ? setup.assets
       : {}
     fs = new npm.Files(setup.files)
-    Object.assign(answer, await install(fs, ask, setup, catalog))
+    Object.assign(answer, await install(fs, ask, setup, catalog, options.get))
   } catch (e) {
     return { ...answer, errors: said(e) }
   }
@@ -212,7 +214,13 @@ export let compile = async (
   let urls: Record<string, string> = {}
   if (ask.pages.length && options.shared !== false) {
     try {
-      let modules = await shared(fs, setup, catalog, origin.replace(/\/$/, ''))
+      let modules = await shared(
+        fs,
+        setup,
+        catalog,
+        origin.replace(/\/$/, ''),
+        ask.pages,
+      )
       answer.shared = modules.files
       urls = modules.urls
     } catch (e) {
