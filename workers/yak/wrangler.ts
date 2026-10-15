@@ -96,6 +96,26 @@ export let aliased = (root = repo, to = TSCONFIG) => {
   Deno.renameSync(tmp, to)
 }
 
+/**
+ * Give the checkout a `node_modules` where it has none: the Worker's. Under
+ * `--node-modules-dir=manual` Deno resolves an `npm:` import from the nearest
+ * `node_modules` above the importing file, so a package outside this
+ * directory (@yaks/vocab's tools) finds nothing on a clean clone, where only
+ * the box's own `deno install` had left one. A real one is left alone.
+ */
+export let linked = (root = dir, at = join(repo, 'node_modules')) => {
+  try {
+    Deno.lstatSync(at)
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+    try {
+      Deno.symlinkSync(join(root, 'node_modules'), at, { type: 'dir' })
+    } catch (error) {
+      if (!(error instanceof Deno.errors.AlreadyExists)) throw error
+    }
+  }
+}
+
 let timed = async <T>(name: string, make: () => Promise<T>) => {
   let started = performance.now()
   let value = await make()
@@ -143,6 +163,7 @@ let preparing = (root = dir, timeout = 600_000) =>
       timed('npm dependencies', async () => {
         let changed = await installed(root, { timeout })
         aliased()
+        linked(root)
         return changed
       }),
     web: () =>
