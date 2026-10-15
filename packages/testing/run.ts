@@ -49,19 +49,20 @@ globalThis.addEventListener?.('error', (e) => {
 /** Runs one test, failing it once `timeout` passes without an end. */
 export let one = async (test: Test, timeout: number): Promise<Outcome> => {
   if (test.skip) return { test, ok: true, skipped: true, ms: 0, errors: [] }
-  let start = now()
   let timer: ReturnType<typeof later> | undefined
   let errors: unknown[] = []
+  // The deadline is set before the clock starts: a test's time is its own,
+  // not the runner's, and a runtime's first timer costs a third of a
+  // millisecond, which the first test to await would otherwise pay.
+  let late = new Promise((_, no) =>
+    timer = later(
+      () => no(new Error(`the test did not end within ${timeout}ms`)),
+      timeout,
+    )
+  )
+  let start = now()
   try {
-    await Promise.race([
-      closing(test.body),
-      new Promise((_, no) =>
-        timer = later(
-          () => no(new Error(`the test did not end within ${timeout}ms`)),
-          timeout,
-        )
-      ),
-    ])
+    await Promise.race([closing(test.body), late])
   } catch (error) {
     errors.push(error)
   } finally {
