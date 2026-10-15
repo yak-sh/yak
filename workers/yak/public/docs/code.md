@@ -177,10 +177,35 @@ Two consequences worth building around:
   `pathname == '/recipes/mine'` stops matching in every copy. Test
   `pathname.endsWith('/mine')`, or read the app's own slug off the `x-yak-app`
   header the platform sets.
-- `/api/*` is never yours. That segment is the platform's own endpoints — apply,
-  query, me, graph, ws, commands, command, blob, files/`<path>`, report, plus
-  `client.js` — and a request for one is answered by the platform without the
-  worker being called at all. Your routes live beside it.
+- `/api/*` is never yours. That segment is the platform's own doors, and a
+  request for one is answered by the platform without the worker being called
+  at all. Your routes live beside it. Each door, with the page that covers it:
+  - `client.js`, `storage.js`: the store client a page imports
+    ([store](store.md)), and the `localStorage` stand-in woven into a sandboxed
+    page.
+  - `apply`, `query`, `ws`: write bundles, read rows, and subscribe to a query
+    ([store](store.md)). `graph`, `vocab` and `vocab.json` give a page its
+    local graph and the words it uses.
+  - `me`: who is looking, their role, and where to sign in ([store](store.md)).
+  - `commands`, `command`: list the app's declared commands and call one
+    ([tools](tools.md)).
+  - `blob`, `blob/<id>`, `files/<path>`: keep and read an uploaded file, and
+    a member's write of one of the app's own files ([files](files.md),
+    [sharing](sharing.md)).
+  - `env`, `fetch`, `connections/<integration>`: a page's sentinels, the call
+    out that swaps one for the key, and the page where a person connects their
+    own account (Keys, below).
+  - `ai/run`: one call to a model, answered at once ([models](models.md)).
+    `ai/recover` takes `{call}` and asks the store to recover that model call.
+    `choose` takes `{output}` and picks a retained build output, as
+    `store_builder_choose` does.
+  - `rtc/*`: voice between the people in the app ([voice](voice.md)).
+  - `stats`: page-view counts, for the app's members ([stats](stats.md)).
+  - `pay/checkout`: a cart posted to take money ([selling](selling.md)).
+  - `storage`: a signed-in person's saved `localStorage` keys for a
+    sandboxed app.
+  - `release`: whether a given release (`?version=`) is live.
+  - `report`: where a page reports what broke ([errors](errors.md)).
 
 These files are never served to the web at all, worker or no worker:
 `worker.js`, `vocab.json`, `wrangler.jsonc` and `wrangler.json`. Those are the

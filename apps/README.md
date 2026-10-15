@@ -8,7 +8,7 @@ Git is an app's only source. A push sends a directory to its space through the
 connector's own tools, the ones any assistant calls:
 
 ```sh
-yak admin push apps/<name> --owner
+yak admin push apps/<name> --as admin
 ```
 
 It creates the app when it does not exist yet (`app_new`), writes every file

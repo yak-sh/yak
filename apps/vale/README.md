@@ -80,8 +80,8 @@ grown for play and the reload case, and removes its baseline checkout.
 Deploy only from the main checkout after the release's commits have landed:
 
 ```sh
-yak admin push apps/vale --space=yourname --app=vale --owner
-yak admin tool app_errors --space yourname --app vale --owner
+yak admin push apps/vale --space yourname --app vale --as admin
+yak --host yaks.app app_errors --space yourname --app vale --as admin
 ```
 
 Check `app_errors` immediately after every deploy and fix new errors before
@@ -140,7 +140,7 @@ yak admin apply yourname/vale @"$D/clear.json" --as admin@bot.yak.sh --check
 # Inspect the plan/count; every patch clears only fight.dealt, never fight itself.
 yak admin apply yourname/vale @"$D/clear.json" --as admin@bot.yak.sh
 # Release the intended files and array declaration from main.
-yak admin push apps/vale --space=yourname --app=vale --owner
+yak admin push apps/vale --space yourname --app vale --as admin
 yak admin query yourname/vale '.fight&?doc&?person' --as admin@bot.yak.sh --json > "$D/after-deploy.json"
 deno run --allow-read --allow-write bin/vale-fight-update.ts restore "$D/original.json" "$D/restore.json" "$D/after-deploy.json"
 yak admin apply yourname/vale @"$D/restore.json" --as admin@bot.yak.sh --check
@@ -148,7 +148,7 @@ yak admin apply yourname/vale @"$D/restore.json" --as admin@bot.yak.sh
 yak admin query yourname/vale '.fight&?doc&?person' --as admin@bot.yak.sh --json > "$D/after-restore.json"
 deno run --allow-read --allow-write bin/vale-fight-update.ts restore "$D/original.json" "$D/verify.json" "$D/after-restore.json"
 # Expected: zero restore patches. Compare row counts and person prose with original.json.
-yak admin tool app_errors --space yourname --app vale --owner
+yak --host yaks.app app_errors --space yourname --app vale --as admin
 ```
 
 A changed or disappeared fight refuses restoration instead of overwriting or
