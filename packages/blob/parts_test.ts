@@ -12,6 +12,15 @@ import {
   Wrong,
 } from './mod.ts'
 
+// These doors pass bytes, not HTTP metadata.
+let stream = (bytes: Uint8Array) =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes)
+      controller.close()
+    },
+  })
+
 // A bucket in memory, its multipart held beside it, and an upload of `file`
 // into it in parts of one block, 64 bytes.
 let setup = async (file: Uint8Array, sha?: string) => {
@@ -32,7 +41,7 @@ let setup = async (file: Uint8Array, sha?: string) => {
       )
       return now({
         etag: 'v',
-        body: new Response(part).body!,
+        body: stream(part),
         arrayBuffer: () => now(part.buffer),
       })
     },
@@ -67,26 +76,30 @@ let setup = async (file: Uint8Array, sha?: string) => {
   }
   sha ??= await addressOf(file)
   let key = `app/blobs/${sha}`
-  let up = parts(objects, multipart, { key, sha, ledger: 'ledger/', part: 64 })
+  let open = () =>
+    parts(objects, multipart, { key, sha, ledger: 'ledger/', part: 64 })
+  let up = open()
+  let reopen = () => up = open()
   // Part n as a sender sends it: its bytes, and the hash state the bytes
   // before it leave.
   let send = (n: number, bytes = file) => {
     let part = bytes.slice((n - 1) * 64, n * 64)
     let from = fold(START, bytes.slice(0, (n - 1) * 64))
-    return up.put(n, new Response(part).body!, part.length, from)
+    return up.put(n, stream(part), part.length, from)
   }
   let ledger = () => [...held.keys()].filter((k) => k.startsWith('ledger/'))
-  return { up, send, held, key, ledger, multipart, begun }
+  return { up, reopen, send, held, key, ledger, multipart, begun }
 }
 
 let file = new Uint8Array(150).map((_, i) => (i * 7) & 0xff)
 let all = [1, 2, 3]
 
 test('an interrupted upload sends only the parts it lacks', async () => {
-  let { up, send, held, key, ledger } = await setup(file)
+  let { up, reopen, send, held, key, ledger } = await setup(file)
   equal(await up.post(file.length), { part: 64, need: all })
   await send(1)
   await send(3)
+  up = reopen()
   equal(await up.post(file.length), { part: 64, need: [2] })
   await send(2)
   equal(await up.post(file.length), {
