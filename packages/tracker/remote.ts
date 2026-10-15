@@ -7,8 +7,8 @@
 // TLS handshake of ten seconds, an answer that never comes). The tracker's
 // Durable Object can also stop answering for half a minute while the runtime
 // stalls or moves it. So a request is short attempts for up to a minute, each
-// on a connection of its own, with a ticket of its own, and taking its whole
-// answer, never one long wait on a connection gone bad.
+// on a connection of its own, with a ticket a minute from expiry, and taking
+// its whole answer, never one long wait on a connection gone bad.
 import { derivedEid } from '@yaks/graph/identity'
 import type { Sink } from './report.ts'
 import { sign } from './ticket.ts'
@@ -73,14 +73,20 @@ export let request = async (
       : {},
   }
   let last: unknown
+  // Signing is deterministic: attempts within one second carry the same
+  // ticket, so it is signed and set once a second, not once an attempt.
+  let exp = 0, headers = new Headers()
   for (let i = 0; i < TRIES; i++) {
     let wait = AbortSignal.timeout(WAIT)
-    let ticket = await sign({
-      ...claims,
-      exp: Math.floor(Date.now() / 1000) + 60,
-    }, remote.secret)
-    let headers = new Headers(init.headers)
-    headers.set('authorization', `Bearer ${ticket}`)
+    let now = Math.floor(Date.now() / 1000) + 60
+    if (now != exp) {
+      exp = now
+      headers = new Headers(init.headers)
+      headers.set(
+        'authorization',
+        `Bearer ${await sign({ ...claims, exp }, remote.secret)}`,
+      )
+    }
     try {
       return await attempt(go, url, {
         ...init,
