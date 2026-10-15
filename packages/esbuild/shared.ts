@@ -5,6 +5,7 @@
 // resources; package cycles share a splitting build so there is one instance
 // and no cycle between content-addressed URLs. Completed groups are retained
 // under a byte budget across compiler jobs.
+import { analysisCache } from './analysis.ts'
 import { parse } from 'es-module-lexer/js'
 import { bundle, type Options, packaged, Stopped } from './bundle.ts'
 import { type Common, common } from './common.ts'
@@ -138,18 +139,7 @@ type Carried = {
   uses: Common['uses']
 }
 
-// Analysis depends on app files as well as the toolkit. Validate every read,
-// including misses in resolution, so an edit or a newly supplied file cannot
-// reuse an old choice of shared packages or their used exports.
-type Analysis = {
-  value: Carried
-  reads: string[]
-  fingerprint: string
-  bytes: number
-}
-let analyses = new Map<string, Analysis>()
-let analysisBytes = 0
-let ANALYSIS_LIMIT = 4 << 20
+let analysis = analysisCache<Carried>(4 << 20, digest)
 
 // What the pages share beyond the packages already shared, read from one
 // build of every consumer's entries. Only a toolkit package depending on an
@@ -176,84 +166,54 @@ let carried = async (
     toolkits.map((name) => [name, catalog[name].dependencies]),
     production,
   ])
-  let fingerprint = (paths: string[]) =>
-    digest(paths.map((path) => [path, fs.read(path)]))
-  let cached = analyses.get(key)
-  if (cached && cached.fingerprint == await fingerprint(cached.reads)) {
-    analyses.delete(key)
-    analyses.set(key, cached)
-    return cached.value
-  }
-  let reads = new Set<string>()
-  let source = {
-    read: (path: string) => {
-      reads.add(path)
-      return fs.read(path)
-    },
-  }
-  let consumers = {
-    '': pages,
-    ...Object.fromEntries(
-      toolkits.map((name) => [name, Object.values(exports(source, name))]),
-    ),
-  }
-  let files = [...new Set(Object.values(consumers).flat())]
-  let graph = phase(timing, 'carried')
   try {
-    let { inputs } = await bundle(
-      source,
-      Object.fromEntries(files.map((path, i) => [`entry-${i}`, path])),
-      { define: production.define, graph: true },
-    )
-    let { entries, uses } = common(inputs!, consumers, new Set(stops))
-    graph()
-    let trimmed = phase(timing, 'used')
-    let names
-    try {
-      names = await used(
-        source,
-        files,
-        Object.assign({}, ...Object.values(entries)),
-        production,
-      )
-    } finally {
-      trimmed()
-    }
-    let modules = Object.fromEntries(
-      Object.entries(entries).map(([name, specs]) => [
-        name,
-        Object.fromEntries(
-          Object.keys(specs).map((spec) => [spec, picked(spec, names[spec])]),
+    return await analysis(key, (path) => fs.read(path), async (source) => {
+      let consumers = {
+        '': pages,
+        ...Object.fromEntries(
+          toolkits.map((name) => [name, Object.values(exports(source, name))]),
         ),
-      ]),
-    )
-    let value = { modules, uses }
-    let paths = [...reads].sort()
-    let bytes = JSON.stringify(value).length * 2 +
-      paths.reduce((n, p) => n + p.length * 2, 0)
-    // A failed analysis never replaces a successful one; Stopped propagates.
-    if (bytes <= ANALYSIS_LIMIT) {
-      analysisBytes -= analyses.get(key)?.bytes ?? 0
-      analyses.delete(key)
-      while (analysisBytes + bytes > ANALYSIS_LIMIT) {
-        let oldest = analyses.keys().next().value!
-        analysisBytes -= analyses.get(oldest)!.bytes
-        analyses.delete(oldest)
       }
-      analyses.set(key, {
-        value,
-        reads: paths,
-        fingerprint: await fingerprint(paths),
-        bytes,
-      })
-      analysisBytes += bytes
-    }
-    return value
+      let files = [...new Set(Object.values(consumers).flat())]
+      let graph = phase(timing, 'carried')
+      try {
+        let { inputs } = await bundle(
+          source,
+          Object.fromEntries(files.map((path, i) => [`entry-${i}`, path])),
+          { define: production.define, graph: true },
+        )
+        let { entries, uses } = common(inputs!, consumers, new Set(stops))
+        graph()
+        let trimmed = phase(timing, 'used')
+        let names
+        try {
+          names = await used(
+            source,
+            files,
+            Object.assign({}, ...Object.values(entries)),
+            production,
+          )
+        } finally {
+          trimmed()
+        }
+        let modules = Object.fromEntries(
+          Object.entries(entries).map(([name, specs]) => [
+            name,
+            Object.fromEntries(
+              Object.keys(specs).map((
+                spec,
+              ) => [spec, picked(spec, names[spec])]),
+            ),
+          ]),
+        )
+        return { modules, uses }
+      } finally {
+        graph()
+      }
+    })
   } catch (e) {
     if (e instanceof Stopped) throw e
     return { modules: {}, uses: {} }
-  } finally {
-    graph()
   }
 }
 
