@@ -290,19 +290,14 @@ test('builds: a failed hook request does not disclose its credential', async () 
   }
 })
 
-// What the tracker hears when these builds fail, each log ending in its line.
-let filed = async (logs: Record<string, string>) => {
-  let samples: Bundle[] = []
+// What these builds are filed under, each log ending in its line: the cause
+// the tracker keeps one bug for, and the commit that was built.
+let diagnoses = async (logs: Record<string, string>) => {
   let env = {
-    META: meta(),
     CF_ACCOUNT: 'account',
     BUILD_LOG_TOKEN: 'token',
     WORKERS_API: 'https://cloudflare.test',
-    ERRORS: {
-      send: (rows: Bundle[]) => (samples.push(...rows), Promise.resolve()),
-    },
   } as Env
-  let time = clock()
   let fetch = globalThis.fetch
   globalThis.fetch = (input) => {
     let uuid = String(input).match(/builds\/builds\/([^/]+)\/logs/)?.[1]
@@ -311,35 +306,27 @@ let filed = async (logs: Record<string, string>) => {
       result: { lines: [[1, '--- deno task check'], [2, logs[uuid!] ?? '']] },
     }))
   }
-  let failed = (uuid: string, commit: string) => {
-    let e = event('failed')
-    e.payload!.buildUuid = uuid
-    e.payload!.buildTriggerMetadata!.commitHash = commit
-    return { body: e, ack() {} }
-  }
   try {
-    await within(env, {}, () =>
-      builds({
-        messages: Object.keys(logs).map((uuid, i) => failed(uuid, `c${i}`)),
-      }, env), time)
-    await time.advance(10_000)
+    return await Promise.all(
+      Object.keys(logs).map(async (uuid, i) => {
+        let e = event('failed')
+        e.payload!.buildUuid = uuid
+        e.payload!.buildTriggerMetadata!.commitHash = `c${i}`
+        let b = await diagnosed(env, broke(e)!)
+        return [b.cause, b.commit]
+      }),
+    )
   } finally {
     globalThis.fetch = fetch
   }
-  return samples.map((row) => {
-    let e = row.error as { fault: string; commit: string; hits?: number }
-    return [e.fault, e.commit, e.hits ?? 1]
-  })
 }
 
 test('builds: failures of one cause are one bug, each under the commit it built', async () => {
-  let [first, second, third] = await filed({
+  let [first, second, third] = await diagnoses({
     'build-1': 'error: TS2322 in report.ts:103',
     'build-2': 'error: TS2322 in report.ts:105',
     'build-3': 'the upload timed out',
-  }).then((rows) =>
-    rows.toSorted((a, b) => String(a[1]).localeCompare(String(b[1])))
-  )
+  })
   assertEquals(first[0], second[0])
   assertEquals(first[0] == third[0], false)
   assertEquals([first[1], second[1], third[1]], ['c0', 'c1', 'c2'])
