@@ -2,7 +2,7 @@ import { Scroll } from '@yaks/tui'
 import { compactCount } from './numbers.ts'
 import { hideCompletedChild, sessionTree } from './tree.ts'
 /** Sidebar contributions: one graph read and one renderer, added as one row. */
-import { type ComponentType, h } from 'preact'
+import { type ComponentType, Fragment, h } from 'preact'
 import type { Bundle, Comp, Eid } from '@yaks/graph'
 import type { Local } from './local.ts'
 import { indicator } from './status.ts'
@@ -91,6 +91,11 @@ export let sessionLine = (b: Bundle) => {
     ? label + ' [' + shortSessionId(b.entity.eid) + ']'
     : shortSessionId(b.entity.eid)
 }
+/** How a session reads in the sidebar: its indicator, then its name or short
+ * id, and never its status in words, which the indicator already shows. */
+export let SessionLabel = ({ b }: { b: Bundle }) =>
+  h(Fragment, null, indicator(b), ' ', sessionLine(b))
+
 /** The stock sidebar. Add a contribution by adding one row to this list. */
 export let panels: Panel[] = [
   {
@@ -182,9 +187,7 @@ export let panels: Panel[] = [
                   : '',
               },
               h('span', { class: 'Muted' }, prefix),
-              indicator(b),
-              ' ',
-              sessionLine(b),
+              h(SessionLabel, { b }),
             )
           ),
           browse && rows.length >= 20

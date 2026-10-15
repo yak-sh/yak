@@ -1,10 +1,10 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { h } from 'preact'
+import { type ComponentChild, h } from 'preact'
 import type { Bundle } from '@yaks/graph'
 import { print } from '@yaks/tui/print'
 import { dress } from './sheet.ts'
-import { type Context, panels, type UIAgent } from './panels.ts'
+import { type Context, panels, SessionLabel, type UIAgent } from './panels.ts'
 
 let panel = panels.find((p) => p.title == 'Context usage')!
 let row = (
@@ -25,15 +25,12 @@ let context = (
   session,
   sessions: [],
 })
-// What a panel shows, painted once in the harness's dress, colors aside.
-let shown = (
-  panel: (typeof panels)[number],
-  ctx: Context & { rows: Bundle[] },
-) =>
+// What a tree shows, painted once in the harness's dress, colors aside.
+let shown = (node: ComponentChild) =>
   // deno-lint-ignore no-control-regex -- the painter's words, not its colors
-  print(h(panel.Render, ctx), 70, dress).replace(/\x1b\[[0-9;]*m/g, '')
+  print(node, 70, dress).replace(/\x1b\[[0-9;]*m/g, '')
 let text = (rows: Bundle[]) =>
-  shown(panel, { ...context(() => Promise.resolve(rows), 's'), rows })
+  shown(h(panel.Render, { ...context(() => Promise.resolve(rows), 's'), rows }))
 
 test('context panel reads only the selected transcript, including its inherited prefix', async () => {
   let calls: string[] = []
@@ -107,12 +104,13 @@ test('sidebar labels keep names and indicators without redundant status text', (
       session: { id: 'Meaningful name', status: 'running' },
     },
   ]
-  let p = panels.find((p) => p.title == 'Sessions')!
-  let ui = shown(p, {
-    ...context(() => Promise.resolve([]), child),
-    rows: sessions,
-    sessions,
-  })
+  let ui = shown(
+    h(
+      'div',
+      null,
+      ...sessions.map((b) => h('div', null, h(SessionLabel, { b }))),
+    ),
+  )
   assert(ui.includes('abcdef01'), ui)
   assert(!ui.includes('child:'), ui)
   assert(!/\b(settled|running|wip)\b/.test(ui), ui)
