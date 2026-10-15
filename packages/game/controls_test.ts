@@ -8,7 +8,7 @@ import {
   mouseButtons,
   movement as axes,
 } from './controls.ts'
-import { controlsProbe, pad } from './controls_test_support.ts'
+import { controlsFixture, controlsProbe, pad } from './controls_test_support.ts'
 import { client } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
 import { docs } from './vocab.ts'
@@ -24,28 +24,32 @@ let movement = (
   stick?: [number, number],
   walk = false,
 ) => axes(held, strafe, stick, walk, bindings)
-let probe = (
+let probeTest = (
+  name: string,
   run: Parameters<typeof controlsProbe<ReturnType<typeof listen>>>[1],
 ) =>
-  controlsProbe(
-    (stage, glass, busy, state) =>
-      listen(stage, glass, busy, {
-        ...state,
-        ...bindings,
-        keys: { KeyF: 'activate', Space: 'hop' },
-        tap: { 0: 'activate', 2: 'evade' },
-        cursor: (x, y, locked) => locked ? [0, 0] : [x / 800, y / 600],
-        gamepad: {
-          move: [0, 1],
-          look: [2, 3],
-          buttons: { 0: 'hop', 2: 'activate' },
-          deadzone: 0.2,
-          lookRate: 4,
-        },
-      }),
-    run,
+  test(
+    name,
+    controlsFixture(
+      (stage, glass, busy, state) =>
+        listen(stage, glass, busy, {
+          ...state,
+          ...bindings,
+          keys: { KeyF: 'activate', Space: 'hop' },
+          tap: { 0: 'activate', 2: 'evade' },
+          cursor: (x, y, locked) => locked ? [0, 0] : [x / 800, y / 600],
+          gamepad: {
+            move: [0, 1],
+            look: [2, 3],
+            buttons: { 0: 'hop', 2: 'activate' },
+            deadzone: 0.2,
+            lookRate: 4,
+          },
+        }),
+    ).bind(null, run),
   )
-let mouseProbe = (
+let mouseTest = (
+  name: string,
   run: (p: {
     hands: ReturnType<typeof listen>
     send: (
@@ -59,7 +63,7 @@ let mouseProbe = (
     locked: () => boolean
   }) => void,
 ) =>
-  probe((p) =>
+  probeTest(name, (p) =>
     run({
       ...p,
       send: (
@@ -77,8 +81,7 @@ let mouseProbe = (
           code: 'Escape',
         })
       },
-    })
-  )
+    }))
 
 test('solo mouse clicks act, while a drag does not', () => {
   for (let button of [0, 2]) {
@@ -177,11 +180,14 @@ test('touch look and mouse look keep their own gesture', () => {
   equal(lookDrag(2, 'mouse', true), false)
 })
 
-test('steering and orbit use locked deltas or captured drags in either swap', () => {
-  for (let hide of [true, false]) {
-    for (let swap of [true, false]) {
-      for (let button of [0, 2]) {
-        mouseProbe((p) => {
+for (let hide of [true, false]) {
+  for (let swap of [true, false]) {
+    for (let button of [0, 2]) {
+      mouseTest(
+        `${hide ? 'Locked deltas' : 'Captured drag'} steer and orbit with ${
+          swap ? 'swapped' : 'default'
+        } button ${button}`,
+        (p) => {
           equal(p.hands.hidesCursor(), true)
           if (!hide) p.hands.hideCursor()
           if (swap) p.hands.swap()
@@ -201,33 +207,34 @@ test('steering and orbit use locked deltas or captured drags in either swap', ()
           p.send('mouseup', button, 0)
           equal(p.locked(), false)
           equal(p.hands.read().look, false)
-        })
-      }
+        },
+      )
     }
   }
+}
+
+mouseTest('locked mouse chord stays locked until both buttons release', (p) => {
+  p.send('pointerdown')
+  p.lock()
+  p.send('mousedown', 2, 3)
+  p.send('mousemove', 2, 3)
+  equal(p.hands.read().move, [0, 1])
+  p.send('mouseup', 0, 2)
+  equal(p.locked(), true)
+  p.send('mouseup', 2, 0)
+  equal(p.locked(), false)
+  let intent = p.hands.read()
+  equal(intent.move, [0, 0])
+  equal(intent.actions.includes('activate'), false)
+  equal(intent.actions.includes('evade'), false)
 })
 
-test('locked mouse chord stays locked until both buttons release', () => {
-  mouseProbe((p) => {
-    p.send('pointerdown')
-    p.lock()
-    p.send('mousedown', 2, 3)
-    p.send('mousemove', 2, 3)
-    equal(p.hands.read().move, [0, 1])
-    p.send('mouseup', 0, 2)
-    equal(p.locked(), true)
-    p.send('mouseup', 2, 0)
-    equal(p.locked(), false)
-    let intent = p.hands.read()
-    equal(intent.move, [0, 0])
-    equal(intent.actions.includes('activate'), false)
-    equal(intent.actions.includes('evade'), false)
-  })
-})
-
-test('escape and native unlock cancel the mouse without a stuck gesture', () => {
-  for (let type of ['keydown', 'pointerlockchange']) {
-    mouseProbe((p) => {
+for (let type of ['keydown', 'pointerlockchange']) {
+  mouseTest(
+    `${
+      type == 'keydown' ? 'Escape' : 'Native unlock'
+    } cancels the mouse without a stuck gesture`,
+    (p) => {
       p.send('pointerdown', 2)
       p.lock()
       p.send(type)
@@ -238,42 +245,46 @@ test('escape and native unlock cancel the mouse without a stuck gesture', () => 
       equal(intent.orbit, [0, 0])
       equal(intent.look, false)
       equal(intent.actions.includes('evade'), false)
-    })
-  }
-})
+    },
+  )
+}
 
-test('a late pointer lock grant after release immediately unlocks', () => {
-  mouseProbe((p) => {
+mouseTest(
+  'a late pointer lock grant after release immediately unlocks',
+  (p) => {
     p.send('pointerdown')
     p.send('pointerup', 0, 0)
     p.send('mouseup', 0, 0)
     p.lock()
     equal(p.locked(), false)
-  })
-})
+  },
+)
 
-test('a second button while locked needs neither capture nor another lock', () => {
-  mouseProbe((p) => {
+mouseTest(
+  'a second button while locked needs neither capture nor another lock',
+  (p) => {
     p.send('pointerdown')
     p.lock()
     p.send('pointerdown', 2, 3)
     equal(p.requests(), 1)
     equal(p.hands.read().move, [0, 1])
-  })
-})
+  },
+)
 
-test('touch input still starts while a mouse drag is pointer locked', () => {
-  mouseProbe((p) => {
+mouseTest(
+  'touch input still starts while a mouse drag is pointer locked',
+  (p) => {
     p.send('pointerdown')
     p.lock()
     p.send('pointerdown', 0, 1, 'touch')
     equal(p.locked(), true)
     equal(p.requests(), 1)
-  })
-})
+  },
+)
 
-test('touch stick and look gestures coexist, release, and cancel independently', () => {
-  probe((p) => {
+probeTest(
+  'touch stick and look gestures coexist, release, and cancel independently',
+  (p) => {
     let touch = (type: string, id: number, x: number, y: number) =>
       p.send(type, {
         pointerType: 'touch',
@@ -302,11 +313,12 @@ test('touch stick and look gestures coexist, release, and cancel independently',
     touch('lostpointercapture', 3, 100, 44)
     equal(p.hands.read().move, [0, 0])
     equal(p.hands.read().look, false)
-  })
-})
+  },
+)
 
-test('settings and gestures round trip through the consumer-named entity', () => {
-  probe((p) => {
+probeTest(
+  'settings and gestures round trip through the consumer-named entity',
+  (p) => {
     equal(p.changes, [])
     p.hands.swap()
     p.hands.strafe()
@@ -333,11 +345,12 @@ test('settings and gestures round trip through the consumer-named entity', () =>
     equal(p.hands.read().move, [0, 1])
     equal(p.changes.at(-1)?.entity, replacement.entity)
     equal(p.row().Controls?.pressed, [])
-  })
-})
+  },
+)
 
-test('keys use supplied bindings, deduplicate edges, and release held actions', () => {
-  probe((p) => {
+probeTest(
+  'keys use supplied bindings, deduplicate edges, and release held actions',
+  (p) => {
     equal(p.send('keydown', { code: 'KeyW' }).defaultPrevented, true)
     equal(p.send('keydown', { code: 'KeyF' }).defaultPrevented, true)
     p.send('keydown', { code: 'KeyF', repeat: true })
@@ -361,11 +374,12 @@ test('keys use supplied bindings, deduplicate edges, and release held actions', 
     p.busy(false)
     p.send('keydown', { code: 'ArrowLeft' })
     equal(p.hands.read().turn, -6)
-  })
-})
+  },
+)
 
-test('read consumes screen presses, wheel and orbit deltas exactly once', () => {
-  probe((p) => {
+probeTest(
+  'read consumes screen presses, wheel and orbit deltas exactly once',
+  (p) => {
     p.hands.press('screen-action')
     p.hands.press('screen-action')
     p.send('wheel', { deltaY: 20 })
@@ -380,21 +394,23 @@ test('read consumes screen presses, wheel and orbit deltas exactly once', () => 
     equal(next.actions, [])
     equal(next.zoom, 0)
     equal(next.orbit, [0, 0])
-  })
-})
+  },
+)
 
-test('cursor projection receives current position and pointer-lock status', () => {
-  probe((p) => {
+probeTest(
+  'cursor projection receives current position and pointer-lock status',
+  (p) => {
     p.send('pointermove', { clientX: 200, clientY: 150 })
     equal(p.hands.pointer(), [0.25, 0.25])
     p.send('pointerdown')
     p.lock()
     equal(p.hands.pointer(), [0, 0])
-  })
-})
+  },
+)
 
-test('dispose removes all browser listeners, unlocks, releases capture and unmounts', () => {
-  probe((p) => {
+probeTest(
+  'dispose removes all browser listeners, unlocks, releases capture and unmounts',
+  (p) => {
     p.send('pointerdown', { button: 2, buttons: 2 })
     p.lock()
     p.send('pointerdown', { pointerType: 'touch', pointerId: 2, clientX: 100 })
@@ -417,21 +433,20 @@ test('dispose removes all browser listeners, unlocks, releases capture and unmou
     p.send('blur')
     equal(p.row(), row)
     equal(p.changes.length, changes)
-  })
+  },
+)
+
+probeTest('dispose releases captured touch without pointer lock', (p) => {
+  p.send('pointerdown', { pointerType: 'touch', pointerId: 7, clientX: 100 })
+  equal([...p.captures], [7])
+  p.dispose()
+  equal(p.captures.size, 0)
+  equal(p.listeners(), 0)
 })
 
-test('dispose releases captured touch without pointer lock', () => {
-  probe((p) => {
-    p.send('pointerdown', { pointerType: 'touch', pointerId: 7, clientX: 100 })
-    equal([...p.captures], [7])
-    p.dispose()
-    equal(p.captures.size, 0)
-    equal(p.listeners(), 0)
-  })
-})
-
-test('gamepad API is polled per read; presses have edges and remain held', () => {
-  probe((p) => {
+probeTest(
+  'gamepad API is polled per read; presses have edges and remain held',
+  (p) => {
     equal(p.polls(), 0)
     p.pads([null, pad([], [0, 2])])
     let first = p.hands.read()
@@ -445,11 +460,12 @@ test('gamepad API is polled per read; presses have edges and remain held', () =>
     equal(p.hands.read().held, [])
     p.pads([pad([], [2])])
     equal(p.hands.read().actions, ['activate'])
-  })
-})
+  },
+)
 
-test('gamepad disconnects and sparse lists release movement, look and buttons', () => {
-  probe((p) => {
+probeTest(
+  'gamepad disconnects and sparse lists release movement, look and buttons',
+  (p) => {
     p.pads([null, pad([1, -1, 1, 0], [2])])
     let first = p.hands.read()
     assertAlmostEquals(Math.hypot(...first.move), 1)
@@ -466,11 +482,12 @@ test('gamepad disconnects and sparse lists release movement, look and buttons', 
     equal(p.hands.read().held, [])
     p.pads([null, pad([], [2])])
     equal(p.hands.read().actions, ['activate'])
-  })
-})
+  },
+)
 
-test('gamepad radial deadzone rescales movement and integrates look using dt', () => {
-  probe((p) => {
+probeTest(
+  'gamepad radial deadzone rescales movement and integrates look using dt',
+  (p) => {
     p.pads([pad([0.12, -0.12, 0.12, -0.12])])
     let quiet = p.hands.read()
     equal(quiet.move, [0, 0])
@@ -490,11 +507,12 @@ test('gamepad radial deadzone rescales movement and integrates look using dt', (
     // Multiple controllers combine without exceeding a unit movement vector.
     p.pads([pad([1, 0]), pad([0, -1])])
     assertAlmostEquals(Math.hypot(...p.hands.read().move), 1)
-  })
-})
+  },
+)
 
-test('busy and blur suppress gamepad polling, held actions, movement and look', () => {
-  probe((p) => {
+probeTest(
+  'busy and blur suppress gamepad polling, held actions, movement and look',
+  (p) => {
     p.pads([pad([1, 0, 1, 0], [2])])
     equal(p.hands.read().actions, ['activate'])
     p.busy(true)
@@ -523,22 +541,24 @@ test('busy and blur suppress gamepad polling, held actions, movement and look', 
     equal(blurred.look, false)
     p.send('focus')
     equal(p.hands.read().actions, ['activate'])
-  })
-})
+  },
+)
 
-test('gamepad permission refusal is no input and recovers on the next read', () => {
-  probe((p) => {
+probeTest(
+  'gamepad permission refusal is no input and recovers on the next read',
+  (p) => {
     p.refusePads(new DOMException('permission denied', 'SecurityError'))
     equal(p.hands.read().held, [])
     p.refusePads(undefined)
     p.pads([pad([], [2])])
     equal(p.hands.read().actions, ['activate'])
-  })
-})
+  },
+)
 
-test('keys, touch taps and gamepad buttons emit the same configured action', () => {
-  for (let source of ['key', 'touch', 'pad']) {
-    probe((p) => {
+for (let source of ['key', 'touch', 'pad']) {
+  probeTest(
+    `${source} emits the configured action once and reports held state`,
+    (p) => {
       if (source == 'key') p.send('keydown', { code: 'KeyF' })
       if (source == 'touch') {
         p.send('pointerdown', { pointerType: 'touch', clientX: 700 })
@@ -549,34 +569,33 @@ test('keys, touch taps and gamepad buttons emit the same configured action', () 
       equal(i.actions, ['activate'], source)
       equal(p.hands.read().actions, [], source)
       equal(i.held, source == 'touch' ? [] : ['activate'])
-    })
-  }
-})
+    },
+  )
+}
 
-test('keyboard, touch and gamepad movement share the same normalized axes', () => {
-  for (let source of ['key', 'touch', 'pad']) {
-    probe((p) => {
-      if (source == 'key') p.send('keydown', { code: 'KeyW' })
-      if (source == 'touch') {
-        p.send('pointerdown', {
-          pointerType: 'touch',
-          clientX: 100,
-          clientY: 100,
-        })
-        p.send('pointermove', {
-          pointerType: 'touch',
-          clientX: 100,
-          clientY: 44,
-        })
-      }
-      if (source == 'pad') p.pads([pad([0, -1])])
-      equal(p.hands.read().move, [0, 1], source)
-    })
-  }
-})
+for (let source of ['key', 'touch', 'pad']) {
+  probeTest(`${source} movement uses normalized forward axes`, (p) => {
+    if (source == 'key') p.send('keydown', { code: 'KeyW' })
+    if (source == 'touch') {
+      p.send('pointerdown', {
+        pointerType: 'touch',
+        clientX: 100,
+        clientY: 100,
+      })
+      p.send('pointermove', {
+        pointerType: 'touch',
+        clientX: 100,
+        clientY: 44,
+      })
+    }
+    if (source == 'pad') p.pads([pad([0, -1])])
+    equal(p.hands.read().move, [0, 1], source)
+  })
+}
 
-test('primary mouse tap emits its bound action and preserves the press pick', () => {
-  probe((p) => {
+probeTest(
+  'primary mouse tap emits its bound action and preserves the press pick',
+  (p) => {
     p.hands.hideCursor()
     p.send('pointerdown', { clientX: 200, clientY: 150 })
     p.send('pointerup', { clientX: 202, clientY: 152, buttons: 0 })
@@ -585,11 +604,12 @@ test('primary mouse tap emits its bound action and preserves the press pick', ()
     equal(i.actions, ['activate'])
     equal(i.pick, [0.25, 0.25])
     equal(p.hands.read().pick, undefined)
-  })
-})
+  },
+)
 
-test('reattaching controls restores preferences from consumer state', () => {
-  probe((p) => {
+probeTest(
+  'reattaching controls restores preferences from consumer state',
+  (p) => {
     p.hands.hideCursor()
     p.hands.swap()
     p.hands.strafe()
@@ -611,12 +631,21 @@ test('reattaching controls restores preferences from consumer state', () => {
       again.dispose()
     }
     equal(p.listeners(), 0)
-  })
-})
+  },
+)
 
-test('client graph controls round trip preferences and preserve held across setting reads and remount', async () => {
+// Each real-client case owns a ready graph and seeded consumer row. Boot and
+// seeding are fixtures; event handling, graph writes and reads remain measured.
+for (let contract of ['preferences', 'held', 'remount'] as const) {
   let front = client(loadVocab(docs), [], { vault: false, wireVault: false })
-  let eid = 'test-client:pilot-controls'
+  await front.ready
+  let eid = `test-client:pilot-controls-${contract}`
+  front.mutate([{
+    entity: { eid },
+    Controls: contract == 'remount'
+      ? { hideCursor: false, strafe: true, swapped: false }
+      : {},
+  }])
   let state = {
     get: (): ControlsBundle => ({
       entity: { eid },
@@ -633,54 +662,65 @@ test('client graph controls round trip preferences and preserve held across sett
       keys: { KeyF: 'activate' },
       cursor: (x, y) => [x, y],
     })
-  try {
-    await front.ready
-    controlsProbe(attach, (p) => {
-      p.send('keydown', { code: 'KeyW' })
-      p.send('keydown', { code: 'KeyF' })
-      p.hands.swap()
-      p.hands.strafe()
-      p.hands.hideCursor()
-      equal(state.get().Controls?.held, ['KeyW', 'KeyF'])
-      equal(p.hands.swapped(), true)
-      equal(p.hands.strafes(), true)
-      let i = p.hands.read()
-      equal(i.move, [0, 1])
-      equal(i.actions, ['activate'])
-      equal(i.held, ['activate'])
-      equal(p.hands.read().held, ['activate'])
-      equal(state.get().Controls?.held, ['KeyW', 'KeyF'])
-      // A consumer can change another preference without replacing transient input.
-      front.mutate([{ entity: { eid }, Controls: { swapped: false } }])
-      equal(p.hands.swapped(), false)
-      equal(p.hands.read().held, ['activate'])
-      p.dispose()
-      let again = attach(p.stage, p.glass, () => false)
-      try {
-        equal(again.hidesCursor(), false)
-        equal(again.strafes(), true)
-        equal(again.swapped(), false)
-        equal(again.read().held, []) // dispose deliberately cancels old gestures
-        p.send('keydown', { code: 'KeyF' })
-        equal(again.read().actions, ['activate'])
-        equal(again.read().held, ['activate'])
-        again.swap()
-        equal(again.read().held, ['activate'])
-        p.send('keyup', { code: 'KeyF' })
-        equal(again.read().held, [])
-        equal(state.get().entity.eid, eid)
-      } finally {
-        again.dispose()
-      }
-      equal(p.listeners(), 0)
-    })
-  } finally {
-    front.close()
-  }
-})
+  let run = controlsFixture(attach)
+  test(`client graph controls preserve ${contract} through the consumer entity`, () => {
+    try {
+      run((p) => {
+        if (contract == 'preferences') {
+          p.send('keydown', { code: 'KeyW' })
+          p.send('keydown', { code: 'KeyF' })
+          p.hands.swap()
+          p.hands.strafe()
+          p.hands.hideCursor()
+          equal(state.get().Controls?.held, ['KeyW', 'KeyF'])
+          equal(p.hands.swapped(), true)
+          equal(p.hands.strafes(), true)
+          equal(p.hands.hidesCursor(), false)
+        } else if (contract == 'held') {
+          p.send('keydown', { code: 'KeyW' })
+          p.send('keydown', { code: 'KeyF' })
+          let i = p.hands.read()
+          equal(i.move, [0, 1])
+          equal(i.actions, ['activate'])
+          equal(i.held, ['activate'])
+          equal(p.hands.read().held, ['activate'])
+          equal(state.get().Controls?.held, ['KeyW', 'KeyF'])
+          // A consumer preference update must preserve transient input.
+          front.mutate([{ entity: { eid }, Controls: { swapped: false } }])
+          equal(p.hands.swapped(), false)
+          equal(p.hands.read().held, ['activate'])
+        } else {
+          p.send('keydown', { code: 'KeyF' })
+          p.dispose()
+          let again = attach(p.stage, p.glass, () => false)
+          try {
+            equal(again.hidesCursor(), false)
+            equal(again.strafes(), true)
+            equal(again.swapped(), false)
+            equal(again.read().held, []) // dispose cancels old gestures
+            p.send('keydown', { code: 'KeyF' })
+            equal(again.read().actions, ['activate'])
+            equal(again.read().held, ['activate'])
+            again.swap()
+            equal(again.read().held, ['activate'])
+            p.send('keyup', { code: 'KeyF' })
+            equal(again.read().held, [])
+            equal(state.get().entity.eid, eid)
+          } finally {
+            again.dispose()
+          }
+          equal(p.listeners(), 0)
+        }
+      })
+    } finally {
+      front.close()
+    }
+  })
+}
 
-test('unbound keys do not enter consumer held state and busy masks held verbs', () => {
-  probe((p) => {
+probeTest(
+  'unbound keys do not enter consumer held state and busy masks held verbs',
+  (p) => {
     p.send('keydown', { code: 'KeyZ' })
     equal(p.row().Controls?.held ?? [], [])
     p.send('keydown', { code: 'KeyF' })
@@ -691,5 +731,5 @@ test('unbound keys do not enter consumer held state and busy masks held verbs', 
     equal(p.hands.read().held, ['activate'])
     p.send('keyup', { code: 'KeyF' })
     equal(p.hands.read().held, [])
-  })
-})
+  },
+)

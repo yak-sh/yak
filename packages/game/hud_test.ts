@@ -65,13 +65,15 @@ test('HUD touch stick displays supplied pixels and recenters when resting', () =
   equal(print(h(Stick, { rest: false }), 80, dress), '')
 })
 
-test('HUD kit specimens carry inventory and comparison words in both hosts', () => {
-  let expected = {
+for (
+  let [name, words] of Object.entries({
     Grid: ['⚔', '24', '12', 'Weapon', 'Nothing'],
     Stats: ['Weapon power', 'Health', '13 →', '14', '0.52 s'],
-  }
-  for (let [name, words] of Object.entries(expected)) {
-    let samples = kit[name].specimens()
+  })
+) {
+  // Specimens are fixture values; serialization and painting remain measured.
+  let samples = kit[name].specimens()
+  test(`HUD ${name} specimens carry their words in both hosts`, () => {
     let html = samples.map(([, node]) => render(node)).join('\n')
     let text = samples.map(([, node]) => plain(print(node, 80, dress))).join(
       '\n',
@@ -80,5 +82,5 @@ test('HUD kit specimens carry inventory and comparison words in both hosts', () 
       ok(html.includes(word), `${name}: browser ${word}`)
       ok(text.includes(word), `${name}: terminal ${word}`)
     }
-  }
-})
+  })
+}
