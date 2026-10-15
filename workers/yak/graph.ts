@@ -164,7 +164,6 @@ import {
   drain,
   due as unembedded,
   type Field as Text,
-  meaning,
   queues,
   remodel,
   schema as vectorSchema,
@@ -292,7 +291,7 @@ import {
   step,
 } from './mover.ts'
 import { weighed } from './meter.ts'
-import { embedder, SPACE, texts } from './embedding.ts'
+import { embedder, ranking, SPACE, texts } from './embedding.ts'
 import { directoryOf } from './directory.ts'
 import {
   isRetired,
@@ -1378,19 +1377,7 @@ export class Store {
         bury: () => Promise.resolve([]),
         gone: () => Promise.resolve(false),
         report: (error) => defect(error, { request: 'plugin', store: name }),
-        // Words ranked by meaning among what a filter line selects (@yaks/host
-        // `meaning`), what a memory recall asks (@yaks/memory): the words
-        // embedded by the model this store's vectors are in, and those vectors
-        // scanned. A store with no model bound ranks nothing.
-        meaning: async (words, { limit, within } = {}) => {
-          let model = embedder(this.#bind)
-          if (!model) return []
-          let { statements: db, fields, screen } = this.#texts
-          return await meaning(db, fields, model, words, {
-            limit,
-            screen: within ? () => screen(within) : undefined,
-          })
-        },
+        meaning: ranking(() => embedder(this.#bind), this.#texts),
       },
       storage: (_host, extend) => {
         store = sqliteStorage(
