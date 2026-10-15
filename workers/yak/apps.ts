@@ -169,7 +169,7 @@ import { reach } from './tunnel.ts'
 import { refuse } from './tool.ts'
 import { routes as commandRoutes } from '@yaks/tools/routes'
 import { commandIn, commandsIn } from './app-command.ts'
-import { source, tooMany, within } from './rate.ts'
+import { type Limiter, source, tooMany, within } from './rate.ts'
 import {
   bearerOf,
   lasting,
@@ -1482,6 +1482,19 @@ let fileRead = (req: Request, path: string) =>
   (path.startsWith('/api/blob/')
     ? !!addressed(path.slice('/api/blob/'.length))
     : !!assetPath(path.slice('/api'.length)))
+
+/** Whether the API door admits a request before any store traffic. Addressed
+ * files are static reads, even when this stranger has exhausted API_RATE. */
+export let apiAllowed = (
+  req: Request,
+  path: string,
+  person: string | null,
+  itself: boolean,
+  limit: Limiter | undefined,
+): Promise<boolean> =>
+  itself || person || fileRead(req, path)
+    ? Promise.resolve(true)
+    : within(limit, source(req))
 
 // The bare hash is the current attachment; the second path segment names an
 // immutable representation. Only the bare address reads mutable metadata.
@@ -3152,8 +3165,7 @@ let served = async (
     // three hundred thumbnails is one stranger's ordinary visit, and a refused
     // image is a broken page.
     if (
-      !itself && !who.person && !fileRead(req, path) &&
-      !await within(env.API_RATE, source(req))
+      !await apiAllowed(req, path, who.person, !!itself, env.API_RATE)
     ) {
       return wall(reporting(tooMany(), req, at))
     }

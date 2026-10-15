@@ -1435,46 +1435,56 @@ test("a stranger's reads are held to a rate per source, a member's are not", asy
   assertEquals(spent, 3, 'a member spent the stranger allowance')
 })
 
+// Requests are inputs to the admission decision, not HTTP construction work.
+let rateAddress = 'a'.repeat(64)
+let ratePaths = [
+  `/api/blob/${rateAddress}/${'b'.repeat(64)}`,
+  `/api/blob/${rateAddress}`,
+  '/api/assets/12345678-1234-4123-8123-123456789abc/app.js',
+]
+let rateRequest = (path: string, method = 'GET') => ({
+  path,
+  req: visit(`/cookbook${path}`, {
+    method,
+    headers: { 'cf-connecting-ip': '203.0.113.9' },
+  }),
+})
+let rateFiles = ratePaths.flatMap((
+  p,
+) => [rateRequest(p), rateRequest(p, 'HEAD')])
+let rateData = [
+  rateRequest('/api/query?.doc'),
+  rateRequest('/api/blob/not-an-address'),
+  rateRequest(`/api/blob/${rateAddress}`, 'POST'),
+]
+
 test("a stranger past the rate still gets the app's files and images", async () => {
-  await using scenario = platform()
-  let { env } = scenario
-  let { app } = await seeded(env)
-  let upload = await apps.fetch(
-    visit('/cookbook/api/blob', {
-      method: 'POST',
-      headers: {
-        cookie: await as(ADA),
-        'content-type': 'application/octet-stream',
-      },
-      body: new Uint8Array([1, 2, 3]),
-    }),
-    env,
-  )
-  let { url, eid }: { url: string; eid: string } = await upload.json()
-  let release = crypto.randomUUID()
-  let source = `ada/.releases/${app.eid}/${release}`
-  await released(env, source, { 'app.js': 'export let n = 1' })
-  await stamp(env, {
-    entities: [{ entity: { eid: app.eid }, app: { source } }],
-  })
-  env.API_RATE = { limit: () => Promise.resolve({ success: false }) }
-  let from = (path: string) =>
-    apps.fetch(
-      visit(path, { headers: { 'cf-connecting-ip': '203.0.113.9' } }),
-      env,
-    )
-  for (
-    let [path, want] of [
-      [url, 200],
-      [`/cookbook/api/blob/${eid}`, 302],
-      [`/cookbook/api/assets/${release}/app.js`, 200],
-      ['/cookbook/api/query?.doc', 429],
-    ] as const
-  ) {
-    let res = await from(path)
-    assertEquals(res.status, want, path)
-    await res.body?.cancel()
+  // The serving door checks this before asking a store. Blob byte responses,
+  // redirects and release assets are exercised above; this is the rate's
+  // decision for those same addressed reads, not another platform boot.
+  let asked: string[] = []
+  let limit = {
+    limit: ({ key }: { key: string }) => {
+      asked.push(key)
+      return Promise.resolve({ success: false })
+    },
   }
+  for (let { req, path } of rateFiles) {
+    assertEquals(
+      await apps.apiAllowed(req, path, null, false, limit),
+      true,
+      path,
+    )
+  }
+  assertEquals(asked, [])
+  for (let { req, path } of rateData) {
+    assertEquals(
+      await apps.apiAllowed(req, path, null, false, limit),
+      false,
+      path,
+    )
+  }
+  assertEquals(asked, Array(3).fill('203.0.113.9'))
 })
 
 test('rung 1: a platform path never reaches an app', async () => {
