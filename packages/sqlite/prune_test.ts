@@ -85,8 +85,7 @@ for (let i = 0; i < 3; i++) {
 }
 test('sqlite: a reference added after prune admission rolls back the erase', () => {
   assertThrows(() => late.apply([{ entity: { eid: 'raced' }, $prune: true }]))
-  assertEquals(raced.get(['raced']), [{ entity: { eid: 'raced' } }])
-  assertEquals(raced.get([canonical]), [])
+  assertEquals(raced.get(['raced', canonical]), [{ entity: { eid: 'raced' } }])
 })
 
 let lists = storage(mem(), vocab)

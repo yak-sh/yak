@@ -9,7 +9,7 @@ import { open } from './db.ts'
 import { Denied, members } from '@yaks/member'
 import { club } from '../member/testing.ts'
 import { grant, ids, setMode } from '../member/testing.ts'
-import { kitchen, mem, preparedStore, RECIPE, snapshot } from './testing.ts'
+import { kitchen, mem, preparedStore, RECIPE } from './testing.ts'
 import { get, read } from './read.ts'
 import { basis, memoized } from './memo.ts'
 import { parse } from '@yaks/query'
@@ -66,7 +66,6 @@ test('certified admission reuses bounded authoritative reads and returns deep co
 })
 
 let recipes = loadVocab([...vocab.docs, ...kitchen.docs])
-let recipeSnapshot = snapshot(kitchen)
 
 test('whole and narrowed cache reads isolate nested JSON values', () => {
   let memo = memoized(mem(), recipes)
@@ -91,8 +90,9 @@ test('whole and narrowed cache reads isolate nested JSON values', () => {
   }
 })
 
+let pending = preparedStore(kitchen)
 test('pending partial cache reads isolate nested JSON values', () => {
-  using s = preparedStore(kitchen, {}, recipeSnapshot)
+  using s = pending
   s.tx((tx) => {
     tx.patch([{ entity: { eid: 'cake' }, recipe: RECIPE }])
     let meta = { oven: 200, steps: [{ mix: false }] }

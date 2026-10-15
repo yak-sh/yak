@@ -31,14 +31,19 @@ let objects = select({
   order: [col('name')],
 })
 
-test('prepared stores keep writes private and retain their complete schema', () => {
+test('prepared stores keep writes private', () => {
   using one = stores[0]
   using two = stores[1]
   one.statements.query(insert('entity', { eid: 'a' }))
   equal(one.statements.query(entities), [{ eid: 'a' }])
   equal(two.statements.query(entities), [])
+})
+
+let copy = preparedStore(vocab, {}, empty)
+test('prepared stores retain their complete schema', () => {
+  using store = copy
   equal(
-    two.statements.query(objects).map((r) => r.name).filter((name) =>
+    store.statements.query(objects).map((r) => r.name).filter((name) =>
       names.includes(String(name))
     ),
     names,
