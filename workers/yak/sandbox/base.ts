@@ -2,20 +2,15 @@
 // Worker deploys name its immutable registry tag and never build it. The CLI
 // workspace is a Worker asset, downloaded by sandbox/launch.ts on first use.
 
+import { sha256 } from '@yaks/graph/sha256'
+
 export let REGISTRY = 'registry.cloudflare.com'
 
 let here = (name: string) => new URL(`./${name}`, import.meta.url)
 
 /** The tag base/Dockerfile is pushed under: `base-` and 16 hex of its hash. */
-export let tag = async (dockerfile: string) => {
-  let sum = await crypto.subtle.digest(
-    'SHA-256',
-    new TextEncoder().encode(dockerfile),
-  )
-  let hex = [...new Uint8Array(sum)]
-    .map((b) => b.toString(16).padStart(2, '0')).join('')
-  return 'base-' + hex.slice(0, 16)
-}
+export let tag = (dockerfile: string) =>
+  'base-' + sha256(dockerfile).slice(0, 16)
 
 /** The stable sandbox image named by the Worker config. */
 export let pinned = (dockerfile: string) =>
@@ -95,7 +90,7 @@ export let based = async (
     has?: (ref: string, password: string) => Promise<boolean>
   },
 ) => {
-  let want = await tag(await Deno.readTextFile(here('base/Dockerfile')))
+  let want = tag(await Deno.readTextFile(here('base/Dockerfile')))
   let from = pinned(await Deno.readTextFile(here('../wrangler.toml')))
   if (!from?.endsWith(':' + want)) {
     throw new Error(

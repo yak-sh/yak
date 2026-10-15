@@ -105,10 +105,10 @@ let tool = (name: string) => {
 // A file of this worker's, read from disk — the Dockerfile and the pages that
 // have to agree with it.
 let at = (name: string) =>
-  Deno.readTextFile(new URL(`./${name}`, import.meta.url))
+  Deno.readTextFileSync(new URL(`./${name}`, import.meta.url))
 
 // The base image's Dockerfile, read once for every test that checks it.
-let baseFile = await at('sandbox/base/Dockerfile')
+let baseFile = at('sandbox/base/Dockerfile')
 
 // Every `ARG <NAME>_VERSION=` the image pins, as name → version. This is the
 // one list; the tool description and the two pages that quote it are checked
@@ -678,8 +678,8 @@ test('a build that ships pays for both in one write', async () => {
 // and above all the one thing that rots silently: the image tag and the SDK
 // version are two halves of one release, and the SDK warns at startup rather
 // than failing when they disagree.
-test('the deploy names the container, and the image is the SDK version', async () => {
-  let conf = parse(await at('wrangler.toml')) as {
+test('the deploy names the container, and the image is the SDK version', () => {
+  let conf = parse(at('wrangler.toml')) as {
     containers: {
       class_name: string
       image: string
@@ -710,7 +710,7 @@ test('the deploy names the container, and the image is the SDK version', async (
     'a migration declares the Sandbox object',
   )
 
-  let pinned = JSON.parse(await at('package.json')) as {
+  let pinned = JSON.parse(at('package.json')) as {
     dependencies: Record<string, string>
   }
   let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(baseFile)
@@ -724,12 +724,9 @@ test('the deploy names the container, and the image is the SDK version', async (
 // The image builds FROM the toolchain base (base.ts, T-38057), and the tag it
 // names is the base Dockerfile's own hash: edit the base and this names the
 // FROM line to write.
-let baseImage = from(await at('wrangler.toml'))!
-test('the sandbox names the base its Dockerfile hashes to', async () => {
-  assertEquals(
-    baseImage.split('/').at(-1),
-    `yak-sandbox:${await tag(baseFile)}`,
-  )
+let baseImage = from(at('wrangler.toml'))!
+test('the sandbox names the base its Dockerfile hashes to', () => {
+  assertEquals(baseImage.split('/').at(-1), `yak-sandbox:${tag(baseFile)}`)
 })
 
 // The base's pin is checked above; its image door controls Docker operations.
@@ -812,11 +809,11 @@ test('sandbox_shell names what is in the image, and where the rest comes from', 
   assertStringIncludes(said, 'destroyed when the build ends')
 })
 
-test('the guide and the limits page say the same image', async () => {
-  let [guide, tech] = await Promise.all([
+test('the guide and the limits page say the same image', () => {
+  let [guide, tech] = [
     at('public/docs/code.md'),
     at('public/docs/technical.md'),
-  ])
+  ]
   for (let [name, version] of pinned()) {
     assert(guide.includes(version), `code.md names ${name} ${version}`)
     assert(tech.includes(version), `technical.md names ${name} ${version}`)
