@@ -144,6 +144,7 @@ import { APP_JSON, type Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
+import { isVerifiedBot } from './lib/bots.ts'
 import { drafted, fullAt, hashed, recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
@@ -1716,6 +1717,16 @@ let api = async (
   // stranger to sign in first would lose exactly the breaks nobody sees.
   if (path == '/report') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
+    // A page a verified bot renders, nobody is looking at (lib/bots.ts). It
+    // loads on budgets and through proxies of its own, which drop loads our
+    // doors answered, so a miss it reports is the bot's: filed, it reads as
+    // the app's break, and a module it cut off would roll the release back
+    // (tools.ts `recoverRelease`). Taken before the flood ceiling, so a bot's
+    // render never spends the reports a person's page may need.
+    if (isVerifiedBot(req)) {
+      await req.body?.cancel()
+      return new Response(null, { status: 204 })
+    }
     if (flooding(space, app)) return json(429, 'too_many_reports')
     let reports = broken(await req.text())
     // The injected reporter names the page that ran, not the newest release.
