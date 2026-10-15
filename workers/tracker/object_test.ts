@@ -21,30 +21,33 @@ let space = '00000000-0000-4000-8000-000000000001'
 
 // What an instance the runtime reset for a deploy meets is its replacement's
 // to redo: the reset refuses its writes in the runtime's words.
-test('a reset instance reports none of its own resets; a live one does', async () => {
-  let CODE = 'Durable Object reset because its code was updated.'
-  let reported = async (reset: boolean) => {
-    let sent: Bundle[][] = []
-    let { sql, transactionSync } = durable()
-    let object = new Tracker({
-      id: { name: space },
-      getWebSockets: () => [],
-      acceptWebSocket: () => {},
-      storage: {
-        sql,
-        transactionSync: (body) => {
-          if (reset) throw Error(CODE)
-          return transactionSync(body)
-        },
-        get: () => Promise.resolve(undefined),
-        put: async () => {},
-        setAlarm: () => Promise.resolve(),
+let CODE = 'Durable Object reset because its code was updated.'
+// How many reports an instance sends for a reset it recovers from.
+let reported = async (reset: boolean) => {
+  let sent: Bundle[][] = []
+  let { sql, transactionSync } = durable()
+  let object = new Tracker({
+    id: { name: space },
+    getWebSockets: () => [],
+    acceptWebSocket: () => {},
+    storage: {
+      sql,
+      transactionSync: (body) => {
+        if (reset) throw Error(CODE)
+        return transactionSync(body)
       },
-    }, { ERRORS: { send: (rows) => Promise.resolve(void sent.push(rows)) } })
-    await object.recover(Error(CODE), 'Tracker.alarm')
-    return sent.length
-  }
+      get: () => Promise.resolve(undefined),
+      put: async () => {},
+      setAlarm: () => Promise.resolve(),
+    },
+  }, { ERRORS: { send: (rows) => Promise.resolve(void sent.push(rows)) } })
+  await object.recover(Error(CODE), 'Tracker.alarm')
+  return sent.length
+}
+test('a reset instance reports none of its own resets', async () => {
   equal(await reported(true), 0)
+})
+test('a live instance reports a reset it meets', async () => {
   equal(await reported(false), 1)
 })
 test('postboot failure does not poison the object and reporting never throws', async () => {
