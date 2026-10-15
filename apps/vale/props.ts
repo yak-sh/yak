@@ -5,24 +5,31 @@
 // makes of it. A model is meshed once per shape, turn and detail, then copied
 // wherever a level places one (terrain.ts `props`). Its authored shape is
 // measured for collision (`bulk`) at every visible detail.
-import { BUILDINGS, useBuildings } from './buildings.ts'
-import { type Glow, type Raised, spin, spun } from './buildings/kit.ts'
-import { light } from './buildings/light.ts'
-import type { Bundle } from './net.ts'
-import { blob, type Out, out, type Profile, profileOf, unkey } from '@yaks/voxel/mesh'
-import { COAST } from './props/coast.ts'
-import { DEEP } from './props/deep.ts'
-import { FIRE } from './props/fire.ts'
-import { FROST } from './props/frost.ts'
-import { HILLS } from './props/hills.ts'
-import { type Kind, type Model, refine } from './props/kit.ts'
-import { LANDMARKS } from './props/landmarks.ts'
-import { MARSH } from './props/marsh.ts'
-import { SANDS } from './props/sands.ts'
-import { VALE } from './props/vale.ts'
-import { VILLAGE } from './props/village.ts'
+import { BUILDINGS, useBuildings } from "./buildings.ts";
+import { type Glow, type Raised, spin, spun } from "./buildings/kit.ts";
+import { light } from "./buildings/light.ts";
+import type { Bundle } from "./net.ts";
+import {
+  blob,
+  type Out,
+  out,
+  type Profile,
+  profileOf,
+  unkey,
+} from "@yaks/voxel/mesh";
+import { COAST } from "./props/coast.ts";
+import { DEEP } from "./props/deep.ts";
+import { FIRE } from "./props/fire.ts";
+import { FROST } from "./props/frost.ts";
+import { HILLS } from "./props/hills.ts";
+import { type Kind, type Model, refine } from "./props/kit.ts";
+import { LANDMARKS } from "./props/landmarks.ts";
+import { MARSH } from "./props/marsh.ts";
+import { SANDS } from "./props/sands.ts";
+import { VALE } from "./props/vale.ts";
+import { VILLAGE } from "./props/village.ts";
 
-export type { Kind }
+export type { Kind };
 
 /** Every kind of prop, by its name. */
 let natural: Record<string, Kind> = {
@@ -36,59 +43,59 @@ let natural: Record<string, Kind> = {
   ...DEEP,
   ...FROST,
   ...FIRE,
-}
+};
 
-export let KINDS: Record<string, Kind> = natural
+export let KINDS: Record<string, Kind> = natural;
 
 /** Install the current building shapes beside the natural props. */
 export let useBuildingKinds = (rows: Bundle[], changed?: Set<string>) => {
-  useBuildings(rows, changed)
-  KINDS = { ...natural, ...BUILDINGS }
+  useBuildings(rows, changed);
+  KINDS = { ...natural, ...BUILDINGS };
   for (let cache of [made, meshed, profiled]) {
-    if (!changed) cache.clear()
+    if (!changed) cache.clear();
     else {for (let key of cache.keys()) {
-        if (changed.has(key.split('.')[0])) cache.delete(key)
+        if (changed.has(key.split(".")[0])) cache.delete(key);
       }}
   }
-}
+};
 
 /** Half the ground a placed kind takes, after a quarter turn. */
 export let halfOf = (kind: string, turn = 0): [number, number] => {
-  let { span, girth, row = 0, foot = 0 } = KINDS[kind]
+  let { span, girth, row = 0, foot = 0 } = KINDS[kind];
   return span
     ? turn & 1 ? [span[1] / 2, span[0] / 2] : [span[0] / 2, span[1] / 2]
     : girth
     ? [row + girth / 2, girth / 2]
-    : [foot, foot]
-}
+    : [foot, foot];
+};
 
 // Which of its kind's shapes a prop is, as `kind:shape`, the seed that shape
 // is made from, and the shape, built once.
 let shapeOf = (kind: string, seed: number) => {
-  let k = KINDS[kind]
-  let n = k.shapes ? seed % k.shapes : seed
-  let id = `${kind}:${n}`, salt = n * 7919 + 17
+  let k = KINDS[kind];
+  let n = k.shapes ? seed % k.shapes : seed;
+  let id = `${kind}:${n}`, salt = n * 7919 + 17;
   return {
     id,
     salt,
     shape: () => {
-      let got = made.get(id)
-      if (!got) made.set(id, got = k.make(salt))
-      return got
+      let got = made.get(id);
+      if (!got) made.set(id, got = k.make(salt));
+      return got;
     },
-  }
-}
-let made = new Map<string, Model>()
+  };
+};
+let made = new Map<string, Model>();
 
 // Only the finest setting adds geometry. The visible cell follows every
 // setting, while the authored outline keeps placement and collision stable.
 let cellOf = (kind: string, m: Model, voxel: number) =>
-  KINDS[kind].detail && Number.isFinite(voxel) ? voxel : m.size
+  KINDS[kind].detail && Number.isFinite(voxel) ? voxel : m.size;
 let edgeOf = (m: Model, cell: number) =>
-  cell == 0.125 && m.size > cell ? m.size / 2 : m.size
+  cell == 0.125 && m.size > cell ? m.size / 2 : m.size;
 
-let meshed = new Map<string, Out>()
-let profiled = new Map<string, Profile>()
+let meshed = new Map<string, Out>();
+let profiled = new Map<string, Profile>();
 
 /** The same model wherever its kind, shape, turn and detail are drawn. */
 export let modelKey = (
@@ -98,12 +105,12 @@ export let modelKey = (
   near = true,
   voxel = Infinity,
 ) => {
-  let s = shapeOf(kind, seed)
-  let cell = KINDS[kind].detail ? cellOf(kind, s.shape(), voxel) : null
+  let s = shapeOf(kind, seed);
+  let cell = KINDS[kind].detail ? cellOf(kind, s.shape(), voxel) : null;
   return `${s.id}:${((turn % 4) + 4) % 4}${
-    KINDS[kind].raise ? `:${near}` : ''
-  }${cell != null ? `:${cell}` : ''}`
-}
+    KINDS[kind].raise ? `:${near}` : ""
+  }${cell != null ? `:${cell}` : ""}`;
+};
 
 // Mesh once for drawing, or briefly to measure where its faces lie.
 let makeModel = (
@@ -113,13 +120,13 @@ let makeModel = (
   near: boolean,
   voxel: number,
 ) => {
-  let { shape } = shapeOf(kind, seed)
-  let base = shape()
-  let cell = cellOf(kind, base, voxel)
-  let m = KINDS[kind].detail ? refine(base, edgeOf(base, cell)) : base
-  let { vox, size, at = [-size / 2, 0, -size / 2] } = m
-  let raised = KINDS[kind].raise ? raisedOf(kind, seed) : null
-  if (raised && !near) vox = raised.shell
+  let { shape } = shapeOf(kind, seed);
+  let base = shape();
+  let cell = cellOf(kind, base, voxel);
+  let m = KINDS[kind].detail ? refine(base, edgeOf(base, cell)) : base;
+  let { vox, size, at = [-size / 2, 0, -size / 2] } = m;
+  let raised = KINDS[kind].raise ? raisedOf(kind, seed) : null;
+  if (raised && !near) vox = raised.shell;
   let o = blob(
     out(),
     spun(vox, turn, 1 + (at[0] + at[2]) / size),
@@ -127,16 +134,16 @@ let makeModel = (
     at,
     0.22,
     cell,
-  )
+  );
   if (raised?.glows.length) {
     let glows = raised.glows.map((g): Glow => {
-      let [x, z] = spin(g.at[0], g.at[2], turn)
-      return { ...g, at: [x, g.at[1], z] }
-    })
-    light(o, glows)
+      let [x, z] = spin(g.at[0], g.at[2], turn);
+      return { ...g, at: [x, g.at[1], z] };
+    });
+    light(o, glows);
   }
-  return o
-}
+  return o;
+};
 
 /** A prop's triangles, placed with the middle of its base at the origin and
  * turned `turn` quarter turns (a building faces its square). Buildings draw
@@ -148,11 +155,11 @@ export let model = (
   near = true,
   voxel = Infinity,
 ): Out => {
-  let look = modelKey(kind, seed, turn, near, voxel)
-  let o = meshed.get(look)
-  if (!o) meshed.set(look, o = makeModel(kind, seed, turn, near, voxel))
-  return o
-}
+  let look = modelKey(kind, seed, turn, near, voxel);
+  let o = meshed.get(look);
+  if (!o) meshed.set(look, o = makeModel(kind, seed, turn, near, voxel));
+  return o;
+};
 
 /** A model's face planes for spacing, without retaining its triangles. */
 export let modelProfile = (
@@ -162,23 +169,23 @@ export let modelProfile = (
   near = true,
   voxel = Infinity,
 ): Profile => {
-  let look = modelKey(kind, seed, turn, near, voxel)
-  let p = profiled.get(look)
+  let look = modelKey(kind, seed, turn, near, voxel);
+  let p = profiled.get(look);
   if (!p) {
-    p = profileOf(meshed.get(look) ?? makeModel(kind, seed, turn, near, voxel))
-    profiled.set(look, p)
+    p = profileOf(meshed.get(look) ?? makeModel(kind, seed, turn, near, voxel));
+    profiled.set(look, p);
   }
-  return p
-}
+  return p;
+};
 
 /** A building's shape, raised (buildings.ts), for a prop of its kind; or
  * null for a prop that is not a building. */
 export let raisedOf = (kind: string, seed: number): Raised | null => {
-  let raise = KINDS[kind].raise
-  return raise ? raise(shapeOf(kind, seed).salt) : null
-}
+  let raise = KINDS[kind].raise;
+  return raise ? raise(shapeOf(kind, seed).salt) : null;
+};
 
-let measured = new Map<string, { r: number; tall: number }>()
+let measured = new Map<string, { r: number; tall: number }>();
 
 /** How much room a prop's model takes, in metres: the radius of the circle
  * its voxels stand in, and how tall it stands.
@@ -190,16 +197,16 @@ let measured = new Map<string, { r: number; tall: number }>()
  * ```
  */
 export let bulk = (kind: string, seed: number) => {
-  let { id, shape } = shapeOf(kind, seed)
-  let got = measured.get(id)
-  if (got) return got
-  let { vox, size } = shape()
-  let r = 0, tall = 0
+  let { id, shape } = shapeOf(kind, seed);
+  let got = measured.get(id);
+  if (got) return got;
+  let { vox, size } = shape();
+  let r = 0, tall = 0;
   for (let k of vox.keys()) {
-    let [x, y, z] = unkey(k)
-    r = Math.max(r, Math.hypot(x, z) * size + size / 2)
-    tall = Math.max(tall, (y + 1) * size)
+    let [x, y, z] = unkey(k);
+    r = Math.max(r, Math.hypot(x, z) * size + size / 2);
+    tall = Math.max(tall, (y + 1) * size);
   }
-  measured.set(id, got = { r, tall })
-  return got
-}
+  measured.set(id, got = { r, tall });
+  return got;
+};
