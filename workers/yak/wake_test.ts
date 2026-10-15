@@ -19,7 +19,7 @@ import { GRAPHQL } from './analytics.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
-import { reporting, STUCK } from './wake.ts'
+import { reporting, resumed, STUCK } from './wake.ts'
 import { appStore, storeName } from './directory.ts'
 import { trash, trashSpace, untrash, untrashSpace } from './erase.ts'
 import { ADA, platform as probe, seeded } from './serving-probe.ts'
@@ -182,57 +182,48 @@ test('a job is marked begun on its row while it runs, and cleared after', async 
 // hourly reading and retried the alarm on the new one. The reading's
 // occurrence was spent, so that retry is what runs it again. A move is
 // expected and says nothing; a job no run has finished for `STUCK` does.
-let died = async (began: string, since: string | null = null) => {
-  let rows: Bundle[] = [], readings = 0
-  let fetch = globalThis.fetch
-  globalThis.fetch = () => {
-    readings++
-    return Promise.resolve(
-      Response.json({ data: { viewer: { accounts: [] } } }),
-    )
+// `resumed` over a directory holding one meter row, as the alarm calls it.
+let BORN = at('06:00')
+let died = async (
+  sweep: { began: string; since?: string | null },
+  wake: { at: string | null } = { at: iso('05:00') },
+) => {
+  let row: Bundle = {
+    entity: { eid: 'yak-meter' },
+    sweep: { kind: 'meter', ...sweep },
+    wake,
   }
-  try {
-    let p = platform('wake resumed', {
-      CF_ANALYTICS_TOKEN: 'test',
-      ERRORS: { send: (s: Bundle[]) => (rows.push(...s), Promise.resolve()) },
-    })
-    await directory(p)
-    await meta(p.env).apply([{
-      entity: { eid: 'yak-meter' },
-      sweep: { began, since },
-    }], KERNEL)
-    let store = new Store(p.states.get(PLATFORM_STORE)!, p.env)
-    await within(p.env, {}, () => store.alarm(), clock())
-    return {
-      readings,
-      sweep: (await wake(p.env, 'yak-meter')).sweep,
-      reported: rows.flatMap((r) =>
-        r.exception ? [(r.exception as { value: string }).value] : []
-      ),
-    }
-  } finally {
-    globalThis.fetch = fetch
+  let writes: Bundle[] = []
+  let reported: string[] = []
+  let graph = {
+    read: () => Promise.resolve([row]),
+    apply: (b: Bundle[]) => (writes.push(...b), Promise.resolve(b)),
   }
+  await resumed(
+    graph as never,
+    BORN,
+    (_job, e) => (reported.push(e.message), Promise.resolve()),
+  )
+  return { writes, reported }
 }
-let ago = (ms: number) => new Date(Date.now() - ms).toISOString()
 
 test('a job its instance died in runs again at the next alarm, reported once stuck', async () => {
-  let began = ago(60_000),
-    since = ago(STUCK),
-    done = { began: null, since: null, through: null }
-  assertEquals(await died(began), {
-    readings: 1,
-    sweep: { kind: 'meter', ...done },
-    reported: [],
-  })
-  assertEquals(await died(began, since), {
-    readings: 1,
-    sweep: { kind: 'meter', ...done },
-    reported: [
-      `wake meter: no run has finished since ${since}; ` +
-      `the run begun ${began} died unfinished`,
-    ],
-  })
+  let began = iso('05:55'), since = new Date(BORN - STUCK).toISOString()
+  // A death inside the streak's allowance says nothing, and fires the job now.
+  let quiet = await died({ began })
+  assertEquals(quiet.reported, [])
+  assertEquals(quiet.writes[0].sweep, { began: null, since: began })
+  assert((quiet.writes[0].wake as { at: string }).at)
+  // Once no run has finished for STUCK, it is reported.
+  let stuck = await died({ began, since })
+  assertEquals(stuck.reported, [
+    `wake meter: no run has finished since ${since}; ` +
+    `the run begun ${began} died unfinished`,
+  ])
+  assertEquals(stuck.writes[0].sweep, { began: null, since })
+  // A run this incarnation began is still going, and a paused job stays so.
+  assertEquals((await died({ began: iso('06:01') })).writes, [])
+  assertEquals((await died({ began }, { at: null })).writes[0].wake, undefined)
 })
 
 test('the meter wake runs its job at the supplied hour', async () => {
