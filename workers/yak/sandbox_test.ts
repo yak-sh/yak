@@ -115,7 +115,7 @@ let baseFile = await at('sandbox/base/Dockerfile')
 // against it rather than against each other.
 let VERSIONS = /^ARG (\w+)_VERSION=(\S+)$/gm
 
-let pinned = async () =>
+let pinned = () =>
   new Map(
     [...baseFile.matchAll(VERSIONS)]
       .map(([, name, version]) => [name, version] as const),
@@ -762,9 +762,9 @@ test('a deploy builds and pushes the base only when it is missing', async () => 
 // the rule under it: nothing is fetched into the image without a sha256 to
 // check it against, because a floating toolchain is a build that worked
 // yesterday and there is nobody here to debug it.
-test('a toolchain apiece, pinned, and every download checksummed', async () => {
+test('a toolchain apiece, pinned, and every download checksummed', () => {
   let file = baseFile
-  let versions = await pinned()
+  let versions = pinned()
   for (
     let want of [
       'RUST',
@@ -796,9 +796,9 @@ test('a toolchain apiece, pinned, and every download checksummed', async () => {
   assertStringIncludes(file, 'wasm32-freestanding')
 })
 
-test('sandbox_shell names what is in the image, and where the rest comes from', async () => {
+test('sandbox_shell names what is in the image, and where the rest comes from', () => {
   let said = tool('sandbox_shell').description
-  for (let [name, version] of await pinned()) {
+  for (let [name, version] of pinned()) {
     assert(said.includes(version), `${name} ${version} is named`)
   }
   for (
@@ -817,7 +817,7 @@ test('the guide and the limits page say the same image', async () => {
     at('public/docs/code.md'),
     at('public/docs/technical.md'),
   ])
-  for (let [name, version] of await pinned()) {
+  for (let [name, version] of pinned()) {
     assert(guide.includes(version), `code.md names ${name} ${version}`)
     assert(tech.includes(version), `technical.md names ${name} ${version}`)
   }
