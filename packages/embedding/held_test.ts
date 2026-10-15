@@ -163,17 +163,23 @@ test('a copy whose dirty set another driver cleared loads again', () => {
   alike(db)
 })
 
-let settling = statements(open(':memory:'))
-for (let s of [SPINE, TOMBSTONE, ...schema()]) settling.query(s)
-settling.query(insert('entity', { id: 1, eid: 'fresh' }))
-
-test('settling vectors before a search reads no vectors or build metadata', () => {
-  let db = settling
-  let vec = Float32Array.of(1, 0)
+// One entity, its vector written while nothing holds a copy, and the dirty
+// set naming it.
+let fresh = Float32Array.of(1, 0)
+let unsettled = () => {
+  let db = statements(open(':memory:'))
+  for (let s of [SPINE, TOMBSTONE, ...schema()]) db.query(s)
+  db.query(insert('entity', { id: 1, eid: 'fresh' }))
   db.query({
-    ...insert(TABLE, { owner: 1, model, hash: '', vec: pack(vec) }),
+    ...insert(TABLE, { owner: 1, model, hash: '', vec: pack(fresh) }),
     or: 'replace',
   })
+  return db
+}
+
+let settling = unsettled()
+test('settling vectors before a search reads no vectors or build metadata', () => {
+  let db = settling
   let reads: string[] = []
   let measured: Statements = {
     ...db,
@@ -193,8 +199,13 @@ test('settling vectors before a search reads no vectors or build metadata', () =
   assertEquals(db.query(select({ from: table(DIRTY) })), [])
   absorb(measured)
   assertEquals(Number(db.query(select({ from: table(BUILD) }))[0].n), n)
-  assertEquals(hold(measured, model)?.size, 1)
-  assertEquals(nearest(measured, vec, { model, limit: 1 })[0].entity, 'fresh')
+})
+
+let settled = unsettled()
+absorb(settled)
+test('a vector settled before any search is near once one asks', () => {
+  assertEquals(hold(settled, model)?.size, 1)
+  assertEquals(nearest(settled, fresh, { model, limit: 1 })[0].entity, 'fresh')
 })
 
 test('a buried entity, or one moved to another model, is no neighbour', () => {

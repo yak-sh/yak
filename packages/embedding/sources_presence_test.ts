@@ -96,17 +96,24 @@ test('embedding skips text groups a read descriptor proves absent', () => {
   assertEquals(reads, 0)
 })
 
-test('embedding still reads missing metadata, unread owners and unscoped fields', () => {
+// What an owner's text reads as, and how many content reads that took.
+let read = (fields: Field[], eid: string) => {
   reads = 0
-  for (let eid of ['null', 'missing', 'no-doc']) {
-    assertEquals(
-      sources(measured, text, [owners.get(eid)!]).map((s) => s.text),
-      [eid == 'no-doc' ? 'Spoken' : `${eid}\nSpoken`],
-    )
-  }
-  assertEquals(
-    sources(measured, unscoped, [owners.get('unscoped')!]).map((s) => s.text),
-    ['Loose'],
-  )
-  assertEquals(reads, 4)
+  return [
+    sources(measured, fields, [owners.get(eid)!]).map((s) => s.text),
+    reads,
+  ]
+}
+
+test('embedding still reads an owner whose descriptor is missing', () => {
+  assertEquals(read(text, 'null'), [['null\nSpoken'], 1])
+  assertEquals(read(text, 'missing'), [['missing\nSpoken'], 1])
+})
+
+test('embedding still reads an owner no earlier row described', () => {
+  assertEquals(read(text, 'no-doc'), [['Spoken'], 1])
+})
+
+test('embedding still reads unscoped fields', () => {
+  assertEquals(read(unscoped, 'unscoped'), [['Loose'], 1])
 })
