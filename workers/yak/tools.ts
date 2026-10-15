@@ -66,7 +66,16 @@ import { withKinds } from './kinds.ts'
 import { mode } from '@yaks/member'
 import type { PropSchema, VocabDoc } from '@yaks/vocab'
 import type { Props, Sheet } from './csv.ts'
-import { configOf, MAX, mimeOf, prefixOf, servedAt, warm } from './files.ts'
+import {
+  configOf,
+  MAX,
+  mimeOf,
+  prefixOf,
+  servesSaid,
+  sourceOnly,
+  warm,
+  whereIn,
+} from './files.ts'
 import { perusal, peruse } from './files_read.ts'
 import { drawn, ICON_SVG } from './raster.ts'
 import { failedScript } from './asset_url.ts'
@@ -1368,10 +1377,7 @@ let published = async (
     serves,
     said: ran +
       trailing +
-      (serves
-        ? `\nserves ${serves}/ — its front page is ${serves}/index.html; ` +
-          'files outside it are source only, not on the web'
-        : '') +
+      servesSaid(serves) +
       (closed
         ? `\nclosed ${closed} ${
           closed == 1 ? 'break' : 'breaks'
@@ -2086,18 +2092,8 @@ export let stored = (path: string, bytes: Uint8Array, sha: string) =>
  * or that it is source only, when the app's wrangler `config` serves a folder
  * (files.ts `servedAt`).
  */
-let placing = (ctx: Ctx, space: Space, app: App, config: Config) => {
-  let at = url(space, app, ctx.env)
-  let dir = config.assets?.directory
-  let where = (path: string) => {
-    if (!dir) return `${at}${path}`
-    let addr = servedAt(config, path)
-    return addr == null
-      ? `source only, not on the web (the app serves ${dir}/)`
-      : `${at}${addr}`
-  }
-  return Object.assign(where, { dir })
-}
+let placing = (ctx: Ctx, space: Space, app: App, config: Config) =>
+  whereIn(url(space, app, ctx.env), config)
 
 // A declaration file's verdict, in its own language: a `.json` through
 // JSON.parse, whose error carries the position — "at position 45971" names the
@@ -3083,10 +3079,7 @@ let OURS: Row[] = [
         let { config } = await configured((p) =>
           p in files ? view.read(prefix + p) : Promise.resolve(null)
         )
-        let dir = config.assets?.directory
-        let source = dir
-          ? paths.filter((path) => servedAt(config, path) == null)
-          : []
+        let { dir, source } = sourceOnly(config, paths)
         // Every fact in the value said in the words too: claude.ai's model
         // reads only the words, and app_deploy's base is this version.
         return {

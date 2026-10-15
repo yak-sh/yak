@@ -161,6 +161,38 @@ export let servedAt = (config: Config, path: string) => {
   return inside.slice(root.length + 1).replace(/(^|\/)index\.html$/, '$1')
 }
 
+/** Where a file of an app answers, in a sentence: its address under `at`, or
+ * that it is source only, when the app's wrangler config serves a folder
+ * (T-124473). `dir` is that folder. */
+export let whereIn = (at: string, config: Config) => {
+  let dir = config.assets?.directory
+  let where = (path: string) => {
+    if (!dir) return `${at}${path}`
+    let addr = servedAt(config, path)
+    return addr == null
+      ? `source only, not on the web (the app serves ${dir}/)`
+      : `${at}${addr}`
+  }
+  return Object.assign(where, { dir })
+}
+
+/** The folder an app serves, if its config names one, and which of `paths`
+ * are outside it: source only, never on the web (T-124474). */
+export let sourceOnly = (config: Config, paths: string[]) => {
+  let dir = config.assets?.directory
+  return {
+    dir,
+    source: dir ? paths.filter((path) => servedAt(config, path) == null) : [],
+  }
+}
+
+/** What a deploy says of the folder its app serves, if it serves one. */
+export let servesSaid = (dir?: string) =>
+  dir
+    ? `\nserves ${dir}/ — its front page is ${dir}/index.html; ` +
+      'files outside it are source only, not on the web'
+    : ''
+
 type Found = { path: string; file: Loaded; status: 200 | 404 }
 
 /**
