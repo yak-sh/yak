@@ -38,7 +38,7 @@ import {
 } from './asset_url.ts'
 import * as files from './files.ts'
 import { inside, keyed, prefixOf, VERSION } from './files.ts'
-import { blobPrefix, servable } from './blob-key.ts'
+import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
 import {
   type Access,
   type App,
@@ -71,13 +71,16 @@ import {
 import {
   addressed,
   contentType,
+  Gone,
   mimeOf,
+  parts,
   representation,
   represents,
   type Served,
   servedVia as fencedVia,
   type Size,
   sizeOf,
+  Wrong,
 } from '@yaks/blob'
 import { KERNEL, type Meta, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
@@ -227,6 +230,7 @@ let SAYS: Record<string, string> = {
   not_a_writer: 'sign in to change this app',
   not_a_reader: 'sign in to see this app',
   no_bytes: 'an upload needs a body: post the file itself',
+  upload_gone: 'that upload is no longer under way — begin it again',
   too_large: 'that file is too big to send — try a smaller one',
   too_many_writes: 'that is a lot of changes in one minute — wait a moment ' +
     'and try again',
@@ -1158,6 +1162,36 @@ let nameSent = (req: Request) => {
  * a row pointing at nothing is the failure a reader sees, while bytes nobody
  * has named yet are invisible until the next arrival of the same file names
  * them. The caller applies the bundles, as whoever it decided is writing.
+ */
+export let filed = async (
+  env: Env,
+  space: Space,
+  app: App,
+  graph: Meta,
+  bytes: Uint8Array<ArrayBuffer>,
+  mime: string,
+  name: string,
+): Promise<File> => {
+  let sha = await sha256(bytes)
+  let blobs = r2Objects(env.BLOBS)
+  let key = blobKey(space, app, sha)
+  if (!(await blobs.has(key))) await blobs.put(key, bytes)
+  return described(graph, app, sha, bytes, mime, name)
+}
+
+/** Kept bytes, and the rows that name them. */
+type File = {
+  sha: string
+  use: string
+  size: Size | undefined
+  mime: string
+  url: string
+  bundles: Bundle[]
+}
+
+/**
+ * The rows that name the `bytes` bytes kept at `sha`, read off `head`: their
+ * first bytes, or all of them.
  *
  * The content row, the way the fleet shapes a file (src/blob.ts),
  * addressed by its sha and carrying what is true of the bytes — how many they
@@ -1169,25 +1203,15 @@ let nameSent = (req: Request) => {
  * thing. A listing shows the use and not the content, which is right: a doc's
  * body is a blob row as well, and nobody saved that.
  */
-export let filed = async (
-  env: Env,
-  space: Space,
-  app: App,
+let described = async (
   graph: Meta,
-  bytes: Uint8Array<ArrayBuffer>,
+  app: App,
+  sha: string,
+  head: Uint8Array,
   mime: string,
   name: string,
-): Promise<
-  {
-    sha: string
-    use: string
-    size: Size | undefined
-    mime: string
-    url: string
-    bundles: Bundle[]
-  }
-> => {
-  let sha = await sha256(bytes)
+  bytes = head.byteLength,
+): Promise<File> => {
   let use = await useOf(sha)
   if (!name || mime == 'application/octet-stream') {
     let [prior] = await graph.query(`.entity.eid=${use}`) as {
@@ -1198,11 +1222,14 @@ export let filed = async (
       mime = prior?.attachment?.mime ?? mime
     }
   }
-  let rep = representation(app.eid, sha, await contentType(bytes, mime), name)
-  let blobs = r2Objects(env.BLOBS)
-  let key = blobKey(space, app, sha)
-  if (!(await blobs.has(key))) await blobs.put(key, bytes)
-  let size = sizeOf(bytes)
+  let whole = bytes == head.byteLength
+  let rep = representation(
+    app.eid,
+    sha,
+    await contentType(head, mime, whole),
+    name,
+  )
+  let size = sizeOf(head)
   return {
     sha,
     use,
@@ -1212,7 +1239,7 @@ export let filed = async (
     bundles: [
       {
         entity: { eid: sha },
-        blob: { bytes: bytes.byteLength },
+        blob: { bytes },
         ...(size ? { image: size } : {}),
       },
       {
@@ -1232,6 +1259,31 @@ export let filed = async (
       },
     ],
   }
+}
+
+// An upload's rows, written as the uploader through the app's own /apply, and
+// the answer every upload door gives: the eid to point a row at, the address
+// to read it from, and what it is.
+let recorded = async (
+  graph: Meta,
+  file: File,
+  bytes: number,
+  tags: Record<string, string>,
+) => {
+  try {
+    await graph.apply(file.bundles, KERNEL)
+  } catch (e) {
+    // Kept by the store's write log (writes.ts): the bytes are stored and their
+    // row lands when the app recovers, so the upload is not told it failed.
+    if (!(e instanceof Pending)) return rejection(e, tags)
+  }
+  return Response.json({
+    eid: file.sha,
+    url: file.url,
+    mime: file.mime,
+    bytes,
+    ...file.size,
+  })
 }
 
 // A page hands the app bytes and gets back an address (T-32677). The rows are
@@ -1266,26 +1318,103 @@ let took = async (
     mimeSent(req),
     nameSent(req),
   )
-  try {
-    await graph.apply(file.bundles, KERNEL)
-  } catch (e) {
-    // Kept by the store's write log (writes.ts): the bytes are stored and their
-    // row lands when the app recovers, so the upload is not told it failed.
-    if (!(e instanceof Pending)) {
-      return rejection(e, {
-        request: 'POST /api/blob',
-        space: space.slug,
-        app: app.slug,
-      })
-    }
-  }
-  return Response.json({
-    eid: file.sha,
-    url: file.url,
-    mime: file.mime,
-    bytes: bytes.byteLength,
-    ...file.size,
+  return recorded(graph, file, bytes.byteLength, {
+    request: 'POST /api/blob',
+    space: space.slug,
+    app: app.slug,
   })
+}
+
+// The size of each part a file goes up in but the last (@yaks/blob `parts`),
+// measured from this box and from a Worker (T-124790). At least 5 MiB, the
+// least R2 takes.
+export let PART = 8 * 1024 * 1024
+
+// A file too big to send well in one request goes up in parts, resumably
+// (@yaks/blob `parts`), addressed by its SHA-256 as a whole upload is:
+//
+//   POST blob/<sha> {bytes, name, mime}  where it stands: `{part, need}`, the
+//                                        part size and the parts still to
+//                                        send; once none are, it is finished
+//                                        and answers as `POST blob` does
+//   PUT  blob/<sha>/<n>                  part n, `part` bytes but the last
+//
+// Every call is safe to send again, so a page that lost its connection, or
+// its tab, asks where it stands and sends what is missing. The ceiling and
+// the space's room are checked against the size it declares, and the bytes
+// are hashed once whole, so what lands is what it said.
+let inParts = async (
+  req: Request,
+  env: Env,
+  space: Space,
+  app: App,
+  store: Door,
+  headers: Record<string, string>,
+  path: string,
+  max = MAX,
+) => {
+  let [sha, n, ...rest] = path.split('/')
+  if (!/^[0-9a-f]{64}$/.test(sha) || rest.length) {
+    return json(404, 'no_such_file')
+  }
+  let key = blobKey(space, app, sha)
+  let up = parts(r2Objects(env.BLOBS), env.BLOBS, {
+    key,
+    sha,
+    ledger: uploadPrefix(app),
+    part: PART,
+  })
+  let tags = {
+    request: `${req.method} /api/blob/<sha>${n ? '/<n>' : ''}`,
+    space: space.slug,
+    app: app.slug,
+  }
+  try {
+    if (n != null) {
+      if (req.method != 'PUT') return json(405, 'method_not_allowed')
+      if (!/^[1-9][0-9]*$/.test(n)) return json(404, 'no_such_file')
+      let length = Number(req.headers.get('content-length') ?? NaN)
+      await up.put(Number(n), req.body ?? new Uint8Array(), length)
+      return Response.json({ n: Number(n) })
+    }
+    if (req.method != 'POST') return json(405, 'method_not_allowed')
+    let said = await req.json().catch(() => ({})) as {
+      bytes?: unknown
+      name?: unknown
+      mime?: unknown
+    }
+    let bytes = Number(said.bytes)
+    if (!(Number.isInteger(bytes) && bytes > 0)) return json(400, 'no_bytes')
+    if (bytes > max) return json(413, 'too_large')
+    let standing = await up.stand(bytes)
+    if (!standing.stored) {
+      let stopped = await fullFiles(env, space, [{ key, bytes }])
+      if (stopped) return json(413, 'space_full', stopped)
+    }
+    if (standing.need.length) {
+      return Response.json({ part: standing.part, need: standing.need })
+    }
+    let whole = await up.finish()
+    let graph = metaOf(store, headers)
+    let name = String(said.name ?? '').slice(0, 200)
+    let mime = String(said.mime ?? '').split(';')[0].trim().slice(0, 120)
+    let file = await described(
+      graph,
+      app,
+      sha,
+      whole.head,
+      mime && mime.toLowerCase() != 'application/octet-stream'
+        ? mime
+        : mimeOf(name),
+      name,
+      whole.bytes,
+    )
+    return recorded(graph, file, whole.bytes, tags)
+  } catch (e) {
+    if (e instanceof Gone) return json(409, 'upload_gone', e.message)
+    if (e instanceof Wrong) return json(400, 'refused', e.message)
+    throw e
+  }
 }
 
 /** Whether the bytes are served at all, which is the store's to say
@@ -1966,6 +2095,25 @@ let api = async (
       ...headers,
       ...(await named(env, who, app)),
     }, writes(who.role) ? MAX : VISIT_UPLOAD)
+  }
+  if (
+    path.startsWith('/blob/') && (req.method == 'POST' || req.method == 'PUT')
+  ) {
+    if (!mayPost) return refused()
+    if (req.method == 'POST') {
+      let paced = await visiting(req, env, app, who)
+      if (paced) return paced
+    }
+    return inParts(
+      req,
+      env,
+      space,
+      app,
+      store,
+      { ...headers, ...(await named(env, who, app)) },
+      path.slice('/blob/'.length),
+      writes(who.role) ? MAX : VISIT_UPLOAD,
+    )
   }
   if (path.startsWith('/blob/')) {
     if (req.method != 'GET' && req.method != 'HEAD') {

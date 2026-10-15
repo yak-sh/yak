@@ -40,6 +40,12 @@ export let servable = async (
 export let receiptPrefix = (app: { eid: string }) =>
   `.model-receipts/${app.eid}/`
 
+/** Where the ledger of an app's uploads in parts is kept (@yaks/blob
+ * `parts`): outside every space's prefix, so it never counts against one, and
+ * by the app's eid, so a rename leaves it in place. The bucket's lifecycle
+ * rule expires what nobody finished (README.md). */
+export let uploadPrefix = (app: { eid: string }) => `.uploads/${app.eid}/`
+
 /** Delete the bytes of an upload whose row is gone, unless a row of the app's
  * store names them again by now (an upload of the same file meanwhile does).
  * Answers whether they were deleted. */

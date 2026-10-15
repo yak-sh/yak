@@ -31,7 +31,10 @@
 // input, a Blob a canvas made — under its own SHA-256 and answers the address
 // to put in an `<img src>` and the eid for a row to point at. Deleting the row
 // at that eid (`apply({entity: {eid}, $delete: true})`) deletes the upload,
-// bytes and all.
+// bytes and all. A big file goes up in parts, several at once, and an upload
+// cut short resumes: sent again, from this tab or another, it sends only the
+// parts the platform does not have yet (`POST ./api/blob/<sha>`). `digest(file)`
+// is that SHA-256, the eid an upload of the file answers.
 //
 // `was(value)` is the precondition half of a write: hash what you read, name
 // it under `$was`, and the store refuses the whole batch if that property has
@@ -139,6 +142,196 @@ export let was = async (value) => {
   return [...sum].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+// SHA-256 over a File or Blob, read a few MiB at a time, so a file need not
+// fit in memory to be named: WebCrypto hashes only what is whole in memory.
+// FIPS 180-4, the same digest the platform keeps the bytes under.
+let K = new Uint32Array([
+  0x428a2f98,
+  0x71374491,
+  0xb5c0fbcf,
+  0xe9b5dba5,
+  0x3956c25b,
+  0x59f111f1,
+  0x923f82a4,
+  0xab1c5ed5,
+  0xd807aa98,
+  0x12835b01,
+  0x243185be,
+  0x550c7dc3,
+  0x72be5d74,
+  0x80deb1fe,
+  0x9bdc06a7,
+  0xc19bf174,
+  0xe49b69c1,
+  0xefbe4786,
+  0x0fc19dc6,
+  0x240ca1cc,
+  0x2de92c6f,
+  0x4a7484aa,
+  0x5cb0a9dc,
+  0x76f988da,
+  0x983e5152,
+  0xa831c66d,
+  0xb00327c8,
+  0xbf597fc7,
+  0xc6e00bf3,
+  0xd5a79147,
+  0x06ca6351,
+  0x14292967,
+  0x27b70a85,
+  0x2e1b2138,
+  0x4d2c6dfc,
+  0x53380d13,
+  0x650a7354,
+  0x766a0abb,
+  0x81c2c92e,
+  0x92722c85,
+  0xa2bfe8a1,
+  0xa81a664b,
+  0xc24b8b70,
+  0xc76c51a3,
+  0xd192e819,
+  0xd6990624,
+  0xf40e3585,
+  0x106aa070,
+  0x19a4c116,
+  0x1e376c08,
+  0x2748774c,
+  0x34b0bcb5,
+  0x391c0cb3,
+  0x4ed8aa4a,
+  0x5b9cca4f,
+  0x682e6ff3,
+  0x748f82ee,
+  0x78a5636f,
+  0x84c87814,
+  0x8cc70208,
+  0x90befffa,
+  0xa4506ceb,
+  0xbef9a3f7,
+  0xc67178f2,
+])
+
+// Each 64-byte block from `at` to `end` folded into the state `h`.
+let blocks = (h, w, b, at, end) => {
+  for (let i = at; i < end; i += 64) {
+    for (let t = 0; t < 16; t++) {
+      let j = i + t * 4
+      w[t] = (b[j] << 24) | (b[j + 1] << 16) | (b[j + 2] << 8) | b[j + 3]
+    }
+    for (let t = 16; t < 64; t++) {
+      let x = w[t - 15], y = w[t - 2]
+      let s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3)
+      let s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^
+        (y >>> 10)
+      w[t] = (w[t - 16] + s0 + w[t - 7] + s1) | 0
+    }
+    let [a, b1, c, d, e, f, g, k] = h
+    for (let t = 0; t < 64; t++) {
+      let S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^
+        ((e >>> 25) | (e << 7))
+      let t1 = (k + S1 + ((e & f) ^ (~e & g)) + K[t] + w[t]) | 0
+      let S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^
+        ((a >>> 22) | (a << 10))
+      let t2 = (S0 + ((a & b1) ^ (a & c) ^ (b1 & c))) | 0
+      k = g
+      g = f
+      f = e
+      e = (d + t1) | 0
+      d = c
+      c = b1
+      b1 = a
+      a = (t1 + t2) | 0
+    }
+    h[0] += a
+    h[1] += b1
+    h[2] += c
+    h[3] += d
+    h[4] += e
+    h[5] += f
+    h[6] += g
+    h[7] += k
+  }
+}
+
+// A multiple of 64, so only the last chunk leaves part of a block over.
+let CHUNK = 4 * 1024 * 1024
+
+export let digest = async (blob) => {
+  let h = new Uint32Array([
+    0x6a09e667,
+    0xbb67ae85,
+    0x3c6ef372,
+    0xa54ff53a,
+    0x510e527f,
+    0x9b05688c,
+    0x1f83d9ab,
+    0x5be0cd19,
+  ])
+  let w = new Uint32Array(64)
+  let size = blob.size
+  let rest = new Uint8Array(0)
+  for (let at = 0; at < size; at += CHUNK) {
+    let b = new Uint8Array(await blob.slice(at, at + CHUNK).arrayBuffer())
+    let whole = b.length - (b.length % 64)
+    blocks(h, w, b, 0, whole)
+    rest = b.subarray(whole)
+  }
+  // The tail: what was left, a 1 bit, zeros, and the length in bits as 64.
+  let tail = new Uint8Array(rest.length < 56 ? 64 : 128)
+  tail.set(rest)
+  tail[rest.length] = 0x80
+  let view = new DataView(tail.buffer)
+  view.setUint32(tail.length - 8, Math.floor(size / 2 ** 29))
+  view.setUint32(tail.length - 4, (size * 8) >>> 0)
+  blocks(h, w, tail, 0, tail.length)
+  return [...h].map((v) => v.toString(16).padStart(8, '0')).join('')
+}
+
+// A file at least this big goes up in parts, several at once; anything
+// smaller is one request, which is quicker below it (measured, T-124790).
+let SPLIT = 16 * 1024 * 1024
+let LANES = 4
+
+// Sent again while what failed was the way there, not the answer: no
+// connection (a phone asleep, a train in a tunnel, which waits for the
+// browser to say it is back online), or a platform that is busy or down. A
+// refusal is thrown at once. Each wait doubles, to fifteen seconds.
+let again = async (call, tries = 0) => {
+  try {
+    return await call()
+  } catch (e) {
+    let busy = e.status == null || e.status >= 500 || e.status == 408 ||
+      e.status == 429
+    if (!busy || tries >= 7) throw e
+    if (globalThis.navigator?.onLine === false) {
+      await new Promise((on) => addEventListener('online', on, { once: true }))
+    }
+    await new Promise((on) =>
+      setTimeout(on, Math.min(1000 * 2 ** tries, 15000))
+    )
+    return again(call, tries + 1)
+  }
+}
+
+// `go` for every item, `LANES` at a time; the first failure stops the rest
+// taking new items, and is thrown once those under way have ended.
+let lanes = async (items, go) => {
+  let next = 0
+  let failed = null
+  let lane = async () => {
+    while (!failed && next < items.length) {
+      try {
+        await go(items[next++])
+      } catch (e) {
+        failed ??= e
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: LANES }, lane))
+  if (failed) throw failed
+}
+
 export let store = (base) => {
   base = based(base)
   let ask = door(base)
@@ -190,18 +383,56 @@ export let store = (base) => {
   // a page may re-send rather than remember. 20 MB is the ceiling; downscale
   // a photo on the page before you send it. Deleting the row at `eid` deletes
   // the upload and its bytes.
-  let upload = (file, opts = {}) => {
+  //
+  // A file of `SPLIT` bytes or more goes up in parts: the door says the part
+  // size and the parts it still needs, those go `LANES` at a time, and asking
+  // again finishes it. A connection that drops is waited out and the part
+  // sent again; an upload begun in a tab that closed carries on from the
+  // parts that arrived, when the same file is uploaded again.
+  let upload = async (file, opts = {}) => {
     let name = opts.name ?? file.name ?? ''
-    return ask('blob', {
-      method: 'POST',
-      headers: {
-        'content-type': file.type || 'application/octet-stream',
-        // A header is ASCII and a file's name is not, so the name is
-        // percent-encoded here and decoded by the door.
-        ...(name ? { 'x-yak-name': encodeURIComponent(name) } : {}),
-      },
-      body: file,
-    })
+    let mime = file.type || 'application/octet-stream'
+    if (file.size < SPLIT) {
+      return again(() =>
+        ask('blob', {
+          method: 'POST',
+          headers: {
+            'content-type': mime,
+            // A header is ASCII and a file's name is not, so the name is
+            // percent-encoded here and decoded by the door.
+            ...(name ? { 'x-yak-name': encodeURIComponent(name) } : {}),
+          },
+          body: file,
+        })
+      )
+    }
+    let at = `blob/${await digest(file)}`
+    let stand = () =>
+      again(() =>
+        ask(at, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ bytes: file.size, name, mime }),
+        })
+      )
+    // An upload the platform let go of (409) is begun again; a few rounds
+    // with nothing finished is a fault, not a slow line.
+    for (let round = 0; round < 4; round++) {
+      let { part, need, ...done } = await stand()
+      if (!need) return done
+      try {
+        await lanes(need, (n) =>
+          again(() =>
+            ask(`${at}/${n}`, {
+              method: 'PUT',
+              body: file.slice((n - 1) * part, n * part),
+            })
+          ))
+      } catch (e) {
+        if (e.status != 409) throw e
+      }
+    }
+    throw new Error(`the upload of ${name || 'a file'} did not finish`)
   }
 
   // The live half: one socket onto this store, opened on the first

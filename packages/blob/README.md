@@ -84,6 +84,7 @@ use the same driver so their writes participate in the same transaction.
 | `sqliteBlobs`, `blobSchema`, `Layout`                                                             | SQLite text storage                                      |
 | `fileBlobs`, `objectBlobs`, `Bucket`, `patient`                                                   | Filesystem and object storage                            |
 | `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                    | A bucket keyed by name: read, delete, list               |
+| `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `digest`, `Gone`, `Wrong`, `MOST`   | Resumable uploads in parts, checked against their hash   |
 | `blobRead`, `hydrate`                                                                             | SQL and post-read text resolution                        |
 | `Artifact`, `ArtifactStore`, `addressOf`, `keep`, `artifactStore`, `artifactBytes`, `artifactDoc` | Artifact storage, verified reads and declarations        |
 | `Size`, `sizeOf`, `mediaTypeOf`, `contentType`, `mediaType`, `matchesMediaType`, `mimeOf`         | Image dimensions, signatures and media types             |
@@ -280,6 +281,76 @@ equal(await new Response(await opened.read({ from: 1, to: 3 })).text(), 'ell')
 await files.delete('page.txt')
 equal(await files.read('page.txt'), null)
 ```
+
+## Uploads in parts
+
+`parts(objects, bucket, {key, sha, ledger, part})` uploads the bytes whose
+SHA-256 is `sha` into `key` in parts of `part` bytes, through the bucket's own
+**multipart** upload (S3's protocol, which R2 speaks; `Multipart` is that slice
+of R2's binding). Its **ledger** is empty objects under `ledger` whose keys
+record the upload under way and each part that landed, which R2's binding has no
+call to list. So an upload cut short resumes: `stand(bytes)` says which parts
+are still needed, beginning the upload if none is under way.
+`put(n, body,
+length)` keeps part `n`. Once nothing is needed, `finish()`
+assembles the parts, hashes the whole where it landed, and answers its length
+and first bytes. Assembled bytes that do not hash to `sha` are deleted and throw
+`Wrong`, as does a part of the wrong length. `Gone` says the upload is not under
+way, so it is begun again. `memoryMultipart(put)` holds the parts in memory for
+a bucket with no multipart of its own.
+
+```ts
+import { equal } from '@yaks/testing'
+import { addressOf, type Bucket, bucketObjects, encode } from '@yaks/blob'
+import { memoryMultipart, parts } from '@yaks/blob'
+
+let held = new Map<string, Uint8Array>()
+let now = <T>(v: T) => Promise.resolve(v)
+let bucket: Bucket = {
+  head: (k) =>
+    now(held.has(k) ? { size: held.get(k)!.length, etag: '' } : null),
+  get: (k) => {
+    let b = held.get(k)
+    return now(
+      b
+        ? {
+          etag: '',
+          body: new Response(b).body!,
+          arrayBuffer: () => now(b.slice().buffer),
+        }
+        : null,
+    )
+  },
+  put: (k, v) => now(void held.set(k, v as Uint8Array)),
+  delete: (ks) => now([ks].flat().forEach((k) => held.delete(k))),
+  list: ({ prefix }) =>
+    now({
+      truncated: false,
+      objects: [...held].filter(([k]) => k.startsWith(prefix))
+        .map(([key, b]) => ({ key, size: b.length, uploaded: new Date() })),
+    }),
+}
+let file = encode('ten bytes!')
+let sha = await addressOf(file)
+let up = parts(bucketObjects(bucket), memoryMultipart(bucket.put), {
+  key: sha,
+  sha,
+  ledger: 'uploads/',
+  part: 4,
+})
+equal((await up.stand(10)).need, [1, 2, 3])
+await up.put(3, file.slice(8), 2) // a connection drops here
+equal((await up.stand(10)).need, [1, 2])
+await up.put(1, file.slice(0, 4), 4)
+await up.put(2, file.slice(4, 8), 4)
+equal((await up.finish()).bytes, 10)
+equal(held.get(sha), file)
+```
+
+R2 takes parts of at least 5 MiB, every one but the last the same size, and
+10,000 of them (`MOST`); `sized(bytes, part)` grows the part for a file that
+would need more. `digest(stream, keep)` hashes a stream as it passes, with
+`crypto.DigestStream` in a Worker, and keeps its first bytes.
 
 ## Reading it back
 

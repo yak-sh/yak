@@ -10,7 +10,7 @@
 // binding in wrangler.toml and the router calls it instead of the module,
 // with no other change. A part never reaches another except through its
 // handler, and none keeps state another reads.
-import type { Bucket } from '@yaks/blob'
+import type { Bucket, Multipart } from '@yaks/blob'
 import type { D1Like } from '@yaks/d1'
 import type { Binding } from './post.ts'
 import type { Dispatch, Fetcher, Namespace } from './door.ts'
@@ -78,7 +78,7 @@ export type Env = {
   // under `wrangler dev` and the workerd probes, so nothing may depend on it.
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp?: string }
   ASSETS: Fetcher
-  BLOBS: Bucket
+  BLOBS: Bucket & Multipart
   // The session-signing secret; unset, no session verifies (token.ts). It
   // also keys the sign-in code digests (signin.ts).
   SESSION_SECRET?: string

@@ -24,7 +24,8 @@ let textual = (mime: string) =>
 
 /**
  * Whether bytes are text: UTF-8 with no control character but tab, line feed
- * and carriage return.
+ * and carriage return. For the first bytes of a file (`whole` false), a
+ * character the cut split in two is not held against them.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
@@ -34,11 +35,14 @@ let textual = (mime: string) =>
  * assertEquals(utf8(bytes('<h1>Café</h1>\n')), true)
  * assertEquals(utf8(new Uint8Array([0x89, 0x50, 0x4e, 0x47])), false)
  * assertEquals(utf8(bytes('a\x00b')), false)
+ * assertEquals(utf8(bytes('Café').subarray(0, 4)), false)
+ * assertEquals(utf8(bytes('Café').subarray(0, 4), false), true)
  * ```
  */
-export let utf8 = (bytes: Uint8Array): boolean => {
+export let utf8 = (bytes: Uint8Array, whole = true): boolean => {
   try {
-    let text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    let text = new TextDecoder('utf-8', { fatal: true })
+      .decode(bytes, { stream: !whole })
     // deno-lint-ignore no-control-regex
     return !/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text)
   } catch {
@@ -63,10 +67,12 @@ export let matchesMediaType = (bytes: Uint8Array, mime: string): boolean =>
     (at(bytes, 0, 'OggS') || at(bytes, 0, 'OpusHead'))) ||
   (mime == 'audio/pcm' && bytes.length > 0 && bytes.length % 2 == 0)
 
-/** A stable media type chosen from bytes and, for text, a valid declaration. */
+/** A stable media type chosen from bytes and, for text, a valid declaration.
+ * `whole` false says the bytes are only a file's first ones. */
 export let contentType = async (
   bytes: Uint8Array,
   declared = '',
+  whole = true,
 ): Promise<string> => {
   let image = mediaTypeOf(bytes)
   if (image) return image
@@ -78,5 +84,5 @@ export let contentType = async (
   }
   if (matchesMediaType(bytes, mime)) return mime
   if (found) return found.mime
-  return textual(mime) && utf8(bytes) ? mime : UNKNOWN
+  return textual(mime) && utf8(bytes, whole) ? mime : UNKNOWN
 }

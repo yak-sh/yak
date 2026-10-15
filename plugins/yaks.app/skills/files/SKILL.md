@@ -1,6 +1,6 @@
 ---
 name: files
-description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, deleting an upload and its bytes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
+description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the 20 MB ceiling and the downscale under it, and a gallery that never shows one picture twice."
 ---
 
 # Files and pictures
@@ -351,7 +351,9 @@ browser responses are private to that browser's cache.
 in it, and someone holding the identical file can compute its eid without
 asking. So never treat a blob address as a permission to hold something private.
 What content addressing does not save is the sending: the upload endpoint reads
-every byte to hash them, so re-uploading a 4 MB photo costs 4 MB every time.
+every byte to hash them, so re-uploading a 4 MB photo costs 4 MB every time. A
+file big enough to go up in parts is the exception (below): the page names it
+first, and bytes the app already holds are not sent again.
 
 ## The two rows one upload writes
 
@@ -456,6 +458,43 @@ gets `416`. Responses include a revalidating cache header,
 `x-content-type-options: nosniff` — an uploaded HTML page or SVG opened in a tab
 cannot run anything. A path that is not 64 hex characters, or bytes this app
 never received, is `404 no_such_file`.
+
+## Big files go up in parts, and resume
+
+`upload` sends a file of 16 MiB or more in parts, four at a time, and an upload
+that is cut short carries on instead of starting over. A part that fails because
+the connection dropped or the phone went to sleep is sent again once the browser
+is back online. If the tab closed, uploading the same file again, from any tab
+or device, sends only the parts that had not arrived. The page changes nothing:
+the same `upload(file)`, the same answer.
+
+An upload in parts is named by the file's SHA-256 before it begins, so the page
+reads the file once to compute it first. `digest(file)` from the client library
+is that hash, the eid the upload will answer.
+
+An upload nobody finishes is forgotten after seven days, and its parts never
+count toward the space's photos and files.
+
+The endpoints, for a client of your own:
+
+    POST ./api/blob/9f2a…          ← the file's SHA-256, and what it is
+    {"bytes": 41943040, "name": "talk.mp4", "mime": "video/mp4"}
+    → {"part": 8388608, "need": [1, 2, 3, 4, 5]}
+
+    PUT ./api/blob/9f2a…/3         ← part 3: from byte 2 × part, part bytes
+    → {"n": 3}
+
+    POST ./api/blob/9f2a…          ← again, once every part is in
+    → {"eid": "9f2a…", "url": "/photos/api/blob/9f2a…/…",
+       "mime": "video/mp4", "bytes": 41943040}
+
+`need` lists the parts not received yet, and every part but the last is `part`
+bytes. Every call may be sent again. A POST when nothing is missing assembles
+the parts and answers what `POST ./api/blob` answers. The whole is hashed once
+it is assembled, and parts that do not hash to the address are dropped with a
+`400`; so is a part of the wrong length. `409 upload_gone` says the upload is no
+longer under way (seven days passed): POST again to begin it anew. The ceilings
+are checked against `bytes`, with the same `too_large` and `space_full`.
 
 Deployed audio and video files use media types from their extensions: `.mp4`,
 `.m4v`, `.mov`, `.webm`, `.mp3`, `.m4a`, `.aac`, `.wav`, `.ogg`, `.flac`, and

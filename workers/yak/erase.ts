@@ -61,7 +61,7 @@
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
 import { promoted } from './release.ts'
 import { caught } from './defects.ts'
-import { receiptPrefix } from './blob-key.ts'
+import { receiptPrefix, uploadPrefix } from './blob-key.ts'
 import type { Bundle } from '@yaks/graph'
 import { token } from '@yaks/graph/sha256'
 import { declarationOf, keepDeclaration } from './declaration.ts'
@@ -363,6 +363,7 @@ export let emptied = async (
   await swept(env, `${space.slug}/.drafts/${app.eid}/`)
   await swept(env, `${space.slug}/.declarations/${app.eid}/`)
   await swept(env, receiptPrefix(app))
+  await swept(env, uploadPrefix(app))
   // The store is named for where the app was born (directory.ts storeName),
   // so emptying it is what keeps a later app at the same address from waking
   // up in this one's graph.

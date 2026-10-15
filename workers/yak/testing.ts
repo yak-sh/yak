@@ -30,6 +30,7 @@ import {
   val,
 } from '@yaks/sql'
 import { objects } from '@yaks/sqlite'
+import { memoryMultipart } from '@yaks/blob'
 import { contentType } from '@std/media-types'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
 import { type Snapshot, snapshot } from '../../packages/sqlite/testing.ts'
@@ -377,6 +378,16 @@ export let bucket = () => {
     etags.set(bytes, next)
     return next
   }
+  let put = (k: string, v: ArrayBuffer | ArrayBufferView | string) => {
+    let bytes = typeof v == 'string'
+      ? new TextEncoder().encode(v)
+      : v instanceof ArrayBuffer
+      ? new Uint8Array(v)
+      : new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
+    held.set(k, new Uint8Array(bytes))
+    if (!at.has(k)) at.set(k, Date.now())
+    return Promise.resolve()
+  }
   return {
     held,
     at,
@@ -410,16 +421,9 @@ export let bucket = () => {
           arrayBuffer: () => Promise.resolve(part.buffer as ArrayBuffer),
         }
       },
-      put: (k: string, v: ArrayBuffer | ArrayBufferView | string) => {
-        let bytes = typeof v == 'string'
-          ? new TextEncoder().encode(v)
-          : v instanceof ArrayBuffer
-          ? new Uint8Array(v)
-          : new Uint8Array(v.buffer, v.byteOffset, v.byteLength)
-        held.set(k, new Uint8Array(bytes))
-        if (!at.has(k)) at.set(k, Date.now())
-        return Promise.resolve()
-      },
+      put,
+      // An upload in parts, held here until it is whole and then put.
+      ...memoryMultipart(put),
       delete: (keys: string | string[]) => {
         for (let k of [keys].flat()) {
           held.delete(k)

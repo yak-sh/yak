@@ -118,7 +118,17 @@ Accepts a `File` off an `<input type=file>` or any `Blob`, POSTs the bytes to
 bytes are a picture that declares its size (png, jpeg, gif, webp). `mime` is the
 blob's own `type`; `name` defaults to `file.name` and is sent percent-encoded.
 The bytes are stored under their SHA-256, so `eid` is that hash and the same
-file twice is one upload and one row. 20 MB is the ceiling.
+file twice is one upload and one row. 20 MB is the ceiling. A file of 16 MiB or
+more goes up in parts, several at once, and resumes where it stopped: uploading
+the same file again sends only the parts that had not arrived
+([files](./files.md)).
+
+### digest(file)
+
+    let eid = await digest(input.files[0])
+
+The SHA-256 of a `File` or `Blob`, in hex: the eid `upload` answers for it. Read
+a few MiB at a time, so it works on a file bigger than memory.
 
 ### me()
 

@@ -15,6 +15,7 @@
 // be checked against a Worker it does not run in.
 
 import { bucketObjects, objectBlobs, type Objects } from './object.ts'
+import type { Multipart } from './parts.ts'
 import type { Blobs } from './store.ts'
 
 /** An R2 bucket is a byte store, with no adapter in between. */
@@ -22,3 +23,6 @@ export let r2Blobs = (bucket: R2Bucket): Blobs => objectBlobs(bucket)
 
 /** And a store keyed by name, the same way. */
 export let r2Objects = (bucket: R2Bucket): Objects => bucketObjects(bucket)
+
+/** And its multipart upload is what `parts` assembles with. */
+export let r2Multipart = (bucket: R2Bucket): Multipart => bucket
