@@ -211,8 +211,9 @@ export let runs = (
     }]
   },
 
-  // Stays up until its process stops, so the call is `running` for as long as
-  // somebody is listening — the way `serve` is while it answers.
+  // Stays up until its process stops, or with `once` until it has said
+  // something, so the call is `running` for as long as somebody is listening —
+  // the way `serve` is while it answers.
   session_listen: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     // A command run in-process writes as its process, not as the transcript
@@ -229,6 +230,7 @@ export let runs = (
     await listen(graph, who(call), session, {
       out: (line) => console.log(line),
       every: 1000 * (Number(args.every) || 2),
+      once: args.once == true,
       stop: host.stopping,
     })
     return []

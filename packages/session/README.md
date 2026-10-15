@@ -473,9 +473,22 @@ hook door, `POST /session/hook` (`@yaks/session/routes`; `server` names the
 forks under the session's own id, and only the hook event says which context a
 call came from (Claude Code's `agent_id`). So the door answers a call from the
 session's own line of work with what the bus owes the session, as the context
-the harness adds after the call, and a subagent's with nothing. The first event
-marks the session `hooked{}`, and from then on the bus says nothing beside a
-tool reply to it.
+the harness adds after the call, and a subagent's with nothing. The first event,
+a subagent's too, marks the session `hooked{}`, and from then on the bus says
+nothing beside a tool reply to it, since a tool call cannot say which context
+made it.
+
+The hook door speaks only after a tool call, so an agent at rest hears nothing
+there. To be woken, its own context runs the listener as a background command
+that ends at the first thing it says; the harness then wakes the agent with that
+output, and the agent runs it again:
+
+```sh
+yak session listen --session "$CLAUDE_CODE_SESSION_ID" --once
+```
+
+A listened line counts as heard once printed, so the command's output goes
+straight to the harness, never to a file another loop watches.
 
 ## Transcripts from outside
 

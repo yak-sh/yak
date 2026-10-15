@@ -3,7 +3,13 @@
 // delivered to it, a letter answering one it wrote. `yak session listen` is
 // the command a harness runs under a monitor — Claude Code's Monitor tool reads
 // each line a command prints as one event — so a running agent learns about its
-// work while it works.
+// work while it works. With `once` it ends at the first lines it says, for a
+// harness that wakes its agent when a background command ends (Claude Code's
+// background Bash), so an idle agent is woken by what arrives.
+//
+// A line is marked said as it is printed, so the printing is the delivery: the
+// command's output goes to the agent's own harness, never to a file a second
+// loop watches, which can vanish and take every line after it.
 //
 // A reply is the old session's while it may still hear it, and the project's
 // once it cannot. The session that wrote a letter hears the answer, wherever
@@ -332,6 +338,8 @@ export type Ear = {
   out: (line: string) => void
   /** how long to wait between reads */
   every: number
+  /** end after the first read that says anything */
+  once?: boolean
   /** stops the loop when it aborts; a command under a monitor stops when its
    * process is killed, so this is for a program that runs it in-process */
   stop?: AbortSignal
@@ -440,7 +448,7 @@ export let hear = async (
 }
 
 /** Say everything addressed to the session as it arrives, until `stop`
- * aborts. */
+ * aborts, or until the first read that says anything when `once`. */
 export let listen = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,
   actor: Actor | null,
@@ -454,7 +462,9 @@ export let listen = async (
     )
   }
   while (!ear.stop?.aborted) {
-    await hear(graph, actor, session, ear.out)
+    let lines = 0
+    await hear(graph, actor, session, (line) => (lines++, ear.out(line)))
+    if (ear.once && lines) return
     await pause(ear.every, ear.stop)
   }
 }

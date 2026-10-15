@@ -171,16 +171,18 @@ export type Hook = {
  * The hook door's answer to one event: the lines owed to the session, when
  * the event came from the session's own line of work, as the context the
  * harness adds to it. An event from a subagent hears nothing, so what the
- * session is owed waits for the session. The first event marks the session
- * `hooked`, and from then on the bus says nothing in a tool reply to it.
+ * session is owed waits for the session. The first event, a subagent's too,
+ * marks the session `hooked`, and from then on the bus says nothing in a tool
+ * reply to it, which cannot tell the session from its subagents.
  */
 export let heard = async (g: Graph, hook: Hook): Promise<object> => {
-  if (!g.vocab.comp('notified') || hook.agent_id) return {}
+  if (!g.vocab.comp('notified')) return {}
   let said = typeof hook.session_id == 'string' ? hook.session_id : ''
   let session = said ? await sessionFor(g, said) : undefined
   if (!session?.session) return {}
   let id = session.entity.eid
   if (!session.hooked) await g.apply([{ entity: { eid: id }, hooked: {} }])
+  if (hook.agent_id) return {}
   let lines = (await owed(g, id)).map(({ line }) => line)
   return lines.length
     ? {

@@ -161,6 +161,10 @@ test('a session hears at its own hook, never through a subagent', async () => {
   let g = bare(laid(POSTED))
   assertEquals(await heard(g, fork), {})
   assertEquals(await said(g, 'letter'), false)
+  // a subagent's own tool reply, which wears the session's id, takes nothing
+  let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
+  assertEquals(await reply(g, call), [])
+  assertEquals(await said(g, 'letter'), false)
   let told = await heard(g, {
     session_id: 'outside',
     hook_event_name: 'PostToolUse',

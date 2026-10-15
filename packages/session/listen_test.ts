@@ -1,4 +1,4 @@
-import { equal, test } from '@yaks/testing'
+import { equal, test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
@@ -12,7 +12,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { sessionDoc } from './comp.ts'
-import { hear, heirs, pending, said } from './listen.ts'
+import { hear, heirs, listen, pending, said } from './listen.ts'
 import { statusComputed } from './state.ts'
 
 let vocab = loadVocab([docDoc, sessionDoc], [idKeywords])
@@ -269,4 +269,28 @@ test('a native transcript at rest hears only what is addressed to it, never what
     (await pending(rest, s)).map(({ item }) => item.entity.eid).sort()
   equal(await heard('resting'), ['nudge'])
   equal(await heard('working'), ['alert', 'news'])
+})
+
+test('a listener told once waits for something to say, says it and ends', async () => {
+  let g = office()
+  await g.apply([{ entity: { eid: 'me' }, session: { id: 'me' } }])
+  let reads = 0
+  let lines: string[] = []
+  let ended = false
+  listen(
+    { ...g, read: (q) => (reads++, g.read(q)) },
+    null,
+    'me',
+    { out: (line) => lines.push(line), every: 1, once: true },
+  ).then(() => ended = true)
+  await until(() => reads > 20) // a few reads with nothing to say
+  equal(ended, false)
+  await g.apply([{
+    entity: { eid: 'mail' },
+    knock: { target: 'me' },
+    doc: { body: 'a reply' },
+  }])
+  await until(() => ended)
+  equal(lines.length, 1)
+  equal((await g.get(['mail']))[0].notified != null, true)
 })
