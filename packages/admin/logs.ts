@@ -361,17 +361,28 @@ export let errors = async (
       : `Time to fix: no bug resolved in the last ${last}`,
   )
   // Each fix beside the bug it closed, newest first, as its resolver
-  // explained it.
+  // explained it; those resolved before explanations were kept are counted.
   let resolvedAt = (b: Bundle) => text(object(b.resolved).at)
+  let bare = 0
   for (
     let row of fixed.toSorted((a, b) =>
       resolvedAt(b).localeCompare(resolvedAt(a))
     )
   ) {
     let ms = fixtime(row), lines = explained(row)
+    if (!lines.length) {
+      bare++
+      continue
+    }
     out(`Resolved${ms == undefined ? '' : ` in ${span(ms)}`}: ${named(row)}`)
     for (let [label, said] of lines) out(`  ${label}: ${line(said)}`)
-    if (!lines.length) out('  No explanation was recorded.')
+  }
+  if (bare) {
+    out(
+      `${bare} bug${
+        bare == 1 ? '' : 's'
+      } resolved with no explanation recorded`,
+    )
   }
   let oldest = rows.reduce<Bundle | undefined>(
     (a, b) => !a || opened(b) < opened(a) ? b : a,
