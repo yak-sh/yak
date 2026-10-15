@@ -125,7 +125,10 @@ box. A query that works on the box can be refused in a store.
   reads 0 ms. Work is bounded by rows or batches (`mover.ts`).
 - **128 MB per isolate**, shared by every object in it (`HELD` in
   packages/embedding/held.ts caps vector copies at 48 MB; the vectors are
-  `search-and-embeddings`).
+  `search-and-embeddings`). The kernel Worker has the same 128 MB, so a body
+  that can be large is read as it arrives, never held whole: the drop door
+  reads its form and zip as they stream (form.ts, unzip.ts) and pins each
+  file as it comes out (tools.ts `pinning`).
 - **Rows read are billed.** Installation keeps planner statistics through
   @yaks/sqlite's `analyzed`: Durable Objects permit optimize but refuse
   analysis_limit, so an analyze reads full indexes. Installation only owes
