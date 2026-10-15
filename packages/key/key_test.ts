@@ -4,7 +4,14 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import { type Bundle, graph, Stale, token, type Was } from '@yaks/graph'
+import {
+  type Bundle,
+  type Graph,
+  graph,
+  Stale,
+  token,
+  type Was,
+} from '@yaks/graph'
 import { isPromise } from '@yaks/fp'
 import { keyEid } from './eid.ts'
 import { keyed, unkeyed } from './say.ts'
@@ -34,16 +41,28 @@ let read = (g: ReturnType<typeof libraryGraph>, q: string) =>
 
 let DUNE = '9780441013593'
 
-test('a key states itself and is stored', () => {
+// A library where b1 already holds Dune's isbn, stated through the key.
+let dune = () => {
   let g = books(libraryGraph())
+  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+  return g
+}
+
+// A case over a library of its own where b1 holds Dune, built at load.
+let holding = (name: string, fn: (g: Graph) => void) => {
+  let g = dune()
+  test(name, () => fn(g))
+}
+
+let stating = books(libraryGraph())
+test('a key states itself and is stored', () => {
+  let g = stating
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
   assertEquals(read(g, '.isbn'), [keyEid('isbn', DUNE)])
   assertEquals(read(g, '.key.value=' + DUNE), [keyEid('isbn', DUNE)])
 })
 
-test('the same value stated twice is one entity', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+holding('the same value stated twice is one entity', (g) => {
   sync(g.apply([keyed('isbn', 'b1', DUNE)]))
   assertEquals(read(g, '.isbn').length, 1)
 })
@@ -106,9 +125,7 @@ test('a key written anywhere but its own id is refused', () => {
   )
 })
 
-test('a held value takes the batch onto its holder', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+holding('a held value takes the batch onto its holder', (g) => {
   // The seed, written again from scratch: a fresh `$alias` and the same value.
   let out = sync(g.apply([
     { entity: { eid: '$b' }, book: { title: 'Dune (1965)' } },
@@ -127,9 +144,7 @@ test('a held value takes the batch onto its holder', () => {
   )
 })
 
-test('a reference to the batch entity follows it onto the holder', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+holding('a reference to the batch entity follows it onto the holder', (g) => {
   let out = sync(g.apply([
     { entity: { eid: '$b' }, book: { title: 'Dune' } },
     { entity: { eid: '$k' }, key: { of: '$b', value: DUNE }, isbn: {} },
@@ -142,9 +157,7 @@ test('a reference to the batch entity follows it onto the holder', () => {
   )
 })
 
-test('a client-minted entity claiming a held value is refused', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+holding('a client-minted entity claiming a held value is refused', (g) => {
   assertThrows(
     () => sync(g.apply([keyed('isbn', 'b2', DUNE)])),
     Error,
@@ -152,17 +165,9 @@ test('a client-minted entity claiming a held value is refused', () => {
   )
 })
 
-// A library where b1 already holds Dune's isbn, stated through the key.
-let dune = () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
-  return g
-}
-
-let dying = dune()
-test('a key dies with what it named', () => {
-  sync(dying.apply([{ entity: { eid: 'b1' }, $delete: true }]))
-  assertEquals(read(dying, '.isbn'), [])
+holding('a key dies with what it named', (g) => {
+  sync(g.apply([{ entity: { eid: 'b1' }, $delete: true }]))
+  assertEquals(read(g, '.isbn'), [])
 })
 
 let freed = dune()
@@ -172,18 +177,14 @@ test('a value is free again once what it named is gone', () => {
   assertEquals(read(freed, '.key.of=b2'), [keyEid('isbn', DUNE)])
 })
 
-test('a retired value can be claimed again', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+holding('a retired value can be claimed again', (g) => {
   sync(g.apply([unkeyed('isbn', DUNE)]))
   assertEquals(read(g, '.isbn'), [])
   sync(g.apply([keyed('isbn', 'b2', DUNE)]))
   assertEquals(read(g, '.key.of=b2'), [keyEid('isbn', DUNE)])
 })
 
-test('held answers who holds each value, in one get', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+holding('held answers who holds each value, in one get', (g) => {
   let at = g.storage.tx((tx) => held(tx, 'isbn', [DUNE, 'nobody'])) as Map<
     string,
     string
@@ -192,63 +193,65 @@ test('held answers who holds each value, in one get', () => {
 })
 
 for (let deletion of [{ $delete: true }, { tombstone: {} }]) {
-  test(`a held value transfers when its holder is explicitly deleted: ${Object.keys(deletion)[0]}`, () => {
-    let g = books(libraryGraph())
-    let eid = keyEid('isbn', DUNE)
-    sync(g.apply([keyed('isbn', 'b1', DUNE)]))
-    let out = sync(g.apply([
-      { entity: { eid: 'b1' }, ...deletion },
-      {
-        ...keyed('isbn', 'b2', DUNE),
-        $was: { key: { of: token('b1'), value: token(DUNE) } },
-      },
-    ]))
-    assertEquals(read(g, '.book'), ['b2'])
-    assertEquals(read(g, '.isbn'), [eid])
-    assertEquals(read(g, '.key.of=b2'), [eid])
-    assertEquals(out.find((b) => b.entity.eid == eid)?.isbn, {})
-  })
+  let how = Object.keys(deletion)[0]
+  holding(
+    `a held value transfers when its holder is explicitly deleted: ${how}`,
+    (g) => {
+      let eid = keyEid('isbn', DUNE)
+      let out = sync(g.apply([
+        { entity: { eid: 'b1' }, ...deletion },
+        {
+          ...keyed('isbn', 'b2', DUNE),
+          $was: { key: { of: token('b1'), value: token(DUNE) } },
+        },
+      ]))
+      assertEquals(read(g, '.book'), ['b2'])
+      assertEquals(read(g, '.isbn'), [eid])
+      assertEquals(read(g, '.key.of=b2'), [eid])
+      assertEquals(out.find((b) => b.entity.eid == eid)?.isbn, {})
+    },
+  )
 }
 
-test('explicit deletion permits a minted owner without resolving it onto the old holder', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
-  let out = sync(g.apply([
-    { entity: { eid: '$b' }, book: { title: 'New edition' } },
-    { entity: { eid: '$k' }, key: { of: '$b', value: DUNE }, isbn: {} },
-    { entity: { eid: 'b1' }, $delete: true },
-  ]))
-  let owner = out.find((b) => b.$alias == '$b')!.entity.eid
-  assert(owner != 'b1')
-  assertEquals(read(g, '.key.of=' + owner), [keyEid('isbn', DUNE)])
-  assertEquals(read(g, '.isbn'), [keyEid('isbn', DUNE)])
-})
+holding(
+  'explicit deletion permits a minted owner without resolving it onto the old holder',
+  (g) => {
+    let out = sync(g.apply([
+      { entity: { eid: '$b' }, book: { title: 'New edition' } },
+      { entity: { eid: '$k' }, key: { of: '$b', value: DUNE }, isbn: {} },
+      { entity: { eid: 'b1' }, $delete: true },
+    ]))
+    let owner = out.find((b) => b.$alias == '$b')!.entity.eid
+    assert(owner != 'b1')
+    assertEquals(read(g, '.key.of=' + owner), [keyEid('isbn', DUNE)])
+    assertEquals(read(g, '.isbn'), [keyEid('isbn', DUNE)])
+  },
+)
 
-test('a conflicting transfer precondition is refused without changing any state', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
-  let before = g.read('*')
-  assertThrows(
-    () =>
-      sync(g.apply([
-        { entity: { eid: 'b1' }, $delete: true },
-        { entity: { eid: 'b2' }, book: { title: 'Changed' } },
-        { ...keyed('isbn', 'b2', DUNE), $was: { key: { of: null } } },
-      ])),
-    Error,
-    'conflicting $was key.of',
-  )
-  assertEquals(g.read('*'), before)
-})
+holding(
+  'a conflicting transfer precondition is refused without changing any state',
+  (g) => {
+    let before = g.read('*')
+    assertThrows(
+      () =>
+        sync(g.apply([
+          { entity: { eid: 'b1' }, $delete: true },
+          { entity: { eid: 'b2' }, book: { title: 'Changed' } },
+          { ...keyed('isbn', 'b2', DUNE), $was: { key: { of: null } } },
+        ])),
+      Error,
+      'conflicting $was key.of',
+    )
+    assertEquals(g.read('*'), before)
+  },
+)
 
-test('transfer keeps guards on other properties and components atomic', () => {
-  let guards: Was[] = [
-    { key: { of: token('b1'), value: token('another value') } },
-    { entity: { num: token(-1) } },
-  ]
-  for (let was of guards) {
-    let g = books(libraryGraph())
-    sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+let guards: [string, Was][] = [
+  ['property', { key: { of: token('b1'), value: token('another value') } }],
+  ['component', { entity: { num: token(-1) } }],
+]
+for (let [other, was] of guards) {
+  holding(`transfer keeps a guard on another ${other} atomic`, (g) => {
     let before = g.read('*')
     assertThrows(() =>
       sync(g.apply([
@@ -257,12 +260,10 @@ test('transfer keeps guards on other properties and components atomic', () => {
         { ...keyed('isbn', 'b2', DUNE), $was: was },
       ])), Stale)
     assertEquals(g.read('*'), before)
-  }
-})
+  })
+}
 
-test('an ordinary conflict refuses the entire batch', () => {
-  let g = books(libraryGraph())
-  sync(g.apply([keyed('isbn', 'b1', DUNE)]))
+holding('an ordinary conflict refuses the entire batch', (g) => {
   let before = g.read('*')
   assertThrows(
     () =>
