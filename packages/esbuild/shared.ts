@@ -97,7 +97,7 @@ let groups = (names: string[], deps: (name: string) => string[]) => {
 
 // Every concrete browser export is an entry of the same splitting build.
 // This retains module identity even when consumers import different subpaths.
-let exports = (fs: Files, name: string) => {
+let exports = (fs: Pick<Files, 'read'>, name: string) => {
   let pkg = JSON.parse(fs.read(`node_modules/${name}/package.json`)!)
   let keys = typeof pkg.exports == 'object' && pkg.exports != null &&
       Object.keys(pkg.exports).some((key) => key.startsWith('.'))
@@ -138,6 +138,19 @@ type Carried = {
   uses: Common['uses']
 }
 
+// Analysis depends on app files as well as the toolkit. Validate every read,
+// including misses in resolution, so an edit or a newly supplied file cannot
+// reuse an old choice of shared packages or their used exports.
+type Analysis = {
+  value: Carried
+  reads: string[]
+  fingerprint: string
+  bytes: number
+}
+let analyses = new Map<string, Analysis>()
+let analysisBytes = 0
+let ANALYSIS_LIMIT = 4 << 20
+
 // What the pages share beyond the packages already shared, read from one
 // build of every consumer's entries. Only a toolkit package depending on an
 // npm package can carry one beside the pages, so the build runs only then. A
@@ -157,17 +170,38 @@ let carried = async (
     )
   )
   if (!npm) return { modules: {}, uses: {} }
+  let key = await digest([
+    pages,
+    stops,
+    toolkits.map((name) => [name, catalog[name].dependencies]),
+    production,
+  ])
+  let fingerprint = (paths: string[]) =>
+    digest(paths.map((path) => [path, fs.read(path)]))
+  let cached = analyses.get(key)
+  if (cached && cached.fingerprint == await fingerprint(cached.reads)) {
+    analyses.delete(key)
+    analyses.set(key, cached)
+    return cached.value
+  }
+  let reads = new Set<string>()
+  let source = {
+    read: (path: string) => {
+      reads.add(path)
+      return fs.read(path)
+    },
+  }
   let consumers = {
     '': pages,
     ...Object.fromEntries(
-      toolkits.map((name) => [name, Object.values(exports(fs, name))]),
+      toolkits.map((name) => [name, Object.values(exports(source, name))]),
     ),
   }
   let files = [...new Set(Object.values(consumers).flat())]
   let graph = phase(timing, 'carried')
   try {
     let { inputs } = await bundle(
-      fs,
+      source,
       Object.fromEntries(files.map((path, i) => [`entry-${i}`, path])),
       { define: production.define, graph: true },
     )
@@ -177,7 +211,7 @@ let carried = async (
     let names
     try {
       names = await used(
-        fs,
+        source,
         files,
         Object.assign({}, ...Object.values(entries)),
         production,
@@ -193,7 +227,28 @@ let carried = async (
         ),
       ]),
     )
-    return { modules, uses }
+    let value = { modules, uses }
+    let paths = [...reads].sort()
+    let bytes = JSON.stringify(value).length * 2 +
+      paths.reduce((n, p) => n + p.length * 2, 0)
+    // A failed analysis never replaces a successful one; Stopped propagates.
+    if (bytes <= ANALYSIS_LIMIT) {
+      analysisBytes -= analyses.get(key)?.bytes ?? 0
+      analyses.delete(key)
+      while (analysisBytes + bytes > ANALYSIS_LIMIT) {
+        let oldest = analyses.keys().next().value!
+        analysisBytes -= analyses.get(oldest)!.bytes
+        analyses.delete(oldest)
+      }
+      analyses.set(key, {
+        value,
+        reads: paths,
+        fingerprint: await fingerprint(paths),
+        bytes,
+      })
+      analysisBytes += bytes
+    }
+    return value
   } catch (e) {
     if (e instanceof Stopped) throw e
     return { modules: {}, uses: {} }
