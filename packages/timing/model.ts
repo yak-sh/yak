@@ -36,6 +36,7 @@ export type StoredSpan = {
   plugin?: string
   package?: string
   outcome?: Outcome
+  query?: string
 }
 
 /** Tracker context is supplied by the host, never obtained through a read. */
