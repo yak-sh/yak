@@ -81,15 +81,31 @@ test('platform bug list filters and sorts before its limit without importing row
   )
   equal(await box.read('.entity *'), before)
 })
-test('platform bug list applies the caller query and order at the remote store', async () => {
-  let answer = await ask('bug_list', {
-    source: 'yaks.app',
-    query: '.bug .order=bug.hits',
-    limit: 2,
-  })
-  equal(valueIn(answer)?.source, 'yaks.app')
-  equal(rows(answer).map((b) => b.entity.eid), [ids[0], ids[1]])
+// The prepared read above crosses the door whole; the caller's own query is
+// checked where each side decides it.
+test('platform bug list sends the caller query and limit to the Worker', async () => {
+  let asked: URLSearchParams | undefined
+  let worker = ((url: URL) => {
+    asked = url.searchParams
+    return Promise.resolve(Response.json([]))
+  }) as typeof fetch
+  await runs({}, config, worker).bug_list({
+    entity: { eid: ids[4] },
+    call: {
+      args: { source: 'yaks.app', query: '.bug .order=bug.hits', limit: 2 },
+    },
+  }, box)
+  equal([asked?.get('query'), asked?.get('limit')], [
+    '.bug .order=bug.hits',
+    '2',
+  ])
 })
+test('the remote store applies a caller query and order before its limit', async () =>
+  equal(
+    (await remote.bugs(undefined, '.bug .order=bug.hits', 2))
+      .map((b) => b.entity.eid),
+    [ids[0], ids[1]],
+  ))
 test('platform bug show reads retained occurrences without local ids or writes', async () => {
   equal(
     rows(await ask('bug_show', { source: 'yaks.app', bug: ids[1] }))

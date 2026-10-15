@@ -1,7 +1,10 @@
 // Tracker records are ordinary graph bundles; the helpers read that boundary.
 
-import type { Bundle, Comp } from '@yaks/graph'
+import type { Bundle, Comp, Graph } from '@yaks/graph'
 
+/** The part of a graph the tracker's handlers read and write through: a
+ * bug's grouping, its frames and its letters. */
+export type Desk = Pick<Graph, 'vocab' | 'get' | 'read' | 'apply'>
 export type Level = 'fatal' | 'error'
 export type Frame = {
   file: string

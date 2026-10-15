@@ -5,13 +5,8 @@
 import { equal, ok, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { bare } from './fixture_test.ts'
-import {
-  type Desk,
-  follow as followed,
-  notify,
-  type Options,
-} from './effects.ts'
-import { comp, str } from './model.ts'
+import { follow as followed, notify, type Options } from './effects.ts'
+import { comp, type Desk, str } from './model.ts'
 
 let options = {
   to: crypto.randomUUID(),

@@ -1,8 +1,10 @@
 // Catalog work crosses an async boundary. Groups and source text can move
 // meanwhile, but the late resolver never writes against its old snapshot.
+// Grouping and reframing run as their handlers do, over a bare store: their
+// own reads and guarded writes, without the pipeline around them.
 
 import { equal, ok, test } from '@yaks/testing'
-import { fixture } from './fixture_test.ts'
+import { bare } from './fixture_test.ts'
 import { enrichFrames } from './frames.ts'
 import { group, reframe } from './group.ts'
 import { comp } from './model.ts'
@@ -15,7 +17,7 @@ let correct = crypto.randomUUID(),
 let winner = crypto.randomUUID(), late = crypto.randomUUID()
 
 let occurrence = async () => {
-  let g = fixture()
+  let g = bare()
   let error = new Error('broken')
   error.stack = 'Error: broken\n at fail (file:///srv/a.ts:10:2)'
   await g.apply(capture(error, { sink: () => {}, eid: 'occurrence' }), {
@@ -106,7 +108,7 @@ test('frames resolved again to the same answer write nothing', async () => {
 })
 
 test('frame resolver failures retain grouping and text without self enrichment', async () => {
-  let g = fixture()
+  let g = bare()
   let error = new TypeError('catalog refused')
   error.stack =
     'TypeError: catalog refused\n at get (file:///srv/source.ts:10:2)'

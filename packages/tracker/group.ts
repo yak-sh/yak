@@ -1,7 +1,7 @@
 // Grouping decides patches from records; graph admission commits them together.
 // The occurrence link is the receipt: resends and retried effects never count twice.
 
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -9,7 +9,7 @@ import { after, same } from '@yaks/fp'
 import { absent, and, eq, every } from '@yaks/query'
 import { faultOf } from './fault.ts'
 import { enrichFrames } from './frames.ts'
-import { comp, type Frame, str, title } from './model.ts'
+import { comp, type Desk, type Frame, str, title } from './model.ts'
 
 export type Enrich = (row: Bundle) => Bundle | Promise<Bundle>
 export let bugEid = (app: string, fault: string): string =>
@@ -132,7 +132,7 @@ export let grouped = (
  * guarded counters serialize competing workers without process-local locks.
  * Contention rebases here, without spending the effect's failure attempts. */
 export let group = async (
-  g: Graph,
+  g: Desk,
   eid: string,
   enrich?: Enrich,
 ): Promise<void> => {
@@ -181,7 +181,7 @@ export let retained = (rows: Bundle[], count = 100): Set<string> => {
   return keep
 }
 
-export let trim = async (g: Graph, bug: string, count = 100): Promise<void> => {
+export let trim = async (g: Desk, bug: string, count = 100): Promise<void> => {
   let rows = await g.read(and(eq('error.bug', bug), every()))
   let keep = retained(rows, count)
   let gone = rows.filter((b) => !keep.has(b.entity.eid))
@@ -216,7 +216,7 @@ let inputs = (row: Bundle) => ({
 /** Catalog awaits cannot freeze the group or the source. Re-read both before
  * committing and keep guards through admission; contention never recounts. */
 export let reframe = async (
-  g: Graph,
+  g: Desk,
   eid: string,
   enrich: Enrich,
 ): Promise<void> => {

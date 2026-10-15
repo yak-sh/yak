@@ -5,7 +5,7 @@ import type { Bundle, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { Handlers } from '@yaks/effects'
-import { comp, str } from './model.ts'
+import { comp, type Desk, str } from './model.ts'
 import { type Enrich, group, reframe, trim } from './group.ts'
 import { enrichFrames } from './frames.ts'
 import { sourceFrames, type SourceOptions } from '@yaks/code/source'
@@ -43,9 +43,6 @@ export type Options = {
   notify?: (bugs: Bundle[]) => void | Promise<void>
   retain?: number
 }
-
-/** The part of a graph a bug's letters are read and written through. */
-export type Desk = Pick<Graph, 'vocab' | 'get' | 'read' | 'apply'>
 
 let openedAt = (row: Bundle) =>
   str(comp(row, 'regressed').at || comp(row, 'created').at)
