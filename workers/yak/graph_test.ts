@@ -12,7 +12,7 @@
 // upgrade — `WebSocketPair` and a 101 `Response` are the runtime's, not the
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
-import { clock, equal, ok, test } from '@yaks/testing'
+import { clock, equal, match, ok, test, throws } from '@yaks/testing'
 import { reported, type Tally, waited } from './lib/hops.ts'
 import {
   assert,
@@ -22,12 +22,13 @@ import {
 } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import type { Frame } from '@yaks/api'
-import { type Bundle, type Comp, type Rule, sha256 } from '@yaks/graph'
+import { type Bundle, type Comp, graph, type Rule, sha256 } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
-import { fitOf, formatted, grantEid, stands, Store } from './graph.ts'
+import { fitOf, formatted, grantEid, shapeOf, stands, Store } from './graph.ts'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from './config.ts'
@@ -216,6 +217,21 @@ let SCHEMA = JSON.stringify({
   },
 })
 
+// The same app after a deploy that added a word.
+let GROWN = JSON.stringify({
+  $defs: {
+    ...JSON.parse(SCHEMA).$defs,
+    dish: { properties: { n: { type: 'number' } } },
+  },
+})
+
+// What a store raises out of each, as a wake does (`shapeOf`), and a graph in
+// memory over each one's words.
+let schemaShape = shapeOf('ada/cookbook', SCHEMA)
+let grownShape = shapeOf('ada/cookbook', GROWN)
+let over = ({ vocab }: typeof schemaShape) =>
+  graph({ vocab, storage: ram(vocab) })
+
 let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 
 // The byline off a returned bundle. `Bundle` carries any component, so a test
@@ -230,19 +246,23 @@ let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   return store
 }
 
-test('a store wakes without its schema under the code that fitted it, and follows new words', () => {
-  let fit = fitOf('a', 'words', 'stamp')
-  ok(stands(fit, fitOf('a', 'words', 'stamp')))
+test('a store wakes without its schema under the code that fitted it, and follows new words', async () => {
+  let fit = fitOf('a', schemaShape.key, 'stamp')
+  ok(stands(fit, fitOf('a', schemaShape.key, 'stamp')))
   for (
     let moved of [
-      fitOf('b', 'words', 'stamp'),
-      fitOf('a', 'more', 'stamp'),
-      fitOf('a', 'words', 'new'),
+      fitOf('b', schemaShape.key, 'stamp'),
+      fitOf('a', grownShape.key, 'stamp'),
+      fitOf('a', schemaShape.key, 'new'),
     ]
   ) ok(!stands(fit, moved))
-  ok(!stands(null, fitOf('a', 'words', null)))
-  ok(!stands(null, fitOf(null, 'words', null)))
-  equal(fitOf(null, 'words', 'stamp'), null)
+  ok(!stands(null, fitOf('a', schemaShape.key, null)))
+  ok(!stands(null, fitOf(null, schemaShape.key, null)))
+  equal(fitOf(null, schemaShape.key, 'stamp'), null)
+  // The words it followed take a write the words it held refused.
+  let dish = [{ entity: { eid: CAKE }, dish: { n: 1 } }]
+  await throws(() => over(schemaShape).apply(dish), /unknown component: dish/)
+  match(over(grownShape).apply(dish), [{ dish: { n: 1 } }])
 })
 
 let appOwned = await (async () => {

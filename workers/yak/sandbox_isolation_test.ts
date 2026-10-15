@@ -1,8 +1,8 @@
 // A leftover process must never see a different member's command environment.
-import { equal, ok, test } from '@yaks/testing'
+import { equal, match, test } from '@yaks/testing'
 import { kv, sandboxes, workspaces } from './testing.ts'
 import type { Space } from './directory.ts'
-import { GRANT, ledger } from './grants.ts'
+import { held, ledger, mint } from './grants.ts'
 import {
   destroyed,
   destroyedAll,
@@ -16,6 +16,15 @@ import { cloudflareProvider } from '@yaks/machine/cloudflare'
 
 let space = { eid: 'isolation', slug: 'isolation' } as Space
 let secret = 'sandbox isolation probe'
+
+// The owner's grant, minted as a build's first command mints it (sandbox.ts
+// `signed`), which derives the grant key once for the file.
+let oauth = kv()
+let book = ledger(oauth)!
+let { grant: owned } = await mint(secret, book, {
+  person: 'owner',
+  space: space.slug,
+})
 
 let containers = () => {
   let tokens = new Map<string, string>()
@@ -56,6 +65,31 @@ let containers = () => {
   }
 }
 
+test('a member cannot read another member’s grant through leftover sandbox code', async () => {
+  let box = containers()
+  let env = { SANDBOX: box.SANDBOX, OAUTH_KV: oauth, SESSION_SECRET: secret }
+  let [theirs, mine] = [named(space, 'editor'), named(space, 'owner')]
+  let provider = cloudflareProvider(box.SANDBOX)
+  let editor = await provider.wake({ id: theirs })
+  let leftover = await editor.machine.start('leftover-process')
+  let owner = await provider.wake({ id: mine })
+  // The placeholder the owner's command holds is swapped for the owner's
+  // token, as the key it was sealed under reads it, and only in the owner's
+  // container.
+  await book.wear(mine, owned)
+  let [lend] = await lent(env, mine)
+  match(await held(lend.value, secret, book), {
+    person: 'owner',
+    space: space.slug,
+  })
+  equal(await lent(env, theirs), [])
+  equal(await owner.machine.look(leftover), null)
+
+  // A build ending must leave another member's running work alone.
+  await destroyed(env, space, 'owner')
+  equal((await editor.machine.look(leftover))?.exit, undefined)
+})
+
 test('a personal sandbox keeps its files and process across calls and a space rename', async () => {
   let box = containers()
   let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
@@ -71,34 +105,6 @@ test('a personal sandbox keeps its files and process across calls and a space re
   )
   equal(await next.machine.read('/workspace/artifact'), 'compiled')
   equal((await next.machine.look(process))?.exit, undefined)
-})
-
-test('a member cannot read another member’s grant through leftover sandbox code', async () => {
-  let box = containers()
-  let env = {
-    SANDBOX: box.SANDBOX,
-    OAUTH_KV: kv(),
-    SESSION_SECRET: secret,
-  }
-  let [theirs, mine] = [named(space, 'editor'), named(space, 'owner')]
-  let provider = cloudflareProvider(box.SANDBOX)
-  let editor = await provider.wake({ id: theirs })
-  let leftover = await editor.machine.start('leftover-process')
-  let owner = await provider.wake({ id: mine })
-  // The placeholder the owner's command holds is swapped for its token only
-  // in the owner's container.
-  let book = ledger(env.OAUTH_KV)!
-  let grant = { id: 'g1', person: 'owner', space: space.slug, exp: 2 ** 31 }
-  await book.keep(grant)
-  await book.wear(mine, grant)
-  let [lend] = await lent(env, mine)
-  ok(lend.value.startsWith(GRANT), 'the owner container is lent its grant')
-  equal(await lent(env, theirs), [])
-  equal(await owner.machine.look(leftover), null)
-
-  // A build ending must leave another member's running work alone.
-  await destroyed(env, space, 'owner')
-  equal((await editor.machine.look(leftover))?.exit, undefined)
 })
 
 test('a legacy compile and workspace survive without giving its leftover code fresh credentials', async () => {
