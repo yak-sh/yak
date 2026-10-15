@@ -140,7 +140,8 @@ export let raise = (db: Driver) => {
 }
 
 // How long an applied write keeps its answer for a resend. The kernel resends
-// within seconds (door.ts `backoff`), so this is room to spare.
+// within half a minute (@yaks/durable-object `backoff`), so this is room to
+// spare.
 let WINDOW = 10 * 60_000
 let BATCH = 16
 

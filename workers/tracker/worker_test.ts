@@ -97,6 +97,9 @@ let lost = () => Error('Network connection lost.')
 test('a mark lost or reset on its way to the object is sent again', async () => {
   let reset = Object.assign(Error('reset'), { retryable: true })
   equal(await marked([lost(), reset]), [200, Array(3).fill('{"bug":"b"}'), 0])
-  equal((await marked(Array.from({ length: 4 }, lost)))[0], 503)
+  equal(
+    (await marked(Array.from({ length: backoff.pauses.length + 1 }, lost)))[0],
+    503,
+  )
   equal(await marked([Error('boot failed')]), [503, ['{"bug":"b"}'], 1])
 })

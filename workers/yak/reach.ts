@@ -319,7 +319,7 @@ let asked = async (
       }
     } catch (e) {
       // A store left out of the merge is a quieter answer, never a silent one.
-      caught(e, { request: 'reach' })
+      caught(e, { request: 'reach', space: r.space.slug, app: r.app.slug })
       return { at: at(r), why: e }
     }
   }))

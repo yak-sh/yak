@@ -145,13 +145,15 @@ export let lost = (e: unknown): boolean =>
 // it. An object restarts for each newer deploy that reaches it, and each
 // restart fails what it had in flight: a call cut off by one deploy's restart
 // can have its retry cut off by the next one's when two land seconds apart.
-// The runtime's own internal error can refuse calls into an object for seconds
-// while it answers others, and sends milliseconds apart all meet it. `wait`
-// spends a pause, half of it or more, so calls that failed together do not
-// return together; a test replaces it.
+// While the runtime moves an object it can refuse calls into it with its own
+// internal error for ten to twenty seconds, so the pauses together outlast
+// that: a read waits for the object rather than failing a person's page or
+// leaving a store out of an answer. Only a call that keeps failing spends
+// them. `wait` spends a pause, half of it or more, so calls that failed
+// together do not return together; a test replaces it.
 export let backoff: { pauses: number[]; wait: (ms: number) => Promise<void> } =
   {
-    pauses: [100, 500, 2000],
+    pauses: [100, 500, 2000, 5000, 15000],
     wait: (ms) => sleep(ms / 2 + Math.random() * ms / 2),
   }
 
