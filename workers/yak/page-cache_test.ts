@@ -1,312 +1,193 @@
-// An app's public pages kept at the Site entrypoint (page-cache.ts), through
-// the gateway's own door, with Site behind a cache that behaves as Cloudflare's
-// does: kept by URL while public, tagged, and purged by tag.
+// An app's public pages kept at the Site entrypoint (page-cache.ts): the
+// gateway's half (`asked`) over a Site with a cache that behaves as
+// Cloudflare's does (kept by URL while public, tagged, purged by tag), the
+// tags a page carries, and the writes that owe them a purge
+// (facets/pages-graph.ts `owed`). The address Site serves from is apps.ts
+// `edged`; the booted kernel is not needed to decide what is kept.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import * as apps from './apps.ts'
-import { stamp } from './directory.ts'
+import type { Bundle } from '@yaks/graph'
 import type { Env } from './env.ts'
-import { keep, kept } from './page-cache.ts'
-import * as sitePart from './site.ts'
+import { owed } from './facets/pages-graph.ts'
+import {
+  asked,
+  keep,
+  keepable,
+  kept,
+  passed,
+  unkept,
+  visitor,
+} from './page-cache.ts'
+import { clock } from './timing.ts'
 import { dataset } from './testing.ts'
-import { call, type Ctx } from './tools.ts'
-import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 
-type Held = {
-  status: number
-  headers: Headers
-  body: ArrayBuffer
-  tags: string[]
-}
+let space = { eid: 's', slug: 'ada' }
+let app = { eid: 'a', slug: 'cookbook' }
 
-// A service binding as the runtime lends one: every property is a method of
-// the far side, its own properties too, so a method is called as one.
-type Far = Record<string, (...args: never[]) => unknown>
-let remote = (far: Far, name: string): unknown =>
-  new Proxy((...args: never[]) => {
-    if (!Object.hasOwn(far, name)) {
-      throw new TypeError(
-        `The RPC receiver does not implement the method "${name}".`,
-      )
-    }
-    return far[name](...args)
-  }, { get: (_, prop) => remote(far, `${name}.${String(prop)}`) })
-let binding = <T extends Far>(far: T): T =>
-  new Proxy(far, {
-    get: (_, name) => name == 'then' ? undefined : remote(far, String(name)),
+let page = (text: string, status = 200) =>
+  new Response(`<body>${text}</body>`, {
+    status,
+    headers: {
+      'content-type': 'text/html',
+      'cache-control': 'public, no-cache',
+      etag: `"${text}"`,
+    },
   })
 
-// Site with its cache in front, what that cache holds, and how often Site
-// was asked.
-let edge = () => {
-  let held = new Map<string, Held>()
-  let env!: Env
+// Site with its cache in front: what Site makes of an address it is asked
+// (`origin`, given the visitor it serves it to) is kept by URL while public.
+let edge = (origin: (visitor: Request) => Response) => {
+  let held = new Map<string, Response>()
   let asks = 0
-  let sent = (e: Held, status: string) => {
-    let headers = new Headers(e.headers)
-    headers.set('cf-cache-status', status)
-    let empty = [204, 304].includes(e.status)
-    return new Response(empty ? null : e.body.slice(0), {
-      status: e.status,
-      headers,
-    })
-  }
-  let site = binding({
+  return {
+    held,
+    asks: () => asks,
     fetch: async (req: Request) => {
       asks++
       let hit = held.get(req.url)
-      if (hit) return sent(hit, 'HIT')
-      let got = await sitePart.fetch(req, env)
-      let e = {
-        status: got.status,
-        headers: got.headers,
-        body: await got.arrayBuffer(),
-        tags: (got.headers.get('cache-tag') ?? '').split(',').filter(Boolean),
+      if (hit) return hit.clone()
+      let got = await kept(origin(visitor(req.url)!))
+      if (got.headers.get('cache-control')?.startsWith('public')) {
+        held.set(req.url, got.clone())
       }
-      if (!got.headers.get('cache-control')?.startsWith('public')) {
-        return sent(e, 'BYPASS')
-      }
-      held.set(req.url, e)
-      return sent(e, 'MISS')
+      return got
     },
-    purge: (tags: string[]) => {
-      for (let [url, e] of held) {
-        if (e.tags.some((t) => tags.includes(t))) held.delete(url)
-      }
-      return Promise.resolve({ success: true, errors: [] })
-    },
-  })
+  }
+}
+
+// The gateway over such a Site, and the views it counted.
+let gateway = (origin: (visitor: Request) => Response, counting = false) => {
+  let site = edge(origin)
+  let views = dataset()
+  let env = {
+    SITE: site,
+    ...counting ? { VIEWS: views } : {},
+  } as unknown as Env
   return {
     site,
-    bind: (e: Env) => env = e,
-    pages: () => [...held.values()].filter((e) => e.status == 200).length,
-    asks: () => asks,
+    views,
+    env,
+    get: (url = 'https://ada.yaks.app/cookbook/', init: RequestInit = {}) =>
+      asked(new Request(url, init), env, clock()),
   }
 }
 
-let page = (bytes: string) =>
-  `<!doctype html><head></head><body>${bytes}</body>`
-
-// Ada's public cookbook, served from its files and built with no worker, the
-// way a release that ships none records it.
-let cookbook = async (vars: Partial<Env> = {}) => {
-  let cache = edge()
-  let scenario = platform({ ...vars, SITE: cache.site })
-  let { env, files } = scenario
-  cache.bind(env)
-  let { dir, space, app } = await seeded(env)
-  await stamp(env, {
-    entities: [{ entity: { eid: app.eid }, app: { worker: '' } }],
-  })
-  let put = (bytes: string) =>
-    files.held.set(
-      'ada/cookbook/index.html',
-      new TextEncoder().encode(page(bytes)),
-    )
-  put('one')
-  let ctx = { env, dir, person: ADA } as unknown as Ctx
-  let tool = (name: string, args: Record<string, unknown> = {}) =>
-    call(ctx, name, { space: 'ada', app: 'cookbook', ...args })
-  let open = async (path = '/cookbook/', init: RequestInit = {}) => {
-    let res = await apps.fetch(visit(path, init), env)
-    return {
-      res,
-      body: await res.text(),
-      cache: /page;dur=[\d.]+;desc=(\w+)/.exec(
-        res.headers.get('server-timing') ?? '',
-      )?.[1],
-      timing: res.headers.get('server-timing') ?? '',
-    }
+test('an open app is kept as a public one is', () => {
+  for (let access of ['public', 'open'] as const) {
+    assert(keepable({ access, worker: '' }), access)
   }
-  return { scenario, env, space, app, cache, put, tool, open }
-}
+  assert(!keepable({ access: 'private', worker: '' }))
+})
+
+test("a sandboxed page and a worker's page are never kept", () => {
+  let sandboxed = { installed: { sandboxed: new Date().toISOString() } }
+  assert(!keepable({ access: 'public', worker: '', ...sandboxed } as never))
+  assert(!keepable({ access: 'public', worker: 'app-script' }))
+})
 
 test('a public page is answered from the edge after its first view', async () => {
-  let views = dataset()
-  let { scenario, put, open } = await cookbook({ VIEWS: views })
-  using _ = scenario
-  let first = await open()
-  assertEquals(first.res.status, 200)
-  assertEquals(first.cache, 'MISS')
-  assertStringIncludes(first.body, '<base href="/cookbook/">')
-  assertStringIncludes(first.body, 'Made with ')
-  // Changed under it with no directory write, the kept page is what answers,
-  // and the app was not read for it.
-  put('two')
-  let again = await open()
-  assertEquals(again.cache, 'HIT')
-  assertEquals(again.body, first.body)
-  assert(!/\bapp;/.test(again.timing), again.timing)
-  assertEquals(again.res.headers.get('cache-control'), 'public, no-cache')
+  let text = 'one'
+  let origins = 0
+  let g = gateway(() => (origins++, keep(page(text), space, app)))
+  let first = (await g.get())!
+  // Changed under it, the kept page is what answers, and the app was not read.
+  text = 'two'
+  let again = (await g.get())!
+  assertEquals(await again.text(), await first.text())
+  assertEquals(origins, 1)
+  assertEquals(again.headers.get('cache-control'), 'public, no-cache')
   for (let name of ['cache-tag', 'x-yak-seen', 'x-yak-browser-cache', 'age']) {
-    assertEquals(again.res.headers.get(name), null, name)
+    assertEquals(again.headers.get(name), null, name)
   }
-  let etag = again.res.headers.get('etag')!
-  let fresh = await open('/cookbook/', { headers: { 'if-none-match': etag } })
-  assertEquals(fresh.res.status, 304)
-  let head = await open('/cookbook/', { method: 'HEAD' })
-  assertEquals([head.res.status, head.body], [200, ''])
-  // The two pages sent and the HEAD are views; the 304 sent none.
-  assertEquals(views.points.length, 3)
 })
+
+test('a kept page answers a revalidation with a 304, and counts a HEAD as a view', async () => {
+  let g = gateway(() => keep(page('one'), space, app), true)
+  let head = (await g.get(undefined, { method: 'HEAD' }))!
+  assertEquals([head.status, await head.text()], [200, ''])
+  let fresh = await g.get(undefined, {
+    headers: { 'if-none-match': head.headers.get('etag')! },
+  })
+  assertEquals(fresh!.status, 304)
+  // The HEAD is a view; the 304 sent none.
+  assertEquals(g.views.points.length, 1)
+})
+
+// A write, and the rows it leaves (the app `a` of space `s`, and the space).
+let owes = (b: Bundle) =>
+  owed([b], () =>
+    Promise.resolve([
+      { entity: { eid: 'a' }, app: { slug: 'cookbook', space: 's' } },
+      { entity: { eid: 's' }, space: { slug: 'ada' } },
+    ].filter((row) => row.entity.eid == b.entity.eid)))
 
 test('a deploy, a setting and a plan change are each seen at once', async () => {
-  let { scenario, env, space, tool, open } = await cookbook()
-  using _ = scenario
-  assertStringIncludes((await open()).body, 'one')
-  assertEquals((await open()).cache, 'HIT')
-  await tool('app_files', {
-    files: [{ path: 'index.html', content: page('released') }],
-  })
-  await tool('app_deploy')
-  let deployed = await open()
-  assertEquals(deployed.cache, 'MISS')
-  assertStringIncludes(deployed.body, 'released')
-  await tool('app_set', { theme_color: '#1b3a2f' })
-  assertStringIncludes(
-    (await open()).body,
-    '<meta name="theme-color" content="#1b3a2f">',
+  assertEquals(await owes({ entity: { eid: 'a' }, app: { version: 2 } }), [
+    'app:a',
+  ])
+  assertEquals(
+    await owes({ entity: { eid: 'a' }, theme: { color: '#1b3a2f' } }),
+    ['app:a'],
   )
-  await stamp(env, {
-    entities: [{ entity: { eid: space.eid }, plan: { tier: 'plus' } }],
-  })
-  let plus = await open()
-  assertEquals(plus.cache, 'MISS')
-  assert(!plus.body.includes('Made with '), plus.body)
+  assertEquals(await owes({ entity: { eid: 's' }, plan: { tier: 'plus' } }), [
+    'space:s',
+  ])
 })
 
-test('a page made private leaves the edge, and its members are served it', async () => {
-  let { scenario, cache, put, tool, open } = await cookbook()
-  using _ = scenario
-  await open()
-  assertEquals(cache.pages(), 1)
-  await tool('app_set', { access: 'private' })
-  assertEquals(cache.pages(), 0)
-  let stranger = await open()
-  assertEquals(stranger.res.status, 303)
-  put('members only')
-  let cookie = await as(ADA)
-  for (let _ of [1, 2]) {
-    let member = await open('/cookbook/', { headers: { cookie } })
-    assertStringIncludes(member.body, 'members only')
-    assertStringIncludes(member.res.headers.get('cache-control')!, 'private')
-  }
-  assertEquals(cache.pages(), 0)
+test('a page made private leaves the edge, and is no longer asked of Site', async () => {
+  assertEquals(
+    await owes({ entity: { eid: 'a' }, app: { access: 'private' } }),
+    [
+      'app:a',
+    ],
+  )
+  let g = gateway(() => keep(page('one'), space, app))
+  assertEquals((await g.get())!.status, 200)
+  unkept(new Request('https://ada.yaks.app/cookbook/'), g.env, '/cookbook/')
+  assertEquals(await g.get(), null)
+  assertEquals(g.site.asks(), 1)
 })
 
-test('an open app is kept as a public one is', async () => {
-  let { scenario, env, app, open } = await cookbook()
-  using _ = scenario
-  await stamp(env, {
-    entities: [{ entity: { eid: app.eid }, app: { access: 'open' } }],
-  })
-  assertEquals((await open()).cache, 'MISS')
-  let again = await open()
-  assertEquals(again.cache, 'HIT')
-  assertStringIncludes(again.res.headers.get('cache-control')!, 'private')
-})
-
-test("a sandboxed page and a worker's page are never kept", async () => {
-  for (
-    let patch of [
-      { installed: { sandboxed: new Date().toISOString() } },
-      { app: { worker: 'app-script' } },
-    ]
-  ) {
-    let { scenario, env, app, cache, open } = await cookbook()
-    using _ = scenario
-    await stamp(env, { entities: [{ entity: { eid: app.eid }, ...patch }] })
-    // Site is asked once, and about none of the app's other addresses after.
-    assertEquals((await open()).res.status, 200)
-    await open('/cookbook/another.html')
-    assertEquals(cache.pages(), 0)
-    assertEquals(cache.asks(), 1)
-  }
+test('an address Site passed is not asked of it again', async () => {
+  let g = gateway(() => passed())
+  assertEquals(await g.get(), null)
+  assertEquals(await g.get('https://ada.yaks.app/cookbook/another.html'), null)
+  assertEquals(await g.get(), null)
+  // The first address was asked; its repeat was remembered as a pass.
+  assertEquals(g.site.asks(), 2)
 })
 
 test('a missing page is kept until a deploy writes it', async () => {
-  let { scenario, tool, open } = await cookbook()
-  using _ = scenario
-  let missing = await open('/cookbook/later.html')
-  assertEquals([missing.res.status, missing.cache], [404, 'MISS'])
-  assertEquals((await open('/cookbook/later.html')).cache, 'HIT')
-  await tool('app_files', {
-    files: [{ path: 'later.html', content: page('later') }],
-  })
-  await tool('app_deploy')
-  let written = await open('/cookbook/later.html')
-  assertEquals(written.res.status, 200)
-  assertStringIncludes(written.body, 'later')
+  let missing = keep(page('lost', 404), space, app)
+  assertEquals(missing.status, 404)
+  let held = await kept(missing)
+  assertEquals(held.status, 404)
+  // It carries the tag the deploy purges.
+  assertStringIncludes(held.headers.get('cache-tag')!, 'app:a')
+  assertEquals(await owes({ entity: { eid: 'a' }, app: { version: 2 } }), [
+    'app:a',
+  ])
 })
 
 test("a space's 404 is kept until an app takes the address", async () => {
-  let { scenario, env, space, open } = await cookbook()
-  using _ = scenario
-  assertEquals((await open('/garden/')).res.status, 404)
-  assertEquals((await open('/garden/')).cache, 'HIT')
-  scenario.files.held.set(
-    'ada/garden/index.html',
-    new TextEncoder().encode(page('garden')),
+  let held = await kept(keep(page('none', 404), space, null))
+  assertEquals(held.headers.get('cache-tag'), 'space:s')
+  assertEquals(
+    await owes({ entity: { eid: 'a' }, app: { slug: 'garden', space: 's' } }),
+    ['space:s'],
   )
-  await stamp(env, {
-    entities: [{
-      entity: { eid: '$app' },
-      app: {
-        slug: 'garden',
-        space: space.eid,
-        version: 1,
-        access: 'public',
-        store: 'ada/garden.ccc333',
-        worker: '',
-      },
-    }],
-  })
-  let garden = await open('/garden/')
-  assertEquals(garden.res.status, 200)
-  assertStringIncludes(garden.body, 'garden')
 })
 
 test('two spaces at one path keep two pages', async () => {
-  let { scenario, env, cache, open } = await cookbook()
-  using _ = scenario
-  await stamp(env, {
-    entities: [
-      {
-        entity: { eid: '$space' },
-        doc: { title: 'bob' },
-        space: { slug: 'bob' },
-      },
-      {
-        entity: { eid: '$app' },
-        doc: { title: 'Cookbook' },
-        app: {
-          slug: 'cookbook',
-          space: '$space',
-          version: 1,
-          access: 'public',
-          store: 'bob/cookbook.bbb222',
-          worker: '',
-        },
-      },
-    ],
-  })
-  scenario.files.held.set(
-    'bob/cookbook/index.html',
-    new TextEncoder().encode(page('bob')),
-  )
-  let bob = () =>
-    apps.fetch(new Request('https://bob.yaks.app/cookbook/'), env)
-      .then((r) => r.text())
-  for (let _ of [1, 2]) {
-    assertStringIncludes((await open()).body, 'one')
-    assertStringIncludes(await bob(), 'bob')
-  }
-  assertEquals(cache.pages(), 2)
+  let g = gateway((who) => keep(page(new URL(who.url).hostname), space, app))
+  let ada = (await g.get('https://ada.yaks.app/cookbook/'))!
+  let bob = (await g.get('https://bob.yaks.app/cookbook/'))!
+  assertStringIncludes(await ada.text(), 'ada.yaks.app')
+  assertStringIncludes(await bob.text(), 'bob.yaks.app')
+  assertEquals(g.site.held.size, 2)
 })
 
 test('an answer that sets a cookie is never kept', async () => {
-  let space = { eid: 's', slug: 'ada' }
-  let app = { eid: 'a', slug: 'cookbook' }
   let cookie = new Response('hi', { headers: { 'set-cookie': 'a=b' } })
   let ok = new Response('hi')
   assertEquals((await kept(keep(cookie, space, app))).status, 204)

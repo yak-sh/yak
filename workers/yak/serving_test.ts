@@ -36,9 +36,11 @@ import * as apps from './apps.ts'
 import * as fileDoor from './files.ts'
 import {
   type App,
+  appOf,
   appStore,
   directory,
   type Row,
+  type Space,
   spaceOf,
   stamp,
   storeName,
@@ -2124,3 +2126,53 @@ for (const path of ['/src/main.ts', '/dist/index.html', '/wrangler.jsonc']) {
     assert(!r.body.includes('the source page'))
   })
 }
+
+// What the gateway decides inline about a build's page, on its own.
+test('a folder sent to its slash keeps the query', () => {
+  let r = apps.folderMove('docs/', '?q=1', 'public, no-cache')
+  assertEquals([r.status, r.headers.get('location')], [307, 'docs/?q=1'])
+})
+
+test('an app marked rooted keeps its pages based at the root', () => {
+  let row = (more: object) =>
+    appOf({
+      entity: { eid: 'a' },
+      app: { slug: 'cookbook', space: 's', version: 1, access: 'public' },
+      ...more,
+    } as Row)
+  assertEquals([row({}).rooted, row({ rooted: {} }).rooted], [false, true])
+})
+
+test("an app worker's own request is woven no scripts, and no badge", () => {
+  let space = (tier: 'plus' | null) => ({ tier }) as Space
+  let asked = new Request('https://ada.yaks.app/', {
+    headers: { 'x-yak-grant': 'g' },
+  })
+  let visit = new Request('https://ada.yaks.app/')
+  assertEquals(apps.badge(asked, space(null)), null)
+  assertEquals(apps.badge(visit, space(null)), true)
+  assertEquals(apps.badge(visit, space('plus')), false)
+})
+
+test('a drawing that fails leaves the app wearing the platform tile', async () => {
+  let app = { access: 'public' } as App
+  let r = (await apps.unwritten(
+    new Request('https://ada.yaks.app/cookbook/icon.png'),
+    { ASSETS } as unknown as Env,
+    app,
+    '/icon.png',
+    '/cookbook/',
+  ))!
+  assertEquals(r.headers.get('content-type'), 'image/png')
+  assertEquals(
+    new Uint8Array(await r.arrayBuffer()),
+    await Deno.readFile(new URL('./public/connector-512.png', import.meta.url)),
+  )
+})
+
+test('a public app is cached for everyone, an open or private one for its readers', () => {
+  let rule = (access: string) => apps.keeping({ access } as App)
+  assertEquals(rule('public'), 'public, no-cache')
+  assertStringIncludes(rule('open'), 'private')
+  assertStringIncludes(rule('private'), 'private')
+})

@@ -131,7 +131,7 @@ import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
 import { APP_JSON, type Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
-import { asked, keep, passed, unkept } from './page-cache.ts'
+import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
 import { recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
@@ -646,7 +646,7 @@ export let manifesting = (app: App, at: string) => ({
 //
 // A file's validator is its content, and a page's is the document as sent
 // (`woven`).
-let keeping = (app: App) =>
+export let keeping = (app: App) =>
   `${app.access == 'public' ? 'public' : 'private'}, ` +
   'no-cache'
 
@@ -713,7 +713,7 @@ let media = async (
 // — so an app on a home screen wears the platform's face rather than the
 // browser's blank sheet. iOS fills a transparent icon with black, which is why
 // the tile that carries its own ground is the right one to fall back to.
-let unwritten = async (
+export let unwritten = async (
   req: Request,
   env: Env,
   app: App,
@@ -740,6 +740,21 @@ let unwritten = async (
     },
   })
 }
+
+// A folder asked for without its slash, sent to it: the location is relative,
+// so it holds at any mount, and the query goes with it.
+export let folderMove = (to: string, search: string, cache: string) =>
+  new Response(null, {
+    status: 307,
+    headers: { location: to + search, 'cache-control': cache },
+  })
+
+// Whether a page wears the platform's scripts as the files door hands it, and
+// the badge among them: not when an app's worker asked for it, since what the
+// worker answers is woven on its way out (`reported`), and the browser would
+// run each script twice. Otherwise the badge is the free plan's.
+export let badge = (req: Request, space: Space) =>
+  bearing(req) ? null : free(space)
 
 let asset = async (
   req: Request,
@@ -784,13 +799,7 @@ let asset = async (
   let to = got.status == 307 ? got.headers.get('location') : null
   if (to) {
     await got.body?.cancel()
-    return new Response(null, {
-      status: 307,
-      headers: {
-        location: to + new URL(req.url).search,
-        'cache-control': keeping(app),
-      },
-    })
+    return folderMove(to, new URL(req.url).search, keeping(app))
   }
   // The app's own 404.html answering a page that is not there.
   let lost = got.status == 404 && got.headers.has(files.FILE)
@@ -823,7 +832,7 @@ let asset = async (
     bare,
     app,
     sandbox ? await sandbox() : '',
-    bearing(req) ? null : free(space),
+    badge(req, space),
     base,
   )
   if (sandbox) {
@@ -2740,7 +2749,7 @@ let served = async (
   // carries its visitor's token, and an app's worker may answer each visitor
   // differently. Nor does the gateway ask Site about such an app's other
   // addresses for a while.
-  if (walls || mode(app.access) == 'private' || app.worker !== '') {
+  if (!keepable(app)) {
     if (edge) return passed()
     unkept(req, env, bare)
   }

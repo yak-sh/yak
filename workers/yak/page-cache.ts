@@ -29,8 +29,11 @@
 // The visitor's own answer is the gateway's: it counts the view and the use
 // from what the kept page says it was, gives the browser the app's own cache
 // rule, and answers a revalidation with a 304.
+import { mode } from '@yaks/member'
+import type { App } from './directory.ts'
 import { bearing } from './dispatch.ts'
 import type { Env } from './env.ts'
+import { sandboxed } from './installed.ts'
 import { matches } from './public-cache.ts'
 import { appTag, spaceTag } from './purge.ts'
 import { hostOf, MOUNT } from './route.ts'
@@ -131,6 +134,14 @@ export let keep = (
   )
   return new Response(page.body, { status: page.status, headers })
 }
+
+/** Whether Site may keep an app's pages: the own files of an app anyone may
+ * read (public or open) and nothing else. A private app's pages are its
+ * members', a sandboxed page carries its visitor's token, and an app's worker
+ * may answer each visitor differently. */
+export let keepable = (app: Pick<App, 'access' | 'worker' | 'installed'>) =>
+  !sandboxed(app as App) && mode(app.access) != 'private' &&
+  app.worker === ''
 
 /** That the gateway served an app whose pages are never kept, mounted at
  * `at`: it asks Site about none of the app's addresses for a while. */
