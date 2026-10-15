@@ -2060,7 +2060,6 @@ export let game = (
         bundles.push({ entity: { eid: me }, fight: fought })
       }
       net.move(bundles)
-      net.tick()
 
       let foe =
         mobs.find((m) =>

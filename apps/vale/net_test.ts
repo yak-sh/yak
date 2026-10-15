@@ -409,7 +409,6 @@ test('a gathering refused locally or by the store does not break later writes', 
     )
     assertEquals(sent.length, where == 'page' ? 0 : 1, where)
     net.keep(harvest('third', 'another-tree'))
-    net.flush()
     await pass(time)
     assertEquals(trouble.length, 1, where)
     assertEquals((await store.read('.gathered')).map((b) => b.entity.eid), [
