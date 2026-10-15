@@ -1,4 +1,4 @@
-import { copyOf, publicDirectory } from './directory-copy.ts'
+import { anonymousPage, copyOf, publicDirectory } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
 // the apex's two pages drawn from directory listings, each for at most thirty
 // seconds, and every public page an app serves (page-cache.ts), keyed by the
@@ -26,6 +26,38 @@ let uncached = (page: Response) => {
 // not the request hostname.
 export let at = (env: Host, path: string) =>
   `https://site.invalid/${encodeURIComponent(apex(env))}${path}`
+
+// The gateway's anonymous subrequest carries validators and deploy selection,
+// never browser credentials. HEAD uses that same GET and drops only its body.
+export let forward = async (req: Request, env: Env, path: string) => {
+  // A deploy probe selects a version at the gateway and at its cached Site
+  // entrypoint. Without the override here the body can come from the previous
+  // deployment even while the gateway runs the requested version.
+  let headers = new Headers()
+  for (
+    let name of [
+      'if-none-match',
+      'cache-control',
+      'Cloudflare-Workers-Version-Overrides',
+    ]
+  ) {
+    let value = req.headers.get(name)
+    if (value) headers.set(name, value)
+  }
+  let anonymous = anonymousPage(req)
+  if (!anonymous) headers.set('x-yak-no-copy', '1')
+  let shown =
+    await (anonymous
+      ? bound(env.SITE, fetch, env)
+      : bound(undefined, fetch, env)).fetch(
+        new Request(at(env, path), { headers }),
+      )
+  if (req.method == 'GET') {
+    return shown
+  }
+  await shown.body?.cancel()
+  return new Response(null, { status: shown.status, headers: shown.headers })
+}
 
 let checksum = async (body: string) =>
   [
@@ -76,6 +108,16 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return uncached(page)
   }
   if ('stale' in serving && serving.stale) return uncached(page)
+  return validated(req, page, env, path)
+}
+
+// Validators include the deployment even when two releases render equal bytes.
+export let validated = async (
+  req: Request,
+  page: Response,
+  env: Pick<Env, 'CF_VERSION_METADATA'>,
+  path: string,
+): Promise<Response> => {
   let body = await page.text()
   let headers = new Headers(page.headers)
   headers.delete('content-length')

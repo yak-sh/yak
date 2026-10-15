@@ -5,7 +5,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
-import { fresh, kernel } from './probe.ts'
+import { kernel } from './probe.ts'
 import { ADDRESSES } from './seo.ts'
 import type { Env } from './env.ts'
 import * as site from './site.ts'
@@ -217,75 +217,108 @@ test('the apex answers the crawler and the model', async () => {
   }
 })
 
-test('the anonymous site subrequest preserves deployment version overrides without forwarding credentials', async () => {
-  let wanted = '12345678-1234-1234-1234-123456789abc'
-  let override = `yak="${wanted}"`
-  let seen: Headers[] = []
-  let env!: Env
-  let k = await fresh({
-    SITE: {
-      fetch: (request) => {
-        let req = new Request(request)
-        seen.push(req.headers)
-        let version =
-          req.headers.get('Cloudflare-Workers-Version-Overrides') == override
-            ? wanted
-            : 'previous'
-        return Promise.resolve(
-          new Response('site', { headers: { 'x-yak-version': version } }),
-        )
-      },
-    },
-  }, (prepared) => env = prepared)
-  try {
-    seen.length = 0
-    for (let path of ['/', '/gallery']) {
-      for (let method of ['GET', 'HEAD']) {
-        let response = await k.at('yaks.app', path, {
-          method,
-          headers: {
-            'Cloudflare-Workers-Version-Overrides': override,
-            'cache-control': 'no-cache',
-            'if-none-match': '"site-validator"',
-          },
-        })
-        assertEquals(response.headers.get('x-yak-version'), wanted)
-        assertEquals(await response.text(), method == 'HEAD' ? '' : 'site')
-      }
-    }
-    assertEquals(seen.length, 4)
-    for (let headers of seen) {
-      assertEquals(
-        headers.get('Cloudflare-Workers-Version-Overrides'),
-        override,
+let wanted = '12345678-1234-1234-1234-123456789abc'
+let override = `yak="${wanted}"`
+let seen: Headers[] = []
+let forwardingEnv = {
+  SITE: {
+    fetch: (request: Request) => {
+      seen.push(request.headers)
+      let version =
+        request.headers.get('Cloudflare-Workers-Version-Overrides') == override
+          ? wanted
+          : 'previous'
+      return Promise.resolve(
+        new Response('site', { headers: { 'x-yak-version': version } }),
       )
-      assertEquals(headers.get('cache-control'), 'no-cache')
-      assertEquals(headers.get('if-none-match'), '"site-validator"')
-      assertEquals(headers.get('authorization'), null)
-      assertEquals(headers.get('cookie'), null)
-    }
-    let firstEnv = { ...env, CF_VERSION_METADATA: { id: 'previous' } }
-    let nextEnv = { ...env, CF_VERSION_METADATA: { id: wanted } }
-    let request = (etag = '') =>
-      new Request(site.at(env, '/'), {
-        headers: { 'if-none-match': etag },
-      })
-    let first = await site.fetch(request(), firstEnv)
-    let body = await first.text()
-    let etag = first.headers.get('etag')!
-    assertEquals(first.headers.get('x-yak-version'), 'previous')
-    let same = await site.fetch(request(etag), firstEnv)
-    assertEquals(same.status, 304)
-    let changed = await site.fetch(request(etag), nextEnv)
-    assertEquals(changed.status, 200)
-    assertEquals(await changed.text(), body)
-    assertEquals(changed.headers.get('x-yak-version'), wanted)
-    let current = changed.headers.get('etag')!
-    assertEquals(current == etag, false)
-    let validated = await site.fetch(request(current), nextEnv)
-    assertEquals(validated.status, 304)
-    assertEquals(validated.headers.get('x-yak-version'), wanted)
-  } finally {
-    await k.stop()
+    },
+  },
+} as Env
+let forwarded = ['/', '/gallery'].flatMap((path) =>
+  ['GET', 'HEAD'].map((method) => ({
+    path,
+    method,
+    request: new Request(`https://yaks.app${path}`, {
+      method,
+      headers: {
+        'Cloudflare-Workers-Version-Overrides': override,
+        'cache-control': 'no-cache',
+        'if-none-match': '"site-validator"',
+      },
+    }),
+  }))
+)
+
+test('the anonymous site subrequest preserves deployment version overrides without forwarding credentials', async () => {
+  seen.length = 0
+  for (let { path, method, request } of forwarded) {
+    let response = await site.forward(request, forwardingEnv, path)
+    assertEquals(response.headers.get('x-yak-version'), wanted)
+    assertEquals(await response.text(), method == 'HEAD' ? '' : 'site')
   }
+  assertEquals(seen.length, 4)
+  for (let headers of seen) {
+    assertEquals(headers.get('Cloudflare-Workers-Version-Overrides'), override)
+    assertEquals(headers.get('cache-control'), 'no-cache')
+    assertEquals(headers.get('if-none-match'), '"site-validator"')
+    assertEquals(headers.get('authorization'), null)
+    assertEquals(headers.get('cookie'), null)
+  }
+})
+
+let firstEnv = { CF_VERSION_METADATA: { id: 'previous' } }
+let nextEnv = { CF_VERSION_METADATA: { id: wanted } }
+let validationRequest = (etag = '') =>
+  new Request('https://site.invalid/yaks.app/', {
+    headers: { 'if-none-match': etag },
+  })
+let validationPages = Array.from({ length: 5 }, () => new Response('same site'))
+
+test('a site validator changes with the deployment even when its page is unchanged', async () => {
+  let first = await site.validated(
+    validationRequest(),
+    validationPages[0],
+    firstEnv,
+    '/',
+  )
+  assertEquals(await first.text(), 'same site')
+  let etag = first.headers.get('etag')!
+  assertEquals(first.headers.get('x-yak-version'), 'previous')
+  let same = await site.validated(
+    validationRequest(etag),
+    validationPages[1],
+    firstEnv,
+    '/',
+  )
+  assertEquals(same.status, 304)
+})
+
+test('an unchanged site page revalidates against its new deployment', async () => {
+  let first = await site.validated(
+    validationRequest(),
+    validationPages[2],
+    firstEnv,
+    '/',
+  )
+  let body = await first.text()
+  let etag = first.headers.get('etag')!
+  let changed = await site.validated(
+    validationRequest(etag),
+    validationPages[3],
+    nextEnv,
+    '/',
+  )
+  assertEquals(changed.status, 200)
+  assertEquals(await changed.text(), body)
+  assertEquals(changed.headers.get('x-yak-version'), wanted)
+  let current = changed.headers.get('etag')!
+  assertEquals(current == etag, false)
+  let validated = await site.validated(
+    validationRequest(current),
+    validationPages[4],
+    nextEnv,
+    '/',
+  )
+  assertEquals(validated.status, 304)
+  assertEquals(validated.headers.get('x-yak-version'), wanted)
 })

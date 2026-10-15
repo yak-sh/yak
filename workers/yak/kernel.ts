@@ -1,4 +1,3 @@
-import { anonymousPage } from './directory-copy.ts'
 // The kernel's router (D-32318 §The meta-space): where a request goes, and
 // nothing else. Each part of the kernel is a module exporting a plain
 // `fetch(req, env)` — identity.ts, mcp.ts, directory.ts, apps.ts — and the
@@ -238,32 +237,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
     (req.method == 'GET' || req.method == 'HEAD') &&
     (path == '/' || path == gallery.PATH)
   ) {
-    // A deploy probe selects a version at the gateway and at its cached Site
-    // entrypoint. Without the override here the body can come from the previous
-    // deployment even while the gateway runs the requested version.
-    let headers = new Headers()
-    for (
-      let name of [
-        'if-none-match',
-        'cache-control',
-        'Cloudflare-Workers-Version-Overrides',
-      ]
-    ) {
-      let value = req.headers.get(name)
-      if (value) headers.set(name, value)
-    }
-    let anonymous = anonymousPage(req)
-    if (!anonymous) headers.set('x-yak-no-copy', '1')
-    let shown = await (anonymous
-      ? bound(env.SITE, site.fetch, env)
-      : bound(undefined, site.fetch, env)).fetch(
-        new Request(site.at(env, path), { headers }),
-      )
-    if (req.method == 'GET') {
-      return shown
-    }
-    await shown.body?.cancel()
-    return new Response(null, { status: shown.status, headers: shown.headers })
+    return site.forward(req, env, path)
   }
   // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
