@@ -8,6 +8,8 @@
 // uses.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
+import { stub } from '@std/testing/mock'
+import { backoff } from '@yaks/durable-object'
 import type { Objects } from '@yaks/blob'
 import { counted } from './lib/objects.ts'
 import { releaseFiles, staged } from './release.ts'
@@ -18,7 +20,7 @@ import { type Namespace, PLATFORM_STORE } from './door.ts'
 import { carried, upload } from './dispatch.ts'
 import type { Env } from './env.ts'
 import type { Who } from './session.ts'
-import { platform } from './testing.ts'
+import { lasting } from './testing.ts'
 import {
   addressed,
   type Files,
@@ -545,8 +547,12 @@ let lost = {
     Response.json({ error: 'Error', message: RESET }, { status: 500 }),
 }
 
-let restarted = async (answer: () => Response) => {
-  let { env } = platform('a probe secret')
+// Each case owns a prepared platform. Booting the directory and seeding its
+// app are fixture work; recording the deploy through a lost answer is the
+// behavior timed below, still through the real Store and its retry receipt.
+let restartFixture = async (answer: () => Response) => {
+  let platform = lasting('a probe secret')
+  let { env } = platform
   let store = env.STORE as unknown as Namespace
   let once = false
   let STORE: Namespace = {
@@ -580,14 +586,30 @@ let restarted = async (answer: () => Response) => {
   }, { 'x-yak-person': ada, 'x-yak-role': 'owner' })
   let space = (await dir.space('ada')) as Space
   let app = (await dir.app(space, 'recipes')) as App
-  await record(dir, { person: ada, role: 'owner' }, app, 1, { a: 'b' }, '')
-  return { dir, app: (await dir.app(space, 'recipes')) as App }
+  await platform.settled()
+  return {
+    platform,
+    dir,
+    space,
+    app,
+    who: { person: ada, role: 'owner' } as Who,
+  }
 }
 
 for (let [how, answer] of Object.entries(lost)) {
+  let fixture = await restartFixture(answer)
   test(`a deploy recorded as a restart ${how} its answer lands once`, async () => {
-    let { dir, app } = await restarted(answer)
+    await using platform = fixture.platform
+    // Retry timing is not this test's subject; keep the retry, not its jitter.
+    let paused: number[] = []
+    using wait = stub(backoff, 'wait', (ms) => {
+      paused.push(ms)
+      return Promise.resolve()
+    })
+    let { dir, space, app, who } = fixture
+    await record(dir, who, app, 1, { a: 'b' }, '')
     assertEquals((await dir.deploys(app)).map((v) => v.version), [1])
-    assertEquals(app.version, 1)
+    assertEquals((await dir.app(space, 'recipes'))?.version, 1)
+    assertEquals(paused, backoff.pauses.slice(0, 1))
   })
 }
