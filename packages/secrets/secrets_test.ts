@@ -326,15 +326,20 @@ test('a secret inside a call is its handle there too, and sealed when the call a
   )
 })
 
+let bound = setup()
+await bound.g.apply([
+  sealed('A', 'op://v/item/key'),
+  sealed('B', 'op://v/gone/x'),
+])
+let noItem = new Error('no such item')
 test('a name resolves through the vault, then 1Password, then the environment', async () => {
-  let { g, vault } = setup()
+  let { vault } = bound
   let op = (ref: string) =>
     ref == 'op://v/item/key' ? Promise.resolve('from-op') : Promise.reject(
-      new Error('no such item'),
+      noItem,
     )
   let env = (name: string) => `env:${name}`
-  assertEquals(await reveal(vault, 'A', { env }), 'env:A')
-  await g.apply([sealed('A', 'op://v/item/key'), sealed('B', 'op://v/gone/x')])
+  assertEquals(await reveal(vault, 'C', { env }), 'env:C')
   assertEquals(vault.read(secretEid('A'))!.op, 'op://v/item/key')
   assertEquals(await reveal(vault, 'A', { env, op }), 'from-op')
   // bound to 1Password and failing: missing, never the environment
@@ -357,16 +362,33 @@ test('peek answers on the spot, with 1Password values warmed first', async () =>
   assertEquals(peek(vault, 'B', { op }), 'warm')
 })
 
-test('records change under the lock and are written back through the graph', async () => {
-  let { g, vault } = setup()
+// A record's write lands in the vault the way the plugin's seal puts it there
+// (./plugin.ts), so the lock is the only thing between two changes.
+let sealing = (vault: Local) => ({
+  apply: (bundles: Bundle[]) => {
+    for (let b of bundles) {
+      let { value } = b.secret as Record<string, string>
+      vault.seal(b.entity.eid, { handle: 'h', value })
+    }
+  },
+})
+
+test('records change one at a time, under the vault lock', async () => {
+  let vault = ramVault()
+  let store = records<{ n?: number }>(sealing(vault), vault, 'count ')
+  let add = () =>
+    store.update('a', (r) => Promise.resolve(void (r.n = (r.n ?? 0) + 1)))
+  await Promise.all([add(), add()])
+  assertEquals(await store.read('a'), { n: 2 })
+})
+
+let recorded = setup()
+test('a record is written back through the graph, which keeps its handle', async () => {
+  let { g, vault } = recorded
   let store = records<{ n?: number }>(g, vault, 'count ')
   assertEquals(await store.read('a'), undefined)
-  await Promise.all(
-    [1, 2, 3].map(() =>
-      store.update('a', (r) => Promise.resolve(void (r.n = (r.n ?? 0) + 1)))
-    ),
-  )
-  assertEquals(await store.read('a'), { n: 3 })
+  await store.update('a', (r) => Promise.resolve(void (r.n = 1)))
+  assertEquals(await store.read('a'), { n: 1 })
   assert(isHandle((await row(g, 'count a'))!.value))
 })
 
