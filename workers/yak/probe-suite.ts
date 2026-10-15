@@ -55,9 +55,11 @@ export let config = (toml: string, vars: Record<string, string>): Config => {
   let services = raw.services!
   for (let key of ACCOUNT_ONLY) delete raw[key]
   raw.services = services.filter((s) => s.binding == 'FILES')
+  // The sandbox's container needs docker, and the Purger purges Site's cache,
+  // which goes with Site: unbound, nothing is purged (purge.ts `purge`).
   raw.durable_objects = {
     bindings: (raw.durable_objects?.bindings ?? []).filter((b) =>
-      b.name != 'SANDBOX'
+      b.name != 'SANDBOX' && b.name != 'PURGER'
     ),
   }
   raw.dev = { ...raw.dev, enable_containers: false }
