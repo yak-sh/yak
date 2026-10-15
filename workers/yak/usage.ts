@@ -204,32 +204,31 @@ let accountAlert = async (env: Env, usage: Usage) => {
 // list of a prefix that a burst of writes is landing in (10058).
 let SWEEP = { tries: 8, wait: 500 }
 
-// The hourly reading. Returns how many rows it wrote, so a caller (and the
-// log) can say whether it found anything at all. A space whose files cannot be
-// listed keeps its last figure, every other space is still read, and the first
-// refusal is thrown once the rest has landed, so it is reported.
-export let sweep = async (env: Env, now = new Date()) => {
-  let month = monthOf(now)
+/** What one hourly reading writes, for the spaces the directory holds and
+ * their apps: each app's and space's `meter`, the spaces whose meter is on
+ * another month (`turned`), and the failures to list a space's files
+ * (`refused`). A space whose files cannot be listed keeps its figures, every
+ * other space is still read. `counts` is the analytics' figures for an app,
+ * or null where no credential was given and only storage is measured. */
+export let measured = async (
+  spaces: { space: Space; apps: App[] }[],
+  { sizesOf, counts, month, now }: {
+    sizesOf: (space: Space) => Promise<Map<string, number>>
+    counts: ((space: Space, app: App) => Counts) | null
+    month: string
+    now: Date
+  },
+) => {
   let at = now.toISOString()
-  let answer = env.CF_ANALYTICS_TOKEN
-    ? await ask<Data>(env.CF_ANALYTICS_TOKEN, QUERY, {
-      account: env.CF_ACCOUNT ?? '',
-      since: `${month}-01T00:00:00Z`,
-      until: at,
-    })
-    : null
-  let counts = answer ? read(answer) : null
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
   let entities: Bundle[] = []
   let turned: Bundle[] = []
   let refused: unknown[] = []
-  for (let space of await dir.all()) {
-    let apps = await dir.apps(space)
+  for (let { space, apps } of spaces) {
     let alive = apps.filter((a) => !a.trashed).length
     // What the space holds, app by app (held.ts). A space whose files cannot
     // be listed keeps its figures, its apps' too: with no listing, `holding`
     // reads them off the rows.
-    let sizes = await fileSizes(env, space, SWEEP.tries, SWEEP.wait)
+    let sizes = await sizesOf(space)
       .catch((e) => {
         refused.push(e)
         return undefined
@@ -264,8 +263,7 @@ export let sweep = async (env: Env, now = new Date()) => {
     }
     let total = { ...none(), bytes: held.bytes, files: held.files }
     for (let app of apps) {
-      let name = storeName(space, app)
-      let got = counts.get(String(env.STORE.idFromName(name))) ?? none()
+      let got = counts(space, app)
       // No `bytes`: the store's own figure stands, and a patch leaves it.
       entities.push({
         entity: { eid: app.eid },
@@ -297,6 +295,38 @@ export let sweep = async (env: Env, now = new Date()) => {
       ...(space.tier ? {} : { plan: { tier: 'free' } }),
     })
   }
+  return { entities, turned, refused }
+}
+
+// The hourly reading. Returns how many rows it wrote, so a caller (and the
+// log) can say whether it found anything at all. A space whose files cannot be
+// listed keeps its last figure, every other space is still read, and the first
+// refusal is thrown once the rest has landed, so it is reported.
+export let sweep = async (env: Env, now = new Date()) => {
+  let month = monthOf(now)
+  let at = now.toISOString()
+  let answer = env.CF_ANALYTICS_TOKEN
+    ? await ask<Data>(env.CF_ANALYTICS_TOKEN, QUERY, {
+      account: env.CF_ACCOUNT ?? '',
+      since: `${month}-01T00:00:00Z`,
+      until: at,
+    })
+    : null
+  let counts = answer ? read(answer) : null
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let spaces = []
+  for (let space of await dir.all()) {
+    spaces.push({ space, apps: await dir.apps(space) })
+  }
+  let { entities, turned, refused } = await measured(spaces, {
+    sizesOf: (space) => fileSizes(env, space, SWEEP.tries, SWEEP.wait),
+    counts: counts &&
+      ((space, app) =>
+        counts.get(String(env.STORE.idFromName(storeName(space, app)))) ??
+          none()),
+    month,
+    now,
+  })
   // A reading is maintenance, not use. Keep the existing last-write stamps;
   // spends and app byte reports still refresh them at their own doors.
   if (turned.length) await stamp(env, { entities: turned }, { stamp: false })

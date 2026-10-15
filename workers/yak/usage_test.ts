@@ -4,12 +4,19 @@ import { test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
-  assertRejects,
   assertStringIncludes,
   assertThrows,
 } from '@std/assert'
 import type { Meter, Space, Tier } from './directory.ts'
-import { accountOf, fileSizes, full, fullFiles, read, sweep } from './usage.ts'
+import {
+  accountOf,
+  fileSizes,
+  full,
+  fullFiles,
+  measured,
+  read,
+  sweep,
+} from './usage.ts'
 import { holding } from './held.ts'
 import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
@@ -806,28 +813,31 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
 })
 
 test('a space whose files cannot be listed keeps its figure, and the rest are read', async () => {
-  let { env, files } = platform('files-refused')
-  let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
-  await dir.apply({
-    entities: [
-      { entity: { eid: '$jeff' }, space: { slug: 'jeff' } },
-      {
-        entity: { eid: '$ada' },
-        space: { slug: 'ada' },
-        meter: { month: '2026-09', files: 70 },
-      },
-    ],
-  }, { 'x-yak-role': 'owner' })
-  files.held.set('jeff/a/photo', new Uint8Array(20))
-  files.held.set('ada/a/photo', new Uint8Array(90))
-  let list = env.BLOBS.list.bind(env.BLOBS)
-  env.BLOBS.list = (options) =>
-    options?.prefix == 'ada/'
-      ? Promise.reject(new Error('list: refused'))
-      : list(options)
-  await assertRejects(() => sweep(env, NOW), Error, 'list: refused')
-  assertEquals((await dir.space('jeff'))!.meter?.files, 20)
-  assertEquals((await dir.space('ada'))!.meter?.files, 70)
+  let held = (slug: string, files: number | null) => ({
+    space: {
+      eid: `$${slug}`,
+      slug,
+      meter: files == null ? null : { month: '2026-09', files },
+    } as Space,
+    apps: [] as dirPart.App[],
+  })
+  let { entities, refused } = await measured(
+    [held('jeff', null), held('ada', 70)],
+    {
+      sizesOf: ({ slug }) =>
+        slug == 'ada'
+          ? Promise.reject(new Error('list: refused'))
+          : Promise.resolve(new Map([['jeff/a/photo', 20]])),
+      counts: null,
+      month: '2026-09',
+      now: NOW,
+    },
+  )
+  assertEquals(
+    entities.map((e) => [e.entity.eid, (e.meter as Meter).files]),
+    [['$jeff', 20], ['$ada', 70]],
+  )
+  assertEquals(refused.map((e) => (e as Error).message), ['list: refused'])
 })
 
 test('all quota guidance uses space plan settings without promising a Plus upgrade', () => {
