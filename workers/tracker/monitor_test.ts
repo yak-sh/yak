@@ -72,3 +72,22 @@ test('monitor recovery resolves only open faults and selects their identities', 
     'entity',
   ]])
 })
+
+test('a door that hangs past the deadline files the uptime bug naming it', async () => {
+  let { tracker } = await fixture()
+  let filed: Bundle[] = []
+  tracker.ingest = (rows) => (filed.push(...rows), Promise.resolve())
+  let hangs =
+    ((url: string) =>
+      url.includes('/api/me')
+        ? Promise.reject(new DOMException('timed out', 'TimeoutError'))
+        : healthy(url)) as typeof fetch
+  await monitor(tracker, now, hangs, now)
+  let [row] = JSON.parse(JSON.stringify(filed.filter((b) => b.error)))
+  equal([row.error.fault, row.error.level, row.exception.value], [
+    uptime,
+    'fatal',
+    'app probe: no answer within 10 s from ' +
+    'https://yourname.yaks.app/recipes/api/me',
+  ])
+})

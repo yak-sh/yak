@@ -119,12 +119,16 @@ reservation pending. Marked trackers reopen without installation writes after
 eviction. Trace setup does not initialize notification mail, arm alarms or
 report errors; ordinary tracker work handles notifications independently.
 
-Platform-only `POST /heartbeat` renews the box heartbeat. Cron probes the MCP
-endpoint and tracks an activated box heartbeat older than five minutes. Each
-tracker graph sends one letter per new bug opening through its own `MAIL`
-binding, with `MAIL_FROM` and `MAIL_TO` configured at activation. Space bugs
-stream through their store's graph subscription and remain unseen until their
-caller marks notification in the platform integration.
+Platform-only `POST /heartbeat` renews the box heartbeat. Each minute the cron
+probes the MCP endpoint and an app's `api/me` (`PROBES` in monitor.ts), which
+reads the directory on every request, so a stalled directory fails it. A door
+that errors, or sends nothing within 10 s, files one fatal `platform-uptime`
+bug, resolved once every door answers again. The cron also tracks an activated
+box heartbeat older than five minutes. Each tracker graph sends one letter per
+new bug opening through its own `MAIL` binding, with `MAIL_FROM` and `MAIL_TO`
+configured at activation. Space bugs stream through their store's graph
+subscription and remain unseen until their caller marks notification in the
+platform integration.
 
 ## Activation and deployment
 

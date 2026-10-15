@@ -1,10 +1,46 @@
 // Cron failures are occurrences, not a second monitor state machine. A stored
-// heartbeat and the upstream probe resolve on recovery through tracker marks.
+// heartbeat and the upstream probes resolve on recovery through tracker marks.
 
 import type { TrackerStore } from './core.ts'
 import { capture, type Context, origin } from '@yaks/tracker/report'
 import { derivedEid } from '@yaks/graph/identity'
 import { and, eq, fields } from '@yaks/query'
+
+/** A door of yaks.app the cron asks each minute. */
+export type Probe = { name: string; url: string }
+
+// The connector's door answers before any store is asked. An app's `api/me`
+// reads its app row from the directory on every request (workers/yak
+// directory.ts) and wakes no app store, so it fails when the directory
+// stalls, which holds every page and tool waiting with it.
+export let PROBES: Probe[] = [
+  { name: 'MCP', url: 'https://yaks.app/mcp' },
+  { name: 'app', url: 'https://yourname.yaks.app/recipes/api/me' },
+]
+
+// How long a door may take to answer before it counts as down: a hang sends
+// no bytes and throws nothing, so only a deadline sees it.
+let PATIENCE = 10_000
+
+/** Why one door is down, or '' when it answered. A GET without a session may
+ * answer 400 or 405; server errors and missing routes mean it cannot serve. */
+let probe = async (send: typeof fetch, { name, url }: Probe) => {
+  try {
+    let response = await send(url, {
+      method: 'GET',
+      signal: AbortSignal.timeout(PATIENCE),
+      redirect: 'manual',
+    })
+    await response.body?.cancel()
+    return response.status >= 500 || response.status == 404
+      ? `${name} probe: ${response.status} from ${url}`
+      : ''
+  } catch (error) {
+    return error instanceof Error && error.name == 'TimeoutError'
+      ? `${name} probe: no answer within ${PATIENCE / 1000} s from ${url}`
+      : `${name} probe unavailable: ${url}`
+  }
+}
 
 export let heartbeat = derivedEid('tracker|box-heartbeat')
 export let monitor = async (
@@ -19,22 +55,8 @@ export let monitor = async (
   ),
 ) => {
   let fault = 'tracker|platform-uptime'
-  let broken = ''
-  try {
-    let response = await send('https://yaks.app/mcp', {
-      method: 'GET',
-      signal: AbortSignal.timeout(10_000),
-      redirect: 'manual',
-    })
-    // An MCP GET without a session may answer 400 or 405. Server errors and
-    // unavailable routes mean the endpoint itself cannot serve.
-    if (response.status >= 500 || response.status == 404) {
-      broken = `MCP probe: ${response.status}`
-    }
-    await response.body?.cancel()
-  } catch {
-    broken = 'MCP probe unavailable'
-  }
+  let broken = (await Promise.all(PROBES.map((door) => probe(send, door))))
+    .filter(Boolean).join('; ')
   // A probe that passes again resolves its outage, saying so: nobody looked
   // into why it failed, and the next failure is caught the same way.
   let check = async (key: string, reason: string, back: string) => {
@@ -62,7 +84,7 @@ export let monitor = async (
       }
     }
   }
-  await check(fault, broken, "yaks.app's MCP endpoint answered again")
+  await check(fault, broken, 'every probed door of yaks.app answered again')
   // No heartbeat yet means the box reporter is not activated, not a failure.
   if (last != null) {
     await check(
