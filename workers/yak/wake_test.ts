@@ -28,18 +28,13 @@ let at = (time: string) => Date.parse(`2026-09-07T${time}:00Z`)
 let iso = (time: string) => new Date(at(time)).toISOString()
 let wake = async (env: ReturnType<typeof platform>['env'], eid: string) =>
   (await meta(env).query(`.entity.eid=${eid}`))[0] as Wake
-// The directory's own object, awake: a store learns which one it is from a
-// request, so one read is what makes its vocabulary the platform's.
+// The directory's own object, awake: the platform deploys it ahead of the
+// first read through its door (testing.ts), which names it. Deploying it again
+// here would be a second pass, owing planner statistics for every table the
+// first one filled, which the first alarm then analyzes.
 let directory = async (p: ReturnType<typeof platform>) => {
-  await p.object(PLATFORM_STORE).fetch(
-    new Request('http://store/vocab', {
-      method: 'POST',
-      headers: { 'x-store': PLATFORM_STORE, 'x-yak-kernel': '1' },
-      body: '{}',
-    }),
-  )
-  await p.settled()
   await meta(p.env).query('.wake')
+  await p.settled()
   return p.object(PLATFORM_STORE)
 }
 // The bell, as the runtime rings it: the alarm is cleared on delivery, and
