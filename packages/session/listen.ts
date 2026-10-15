@@ -353,6 +353,37 @@ let pause = (every: Ear['every'], stop?: AbortSignal) =>
     })
   })
 
+/** Select what this listener hears. Addressed items do not wait for a turn;
+ * project-held items do, for native transcripts only. Read held items lazily:
+ * a native transcript at rest must neither consume nor read its project's news.
+ * Author exclusion, native comment exclusion and deduplication are shared by
+ * the native bus and outside listeners. */
+export let pendingItems = async (
+  session: Eid,
+  native: boolean,
+  working: boolean,
+  addressed: Bundle[],
+  held: () => Bundle[] | Promise<Bundle[]>,
+): Promise<Bundle[]> => {
+  let seen = new Set<Eid>()
+  let items: Bundle[] = []
+  for (
+    let b of [
+      ...addressed,
+      ...!native || working ? await held() : [],
+    ]
+  ) {
+    if (
+      seen.has(b.entity.eid) || author(b) == session || (native && b.comment)
+    ) {
+      continue
+    }
+    seen.add(b.entity.eid)
+    items.push(b)
+  }
+  return items
+}
+
 /** What this session has yet to hear, as the item and its readable line. */
 export let pending = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
@@ -372,23 +403,18 @@ export let pending = async (
     : []
   let native = !process?.process &&
     (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0
-  let seen = new Set<string>()
-  let items: Bundle[] = []
-  let hears = (b: Bundle) => {
-    if (
-      seen.has(b.entity.eid) || author(b) == session || (native && b.comment)
-    ) return
-    seen.add(b.entity.eid)
-    items.push(b)
-  }
+  let addressed: Bundle[] = []
   for (let q of addressedTo(vocab, session)) {
-    for (let b of await graph.read(and(...q.clauses, every()))) hears(b)
+    addressed.push(...await graph.read(and(...q.clauses, every())))
   }
-  // What is held for the project waits for a session at work: an outside
-  // one hears it on its own call, a native one only mid-turn (see above).
   let working = !native || (await atWork(graph, [session])).length > 0
-  let projects = working ? await worksFor(graph, owner) : []
-  for (let b of await held(graph, session, projects)) hears(b)
+  let items = await pendingItems(
+    session,
+    native,
+    working,
+    addressed,
+    async () => held(graph, session, await worksFor(graph, owner)),
+  )
   if (!items.length) return []
   let pointed = [
     ...new Set(

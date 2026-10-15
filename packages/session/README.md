@@ -234,28 +234,30 @@ const vocab = loadVocab(
   [kernelKeywords, edgeKeywords],
 )
 const p = identityEid('provider', ['claude'])
-const g = graph({ storage: ram(vocab), vocab })
-await g.apply([
-  { entity: { eid: p }, provider: { name: 'claude' } },
-  { entity: { eid: 'x' }, task: {} },
-  { entity: { eid: 'y' }, task: {} },
-  link('y', 'requires', 'x'),
-  { entity: { eid: 's' }, session: {} },
-  {
-    entity: { eid: 's:in' },
-    entry: { session: 's' },
-    content: { body: 'work y' },
-    using: { provider: p },
-  },
-  {
-    entity: { eid: 's:out' },
-    entry: { session: 's' },
-    content: { body: 'waiting on x' },
-    output: {},
-  },
-  { entity: { eid: 'y' }, claim: { session: 's' } },
-  { entity: { eid: 'x' }, completed: {} },
-])
+const storage = ram(vocab)
+// A transcript parked on y, whose dependency x has finished.
+storage.tx((tx) =>
+  tx.patch([
+    { entity: { eid: p }, provider: { name: 'claude' } },
+    { entity: { eid: 'x' }, task: {}, completed: {} },
+    { entity: { eid: 'y' }, task: {}, claim: { session: 's' } },
+    link('y', 'requires', 'x'),
+    { entity: { eid: 's' }, session: {} },
+    {
+      entity: { eid: 's:in' },
+      entry: { session: 's' },
+      content: { body: 'work y' },
+      using: { provider: p },
+    },
+    {
+      entity: { eid: 's:out' },
+      entry: { session: 's' },
+      content: { body: 'waiting on x' },
+      output: {},
+    },
+  ])
+)
+const g = graph({ storage, vocab })
 await wake(g, 'x') // what session_wake runs
 const [told] = (await transcript(g, 's')).slice(-1)
 // What finished, and the request for a turn.

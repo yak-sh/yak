@@ -258,8 +258,8 @@ export let follow = async (
         let now = await one(g, session)
         let pid = (b?: Bundle) => comp(b, PROCESS)?.pid
         if (comp(now, EXIT) == null || pid(now) != pid(row)) return
-        await ended(g, session, o, run.through)
-        await onward(g, session, o).catch(told(o))
+        let well = await finish(g, session, o, run.through)
+        if (well != null) await onward(g, session, o, well).catch(told(o))
         return
       }
     } catch (e) {
@@ -330,6 +330,22 @@ let given = async (
   return owes.text
 }
 
+/** Carry an ended run's job onto the same provider thread. The caller
+ * supplies the current session and unanswered transcript. Starting the
+ * command must still take the guarded ending before it launches. */
+export let carry = (
+  row: Bundle,
+  job: Asked,
+  said: Bundle[],
+): Asked | null => {
+  let thread = comp(row, SESSION)?.id
+  if (
+    row.stop || row[EXIT] == null || thread == null ||
+    !said.some((b) => b.using)
+  ) return null
+  return { ...job, ...since(said, job), thread: String(thread) }
+}
+
 /**
  * Start a session's provider, with the persona its checkout is owed, and read
  * its output back into the transcript.
@@ -362,8 +378,9 @@ export let start = async (
     // it was told since.
     let thread = comp(row, SESSION)?.id
     if (thread == null || !await requested(g, session)) return null
-    if (!await reopen(g, row)) return null
-    job = { ...job, ...await since(g, session, job), thread: String(thread) }
+    let carried = carry(row, job, await unanswered(g, session))
+    if (!carried || !await reopen(g, row)) return null
+    job = carried
   }
   let cwd = o.worktrees ? await cut(g, session, o) : o.cwd
   let persona = await given(g, session, cwd ?? Deno.cwd(), adapter)
@@ -417,16 +434,33 @@ let reopen = async (g: Graph, row: Bundle): Promise<boolean> => {
 // What a run that carries on is given: everything said to the session since
 // its last run was (@yaks/session `unanswered`), and the newest of it as the
 // request its turns answer.
-let since = async (
-  g: Graph,
-  session: string,
+let since = (
+  said: Bundle[],
   job: Asked,
-): Promise<Pick<Asked, 'instruction' | 'ask'>> => {
-  let said = await unanswered(g, session)
+): Pick<Asked, 'instruction' | 'ask'> => {
   return {
     instruction: said.map((b) => String(comp(b, 'content')?.body ?? ''))
       .join('\n\n'),
     ask: { ...job.ask, through: said.at(-1)!.entity.eid },
+  }
+}
+
+/** Finish a managed turn and tell it about dependencies completed during
+ * the run. Called only after its final log bytes have been imported. */
+export let finish = async (
+  g: Graph,
+  session: string,
+  o: Pick<Opts, 'mint' | 'report'> = {},
+  through?: string,
+): Promise<boolean | undefined> => {
+  await ended(g, session, o, through)
+  try {
+    let well = cleanEnd(await one(g, session))
+    if (well) await rouse(g, session)
+    return well
+  } catch (e) {
+    told(o)(e)
+    return undefined
   }
 }
 
@@ -435,9 +469,12 @@ let since = async (
 // meanwhile starts its next run. One parked keeps its checkout and its files,
 // for its next run to carry on in and append to (@yaks/process `sweep` takes
 // the files in a day); every other run's are taken back.
-let onward = async (g: Graph, session: string, o: Opts): Promise<void> => {
-  let well = cleanEnd(await one(g, session))
-  if (well) await rouse(g, session)
+let onward = async (
+  g: Graph,
+  session: string,
+  o: Opts,
+  well: boolean,
+): Promise<void> => {
   if (!well || !await parked(g, session)) {
     if (o.worktrees) await taken(g, checkoutOf(session, o.worktrees))
     clean(session, o)
@@ -514,7 +551,7 @@ export let resume = async (g: Graph, o: Opts = {}): Promise<Run[]> => {
 let ended = async (
   g: Graph,
   session: string,
-  o: Opts,
+  o: Pick<Opts, 'mint'>,
   through?: string,
 ): Promise<void> => {
   let newest = async (q: string) =>

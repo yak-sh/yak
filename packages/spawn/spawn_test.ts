@@ -17,14 +17,28 @@ import {
 } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
-import { sessionDoc, sessions, transcriptUsage, wake } from '@yaks/session'
+import {
+  sessionDoc,
+  sessions,
+  transcriptUsage,
+  unanswered,
+  wake,
+} from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { launch, processDoc, processes, store } from '@yaks/process'
 import { spawning } from './effects.ts'
 import { adopting } from './service.ts'
 import { checkoutDoc } from '@yaks/git/vocab'
-import { checkoutOf, down, follow, type Opts, start } from './run.ts'
+import {
+  asked as jobOf,
+  carry,
+  checkoutOf,
+  down,
+  finish,
+  type Opts,
+  start,
+} from './run.ts'
 import { sessionEnv } from '@yaks/session'
 import { asking, bare, fake, launching, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
@@ -400,10 +414,10 @@ let PARKED = await image(asked, [...over, {
 }], finished)
 let GOING = await image(asked, finished)
 
+let JOB = (await jobOf(bare(GOING), 'S1'))!
 let parking = (rows: Bundle[]) => {
   let g = { g: bare(rows) }
-  let { launch, started, first } = launching()
-  let stopping = new AbortController()
+  let started: string[][] = []
   let opts = {
     adapters: {
       fake: {
@@ -411,52 +425,45 @@ let parking = (rows: Bundle[]) => {
         argv: (j) => ['agent', String(j.thread), j.instruction],
       },
     },
-    launch,
-    dir: '/none',
-    signal: stopping.signal,
   } satisfies Opts
   return {
     g: g.g,
     opts,
     started,
-    first,
-    stopping,
     // what `session_wake` runs for x's completing
     wake: () => wake(g.g, 'x'),
-    // the run it asked for is started by the request that carries it
+    // The same command preparation start() uses, before the process and
+    // log boundary (covered above with a real child).
     request: async () => {
-      let [asked] = await g.g.read(
-        '.entry.session=S1&.using&.order=-entry.seq&.limit=1',
-      )
-      await spawning(opts)({ graph: g.g, stopping: stopping.signal })
-        .spawn_start!(
-          { entity: asked.entity } as Event,
-          undefined!,
-          undefined!,
-          undefined!,
-        )
+      let [row] = await g.g.get(['S1'])
+      let job = carry(row, JOB, await unanswered(g.g, 'S1'))
+      if (job) started.push(opts.adapters.fake.argv(job))
     },
   }
 }
 
+let parkedRun = parking(PARKED)
+let goingRun = parking(GOING)
+
 test('a run that ends waiting on a dependency carries on its thread when it finishes', async () => {
-  let p = parking(PARKED)
-  p.stopping.abort()
+  let p = parkedRun
   await p.wake()
   await p.request()
-  let [agent, thread, instruction] = await p.first
+  assertEquals(p.started.length, 1)
+  let [agent, thread, instruction] = p.started[0]
   assertEquals([agent, thread], ['agent', 'S1'])
   assert(instruction.includes('has finished'), instruction)
 })
 
 test('a dependency that finishes while the run goes is told as it ends', async () => {
-  let p = parking(GOING)
+  let p = goingRun
   await p.wake()
   assertEquals(p.started, [])
-  // the run ends: its log is read to the end, and it is told as it goes
+  // After the final log bytes, follow() finishes the turn and tells it
+  // what completed while it ran, before preparing the next command.
   await p.g.apply(over)
-  await follow(p.g, 'S1', fake.read, p.opts, { through: 'E1' })
-  p.stopping.abort()
+  assertEquals(await finish(p.g, 'S1', {}, 'E1'), true)
+  await p.request()
   assertEquals(p.started.length, 1)
   assertEquals(p.started[0].slice(0, 2), ['agent', 'S1'])
   assert(p.started[0][2].includes('has finished'), p.started[0][2])

@@ -16,6 +16,8 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
 import { due, feed, heard, reply } from './bus.ts'
+import { pendingItems } from './listen.ts'
+import { statusOf } from './state.ts'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived, statusComputed } from './status.ts'
 import { sessions } from './plugin.ts'
@@ -360,15 +362,44 @@ let HELD = await image([
   { entity: { eid: 'news' }, knock: { target: 'p' }, doc: { body: 'bug' } },
 ])
 
-for (
-  let [name, store] of [['RAM', memory], ['SQLite', lite]] as const
-) {
-  test(`${name}: what is held for a project is fed to its transcript at work, never one at rest`, async () => {
-    let g = graph({ vocab, storage: laid(HELD, store()) })
-    // its own knock, and the project's news
-    assertEquals(
-      (await due(g)).map(({ session, item }) => [session, item.entity.eid]),
-      [['native', 'knock'], ['native', 'news']],
-    )
-  })
-}
+test('RAM: what is held for a project is fed to its transcript at work, never one at rest', async () => {
+  let g = graph({ vocab, storage: laid(HELD) })
+  assertEquals(
+    (await due(g)).map(({ session, item }) => [session, item.entity.eid]),
+    [['native', 'knock'], ['native', 'news']],
+  )
+})
+
+test('project-held news waits for a native turn, but addressed news never waits', async () => {
+  let news = HELD.find((b) => b.entity.eid == 'news')!
+  let knock = HELD.find((b) => b.entity.eid == 'knock')!
+  let working = (session: string) =>
+    ['pending', 'running'].includes(statusOf(
+      HELD.filter((b) => (b.entry as { session?: string })?.session == session),
+    ))
+  let due: string[][] = []
+  for (let session of ['native', 'resting']) {
+    for (
+      let item of await pendingItems(
+        session,
+        true,
+        working(session),
+        session == 'native' ? [knock] : [],
+        () => [news],
+      )
+    ) due.push([session, item.entity.eid])
+  }
+  assertEquals(due, [['native', 'knock'], ['native', 'news']])
+  // Rest only withholds project news, not a knock addressed to the transcript.
+  let direct = { ...knock, knock: { target: 'resting' } }
+  assertEquals(
+    await pendingItems('resting', true, false, [direct], () => {
+      throw new Error('a transcript at rest must not read project news')
+    }),
+    [direct],
+  )
+  // An outside listener hears held news on its own call, between turns too.
+  assertEquals(await pendingItems('outside', false, false, [], () => [news]), [
+    news,
+  ])
+})
