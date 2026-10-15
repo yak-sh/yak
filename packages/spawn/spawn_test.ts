@@ -35,6 +35,7 @@ import {
 import { sessionEnv } from '@yaks/session'
 import { asking, bare, fake, host, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
+import { transcriptGraph } from '../session/testing.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
@@ -409,9 +410,11 @@ let GOING = await image(asked, finished)
 
 let JOB = (await jobOf(bare(GOING), 'S1'))!
 let parking = (rows: Bundle[]) => {
-  let storage = ram(host, { number: true })
-  storage.tx((tx) => tx.patch(rows))
-  let g = { g: graph({ storage, vocab: host, plugins: [sessions()] }) }
+  // Session owns admission, compare-and-set and task wake policy (wake_test).
+  // Here its RAM transcript door keeps real queries, entries and sequencing;
+  // spawn owns finishing a run and carrying the resulting input to its thread.
+  let g = transcriptGraph(host)
+  g.apply(rows)
   let started: string[][] = []
   let opts = {
     adapters: {
@@ -422,19 +425,19 @@ let parking = (rows: Bundle[]) => {
     },
   } satisfies Opts
   return {
-    g: g.g,
+    g,
     opts,
     started,
     // The process observer has recorded its exit; graph admission is not
     // part of finishing this transcript's turn.
-    exited: () => storage.tx((tx) => tx.patch(over)),
+    exited: () => g.apply(over),
     // what `session_wake` runs for x's completing
-    wake: () => wake(g.g, 'x'),
+    wake: () => wake(g, 'x'),
     // The same command preparation start() uses, before the process and
     // log boundary (covered above with a real child).
     request: async () => {
-      let [row] = await g.g.get(['S1'])
-      let job = carry(row, JOB, await unanswered(g.g, 'S1'))
+      let [row] = await g.get(['S1'])
+      let job = carry(row, JOB, await unanswered(g, 'S1'))
       if (job) started.push(opts.adapters.fake.argv(job))
     },
   }
