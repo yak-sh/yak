@@ -32,6 +32,8 @@ import {
   wordsOf as composed,
   type WordsOpts,
 } from '@yaks/host/words'
+import { selected } from '@yaks/host/documents'
+import { dependencies, Unplanned } from '@yaks/esbuild'
 import { vocabFacets } from './load.ts'
 import { once } from '@yaks/fp'
 export {
@@ -70,6 +72,76 @@ let configured = Object.fromEntries(
 /** The configured declarations, with an optional graph-owned vocabulary. */
 export let storeWords = (kind: StoreKind, own?: VocabDoc[]): Words =>
   composed(configured[kind], own, kind == 'app' ? appOptions : metaOptions)
+
+/** The packages an app's declaration names as its `"platform"` dependencies
+ * (`stated`, from its package.json). */
+export let packagesOf = (doc: VocabDoc): string[] =>
+  Array.isArray(doc.packages) ? doc.packages : []
+
+// Every name an app store speaks before its own words and its dependencies':
+// the configured packages' and the meta vocabulary.
+let everywhere = once(() =>
+  new Set(
+    storeWords('app', [metaDoc]).docs.flatMap((d) =>
+      Object.keys(d.$defs ?? {})
+    ),
+  )
+)
+// The components a package's `./vocab` lends a store: the ones a store keeps.
+// A page-only one (`sync: none`) never reaches a store, and a page composes it
+// itself (@yaks/ux `kitDocs`); a `_` one is a store's own machinery (its
+// journal, its lenses), which the platform turns on; and a package's tools,
+// rules and effects stay with the processes its configuration binds.
+let entriesOf = (pkg: string) =>
+  (vocabFacets[pkg]?.docs ?? []).flatMap((d) => Object.entries(d.$defs ?? {}))
+    .filter(([name, s]) =>
+      s?.component === true && s.sync != 'none' && !name.startsWith('_')
+    )
+
+/**
+ * What an app's `"platform"` dependencies add to its store, as the configured
+ * packages are added (`configured`): each package's `./vocab` components, less
+ * every name the store already speaks (`mine` names the app's own). A
+ * dependency adds words and never changes one: an extension stays only where
+ * it extends a word one of these packages lends. A package with no `./vocab`
+ * lends nothing.
+ */
+export let lent = (
+  packages: string[],
+  mine: Iterable<string> = [],
+): Taken<'vocab'> => {
+  if (!packages.length) return []
+  let held = new Set([...everywhere(), ...mine])
+  let lending = new Set(
+    packages.flatMap((pkg) =>
+      entriesOf(pkg).filter(([name, s]) =>
+        s?.extends !== true && !held.has(name)
+      ).map(([name]) => name)
+    ),
+  )
+  return packages.flatMap((pkg): Taken<'vocab'> => {
+    let names = entriesOf(pkg).filter(([name, s]) =>
+      s?.extends === true ? lending.has(name) : !held.has(name)
+    ).map(([name]) => name)
+    return names.length
+      ? [[vocabFacets[pkg], {}, pkg, [...new Set(names)], ['vocab']]]
+      : []
+  })
+}
+// The names an app's own manifest declares, which no dependency lends again.
+let declares = (doc: VocabDoc) =>
+  Object.entries(doc.$defs ?? {}).filter(([, s]) => s?.extends !== true)
+    .map(([name]) => name)
+let pluginsOf = (doc: VocabDoc): Taken<'vocab'> => [
+  ...configured.app,
+  ...lent(packagesOf(doc), declares(doc)),
+]
+/** The documents an app's dependencies lend its store, as {@link lent} picks
+ * them: for a reader composing the words of several apps at once. */
+export let lentDocs = (doc: VocabDoc): VocabDoc[] =>
+  lent(packagesOf(doc), declares(doc)).flatMap(([v, , pkg, names]) =>
+    selected(v.docs ?? [], names, pkg).map((d) => ({ ...d, package: pkg }))
+  )
 
 // Existing readers ask for a store's documents; these are projections of its
 // configuration, shared with the assembly rather than maintained lists. Each is
@@ -202,6 +274,10 @@ export let wordsOf = (doc: VocabDoc): Record<string, Record<string, string>> =>
  * this manifest did not name; `dropped` is every component and `comp.prop`
  * that left; `retyped` is every empty `comp.prop` whose column the store sheds
  * so it stands again at its new type.
+ *
+ * A `"platform"` dependency ({@link lent}) is held the same way: one the
+ * manifest stopped naming stays while a component it lent holds rows, and its
+ * empty components are `dropped` when it leaves.
  */
 export let grew = (
   was: VocabDoc,
@@ -277,7 +353,23 @@ let growing = (
       .filter((prop) => !(prop in (theirs[name]?.properties ?? {})))
       .map((prop) => `${name}.${prop}`)
   )
-  return { doc: { ...next, $defs: defs }, dropped, added, kept, retyped }
+  // A dependency the next manifest stopped naming is held as a word is: it
+  // stays while a component it lent holds rows, so a rollback to a release
+  // that named fewer packages serves what is stored; one whose components
+  // hold nothing leaves, and their tables with it.
+  let packages = packagesOf(next)
+  for (let pkg of packagesOf(was)) {
+    if (packages.includes(pkg)) continue
+    let [lending] = lent([pkg], Object.keys(defs))
+    let words = (lending?.[3] ?? []).filter((name) =>
+      entriesOf(pkg).some(([n, s]) => n == name && s.extends !== true)
+    )
+    if (words.some((name) => rows(name))) packages = [...packages, pkg]
+    else dropped.push(...words)
+  }
+  let doc: VocabDoc = { ...next, $defs: defs }
+  if (packages.length) doc.packages = packages.toSorted()
+  return { doc, dropped, added, kept, retyped }
 }
 
 /**
@@ -398,7 +490,10 @@ export let OPENS: Record<string, string> = {
  * `tools`, which is an object of properties like any other. `models` and `rtc`
  * are each {@link OPENS}: who may spend the owner's account budget through the
  * app. `blob` is which uploads the app takes (@yaks/blob `Accepts`), checked
- * where bytes come in (apps.ts `took`, `inParts`; inbox.ts).
+ * where bytes come in (apps.ts `took`, `inParts`; inbox.ts). `packages` is
+ * the one the person never writes here: a deploy lifts it off package.json's
+ * `"platform"` dependencies ({@link stated}), and the store speaks their
+ * words ({@link lent}).
  *
  * A `$defs` entry marked `"tool": true` is one of the app's commands, not a
  * component: it is left out here and read by @yaks/tools/declared `parseTools`, so a
@@ -436,9 +531,17 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
       throw refuse('arguments', `${file}: "blob": ${wrong.join('; ')}`)
     }
   }
+  let packages = held.packages
+  if (
+    packages !== undefined &&
+    (!Array.isArray(packages) || packages.some((p) => typeof p != 'string'))
+  ) {
+    throw refuse('arguments', `${file}: "packages" is a list of package names`)
+  }
   let body = Object.fromEntries(
     Object.entries(held).filter(([k]) =>
-      !(k == 'tools' && off !== undefined) && !(k in OPENS) && k != 'blob'
+      !(k == 'tools' && off !== undefined) && !(k in OPENS) && k != 'blob' &&
+      k != 'packages'
     ),
   )
   let keys = Object.keys(body)
@@ -465,12 +568,15 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   if (off !== undefined) doc = { ...doc, tools: off }
   for (let [word] of opens) doc = { ...doc, [word]: held[word] }
   if (held.blob !== undefined) doc = { ...doc, blob: held.blob }
+  if (packages?.length) {
+    doc = { ...doc, packages: [...new Set(packages)].sort() }
+  }
   let errs = [...storable(doc), ...floored(doc)]
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
   // A companion can be supplied by the platform, so resolve permission names
   // in the same composed vocabulary the store will hold.
   if (Object.values(doc.$defs ?? {}).some((s) => s.permit !== undefined)) {
-    let errors = permitted(storeWords('app', [doc]).vocab)
+    let errors = permitted(composed(pluginsOf(doc), [doc], appOptions).vocab)
     if (errors.length) {
       throw refuse('arguments', `${file}: ${errors.join('; ')}`)
     }
@@ -515,6 +621,86 @@ export let unsaid = (
       } the platform already says — pick another name; the whole list is in ` +
         `the guide under "Components of your own" (${GUIDE})`,
     )
+  }
+  return doc
+}
+
+/**
+ * An app's declaration as its files say it: its `vocab.json` (or `.yml`), and
+ * the packages its package.json names as `"platform"` dependencies, whose
+ * code the compile hands its pages and whose words its store speaks
+ * ({@link lent}). package.json is read as the compile reads it (@yaks/esbuild
+ * `dependencies`) and refused in the same words; `packages` is said nowhere
+ * else, so a manifest saying it is refused too.
+ */
+export let stated = (
+  source: string | null,
+  file = 'vocab.json',
+  pkg: string | null = null,
+): VocabDoc => {
+  let doc = appDoc(source ?? {}, file)
+  if (doc.packages) {
+    throw refuse(
+      'arguments',
+      `${file}: "packages" — a store speaks the words of the packages ` +
+        'package.json names as "platform" dependencies, and that is said ' +
+        'nowhere else: drop it here',
+    )
+  }
+  let named: Record<string, string>
+  try {
+    named = dependencies(pkg)
+  } catch (e) {
+    if (e instanceof Unplanned) throw refuse('arguments', e.message)
+    throw e
+  }
+  let packages = Object.keys(named).filter((n) => named[n] == 'platform')
+  return packages.length ? { ...doc, packages: packages.sort() } : doc
+}
+
+/**
+ * A manifest, refused if it declares a word one of its `"platform"`
+ * dependencies lends, or if two of them lend one word: a store speaks one of
+ * each, and in it the app's own word would hide the package's. Two
+ * dependencies are refused by the composition itself (@yaks/vocab
+ * `loadVocab`), which names the word and both packages.
+ *
+ * `held` and `accepted` are {@link unsaid}'s: a word the store already held as
+ * its own beside the same dependency stays its own when that package later
+ * says it too, and so does every word of a release already admitted.
+ */
+export let unlent = (
+  doc: VocabDoc,
+  held: VocabDoc = {},
+  file = 'vocab.json',
+  accepted: string[] = [],
+): VocabDoc => {
+  let packages = packagesOf(doc)
+  if (!packages.length) return doc
+  let mine = new Set(declares(doc))
+  let kept = (name: string, pkg: string) =>
+    accepted.includes(name) ||
+    name in (held.$defs ?? {}) && packagesOf(held).includes(pkg)
+  for (let [, , pkg, names = []] of lent(packages)) {
+    let twice = entriesOf(pkg).find(([name, s]) =>
+      s?.extends !== true && names.includes(name) && mine.has(name) &&
+      !kept(name, pkg)
+    )?.[0]
+    if (twice) {
+      throw refuse(
+        'arguments',
+        `${file}: ${twice} is declared twice, by ${pkg} and by ${file} — ` +
+          `package.json names ${pkg} as a "platform" dependency, and its ` +
+          `words are this app's store's too: rename ${twice}, or drop ${pkg}`,
+      )
+    }
+  }
+  try {
+    appWords(doc)
+  } catch (e) {
+    // Only the dependencies' to answer for when the app's own words stand.
+    appWords({ ...doc, packages: [] })
+    throw refuse('arguments', `package.json: ${(e as Error).message}`)
   }
   return doc
 }
@@ -571,11 +757,11 @@ export let appWords = (source: unknown = {}): Words => {
     appVocabs.set(key, held)
     return held
   }
-  let v = storeWords('app', [
-    metaDoc,
-    ...(declaredLenses(doc) ? lensDocs : []),
-    doc,
-  ])
+  let v = composed(
+    pluginsOf(doc),
+    [metaDoc, ...(declaredLenses(doc) ? lensDocs : []), doc],
+    appOptions,
+  )
   appVocabs.set(key, v)
   if (appVocabs.size > 64) appVocabs.delete(appVocabs.keys().next().value!)
   return v

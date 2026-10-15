@@ -364,6 +364,7 @@ import {
   platformVocab,
   storeWords,
   teach,
+  unlent,
   unsaid,
 } from './vocab.ts'
 
@@ -4630,11 +4631,12 @@ export class Store {
     return readBody(request).then(async (body) => {
       try {
         let was = appDoc(this.#get('vocab') ?? '{}')
-        let next = unsaid(
-          appDoc(body),
+        let accepted = JSON.parse(request.headers.get(ACCEPTED) ?? '[]')
+        let next = unlent(
+          unsaid(appDoc(body), was, 'vocab.json', accepted),
           was,
           'vocab.json',
-          JSON.parse(request.headers.get(ACCEPTED) ?? '[]'),
+          accepted,
         )
         let { doc, dropped, added, kept, retyped } = grew(
           was,

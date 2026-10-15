@@ -23,11 +23,12 @@
 // directory of files on somebody else's disk: the guide has to travel as bytes
 // there too, one skill per page, and the icon with it. Same deal, same refusal.
 // It also projects the three store configs and package exports into load.ts:
-// literal facet imports that esbuild can bundle without runtime discovery.
+// literal facet imports that esbuild can bundle without runtime discovery,
+// and every package's `./vocab`, which an app may name as a dependency.
 import { front, read } from '@yaks/yaml'
 import { fileURLToPath } from 'node:url'
 import { configs, domains } from './config.ts'
-import { imports, loader, type Manifest } from './load-gen.ts'
+import { imports, loader, type Manifest, vocabs } from './load-gen.ts'
 
 let HERE = new URL('.', import.meta.url)
 let TARGET = new URL('content.ts', HERE)
@@ -329,7 +330,15 @@ manifests.push(
   })),
 )
 let loaded = await formatted(
-  loader(imports(Object.values(configs), manifests), local),
+  loader(
+    [
+      ...new Set([
+        ...imports(Object.values(configs), manifests),
+        ...vocabs(manifests),
+      ]),
+    ],
+    local,
+  ),
 )
 let files = await packaged()
 if (Deno.args.includes('--check')) {

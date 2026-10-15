@@ -1,7 +1,10 @@
 // The app vocabulary, held to two things: every example the guide teaches
 // loads, and what a load implies is one app's tables — not the fleet's 83
 // (V-33553).
-import { test } from '@yaks/testing'
+import { equal, test, throws } from '@yaks/testing'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { docs as tmuxDocs } from '@yaks/tmux/vocab'
 import {
   assert,
   assertEquals,
@@ -26,6 +29,8 @@ import {
   platformApart,
   platformVocab,
   reserved,
+  stated,
+  unlent,
   unsaid,
 } from './vocab.ts'
 import { effectsIn, type PropSchema, type VocabDoc } from '@yaks/vocab'
@@ -593,11 +598,13 @@ test('app vocab keeps external UX state page-only, including transient events', 
   )
 })
 
-// Journal names in a manifest are refused; an app never loads them implicitly.
+// Journal names in a manifest are refused; an app never loads them implicitly,
+// nor by naming @yaks/journal as a dependency.
 test('app vocabularies never load journal components', () => {
-  let v = appVocab({})
-  assertEquals(v.comp('_tx'), undefined)
-  assertEquals(v.comp('_change'), undefined)
+  for (let v of [appVocab({}), appVocab({ packages: ['@yaks/journal'] })]) {
+    assertEquals(v.comp('_tx'), undefined)
+    assertEquals(v.comp('_change'), undefined)
+  }
   assertThrows(() =>
     appVocab({
       $defs: {
@@ -606,4 +613,80 @@ test('app vocabularies never load journal components', () => {
       },
     })
   )
+})
+
+// A package an app names as a "platform" dependency, and the word it lends,
+// read off the package rather than written down here.
+let LENDER = '@yaks/tmux'
+let lends = Object.keys(tmuxDocs[0].$defs ?? {})[0]
+let pkgJson = (deps: Record<string, string>) =>
+  JSON.stringify({ dependencies: deps })
+let platform = pkgJson({ [LENDER]: 'platform', three: '^0.180.0' })
+// The declaration a deploy hands the store, before and after package.json
+// names the package: the store refuses the word, then speaks it as the
+// package declares it.
+test("a dependency package.json names is the store's words too", async () => {
+  let vocab = appVocab(stated(null))
+  await throws(
+    () =>
+      graph({ vocab, storage: ram(vocab) }).apply([
+        { entity: { eid: 'pane-1' }, [lends]: {} },
+      ]),
+    new RegExp(`unknown component: ${lends}`),
+  )
+  let after = appVocab(stated(null, 'vocab.json', platform))
+  equal(
+    Object.keys(after.def(lends)?.properties ?? {}),
+    Object.keys(tmuxDocs[0].$defs?.[lends].properties ?? {}),
+  )
+})
+
+// A page that composes a package's page-only words beside the store's own
+// (Vale's `pageDocs`) never finds them declared twice.
+test('a package every store speaks, a page-only one, or an npm one lends nothing', () => {
+  let plain = appVocab({}).all.length
+  let none: Record<string, string>[] = [
+    { '@yaks/draft': 'platform' },
+    { '@yaks/ux': 'platform' },
+    { three: '^0.180.0' },
+  ]
+  for (let deps of none) {
+    equal(appVocab(stated(null, 'vocab.json', pkgJson(deps))).all.length, plain)
+  }
+})
+
+test("package.json is read as the compile reads it, and vocab.json can't name packages", () => {
+  assertThrows(() => stated(null, 'vocab.json', '{'), Error, 'not JSON')
+  assertThrows(
+    () => stated('{"packages": ["@yaks/tmux"], "$defs": {}}', 'vocab.json'),
+    Error,
+    'vocab.json: "packages"',
+  )
+})
+
+test("a manifest declaring a dependency's word is refused, naming both", () => {
+  let mine = says({ [lends]: { label: txt } })
+  let doc = { ...mine, packages: [LENDER] }
+  let refused = assertThrows(() => unlent(appDoc(doc)), Error).message
+  for (let said of [lends, LENDER, 'vocab.json']) {
+    assertStringIncludes(refused, said)
+  }
+  // A word the store already held as its own beside that package, or one a
+  // release already admitted, stays the app's in its own store.
+  for (
+    let held of [
+      unlent(appDoc(doc), appDoc(doc)),
+      unlent(appDoc(doc), {}, 'vocab.json', [lends]),
+    ]
+  ) assert(appVocab(held).prop(lends, 'label'))
+})
+
+test('a rollback that names fewer packages keeps those whose words hold rows', () => {
+  let was = appDoc({ packages: [LENDER] })
+  let held = grew(was, {}, (name) => name == lends ? 2 : 0)
+  assertEquals(held.doc.packages, [LENDER])
+  assertEquals(held.dropped, [])
+  let empty = grew(was, {}, () => 0)
+  assertEquals(empty.doc.packages, undefined)
+  assertEquals(empty.dropped, [lends])
 })

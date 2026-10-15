@@ -248,6 +248,17 @@ searches every app's live files and kept versions; it is how you find out
 whether a word is free before you take it. Namespacing (D-59567) is designed,
 not built. Shaping the word is `vocabulary`'s ground.
 
+An app's `"platform"` dependencies (its package.json) add their packages'
+words on top (`vocab.ts` `lent`), as their code reaches its pages: the
+declaration a deploy hands the store carries `packages` (`stated`), and every
+package's `./vocab` is bundled into the Worker (load.ts) so a store composes
+them with no list of its own. A dependency adds the components a store keeps
+(not page-only `sync: none` ones, nor its rules, tools or effects), never
+changes a word the store already speaks, and lends no `_` machinery word (no
+journal). Its word declared in vocab.json too refuses the deploy (`unlent`), and one a
+package takes later stays the app's in its store; a release that stops naming
+a dependency keeps it while its words hold rows (`grew`).
+
 An app-grep audit distinguishes live files, kept versions and published offers.
 The mirror's `.releases` indexes are deployed versions; the directory's
 `.published` rows name which pinned release an install serves. Follow those

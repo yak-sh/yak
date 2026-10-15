@@ -636,9 +636,13 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
         adding.push([name, schema])
         continue
       }
-      if (name in defs) throw new Error(`component '${name}' is declared twice`)
-      defs[name] = schema
       let pkg = schema.package ?? doc.package
+      if (name in defs) {
+        // Which two said it, where both documents say whose they are.
+        let by = from[name] && pkg ? `, by ${from[name]} and by ${pkg}` : ''
+        throw new Error(`component '${name}' is declared twice${by}`)
+      }
+      defs[name] = schema
       if (pkg) from[name] = pkg
     }
   }

@@ -51,7 +51,13 @@ import { edits, mode } from '@yaks/member'
 import { declarationOf } from './declaration.ts'
 import { compile, lensesIn } from '@yaks/lens'
 import { lensDocAt, spoken as lensSpoken } from './lenses.ts'
-import { appKeywords, appVocab, platformDocs } from './vocab.ts'
+import {
+  appKeywords,
+  appVocab,
+  lentDocs,
+  packagesOf,
+  platformDocs,
+} from './vocab.ts'
 import { once } from '@yaks/fp'
 import { matcher, rows } from '@yaks/match'
 import { parse, tokens } from '@yaks/query'
@@ -818,8 +824,14 @@ let union = (docs: VocabDoc[]): Vocab => {
       defs[name] = schema
     }
   }
+  // And the words the apps' `"platform"` dependencies lend, beneath their own.
+  let packages = [...new Set(docs.flatMap(packagesOf))].sort()
   return loadVocab(
-    [...core().docs, { title: 'space', $defs: defs }],
+    [
+      ...core().docs,
+      ...lentDocs({ $defs: defs, packages }),
+      { title: 'space', $defs: defs },
+    ],
     appKeywords,
   )
 }

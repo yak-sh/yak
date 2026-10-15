@@ -10,7 +10,8 @@ guide:
     about who is asking, the CPU and subrequest limits, and whole workers to
     copy. And TypeScript and npm packages, in a worker or a page's scripts:
     package.json, the package-lock.json app_deploy pins them in, and what the
-    compile refuses.
+    compile refuses. And the platform's own @yaks packages, named "platform",
+    whose components the app's store takes too.
 ---
 
 # Code of your own
@@ -144,6 +145,31 @@ build seconds, beside the sandbox's.
   script's own address, so import it from a file beside the page's script.
 - JSX compiles to `React.createElement` calls; `/** @jsx h */` at the top of a
   file names another function.
+
+## The platform's own packages
+
+The `@yaks/` packages yaks.app is built from are named in `package.json` too,
+with `"platform"` where a version would go:
+
+    {"dependencies": {"@yaks/client": "platform", "@yaks/canvas": "platform"}}
+
+A `"platform"` dependency is never fetched from npm. The compile hands the page
+the copy this release of yaks.app runs, so the page and the store it talks to
+never disagree about a version.
+
+Its words reach the app's store as well. Every component a `"platform"`
+dependency declares, the store keeps and relays from the deploy that names it,
+like the app's own: a page saves `@yaks/canvas`'s `card` without `vocab.json`
+declaring `card` again. A component the package keeps on the page
+(`"sync": "none"`) stays there, a package that declares no components adds none,
+and a component every app's store already has stays as it is.
+
+- A component `vocab.json` declares that a `"platform"` dependency also declares
+  refuses the deploy, naming the component and both: rename yours, or drop the
+  dependency. So does one that two dependencies both declare.
+- A deploy or a rollback that stops naming a dependency keeps its components
+  while anything is stored in them, so what was saved stays readable. A
+  dependency whose components hold nothing leaves, and they go with it.
 
 ## The fall-through rule
 

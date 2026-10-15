@@ -581,6 +581,17 @@ test('a word has one home across documents', () => {
     Error,
     'declared twice',
   )
+  // Where both documents say whose they are, the refusal names both.
+  let doc = { component: true, type: 'object' }
+  assertThrows(
+    () =>
+      loadVocab([
+        { package: '@a/one', $defs: { doc } },
+        { package: '@a/two', $defs: { doc } },
+      ]),
+    Error,
+    "component 'doc' is declared twice, by @a/one and by @a/two",
+  )
 })
 
 // The spine's case: a plugin keeps a property beside every entity without

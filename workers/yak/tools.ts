@@ -56,8 +56,10 @@ import {
   grew,
   homed,
   type Homes,
+  lentDocs,
   livesIn,
   meant,
+  stated,
   teach,
   unsaid,
   wordsOf,
@@ -989,10 +991,8 @@ let published = async (
   // bucket now, beside everything below rather than after it (T-124005).
   let snapshot = c.time('snapshot', () => files.finish())
   snapshot.catch(() => {})
-  let [[all, { file: vocabFile, source }], [, serving]] = await Promise.all([
-    early,
-    readServing(),
-  ])
+  let [[all, { file: vocabFile, source, pkg }], [, serving]] = await Promise
+    .all([early, readServing()])
   let version = target?.version ?? (all[0]?.version ?? 0) + 1
   // And what its declaration is called. A rollback selects a version again,
   // so it declares under a name of its own: a declaration once written is
@@ -1001,8 +1001,9 @@ let published = async (
   let pointer = target ? `${version}-${crypto.randomUUID()}` : String(version)
   let draft = draftStore(ctx.env.STORE, space, app, pointer)
   // The file the app declares its words in — and its name, for every sentence
-  // below that tells somebody to go and edit it.
-  let declaration = appDoc(source ?? {}, vocabFile)
+  // below that tells somebody to go and edit it — with the packages whose
+  // words its package.json lends it.
+  let declaration = stated(source, vocabFile, pkg)
   if (target) accepted = Object.keys(declaration.$defs ?? {})
   // A command was once declared in a file of its own; it is an entry in the
   // manifest now (T-38021), and a file still saying one that way is refused in
@@ -1223,10 +1224,12 @@ let published = async (
   // vocabulary inside the object, and the one that plants the words is the one
   // that can say which they are.
   // A tool is checked against the names, so the names are all this reads: the
-  // core every app's store plants, the app's own, and the ones it borrows.
+  // core every app's store plants, the app's own, the ones its dependencies
+  // lend, and the ones it borrows.
+  let accepting = appDoc(JSON.parse(taken))
   let words = [
     ...componentsOf(coreDocs()),
-    ...componentsOf([appDoc(JSON.parse(taken))]),
+    ...componentsOf([accepting, ...lentDocs(accepting)]),
     ...Object.keys(JSON.parse(borrowed)),
   ]
   // And the two tools every kind this app declares is worth (kinds.ts,
@@ -1793,23 +1796,26 @@ let born = (
  * format it was written in: the `.yml` first — YAML is the warm path
  * (M-34605), and every parser here reads it through the same door as the
  * JSON (@yaks/yaml `read`) — then the `.json`, which every app that already
- * has one keeps. Both are read at once, since each is a round trip to the
- * bucket. `file` is what a refusal calls it, and `source` is null where the
- * app declares no words, which is most apps.
+ * has one keeps. `file` is what a refusal calls it, and `source` is null where
+ * the app declares no words, which is most apps. Beside them `pkg`, the
+ * package.json whose `"platform"` dependencies lend the store their words
+ * (vocab.ts `stated`). All are read at once, since each is a round trip to the
+ * bucket.
  */
 let declaring = async (
   blobs: Objects,
   space: Space,
   app: App,
-): Promise<{ file: string; source: string | null }> => {
-  let files = ['vocab.yml', 'vocab.json']
+): Promise<{ file: string; source: string | null; pkg: string | null }> => {
+  let files = ['vocab.yml', 'vocab.json', 'package.json']
   let read = await Promise.all(
     files.map((file) => blobs.read(fileKey(space, app, file))),
   )
-  let at = read.findIndex(Boolean)
+  let at = read.slice(0, 2).findIndex(Boolean)
+  let pkg = read[2] ? decoded(read[2]) : null
   return at < 0
-    ? { file: 'vocab.json', source: null }
-    : { file: files[at], source: decoded(read[at]!) }
+    ? { file: 'vocab.json', source: null, pkg }
+    : { file: files[at], source: decoded(read[at]!), pkg }
 }
 
 // The words a publication declares, read from the bytes its vocab file names.

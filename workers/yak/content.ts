@@ -24,7 +24,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'code',
     'title': 'Code of your own',
     'description':
-      "worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the keys the person connected), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy. And TypeScript and npm packages, in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses.",
+      "worker.js in front of an app's files: which routes are yours, what env holds (STORE, FILES, and the keys the person connected), what the request reports about who is asking, the CPU and subrequest limits, and whole workers to copy. And TypeScript and npm packages, in a worker or a page's scripts: package.json, the package-lock.json app_deploy pins them in, and what the compile refuses. And the platform's own @yaks packages, named \"platform\", whose components the app's store takes too.",
     'brief':
       "worker.js in front of an app's files; TypeScript and npm packages",
   },
