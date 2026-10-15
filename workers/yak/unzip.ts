@@ -1,13 +1,18 @@
-// A zip, read in the Worker (T-34230): the bytes somebody dropped on their
-// space's page, unpacked into the files an app is made of (drop.ts). No
-// library — the runtime already inflates, so what is left is the container,
-// and the container is a few headers.
+// A zip, read in the Worker as it arrives (T-34230): the bytes somebody
+// dropped on their space's page, unpacked into the files an app is made of
+// (drop.ts). The request body flows through it, and each file comes out whole
+// and is let go before the next is read, so a drop of any size holds one file
+// at a time (T-124990).
 //
-// It reads the LOCAL file headers, in order, because that is where the bytes
-// are; the central directory at the end is read only for what a local header
-// can leave out — a zip written as a stream sets the data-descriptor flag and
-// writes zeros for the sizes, and the index at the end is the one place those
-// sizes exist.
+// It reads the local file headers, in order, because they come first and the
+// bytes follow them; the central directory at the end comes too late to help
+// a stream and is never read. A zip written as a stream (macOS's Archive
+// Utility writes every zip this way) sets the data-descriptor flag and writes
+// zeros for the sizes, which follow the bytes instead: such an entry ends
+// where a descriptor records the packed size read so far. No library: the
+// runtime already inflates, and fflate's streaming `Unzip` ends such an entry
+// at the first four bytes that look like any signature, which a large zip's
+// data holds by chance, and reads no flags.
 //
 // Everything else here is a refusal, and each one answers a sentence, because
 // what reads it is a person who dragged a file onto a page (apps.ts `SAYS` is
@@ -19,6 +24,8 @@
 //   a password                   there is no password to give it
 //   a path that escapes          `../`, an absolute path, a backslash
 //   more than there is room for  counted as it inflates, not as it claims
+//   damaged or cut short         a deflate that will not inflate, an end
+//                                that never comes
 //
 // And two conveniences, because a zip made on a desktop is never bare: a
 // single top-level folder is stripped when every entry shares it (unzipping
@@ -26,6 +33,15 @@
 // `recipes`), and macOS's own leavings — `__MACOSX/` and `.DS_Store` — are
 // dropped rather than deployed.
 
+import { CallError } from '@yaks/tools/errors'
+import {
+  type Bytes,
+  exactly,
+  gathered,
+  type Reader,
+  reader,
+  until,
+} from './bytes.ts'
 import { refuse } from './tool.ts'
 
 export type Entry = { path: string; bytes: Uint8Array<ArrayBuffer> }
@@ -33,11 +49,17 @@ export type Entry = { path: string; bytes: Uint8Array<ArrayBuffer> }
 let LOCAL = 0x04034b50
 let CENTRAL = 0x02014b50
 let END = 0x06054b50
+let END64 = 0x06064b50
 let DESCRIPTOR = 0x08074b50
+// The extra field that carries sizes too large for a header's four bytes.
+let ZIP64 = 0x0001
+let FULL = 0xffffffff
 
 // A zip is little-endian, everywhere.
-let u16 = (v: DataView, at: number) => v.getUint16(at, true)
-let u32 = (v: DataView, at: number) => v.getUint32(at, true)
+let u16 = (b: Uint8Array, at: number) => b[at] | b[at + 1] << 8
+let u32 = (b: Uint8Array, at: number) =>
+  (b[at] | b[at + 1] << 8 | b[at + 2] << 16 | b[at + 3] << 24) >>> 0
+let u64 = (b: Uint8Array, at: number) => u32(b, at) + u32(b, at + 4) * 2 ** 32
 
 let name = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
@@ -63,48 +85,20 @@ let junk = (path: string) => {
   return parts.includes('__MACOSX') || parts.at(-1) == '.DS_Store'
 }
 
-// The folder every entry sits in, when there is exactly one — `recipes/` for a
-// zip of `recipes/index.html` and `recipes/style.css`, and nothing for a zip
-// whose files are at its root or in two folders.
-let shared = (paths: string[]) => {
-  let first = paths[0] ?? ''
+/**
+ * Files with the one folder they all sit in taken off their paths, when there
+ * is one: `recipes/` for `recipes/index.html` and `recipes/style.css`, and
+ * nothing for files at the root or in two folders. A stream cannot know that
+ * until its last file is out, so `unzip` hands each file on under the path
+ * the zip gave it, and its caller applies this to what it kept.
+ */
+export let unfolded = <T extends { path: string }>(files: T[]): T[] => {
+  let first = files[0]?.path ?? ''
   let top = first.slice(0, first.indexOf('/') + 1)
-  return top && paths.every((p) => p.startsWith(top)) ? top : ''
-}
-
-// The index at the end of the file, as a map of path to what it says about the
-// entry. Only what a local header may omit is kept. A zip with no readable
-// index answers an empty map: it is a fallback, not the source of truth, and
-// an entry that then needs it is refused by name.
-let index = (v: DataView, bytes: Uint8Array) => {
-  let said = new Map<string, { method: number; packed: number; size: number }>()
-  let end = -1
-  // The record is 22 bytes plus a comment of up to 64 KB, so the scan back is
-  // bounded by that and not by the file.
-  for (
-    let i = v.byteLength - 22;
-    i >= 0 && i >= v.byteLength - 22 - 65_535;
-    i--
-  ) {
-    if (u32(v, i) == END) {
-      end = i
-      break
-    }
-  }
-  if (end < 0) return said
-  let n = u16(v, end + 10)
-  let at = u32(v, end + 16)
-  for (let i = 0; i < n && at + 46 <= v.byteLength; i++) {
-    if (u32(v, at) != CENTRAL) break
-    let len = u16(v, at + 28)
-    said.set(name(bytes.subarray(at + 46, at + 46 + len)), {
-      method: u16(v, at + 10),
-      packed: u32(v, at + 20),
-      size: u32(v, at + 24),
-    })
-    at += 46 + len + u16(v, at + 30) + u16(v, at + 32)
-  }
-  return said
+  return top && files.every((f) => f.path.startsWith(top))
+    ? files.map((f) => ({ ...f, path: f.path.slice(top.length) }))
+      .filter((f) => f.path)
+    : files
 }
 
 let big = () =>
@@ -113,79 +107,150 @@ let big = () =>
     'That unpacks to more than this space has room for.',
   )
 
-// The runtime's own inflate, with the ceiling counted as the bytes come out.
-let inflate = async (packed: Uint8Array<ArrayBuffer>, room: number) => {
-  let reader = new Blob([packed]).stream()
-    .pipeThrough(new DecompressionStream('deflate-raw'))
-    .getReader()
-  let parts: Uint8Array[] = []
-  let n = 0
-  for (;;) {
-    let { done, value } = await reader.read()
-    if (done || !value) break
-    n += value.byteLength
-    if (n > room) {
-      await reader.cancel()
-      throw big()
+let cut = (path: string) => () =>
+  refuse('arguments', `That zip stops in the middle of ${path}.`)
+
+let damaged = (path: string) =>
+  refuse(
+    'arguments',
+    `${path} in that zip is damaged and will not unpack — make the zip ` +
+      'again from the folder itself.',
+  )
+
+// The data of the extra field `id`, or null.
+let field = (extra: Uint8Array, id: number) => {
+  for (let at = 0; at + 4 <= extra.length; at += 4 + u16(extra, at + 2)) {
+    if (u16(extra, at) == id) {
+      return extra.subarray(at + 4, at + 4 + u16(extra, at + 2))
     }
-    parts.push(value)
   }
-  let out = new Uint8Array(n)
+  return null
+}
+
+// The sizes a local header gives, any it left full read from its ZIP64 field,
+// which holds them in eight bytes each, the unpacked size first.
+let sized = (head: Uint8Array, extra: Uint8Array) => {
+  let packed = u32(head, 18)
+  let size = u32(head, 22)
+  let wide = field(extra, ZIP64)
   let at = 0
-  for (let part of parts) {
-    out.set(part, at)
-    at += part.byteLength
+  if (wide && size == FULL) {
+    size = u64(wide, at)
+    at += 8
   }
-  return out
+  if (wide && packed == FULL) packed = u64(wide, at)
+  return { packed, size, wide: !!wide }
 }
 
 /**
- * The files in a zip, in the order it holds them. Throws a sentence at the
- * first thing it will not take, so a person reads one clear no rather than a
- * list of them. `max` is the room there is for what it unpacks to, counted
- * as it inflates, so a small zip that claims to be a large one is refused by
- * what it produces; the space's exact accounting follows at the write.
+ * The packed bytes of an entry written as a stream, up to its descriptor,
+ * which is then let go. The descriptor's signature is optional, and four
+ * bytes of data can look like one, so a place is the end only where a
+ * descriptor there records the packed size read so far: signed, `PK\7\8`,
+ * a crc and the sizes; unsigned, the crc and the sizes and then the next
+ * header. Each size is eight bytes in a ZIP64 entry, four otherwise.
  */
-export let unzip = async (
-  buf: ArrayBuffer,
+async function* described(r: Reader, width: number, path: string) {
+  let look = 8 + 2 * width
+  let signed = false
+  let size = (b: Uint8Array, at: number) => width == 8 ? u64(b, at) : u32(b, at)
+  let end = (b: Uint8Array, taken: number) => {
+    // Every `P` is where one could start: the signed one's own signature, or
+    // the next header's, `look - 4` bytes after an unsigned one.
+    for (
+      let q = b.indexOf(0x50);
+      q >= 0 && q + 4 <= b.length;
+      q = b.indexOf(0x50, q + 1)
+    ) {
+      let p = q - look + 4
+      let next = u32(b, q) == LOCAL || u32(b, q) == CENTRAL
+      if (p >= 0 && next && size(b, p + 4) == taken + p) return p
+      if (
+        q + look <= b.length && u32(b, q) == DESCRIPTOR &&
+        size(b, q + 8) == taken + q
+      ) {
+        signed = true
+        return q
+      }
+    }
+    return -1
+  }
+  yield* until(r, look, end, cut(path))
+  r.skip(signed ? look : look - 4)
+}
+
+// An entry's packed bytes through the runtime's inflate. A failure of the
+// bytes it was handed is the zip's, said as a sentence; one in handing them
+// over (a stream cut off) is passed on as it was.
+let inflated = async (
+  packed: AsyncIterable<Bytes>,
+  room: number,
+  path: string,
+) => {
+  let from = packed[Symbol.asyncIterator]()
+  let failed: unknown
+  let stopped = false
+  let out = new ReadableStream<Bytes>({
+    pull: async (c) => {
+      let got = await from.next().catch((e) => {
+        failed = e
+        throw e
+      })
+      if (stopped) return
+      if (got.done) c.close()
+      else c.enqueue(got.value)
+    },
+    // The inflate gave up on what it was handed while the next was coming.
+    cancel: () => void (stopped = true),
+  }).pipeThrough(new DecompressionStream('deflate-raw'))
+  try {
+    return await gathered(out, room, big)
+  } catch (e) {
+    throw failed ?? (e instanceof CallError ? e : damaged(path))
+  }
+}
+
+/**
+ * The files in a zip, in the order it holds them, each as it comes out of
+ * `chunks`: the next is not read until the one before is taken. Throws a
+ * sentence at the first thing it will not take, so a person reads one clear
+ * no rather than a list of them. `max` is the room there is for what it
+ * unpacks to, counted as it inflates, so a small zip that claims to be a
+ * large one is refused by what it produces; the space's exact accounting
+ * follows at the write. Paths are the zip's own; `unfolded` takes off a
+ * folder they all share.
+ */
+export async function* unzip(
+  chunks: AsyncIterable<Bytes>,
   max: number,
-): Promise<Entry[]> => {
-  let bytes = new Uint8Array(buf)
-  let v = new DataView(buf)
-  if (v.byteLength < 30 || u32(v, 0) != LOCAL) {
+): AsyncGenerator<Entry> {
+  let r = reader(chunks)
+  let first = await r.peek(30)
+  if (first.length < 30 || u32(first, 0) != LOCAL) {
     throw refuse(
       'arguments',
       "That isn't a zip — drop a .zip of your app's files, or a single " +
         'index.html.',
     )
   }
-  let said = index(v, bytes)
-  let out: Entry[] = []
   let total = 0
-  let at = 0
-  while (at + 30 <= v.byteLength && u32(v, at) == LOCAL) {
-    let flags = u16(v, at + 6)
-    let method = u16(v, at + 8)
-    let packed = u32(v, at + 18)
-    let size = u32(v, at + 22)
-    let len = u16(v, at + 26)
-    let path = name(bytes.subarray(at + 30, at + 30 + len))
-    let start = at + 30 + len + u16(v, at + 28)
-    // Written as a stream: the sizes were not known when the header went out,
-    // so they are zero here and true in the index at the end.
-    if (flags & 8) {
-      let there = said.get(path)
-      if (!there) {
-        throw refuse(
-          'arguments',
-          `${path} in that zip has no size recorded anywhere in it — make ` +
-            'the zip again from the folder itself.',
-        )
-      }
-      method = there.method
-      packed = there.packed
-      size = there.size
+  let any = false
+  for (;;) {
+    let head = await r.peek(30)
+    let sig = head.length >= 4 ? u32(head, 0) : null
+    if (sig == CENTRAL || sig == END || sig == END64) break
+    if (sig != LOCAL || head.length < 30) {
+      throw refuse('arguments', 'That zip stops before its end.')
     }
+    let flags = u16(head, 6)
+    let method = u16(head, 8)
+    let len = u16(head, 26)
+    let at = 30 + len + u16(head, 28)
+    head = await r.peek(at)
+    let path = name(head.subarray(30, 30 + len))
+    if (head.length < at) throw cut(path)()
+    let { packed, size, wide } = sized(head, head.subarray(30 + len, at))
+    r.skip(at)
     if (flags & 1) {
       throw refuse(
         'arguments',
@@ -193,16 +258,15 @@ export let unzip = async (
           'here to give it a password.',
       )
     }
-    if (packed == 0xffffffff || size == 0xffffffff) throw big()
-    let after = start + packed
-    if (flags & 8) {
-      after += after + 4 <= v.byteLength && u32(v, after) == DESCRIPTOR
-        ? 16
-        : 12
-    }
+    // Written as a stream: the sizes were not known when the header went
+    // out, so they are zero here and true in the descriptor after the bytes.
+    let streamed = !!(flags & 8)
+    let data = streamed
+      ? described(r, wide ? 8 : 4, path)
+      : exactly(r, packed, cut(path))
     // A folder entry carries no bytes; the paths inside it say the same thing.
     if (path.endsWith('/') || junk(path)) {
-      at = after
+      for await (let _ of data) continue
       continue
     }
     if (escapes(path)) {
@@ -219,23 +283,14 @@ export let unzip = async (
           `(method ${method}) — zip it again with the ordinary settings.`,
       )
     }
-    if (start + packed > v.byteLength) {
-      throw refuse('arguments', `That zip stops in the middle of ${path}.`)
-    }
     let room = max - total
-    if (size > room) throw big()
-    let content = method == 0
-      ? bytes.slice(start, start + packed)
-      : await inflate(bytes.subarray(start, start + packed), room)
-    total += content.byteLength
-    if (total > max) throw big()
-    out.push({ path, bytes: content })
-    at = after
+    if (!streamed && size > room) throw big()
+    let bytes = method == 0
+      ? await gathered(data, room, big)
+      : await inflated(data, room, path)
+    total += bytes.length
+    any = true
+    yield { path, bytes }
   }
-  if (!out.length) throw refuse('arguments', 'There are no files in that zip.')
-  let top = shared(out.map((e) => e.path))
-  return top
-    ? out.map((e) => ({ ...e, path: e.path.slice(top.length) }))
-      .filter((e) => e.path)
-    : out
+  if (!any) throw refuse('arguments', 'There are no files in that zip.')
 }

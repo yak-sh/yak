@@ -1823,15 +1823,8 @@ let offeredWords = async (raw: Objects, files: Files) => {
 // A file named as a picture is one, refused at the write with what is wrong
 // and what to send instead, whichever door brought it (@yaks/blob `broken`). A
 // chat model asked for a PNG transcribes one it cannot checksum, and kept as it
-// came, that file served as the app's icon and drew nothing (T-123684). An
-// icon.svg is drawn here too, since the app's icon is drawn from it
-// (raster.ts), and one that cannot be is refused now rather than drawing
-// nothing later.
-let pictured = async (
-  env: Env,
-  app: App,
-  files: { path: string; bytes: Uint8Array }[],
-) => {
+// came, that file served as the app's icon and drew nothing (T-123684).
+let pictured = async (files: { path: string; bytes: Uint8Array }[]) => {
   for (let f of files) {
     let path = f.path.replace(/^\/+/, '')
     let why = await broken(f.bytes, mimeOf(path))
@@ -1841,12 +1834,23 @@ let pictured = async (
         `${path} does not decode: ${why}. ${instead(path)}`,
       )
     }
-    if (path != ICON_SVG) continue
-    let drawing = await drawn(env, decoded(f.bytes), app.slug)
+  }
+}
+
+// An icon.svg is drawn at the write too, since the app's icon is drawn from it
+// (raster.ts), and one that cannot be is refused now rather than drawing
+// nothing later. Its bytes are the write's own, or else the ones pinned at its
+// sha by a write that learned where a file lands only after the bytes had gone
+// (a drop takes a zip's shared folder off once the zip is read).
+let iconed = async (env: Env, app: App, sent: Change[]) => {
+  for (let f of sent) {
+    if (f.path != ICON_SVG || !f.sha) continue
+    let bytes = f.bytes ?? await r2RawObjects(env.BLOBS).get(addressed(f.sha))
+    let drawing = await drawn(env, decoded(bytes), app.slug)
     if (typeof drawing == 'string') {
       throw refuse(
         'arguments',
-        `${path} cannot be drawn as the app's icon: ${drawing}`,
+        `${f.path} cannot be drawn as the app's icon: ${drawing}`,
       )
     }
   }
@@ -1884,7 +1888,32 @@ export let wroteAt = async (
   files: { path: string; bytes: Uint8Array }[],
   c: Clock = clock(),
 ) => {
-  let sent = await sending(env, app, files, c)
+  await c.time('pictures', () => pictured(files))
+  return await wrotePinned(env, space, app, who, await hashed(files), c)
+}
+
+/**
+ * Files named by their sha into the next release's private draft, each
+ * carrying its bytes for the draft to put (`wroteAt`, once it has hashed them)
+ * or already pinned (`pinning`). What turns on where a file lands is checked
+ * here, by the path it lands at: the app's notes, the one file with a ceiling
+ * of its own (standing.ts), handed whole to any agent that can reach the app,
+ * so refused over the cap at the write rather than truncated at the read; and
+ * an icon.svg, drawn. Then the space's room, then the draft.
+ */
+export let wrotePinned = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  sent: Change[],
+  c: Clock = clock(),
+) => {
+  for (let f of sent) {
+    let no = tooLong(f.path, f.size ?? 0)
+    if (no) throw refuse('limit', no)
+  }
+  await c.time('icon', () => iconed(env, app, sent))
   let stopped = await c.time('quota', () => fullAt(env, space, sent))
   if (stopped) throw refuse('limit', stopped)
   let landing = await c.time(
@@ -1895,25 +1924,45 @@ export let wroteAt = async (
 }
 
 /**
- * Files as a write sends them, each named by its sha: refused here if it is
- * a picture that is not one, or the app's notes over their cap.
+ * A stream's files pinned as they arrive (drop.ts): `pin` checks a file as
+ * any write does, names it by its sha and puts it at its content address,
+ * then answers once no more than `held` bytes wait on their puts, so however
+ * long the stream, its files hold that much and the one in hand. A file
+ * larger than `held` is put alone. `pinned` answers each file as a write
+ * records it, bytes let go, once the last put is done, and `wrotePinned`
+ * records them. A put that failed fails whichever of the two comes next.
  */
-export let sending = async (
-  env: Env,
-  app: App,
-  files: { path: string; bytes: Uint8Array }[],
-  c: Clock = clock(),
-) => {
-  await c.time('pictures', () => pictured(env, app, files))
-  // The one file with a ceiling of its own (standing.ts): the app's notes are
-  // handed whole to any agent that can reach the app, so they are refused
-  // over the cap here — at the write, whichever door brought the bytes —
-  // rather than truncated at the read.
-  for (let f of files) {
-    let no = tooLong(f.path, f.bytes.byteLength)
-    if (no) throw refuse('limit', no)
+export let pinning = (blobs: Pick<Objects, 'put'>, held: number) => {
+  let sent: Change[] = []
+  let flying = new Set<Promise<void>>()
+  let holding = 0
+  let failed: { error: unknown } | null = null
+  let fail = () => {
+    if (failed) throw failed.error
   }
-  return await hashed(files)
+  return {
+    pin: async (file: { path: string; bytes: Uint8Array }) => {
+      fail()
+      await pictured([file])
+      let [{ bytes, ...f }] = await hashed([file])
+      sent.push(f)
+      holding += f.size
+      let put: Promise<void> = blobs.put(addressed(f.sha), bytes)
+        .catch((error) => void (failed ??= { error }))
+        .finally(() => {
+          holding -= f.size
+          flying.delete(put)
+        })
+      flying.add(put)
+      while (holding > held) await Promise.race(flying)
+      fail()
+    },
+    pinned: async () => {
+      await Promise.all(flying)
+      fail()
+      return sent
+    },
+  }
 }
 
 /** Files named by their sha, as a write records them. */

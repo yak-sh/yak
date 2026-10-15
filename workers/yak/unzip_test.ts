@@ -4,16 +4,30 @@
 //
 // The fixtures are built here rather than checked in (probe.ts `zipped`), so
 // what makes a case what it is — the folder prefix, the escaping path, the
-// method nobody reads — is readable in the test.
+// method nobody reads — is readable in the test. Each is read as a stream
+// hands it over, seven bytes at a time, so every header, size and descriptor
+// lands across a chunk's edge somewhere.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { zipped } from './probe.ts'
-import { escapes, unzip } from './unzip.ts'
+import { type Entry, escapes, unfolded, unzip } from './unzip.ts'
 
 let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
+async function* chunked(bytes: Uint8Array<ArrayBuffer>) {
+  for (let at = 0; at < bytes.length; at += 7) {
+    yield bytes.subarray(at, at + 7)
+  }
+}
+
+let unpacked = async (bytes: Uint8Array<ArrayBuffer>, max = Infinity) => {
+  let out: Entry[] = []
+  for await (let entry of unzip(chunked(bytes), max)) out.push(entry)
+  return unfolded(out)
+}
+
 let read = async (entries: Parameters<typeof zipped>[0], max = Infinity) =>
-  await unzip((await zipped(entries)).buffer as ArrayBuffer, max)
+  await unpacked(await zipped(entries), max)
 
 let refuses = async (
   entries: Parameters<typeof zipped>[0],
@@ -80,18 +94,43 @@ test("macOS's own leavings never become files", async () => {
   assertEquals(out.map((e) => e.path), ['index.html'])
 })
 
-// Written as a stream: the local header carries zeros and the index at the end
-// carries the sizes. Deflated too, so the packed length has to come from the
-// index for the walk to find the next header at all.
-test('a data descriptor sends the reader to the index', async () => {
+// Written as a stream: the local header carries zeros and a descriptor after
+// the bytes carries the sizes, with its signature or, as the format allows,
+// without. Stored bytes holding a descriptor's signature of their own are
+// still one file: the end is where a descriptor records the size read so far.
+test('an entry written as a stream ends at its descriptor', async () => {
+  let fake = 'a PK\x07\x08 that is not the end'
   let out = await read([
     { path: 'index.html', content: 'page', deflate: true, flags: 8 },
     { path: 'style.css', content: 'css', flags: 8 },
+    { path: 'fake.txt', content: fake, flags: 8 },
+    { path: 'bare.txt', content: fake, flags: 8, bare: true },
+    { path: 'last.txt', content: 'last', deflate: true, flags: 8, bare: true },
   ])
-  assertEquals(out.map((e) => e.path), ['index.html', 'style.css'])
-  assertEquals(text(out[0].bytes), 'page')
-  assertEquals(text(out[1].bytes), 'css')
+  assertEquals(out.map((e) => [e.path, text(e.bytes)]), [
+    ['index.html', 'page'],
+    ['style.css', 'css'],
+    ['fake.txt', fake],
+    ['bare.txt', fake],
+    ['last.txt', 'last'],
+  ])
 })
+
+// One stored file is a 40-byte header and its 4 bytes: cut inside them, and
+// cut where the index should begin.
+test('a zip cut short is refused', async () => {
+  let whole = await zipped([{ path: 'index.html', content: 'page' }])
+  await assertRejects(
+    () => unpacked(whole.slice(0, 42)),
+    Error,
+    'middle of index.html',
+  )
+  await assertRejects(() => unpacked(whole.slice(0, 44)), Error, 'its end')
+})
+
+// One byte that names a deflate block type there is no such thing as.
+test('a deflate that will not inflate is refused, by name', () =>
+  refuses([{ path: 'index.html', content: '\x07', method: 8 }], 'damaged'))
 
 test('a path out of the app is refused, by name', () =>
   refuses([{ path: '../secrets.txt', content: 'no' }], 'points outside'))
@@ -131,11 +170,5 @@ test('an empty zip is refused', () => refuses([], "isn't a zip"))
 
 test('bytes that are not a zip are refused', async () => {
   let page = new TextEncoder().encode('<h1>not a zip</h1>')
-  await assertRejects(
-    async () => {
-      await unzip(page.buffer as ArrayBuffer, Infinity)
-    },
-    Error,
-    "isn't a zip",
-  )
+  await assertRejects(() => unpacked(page), Error, "isn't a zip")
 })

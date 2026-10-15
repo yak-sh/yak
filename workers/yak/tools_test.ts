@@ -20,6 +20,7 @@ import {
   type Out,
   parses,
   patched,
+  pinning,
   sri,
   stored,
   TOOLS,
@@ -727,4 +728,35 @@ test('paid and comped domain attachment still provisions normally', async () => 
   } finally {
     globalThis.fetch = original
   }
+})
+
+// A drop pins its files as they stream in (drop.ts), and what bounds its
+// memory is that a pin answers, letting the next file be read, only once no
+// more than the bound waits on puts. Each put here waits until it is let go.
+test('a pin answers once no more than its bound waits on puts', async () => {
+  let gates: (() => void)[] = []
+  let second = Promise.withResolvers<void>()
+  let pins = pinning({
+    put: () =>
+      new Promise<void>((go) => {
+        if (gates.push(go) == 2) second.resolve()
+      }),
+  }, 2)
+  let file = (path: string) => ({ path, bytes: new TextEncoder().encode(path) })
+  await pins.pin(file('ab'))
+  let next = pins.pin(file('cd'))
+  // Once the second put is made, a pin with no bound answers within a few
+  // turns; this one is still waiting for the first.
+  let early = await Promise.race([
+    next.then(() => true),
+    second.promise.then(async () => {
+      for (let i = 0; i < 9; i++) await null
+      return false
+    }),
+  ])
+  assertEquals(early, false)
+  gates[0]()
+  await next
+  gates[1]()
+  assertEquals((await pins.pinned()).map((f) => f.path), ['ab', 'cd'])
 })

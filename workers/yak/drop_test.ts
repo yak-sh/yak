@@ -9,8 +9,10 @@
 // out of the app, more than the ceiling, and nobody signed in.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
+import { received } from './drop.ts'
 import { kernel, type Packed, seed, signIn, unique, zipped } from './probe.ts'
 import { managePath } from './route.ts'
+import { addressed } from './versions.ts'
 
 // The form a browser sends: the file under `file`, the name beside it.
 let drops = (
@@ -268,4 +270,52 @@ test("the drop zone is on the owner's New app page", async () => {
   } finally {
     await k.stop()
   }
+})
+
+// A drop is read as it arrives, below the door (T-124990): each file is pinned
+// at its content address as it comes out, so one many times what the Worker
+// holds at once still lands, and the first file goes out while most of the zip
+// has yet to arrive. Here the zip carries five times what is held at once;
+// that no more than that waits on puts is tools_test.ts's. The form is the one
+// a browser sends, written out.
+test('a drop many times what is held at once lands file by file', async () => {
+  let held = 256
+  let files = Array.from({ length: 5 }, (_, i) => ({
+    path: `site/${i}.bin`,
+    content: crypto.getRandomValues(new Uint8Array(held)),
+  }))
+  let said = (name: string, file = '') =>
+    `--b\r\ncontent-disposition: form-data; name="${name}"${file}\r\n\r\n`
+  let body = new Uint8Array(
+    await new Blob([
+      said('file', '; filename="site.zip"'),
+      await zipped(files),
+      `\r\n${said('slug')}site\r\n--b--\r\n`,
+    ]).arrayBuffer(),
+  )
+  let read = 0
+  let req = new Request('https://jeff.yaks.app/deploy', {
+    method: 'POST',
+    headers: { 'content-type': 'multipart/form-data; boundary=b' },
+    body: new ReadableStream({
+      pull: (c) => {
+        if (read >= body.length) return c.close()
+        c.enqueue(body.slice(read, read += held))
+      },
+    }, { highWaterMark: 0 }),
+  })
+  let stored = new Map<string, Uint8Array>()
+  let first = -1
+  let put = (key: string, bytes: Uint8Array) => {
+    if (first < 0) first = read
+    stored.set(key, bytes)
+    return Promise.resolve()
+  }
+  let got = await received(req, { put }, Infinity, held)
+  assertEquals(got.asked, 'site')
+  assertEquals(
+    got.files.map((f) => [f.path, stored.get(addressed(f.sha ?? ''))]),
+    files.map((f) => [f.path.slice('site/'.length), f.content]),
+  )
+  assert(first < body.length / 2, `the first put waited for ${first} bytes`)
 })

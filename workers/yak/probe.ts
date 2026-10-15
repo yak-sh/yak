@@ -1155,6 +1155,9 @@ export type Packed = {
   method?: number
   flags?: number
   size?: number
+  // A data descriptor (flags bit 3) without its signature, as the format
+  // allows.
+  bare?: boolean
 }
 
 let deflated = async (bytes: Uint8Array<ArrayBuffer>) =>
@@ -1201,8 +1204,9 @@ export let zipped = async (entries: Packed[]) => {
       t.setUint32(0, 0x08074b50, true)
       t.setUint32(8, packed.length, true)
       t.setUint32(12, size, true)
-      body.push(tail)
-      took += tail.length
+      let sent = one.bare ? tail.subarray(4) : tail
+      body.push(sent)
+      took += sent.length
     }
     let row = new Uint8Array(46 + name.length)
     let c = new DataView(row.buffer)

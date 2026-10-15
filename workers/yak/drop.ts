@@ -8,12 +8,15 @@
 // it is a plain multipart form (pages.ts `dropZone`) and every no it answers is
 // a sentence on a page rather than a code in a body.
 //
-// What it does with what it took is not written here: unzip.ts turns the bytes
-// into files, and then the three tools an agent would call do the rest —
-// `app_new` where the name is new, the write half of `app_files`, `app_deploy`
-// (tools.ts `call`, `wrote`). So a drop lands under the same room, the same
-// member guard and the same version bump as everything else, and there is no
-// second implementation of a deploy to keep in step with the first.
+// What it does with what it took is not written here: form.ts and unzip.ts
+// turn the bytes into files as they arrive, each pinned at its content address
+// and let go before the next (tools.ts `pinning`), so a drop is bounded by the
+// space's room and not the Worker's memory (T-124990). Then the three tools an
+// agent would call do the rest — `app_new` where the name is new, the write
+// half of `app_files`, `app_deploy` (tools.ts `call`, `wrotePinned`). So a
+// drop lands under the same room, the same member guard and the same version
+// bump as everything else, and there is no second implementation of a deploy
+// to keep in step with the first.
 //
 // The guard is `writes` (@yaks/member): a space's owner or editor deploys,
 // nobody else — the same rule as the file door in apps.ts, which is not the
@@ -26,11 +29,22 @@ import { bound, type Env } from './env.ts'
 import { dropped, nothingHere } from './pages.ts'
 import { hostOf, route, SLUG } from './route.ts'
 import { whoIs } from './session.ts'
-import { call, inApp, wrote } from './tools.ts'
-import { type Entry, unzip } from './unzip.ts'
+import { call, inApp, pinning, wrotePinned } from './tools.ts'
+import { unfolded, unzip } from './unzip.ts'
 import { FILES } from './meter.ts'
 import { writes } from '@yaks/member'
 import { caught } from './defects.ts'
+import type { Objects } from '@yaks/blob'
+import { gathered } from './bytes.ts'
+import { type Part, parts } from './form.ts'
+import { r2RawObjects } from './lib/objects.ts'
+import { refuse } from './tool.ts'
+import type { Change } from './written.ts'
+
+// How many bytes a drop's files may hold waiting on their puts at once
+// (tools.ts `pinning`). The isolate's 128 MB also holds the file being
+// unpacked, the request's chunks and everything else the Worker is doing.
+let HELD = 16 * 2 ** 20
 
 // A file's own name, with any folders a browser sent in front of it gone
 // (a directory drop names `pics/cat.png`) and nothing that could escape left.
@@ -57,14 +71,57 @@ export let slugged = (name: string) => {
 let titled = (slug: string) =>
   slug.replace(/-+/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
-// The files a drop carries: a zip is its entries, and anything else is itself,
-// at its own name.
-let opened = async (file: File, room: number): Promise<Entry[]> => {
-  let bytes = new Uint8Array(await file.arrayBuffer())
-  if (!/\.zip$/i.test(file.name) && file.type != 'application/zip') {
-    return [{ path: basename(file.name), bytes }]
+// The files a drop carries, pinned one by one as they arrive: a zip is its
+// entries, and anything else is itself, at its own name.
+let opened = async (
+  file: Part,
+  room: number,
+  pins: ReturnType<typeof pinning>,
+) => {
+  let name = file.filename ?? ''
+  if (!/\.zip$/i.test(name) && file.type != 'application/zip') {
+    let bytes = await gathered(
+      file.body,
+      room,
+      () => refuse('limit', 'That file is more than this space has room for.'),
+    )
+    if (bytes.length) await pins.pin({ path: basename(name), bytes })
+    return await pins.pinned()
   }
-  return await unzip(bytes.buffer as ArrayBuffer, room)
+  for await (let entry of unzip(file.body, room)) await pins.pin(entry)
+  return unfolded(await pins.pinned())
+}
+
+/**
+ * What a drop's form carries, read as it arrives: the name typed beside the
+ * file, the file's own name, and the files it is, each pinned at its content
+ * address as it comes out, with no more than `held` bytes waiting on their
+ * puts at once (tools.ts `pinning`). No files when it carries none.
+ */
+export let received = async (
+  req: Request,
+  blobs: Pick<Objects, 'put'>,
+  room: number,
+  held = HELD,
+) => {
+  let asked = ''
+  let name = ''
+  let files: Change[] = []
+  for await (let part of parts(req)) {
+    if (part.name == 'slug') {
+      asked = new TextDecoder().decode(
+        await gathered(part.body, 1024, () =>
+          refuse(
+            'arguments',
+            'That name cannot be an address — letters, digits and hyphens.',
+          )),
+      ).trim().toLowerCase()
+    } else if (part.name == 'file' && part.filename && !name) {
+      name = part.filename
+      files = await opened(part, room, pinning(blobs, held))
+    }
+  }
+  return { asked, name, files }
 }
 
 export let fetch = async (req: Request, env: Env): Promise<Response> => {
@@ -99,17 +156,15 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       )
   }
   try {
-    let form = await req.formData()
-    let file = form.get('file')
-    if (!(file instanceof File) || !file.size) {
+    let form = await received(
+      req,
+      r2RawObjects(env.BLOBS),
+      FILES[space.tier ?? 'free'],
+    )
+    if (!form.files.length) {
       return no('Pick a file first — a .zip of the app, or one index.html.')
     }
-    let room = FILES[space.tier ?? 'free']
-    if (file.size > room) {
-      return no('That file is more than this space has room for.')
-    }
-    let asked = String(form.get('slug') ?? '').trim().toLowerCase()
-    let slug = asked || slugged(file.name)
+    let slug = form.asked || slugged(form.name)
     if (!slug) {
       return no(
         'What should the app be called? A zip is named after itself, but ' +
@@ -122,7 +177,6 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
           'starting with a letter or a digit.',
       )
     }
-    let files = await opened(file, room)
     let ctx = { env, dir, person: who.person! }
     // A name nobody has taken is a new app; a name that is somebody's is an
     // update of it, which is what dropping the same zip twice means. app_new
@@ -137,7 +191,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     // The member guard again, and this time it is the tool's own: `inApp` is
     // what every write in tools.ts goes through.
     let it = await inApp(ctx, { space: space.slug, app: slug }, true)
-    let paths = await wrote(env, space, it.app, it.who, files)
+    let { paths } = await wrotePinned(env, space, it.app, it.who, form.files)
     await call(ctx, 'app_deploy', { space: space.slug, app: slug })
     // The version this drop became, read back rather than parsed out of the
     // tool's sentence: the row is where a version lives.
