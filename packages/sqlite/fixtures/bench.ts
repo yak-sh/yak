@@ -3,7 +3,7 @@ import type { Comp } from '@yaks/graph'
 import { assertEquals } from '@std/assert'
 import '../sqlitepath.ts'
 import { Database } from '@db/sqlite'
-import { compile, type Driver, render, type Stmt } from '@yaks/sql'
+import { compile, type Driver, renderStable, type Stmt } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { schema as ftsSchema } from '@yaks/fts'
 import { get, storage } from '@yaks/sqlite'
@@ -30,7 +30,7 @@ export function location() {
  * cache. It writes the statements the box's driver runs (../driver.ts). */
 export let perCall = (db: Database): Driver => ({
   query: (s) => {
-    let { sql, params } = render(s, { reuse: true })
+    let { sql, params } = renderStable(s)
     let stmt = db.prepare(sql)
     try {
       return stmt.all(...params)

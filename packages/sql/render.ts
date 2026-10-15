@@ -36,8 +36,8 @@ import {
 
 // What one rendering accumulates: the parameters in the order their `?`s were
 // written, whether values are being written as literals instead, and whether
-// the host keeps its statements by their text (`render`'s `reuse`).
-type Ctx = { params: Param[]; inline: boolean; reuse?: boolean }
+// the text must be stable whatever a collection's members (`renderStable`).
+type Ctx = { params: Param[]; inline: boolean; stable: boolean }
 
 /** An identifier, quoted. */
 export let q = (name: string): string => `"${name.replaceAll('"', '""')}"`
@@ -116,15 +116,14 @@ let compound = (e: Expr): boolean =>
 // component, asked thousands of times a session) renders only what changed
 // since: the part holding its bound values. A leaf is cheaper to write than to
 // look up, and short text is not worth keeping.
-// A host that reuses statements writes collections its own way, and keeps its
-// text apart.
+// Stable text writes collections its own way, so it is kept apart.
 let seen = [new WeakMap<object, string>(), new WeakMap<object, string>()]
 let LEAF = new Set(['col', 'val', 'lit', 'star', 'table'])
 let kept =
   <N extends { t: string }>(write: (n: N, c: Ctx) => string) =>
   (n: N, c: Ctx): string => {
     if (c.inline || LEAF.has(n.t)) return write(n, c)
-    let texts = seen[c.reuse ? 1 : 0]
+    let texts = seen[c.stable ? 1 : 0]
     let text = texts.get(n)
     if (text != null) return text
     let bound = c.params.length
@@ -253,11 +252,10 @@ let tail = (
   (s.limit ? ` limit ${expr(s.limit, c)}` : '') +
   (s.offset ? ` offset ${expr(s.offset, c)}` : '')
 
-// A collection's members as VALUES rows, unless its host reads it cheaper as
-// one JSON array: one too large to write out, or any on a host that reuses
-// statements by their text (./ast.ts `each`).
+// A collection's members as VALUES rows, unless it is one JSON array: one too
+// large to write out, or any in stable text (./ast.ts `each`).
 let written = (list: readonly Param[], c: Ctx): string | undefined =>
-  !c.reuse && bounded(list)
+  !c.stable && bounded(list)
     ? `values ${list.map((v) => `(${literal(v)})`).join(', ')}`
     : undefined
 
@@ -450,13 +448,11 @@ let stmt = (s: Stmt, c: Ctx): string => {
 // The same accumulator, writing values as literals: what a statement SQLite
 // stores as text needs, since nothing will be bound to it when it runs.
 let lit = (c: Ctx): Ctx =>
-  c.inline ? c : { params: c.params, inline: true, reuse: c.reuse }
+  c.inline ? c : { params: c.params, inline: true, stable: c.stable }
 
 /**
  * A statement, or an expression, as the text SQLite runs and the parameters
- * it binds. `reuse` is for a host that keeps prepared statements by their
- * text: every collection (`each`) is bound as one JSON array, so a
- * statement's text is the same whatever its members.
+ * it binds.
  *
  * ```ts
  * import { col, eq, render, val } from '@yaks/sql'
@@ -470,11 +466,23 @@ let lit = (c: Ctx): Ctx =>
  * // s.sql == 'select "v" from "meta" where "k" = ?', s.params == ['epoch']
  * ```
  */
-export let render = (
-  node: Stmt | Expr,
-  opts: { reuse?: boolean } = {},
-): Raw => {
-  let c: Ctx = { params: [], inline: false, reuse: opts.reuse }
+export let render = (node: Stmt | Expr): Raw => rendered(node, false)
+
+/** {@link render} for a host that keeps prepared statements by their text:
+ * every collection (`each`) is bound as one JSON array, so a statement's text
+ * is stable whatever its members.
+ *
+ * ```ts
+ * import { col, each, renderStable, select } from '@yaks/sql'
+ *
+ * renderStable(select({ cols: [col('value')], from: { t: 'from', q: each([1, 2]) } })).sql
+ * // 'select "value" from (select "value" from "json_each"(?))'
+ * ```
+ */
+export let renderStable = (node: Stmt | Expr): Raw => rendered(node, true)
+
+let rendered = (node: Stmt | Expr, stable: boolean): Raw => {
+  let c: Ctx = { params: [], inline: false, stable }
   let sql = isExpr(node) ? expr(node, c) : stmt(node, c)
   return raw(
     sql,
@@ -572,7 +580,7 @@ let MEMO_SIZE = 1024, MEMO_TEXT = 4096
  * operator around it would take it apart: what an ORDER BY term or a derived
  * read is spliced into the binder's text as. */
 export let inline = (e: Expr): string =>
-  operand(e, { params: [], inline: true })
+  operand(e, { params: [], inline: true, stable: false })
 
 let EXPRS = new Set([
   'col',

@@ -5,7 +5,7 @@ import {
   type Driver,
   excerpt,
   type Param,
-  render,
+  renderStable,
   type Row,
   statement,
   type Stmt,
@@ -21,7 +21,7 @@ export let driver = (
     opts.before?.(s)
     // Each statement is kept by its text (./native.ts `prepared`), and a list
     // costs no rows here: every collection binds as one JSON array.
-    let rendered = render(s, { reuse: true }), { sql, params } = rendered
+    let rendered = renderStable(s), { sql, params } = rendered
     let at = context()
     let c = at?.channel ?? peek(d)
     if (!c) return run(sql, params)

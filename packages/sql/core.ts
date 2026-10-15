@@ -85,7 +85,7 @@ export {
   when,
   type Write,
 } from './ast.ts'
-export { excerpt, render, shape } from './render.ts'
+export { excerpt, render, renderStable, shape } from './render.ts'
 export { type Driver, effect, type Row, scan, tally } from './driver.ts'
 export { held, type Tag, tagOf, tallied } from './sqlite.ts'
 export * from './compound.ts'

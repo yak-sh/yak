@@ -555,18 +555,18 @@ export let array = (list: readonly Param[]): Query =>
  * reads one cheapest. A bounded collection is literal VALUES, costing a
  * Durable Object no virtual rows, and any other is an {@link array},
  * respecting a host's bound-parameter ceiling. A host that keeps prepared
- * statements by their text renders with `reuse` ({@link render}), and every
- * collection is an array: written out, each different set of members is a
- * statement to prepare. SQLite copies literal VALUES into every reference
+ * statements by their text renders with `renderStable`, and every collection
+ * is an array: written out, each different set of members is a statement to
+ * prepare. SQLite copies literal VALUES into every reference
  * while it prepares, so a collection a statement names many times is an
  * {@link array} on any host.
  *
  * ```ts
- * import { each, render } from '@yaks/sql'
+ * import { each, render, renderStable } from '@yaks/sql'
  *
  * render(each(['a', 'b'])).sql
  * // `select "column1" as "value" from (values ('a'), ('b'))`
- * render(each(['a', 'b']), { reuse: true }).sql
+ * renderStable(each(['a', 'b'])).sql
  * // 'select "value" from "json_each"(?)'
  * ```
  */
