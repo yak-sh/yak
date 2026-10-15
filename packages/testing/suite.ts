@@ -18,6 +18,8 @@ export type Test = {
 
 let tests: Test[] | undefined
 let file = ''
+// Whether a stack has been read since the module now loading was named.
+let mapped = false
 
 /** Starts collecting: every test declared from now on lands in the list
  * returned, instead of going to Deno.test. */
@@ -26,6 +28,7 @@ export let collect = (): Test[] => tests = []
 /** Names the module whose declarations follow. */
 export let from = (path: string) => {
   file = path
+  mapped = false
 }
 
 /**
@@ -42,8 +45,14 @@ export let test = (
   body: () => unknown,
   { tags = [], skip = false }: Options = {},
 ): void => {
-  if (tests) tests.push({ name, body, tags, skip, file })
-  else {
+  if (tests) {
+    // The first stack read that holds a module's frame reads the module's
+    // source map, half a millisecond, once. A module declares from its own
+    // frame, so the map is read here, in its load, rather than by whichever
+    // of its tests first reports an error.
+    mapped ||= !!Error().stack
+    tests.push({ name, body, tags, skip, file })
+  } else {
     globalThis.Deno?.test({ name, ignore: skip, fn: () => closing(body) })
   }
 }
