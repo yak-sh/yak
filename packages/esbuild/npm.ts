@@ -13,13 +13,17 @@ export let REGISTRY = 'https://registry.npmjs.org'
 // How long the registry has to answer, in ms.
 let WAIT = 30_000
 
-// The files of a package kept for a build: its text, as worker-bundler kept
-// it. A build reads nothing else (an image or a binary is never compiled in).
+// The files of a package a build can read: its text, as worker-bundler kept
+// it. A build reads nothing else (an image or a binary is never compiled in),
+// so `read` and `list` answer these; `whole` answers the rest as bytes.
 let TEXT = /\.(?:[cm]?[jt]sx?|json|md|txt|css|html|ya?ml|toml|xml|svg|map|py)$/i
 let NAMED =
   /^(?:license|readme|changelog|package\.json|tsconfig\.json|\.npmignore|\.gitignore)/i
 let text = (path: string) =>
   TEXT.test(path) || NAMED.test(path.slice(path.lastIndexOf('/') + 1))
+
+// What only tooling reads, and a page never fetches.
+let TOOLING = /\.(?:d\.[cm]?ts|map|md)$/i
 
 let decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 
@@ -151,6 +155,21 @@ export class Files {
       },
     )
     if (out != null) this.#files.set(path, out)
+    return out
+  }
+
+  /** Every file an installed package ships, raw, by path from its directory,
+   * apart from what only tooling reads (types, source maps, documents). The
+   * ones a build cannot read (`read` answers text) are still here, as bytes. */
+  whole(name: string): Record<string, Uint8Array> {
+    let pack = this.#packages.get(`node_modules/${name}/`)
+    let out: Record<string, Uint8Array> = {}
+    if (!pack) return out
+    walk(
+      pack.tgz,
+      (at, _, file) => file && at.startsWith(pack.root) && !TOOLING.test(at),
+      (at, bytes) => void (out[at.slice(pack.root.length)] = bytes),
+    )
     return out
   }
 

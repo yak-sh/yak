@@ -4,6 +4,7 @@ import { type Catalog, located, seed, type Toolkit } from './platform.ts'
 import { lockfile, pins, reached, wanted } from './lock.ts'
 import { satisfies } from 'semver'
 import { compile } from './compile.ts'
+import { bytesOf } from './plan.ts'
 
 let digest = (n = 'a') => `sha256:${n.repeat(64)}`
 let pkg = (dependencies: Record<string, string> = {}, n = 'a'): Toolkit => ({
@@ -217,7 +218,7 @@ test('package resources retain module-relative addresses for nested entries', as
     for (let [path, text] of Object.entries(shared)) {
       let url = new URL(path, `file://${root}/`)
       await Deno.mkdir(new URL('.', url), { recursive: true })
-      await Deno.writeTextFile(url, text)
+      await Deno.writeFile(url, bytesOf(text))
     }
     let page = built.pages['main.ts'].replaceAll(
       'https://yaks.app/',

@@ -21,7 +21,7 @@
 // nothing here has moved: the last release's worker and pages still serve.
 import type { Answer, Ask, Plan } from '@yaks/esbuild'
 import type { Objects } from '@yaks/blob'
-import { plan, Unplanned } from '@yaks/esbuild'
+import { bytesOf, plan, Unplanned } from '@yaks/esbuild'
 import type { App, Space } from './directory.ts'
 import type { Module } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -226,12 +226,12 @@ export let writeResources = async (
   }
   await Promise.all(
     Object.entries({ ...answer.pages, ...answer.assets }).map(([path, code]) =>
-      blobs.put(prefix + BUILT + path, encode(code))
+      blobs.put(prefix + BUILT + path, bytesOf(code))
     ),
   )
   await Promise.all(
     Object.entries(answer.shared ?? {}).map(([path, code]) =>
-      blobs.put(path, encode(code))
+      blobs.put(path, bytesOf(code))
     ),
   )
 }

@@ -15,6 +15,7 @@
 import * as esbuild from 'esbuild'
 import { legacy, resolve } from 'resolve.exports'
 import { packageOf, TRIES } from './graph.ts'
+import { moved as rewrite } from './platform.ts'
 
 /** What a build reads: a path's text, or null when there is no such file. */
 export type Source = { read(path: string): string | null }
@@ -28,6 +29,9 @@ export type Options = {
   define?: Record<string, string>
   /** A package import replaced by a hosted module URL. */
   external?: (specifier: string, importer: string) => string | undefined
+  /** The expression a package module's `import.meta.url` becomes, for the
+   * path it was read from, or none to leave it. */
+  moved?: (path: string) => string | undefined
   /** Also answer the module graph the build read, as `Built.inputs`. */
   graph?: boolean
 }
@@ -57,6 +61,8 @@ export type Built = {
   code: string
   files: Record<string, string>
   warnings: string[]
+  /** The packages whose modules the build read, by name. */
+  packages: string[]
   inputs?: Record<string, Input>
 }
 
@@ -129,7 +135,8 @@ let loader = (path: string): esbuild.Loader =>
 
 let virtual = (
   files: Source,
-  external: Options['external'],
+  { external, moved }: Options,
+  reached: Set<string>,
 ): esbuild.Plugin => ({
   name: 'virtual-fs',
   setup(build) {
@@ -169,6 +176,18 @@ let virtual = (
       if (contents == null) {
         return { errors: [{ text: `File not found: ${path}` }] }
       }
+      let name = path.startsWith('node_modules/')
+        ? packageOf(path.slice('node_modules/'.length))
+        : null
+      if (name) reached.add(name)
+      let to = name ? moved?.(path) : undefined
+      if (to != null && /\.[mc]?[jt]sx?$/.test(path)) {
+        try {
+          contents = rewrite(contents, to)
+        } catch {
+          // esbuild names the syntax error.
+        }
+      }
       return {
         contents,
         loader: loader(path),
@@ -206,8 +225,10 @@ export let bundle = async (
 let built = async (
   files: Source,
   entry: string | Record<string, string>,
-  { node = false, minify = false, define, external, graph = false }: Options,
+  options: Options,
 ): Promise<Built> => {
+  let { node = false, minify = false, define, graph = false } = options
+  let reached = new Set<string>()
   let out = await esbuild.build({
     entryPoints: typeof entry == 'string' ? [entry] : entry,
     bundle: true,
@@ -216,7 +237,7 @@ let built = async (
     platform: node ? 'node' : 'browser',
     target: 'es2022',
     minify,
-    plugins: [virtual(files, external)],
+    plugins: [virtual(files, options, reached)],
     ...typeof entry == 'string'
       ? { outfile: 'bundle.js' }
       : { outdir: '/output', splitting: true, chunkNames: 'chunk-[hash]' },
@@ -235,6 +256,7 @@ let built = async (
       file.text,
     ])),
     warnings: out.warnings.map((w) => w.text),
+    packages: [...reached].sort(),
     ...out.metafile ? { inputs: inputs(out.metafile) } : {},
   }
 }

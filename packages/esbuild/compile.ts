@@ -22,7 +22,15 @@ import * as npm from './npm.ts'
 import { type Answer, type Ask, dependencies } from './plan.ts'
 import { said } from './said.ts'
 import { external, shared } from './shared.ts'
-import { type Catalog, located, type Seed, seed } from './platform.ts'
+import {
+  ASSETS,
+  type Catalog,
+  located,
+  packed,
+  type Seed,
+  seed,
+  urlOf,
+} from './platform.ts'
 export type { Catalog, Toolkit } from './platform.ts'
 export { Stopped } from './bundle.ts'
 
@@ -188,7 +196,13 @@ export let compile = async (
   ) => {
     try {
       locate(at)
-      let { code, warnings } = await bundle(fs, entry, options)
+      let { code, warnings, packages } = await bundle(fs, entry, options)
+      if (options.moved) {
+        Object.assign(
+          answer.assets,
+          packed(fs, packages, (name, path) => `${ASSETS}${name}/${path}`),
+        )
+      }
       answer.errors.push(...checked(entry, code, why))
       answer.notes.push(...warnings.map((w) => `${entry}: ${w}`))
       return code
@@ -229,8 +243,14 @@ export let compile = async (
     }
   }
   for (let entry of ask.pages) {
+    // A package module's own address is where the page serves its package.
+    let up = '../'.repeat(entry.split('/').length - 1)
     let code = await built(entry, entry, {
       minify: true,
+      moved: (path) =>
+        packageOf(path.slice('node_modules/'.length))! in setup.platform
+          ? undefined
+          : urlOf(up + ASSETS + path.slice('node_modules/'.length)),
       ...options.shared !== false ? { external: external(urls) } : {},
       // What a package written for bundlers asks of its environment.
       define: { 'process.env.NODE_ENV': '"production"' },

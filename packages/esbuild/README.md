@@ -201,6 +201,23 @@ ships: a page importing `three` reads 2 MB of the 20 MB of sources `three`
 ships. Of a package's files, a build can read its text (scripts, JSON, CSS and
 the like), never an image or a binary.
 
+## A package's files
+
+A page that bundles an npm package gets the package's files, whole and as bytes:
+a `.wasm`, a font, an image, a worker script. The `import.meta.url` of a package
+module names that module's place among them, so
+`new URL('./draco_decoder.wasm', import.meta.url)` resolves to the file as
+shipped, and a folder named from it holds its siblings. A page script's packages
+are `Answer.assets` under `__packages/<name>/<path>`. A shared npm package's
+files travel in its group, under `resources/<name>/<path>`, beside the emitted
+module. A build emits the files of each package it read a module of, apart from
+what only tools read (`.d.ts`, `.map`, `.md`) and a path no host serves (`%`,
+`?`, `#`, `\`). Toolkit packages are not among them: their resources come from
+the catalog.
+
+A file's body (`Body`) is its text, or `{base64}` for bytes, since an answer is
+JSON; `bytesOf` and `bodyOf` convert. Bytes are never decoded as text.
+
 ## The lock
 
 `package-lock.json`, npm's lockfile version 3, top level only. Every locked

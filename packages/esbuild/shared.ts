@@ -9,7 +9,8 @@ import { bundle, type Options, packaged, Stopped } from './bundle.ts'
 import { type Common, common } from './common.ts'
 import { packageOf } from './graph.ts'
 import type { Files } from './npm.ts'
-import { type Catalog, located, type Seed } from './platform.ts'
+import { type Catalog, located, packed, type Seed, urlOf } from './platform.ts'
+import type { Body } from './plan.ts'
 
 let singletons = ['preact', '@preact/signals', '@preact/signals-core']
 
@@ -18,13 +19,17 @@ let production: Options = {
   define: { 'process.env.NODE_ENV': '"production"' },
 }
 
-type Shared = { files: Record<string, string>; urls: Record<string, string> }
+type Shared = { files: Record<string, Body>; urls: Record<string, string> }
 type Cached = Shared & { reads: string[]; fingerprint: string }
 let held = new Map<string, Cached>()
 let bytes = 0
 let LIMIT = 16 << 20
 let size = (group: Shared) =>
-  Object.values(group.files).reduce((sum, text) => sum + text.length * 2, 0)
+  Object.values(group.files).reduce(
+    (sum, body) =>
+      sum + (typeof body == 'string' ? body : body.base64).length * 2,
+    0,
+  )
 let keep = (key: string, group: Cached) => {
   if (held.has(key)) {
     bytes -= size(held.get(key)!)
@@ -262,6 +267,11 @@ export let shared = async (
     ]))
     let built = await bundle(files, points, {
       ...production,
+      // A package module's own address is where its group serves its package.
+      moved: (path) =>
+        packageOf(path.slice('node_modules/'.length))! in setup.platform
+          ? undefined
+          : urlOf('./resources/' + path.slice('node_modules/'.length)),
       external: (spec) => {
         let name = packageOf(spec)
         if (!name || !name.startsWith('@yaks/') && !has.has(name)) return
@@ -300,9 +310,14 @@ export let shared = async (
         }
       }
     }
-    let outputs = {
+    let outputs: Record<string, Body> = {
       ...built.files,
       ...resources,
+      ...packed(
+        fs,
+        built.packages,
+        (name, path) => `resources/${name}/${path}`,
+      ),
       // Distinct packages with identical code still own distinct module state.
       'modules.json': JSON.stringify(Object.fromEntries(specs.map((spec, i) => [
         spec,

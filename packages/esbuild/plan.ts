@@ -57,6 +57,25 @@ export type Ask = {
   pages: string[]
 }
 
+/** A file the compiler emits: its text, or its bytes as base64 (an answer is
+ * JSON, and a package's image or WebAssembly is not text). */
+export type Body = string | { base64: string }
+
+/** A body as the bytes to store and serve. */
+export let bytesOf = (body: Body): Uint8Array =>
+  typeof body == 'string'
+    ? new TextEncoder().encode(body)
+    : Uint8Array.from(atob(body.base64), (c) => c.charCodeAt(0))
+
+/** Bytes as a body. */
+export let bodyOf = (bytes: Uint8Array): Body => {
+  let text = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    text += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return { base64: btoa(text) }
+}
+
 /** What the compiler answers. Any `errors` mean nothing it made may be used;
  * each is a line an agent can act on. */
 export type Answer = {
@@ -65,9 +84,9 @@ export type Answer = {
   /** Each compiled page script, by the entry's own path. */
   pages: Record<string, string>
   /** Runtime package resources, under a reserved package-relative namespace. */
-  assets: Record<string, string>
+  assets: Record<string, Body>
   /** Content-addressed browser modules and resources, shared across apps. */
-  shared?: Record<string, string>
+  shared?: Record<string, Body>
   /** package-lock.json as the build left it, when the app has a package.json. */
   lock?: string
   /** What the lock holds, as `name@version`. */

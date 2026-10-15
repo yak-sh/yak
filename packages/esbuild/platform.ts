@@ -4,7 +4,8 @@
 import { intersects, Range } from 'semver'
 import { parse } from 'es-module-lexer/js'
 import { script } from './graph.ts'
-import { dependencies } from './plan.ts'
+import type { Files } from './npm.ts'
+import { type Body, bodyOf, dependencies } from './plan.ts'
 
 /** A compiler's toolkit package: paths relative to its package root, including
  * package.json, normalized source imports, runtime dependencies and source SHA. */
@@ -57,19 +58,48 @@ export let located = (
     if (!path.startsWith('node_modules/@yaks/') || !script(path)) continue
     let base = baseFor?.(path) ??
       up + ASSETS + path.slice('node_modules/'.length)
-    for (let imp of parse(source)[0].toReversed()) {
-      if (imp.d != -2) continue
-      let tail = urlProp.exec(source.slice(imp.e))
-      if (!tail) continue
-      let value = typeof entry == 'string'
-        ? `new URL(${JSON.stringify(base)}, import.meta.url).href`
-        : JSON.stringify(new URL(base, entry).href)
-      source = source.slice(0, imp.s) + value +
-        source.slice(imp.e + tail[0].length)
-    }
-    out[path] = source
+    out[path] = moved(
+      source,
+      typeof entry == 'string'
+        ? urlOf(base)
+        : JSON.stringify(new URL(base, entry).href),
+    )
   }
   return out
+}
+
+/** The files of installed npm packages, whole and as bytes, each named by
+ * `at(package, path)`. A path a host could not serve is left out. A toolkit
+ * package comes from the catalog and holds none here. */
+export let packed = (
+  fs: Files,
+  names: string[],
+  at: (name: string, path: string) => string,
+) => {
+  let out: Record<string, Body> = {}
+  for (let name of names) {
+    for (let [path, bytes] of Object.entries(fs.whole(name))) {
+      if (safe(path)) out[at(name, path)] = bodyOf(bytes)
+    }
+  }
+  return out
+}
+
+/** The expression for `base`, a path from the module that is running. */
+export let urlOf = (base: string) =>
+  `new URL(${JSON.stringify(base)}, import.meta.url).href`
+
+/** A module's source with each `import.meta.url` read replaced by `value`, an
+ * expression for the address the module is served from. */
+export let moved = (source: string, value: string) => {
+  for (let imp of parse(source)[0].toReversed()) {
+    if (imp.d != -2) continue
+    let tail = urlProp.exec(source.slice(imp.e))
+    if (!tail) continue
+    source = source.slice(0, imp.s) + value +
+      source.slice(imp.e + tail[0].length)
+  }
+  return source
 }
 
 // A flat install must satisfy every consumer, not whichever was visited last.

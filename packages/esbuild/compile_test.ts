@@ -2,7 +2,7 @@ import { equal, match, test } from '@yaks/testing'
 import { parse } from 'es-module-lexer/js'
 import { bundle, Stopped } from './bundle.ts'
 import compiler, { compile, type Job } from './compile.ts'
-import type { Answer, Ask } from './plan.ts'
+import { type Answer, type Ask, type Body, bytesOf } from './plan.ts'
 import { type Catalog, seed } from './platform.ts'
 import { Files } from './npm.ts'
 import { registry } from './registry_fixture_test.ts'
@@ -36,6 +36,7 @@ let worker = (source: string, flags: string[] = []): Ask => ({
   pages: [],
 })
 
+let utf8 = (body: Body) => new TextDecoder().decode(bytesOf(body))
 let imports = (code: string) => parse(code)[0].map((i) => i.n).sort()
 let run = (code: string, shared: Answer['shared'] = {}) => {
   let urls = new Map<string, string>()
@@ -49,7 +50,7 @@ let run = (code: string, shared: Answer['shared'] = {}) => {
       if (!(path in shared)) continue
       let child = urls.get(path)
       if (!child) {
-        child = encode(rewrite(shared[path], url.href)) +
+        child = encode(rewrite(utf8(shared[path]), url.href)) +
           `#${encodeURIComponent(path)}`
         urls.set(path, child)
       }
@@ -337,4 +338,70 @@ test('a build whose esbuild ends throws Stopped, and the next starts esbuild aga
   let threw = await bundle(files, 'a.ts').catch((e) => e)
   equal(threw instanceof Stopped, true, String(threw))
   equal((await run((await bundle(files, 'a.ts')).code)).a, 1)
+})
+
+// An npm package that names a file beside its module: one that is not text.
+let WASM = new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 255, 254, 128])
+let viewer = {
+  'package.json': JSON.stringify({ version: '1.0.0', exports: './index.js' }),
+  'index.js':
+    "export let url = new URL('./decoder.wasm', import.meta.url).href",
+  'decoder.wasm': WASM,
+  'libs/draco/wrapper.js': 'self.draco = 1',
+  'index.d.ts': 'export let url: string',
+}
+
+// The module with its `import.meta.url` said to be `at`, run.
+let from = (code: string, at: string) =>
+  run(code.replaceAll('import.meta.url', JSON.stringify(at)))
+
+test("an npm package's files are served beside the module that names them", async () => {
+  let { get } = registry({ viewer: { '1.0.0': viewer } })
+  let files = {
+    'package.json': JSON.stringify({ dependencies: { viewer: '1.0.0' } }),
+    'main.ts': "export { url } from 'viewer'",
+  }
+  let got = await compile({ files, pages: ['main.ts'] }, {}, undefined, { get })
+  equal(got.errors, [])
+  let { url } = await from(got.pages['main.ts'], 'https://app.test/main.js')
+  let path = new URL(url).pathname.slice(1)
+  equal(bytesOf(got.assets[path]), WASM)
+  equal(Object.keys(got.assets).sort(), [
+    '__packages/viewer/decoder.wasm',
+    '__packages/viewer/index.js',
+    '__packages/viewer/libs/draco/wrapper.js',
+    '__packages/viewer/package.json',
+  ])
+})
+
+test("a shared npm package's files are served beside its shared module", async () => {
+  let { get } = registry({ viewer: { '1.0.0': viewer } })
+  let stage: Catalog = {
+    '@yaks/stage': {
+      files: {
+        'package.json': JSON.stringify({ exports: { '.': './mod.ts' } }),
+        'mod.ts': "export { url } from 'viewer'",
+      },
+      dependencies: { viewer: '*' },
+      version: `sha256:${'c'.repeat(64)}`,
+    },
+  }
+  let files = {
+    'package.json': JSON.stringify({
+      dependencies: { '@yaks/stage': 'platform', viewer: '1.0.0' },
+    }),
+    'main.ts': "export { url } from 'viewer'\n" +
+      "export { url as staged } from '@yaks/stage'",
+  }
+  let got = await compile({ files, pages: ['main.ts'] }, stage, undefined, {
+    get,
+  })
+  equal(got.errors, [])
+  let shared = got.shared!
+  let wasm = Object.keys(shared).find((p) => p.endsWith('/decoder.wasm'))!
+  let dir = wasm.slice(0, wasm.indexOf('resources/'))
+  equal(bytesOf(shared[wasm]), WASM)
+  let entry = utf8(shared[`${dir}entry-0.js`])
+  let { url } = await from(entry, `https://yaks.app/${dir}entry-0.js`)
+  equal(url, `https://yaks.app/${wasm}`)
 })
