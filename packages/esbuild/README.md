@@ -215,11 +215,11 @@ the like), never an image or a binary.
 A page that bundles an npm package reaches the package's files as shipped: a
 `.wasm`, a font, an image, a worker script. They are served from the package's
 **home**, `__packages/<sha256>/` on `origin`, where the SHA-256 names the
-registry tarball they come out of, so every app and every compile that pins
-that release shares one home. The `import.meta.url` of a package module names
-its own file in its home, so `new URL('./draco_decoder.wasm', import.meta.url)`
-resolves to the file as shipped, and a folder named from it holds its siblings.
-That holds for a page script's own packages and for shared ones alike. Toolkit
+registry tarball they come out of, so every app and every compile that pins that
+release shares one home. The `import.meta.url` of a package module names its own
+file in its home, so `new URL('./draco_decoder.wasm', import.meta.url)` resolves
+to the file as shipped, and a folder named from it holds its siblings. That
+holds for a page script's own packages and for shared ones alike. Toolkit
 packages have no home: their resources come from the catalog.
 
 A compile carries none of a package's files. `Answer.tarballs` maps the SHA-256
