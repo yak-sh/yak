@@ -347,10 +347,8 @@ export let remember = async <T>(
     scopes?: { [scope: string]: Imports }
     base: URL
   }
-  let manifests = new Map<string, Manifest>()
   let locks = new Map<string, { [specifier: string]: string }>()
   let scanned = new Set<string>()
-  let ancestors = new Set<string>()
   // Its stat before its contents: a write after the read moves the stat kept.
   let watch = (path: string) => {
     if (!sources.has(path)) {
@@ -359,89 +357,77 @@ export let remember = async <T>(
     }
     return sources.get(path)!
   }
-  let ancestry = (specifier: string) => {
-    if (!local(specifier)) return
-    let dir = new URL('.', specifier)
-    while (true) {
-      if (ancestors.has(dir.href)) break
-      ancestors.add(dir.href)
-      for (let name of FILES) {
-        let path = pathOf(new URL(name, dir).href)
+  // A configuration file, with the lock and import map it names watched too.
+  // A JSONC form this JSON reader cannot prove derives normally.
+  let manifest = (text: string, base: URL): Manifest => {
+    let doc = JSON.parse(text)
+    if (doc.lock !== false) {
+      let lock = new URL(
+        typeof doc.lock == 'string' ? doc.lock : doc.lock?.path ?? 'deno.lock',
+        base,
+      )
+      let path = pathOf(lock.href)
+      if (!locks.has(path)) {
         let text = watch(path)
-        if (name == 'deno.json' || name == 'deno.jsonc') {
-          if (text !== null && !manifests.has(path)) {
-            // A JSONC form this JSON reader cannot prove derives normally.
-            let doc = JSON.parse(text)
-            let base = new URL(name, dir)
-            if (doc.lock !== false) {
-              let lock = new URL(
-                typeof doc.lock == 'string'
-                  ? doc.lock
-                  : doc.lock?.path ?? 'deno.lock',
-                base,
-              )
-              let path = pathOf(lock.href)
-              if (!locks.has(path)) {
-                let text = watch(path)
-                if (text !== null) {
-                  locks.set(path, JSON.parse(text).specifiers ?? {})
-                }
-              }
-            }
-            if (doc.importMap) {
-              base = new URL(doc.importMap, base)
-              let map = watch(pathOf(base.href))
-              if (map === null) throw new Error('absent import map')
-              manifests.set(path, { ...JSON.parse(map), base })
-            } else manifests.set(path, { ...doc, base })
-          }
-        }
+        if (text !== null) locks.set(path, JSON.parse(text).specifiers ?? {})
       }
-      let up = new URL('../', dir)
-      if (up.href == dir.href) break
-      dir = up
     }
+    if (!doc.importMap) return { ...doc, base }
+    let map = new URL(doc.importMap, base)
+    let held = watch(pathOf(map.href))
+    if (held === null) throw new Error('absent import map')
+    return { ...JSON.parse(held), base: map }
   }
+  // The configurations over a directory, nearest first. Each directory's
+  // files are watched once, however many modules a walk finds in it.
+  let over = new Map<string, Manifest[]>()
+  let governing = (dir: URL): Manifest[] => {
+    let known = over.get(dir.href)
+    if (known) return known
+    let here = pathOf(dir.href)
+    let found = FILES.flatMap((name) => {
+      let text = watch(here + name)
+      return text === null ? [] : [manifest(text, new URL(name, dir))]
+    })
+    let up = new URL('../', dir)
+    let chain = up.href == dir.href ? found : [...found, ...governing(up)]
+    over.set(dir.href, chain)
+    return chain
+  }
+  let ancestry = (specifier: string): Manifest[] =>
+    local(specifier) ? governing(new URL('.', specifier)) : []
   let relative = (specifier: string, from: string): string => {
     let address = (name: string, base: URL | string): string =>
       /^(?:\.?\.?\/|[a-z][\w+.-]*:)/i.test(name)
         ? new URL(name, base).href
         : name
     let asked = address(specifier, from)
-    let dir = new URL('.', from)
-    while (true) {
-      for (let name of ['deno.json', 'deno.jsonc']) {
-        let doc = manifests.get(pathOf(new URL(name, dir).href))
-        if (!doc) continue
-        let scopes = Object.keys(doc.scopes ?? {}).filter((s) =>
-          from.startsWith(new URL(s, doc.base).href)
+    for (let doc of ancestry(from)) {
+      let scopes = Object.keys(doc.scopes ?? {}).filter((s) =>
+        from.startsWith(new URL(s, doc.base).href)
+      ).sort((a, b) =>
+        new URL(b, doc.base).href.length - new URL(a, doc.base).href.length
+      )
+      for (
+        let map of [...scopes.map((s) => doc.scopes![s]), doc.imports ?? {}]
+      ) {
+        let key = Object.keys(map).filter((k) =>
+          address(k, doc.base) == asked ||
+          k.endsWith('/') && asked.startsWith(address(k, doc.base)) ||
+          packaged(map[k]) && asked.startsWith(`${k}/`)
         ).sort((a, b) =>
-          new URL(b, doc.base).href.length - new URL(a, doc.base).href.length
-        )
-        for (
-          let map of [...scopes.map((s) => doc.scopes![s]), doc.imports ?? {}]
-        ) {
-          let key = Object.keys(map).filter((k) =>
-            address(k, doc.base) == asked ||
-            k.endsWith('/') && asked.startsWith(address(k, doc.base)) ||
-            packaged(map[k]) && asked.startsWith(`${k}/`)
-          ).sort((a, b) =>
-            address(b, doc.base).length - address(a, doc.base).length
-          )[0]
-          if (!key) {
-            continue
-          }
-          let mapped = map[key] + asked.slice(address(key, doc.base).length)
-          return packaged(mapped) || immutable(mapped)
-            ? mapped
-            : mapped.startsWith('.') || mapped.startsWith('/')
-            ? new URL(mapped, doc.base).href
-            : resolve(mapped)
+          address(b, doc.base).length - address(a, doc.base).length
+        )[0]
+        if (!key) {
+          continue
         }
+        let mapped = map[key] + asked.slice(address(key, doc.base).length)
+        return packaged(mapped) || immutable(mapped)
+          ? mapped
+          : mapped.startsWith('.') || mapped.startsWith('/')
+          ? new URL(mapped, doc.base).href
+          : resolve(mapped)
       }
-      let up = new URL('../', dir)
-      if (up.href == dir.href) break
-      dir = up
     }
     return packaged(asked) || immutable(asked)
       ? asked

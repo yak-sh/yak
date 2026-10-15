@@ -4,16 +4,20 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, graph, signed } from '@yaks/graph'
+import { type Bundle, graph, mint, signed } from '@yaks/graph'
 import { books, comp, memory } from '../graph/testing.ts'
 import { restoreInto } from './local.ts'
 import { restorable } from './restore.ts'
 import { cli, type Command } from './run.ts'
 
+// The actors are minted ids, which a write keeps as they are: resolving a
+// name is not what restoration is about.
+let actors = { then: mint(), instrument: mint(), caller: mint() }
+let { then, instrument, caller } = actors
 let historical = {
   at: '2026-10-09T12:00:00.000Z',
-  by: 'then',
-  via: 'instrument',
+  by: then,
+  via: instrument,
 }
 let now = '2026-10-11T12:00:00.000Z'
 // The graph starts with the actors, and with whatever else a case holds.
@@ -22,9 +26,9 @@ let fixture = (held: Bundle[] = []) => {
   let storage = memory()
   storage.tx((tx) =>
     tx.patch([
-      ...['then', 'instrument', 'caller'].map((eid) => ({
+      ...Object.entries(actors).map(([title, eid]) => ({
         entity: { eid },
-        doc: { title: eid },
+        doc: { title },
       })),
       ...held,
     ])
@@ -55,7 +59,7 @@ let fixture = (held: Bundle[] = []) => {
     },
     run: async (args) => {
       ordinary++
-      await g.apply(signed(args.bundles as Bundle[], { by: 'caller' }), {
+      await g.apply(signed(args.bundles as Bundle[], { by: caller }), {
         check: args.check === true,
       })
       return 0
@@ -65,7 +69,7 @@ let fixture = (held: Bundle[] = []) => {
     await restoreInto(
       g,
       args.bundles as Bundle[],
-      { by: 'caller' },
+      { by: caller },
       {
         check: args.check === true,
         stamp: args.stamp as boolean | undefined,
@@ -93,7 +97,7 @@ let patch = (eid: string): Bundle[] => [{
   entity: { eid },
   doc: { title: 'Sale' },
   sold: historical,
-  $actor: { by: 'then' },
+  $actor: { by: then },
 }]
 
 // Compile the shared vocabulary's rules before the timed cases.
@@ -113,9 +117,9 @@ test('local restore preserves history and stamps its current journal writer', as
   assertEquals(ordinary(), 0)
   let [sale] = await g.get(['sale'])
   assertEquals(comp(sale, 'sold'), historical)
-  assertEquals(comp(sale, 'created'), { at: now, by: 'caller' })
+  assertEquals(comp(sale, 'created'), { at: now, by: caller })
   assert(
-    journal.some((b) => b.entity.eid == 'sale' && b.$actor?.by == 'caller'),
+    journal.some((b) => b.entity.eid == 'sale' && b.$actor?.by == caller),
   )
 })
 
@@ -129,18 +133,18 @@ test('an explicit stamp repair preserves the supplied provenance', async () => {
   let { g, line } = fixture([{
     entity: { eid: 'sale' },
     doc: { title: 'Sale' },
-    created: { at: now, by: 'caller' },
-    updated: { at: now, by: 'caller' },
+    created: { at: now, by: caller },
+    updated: { at: now, by: caller },
   }])
   assertEquals(
     await line(['--restore', '--stamp=false'], [{
       entity: { eid: 'sale' },
-      updated: { by: 'then', at: historical.at },
+      updated: { by: then, at: historical.at },
     }]),
     0,
   )
   assertEquals(comp((await g.get(['sale']))[0], 'updated'), {
-    by: 'then',
+    by: then,
     at: historical.at,
   })
 })
