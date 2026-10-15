@@ -51,6 +51,11 @@ assertion.
 - A graph over `:memory:` or @yaks/ram is a value, not a boot, so most tests
   run at a pure seam, in memory. When RAM lacks something a test needs,
   @yaks/ram gets it (M-39498).
+- A case times only the act it checks. Build and seed its graph, store or
+  field when the file loads (top-level `await`), one fixture per case that
+  writes to it, and give each behavior a case of its own. A case that builds
+  a graph, seeds it, then writes three times to check three things sits near
+  1 ms, and a loaded runner pushes it over.
 - Time is an input a test controls. Inject @yaks/testing's `clock()` at the
   subject's timer boundary and `await time.advance(ms)` to run due callbacks;
   no timer delay or polling is needed to check expiry, retries or windows.
