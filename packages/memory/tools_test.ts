@@ -379,28 +379,48 @@ test('a recall answers whole memories, each wearing its token', async () => {
   assertEquals(feedback.map((b) => heard(b).said), ['use grams, never cups'])
 })
 
-test('a host ranking by meaning orders a recall, among what it admits', async () => {
+// Two memories, the newer a correction, in a graph of their own, and a recall
+// through a host: saved once at load, outside the timed bodies.
+let two = await (async () => {
   let g = fresh()
   await write(g, [{ entity: { eid: 'jeff' }, person: { name: 'Jeff' } }])
   let [soft] = eids(await save({ said: 'keep it soft, not technical' }, g))
   let [grams] = eids(await save({ said: 'use grams', feedback: 'jeff' }, g))
-  // An index that ranks the gentle one nearest, among what `within` admits.
-  let meaning = async (_: string, { within = '' } = {}) => {
-    let admitted = eids(await g.read(within))
-    return [soft, grams].filter((e) => admitted.includes(e))
-      .map((entity) => ({ entity, similarity: 1, excerpt: '' }))
+  let recall = (host: Parameters<typeof runs>[0]) => {
+    let tool = runs(host).memory_recall!
+    return async (args: Record<string, unknown>) =>
+      eids(await tool(call(args), g) as Bundle[])
   }
-  let reported: unknown[] = []
-  let recall =
-    (host: Parameters<typeof runs>[0]) =>
-    async (args: Record<string, unknown>) =>
-      eids(await runs(host).memory_recall!(call(args), g) as Bundle[])
-  let ranked = recall({ meaning })
+  // An index that ranks the gentle one nearest, among what `within` admits.
+  let ranked = recall({
+    meaning: async (_, { within = '' } = {}) => {
+      let admitted = eids(await g.read(within))
+      return [soft, grams].filter((e) => admitted.includes(e))
+        .map((entity) => ({ entity, similarity: 1, excerpt: '' }))
+    },
+  })
+  return { soft, grams, recall, ranked }
+})()
+
+test('a host ranking by meaning orders a recall nearest first', async () => {
+  let { soft, grams, ranked } = two
   // Words neither memory holds, nearest first rather than newest.
   assertEquals(await ranked({ said: 'how the pages look' }), [soft, grams])
+})
+
+test('a host ranking by meaning ranks only what the recall admits', async () => {
+  let { grams, ranked } = two
   assertEquals(await ranked({ said: 'pages', feedback: true }), [grams])
+})
+
+test('a recall without words is newest first, whatever a host ranks', async () => {
+  let { soft, grams, ranked } = two
   assertEquals(await ranked({}), [grams, soft])
-  // An index that fails is a worse order, and the host hears of it.
+})
+
+test('an index that fails is a worse order, and the host hears of it', async () => {
+  let { grams, recall } = two
+  let reported: unknown[] = []
   let broken = recall({
     meaning: () => Promise.reject(new Error('no model')),
     report: (e) => void reported.push(e),
@@ -559,9 +579,15 @@ let discussion = async (g: G) => {
   await write(g, [{ entity: { eid: 't9' }, task: {}, doc: { title: 'quiet' } }])
 }
 
-test('target is what a comment is aimed at, whole', async () => {
+// One discussion, written once at load: the target and thread tools only read.
+let talk = await (async () => {
   let g = fresh()
   await discussion(g)
+  return g
+})()
+
+test('target is what a comment is aimed at, whole', async () => {
+  let g = talk
   let [t] = await ask('memory_target', { id: 'k1' }, g)
   assertEquals([t.entity.eid, vocab.kindOf(t)], ['t1', 'task'])
   assertEquals(eids(await ask('memory_target', { id: 'r2' }, g)), ['r1'])
@@ -573,8 +599,7 @@ test('target is what a comment is aimed at, whole', async () => {
 })
 
 test('a thread is what it is about, then every comment, oldest first', async () => {
-  let g = fresh()
-  await discussion(g)
+  let g = talk
   let thread = ['t1', 'k1', 'k2', 'r1', 'r2']
   assertEquals(eids(await ask('memory_thread', { id: 'r2' }, g)), thread)
   assertEquals(eids(await ask('memory_thread', { id: 't1' }, g)), thread)
