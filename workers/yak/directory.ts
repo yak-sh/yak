@@ -378,6 +378,16 @@ export type Row = {
     by?: Id | null
     via?: Id | null
   }
+  written?: {
+    app: Id
+    draft?: string | null
+    path: string
+    sha?: string | null
+    was?: string | null
+    size?: number | null
+    at?: string | null
+    by?: Id | null
+  }
   entity: { eid: string }
   space?: { slug: string }
   app?: {
@@ -935,6 +945,18 @@ export let deployOf = (r: Row) => ({
   reload: r.deploy!.reload ?? null,
 })
 
+/** One file written into an app (drafts.ts `Written`), as a row reads. */
+export let writtenOf = (r: Row) => ({
+  eid: r.entity.eid,
+  draft: r.written!.draft ?? null,
+  path: r.written!.path,
+  sha: r.written!.sha ?? null,
+  was: r.written!.was ?? null,
+  size: r.written!.size ?? null,
+  at: r.written!.at ?? null,
+  by: r.written!.by ? idOf(r.written!.by) : null,
+})
+
 // One restore of an app's store, as recover.ts reads it (T-34507). `from` is
 // the bookmark the store stood at before this one moved it, which is the way
 // back out of it if the recovery itself turns out to be the mistake.
@@ -1337,6 +1359,13 @@ export let directory = (via: Fetcher | Part, now = false) => {
           via: row.switched.via ? idOf(row.switched.via) : null,
         },
       })),
+    // What was written into an app's files (drafts.ts): every row it keeps,
+    // or one draft's alone. Never cached: a write reads its own draft back.
+    written: async (app: App, draft?: string) =>
+      (await query(
+        `.written.app=${app.eid}${draft ? `&.written.draft=${draft}` : ''}`,
+        true,
+      )).map(writtenOf),
     // Every deploy of an app, newest first — the versions app_versions pages
     // through, app_rollback picks from, and the retention sweep marks live
     // bytes off (versions.ts). None is ever buried, so this grows with the

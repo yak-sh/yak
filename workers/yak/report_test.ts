@@ -759,12 +759,13 @@ let platformBreak = await (async () => {
     let { cookie } = await seed(k, [{ slug: acme64, apps: ['shop'] }])
     let agent = connector(k, cookie)
     let app = { space: acme64, app: 'shop' }
+    // Notes, so saying what the app is reads its bytes from the bucket.
     await agent.tool('app_files', {
       ...app,
       files: [{
         path: 'vocab.json',
         content: vocabFile({ note: { body: txt } }),
-      }],
+      }, { path: 'NOTES.md', content: 'A shop.' }],
     })
     await agent.tool('app_deploy', app)
     return {

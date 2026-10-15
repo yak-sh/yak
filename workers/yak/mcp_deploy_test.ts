@@ -269,7 +269,7 @@ test('a deploy is a version, and one word puts it back', async () => {
     assertStringIncludes(listing.text, 'live v2, with nothing unreleased')
 
     // A size down from a deploy: every write keeps what it replaced
-    // (versions.ts, T-34508). The page has been written three times by now, so
+    // (written.ts, T-34508). The page has been written three times by now, so
     // the path can already answer its own past.
     let past = await agent.tool('app_files', {
       ...app,

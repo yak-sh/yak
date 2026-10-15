@@ -562,7 +562,8 @@ test(
         page,
       )
       // A file a person asks to be rid of: gone from the listing and from
-      // the address, and asking twice says so rather than pretending.
+      // the address, and asking twice, as a call cut off and sent again
+      // does, says it already went rather than pretending.
       await agent.tool('app_files', {
         ...app,
         op: 'write',
@@ -577,11 +578,13 @@ test(
         }),
         /deleted draft\.html/,
       )
-      await assertRejects(
-        () =>
-          agent.tool('app_files', { ...app, op: 'delete', path: 'draft.html' }),
-        Error,
-        'no file draft.html',
+      assertMatch(
+        await agent.tool('app_files', {
+          ...app,
+          op: 'delete',
+          path: 'draft.html',
+        }),
+        /already deleted draft\.html/,
       )
       assertEquals(
         (await k.at(`${jeff54}.yaks.app`, '/recipes/draft.html')).status,

@@ -329,6 +329,9 @@ export let BOUNDARIES = [
   'yak/store/output_of/14',
   'yak/store/vale-creature-prompt/16',
   'yak/store/vale-figure-prompt/17',
+  // The directory's `written` rows, which drafts and file histories became
+  // (written.ts, carried.ts).
+  'yak/store/written/1',
 ]
 
 /** A column dropped from a table. */

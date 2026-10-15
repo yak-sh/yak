@@ -568,7 +568,7 @@ These are the names, all of them:
     serves session session_run sfu signed_in signin space spend staged stop
     stripe submitted subscription supersedes supervises sweep switched task theme tool topic
     trashed tree_entry tunnel typed updated usage uses using verified wake wants
-    web worked worktree
+    web worked worktree written
 
 When your first choice is taken, ask what the component is _for_ and name that:
 the taken name is the general one, yours is the specific one. Not `comment` but

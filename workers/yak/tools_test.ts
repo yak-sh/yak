@@ -444,25 +444,27 @@ test('a deploy says how many round trips it took', async () => {
     return { hops: said.hops, r2: said.r2 }
   }
 
-  assertEquals(
-    await costs('app_files', {
-      space: 'ada',
-      app: 'recipes',
-      files: [
-        { path: 'index.html', content: '<h1>hi</h1>' },
-        { path: 'style.css', content: 'h1{color:teal}' },
-      ],
-    }),
-    // The draft this write starts holds nothing yet, so each path asks for
-    // its history and its legacy source at once, then writes its bytes and
-    // pins them; it asks for no bytes or deletion marker of the draft's own.
-    { hops: 5, r2: 8 },
-  )
+  let write = {
+    space: 'ada',
+    app: 'recipes',
+    files: [
+      { path: 'index.html', content: '<h1>hi</h1>' },
+      { path: 'style.css', content: 'h1{color:teal}' },
+    ],
+  }
+  // Each file is one put at its address, and nothing is read: the draft
+  // names its files by sha (written.ts).
+  assertEquals(await costs('app_files', write), { hops: 4, r2: 2 })
+  // Sent again, as a write cut off and resent is, the draft already holds
+  // both, so nothing goes up.
+  assertEquals((await costs('app_files', write)).r2, 0)
   let deploy = await costs('app_deploy', { space: 'ada', app: 'recipes' })
   // The release's Git commit is the directory's effect, minted after the
-  // deploy has answered, so none of its round trips are the deploy's.
+  // deploy has answered, so none of its round trips are the deploy's. The
+  // release names the shas the draft holds, so it copies no bytes: what it
+  // puts is its index and what its compile made.
   assert(deploy.hops <= 21, JSON.stringify(deploy))
-  assert(deploy.r2 <= 11, JSON.stringify(deploy))
+  assertEquals(deploy.r2, 2)
   assertEquals(
     (await costs('app_files', {
       space: 'ada',

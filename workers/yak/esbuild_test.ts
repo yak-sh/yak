@@ -13,6 +13,7 @@ import type { Env } from './env.ts'
 import { ADA, platform, seeded, visit } from './serving-probe.ts'
 import { call, type Ctx } from './tools.ts'
 import { handler } from './kernel.ts'
+import { addressed, SHA, sha256 } from './versions.ts'
 
 let WORKER = 'export default { fetch: () => new Response("compiled") }'
 
@@ -323,17 +324,14 @@ test('a released app stages changed files over its source', async () => {
     'main.ts': 'let n = 1',
   })
   await s.tool('app_deploy')
+  // An edit stores the one file it changed, once, at its address.
   let keys = async () =>
-    (await s.env.BLOBS.list({ prefix: 'ada/.drafts/' })).objects.map((o) =>
-      o.key
-    )
+    (await s.env.BLOBS.list({ prefix: SHA })).objects.map((o) => o.key)
   let before = new Set(await keys())
   await s.write({ 'index.html': '<h1>new</h1>' })
   assertEquals(
-    (await keys()).filter((key) => !before.has(key)).map((key) =>
-      key.split('/').pop()
-    ),
-    ['index.html'],
+    (await keys()).filter((key) => !before.has(key)),
+    [addressed(await sha256(new TextEncoder().encode('<h1>new</h1>')))],
   )
   assertEquals(
     await s.tool('app_files', { op: 'read', path: 'main.ts' }),
@@ -368,8 +366,9 @@ test('an edit crossing deployment is replayed into the next draft', async () => 
   let entered = Promise.withResolvers<void>()
   let resume = Promise.withResolvers<void>()
   let held = false
+  let late = addressed(await sha256(new TextEncoder().encode('<h1>late</h1>')))
   s.env.BLOBS.put = async (key, value) => {
-    if (!held && key.includes('/.drafts/') && key.endsWith('/index.html')) {
+    if (!held && key == late) {
       held = true
       entered.resolve()
       await resume.promise

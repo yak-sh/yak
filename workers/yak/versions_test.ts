@@ -22,26 +22,20 @@ import type { Who } from './session.ts'
 import { platform } from './testing.ts'
 import {
   addressed,
+  type Files,
   GRACE,
-  held,
-  history,
   KEEP,
   moved,
-  own,
   pinned,
   type Pinner,
   pins,
-  pruned,
   record,
-  renamed,
-  replaced,
-  restore,
   SHA,
   sha256,
-  snapshot,
   type Version,
   whatChanged,
 } from './versions.ts'
+import { newest, pruned, type Written } from './written.ts'
 
 let PREFIX = 'jeff/recipes/'
 let WHO: Who = { person: 'p1', role: 'owner' }
@@ -138,11 +132,22 @@ let memory = () => {
 }
 
 let bytes = (s: string) => new TextEncoder().encode(s)
-let read = async (blobs: Objects, path: string) =>
-  new TextDecoder().decode(await blobs.get(PREFIX + path))
 
-// The deploy rows, in memory: the two questions `record` asks of the
-// directory — write a bundle, read the app's versions back.
+// Files as a write leaves them: each text's bytes at their address, and the
+// path naming its sha.
+let stored = async (blobs: Objects, files: Record<string, string>) =>
+  Object.fromEntries(
+    await Promise.all(
+      Object.entries(files).map(async ([path, text]) => {
+        let sha = await sha256(bytes(text))
+        await blobs.put(addressed(sha), bytes(text))
+        return [path, sha]
+      }),
+    ),
+  ) as Files
+
+// The directory rows the sweep reads, in memory: deploys, and the `written`
+// rows a write leaves (written.ts).
 type Entity = {
   entity?: { eid: string }
   deploy?: {
@@ -152,14 +157,20 @@ type Entity = {
     worker?: string
     source?: string
   }
+  written?: Omit<Written, 'eid'> & { app: string }
   tombstone?: unknown
+  $delete?: boolean
 }
 
 let directory = () => {
   let rows: (Version & { app: string })[] = []
+  let writes: (Written & { app: string })[] = []
   let apply = (m: { entities: Entity[] }) => {
     for (let e of m.entities) {
-      let had = rows.find((r) => r.eid == e.entity?.eid)
+      let eid = e.entity!.eid
+      if (e.$delete) writes = writes.filter((w) => w.eid != eid)
+      if (e.written) writes.push({ ...e.written, eid })
+      let had = rows.find((r) => r.eid == eid)
       if (e.deploy && had) {
         if (e.deploy.files) had.files = JSON.parse(e.deploy.files)
         if (e.deploy.source) had.source = e.deploy.source
@@ -174,7 +185,7 @@ let directory = () => {
           source: e.deploy.source ?? null,
         })
       }
-      if (e.tombstone) rows = rows.filter((r) => r.eid != e.entity!.eid)
+      if (e.tombstone) rows = rows.filter((r) => r.eid != eid)
     }
     return Promise.resolve([])
   }
@@ -187,87 +198,39 @@ let directory = () => {
         rows.filter((r) => r.app == app.eid)
           .sort((a, b) => b.version - a.version),
       ),
+    written: (app: App, draft?: string) =>
+      Promise.resolve(
+        writes.filter((w) => w.app == app.eid && (!draft || w.draft == draft)),
+      ),
     apply,
     stamp: apply,
   } as unknown as Directory
-  return { dir, rows: () => rows }
+  // One write to a path, as written.ts records it, `days` ago.
+  let wrote = (
+    path: string,
+    sha: string | null,
+    days: number,
+    was = null as string | null,
+  ) =>
+    apply({
+      entities: [{
+        entity: { eid: crypto.randomUUID() },
+        written: {
+          app: APP.eid,
+          draft: null,
+          path,
+          sha,
+          was,
+          size: null,
+          at: ago(days).toISOString(),
+          by: 'p1',
+        },
+      }],
+    })
+  return { dir, rows: () => rows, writes: () => newest(writes), wrote }
 }
 
-test('a manifest names paths and shas, not the bytes', async () => {
-  let { blobs, trips } = memory()
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
-  await blobs.put(PREFIX + 'style.css', bytes('body{}'))
-  // What the platform keeps beside the app's files is not the app's files.
-  await blobs.put(PREFIX + 'blobs/deadbeef', bytes('a photo'))
-  let before = trips()
-  let files = await snapshot(blobs, PREFIX)
-  assertEquals(Object.keys(files).sort(), ['index.html', 'style.css'])
-  assert(/^[0-9a-f]{64}$/.test(files['index.html']), 'a sha, not the text')
-  // What a deploy costs the bucket, and what the global key must never make
-  // dearer (T-34953): one listing, then per file one get, one head and — only
-  // where the object is new — one put.
-  let cost = trips()
-  assertEquals(
-    {
-      list: cost.list - before.list,
-      get: cost.get - before.get,
-      has: cost.has - before.has,
-      put: cost.put - before.put,
-    },
-    { list: 1, get: 2, has: 2, put: 2 },
-  )
-
-  // The bytes are pinned once, at their own name, so an unchanged file across
-  // two deploys is one object — and the second deploy pays the head and no put.
-  let mid = trips()
-  let again = await snapshot(blobs, PREFIX)
-  assertEquals(again, files)
-  assertEquals(trips().has - mid.has, 2)
-  assertEquals(trips().put - mid.put, 0)
-  assertEquals((await blobs.list(SHA)).length, 2)
-  assertEquals(own(['index.html', 'blobs/x', 'versions/y']), ['index.html'])
-})
-
-test('a rollback restores the bytes, and only the files', async () => {
-  let { blobs } = memory()
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
-  await blobs.put(PREFIX + 'worker.js', bytes('export default { fetch: one }'))
-  await blobs.put(
-    PREFIX + 'vocab.json',
-    bytes('{"recipe":{"serves":"number"}}'),
-  )
-  let one = await snapshot(blobs, PREFIX)
-
-  // The deploy that broke it: a changed page, a changed worker, a new file.
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>OOPS</h1>'))
-  await blobs.put(PREFIX + 'worker.js', bytes('export default { fetch: two }'))
-  await blobs.put(PREFIX + 'broken.js', bytes('throw new Error("no")'))
-  await blobs.put(PREFIX + 'blobs/deadbeef', bytes('a photo'))
-  let two = await snapshot(blobs, PREFIX)
-  assertEquals(
-    whatChanged(one, two),
-    'added broken.js, changed index.html, worker.js',
-  )
-
-  await restore(blobs, PREFIX, one)
-  assertEquals(await read(blobs, 'index.html'), '<h1>one</h1>')
-  assertEquals(await read(blobs, 'worker.js'), 'export default { fetch: one }')
-  assertEquals(
-    await read(blobs, 'vocab.json'),
-    '{"recipe":{"serves":"number"}}',
-  )
-  // What that version did not name is gone, and what was never a file of the
-  // app's — a photo someone uploaded — is untouched.
-  assertEquals(await blobs.has(PREFIX + 'broken.js'), false)
-  assertEquals(await read(blobs, 'blobs/deadbeef'), 'a photo')
-  // And the version it rolled forward from is still restorable: history is
-  // never rewritten, so its bytes are still pinned.
-  await restore(blobs, PREFIX, two)
-  assertEquals(await read(blobs, 'index.html'), '<h1>OOPS</h1>')
-})
-
-// What a version PUT back, read off the manifests: a rollback restores files,
-// so the files are its record (T-32910, C-32905 item 6).
+let ago = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000)
 
 test('no version is ever buried, and every one keeps its bytes', async () => {
   let { blobs, clock } = memory()
@@ -276,11 +239,12 @@ test('no version is ever buried, and every one keeps its bytes', async () => {
   clock.now = Date.now() - 2 * GRACE
   // One file that never changes and one that changes every time, so each
   // version pins a byte set of its own beside a shared one.
-  await blobs.put(PREFIX + 'style.css', bytes('body{}'))
   let shared = ''
   for (let n = 1; n <= KEEP + 3; n++) {
-    await blobs.put(PREFIX + 'index.html', bytes(`<h1>${n}</h1>`))
-    let files = await snapshot(blobs, PREFIX)
+    let files = await stored(blobs, {
+      'style.css': 'body{}',
+      'index.html': `<h1>${n}</h1>`,
+    })
     shared = files['style.css']
     await record(dir, WHO, APP, n, files, '')
   }
@@ -291,10 +255,7 @@ test('no version is ever buried, and every one keeps its bytes', async () => {
   assertEquals(await pruned(dir, blobs, ONE), 0)
   for (let v of kept) {
     for (let sha of Object.values(v.files)) {
-      assert(
-        await blobs.has(addressed(sha)),
-        `v${v.version}: ${sha}`,
-      )
+      assert(await blobs.has(addressed(sha)), `v${v.version}: ${sha}`)
     }
   }
   assert(await blobs.has(addressed(shared)))
@@ -302,38 +263,28 @@ test('no version is ever buried, and every one keeps its bytes', async () => {
   assertEquals((await blobs.list(SHA)).length, KEEP + 4)
 })
 
-test('pruning keeps source bytes named by the serving release', async () => {
+test('pruning keeps the bytes the serving release names', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()
   clock.now = Date.now() - 2 * GRACE
-  let source = 'jeff/.releases/a1/source'
   let current = 'jeff/.releases/a1/current'
-  let draft = 'jeff/.drafts/a1/delta-v2'
-  await blobs.put(`${source}/index.html`, bytes('kept'))
-  await blobs.put(`${source}/removed.css`, bytes('removed'))
-  await blobs.put(`${draft}/.deleted/removed.css`, bytes(''))
-  let release = await staged(
-    blobs,
-    source,
-    draft,
-    current,
-    true,
-  )
-  let files = await release.finish()
-  await record(dir, WHO, APP, 2, files, '')
-  await pruned(dir, blobs, [{
-    prefix: PREFIX,
-    app: { ...APP, source: current },
-  }])
-  assertEquals(await blobs.has(`${source}/index.html`), false)
-  assertEquals(await blobs.has(`${source}/removed.css`), false)
-  assertEquals(await blobs.has(`${current}.json`), true)
+  let files = await stored(blobs, { 'index.html': 'kept' })
+  let release = staged(blobs, files, current)
+  await release.files.put(`${current}/esbuild/app.js`, bytes('compiled'))
+  await record(dir, WHO, APP, 2, await release.finish(), '')
   assertEquals(
-    new TextDecoder().decode(
-      await releaseFiles(blobs).get(`${current}/index.html`),
-    ),
-    'kept',
+    await pruned(dir, blobs, [{
+      prefix: PREFIX,
+      app: { ...APP, source: current },
+    }]),
+    0,
   )
+  assertEquals(await blobs.has(`${current}.json`), true)
+  let served = releaseFiles(blobs)
+  let text = async (key: string) =>
+    new TextDecoder().decode(await served.get(key))
+  assertEquals(await text(`${current}/index.html`), 'kept')
+  assertEquals(await text(`${current}/esbuild/app.js`), 'compiled')
 })
 
 test('published releases keep versioned bytes after newer deploys', async () => {
@@ -430,15 +381,17 @@ test('a deploy never changes the stored release it replaces', async () => {
 })
 
 // The worker's last hop. A dispatch namespace is remote-only, so what a
-// rollback restores is proved to reach Cloudflare the way dispatch_test.ts
+// rollback puts back is proved to reach Cloudflare the way dispatch_test.ts
 // proves an upload: against the account API, stubbed.
 test('the worker a rollback put back is the source uploaded', async () => {
   let { blobs } = memory()
-  await blobs.put(PREFIX + 'worker.js', bytes('export default { fetch: one }'))
-  let one = await snapshot(blobs, PREFIX)
-  await blobs.put(PREFIX + 'worker.js', bytes('export default { fetch: two }'))
-  await snapshot(blobs, PREFIX)
-  await restore(blobs, PREFIX, one)
+  let one = await stored(blobs, {
+    'worker.js': 'export default { fetch: one }',
+  })
+  await stored(blobs, { 'worker.js': 'export default { fetch: two }' })
+  // A version put back is a release of the shas its manifest names.
+  let back = 'jeff/.releases/a1/back'
+  let release = staged(blobs, one, back)
 
   let sent: FormData | null = null
   let was = globalThis.fetch
@@ -456,7 +409,7 @@ test('the worker a rollback put back is the source uploaded', async () => {
     let version = await upload(
       { CF_ACCOUNT: 'acct', CF_WORKERS_TOKEN: 'a-token' } as Env,
       'jeff/recipes',
-      await carried((path) => blobs.read(PREFIX + path)),
+      await carried((path) => release.files.read(`${back}/${path}`)),
     )
     // And what the deploy records beside its manifest: Cloudflare's own name
     // for the release.
@@ -470,87 +423,46 @@ test('the worker a rollback put back is the source uploaded', async () => {
   )
 })
 
-// ---- what a write replaced (T-34508) ---------------------------------------
-
-let ago = (days: number) => new Date(Date.now() - days * 24 * 60 * 60_000)
-
-test('a write pins what it replaced, and a path answers its own past', async () => {
-  let { blobs } = memory()
-  // A file that did not exist has no previous version, and nothing is written
-  // down about it.
-  assertEquals(await replaced(blobs, PREFIX, 'index.html', 'p1'), null)
-  assertEquals(await history(blobs, PREFIX, 'index.html'), [])
-
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
-  let was = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(2))
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>two</h1>'))
-  assertEquals(was!.size, 12)
-  assertEquals(was!.by, 'p1')
-  // The bytes are pinned by their content, so the history can hand them back.
-  assertEquals(
-    new TextDecoder().decode(await blobs.get(addressed(was!.sha))),
-    '<h1>one</h1>',
-  )
-
-  let then = await replaced(blobs, PREFIX, 'index.html', 'p2', ago(1))
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>three</h1>'))
-  let all = await history(blobs, PREFIX, 'index.html')
-  // Newest first: the last thing it was is the first thing offered back.
-  assertEquals(all.map((w) => w.sha), [then!.sha, was!.sha])
-
-  // What it held at a moment is the bytes the first write after that moment
-  // took away.
-  assertEquals(held(all, ago(3).getTime())!.sha, was!.sha)
-  assertEquals(held(all, ago(1.5).getTime())!.sha, then!.sha)
-  // And nothing at all once no write has happened since: the file already is
-  // what it was.
-  assertEquals(held(all, Date.now()), null)
-
-  // A path's history is not one of the app's files, so nothing lists it, no
-  // deploy snapshots it and no install carries it.
-  assertEquals(Object.keys(await snapshot(blobs, PREFIX)), ['index.html'])
-})
+// ---- what a path has held (T-34508, T-124791) -------------------------------
 
 test('the prune lets go only of bytes nothing names any more', async () => {
   let { blobs, clock } = memory()
-  let { dir } = directory()
+  let { dir, writes, wrote } = directory()
   clock.now = Date.now() - 2 * GRACE
-  // One deploy, so a version names the page it went out with.
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>shipped</h1>'))
-  let one = await snapshot(blobs, PREFIX)
+  // One deploy, so a version names the page it went out with, written forty
+  // days ago; then two writes over it, one a day ago.
+  let one = await stored(blobs, { 'index.html': '<h1>shipped</h1>' })
   await record(dir, WHO, APP, 1, one, '')
-
-  // Then two writes over it, forty days apart, so one entry is inside the
-  // window and one is well outside it.
-  let old = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(40))
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>middle</h1>'))
-  let recent = await replaced(blobs, PREFIX, 'index.html', 'p1', ago(1))
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>now</h1>'))
-  // The forty-day-old entry names the deployed bytes, which is the case that
-  // matters: an entry aging out must not take a version's bytes with it.
-  assertEquals(old!.sha, one['index.html'])
+  await wrote('index.html', one['index.html'], 40)
+  let { 'index.html': middle } = await stored(blobs, {
+    'index.html': '<h1>middle</h1>',
+  })
+  await wrote('index.html', middle, 1, one['index.html'])
 
   // KEEP is a floor under the age, so nothing goes while there are only two.
   assertEquals(await pruned(dir, blobs, ONE), 0)
-  assertEquals((await history(blobs, PREFIX, 'index.html')).length, 2)
+  assertEquals(writes().length, 2)
 
-  // Past KEEP, the old entry ages out — and its bytes stay, because the kept
+  // Past KEEP, the old write ages out, and its bytes stay, because the kept
   // version still names them.
+  let was = middle
   for (let i = 0; i < KEEP; i++) {
-    await replaced(blobs, PREFIX, 'index.html', 'p1', ago(1))
-    await blobs.put(PREFIX + 'index.html', bytes(`<h1>${i}</h1>`))
+    let { 'index.html': sha } = await stored(blobs, {
+      'index.html': `<h1>${i}</h1>`,
+    })
+    await wrote('index.html', sha, 0.5, was)
+    was = sha
   }
   await pruned(dir, blobs, ONE)
-  let all = await history(blobs, PREFIX, 'index.html')
-  // The newest KEEP, plus everything inside the thirty days — which is the
+  let all = writes()
+  // The newest KEEP, plus everything inside the thirty days, which is the
   // day-old one sitting just past KEEP, and not the forty-day-old one.
   assertEquals(all.length, KEEP + 1)
-  assertEquals(all[KEEP].sha, recent!.sha)
-  assertEquals(all.some((w) => w.at == old!.at), false)
-  assert(await blobs.has(addressed(old!.sha)), 'the deploy still names it')
-  assert(await blobs.has(addressed(recent!.sha)), 'inside the window')
+  assertEquals(all[KEEP].sha, middle)
+  assert(await blobs.has(addressed(one['index.html'])), 'the deploy names it')
+  assert(await blobs.has(addressed(middle)), 'inside the window')
 
-  // And what is left pinned is exactly what something names: nothing is kept
+  // And what is left stored is exactly what something names: nothing is kept
   // for its own sake.
   let named = new Set([...all.map((w) => w.sha), ...Object.values(one)])
   for (let key of await blobs.list(SHA)) {
@@ -559,8 +471,8 @@ test('the prune lets go only of bytes nothing names any more', async () => {
 })
 
 // The liveness rule itself (T-34952, D-34942): what keeps a blob is that
-// something names it, and never how recent it is — plus the day's grace that
-// keeps a deploy still in flight from being swept out from under.
+// something names it, and never how recent it is, plus the day's grace that
+// keeps a write still in flight from being swept out from under.
 test('a blob lives while anything names it, and a day besides', async () => {
   let { blobs, clock, trips } = memory()
   let { dir } = directory()
@@ -568,23 +480,22 @@ test('a blob lives while anything names it, and a day besides', async () => {
 
   // The first deploy, then enough after it that v1 is far past the page a
   // version list shows.
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>v1</h1>'))
-  let one = await snapshot(blobs, PREFIX)
+  let one = await stored(blobs, { 'index.html': '<h1>v1</h1>' })
   await record(dir, WHO, APP, 1, one, '')
   for (let n = 2; n <= KEEP + 3; n++) {
-    await blobs.put(PREFIX + 'index.html', bytes(`<h1>v${n}</h1>`))
-    await record(dir, WHO, APP, n, await snapshot(blobs, PREFIX), '')
+    let files = await stored(blobs, { 'index.html': `<h1>v${n}</h1>` })
+    await record(dir, WHO, APP, n, files, '')
   }
 
-  // Bytes whose referrer is gone — an entry that aged out, a deploy that died
+  // Bytes whose referrer is gone: a write that aged out, a deploy that died
   // before its row.
   let orphan = 'a'.repeat(64)
   await blobs.put(addressed(orphan), bytes('nobody names these'))
-  // And a deploy landing right now: its bytes are in the bucket, its row is
+  // And a write landing right now: its bytes are in the bucket, its row is
   // not written yet, so nothing names them at all.
   clock.now = Date.now() - 60 * 60_000
   let flight = 'c'.repeat(64)
-  await blobs.put(addressed(flight), bytes('a deploy still in flight'))
+  await blobs.put(addressed(flight), bytes('a write still in flight'))
 
   let before = trips()
   assertEquals(await pruned(dir, blobs, ONE), 1)
@@ -595,43 +506,15 @@ test('a blob lives while anything names it, and a day besides', async () => {
     'v1 is past the page and still restorable',
   )
 
-  // What the sweep costs an app: staged files, path logs and pinned bytes.
+  // What the sweep costs an app: its staged releases, what is left of drafts
+  // kept as bytes, and the stored blobs; no read at all.
   let cost = trips()
-  assertEquals(cost.list - before.list, 4)
+  assertEquals(cost.list - before.list, 3)
   assertEquals(cost.read - before.read, 0)
   assertEquals(cost.delete - before.delete, 1)
 })
 
-test('a history that cannot be read is a history with nothing in it', async () => {
-  let { blobs } = memory()
-  await blobs.put(PREFIX + 'history/index.html.json', bytes('{ not json'))
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>one</h1>'))
-  // The write still lands and still keeps what it replaced: losing the
-  // sentence about the bytes must never take the bytes with it.
-  let was = await replaced(blobs, PREFIX, 'index.html', 'p1')
-  assertEquals((await history(blobs, PREFIX, 'index.html'))[0].sha, was!.sha)
-})
-
 // ---- one key space for the whole bucket (T-34953, D-34942) -----------------
-
-test('two apps holding the same file hold one object', async () => {
-  let { blobs } = memory()
-  let theirs = 'ada/recipes/'
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>hello</h1>'))
-  await blobs.put(theirs + 'index.html', bytes('<h1>hello</h1>'))
-  let mine = await snapshot(blobs, PREFIX)
-  let yours = await snapshot(blobs, theirs)
-  assertEquals(mine['index.html'], yours['index.html'])
-  // The address is the key, so the second deploy's pin is the first one's.
-  assertEquals(await blobs.list(SHA), [addressed(mine['index.html'])])
-  // And each app still puts its own copy back from it.
-  await blobs.delete(theirs + 'index.html')
-  await restore(blobs, theirs, yours)
-  assertEquals(
-    new TextDecoder().decode(await blobs.get(theirs + 'index.html')),
-    '<h1>hello</h1>',
-  )
-})
 
 test('a pin at the old per-app key is read until it is carried', async () => {
   let { blobs } = memory()
@@ -647,10 +530,6 @@ test('a pin at the old per-app key is read until it is carried', async () => {
     new TextDecoder().decode((await store.get(sha))!),
     '<h1>one</h1>',
   )
-  // Which is the whole point: a rollback onto a version pinned before the move
-  // still works, so nothing 404s while the migration runs.
-  await restore(blobs, PREFIX, { 'index.html': sha })
-  assertEquals(await read(blobs, 'index.html'), '<h1>one</h1>')
 })
 
 // The mark set is the bucket's: an object one app has stopped naming may be
@@ -663,20 +542,17 @@ test('the sweep keeps a sha another app still names', async () => {
   let theirs = 'ada/recipes/'
   let THEIRS = { eid: 'a2', slug: 'recipes', version: 0 } as App
 
-  // Both apps serve the same page; only the first has deployed it, so only its
+  // Both apps hold the same page; only the first has deployed it, so only its
   // manifest names the one object the two share.
-  await blobs.put(PREFIX + 'index.html', bytes('<h1>shared</h1>'))
-  await blobs.put(theirs + 'index.html', bytes('<h1>shared</h1>'))
-  let mine = await snapshot(blobs, PREFIX)
+  let mine = await stored(blobs, { 'index.html': '<h1>shared</h1>' })
   await record(dir, WHO, APP, 1, mine, '')
-  await snapshot(blobs, theirs)
   let sha = mine['index.html']
 
   let both: Pinner[] = [...ONE, { prefix: theirs, app: THEIRS }]
   assertEquals(await pruned(dir, blobs, both, Date.now()), 0)
   assert(await blobs.has(addressed(sha)), 'the other app names it')
   // And the same sweep with the naming app left out is the per-app sweep this
-  // replaced: it would take the second app's page out from under it.
+  // replaced: it would take the first app's page out from under it.
   assertEquals(
     await pruned(dir, blobs, [{ prefix: theirs, app: THEIRS }], Date.now()),
     1,
@@ -711,35 +587,14 @@ test('the migration carries the old key across, once', async () => {
   assertEquals(await blobs.list(`${PREFIX}versions/`), [pinned(PREFIX, liar)])
 })
 
-// T-37888: the notes were `AGENTS.md` before T-34632. The sweep carries the
-// file, what it held before, and every release that names it to the one name.
-test('a renamed path carries its bytes, history and releases', async () => {
-  let { blobs } = memory()
-  let { dir, rows } = directory()
-  await blobs.put(PREFIX + 'AGENTS.md', bytes('grams'))
-  await record(dir, WHO, APP, 1, await snapshot(blobs, PREFIX), '')
-  await replaced(blobs, PREFIX, 'AGENTS.md', 'p1')
-  await blobs.put(PREFIX + 'AGENTS.md', bytes('grams, always'))
-  let one = ONE[0]
-
-  assertEquals(await renamed(blobs, dir, one, 'AGENTS.md', 'NOTES.md'), true)
-  assertEquals(await read(blobs, 'NOTES.md'), 'grams, always')
-  assertEquals(await blobs.has(PREFIX + 'AGENTS.md'), false)
-  assertEquals((await history(blobs, PREFIX, 'AGENTS.md')).length, 0)
-  let was = await history(blobs, PREFIX, 'NOTES.md')
-  assertEquals(was.map((w) => w.path), ['NOTES.md'])
-  assertEquals(Object.keys(rows()[0].files), ['NOTES.md'])
-  // Idempotent: the next day's sweep finds nothing to carry.
-  assertEquals(await renamed(blobs, dir, one, 'AGENTS.md', 'NOTES.md'), false)
-
-  // Both names at once: the newer one wins, and the older bytes are kept in
-  // its history rather than lost.
-  await blobs.put(PREFIX + 'AGENTS.md', bytes('cups'))
-  assertEquals(await renamed(blobs, dir, one, 'AGENTS.md', 'NOTES.md'), true)
-  assertEquals(await read(blobs, 'NOTES.md'), 'grams, always')
-  let kept = (await history(blobs, PREFIX, 'NOTES.md'))[0]
-  assertEquals(kept.sha, await sha256(bytes('cups')))
-  assert(await pins(blobs, PREFIX).has(kept.sha), 'pinned')
+test('what one version did to the one before it', () => {
+  assertEquals(
+    whatChanged(
+      { 'index.html': 'a', 'worker.js': 'b' },
+      { 'index.html': 'c', 'worker.js': 'b', 'broken.js': 'd' },
+    ),
+    'added broken.js, changed index.html',
+  )
 })
 
 // Every platform deploy restarts every object, and a deploy being recorded

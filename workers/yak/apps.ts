@@ -144,13 +144,13 @@ import { APP_JSON, type Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
-import { recoverRelease } from './tools.ts'
+import { drafted, fullAt, hashed, recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
 import { caught, refusing } from './defects.ts'
 import { full, fullFiles } from './usage.ts'
 import { free, refusedVisit, size } from './meter.ts'
 import { scheduleBy } from './used.ts'
-import { modifying, sha256 } from './versions.ts'
+import { sha256 } from './versions.ts'
 import {
   DAYS,
   NOT_ON,
@@ -2147,27 +2147,25 @@ let api = async (
     // token, and that token is the page's — writing the app's code stays a
     // member's act through the tools, never something its own page does.
     if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
-    let bytes = new Uint8Array(await req.arrayBuffer())
-    let key = await modifying(
-      r2Objects(env.BLOBS),
-      directory(bound(env.DIRECTORY, dirPart.fetch, env)),
-      space,
-      app,
-      who,
-      (app) => prefixOf(space, app),
-      async (draft, _app, _attempt, files) => {
-        let key = keyed(draft, path.slice('/files'.length))
-        let stopped = await fullFiles(env, space, [{
-          key,
-          bytes: bytes.byteLength,
-        }])
-        if (stopped) return { error: stopped }
-        await files.put(key, bytes)
-        return { key }
-      },
-    )
-    if ('error' in key) return json(413, 'space_full', key.error)
-    return Response.json({ ok: true, key: key.key })
+    // Into the draft as app_files writes: a file the draft already holds as
+    // sent is not sent again.
+    let file = keyed('', path.slice('/files/'.length))
+    try {
+      let sent = await hashed([{
+        path: file,
+        bytes: new Uint8Array(await req.arrayBuffer()),
+      }])
+      let stopped = await fullAt(env, space, sent)
+      if (stopped) return json(413, 'space_full', stopped)
+      await drafted(env, space, app, who, sent)
+    } catch (e) {
+      return rejection(e, {
+        request: 'PUT /api/files',
+        space: space.slug,
+        app: app.slug,
+      })
+    }
+    return Response.json({ ok: true, key: file })
   }
   return json(404, 'not_found')
 }

@@ -1,10 +1,10 @@
-// A private release reuses immutable source bytes and still serves a complete
-// app after its draft and the old release's unreferenced files are removed.
+// A release names the shas its files are, and still serves a whole app once
+// the keys it was made from are gone.
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Objects } from '@yaks/blob'
 import { prepare, promoted, releaseFiles, staged } from './release.ts'
-import { encode, indexOf } from './release_index.ts'
+import { encode } from './release_index.ts'
 import type { App, Directory } from './directory.ts'
 import { addressed, sha256 } from './versions.ts'
 
@@ -65,60 +65,33 @@ let bytes = (text: string) => new TextEncoder().encode(text)
 let text = (bytes: Uint8Array<ArrayBuffer> | null) =>
   bytes ? new TextDecoder().decode(bytes) : null
 
-let preparedRelease = memory()
-let releaseOld = 'alice/.releases/app/old'
-let releaseNext = 'alice/.releases/app/next'
-let releaseDraft = 'alice/.drafts/app/delta-v2'
-let releaseSources = {
-  'index.html': bytes('old page'),
-  'keep.js': bytes('kept code'),
-  'remove.css': bytes('old style'),
-}
-for (let [path, body] of Object.entries(releaseSources)) {
-  await preparedRelease.files.put(`${releaseOld}/${path}`, body)
-}
-await preparedRelease.files.put(`${releaseDraft}/index.html`, bytes('new page'))
-await preparedRelease.files.put(
-  `${releaseDraft}/.deleted/remove.css`,
-  bytes(''),
-)
-let keptSha = await sha256(releaseSources['keep.js'])
-let newPageSha = await sha256(bytes('new page'))
-let compiledSha = await sha256(bytes('compiled'))
-let releaseStage = await staged(
-  preparedRelease.files,
-  releaseOld,
-  releaseDraft,
-  releaseNext,
-  true,
-)
-await releaseStage.files.put(
-  `${releaseNext}/esbuild/keep.js`,
-  bytes('compiled'),
-)
-test('a release serves unchanged, changed, and compiled files', async () => {
-  let { files, held } = preparedRelease
-  let next = releaseNext, draft = releaseDraft
-  let stage = releaseStage
-  let snapshot = await stage.finish()
-  assertEquals(snapshot, {
-    'index.html': newPageSha,
-    'keep.js': keptSha,
+let sha = sha256
+
+test('a release names the shas it is made of, and copies none', async () => {
+  let { files, held } = memory()
+  let page = bytes('new page'), kept = bytes('kept code')
+  for (let b of [page, kept]) await files.put(addressed(await sha(b)), b)
+  let next = 'alice/.releases/app/next'
+  let stage = staged(files, {
+    'index.html': await sha(page),
+    'keep.js': await sha(kept),
+    'esbuild/stale.js': await sha(kept),
+  }, next)
+  // What a compile reads, it reads through the release, and what it writes
+  // and drops changes only the release.
+  assertEquals(text(await stage.files.read(`${next}/keep.js`)), 'kept code')
+  await stage.files.put(`${next}/esbuild/keep.js`, bytes('compiled'))
+  await stage.files.delete(`${next}/esbuild/stale.js`)
+  assertEquals(await stage.finish(), {
+    'index.html': await sha(page),
+    'keep.js': await sha(kept),
   })
-  assertEquals(held.has(`${next}/keep.js`), false)
-  assertEquals(held.has(`${next}/index.html`), false)
-  assertEquals(await files.has(addressed(snapshot['index.html'])), true)
-  let index = await indexOf(files, `${next}/`)
-  let compiled = index!['esbuild/keep.js']
-  assertEquals(compiled.sha, compiledSha)
-  assertEquals(compiled.key, addressed(compiled.sha!))
-  assertEquals(await files.has(compiled.key), true)
-  await files.delete(`${draft}/index.html`)
+  assertEquals([...held.keys()].filter((key) => key.startsWith(`${next}/`)), [])
   let served = releaseFiles(files)
   assertEquals(text(await served.read(`${next}/index.html`)), 'new page')
   assertEquals(text(await served.read(`${next}/keep.js`)), 'kept code')
   assertEquals(text(await served.read(`${next}/esbuild/keep.js`)), 'compiled')
-  assertEquals(await served.read(`${next}/remove.css`), null)
+  assertEquals(await served.read(`${next}/esbuild/stale.js`), null)
   assertEquals(
     await served.list(`${next}/`),
     [`${next}/esbuild/keep.js`, `${next}/index.html`, `${next}/keep.js`],
@@ -156,25 +129,6 @@ test('a live indexed release keeps its bytes when promoted', async () => {
   assertEquals(await prepare(files, source), index)
 })
 
-test('copying a legacy release leaves its source index untouched', async () => {
-  let { files } = memory()
-  let source = 'alice/.releases/app/legacy'
-  let copy = 'alice/.releases/app/repacked'
-  let old = encode({
-    'index.html': { key: '.releases/app/legacy/index.html' },
-  })
-  await files.put(`${source}/index.html`, bytes('original'))
-  await files.put(source + '.json', old)
-  let stage = await staged(files, source, 'alice/.drafts/empty', copy, true)
-  await stage.files.put(`${copy}/extra.txt`, bytes('changed'))
-  await stage.finish()
-  assertEquals(text(await files.read(source + '.json')), text(old))
-  assertEquals(
-    text(await releaseFiles(files).read(`${copy}/index.html`)),
-    'original',
-  )
-})
-
 test('an app served in place is promoted to a release once', async () => {
   let { files, held } = memory()
   let stamped: unknown[] = []
@@ -189,10 +143,9 @@ test('an app served in place is promoted to a release once', async () => {
   await files.put(`${prefix}history/index.html.json`, bytes('[]'))
   await files.put(`${prefix}blobs/${'0'.repeat(64)}`, bytes('upload'))
   await files.put('yourname/.declarations/e1/legacy/7.json', bytes('{}'))
-  assertEquals(await promoted(files, dir, prefix, app), 2)
-  let source = (stamped[0] as { app: { source: string } }).app.source
-  assertEquals(source.startsWith('yourname/.releases/e1/'), true)
-  let release = source.split('/').pop()
+  let { source } = await promoted(files, dir, prefix, app)
+  assertEquals(source!.startsWith('yourname/.releases/e1/'), true)
+  let release = source!.split('/').pop()
   assertEquals(
     text(await files.read(`yourname/.declarations/e1/${release}/7.json`)),
     '{}',
@@ -206,7 +159,17 @@ test('an app served in place is promoted to a release once', async () => {
   ])
   assertEquals(held.has(addressed(await sha256(bytes('page')))), true)
   // An app with a source, or with nothing in place, is left alone.
-  assertEquals(await promoted(files, dir, prefix, { ...app, source }), 0)
-  assertEquals(await promoted(files, dir, 'yourname/empty/', app), 0)
+  assertEquals(await promoted(files, dir, prefix, { ...app, source }), {
+    ...app,
+    source,
+  })
+  assertEquals(await promoted(files, dir, 'yourname/empty/', app), app)
   assertEquals(stamped.length, 1)
+  // A draft it had open stays open over the release.
+  let draft = 'yourname/.drafts/e1/delta-v8-x'
+  assertEquals(
+    (await promoted(files, dir, prefix, { ...app, draft })).draft,
+    draft,
+  )
+  assertEquals(stamped.length, 2)
 })

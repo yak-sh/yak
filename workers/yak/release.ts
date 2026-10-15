@@ -1,7 +1,8 @@
-// A release names immutable bytes already in the space. A deploy writes only
-// changed files into its private prefix, then writes this manifest before the
-// app row selects it. Keys are relative to the space so a space rename carries
-// them without rewriting the manifest.
+// A release names immutable bytes already stored: its index maps each path to
+// the bytes' content address (versions.ts `addressed`), and a deploy writes
+// that index, beside what its compile made, before the app row selects it. An
+// older release's index may name keys of its own, relative to the space, so a
+// space rename carries them without rewriting the index.
 import type { Objects } from '@yaks/blob'
 import { lanes } from '@yaks/fp'
 import { token } from '@yaks/graph/sha256'
@@ -37,9 +38,18 @@ let complete = (index: Index | null): index is Index =>
 // naming a release's own keys can be promoted (`prepare`), so it is read again.
 let HELD = 512
 let held = new WeakMap<Objects, Map<string, Promise<Index | null>>>()
-let indexed = (raw: Objects, prefix: string) => {
+let cache = (raw: Objects) => {
   let kept = held.get(raw) ?? new Map<string, Promise<Index | null>>()
   held.set(raw, kept)
+  return kept
+}
+// An index this isolate has just written is the one a read would find.
+let written = async (raw: Objects, source: string, index: Index) => {
+  await raw.put(source + META, encode(index))
+  if (complete(index)) cache(raw).set(`${source}/`, Promise.resolve(index))
+}
+let indexed = (raw: Objects, prefix: string) => {
+  let kept = cache(raw)
   let found = kept.get(prefix)
   if (found) return found
   let read = indexOf(raw, prefix)
@@ -89,23 +99,25 @@ let pinned = async (raw: Objects, source: string): Promise<Index> => {
  * named by the SHA-256 of its bytes and pinned under it once, the index
  * written, and the app's source pointed at it. Its pages answer the same bytes
  * as before, and its next edit and deploy name shas rather than copying them.
- * The prefix's own keys stay until a later pass lets them go.
+ * The prefix's own keys stay until a later pass lets them go. A draft the app
+ * had open was its edits over those same files, so it stays open over the
+ * release.
  *
- * An app with a source, a draft or a release in flight is left alone, and so
- * is one that moved while its files were read: the source only moves from
- * nothing, guarded, so a second run or a racing edit changes nothing. Answers
- * how many files the release names.
+ * An app with a source or a release in flight is left alone. The source only
+ * moves from nothing, guarded, so a second run changes nothing, and one that
+ * crossed an edit or a deploy is refused as stale. Answers the app as it now
+ * stands.
  */
 export let promoted = async (
   raw: Objects,
   dir: Directory,
   prefix: string,
   app: App,
-): Promise<number> => {
-  if (app.source || app.draft || app.fence) return 0
+): Promise<App> => {
+  if (app.source || app.fence) return app
   let paths = (await raw.list(prefix)).map((key) => key.slice(prefix.length))
     .filter((path) => own([path]).length || path.startsWith(BUILT))
-  if (!paths.length) return 0
+  if (!paths.length) return app
   let pin = pins(raw, prefix)
   let index: Index = {}
   // A lane holds one file at a time, so the whole set is never in hand at
@@ -118,7 +130,7 @@ export let promoted = async (
   })
   let space = prefix.slice(0, prefix.indexOf('/'))
   let source = releaseOf({ slug: space }, app)
-  await raw.put(source + META, encode(index))
+  await written(raw, source, index)
   // An app's declarations are kept under its source's name (declaration.ts),
   // so each one it has goes under the new name before the source moves.
   let named = `${space}/.declarations/${app.eid}/`
@@ -136,21 +148,21 @@ export let promoted = async (
       $was: {
         app: {
           source: token(null),
-          draft: token(null),
+          draft: token(app.draft ?? null),
           fence: token(null),
           version: token(app.version),
         },
       },
     }],
   })
-  return paths.length
+  return { ...app, source }
 }
 
 export let prepare = async (raw: Objects, source: string): Promise<Index> => {
   let prior = await indexed(raw, `${source}/`)
   if (complete(prior)) return prior
   let index = await pinned(raw, source)
-  await raw.put(source + META, encode(index))
+  await written(raw, source, index)
   return index
 }
 // Existing releases have their bytes at their own keys. New ones point at
@@ -221,108 +233,124 @@ export let releaseFiles = (blobs: Objects): Objects => {
   }
 }
 
-// A mutable view of one private release. Only `finish` makes its index
-// visible; the app row still selects it later in `record`.
-export let staged = async (
-  raw: Objects,
-  source: string | null | undefined,
-  work: string,
-  prefix: string,
-  sparse = false,
-) => {
-  let files = releaseFiles(raw)
-  let root = `${prefix}/`
-  let space = spaceOf(root)
-  // The source's index and the draft's own keys are two reads with nothing
-  // between them, so they go together.
-  let [prior, changed] = await Promise.all([
-    sparse && source ? pinned(raw, source) : null,
-    raw.list(`${work}/`),
-  ])
-  let index: Index = { ...prior }
-  let pin = pins(raw, space)
-  let put = async (key: string, bytes: Uint8Array) => {
-    let path = key.slice(root.length)
-    let sha = await sha256(new Uint8Array(bytes))
-    await pin.put(sha, bytes)
-    index[path] = { key: addressed(sha), sha }
-  }
-  let present = new Set(changed.map((key) => key.slice(work.length + 1)))
-  for (let path of present) {
-    if (sparse && path.startsWith('.deleted/') && !present.has(path.slice(9))) {
-      delete index[path.slice(9)]
-    }
-  }
-  await Promise.all(
-    changed.filter((key) =>
-      !sparse || !key.slice(work.length + 1).startsWith('.deleted/')
-    ).map(async (key) => {
-      let path = key.slice(work.length + 1)
-      await put(root + path, await raw.get(key))
-    }),
+/** The files a release index names, path to sha. A complete index (every
+ * index written since D-34942, and every one `prepare` has promoted) names a
+ * sha for every path. */
+export let filesOf = (index: Index): Files =>
+  Object.fromEntries(
+    Object.entries(index).flatMap(([path, file]) =>
+      file.sha ? [[path, file.sha]] : []
+    ),
   )
-  let read = (key: string) =>
-    key.startsWith(root)
-      ? (index[key.slice(root.length)]
-        ? raw.read(location(space, index[key.slice(root.length)].key))
-        : Promise.resolve(null))
-      : files.read(key)
-  let view: Objects = {
+
+/**
+ * One set of files read under `root`, each path resolved to the bytes its sha
+ * names: a key under `root` is a path in `files`, and any other key is the
+ * bucket's, read through release indexes as `releaseFiles` reads it. Nothing
+ * under `root` is a key in the bucket, so a draft or a release in the making
+ * is read without a listing and without a copy. Writes under `root` are the
+ * caller's to say (`staged`); here they are refused.
+ */
+export let viewOf = (
+  raw: Objects,
+  root: string,
+  files: Files,
+  put: (path: string, bytes: Uint8Array) => Promise<void> = (path) =>
+    Promise.reject(new Error(`${root}/${path} is read-only`)),
+  drop: (path: string) => void = (path) => {
+    throw new Error(`${root}/${path} is read-only`)
+  },
+): Objects => {
+  let others = releaseFiles(raw)
+  let at = `${root}/`
+  // The sha a key names: undefined for a key outside the root, null for a
+  // path the files do not hold.
+  let named = (key: string) =>
+    key.startsWith(at) ? files[key.slice(at.length)] ?? null : undefined
+  let read = (key: string) => {
+    let sha = named(key)
+    return sha === undefined
+      ? others.read(key)
+      : sha
+      ? raw.read(addressed(sha))
+      : Promise.resolve(null)
+  }
+  return {
     read,
-    load: (key) =>
-      key.startsWith(root)
-        ? (index[key.slice(root.length)]
-          ? raw.load(location(space, index[key.slice(root.length)].key))
-          : Promise.resolve(null))
-        : files.load(key),
-    open: (key) =>
-      key.startsWith(root)
-        ? (index[key.slice(root.length)]
-          ? raw.open(location(space, index[key.slice(root.length)].key))
-          : Promise.resolve(null))
-        : files.open(key),
+    load: async (key) => {
+      let sha = named(key)
+      if (sha === undefined) return others.load(key)
+      let found = sha ? await raw.load(addressed(sha)) : null
+      return found && { ...found, version: sha!.slice(0, 24) }
+    },
+    open: async (key) => {
+      let sha = named(key)
+      if (sha === undefined) return others.open(key)
+      let found = sha ? await raw.open(addressed(sha)) : null
+      return found && { ...found, version: sha!.slice(0, 24) }
+    },
     get: async (key) => {
       let bytes = await read(key)
       if (!bytes) throw new Error(`no object at ${key}`)
       return bytes
     },
-    has: (key) =>
-      key.startsWith(root)
-        ? Promise.resolve(key.slice(root.length) in index)
-        : files.has(key),
+    has: (key) => {
+      let sha = named(key)
+      return sha === undefined ? others.has(key) : Promise.resolve(!!sha)
+    },
     put: (key, bytes) =>
-      key.startsWith(root) ? put(key, bytes) : files.put(key, bytes),
+      key.startsWith(at)
+        ? put(key.slice(at.length), bytes)
+        : raw.put(key, bytes),
     delete: async (keys) => {
       let all = [keys].flat()
-      let outside = all.filter((key) => !key.startsWith(root))
-      if (outside.length) await files.delete(outside)
-      for (let key of all.filter((key) => key.startsWith(root))) {
-        let path = key.slice(root.length)
-        let held = index[path]
-        delete index[path]
-        if (held?.key == key.slice(space.length)) await raw.delete(key)
-      }
+      let outside = all.filter((key) => !key.startsWith(at))
+      if (outside.length) await raw.delete(outside)
+      for (let key of all) if (key.startsWith(at)) drop(key.slice(at.length))
     },
-    list: (at) =>
-      at.startsWith(root)
+    list: (prefix) =>
+      prefix.startsWith(at) || at.startsWith(prefix)
         ? Promise.resolve(
-          Object.keys(index).filter((path) => (root + path).startsWith(at))
-            .map((path) => root + path).sort(),
+          Object.keys(files).map((path) => at + path)
+            .filter((key) => key.startsWith(prefix)).sort(),
         )
-        : files.list(at),
-    uploaded: (at) => raw.uploaded(at),
+        : others.list(prefix),
+    uploaded: (prefix) => raw.uploaded(prefix),
   }
-  let manifest = (): Files | null => {
-    let version = Object.fromEntries(
-      own(Object.keys(index)).map((path) => [path, index[path].sha]),
-    ) as Files
-    return Object.values(version).some((sha) => !sha) ? null : version
-  }
+}
+
+/**
+ * A release in the making: the files `from` names, read under `prefix`, with
+ * what its compile writes there pinned by their bytes and added, and what it
+ * drops taken out. Nothing is read or copied to make it: every file it starts
+ * with is a sha already stored. Only `finish` makes its index visible, and the
+ * app row selects it later still, in `record`.
+ */
+export let staged = (raw: Objects, from: Files, prefix: string) => {
+  let files: Files = { ...from }
+  // A put at the content address is the whole write: bytes already there are
+  // these bytes, so one call, never a look first.
+  let view = viewOf(raw, prefix, files, async (path, bytes) => {
+    let sha = await sha256(new Uint8Array(bytes))
+    await raw.put(addressed(sha), bytes)
+    files[path] = sha
+  }, (path) => void delete files[path])
+  let manifest = (): Files =>
+    Object.fromEntries(
+      own(Object.keys(files)).map((path) => [path, files[path]]),
+    )
   let finish = async (): Promise<Files> => {
-    let version = manifest()
-    if (!version) throw new Error('release has a file without a pinned sha')
-    await raw.put(prefix + META, encode(index))
-    return version
+    await written(
+      raw,
+      prefix,
+      Object.fromEntries(
+        Object.entries(files).map(([path, sha]) => [
+          path,
+          { key: addressed(sha), sha },
+        ]),
+      ),
+    )
+    return manifest()
   }
   return { files: view, manifest, finish }
 }

@@ -28,9 +28,8 @@ import { prefixOf } from './files.ts'
 import { r2Objects } from './lib/objects.ts'
 import { countedSpend, refusedSpend } from './meter.ts'
 import { caught } from './defects.ts'
-import type { Who } from './session.ts'
 import { type Ctx, refuse } from './tool.ts'
-import { BUILT, type Files, own, replaced, sha256 } from './versions.ts'
+import { BUILT, type Files, own, sha256 } from './versions.ts'
 import { type Config, sourceOf } from './wrangler_app.ts'
 import { url } from './host.ts'
 import { valid as sharedPath } from './shared.ts'
@@ -204,7 +203,6 @@ export let compiled = async (
   ctx: Ctx,
   space: Space,
   app: App,
-  who: Who,
   config: Config,
   keys: string[],
   files = r2Objects(ctx.env.BLOBS),
@@ -393,15 +391,9 @@ export let compiled = async (
   if (lock != null) {
     let was = await read(LOCK)
     if (!was || new TextDecoder().decode(was) != lock) {
-      await replaced(
-        blobs,
-        prefix,
-        LOCK,
-        who.person ?? '',
-        new Date(),
-        `${space.slug}/${app.slug}/`,
-        () => blobs.put(prefix + LOCK, encode(lock)),
-      )
+      // Into the release being made, by its bytes: the version it lands in
+      // keeps the lock it replaced (written.ts).
+      await blobs.put(prefix + LOCK, encode(lock))
     }
     lines.push(
       `${LOCK} pins ${answer.installed.join(', ') || 'nothing'}; the next ` +

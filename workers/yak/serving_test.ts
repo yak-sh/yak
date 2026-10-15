@@ -60,6 +60,7 @@ import { PLATFORM_STORE } from './door.ts'
 import { sweep } from './usage.ts'
 import { FREE, free, monthOf, PLUS, size } from './meter.ts'
 import { ADA, ADA_OWNS, as, platform, seeded, visit } from './serving-probe.ts'
+import { addressed, sha256 } from './versions.ts'
 
 // The app's own graph, driven the way `public/client.js` drives it.
 let client = (env: Env, cookie?: string) => {
@@ -1965,25 +1966,30 @@ test('photo and file uploads enforce space R2 limits from actual bytes', async (
     await assertRejects(
       () =>
         wrote(env, current, app, { person: ADA, role: 'owner' }, [
-          { path: 'one.txt', bytes: new Uint8Array(2) },
-          { path: 'two.txt', bytes: new Uint8Array(2) },
+          { path: 'one.txt', bytes: new Uint8Array([1, 1]) },
+          { path: 'two.txt', bytes: new Uint8Array([2, 2]) },
         ]),
       Error,
       'photos and files',
     )
-    assertEquals(files.held.has('ada/cookbook/one.txt'), false)
+    assertEquals(
+      files.held.has(addressed(await sha256(new Uint8Array([1, 1])))),
+      false,
+    )
     await sweep(env)
     let listing = await call({ env, dir, person: ADA }, 'app_list', {
       space: 'ada',
     })
     // The space's line says where it stands (meter.ts `gauged`), and its
-    // value carries the reading whole.
+    // value carries the reading whole. The app's own files are stored by
+    // their content, once for the whole bucket, as its releases always were
+    // (written.ts), so what the reading holds is the photos.
     assertStringIncludes(
       listing.text,
-      `${size(cap - 2)} of ${size(cap)} of photos and files`,
+      `${size(cap - 3)} of ${size(cap)} of photos and files`,
     )
     let [stood] = (listing.value as { spaces: Listed[] }).spaces
-    assertEquals(stood.standing.limits.files, { used: cap - 2, limit: cap })
+    assertEquals(stood.standing.limits.files, { used: cap - 3, limit: cap })
   }
 })
 

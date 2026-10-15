@@ -486,25 +486,12 @@ test(
         doc: { title: `Live\n\n## Heading ${'x'.repeat(100)}` },
       }],
     }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
-    // Notes under the name they had before T-34632 (T-37888).
-    await r2Objects(env.BLOBS).put(
-      'ada/live/AGENTS.md',
-      new TextEncoder().encode('grams'),
-    )
 
     assertEquals(await collected(env), 1)
     assertEquals(
       (await dir.app(space, 'live'))!.title,
       `Live ## Heading ${'x'.repeat(64)}`,
     )
-    // The notes are under the one name read now, and the old one is gone.
-    assertEquals(
-      new TextDecoder().decode(
-        (await r2Objects(env.BLOBS).read('ada/live/NOTES.md'))!,
-      ),
-      'grams',
-    )
-    assertEquals(await r2Objects(env.BLOBS).has('ada/live/AGENTS.md'), false)
     assertEquals((await dir.apps(space)).map((a) => a.slug), ['live', 'fresh'])
     // The bytes went with the row, and only that app's.
     let keys = await r2Objects(env.BLOBS).list('ada/')

@@ -357,7 +357,7 @@ let sameBytes = (a: Uint8Array, b: Uint8Array) => {
  * The bucket, as the slice `r2Objects` asks for.
  *
  * `at` is when each object landed, which the retention sweep reads
- * (versions.ts `pruned`); a test that wants an object to look old sets it,
+ * (written.ts `pruned`); a test that wants an object to look old sets it,
  * and everything else lands now.
  */
 export let bucket = () => {

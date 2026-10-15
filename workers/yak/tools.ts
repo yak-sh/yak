@@ -41,7 +41,7 @@ import { bindingLines, bindings } from './bindings.ts'
 import { broken, mediaTypeOf, type Objects } from '@yaks/blob'
 import { blobPrefix } from './blob-key.ts'
 import { r2Objects, r2RawObjects } from './lib/objects.ts'
-import { staged } from './release.ts'
+import { filesOf, prepare, staged, viewOf } from './release.ts'
 import { isTestAddress } from './lib/bots.ts'
 import { fullFiles } from './usage.ts'
 import { TOOLS_EXAMPLE, viewsOf } from '@yaks/tools/declared'
@@ -262,21 +262,13 @@ import {
   addressed,
   BUILT,
   deployedOver,
-  draftFiles,
-  draftManifest,
-  draftOf,
   fenced,
-  held,
-  history,
+  type Files,
   KEEP,
-  manifest,
-  modifying,
   own,
   pins,
   record,
   releaseOf,
-  replaced,
-  restore,
   same,
   sha256,
   unfenced,
@@ -284,9 +276,21 @@ import {
   versions,
   waiting,
   whatChanged,
-  when,
-  working,
 } from './versions.ts'
+import { old } from './carried.ts'
+import {
+  type Change,
+  current,
+  type Draft,
+  drafting,
+  heldAt,
+  history,
+  modifying,
+  replaced,
+  served,
+  when,
+  type Written,
+} from './written.ts'
 import { appTag, purge } from './purge.ts'
 import { keepable } from './page-cache.ts'
 import { within } from './rate.ts'
@@ -974,7 +978,6 @@ let published = async (
         ctx,
         space,
         app,
-        who,
         parsed.config,
         keys,
         blobs,
@@ -1478,21 +1481,10 @@ let released = async (
     )
   }
   let blobs = r2RawObjects(ctx.env.BLOBS)
+  // A draft still kept as its own bytes moves into rows before the fence
+  // names it (written.ts `current`).
+  standing = await current(blobs, ctx.dir, space, standing)
   let kept = target?.source && target.script ? target : undefined
-  // A deploy with no draft releases the source as it stands. It names a draft
-  // nothing has written rather than stamping one, since the fence below holds
-  // edits off either way and guards that none began (T-124005).
-  let work = target
-    ? kept?.source ?? releaseOf(space, standing)
-    : standing.draft ?? draftOf(space, standing)
-  if (target && !kept) {
-    await restore(
-      r2Objects(ctx.env.BLOBS),
-      `${work}/`,
-      target.files,
-      `${space.slug}/${standing.slug}/`,
-    )
-  }
   let release = kept?.source ?? releaseOf(space, standing)
   let draft = standing.draft ?? null
   let reviewing = base != null && base < (standing.version ?? 0) && !confirm
@@ -1512,20 +1504,24 @@ let released = async (
   // `record`), so only a release that stopped short has one left to lift.
   let released = false
   try {
+    // A deploy names the shas its draft holds, and a version put back that
+    // kept no release names the shas its manifest does: neither reads or
+    // copies a byte to make the release. The fence above holds edits off, so
+    // the draft read here is the one this release takes.
     let files = kept
       ? {
         files: r2Objects(ctx.env.BLOBS),
         manifest: () => kept.files,
         finish: () => Promise.resolve(kept.files),
       }
-      : await c.time('staged', () =>
-        staged(
-          blobs,
-          prefixOf(space, standing),
-          work,
-          release,
-          !target && work.split('/').pop()?.startsWith('delta-v') == true,
-        ))
+      : staged(
+        blobs,
+        target ? target.files : (await c.time(
+          'staged',
+          () => drafting(blobs, ctx.dir, space, standing),
+        )).files,
+        release,
+      )
     // The fence holds both the serving pointer and the candidate's edits.
     // Inspect losses before compiling, planting a schema or deploying a worker.
     if (reviewing && base != null) {
@@ -1638,60 +1634,42 @@ let offered = async (ctx: Ctx, from: { space: Space; app: App }) => {
       `published version ${number} has no retained release`,
     )
   }
-  let blobs = r2Objects(ctx.env.BLOBS)
-  let root = `${version.source ?? `${from.space.slug}/${from.app.slug}`}/`
-  let store = pins(blobs, `${from.space.slug}/${from.app.slug}/`)
-  let paths = version.source
-    ? (await blobs.list(root)).map((key) => key.slice(root.length))
-    : Object.keys(version.files)
-  paths = paths.filter(transferable)
-  let read = async (path: string) => {
-    let bytes = version.source
-      ? await blobs.read(root + path)
-      : await store.get(version.files[path])
-    if (!bytes) {
-      throw refuse(
-        'missing',
-        `published version ${number} has no bytes for ${path}`,
-      )
-    }
-    return bytes
-  }
-  return { paths, read }
+  let files = version.source
+    ? filesOf(await prepare(r2RawObjects(ctx.env.BLOBS), version.source))
+    : version.files
+  return Object.fromEntries(
+    Object.entries(files).filter(([path]) => transferable(path)),
+  ) as Files
 }
 
-// A publication's source and completed build travel together. The copy earns
-// its own history, and its uploaded blobs and store data stay its own.
-let copied = (
+// A publication's source and completed build travel together, named by their
+// shas, so an install copies no bytes. The copy earns its own history, and its
+// uploaded blobs and store data stay its own.
+let copied = async (
   ctx: Ctx,
-  from: Awaited<ReturnType<typeof offered>>,
+  from: Files,
   onto: { space: Space; app: App },
   who: Who,
-) => {
-  let blobs = r2Objects(ctx.env.BLOBS)
-  return modifying(
-    blobs,
+) =>
+  (await modifying(
+    r2RawObjects(ctx.env.BLOBS),
     ctx.dir,
     onto.space,
     onto.app,
     who,
-    (app) => prefixOf(onto.space, app),
-    async (draft, _app, _attempt, editFiles) => {
-      let here = `${draft}/`
-      let code = from.paths
-      let had = (await editFiles.list(here)).map((k) => k.slice(here.length))
-        .filter(transferable)
-      await Promise.all(
-        code.map(async (path) =>
-          editFiles.put(here + path, await from.read(path))
-        ),
+    (draft) => {
+      let gone = Object.keys(draft.files).filter((path) =>
+        transferable(path) && !(path in from)
       )
-      let gone = had.filter((p) => !code.includes(p))
-      await Promise.all(gone.map((path) => editFiles.delete(here + path)))
-      return { wrote: own(code), gone: own(gone) }
+      return Promise.resolve({
+        changes: [
+          ...Object.entries(from).map(([path, sha]) => ({ path, sha })),
+          ...gone.map((path) => ({ path })),
+        ],
+        value: { wrote: own(Object.keys(from)), gone: own(gone) },
+      })
     },
-  )
-}
+  )).value
 
 let answer = (
   store: Door,
@@ -1839,14 +1817,12 @@ let declaring = async (
     : { file: files[at], source: decoded(read[at]!) }
 }
 
-let offeredWords = async (files: Awaited<ReturnType<typeof offered>>) => {
-  let file = ['vocab.yml', 'vocab.json'].find((path) =>
-    files.paths.includes(path)
-  )
-  return {
-    file: file ?? 'vocab.json',
-    source: file ? decoded(await files.read(file)) : null,
-  }
+// The words a publication declares, read from the bytes its vocab file names.
+let offeredWords = async (raw: Objects, files: Files) => {
+  let file = ['vocab.yml', 'vocab.json'].find((path) => path in files)
+  let bytes = file ? await raw.read(addressed(files[file])) : null
+  if (file && !bytes) throw refuse('missing', `no blob for ${files[file]}`)
+  return { file: file ?? 'vocab.json', source: bytes ? decoded(bytes) : null }
 }
 
 // A file named as a picture is one, refused at the write with what is wrong
@@ -1897,7 +1873,13 @@ let instead = (path: string) =>
  * by other doors too: a zip somebody dropped on their space's page carries
  * pictures (drop.ts, T-34230), and `sandbox_ship` carries what a compiler
  * made (T-34264). Neither is `content: string` — a `.wasm` would not survive
- * a decode — which is why this takes bytes. Answers their app-relative paths.
+ * a decode — which is why this takes bytes. Answers their app-relative paths,
+ * and which of them the draft already held as sent (written.ts `modifying`),
+ * so a write sent again after it was cut off says what had landed.
+ *
+ * Each file costs one put, at its content address, and the files go out at
+ * once (T-34986); the draft records them in one directory write after (T-124791).
+ * `files` is the wall clock of both.
  */
 export let wroteAt = async (
   env: Env,
@@ -1907,144 +1889,119 @@ export let wroteAt = async (
   files: { path: string; bytes: Uint8Array }[],
   c: Clock = clock(),
 ) => {
-  await c.time('pictures', () => pictured(env, app, files))
-  let blobs = r2Objects(env.BLOBS)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  return modifying(
-    blobs,
-    dir,
-    space,
-    app,
-    who,
-    (app) => prefixOf(space, app),
-    async (draft, app, _attempt, editFiles, fresh) => {
-      let edit = { ...app, source: draft }
-      let prefix = fileKey(space, edit, '')
-      let archive = `${space.slug}/${app.slug}/`
-      // The wrangler config the app serves by, asked for beside the puts so
-      // it adds no wait; a never-released app's fresh draft holds nothing else.
-      let config = configAfter(
-        files,
-        fresh && !app.version ? null : editFiles,
-        prefix,
-      )
-      let stopped = await c.time(
-        'quota',
-        () =>
-          fullFiles(
-            env,
-            space,
-            files.map((f) => ({
-              key: fileKey(space, edit, f.path),
-              bytes: f.bytes.byteLength,
-            })),
-          ),
-      )
-      if (stopped) throw refuse('limit', stopped)
-      // The one file with a ceiling of its own (standing.ts): the app's notes are
-      // handed whole to any agent that can reach the app, so they are refused
-      // over the cap here — at the write, whichever door brought the bytes —
-      // rather than truncated at the read.
-      for (let f of files) {
-        let no = tooLong(f.path, f.bytes.byteLength)
-        if (no) throw refuse('limit', no)
-      }
-      // What each path held goes into its own history, pinned by its content
-      // (versions.ts `replaced`, T-34508), so the edit can be undone before
-      // deploy; the new bytes go out beside that pin, once the old are in hand.
-      //
-      // The new bytes are pinned once the answer is on its way, without a head
-      // first, since bytes just made are almost never there already. So the
-      // next write over them finds them kept and only notes them, and the
-      // release that takes them only names them (release.ts `staged`). Nothing
-      // waits on that pin: both of those pin whatever they find missing, and a
-      // put to this bucket is most of a second (T-123988).
-      //
-      // The files go out at once: each path's replacement is its own chain of
-      // round trips to the bucket with nothing to wait on in another path's, so
-      // a three-file write costs one file's time, not three (T-34986). `pin` is
-      // each whole replacement and `put` the write inside it, summed per file —
-      // total waiting, which overlaps — and `files` is the wall clock the batch
-      // actually took.
-      let at = new Date()
-      let pin = c.sum('pin')
-      let put = c.sum('put')
-      await c.time('files', () =>
-        Promise.all(files.map(async (f) => {
-          let path = fileKey(space, edit, f.path).slice(prefix.length)
-          let sha = await sha256(new Uint8Array(f.bytes))
-          return pin(() =>
-            replaced(
-              editFiles,
-              prefix,
-              path,
-              who.person ?? '',
-              at,
-              archive,
-              () => put(() => editFiles.put(prefix + path, f.bytes)),
-            ).then((was) => {
-              background(
-                blobs.put(addressed(sha), f.bytes).catch((e) =>
-                  caught(e, { request: 'pin', app: app.slug })
-                ),
-              )
-              return was
-            })
-          )
-        })))
-      let paths = files.map((f) =>
-        fileKey(space, edit, f.path).slice(prefix.length)
-      )
-      return { paths, config: await config }
-    },
-  ).then((done) => {
-    if (!who.administrative) scheduleUse(env, app.eid)
-    return done
-  })
+  let sent = await sending(env, app, files, c)
+  let stopped = await c.time('quota', () => fullAt(env, space, sent))
+  if (stopped) throw refuse('limit', stopped)
+  let landing = await c.time(
+    'files',
+    () => drafted(env, space, app, who, sent),
+  )
+  return { ...landing, paths: sent.map((f) => f.path) }
 }
+
+/**
+ * Files as a write sends them, each named by its sha: refused here if it is
+ * a picture that is not one, or the app's notes over their cap.
+ */
+export let sending = async (
+  env: Env,
+  app: App,
+  files: { path: string; bytes: Uint8Array }[],
+  c: Clock = clock(),
+) => {
+  await c.time('pictures', () => pictured(env, app, files))
+  // The one file with a ceiling of its own (standing.ts): the app's notes are
+  // handed whole to any agent that can reach the app, so they are refused
+  // over the cap here — at the write, whichever door brought the bytes —
+  // rather than truncated at the read.
+  for (let f of files) {
+    let no = tooLong(f.path, f.bytes.byteLength)
+    if (no) throw refuse('limit', no)
+  }
+  return await hashed(files)
+}
+
+/** Files named by their sha, as a write records them. */
+export let hashed = (files: { path: string; bytes: Uint8Array }[]) =>
+  Promise.all(files.map(async (f) => ({
+    path: f.path.replace(/^\/+/, ''),
+    bytes: f.bytes,
+    sha: await sha256(new Uint8Array(f.bytes)),
+    size: f.bytes.byteLength,
+  })))
+
+/** Why the space has no room for what a write sends, or '' when it has. */
+export let fullAt = (env: Env, space: Space, sent: Change[]) =>
+  fullFiles(
+    env,
+    space,
+    sent.flatMap((f) =>
+      f.sha && f.size ? [{ key: addressed(f.sha), bytes: f.size }] : []
+    ),
+  )
 
 export let wrote = async (...args: Parameters<typeof wroteAt>) =>
   (await wroteAt(...args)).paths
 
-const WRANGLERS = ['wrangler.jsonc', 'wrangler.json']
+/**
+ * Changes into an app's draft (written.ts `modifying`), with the wrangler
+ * config the app serves by once they have landed, worked out beside them so
+ * it adds no wait. Answers which paths the draft already held as sent.
+ */
+export let drafted = async (
+  env: Env,
+  space: Space,
+  app: App,
+  who: Who,
+  changes: Change[],
+) => {
+  let raw = r2RawObjects(env.BLOBS)
+  let config: Promise<Config> = Promise.resolve({})
+  let { already } = await modifying(
+    raw,
+    directory(bound(env.DIRECTORY, dirPart.fetch, env)),
+    space,
+    app,
+    who,
+    (draft) => {
+      config = configAfter(raw, changes, draft)
+      config.catch(() => {})
+      return Promise.resolve({ changes, value: null })
+    },
+  )
+  if (!who.administrative) scheduleUse(env, app.eid)
+  return { config: await config, already }
+}
 
 /**
- * The wrangler config an app serves by once `files` have landed: what the
- * call wrote, else what the draft already holds. `held` is the draft's view,
- * or null when it holds nothing to ask. The draft is listed first, so an app
- * with no wrangler file costs two listings and no reads.
+ * The wrangler config an app serves by once `changes` have landed: bytes the
+ * call sent, else what the draft holds after it. The draft names its files,
+ * so an app with no wrangler file costs no read at all.
  */
-let configAfter = async (
-  files: { path: string; bytes: Uint8Array }[],
-  held: Objects | null,
-  prefix: string,
-) => {
-  let wrote = new Map(files.map((f) => [f.path, f.bytes]))
-  let named = held
-    ? new Set((await held.list(prefix)).map((k) => k.slice(prefix.length)))
-    : new Set<string>()
-  let had = new Map(
-    await Promise.all(
-      WRANGLERS.filter((p) => named.has(p)).map(async (p) =>
-        [p, await held!.read(prefix + p)] as const
-      ),
-    ),
-  )
+let configAfter = async (raw: Objects, changes: Change[], draft: Draft) => {
+  let sent = new Map(changes.map((c) => [c.path, c.bytes]))
+  let files = { ...draft.files }
+  for (let c of changes) {
+    if (c.sha) files[c.path] = c.sha
+    else delete files[c.path]
+  }
+  let view = viewOf(raw, draft.root, files)
   return (await configured((p) =>
-    Promise.resolve(
-      (wrote.get(p) ?? had.get(p) ?? null) as Uint8Array<ArrayBuffer> | null,
-    )
-  ))
-    .config
+    sent.get(p)
+      ? Promise.resolve(sent.get(p) as Uint8Array<ArrayBuffer>)
+      : p in files
+      ? view.read(`${draft.root}/${p}`)
+      : Promise.resolve(null)
+  )).config
 }
 
 /**
  * Delete each file under `folder` that `kept` does not name, into its own
- * history as app_files' delete does (versions.ts `replaced`): a build shipped
- * over the last one leaves none of the last one's files behind. Answers the
- * paths it deleted.
+ * history as app_files' delete does (written.ts): a build shipped over the
+ * last one leaves none of the last one's files behind. Answers the paths it
+ * deleted.
  */
-let swept = (
+let swept = async (
   env: Env,
   space: Space,
   app: App,
@@ -2053,35 +2010,35 @@ let swept = (
   kept: string[],
 ) => {
   let keep = new Set(kept)
-  return modifying(
-    r2Objects(env.BLOBS),
+  return (await modifying(
+    r2RawObjects(env.BLOBS),
     directory(bound(env.DIRECTORY, dirPart.fetch, env)),
     space,
     app,
     who,
-    (app) => prefixOf(space, app),
-    async (draft, app, _attempt, editFiles) => {
-      let prefix = fileKey(space, { ...app, source: draft }, '')
-      let archive = `${space.slug}/${app.slug}/`
-      let under = await editFiles.list(`${prefix}${folder}/`)
-      let gone = own(under.map((k) => k.slice(prefix.length)))
-        .filter((path) => !keep.has(path))
-      let at = new Date()
-      await Promise.all(gone.map((path) =>
-        replaced(
-          editFiles,
-          prefix,
-          path,
-          who.person ?? '',
-          at,
-          archive,
-          () => editFiles.delete(prefix + path),
-        )
-      ))
-      return gone
+    (draft) => {
+      let gone = own(Object.keys(draft.files)).filter((path) =>
+        path.startsWith(`${folder}/`) && !keep.has(path)
+      )
+      return Promise.resolve({
+        changes: gone.map((path) => ({ path })),
+        value: gone,
+      })
     },
-  )
+  )).value
 }
+
+/**
+ * How big the bytes a path's history names are, as a history says it
+ * ("4213 B, "): what the write that left them recorded, and where none did,
+ * the bucket's word for one asked to `look`, else nothing.
+ */
+let sizes =
+  (blobs: Objects, rows: Written[]) => async (sha: string, look = false) => {
+    let n = rows.find((w) => w.sha == sha && w.size != null)?.size ??
+      (look ? (await blobs.open(addressed(sha)))?.size : null)
+    return n == null ? '' : `${size(n)}, `
+  }
 
 /**
  * What a write says about the bytes it stored: how many there are, their
@@ -2664,14 +2621,16 @@ let OURS: Row[] = [
       }]
       if (moving) {
         entities.push(
-          ...apps.filter((app) => app.source || app.draft).map((app) => ({
+          // A draft is rows (written.ts), named by no address; only one
+          // still kept as bytes of its own moves (carried.ts).
+          ...apps.filter((app) => app.source || old(app)).map((app) => ({
             entity: { eid: app.eid },
             app: {
               ...(app.source
                 ? { source: app.source.replace(`${space.slug}/`, `${to}/`) }
                 : {}),
-              ...(app.draft
-                ? { draft: app.draft.replace(`${space.slug}/`, `${to}/`) }
+              ...(old(app)
+                ? { draft: app.draft!.replace(`${space.slug}/`, `${to}/`) }
                 : {}),
             },
           })),
@@ -3066,27 +3025,27 @@ let OURS: Row[] = [
         'inApp',
         () => inApp(ctx, args, WRITES.includes(op)),
       )
-      let blobs = r2Objects(ctx.env.BLOBS)
-      let source = working(app, prefixOf(space, app))
-      let edit = { ...app, source }
-      let prefix = fileKey(space, edit, '')
-      let view = draftFiles(blobs, app.draft, prefixOf(space, app))
-      let archive = `${space.slug}/${app.slug}/`
+      let blobs = r2RawObjects(ctx.env.BLOBS)
+      // A path as the app names it: written.ts keys the draft by app-relative
+      // paths, and a leading slash names the same file.
+      let named = (path: string) => path.replace(/^\/+/, '')
+      // The draft names every file it holds by sha (written.ts), so listing,
+      // comparing and finding a file read no bytes; only a file asked for
+      // whole is read, from its content address.
+      let draft = () =>
+        c.time('draft', () => drafting(blobs, ctx.dir, space, app))
+      let at = (d: Draft, path: string) => `${d.root}/${path}`
       if (op == 'list') {
-        let all = await versions(ctx.dir, app)
+        let [d, all] = await Promise.all([draft(), versions(ctx.dir, app)])
         let live = all.find((v) => v.version == app.version)
-        // With no draft, source is the immutable release whose file hashes
-        // the version already records. A draft needs its own bytes inspected.
-        let files = app.draft && live
-          ? await draftManifest(blobs, app.draft, live.files)
-          : live && !app.draft
-          ? live.files
-          : await manifest(view, prefix)
+        let files: Files = Object.fromEntries(
+          Object.entries(d.files).filter(([path]) => own([path]).length),
+        )
         let paths = Object.keys(files).sort()
         let unreleased = !live || !same(live.files, files)
         let version = app.version ?? 0
         let { config } = await configured((p) =>
-          p in files ? view.read(prefix + p) : Promise.resolve(null)
+          p in files ? d.view.read(at(d, p)) : Promise.resolve(null)
         )
         let { dir, source } = sourceOnly(config, paths)
         // Every fact in the value said in the words too: claude.ai's model
@@ -3122,10 +3081,8 @@ let OURS: Row[] = [
       // app read back in one call (files_read.ts): what an assistant coming
       // back to an app needs before it changes anything (T-124200).
       if (op == 'read' && args.path != null && args.paths == null) {
-        // One read, not a head and then a read: each is a round trip.
-        let bytes = await view.read(
-          fileKey(space, edit, text(args.path, 'path')),
-        )
+        let d = await draft()
+        let bytes = await d.view.read(at(d, named(text(args.path, 'path'))))
         if (!bytes) throw refuse('missing', `no file ${args.path}`)
         return {
           text: decoded(bytes),
@@ -3134,12 +3091,11 @@ let OURS: Row[] = [
         }
       }
       if (op == 'read') {
-        let named = [...list(args.path, 'path'), ...list(args.paths, 'paths')]
-          .map((path) => fileKey(space, edit, path).slice(prefix.length))
-        let paths = named.length
-          ? named
-          : own((await view.list(prefix)).map((k) => k.slice(prefix.length)))
-        let read = await peruse(paths, (path) => view.open(prefix + path))
+        let d = await draft()
+        let asked = [...list(args.path, 'path'), ...list(args.paths, 'paths')]
+          .map(named)
+        let paths = asked.length ? asked : own(Object.keys(d.files)).sort()
+        let read = await peruse(paths, (path) => d.view.open(at(d, path)))
         let version = app.version ?? 0
         return {
           text: perusal(read, version),
@@ -3156,76 +3112,61 @@ let OURS: Row[] = [
         }
       }
       if (op == 'delete') {
-        return modifying(
+        let path = named(text(args.path, 'path'))
+        // A delete takes bytes away like a write does, so it keeps them the
+        // same way: the file's last write stays in its history the moment it
+        // stops being a file, and op restore brings it back (T-34508). One
+        // sent again after it landed finds the draft's own delete and says so.
+        let { value: gone } = await modifying(
           blobs,
           ctx.dir,
           space,
           app,
           who,
-          (app) => prefixOf(space, app),
-          async (draft, app, attempt, editFiles) => {
-            let prefix = `${draft}/`
-            let key = fileKey(
-              space,
-              { ...app, source: draft },
-              text(args.path, 'path'),
-            )
-            if (!(await editFiles.has(key))) {
-              if (attempt) {
-                return {
-                  text: `deleted ${args.path} — staged for app_deploy`,
-                  space,
-                }
-              }
-              throw refuse('missing', `no file ${args.path}`)
+          (d, _app, attempt) => {
+            if (path in d.files) {
+              return Promise.resolve({ changes: [{ path }], value: true })
             }
-            let path = key.slice(prefix.length)
-            // A delete takes bytes away like a write does, so it keeps them the
-            // same way: the file is in its own history the moment it stops being a
-            // file, and op restore brings it back (T-34508).
-            await replaced(
-              editFiles,
-              prefix,
-              path,
-              who.person ?? '',
-              new Date(),
-              archive,
-              () => editFiles.delete(key),
-            )
-            return {
-              text: `deleted ${path} — app_files(app: '${app.slug}', op: ` +
-                `'restore', path: '${path}') brings it back; staged for app_deploy`,
-              space,
+            if (attempt || d.rows.some((w) => w.path == path && !w.sha)) {
+              return Promise.resolve({ changes: [], value: false })
             }
+            throw refuse('missing', `no file ${path}`)
           },
-        ).then((result) => {
-          if (!who.administrative) scheduleUse(ctx.env, app.eid)
-          return result
-        })
+        )
+        if (!who.administrative) scheduleUse(ctx.env, app.eid)
+        return {
+          text: `${gone ? 'deleted' : 'already deleted'} ${path} — ` +
+            `app_files(app: '${app.slug}', op: 'restore', path: '${path}') ` +
+            'brings it back; staged for app_deploy',
+          space,
+        }
       }
-      // What this file has been (T-34508). Every write pins what it replaced,
-      // so a path answers its own past — and `now` is at the top because "what
-      // is there this second" is half of what somebody reading a history is
-      // trying to work out.
+      // What this file has been (T-34508): what each write to it the app
+      // keeps took away, newest first, each a sha whose bytes are still
+      // stored. `now` is at the top because "what is there this second" is
+      // half of what somebody reading a history is trying to work out.
       if (op == 'history') {
-        let path = fileKey(space, edit, text(args.path, 'path'))
-          .slice(prefix.length)
-        let all = await history(blobs, archive, path)
-        let live = await view.read(prefix + path)
+        let path = named(text(args.path, 'path'))
+        let [d, all] = await Promise.all([draft(), history(ctx.dir, app, path)])
+        let now = d.files[path] ?? null
+        let gone = replaced(all)
+        let sized = sizes(blobs, all)
+        let name = async (by: string | null) =>
+          (by && await ctx.dir.nameAt(by)) || by || 'someone'
         return {
           text: [
             `${path} in ${space.slug}/${app.slug}:`,
-            live
-              ? `now — ${size(live.byteLength)}, sha256 ${await sha256(live)}`
+            now
+              ? `now — ${await sized(now, true)}sha256 ${now}`
               : 'now — no file there',
             ...await Promise.all(
-              all.map(async (w) =>
-                `- until ${w.at} — ${size(w.size)}, sha256 ${w.sha}, by ${
-                  (w.by && await ctx.dir.nameAt(w.by)) || w.by || 'someone'
-                }`
+              gone.map(async (w) =>
+                `- until ${w.at} — ${await sized(
+                  w.sha,
+                )}sha256 ${w.sha}, by ${await name(w.by)}`
               ),
             ),
-            all.length
+            gone.length
               ? `app_files(app: '${app.slug}', op: 'restore', path: ` +
                 `'${path}') puts back the newest of those; sha or at names ` +
                 'another'
@@ -3234,12 +3175,14 @@ let OURS: Row[] = [
           space,
         }
       }
-      // And putting one back, as a new write — so the bytes it replaces are
-      // themselves kept, and a restore can be undone by another.
+      // And putting one back, as a new write naming the sha it held, so what
+      // it replaces is kept in turn and a restore can be undone by another.
+      // No bytes move: they are already at their address.
       if (op == 'restore') {
-        let path = fileKey(space, edit, text(args.path, 'path'))
-          .slice(prefix.length)
-        let all = await history(blobs, archive, path)
+        let path = named(text(args.path, 'path'))
+        let [d, all] = await Promise.all([draft(), history(ctx.dir, app, path)])
+        let now = d.files[path] ?? null
+        let gone = replaced(all)
         if (!all.length) {
           throw refuse(
             'missing',
@@ -3247,53 +3190,62 @@ let OURS: Row[] = [
               'has replaced it, so what is there is what there has been',
           )
         }
+        let then = args.at != null
+          ? heldAt(all, when(text(args.at, 'at')).getTime())
+          : undefined
         let want = args.sha != null
-          ? all.find((w) => w.sha == text(args.sha, 'sha'))
+          ? [...gone.map((w) => w.sha), ...all.map((w) => w.sha)]
+            .find((sha) => sha == text(args.sha, 'sha'))
           : args.at != null
-          ? held(all, when(text(args.at, 'at')).getTime())
-          : all[0]
+          ? then
+          : gone.find((w) => w.sha != now)?.sha
         if (!want) {
           throw refuse(
             'missing',
             args.sha != null
               ? `no ${args.sha} in ${path}'s history — op history lists what ` +
                 'it keeps'
-              : `${path} has not been written since ${args.at}, so what is ` +
-                'there is already what it was then',
+              : args.at != null && then === undefined
+              ? `${path} has not been written since ${args.at}, so what is ` +
+                'there is already what it was then'
+              : args.at != null
+              ? `there was no file at ${path} at ${args.at} — op delete ` +
+                'removes it'
+              : `nothing has replaced ${path} in ${space.slug}/` +
+                `${app.slug}, so what is there is what there has been`,
           )
         }
-        let bytes = await pins(blobs, archive).get(want.sha)
-        if (!bytes) {
+        if (!await blobs.has(addressed(want))) {
           throw refuse(
             'missing',
-            `${path}'s bytes from ${want.at} are no longer kept — the history ` +
-              'goes back 30 days',
+            `${path}'s bytes ${want} are no longer kept — the history goes ` +
+              'back 30 days',
           )
         }
-        let { paths: [p], config } = await wroteAt(
-          ctx.env,
-          space,
-          app,
-          who,
-          [{ path, bytes }],
-          c,
-        )
+        let until = gone.find((w) => w.sha == want)?.at
+        let { config } = await drafted(ctx.env, space, app, who, [{
+          path,
+          sha: want,
+          size: all.find((w) => w.sha == want)?.size ?? null,
+        }])
         let where = placing(ctx, space, app, config)
         return {
-          text: `put ${p} back to what it was until ${want.at} → ` +
-            `${where(p)} — ${
-              stored(p, bytes, want.sha)
-            }. This is itself a write, so op history now has the bytes it ` +
-            'replaced. Staged for app_deploy.',
+          text:
+            `put ${path} back to ${
+              until ? `what it was until ${until}` : `sha256 ${want}`
+            } → ${
+              where(path)
+            }, sha256 ${want}. This is itself a write, so op ` +
+            'history now has the bytes it replaced. Staged for app_deploy.',
           space,
         }
       }
       // A read-modify-write of one file, in one call: the loop an agent that
       // miscounted a bracket in a 46 KB file had no cheap way to run.
       if (op == 'patch') {
-        let path = text(args.path, 'path')
-        let key = fileKey(space, edit, path)
-        let was = await view.read(key)
+        let path = named(text(args.path, 'path'))
+        let d = await draft()
+        let was = await d.view.read(at(d, path))
         if (!was) throw refuse('missing', `no file ${path}`)
         // Empty is a legal replacement — it is how a line is removed — so
         // this asks for a string rather than for something.
@@ -3307,7 +3259,7 @@ let OURS: Row[] = [
           decoded(was),
           text(args.find, 'find'),
           args.replace,
-          key.slice(prefix.length),
+          path,
         ))
         let { paths: [p], config } = await wroteAt(
           ctx.env,
@@ -3359,26 +3311,43 @@ let OURS: Row[] = [
         path: text(args.path, 'path'),
         bytes: bytesOf(args),
       }]
-      let { paths, config } = await wroteAt(ctx.env, space, app, who, sent, c)
+      let { paths, config, already } = await wroteAt(
+        ctx.env,
+        space,
+        app,
+        who,
+        sent,
+        c,
+      )
       // What landed, per file: the measurement the caller checks its own
-      // transcription against.
+      // transcription against. A file the draft already held as sent was not
+      // sent again, so a write cut off and sent again says what had landed.
+      let there = new Set(already)
       let each = await Promise.all(
         sent.map(async (f, i) =>
-          stored(paths[i], f.bytes, await sha256(f.bytes))
+          stored(paths[i], f.bytes, await sha256(f.bytes)) +
+          (there.has(paths[i]) ? ', already there' : '')
         ),
       )
       let where = placing(ctx, space, app, config)
       return {
         text: paths.length == 1
-          ? `wrote ${paths[0]} → ${where(paths[0])} — ${
-            each[0]
-          }; staged for app_deploy`
-          : `wrote ${paths.length} files → ${url(space, app, ctx.env)}:\n` +
+          ? `${there.size ? 'already had' : 'wrote'} ${paths[0]} → ${
+            where(paths[0])
+          } — ${each[0]}; staged for app_deploy`
+          : `wrote ${
+            there.size ? `${paths.length - there.size} of ` : ''
+          }${paths.length} files → ${url(space, app, ctx.env)}` +
+            (there.size
+              ? ` (the draft already held ${there.size} of them as sent)`
+              : '') +
+            ':\n' +
             paths.map((p, i) =>
               `${p}${where.dir ? ` → ${where(p)}` : ''} — ${each[i]}`
             ).join('\n') +
             '\nStaged for app_deploy.',
         space,
+        value: { wrote: paths.filter((p) => !there.has(p)), already },
       }
     },
   },
@@ -3458,14 +3427,21 @@ let OURS: Row[] = [
         }
         return files
       })
-      let paths = await wrote(ctx.env, space, app, who, files)
+      let { paths, already } = await wroteAt(ctx.env, space, app, who, files)
       let gone = replace
         ? await swept(ctx.env, space, app, who, into, paths)
         : []
+      // A ship cut off and sent again puts up only what had not landed, and
+      // says so.
       return {
         text: `shipped ${paths.length} ${
           paths.length == 1 ? 'file' : 'files'
         } → ${url(space, app, ctx.env)}: ${capped(paths.join(', '))}${
+          already.length
+            ? `; ${already.length} of them the draft already held as built, ` +
+              `so they did not go up again: ${capped(already.join(', '))}`
+            : ''
+        }${
           gone.length
             ? `; deleted ${gone.length} the build no longer makes: ${
               capped(gone.join(', '))
@@ -3604,15 +3580,16 @@ let OURS: Row[] = [
       if (!(Number.isSafeInteger(from) && from >= 1)) {
         throw refuse('arguments', `part: ${args.part} — a whole number from 1`)
       }
-      let blobs = r2Objects(ctx.env.BLOBS)
-      let source = working(app, prefixOf(space, app))
-      let prefix = `${source}/`
-      let view = draftFiles(blobs, app.draft, prefixOf(space, app))
-      let keys = (await view.list(prefix)).map((k) => k.slice(prefix.length))
+      let draft = await drafting(
+        r2RawObjects(ctx.env.BLOBS),
+        ctx.dir,
+        space,
+        app,
+      )
       let files = await texts(
-        view,
-        prefix,
-        own(keys).filter((p) => asked(path, p)),
+        draft.view,
+        `${draft.root}/`,
+        own(Object.keys(draft.files)).filter((p) => asked(path, p)),
       )
       if (!files.length) {
         throw refuse(
@@ -3788,9 +3765,8 @@ let OURS: Row[] = [
         }
       }
       // What serves now is the live version's manifest, already in hand; only
-      // an app whose live version is not on record reads its files for it.
-      let now = live?.files ??
-        await manifest(r2Objects(ctx.env.BLOBS), fileKey(space, app, ''))
+      // an app whose live version is not on record reads its release's index.
+      let now = live?.files ?? await served(r2RawObjects(ctx.env.BLOBS), app)
       let { version, said } = await released(
         ctx,
         space,
@@ -5273,7 +5249,7 @@ let OURS: Row[] = [
       // app row was minted and its files copied, leaving a v0 app nobody asked
       // for in the space, counted against its ceiling (T-37809). Nothing has
       // happened yet here, so a refusal costs the installer nothing.
-      let said = await offeredWords(source)
+      let said = await offeredWords(r2RawObjects(ctx.env.BLOBS), source)
       let accepted = Object.keys(
         appDoc(said.source ?? {}, said.file).$defs ?? {},
       )
@@ -5364,7 +5340,7 @@ let OURS: Row[] = [
       // additive graft, and one that conflicts is refused here with the
       // sentence a deploy gives (T-32728), leaving the copy as it was.
       let source = await offered(ctx, from)
-      let said = await offeredWords(source)
+      let said = await offeredWords(r2RawObjects(ctx.env.BLOBS), source)
       let accepted = Object.keys(
         appDoc(said.source ?? {}, said.file).$defs ?? {},
       )

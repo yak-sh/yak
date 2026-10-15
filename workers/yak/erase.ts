@@ -106,19 +106,9 @@ import { vouched, type Who } from './session.ts'
 import { storeOf } from './door.ts'
 import { answered } from './meta.ts'
 import { ending } from './billing.ts'
-import { NOTES } from './standing.ts'
-import {
-  draftFiles,
-  history,
-  moved,
-  own,
-  type Pinner,
-  pruned,
-  renamed,
-  versions,
-  working,
-} from './versions.ts'
-import { prefixOf } from './files.ts'
+import { moved, own, type Pinner, SHA, versions } from './versions.ts'
+import { drafting, pruned, served } from './written.ts'
+import { entries, histories, old, oldPaths } from './carried.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -338,20 +328,21 @@ export let emptied = async (
   app: App,
   who: Who,
 ) => {
-  let blobs = r2Objects(env.BLOBS)
-  let source = working(app, prefixOf(space, app))
-  let filesAt = draftFiles(blobs, app.draft, prefixOf(space, app))
-  let files = own(
-    (await filesAt.list(`${source}/`)).map((key) =>
-      key.slice(source.length + 1)
-    ),
-  )
+  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  // Counted where they are: an app going is not first carried into the shape
+  // a write keeps files in (carried.ts).
+  let raw = r2RawObjects(env.BLOBS)
+  let files = await oldPaths(
+    raw,
+    under(space, app),
+    app,
+    Object.keys(await served(raw, app)),
+  ) ?? own(Object.keys((await drafting(raw, dir, space, app)).files))
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
   if (env.CF_WORKERS_TOKEN) {
     if (app.script) await drop(env, app.script, true)
     await drop(env, storeName(space, app), true)
-    let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
     for (let v of await versions(dir, app)) {
       if (v.script && v.script != app.script) await drop(env, v.script, true)
     }
@@ -610,7 +601,7 @@ export let trash = async (
 }
 
 // And out of it. Both doors call this, the tool and the space page's form.
-// `untrash` rather than `restore` because versions.ts already owns that word
+// `untrash` rather than `restore` because app_files already owns that word
 // for putting an app's files back, and these are two different acts on the
 // same app.
 export let untrash = async (
@@ -723,6 +714,11 @@ let retitled = async (
   if (entities.length) await dir.apply({ entities })
 }
 
+// How many old history logs one sweep carries into rows (carried.ts): each
+// is a read, a few puts at most and a delete, so a run stays well inside a
+// scheduled invocation's limits, and the rest wait for tomorrow.
+let LOGS = 2000
+
 export let collected = async (env: Env, now = new Date()) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
   let idle = new Set(await abandoned(env, now))
@@ -730,12 +726,12 @@ export let collected = async (env: Env, now = new Date()) => {
   // Every app left standing when the erasures are done, which is exactly the
   // set of things that can name a pinned blob. It is collected rather than
   // acted on app by app because the pins are one key space for the whole bucket
-  // now (versions.ts `pruned`, D-34942): an object one app stopped naming may
+  // now (written.ts `pruned`, D-34942): an object one app stopped naming may
   // be a file another app serves. A trashed app inside its thirty days is in
   // the list on purpose — the erasure above is what frees its bytes, not its
   // mark — and so is the platform's own space, which is skipped for erasure and
   // holds pins like any other.
-  let standing: Pinner[] = []
+  let standing: (Pinner & { space: Space })[] = []
   for (let space of await dir.all()) {
     // Never the directory itself, whatever its row says: the app that holds
     // every space on the platform is not one a sweep may erase (`refused`
@@ -782,11 +778,13 @@ export let collected = async (env: Env, now = new Date()) => {
       }
     }
     for (let app of apps) {
-      if (!went.has(app.eid)) standing.push({ prefix: under(space, app), app })
+      if (!went.has(app.eid)) {
+        standing.push({ prefix: under(space, app), app, space })
+      }
     }
   }
   // And then what those apps are still holding on to: the bytes a write or a
-  // deploy pinned that nothing names any more (versions.ts `pruned`, T-34508).
+  // deploy pinned that nothing names any more (written.ts `pruned`, T-34508).
   // It rides here rather than on every write because the rule needs to see the
   // whole bucket at once, and rather than only on a deploy because an app that
   // stopped deploying would then keep its pins forever.
@@ -796,12 +794,14 @@ export let collected = async (env: Env, now = new Date()) => {
   // that cannot be promoted is reported and left for tomorrow's run.
   let promotions = 0
   let raw = r2RawObjects(env.BLOBS)
-  for (let { prefix, app } of standing) {
-    if (prefix == `${META.space}/${META.app}/`) continue
+  for (let one of standing) {
+    if (one.prefix == `${META.space}/${META.app}/`) continue
     try {
-      if (await promoted(raw, dir, prefix, app)) promotions++
+      let app = await promoted(raw, dir, one.prefix, one.app)
+      if (app.source != one.app.source) promotions++
+      one.app = app
     } catch (e) {
-      caught(e, { request: 'promote', app: app.eid })
+      caught(e, { request: 'promote', app: one.app.eid })
     }
   }
   // First the pins the old per-app key still holds, carried into that one key
@@ -809,18 +809,39 @@ export let collected = async (env: Env, now = new Date()) => {
   // a key space the sweep does not read.
   let carried = 0
   for (let { prefix } of standing) carried += await moved(blobs, prefix)
-  // And the notes file under the one name it has now (standing.ts `NOTES`,
-  // T-37888): what an app wrote as `AGENTS.md` before T-34632, carried across
-  // with its history and every manifest that names it.
-  let notes = 0
+  // Then each app's files in the shape a write keeps them now (carried.ts):
+  // a draft kept as its own bytes becomes `written` rows, and so does each
+  // old history log, a bounded number a run. One app that cannot be carried
+  // is reported and left for tomorrow's run. The mark below reads each app as
+  // it now stands, so a release made here names its files today.
+  let logs = 0
+  let have = new Set(
+    Object.keys(await raw.uploaded(SHA)).map((key) => key.slice(SHA.length)),
+  )
   for (let one of standing) {
-    if (await renamed(blobs, dir, one, 'AGENTS.md', NOTES)) notes++
+    if (one.prefix == `${META.space}/${META.app}/`) continue
+    try {
+      if (old(one.app)) {
+        one.app = (await drafting(raw, dir, one.space, one.app)).app
+      }
+      logs += await histories(
+        raw,
+        dir,
+        one.prefix,
+        one.app,
+        async () => (await drafting(raw, dir, one.space, one.app)).files,
+        have,
+        LOGS - logs,
+      )
+    } catch (e) {
+      caught(e, { request: 'carry', app: one.app.eid })
+    }
   }
-  let unpinned = await pruned(dir, blobs, standing, now.getTime())
+  let unpinned = await pruned(dir, raw, standing, now.getTime())
   if (gone) console.log(`yak-trash: ${gone} erased at ${now.toISOString()}`)
   if (promotions) console.log(`yak-trash: ${promotions} apps given a release`)
   if (carried) console.log(`yak-trash: ${carried} pins carried to sha/`)
-  if (notes) console.log(`yak-trash: ${notes} AGENTS.md renamed to ${NOTES}`)
+  if (logs) console.log(`yak-trash: ${logs} history logs carried to rows`)
   if (unpinned) console.log(`yak-trash: ${unpinned} pinned blobs let go`)
   return gone
 }
@@ -855,15 +876,13 @@ export let abandoned = async (env: Env, now = new Date(), only?: string) => {
       )
     }
     if (used) continue
-    let blobs = r2Objects(env.BLOBS)
+    // A write is a `written` row, which the references above already count;
+    // what the old history logs say counts until carried.ts has moved them.
+    let blobs = r2RawObjects(env.BLOBS)
     for (let app of apps) {
       let prefix = `${space.slug}/${app.slug}/`
       for (let key of await blobs.list(`${prefix}history/`)) {
-        let edits = await history(
-          blobs,
-          prefix,
-          key.slice(`${prefix}history/`.length, -'.json'.length),
-        )
+        let edits = await entries(blobs, key)
         used ||= edits.some((edit) =>
           edit.by && !(Date.parse(edit.at) <= now.getTime() - IDLE)
         )

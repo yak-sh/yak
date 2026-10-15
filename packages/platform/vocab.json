@@ -60,7 +60,7 @@
         "draft": {
           "type": "string",
           "stamped": true,
-          "description": "the address of its editable files, kept independently of its served release"
+          "description": "the draft its edits since the served release belong to: the written rows carrying it are those edits"
         },
         "fence": {
           "type": "string",
@@ -390,6 +390,50 @@
       "before": [
         "doc"
       ]
+    },
+    "written": {
+      "component": true,
+      "type": "object",
+      "wire": false,
+      "description": "One file written into an app's draft: its path, the SHA-256 naming the bytes the write left there (stored once, under that address), or none where the write deleted it, the SHA-256 of what it replaced, and who wrote it when. A draft is the newest of these per path among the rows carrying it, and every row for a path is that path's history.",
+      "properties": {
+        "app": {
+          "type": "string",
+          "ref": "app",
+          "death": "cascade"
+        },
+        "draft": {
+          "type": "string",
+          "description": "the app's draft when it was written"
+        },
+        "path": {
+          "type": "string",
+          "description": "the file's path from the app's root"
+        },
+        "sha": {
+          "type": "string",
+          "description": "the SHA-256 of the bytes; absent where the write deleted the file"
+        },
+        "was": {
+          "type": "string",
+          "description": "the SHA-256 of the bytes the write replaced; absent where there was no file"
+        },
+        "size": {
+          "type": "number",
+          "description": "the bytes' length"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      }
     },
     "switched": {
       "component": true,
