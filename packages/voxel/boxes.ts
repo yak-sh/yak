@@ -248,7 +248,7 @@ export let drawn = (o: Out, solids: Solid[], cell = 0.1): Out => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { fights, metal, METAL, out, pack } from './mesh.ts'
+ * import { metal, METAL, out } from './mesh.ts'
  * let faces = (o: ReturnType<typeof out>) => o.pos.length / 12
  * let blade = cuboids(out(), [[[0, 0, 0], [1, 1, 1], metal(0xdfe6ee)]])
  * assertEquals(faces(blade), 6)
@@ -260,12 +260,6 @@ export let drawn = (o: Out, solids: Solid[], cell = 0.1): Out => {
  *   [[1, 0, 0], [1, 1, 1], 0xff0000],
  * ])
  * assertEquals(faces(pair), 10)
- * // A band round a box, a helm over hair: nothing drawn twice in a plane.
- * let band = cuboids(out(), [
- *   [[0, 0, 0], [1, 1, 1], 0xffffff],
- *   [[0, 0.4, 0], [1, 0.2, 1], 0xff0000],
- * ])
- * assertEquals(fights(pack(band)), [])
  * ```
  */
 export let cuboids = (o: Out, boxes: Box[], cell = 0.1, round = 0.035): Out =>

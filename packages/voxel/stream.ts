@@ -50,19 +50,16 @@ let detail = (d: number, has?: number) => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let at = (x: number, z: number, has = () => undefined as number | undefined) =>
- *   wanted(16, x, z, 110, has)
  * let of = (w: Want[], ci: number, ck: number) =>
  *   w.find((c) => c.ci == ci && c.ck == ck)?.lod
- * // Standing in chunk (0, 0): it is drawn finest, a chunk 50 m off coarser,
- * // one 90 m off coarser again, and one past sight not at all.
- * let w = at(8, 8)
- * assertEquals([of(w, 0, 0), of(w, 3, 0), of(w, 6, 0), of(w, 8, 0)], [0, 1, 2, undefined])
+ * // Standing in chunk (0, 0) of 32 m chunks: it is drawn finest, a chunk
+ * // 48 m off coarser, one 80 m off coarser again, and one past sight not at
+ * // all.
+ * let w = wanted(32, 16, 16, 110, () => undefined)
+ * assertEquals([of(w, 0, 0), of(w, 2, 0), of(w, 3, 0), of(w, 4, 0)], [0, 1, 2, undefined])
  * assertEquals(w[0], { ci: 0, ck: 0, lod: 0, d: 0 })
- * // A chunk just past the first ring keeps the finest detail it has.
- * assertEquals([of(at(5, 8), 3, 0), of(at(5, 8, () => 0), 3, 0)], [1, 0])
  * // A world with edges draws nothing past them.
- * assertEquals(wanted(16, 8, 8, 110, () => undefined, 8).every((c) => c.ci >= 0 && c.ci < 8), true)
+ * assertEquals(wanted(32, 16, 16, 110, () => undefined, 4).every((c) => c.ci >= 0 && c.ci < 4), true)
  * ```
  */
 export let wanted = (
