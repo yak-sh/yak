@@ -44,14 +44,52 @@ export let test = (
 ): void => {
   if (tests) tests.push({ name, body, tags, skip, file })
   else {
-    globalThis.Deno?.test({
-      name,
-      ignore: skip,
-      fn: async () => {
-        await body()
-      },
-    })
+    globalThis.Deno?.test({ name, ignore: skip, fn: () => closing(body) })
   }
+}
+
+// What the running test asked to have done once it ends (`cleanup`).
+let ending: (() => unknown)[] | undefined
+
+/**
+ * Asks for `done` once the running test ends, before its time is taken, so
+ * a test pays for closing what it opened and leaves nothing running into
+ * the next one. Outside a test it does nothing, and answers false.
+ *
+ * ```ts ignore
+ * let fixture = () => {
+ *   let db = open()
+ *   cleanup(() => db.close())
+ *   return db
+ * }
+ * ```
+ */
+export let cleanup = (done: () => unknown): boolean => {
+  ending?.push(done)
+  return !!ending
+}
+
+/** Runs a test's body, then what it asked to have done once it ends, last
+ * asked first. A body's failure is the test's; else the first cleanup's. */
+export let closing = async (body: () => unknown): Promise<void> => {
+  let was = ending
+  let asked: (() => unknown)[] = ending = []
+  let failed: { error: unknown } | undefined
+  try {
+    await body()
+  } catch (error) {
+    failed = { error }
+  } finally {
+    ending = was
+  }
+  for (let done of asked.reverse()) {
+    try {
+      await done()
+    } catch (error) {
+      failed ??= { error }
+    }
+  }
+  if (failed) throw failed.error
 }
 
 /** Declares one clause of a suite; `it.skip` declares it skipped. */

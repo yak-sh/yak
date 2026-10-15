@@ -81,6 +81,11 @@ suite's name, its tags combine with the suite's tags, and either one's `skip`
 skips the clause. If a suite's body throws while declaring tests, it declares a
 failing test instead.
 
+`cleanup(done)` asks for `done` once the running test ends, last asked first,
+inside the test's time: a fixture that opens something closes it there, and
+nothing it left running reaches the next test. A cleanup that throws fails the
+test.
+
 Outside the runner, declarations register with `Deno.test` when it is available.
 In a runtime without `Deno.test`, declarations need the runner's collection
 mechanism to be executed.
