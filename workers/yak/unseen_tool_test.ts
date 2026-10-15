@@ -2,13 +2,21 @@
 // stored report left empty.
 import { test } from '@yaks/testing'
 import { assertEquals, assertStringIncludes } from '@std/assert'
-import { appStore } from './directory.ts'
+import { type App, appStore, type Space } from './directory.ts'
+import type { Env } from './env.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import { ADA, platform, seeded } from './serving-probe.ts'
-import { call, TOOLS } from './tools.ts'
-import { brokenIn, foresee, noted, serve } from './unseen.ts'
+import { call } from './tools.ts'
+import {
+  brokenIn,
+  closing,
+  folds,
+  foresee,
+  line,
+  noted,
+  serve,
+} from './unseen.ts'
 import type { Who } from './session.ts'
-import { running } from './agent.ts'
 import { tallying } from './lib/hops.ts'
 
 test('app_errors lists a break whose stored stack is null', async () => {
@@ -53,28 +61,52 @@ test('app_errors lists a break whose stored stack is null', async () => {
   )
 })
 
-test('app_errors says a break once, and its id archives every time', async () => {
-  using p = platform()
-  let { env } = p
-  let { dir, space, app } = await seeded(env)
-  let errors = (args = {}) =>
-    call({ env, dir, person: ADA }, 'app_errors', {
-      space: 'ada',
-      app: 'cookbook',
-      ...args,
-    }).then((r) => r.text)
-  for (let i = 0; i < 3; i++) {
-    await noted({ request: 'page /cookbook/', message: 'boom', version: 1 }, {
-      env,
-      space,
-      app,
-    })
-  }
-  let [said, ...more] = (await errors()).split('\n')
-  assertEquals(more, [])
-  assertStringIncludes(said, 'boom (3 times since')
-  assertEquals(await errors({ fixed: said.split(' ')[1] }), 'archived 1')
-  assertEquals(await errors(), 'no open errors')
+// A tracker occurrence as the space's tracker answers a query for it.
+let row = (
+  eid: string,
+  app: App,
+  message: string,
+  request: string,
+  at = '',
+) => ({
+  entity: { eid },
+  error: { at, message, tags: { request }, version: 1 },
+  during: { app: app.eid },
+})
+
+// The space's tracker, answering every query with `rows`, and keeping what it
+// was asked.
+let tracker = (rows: unknown[] = []) => {
+  let asked: Request[] = []
+  let env = {
+    TRACKER_SECRET: 'secret',
+    TRACKER: {
+      fetch: (r: Request) => {
+        asked.push(r)
+        return Promise.resolve(Response.json(r.method == 'POST' ? {} : rows))
+      },
+    },
+  } as unknown as Env
+  return { env, asked }
+}
+
+let space = { eid: 'space-1', slug: 'ada' } as Space
+let cook = { eid: 'app-1', slug: 'cookbook' } as App
+let ada: Who = { person: ADA, role: 'owner' }
+
+test('app_errors says a break once, and its id archives every time', () => {
+  let hits = [1, 2, 3].map((n) => ({
+    kind: 'error',
+    tracked: true,
+    entity: { eid: `e${n}` },
+    error: { message: 'boom', request: 'page /cookbook/', at: `2026-01-0${n}` },
+  }))
+  let lines = folds(hits.map((hit) => ({ app: cook, hit }))).map(line)
+  assertEquals(lines.length, 1)
+  assertStringIncludes(lines[0], 'boom (3 times since 2026-01-01')
+  let id = lines[0].split(' ')[1]
+  assertEquals(closing(hits, [id]).length, 3)
+  assertEquals(closing(hits, ['nothing']).length, 0)
 })
 
 test('app_errors shows a session error from its content', async () => {
@@ -102,20 +134,26 @@ test('app_errors shows a session error from its content', async () => {
   )
 })
 
+// The connector begins reading what a write's answer will tell as soon as the
+// write knows its space (mcp.ts `ahead`), and the answer is handed that
+// reading: the space's breaks are asked for once (T-124082).
+test("a write's answer reads its space's breaks once", async () => {
+  let { env, asked } = tracker()
+  await tallying(new Map(), async () => {
+    foresee(env, space, ada)
+    await serve(env, space, ada)
+  })
+  assertEquals(asked.length, 1)
+})
+
 test('brokenIn says each break plainly and leaves it news', async () => {
-  using p = platform()
-  let { env } = p
-  let { space, app } = await seeded(env)
-  let ada: Who = { person: ADA, role: 'owner' }
-  let at = { env, space, app }
-  for (let i = 0; i < 3; i++) {
-    await noted({ request: 'page /cookbook/', message: 'boom', version: 1 }, at)
-  }
-  await noted(
-    { request: 'page /cookbook/new', message: 'bang', version: 1 },
-    at,
-  )
-  let said = (await brokenIn(env, space, ada, [app])).get(app.eid)!
+  let { env, asked } = tracker([
+    ...[1, 2, 3].map((n) =>
+      row(`e${n}`, cook, 'boom', 'page /cookbook/', `2026-01-0${n}`)
+    ),
+    row('e4', cook, 'bang', 'page /cookbook/new', '2026-01-04'),
+  ])
+  let said = (await brokenIn(env, space, ada, [cook])).get(cook.eid)!
   assertEquals(
     said.map(({ said, where, times }) => ({ said, where, times })),
     [
@@ -123,41 +161,6 @@ test('brokenIn says each break plainly and leaves it news', async () => {
       { said: 'boom', where: 'page /cookbook/', times: 3 },
     ],
   )
-  // Seen on the dashboard, not yet told: the assistant still hears of both.
-  assertEquals((await serve(env, space, ada)).length, 4)
-})
-
-// The connector begins reading what a write's answer will tell as soon as the
-// write knows its space (mcp.ts `ahead`), and the answer is handed that
-// reading: the space's breaks are asked for once (T-124082).
-test("a write's answer reads its space's breaks once", async () => {
-  using p = platform()
-  let { env } = p
-  let { dir, space, app } = await seeded(env)
-  await noted({ request: 'page /cookbook/', message: 'boom', version: 1 }, {
-    env,
-    space,
-    app,
-  })
-  let tracker = env.TRACKER!
-  let asked = 0
-  env.TRACKER = {
-    fetch: (r: Request) => {
-      if (new URL(r.url).pathname == '/query') asked++
-      return tracker.fetch(r)
-    },
-  }
-  let ctx = {
-    env,
-    dir,
-    person: ADA,
-    ahead: (at: typeof space, who: Who) => foresee(env, at, who),
-  }
-  let set = TOOLS.find((t) => t.name == 'app_set')!
-  let [said] = await tallying(
-    new Map(),
-    () => running(ctx, set)({ space: 'ada', app: 'cookbook', title: 'Cook' }),
-  )
-  assertStringIncludes(JSON.stringify(said), 'boom')
-  assertEquals(asked, 1)
+  // Nothing was marked: the assistant still hears of both.
+  assertEquals(asked.filter((r) => r.method == 'POST'), [])
 })

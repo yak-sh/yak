@@ -664,6 +664,17 @@ export let named = (word: string, h: Hit) => {
     word == idOf(h)
 }
 
+/** The open occurrences these words close. An id names its break, and the
+ * line it came off speaks for the whole fold ({@link line}), so every
+ * occurrence of that break goes with it. A bound stays a bound. */
+export let closing = (open: Seen['hit'][], words: string[]) => {
+  let ids = new Set(
+    open.filter((h) => words.some((w) => w == h.entity.eid || w == idOf(h)))
+      .map(same),
+  )
+  return open.filter((h) => ids.has(same(h)) || words.some((w) => named(w, h)))
+}
+
 // Behind us, so it stops showing — whether the caller fixed it or is only
 // saying it is stale. Nothing matched is worth saying; a stale id is how a
 // person learns it is already archived.
@@ -674,17 +685,7 @@ export let archive = async (
   who: Who,
   words: string[],
 ) => {
-  let open = await openIn(env, space, app, who, true)
-  // An id names its break, and the line it came off speaks for the whole
-  // fold ({@link line}), so every occurrence of that break goes with it. A
-  // bound stays a bound.
-  let ids = new Set(
-    open.filter((h) => words.some((w) => w == h.entity.eid || w == idOf(h)))
-      .map(same),
-  )
-  let hits = open.filter((h) =>
-    ids.has(same(h)) || words.some((w) => named(w, h))
-  )
+  let hits = closing(await openIn(env, space, app, who, true), words)
   if (!hits.length) {
     throw refuse('missing', `nothing open here by ${words.join(', ')}`)
   }
