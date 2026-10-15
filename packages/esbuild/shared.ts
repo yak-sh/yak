@@ -1,9 +1,10 @@
 // Browser packages compiled apart from app entries: toolkit packages, Preact
 // and Signals, and each npm package more than one of a page's consumers would
-// otherwise carry (./common.ts). A dependency group's URL names all its
-// emitted bytes and resources; package cycles share a splitting build so there
-// is one instance and no cycle between content-addressed URLs. Completed
-// groups are retained under a byte budget across compiler jobs.
+// otherwise carry (./common.ts), trimmed to the exports of it they use
+// (./used.ts). A dependency group's URL names all its emitted bytes and
+// resources; package cycles share a splitting build so there is one instance
+// and no cycle between content-addressed URLs. Completed groups are retained
+// under a byte budget across compiler jobs.
 import { parse } from 'es-module-lexer/js'
 import { bundle, type Options, packaged, Stopped } from './bundle.ts'
 import { type Common, common } from './common.ts'
@@ -11,6 +12,7 @@ import { packageOf } from './graph.ts'
 import type { Files } from './npm.ts'
 import { type Catalog, located, packed, type Seed, urlOf } from './platform.ts'
 import type { Body } from './plan.ts'
+import { used } from './used.ts'
 
 let singletons = ['preact', '@preact/signals', '@preact/signals-core']
 
@@ -117,6 +119,22 @@ let exports = (fs: Files, name: string) => {
   return out
 }
 
+// The module a shared npm specifier is built from: the exports of it that the
+// page's consumers use, and no more, the way a bundled copy kept only those.
+let picked = (spec: string, names: string[]) =>
+  names.length
+    ? `export { ${names.map((n) => JSON.stringify(n)).join(', ')} } ` +
+      `from ${JSON.stringify(spec)}`
+    : `import ${JSON.stringify(spec)}`
+
+/** What a page shares beyond its toolkit packages, Preact and Signals: each
+ * npm package's entry modules, by specifier, and the shared packages each
+ * consumer's build imports. */
+type Carried = {
+  modules: Record<string, Record<string, string>>
+  uses: Common['uses']
+}
+
 // What the pages share beyond the packages already shared, read from one
 // build of every consumer's entries. Only a toolkit package depending on an
 // npm package can carry one beside the pages, so the build runs only then. A
@@ -127,14 +145,14 @@ let carried = async (
   stops: string[],
   catalog: Catalog,
   setup: Seed,
-): Promise<Common> => {
+): Promise<Carried> => {
   let toolkits = Object.keys(setup.platform)
   let npm = toolkits.some((name) =>
     Object.entries(catalog[name].dependencies).some(([dep, version]) =>
       version != 'platform' && !singletons.includes(dep)
     )
   )
-  if (!npm) return { entries: {}, uses: {} }
+  if (!npm) return { modules: {}, uses: {} }
   let consumers = {
     '': pages,
     ...Object.fromEntries(
@@ -148,10 +166,25 @@ let carried = async (
       Object.fromEntries(files.map((path, i) => [`entry-${i}`, path])),
       { define: production.define, graph: true },
     )
-    return common(inputs!, consumers, new Set(stops))
+    let { entries, uses } = common(inputs!, consumers, new Set(stops))
+    let names = await used(
+      fs,
+      files,
+      Object.assign({}, ...Object.values(entries)),
+      production,
+    )
+    let modules = Object.fromEntries(
+      Object.entries(entries).map(([name, specs]) => [
+        name,
+        Object.fromEntries(
+          Object.keys(specs).map((spec) => [spec, picked(spec, names[spec])]),
+        ),
+      ]),
+    )
+    return { modules, uses }
   } catch (e) {
     if (e instanceof Stopped) throw e
-    return { entries: {}, uses: {} }
+    return { modules: {}, uses: {} }
   }
 }
 
@@ -170,7 +203,7 @@ export let shared = async (
     if (fs.read(`node_modules/${name}/package.json`) != null) names.push(name)
   }
   let npm = await carried(fs, pages, names, catalog, setup)
-  names.push(...Object.keys(npm.entries))
+  names.push(...Object.keys(npm.modules))
   let has = new Set(names)
   let deps = (name: string) => {
     let pkg = JSON.parse(fs.read(`node_modules/${name}/package.json`)!)
@@ -188,9 +221,15 @@ export let shared = async (
   let result: Shared = { files: {}, urls: {} }
   for (let group of groups(names, deps)) {
     let own = new Set(group)
+    // Each entry by specifier, and the entry modules written here, by path.
     let entries: Record<string, string> = {}
+    let picks: Record<string, string> = {}
     for (let name of group) {
-      Object.assign(entries, npm.entries[name] ?? exports(fs, name))
+      if (!npm.modules[name]) Object.assign(entries, exports(fs, name))
+      for (let [spec, source] of Object.entries(npm.modules[name] ?? {})) {
+        entries[spec] = `__picked/${spec}.js`
+        picks[entries[spec]] = source
+      }
     }
     let resources: Record<string, string> = {}
     let sources: Record<string, string> = {}
@@ -225,6 +264,7 @@ export let shared = async (
     }
     let key = await digest([
       sorted(entries),
+      sorted(picks),
       sorted(sources),
       sorted(resources),
       sorted(pins),
@@ -240,10 +280,11 @@ export let shared = async (
     let files = {
       read: (path: string) => {
         reads.add(path)
-        return path.startsWith('node_modules/') &&
-            !path.split('/').includes('..')
-          ? rewritten[path] ?? fs.read(path)
-          : null
+        return picks[path] ??
+          (path.startsWith('node_modules/') &&
+              !path.split('/').includes('..')
+            ? rewritten[path] ?? fs.read(path)
+            : null)
       },
     }
     let fingerprint = (paths: string[]) =>

@@ -205,13 +205,15 @@ let independent = async () => {
 }
 
 // An npm package the page and a toolkit package both import, at two pinned
-// versions: one module per compile, whichever subpath imports it.
+// versions: one module per compile, whichever subpath imports it, carrying
+// the exports of it something uses.
 let counter = (v: number) => ({
   'package.json': JSON.stringify({
     version: `${v}.0.0`,
     exports: { '.': './index.js', './more': './more.js' },
   }),
-  'index.js': `export let state = { v: ${v} }`,
+  'index.js': `export let state = { v: ${v} }\n` +
+    `export let idle = () => 'idle-${v}'`,
   'more.js': "export { state as more } from './index.js'",
 })
 let npm = async () => {
@@ -222,23 +224,28 @@ let npm = async () => {
     '@yaks/stage': {
       files: {
         'package.json': JSON.stringify({ exports: { '.': './mod.ts' } }),
-        'mod.ts': "export { state } from 'counter'",
+        'mod.ts': "import * as counter from 'counter'\n" +
+          'export let state = counter.state',
       },
       dependencies: { counter: '*' },
       version: `sha256:${'c'.repeat(64)}`,
     },
   }
-  let pinned = (version: string) =>
+  let one = "import { state } from 'counter'\n" +
+    "import { more } from 'counter/more'\n" +
+    "import { state as staged } from '@yaks/stage'\n" +
+    'export let one = state === staged && state === more && state.v'
+  // A namespace read by computed keys uses every export.
+  let all = one + "\nimport * as all from 'counter'\n" +
+    'export let keys = Object.keys(all)'
+  let pinned = (version: string, main: string) =>
     compile(
       {
         files: {
           'package.json': JSON.stringify({
             dependencies: { '@yaks/stage': 'platform', counter: version },
           }),
-          'main.ts': "import { state } from 'counter'\n" +
-            "import { more } from 'counter/more'\n" +
-            "import { state as staged } from '@yaks/stage'\n" +
-            'export let one = state === staged && state === more && state.v',
+          'main.ts': main,
         },
         pages: ['main.ts'],
       },
@@ -246,11 +253,20 @@ let npm = async () => {
       'https://yaks.app',
       { get },
     )
-  let [first, second] = await Promise.all([pinned('1.0.0'), pinned('2.0.0')])
+  let [first, second] = await Promise.all([
+    pinned('1.0.0', one),
+    pinned('2.0.0', all),
+  ])
   equal([first.errors, second.errors], [[], []])
   equal((await run(first.pages['main.ts'], first.shared)).one, 1)
-  equal((await run(second.pages['main.ts'], second.shared)).one, 2)
+  let got = await run(second.pages['main.ts'], second.shared)
+  equal([got.one, got.keys], [2, ['idle', 'state']])
   equal(Object.keys(first.shared!).filter((path) => path in second.shared!), [])
+  let emitted = (shared: Answer['shared']) =>
+    Object.entries(shared!).filter(([path]) => !path.includes('/resources/'))
+      .map(([, body]) => body).join('\n')
+  equal(emitted(first.shared).includes('idle-1'), false)
+  equal(emitted(second.shared).includes('idle-2'), true)
 }
 
 test('the server compiles a posted job into one module per page', async () => {

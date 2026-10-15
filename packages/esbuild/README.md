@@ -138,11 +138,16 @@ A package only one consumer imports stays bundled into it, where esbuild keeps
 only what it uses. So does one an ES module URL cannot stand in for: something
 `require`s it, or an import of it names a CommonJS or non-script file. A toolkit
 package's or Preact's concrete browser exports are the entries of its splitting
-build, and a shared npm package's entries are the specifiers of it that anything
-imports, so each package's subpaths share one instance. Packages with cyclic
-dependencies share one build. Dependency groups import one another through
-absolute URLs on `origin`. A group's URL names its emitted bytes, so two apps
-with the same sources, npm pins and imported specifiers reuse the same modules,
+build, each keeping all it exports, so every app loads the same module. A shared
+npm package's entries are the specifiers of it that anything imports, each
+carrying only the exports of it the page's consumers use, so the one instance
+costs what one bundled copy of their union would, and each package's subpaths
+share it. esbuild decides what is used, as it does for a bundled copy: a
+namespace read by property names uses those exports, and one passed along or
+read by computed keys uses every export. Packages with cyclic dependencies share
+one build. Dependency groups import one another through absolute URLs on
+`origin`. A group's URL names its emitted bytes, so two apps with the same
+sources, npm pins, imported specifiers and used exports reuse the same modules,
 and another pinned version is another module. Preact's main, hooks, compat and
 JSX exports share one instance; Signals and its core import that same Preact
 instance. Preact server-rendering adapters need an optional renderer peer and

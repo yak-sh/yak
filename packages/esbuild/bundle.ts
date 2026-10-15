@@ -29,10 +29,13 @@ export type Options = {
   define?: Record<string, string>
   /** A package import replaced by a hosted module URL. */
   external?: (specifier: string, importer: string) => string | undefined
+  /** A package import read from another of the build's files, by path. */
+  alias?: (specifier: string, importer: string) => string | undefined
   /** The expression a package module's `import.meta.url` becomes, for the
    * path it was read from, or none to leave it. */
   moved?: (path: string) => string | undefined
-  /** Also answer the module graph the build read, as `Built.inputs`. */
+  /** Also answer the module graph the build read, as `Built.inputs`, and
+   * each emitted file's exports, as `Built.exports`. */
   graph?: boolean
 }
 
@@ -55,8 +58,9 @@ export class Stopped extends Error {
   override name = 'Stopped'
 }
 
-/** Built entries: the first module, every emitted file, warnings, and the
- * files read, by path, when the build was asked for its graph. */
+/** Built entries: the first module, every emitted file, warnings, and, when
+ * the build was asked for its graph, the files read, by path, and the names
+ * each emitted file exports, by file. */
 export type Built = {
   code: string
   files: Record<string, string>
@@ -64,6 +68,7 @@ export type Built = {
   /** The packages whose modules the build read, by name. */
   packages: string[]
   inputs?: Record<string, Input>
+  exports?: Record<string, string[]>
 }
 
 let PACKAGE_TRIES = [...TRIES, '.json']
@@ -135,7 +140,7 @@ let loader = (path: string): esbuild.Loader =>
 
 let virtual = (
   files: Source,
-  { external, moved }: Options,
+  { external, alias, moved }: Options,
   reached: Set<string>,
 ): esbuild.Plugin => ({
   name: 'virtual-fs',
@@ -146,6 +151,8 @@ let virtual = (
       { filter: /.*/ },
       ({ kind, path, resolveDir, importer }) => {
         if (kind == 'entry-point') return found(path)
+        let other = alias?.(path, importer)
+        if (other) return found(other)
         let url = external?.(path, importer)
         if (url) return left(url)
         if (path.startsWith('.')) {
@@ -222,6 +229,9 @@ export let bundle = async (
   }
 }
 
+// An emitted file's name, as `Built.files` keys it.
+let named = (path: string) => path.slice(path.lastIndexOf('/') + 1)
+
 let built = async (
   files: Source,
   entry: string | Record<string, string>,
@@ -251,13 +261,21 @@ let built = async (
   })
   return {
     code: out.outputFiles[0].text,
-    files: Object.fromEntries(out.outputFiles.map((file) => [
-      file.path.slice(file.path.lastIndexOf('/') + 1),
-      file.text,
-    ])),
+    files: Object.fromEntries(
+      out.outputFiles.map((file) => [named(file.path), file.text]),
+    ),
     warnings: out.warnings.map((w) => w.text),
     packages: [...reached].sort(),
-    ...out.metafile ? { inputs: inputs(out.metafile) } : {},
+    ...out.metafile
+      ? {
+        inputs: inputs(out.metafile),
+        exports: Object.fromEntries(
+          Object.entries(out.metafile.outputs).map((
+            [path, { exports }],
+          ) => [named(path), exports]),
+        ),
+      }
+      : {},
   }
 }
 

@@ -23,7 +23,8 @@ export type Common = {
 }
 
 let OWNER = /^node_modules\/((?:@[^/]+\/)?[^/]+)\//
-let owner = (path: string) => OWNER.exec(path)?.[1] ?? ''
+/** The npm package a path of the install lies in, or `''` for an app file. */
+export let owner = (path: string): string => OWNER.exec(path)?.[1] ?? ''
 
 type Crossing = Input['imports'][number]
 
