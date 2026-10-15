@@ -5,7 +5,7 @@ import type { Bundle } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import type { Options } from './store.ts'
 import { maintenance } from '../used.ts'
-import { blobPrefix, naming } from '../blob-key.ts'
+import { blobPrefix, released } from '../blob-key.ts'
 import { r2Objects } from '../lib/objects.ts'
 
 export let effects = (_host: unknown, options: Options): Handlers => {
@@ -33,8 +33,13 @@ export let effects = (_host: unknown, options: Options): Handlers => {
       if (!STORE || !BLOBS || !at.app || !/^[0-9a-f]{64}$/.test(sha)) return
       let { directoryOf } = await import('../directory.ts')
       let found = await directoryOf(STORE).appAt(at.app)
-      if (!found || (await at.graph.read(naming(sha))).length) return
-      await r2Objects(BLOBS).delete(blobPrefix(found.space, found.app) + sha)
+      if (!found) return
+      await released(
+        at.graph,
+        r2Objects(BLOBS),
+        blobPrefix(found.space, found.app),
+        sha,
+      )
     }),
   }
 }
