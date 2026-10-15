@@ -16,7 +16,6 @@ import { apex } from './host.ts'
 import { ask } from './stripe.ts'
 import { b64u } from './mcp-probe.ts'
 import { clock, until } from '@yaks/testing'
-import { within } from './defects.ts'
 import { COOKIE, sign, verify } from './lib/token.ts'
 import type { Custom } from './domains.ts'
 import type { Command } from './declared.ts'
@@ -185,12 +184,17 @@ let boot = async (
   load?: Load,
 ) => {
   // Loaded when a test asks: the runner imports this module for its Stripe
-  // helpers and has no use for the kernel's whole graph.
+  // helpers and has no use for the kernel's whole graph. Nor can it load one:
+  // it runs with --node-modules-dir=manual (probe-suite.ts), where a
+  // package's npm import does not resolve, so nothing here imports the
+  // kernel's modules but this.
   await (readied ??= import('./wrangler.ts').then((w) => w.ready()))
-  let [{ handler }, { emailed, limiter, platform }] = await Promise.all([
-    import('./kernel.ts'),
-    import('./testing.ts'),
-  ])
+  let [{ handler }, { emailed, limiter, platform }, { within }] = await Promise
+    .all([
+      import('./kernel.ts'),
+      import('./testing.ts'),
+      import('./defects.ts'),
+    ])
   let secret = crypto.randomUUID()
   let log = Deno.makeTempFileSync({ prefix: 'yak-mail-' })
   let cf = cloudflare(log)
