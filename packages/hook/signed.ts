@@ -69,16 +69,19 @@ let key = (secret: string) =>
   )
 
 // Whether any of these digests is the HMAC of the payload. A malformed digest
-// is simply not a match: it must never throw its way past the check.
+// is simply not a match: it must never throw its way past the check, and when
+// none is well formed there is nothing to take the secret out for.
 let matches = async (
   secret: string,
   payload: string,
   digests: (Uint8Array<ArrayBuffer> | null)[],
 ) => {
+  let sent = digests.filter((d) => d != null)
+  if (!sent.length) return false
   let k = await key(secret)
   let bytes = enc.encode(payload)
-  for (let d of digests) {
-    if (d && await crypto.subtle.verify('HMAC', k, d, bytes)) return true
+  for (let d of sent) {
+    if (await crypto.subtle.verify('HMAC', k, d, bytes)) return true
   }
   return false
 }

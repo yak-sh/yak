@@ -109,26 +109,38 @@ test('github: sha256= and the hex of the body', async () => {
   )
 })
 
-test('hmac: a named header, hex or base64', async () => {
-  let raw = 'a=1&b=2'
-  let d = await mac(SECRET, raw)
-  let hexed: Scheme = { header: 'X-Signature' }
-  let based: Scheme = { header: 'X-Shopify-Hmac-Sha256', encoding: 'base64' }
+// A digest of a form body, and the two named-header schemes that carry it.
+let form = 'a=1&b=2'
+let formMac = await mac(SECRET, form)
+let hexed: Scheme = { header: 'X-Signature' }
+let based: Scheme = { header: 'X-Shopify-Hmac-Sha256', encoding: 'base64' }
+
+test('hmac: a named header carries the digest in hex', async () => {
   assertEquals(
     [
-      await ask(hexed, raw, { 'x-signature': hex(d) }),
-      await ask(based, raw, { 'x-shopify-hmac-sha256': b64(d) }),
-      await ask(based, raw, { 'x-shopify-hmac-sha256': '%%%' }),
-      await ask(hexed, raw, { 'x-signature': b64(d) }),
+      await ask(hexed, form, { 'x-signature': hex(formMac) }),
+      await ask(hexed, form, { 'x-signature': b64(formMac) }),
     ],
-    ['', '', 'the signature does not match', 'the signature does not match'],
+    ['', 'the signature does not match'],
   )
 })
 
+test('hmac: a named header may carry it in base64', async () => {
+  assertEquals(
+    [
+      await ask(based, form, { 'x-shopify-hmac-sha256': b64(formMac) }),
+      await ask(based, form, { 'x-shopify-hmac-sha256': '%%%' }),
+    ],
+    ['', 'the signature does not match'],
+  )
+})
+
+let opened = '{"action":"opened"}'
+let openedMac = await mac(SECRET, opened)
 test('checked: a captured request carries the answer in verified', async () => {
-  let body = '{"action":"opened"}'
+  let body = opened
   let headers = JSON.stringify({
-    'X-Hub-Signature-256': `sha256=${hex(await mac(SECRET, body))}`,
+    'X-Hub-Signature-256': `sha256=${hex(openedMac)}`,
   })
   let r = { id: '1', source: 'gh', body, headers }
   assertEquals(
