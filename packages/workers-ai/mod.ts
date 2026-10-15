@@ -269,7 +269,7 @@ let answers = (out: unknown, model: string): Record<string, Answer> => {
   )
 }
 
-let message = (e: unknown) => e instanceof Error ? e.message : String(e)
+let message = (e: unknown): string => e instanceof Error ? e.message : String(e)
 
 // How the binding says every model of this kind is busy: in its own words,
 // or as the 429 it was answered.
@@ -305,7 +305,8 @@ let missing = (e: unknown) => /^5007:|no such model/i.test(message(e))
  * assertEquals(unfit(new Error('3040: Capacity temporarily exceeded')), false)
  * ```
  */
-export let unfit = (e: unknown) => /^(5006|5004|3006|5005):/.test(message(e))
+export let unfit = (e: unknown): boolean =>
+  /^(5006|5004|3006|5005):/.test(message(e))
 
 // What the binding is asked: a chat, or a structured model's questions about
 // the same conversation.

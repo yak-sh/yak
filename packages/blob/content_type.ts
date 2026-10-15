@@ -36,7 +36,7 @@ let textual = (mime: string) =>
  * assertEquals(utf8(bytes('a\x00b')), false)
  * ```
  */
-export let utf8 = (bytes: Uint8Array) => {
+export let utf8 = (bytes: Uint8Array): boolean => {
   try {
     let text = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
     // deno-lint-ignore no-control-regex
