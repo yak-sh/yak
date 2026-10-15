@@ -18,13 +18,15 @@
 // point: a row never names bytes that are not stored, so a write sent again
 // after it was cut off finds every file that landed already recorded and puts
 // only the rest (`modifying`). Two writers serialize in the directory: the
-// rows are appended, never rewritten, so neither loses the other's, and the
-// guard on the app row sends a write that crossed a deploy back to read the
-// draft the deploy left.
+// rows are appended, never rewritten, so neither loses the other's. A row is
+// named for the row it supersedes, so two writes of one path from the same
+// state collide and the second goes round to write over the first; the guard
+// on the app row sends a write that crossed a deploy back to read the draft
+// the deploy left.
 import type { Objects } from '@yaks/blob'
 import { lanes } from '@yaks/fp'
 import { Stale } from '@yaks/graph/errors'
-import { mint } from '@yaks/graph/identity'
+import { derivedEid, mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import { filesAt, viewOf } from './release.ts'
@@ -184,6 +186,13 @@ export let modifying = async <T>(
       if (!todo.length) return { value, wrote: [], already }
       let id = row.draft ?? mint()
       let at = new Date().toISOString()
+      // Each row is named for the row it supersedes, so two writers who read
+      // the same state of a path race for one eid: the first lands, and the
+      // guard sends the other round to write over it.
+      let heads = new Map<string, string>()
+      for (let w of newest(draft.rows)) {
+        if (!heads.has(w.path)) heads.set(w.path, w.eid)
+      }
       await dir.stamp({
         entities: [
           {
@@ -199,7 +208,12 @@ export let modifying = async <T>(
             },
           },
           ...todo.map((c) => ({
-            entity: { eid: mint() },
+            entity: {
+              eid: derivedEid(
+                `written|${row.eid}|${id}|${c.path}|${heads.get(c.path) ?? ''}`,
+              ),
+            },
+            $was: { written: { path: token(null) } },
             written: {
               app: row.eid,
               draft: id,
