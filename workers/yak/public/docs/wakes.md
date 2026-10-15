@@ -267,9 +267,9 @@ schedule, and a rule is for what one firing means about that row.
   firing runs the rules and the declared commands, which write rows. Its one
   call into your JavaScript is a command that declares `"worker": "/tick"` (see
   above): the platform POSTs the call's arguments to that route in your
-  `worker.js`, within 5 seconds, and a worker that is missing or answers
-  an error fails the call, recorded as a `failed` execution. Any other
-  firing runs none of your JavaScript, and has no background `env` to reach.
+  `worker.js`, within 5 seconds, and a worker that is missing or answers an
+  error fails the call, recorded as a `failed` execution. Any other firing runs
+  none of your JavaScript, and has no background `env` to reach.
 - **On the app's own declarations.** The rules and the commands in its
   `vocab.json`, as the last deploy left them.
 - **Under the Durable Object alarm's budget**, which is what a store object's
