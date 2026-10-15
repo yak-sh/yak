@@ -58,6 +58,17 @@ export type Standing = { part: number; need: number[]; stored: boolean }
 /** What a finished upload holds: its length and its first bytes. */
 export type Whole = { bytes: number; head: Uint8Array<ArrayBuffer> }
 
+/** One upload in parts, as {@link parts} answers it. */
+export type Parts = {
+  stand: (bytes: number) => Promise<Standing>
+  put: (
+    n: number,
+    body: ReadableStream<Uint8Array> | Uint8Array,
+    length: number,
+  ) => Promise<void>
+  finish: () => Promise<Whole>
+}
+
 /**
  * The part size for `bytes`: `part`, unless that would take more than
  * {@link MOST} parts. Every part but the last is this size, which R2 requires.
@@ -155,7 +166,7 @@ export let parts = (
   objects: Objects,
   bucket: Multipart,
   at: { key: string; sha: string; ledger: string; part: number },
-) => {
+): Parts => {
   let { key, sha, ledger } = at
   let begun = `${ledger}${sha}.`
   let ticket = (t: Omit<Ticket, 'at'>) =>
