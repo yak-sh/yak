@@ -1084,6 +1084,8 @@ test("the app's own code failing to load is the agent's to fix", async () => {
       'Uncaught SyntaxError: missing ) after argument list\n  at worker.js:117:27\n',
       'Uncaught TypeError: x is not a function\n  at f (lib/util.js:3:9)\n  at worker.js:1:8',
       'Uncaught Error: No such module "lib/gone.js".\n  imported from "worker.js"',
+      "Uncaught SyntaxError: The requested module './worker.js' does not provide an export named 'default'\n  at __yak_entry.js:1:7\n",
+      "Uncaught SyntaxError: The requested module './util.js' does not provide an export named 'y'\n  at lib/util.js:1:9",
     ]
   ) {
     let e = await refusedWith(message)
@@ -1098,6 +1100,7 @@ test('a load failure in the wrapper, or naming no module, is ours', async () => 
     let message of [
       'Uncaught SyntaxError: Unexpected token\n  at __yak_entry.js:4:1',
       'Uncaught Error: No such module "worker.js".\n  imported from "__yak_entry.js"',
+      "Uncaught SyntaxError: The requested module './gone.js' does not provide an export named 'default'\n  at __yak_entry.js:1:7",
       'Uncaught SyntaxError',
       'Invalid binding',
     ]

@@ -922,11 +922,24 @@ export let upload = async (
 // the wrapper, or one naming no module, is ours.
 let PLACE = /([\w./@-]+):\d+:\d+|imported from "([^"]+)"/g
 
+// A module lacking an export another asked for is the one at fault, not the
+// place that asked: an app's main module with no default export fails at the
+// wrapper's `import app`, and is the app's to fix.
+let LACKS =
+  /requested module '([^']+)' does not provide an export named '[^']*'(?:\s+at ([\w./@-]+):\d+:\d+)?/
+
+let places = (said: string) => {
+  let lacks = said.match(LACKS)
+  return lacks
+    ? [new URL(lacks[1], `file:///${lacks[2] ?? ''}`).pathname.slice(1)]
+    : [...said.matchAll(PLACE)].map((m) => m[1] ?? m[2])
+}
+
 let unloaded = (modules: Module[], e: unknown) => {
   let said = e instanceof Error ? e.message.replace(/^cloudflare: /, '') : ''
-  let places = [...said.matchAll(PLACE)].map((m) => m[1] ?? m[2])
+  let at = places(said)
   let theirs = (name: string) => modules.some((m) => m.name == name)
-  return places.length && places.every(theirs)
+  return at.length && at.every(theirs)
     ? refuse(
       'arguments',
       `refused worker: ${
