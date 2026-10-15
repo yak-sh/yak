@@ -91,6 +91,20 @@ without a `404.html` the app's `index.html` answers it, so a page that draws
 itself at a place opens there. A missing stylesheet, script or picture is a 404,
 never a page.
 
+**Choosing what a missing page answers.** The same `wrangler.jsonc` can say it,
+in Cloudflare's own key, `assets.not_found_handling`:
+
+    { "assets": { "not_found_handling": "single-page-application" } }
+
+- `"single-page-application"`: a route answers `index.html` with 200, even when
+  a `404.html` exists.
+- `"404-page"`: the nearest `404.html` answers 404, looking in the missing
+  page's folder and then each folder above it; with none, a plain 404.
+- `"none"`: a plain 404.
+
+Unset, the rule above holds: the root's `404.html`, else `index.html` for a
+route. A missing file with an extension is a 404 in every mode.
+
 Each page resolves its relative URLs from its own folder, as anywhere on the
 web: `docs/index.html` names `../style.css`, and reaches the client at
 `../api/client.js`.

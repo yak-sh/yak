@@ -55,8 +55,12 @@ export type Config = {
   // `assets.directory`: a build's `dist` beside the source that made it. Only
   // what is inside it is on the web (files.ts `rootOf`); the rest stays the
   // app's, read back through app_files. Absent, the app's root is served.
-  assets?: { directory?: string }
+  // `assets.not_found_handling`, Cloudflare's own key for a path with no file
+  // (files.ts `resolve`). Absent, a missing page infers it.
+  assets?: { directory?: string; not_found_handling?: NotFound }
 }
+export let NOT_FOUND = ['single-page-application', '404-page', 'none'] as const
+export type NotFound = typeof NOT_FOUND[number]
 export type Parsed = { config: Config; report: string[]; refused: string[] }
 export type Request = {
   name: string
@@ -320,7 +324,15 @@ export let allowlist = (value: unknown): Parsed => {
     if (!object(value.assets)) {
       no('assets', 'expected an object: { "directory": "dist" }')
     } else {
-      keys(value.assets, ['directory'], 'assets.')
+      keys(value.assets, ['directory', 'not_found_handling'], 'assets.')
+      let handling = NOT_FOUND.find((n) => n == value.assets.not_found_handling)
+      if (handling) config.assets = { not_found_handling: handling }
+      else if ('not_found_handling' in value.assets) {
+        no(
+          'assets.not_found_handling',
+          `expected one of ${NOT_FOUND.join(', ')}`,
+        )
+      }
       if ('directory' in value.assets) {
         let dir = folder(value.assets.directory)
         if (dir == null) {
@@ -328,7 +340,9 @@ export let allowlist = (value: unknown): Parsed => {
             'assets.directory',
             'expected a folder of the app, such as dist, with no .. in it',
           )
-        } else config.assets = dir ? { directory: dir } : {}
+        } else {config.assets = dir
+            ? { ...config.assets, directory: dir }
+            : config.assets ?? {}}
       }
     }
   }

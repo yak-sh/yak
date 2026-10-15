@@ -68,7 +68,10 @@ A yaks app is an index.html and whatever files sit beside it, served live
 at <space>.${
     apex(env)
   }/<app>/, other pages at their own addresses (about.html at /about), and a
-404.html for a page that is not there. No build step is needed: html, css and
+404.html for a page that is not there (an app with both a 404.html and
+routes says which wins: {"assets": {"not_found_handling":
+"single-page-application"}} answers routes index.html, "404-page" the nearest
+404.html). No build step is needed: html, css and
 js are served as written. TypeScript and npm packages work too — name the
 packages in a package.json beside index.html, and app_deploy compiles them.
 A site any tool builds (Vite, Astro, Eleventy, SvelteKit) serves as built: build

@@ -31,7 +31,7 @@ import { seedy } from './seed.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
 import { drawn, ICON_SVG } from './raster.ts'
-import { type Config, parse, WORKER } from './wrangler_app.ts'
+import { type Config, type NotFound, parse, WORKER } from './wrangler_app.ts'
 import * as shared from './shared.ts'
 
 /** The ceiling on bytes entering an app, through upload or app_files fetch. */
@@ -168,13 +168,16 @@ type Found = { path: string; file: Loaded; status: 200 | 404 }
  * build's pages: the file itself, a folder's index.html, and a page's address
  * without its extension (`/about` is about.html). A folder asked for without
  * its slash is sent to it (`{to}`), so about/index.html's relative URLs
- * resolve inside about/. A page that is not there is the app's 404.html,
- * answered 404; without one, a route answers the app's index.html. `load`
- * reads a path of the folder.
+ * resolve inside about/. A page that is not there follows the app's
+ * `assets.not_found_handling` (Cloudflare's own key): `single-page-application`
+ * answers a route its index.html, `404-page` the nearest 404.html answered
+ * 404, `none` a plain 404. Unset, the root's 404.html answers 404, and
+ * without one a route answers index.html. `load` reads a path of the folder.
  */
 export let resolve = async (
   path: string,
   load: (path: string) => Promise<Loaded | null>,
+  notFound?: NotFound,
 ): Promise<Found | { to: string } | null> => {
   let first = async (paths: string[], status: 200 | 404 = 200) => {
     for (let p of paths) {
@@ -193,9 +196,26 @@ export let resolve = async (
   if (pretty(path) && !path.endsWith('/') && await load(`${path}/index.html`)) {
     return { to: `${encodeURIComponent(path.split('/').pop()!)}/` }
   }
-  if (!page(path)) return null
+  if (notFound == 'none' || !page(path)) return null
+  if (notFound == 'single-page-application') {
+    return pretty(path) ? await first(['/index.html']) : null
+  }
+  if (notFound == '404-page') return await first(nearest(path), 404)
   return await first(['/404.html'], 404) ??
     (pretty(path) ? await first(['/index.html']) : null)
+}
+
+// Cloudflare's `404-page`: the 404.html nearest the path, walking up from
+// its folder to the root.
+///
+/// nearest('/a/b/c') -> ['/a/b/404.html', '/a/404.html', '/404.html']
+/// nearest('/a/') -> ['/a/404.html', '/404.html']
+/// nearest('/x') -> ['/404.html']
+export let nearest = (path: string) => {
+  let dirs = path.split('/').slice(0, -1)
+  return dirs.map((_, i) =>
+    `${dirs.slice(0, dirs.length - i).join('/')}/404.html`
+  )
 }
 
 // The gateway's way in: the `FILES` binding, so Cloudflare's cache answers
@@ -490,7 +510,11 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     }
     return file ? served(file, type, at.slice(1)) : missing()
   }
-  let found = await resolve(at, (p) => blobs.load(`${root}${p}`))
+  let found = await resolve(
+    at,
+    (p) => blobs.load(`${root}${p}`),
+    config.assets?.not_found_handling,
+  )
   if (found && 'to' in found) {
     return new Response(null, {
       status: 307,
