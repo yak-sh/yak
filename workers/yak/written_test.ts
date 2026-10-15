@@ -254,28 +254,37 @@ test('a write sent again sends only what did not land, and says so', async () =>
   })
 })
 
-test('a path answers its own past, and is put back without moving bytes', async () => {
-  let { write, read, puts, past, restore, time } = made()
-  await write({ 'page.html': 'one' })
-  await time.advance(5)
-  let between = time.now()
-  await time.advance(5)
-  await write({ 'page.html': 'two' })
+// One path written twice, ten milliseconds apart, and a moment between.
+let rewritten = async () => {
+  let edits = made()
+  await edits.write({ 'page.html': 'one' })
+  await edits.time.advance(5)
+  let between = edits.time.now()
+  await edits.time.advance(5)
+  await edits.write({ 'page.html': 'two' })
+  edits.puts.length = 0
+  return { ...edits, between }
+}
+
+test('a path answers its own past, and which of it a restore puts back', async () => {
+  let { past, between } = await rewritten()
   let all = await past('page.html')
   assertEquals([all[0].sha, all[0].size], [sha('two'), 3])
   assertEquals(replaced(all), [{ sha: sha('one'), at: all[0].at, by: ADA }])
-  puts.length = 0
+  // What it held before, what a sha names, and what it held at a moment.
+  let put = (asked = {}) => restoring(all, sha('two'), asked).want
+  assertEquals(put(), sha('one'))
+  assertEquals(put({ sha: sha('two') }), sha('two'))
+  assertEquals(put({ at: between }), sha('one'))
+})
+
+test('a path is put back without moving bytes, and the restore is history', async () => {
+  let { read, puts, past, restore, time } = await rewritten()
   await time.advance(1)
   await restore('page.html')
   assertEquals(await read('page.html'), 'one')
-  await time.advance(1)
-  await restore('page.html', { sha: sha('two') })
-  assertEquals(await read('page.html'), 'two')
-  await time.advance(1)
-  await restore('page.html', { at: between })
-  assertEquals(await read('page.html'), 'one')
-  assertEquals((await past('page.html')).length, 5)
-  assertEquals(replaced(await past('page.html')).length, 4)
+  assertEquals((await past('page.html')).length, 3)
+  assertEquals(replaced(await past('page.html')).length, 2)
   assertEquals(puts, [])
 })
 

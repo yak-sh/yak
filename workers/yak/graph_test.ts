@@ -231,6 +231,7 @@ let schemaShape = shapeOf('ada/cookbook', SCHEMA)
 let grownShape = shapeOf('ada/cookbook', GROWN)
 let over = ({ vocab }: typeof schemaShape) =>
   graph({ vocab, storage: ram(vocab) })
+let before = over(schemaShape), after = over(grownShape)
 
 let owner: Vouch = { app: APP, person: ADA, role: 'owner', title: 'Ada' }
 
@@ -261,8 +262,8 @@ test('a store wakes without its schema under the code that fitted it, and follow
   equal(fitOf(null, schemaShape.key, 'stamp'), null)
   // The words it followed take a write the words it held refused.
   let dish = [{ entity: { eid: CAKE }, dish: { n: 1 } }]
-  await throws(() => over(schemaShape).apply(dish), /unknown component: dish/)
-  match(over(grownShape).apply(dish), [{ dish: { n: 1 } }])
+  await throws(() => before.apply(dish), /unknown component: dish/)
+  match(after.apply(dish), [{ dish: { n: 1 } }])
 })
 
 let appOwned = await (async () => {

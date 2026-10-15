@@ -150,24 +150,29 @@ let callers: Array<{
 // Which failures are retried, and how often, is `retried`'s. Each caller below
 // is sent one eviction, for what it makes of the sends: a fresh stub and a
 // request built again each time.
+// A call through `retried` failing with `errors` in turn: what it answers,
+// how many sends it made, and the pauses between them.
+let retrying = async (errors: Error[]) => {
+  let sent = 0
+  paused.length = 0
+  let call = () =>
+    retried(() => {
+      let error = errors[sent++]
+      if (error) throw error
+      return 'ok'
+    })
+  if (fails(errors)) {
+    assertEquals(await assertRejects(call), errors.at(-1))
+  } else assertEquals(await call(), 'ok')
+  assertEquals(sent, sends(errors))
+  assertEquals(paused, backoff.pauses.slice(0, sent - 1))
+}
+
+// Every eviction is one `retried` sends again; the pauses, which take no
+// account of which it was, are spent through one of them.
 test('retried: every eviction is sent again after a pause, once per pause', async () => {
-  for (let failure of failures) {
-    for (let errors of runs(failure)) {
-      let sent = 0
-      paused.length = 0
-      let call = () =>
-        retried(() => {
-          let error = errors[sent++]
-          if (error) throw error
-          return 'ok'
-        })
-      if (fails(errors)) {
-        assertEquals(await assertRejects(call), errors.at(-1))
-      } else assertEquals(await call(), 'ok')
-      assertEquals(sent, sends(errors))
-      assertEquals(paused, backoff.pauses.slice(0, sent - 1))
-    }
-  }
+  for (let failure of failures) await retrying([failure()])
+  for (let errors of runs(flagged)) await retrying(errors)
 })
 
 for (let caller of callers) {

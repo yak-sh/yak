@@ -84,9 +84,11 @@ test('no content file names an entity — the identity property does', () => {
   }
 })
 
+// The store the page is applied to, and the page as read, both made once.
+let g = graph({ storage: memory(), vocab })
+let { meta } = file('./public/docs/store.md')
+
 test('a page applied twice is one entity, at the id its slug names', () => {
-  let g = graph({ storage: memory(), vocab })
-  let { meta } = file('./public/docs/store.md')
   let eid = identityEid('guide', ['store'])
 
   let once = g.apply([{ ...meta, entity: { eid: '$page' } }]) as Bundle[]

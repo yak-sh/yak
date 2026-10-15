@@ -54,11 +54,14 @@ test('a path that escapes the app is one, whatever shape it takes', () => {
   assertEquals(escapes('C:/x'), true)
 })
 
+// A zip is made once, as the file it stands for is: its reading is the test.
+let mixed = await zipped([
+  { path: 'index.html', content: '<h1>hi</h1>' },
+  { path: 'style.css', content: 'body { color: red }', deflate: true },
+])
+
 test('stored and deflated entries both come back whole', async () => {
-  let out = await read([
-    { path: 'index.html', content: '<h1>hi</h1>' },
-    { path: 'style.css', content: 'body { color: red }', deflate: true },
-  ])
+  let out = await unpacked(mixed)
   assertEquals(out.map((e) => e.path), ['index.html', 'style.css'])
   assertEquals(text(out[0].bytes), '<h1>hi</h1>')
   assertEquals(text(out[1].bytes), 'body { color: red }')
@@ -98,15 +101,17 @@ test("macOS's own leavings never become files", async () => {
 // the bytes carries the sizes, with its signature or, as the format allows,
 // without. Stored bytes holding a descriptor's signature of their own are
 // still one file: the end is where a descriptor records the size read so far.
+let fake = 'a PK\x07\x08 that is not the end'
+let streamed = await zipped([
+  { path: 'index.html', content: 'page', deflate: true, flags: 8 },
+  { path: 'style.css', content: 'css', flags: 8 },
+  { path: 'fake.txt', content: fake, flags: 8 },
+  { path: 'bare.txt', content: fake, flags: 8, bare: true },
+  { path: 'last.txt', content: 'last', deflate: true, flags: 8, bare: true },
+])
+
 test('an entry written as a stream ends at its descriptor', async () => {
-  let fake = 'a PK\x07\x08 that is not the end'
-  let out = await read([
-    { path: 'index.html', content: 'page', deflate: true, flags: 8 },
-    { path: 'style.css', content: 'css', flags: 8 },
-    { path: 'fake.txt', content: fake, flags: 8 },
-    { path: 'bare.txt', content: fake, flags: 8, bare: true },
-    { path: 'last.txt', content: 'last', deflate: true, flags: 8, bare: true },
-  ])
+  let out = await unpacked(streamed)
   assertEquals(out.map((e) => [e.path, text(e.bytes)]), [
     ['index.html', 'page'],
     ['style.css', 'css'],

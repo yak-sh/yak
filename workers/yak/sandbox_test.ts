@@ -809,17 +809,17 @@ test('sandbox_shell names what is in the image, and where the rest comes from', 
   assertStringIncludes(said, 'destroyed when the build ends')
 })
 
+// The guide's page and the limits page, read once, as read rather than as
+// wrapped: the formatter may break a line anywhere.
+let [guide, tech] = ['public/docs/code.md', 'public/docs/technical.md']
+  .map((page) => at(page).replace(/\s+/g, ' '))
+
 test('the guide and the limits page say the same image', () => {
-  let [guide, tech] = [
-    at('public/docs/code.md'),
-    at('public/docs/technical.md'),
-  ]
   for (let [name, version] of pinned()) {
     assert(guide.includes(version), `code.md names ${name} ${version}`)
     assert(tech.includes(version), `technical.md names ${name} ${version}`)
   }
-  // As read, not as wrapped: the formatter may break a line anywhere.
-  for (let page of [guide, tech].map((p) => p.replace(/\s+/g, ' '))) {
+  for (let page of [guide, tech]) {
     assertStringIncludes(page, 'apt')
     assertStringIncludes(page, 'destroyed when the build ends')
   }

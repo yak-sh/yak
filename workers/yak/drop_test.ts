@@ -278,21 +278,22 @@ test("the drop zone is on the owner's New app page", async () => {
 // has yet to arrive. Here the zip carries five times what is held at once;
 // that no more than that waits on puts is tools_test.ts's. The form is the one
 // a browser sends, written out.
+let held = 256
+let files = Array.from({ length: 5 }, (_, i) => ({
+  path: `site/${i}.bin`,
+  content: crypto.getRandomValues(new Uint8Array(held)),
+}))
+let said = (name: string, file = '') =>
+  `--b\r\ncontent-disposition: form-data; name="${name}"${file}\r\n\r\n`
+let body = new Uint8Array(
+  await new Blob([
+    said('file', '; filename="site.zip"'),
+    await zipped(files),
+    `\r\n${said('slug')}site\r\n--b--\r\n`,
+  ]).arrayBuffer(),
+)
+
 test('a drop many times what is held at once lands file by file', async () => {
-  let held = 256
-  let files = Array.from({ length: 5 }, (_, i) => ({
-    path: `site/${i}.bin`,
-    content: crypto.getRandomValues(new Uint8Array(held)),
-  }))
-  let said = (name: string, file = '') =>
-    `--b\r\ncontent-disposition: form-data; name="${name}"${file}\r\n\r\n`
-  let body = new Uint8Array(
-    await new Blob([
-      said('file', '; filename="site.zip"'),
-      await zipped(files),
-      `\r\n${said('slug')}site\r\n--b--\r\n`,
-    ]).arrayBuffer(),
-  )
   let read = 0
   let req = new Request('https://jeff.yaks.app/deploy', {
     method: 'POST',

@@ -162,7 +162,7 @@ test('an invitation reaches nobody until its person accepts it', async () => {
   }
 })
 
-// The people and places of the two tests below, and a directory that holds
+// The people and places of the tests below, and a directory that holds
 // them: the seams that decide what a friend and an owner are told, without a
 // kernel.
 let JEFF = 'jeff-eid'
@@ -176,9 +176,13 @@ let diary = {
 } as App
 let emailOf = (person: string) => `${person}@x.test`
 
-test('a friend who has not accepted is told the invitation waits', async () => {
-  // ana is invited to the diary and has not accepted; bo was never invited.
+// Her letter's link, sealed once.
+let link = await acceptLink(SECRET, { invite: 'inv', to: 'ap' }, {})
+
+// ana is invited to the diary and has not accepted; bo was never invited.
+let invited = () => {
   let invites = new Map([['ap/ana', { eid: 'inv', role: 'editor' }]])
+  let applied: unknown[] = []
   let dir = {
     invite: (to: string, person: string) =>
       Promise.resolve(invites.get(`${to}/${person}`) ?? null),
@@ -196,28 +200,25 @@ test('a friend who has not accepted is told the invitation waits', async () => {
     grant: () => Promise.resolve(null),
     apply: (b: unknown) => Promise.resolve(void applied.push(b)),
   } as unknown as Directory
-  let applied: unknown[] = []
-  let click = async (person: string | null) =>
-    door(
-      new Request(
-        await acceptLink(SECRET, { invite: 'inv', to: 'ap' }, {}),
-      ),
-      {} as Env,
-      dir,
-      person,
-      SECRET,
-    )
+  let click = (person: string | null) =>
+    door(new Request(link), {} as Env, dir, person, SECRET)
+  return { dir, applied, click }
+}
 
-  // Her letter's link, opened before she signs in, says who invited her to
-  // which app, and wears the platform's face rather than the private app's
-  // own, which is not hers to see yet.
-  let offer = await (await click(null)).text()
+// Her letter's link, opened before she signs in, says who invited her to
+// which app, and wears the platform's face rather than the private app's own,
+// which is not hers to see yet.
+test('an invitation opened before signing in says who invited them to which app', async () => {
+  let offer = await (await invited().click(null)).text()
   assertStringIncludes(offer, 'invited you to use Diary.')
   assertStringIncludes(offer, 'href="https://jeff.yaks.app/diary/"')
   assertStringIncludes(offer, '/connector-512.png')
+})
 
-  // Refused at the app, she is told her invitation waits; the stranger is
-  // told whose it is to grant, and sees nothing of the app.
+// Refused at the app, she is told her invitation waits; the stranger is told
+// whose it is to grant, and sees nothing of the app.
+test('a friend who has not accepted is told the invitation waits', async () => {
+  let { dir } = invited()
   assertStringIncludes(
     await refusedSaid(dir, space, diary, 'ana', 'not_a_writer'),
     'invitation to this app',
@@ -228,6 +229,10 @@ test('a friend who has not accepted is told the invitation waits', async () => {
       'invitation',
     ),
   )
+})
+
+test("a private app's page tells an invited friend it waits, and a stranger nothing", async () => {
+  let { dir } = invited()
   let page = await shut(dir, space, diary, 'ana', {})
   assertEquals(page.status, 403)
   assertStringIncludes(await page.text(), 'Your invitation is waiting')
@@ -235,7 +240,9 @@ test('a friend who has not accepted is told the invitation waits', async () => {
     await (await shut(dir, space, diary, 'bo', {})).text(),
     'Nothing here yet',
   )
-  // Asked again, the owner hears she never accepted.
+})
+
+test('asked again, the owner hears the friend never accepted', () => {
   assertStringIncludes(
     invitedWords({
       email: emailOf('ana'),
@@ -245,8 +252,10 @@ test('a friend who has not accepted is told the invitation waits', async () => {
     }),
     'had not accepted yet',
   )
+})
 
-  // Her click, signed in as her, takes the invitation and writes her grant.
+test('her click, signed in as her, takes the invitation and writes her grant', async () => {
+  let { click, applied } = invited()
   assertEquals((await click('ana')).status, 303)
   assertMatch(JSON.stringify(applied), /"tombstone".*"grant".*"person":"ana"/)
 })

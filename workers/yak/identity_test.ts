@@ -940,40 +940,43 @@ test('a connector keeps its door until the person closes it', async () => {
 // Connecting an assistant again replaces its grant, but only once the new one
 // is in the client's hands (T-121901): a second consent leaves the grant the
 // person already had standing, and only the exchange of the new grant's code
-// (`replace`) takes it away.
-test('connecting again keeps the old grant until the new one is taken', async () => {
-  let store = kv()
-  let env = { OAUTH_KV: store } as unknown as Env
-  let oauth = getOAuthApi<Env>({
-    apiRoute: '/api',
-    apiHandler: { fetch: () => new Response() },
-    defaultHandler: { fetch: () => new Response() },
-    authorizeEndpoint: '/oauth/authorize',
-    tokenEndpoint: '/oauth/token',
-  }, env)
-  let back = 'https://probe.invalid/cb'
-  let { clientId } = await oauth.createClient({
-    redirectUris: [back],
-    tokenEndpointAuthMethod: 'none',
-  })
-  // The grant the person already holds for this assistant, as the provider
-  // keeps one (its stored shape, which every grant ever written still has).
-  let old = 'held-grant'
-  await store.put(
-    `grant:p:${old}`,
+// (`replace`) takes it away. The provider keeps a store of its own, with the
+// assistant registered once; each test's person is its own.
+let grants = kv()
+let provider = { OAUTH_KV: grants } as unknown as Env
+let oauth = getOAuthApi<Env>({
+  apiRoute: '/api',
+  apiHandler: { fetch: () => new Response() },
+  defaultHandler: { fetch: () => new Response() },
+  authorizeEndpoint: '/oauth/authorize',
+  tokenEndpoint: '/oauth/token',
+}, provider)
+let back = 'https://probe.invalid/cb'
+let { clientId } = await oauth.createClient({
+  redirectUris: [back],
+  tokenEndpointAuthMethod: 'none',
+})
+// A grant the person holds for this assistant, as the provider keeps one (its
+// stored shape, which every grant ever written still has).
+let holding = (person: string, id: string) =>
+  grants.put(
+    `grant:${person}:${id}`,
     JSON.stringify({
-      id: old,
+      id,
       clientId,
-      userId: 'p',
+      userId: person,
       scope: ['graph'],
       metadata: {},
       createdAt: 0,
       redirectUri: back,
     }),
   )
-  let held = async () =>
-    (await oauth.listUserGrants('p')).items.map((g) => g.id)
-  await consent(env, {
+let held = async (person: string) =>
+  (await oauth.listUserGrants(person)).items.map((g) => g.id).sort()
+
+test('connecting again keeps the old grant until the new one is taken', async () => {
+  await holding('p', 'held-grant')
+  await consent(provider, {
     responseType: 'code',
     clientId,
     redirectUri: back,
@@ -982,11 +985,16 @@ test('connecting again keeps the old grant until the new one is taken', async ()
     codeChallenge: 'c'.repeat(43),
     codeChallengeMethod: 'S256',
   }, 'p')
-  let both = await held()
-  let taken = both.find((id) => id != old)!
-  assertEquals(both.sort(), [old, taken].sort())
-  assertEquals(await replace(oauth, 'p', taken), [old])
-  assertEquals(await held(), [taken])
+  let both = await held('p')
+  assertEquals(both.length, 2)
+  assert(both.includes('held-grant'))
+})
+
+test('the grant taken takes away the one it replaces', async () => {
+  await holding('q', 'older')
+  await holding('q', 'newer')
+  assertEquals(await replace(oauth, 'q', 'newer'), ['older'])
+  assertEquals(await held('q'), ['newer'])
 })
 
 // The sign-in box is for somebody signed out (T-34209). A browser carrying a

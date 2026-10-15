@@ -129,12 +129,22 @@ export let HOST = sandboxHost()
 export let idOf = (sandboxes: Sandboxes, name: string) =>
   String(sandboxes.idFromName(name))
 
+// The secret's bytes, one array per secret: @yaks/secrets keeps the HMAC key
+// it imports under the salt array it is handed (sentinel.ts `signing`), so
+// fresh bytes each call would import the key again for every placeholder.
+let salts = new Map<string, Uint8Array>()
+let salt = (secret: string) => {
+  let held = salts.get(secret)
+  if (!held) salts.set(secret, held = new TextEncoder().encode(secret))
+  return held
+}
+
 /** What a container holds in place of its grant's token: a sentinel of its id
  * under the platform's secret. It names the container rather than the grant,
  * so a process started under one grant still calls in after the next is
  * minted, and only the container it was made for can have it swapped. */
 export let placeholder = (secret: string, container: string) =>
-  sentinel(new TextEncoder().encode(secret), `sandbox:${container}`)
+  sentinel(salt(secret), `sandbox:${container}`)
 
 /** How long the grant in the container's environment lives, in hours: the
  * whole build budget plus the nap that outlasts it, so the token is alive for

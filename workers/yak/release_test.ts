@@ -63,17 +63,19 @@ let bytes = (text: string) => new TextEncoder().encode(text)
 let text = (bytes: Uint8Array<ArrayBuffer> | null) =>
   bytes ? new TextDecoder().decode(bytes) : null
 
-let sha = sha256
+// Two files already stored, by their content address.
+let page = bytes('new page'), kept = bytes('kept code')
+let [PAGE, KEPT] = await Promise.all([page, kept].map(sha256))
 
 test('a release names the shas it is made of, and copies none', async () => {
   let { files, held } = memory()
-  let page = bytes('new page'), kept = bytes('kept code')
-  for (let b of [page, kept]) await files.put(addressed(await sha(b)), b)
+  await files.put(addressed(PAGE), page)
+  await files.put(addressed(KEPT), kept)
   let next = 'alice/.releases/app/next'
   let stage = staged(files, {
-    'index.html': await sha(page),
-    'keep.js': await sha(kept),
-    'esbuild/stale.js': await sha(kept),
+    'index.html': PAGE,
+    'keep.js': KEPT,
+    'esbuild/stale.js': KEPT,
   }, next)
   // What a compile reads, it reads through the release, and what it writes
   // and drops changes only the release.
@@ -81,8 +83,8 @@ test('a release names the shas it is made of, and copies none', async () => {
   await stage.files.put(`${next}/esbuild/keep.js`, bytes('compiled'))
   await stage.files.delete(`${next}/esbuild/stale.js`)
   assertEquals(await stage.finish(), {
-    'index.html': await sha(page),
-    'keep.js': await sha(kept),
+    'index.html': PAGE,
+    'keep.js': KEPT,
   })
   assertEquals([...held.keys()].filter((key) => key.startsWith(`${next}/`)), [])
   let served = releaseFiles(files)

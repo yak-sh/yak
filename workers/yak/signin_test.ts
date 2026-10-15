@@ -56,6 +56,9 @@ let past = () => new Date(Date.now() - 1).toISOString()
 
 let SECRET = 'a probe secret'
 let ME = 'me@yaks.app'
+// The mac of the code most tests send, made once: the first one imports the
+// secret's key (lib/hmac.ts), which every sign-in after reuses.
+let CODE = await mac(ME, '123456', SECRET)
 
 // A bundle that buries the entity: a tombstone.
 let forgotten = (wrote: Bundle[]) => wrote.some((b) => b.tombstone)
@@ -66,25 +69,24 @@ let tries = (wrote: Bundle[]) =>
     .filter((t) => t != null)
 
 test('the live code opens, and is spent', async () => {
-  let code = await mac(ME, '123456', SECRET)
   assertEquals(
-    code,
+    CODE,
     '4b16a8c088351316c93cd7b715ff2bb70e1e34901046eab1b9c6d8d19a952e02',
   )
-  let d = door([row(ME, code, soon())])
+  let d = door([row(ME, CODE, soon())])
   assert(await spend(d.at, SECRET, ME, '123456'))
   assert(forgotten(d.wrote))
 })
 
 test('a wrong guess costs a try, not the code', async () => {
-  let d = door([row(ME, await mac(ME, '123456', SECRET), soon())])
+  let d = door([row(ME, CODE, soon())])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
   assertFalse(forgotten(d.wrote))
   assertEquals(tries(d.wrote), [1])
 })
 
 test('the last guess burns the code, and leaves its record', async () => {
-  let burnt = row(ME, await mac(ME, '123456', SECRET), soon(), TRIES - 1)
+  let burnt = row(ME, CODE, soon(), TRIES - 1)
   let d = door([burnt])
   assertFalse(await spend(d.at, SECRET, ME, '654321'))
   assertEquals(tries(d.wrote), [TRIES])
@@ -98,7 +100,7 @@ test('the last guess burns the code, and leaves its record', async () => {
 })
 
 test('an expired code opens nothing, right digits or not', async () => {
-  let d = door([row(ME, await mac(ME, '123456', SECRET), past())])
+  let d = door([row(ME, CODE, past())])
   assertFalse(await spend(d.at, SECRET, ME, '123456'))
   assertEquals(d.wrote.length, 0)
 })
@@ -160,7 +162,7 @@ test('the window passes and the address may ask again', async () => {
 test('signing in clears the count', async () => {
   let full = [
     ...Array.from({ length: SENDS - 1 }, () => record(60_000)),
-    row(ME, await mac(ME, '123456', SECRET), soon()),
+    row(ME, CODE, soon()),
   ]
   let d = door(full)
   assert(await spend(d.at, SECRET, ME, '123456'))
@@ -194,7 +196,7 @@ let guarded = (rows: Signin[]) => {
 }
 
 test('forty guesses at once still get five, and the code dies', async () => {
-  let rows = [row(ME, await mac(ME, '123456', SECRET), soon()) as Signin]
+  let rows = [row(ME, CODE, soon()) as Signin]
   let store = guarded(rows)
   let wrong = Array.from({ length: 40 }, (_, i) => String(i).padStart(6, '9'))
   let opened = await Promise.all(wrong.map((c) => spend(store, SECRET, ME, c)))
@@ -206,7 +208,7 @@ test('forty guesses at once still get five, and the code dies', async () => {
 test('a code belongs to its address', async () => {
   // The address is inside the mac, so the row's own email cannot be edited
   // into someone else's sign-in.
-  let d = door([row('you@yaks.app', await mac(ME, '123456', SECRET), soon())])
+  let d = door([row('you@yaks.app', CODE, soon())])
   assertFalse(await spend(d.at, SECRET, 'you@yaks.app', '123456'))
 })
 

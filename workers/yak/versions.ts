@@ -181,9 +181,7 @@ export let own = (paths: string[]) => paths.filter((p) => !kept(p))
 // attachments already use (src/blob.ts). apps.ts names an upload with this
 // same function, so one file sent two ways is one name.
 export let sha256 = async (bytes: Uint8Array<ArrayBuffer>) =>
-  [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))]
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
+  new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)).toHex()
 
 // The one key space pinned bytes live in: the sha alone, so two apps holding
 // the same file hold one object (D-34942).

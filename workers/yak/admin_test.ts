@@ -44,26 +44,31 @@ let census = (): Census => ({
     },
     { entity: { eid: 'lab' }, space: { slug: 'lab' } },
   ],
+  // Each wears its access mode, as every stored app does: a row without one
+  // is reported as a failure (directory.ts `unsaid`).
   apps: [
     {
       entity: { eid: 'a1' },
-      app: { slug: 'notes', space: 'home', version: 2 },
+      app: { slug: 'notes', space: 'home', version: 2, access: 'private' },
       meter: meter({ requests: 40, bytes: 100 }),
       used: { at: '2026-10-12T00:00:00Z' },
     },
     {
       entity: { eid: 'a2' },
-      app: { slug: 'cart', space: 'shop', version: 1 },
+      app: { slug: 'cart', space: 'shop', version: 1, access: 'public' },
       meter: { month: '2026-09', requests: 9, bytes: 990 },
       used: { at: '2026-10-14T10:00:00Z' },
     },
     {
       entity: { eid: 'a3' },
-      app: { slug: 'old', space: 'shop', version: 1 },
+      app: { slug: 'old', space: 'shop', version: 1, access: 'private' },
       meter: { bytes: 7, files: 3 },
       trashed: { at: '2026-10-01T00:00:00Z' },
     },
-    { entity: { eid: 'a4' }, app: { slug: 'try', space: 'lab', version: 1 } },
+    {
+      entity: { eid: 'a4' },
+      app: { slug: 'try', space: 'lab', version: 1, access: 'open' },
+    },
   ],
   seats: [
     {
