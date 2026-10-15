@@ -20,17 +20,19 @@ let posted = (svg: string, query = '') =>
 let icon = (inner: string, box = '0 0 24 24') =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${box}">${inner}</svg>`
 
-test('a square SVG comes back a PNG of the size asked, that decodes', async () => {
-  let r = await posted(icon('<circle cx="12" cy="12" r="9" fill="teal"/>'))
+// Small, so the drawing is cheap: the size asked is what comes back.
+let tiny = (query = '?size=16') =>
+  posted(icon('<circle cx="12" cy="12" r="9" fill="teal"/>'), query)
+
+test('a square SVG comes back a PNG of the size asked', async () => {
+  let r = await tiny('?size=20')
   assertEquals(r.headers.get('content-type'), 'image/png')
-  let png = new Uint8Array(await r.arrayBuffer())
-  assertEquals(sizeOf(png), { w: 512, h: 512 })
+  assertEquals(sizeOf(new Uint8Array(await r.arrayBuffer())), { w: 20, h: 20 })
+})
+
+test('the PNG decodes', async () => {
+  let png = new Uint8Array(await (await tiny()).arrayBuffer())
   assertEquals(await broken(png, 'image/png'), undefined)
-  let small = await posted(icon('<rect width="24" height="24"/>'), '?size=180')
-  assertEquals(sizeOf(new Uint8Array(await small.arrayBuffer())), {
-    w: 180,
-    h: 180,
-  })
 })
 
 test('an SVG that cannot be drawn as an icon is refused with the reason', async () => {
