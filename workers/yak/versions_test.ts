@@ -287,6 +287,26 @@ test('pruning keeps the bytes the serving release names', async () => {
   assertEquals(await text(`${current}/esbuild/app.js`), 'compiled')
 })
 
+test('a release kept from before indexes gets one and still answers', async () => {
+  let { blobs, clock } = memory()
+  let { dir } = directory()
+  clock.now = Date.now() - 2 * GRACE
+  let v1 = 'jeff/.releases/a1/v1'
+  await blobs.put(`${v1}/index.html`, bytes('<h1>v1</h1>'))
+  await dir.apply({
+    entities: [{
+      entity: { eid: 'v1-deploy' },
+      deploy: { app: APP.eid, version: 1, files: '{}', source: v1 },
+    }],
+  })
+  await pruned(dir, blobs, [{ prefix: PREFIX, app: { ...APP, source: v1 } }])
+  assertEquals(await blobs.list(`${v1}/`), [])
+  assertEquals(
+    new TextDecoder().decode(await releaseFiles(blobs).get(`${v1}/index.html`)),
+    '<h1>v1</h1>',
+  )
+})
+
 test('published releases keep versioned bytes after newer deploys', async () => {
   let { blobs, clock } = memory()
   let { dir } = directory()

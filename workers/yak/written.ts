@@ -28,6 +28,7 @@ import { mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
 import { adopted, old } from './carried.ts'
+import { caught } from './defects.ts'
 import { filesOf, prepare, promoted, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
@@ -345,8 +346,18 @@ export let pruned = async (
     let legacy: string[] = []
     await lanes(LANES)([...sources], async (source) => {
       namedFiles.add(source + META)
+      // A release made before releases had an index gets one here, its bytes
+      // given their addresses (release.ts `prepare`), so its own keys go
+      // below like any stage's. One that cannot is reported and kept.
       let index = await indexOf(blobs, `${source}/`)
-      if (!index) return void legacy.push(`${source}/`)
+      if (!index) {
+        try {
+          index = await prepare(blobs, source)
+        } catch (e) {
+          caught(e, { request: 'index release', app: app.eid })
+          return void legacy.push(`${source}/`)
+        }
+      }
       for (let file of Object.values(index)) {
         namedFiles.add(file.key.startsWith(SHA) ? file.key : space + file.key)
         if (file.sha) named.add(file.sha)
