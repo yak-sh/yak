@@ -3,8 +3,8 @@
 // deno run -A bin/vale-map-time.ts --before=<commit>
 import { createCanvas, ImageData } from 'npm:@napi-rs/canvas@0.1.80'
 import { chart, chartPatch, chartRegions } from '../apps/vale/chart.ts'
-import { chartbook } from '../apps/vale/chartbook.ts'
-import { chartsheet } from '../apps/vale/chartsheet.ts'
+import { chartbook } from '@yaks/voxel/chartbook'
+import { chartsheet } from '@yaks/voxel/chartsheet'
 import { SIZE } from '../apps/vale/levels.ts'
 import { coverage } from '../apps/vale/chartcover.ts'
 import { type Box, pan, view, zoom } from '../apps/vale/mapview.ts'
@@ -22,8 +22,8 @@ if (sample) {
   seedBuildings()
   let box = view(arriveOf('mossvale')), known = new Set(['mossvale'])
   let canvas = createCanvas(320, 320), ctx = canvas.getContext('2d')
-  let pixels = chartbook<Uint8ClampedArray<ArrayBuffer>>()
-  let compose = chartsheet(() => {
+  let pixels = chartbook<Uint8ClampedArray<ArrayBuffer>>(CHUNK)
+  let compose = chartsheet(SIZE, () => {
     let image = createCanvas(SIZE, SIZE), ctx = image.getContext('2d')
     return {
       image,
