@@ -203,18 +203,19 @@ for code enumerating application-owned tables.
 ## Resets
 
 The runtime moves an object to a new instance when it likes (a deploy, a runtime
-update, another machine), and the instance it moved fails its work in flight;
-whoever owns that work runs it again. `moved(error)` recognizes those words.
-`replaced(ctx.storage)` says whether this instance is the one that was moved: a
-reset instance still answers a read but refuses every write, so it asks through
-a transaction. `evicted(error)` is a reset a caller should send again for, and
-`killed(error)` a kill for the CPU or memory limit, which no code of the object
-sees. `opaque(error)` is the runtime's own internal error, which names only a
-reference: the work is tried again, and reported if it keeps failing.
-`lost(error)` is the connection to the object dropped under a call, which the
-runtime names in words alone. `retried(send, replayable, retry)` sends a call
-again while it fails in words `retry` knows (`evicted` by default), pausing
-before each resend as `backoff` says.
+update, another machine, a failure inside its own storage), and the instance it
+moved fails its work in flight; whoever owns that work runs it again.
+`moved(error)` recognizes those words. `replaced(ctx.storage)` says whether this
+instance is the one that was moved: a reset instance still answers a read but
+refuses every write, so it asks through a transaction. `evicted(error)` is a
+reset a caller should send again for, and `killed(error)` a kill for the CPU or
+memory limit, which no code of the object sees. `opaque(error)` is the runtime's
+own internal error, which names only a reference: the work is tried again, and
+reported if it keeps failing. `lost(error)` is the connection to the object
+dropped under a call, which the runtime names in words alone.
+`retried(send, replayable, retry)` sends a call again while it fails in words
+`retry` knows (`evicted` by default), pausing before each resend as `backoff`
+says.
 
 ```ts
 import { assertEquals } from '@std/assert'
