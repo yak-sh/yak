@@ -80,18 +80,6 @@ test('a declared effect owes no row until its handler is registered', async () =
   assertEquals(await owed(a.g), ['post_note p1 pending'])
 })
 
-test('a run owed for a removal is handed what the commit removed', async () => {
-  let a = proc(store())
-  let eid = '00000000-0000-4000-8000-000000000001'
-  let gone: unknown[] = []
-  a.fx.handle({ post_gone: (e) => void gone.push(e.before?.post) })
-  await a.g.apply([post(eid)])
-  await a.g.apply([{ entity: { eid }, $delete: true }])
-  await a.fx.work(a.g)
-  await a.fx.idle()
-  assertEquals(gone, [{ title: 'One' }])
-})
-
 test('a batch that never commits owes nothing', async () => {
   let a = proc(store())
   await a.g.apply([post('p1')], { check: true })
@@ -103,7 +91,7 @@ test('a batch that never commits owes nothing', async () => {
 let committingWords = loadVocab([
   pick(pooledBlog.docs[0], ['entity', 'post']),
   pick(pooledBlog.docs[1], ['effect']),
-  pick(pooledBlog.docs[2], ['post_note']),
+  pick(pooledBlog.docs[2], ['post_note', 'post_gone']),
 ])
 let committingStore = memory()
 let committedNotes = parse('.effect.handler=post_note')
@@ -134,8 +122,10 @@ let committingFx = effects(committingWords, {
   singleOwner: true,
   write: commitWrite,
 })
+let committedGone: unknown[] = []
 committingFx.handle({
   post_note: (e) => void committedRuns.push(`${e.kind} ${e.entity.eid}`),
+  post_gone: (e) => void committedGone.push(e.before?.post),
 })
 // This private store starts empty; join the worker without a backlog pass.
 await committingFx.work(committingGraph, undefined, 0)
@@ -146,7 +136,8 @@ let commitPost = (bundle: Bundle) => {
       after(
         committingFx.hooks!.precondition!([bundle], tx, undefined, context),
         (ready) => {
-          tx.patch(ready)
+          tx.remove(ready.filter(dead).map((b) => b.entity))
+          tx.patch(ready.filter((b) => !dead(b)))
           return committingFx.hooks!.commit!(ready, tx, undefined, context)
         },
       )
@@ -168,6 +159,14 @@ test('a process working the pool runs what it writes, once committed', async () 
   await committingFx.idle()
   assertEquals(committedRuns, ['created p1', 'changed p1'])
   assertEquals(await committingStore.rows(committedNotes), [])
+})
+
+test('a run owed for a removal is handed what the commit removed', async () => {
+  let eid = '00000000-0000-4000-8000-000000000001'
+  await commitPost(post(eid))
+  await commitPost({ entity: { eid }, $delete: true })
+  await committingFx.idle()
+  assertEquals(committedGone, [{ title: 'One' }])
 })
 
 test('a pooled event retains all components moved on its target', async () => {
