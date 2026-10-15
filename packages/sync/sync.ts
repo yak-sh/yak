@@ -86,6 +86,8 @@ export type SyncOpts = {
   replica?: Replica
   /** how a write is sent (default: the global `fetch`) */
   fetch?: Fetch
+  /** Local epoch milliseconds for clock measurement (default: monotonic epoch). */
+  time?: () => number
   /** how the socket is opened (default: the global `WebSocket`) */
   connect?: Connect
   /** how a reconnect, and a relayed value's pace, is timed (default:
@@ -343,6 +345,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     url: opts.url,
     connect: opts.connect,
     timer,
+    time: opts.time,
     wait: opts.wait,
     most: opts.most,
     pending,

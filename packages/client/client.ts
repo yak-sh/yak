@@ -74,6 +74,8 @@ export type ClientOpts = {
   wait?: number
   /** the longest reconnect delay in ms (default: 30_000) */
   most?: number
+  /** Local epoch milliseconds for the synced clock (default: monotonic epoch). */
+  time?: () => number
   /** where a refusal or a network failure is reported (default: a console
    * warning) */
   report?: Report
@@ -262,6 +264,7 @@ export let client = (
       fetch: opts.fetch,
       connect: opts.connect,
       timer: opts.timer,
+      time: opts.time,
       headers: opts.headers,
       wait: opts.wait,
       most: opts.most,

@@ -77,6 +77,7 @@ let peers = () => {
   })
   let pages = heroes.map((eid) => {
     let page = connect(new URL('http://vale.test/'), vocab, {
+      time: () => Date.now(), // the game and its socket share this test's fake clock
       fetch: (r) => serve(r),
       connect: () => {
         let both = pair()
