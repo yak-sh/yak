@@ -599,10 +599,10 @@ let restartFixture = async (answer: () => Response) => {
 for (let [how, answer] of Object.entries(lost)) {
   let fixture = await restartFixture(answer)
   test(`a deploy recorded as a restart ${how} its answer lands once`, async () => {
-    await using platform = fixture.platform
+    await using _platform = fixture.platform
     // Retry timing is not this test's subject; keep the retry, not its jitter.
     let paused: number[] = []
-    using wait = stub(backoff, 'wait', (ms) => {
+    using _wait = stub(backoff, 'wait', (ms) => {
       paused.push(ms)
       return Promise.resolve()
     })

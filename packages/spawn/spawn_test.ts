@@ -7,14 +7,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
-import {
-  effectDoc,
-  type Effects,
-  effects,
-  type Event,
-  POOL,
-  take,
-} from '@yaks/effects'
+import { effectDoc, type Effects, effects, POOL, take } from '@yaks/effects'
 import { modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
 import {
@@ -40,7 +33,7 @@ import {
   start,
 } from './run.ts'
 import { sessionEnv } from '@yaks/session'
-import { asking, bare, fake, launching, tracked, until } from './testing.ts'
+import { asking, bare, fake, tracked, until } from './testing.ts'
 import { spawnDoc } from './vocab.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
