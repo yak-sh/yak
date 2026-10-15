@@ -117,7 +117,6 @@ import {
   type Derived,
   type Driver,
   eq,
-  erect,
   notNull,
   type Raw,
   render,
@@ -129,8 +128,6 @@ import {
 } from '@yaks/sql'
 import {
   FIT,
-  follow,
-  forget,
   identity as inspectIdentity,
   inspect as inspectStorage,
   printed,
@@ -274,7 +271,14 @@ import { borrows } from './reach.ts'
 import { behind, ran } from './running.ts'
 import { type Meta, meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
-import { apart, counts, hop, type Tally, tallying } from './lib/hops.ts'
+import {
+  apart,
+  hop,
+  reported,
+  type Tally,
+  tallying,
+  waited,
+} from './lib/hops.ts'
 import {
   batch,
   BATCHES,
@@ -339,7 +343,7 @@ import { apex, url } from './host.ts'
 import {
   documented,
   install,
-  lifecycleColumns,
+  passed,
   respelled,
   retire,
   shed,
@@ -731,9 +735,23 @@ let aggOf = (line: string): Agg | null =>
   parse(line).clauses.map((c) => c.kind as Agg).find((k) => AGGS.includes(k)) ??
     null
 
+// What a schema pass is remembered by: the Worker version it ran under, the
+// words it fitted and the stamp it left. A wake finding the same three renders
+// no schema; one finding any moved asks the print again. A runtime that names
+// no version remembers nothing.
+export let fitOf = (
+  version: string | null,
+  key: string,
+  schema: string | null,
+): string | null => version && `${version} ${key} ${schema ?? ''}`
+export let stands = (held: string | null, fit: string | null): boolean =>
+  !!fit && held == fit
+
 // A query tree sent where text goes arrives as `[object Object]`, which reads
 // as two words that match nothing. The sender's bug, never a question.
 let FORMATTED = /\[object [A-Z]\w*\]/
+export let formatted = (line: string): string | null =>
+  line.match(FORMATTED)?.[0] ?? null
 
 let unserved = (line: string): string | null => {
   for (let seg of line.split('&')) {
@@ -1186,38 +1204,22 @@ export class Store {
   // as they were renders no schema at all, and one that finds any moved (a
   // deploy, a new vocabulary, a rollback's pass) asks the print again.
   #schema(shape: Shape): Error[] {
-    let left: Error[] = []
     let held = this.#get('schema')
-    if (!(this.#get('name') || held)) return left
-    if (this.#stood(shape)) return left
-    let { vocab, print, stamp } = shape
-    if (held && held != stamp) forget(this.#sql, print)
-    follow(this.#sql, print, () => {
-      if (held == stamp) return
-      // Install only changed definitions. Unrelated words must not discard
-      // search indexes or audit every entity on the request that discovers
-      // them.
-      lifecycleColumns(this.#sql, vocab)
-      erect(this.#sql, blobSchema())
-      if (vocab.comp('_tx')) erect(this.#sql, journalDdl())
-      left = install(this.#sql, vocab, blobRead(vocab))
-      if (left.length) return false
-      watchEmbedding(statements(this.#sql), texts(vocab, blobRead(vocab)))
-      this.#put('schema', stamp)
-    })
+    if (!(this.#get('name') || held)) return []
+    if (this.#stood(shape)) return []
+    let { left, stamp } = passed(this.#sql, shape, held)
+    if (stamp) this.#put('schema', stamp)
     let fit = this.#fit(shape)
     if (!left.length && fit) this.#put('fitted', fit)
     return left
   }
 
   #fit(shape: Shape): string | null {
-    let version = this.#version()
-    return version && `${version} ${shape.key} ${this.#get('schema') ?? ''}`
+    return fitOf(this.#version(), shape.key, this.#get('schema'))
   }
 
   #stood(shape: Shape): boolean {
-    let fit = this.#fit(shape)
-    return !!fit && this.#get('fitted') == fit
+    return stands(this.#get('fitted'), this.#fit(shape))
   }
 
   #build() {
@@ -3216,7 +3218,7 @@ export class Store {
     await this.#ensureStarted(request)
     let tally = this.#pending
     this.#pending = new Map()
-    if (waking) tally.set('wake', Date.now() - woke)
+    waited(tally, waking, woke, Date.now())
     let run = () =>
       tallying(tally, async () => {
         let base = request.headers.get('x-yak-base-release')
@@ -3270,15 +3272,8 @@ export class Store {
         ) this.#used()
         if (answer.status == 101) return answer
         let headers = new Headers(answer.headers)
-        let { hops, r2 } = counts(tally)
-        headers.set('x-yak-hops', String(hops))
-        headers.set('x-yak-stmts', String(tally.get('stmts') ?? 0))
-        if (tally.has('rows')) {
-          headers.set('x-yak-rows', String(tally.get('rows')))
-        }
-        headers.set('x-yak-r2', String(r2))
-        if (tally.has('wake')) {
-          headers.set('x-yak-wake', String(tally.get('wake')))
+        for (let [name, value] of Object.entries(reported(tally))) {
+          headers.set(name, value)
         }
         return new Response(answer.body, {
           status: answer.status,
@@ -4129,9 +4124,9 @@ export class Store {
   #asked = served(async (request) => {
     let url = new URL(request.url)
     let line = url.searchParams.get('q') ?? ''
-    let formatted = line.match(FORMATTED)
-    if (formatted) {
-      let e = new TypeError(`a query was sent as ${formatted[0]}`)
+    let text = formatted(line)
+    if (text) {
+      let e = new TypeError(`a query was sent as ${text}`)
       defect(e, { request: 'query', store: this.#get('name') })
       throw e
     }

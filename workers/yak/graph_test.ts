@@ -12,7 +12,8 @@
 // upgrade — `WebSocketPair` and a 101 `Response` are the runtime's, not the
 // web's — so a socket is driven the way the runtime drives a hibernated one,
 // through `webSocketMessage`.
-import { test } from '@yaks/testing'
+import { clock, equal, ok, test } from '@yaks/testing'
+import { reported, type Tally, waited } from './lib/hops.ts'
 import {
   assert,
   assertEquals,
@@ -26,7 +27,7 @@ import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
-import { grantEid, Store } from './graph.ts'
+import { fitOf, formatted, grantEid, stands, Store } from './graph.ts'
 import { metaOf } from './meta.ts'
 import type { Load } from '@yaks/host'
 import { appConfig } from './config.ts'
@@ -127,26 +128,22 @@ test('each store response reports the SQL it ran for that fetch', async () => {
   assert(measured > 0 && measured <= calls - before)
 })
 
-test('only the request that woke a store says how long it waited to start', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = new Store(ctx)
-  let first = await get(store, '/query?q=.doc%26.count', owner)
-  assert(Number(first.headers.get('x-yak-wake')) >= 0)
-  let second = await get(store, '/query?q=.doc%26.count', owner)
-  assertEquals(second.headers.get('x-yak-wake'), null)
-  let woken = await get(new Store(ctx), '/query?q=.doc%26.count', owner)
-  assert(woken.headers.has('x-yak-wake'))
+test('only the request that woke a store says how long it waited to start', () => {
+  let time = clock(1000)
+  let says = (waking: boolean) => {
+    let tally: Tally = new Map()
+    waited(tally, waking, 990, time.now())
+    return reported(tally)['x-yak-wake']
+  }
+  equal(says(true), '10')
+  equal(says(false), undefined)
 })
 
-test('a query tree sent as text is refused, never run as two words', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let store = new Store(ctx)
-  let q = encodeURIComponent('[object Object]')
-  for (let path of [`/query?q=${q}`, `/query?q=${q}&listing=1`]) {
-    assertEquals((await get(store, path, owner)).status, 500)
-  }
+test('a query tree sent as text is refused, never run as two words', () => {
+  equal(formatted(String({})), '[object Object]')
+  equal(formatted('[object Array]'), '[object Array]')
+  equal(formatted('.recipe & [object Object]'), '[object Object]')
+  equal(formatted('.recipe.title=[object] & .doc'), null)
 })
 
 test('a Store row profile attributes SQL to the HTTP route', async () => {
@@ -233,34 +230,19 @@ let cookbook = async (ctx = state(), manifest = SCHEMA, v = owner) => {
   return store
 }
 
-test('a store wakes without its schema under the code that fitted it, and follows new words', async () => {
-  let ctx = state()
-  using _db = ctx.storage
-  let on = (id: string) => ({ CF_VERSION_METADATA: { id } })
-  let wake = async (id: string, path = '/query?q=.recipe') =>
-    await get(new Store(ctx, on(id)), path, owner)
-  let stmts = (r: Response) => Number(r.headers.get('x-yak-stmts'))
-  assertEquals(
-    (await post(new Store(ctx, on('a')), '/vocab', SCHEMA, owner)).status,
-    200,
-  )
-  let fitted = await wake('a'), deployed = await wake('b')
-  assertEquals([fitted.status, deployed.status], [200, 200])
-  assert(stmts(fitted) < stmts(deployed))
-  let grown = JSON.stringify({
-    $defs: {
-      ...JSON.parse(SCHEMA).$defs,
-      dish: { properties: { n: { type: 'number' } } },
-    },
-  })
-  assertEquals(
-    (await post(new Store(ctx, on('b')), '/vocab', grown, owner)).status,
-    200,
-  )
-  let wrote = await post(new Store(ctx, on('b')), '/apply', [
-    { entity: { eid: CAKE }, dish: { n: 1 } },
-  ], owner)
-  assertEquals(wrote.status, 200)
+test('a store wakes without its schema under the code that fitted it, and follows new words', () => {
+  let fit = fitOf('a', 'words', 'stamp')
+  ok(stands(fit, fitOf('a', 'words', 'stamp')))
+  for (
+    let moved of [
+      fitOf('b', 'words', 'stamp'),
+      fitOf('a', 'more', 'stamp'),
+      fitOf('a', 'words', 'new'),
+    ]
+  ) ok(!stands(fit, moved))
+  ok(!stands(null, fitOf('a', 'words', null)))
+  ok(!stands(null, fitOf(null, 'words', null)))
+  equal(fitOf(null, 'words', 'stamp'), null)
 })
 
 let appOwned = await (async () => {

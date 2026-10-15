@@ -106,3 +106,28 @@ export let counts = (tally: Tally) => {
   for (let [name, n] of tally) if (name.startsWith('r2.')) r2 += n
   return { hops: tally.get('hops') ?? 0, r2 }
 }
+
+/** How long a request waited for its object to start, noted on its tally:
+ * only the request that woke the object has anything to say. */
+export let waited = (
+  tally: Tally,
+  waking: boolean,
+  since: number,
+  now: number,
+) => {
+  if (waking) tally.set('wake', now - since)
+}
+
+/** The headers a store's answer carries about the work behind it. */
+export let reported = (tally: Tally): Record<string, string> => {
+  let { hops, r2 } = counts(tally)
+  let header = (name: string) =>
+    tally.has(name) ? { [`x-yak-${name}`]: String(tally.get(name)) } : {}
+  return {
+    'x-yak-hops': String(hops),
+    'x-yak-stmts': String(tally.get('stmts') ?? 0),
+    ...header('rows'),
+    'x-yak-r2': String(r2),
+    ...header('wake'),
+  }
+}

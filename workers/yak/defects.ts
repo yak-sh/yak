@@ -138,6 +138,12 @@ export let reported = (error: unknown) => {
   if (error && typeof error == 'object') context.getStore()?.seen.add(error)
 }
 
+/** Whether a failure met by an instance is its replacement's to redo, and so
+ * no defect: the runtime moved the instance (`replaced`, absent outside a
+ * Durable Object) and the failure says so. */
+export let redone = (error: unknown, replaced?: () => boolean): boolean =>
+  moved(error) && !!replaced?.()
+
 /** Only exception data and explicit tags leave. One thrown object can pass
  * several catches; a later invocation reusing it is another occurrence. An
  * occurrence about other code than the running version (a failed build)
@@ -151,9 +157,7 @@ export let defect = (
   details: { hit?: Hit; fault?: string; commit?: string } = {},
 ) => {
   let invocation = context.getStore()
-  if (!invocation?.env.ERRORS || moved(error) && invocation.replaced?.()) {
-    return
-  }
+  if (!invocation?.env.ERRORS || redone(error, invocation.replaced)) return
   if (error && typeof error == 'object') {
     if (invocation.seen.has(error)) return
     invocation.seen.add(error)

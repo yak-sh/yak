@@ -314,7 +314,7 @@ export let signed = async (
 // grant it wears, lent as @yaks/egress lends a credential, to this platform
 // and the address of the one space the grant reaches, where a clone of its
 // apps knocks (git_door.ts). None when it wears none.
-let lent = async (env: Keys, container: string) => {
+export let lent = async (env: Keys, container: string) => {
   let book = ledger(env.OAUTH_KV)
   let secret = env.SESSION_SECRET
   let was = book && await book.wearing(container)
@@ -340,10 +340,19 @@ export let swapped = async (
   container: string,
   req: Request,
   send: typeof fetch = fetch,
+): Promise<Response> => routed(apex(env), await lent(env, container), req, send)
+
+/** {@link swapped} for what a container is lent: the hosts the platform and
+ * a space answer at are where its placeholder is swapped, and every other
+ * host is sent the request as it came. */
+export let routed = async (
+  platform: string,
+  lend: Awaited<ReturnType<typeof lent>>,
+  req: Request,
+  send: typeof fetch = fetch,
 ): Promise<Response> => {
   let to = new URL(req.url).hostname
-  let lend = await lent(env, container)
-  if (to != apex(env) && !lend.some((g) => g.hosts.includes(to))) {
+  if (to != platform && !lend.some((g) => g.hosts.includes(to))) {
     return send(req)
   }
   try {

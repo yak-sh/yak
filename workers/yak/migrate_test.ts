@@ -3,20 +3,20 @@
 // doors: what the object remembers rewritten into the one shape a deploy takes
 // now, a schema that moves re-cut and refilled, and a schema that will not
 // stand refused at every door and heard by the tracker.
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { clock } from '@yaks/testing'
-import { within } from './defects.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from '../../packages/durable-object/testing.ts'
-import { at, by, col, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
+import { at, by, col, erect, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
-import { columns, objects as catalogue, reclassify } from '@yaks/sqlite'
+import { columns, objects as catalogue, reclassify, schema } from '@yaks/sqlite'
+import { mem } from '../../packages/sqlite/testing.ts'
 import { Store } from './graph.ts'
-import { documented, respelled, unholed, unworded } from './migrate.ts'
+import { loadVocab } from '@yaks/vocab'
+import { documented, passed, respelled, unholed, unworded } from './migrate.ts'
 import { PLATFORM_STORE } from './door.ts'
-import { db, every, keep, slot } from './testing.ts'
+import { db, keep, slot } from './testing.ts'
 
 // One object's whole state, kept across incarnations: its storage and the
 // socket list the runtime holds.
@@ -32,7 +32,6 @@ let state = () => {
 
 type State = ReturnType<typeof state>
 
-let SPACE = 'c0000000-0000-4000-8000-0000000000c5'
 let APP = 'd0000000-0000-4000-8000-0000000000ab'
 let ONE = '10000000-0000-4000-8000-000000000001'
 let TWO = '20000000-0000-4000-8000-000000000002'
@@ -126,22 +125,47 @@ test('a Store retires an old build identity index on its next schema wake', asyn
   assertEquals((await moved.query('.build&*', APP)).length, 2)
 })
 
-test('a Store an older release opened is brought to its schema again, though its print is recorded', async () => {
-  let ctx = state()
-  await newer(ctx, 'ada/vale').query('.build&*', APP)
-  let indexes = () =>
-    catalogue(db(ctx), { type: 'index' })
-      .filter((i) => i.sql != null).map((i) => {
-        assert(typeof i.name == 'string')
-        return i.name
-      }).sort()
-  let stood = indexes()
-  // The release before prints, a rollback away, retires an index and keeps
-  // only its own stamp.
-  run(ctx, { t: 'drop', kind: 'index', name: stood[0], ifExists: true })
-  keep(ctx, 'schema', 'older schema')
-  await newer(ctx, 'ada/vale').query('.build&*', APP)
-  assertEquals(indexes(), stood)
+// A wake's schema pass with the raising of the schema stood in for: what it
+// is asked to raise, and what it leaves undone.
+let pass = (left: Error[] = []) => {
+  let asked = 0
+  return {
+    raise: () => (asked++, left),
+    get asked() {
+      return asked
+    },
+  }
+}
+
+// One file stands for every pass: a print is recorded for good, so each test
+// names its own.
+let file = mem()
+erect(file, schema(loadVocab({})))
+let shape = (print: string) => ({
+  vocab: loadVocab({}),
+  print,
+  stamp: 'stamp',
+})
+
+test('a Store an older release opened is brought to its schema again, though its print is recorded', () => {
+  let first = pass(), again = pass(), same = pass(), now = shape('older')
+  equal(passed(file, now, null, first.raise).stamp, 'stamp')
+  // The release before prints, a rollback away, kept only its own stamp.
+  equal(passed(file, now, 'older schema', again.raise).stamp, 'stamp')
+  equal([first.asked, again.asked], [1, 1])
+  // Its own stamp and a recorded print leave nothing to raise.
+  equal(passed(file, now, 'stamp', same.raise).stamp, null)
+  equal(same.asked, 0)
+})
+
+test('a declared index the rows cannot satisfy is reported, and the store serves', () => {
+  let stuck = new Error('space_slug is not built'), now = shape('stuck')
+  let failing = pass([stuck]), healed = pass()
+  let wake = (p: ReturnType<typeof pass>) => passed(file, now, null, p.raise)
+  equal(wake(failing), { left: [stuck], stamp: null })
+  // The print stays unrecorded, so the next wake raises again.
+  equal(wake(healed).stamp, 'stamp')
+  equal(healed.asked, 1)
 })
 
 // A Store over the object, as a new incarnation, driven through its own doors.
@@ -634,55 +658,6 @@ let refused = async (now: ReturnType<typeof newer>, message: string) => {
     assert(body.message.includes(message), body.message)
   }
 }
-
-// A directory whose rows break a unique index its vocabulary declares, with
-// the index gone and a schema stamp older than the code: the next boot raises
-// the index, and cannot.
-let unsatisfiable = async () => {
-  let ctx = state()
-  let now = newer(ctx, PLATFORM_STORE)
-  let r = await now.apply([
-    { entity: { eid: SPACE }, space: { slug: 'ada' }, doc: { title: 'Ada' } },
-    { entity: { eid: TWO }, space: { slug: 'ben' } },
-  ])
-  assertEquals(r.status, 200)
-  run(
-    ctx,
-    { t: 'drop', kind: 'index', name: 'space_slug' },
-    every('space', { slug: 'same' }),
-  )
-  keep(ctx, 'schema', 'older schema')
-  return ctx
-}
-
-test('a declared index the rows cannot satisfy is reported, and the store serves', async () => {
-  let ctx = await unsatisfiable()
-  let seen: Bundle[] = []
-  let env = {
-    ERRORS: {
-      send: (rows: Bundle[]) => {
-        seen.push(rows[0])
-        return Promise.resolve()
-      },
-    },
-  }
-  await within(env, {}, async () => {
-    let now = newer(ctx, PLATFORM_STORE)
-    let r = await now.apply([
-      { entity: { eid: crypto.randomUUID() }, doc: { title: 'Cy' } },
-    ])
-    assertEquals(r.status, 200)
-  }, clock())
-  assertEquals(catalogue(db(ctx), { name: 'space_slug' }).length, 0)
-  assertEquals(slot(ctx, 'schema'), 'older schema')
-  assertEquals(seen.length, 1)
-  assertEquals((seen[0].error as { tags: unknown }).tags, {
-    request: 'schema fit',
-    store: PLATFORM_STORE,
-  })
-  let { value } = seen[0].exception as { value: string }
-  assert(value.includes('space_slug is not built'), value)
-})
 
 test('a nullable unique key is raised over older rows without one', async () => {
   let ctx = state()

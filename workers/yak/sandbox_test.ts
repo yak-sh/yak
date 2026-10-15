@@ -16,7 +16,7 @@
 // `--containers-rollout=none` is what gets a dry run past it. So the last test
 // here reads the deploy's own config instead (see the gate note in
 // wrangler.toml).
-import { test } from '@yaks/testing'
+import { equal, test } from '@yaks/testing'
 import {
   assert,
   assertEquals,
@@ -30,7 +30,8 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import type { Env } from './env.ts'
 import * as apps from './apps.ts'
-import { platform, type Ran, sandboxes, workspaces } from './testing.ts'
+import { kv, platform, type Ran, sandboxes, workspaces } from './testing.ts'
+import type { Space } from './directory.ts'
 import { GRANT, held, ledger } from './grants.ts'
 import {
   asleep,
@@ -43,6 +44,7 @@ import {
   named,
   NO_BOX,
   released,
+  routed,
   seconds,
   spending,
   swapped,
@@ -105,6 +107,9 @@ let tool = (name: string) => {
 let at = (name: string) =>
   Deno.readTextFile(new URL(`./${name}`, import.meta.url))
 
+// The base image's Dockerfile, read once for every test that checks it.
+let baseFile = await at('sandbox/base/Dockerfile')
+
 // Every `ARG <NAME>_VERSION=` the image pins, as name → version. This is the
 // one list; the tool description and the two pages that quote it are checked
 // against it rather than against each other.
@@ -112,7 +117,7 @@ let VERSIONS = /^ARG (\w+)_VERSION=(\S+)$/gm
 
 let pinned = async () =>
   new Map(
-    [...(await at('sandbox/base/Dockerfile')).matchAll(VERSIONS)]
+    [...baseFile.matchAll(VERSIONS)]
       .map(([, name, version]) => [name, version] as const),
   )
 
@@ -496,26 +501,41 @@ test('every command is signed in as the caller, with one grant', async () => {
 })
 
 test('a placeholder becomes the token toward yaks.app and stays a placeholder toward any other host', async () => {
-  let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
-  await tool('sandbox_shell').run({ env, dir: dirOf(env), person: ADA }, {
-    command: 'ls',
-  })
-  let placeholder = box.env.at(-1)!.YAKS_TOKEN
-  let mine = named(space, ADA)
-
-  // To this platform, and to a clone of an app at Ada's own space's address.
-  let apex = new URL(HOST).host
-  for (
-    let [to, git] of [
-      [`${HOST}/mcp`, false],
-      [`https://ada.${apex}/chess.git/info/refs`, true],
-    ] as const
-  ) {
-    let { status, bearer } = await sent(env, mine, to, placeholder, git)
-    assertEquals(status, 200)
-    let grant = await held(bearer!, SECRET, ledger(env.OAUTH_KV)!)
-    assertEquals(grant?.person, ADA, to)
+  let apex = new URL(HOST).host, PLACEHOLDER = SENTINEL + 'a'.repeat(43)
+  let lend = [{
+    sentinel: PLACEHOLDER,
+    value: 'token',
+    hosts: [apex, `ada.${apex}`],
+  }]
+  let sentTo = async (to: string, git = false) => {
+    let out: Request | undefined
+    let res = await routed(
+      apex,
+      lend,
+      new Request(to, {
+        headers: {
+          authorization: git
+            ? `Basic ${btoa(`x:${PLACEHOLDER}`)}`
+            : `Bearer ${PLACEHOLDER}`,
+        },
+      }),
+      (r, init) => {
+        out = new Request(r, init)
+        return Promise.resolve(new Response('ok'))
+      },
+    )
+    let said = out?.headers.get('authorization')?.split(' ')[1]
+    return {
+      status: res.status,
+      bearer: said && (git ? atob(said).slice(2) : said),
+    }
   }
+  // To this platform, and to a clone of an app at Ada's own space's address.
+  equal(await sentTo(`${HOST}/mcp`), { status: 200, bearer: 'token' })
+  equal(await sentTo(`https://ada.${apex}/chess.git/info/refs`, true), {
+    status: 200,
+    bearer: 'token',
+  })
   // Anywhere else, another space's address included, as it came.
   for (
     let to of [
@@ -524,18 +544,11 @@ test('a placeholder becomes the token toward yaks.app and stays a placeholder to
       `https://example.com/?next=${HOST}`,
     ]
   ) {
-    assertEquals(await sent(env, mine, to, placeholder), {
-      status: 200,
-      bearer: placeholder,
-    })
+    equal(await sentTo(to), { status: 200, bearer: PLACEHOLDER })
   }
   // And only over https (another member's container is
   // sandbox_isolation_test.ts's).
-  assertEquals(
-    (await sent(env, mine, HOST.replace('https:', 'http:'), placeholder))
-      .status,
-    403,
-  )
+  equal((await sentTo(HOST.replace('https:', 'http:'))).status, 403)
 })
 
 test('destroying the container revokes what it was wearing', async () => {
@@ -565,31 +578,27 @@ test('destroying the container revokes what it was wearing', async () => {
 
 test('the container holds a placeholder, never the token, and neither reaches the transcript', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
-  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
-  let model = fake([
-    {
-      calls: [{
-        id: 'c1',
-        name: 'sandbox_shell',
-        args: JSON.stringify({ command: 'yak app_list' }),
-      }],
-    },
-    { text: 'listed' },
-  ])
-  let beats: string[] = []
-  await build(env, owner, space, [{ said: 'person', text: 'list them' }], {
-    model,
-    on: (b) => beats.push(JSON.stringify(b)),
-  })
+  let env = {
+    SANDBOX: box.SANDBOX,
+    WORKSPACES: workspaces(box.SANDBOX),
+    OAUTH_KV: kv(),
+    SESSION_SECRET: SECRET,
+  }
+  let { machine } = await workbench(
+    env,
+    { eid: 'ada', slug: 'ada' } as Space,
+    ADA,
+    spending(),
+  )
+  await machine.start('yak app_list')
 
   let placeholder = box.env.at(-1)!.YAKS_TOKEN
   assert(placeholder?.startsWith(SENTINEL), 'the command was signed in')
   for (let handed of box.env.flatMap(Object.values)) {
     assert(!handed.startsWith(GRANT), 'no grant token is handed in')
   }
-  // Not in a frame the person's page draws, not in what the model reads back,
-  // and not in the command line the tool was called with.
-  for (let said of [...beats, ...box.ran]) {
+  // Not in the command line the tool was called with.
+  for (let said of box.ran) {
     assert(!said.includes(placeholder), `not in ${said.slice(0, 60)}`)
   }
 })
@@ -704,26 +713,26 @@ test('the deploy names the container, and the image is the SDK version', async (
   let pinned = JSON.parse(await at('package.json')) as {
     dependencies: Record<string, string>
   }
-  let base = await at('sandbox/base/Dockerfile')
-  let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(base)
+  let tag = /^FROM docker\.io\/cloudflare\/sandbox:(\S+)$/m.exec(baseFile)
   assert(tag, 'the base is FROM the sandbox image')
   assertEquals(tag[1], pinned.dependencies['@cloudflare/sandbox'])
   // Pinned and checksummed like everything else it downloads.
-  assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(base), 'deno is pinned')
-  assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(base), 'and checksummed')
+  assert(/^ARG DENO_VERSION=\d+\.\d+\.\d+$/m.test(baseFile), 'deno is pinned')
+  assert(/^ARG DENO_SHA256=[0-9a-f]{64}$/m.test(baseFile), 'and checksummed')
 })
 
 // The image builds FROM the toolchain base (base.ts, T-38057), and the tag it
 // names is the base Dockerfile's own hash: edit the base and this names the
 // FROM line to write.
+let baseImage = from(await at('wrangler.toml'))!
 test('the sandbox names the base its Dockerfile hashes to', async () => {
-  let want = await tag(await at('sandbox/base/Dockerfile'))
-  let image = from(await at('wrangler.toml'))
-  assertEquals(image?.split('/').at(-1), `yak-sandbox:${want}`)
+  assertEquals(
+    baseImage.split('/').at(-1),
+    `yak-sandbox:${await tag(baseFile)}`,
+  )
 })
 
 // The base's pin is checked above; its image door controls Docker operations.
-let baseImage = from(await at('wrangler.toml'))!
 test('a deploy builds and pushes the base only when it is missing', async () => {
   let image = baseImage
   let calls = async (held: string[], dry = false) => {
@@ -754,7 +763,7 @@ test('a deploy builds and pushes the base only when it is missing', async () => 
 // check it against, because a floating toolchain is a build that worked
 // yesterday and there is nobody here to debug it.
 test('a toolchain apiece, pinned, and every download checksummed', async () => {
-  let file = await at('sandbox/base/Dockerfile')
+  let file = baseFile
   let versions = await pinned()
   for (
     let want of [

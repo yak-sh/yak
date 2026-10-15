@@ -1,4 +1,3 @@
-import { statements } from '@yaks/sqlite'
 // What a Store's own storage is brought to at each wake (graph.ts): the schema
 // its vocabulary implies, raised over whatever the object holds ({@link
 // install}), changed definitions installed when that schema moves, a column
@@ -7,7 +6,14 @@ import { statements } from '@yaks/sqlite'
 // {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
 // reads, for `yak admin deploys`.
 import { adopt, fields } from '@yaks/fts'
-import { rekey, schema as vectorSchema } from '@yaks/embedding'
+import { blobRead, blobSchema } from '@yaks/blob'
+import { ddl as journalDdl } from '@yaks/journal'
+import {
+  rekey,
+  schema as vectorSchema,
+  watch as watchEmbedding,
+} from '@yaks/embedding'
+import { texts } from './embedding.ts'
 import { reserved } from '@yaks/durable-object'
 import {
   catalogue,
@@ -25,9 +31,12 @@ import {
   epoch,
   epochAt,
   fit,
+  follow,
+  forget,
   indexed,
   retabled,
   retired,
+  statements,
 } from '@yaks/sqlite'
 import { build } from '@yaks/sqlite/owe'
 import type { Index, Vocab } from '@yaks/vocab'
@@ -486,4 +495,45 @@ export let lifecycleColumns = (d: Driver, vocab: Vocab) => {
     if (held) throw new Error(`${name}.state contract has not completed`)
     shed(d, vocab, vocab, name, 'state')
   }
+}
+
+/** The schema a vocabulary implies, raised over what the object holds and
+ * its search watched. Only changed definitions are installed: unrelated words
+ * must not discard search indexes or audit every entity on the request that
+ * discovers them. What it had to leave undone comes back. */
+export let raised = (d: Driver, vocab: Vocab): Error[] => {
+  lifecycleColumns(d, vocab)
+  erect(d, blobSchema())
+  if (vocab.comp('_tx')) erect(d, journalDdl())
+  let left = install(d, vocab, blobRead(vocab))
+  if (!left.length) {
+    watchEmbedding(statements(d), texts(vocab, blobRead(vocab)))
+  }
+  return left
+}
+
+/** One wake's schema pass, for the print a vocabulary renders to and the
+ * stamp an older release kept. The stamp decides when the pass (`raise`) runs
+ * while that release can still run (a rollback): where the store holds
+ * another, the print is forgotten and the pass runs again; where it holds this
+ * one, a print the store lacks is recorded with no pass. A pass that leaves
+ * something undone leaves the print unrecorded, so the next wake tries again,
+ * and `stamp` is what the store is to record as its own once the pass ran
+ * clean. */
+export let passed = (
+  d: Driver,
+  { vocab, print, stamp }: { vocab: Vocab; print: string; stamp: string },
+  held: string | null,
+  raise = raised,
+): { left: Error[]; stamp: string | null } => {
+  let left: Error[] = []
+  let ran = false
+  if (held && held != stamp) forget(d, print)
+  follow(d, print, () => {
+    if (held == stamp) return
+    left = raise(d, vocab)
+    if (left.length) return false
+    ran = true
+  })
+  return { left, stamp: ran ? stamp : null }
 }

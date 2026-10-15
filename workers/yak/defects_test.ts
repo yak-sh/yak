@@ -6,7 +6,14 @@ import { capture, origin } from '@yaks/tracker/report'
 import { batch } from '../tracker/queue.ts'
 import { platform } from '../tracker/core.ts'
 import { CallError } from '@yaks/tools/errors'
-import { caught, defect, delivery, refusing, within } from './defects.ts'
+import {
+  caught,
+  defect,
+  delivery,
+  redone,
+  refusing,
+  within,
+} from './defects.ts'
 import { Pending } from './writes.ts'
 import { type Own, replaced } from '@yaks/durable-object'
 
@@ -159,23 +166,6 @@ let GONE =
 let CODE = 'Durable Object reset because its code was updated.'
 let TIMEOUT =
   'Durable Object storage operation exceeded timeout which caused object to be reset.'
-let reports = async (instance?: Own) => {
-  let { rows, time, env } = recorded()
-  await within(
-    env,
-    {},
-    () => {
-      caught(new Error(GONE), { request: 'write' })
-      defect(new Error(CODE), {})
-      defect(new Error(TIMEOUT), {})
-    },
-    time,
-    { replaced: instance && (() => replaced(instance)) },
-  )
-  return rows.flat().flatMap((r) =>
-    r.exception ? [(r.exception as { value: string }).value] : []
-  )
-}
 // An instance's storage. One reset for a deploy refuses writes and still
 // answers reads; one no longer active refuses both.
 let refuse = (words: string) => (): never => {
@@ -186,11 +176,15 @@ let storage = (write = () => {}, read: () => unknown = () => []): Own => ({
   transactionSync: (body) => (write(), body()),
 })
 
-test('a moved instance reports none of its resets; a live caller and our own reset do', async () => {
-  equal(await reports(storage(refuse(CODE))), [TIMEOUT])
-  equal(await reports(storage(undefined, refuse(GONE))), [TIMEOUT])
-  equal(await reports(storage()), [GONE, CODE, TIMEOUT])
-  equal(await reports(), [GONE, CODE, TIMEOUT])
+test('a moved instance reports none of its resets; a live caller and our own reset do', () => {
+  let redoneBy = (instance?: Own) =>
+    [GONE, CODE, TIMEOUT].map((words) =>
+      redone(new Error(words), instance && (() => replaced(instance)))
+    )
+  equal(redoneBy(storage(refuse(CODE))), [true, true, false])
+  equal(redoneBy(storage(undefined, refuse(GONE))), [true, true, false])
+  equal(redoneBy(storage()), [false, false, false])
+  equal(redoneBy(), [false, false, false])
 })
 
 test('parallel invocation tags remain isolated and escaping failures reach tracker', async () => {
