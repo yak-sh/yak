@@ -193,7 +193,7 @@ export let clearOfCourse = (
   w: number,
   d: number,
   room: number,
-) =>
+): boolean =>
   !nearCourse(c, x, z, Math.max(w, d) + room) ||
   !c.xs.some((a, i) =>
     Math.hypot(
@@ -203,7 +203,7 @@ export let clearOfCourse = (
   )
 
 /** Project onto the endpoint chord, clamped to 0..1 (not arc length). */
-export let alongCourse = (c: Course, x: number, z: number) => {
+export let alongCourse = (c: Course, x: number, z: number): number => {
   let length2 = c.dx * c.dx + c.dz * c.dz
   return length2
     ? Math.min(
@@ -214,7 +214,7 @@ export let alongCourse = (c: Course, x: number, z: number) => {
 }
 
 /** Distance from (x,z) to the sample interpolation at chord fraction t. */
-export let offCourse = (c: Course, x: number, z: number, t: number) => {
+export let offCourse = (c: Course, x: number, z: number, t: number): number => {
   let f = Math.min(1, Math.max(0, t)) * (c.xs.length - 1)
   let i = Math.min(c.xs.length - 2, Math.floor(f)), u = f - i
   return Math.hypot(

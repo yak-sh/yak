@@ -58,17 +58,18 @@ export let planted = <E extends Effect, C extends object>(
   effects: e.effects,
 })
 
-export let within = (a: Area, at: { x: number; z: number }) =>
+export let within = (a: Area, at: { x: number; z: number }): boolean =>
   Math.hypot(a.x - at.x, a.z - at.z) <= a.radius
 
 /** A late frame pulses once on current occupants, not retroactively on
  * occupants whose old positions we do not know. No pulse after expiry. */
-export let pulse = (a: Area, now: number) => now >= a.next && now <= a.until
+export let pulse = (a: Area, now: number): boolean =>
+  now >= a.next && now <= a.until
 
-export let following = (a: Area, now: number) =>
+export let following = (a: Area, now: number): number =>
   a.next + (Math.floor((now - a.next) / 1000) + 1) * 1000
 
 /** Friendly effects use the shared clock, independent of when the caster
  * publishes its advanced cursor. Only the receiving hero changes health. */
-export let received = (a: Area, now: number) =>
+export let received = (a: Area, now: number): number =>
   now > a.until ? 0 : a.start + Math.floor((now - a.start) / 1000) * 1000

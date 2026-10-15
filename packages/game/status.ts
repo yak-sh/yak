@@ -52,7 +52,10 @@ export let applied = <K extends string, S extends string = string>(
 })
 
 /** Includes a tick on the expiry boundary, but never one after expiry. */
-export let elapsed = (s: Status, now: number) => {
+export let elapsed = (
+  s: Status,
+  now: number,
+): { amount: number; next: number } => {
   let ticks = Math.max(
     0,
     Math.floor((Math.min(now, s.until) - s.next) / 1000) + 1,

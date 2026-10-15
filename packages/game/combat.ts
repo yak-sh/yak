@@ -9,7 +9,11 @@ export type BlowRules = {
 }
 
 /** One roll drives both the critical hit and the variation within its tenth. */
-export let blow = (might: number, roll: number, rules: BlowRules) => {
+export let blow = (
+  might: number,
+  roll: number,
+  rules: BlowRules,
+): { dmg: number; great: boolean } => {
   let great = rules.sure || roll > rules.greatAt - rules.luck
   let base = might * (1 - rules.spread + (roll % 0.1) * 20 * rules.spread)
   return { dmg: Math.round(base * (great ? rules.greatScale : 1)), great }
