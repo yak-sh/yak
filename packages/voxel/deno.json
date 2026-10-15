@@ -5,13 +5,14 @@
     ".": "./mod.ts",
     "./mesh": "./mesh.ts",
     "./boxes": "./boxes.ts",
+    "./light": "./light.ts",
     "./stream": "./stream.ts",
     "./chartbook": "./chartbook.ts",
     "./chartsheet": "./chartsheet.ts",
     "./three": "./three/mod.ts"
   },
   "license": "Apache-2.0",
-  "description": "Worker-safe voxel geometry, chunk detail and heightfield charts, with Three.js materials, box rigs and baked light at /three.",
+  "description": "Worker-safe voxel geometry, baked lamp light, chunk detail and heightfield charts, with Three.js materials and box rigs at /three.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

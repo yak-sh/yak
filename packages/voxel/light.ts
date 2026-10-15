@@ -1,8 +1,9 @@
 // A building's lamps and fire light its own mesh. The light at each vertex is
 // baked once per shape and turn into the unused high bits of its edge flags;
-// soft.ts brings it up at dusk. Its facing keeps light inside the walls and
-// under the ceiling, while the distance makes each source brightest nearby.
-import { type Out, type Vec } from '../mesh.ts'
+// three/soft.ts brings it up at dusk. Its facing keeps light inside the walls
+// and under the ceiling, while the distance makes each source brightest nearby.
+// Plain arrays in and out, so a worker meshing a building bakes it too.
+import { type Out, type Vec } from './mesh.ts'
 
 export type LightSource = { at: Vec; size: number }
 

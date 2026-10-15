@@ -54,10 +54,10 @@ chooses where settings are persisted.
 
 Three.js is an ordinary npm dependency shared by the page and stage. Stage has
 no voxel, graph or application dependencies. Points are plain `[x, y, z]`
-values. Voxel materials, packed-quad geometry, box rigs, puppets and baked lamp
-light live in `@yaks/voxel/three`. The platform compiler serves the browser
-exports from `browser.json`. An app opts in with `"@yaks/stage": "platform"` in
-its `package.json` dependencies.
+values. Voxel materials, packed-quad geometry, box rigs and puppets live in
+`@yaks/voxel/three`, and baked lamp light in `@yaks/voxel/light`. The platform
+compiler serves the browser exports from `browser.json`. An app opts in with
+`"@yaks/stage": "platform"` in its `package.json` dependencies.
 
 Mossvale (`apps/vale`) is a consumer. Its vocabulary, saved heroes, world,
 procedural voices and design subscriptions remain in the app. The larger

@@ -1,6 +1,6 @@
 import { equal, test } from '@yaks/testing'
-import { cuboids } from '../boxes.ts'
-import { out } from '../mesh.ts'
+import { cuboids } from './boxes.ts'
+import { out } from './mesh.ts'
 import { light, warmth } from './light.ts'
 
 test('lamp light keeps rim flags and brightens only faces toward its source', () => {

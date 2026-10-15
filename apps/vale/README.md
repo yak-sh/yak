@@ -57,11 +57,11 @@ with that compiler, not an older registry release. `@yaks/game` owns the
 value-only rules (randomness, progression, effects, combat, paths, targeting,
 shots, ownership and remote motion); Vale reads its graph and supplies its own
 world, designs and policies. Its vocabulary and saved rows do not move.
-`@yaks/voxel/three` owns voxel materials, packed-quad geometry, box rigs,
-puppets and baked light. `@yaks/stage` owns renderer and loop, ordinary-geometry
-instancing, effects, camera, picking and positional sound; Vale supplies its
-designs, collision, voices and settings. Preact, signals, Three.js and marked
-are ordinary npm dependencies.
+`@yaks/voxel/three` owns voxel materials, packed-quad geometry, box rigs and
+puppets, and `@yaks/voxel/light` bakes lamp light. `@yaks/stage` owns renderer
+and loop, ordinary-geometry instancing, effects, camera, picking and positional
+sound; Vale supplies its designs, collision, voices and settings. Preact,
+signals, Three.js and marked are ordinary npm dependencies.
 
 The grammar, completion, drafts, network client, Markdown and voice packages
 join the same compiled page runtime. The creature-build subscription uses server

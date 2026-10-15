@@ -547,10 +547,11 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/stage](./stage)** — Three.js presentation over supplied values:
   renderer and frame loop, ordinary-geometry instancing, effects, cameras,
   picking and positional sound; no graph or game-world dependencies.
-- **[@yaks/voxel](./voxel)** — voxel and box meshing into packed quads, with the
-  voxel look at `/three`, distance-based chunk detail and cached heightfield
-  charts. The root is renderer-free and worker-safe; `/three` supplies voxel
-  materials, box rigs, puppets and baked lamps. No graph or game world.
+- **[@yaks/voxel](./voxel)** — voxel and box meshing into packed quads with
+  baked lamp light, distance-based chunk detail and cached heightfield charts,
+  with the voxel look at `/three`. The root is renderer-free and worker-safe;
+  `/three` supplies voxel materials, box rigs and puppets. No graph or game
+  world.
 - **[@yaks/fp](./fp)** — a vocabulary of small curried functions, each made of
   the ones before it: `compose`, a `pipe` that stops on nil, `when` dispatch
   tables, copy-tweak-return (`beget`, `update`, `defaults`), `tally`, `fold`,

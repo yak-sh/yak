@@ -15,8 +15,10 @@ or save migrations.
 `@yaks/voxel/mesh` supplies the quad writer (`out`, `quad`, `pack`), voxel
 shapes (`box`, `ball`, `blob`) and the packed representation.
 `@yaks/voxel/boxes` turns box models into that representation, including flush
-surfaces, worn pieces and shaped surfaces. Both are also exported from
-`@yaks/voxel`.
+surfaces, worn pieces and shaped surfaces. `@yaks/voxel/light` bakes lamp light
+into packed quads (`light`, `warmth`), so a worker meshing a building lights it
+too; `@yaks/voxel/three`'s material brings that light up at dusk. All three are
+also exported from `@yaks/voxel`.
 
 ## Three.js presentation
 
@@ -29,7 +31,6 @@ root:
 - `partOf`, `knit` and the other box-part helpers assemble jointed box models.
 - `puppet` animates a caller-supplied `Rig` from `Act` values. Creature designs,
   equipment and animation policy stay with the app.
-- `light` and `warmth` bake lamp light into packed quads.
 
 Three.js is shared with the page and `@yaks/stage` by the platform compiler.
 Stage knows no voxels: for its instancing cache, adapt a packed-quad template

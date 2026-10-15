@@ -2,4 +2,3 @@
 export * from './soft.ts'
 export * from './parts.ts'
 export * from './puppet.ts'
-export * from './light.ts'
