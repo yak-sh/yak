@@ -12,7 +12,7 @@ import { toolsDoc } from '@yaks/tools'
 import { ram } from '@yaks/ram'
 import { comp, connect, result, shop, shopGraph, text } from './testing.ts'
 import { roster } from './server.ts'
-import { core, translated } from './tools.ts'
+import { core, shapeOf, translated } from './tools.ts'
 import { z } from 'zod'
 import { rosterLine, rosterVersion } from './roster.ts'
 
@@ -204,7 +204,7 @@ test('a client listed before an argument was renamed is still answered', async (
 
 test('a call missing its argument altogether is told which one', () => {
   let apply = core({ vocab: shop }).find((t) => t.name == 'graph_apply')!
-  let told = z.object(apply.input!).safeParse({})
+  let told = z.object(shapeOf(apply)).safeParse({})
   assertEquals(
     told.error?.issues.map((i) => `${i.path}: ${i.message}`),
     ['bundles: Required'],
