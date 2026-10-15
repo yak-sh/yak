@@ -1,5 +1,10 @@
 import { signal } from '@preact/signals'
-import { client, type Saved, stash as vaultStash } from '@yaks/client'
+import {
+  client,
+  type Saved,
+  stash as vaultStash,
+  type Vault,
+} from '@yaks/client'
 import { draftDoc, draftEid, drafts, type Stash } from '@yaks/draft'
 import { mint } from '@yaks/graph'
 import { equal, ok, test } from '@yaks/testing'
@@ -40,6 +45,15 @@ let deferred = <T>() => {
   let resolve!: (value: T) => void
   let promise = new Promise<T>((yes) => resolve = yes)
   return { promise, resolve }
+}
+// A vault whose load waits until the case releases it, so a field made as the
+// file loads takes its drafts inside the case.
+let held = (vault: Vault) => {
+  let gate = deferred<void>()
+  return {
+    vault: { ...vault, load: () => gate.promise.then(vault.load) },
+    release: () => gate.resolve(),
+  }
 }
 let saved = (by: string, text: string): Saved => ({
   eid: draftEid(by, 'chat'),
@@ -328,16 +342,18 @@ let waiting = (() => {
     if (!rows.some((b) => b.draft)) return mutate(rows)
     return ++writes == 1 ? gate.promise.then(() => mutate(rows)) : mutate(rows)
   }
-  return { net, by, vault, gate }
-})()
-test('migration preserves edits a kept page makes while the store receipt waits', async () => {
-  let { net, by, vault, gate } = waiting
+  let load = held(vault)
   let host = commandField(net, () => by, empty, {
-    vault,
+    vault: load.vault,
     stash: storage(),
     pace: 0,
   })
+  return { net, by, vault, gate, host, release: load.release }
+})()
+test('migration preserves edits a kept page makes while the store receipt waits', async () => {
+  let { net, by, vault, gate, host, release } = waiting
   try {
+    release()
     await host.ready
     await vault.save([saved(by, 'precious from old page')])
     gate.resolve()
@@ -386,8 +402,9 @@ test('command draft emergency stashes do not cross app installations', async () 
 })
 
 // A store already holding the person's chat draft as 'hosted', a page stash
-// keeping `kept` under the key `at` names, and the old vault holding `legacy`:
-// one per case, made as the file loads, so a case times the migration alone.
+// keeping `kept` under the key `at` names, the old vault holding `legacy`, and
+// a field over them waiting on that vault: one per case, made as the file
+// loads, so a case times the migration alone.
 let hosted = (at: (by: string) => string, kept: object, legacy?: string) => {
   let net = remote(), by = mint(), stash = storage()
   net.client.mutate([{
@@ -396,16 +413,19 @@ let hosted = (at: (by: string) => string, kept: object, legacy?: string) => {
     typed: { over: '' },
   }])
   stash.setItem(at(by), JSON.stringify(kept))
-  let vault = legacy == null ? false as const : vaultStash([saved(by, legacy)])
-  return { net, by, stash, vault }
+  let { vault, release } = held(
+    vaultStash(legacy == null ? [] : [saved(by, legacy)]),
+  )
+  let host = commandField(net, () => by, empty, { vault, stash, pace: 0 })
+  return { net, by, stash, host, release }
 }
 // The page's text once migrated, and the store's once it has taken it.
 let migrated = async (
-  { net, by, stash, vault }: ReturnType<typeof hosted>,
+  { net, by, host, release }: ReturnType<typeof hosted>,
   text: string,
 ) => {
-  let host = commandField(net, () => by, empty, { vault, stash, pace: 0 })
   try {
+    release()
     await host.ready
     equal(host.drafts.text('chat'), text)
     await tick()
