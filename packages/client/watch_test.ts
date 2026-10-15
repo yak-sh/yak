@@ -8,7 +8,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, transient } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { client } from './client.ts'
-import { box, boxClient, boxDoc, pair, server, titles } from './testing.ts'
+import { box, boxClient, pair, server, titles } from './testing.ts'
 import type { Hold, Make } from './watch.ts'
 
 let subscribes = (sent: unknown[] | undefined): unknown[] | undefined =>
@@ -353,23 +353,59 @@ let mine = {
   durable: 'connection',
   properties: { at: { type: 'string' } },
 }
-let page = loadVocab([boxDoc, { $defs: { Panels: mine, Completion: mine } }])
+let page = loadVocab([{ $defs: { Panels: mine, Completion: mine } }])
+// The store knows neither page-owned component. Drive its empty answer and
+// refusal directly; this contract needs no API server or server graph.
+let pageSocket = pair().client
+let pageWrites = 0
+let pageTrouble: unknown[] = []
+let pageClient = client(page, [], {
+  url: 'http://box.test',
+  vault: false,
+  wireVault: false,
+  connect: () => pageSocket,
+  fetch: () => {
+    pageWrites++
+    return Response.json([])
+  },
+  report: (trouble) => void pageTrouble.push(trouble),
+})
+pageClient.wire!.open()
+pageSocket.emit('open')
+await pageClient.ready
 
 test("a remote watch shows the page's own rows, which no server answers", async () => {
-  let c = boxClient(server(), {}, page)
-  let shows = async (query: string, row: Bundle) => {
+  let c = pageClient
+  let shows = async (query: string, row: Bundle, unknown = false) => {
     let w = c.watch(query)
     let heard: number[] = []
     w.subscribe((rows) => heard.push(rows.length))
-    await c.idle()
-    c.mutate([row])
-    await c.idle()
+    assertEquals(w.value, [])
+    let sub = subscribes(pageSocket.sent)?.at(-1) as { id: string }
+    pageSocket.emit(
+      'message',
+      JSON.stringify({
+        id: sub.id,
+        ...unknown
+          ? {
+            refused: {
+              error: 'Refused',
+              message: 'unknown component Completion',
+            },
+          }
+          : { bundles: [] },
+      }),
+    )
+    await c.wire!.idle()
+    await c.mutate([row])
     return [heard.at(-1), w.value.length]
   }
   let menu = { entity: { eid: 'hero/menu' }, Panels: { at: 'bag' } }
   assertEquals(await shows('.entity.eid="hero/menu"', menu), [1, 1])
   let chat = { entity: { eid: 'chat' }, Completion: { at: '/w' } }
-  assertEquals(await shows('.Completion', chat), [1, 1])
+  assertEquals(await shows('.Completion', chat, true), [1, 1])
+  assertEquals(pageWrites, 0)
+  assertEquals(pageTrouble.length, 1) // only the unknown-component refusal
   c.close()
 })
 

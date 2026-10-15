@@ -66,7 +66,13 @@ let writing = () => {
   return { c, response }
 }
 
+// Prepare the host response; the timed contract starts with the local write.
 let stamped = writing()
+let applied = [{
+  ...row('write-stamps', 'server'),
+  created: { by: 'owner', at: '2026-10-11T00:00:00.000Z' },
+}]
+let stampedResponse = Response.json(applied)
 test('the browser replica writes optimistically and resolves with stamped server bundles', async () => {
   let { c, response } = stamped
   try {
@@ -78,11 +84,7 @@ test('the browser replica writes optimistically and resolves with stamped server
     receipt.then(() => settled = true)
     await Promise.resolve()
     assertEquals(settled, false)
-    let applied = [{
-      ...row('write-stamps', 'server'),
-      created: { by: 'owner', at: '2026-10-11T00:00:00.000Z' },
-    }]
-    response.resolve(Response.json(applied))
+    response.resolve(stampedResponse)
     assertEquals(await receipt, applied)
     assertEquals(c.box.ent('write-stamps')?.created, applied[0].created)
   } finally {
