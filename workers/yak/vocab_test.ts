@@ -23,6 +23,7 @@ import {
   gitVocab,
   grew,
   homed,
+  lentDocs,
   livesIn,
   meant,
   numbered,
@@ -598,12 +599,18 @@ test('app vocab keeps external UX state page-only, including transient events', 
   )
 })
 
+// The vocabulary of an app that declares nothing: the core alone, composed once
+// for the file, as a store keeps it for its isolate.
+let bare = appVocab({})
+
 // Journal names in a manifest are refused; an app never loads them implicitly,
 // nor by naming @yaks/journal as a dependency.
 test('app vocabularies never load journal components', () => {
-  for (let v of [appVocab({}), appVocab({ packages: ['@yaks/journal'] })]) {
-    assertEquals(v.comp('_tx'), undefined)
-    assertEquals(v.comp('_change'), undefined)
+  assertEquals(bare.comp('_tx'), undefined)
+  assertEquals(bare.comp('_change'), undefined)
+  let journal = lentDocs(appDoc({ packages: ['@yaks/journal'] }))
+  for (let name of ['_tx', '_change']) {
+    assert(!journal.some((doc) => doc.$defs?.[name]))
   }
   assertThrows(() =>
     appVocab({
@@ -644,14 +651,13 @@ test("a dependency package.json names is the store's words too", async () => {
 // A page that composes a package's page-only words beside the store's own
 // (Vale's `pageDocs`) never finds them declared twice.
 test('a package every store speaks, a page-only one, or an npm one lends nothing', () => {
-  let plain = appVocab({}).all.length
   let none: Record<string, string>[] = [
     { '@yaks/draft': 'platform' },
     { '@yaks/ux': 'platform' },
     { three: '^0.180.0' },
   ]
   for (let deps of none) {
-    equal(appVocab(stated(null, 'vocab.json', pkgJson(deps))).all.length, plain)
+    equal(lentDocs(stated(null, 'vocab.json', pkgJson(deps))), [])
   }
 })
 
@@ -664,21 +670,21 @@ test("package.json is read as the compile reads it, and vocab.json can't name pa
   )
 })
 
+// A manifest declaring the word its dependency lends, and the vocabulary its
+// store speaks once the word is the app's own: composed once for the file.
+let twice = appDoc({ ...says({ [lends]: { label: txt } }), packages: [LENDER] })
+let spoken = appVocab(twice)
+
 test("a manifest declaring a dependency's word is refused, naming both", () => {
-  let mine = says({ [lends]: { label: txt } })
-  let doc = { ...mine, packages: [LENDER] }
-  let refused = assertThrows(() => unlent(appDoc(doc)), Error).message
+  let refused = assertThrows(() => unlent(twice), Error).message
   for (let said of [lends, LENDER, 'vocab.json']) {
     assertStringIncludes(refused, said)
   }
   // A word the store already held as its own beside that package, or one a
   // release already admitted, stays the app's in its own store.
-  for (
-    let held of [
-      unlent(appDoc(doc), appDoc(doc)),
-      unlent(appDoc(doc), {}, 'vocab.json', [lends]),
-    ]
-  ) assert(appVocab(held).prop(lends, 'label'))
+  equal(unlent(twice, twice), twice)
+  equal(unlent(twice, {}, 'vocab.json', [lends]), twice)
+  assert(spoken.prop(lends, 'label'))
 })
 
 test('a rollback that names fewer packages keeps those whose words hold rows', () => {
