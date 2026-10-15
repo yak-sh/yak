@@ -63,6 +63,18 @@ test('an edited identity AST binds its current operand', () => {
   same(q)
 })
 
+// The options each row below starts from, compiled once on their own: the
+// rows share that plan, and each checks it again before its change.
+let start = (storageOrder: boolean): BindOpts => ({
+  references: { [eid(1)]: 1, [eid(2)]: 1 },
+  storageOrder,
+})
+for (let order of [false, true]) {
+  test(`reference bindings start from their options: storage order ${order}`, () => {
+    same(query(eid(1), eid(2)), start(order))
+  })
+}
+
 for (
   let [name, change] of [
     ['integer', (opts: BindOpts) => {
@@ -82,10 +94,7 @@ for (
   ] as const
 ) {
   test(`reference bindings follow mutable options: ${name}`, () => {
-    let opts: BindOpts = {
-      references: { [eid(1)]: 1, [eid(2)]: 1 },
-      storageOrder: name == 'replaced map',
-    }
+    let opts = start(name == 'replaced map')
     let q = query(eid(1), eid(2))
     same(q, opts)
     change(opts)
@@ -157,42 +166,51 @@ test('a begin hook that intercepts a warmed predicate runs once', () => {
   equal(begun, 2)
 })
 
-test('begin preserves captured reference maps while seeing in-place changes', () => {
+// A begin hook that changes the options' reference map: compiled with a
+// reference plan and without, the answers agree, and the screen sees the map
+// as begin left it.
+let hooked = (value: number, replace: boolean, cached: boolean) => {
   let q = and(eq('mark.owner', eid(1)))
-  let run = (value: number, replace: boolean, cached: boolean) => {
-    let begun = 0, screen: Screen | undefined
-    let opts: BindOpts = { references: { [eid(1)]: value } }
-    opts.extend = [{
-      name: 'references',
-      compile: {},
-      begin: (s) => {
-        begun++
-        screen = s
-        if (replace) opts.references = { [eid(1)]: 9 }
-        else opts.references![eid(1)] = 9
-      },
-    }]
-    let out = cached ? compile(q, vocab, opts) : render(bind(q, vocab, opts))
-    equal(begun, 1)
-    equal(screen!()!.params, [9])
-    return [out.sql, out.params]
-  }
-  for (let [value, replace] of [[1, true], [2, true], [3, false]] as const) {
-    equal(run(value, replace, true), run(value, replace, false))
+  let begun = 0, screen: Screen | undefined
+  let opts: BindOpts = { references: { [eid(1)]: value } }
+  opts.extend = [{
+    name: 'references',
+    compile: {},
+    begin: (s) => {
+      begun++
+      screen = s
+      if (replace) opts.references = { [eid(1)]: 9 }
+      else opts.references![eid(1)] = 9
+    },
+  }]
+  let out = cached ? compile(q, vocab, opts) : render(bind(q, vocab, opts))
+  equal(begun, 1)
+  equal(screen!()!.params, [9])
+  return [out.sql, out.params]
+}
+
+test('begin preserves captured reference maps it replaces', () => {
+  for (let value of [1, 2]) {
+    equal(hooked(value, true, true), hooked(value, true, false))
   }
 })
 
-test('begin restrictions use live options without rebuilding the captured spine', () => {
-  let words = loadVocab([...vocab.docs, {
-    $defs: {
-      virtual: {
-        component: true,
-        computed: true,
-        properties: { value: { type: 'string' } },
-      },
+test('begin sees in-place changes to captured reference maps', () => {
+  equal(hooked(3, false, true), hooked(3, false, false))
+})
+
+let words = loadVocab([...vocab.docs, {
+  $defs: {
+    virtual: {
+      component: true,
+      computed: true,
+      properties: { value: { type: 'string' } },
     },
-  }])
-  for (let mutate of ['spine', 'eids'] as const) {
+  },
+}])
+
+for (let mutate of ['spine', 'eids'] as const) {
+  test(`begin restrictions use live options without rebuilding the captured spine: ${mutate}`, () => {
     let active = false, begun = 0
     let q = and(eq('link.left', eid(1)))
     let opts: BindOpts = {
@@ -223,8 +241,8 @@ test('begin restrictions use live options without rebuilding the captured spine'
     ;(q.clauses[0] as Pred).path = ['link', 'left']
     let expected = render(bind(q, words, opts))
     equal([output.sql, output.params], [expected.sql, expected.params])
-  }
-})
+  })
+}
 
 test('begin rewrites retain the ordinary binder refusal', () => {
   let q = and(eq('link.right', eid(1))), active = false
@@ -300,7 +318,7 @@ test('catalog-sensitive predicates read each current snapshot', () => {
 test('reference queries follow the current catalog held mode', () => {
   let archetypes = Object.assign(() => [1], { held: true })
   let opts = { archetypes }
-  same(query(eid(1)), opts)
+  same(and(eq('link.left', eid(1))), opts)
   archetypes.held = false
-  same(query(eid(2)), opts)
+  same(and(eq('link.left', eid(2))), opts)
 })
