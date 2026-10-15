@@ -43,92 +43,66 @@ let vocab = loadVocab([archetypeDoc, {
   },
 }])
 
-// A graph holding `seed`, then `grow(n)` for each size, asked `q` each time:
-// the eids it answers and the VM steps that took.
-let asked = (
-  q: string,
-  seed: Bundle[],
-  grow: (from: number, n: number) => Bundle[],
-  sizes: number[],
-) => {
+// A graph holding `seed` and then `more`, with `q` prepared against it: a run
+// answers the eids and the VM steps that took. Built when the file loads, since
+// a query reads and changes nothing.
+let world = (q: string, seed: Bundle[], more: Bundle[]) => {
   let db = new Database(':memory:'), d = driver(db)
-  try {
-    let store = storage(d, vocab)
-    store.install()
-    let g = graph({ storage: store, vocab, plugins: [archetypes()] })
-    g.apply(seed)
-    let at = 0
-    return sizes.map((n) => {
-      for (; at < n; at += 500) g.apply(grow(at, Math.min(500, n - at)))
-      let sql = render(compile(parse(q), vocab, { archetypes: catalog(d) }))
-      let stmt = db.prepare(sql.sql)
-      try {
-        let eids = stmt.all(...sql.params).map((r) => String(r.eid)).sort()
-        let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
-        return { eids, steps }
-      } finally {
-        stmt.finalize()
-      }
-    })
-  } finally {
-    db.close()
+  let store = storage(d, vocab)
+  store.install()
+  let g = graph({ storage: store, vocab, plugins: [archetypes()] })
+  g.apply(seed)
+  g.apply(more)
+  let sql = render(compile(parse(q), vocab, { archetypes: catalog(d) }))
+  let stmt = db.prepare(sql.sql)
+  return () => {
+    let eids = stmt.all(...sql.params).map((r) => String(r.eid)).sort()
+    let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 1)
+    return { eids, steps }
   }
 }
 
-let many = (from: number, n: number, make: (eid: string) => Bundle) =>
-  Array.from({ length: n }, (_, i) => make(`x${from + i}`))
+// The world with 10 bundles of a kind added, and with 40.
+let growing = (q: string, seed: Bundle[], make: (eid: string) => Bundle) => {
+  let more = (n: number) => Array.from({ length: n }, (_, i) => make(`x${i}`))
+  return [10, 40].map((n) => world(q, seed, more(n)))
+}
+
+// Sessions elsewhere, none of them running outside the graph: every one is
+// admitted by the absence test alone.
+let sessions = growing('.session.persona.persona.home=home !process', [
+  { entity: { eid: 'home' }, project: {} },
+  { entity: { eid: 'away' }, project: {} },
+  { entity: { eid: 'mine' }, persona: { home: 'home' } },
+  { entity: { eid: 'theirs' }, persona: { home: 'away' } },
+  { entity: { eid: 'native' }, session: { persona: 'mine' } },
+  { entity: { eid: 'outside' }, session: { persona: 'mine' }, process: {} },
+], (eid) => ({ entity: { eid }, session: { persona: 'theirs' } }))
+
+// Tasks filed straight under the top project: each is a value the path's far
+// end yields, and none is filed under one of them.
+let tasks = growing('.task .filed.project.filed.project=top !completed', [
+  { entity: { eid: 'top' }, project: {} },
+  { entity: { eid: 'sub' }, project: {}, filed: { project: 'top' } },
+  { entity: { eid: 'deep' }, task: {}, filed: { project: 'sub' } },
+], (eid) => ({ entity: { eid }, task: {}, filed: { project: 'top' } }))
 
 test('a path equality beside an absence test seeks the path', () => {
-  let seed = [
-    { entity: { eid: 'home' }, project: {} },
-    { entity: { eid: 'away' }, project: {} },
-    { entity: { eid: 'mine' }, persona: { home: 'home' } },
-    { entity: { eid: 'theirs' }, persona: { home: 'away' } },
-    { entity: { eid: 'native' }, session: { persona: 'mine' } },
-    { entity: { eid: 'outside' }, session: { persona: 'mine' }, process: {} },
-  ]
-  // Sessions elsewhere, none of them running outside the graph: every one is
-  // admitted by the absence test alone.
-  let elsewhere = (from: number, n: number) =>
-    many(
-      from,
-      n,
-      (eid) => ({ entity: { eid }, session: { persona: 'theirs' } }),
-    )
-  let [{ eids, steps }] = asked(
-    '.session.persona.persona.home=home !process',
-    seed,
-    elsewhere,
-    [1000],
+  let [small, large] = sessions.map((run) => run())
+  equal(small.eids, ['native'])
+  equal(large.eids, ['native'])
+  ok(
+    large.steps < small.steps + 30,
+    `${small.steps} then ${large.steps} VM steps for four times the sessions`,
   )
-  equal(eids, ['native'])
-  ok(steps < 300, `${steps} VM steps`)
 })
 
 test('a path with a broad far end beside a dense spine reads each row once', () => {
-  let seed = [
-    { entity: { eid: 'top' }, project: {} },
-    { entity: { eid: 'sub' }, project: {}, filed: { project: 'top' } },
-    { entity: { eid: 'deep' }, task: {}, filed: { project: 'sub' } },
-  ]
-  // Tasks filed straight under the top project: each is a value the path's
-  // far end yields, and none is filed under one of them.
-  let broad = (from: number, n: number) =>
-    many(from, n, (eid) => ({
-      entity: { eid },
-      task: {},
-      filed: { project: 'top' },
-    }))
-  let [small, large] = asked(
-    '.task .filed.project.filed.project=top !completed',
-    seed,
-    broad,
-    [100, 800],
-  )
+  let [small, large] = tasks.map((run) => run())
   equal(small.eids, ['deep'])
   equal(large.eids, ['deep'])
   ok(
-    large.steps < small.steps * 16,
-    `${small.steps} then ${large.steps} VM steps for eight times the rows`,
+    large.steps < small.steps * 8,
+    `${small.steps} then ${large.steps} VM steps for four times the rows`,
   )
 })

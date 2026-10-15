@@ -1,9 +1,8 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { col, type CreateTable, lit, select, table } from '@yaks/sql'
-import { open } from './db.ts'
+import { col, type CreateTable, insert, lit, select, table } from '@yaks/sql'
 import { columns } from './physical.ts'
-import { storage } from './mod.ts'
+import { preparedDriver, snapshot } from './testing.ts'
 import { add, follow, forget, lacking, printOf } from './follow.ts'
 import { storage as readStore } from './read-store.ts'
 import { parse } from '@yaks/query'
@@ -21,26 +20,32 @@ let log = (cols: CreateTable['cols']): CreateTable => ({
   cols: [{ name: 'id', type: 'integer', pk: true }, ...cols],
 })
 
-test('a file follows its schema once per print, adding what it lacks', () => {
-  let db = open(':memory:')
-  let store = storage(db, vocab)
+// A file the vocabulary is installed in, holding the note `n1`.
+let image = snapshot(vocab, {}, [
+  insert('entity', { id: 1, eid: 'n1', num: 1 }),
+  insert('note', { entity: 1, text: 'hi' }),
+  log([]),
+])
+let fresh = () => preparedDriver(image)
+let [a, b] = ['a', 'b'].map((s) => printOf(s, []))
+
+test('a file follows its schema once per print', () => {
+  let db = fresh()
   let passes = 0
-  let at = (stmts: CreateTable[]) =>
-    follow(db, printOf(store.print(), stmts), () => {
-      passes++
-      store.install()
-      add(db, stmts)
-    })
-  let v1 = [log([])]
-  assertEquals([at(v1), at(v1), passes], [true, false, 1])
-  let v2 = [log([
+  let at = (print: string) => follow(db, print, () => void passes++)
+  assertEquals([at(a), at(a), passes], [true, false, 1])
+  assertEquals([at(b), at(b), passes], [true, false, 2])
+  // The older print is still recorded: its process finds nothing to do.
+  assertEquals([at(a), passes], [false, 2])
+})
+
+test('a file is added the columns its tables lack', () => {
+  let db = fresh()
+  add(db, [log([
     { name: 'at', type: 'text', notNull: true },
     { name: 'n', type: 'integer', notNull: true, default: lit(0) },
-  ])]
-  assertEquals([at(v2), at(v2), passes], [true, false, 2])
+  ])])
   assertEquals(columns(db, 'log'), ['id', 'at', 'n'])
-  // The older print is still recorded: its process finds nothing to do.
-  assertEquals([at(v1), passes], [false, 2])
   db.query({ t: 'insert', into: 'log', cols: ['id'], rows: [[lit(1)]] })
   assertEquals(db.query(select({ cols: [col('n')], from: table('log') })), [
     { n: 0 },
@@ -48,14 +53,12 @@ test('a file follows its schema once per print, adding what it lacks', () => {
 })
 
 test('an unfinished pass leaves its print for the next opener, and so does forget', () => {
-  let db = open(':memory:')
-  let store = storage(db, vocab)
-  let print = printOf(store.print(), [])
+  let db = fresh()
+  let print = printOf('store', [])
   let passes = 0
   let at = (done: boolean) =>
     follow(db, print, () => {
       passes++
-      store.install()
       return done
     })
   assertEquals([at(false), at(true), at(true), passes], [true, true, false, 2])
@@ -63,39 +66,49 @@ test('an unfinished pass leaves its print for the next opener, and so does forge
   assertEquals([at(true), passes], [true, 3])
 })
 
-test('a reader reads what no writer has added a column or table for as never given', () => {
-  let dir = Deno.makeTempDirSync({ prefix: 'yak-follow-' })
-  let v1 = vocab
-  let v2 = loadVocab({
-    $defs: {
-      note: {
-        component: true,
-        properties: { text: { type: 'string' }, mood: { type: 'string' } },
-      },
-      pin: { component: true, properties: { at: { type: 'string' } } },
+// A vocabulary that gained a column and a component after the file was made,
+// read by a reader no writer has caught up with.
+let later = loadVocab({
+  $defs: {
+    note: {
+      component: true,
+      properties: { text: { type: 'string' }, mood: { type: 'string' } },
     },
-  })
-  let db = open(`${dir}/g.db`)
-  let store = storage(db, v1)
-  store.install()
-  store.tx((t) => t.patch([{ entity: { eid: 'n1' }, note: { text: 'hi' } }]))
-  let reader = open(`${dir}/g.db`, { readOnly: true })
-  let behind = lacking(reader, v2)
-  assertEquals(behind.absent, ['pin'])
-  let read = readStore(reader, v2, behind)
-  let eids = (q: string) => read.read(parse(q)).map((b) => b.entity.eid)
+    pin: { component: true, properties: { at: { type: 'string' } } },
+  },
+})
+// The reader of such a file, which changes nothing and so serves every test.
+let reader = fresh()
+let lag = lacking(reader, later)
+let read = readStore(reader, later, lag)
+
+test('a reader reads a property the file has no column for as never given', () => {
   assertEquals(read.read(parse('.note')).map((b) => b.note), [
     { text: 'hi', mood: null },
   ])
-  assertEquals(
-    [eids('.pin'), eids('.note !pin'), eids('.pin.at=x | .note'), eids('*')],
-    [[], ['n1'], ['n1'], ['n1']],
-  )
+})
+
+// What a query finds beside the table `pin` the file has no table for.
+for (
+  let [q, want] of [
+    ['.pin', []],
+    ['.note !pin', ['n1']],
+    ['.pin.at=x | .note', ['n1']],
+    ['*', ['n1']],
+  ] as [string, string[]][]
+) {
+  test(`a reader finds ${want.length} for ${q} where no entity wears a component the file has no table for`, () => {
+    assertEquals(read.read(parse(q)).map((b) => b.entity.eid), want)
+  })
+}
+
+test('a reader names the components the file has no table for, and reads the others whole', () => {
+  assertEquals(lag.absent, ['pin'])
   assertEquals(read.get(['n1']).map((b) => Object.keys(b).sort()), [
     ['entity', 'note'],
   ])
-  assertEquals(lacking(reader, v1), { derived: {}, absent: [] })
-  reader.close()
-  db.close()
-  Deno.removeSync(dir, { recursive: true })
+})
+
+test('a reader of a file at its vocabulary lacks nothing', () => {
+  assertEquals(lacking(fresh(), vocab), { derived: {}, absent: [] })
 })

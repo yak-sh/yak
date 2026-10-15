@@ -97,6 +97,26 @@ export let snapshot = (
   return kept
 }
 
+/**
+ * A snapshot of what `build` leaves in an in-memory database that stands in
+ * for a file (`file` set), made empty or as a copy of `from`: a fixture a test
+ * would otherwise rebuild each time. It needs `server_meta`, which every copy
+ * records its epoch in.
+ */
+export let imaged = (
+  build: (driver: Driver) => void,
+  from?: Snapshot,
+): Snapshot => {
+  let db = new Database(':memory:')
+  try {
+    if (from) deserialize(db, from[image])
+    build(Object.assign(driver(db), { file: true }))
+    return { [image]: serialize(db) }
+  } finally {
+    db.close()
+  }
+}
+
 let copied = (from: Snapshot) => {
   let db = new Database(':memory:')
   try {

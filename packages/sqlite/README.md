@@ -927,6 +927,10 @@ while the schema pass holds the write lock (`@yaks/sqlite/owe`):
   `after`, and a pass that no longer needs a rebuild gives it up (`forgo`).
   `_yaks_` names no component table.
 
+`BIG`, `FILL`, `COPY` and `CLEAR` are one value, `SIZES`, which `build`,
+`filler`, `reshape`, `work` and the store's `sizes` option take in their place,
+so a test shrinks them to a few rows instead of building thousands.
+
 Owed work sits in `server_meta` as `owed:<kind>:<name>`, its statements as data,
 so any process can finish it. `work(driver, now?, daily?)` does one window of
 the first that is due (indexes, then fills, then refits, then clearing); a
@@ -960,67 +964,85 @@ call `ready()` before opening their graph; binding never creates a table.
 transaction, then commits a synchronous migration and its completion record
 together. `announce`, `apply`, and `fail` expose the stages separately.
 
-This example uses a zero grace period and an explicit watch check because both
-connections are controlled by the example. Cooperating applications use the same
-maximum polling interval: `run()` defaults to one second plus a 100 ms margin,
-and `watchMigrations()` defaults to one second.
+This example uses a zero grace period and an explicit watch check because it
+controls both sides, so it announces and applies where `run()` would also wait
+out the grace. Cooperating applications use the same maximum polling interval:
+`run()` defaults to one second plus a 100 ms margin, and `watchMigrations()`
+defaults to one second.
 
 ```ts
 import { open } from '@yaks/sqlite/db'
-import {
-  add,
-  columns,
-  migrations,
-  migrationSchema,
-  watchMigrations,
-} from '@yaks/sqlite'
+import { add, columns, migrations, migrationSchema } from '@yaks/sqlite'
 import { equal, throws } from '@yaks/testing'
 
-let path = await Deno.makeTempFile({ suffix: '.db' })
-let app = open(path), migrator = open(path)
-let notices: Error[] = []
+let app = open(':memory:')
 add(app, migrationSchema())
 let control = migrations(app)
-let changes = migrations(migrator)
-let watch = watchMigrations(control, (reason) => notices.push(reason))
 try {
   equal(control.ready(), 0)
-  let claim = changes.announce('add-note', 0)
+  let claim = control.announce('add-note', 0)
   await throws(() => control.ready(), 'pending')
-  watch.check()
-  equal(notices.length, 1)
-  changes.apply(claim, (db) =>
+  control.apply(claim, (db) =>
     db.query({
       t: 'create table',
       name: 'note',
       cols: [{ name: 'title', type: 'text' }],
     }))
-  watch.check()
-  equal(notices.length, 1)
   equal(control.ready(), claim.generation)
   equal(columns(app, 'note'), ['title'])
-  let failed = changes.announce('abort', 0)
+} finally {
+  app.close()
+}
+```
+
+A watch tells the application that a migration has been announced or finished:
+
+```ts
+import { open } from '@yaks/sqlite/db'
+import { add, migrations, migrationSchema, watchMigrations } from '@yaks/sqlite'
+import { equal } from '@yaks/testing'
+
+let app = open(':memory:')
+add(app, migrationSchema())
+let control = migrations(app)
+let notices: Error[] = []
+let watch = watchMigrations(control, (reason) => notices.push(reason))
+try {
+  let claim = control.announce('add-note', 0)
+  watch.check()
+  equal(notices.length, 1)
+  control.apply(claim, () => {})
+  watch.check()
+  equal(notices.length, 1)
+} finally {
+  watch.stop()
+  app.close()
+}
+```
+
+A callback that throws is recorded as failed, and the control refuses to be
+ready until someone has inspected the work and acknowledged it:
+
+```ts
+import { open } from '@yaks/sqlite/db'
+import { add, migrations, migrationSchema } from '@yaks/sqlite'
+import { equal, throws } from '@yaks/testing'
+
+let app = open(':memory:')
+add(app, migrationSchema())
+let control = migrations(app)
+try {
+  let failed = control.announce('abort', 0)
   await throws(() =>
-    changes.apply(failed, () => {
+    control.apply(failed, () => {
       throw new Error('abort')
     }), 'abort')
   equal(control.read()?.state, 'failed')
   // After inspecting and repairing failed or abandoned work:
-  changes.acknowledge(failed.generation)
+  control.acknowledge(failed.generation)
   equal(control.ready(), failed.generation)
-  let applied = await changes.run('add-summary', (db) =>
-    db.query({
-      t: 'alter table',
-      table: 'note',
-      add: { name: 'summary', type: 'text' },
-    }), { intervalMs: 1, marginMs: 0 })
-  equal(applied.state, 'applied')
-  equal(columns(app, 'note'), ['title', 'summary'])
 } finally {
-  watch.stop()
   app.close()
-  migrator.close()
-  await Deno.remove(path)
 }
 ```
 

@@ -104,7 +104,7 @@ import {
   ledger,
 } from './archetype.ts'
 import { componentTables, shape } from './physical.ts'
-import { build, forgo, reshape } from './owe.ts'
+import { build, forgo, reshape, type Sizes } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
@@ -310,6 +310,9 @@ export type Store = {
  * as text through `doc_value`.
  */
 export type Opts = BindOpts & {
+  /** How big a table is before a file owes its schema work, and the rows a
+   * window does of it (./owe.ts `SIZES`): what a test shrinks. */
+  sizes?: Sizes
   /** A single-owner host's readiness check, called on the first operation.
    * True asserts that this vocabulary and its derived schema, metadata and
    * archetypes already stand; false asks this adapter to install them. The
@@ -835,13 +838,13 @@ export let storage = (
             )
           let kept = new Set<string>()
           let unfit = fit(driver, vocab, (comp, r) => {
-            let owes = reshape(driver, comp, r, after(comp))
+            let owes = reshape(driver, comp, r, after(comp), base.sizes)
             if (owes) kept.add(comp)
             return owes
           })
           forgo(driver, kept)
           for (let stmt of retired(driver, vocab)) driver.query(stmt)
-          left = [...unfit, ...build(driver, indexed(vocab))]
+          left = [...unfit, ...build(driver, indexed(vocab), base.sizes)]
           left.forEach(report)
           clean = !left.length
           // Memory templates keep schema, never a store's lineage identity.

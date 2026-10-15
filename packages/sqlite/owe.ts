@@ -75,6 +75,10 @@ export let COPY = 20_000
 /** The rows one window deletes from a rebuilt table's old rows: about 65 ms
  * on the box's copy. */
 export let CLEAR = 10_000
+/** The sizes above as one value, which what chooses by them takes, so a
+ * test can shrink them instead of building the rows. */
+export type Sizes = { big: number; fill: number; copy: number; clear: number }
+export let SIZES: Sizes = { big: BIG, fill: FILL, copy: COPY, clear: CLEAR }
 /** How long a window that failed waits before it is tried again. */
 export let RETRY = 3_600_000
 /** How often a file's upkeep ({@link Daily}) is done. */
@@ -172,12 +176,16 @@ export let unbuilt = (s: CreateIndex, e: unknown): Error =>
  * opens with the shape it holds and the caller reports it; a failed statement
  * undoes only itself, so the rest stands.
  */
-export let build = (driver: Driver, stmts: readonly Stmt[]): Error[] => {
+export let build = (
+  driver: Driver,
+  stmts: readonly Stmt[],
+  sizes: Sizes = SIZES,
+): Error[] => {
   let names = new Set(catalogue(driver).map((o) => o.name))
   let owing = !!driver.file && names.has(META)
   let now = stmts.filter((s) => {
     if (!owing || s.t != 'create index' || names.has(s.name)) return true
-    if (!names.has(s.on) || !holds(driver, s.on, BIG)) return true
+    if (!names.has(s.on) || !holds(driver, s.on, sizes.big)) return true
     owe(driver, { kind: 'index', name: s.name, stmt: s })
     return false
   })
@@ -229,11 +237,15 @@ export let work = (
   driver: Driver,
   now: number = Date.now(),
   daily: Daily[] = [],
+  sizes: Sizes = SIZES,
 ): Worked | undefined => {
   let due = owed(driver).find((w) => !w.next || Date.parse(w.next) <= now)
   if (!due) return upkeep(driver, daily, now)
   try {
-    return unit(driver, () => ({ name: key(due), done: step(driver, due) }))
+    return unit(
+      driver,
+      () => ({ name: key(due), done: step(driver, due, sizes) }),
+    )
   } catch (error) {
     unit(driver, () =>
       owe(driver, {
@@ -368,6 +380,7 @@ let windows: {
     driver: Driver,
     w: Extract<Owed, { kind: K }>,
     here: Map<string, SchemaObject>,
+    sizes: Sizes,
   ) => boolean
 } = {
   index: (driver, w, here) => {
@@ -375,12 +388,12 @@ let windows: {
     if (here.has(w.stmt.on)) driver.query({ ...w.stmt, ifNot: true })
     return true
   },
-  fill: (driver, w, here) => {
+  fill: (driver, w, here, { fill }) => {
     // An index a later pass rebuilt whole, or dropped, is no longer this
     // work's.
     let guarded = here.get(w.triggers[0]?.name)?.sql?.includes(key(w))
     if (!here.has(w.name) || !guarded) return true
-    let hi = next(driver, w.source, w.cursor, FILL)
+    let hi = next(driver, w.source, w.cursor, fill)
     if (hi == null) {
       for (let t of w.triggers) {
         driver.query({
@@ -409,10 +422,10 @@ let windows: {
     owe(driver, { ...w, cursor: hi })
     return false
   },
-  refit: (driver, w, here) => {
+  refit: (driver, w, here, sizes) => {
     let comp = w.name, into = w.table.name, old = leaving(comp)
     if (!here.has(comp) || !here.has(into)) return quit(driver, w), true
-    let hi = next(driver, comp, w.cursor, COPY)
+    let hi = next(driver, comp, w.cursor, sizes.copy)
     if (hi != null) {
       let r = { changed: w.changed } as Refitting
       driver.query({
@@ -451,13 +464,13 @@ let windows: {
       legacy('off')
     }
     // An index over the rows is built in a window of its own.
-    build(driver, w.after)
+    build(driver, w.after, sizes)
     owe(driver, { kind: 'clear', name: old })
     return true
   },
-  clear: (driver, w, here) => {
+  clear: (driver, w, here, { clear }) => {
     if (!here.has(w.name)) return true
-    let hi = next(driver, w.name, Number.MIN_SAFE_INTEGER, CLEAR)
+    let hi = next(driver, w.name, Number.MIN_SAFE_INTEGER, clear)
     if (hi == null) {
       driver.query({ t: 'drop', kind: 'table', name: w.name })
       return true
@@ -474,13 +487,14 @@ let windows: {
 // One window of `w`, inside its unit; true when the work is finished, and its
 // row then gone. An index or a rebuilt table in place makes the statistics
 // due, since the planner has none for it yet.
-let step = (driver: Driver, w: Owed): boolean => {
+let step = (driver: Driver, w: Owed, sizes: Sizes): boolean => {
   let here = new Map(catalogue(driver).map((o) => [o.name, o]))
   let done = (windows[w.kind] as (
     d: Driver,
     w: Owed,
     h: Map<string, SchemaObject>,
-  ) => boolean)(driver, w, here)
+    s: Sizes,
+  ) => boolean)(driver, w, here, sizes)
   if (done) meta(driver).del(key(w))
   if (done && (w.kind == 'index' || w.kind == 'refit')) {
     meta(driver).del(DAILY + statistics.name)
@@ -493,14 +507,16 @@ let step = (driver: Driver, w: Owed): boolean => {
  * on a file, an index whose content holds more than one window's rows is owed
  * and filled {@link FILL} rows at a time; a smaller one is rebuilt at once.
  */
-export let filler = (driver: Driver): Filler => ({
+export let filler = (driver: Driver, sizes: Sizes = SIZES): Filler => ({
   pending: (fts) =>
     owed(driver).some((w) => w.kind == 'fill' && w.name == fts)
       ? cursorOf({ kind: 'fill', name: fts })
       : undefined,
   owe: ({ fts, ...fill }) => {
     let here = catalogue(driver).some((o) => o.name == META)
-    if (!driver.file || !here || !holds(driver, fill.source, FILL + 1)) return
+    if (!driver.file || !here || !holds(driver, fill.source, sizes.fill + 1)) {
+      return
+    }
     owe(driver, { kind: 'fill', name: fts, ...fill, cursor: 0 })
     return cursorOf({ kind: 'fill', name: fts })
   },
@@ -520,9 +536,10 @@ export let reshape = (
   comp: string,
   r: Refitting,
   after: Stmt[],
+  sizes: Sizes = SIZES,
 ): boolean => {
   let names = new Set(catalogue(driver).map((o) => o.name))
-  if (!driver.file || !names.has(META) || !holds(driver, comp, BIG)) {
+  if (!driver.file || !names.has(META) || !holds(driver, comp, sizes.big)) {
     return false
   }
   let table = { ...r.fresh, name: building(comp), ifNot: true }
