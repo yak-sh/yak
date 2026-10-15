@@ -135,10 +135,9 @@ try {
 
 `cloudflareProvider(namespace, options?)` lends the containers in a deployed
 Cloudflare Sandbox namespace. The request id is the container's name. Request
-sets its idle sleep backstop and, given `hosts`, where its network reaches; wake
-reaches the same files and processes; release destroys the container. The
-namespace chooses its deployed image, so `from`, `image` and existing-machine
-addresses are refused rather than ignored.
+sets its idle sleep backstop; wake reaches the same files and processes; release
+destroys the container. The namespace chooses its deployed image, so `from`,
+`image` and existing-machine addresses are refused rather than ignored.
 
 Commands keep completed processes for `look` and `tail`; their ceiling is four
 minutes. SIGTERM and SIGKILL both use the SDK's single kill operation. Export

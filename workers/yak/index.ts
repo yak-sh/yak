@@ -6,7 +6,7 @@
 // may live in a different Worker from the one that binds it, and so are the
 // Wire object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation.
-import { waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
+import { env, waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
 import type { Caller } from '@yaks/egress'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
@@ -16,7 +16,8 @@ import * as filePart from './files.ts'
 import { builds } from './builds.ts'
 import type { Env, Inbound } from './env.ts'
 import { handler, type Lent } from './kernel.ts'
-import { egress } from './sandbox.ts'
+import { apex } from './host.ts'
+import { swapped } from './sandbox.ts'
 export { WorkspaceStore as Workspaces } from './workspaces.ts'
 import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
@@ -42,13 +43,19 @@ export let Builder = instrument(Built)
 // load, and sandbox.ts types the binding instead so every test can reach the
 // tools that use it.
 //
-// Its network is closed but for the registries a build installs from
-// (sandbox.ts `egress`, T-37883): the container starts with no internet, and
-// every HTTP and HTTPS request it makes is handed to `ContainerProxy`, which
-// lets an allowed host through and answers 520 to the rest. The SDK puts the
-// interception's certificate authority in the container's trust store itself.
-// The class keeps the SDK's name, since the Durable Object binding and its
-// migration are keyed by it.
+// Its network is the whole internet, and only this platform's own hosts are
+// intercepted: the apex and every space's address. A request the container
+// makes to one is handed to `ContainerProxy`, which runs it through
+// sandbox.ts `swapped` so the container's placeholder becomes the token of the
+// grant it wears where that grant reaches; everything else leaves the
+// container directly. The SDK puts the interception's certificate authority
+// in the container's trust store itself. The class keeps the SDK's name, since
+// the Durable Object binding and its migration are keyed by it.
+//
+// A sandbox the allowlist reached (T-37883) keeps that list in its own
+// storage, and the SDK has no call that forgets one: the constructor clears
+// it before the SDK next applies it, so an older sandbox reaches the internet
+// as a new one does.
 //
 // The SDK is awaited, not imported (T-37974). Its RPC library makes an Error
 // as it loads, and in local workerd an Error made while the bundle's top-level
@@ -60,13 +67,18 @@ export let Builder = instrument(Built)
 let sdk = await import('@cloudflare/sandbox')
 export let ContainerProxy = sdk.ContainerProxy
 export class Sandbox extends sdk.Sandbox<Env> {
-  override enableInternet = false
   override interceptHttps = true
   constructor(...made: ConstructorParameters<typeof sdk.Sandbox<Env>>) {
     super(...made)
-    this.allowedHosts = egress(made[1])
+    Object.assign(this, { allowedHostsOverride: undefined })
   }
 }
+// Assigned rather than declared `static`: the SDK's setter is what files the
+// handlers where `ContainerProxy` finds them, in every isolate that loads this
+// module.
+let platform = (req: Request, env: Env, out: { containerId: string }) =>
+  swapped(env, out.containerId, req)
+Sandbox.outboundByHost = { [apex(env)]: platform, [`*.${apex(env)}`]: platform }
 
 // The kernel's cached file entrypoint (cache.ts, wrangler.toml
 // `[exports.Files]`). The default entrypoint below is

@@ -176,12 +176,13 @@ grants one the space already has. What app builders read is the guide's
   from `./api/env` in a page.
 - Every fetch a worker makes leaves through the outbound Worker; a page sends
   its call to `./api/fetch?url=…` (workers/yak/outbound.ts). @yaks/egress
-  `forward` swaps the sentinel for the credential only for a connected
+  `forward` swaps the sentinel, in a header, a Basic credential, the query or
+  the body, for the credential only for a connected
   connection the app uses, a caller allowed to call out through it, and https to
   a host its integration names; it follows no redirect
   (packages/egress/README.md).
 - `direct: true` hands the worker the key itself, for a key it must sign with
-  (a request signature, SigV4, Basic auth). Only a pasted key shared by everyone
+  (a request signature, SigV4). Only a pasted key shared by everyone
   may be direct.
 - `app_secret_set`, `app_secret_list` and `app_secret_remove` are translations
   kept for the published listing (M-37853, workers/yak/published.ts):
@@ -203,8 +204,11 @@ with the child it was handed to.
   because it opens the vault and cannot live inside it.
 - **What 1Password itself needs**: `op` runs with a cleared environment but for
   `PATH`, `HOME`, `XDG_CONFIG_HOME` and `OP_SERVICE_ACCOUNT_TOKEN`.
-- **A short-lived grant handed to a child**: the build sandbox's `YAKS_TOKEN`
-  dies with its container (workers/yak/sandbox.ts). The `yak` CLI reads
+- **A placeholder handed to a child**: the build sandbox's `YAKS_TOKEN` is a
+  sentinel for a short-lived grant, swapped for the grant's token only on its
+  way to yaks.app or the space's own address (workers/yak/sandbox.ts
+  `swapped`, the same @yaks/egress swap apps' calls get), and the grant dies
+  with its container. The `yak` CLI reads
   `YAKS_TOKEN` before the selected yaks.app connection; a graphless machine
   makes a personal account graph on first `yak auth` (packages/cli/accounts.ts).
 - **Outside CLIs** a managed spawn runs (Claude Code, the Codex CLI) find their

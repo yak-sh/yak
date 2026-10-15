@@ -37,18 +37,18 @@ import {
   awake,
   BUDGET,
   destroyed,
-  egress,
   HELD,
   HOST,
   LIFE,
   named,
   NO_BOX,
-  REGISTRIES,
   released,
   seconds,
   spending,
+  swapped,
   workbench,
 } from './sandbox.ts'
+import { SENTINEL } from '@yaks/secrets'
 import { type Ctx, TOOLS } from './tools.ts'
 import { PUBLISHED } from './published.ts'
 import type { Who } from './session.ts'
@@ -421,11 +421,46 @@ test('a release answers the seconds held, and the container goes', async () => {
   assertEquals(await released(env, space, spending()), 0)
 })
 
-// The sandbox's sign-in (T-34387): every command runs with a grant of the
-// caller's in its environment, one grant for the whole container, and the
-// grant dies with the container.
+// The sandbox's sign-in (T-34387): every command runs with a placeholder for
+// a grant of the caller's in its environment, one grant for the whole
+// container, which the kernel swaps in on the way to this platform alone, and
+// the grant dies with the container.
+
+// A request the container sends, as the kernel lets it out (sandbox.ts
+// `swapped`): what came back, and the credential it left with, if it left.
+// `git` sends it as Basic, the way a clone from `https://x:$YAKS_TOKEN@…` does.
+let sent = async (
+  env: Env,
+  container: string,
+  to: string,
+  bearer: string,
+  git = false,
+) => {
+  let out: Request | undefined
+  let res = await swapped(
+    env,
+    container,
+    new Request(to, {
+      headers: {
+        authorization: git
+          ? `Basic ${btoa(`x:${bearer}`)}`
+          : `Bearer ${bearer}`,
+      },
+    }),
+    (r, init) => {
+      out = new Request(r, init)
+      return Promise.resolve(new Response('ok'))
+    },
+  )
+  let said = out?.headers.get('authorization')?.split(' ')[1]
+  return {
+    status: res.status,
+    bearer: said && (git ? atob(said).slice('x:'.length) : said),
+  }
+}
+
 test('every command is signed in as the caller, with one grant', async () => {
-  let { box, env } = await bench(() => ({ stdout: 'ok' }))
+  let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
   // No `spend` on the Ctx, so each of these is its own build as far as the
   // tools are concerned: what makes the two say one grant is the ledger row
   // the container wears, not a memory inside one call.
@@ -438,26 +473,78 @@ test('every command is signed in as the caller, with one grant', async () => {
   )
   let [first, second] = invocations
   assertEquals(first.YAKS_HOST, HOST)
-  assert(first.YAKS_TOKEN?.startsWith(GRANT), 'a grant token, said as one')
+  assert(first.YAKS_TOKEN?.startsWith(SENTINEL), 'a placeholder, not a token')
   assertEquals(second.YAKS_TOKEN, first.YAKS_TOKEN)
   // A writeFile is not a command, and asks for no grant.
   assertEquals(invocations.length, 2)
 
-  // And it opens the door as Ada, narrowed to her space, for about as long as
-  // the container can live.
+  // And on its way here it opens the door as Ada, narrowed to her space, for
+  // about as long as the container can live.
   let book = ledger(env.OAUTH_KV)!
-  let grant = await held(first.YAKS_TOKEN, SECRET, book)
+  assertEquals((await book.ids(ADA)).length, 1)
+  let { bearer } = await sent(
+    env,
+    named(space, ADA),
+    `${HOST}/mcp`,
+    first.YAKS_TOKEN,
+  )
+  let grant = await held(bearer!, SECRET, book)
   assertEquals(grant?.person, ADA)
   assertEquals(grant?.space, 'ada')
   let hours = (grant!.exp - Math.floor(Date.now() / 1000)) / 3600
   assert(Math.abs(hours - LIFE) < 0.01, `${hours} hours is about ${LIFE}`)
 })
 
+test('a placeholder becomes the token toward yaks.app and stays a placeholder toward any other host', async () => {
+  let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
+  await tool('sandbox_shell').run({ env, dir: dirOf(env), person: ADA }, {
+    command: 'ls',
+  })
+  let placeholder = box.env.at(-1)!.YAKS_TOKEN
+  let mine = named(space, ADA)
+
+  // To this platform, and to a clone of an app at Ada's own space's address.
+  let apex = new URL(HOST).host
+  for (
+    let [to, git] of [
+      [`${HOST}/mcp`, false],
+      [`https://ada.${apex}/chess.git/info/refs`, true],
+    ] as const
+  ) {
+    let { status, bearer } = await sent(env, mine, to, placeholder, git)
+    assertEquals(status, 200)
+    let grant = await held(bearer!, SECRET, ledger(env.OAUTH_KV)!)
+    assertEquals(grant?.person, ADA, to)
+  }
+  // Anywhere else, another space's address included, as it came.
+  for (
+    let to of [
+      'https://github.com/withastro/astro',
+      `https://bob.${apex}/`,
+      `https://example.com/?next=${HOST}`,
+    ]
+  ) {
+    assertEquals(await sent(env, mine, to, placeholder), {
+      status: 200,
+      bearer: placeholder,
+    })
+  }
+  // And only over https (another member's container is
+  // sandbox_isolation_test.ts's).
+  assertEquals(
+    (await sent(env, mine, HOST.replace('https:', 'http:'), placeholder))
+      .status,
+    403,
+  )
+})
+
 test('destroying the container revokes what it was wearing', async () => {
   let { box, env, space } = await bench(() => ({ stdout: 'ok' }))
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
+  let mine = named(space, ADA)
   await tool('sandbox_shell').run(lone, { command: 'ls' })
-  let token = box.env.at(-1)!.YAKS_TOKEN
+  let placeholder = box.env.at(-1)!.YAKS_TOKEN
+  let token = (await sent(env, mine, `${HOST}/mcp`, placeholder)).bearer!
   let book = ledger(env.OAUTH_KV)!
   assert(await held(token, SECRET, book), 'live while the container is')
 
@@ -466,16 +553,17 @@ test('destroying the container revokes what it was wearing', async () => {
   // holding the grant to end it.
   assertEquals(await destroyed(env, space, ADA), true)
   assertEquals(await held(token, SECRET, book), null)
-  assertEquals(await book.wearing(named(space, ADA)), null)
+  assertEquals((await sent(env, mine, `${HOST}/mcp`, placeholder)).status, 403)
 
   // The next wake mints a fresh one rather than saying the dead one again.
   await tool('sandbox_shell').run(lone, { command: 'ls' })
-  let next = box.env.at(-1)!.YAKS_TOKEN
+  let next = (await sent(env, mine, `${HOST}/mcp`, box.env.at(-1)!.YAKS_TOKEN))
+    .bearer!
   assert(next != token, 'a new grant for a new container')
   assert(await held(next, SECRET, book))
 })
 
-test('the token is in the environment and never in the transcript', async () => {
+test('the container holds a placeholder, never the token, and neither reaches the transcript', async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
   let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
   let model = fake([
@@ -494,12 +582,15 @@ test('the token is in the environment and never in the transcript', async () => 
     on: (b) => beats.push(JSON.stringify(b)),
   })
 
-  let token = box.env.at(-1)!.YAKS_TOKEN
-  assert(token?.startsWith(GRANT), 'the command was signed in')
+  let placeholder = box.env.at(-1)!.YAKS_TOKEN
+  assert(placeholder?.startsWith(SENTINEL), 'the command was signed in')
+  for (let handed of box.env.flatMap(Object.values)) {
+    assert(!handed.startsWith(GRANT), 'no grant token is handed in')
+  }
   // Not in a frame the person's page draws, not in what the model reads back,
   // and not in the command line the tool was called with.
   for (let said of [...beats, ...box.ran]) {
-    assert(!said.includes(token), `the token is not in ${said.slice(0, 60)}`)
+    assert(!said.includes(placeholder), `not in ${said.slice(0, 60)}`)
   }
 })
 
@@ -721,7 +812,8 @@ test('the guide and the limits page say the same image', async () => {
     assert(guide.includes(version), `code.md names ${name} ${version}`)
     assert(tech.includes(version), `technical.md names ${name} ${version}`)
   }
-  for (let page of [guide, tech]) {
+  // As read, not as wrapped: the formatter may break a line anywhere.
+  for (let page of [guide, tech].map((p) => p.replace(/\s+/g, ' '))) {
     assertStringIncludes(page, 'apt')
     assertStringIncludes(page, 'destroyed when the build ends')
   }
@@ -821,15 +913,4 @@ test("the month of sandbox time is the account's, and it refuses", async () => {
     Error,
     'build seconds a month',
   )
-})
-
-test('a sandbox reaches the registries, this platform and its own space, and nothing else', () => {
-  let hosts = egress({ APEX: 'yaks.fyi' }, 'pat')
-  for (let host of ['static.crates.io', 'pypi.org', 'registry.npmjs.org']) {
-    assert(hosts.includes(host), host)
-  }
-  assert(hosts.includes('yaks.fyi'))
-  assertEquals(hosts.filter((h) => h.endsWith('.yaks.fyi')), ['pat.yaks.fyi'])
-  assert(hosts.every((h) => !h.includes('*')), 'no wildcard reaches further')
-  assertEquals(REGISTRIES.includes('github.com'), false)
 })

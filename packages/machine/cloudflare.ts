@@ -43,7 +43,6 @@ export type Box = {
   ): Promise<{ content: string }>
   destroy(): Promise<unknown>
   setSleepAfter?(after: string): unknown
-  setAllowedHosts?(hosts: string[]): unknown
 }
 
 /** The `SANDBOX` binding: a Durable Object namespace handing out one by name. */
@@ -60,14 +59,10 @@ export let TIMEOUT = 240_000
 export let NAP = 300
 export let SLEEP = `${NAP / 60}m`
 
-/** `hosts` replaces the namespace's default list of where a container's
- * network reaches, for the containers this provider lends. `failed` hears a
- * configuration RPC that did not land; the container keeps what it had. */
 export type CloudflareOptions = {
   env?: () => Promise<Record<string, string>>
   retry?: <T>(send: () => T | Promise<T>) => Promise<T>
-  hosts?: string[]
-  failed?: (error: unknown, what: 'sleep' | 'hosts') => void
+  sleepError?: (error: unknown) => void
 }
 
 /** Cloudflare's synchronous exec is also used to expand artifact globs. */
@@ -268,7 +263,6 @@ export let cloudflareProvider = (
       readFile: (path, opts) => call((box) => box.readFile(path, opts)),
       destroy: () => call((box) => box.destroy()),
       setSleepAfter: (after) => call((box) => box.setSleepAfter?.(after)),
-      setAllowedHosts: (hosts) => call((box) => box.setAllowedHosts?.(hosts)),
     }
   }
   let wake = (ref: MachineRef) =>
@@ -277,7 +271,7 @@ export let cloudflareProvider = (
       cwd: CWD,
     })
   return {
-    request: async (request: MachineRequest) => {
+    request: (request: MachineRequest) => {
       if (request.from != null || request.image != null) {
         throw new Error(
           "cloudflare: uses the namespace's deployed image; from and image are unsupported",
@@ -287,16 +281,9 @@ export let cloudflareProvider = (
       // Configuration is a best-effort backstop. The SDK default still sleeps
       // a container if this RPC fails; the host reports the failure.
       Promise.resolve(box.setSleepAfter?.(SLEEP)).catch((e) =>
-        options.failed?.(e, 'sleep')
+        options.sleepError?.(e)
       )
-      // Awaited, so the first command already reaches them. The SDK keeps
-      // the list in the container's storage and applies it before each start.
-      if (options.hosts) {
-        await Promise.resolve(box.setAllowedHosts?.(options.hosts)).catch((
-          e,
-        ) => options.failed?.(e, 'hosts'))
-      }
-      return { machine: machineOf(box), cwd: CWD }
+      return Promise.resolve({ machine: machineOf(box), cwd: CWD })
     },
     wake,
     release: async (ref) => {

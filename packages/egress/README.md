@@ -2,9 +2,10 @@
 
 Calls going out with a credential the caller never holds. An app is handed a
 sentinel for each connection it uses ([@yaks/connections](../connections)), and
-puts it wherever the service wants its key or token: a header, the query, the
-body. The egress sends the request on with the credential in the sentinel's
-place, verbatim.
+puts it wherever the service wants its key or token: a header, either half of a
+Basic credential (`curl -u`, a URL's `user:password@`), the query, the body. The
+egress sends the request on with the credential in the sentinel's place,
+verbatim.
 
 It serves no route. A host authenticates the caller and hands each call to
 `forward`, in-process or from an outbound Worker.

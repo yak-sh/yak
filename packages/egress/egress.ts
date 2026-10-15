@@ -1,6 +1,7 @@
 // The egress: a call going out with a credential. An app never holds one. It
 // holds sentinels (@yaks/secrets), and puts one wherever the service wants its
-// key or token: a header, the query, the body. The egress finds each, checks
+// key or token: a header, a Basic credential, the query, the body. The egress
+// finds each, checks
 // who is calling and where the request goes, and sends it on with the
 // credential in the sentinel's place, verbatim. A service that refuses an
 // access token is asked once more, after the token is refreshed.
@@ -71,6 +72,20 @@ let utf8 = (s: string) => latin(new TextEncoder().encode(s))
 // The body goes whole, so its length is the runtime's to say.
 let SIZED = ['content-length', 'transfer-encoding']
 
+// A Basic credential is its `user:password` in base64, which is how curl's
+// `-u` and a URL's userinfo (git's `https://x:<token>@host/`) send one. A
+// sentinel in either half is found, and swapped, in the pair it encodes.
+let BASIC = /^(basic\s+)([A-Za-z0-9+/]+=*)$/i
+let basic = (v: string) => {
+  let said = BASIC.exec(v)
+  if (!said) return null
+  try {
+    return { scheme: said[1], pair: atob(said[2]) }
+  } catch {
+    return null
+  }
+}
+
 // One connection a request's sentinel stands for, checked, with the value that
 // goes in its place.
 type Hit = Grant & { eid: Eid; oauth: boolean }
@@ -140,19 +155,27 @@ let prepare = async (
   let headers = [...req.headers].filter(([k]) => !SIZED.includes(k))
   let body = req.body ? latin(new Uint8Array(await req.arrayBuffer())) : null
   let found = [
-    ...new Set([tail, ...headers.map(([, v]) => v), body ?? ''].flatMap(
-      sentinels,
-    )),
+    ...new Set(
+      [
+        tail,
+        ...headers.flatMap(([, v]) => [v, basic(v)?.pair ?? '']),
+        body ?? '',
+      ].flatMap(sentinels),
+    ),
   ]
   let sent = (by: readonly Grant[]) => {
     let values = new Map(by.map((h) => [h.sentinel, h.value]))
     let raw = new Map(by.map((h) => [h.sentinel, utf8(h.value)]))
+    let header = (v: string) => {
+      let b = basic(v)
+      return b && sentinels(b.pair).length
+        ? b.scheme + btoa(swap(b.pair, raw))
+        : swap(v, values)
+    }
     return send(
       new Request(url.origin + swap(tail, values), {
         method: req.method,
-        headers: headers.map((
-          [k, v],
-        ): [string, string] => [k, swap(v, values)]),
+        headers: headers.map(([k, v]): [string, string] => [k, header(v)]),
         body: body == null ? null : bytes(swap(body, raw)),
         redirect: by.length ? 'manual' : req.redirect,
         signal: req.signal,

@@ -44,14 +44,26 @@
 // sleeps on its own after that long idle, which is where the billing stops.
 // Idle shutdown ends its processes and temporary files; ship artifacts before it sleeps.
 //
-// And it is signed in as the caller (T-34387). Every command runs with
-// `YAKS_TOKEN` and `YAKS_HOST` in its environment — a grant (grants.ts),
-// narrowed to this space and living about as long as the container can — so
-// the `yak` CLI the live platform supplies, and plain `curl`, reach the platform's own
-// door as the person whose build this is. One grant per container rather than
-// one per command ({@link signed}), and it dies with the container
-// ({@link destroyed}). It rides the SDK's per-invocation env and is never
-// exported into a shell, so nothing puts it in the builder's transcript.
+// Its network is the whole internet. It is the person's box: whatever runs in
+// it runs because they or their agent asked, and an agent a prompt has turned
+// already acts as them, sandbox or not. So a list of hosts it may reach
+// protected nothing, and stopped it cloning from GitHub. Only HTTP to this
+// platform and its spaces' addresses passes through the kernel on its way out
+// (index.ts `Sandbox`); the rest leaves the container directly.
+//
+// It is signed in as the caller (T-34387) without holding the caller's token.
+// Every command runs with `YAKS_HOST` and `YAKS_TOKEN` in its environment, and
+// `YAKS_TOKEN` is a placeholder: a sentinel (@yaks/secrets) made for this one
+// container ({@link placeholder}). On its way to this platform, or to its
+// space's own address, the kernel puts the token of the grant the container
+// wears (grants.ts) in its place ({@link swapped}), as an app's calls out get
+// a connection's key (outbound.ts, @yaks/egress); sent anywhere else it stays
+// a placeholder. So the `yak` CLI
+// the live platform supplies, and plain `curl`, reach the platform's own door
+// as the person whose build this is, narrowed to this space. One grant per
+// container rather than one per command ({@link signed}), and it dies with the
+// container ({@link destroyed}). The placeholder rides the SDK's per-invocation
+// env and is never exported into a shell.
 import {
   cloudflareProvider,
   NAP,
@@ -59,10 +71,12 @@ import {
   TIMEOUT,
 } from '@yaks/machine/cloudflare'
 export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/machine/cloudflare'
+import { granted, Refused } from '@yaks/egress'
+import { sentinel } from '@yaks/secrets'
 import type { Space, Tier } from './directory.ts'
 import { retried } from './door.ts'
 import { type Grant, type Kv, ledger, mint, tokenOf } from './grants.ts'
-import { type Host, spaceHost, url } from './host.ts'
+import { apex, type Host, spaceHost, url } from './host.ts'
 import { refuse } from './tool.ts'
 import { caught } from './defects.ts'
 import type { Workspaces } from './workspaces.ts'
@@ -110,40 +124,17 @@ export let CAP = 8_000
 export let sandboxHost = (env: Host = {}) => url(env)
 export let HOST = sandboxHost()
 
-/** Where a sandbox may reach (T-37883): the package registries its
- * toolchains install from, Ubuntu's archive for apt, and this platform, which
- * the `yaks` CLI inside it talks to. Everything else is refused at the
- * container's edge (index.ts `Sandbox`), so a command cannot mail what it
- * reads to somebody else's server, or be anybody's crawler.
- *
- * A space's own sandbox also reaches the space's own address, so a fresh one
- * can clone an app to rebuild it and fetch the page it shipped. Only its own:
- * another space's open app takes anyone's writes. */
-export let REGISTRIES = [
-  // Rust: the crates index and downloads, and rustup's targets.
-  'crates.io',
-  'index.crates.io',
-  'static.crates.io',
-  'static.rust-lang.org',
-  // Python.
-  'pypi.org',
-  'files.pythonhosted.org',
-  // JavaScript and Deno.
-  'registry.npmjs.org',
-  'jsr.io',
-  // Go's module proxy and checksum database.
-  'proxy.golang.org',
-  'sum.golang.org',
-  // apt, on the image's Ubuntu.
-  'archive.ubuntu.com',
-  'security.ubuntu.com',
-]
+/** A container by its Durable Object's id: what its calls out are said to
+ * come from (index.ts `Sandbox`), and so what the ledger knows it by. */
+export let idOf = (sandboxes: Sandboxes, name: string) =>
+  String(sandboxes.idFromName(name))
 
-export let egress = (env: Host = {}, space?: string) => [
-  ...REGISTRIES,
-  new URL(sandboxHost(env)).hostname,
-  ...space ? [spaceHost(env, space)] : [],
-]
+/** What a container holds in place of its grant's token: a sentinel of its id
+ * under the platform's secret. It names the container rather than the grant,
+ * so a process started under one grant still calls in after the next is
+ * minted, and only the container it was made for can have it swapped. */
+export let placeholder = (secret: string, container: string) =>
+  sentinel(new TextEncoder().encode(secret), `sandbox:${container}`)
 
 /** How long the grant in the container's environment lives, in hours: the
  * whole build budget plus the nap that outlasts it, so the token is alive for
@@ -275,17 +266,18 @@ let alive = (g: Grant | null, now: number): g is Grant =>
   !!g && g.exp * 1000 - now > TIMEOUT
 
 /**
- * The container's environment: the platform to talk to, and the grant that is
- * the caller. `yaks` reads both by name and so does a `curl` written by hand,
- * so a command in the sandbox reaches the same tools the person's own agent
- * has — as the person, narrowed to this space, and no longer than the
- * container lives ({@link LIFE}).
+ * The container's environment: the platform to talk to, and the placeholder
+ * for the grant that is the caller. `yaks` reads both by name and so does a
+ * `curl` written by hand, so a command in the sandbox reaches the same tools
+ * the person's own agent has — as the person, narrowed to this space, and no
+ * longer than the container lives ({@link LIFE}).
  *
  * One grant per container, not one per command: the ledger row (grants.ts
- * `wear`) is what makes the second wake say the same grant as the first, since
- * the token itself is kept nowhere and re-derived from what the ledger holds.
- * A grant revoked by hand (tools.ts `grant`) is gone from the ledger, so the
- * next wake mints rather than saying a dead one again.
+ * `wear`), under the container's id, is what the next wake reuses and what
+ * {@link swapped} reads the token from, since the token itself is kept
+ * nowhere and re-derived from what the ledger holds. A grant revoked by hand
+ * (tools.ts `grant`) is gone from the ledger, so the next wake mints rather
+ * than wearing a dead one.
  *
  * Nothing to sign with — no secret, no KV, which is every probe and every
  * test — is an empty environment rather than a refusal: the workbench still
@@ -293,6 +285,7 @@ let alive = (g: Grant | null, now: number): g is Grant =>
  */
 export let signed = async (
   env: Keys,
+  container: string,
   space: Space,
   person: string,
   now = Date.now(),
@@ -300,23 +293,67 @@ export let signed = async (
   let book = ledger(env.OAUTH_KV)
   let secret = env.SESSION_SECRET
   if (!book || !secret) return {}
-  let holder = named(space, person)
-  let was = await book.wearing(holder)
+  let was = await book.wearing(container)
   // A personal container reuses only its person's still-valid grant.
   let has = was?.person == person ? await book.held(was.person, was.id) : null
-  if (alive(has, now)) {
-    return {
-      YAKS_TOKEN: await tokenOf(has, secret),
-      YAKS_HOST: sandboxHost(env),
-    }
+  if (!alive(has, now)) {
+    let { grant } = await mint(secret, book, {
+      person,
+      space: space.slug,
+      hours: LIFE,
+    }, now)
+    await book.wear(container, grant, now)
   }
-  let { grant, token } = await mint(secret, book, {
-    person,
-    space: space.slug,
-    hours: LIFE,
-  }, now)
-  await book.wear(holder, grant, now)
-  return { YAKS_TOKEN: token, YAKS_HOST: sandboxHost(env) }
+  return {
+    YAKS_TOKEN: await placeholder(secret, container),
+    YAKS_HOST: sandboxHost(env),
+  }
+}
+
+// What a container's placeholder stands for on one call: the token of the
+// grant it wears, lent as @yaks/egress lends a credential, to this platform
+// and the address of the one space the grant reaches, where a clone of its
+// apps knocks (git_door.ts). None when it wears none.
+let lent = async (env: Keys, container: string) => {
+  let book = ledger(env.OAUTH_KV)
+  let secret = env.SESSION_SECRET
+  let was = book && await book.wearing(container)
+  let grant = was && await book!.held(was.person, was.id)
+  if (!grant || !secret) return []
+  return [{
+    sentinel: await placeholder(secret, container),
+    value: await tokenOf(grant, secret),
+    hosts: [apex(env), ...grant.space ? [spaceHost(env, grant.space)] : []],
+  }]
+}
+
+/**
+ * A request a container sends, on its way out (index.ts `Sandbox`): to this
+ * platform or its space's address, with the container's placeholder swapped
+ * for its grant's token; anywhere else, another space's address included, as
+ * it came, placeholder and all. Toward this platform, a placeholder the
+ * container does not hold, one it holds no live grant for, or one sent over
+ * plain http is refused with a 403, as an app's call out is (outbound.ts).
+ */
+export let swapped = async (
+  env: Keys,
+  container: string,
+  req: Request,
+  send: typeof fetch = fetch,
+): Promise<Response> => {
+  let to = new URL(req.url).hostname
+  let lend = await lent(env, container)
+  if (to != apex(env) && !lend.some((g) => g.hosts.includes(to))) {
+    return send(req)
+  }
+  try {
+    return await granted(lend, req, send)
+  } catch (e) {
+    if (!(e instanceof Refused)) throw e
+    return new Response(`yaks.app refused this call: ${e.message}`, {
+      status: 403,
+    })
+  }
 }
 
 // The grant the container was wearing, taken back. Telemetry rather than a
@@ -351,7 +388,8 @@ export let workbench = async (
   spend: Spend,
   now = Date.now,
 ) => {
-  if (!env.SANDBOX) throw new Error(NO_BOX)
+  let ns = env.SANDBOX
+  if (!ns) throw new Error(NO_BOX)
   let spent = seconds(spend, now())
   if (spent >= BUDGET) throw refuse('limit', overBudget(spent))
   let first = spend.since == null
@@ -360,24 +398,23 @@ export let workbench = async (
   }
   spend.person = person
   spend.since ??= now()
-  let provider = cloudflareProvider(env.SANDBOX, {
-    retry: retried,
-    env: () => spend.signing ??= signed(env, space, person),
-    hosts: egress(env, space.slug),
-    failed: (e, what) =>
-      caught(e, { request: `sandbox ${what}`, space: space.slug }),
-  })
   let ref = { id: named(space, person) }
   let source = { id: shared(space) }
+  let provider = cloudflareProvider(ns, {
+    retry: retried,
+    env: () => spend.signing ??= signed(env, idOf(ns, ref.id), space, person),
+    sleepError: (e) =>
+      caught(e, { request: 'sandbox sleep', space: space.slug }),
+  })
   // Snapshot only the workspace into a clean container, never its processes,
   // system files or environment. The source records completed copies so a
   // retry or another command cannot overwrite the person's later work.
-  let old = cloudflareProvider(env.SANDBOX, { retry: retried })
+  let old = cloudflareProvider(ns, { retry: retried })
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
   spend.copying ??= retried(() => workspace.fork(source.id, ref.id)).then(
     async (processes) => {
-      await bared(env, space, source.id)
+      await bared(env, space, idOf(ns, source.id))
       return processes
     },
   ).catch((error) => {
@@ -445,7 +482,7 @@ export let destroyed = async (
   // container is a bearer nobody is holding. It is read off the ledger rather
   // than passed in, so erasing a space (erase.ts) revokes the grant a build
   // minted in some other request just as a build's own end does.
-  await bared(env, space, named(space, person))
+  await bared(env, space, idOf(env.SANDBOX, named(space, person)))
   return true
 }
 
@@ -454,15 +491,16 @@ export let destroyedAll = async (
   env: Bound,
   space: Space,
 ) => {
-  if (!env.SANDBOX) return false
-  let provider = cloudflareProvider(env.SANDBOX, { retry: retried })
+  let ns = env.SANDBOX
+  if (!ns) return false
+  let provider = cloudflareProvider(ns, { retry: retried })
   let source = { id: shared(space) }
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
   let copies = await retried(() => workspace.retire())
   for (let ref of [...copies.map((id) => ({ id })), source]) {
     await provider.release(ref)
-    await bared(env, space, ref.id)
+    await bared(env, space, idOf(ns, ref.id))
   }
   await retried(() => workspace.destroy())
   return true

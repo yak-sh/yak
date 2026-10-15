@@ -5,9 +5,12 @@ import type { Space } from './directory.ts'
 import { held, ledger } from './grants.ts'
 import {
   destroyedAll,
+  HOST,
+  named,
   released,
   shared,
   spending,
+  swapped,
   workbench,
 } from './sandbox.ts'
 import { cloudflareProvider } from '@yaks/machine/cloudflare'
@@ -67,8 +70,27 @@ test('a member cannot read another member’s grant through leftover sandbox cod
   let spend = spending()
   let owner = await workbench(env, space, 'owner', spend)
   await owner.machine.start('owner-command')
-  let token = [...box.tokens.values()][0]
+  // What the owner's command holds is a placeholder, which only the owner's
+  // container has swapped for the owner's token on its way to the platform.
+  let placeholder = [...box.tokens.values()][0]
+  let bearer = async (container: string) => {
+    let out = ''
+    await swapped(
+      env,
+      container,
+      new Request(`${HOST}/mcp`, {
+        headers: { authorization: `Bearer ${placeholder}` },
+      }),
+      (r, init) => {
+        out = new Request(r, init).headers.get('authorization') ?? ''
+        return Promise.resolve(new Response())
+      },
+    )
+    return out.slice('Bearer '.length)
+  }
+  let token = await bearer(named(space, 'owner'))
   equal((await held(token, secret, ledger(env.OAUTH_KV)!))?.person, 'owner')
+  equal(await bearer(named(space, 'editor')), '')
   equal(
     (await editor.provider.exec(editor.ref, 'read-owner-environment')).stdout,
     'absent',

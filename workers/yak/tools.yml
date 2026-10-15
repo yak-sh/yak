@@ -147,13 +147,15 @@ sandbox_shell:
     makes a module a browser loads with no glue code, -target wasm32-wasi
     one a WASI layer runs); Deno 2.9.1, and the image's Node and Bun. The
     command runs as root, so `apt-get install -y <pkg>`, cargo, pip, npm and
-    go get install anything for that build. Its network reaches the package
-    registries, this platform and the space's own address, nothing else. sandbox_write writes source
-    in; sandbox_ship copies a built artifact into the app. It is signed in as
-    the person: `yak` is installed with $YAKS_TOKEN and $YAKS_HOST set, so
-    `yak <tool>` and curl call these same tools, on a short-lived token
-    revoked when the container is destroyed. Use is metered in seconds
-    charged to the space: a {{budget}}-second budget per managed build (or
+    go get install anything for that build. Its network reaches the whole
+    internet, so git clone, npm create and any API work. sandbox_write writes
+    source in; sandbox_ship copies a built artifact into the app. It is
+    signed in as the person: `yak` is installed with $YAKS_TOKEN and
+    $YAKS_HOST set, so `yak <tool>` and curl call these same tools.
+    $YAKS_TOKEN is a placeholder, which yaks.app swaps for a short-lived token
+    of the person's on its way to yaks.app or the space's own address, and
+    nowhere else; the token is revoked when the container is destroyed. Use
+    is metered in seconds charged to the space: a {{budget}}-second budget per managed build (or
     standalone tool call), and a monthly allowance shared by the owner's free
     spaces. One sandbox awake per person at a time on the free tier, two on
     the Plus plan. The container is destroyed when the build ends; separate

@@ -80,6 +80,30 @@ for (
   })
 }
 
+test('a sentinel in a Basic credential is swapped inside it, and an ungranted one is refused', async () => {
+  seen = []
+  await granted(
+    grants,
+    new Request('https://api.example/', {
+      headers: { authorization: `Basic ${btoa(`x:${KEY}`)}` },
+    }),
+    send,
+  )
+  assertEquals(
+    seen[0].headers.get('authorization'),
+    `Basic ${btoa('x:' + String.fromCharCode(...bytes('clé')))}`,
+  )
+  await assertRejects(() =>
+    granted(
+      grants,
+      new Request('https://api.example/', {
+        headers: { authorization: `Basic ${btoa(`${OTHER}:`)}` },
+      }),
+      send,
+    ), Refused)
+  assertEquals(seen.length, 1)
+})
+
 test('each found sentinel must be granted for the destination', async () => {
   seen = []
   await assertRejects(() =>

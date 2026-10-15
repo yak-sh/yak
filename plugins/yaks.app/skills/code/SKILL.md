@@ -482,9 +482,11 @@ answers everybody (a public page's weather) needs the person to open the
 connection to anyone, on the same page; until then a signed-out visitor's call
 comes back `403` from yaks.app, saying so.
 
-A key the service wants transformed before it is sent — a request signature, AWS
-SigV4, Basic auth's base64 — never appears verbatim, so it cannot be swapped.
-`direct: true` hands the worker the key itself instead. Use it only for that.
+A sentinel inside Basic auth (`Authorization: Basic` of `user:sentinel`, as
+`curl -u` sends it) is swapped inside the pair. A key the service wants
+transformed before it is sent — a request signature, AWS SigV4 — never appears
+verbatim, so it cannot be swapped. `direct: true` hands the worker the key
+itself instead. Use it only for that.
 
 A page's own fetches never pass through yaks.app, so a sentinel in one goes out
 as it is. An app with no worker sends the call through the platform instead:
@@ -692,13 +694,9 @@ its root. Two different files landing on one path are refused. `replace: true`,
 with `into`, makes that folder hold exactly what this ships: each file an
 earlier build left there is deleted, into its history like any delete.
 
-**Its network reaches the package registries and nothing else**: crates.io,
-PyPI, npm, the Go module proxy, Ubuntu's archive, yaks.app itself, and your
-space's own address (`<space>.yaks.app`). Any other address is refused, so a
-build fetches what it needs from a registry, not from a URL. A scaffolder that
-downloads its template from GitHub (`npm create astro`) cannot; one that carries
-its templates in its package (`npm create vite`, `npx sv create`) can, and
-otherwise write the template's few files yourself.
+**Its network reaches the whole internet.** It is your box: `git clone` from
+GitHub, a scaffolder that downloads its template (`npm create astro`), any
+registry and any API all work.
 
 **One sandbox at a time.** Your sandbox is private to you in each space, and one
 person holds one awake at a time on the free plan, two on the Plus plan. A
@@ -710,7 +708,7 @@ you own, and 10 hours for each space on the Plus plan.
 That container is **signed in as you**. Two variables are set in every command's
 environment, and the `yak` CLI is installed:
 
-    YAKS_TOKEN   a grant — you, narrowed to this space
+    YAKS_TOKEN   a placeholder for a grant — you, narrowed to this space
     YAKS_HOST    https://yaks.app
 
 So a build script reaches the same tools your agent has, as you:
@@ -730,12 +728,16 @@ write the JSON-RPC yourself:
       -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":
            {"name":"app_list","arguments":{}}}'
 
+The container never holds the grant itself. `$YAKS_TOKEN` is a placeholder, and
+yaks.app puts the grant in its place on the way out, only when the request goes
+to yaks.app or to your space's own address (`<space>.yaks.app`, where a clone of
+your app is answered). Sent anywhere else, it stays a placeholder, so printing
+it or a package reading it gives nothing away.
+
 The grant is minted when the container wakes and **dies with the container** —
 it is taken back the moment the sandbox is destroyed, and it expires by itself
 soon after the sandbox would have slept. It is never more than you are: it
 carries no permission of its own, only your membership, and only in this space.
-Nothing else about it needs handling — do not print it, and do not write it into
-a file the app serves.
 
 ## A site a tool builds
 

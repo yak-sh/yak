@@ -207,12 +207,12 @@ with Rust 1.98.1 (and wasm-bindgen 0.2.128, wasm-opt 132), Python 3.13.15 with
 pip, Go 1.27.1, Zig 0.16.0 — which is also its C and C++ compiler — and Deno
 2.9.1 alongside Node and Bun. Anything else the builder installs for that
 session with `apt` or a package manager; the container's network reaches the
-package registries and nothing else. One build gets **10 minutes** of container
-time; past that the build says so and keeps whatever it has already shipped. A
-month holds **1 hour** of build time on Free and **10 hours** on the Plus plan,
-the container's and the compiling at `app_deploy` together, and one person has
-one container awake at a time on Free, two on the Plus plan. The container is
-destroyed when the build ends, and everything in it with it.
+whole internet. One build gets **10 minutes** of container time; past that the
+build says so and keeps whatever it has already shipped. A month holds **1
+hour** of build time on Free and **10 hours** on the Plus plan, the container's
+and the compiling at `app_deploy` together, and one person has one container
+awake at a time on Free, two on the Plus plan. The container is destroyed when
+the build ends, and everything in it with it.
 
 [The pricing page](/pricing) has both plans in full.
 

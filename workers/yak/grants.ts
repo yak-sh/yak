@@ -110,16 +110,18 @@ export let ledger = (kv: unknown) => {
   let book = shelf<Grant>(kv, CLI_GRANT)
   if (!book) return null
   // Never write or delete provider-owned grant: rows here.
-  // What a long-lived holder is signed in with, by the holder's own name.
+  // What a long-lived holder is signed in with, by what the holder is known
+  // by.
   let worn = (holder: string) => `wearing:${holder}`
   return {
     ...book,
-    // Which grant a long-lived holder is wearing — one build container
-    // (sandbox.ts). The token is answered once and kept nowhere, so this row
-    // is not the token: it is whose grant and which one, which is enough for
-    // the holder's next wake to say the same grant again, and enough for
-    // whoever ends the holder to take it back without having minted it. It
-    // expires with the grant it names.
+    // Which grant a long-lived holder is wearing — one build container, by
+    // its id (sandbox.ts). The token is answered once and kept nowhere, so
+    // this row is not the token: it is whose grant and which one, which is
+    // enough for the holder's next wake to wear the same grant again, for the
+    // swap on its way out to say that grant's token, and for whoever ends the
+    // holder to take it back without having minted it. It expires with the
+    // grant it names.
     wear: async (holder: string, g: Grant, now = Date.now()) => {
       await book.kv.put(worn(holder), `${g.person}:${g.id}`, {
         expirationTtl: book.ttl(g, now),
@@ -141,7 +143,7 @@ export let ledger = (kv: unknown) => {
 // The token that carries a grant. The seal is deterministic, so a grant still
 // on the books can be said again from what the ledger holds — which is what
 // lets one build container keep one grant across every command that wakes it
-// (sandbox.ts `worn`) instead of minting one per command. It is not a way to
+// (sandbox.ts `swapped`) instead of minting one per command. It is not a way to
 // recover a token somebody lost: nothing but this kernel can read the ledger.
 export let tokenOf = async (g: Grant, secret: string) =>
   GRANT + await seal('grant', g, secret)
