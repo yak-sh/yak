@@ -23,9 +23,11 @@ const escape = (v) =>
       '"': '&quot;',
       "'": '&#39;',
     })[c])
+// The public store expands references to people as {eid, name}.
+const refId = (ref) => typeof ref === 'string' ? ref : ref?.eid
 const personId = (who) => typeof who === 'string' ? who : who?.person
 const own = (session, who) =>
-  !!personId(who) && session?.created?.by === personId(who)
+  !!personId(who) && refId(session?.created?.by) === personId(who)
 const writable = (who) => !!personId(who) && who?.writes !== false
 const cleanups = new WeakMap()
 let lastError = ''
@@ -35,9 +37,10 @@ const pickReceipts = new Map()
 const pickListeners = new Set()
 function pickRows(rows, who) {
   const held = new Map(
-    rows.filter((r) => r.cook_pick && r.edge?.from === personId(who)).map((
-      r,
-    ) => [r.edge.to, r]),
+    rows.filter((r) => r.cook_pick && refId(r.edge?.from) === personId(who))
+      .map((
+        r,
+      ) => [r.edge.to, r]),
   )
   for (const [recipe, receipt] of pickReceipts) {
     if (receipt.by !== personId(who)) continue
@@ -326,7 +329,7 @@ async function completionGuard(row) {
   return {
     completed: {
       at: await was(row.completed?.at),
-      by: await was(row.completed?.by),
+      by: await was(refId(row.completed?.by)),
     },
   }
 }
