@@ -5,8 +5,11 @@ import { graph } from './mod.ts'
 import { hook } from '@yaks/graph/plugin'
 import { books, memory } from './testing.ts'
 
-test('hook keys see earlier rewrites and null removals before tracing', async () => {
-  let seen: unknown[] = [], contexts: unknown[] = [], always = 0
+// A graph whose first normalize hook gives `added` a book, and whose second
+// is keyed on book: what the keyed hook saw, under which graph, and how often
+// the unkeyed one ran.
+let rewriting = () => {
+  let seen: unknown[] = [], contexts: unknown[] = [], runs = { always: 0 }
   let g = graph({
     vocab: books,
     storage: memory(),
@@ -14,7 +17,7 @@ test('hook keys see earlier rewrites and null removals before tracing', async ()
       name: 'rewrite',
       hooks: {
         normalize: (b) => {
-          always++
+          runs.always++
           return Promise.resolve(
             b.map((b) =>
               b.entity.eid == 'added' ? { ...b, book: { pages: 3 } } : b
@@ -34,23 +37,44 @@ test('hook keys see earlier rewrites and null removals before tracing', async ()
       },
     }],
   })
-  let idle = await record(g, () =>
-    g.apply([{
-      entity: { eid: 'idle' },
-      doc: { title: 'Untouched' },
-    }]))
-  ok(!idle.spans.some((e) => e.plugin == 'books'))
-  let added = await record(g, () => g.apply([{ entity: { eid: 'added' } }]))
-  ok(added.spans.some((e) => e.plugin == 'books'))
-  equal(added.result[0].book, { pages: 3 })
-  await g.apply([{ entity: { eid: 'idle' }, book: null }])
-  equal(seen, [{ pages: 3 }, null])
-  equal(contexts, [g, g])
-  equal(always, 3)
+  return { g, seen, contexts, runs }
+}
+
+let idle = rewriting(), added = rewriting(), removed = rewriting()
+await removed.g.apply([{
+  entity: { eid: 'idle' },
+  doc: { title: 'Untouched' },
+}])
+
+test('a keyed hook skips a batch without its key, before tracing', async () => {
+  let { g, seen, runs } = idle
+  let out = await record(
+    g,
+    () => g.apply([{ entity: { eid: 'idle' }, doc: { title: 'Untouched' } }]),
+  )
+  ok(!out.spans.some((e) => e.plugin == 'books'))
+  equal([seen, runs.always], [[], 1])
 })
 
-test('eligible hooks preserve rollback and observe cascaded removals', async () => {
-  let audited = 0, observed = 0, released: unknown[] = []
+test('a keyed hook sees its key when an earlier hook writes it', async () => {
+  let { g, seen, contexts } = added
+  let out = await record(g, () => g.apply([{ entity: { eid: 'added' } }]))
+  ok(out.spans.some((e) => e.plugin == 'books'))
+  equal(out.result[0].book, { pages: 3 })
+  equal(seen, [{ pages: 3 }])
+  equal(contexts, [g])
+})
+
+test('a keyed hook sees a null removal of its key', async () => {
+  let { g, seen, runs } = removed
+  await g.apply([{ entity: { eid: 'idle' }, book: null }])
+  equal([seen, runs.always], [[null], 2])
+})
+
+// A graph whose book hooks refuse a book of -1 pages at commit and count
+// audits and effects, and whose bookmark cascade hook keeps what it released.
+let watched = () => {
+  let counts = { audited: 0, observed: 0 }, released: unknown[] = []
   let g = graph({
     vocab: books,
     storage: memory(),
@@ -65,11 +89,11 @@ test('eligible hooks preserve rollback and observe cascaded removals', async () 
         }),
         audit: hook(['book'], (b, _tx, err) => {
           ok(err instanceof Error)
-          audited++
+          counts.audited++
           return b
         }),
         effect: hook(['book'], (b) => {
-          observed++
+          counts.observed++
           return b
         }),
         cascade: hook(['bookmark'], (b) => {
@@ -79,18 +103,29 @@ test('eligible hooks preserve rollback and observe cascaded removals', async () 
       },
     }],
   })
+  return { g, counts, released }
+}
+
+let refusing = watched(), cascading = watched()
+await cascading.g.apply([
+  { entity: { eid: 'book' }, book: { pages: 3 } },
+  { entity: { eid: 'mark' }, bookmark: { of: 'book' } },
+])
+
+test('a refused batch rolls back whole, audited and never observed', async () => {
+  let { g, counts } = refusing
   await throws(() =>
     g.apply([
       { entity: { eid: 'refused' }, book: { pages: -1 } },
       { entity: { eid: 'also-refused' }, doc: { title: 'Rolled back' } },
     ]), 'refused')
   equal(await g.get(['refused', 'also-refused']), [])
-  equal([audited, observed], [1, 0])
-  await g.apply([
-    { entity: { eid: 'book' }, book: { pages: 3 } },
-    { entity: { eid: 'mark' }, bookmark: { of: 'book' } },
-  ])
+  equal(counts, { audited: 1, observed: 0 })
+})
+
+test('a keyed cascade hook observes the removals a delete cascades', async () => {
+  let { g, counts, released } = cascading
   await g.apply([{ entity: { eid: 'book' }, $delete: true }])
   equal(released, [{ entity: { eid: 'mark' }, bookmark: null }])
-  equal([audited, observed], [1, 1])
+  equal(counts, { audited: 0, observed: 1 })
 })

@@ -26,34 +26,58 @@ let sync = (out: Bundle[] | Promise<Bundle[]>): Bundle[] => {
 let held = (one: ReturnType<typeof g>, eid: string) =>
   (one.get([eid]) as Bundle[])[0]
 
-test('fresh rules sharing a match keep their callbacks and writes, and observe a changed match', () => {
+// A rule that writes its own page count and says when it ran.
+let paging = (name: string, pages: number, called: string[]): Plugin => ({
+  name,
+  rules: [{
+    phase: 'precondition',
+    match: '*book',
+    produce: { book: { pages } },
+    run: () => void called.push(name),
+  }],
+})
+let write = (one: ReturnType<typeof g>) =>
+  sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 33 } }]))
+
+let twins: string[] = []
+let first = g([paging('first', 11, twins)])
+let second = g([paging('second', 22, twins)])
+test('fresh rules sharing a match keep their callbacks and writes', () => {
+  write(first)
+  write(second)
+  assertEquals(comp(held(first, 'b1'), 'book').pages, 11)
+  assertEquals(comp(held(second, 'b1'), 'book').pages, 22)
+  assertEquals(twins, ['first', 'second'])
+})
+
+// A graph whose rule has run once on `*book`, then had its match set to
+// `match` and run on that too: what it called.
+let rematched = (match: string) => {
   let called: string[] = []
-  let factory = (name: string, pages: number): Plugin => ({
-    name,
-    rules: [{
-      phase: 'precondition',
-      match: '*book',
-      produce: { book: { pages } },
-      run: () => void called.push(name),
-    }],
-  })
-  let first = factory('first', 11)
-  let a = g([first])
-  let b = g([factory('second', 22)])
-  let write = (one: ReturnType<typeof g>) =>
-    sync(one.apply([{ entity: { eid: 'b1' }, book: { pages: 33 } }]))
-  write(a)
-  write(b)
-  assertEquals(comp(held(a, 'b1'), 'book').pages, 11)
-  assertEquals(comp(held(b, 'b1'), 'book').pages, 22)
-  first.rules![0].match = '.review, *book'
-  write(a)
-  assertEquals(comp(held(a, 'b1'), 'book').pages, 33)
-  assertEquals(called, ['first', 'second'])
-  first.rules![0].match = '*book'
-  write(a)
-  assertEquals(comp(held(a, 'b1'), 'book').pages, 11)
-  assertEquals(called, ['first', 'second', 'first'])
+  let plugin = paging('changed', 11, called)
+  let one = g([plugin])
+  write(one)
+  plugin.rules![0].match = match
+  write(one)
+  return { one, rule: plugin.rules![0], called }
+}
+
+let changed = rematched('*book')
+test('a warmed rule observes its match changed', () => {
+  let { one, rule, called } = changed
+  rule.match = '.review, *book'
+  write(one)
+  assertEquals(comp(held(one, 'b1'), 'book').pages, 33)
+  assertEquals(called, ['changed', 'changed'])
+})
+
+let back = rematched('.review, *book')
+test('a warmed rule observes its match changed back', () => {
+  let { one, rule, called } = back
+  rule.match = '*book'
+  write(one)
+  assertEquals(comp(held(one, 'b1'), 'book').pages, 11)
+  assertEquals(called, ['changed', 'changed'])
 })
 
 for (let count of [1, 2]) {

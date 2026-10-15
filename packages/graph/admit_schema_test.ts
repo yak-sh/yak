@@ -45,13 +45,16 @@ let joints = loadVocab({
   },
 })
 
+let moved = graph({
+  storage: memory(),
+  vocab: moves,
+  plugins: [admitSchema(moves)],
+})
+await moved.apply([{ entity: { eid: 'move-1' }, move: { reach: 2 } }])
 test('schema admission validates an extension property', async () => {
-  let vocab = moves
-  let g = graph({ storage: memory(), vocab, plugins: [admitSchema(vocab)] })
-  await g.apply([{ entity: { eid: 'move-1' }, move: { reach: 2 } }])
   await assertRejects(
     async () =>
-      await g.apply([{
+      await moved.apply([{
         entity: { eid: 'move-1' },
         move: { reach: 4 },
       }]),
@@ -59,28 +62,23 @@ test('schema admission validates an extension property', async () => {
   )
 })
 
+// Which trees are well formed is tree()'s, in admit_schema.ts.
+let nodes = [{ id: 'root' }, { id: 'child', up: 'root' }]
+let jointed = graph({
+  storage: memory(),
+  vocab: joints,
+  plugins: [admitSchema(joints)],
+})
+await jointed.apply([{ entity: { eid: 'tree' }, joints: { nodes } }])
 test('schema admission keeps an ordered tree through partial writes', async () => {
-  let vocab = joints
-  let g = graph({ storage: memory(), vocab, plugins: [admitSchema(vocab)] })
-  let nodes = [{ id: 'root' }, { id: 'child', up: 'root' }]
-  await g.apply([{ entity: { eid: 'tree' }, joints: { nodes } }])
-  for (
-    let invalid of [
-      [{ id: 'root', up: 'root' }],
-      [{ id: 'child', up: 'root' }, { id: 'root' }],
-      [{ id: 'root' }, { id: 'root' }],
-      [{ id: 'child', up: 'missing' }],
-    ]
-  ) {
-    await assertRejects(
-      async () =>
-        await g.apply([{
-          entity: { eid: 'tree' },
-          joints: { nodes: invalid },
-        }]),
-      Refused,
-      'parents must precede',
-    )
-  }
-  assertEquals((await g.get(['tree']))[0].joints, { nodes })
+  await assertRejects(
+    async () =>
+      await jointed.apply([{
+        entity: { eid: 'tree' },
+        joints: { nodes: [{ id: 'child', up: 'root' }, { id: 'root' }] },
+      }]),
+    Refused,
+    'parents must precede',
+  )
+  assertEquals((await jointed.get(['tree']))[0].joints, { nodes })
 })

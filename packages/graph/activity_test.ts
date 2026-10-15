@@ -111,18 +111,23 @@ for (let async of [false, true]) {
   })
 }
 
-test('query, rows and get expose counts without query text or row contents', async () => {
-  let vocab = loadVocab([{
-    $defs: {
-      book: { component: true, properties: { title: { type: 'string' } } },
-    },
-  }])
-  let g = graph({ vocab, storage: ram(vocab) })
-  await g.apply([{
-    entity: { eid: 'book-private' },
-    book: { title: 'private' },
-  }])
-  for (let reader of [g, readonly({ vocab, storage: g.storage })]) {
+let titled = loadVocab([{
+  $defs: {
+    book: { component: true, properties: { title: { type: 'string' } } },
+  },
+}])
+let shelf = graph({ vocab: titled, storage: ram(titled) })
+await shelf.apply([{
+  entity: { eid: 'book-private' },
+  book: { title: 'private' },
+}])
+for (
+  let [door, reader] of [
+    ['a graph', shelf],
+    ['a read-only graph', readonly({ vocab: titled, storage: shelf.storage })],
+  ] as const
+) {
+  test(`${door}'s query, rows and get expose counts without query text or row contents`, async () => {
     let c = channel(reader)
     let off = c.subscribe(() => {})
     await reader.read('.book.title=private', { parent: 'request' })
@@ -137,24 +142,31 @@ test('query, rows and get expose counts without query text or row contents', asy
     let text = JSON.stringify(c.history())
     ok(!text.includes('private'))
     off()
-  }
+  })
+}
+
+let hefty = graph({ vocab: heftyBooks, storage: ram(heftyBooks) })
+test('only fired declared rules emit activity', async () => {
+  let c = channel(hefty)
+  let off = c.subscribe(() => {})
+  await hefty.apply([{ entity: { eid: 'book' }, book: { pages: 7 } }])
+  ok(c.history().some((e) => e.kind == 'rule' && e.name == 'mark_hefty'))
+  off()
 })
 
-test('only fired declared rules emit activity; refused batches cannot commit', async () => {
-  let vocab = heftyBooks
-  let g = graph({ vocab, storage: ram(vocab) })
-  let c = channel(g)
+let stocked = graph({ vocab: books, storage: memory() })
+await stocked.apply([{ entity: { eid: 'book' }, book: { pages: 7 } }])
+test('a refused batch cannot commit, and its apply ends refused', async () => {
+  let c = channel(stocked)
   let off = c.subscribe(() => {})
-  await g.apply([{ entity: { eid: 'book' }, book: { pages: 7 } }])
-  ok(c.history().some((e) => e.kind == 'rule' && e.name == 'mark_hefty'))
   await throws(() =>
-    g.apply([{
+    stocked.apply([{
       entity: { eid: 'book' },
       book: { pages: 9 },
       $was: { book: { pages: token(123) } },
     }])
   )
-  equal((await g.get(['book']))[0].book, { pages: 7 })
+  equal((await stocked.get(['book']))[0].book, { pages: 7 })
   equal(
     c.history().findLast((e) => e.kind == 'apply' && e.stage == 'end')?.outcome,
     'refused',

@@ -29,42 +29,46 @@ let positions = loadVocab({
 
 for (let certified of [false, true]) {
   for (let rewrite of [false, true]) {
-    test(`admission returns checked peer values from ${rewrite ? 'hooks' : 'rules'} (${certified})`, async () => {
-      let vocab = positions
-      let value = { x: 100, label: 'bounded' }
-      let policy: Plugin = {
-        name: 'bound',
-        ...(certified ? { admission: () => true } : {}),
-        ...(rewrite
-          ? {
-            hooks: {
-              precondition: (b) =>
-                b.map((row) => ({ ...row, position: value })),
-            },
-          }
-          : {
-            rules: [{
-              name: 'bound',
-              phase: 'precondition',
-              match: '*position',
-              produce: { position: value },
-            }],
-          }),
-      }
-      let g = graph({
+    let value = { x: 100, label: 'bounded' }
+    let policy: Plugin = {
+      name: 'bound',
+      ...(certified ? { admission: () => true } : {}),
+      ...(rewrite
+        ? {
+          hooks: {
+            precondition: (b) => b.map((row) => ({ ...row, position: value })),
+          },
+        }
+        : {
+          rules: [{
+            name: 'bound',
+            phase: 'precondition',
+            match: '*position',
+            produce: { position: value },
+          }],
+        }),
+    }
+    let bounded = () =>
+      graph({
         storage: memory(),
-        vocab,
-        plugins: [policy, admitSchema(vocab)],
+        vocab: positions,
+        plugins: [policy, admitSchema(positions)],
       })
-      let input: Bundle[] = [{
-        entity: { eid: 'p1' },
-        position: { x: rewrite ? 200 : 50 },
-      }]
-      let ordinary = await g.apply(input, { check: true })
-      let checked = await g.admit(input)
+    let input: Bundle[] = [{
+      entity: { eid: 'p1' },
+      position: { x: rewrite ? 200 : 50 },
+    }]
+    let by = rewrite ? 'hooks' : 'rules'
+    let checking = bounded(), admitting = bounded()
+    test(`a check returns peer values from ${by} and writes nothing (${certified})`, async () => {
+      let ordinary = await checking.apply(input, { check: true })
       assertEquals(ordinary[0].position, value)
-      assertEquals(checked[0].position, ordinary[0].position)
-      assertEquals(await g.get(['p1']), [])
+      assertEquals(await checking.get(['p1']), [])
+    })
+    test(`admission returns checked peer values from ${by} (${certified})`, async () => {
+      let checked = await admitting.admit(input)
+      assertEquals(checked[0].position, value)
+      assertEquals(await admitting.get(['p1']), [])
     })
   }
 }

@@ -44,8 +44,14 @@ let checks = (vocab: Vocab): Map<string, Map<string, Check>> => {
   return out
 }
 
-// A flat joint tree names each node once, after the parent it hangs from.
-let tree = (value: unknown, key: string, parent: string): boolean => {
+/// tree([{ id: 'root' }, { id: 'child', up: 'root' }], 'id', 'up') -> true
+/// tree([{ id: 'root', up: 'root' }], 'id', 'up') -> false
+/// tree([{ id: 'child', up: 'root' }, { id: 'root' }], 'id', 'up') -> false
+/// tree([{ id: 'root' }, { id: 'root' }], 'id', 'up') -> false
+/// tree([{ id: 'child', up: 'missing' }], 'id', 'up') -> false
+/** Whether a flat tree (a property declaring `tree: {key, parent}`) names
+ * each node once, after the parent it hangs from. */
+export let tree = (value: unknown, key: string, parent: string): boolean => {
   if (!Array.isArray(value)) return false
   let seen = new Set<unknown>()
   for (let node of value) {
