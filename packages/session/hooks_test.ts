@@ -14,13 +14,18 @@ test('an install leads each event and keeps everything else', () => {
 })
 
 test('a second install replaces the first, never doubles it', () => {
-  let once = merged({ SessionStart: [theirs] }, lifecycle())
+  let once = merged(
+    { SessionStart: [theirs], UserPromptSubmit: [theirs] },
+    lifecycle(),
+  )
   let twice = merged(once, lifecycle('/usr/local/bin/yak', 'http://box:9'))
   assertEquals(twice.SessionStart.length, 2)
   assertEquals(twice.PostToolUse, [{
     hooks: [{ type: 'http', url: 'http://box:9/session/hook', timeout: 2 }],
   }])
   assertEquals(twice.SessionStart[1], theirs)
+  assertEquals(twice.UserPromptSubmit.length, 2)
+  assertEquals(twice.UserPromptSubmit[1], theirs)
   assert(
     JSON.stringify(twice.SessionStart[0]).includes('/usr/local/bin/yak'),
     JSON.stringify(twice.SessionStart[0]),
@@ -33,24 +38,28 @@ test('removing takes ours out and leaves theirs', () => {
   assertEquals(gone, { SessionStart: [theirs], Stop: [theirs] })
 })
 
+let settings = Deno.makeTempFileSync({ suffix: '.json' })
+Deno.writeTextFileSync(settings, JSON.stringify({ model: 'opus', hooks: {} }))
+let removable = Deno.makeTempFileSync({ suffix: '.json' })
+Deno.writeTextFileSync(removable, JSON.stringify({ model: 'opus', hooks: {} }))
+install(removable)
+
 test('a settings file keeps the keys nobody asked about', () => {
-  let path = Deno.makeTempFileSync({ suffix: '.json' })
-  try {
-    Deno.writeTextFileSync(path, JSON.stringify({ model: 'opus', hooks: {} }))
-    install(path)
-    let said = JSON.parse(Deno.readTextFileSync(path))
-    assertEquals(said.model, 'opus')
-    assertEquals(Object.keys(said.hooks).sort(), [
-      'PostToolUse',
-      'SessionEnd',
-      'SessionStart',
-      'SubagentStart',
-    ])
-    install(path, { remove: true })
-    assertEquals(JSON.parse(Deno.readTextFileSync(path)), { model: 'opus' })
-  } finally {
-    Deno.removeSync(path)
-  }
+  install(settings)
+  let said = JSON.parse(Deno.readTextFileSync(settings))
+  assertEquals(said.model, 'opus')
+  assertEquals(Object.keys(said.hooks).sort(), [
+    'PostToolUse',
+    'SessionEnd',
+    'SessionStart',
+    'SubagentStart',
+    'UserPromptSubmit',
+  ])
+})
+
+test('uninstall leaves the settings outside hooks untouched', () => {
+  install(removable, { remove: true })
+  assertEquals(JSON.parse(Deno.readTextFileSync(removable)), { model: 'opus' })
 })
 
 test('an install takes out the turn hooks an older one wrote', () => {
@@ -66,5 +75,5 @@ test('an install takes out the turn hooks an older one wrote', () => {
     lifecycle(),
   )
   assertEquals(out.Stop, [theirs])
-  assertEquals(out.UserPromptSubmit, undefined)
+  assertEquals(out.UserPromptSubmit, lifecycle().UserPromptSubmit)
 })

@@ -75,6 +75,9 @@ export let lifecycle = (
 ): Record<string, Hook[]> => ({
   SessionStart: [cmd(`${yak} session context --hook - || true`)],
   SubagentStart: [cmd(`${yak} session context --hook - || true`)],
+  UserPromptSubmit: [
+    cmd(`${yak} session context --hook - 2>/dev/null || true`, 2),
+  ],
   PostToolUse: [post(`${server.replace(/\/+$/, '')}${PATH}`)],
   SessionEnd: [cmd(`${yak} session wrap --hook - || true`, 5)],
 })

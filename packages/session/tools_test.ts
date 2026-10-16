@@ -488,3 +488,50 @@ test('session check leaves an incomplete imported log for inspection', async () 
     Deno.removeSync(path)
   }
 })
+
+// The prompt event is read-only and needs no session lookup or claim read.
+let promptTranscript = Deno.makeTempFileSync()
+Deno.writeTextFileSync(
+  promptTranscript,
+  JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-10-16T14:58:00.000Z',
+    message: { stop_reason: 'end_turn' },
+  }) + '\n',
+)
+test('prompt context returns only one line and never consults the graph', async () => {
+  let graph = new Proxy({} as Graph, {
+    get: () => {
+      throw new Error('prompt hook touched the graph')
+    },
+  })
+  let call = (path: string): Bundle => ({
+    entity: { eid: 'prompt-call' },
+    call: {
+      args: {
+        hook: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'abc',
+          transcript_path: path,
+          prompt: 'hi',
+        }),
+      },
+    },
+  })
+  let rows = await tools.session_context!(
+    call(promptTranscript),
+    graph,
+  ) as Bundle[]
+  assertEquals(rows.length, 1)
+  assertEquals(Object.keys(rows[0]).sort(), ['content', 'entity', 'output'])
+  let body = String(comp(rows[0], 'content').body)
+  assertEquals(body.split('\n').length, 1)
+  assertEquals(
+    body.endsWith('previous reply ended: 2026-10-16T14:58:00.000Z.'),
+    true,
+  )
+  assertEquals(
+    await tools.session_context!(call(promptTranscript + '.missing'), graph),
+    [],
+  )
+})

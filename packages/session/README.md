@@ -430,10 +430,23 @@ file (default `~/.claude/settings.json`), replacing an earlier install and
 leaving every other entry alone. A harness runs each hook with the event as JSON
 on stdin.
 
-| Event                       | Command                        | Effect                                                                    |
-| --------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
-| SessionStart, SubagentStart | `yak session context --hook -` | creates the session under the harness's id; prints its claims             |
-| SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims, except the task a managed run is parked on |
+| Event                       | Command                        | Effect                                                                           |
+| --------------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| SessionStart, SubagentStart | `yak session context --hook -` | creates the session under the harness's id; prints its claims                    |
+| UserPromptSubmit            | `yak session context --hook -` | one timing line: prompt sent (or observed at hook time) and previous reply ended |
+| SessionEnd                  | `yak session wrap --hook -`    | releases the session's claims, except the task a managed run is parked on        |
+
+UserPromptSubmit reads `transcript_path` locally and prints plain stdout, which
+Claude Code adds as context on exit 0. Its documented input has no sent
+timestamp: a matching queued submission (or `prompt_id` already in the
+transcript) supplies one; otherwise the line says **Prompt observed** at hook
+time, not an invented send time. The previous reply uses a main-thread assistant
+`end_turn` timestamp, never a tool call or a subagent. Reads are bounded to the
+last 1 MiB; unavailable times say `unknown`. A missing/unreadable transcript or
+unavailable graph means no context. The hook suppresses errors, exits
+successfully and has a two-second ceiling; it never blocks a prompt. See Claude
+Code's
+[hook input and output reference](https://code.claude.com/docs/en/hooks#userpromptsubmit).
 
 It also writes a PostToolUse HTTP hook posting each tool call to the server's
 hook door, `POST /session/hook` (`@yaks/session/routes`; `server` names the

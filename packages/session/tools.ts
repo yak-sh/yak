@@ -62,6 +62,7 @@ import { sessionFor } from './who.ts'
 import { ENTRY } from './native.ts'
 import { ordered, statusOf } from './state.ts'
 import { install, settingsPath } from './hooks.ts'
+import { promptContext, promptHook } from './prompt.ts'
 import type { Options as Reading } from './service.ts'
 import { listen } from './listen.ts'
 import { cacheRead } from './cache.ts'
@@ -273,6 +274,17 @@ export let runs = (
   // number it was just given; the locks are said beneath it.
   session_context: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
+    let prompt = promptHook(args.hook)
+    if (prompt) {
+      let body = promptContext(prompt)
+      return body
+        ? [{
+          entity: { eid: '$said' },
+          content: { body },
+          output: { source: call.entity.eid },
+        }]
+        : []
+    }
     let id = idIn(args)
     if (!id) return []
     let found = await sessionFor(graph, id)
