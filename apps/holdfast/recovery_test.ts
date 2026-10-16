@@ -264,3 +264,16 @@ test('an unknown batch without immutable receipts errors rather than blindly ret
   equal(unsupported.waits, 0)
   equal(unsupported.reports.length, 2)
 })
+
+const sold = fixture(sale)
+sold.landed(
+  sale.filter((r) => !!r.spent).map((r) => ({
+    ...r,
+    spent: { ...r.spent!, tower: null },
+  })) as unknown as Row[],
+)
+test('a sale receipt survives the server clearing its deleted tower reference', async () => {
+  await recover(sale, sold.ports)
+  equal(sold.writes.length, 1)
+  equal(sold.accepts.length, 1)
+})

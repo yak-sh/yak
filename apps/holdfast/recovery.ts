@@ -47,13 +47,21 @@ export async function recover(
   ports: RecoveryPorts,
 ): Promise<void> {
   let witnesses = batch.flatMap((row) =>
-    row.$delete
-      ? []
-      : receipts.flatMap((component) =>
-        row[component]
-          ? [{ eid: row.entity.eid, component, value: row[component] }]
-          : []
-      )
+    row.$delete ? [] : receipts.flatMap((component) =>
+      row[component]
+        ? [{
+          eid: row.entity.eid,
+          component,
+          // A sale clears spent.tower through its reference death policy.
+          // The immutable ledger amount/run still proves that transaction.
+          value: component === 'spent' && batch.some((r) =>
+              r.$delete && r.entity.eid === row.spent!.tower
+            )
+            ? { run: row.spent!.run, gold: row.spent!.gold }
+            : row[component],
+        }]
+        : []
+    )
   )
   let unknown = false
   // A failed read says nothing about acceptance. Delay and read again; do not
