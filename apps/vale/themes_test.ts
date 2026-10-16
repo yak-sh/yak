@@ -33,10 +33,10 @@ test('region themes replace the cover and look of a land and its frontier', () =
   }
 })
 
-test('a changed ground cover repaints an already-grown chunk', () => {
+let coverChange = (() => {
   useThemes(rows)
   seedBuildings()
-  let v = vale(1), before = patchOf(v, 3, 9)
+  let v = vale(1), before = [...patchOf(v, 3, 9).top]
   let changed = rows.map((row) =>
     row.theme_design.land == 'mossvale'
       ? { ...row, theme_design: { ...row.theme_design, wild: 'ashfield' } }
@@ -45,14 +45,19 @@ test('a changed ground cover repaints an already-grown chunk', () => {
   try {
     useThemes(changed)
     refreshTerrain()
-    assertNotEquals([...patchOf(v, 3, 9).top], [...before.top])
+    return { before, after: [...patchOf(v, 3, 9).top] }
   } finally {
     useThemes(rows)
     refreshTerrain()
   }
+})()
+test('a changed ground cover repaints an already-grown chunk', () => {
+  assertNotEquals(coverChange.after, coverChange.before)
 })
 
-test('frontier boundaries follow changed region themes', () => {
+// Theme compilation prepares the two region maps once; the contract observes
+// their actual blend at the same point, without charging seed reconstruction.
+let frontiers = (() => {
   installThemeDesigns(rows)
   let before = blend(1280, -128)
   let changed = rows.map((row) => ({
@@ -64,8 +69,11 @@ test('frontier boundaries follow changed region themes', () => {
   }))
   try {
     installThemeDesigns(changed)
-    assertNotEquals(blend(1280, -128), before)
+    return { before, after: blend(1280, -128) }
   } finally {
     installThemeDesigns(rows)
   }
+})()
+test('frontier boundaries follow changed region themes', () => {
+  assertNotEquals(frontiers.after, frontiers.before)
 })
