@@ -221,8 +221,9 @@ test('/vocab is what a client loads to read the graph as it does', async () => {
   assertEquals((await handler(post('/vocab', {}))).status, 405)
 })
 
+let signedDoor = shop()
 test('the door signs the batch, never the client', async () => {
-  let handler = shop()
+  let handler = signedDoor
   await handler(post('/apply', [
     // the client claims someone else wrote this
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
@@ -233,8 +234,9 @@ test('the door signs the batch, never the client', async () => {
   assertEquals(comp(found[0], 'created').by, 'm1')
 })
 
+let unattributedDoor = shop(() => null)
 test('an unattributed door leaves the actor off', async () => {
-  let handler = shop(() => null)
+  let handler = unattributedDoor
   await handler(post('/apply', [
     { entity: { eid: 'b1' }, book: { price: 12 }, $actor: { by: 'villain' } },
   ]))
