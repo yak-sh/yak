@@ -226,6 +226,22 @@ test('a request permits only declared marks through stored references', () => {
   )
 })
 
+// A permit composes the store's words, the named packages' among them.
+test('a manifest with a permit reads beside the packages it names', () => {
+  let doc = appDoc({
+    $defs: {
+      hero: { properties: {} },
+      request: {
+        floor: 'owner',
+        permit: { completed: 'target' },
+        properties: { target: { type: 'string', ref: 'hero', death: 'keep' } },
+      },
+    },
+    packages: ['@yaks/ux', '@yaks/game'],
+  })
+  assertEquals(doc.packages, ['@yaks/game', '@yaks/ux'])
+})
+
 test('a manifest is refused in the words that fix it', () => {
   assertThrows(() => appDoc('{'), Error, 'vocab.json is not JSON')
   assertThrows(() => appDoc('[]'), Error, 'vocab.json is an object')

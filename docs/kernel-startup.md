@@ -77,6 +77,13 @@ Evidence and scripts: `/home/yaks/bench-T-125212/{direct,cold}.mjs`,
 
 ## Lazy optional vocabulary control
 
+Reverted in ef5e9a7c9: every package's `./vocab` is eager again. `appDoc`
+composes the packages a manifest names whenever it declares a `permit`, before
+any caller could prepare them, so requests to yourname/vale's store failed
+(`@yaks/game/vocab has not been loaded`). With no startup gain to keep, the lazy
+loader and its probe were removed rather than reordered. What follows records
+the candidate as measured.
+
 The candidate keeps the store configurations' vocabulary synchronous and bundles
 optional facets as literal dynamic imports. Only a declaration that names an
 optional package prepares it. The existing synchronous composer then uses the
