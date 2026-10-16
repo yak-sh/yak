@@ -1,0 +1,3 @@
+#!/bin/sh
+# Run the CLI from the pinned checkout, resolving its workspace imports.
+exec deno run -A --config /home/agent/workspace/deno.json /home/agent/workspace/packages/cli/yak.ts "$@"
