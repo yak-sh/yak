@@ -175,30 +175,41 @@ test('coverage reports each absent duty before a launch can succeed', async () =
   await f.coverage.close()
 })
 
-test('covered duty loss notifies immediately and is reported again after recovery', async () => {
+// Prepare a real private monitor before the test timer; only immutable
+// observations cross into the assertions, never a live fixture or clock.
+let dutyLoss = await (async () => {
   let f = fixture()
   try {
     await f.coverage.checked
-    assertEquals(f.events, [])
+    let initially = f.events.length
     f.needed(['wake'])
     f.notify()
     await until(() => f.events.some((e) => e.kind == 'start'))
-    assertEquals(
+    let first = Object.freeze(
       f.events.filter((e) => e.kind == 'report').map((e) => e.role),
-      ['wake'],
     )
     f.needed([])
     await f.time.advance(100)
     f.needed(['wake'])
     await f.time.advance(100)
-    assertEquals(
-      f.events.filter((e) => e.kind == 'report').map((e) => e.role),
-      ['wake', 'wake'],
-    )
-    assertEquals(f.events.filter((e) => e.kind == 'start').length, 2)
+    return Object.freeze({
+      initially,
+      first,
+      recovered: Object.freeze(
+        f.events.filter((e) => e.kind == 'report').map((e) => e.role),
+      ),
+      starts: f.events.filter((e) => e.kind == 'start').length,
+    })
   } finally {
     await f.coverage.close()
   }
+})()
+
+test('covered duty loss notifies immediately and is reported again after recovery', () => {
+  assertEquals(dutyLoss.initially, 0)
+  assertEquals(dutyLoss.first, ['wake'])
+  assertEquals(dutyLoss.recovered, ['wake', 'wake'])
+  assertEquals(dutyLoss.starts, 2)
 })
 
 test('failed recovery retries on a bounded poll, without flooding missing reports', async () => {
@@ -224,7 +235,7 @@ test('failed recovery retries on a bounded poll, without flooding missing report
   }
 })
 
-test('process notifications during inspection/launch coalesce without overlap', async () => {
+let notifications = await (async () => {
   let f = fixture()
   await f.coverage.checked
   let inspected = deferred<string[]>()
@@ -238,6 +249,7 @@ test('process notifications during inspection/launch coalesce without overlap', 
     return roles
   })
   f.launch(() => launched.promise)
+  let during!: Readonly<{ peak: number; starts: number }>
   try {
     f.notify()
     await Promise.resolve()
@@ -245,14 +257,22 @@ test('process notifications during inspection/launch coalesce without overlap', 
     inspected.resolve(['wake'])
     await until(() => f.events.some((e) => e.kind == 'start'))
     for (let i = 0; i < 20; i++) f.notify()
-    assertEquals(peak, 1)
-    assertEquals(f.events.filter((e) => e.kind == 'start').length, 1)
+    during = Object.freeze({
+      peak,
+      starts: f.events.filter((e) => e.kind == 'start').length,
+    })
     launched.resolve()
   } finally {
     launched.resolve()
     await f.coverage.close()
   }
-  assertEquals(peak, 1)
+  return Object.freeze({ during, finalPeak: peak })
+})()
+
+test('process notifications during inspection/launch coalesce without overlap', () => {
+  assertEquals(notifications.during.peak, 1)
+  assertEquals(notifications.during.starts, 1)
+  assertEquals(notifications.finalPeak, 1)
 })
 
 test('dead pid polling detects loss without a process notification', async () => {

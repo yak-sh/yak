@@ -1911,7 +1911,9 @@ test('an invalid plugin config creates no absent database', async () => {
   }
 }, { tags: ['migration'] })
 
-test('a draining process stops advertising duties before its graph closes', async () => {
+// Compose, stop and close a private host at file load. The timed check sees
+// frozen observations only; no database, service or asynchronous work survives.
+let drainingProcess = await (async () => {
   let host = await composing(
     { db: ':memory:', plugins: ['m'] },
     ['graph', 'effects'],
@@ -1919,15 +1921,29 @@ test('a draining process stops advertising duties before its graph closes', asyn
   )
   try {
     let [before] = await host.graph.get([me])
-    assertEquals((before.process as Comp).roles, ['graph', 'effects'])
+    let initialRoles = Object.freeze([
+      ...(before.process as Comp).roles as string[],
+    ])
     host.stop()
     await until(async () => {
       let [row] = await host.graph.get([me])
       return JSON.stringify((row.process as Comp).roles) == '["graph"]'
     })
     let [draining] = await host.graph.get([me])
-    assertEquals(draining.exit, undefined)
+    return Object.freeze({
+      initialRoles,
+      drainingRoles: Object.freeze([
+        ...(draining.process as Comp).roles as string[],
+      ]),
+      exit: draining.exit,
+    })
   } finally {
     await host.close()
   }
+})()
+
+test('a draining process stops advertising duties before its graph closes', () => {
+  assertEquals(drainingProcess.initialRoles, ['graph', 'effects'])
+  assertEquals(drainingProcess.drainingRoles, ['graph'])
+  assertEquals(drainingProcess.exit, undefined)
 })
