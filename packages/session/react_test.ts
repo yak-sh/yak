@@ -2093,13 +2093,17 @@ await asyncAnchorRace.apply([{
   content: { body: 'held reply' },
 }], { trusted: true })
 
-test('an anchored continuation includes a tool final committed during its preceding ask', async () => {
-  let { model, asked } = scripted([says('async-anchor-done', 'saw final')])
-  await react(asyncAnchorRace, ids.s, {
-    model,
-    tools: [echo],
-    asyncTools: true,
-  })
+const asyncAnchorContinuation = scripted([
+  says('async-anchor-done', 'saw final'),
+])
+await react(asyncAnchorRace, ids.s, {
+  model: asyncAnchorContinuation.model,
+  tools: [echo],
+  asyncTools: true,
+})
+
+test('an anchored continuation includes a tool final committed during its preceding ask', () => {
+  let { asked } = asyncAnchorContinuation
   assertEquals(asked.length, 1)
   assertEquals(asked[0].anchor, 'held-anchor')
   assertEquals(asked[0].items, [{
