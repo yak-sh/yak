@@ -145,6 +145,17 @@ The page gets it in one line, from the app's own address:
   subscribe('.doc', draw)             // and again whenever it changes,
                                        // including on their other device
 
+A browser write is saved only when apply answers with its accepted receipt.
+The client durably keeps intent before sending and automatically retries with
+the same identity after a dropped response or a new page on this origin.
+A rejected unknown outcome remains unsaved, not lost: keep the editable draft.
+Import outbox from the same client for pending(), onPending(draw), and its
+ready promise; pending entries are pending or refused, never saved. A definite
+refusal stays inspectable until explicitly retried with retry(key) or discarded
+with forget(key). Closing the tab pauses delivery until another page opens.
+IndexedDB failure refuses to send rather than pretending this browser's intent
+was saved. Recovery is scoped to this app and signed-in person.
+
 An entity is {entity: {eid}, ...components}: '$name' creates a new one (the
 reply is one bundle per entity — an object holding that entity's id and its
 components — carrying the eid the server picked and the '$alias' you asked
