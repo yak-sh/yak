@@ -147,6 +147,143 @@
         "dispatch"
       ],
       "target": ".session&.home | .entry&.entry.session.home | .task&.claim"
+    },
+    "conversation_projects": {
+      "tool": true,
+      "surfaces": [
+        "mcp"
+      ],
+      "description": "Identify the trusted human caller and list active projects.",
+      "applied": true,
+      "readOnly": true,
+      "input": {},
+      "required": []
+    },
+    "conversation_start": {
+      "tool": true,
+      "surfaces": [
+        "mcp"
+      ],
+      "description": "Start a native project conversation without waiting for a reply.",
+      "applied": true,
+      "input": {
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "The active project to talk with."
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "project",
+        "prompt"
+      ]
+    },
+    "conversation_send": {
+      "tool": true,
+      "surfaces": [
+        "mcp"
+      ],
+      "description": "Send exact human words to an owned project conversation without waiting.",
+      "applied": true,
+      "input": {
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "The active project to talk with."
+        },
+        "session": {
+          "type": "string",
+          "ref": "session"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "project",
+        "session",
+        "text"
+      ]
+    },
+    "conversation_read": {
+      "tool": true,
+      "surfaces": [
+        "mcp"
+      ],
+      "description": "Read a bounded current transcript page, including progressive assistant replies. Poll again to receive revisions to the same message id.",
+      "applied": true,
+      "readOnly": true,
+      "input": {
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "The active project to talk with."
+        },
+        "session": {
+          "type": "string",
+          "ref": "session"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "before": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Read older entries strictly before this entry sequence. Omit to poll the current tail."
+        }
+      },
+      "required": [
+        "project",
+        "session"
+      ]
+    },
+    "conversation_recent": {
+      "tool": true,
+      "surfaces": [
+        "mcp"
+      ],
+      "description": "List this caller\u2019s recent project conversations.",
+      "applied": true,
+      "readOnly": true,
+      "input": {
+        "project": {
+          "type": "string",
+          "ref": "project",
+          "description": "The active project to talk with."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      },
+      "required": [
+        "project"
+      ]
+    },
+    "conversation_inbox": {
+      "tool": true,
+      "surfaces": [
+        "mcp"
+      ],
+      "description": "Read the trusted human caller\u2019s inbox, using shared inbox policy.",
+      "applied": true,
+      "readOnly": true,
+      "input": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      },
+      "required": []
     }
   }
 }

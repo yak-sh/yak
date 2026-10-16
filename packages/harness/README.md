@@ -1129,3 +1129,29 @@ provider's model catalog or prices. Authorize the provider with **A** first.
 Selection itself neither performs authentication nor contacts the model; an
 unauthorized request reports the provider error rather than falling back to a
 different provider. This is a local selection UI, not automatic model routing.
+
+## Human conversations over MCP
+
+`conversation_projects` returns the owner and active projects. The MCP-only
+`conversation_start({project,prompt})` and
+`conversation_send({project,session,text})` acknowledge persisted input without
+waiting for the model. The ordinary native runner serves the transcript. Start
+snapshots the project's lineage persona, goals, recent work and up to 24 recent
+human inputs across project-linked doors, separately from the exact first input.
+No caller-supplied actor, machine or model is accepted.
+
+`conversation_read({project,session,limit?,before?})` returns a chronological
+page of visible user/assistant messages, status, and `nextBefore` for older
+entries. Poll the current tail to receive same-id text revisions; preserve older
+loaded pages. `conversation_recent({project,limit?})` reopens owned project
+sessions. `conversation_inbox({limit?})` uses the shared inbox reader for that
+owner.
+
+These tools require an authenticated human principal. An owner-only box that
+already trusts its network perimeter may resolve only its **exact host process**
+fallback identity through the server's configured `person`. That setting is not
+OAuth subject mapping: public deployments still need the existing owner-only
+Access policy, and tailnet access remains trusted.
+Agent/anonymous/foreign-process calls cannot use this fallback. A multi-user or
+unprotected deployment must supply real request authentication, not rely on
+`person`.

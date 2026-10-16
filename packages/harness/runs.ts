@@ -27,6 +27,7 @@ import { defaultUsing, selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
 import { homeAt, owing } from './session_machines.ts'
+import { conversations } from './conversations.ts'
 import { instructionsFor } from './instructions.ts'
 
 type Args = Record<string, unknown>
@@ -99,6 +100,7 @@ export let windows = async (
 
 /** The functions behind the tools the harness declares (./vocab.json). */
 export let runs = (host?: Host): Runs => ({
+  ...conversations(host),
   session_list: (_, graph) => graph.read(parse('.session&*')),
   session_new: async (call, graph) => {
     let args = argsOf(call)

@@ -255,7 +255,13 @@ export let through = (session: Eid, by?: Eid) => ({
 export let begin = async (
   g: Graph,
   prompt: string | undefined,
-  o: Opening & { using: Comp; by?: Eid; via?: Eid },
+  o: Opening & {
+    using: Comp
+    by?: Eid
+    via?: Eid
+    project?: Eid
+    title?: string
+  },
 ): Promise<Eid> => {
   let operator = await humanCaller(g, { by: o.by, via: o.via })
   let session = crypto.randomUUID() as Eid
@@ -273,6 +279,8 @@ export let begin = async (
       },
       native: {},
       ...o.home ? { home: o.home } : {},
+      ...o.project ? { filed: { project: o.project } } : {},
+      ...o.title ? { doc: { title: o.title } } : {},
       ...prompt ? {} : { using: o.using },
       $actor: through(session, o.by),
     },
