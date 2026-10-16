@@ -98,21 +98,29 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
 
 // A session has no numbered handle. Its secondary text is part of the same
 // navigable entry as its heading, and a native link can open it in a new tab.
+let favoriteSession = uuid()
+applyLocal([
+  { eid: favoriteSession, name: 'entity', comp: { eid: favoriteSession } },
+  { eid: favoriteSession, name: 'session', comp: {} },
+  {
+    eid: favoriteSession,
+    name: 'doc',
+    comp: { title: 'Investigating the problem' },
+  },
+  { eid: favoriteSession, name: 'brief', comp: { text: 'Found the cause' } },
+  { eid: favoriteSession, name: 'favorite', comp: {} },
+])
+
+let favoriteEntry = ent(favoriteSession)
+let favoriteHref = entityPath(idOf(favoriteEntry))
+let favoriteMount = mount(<ListEntry e={favoriteEntry} />)
 test('a favorite session opens from its whole entry, without a numbered handle', () => {
-  let id = uuid()
-  applyLocal([
-    { eid: id, name: 'entity', comp: { eid: id } },
-    { eid: id, name: 'session', comp: {} },
-    { eid: id, name: 'doc', comp: { title: 'Investigating the problem' } },
-    { eid: id, name: 'brief', comp: { text: 'Found the cause' } },
-    { eid: id, name: 'favorite', comp: {} },
-  ])
-  let mounted = mount(<ListEntry e={ent(id)} />)
+  let mounted = favoriteMount
   try {
     let brief = mounted.root.querySelector<HTMLElement>('.Rows_Kind')!
     assertEquals(
       brief.closest('a')?.getAttribute('href'),
-      entityPath(idOf(ent(id))),
+      favoriteHref,
     )
     assertEquals(mounted.root.querySelectorAll('a a').length, 0)
   } finally {

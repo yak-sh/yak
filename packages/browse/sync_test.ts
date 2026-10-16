@@ -14,41 +14,42 @@ import * as live from './live.ts'
 
 let uid = () => crypto.randomUUID()
 
-test('the indicator follows shared delivery until the host answers', async () => {
-  let answer!: (response: Response) => void
-  let waiting = new Promise<Response>((resolve) => {
-    answer = resolve
-  })
+// Begin one held delivery at file load. The indicator has no reason to pay
+// for constructing the replica or admitting a write before its host answers.
+let heldDelivery = await (async () => {
+  let answer = Promise.withResolvers<Response>()
+  let sent = Promise.withResolvers<void>()
   let sends = 0
-  let sending!: () => void
-  let sent = new Promise<void>((resolve) => {
-    sending = resolve
-  })
   let restore = live.useRoute((frame) => {
     if ((frame as { request?: Request }).request) {
       sends++
-      sending()
-      return waiting
+      sent.resolve()
+      return answer.promise
     }
   })
+  let receipt = live.apply([{
+    entity: { eid: uid() },
+    doc: { title: 'held' },
+  }])
+  await sent.promise
+  return { answer, receipt, restore, sends: () => sends }
+})()
+
+test('the indicator follows shared delivery until the host answers', async () => {
+  let { answer, receipt, restore, sends } = heldDelivery
   try {
-    let receipt = live.apply([{
-      entity: { eid: uid() },
-      doc: { title: 'held' },
-    }])
-    await sent
     assertEquals(live.outboxWrites.value.length, 1)
     let w = live.outboxWrites.value[0]
     assert(w.id.startsWith('outbox:'))
     assertEquals(w.count, 2) // the entity identity and doc patch
     assert(w.since > 0)
     assertEquals(live.unsent(), [w.id])
-    answer(Response.json([]))
+    answer.resolve(Response.json([]))
     await receipt
     assertEquals(live.outboxWrites.value.length, 0)
-    assertEquals(sends, 1)
+    assertEquals(sends(), 1)
   } finally {
-    answer(Response.json([]))
+    answer.resolve(Response.json([]))
     live.useRoute(restore)
   }
 })

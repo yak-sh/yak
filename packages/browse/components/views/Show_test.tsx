@@ -54,24 +54,31 @@ test('task acceptance is a distinct Markdown section', () => {
   }
 })
 
-test('a doc without accept renders no Acceptance section, not JSON', () => {
-  // The stack asks <Entity view='Acceptance'> for every doc. With no catch-all
-  // the absent-accept case fell through resolve() to the JSON dump, printing
-  // the whole entity between Body and Dependencies.
-  cache.value = {
-    doc: {
-      entity: { eid: 'doc', num: 1 },
-      doc: { eid: 'doc', title: 'No criteria', body: 'Body only' },
-    },
-  }
-  let e = ent('doc')
-  assertEquals(resolve(e, 'Acceptance').view, 'Acceptance')
-  let { root, free } = mount(h(resolve(e, 'Acceptance').Render, { e }))
-  assertEquals(root.querySelector('.Json'), null)
-  assertEquals(root.querySelector('.Show_Acceptance'), null)
-  free()
-  cache.value = {}
-})
+// Assembly and renderer selection are fixtures; this case checks the absent
+// section's paint, not constructing a live replica entity.
+let noCriteriaRow = {
+  entity: { eid: 'no-criteria', num: 1 },
+  doc: { eid: 'no-criteria', title: 'No criteria', body: 'Body only' },
+}
+let noCriteria: Ent = {
+  ...noCriteriaRow,
+  eid: 'no-criteria',
+  num: 1,
+  kind: 'doc',
+  refs: [],
+  kids: [],
+}
+let noAcceptance = resolve(noCriteria, 'Acceptance')
+preparedTest(
+  'a doc without accept renders no Acceptance section, not JSON',
+  () => {
+    assertEquals(noAcceptance.view, 'Acceptance')
+    let { root, free } = mount(h(noAcceptance.Render, { e: noCriteria }))
+    assertEquals(root.querySelector('.Json'), null)
+    assertEquals(root.querySelector('.Show_Acceptance'), null)
+    free()
+  },
+)
 
 // This case checks Meta's paint, so build its document face and select its
 // renderer once; assembling an Ent from the live replica is a separate seam.
@@ -89,12 +96,10 @@ let quietDoc: Ent = {
 }
 let quietMeta = resolve(quietDoc, 'Meta').Render
 
-test('document meta paints no tally when it has no comments', () => {
-  cache.value = { doc: quietRow }
+preparedTest('document meta paints no tally when it has no comments', () => {
   let { root, free } = mount(h(quietMeta, { e: quietDoc, id: true }))
   assertEquals(root.querySelector('.Show_Comments'), null)
   free()
-  cache.value = {}
 })
 
 // T-33921: a row render reaches NO transport. The comment tally is the
@@ -136,19 +141,10 @@ test('the meta row renders its tally without reaching live', () => {
   }
 })
 
-test('empty document meta remains a first-class null', () => {
-  cache.value = {
-    doc: {
-      entity: { eid: 'doc', num: 1 },
-      doc: { eid: 'doc', title: 'Quiet document', body: '' },
-    },
-  }
-
-  let e = ent('doc')
-  let { root, free } = mount(h(resolve(e, 'Meta').Render, { e }))
+preparedTest('empty document meta remains a first-class null', () => {
+  let { root, free } = mount(h(quietMeta, { e: quietDoc }))
   assertEquals(root.innerHTML, '')
   free()
-  cache.value = {}
 })
 
 test('proposal meta distinguishes pending, cancelled, and approved', () => {
