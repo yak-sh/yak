@@ -6,10 +6,10 @@ import {
 } from 'node:http'
 import { test } from 'node:test'
 import {
+  type AuthOptions,
   createAuthenticator,
   REDIRECT_URI,
   RESOURCE,
-  type AuthOptions,
 } from '../src/auth'
 import { MCPClient } from '../src/transport'
 
@@ -38,7 +38,7 @@ async function probe(
     url: `http://127.0.0.1:${address.port}`,
     close: () =>
       new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
+        server.close((error) => (error ? reject(error) : resolve()))
       ),
   }
 }
@@ -51,13 +51,14 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
   let url = ''
   const grants: URLSearchParams[] = []
   const server = await probe((req, res, body) => {
-    if (req.url === '/.well-known/oauth-authorization-server')
+    if (req.url === '/.well-known/oauth-authorization-server') {
       return reply(res, {
         issuer: url,
         authorization_endpoint: `${url}/authorize`,
         token_endpoint: `${url}/token`,
         registration_endpoint: `${url}/register`,
       })
+    }
     if (req.url === '/register') {
       assert.deepEqual(JSON.parse(body), {
         client_name: 'Yak Raycast',
@@ -78,10 +79,10 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
       params.get('grant_type') === 'refresh_token'
         ? { access_token: 'refreshed-probe', expires_in: 900 }
         : {
-            access_token: 'access-probe',
-            refresh_token: 'refresh-probe',
-            expires_in: 900,
-          },
+          access_token: 'access-probe',
+          refresh_token: 'refresh-probe',
+          expires_in: 900,
+        },
     )
   })
   url = server.url
@@ -92,36 +93,41 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
   const auth = createAuthenticator({
     issuer: url,
     registration: {
-      get: async () => registration,
-      set: async (id) => {
+      get: () => Promise.resolve(registration),
+      set: (id: string) => {
         registration = id
+        return Promise.resolve()
       },
     },
     client: {
-      getTokens: async () =>
-        tokens && {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          isExpired: () => expired,
-        },
-      setTokens: async (
+      getTokens: () =>
+        Promise.resolve(
+          tokens && {
+            accessToken: tokens.access_token,
+            refreshToken: tokens.refresh_token,
+            isExpired: () => expired,
+          },
+        ),
+      setTokens: (
         value: Parameters<AuthOptions['client']['setTokens']>[0],
       ) => {
         tokens = value as unknown as Record<string, unknown>
+        return Promise.resolve()
       },
-      removeTokens: async () => {
+      removeTokens: () => {
         tokens = undefined
+        return Promise.resolve()
       },
-      authorizationRequest: async (
+      authorizationRequest: (
         options: Parameters<AuthOptions['client']['authorizationRequest']>[0],
       ) => {
         assert.equal(options.extraParameters?.resource, RESOURCE)
         assert.equal(options.extraParameters?.redirect_uri, REDIRECT_URI)
-        return { codeVerifier: 'probe-verifier' }
+        return Promise.resolve({ codeVerifier: 'probe-verifier' })
       },
-      authorize: async () => {
+      authorize: () => {
         authorizations++
-        return { authorizationCode: 'probe-code' }
+        return Promise.resolve({ authorizationCode: 'probe-code' })
       },
     } as unknown as AuthOptions['client'],
   })
@@ -144,23 +150,26 @@ test('public PKCE DCR, resource indicators, secure token save and refresh rotati
 })
 
 test('invalid refresh reauthenticates, discovery stays issuer-bound, registration errors omit provider secrets', async () => {
-  for (const mode of [
-    'invalid-grant',
-    'foreign-issuer',
-    'dcr-denied',
-  ] as const) {
+  for (
+    const mode of [
+      'invalid-grant',
+      'foreign-issuer',
+      'dcr-denied',
+    ] as const
+  ) {
     let url = ''
     let removed = false
     let authorized = false
     const server = await probe((req, res, body) => {
-      if (req.url?.includes('well-known'))
+      if (req.url?.includes('well-known')) {
         return reply(res, {
           issuer: mode === 'foreign-issuer' ? 'https://evil.invalid' : url,
           authorization_endpoint: `${url}/authorize`,
           token_endpoint: `${url}/token`,
           registration_endpoint: `${url}/register`,
         })
-      if (req.url === '/register')
+      }
+      if (req.url === '/register') {
         return reply(
           res,
           {
@@ -169,35 +178,40 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
           },
           400,
         )
-      if (new URLSearchParams(body).get('grant_type') === 'refresh_token')
+      }
+      if (new URLSearchParams(body).get('grant_type') === 'refresh_token') {
         return reply(
           res,
           { error: 'invalid_grant', refresh_token: 'secret-provider-text' },
           400,
         )
+      }
       reply(res, { access_token: 'new-probe', expires_in: 900 })
     })
     url = server.url
     const auth = createAuthenticator({
       issuer: url,
       registration: {
-        get: async () => (mode === 'dcr-denied' ? undefined : 'client'),
+        get: () =>
+          Promise.resolve(mode === 'dcr-denied' ? undefined : 'client'),
         set: async () => {},
       },
       client: {
-        getTokens: async () => ({
-          accessToken: 'old',
-          refreshToken: 'expired',
-          isExpired: () => true,
-        }),
-        setTokens: async () => {},
-        removeTokens: async () => {
+        getTokens: () =>
+          Promise.resolve({
+            accessToken: 'old',
+            refreshToken: 'expired',
+            isExpired: () => true,
+          }),
+        setTokens: () => {},
+        removeTokens: () => {
           removed = true
+          return Promise.resolve()
         },
-        authorizationRequest: async () => ({ codeVerifier: 'proof' }),
-        authorize: async () => {
+        authorizationRequest: () => Promise.resolve({ codeVerifier: 'proof' }),
+        authorize: () => {
           authorized = true
-          return { authorizationCode: 'code' }
+          return Promise.resolve({ authorizationCode: 'code' })
         },
       } as unknown as AuthOptions['client'],
     })
@@ -205,7 +219,7 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
       if (mode === 'invalid-grant') {
         assert.equal(await auth(), 'new-probe')
         assert.ok(removed && authorized)
-      } else
+      } else {
         await assert.rejects(
           auth(),
           (error: Error) =>
@@ -214,6 +228,7 @@ test('invalid refresh reauthenticates, discovery stays issuer-bound, registratio
               mode === 'dcr-denied' ? REDIRECT_URI : 'unexpected issuer',
             ),
         )
+      }
     } finally {
       await server.close()
     }
@@ -242,23 +257,30 @@ test('authenticated MCP handshake, negotiated session, chunked SSE, JSON and dec
       res.end()
       return
     }
-    if (rpc.params.name === 'json')
+    if (rpc.params.name === 'json') {
       return reply(res, {
         jsonrpc: '2.0',
         id: rpc.id,
         result: { content: [{ type: 'text', text: JSON.stringify(bundles) }] },
       })
+    }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' })
     res.write(
       ': heartbeat\r\ndata: {"jsonrpc":"2.0","method":"notifications/message"}\r\n\r\n',
     )
-    const event = `event: message\r\ndata: ${JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: { structuredContent: { result: bundles } } })}\r\n\r\n`
+    const event = `event: message\r\ndata: ${
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: rpc.id,
+        result: { structuredContent: { result: bundles } },
+      })
+    }\r\n\r\n`
     for (let i = 0; i < event.length; i += 7) res.write(event.slice(i, i + 7))
     res.end()
   })
   const client = new MCPClient({
     endpoint: `${server.url}/mcp`,
-    request: async (input, init) =>
+    request: (input, init) =>
       fetch(input, {
         ...init,
         headers: {
@@ -282,32 +304,36 @@ test('authenticated MCP handshake, negotiated session, chunked SSE, JSON and dec
 })
 
 test('HTTP, tool, RPC and truncated SSE failures never replay a mutating call or leak bearer text', async () => {
-  for (const mode of [
-    '401',
-    '500',
-    'tool',
-    'rpc',
-    'truncated',
-    'wrong-id',
-  ] as const) {
+  for (
+    const mode of [
+      '401',
+      '500',
+      'tool',
+      'rpc',
+      'truncated',
+      'wrong-id',
+    ] as const
+  ) {
     let mutations = 0
     const server = await probe((_req, res, body) => {
       const rpc = JSON.parse(body)
-      if (rpc.method === 'initialize')
+      if (rpc.method === 'initialize') {
         return reply(res, {
           jsonrpc: '2.0',
           id: rpc.id,
           result: { protocolVersion: '2025-06-18' },
         })
+      }
       if (rpc.method === 'notifications/initialized') {
         res.writeHead(202)
         res.end()
         return
       }
       mutations++
-      if (mode === '401' || mode === '500')
+      if (mode === '401' || mode === '500') {
         return reply(res, { access_token: 'secret-never-show' }, Number(mode))
-      if (mode === 'tool')
+      }
+      if (mode === 'tool') {
         return reply(res, {
           jsonrpc: '2.0',
           id: rpc.id,
@@ -318,7 +344,8 @@ test('HTTP, tool, RPC and truncated SSE failures never replay a mutating call or
             ],
           },
         })
-      if (mode === 'rpc')
+      }
+      if (mode === 'rpc') {
         return reply(res, {
           jsonrpc: '2.0',
           id: rpc.id,
@@ -327,8 +354,10 @@ test('HTTP, tool, RPC and truncated SSE failures never replay a mutating call or
             message: 'Bad argument refresh_token=secret-never-show',
           },
         })
-      if (mode === 'wrong-id')
+      }
+      if (mode === 'wrong-id') {
         return reply(res, { jsonrpc: '2.0', id: rpc.id + 1, result: {} })
+      }
       res.writeHead(200, { 'Content-Type': 'text/event-stream' })
       res.end(': heartbeat\n\n')
     })

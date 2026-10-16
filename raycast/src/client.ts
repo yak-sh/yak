@@ -36,8 +36,8 @@ function envelope<T>(result: unknown): T {
 function results(rows: Bundle[]): Result[] {
   return rows.map((row) => ({
     id: row.entity.eid,
-    title:
-      row.doc?.title || row.content?.body?.split('\n')[0] || row.entity.eid,
+    title: row.doc?.title || row.content?.body?.split('\n')[0] ||
+      row.entity.eid,
     body: row.doc?.body || row.content?.body,
   }))
 }

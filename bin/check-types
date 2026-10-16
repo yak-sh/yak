@@ -17,4 +17,8 @@ deno run --no-lock -A "$root/workers/yak/draft-assets.ts"
 deno run --no-lock -A "$root/workers/yak/outbox-assets.ts"
 ln -s "$root" "$cache/typecheck.next.$$"
 mv -Tf "$cache/typecheck.next.$$" "$cache/typecheck"
-exec deno check --doc --config "$cache/typecheck/deno.json" "$cache/typecheck"
+# Raycast is a Node/React host with its own tsconfig and dependencies, checked
+# by check:raycast. Deno must not reinterpret its Node-style module resolution.
+exec deno check --doc --config "$cache/typecheck/deno.json" \
+  "$cache/typecheck/apps" "$cache/typecheck/bench" "$cache/typecheck/bin" \
+  "$cache/typecheck/packages" "$cache/typecheck/plugins" "$cache/typecheck/workers"

@@ -5,6 +5,10 @@
     "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
     "check:types": "bash bin/check-types",
+    "check:raycast": {
+      "command": "npm --prefix raycast ci --ignore-scripts --no-audit --no-fund && npm --prefix raycast run typecheck && npm --prefix raycast test",
+      "files": ["raycast/**/*", "deno.json"]
+    },
     "check:publish": {
       "command": "deno publish --dry-run --allow-dirty --no-check",
       "files": [
@@ -95,6 +99,7 @@
         "check:lint",
         "check:bytes",
         "check:types",
+        "check:raycast",
         "check:publish",
         "check:browser",
         "check:workers",

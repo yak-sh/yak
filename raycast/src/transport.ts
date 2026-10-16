@@ -107,8 +107,8 @@ export class MCPClient {
     let message: RPC
     try {
       message = response.headers
-        .get('Content-Type')
-        ?.includes('text/event-stream')
+          .get('Content-Type')
+          ?.includes('text/event-stream')
         ? await this.sse(response, id!)
         : ((await response.json()) as RPC)
     } catch (error) {
@@ -124,9 +124,11 @@ export class MCPClient {
     }
     if (message.error) {
       throw new Error(
-        `MCP ${method}: ${safeMessage(
-          message.error.message,
-        )} (${message.error.code})`,
+        `MCP ${method}: ${
+          safeMessage(
+            message.error.message,
+          )
+        } (${message.error.code})`,
       )
     }
     if (!('result' in message)) {

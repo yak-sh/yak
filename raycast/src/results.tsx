@@ -37,9 +37,9 @@ export function Results({
       onSearchTextChange={onSearchTextChange}
       searchText={query}
       throttle
-      searchBarPlaceholder={
-        onSearchTextChange ? 'Search anything in your graph…' : 'Filter inbox…'
-      }
+      searchBarPlaceholder={onSearchTextChange
+        ? 'Search anything in your graph…'
+        : 'Filter inbox…'}
       isShowingDetail
       actions={<ActionPanel>{refresh}</ActionPanel>}
     >
@@ -54,16 +54,12 @@ export function Results({
       )}
       {!loading && !error && !value?.length && (
         <List.EmptyView
-          title={
-            onSearchTextChange && !query?.trim()
-              ? 'Search Your Graph'
-              : 'No Results'
-          }
-          description={
-            onSearchTextChange
-              ? 'Search people, projects, conversations, work, or anything else.'
-              : 'Your inbox is empty.'
-          }
+          title={onSearchTextChange && !query?.trim()
+            ? 'Search Your Graph'
+            : 'No Results'}
+          description={onSearchTextChange
+            ? 'Search people, projects, conversations, work, or anything else.'
+            : 'Your inbox is empty.'}
         />
       )}
       {(value ?? []).map((item) => (

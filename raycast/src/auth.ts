@@ -67,17 +67,16 @@ export function createAuthenticator(
       )
     }
     const parsed: unknown = await response.json().catch(() => ({}))
-    const body =
-      parsed && typeof parsed === 'object'
-        ? (parsed as Record<string, unknown>)
-        : {}
+    const body = parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, unknown>)
+      : {}
     if (!response.ok) {
       const code = [
-        'invalid_grant',
-        'invalid_client',
-        'invalid_client_metadata',
-        'access_denied',
-      ].includes(String(body.error))
+          'invalid_grant',
+          'invalid_client',
+          'invalid_client_metadata',
+          'access_denied',
+        ].includes(String(body.error))
         ? String(body.error)
         : 'request_rejected'
       if (code === 'invalid_client_metadata') {
@@ -108,10 +107,11 @@ export function createAuthenticator(
           return false
         }
       })
-    )
+    ) {
       throw new Error(
         'Cloudflare OAuth discovery returned an unexpected issuer or endpoint.',
       )
+    }
     let clientId = await options.registration.get()
     if (!clientId) {
       const registration = await json(metadata.registration_endpoint, {
@@ -125,10 +125,11 @@ export function createAuthenticator(
           token_endpoint_auth_method: 'none',
         }),
       })
-      if (typeof registration.client_id !== 'string')
+      if (typeof registration.client_id !== 'string') {
         throw new Error(
           'Cloudflare OAuth registration did not return a client ID.',
         )
+      }
       clientId = registration.client_id
       await options.registration.set(clientId)
     }
@@ -163,8 +164,11 @@ export function createAuthenticator(
         await options.client.setTokens(refreshed)
         return refreshed.access_token
       } catch (error) {
-        if (!(error instanceof OAuthFailure) || error.code !== 'invalid_grant')
+        if (
+          !(error instanceof OAuthFailure) || error.code !== 'invalid_grant'
+        ) {
           throw error
+        }
         await options.client.removeTokens()
       }
     }
@@ -206,7 +210,7 @@ export async function getAccessToken(): Promise<string> {
         get: () => LocalStorage.getItem<string>(CLIENT_KEY),
         set: (id) => LocalStorage.setItem(CLIENT_KEY, id),
       },
-    }),
+    })
   )
   return (await authenticator)()
 }

@@ -14,8 +14,8 @@ export function selectedProject(
 ): string {
   return (
     projects.find((project) => project.id === remembered)?.id ??
-    projects[0]?.id ??
-    ''
+      projects[0]?.id ??
+      ''
   )
 }
 
@@ -93,10 +93,9 @@ export function mergeConversation(
 ): Conversation {
   if (!current) return page
   const messages = new Map<string, Conversation['messages'][number]>()
-  const ordered =
-    direction === 'older'
-      ? [...page.messages, ...current.messages]
-      : [...current.messages, ...page.messages]
+  const ordered = direction === 'older'
+    ? [...page.messages, ...current.messages]
+    : [...current.messages, ...page.messages]
   for (const message of ordered) messages.set(message.id, message)
   return {
     ...(direction === 'older' ? current : page),

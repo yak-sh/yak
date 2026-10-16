@@ -143,14 +143,20 @@ test('all commands share authenticated tools/call and preserve words/project', a
       calls.find((c) => c.name === 'graph_query')?.arguments.q,
       '".task & x\\"" ?doc .limit=50',
     )
-    assert.equal(resultUrl('#entity/id'), 'https://tasks.yak.sh/%23entity%2Fid')
+    assert.equal(
+      resultUrl('#entity/id'),
+      'https://tasks.yak.sh/%23entity%2Fid',
+    )
     await assert.rejects(client.drop(' \n', 'project'), /Say something/)
-    await assert.rejects(client.send('session', '', 'project'), /Say something/)
+    await assert.rejects(
+      client.send('session', '', 'project'),
+      /Say something/,
+    )
     assert.deepEqual(await client.search(''), [])
   } finally {
     server.closeAllConnections()
     await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
+      server.close((error) => (error ? reject(error) : resolve()))
     )
   }
 })

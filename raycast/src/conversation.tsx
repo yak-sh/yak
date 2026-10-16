@@ -88,9 +88,11 @@ export function Conversation({
       isLoading={olderLoading || (!value && !error)}
       markdown={`${
         error
-          ? `**Could not refresh conversation**\n\n${errorText(
+          ? `**Could not refresh conversation**\n\n${
+            errorText(
               error,
-            )}\n\n---\n\n`
+            )
+          }\n\n---\n\n`
           : ''
       }${transcript(value ?? provisional)}`}
       actions={
@@ -105,8 +107,7 @@ export function Conversation({
                   project={project}
                   onSent={() => setRevision((value) => value + 1)}
                 />,
-              )
-            }
+              )}
           />
           <Action
             title='Refresh Conversation'

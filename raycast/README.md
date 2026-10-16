@@ -103,8 +103,8 @@ license. This does not prevent local development builds.
 ### Actual box-package probe
 
 `packages/harness/conversations_probe.ts` serves the actual MCP handler over
-loopback, composing an in-memory graph and fake native model. It never opens
-the owner's config or calls a model provider. Run from the repository root:
+loopback, composing an in-memory graph and fake native model. It never opens the
+owner's config or calls a model provider. Run from the repository root:
 
 ```sh
 scratch=$(mktemp -d /tmp/yak-raycast-probe.XXXXXX)
@@ -121,7 +121,7 @@ YAK_PROBE_PORT=<printed-port> node --import tsx test/box-probe.ts
 ```
 
 This drives the same client functions as every command: start, read a native
-reply, follow-up, recent/reopen, search/open URL, and inbox. Stop the server with
-Ctrl-C and remove the scratch directory afterward. It is deliberately not
+reply, follow-up, recent/reopen, search/open URL, and inbox. Stop the server
+with Ctrl-C and remove the scratch directory afterward. It is deliberately not
 pointable at a remote host. These checks do not substitute for testing native
 Raycast focus, hotkeys and browser login on a Mac.
