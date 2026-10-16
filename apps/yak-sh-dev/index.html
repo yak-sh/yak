@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description"
+      content="The yaks developer toolkit: an entity-component graph, TypeScript packages, and the yak CLI. Build locally, connect agents over MCP, or host a yaks app.">
+    <meta name="theme-color" content="#f7f6f2">
+    <title>yak.sh — one graph, every interface</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="style.css">
+    <script type="importmap">
+    {
+      "imports": {
+        "@yaks/graph": "https://esm.sh/jsr/@yaks/graph@0.2.10",
+        "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.10",
+        "@yaks/ram": "https://esm.sh/jsr/@yaks/ram@0.2.10",
+        "@yaks/cli": "https://esm.sh/jsr/@yaks/cli@0.2.10",
+        "@yaks/graph/tools": "https://esm.sh/jsr/@yaks/graph@0.2.10/tools",
+        "@yaks/tools": "https://esm.sh/jsr/@yaks/tools@0.2.10"
+      }
+    }
+    </script>
+    <script type="module" src="main.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="header wrap">
+      <a href="#" class="brand"
+        aria-label="yak.sh home"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 5v8l7 7v8h10v-8l7-7V5l-8 9h-8z" fill="currentColor"/><path d="M13 22h6" stroke="#f7f6f2" stroke-width="2"/></svg>yak<span>.sh</span></a>
+      <nav
+        aria-label="Main navigation"><a href="#start">Start here</a><a href="#packages">Packages</a><a href="#playground">Playground</a><a class="source-link" href="https://github.com/yak-sh/yak">GitHub <span aria-hidden="true">↗</span></a></nav>
+    </header>
+    <main id="main">
+      <section class="hero wrap">
+        <div class="hero-copy">
+          <p
+            class="eyebrow"><span class="dot"></span> The yaks developer toolkit</p>
+          <h1>One graph.<br>Every interface.</h1>
+          <p
+            class="lead">Give your data a shared language. The <strong>@yaks</strong> TypeScript packages connect an entity-component graph to tools, command lines, and agents.</p>
+          <div
+            class="actions"><a class="button primary" href="#start">Build with yaks <span aria-hidden="true">↓</span></a><a class="text-link" href="#playground">Try it in your browser <span aria-hidden="true">↗</span></a></div>
+          <p
+            class="hero-note">Use the packages. Run <code>yak</code>. Bring your own host.</p>
+        </div>
+        <div class="diagram"
+          aria-label="A graph of entities and components shared by an application, the yak CLI, and MCP agents">
+          <div
+            class="diagram-head"><span>The same data, different doors</span><span class="diagram-mark">↗</span></div>
+          <div
+            class="doors"><span>App</span><span><code>yak</code> CLI</span><span>MCP agents</span></div>
+          <svg class="wires" viewBox="0 0 440 54" preserveAspectRatio="none"
+            aria-hidden="true">
+            <path d="M73 0v20h147v34M220 0v54M367 0v20H220" fill="none"
+              stroke="currentColor" stroke-width="1.5" />
+            <circle cx="220" cy="20" r="4" fill="currentColor" />
+          </svg>
+          <div class="graph-card">
+            <div
+              class="graph-card-title"><span class="dot"></span> One graph <span class="small muted">entities + components</span></div>
+            <pre><code><span class="code-muted">{</span>
+  entity: <span class="code-muted">{</span> eid: <span class="code-string">'book:dune'</span> <span class="code-muted">},</span>
+  book: <span class="code-muted">{</span>
+    title: <span class="code-string">'Dune'</span>,
+    pages: <span class="code-number">412</span>
+  <span class="code-muted">}</span>
+<span class="code-muted">}</span></code></pre>
+          </div>
+          <div
+            class="storage-line"><span>Storage adapters</span><span>Memory <i>/</i> SQLite <i>/</i> Durable Objects</span></div>
+        </div>
+      </section>
+      <div class="principles wrap">
+        <p><span>01</span> Data is bundles.</p>
+        <p><span>02</span> Behavior is plugins.</p>
+        <p><span>03</span> Tools share the graph.</p>
+      </div>
+
+      <section id="start" class="section wrap start-grid">
+        <div><p class="eyebrow">Start small</p><h2>A toolkit, not<br>a take-it-all framework.</h2><p>Start with an in-memory graph, or install the CLI to work with a local graph. Packages compose; runtime requirements depend on the package.</p><a class="text-link" href="https://github.com/yak-sh/yak/blob/main/packages/README.md">Read the package guide ↗</a></div>
+        <div class="start-options">
+          <article>
+            <div
+              class="option-head"><h3>Use the libraries</h3><span>TypeScript</span></div>
+            <p>Add a graph, a vocabulary, and in-memory storage to a Deno project.</p>
+            <div
+              class="codebox"><button class="copy" data-copy="libraries" aria-label="Copy library install command">Copy</button><pre id="libraries"><code>deno add jsr:@yaks/graph \
+  jsr:@yaks/vocab jsr:@yaks/ram</code></pre></div>
+            <p
+              class="small">Node project? <code>npx jsr add @yaks/graph @yaks/vocab @yaks/ram</code></p>
+          </article>
+          <article>
+            <div
+              class="option-head"><h3>Install the yak CLI</h3><span>Deno required</span></div>
+            <div
+              class="codebox"><button class="copy" data-copy="install" aria-label="Copy yak install command">Copy</button><pre id="install"><code>deno run -A --minimum-dependency-age=0 \
+  jsr:@yaks/cli/install</code></pre></div>
+            <p
+              class="small">Install <a href="https://deno.com/">Deno</a> first. <a href="https://github.com/yak-sh/yak/blob/main/packages/cli/README.md">CLI reference ↗</a></p>
+          </article>
+        </div>
+      </section>
+
+      <section id="model" class="section wrap">
+        <div
+          class="section-heading"><div><p class="eyebrow">The mental model</p><h2>Small pieces. A shared shape.</h2></div><a class="text-link" href="https://github.com/yak-sh/yak/blob/main/packages/graph/README.md">The graph, explained ↗</a></div>
+        <div class="model-grid">
+          <article><span class="model-number">01 / Identity</span><h3>An entity is a thing.</h3><p>A stable <code>entity.eid</code> identifies it. Components describe it without changing its identity.</p></article>
+          <article><span class="model-number">02 / Vocabulary</span><h3>Components give it meaning.</h3><p>A vocabulary declares component names and property types. One entity can carry several components.</p></article>
+          <article><span class="model-number">03 / Transactions</span><h3>Bundles carry the change.</h3><p>A bundle is an entity’s components as JSON. Send a batch of patches: all writes commit, or none do.</p></article>
+        </div>
+      </section>
+
+      <section id="playground" class="play-section">
+        <div class="wrap">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Not a recording</p>
+              <h2>A graph you can touch.</h2>
+            </div>
+            <p>Run <code>yak</code> against a graph in this tab.<br>No account. No server writes. Reload to reset.</p>
+          </div>
+          <div class="playground">
+            <div class="console">
+              <div
+                class="panel-head"><span>Command line</span><span id="runtime-status" role="status">Load on first run</span></div>
+              <div class="examples"
+                aria-label="Example commands"><button data-command="graph query .book">List books</button><button data-command="graph query .book.pages>400">Filter pages</button><button data-command="graph apply --change '[{&quot;entity&quot;:{&quot;eid&quot;:&quot;book:dune&quot;},&quot;book&quot;:{&quot;pages&quot;:500}}]'">Patch a book</button></div>
+              <pre id="output" class="output"
+                aria-live="polite">A book is waiting in the graph.
+Choose an example, or type a command below.</pre>
+              <form
+                id="command-form"><label class="prompt" for="command">yak</label><input id="command" name="command" value="graph query .book" spellcheck="false" autocomplete="off" aria-label="yak command"><button type="submit" id="run">Run ↵</button></form>
+              <p
+                class="console-note">Published @yaks packages via esm.sh. First run needs a network connection.</p>
+            </div>
+            <div class="live-data">
+              <div
+                class="panel-head"><span>Graph / books</span><span id="entity-count">1 entity</span></div>
+              <div id="books">
+                <article class="book">
+                  <div><span class="book-symbol">B</span><span class="book-id">book:dune</span></div>
+                  <h3>Dune</h3>
+                  <p><strong>412</strong> pages</p>
+                </article>
+              </div>
+              <p
+                class="data-note">The command and this view read the same in-memory graph. Change the pages and watch it update.</p>
+            </div>
+          </div>
+          <p
+            class="play-source">Want the code? <a href="playground.js">Read this playground’s source ↗</a> · <a href="https://github.com/yak-sh/yak/blob/main/packages/graph/README.md#a-complete-in-memory-example">Graph examples ↗</a></p>
+        </div>
+      </section>
+
+      <section id="packages" class="section wrap">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Pick your pieces</p>
+            <h2>Follow the README.</h2>
+          </div>
+          <p>The package READMEs are the reference.<br>These are starting points, not another copy.</p>
+        </div>
+        <div class="package-grid">
+          <a class="package"
+            href="https://github.com/yak-sh/yak/blob/main/packages/graph/README.md"><span class="package-icon">{ }</span><h3>@yaks/graph <span>↗</span></h3><p>The data model and phased, pluggable transaction pipeline.</p><span class="package-tag">Core</span></a>
+          <a class="package"
+            href="https://github.com/yak-sh/yak/blob/main/packages/vocab/README.md"><span class="package-icon">Aa</span><h3>@yaks/vocab <span>↗</span></h3><p>Declare the components and properties your graph understands.</p><span class="package-tag">Schema</span></a>
+          <a class="package"
+            href="https://github.com/yak-sh/yak/blob/main/packages/query/README.md"><span class="package-icon">.?</span><h3>@yaks/query <span>↗</span></h3><p>Parse, build, and complete the shared query language.</p><span class="package-tag">Queries</span></a>
+          <a class="package"
+            href="https://github.com/yak-sh/yak/blob/main/packages/ram/README.md"><span class="package-icon">[ ]</span><h3>@yaks/ram <span>↗</span></h3><p>In-memory storage for tests, browser state, and local copies.</p><span class="package-tag">Storage</span></a>
+          <a class="package"
+            href="https://github.com/yak-sh/yak/blob/main/packages/cli/README.md"><span class="package-icon">&gt;_</span><h3>@yaks/cli <span>↗</span></h3><p>The yak command and a host composed from a JSON config.</p><span class="package-tag">Command line</span></a>
+          <a class="package"
+            href="https://github.com/yak-sh/yak/blob/main/packages/mcp/README.md"><span class="package-icon">↔</span><h3>@yaks/mcp <span>↗</span></h3><p>Expose a graph and its tools over the Model Context Protocol.</p><span class="package-tag">Agents</span></a>
+        </div>
+        <div
+          class="more-packages"><span>Need persistence or a UI?</span><a href="https://github.com/yak-sh/yak/blob/main/packages/sqlite/README.md">SQLite ↗</a><a href="https://github.com/yak-sh/yak/blob/main/packages/durable-object/README.md">Durable Objects ↗</a><a href="https://github.com/yak-sh/yak/blob/main/packages/ui/README.md">UI ↗</a><a href="https://github.com/yak-sh/yak/blob/main/packages/README.md">All packages →</a></div>
+      </section>
+
+      <section id="host" class="section wrap host-grid">
+        <div><p class="eyebrow">Your machine. Your graph.</p><h2>Run locally.<br>Let agents in.</h2><p>The CLI opens a local graph from its config. Start its HTTP server when you need a web interface or an MCP endpoint. Local commands don’t require a running server.</p><p>The <code>@yaks/mcp</code> plugin exposes <code>/mcp</code> to agents. Choose the authentication policy for any graph you expose beyond your machine.</p><a class="text-link" href="https://github.com/yak-sh/yak/blob/main/packages/cli/README.md#the-config">Host configuration ↗</a></div>
+        <div
+          class="host-code"><div class="panel-head"><span>A local graph</span><span>Shell</span></div><pre><code><span class="code-muted"># Create your graph and config</span>
+yak init Ada
+
+<span class="code-muted"># Open it, run a command, exit</span>
+yak --config ~/.yak/yak.json task list
+
+<span class="code-muted"># Serve its configured HTTP routes</span>
+yak serve --config ~/.yak/yak.json
+
+<span class="code-muted"># Or select a remote MCP server</span>
+yak --host yaks.app app_list</code></pre><a href="https://github.com/yak-sh/yak/blob/main/packages/mcp/README.md">MCP setup, transports, and authentication ↗</a></div>
+      </section>
+
+      <section
+        class="platform-section wrap"><div><p class="eyebrow">The hosted side</p><h2>yaks is the toolkit.<br>yaks.app is a place to host.</h2><p>Build, host, and share web apps with Claude or ChatGPT on yaks.app. The <code>yak</code> CLI works with local graphs and the hosted platform; <code>--config</code> and <code>--host</code> select different destinations.</p></div><a class="button primary" href="https://yaks.app/">Explore yaks.app <span aria-hidden="true">↗</span></a></section>
+      <section class="wrap next-links"
+        aria-label="Further reading"><a href="https://github.com/yak-sh/yak/blob/main/packages/graph/ARCHITECTURE.md">Understand the architecture <span>↗</span></a><a href="https://github.com/yak-sh/yak/blob/main/packages/cli/README.md">Read the CLI reference <span>↗</span></a><a href="https://github.com/yak-sh/yak">Explore the source <span>↗</span></a></section>
+    </main>
+    <footer
+      class="wrap"><a class="brand" href="#">yak<span>.sh</span></a><p>The yaks developer toolkit.</p><div><a href="https://yak.sh/">Jeff’s pages ↗</a><a href="https://github.com/yak-sh/yak">GitHub ↗</a><a href="https://yaks.app/">yaks.app ↗</a></div></footer>
+  </body>
+</html>
