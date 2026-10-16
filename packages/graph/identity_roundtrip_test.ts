@@ -15,7 +15,10 @@ let vocab = loadVocab([archetypeDoc, {
     entity: {
       component: true,
       wire: false,
-      properties: { num: { type: 'number', stamped: true } },
+      properties: {
+        num: { type: 'number', stamped: true },
+        archetype: { type: 'string', stamped: true },
+      },
     },
     note: { component: true, properties: { text: { type: 'string' } } },
     other: { component: true, properties: {} },
