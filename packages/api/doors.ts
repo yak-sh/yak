@@ -20,6 +20,7 @@ import { signed } from './actor.ts'
 import { readBody, receiveBody } from './body.ts'
 import { fault, json, refusal } from './refuse.ts'
 import { published } from './publish.ts'
+import { received } from './receipts.ts'
 
 /** Context the application gives each incoming write before authentication
  * signs it. Streaming imports call it once per chunk, including checks. */
@@ -230,19 +231,23 @@ export let write = async (
   context?: WriteContext,
   opts?: ReadOpts,
 ): Promise<Response> => {
+  let key = request.headers.get('idempotency-key')
   if (poured(request)) {
+    if (key) throw new Refused('Idempotency-Key requires a JSON apply')
     return pour(graph, request, who, activity, context, opts)
   }
-  let body = JSON.parse(await readBody(request))
+  let text = await readBody(request)
+  let body = JSON.parse(text)
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')
   }
   let check = new URL(request.url).searchParams.has('check')
   let cause = peek(activity) ? parent(activity, request) : undefined
-  let applied = await graph.apply(
-    signed(context ? context(request, body) : body, who),
-    { check, ...(cause && { parent: cause }) },
-  )
+  let batch = signed(context ? context(request, body) : body, who)
+  let options = { check, ...(cause && { parent: cause }) }
+  let applied = key && !check
+    ? await received(graph, key, text, who, batch, options)
+    : await graph.apply(batch, options)
   return json(
     published(
       graph.vocab,

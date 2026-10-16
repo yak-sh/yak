@@ -13,7 +13,7 @@
         "method": {
           "type": "string",
           "stamped": true,
-          "description": "the HTTP method: GET, POST, PUT, …"
+          "description": "the HTTP method: GET, POST, PUT, \u2026"
         },
         "url": {
           "type": "string",
@@ -44,8 +44,12 @@
     },
     "serve": {
       "tool": true,
-      "surfaces": ["cli"],
-      "roles": ["web"],
+      "surfaces": [
+        "cli"
+      ],
+      "roles": [
+        "web"
+      ],
       "title": "Answer HTTP for this graph",
       "description": "Listen on a TCP port and answer HTTP requests for this graph: POST /apply, GET or POST /query, the /ws subscription socket, POST /mcp, and every route the loaded plugins add. The port and network interface come from the configuration that opened the graph unless these arguments override them. This call does not return while the server is up. It returns when the server stops: it stops taking requests, closes its sockets and lets the requests in flight finish for the grace, then returns either way. Its result reports where it listened and for how long; while it runs, its execution state stays 'running', which is how the record of a server that is still up differs from one that has stopped.",
       "input": {
@@ -68,6 +72,25 @@
         "grace": {
           "type": "number",
           "description": "seconds a stopping server lets requests in flight finish before it stops anyway (default 10)"
+        }
+      }
+    },
+    "apply_receipt": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "journal": false,
+      "description": "A successful keyed API write, retained indefinitely in the mutation transaction with its request digest and canonical answer. Hidden from graph reads by the API graph plugin.",
+      "properties": {
+        "answer": {
+          "type": "string",
+          "stamped": true,
+          "description": "The canonical applied bundles as JSON, before caller answer projection."
+        },
+        "digest": {
+          "type": "string",
+          "stamped": true,
+          "description": "The SHA-256 digest of the exact JSON request body bound to this key and authenticated writer."
         }
       }
     }

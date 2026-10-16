@@ -83,6 +83,33 @@ bundles with current relayed values. Ordinary `/query` reads stored data,
 including saved relayed values. A saved value does not count as a connected
 writer's presence after that writer disconnects.
 
+### Keyed JSON writes
+
+A **receipt** is the canonical applied answer kept atomically with a successful
+JSON `POST /apply` carrying `Idempotency-Key`. Resend the same key and exact
+body after a lost answer: aliases and `$was` are accepted once, and a replay
+returns the original answer without another mutation. Keys are scoped to the
+authenticated actor (`by` and `via`). Reusing a key with a different body is
+refused.
+
+```sh
+curl -X POST http://localhost:3000/apply \
+  -H 'Idempotency-Key: outbox:my-unique-write' \
+  -H 'Content-Type: application/json' \
+  -d '[{"entity":{"eid":"$note"},"doc":{"title":"Remember"}}]'
+```
+
+Receipts have no expiry, including `outbox:` keys: durable outboxes may replay
+after any offline interval. Only a SHA-256 digest binds the request body; the
+body itself is not retained. The canonical answer is retained before caller
+answer projection and projected again when replayed. Receipt rows are
+server-owned, `sync: none`, and hidden from graph reads and aggregates by
+`@yaks/api/graph`. The box composes that facet with the API vocabulary. A custom
+graph must load `@yaks/api/vocab`; the HTTP door installs receipt hooks when
+first needed. Dry runs (`?check`) do not consume keys. Keyed NDJSON imports are
+refused because they span transactions; unkeyed requests keep their ordinary
+behavior.
+
 ## Exports
 
 | Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
