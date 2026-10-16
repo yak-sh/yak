@@ -101,9 +101,10 @@ test('the index follows the text and the membership', () => {
   assertEquals(heal(t.db, text), [])
 })
 
+let healing = talking(1)
+healing.said(1, 'facets')
 test('healing observes membership and its index in the same snapshot', () => {
-  let t = talking(1)
-  t.said(1, 'facets')
+  let t = healing
   // A second writer commits immediately after the first read finishes. Its
   // triggers keep the index whole; maintenance must not mistake that commit
   // for drift and take the writer to rebuild it.

@@ -63,11 +63,13 @@ test('another document appends rungs, in load order, after the declaring one', (
 
 let extended = loadVocab([jobs, lease])
 
+let reported = doc(
+  Object.fromEntries(extended.all.map((n) => [n, extended.def(n)!])),
+)
+
 test('the entry a vocabulary reports loads back as the same ladder', () => {
   let v = extended
-  let back = loadVocab(
-    doc(Object.fromEntries(v.all.map((n) => [n, v.def(n)!]))),
-  )
+  let back = loadVocab(reported)
   assertEquals(back.comp('job')?.ladder, v.comp('job')?.ladder)
   assertEquals(back.prop('job', 'status'), v.prop('job', 'status'))
 })

@@ -3,6 +3,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
+import { parse } from '@yaks/query'
 import { col, eq, select, sub, table } from '@yaks/sql'
 import { preparedStore, snapshot } from '../sqlite/testing.ts'
 import { ram } from './mod.ts'
@@ -112,8 +113,6 @@ for (let [name, storage] of Object.entries(stores)) {
     }))
   test(`${name} owner component selection keeps the owner's private aspect`, () =>
     assertEquals(owner.rows('.private'), [{ eid: 'owner-1' }]))
-  test(`${name} gathered computed values use visible sources`, () =>
-    assertEquals(value(g.read('.public') as Bundle[]), { value: null }))
   test(`${name} computed getters use visible sources`, () =>
     assertEquals(value(g.get(['other']) as Bundle[]), { value: null }))
   test(`${name} computed predicates use visible sources`, () =>
@@ -122,4 +121,45 @@ for (let [name, storage] of Object.entries(stores)) {
     assertEquals(g.rows('.public .fields=public.value'), [
       { eid: 'other', 'public.value': null },
     ]))
+}
+
+// A gathered value needs one public owner and its hidden source. The pointer
+// and second owner above exercise other read shapes, not this gathering.
+let gatherVocab = loadVocab({
+  $defs: {
+    public: vocab.def('public')!,
+    private: vocab.def('private')!,
+  },
+})
+for (
+  let [name, storage] of Object.entries({
+    RAM: ram(gatherVocab, {
+      computed: {
+        'public.value': (b, among) =>
+          (among.of(b.entity.eid)?.private as Record<string, unknown>)?.text ??
+            null,
+      },
+    }),
+    SQL: preparedStore(gatherVocab, base, snapshot(gatherVocab, base)),
+  })
+) {
+  storage.tx((tx) =>
+    tx.patch([{
+      entity: { eid: 'other' },
+      public: {},
+      private: { text: 'secret' },
+    }])
+  )
+  let gathered = parse('.public')
+  let hidden = parse('.entity.eid=owner')
+  let g = graph({
+    vocab: gatherVocab,
+    storage,
+    plugins: [{
+      name: 'owner',
+      scope: () => ({ components: { private: hidden } }),
+    }],
+  })
+  test(`${name} gathered computed values use visible sources`, () =>
+    assertEquals((g.read(gathered) as Bundle[])[0].public, { value: null }))
 }

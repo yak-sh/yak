@@ -37,11 +37,12 @@ for (let i = 0; i < 3; i++) {
 }
 
 for (let eid of ['', 'server']) {
+  let query = and(eq('entity.eid', list(eid)))
   test(`d1: pruning removes the malformed orphan ${JSON.stringify(eid)}`, async () => {
     equal(await g.apply([{ entity: { eid }, $prune: true }]), [
       { entity: { eid }, tombstone: {} },
     ])
-    equal(await g.rows(and(eq('entity.eid', list(eid)))), [])
+    equal(await g.rows(query), [])
   })
 }
 

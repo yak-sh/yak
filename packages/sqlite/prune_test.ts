@@ -8,7 +8,7 @@ import { spineDoc } from '@yaks/kernel'
 import { as, lit, select } from '@yaks/sql'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { storage } from './mod.ts'
-import { mem } from './testing.ts'
+import { mem, preparedStore } from './testing.ts'
 
 let vocab = loadVocab([{
   $defs: {
@@ -22,8 +22,7 @@ let vocab = loadVocab([{
 let canonical = '11111111-1111-4111-8111-111111111111'
 
 let spined = loadVocab([spineDoc, archetypeDoc])
-let shaped = storage(mem(), spined)
-shaped.install()
+let shaped = preparedStore(spined)
 shaped.tx((tx) =>
   tx.patch([
     { entity: { eid: '' } },
@@ -37,12 +36,12 @@ let tracked = graph({
   plugins: [archetypes()],
 })
 let emptyShape = shaped.get(['yak'])[0].entity.archetype!
+let ownerNames = and(eq('entity.archetype', list('', 'yak')))
+let sameShape = and(eq('entity.archetype', emptyShape))
 test('sqlite: spine reference equality compares archetypes rather than owner identity', () => {
-  assertEquals(shaped.read(and(eq('entity.archetype', list('', 'yak')))), [])
+  assertEquals(shaped.rows(ownerNames), [])
   assertEquals(
-    shaped.read(and(eq('entity.archetype', emptyShape))).map((b) =>
-      b.entity.eid
-    ).sort(),
+    shaped.rows(sameShape).map((b) => String(b.eid)).sort(),
     ['', 'https://github.com/yaksh/yaks', 'yak'],
   )
 })
@@ -57,8 +56,7 @@ for (let eid of ['', 'yak', 'https://github.com/yaksh/yaks']) {
   })
 }
 
-let raced = storage(mem(), vocab)
-raced.install()
+let raced = preparedStore(vocab)
 raced.tx((tx) => tx.patch([{ entity: { eid: 'raced' } }]))
 let late = graph({
   vocab,

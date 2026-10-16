@@ -167,26 +167,38 @@ let ladderIds = new Map([
 ])
 let ladderArchetypes = archetypeSet(ladderCache, ladderIds)
 
+let ladderQuery = parse('.task.status=done')
+let done = ladderCache.intern(['task', 'completed']).eid
+let first = archetypeSet(ladderCache, new Map([[done, 301]]))
+let next = archetypeSet(ladderCache, new Map([[done, 909]]))
+let edited = structuredClone(ladderQuery)
+let openClause = parse('.task.status=open').clauses[0]
+
 test('a ladder filter uses each snapshot, caller override and edited query', () => {
-  let query = parse('.task.status=done')
-  let done = ladderCache.intern(['task', 'completed']).eid
-  let first = archetypeSet(ladderCache, new Map([[done, 301]]))
-  let next = archetypeSet(ladderCache, new Map([[done, 909]]))
-  assertEquals(lists(compile(query, ladder, { archetypes: first }).sql), [[
-    301,
+  assertEquals(lists(compile(ladderQuery, ladder, { archetypes: first }).sql), [
+    [301],
+  ])
+  assertEquals(lists(compile(ladderQuery, ladder, { archetypes: next }).sql), [[
+    909,
   ]])
-  assertEquals(lists(compile(query, ladder, { archetypes: next }).sql), [[909]])
-  let overridden = compile(query, ladder, {
+})
+
+test('a caller override replaces the ladder lookup', () => {
+  let overridden = compile(ladderQuery, ladder, {
     archetypes: next,
     derived: { 'task.status': { tag: 'text', expr: () => lit('wip') } },
   })
   assertEquals(overridden.params, ['done'])
   assert(overridden.sql.includes("'wip'"), overridden.sql)
-  let edited = structuredClone(query)
+})
+
+test('an edited ladder query is read again after its first compilation', () => {
+  // Reset this writable fixture when the budget runner loads the case again.
+  Object.assign(edited.clauses[0], ladderQuery.clauses[0])
   assertEquals(lists(compile(edited, ladder, { archetypes: next }).sql), [[
     909,
   ]])
-  Object.assign(edited.clauses[0], parse('.task.status=open').clauses[0])
+  Object.assign(edited.clauses[0], openClause)
   assertEquals(lists(compile(edited, ladder, { archetypes: next }).sql), [])
 })
 

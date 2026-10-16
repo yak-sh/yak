@@ -545,19 +545,9 @@ this orders candidates without changing the query's meaning.
 
 ```ts
 import { complete } from '@yaks/query'
-import { loadVocab } from '@yaks/vocab'
+import { completionVocab as vocab } from './completion_fixture.ts'
 import { equal } from '@yaks/testing'
 
-const vocab = loadVocab({
-  $defs: {
-    task: {
-      component: true,
-      properties: {
-        status: { type: 'string', enum: ['open', 'done'] },
-      },
-    },
-  },
-})
 equal(complete(vocab, '.sta'), {
   from: 0,
   to: 4,

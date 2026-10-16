@@ -285,25 +285,26 @@ export let rules = (store: () => Storage): void => {
   // A pattern effect over the same store: a match is a query, and a storage
   // that answers bindings answers one that joins two entities.
 
+  let joiningFx = effects(shop)
+  let joining = graph({ storage: store(), vocab: shop, plugins: [joiningFx] })
+  let joined: string[] = []
+  // Every shelved product and its review, joined by the reference between them.
+  joiningFx.on('$p .product, .shelf; .review, review.product=$p', (e) => {
+    joined.push(`${e.entity.eid} ${e.vars?.p}`)
+  })
+  joining.apply([{ entity: { eid: 'p1' }, product: { sku: 'A' } }])
+  joining.apply([{
+    entity: { eid: 'r1' },
+    review: { product: 'p1', stars: 5 },
+  }])
   test('an effect on a joining pattern fires over a store', async () => {
-    let fx = effects(shop)
-    let g = graph({ storage: store(), vocab: shop, plugins: [fx] })
-    let seen: string[] = []
-    // Every review of a product that is on a shelf: two entities, joined by
-    // the property between them, which no component-and-kind registration can
-    // say.
-    fx.on('$p .product, .shelf; .review, review.product=$p', (e) => {
-      seen.push(`${e.entity.eid} ${e.vars?.p}`)
-    })
-    await g.apply([{ entity: { eid: 'p1' }, product: { sku: 'A' } }])
-    await g.apply([{
-      entity: { eid: 'r1' },
-      review: { product: 'p1', stars: 5 },
-    }])
     // Not yet: the product is on no shelf.
-    assertEquals(seen, [])
-    await g.apply([{ entity: { eid: 'p1' }, shelf: { aisle: 'Z', slot: 1 } }])
-    assertEquals(seen, ['p1 p1'])
+    assertEquals(joined, [])
+    await joining.apply([{
+      entity: { eid: 'p1' },
+      shelf: { aisle: 'Z', slot: 1 },
+    }])
+    assertEquals(joined, ['p1 p1'])
   })
 
   test('an effect on a removal beside a filter reads the batch', async () => {

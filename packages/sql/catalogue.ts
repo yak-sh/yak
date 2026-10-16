@@ -62,10 +62,9 @@ export let catalogue = (driver: Driver): readonly SchemaObject[] =>
  *
  * ```ts
  * import { catalogue, erect, revision, type Stmt } from '@yaks/sql'
- * import { open } from '@yaks/sqlite/db'
+ * import { catalogueExample as db } from './catalogue_fixture.ts'
  * import { equal } from '@yaks/testing'
  *
- * let db = open(':memory:')
  * let made: Stmt = { t: 'create table', name: 'x', ifNot: true, cols: [{ name: 'a' }] }
  * erect(db, [made, made])
  * let at = revision(db, 'schema')

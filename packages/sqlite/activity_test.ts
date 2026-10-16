@@ -133,12 +133,15 @@ test('SQL spans count returned and affected rows and say what they ran without i
   }
 })
 
+let idle = open(':memory:')
+let idleChannel = channel(idle)
+let disconnectIdle = idleChannel.subscribe(() => {})
+disconnectIdle()
+let idleQuery = select({ cols: [val('private')] })
 test('an idle SQL driver creates no spans or clocks, including after disconnect', () => {
-  let db = open(':memory:')
+  let db = idle
   try {
-    let c = channel(db)
-    let stop = c.subscribe(() => {})
-    stop()
+    let c = idleChannel
     let clock = stub(performance, 'now', () => {
       throw new Error('idle clock')
     })
@@ -146,7 +149,7 @@ test('an idle SQL driver creates no spans or clocks, including after disconnect'
       throw new Error('idle span')
     })
     try {
-      db.query(select({ cols: [val('private')] }))
+      db.query(idleQuery)
       equal(peek(db), undefined)
       equal(c.history(), [])
     } finally {

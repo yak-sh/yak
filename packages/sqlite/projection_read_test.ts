@@ -2,10 +2,19 @@
 // dynamic, computed and graph-dependent expressions still read their owner.
 import { assertEquals } from '@std/assert'
 import { test } from '@yaks/testing'
-import { col, fn, insert, select, sub, table, val } from '@yaks/sql'
+import {
+  col,
+  type Derived,
+  fn,
+  insert,
+  select,
+  sub,
+  table,
+  val,
+} from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
-import { open } from './db.ts'
-import { storage } from './mod.ts'
+import { get } from './read.ts'
+import { preparedDriver, snapshot } from './testing.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -21,8 +30,7 @@ let vocab = loadVocab({
     other: { component: true, properties: { value: { type: 'string' } } },
   },
 })
-let sql = open(':memory:')
-let store = storage(sql, vocab, {
+let options: { derived: Derived } = {
   derived: {
     'word.plain': {
       tag: 'text',
@@ -48,19 +56,22 @@ let store = storage(sql, vocab, {
       text: () => val('stored value'),
     },
   },
-})
-store.install()
-sql.query(insert('entity', { id: 1, eid: 'one' }))
-sql.query(insert('word', {
-  entity: 1,
-  plain: 'hello',
-  dynamic: 'held clock',
-  related: 'held relation',
-}))
-sql.query(insert('other', { entity: 1, value: 'stored relation' }))
+}
+let sql = preparedDriver(
+  snapshot(vocab, options, [
+    insert('entity', { id: 1, eid: 'one' }),
+    insert('word', {
+      entity: 1,
+      plain: 'hello',
+      dynamic: 'held clock',
+      related: 'held relation',
+    }),
+    insert('other', { entity: 1, value: 'stored relation' }),
+  ]),
+)
 
 test('gathers preserve owner expressions outside stable stored text', () => {
-  assertEquals(store.get(['one'])[0].word, {
+  assertEquals(get(sql, vocab, ['one'], options)[0].word, {
     plain: 'HELLO',
     dynamic: 'current clock',
     related: 'owner relation',

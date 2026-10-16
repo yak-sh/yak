@@ -91,10 +91,10 @@ test('whole and narrowed cache reads isolate nested JSON values', () => {
 })
 
 let pending = preparedStore(kitchen)
+pending.tx((tx) => tx.patch([{ entity: { eid: 'cake' }, recipe: RECIPE }]))
 test('pending partial cache reads isolate nested JSON values', () => {
   using s = pending
   s.tx((tx) => {
-    tx.patch([{ entity: { eid: 'cake' }, recipe: RECIPE }])
     let meta = { oven: 200, steps: [{ mix: false }] }
     tx.patch([{ entity: { eid: 'cake' }, recipe: { meta } }])
     let b = tx.get(['cake'], ['recipe'])[0]

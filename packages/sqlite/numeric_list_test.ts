@@ -2,8 +2,8 @@ import { equal, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { storage } from './mod.ts'
-import { mem } from './testing.ts'
+import { preparedStore } from './testing.ts'
+import { type Row } from '@yaks/sql'
 
 let vocab = loadVocab({
   $defs: {
@@ -57,10 +57,11 @@ let bundles: Bundle[] = values.map((x) => ({
 }))
 bundles.push({ entity: { eid: 'absent' }, point: {} })
 bundles.push({ entity: { eid: 'missing' } })
-let stored = graph({ vocab, storage: storage(mem(), vocab) })
+// Numeric membership is decided by the adapter; RAM remains the query oracle.
+let stored = preparedStore(vocab)
 let memory = graph({ vocab, storage: ram(vocab) })
-stored.storage.install()
-for (let g of [stored, memory]) g.apply(bundles)
+stored.tx((tx) => tx.patch(bundles))
+memory.apply(bundles)
 let queries = [
   '.point.x=1,2,3',
   '.point.x=3,2,1,2',
@@ -75,10 +76,11 @@ let queries = [
   '.point.text=1,2,3',
 ]
 let ids = (bs: Bundle[]) => bs.map((b) => b.entity.eid).sort()
+let rowIds = (rows: Row[]) => rows.map((row) => String(row.eid)).sort()
 for (let q of queries) {
   let expected = ids(await memory.read(q))
-  test(`numeric lists preserve query membership: ${q}`, async () => {
-    equal(ids(await stored.read(q)), expected)
+  test(`numeric lists preserve query membership: ${q}`, () => {
+    equal(rowIds(stored.rows(q)), expected)
   })
 }
 
@@ -111,6 +113,6 @@ test('numeric list gates preserve page cursors', async () => {
 let scopedQuery = '.point.x=10,11,12,13'
 let scope = { visibility: { entity: `.point.x=10,12` } }
 let visible = ids(await memory.read(scopedQuery, scope))
-test('numeric lists preserve scoped visibility', async () => {
-  equal(ids(await stored.read(scopedQuery, scope)), visible)
+test('numeric lists preserve scoped visibility', () => {
+  equal(rowIds(stored.rows(scopedQuery, scope)), visible)
 })

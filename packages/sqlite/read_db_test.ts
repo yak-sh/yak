@@ -115,10 +115,11 @@ for (
   })
 }
 f.db.query({ t: 'commit' })
+let last = open(f.path)
 
 test('the last read-only connection leaves its database and WAL untouched', () => {
-  using cleanup = f
-  let db = open(cleanup.path)
+  using _cleanup = f
+  let db = last
   assertEquals(scan(db, 't'), [{ x: 1 }])
   f.db.close()
   let contents = () =>

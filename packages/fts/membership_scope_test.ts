@@ -125,6 +125,9 @@ let opts = {
   exactIds: true,
   extend: [selected],
 }
+let overlayMatches = [overlay]
+let overlayBatch = [{ entity: { eid: 'book-1' }, book: { price: 13 } }]
+let overlayCovers = ['book']
 // Prepare inputs above; exercise the public matcher inside each case.
 test('shared text screens survive multiple rule patterns', () => {
   assertEquals(
@@ -137,9 +140,9 @@ test('shared text screens read batch overlays', () => {
     bindings(
       matching,
       prices,
-      [overlay],
-      [{ entity: { eid: 'book-1' }, book: { price: 13 } }],
-      ['book'],
+      overlayMatches,
+      overlayBatch,
+      overlayCovers,
       opts,
     ).map((rows) => rows.map((r) => r.entities)),
     [[['book-1']]],
