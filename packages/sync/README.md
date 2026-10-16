@@ -82,7 +82,10 @@ Caller-written local and peer values stay. A transport failure keeps the local
 batch: the server may have applied it before the connection failed. There is no
 automatic HTTP retry.
 
-```ts
+The refusal and unknown-outcome contracts run in `sync_test.ts`, each with its
+own fixture; this example shows both outcomes together.
+
+```ts ignore
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -508,7 +511,10 @@ Errors arrive as ordinary `Error` objects unless the receiver supplies
 support structured cloning; a decoder can restore an Error subclass and its
 data.
 
-```ts
+The codec contract is checked in `port_test.ts` with controlled message
+delivery; the example below uses the browser's native ports.
+
+```ts ignore
 import { portLink } from '@yaks/sync/port'
 import { equal, throws } from '@yaks/testing'
 

@@ -21,29 +21,28 @@ test('sha256 matches the published vectors', () => {
   )
 })
 
-// The platform hashes on a thread of its own, so its digests are asked for at
-// once and awaited together, not one round trip after another.
-test('sha256 matches the platform digest, including multi-byte text', async () => {
-  let texts = [
-    '',
-    'a',
-    'the quick brown fox',
-    'æøå — 日本語',
-    'x'.repeat(55),
-    'x'.repeat(56),
-    'x'.repeat(200),
-    'æ'.repeat(300),
-    'y'.repeat(1000),
-    'z',
-  ]
-  let wants = await Promise.all(
-    texts.map((s) =>
-      crypto.subtle.digest('SHA-256', new TextEncoder().encode(s))
-    ),
-  )
-  texts.forEach((s, i) =>
-    assertEquals(sha256(s), hex(wants[i]), s.slice(0, 20))
-  )
+// Platform digests are independent expected values, not work under test. Ask
+// for them while the file loads so OS thread scheduling cannot time the check.
+let texts = [
+  '',
+  'a',
+  'the quick brown fox',
+  'æøå — 日本語',
+  'x'.repeat(55),
+  'x'.repeat(56),
+  'x'.repeat(200),
+  'æ'.repeat(300),
+  'y'.repeat(1000),
+  'z',
+]
+let wants = await Promise.all(
+  texts.map(async (s) =>
+    hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))
+  ),
+)
+
+test('sha256 matches the platform digest, including multi-byte text', () => {
+  texts.forEach((s, i) => assertEquals(sha256(s), wants[i], s.slice(0, 20)))
 })
 
 test('a guard token hashes the value as text, and absence is null', () => {
@@ -53,10 +52,10 @@ test('a guard token hashes the value as text, and absence is null', () => {
   assertEquals(token('42'), sha256('42'))
 })
 
-test('binary tokens hash exactly the visible bytes', async () => {
-  let bytes = new Uint8Array([19, 0, 255, 128, 19]).subarray(1, 4)
-  let digest = await crypto.subtle.digest('SHA-256', bytes)
-  assertEquals(token(bytes), hex(digest))
+let bytes = new Uint8Array([19, 0, 255, 128, 19]).subarray(1, 4)
+let digest = hex(await crypto.subtle.digest('SHA-256', bytes))
+test('binary tokens hash exactly the visible bytes', () => {
+  assertEquals(token(bytes), digest)
   assertEquals(token(bytes), token(new Uint8Array([0, 255, 128])))
   assertEquals(token(new Uint8Array()), sha256(''))
 })
