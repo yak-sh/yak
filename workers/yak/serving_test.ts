@@ -708,46 +708,61 @@ test('/api/stats with no analytics token is a sentence, not a failure', async ()
   assertStringIncludes(said.say, 'not switched on')
 })
 
+// This case owns its seeded store and callers. Build them during module load;
+// each reload (including the budget runner's second pass) gets a fresh scenario.
 let wireFixture = async () => {
   let scenario = platform()
-  let { env } = scenario
-  let { dir, space, app } = await seeded(env)
-  let store = appStore(env.STORE, space, app)
-  let declaration = await store('/vocab', {
-    method: 'POST',
-    body: JSON.stringify({
-      $vocabulary: { 'https://yak.sh/vocab/member': true },
-      $defs: {
-        local_setting: {
-          component: true,
-          personal: 'entity',
-          properties: { text: { type: 'string', search: true } },
+  try {
+    let { env } = scenario
+    let { dir, space, app } = await seeded(env)
+    let store = appStore(env.STORE, space, app)
+    let declaration = await store('/vocab', {
+      method: 'POST',
+      body: JSON.stringify({
+        $vocabulary: { 'https://yak.sh/vocab/member': true },
+        $defs: {
+          local_setting: {
+            component: true,
+            personal: 'entity',
+            properties: { text: { type: 'string', search: true } },
+          },
         },
-      },
-    }),
-  }, KERNEL)
-  assertEquals(declaration.status, 200, await declaration.text())
-  await store('/apply', {
-    method: 'POST',
-    body: JSON.stringify([{
-      entity: { eid: ADA },
-      doc: { title: `lemons ${'public '.repeat(200)}` },
-      local_setting: { text: 'lemons unsharedsetting' },
-    }]),
-  }, ADA_OWNS)
-  let eli = 'e0000000-0000-4000-8000-000000000001'
-  await dir.apply(
-    { entities: [{ entity: { eid: eli }, person: {} }] },
-    ADA_OWNS,
-  )
-  return { scenario, env, eli, space, app }
+      }),
+    }, KERNEL)
+    assertEquals(declaration.status, 200, await declaration.text())
+    await store('/apply', {
+      method: 'POST',
+      body: JSON.stringify([{
+        entity: { eid: ADA },
+        doc: { title: `lemons ${'public '.repeat(200)}` },
+        local_setting: { text: 'lemons unsharedsetting' },
+      }]),
+    }, ADA_OWNS)
+    let eli = 'e0000000-0000-4000-8000-000000000001'
+    await dir.apply(
+      { entities: [{ entity: { eid: eli }, person: {} }] },
+      ADA_OWNS,
+    )
+    let cookie = await as(ADA)
+    let page = client(env, cookie)
+    let visitors = [client(env), client(env, await as(eli))]
+    let grant = await granting(
+      env.SESSION_SECRET!,
+      storeName(space, app),
+      { person: ADA, role: 'owner' },
+    )
+    await scenario.settled()
+    return { scenario, env, cookie, page, visitors, grant }
+  } catch (error) {
+    await scenario[Symbol.asyncDispose]()
+    throw error
+  }
 }
 let wireScene = await wireFixture()
 
 test('the page wire: apply, query and search round-trip', async () => {
   await using _scenario = wireScene.scenario
-  let { env, eli, space, app } = wireScene
-  let page = client(env, await as(ADA))
+  let { env, cookie, page, visitors, grant } = wireScene
 
   // The page's own envelope in, the page's own answer out — the shape the
   // guide documents and every deployed app reads.
@@ -794,7 +809,7 @@ test('the page wire: apply, query and search round-trip', async () => {
   let pageWrite = await apps.fetch(
     visit('/cookbook/api/apply', {
       method: 'POST',
-      headers: { cookie: await as(ADA), 'content-type': 'application/json' },
+      headers: { cookie, 'content-type': 'application/json' },
       body: JSON.stringify([copied('three lemons and a lemon glaze')]),
     }),
     env,
@@ -806,11 +821,7 @@ test('the page wire: apply, query and search round-trip', async () => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        'x-yak-grant': await granting(
-          env.SESSION_SECRET!,
-          storeName(space, app),
-          { person: ADA, role: 'owner' },
-        ),
+        'x-yak-grant': grant,
       },
       body: JSON.stringify({
         entities: [copied('three lemons and a lemon icing')],
@@ -866,7 +877,7 @@ test('the page wire: apply, query and search round-trip', async () => {
     1,
   )
 
-  for (let visitor of [client(env), client(env, await as(eli))]) {
+  for (let visitor of visitors) {
     assertEquals(await visitor.query('.local_setting&*'), [])
     assertEquals(await visitor.query('.local_setting.text&*'), [])
     assertEquals(

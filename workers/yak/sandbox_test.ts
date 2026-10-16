@@ -69,7 +69,8 @@ let dirOf = (env: Env) =>
 
 // A space with Ada in it and one app of hers — the app a compile ships into.
 let seeded = async (vars: Partial<Env> = {}) => {
-  let { env } = platform(SECRET, vars)
+  let scenario = platform(SECRET, vars)
+  let { env } = scenario
   let dir = dirOf(env)
   await dir.apply({
     entities: [
@@ -86,7 +87,12 @@ let seeded = async (vars: Partial<Env> = {}) => {
     ],
   }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
   let space = (await dir.space('ada'))!
-  return { env, space }
+  return {
+    env,
+    space,
+    settled: scenario.settled,
+    [Symbol.asyncDispose]: scenario[Symbol.asyncDispose],
+  }
 }
 
 let ctxOf = (env: Env, spend = spending()): Ctx => ({
@@ -124,17 +130,20 @@ let pinned = () =>
 // The whole workbench, wired: a space, an app, and a scripted container.
 let bench = async (answer: (cmd: string) => Ran | void = () => {}) => {
   let box = sandboxes((cmd) => cmd.startsWith('chmod ') ? {} : answer(cmd))
-  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let scenario = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let { env } = scenario
   let ctx = ctxOf(env)
   await tool('app_new').run(ctx, { slug: 'chess', title: 'Chess' })
-  return { env, space, ctx, box }
+  return { ...scenario, ctx, box }
 }
 
-test('the machine tools write, run and read, and a ship copies out', async () => {
+// This case owns its workbench, including the mutable listing. Loading the
+// module again makes a fresh one; the case closes it even if a check fails.
+let machine = await (async () => {
   // The build leaves a .js and a .wasm in pkg/, which the globs find, and a
   // site in dist/, a page per route and its assets, which the listing walks.
   let dist = ['about/index.html', '_astro/app.js']
-  let { ctx, box, env, space } = await bench((cmd) =>
+  let fixture = await bench((cmd) =>
     cmd.startsWith('find ')
       ? {
         stdout: cmd.includes('./dist')
@@ -143,6 +152,17 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
       }
       : { stdout: 'Finished `release` profile', stderr: 'warning: unused' }
   )
+  fixture.box.files.set('/workspace/pkg/chess.js', 'export default init')
+  fixture.box.files.set('/workspace/pkg/chess_bg.wasm', WASM)
+  fixture.box.files.set('/workspace/dist/about/index.html', '<h1>About</h1>')
+  fixture.box.files.set('/workspace/dist/_astro/app.js', 'boot()')
+  await fixture.settled()
+  return { ...fixture, dist }
+})()
+
+test('the machine tools write, run and read, and a ship copies out', async () => {
+  await using fixture = machine
+  let { ctx, box, env, space, dist } = fixture
 
   await tool('sandbox_write').run(ctx, {
     path: 'src/lib.rs',
@@ -168,8 +188,6 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
 
   // The artifact, shipped: both files land beside index.html under their own
   // names, and the tool says where.
-  box.files.set('/workspace/pkg/chess.js', 'export default init')
-  box.files.set('/workspace/pkg/chess_bg.wasm', WASM)
   let shipped = await tool('sandbox_ship').run(ctx, {
     app: 'chess',
     paths: ['pkg/*.js', 'pkg/*.wasm'],
@@ -177,8 +195,6 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   assertStringIncludes(shipped.text, 'shipped 2 files')
   assertStringIncludes(shipped.text, 'chess.js, chess_bg.wasm')
   // The site keeps its folders, under the folder of the app it was sent to.
-  box.files.set('/workspace/dist/about/index.html', '<h1>About</h1>')
-  box.files.set('/workspace/dist/_astro/app.js', 'boot()')
   await tool('sandbox_ship').run(ctx, {
     app: 'chess',
     paths: ['dist'],
@@ -206,7 +222,7 @@ test('the machine tools write, run and read, and a ship copies out', async () =>
   assertEquals(await (await site('_astro/app.js')).text(), 'boot()')
 
   // A new build shipped to replace the folder leaves none of the last one.
-  dist = ['about/index.html', '_astro/app2.js']
+  dist.splice(0, dist.length, 'about/index.html', '_astro/app2.js')
   box.files.set('/workspace/dist/_astro/app2.js', 'boot2()')
   let again = await tool('sandbox_ship').run(ctx, {
     app: 'chess',
