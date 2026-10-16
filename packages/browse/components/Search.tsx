@@ -190,7 +190,12 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
           : err
           ? <Snip>{err}</Snip>
           : !q.trim()
-          ? <Snip>Type words or a query · Escape closes · ⌘/Ctrl+Enter opens a new tab</Snip>
+          ? (
+            <Snip>
+              Type words or a query · Escape closes · ⌘/Ctrl+Enter opens a new
+              tab
+            </Snip>
+          )
           : answered == q && !ordered.length && <Snip>No results.</Snip>}
         {
           /* Each registry tile is its own real entity anchor. The result shell

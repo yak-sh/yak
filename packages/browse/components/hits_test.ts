@@ -6,7 +6,7 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { vocab } from '../types.ts'
 import { config } from '../live.ts'
-import { rows } from './hits.ts'
+import { hits, rows } from './hits.ts'
 
 let g = graph({ storage: ram(vocab), vocab })
 g.apply([{
@@ -31,3 +31,32 @@ test('filtered picker results retain the session brief for its tile', async () =
     config.host = host
   }
 })
+
+for (
+  let [query, order] of [
+    ['dragon .task', 'search'],
+    ['dragon (.task .order=-created.at)', '-created.at'],
+    ['.session', undefined],
+  ] as const
+) {
+  test(`palette ranks words without overriding the query's order: ${query}`, async () => {
+    let prior = globalThis.fetch
+    let host = config.host
+    config.host = 'search.test'
+    let asked = ''
+    globalThis.fetch = (input) => {
+      asked = new URL(String(input), 'http://search.test').searchParams.get(
+        'q',
+      )!
+      return Promise.resolve(Response.json([]))
+    }
+    try {
+      await hits(query)
+      let got = asked.match(/\.order=([^ )&]+)/g) ?? []
+      assertEquals(got, order ? [`.order=${order}`] : [])
+    } finally {
+      globalThis.fetch = prior
+      config.host = host
+    }
+  })
+}
