@@ -277,3 +277,89 @@ test('outbox close cancels retry without forgetting durable intent', async () =>
   await throws(() => closed.box.submit(intent(), 'after-close'), 'closed')
   equal(closedCalls, 1)
 })
+
+// Sending can remain unanswered indefinitely without blocking later disk
+// admissions. Read disk in reverse order on reopen, as a key-ordered store may.
+let blockedDisk = disk()
+let blockedSend = deferred<string>()
+let blockedCalls: unknown[] = []
+let blocked = await fixture((key, sent) => {
+  blockedCalls.push([key, structuredClone(sent)])
+  return blockedSend.promise
+}, blockedDisk.store)
+let replayRows = deferred<Pending<Intent>[]>()
+let orderedCalls: unknown[] = []
+let orderedOpening = fixture((key, sent) => {
+  orderedCalls.push([key, structuredClone(sent)])
+  return Promise.resolve('saved')
+}, { ...blockedDisk.store, load: () => replayRows.promise })
+let orderedIntents = [
+  { ...intent(), title: 'first' },
+  { ...intent(), title: 'second' },
+  { ...intent(), title: 'third' },
+]
+let orderedKeys = ['z-first', 'a-second', 'm-third']
+test('outbox admits later writes while a send is unanswered and reopens in admission order', async () => {
+  let reopened: Awaited<typeof orderedOpening> | undefined
+  try {
+    let admitted = changedTo(
+      blocked.box,
+      () => blocked.box.pending().length === 3,
+    )
+    for (let i = 0; i < orderedKeys.length; i++) {
+      // No answer is expected from this page: simulate closing it after all
+      // three admissions commit, with the first POST still unanswered.
+      void blocked.box.submit(orderedIntents[i], orderedKeys[i])
+    }
+    await admitted
+    equal(blockedCalls, [[orderedKeys[0], orderedIntents[0]]])
+    let rows = [...blockedDisk.rows.values()]
+    equal(
+      rows.map((row) => [row.key, row.sent]),
+      orderedKeys.map((key, i) => [key, orderedIntents[i]]),
+    )
+    let [firstAt, secondAt, thirdAt] = rows.map((row) => ok(row.at))
+    ok(firstAt < secondAt && secondAt < thirdAt)
+    blocked.box.close()
+    replayRows.resolve(rows.reverse())
+    reopened = await orderedOpening
+    await changedTo(reopened.box, () => reopened!.box.pending().length === 0)
+    equal(orderedCalls, orderedKeys.map((key, i) => [key, orderedIntents[i]]))
+    equal([...blockedDisk.rows.values()], [])
+  } finally {
+    blocked.box.close()
+    reopened?.box.close()
+  }
+})
+
+let loadFailure = new Error('outbox disk cannot be read')
+let unreadableCalls: string[] = []
+let unreadablePuts = 0
+let unreadable = durableOutbox<Intent, string>({
+  scope: 'unreadable/app',
+  store: {
+    ...disk().store,
+    load: () => Promise.reject(loadFailure),
+    put: () => {
+      unreadablePuts++
+      return Promise.resolve()
+    },
+  },
+  send: (key) => {
+    unreadableCalls.push(key)
+    return Promise.resolve('saved')
+  },
+})
+test('outbox rejects every admission after startup load failure without sending or writing', async () => {
+  try {
+    equal(await throws(() => unreadable.ready), loadFailure)
+    for (let key of ['after-failure-1', 'after-failure-2', 'after-failure-3']) {
+      equal(await throws(() => unreadable.submit(intent(), key)), loadFailure)
+    }
+    equal(unreadableCalls, [])
+    equal(unreadablePuts, 0)
+    equal(unreadable.pending(), [])
+  } finally {
+    unreadable.close()
+  }
+})
