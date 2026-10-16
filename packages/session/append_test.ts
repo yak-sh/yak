@@ -1,10 +1,10 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import { appendEntry } from './append.ts'
+import { appendEntry, sequencing } from './append.ts'
 import { sessionTools } from './children.ts'
-import { locked, seed, store } from './testing.ts'
+import { locked, pages, seed, store } from './testing.ts'
 import { transcript } from './react.ts'
-import { type Bundle, type Comp, Refused, status } from '@yaks/graph'
+import { type Bundle, type Comp, graph, Refused, status } from '@yaks/graph'
 
 let positions = (rows: Bundle[]) => rows.map((b) => (b.entry as Comp).seq)
 
@@ -89,9 +89,21 @@ test('append starts after a nested fork boundary', async () => {
   assertEquals(positions(await transcript(g, 'new-child')), [1, 2, 3, 4])
 })
 
+// These two cases exercise entry allocation, not lock ownership, naming or
+// cost accounting: install the sequencing hook at its owning graph boundary.
+let appending = () =>
+  graph({
+    storage: store(),
+    vocab: pages,
+    plugins: [{
+      name: 'entry allocation',
+      hooks: { precondition: sequencing },
+    }],
+  })
+let duplicateBatch = appending()
+await duplicateBatch.apply([{ entity: { eid: 's' }, session: {} }])
 test('batch reservations reject duplicate explicit entries and rollback', async () => {
-  let g = locked(store())
-  await g.apply([{ entity: { eid: 's' }, session: {} }])
+  let g = duplicateBatch
   await assertRejects(
     async () => {
       await g.apply([
@@ -123,10 +135,12 @@ test('batch child-before-parent order still allocates after the new fork anchor'
   )
 })
 
+let notices = appending()
+await notices.apply([{ entity: { eid: 's' }, session: {} }])
+let noticeTool = sessionTools(notices).find((t) => t.name == 'notice')!
 test('notice tool admits passive context without callers supplying sequence', async () => {
-  let g = locked(store())
-  await g.apply([{ entity: { eid: 's' }, session: {} }])
-  let tool = sessionTools(g).find((t) => t.name == 'notice')!
+  let g = notices
+  let tool = noticeTool
   let id = await tool.run({ session: 's', body: 'background', eid: 'note' }, {
     session: 's',
     call: { entity: { eid: 'tool-call' } },

@@ -37,6 +37,11 @@ let cloud = (
   tracks = [{ mid: '1', status: 'active' }, { mid: '2', status: 'inactive' }],
 ) => {
   let sent: { path: string; method: string; body: unknown }[] = []
+  // Response bodies belong to the scripted provider, not lease cleanup.
+  let answers = [
+    Response.json({ tracks }, { status }),
+    Response.json({ tracks }, { status: closing }),
+  ]
   let realtime: Realtime = {
     app: 'app1',
     token: 'test-token',
@@ -46,9 +51,7 @@ let cloud = (
         method: init!.method!,
         body: init!.body ? JSON.parse(String(init!.body)) : null,
       })
-      return Promise.resolve(Response.json({
-        tracks,
-      }, { status: init!.method == 'GET' ? status : closing }))
+      return Promise.resolve(answers.shift()!)
     },
   }
   return { realtime, sent }

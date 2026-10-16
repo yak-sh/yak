@@ -76,14 +76,11 @@ import { checked, hooked } from '@yaks/hook'
 // What GitHub sends: the body, signed with the secret the receiver shares.
 let secret = 'a shared secret'
 let body = '{"action":"opened"}'
-let bytes = (s: string) => new TextEncoder().encode(s)
-let hmac = { name: 'HMAC', hash: 'SHA-256' }
-let key = await crypto.subtle.importKey('raw', bytes(secret), hmac, false, [
-  'sign',
-])
-let mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, bytes(body)))
-let hex = [...mac].map((b) => b.toString(16).padStart(2, '0')).join('')
-let sent = { 'x-hub-signature-256': `sha256=${hex}` }
+// The GitHub-style signature for this exact body and secret.
+let sent = {
+  'x-hub-signature-256':
+    'sha256=5607d3374e7be3c79bb6530a2776fcf125a622b670b1ae24188ff4910a0b9221',
+}
 
 let request = {
   id: 'r1',

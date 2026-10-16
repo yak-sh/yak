@@ -35,6 +35,7 @@ import { spawning } from './effects.ts'
 import { fake, until } from './testing.ts'
 import { every, runs } from './tools.ts'
 import { spawnDoc } from './vocab.ts'
+import { transcriptGraph } from '../session/testing.ts'
 
 let comp = (b: Bundle | undefined, name: string) =>
   (b?.[name] ?? undefined) as Comp | undefined
@@ -438,11 +439,7 @@ test('session stop ends a managed run', async () => {
 
 // The stop door needs no process behind a native transcript.
 let nativeVocab = loadVocab([spineDoc, sessionDoc, toolsDoc, modelDoc])
-let native = graph({
-  storage: ram(nativeVocab),
-  vocab: nativeVocab,
-  plugins: [sessions()],
-})
+let native = transcriptGraph(nativeVocab)
 await native.apply([
   { entity: { eid: 's' }, session: {} },
   {
@@ -458,7 +455,10 @@ test('session stop ends a native transcript', async () => {
   await tools.session_stop!(...asked(native, { session: 's' }))
   let entries = await native.read('.entry.session=s .stop')
   assertEquals(statusOf(entries), 'stopped')
-  for (let entry of entries.filter((b) => b.stop)) {
-    await native.apply([{ entity: entry.entity, stop: null }])
-  }
+  await native.apply(
+    entries.filter((b) => b.stop).map((entry) => ({
+      entity: entry.entity,
+      stop: null,
+    })),
+  )
 })

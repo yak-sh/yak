@@ -211,23 +211,28 @@ test('email queues blocking decisions once and digests the rest once daily, with
   )
 })
 
+// The predecessor has already been sent when the next rendering is planned.
+let [predecessor] = planned(needs(), [], inbox, at(4))
+predecessor.mail = { ...comp(predecessor, 'mail'), message_id: 'out@box' }
+let nextRendering = needs()
+nextRendering[0].at = at(7)
+let renderedOriginal = needs()[0].row
+let predecessorRow = row(predecessor.entity.eid, {
+  doc: comp(predecessor, 'doc'),
+  mail: comp(predecessor, 'mail'),
+  deliver: comp(predecessor, 'deliver'),
+  mail_notice: comp(predecessor, 'mail_notice'),
+}, 9)
 test('sending an inbox rendering threads it by its predecessor and never creates more inbox activity', () => {
-  let [first] = planned(needs(), [], inbox, at(4))
-  first.mail = { ...comp(first, 'mail'), message_id: 'out@box' }
-  let next = needs()
-  next[0].at = at(7)
+  let first = predecessor, next = nextRendering
   let [second] = planned(next, [first], inbox, at(8))
   assertEquals(comp(second, 'mail').reply_to, first.entity.eid)
   let sent = message(second, 'ana@books.example', 'out@box')
   assertEquals(payload(sent).headers?.['In-Reply-To'], '<out@box>')
-  let original = needs()[0].row
-  let sentRow = row(first.entity.eid, {
-    doc: comp(first, 'doc'),
-    mail: comp(first, 'mail'),
-    deliver: comp(first, 'deliver'),
-    mail_notice: comp(first, 'mail_notice'),
-  }, 9)
-  assertEquals(threads([original, sentRow], reader)[0].at, at(1))
+})
+
+test('a sent inbox rendering never creates more inbox activity', () => {
+  assertEquals(threads([renderedOriginal, predecessorRow], reader)[0].at, at(1))
 })
 
 test('archived or read decisions and muted threads never queue email; requested alerts do', () => {
@@ -652,8 +657,9 @@ test('system-generated inbound echoes cannot become conversations or comments, i
   }
 })
 
+let noSystemIdentity = await world()
 test('an automatic echo of the configured person fails closed without a system identity', async () => {
-  let g = await world()
+  let g = noSystemIdentity
   for (let target of [undefined, 'ask']) {
     let out = await arrived({ graph: g, domain, readings })({
       from: 'ana@books.example',

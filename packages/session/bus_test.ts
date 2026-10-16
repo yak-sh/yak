@@ -23,6 +23,7 @@ import { sessionDerived, statusComputed } from './status.ts'
 import { sessions } from './plugin.ts'
 import { service } from './service.ts'
 import { preparedStore } from '../sqlite/testing.ts'
+import { parse } from '@yaks/query'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -395,10 +396,28 @@ let heldVocab = loadVocab([
   words(projectDoc, 'project'),
   words(sessionDoc, 'session', 'entry', 'using', 'claim'),
 ])
-let held = graph({
-  vocab: heldVocab,
-  storage: laid(HELD, ram(heldVocab, { computed: statusComputed })),
-})
+// This history is immutable: derive its statuses once when it is laid down,
+// rather than re-deriving every transcript on every projected bus read.
+let heldStatuses = new Map(
+  HELD.filter((b) => b.session).map((b) => [
+    b.entity.eid,
+    statusOf(
+      HELD.filter((entry) =>
+        (entry.entry as { session?: string })?.session == b.entity.eid
+      ),
+    ),
+  ]),
+)
+let heldStorage = laid(
+  HELD,
+  ram(heldVocab, {
+    computed: { 'session.status': (b) => heldStatuses.get(b.entity.eid) },
+  }),
+)
+let held = graph({ vocab: heldVocab, storage: heldStorage })
+held.get = heldStorage.get
+held.read = (query, opts) =>
+  heldStorage.read(typeof query == 'string' ? parse(query) : query, opts)
 
 test('RAM: what is held for a project is fed to its transcript at work, never one at rest', async () => {
   let g = held

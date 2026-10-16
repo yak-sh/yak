@@ -5,6 +5,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { club as clubVocab } from './testing.ts'
 import { clubhouse, noon } from './testing.ts'
 import { invited } from './invite.ts'
 
@@ -54,13 +56,36 @@ test('a new seat writes an invitation, and the invitation goes', async () => {
   assertEquals((invite.mail as Comp).message_id, 'stash-1')
 })
 
+// The handler decides the role's words. Delivery through the post room is
+// covered above; capture its actual letter at the handler's write boundary.
+let ownerLetters: Bundle[] = []
+let ownerStore = ram(clubVocab)
+let ownerInvite = invited({
+  apply: (bundles) => ownerLetters.push(...bundles),
+  eid: () => 'owner-invite',
+  now: noon,
+  welcome: ({ role }) => ({
+    from: 'hello@books.example',
+    subject: role == 'owner'
+      ? 'You run the book club'
+      : 'You are in the book club',
+    body: 'Welcome. We meet Thursdays.',
+  }),
+})
 test("the role is the letter's business, not the handler's", async () => {
-  let { g, post } = await rig()
-  await g.apply([{
-    entity: { eid: 'm-first' },
-    member: { space: club, person: ana, role: 'owner' },
-  }])
-  assertEquals(post.last()?.subject, 'You run the book club')
+  await ownerStore.tx((tx) =>
+    ownerInvite(
+      {
+        kind: 'created',
+        name: 'member',
+        entity: { eid: 'm-first' },
+        comp: { space: club, person: ana, role: 'owner' },
+      },
+      tx,
+      (bundles) => bundles,
+    )
+  )
+  assertEquals((ownerLetters[0].doc as Comp).title, 'You run the book club')
 })
 
 let unaddressed = await rig()

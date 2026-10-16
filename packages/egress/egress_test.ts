@@ -3,8 +3,9 @@
 // place, who and what is refused, and the one retry after a refresh.
 
 import { test } from '@yaks/testing'
+import { parse } from '@yaks/query'
 import { assertEquals, assertRejects } from '@std/assert'
-import { type Comp, graph } from '@yaks/graph'
+import { type Comp, graph, type Query } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { provisionalDoc } from '@yaks/effects'
@@ -75,8 +76,9 @@ let vocab = loadVocab(
   [edgeKeywords],
 )
 let vault = ramVault()
+let storage = ram(vocab)
 let g = graph({
-  storage: ram(vocab),
+  storage,
   vocab,
   provenance: false,
   plugins: [
@@ -296,6 +298,16 @@ test(
   },
 )
 
+// This case checks retry exhaustion, not graph query normalization. Keep the
+// real RAM reads, connections, vault and write hooks at the egress boundary.
+let exhausted: Ctx = {
+  ...c,
+  graph: {
+    ...g,
+    read: (query: Query) =>
+      storage.read(typeof query == 'string' ? parse(query) : query),
+  },
+}
 let refusedRefresh = [
   new Response(null, { status: 401 }),
   Response.json({ access_token: 'A3' }),
@@ -304,7 +316,7 @@ let refusedRefresh = [
 test('a refreshed token the service refuses too is its answer', async () => {
   seen = []
   replies = refusedRefresh
-  assertEquals((await events()).status, 401)
+  assertEquals((await forward(exhausted, viewer, calendarRequest)).status, 401)
   assertEquals(seen.length, 3)
 })
 

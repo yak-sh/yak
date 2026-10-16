@@ -122,11 +122,9 @@ scenario(
     equal(p.submitted.length, 1)
     let call = p.submitted[0].call!
     equal(p.submitted[0].conversation, 'session')
-    equal(
-      ((await p.g.get([call]))[0].using as Record<string, unknown>).tools,
-      [],
-    )
-    equal((await p.g.get([call]))[0].ask != null, true)
+    let [ask] = await p.g.get([call])
+    equal((ask.using as Record<string, unknown>).tools, [])
+    equal(ask.ask != null, true)
   },
 )
 
@@ -293,26 +291,26 @@ scenario(
   },
 )
 
-scenario(
-  'a receipt arriving during a pending step is delivered after lease release',
-  async (p) => {
-    pending(p)
-    let checks = 0
-    p.r.executor!.resume = async () => {
-      if (++checks > 1) return { ...saved, items: [] }
-      await p.g.apply([{
-        entity: { eid: 'ask' },
-        inference: { receipt: 'private-receipt' },
-      }])
-      return undefined
-    }
-    await settle(p.g, 'session', p.r)
-    equal(checks, 2)
-    let [ask] = await p.g.get(['ask'])
-    equal(ask.cost, { dollars: 0.02, reported: true })
-    equal(ask.attempt, { by: null })
-  },
-)
+// The accepted ask and executor callback are history; only the receipt race
+// and the lease handoff are timed.
+let arriving = fixture()
+pending(arriving)
+let receiptChecks = 0
+arriving.r.executor!.resume = async () => {
+  if (++receiptChecks > 1) return { ...saved, items: [] }
+  await arriving.g.apply([{
+    entity: { eid: 'ask' },
+    inference: { receipt: 'private-receipt' },
+  }])
+  return undefined
+}
+test('a receipt arriving during a pending step is delivered after lease release', async () => {
+  await settle(arriving.g, 'session', arriving.r)
+  equal(receiptChecks, 2)
+  let [ask] = await arriving.g.get(['ask'])
+  equal(ask.cost, { dollars: 0.02, reported: true })
+  equal(ask.attempt, { by: null })
+})
 
 scenario(
   'hosted tool replies retain their stable identity across a later selection',
