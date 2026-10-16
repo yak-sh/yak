@@ -57,6 +57,9 @@ test('an acknowledged mutation waits for admission and rejects an offline server
   )
   assertEquals(heldClient.ent('r1'), undefined)
   assertEquals(await heldServer.get(['r1']), [])
+})
+
+test('an acknowledged mutation lands only after the host accepts it', async () => {
   heldOffline = false
   await heldClient.mutate(heldWrite, { optimistic: false })
   assertEquals(comp(heldClient.ent('r1'), 'doc').title, 'Dal')
@@ -69,25 +72,31 @@ test('an acknowledged mutation waits for admission and rejects an offline server
   heldClient.close()
 })
 
-test('a named write carries its key on every send', async () => {
-  let keys: (string | null)[] = []
-  let c = client(heldVocab, [], {
-    url: 'http://box.test',
-    vault: false,
-    wireVault: false,
-    fetch: async (request) => {
-      keys.push(request.headers.get('idempotency-key'))
-      return Response.json(await heldServer.apply(await request.json()))
-    },
-    report: () => {},
-  })
-  let soup: Bundle[] = [{ entity: { eid: 'r2' }, doc: { title: 'Soup' } }]
-  await c.mutate(soup, { key: 'soup' })
-  await c.mutate(soup, { key: 'soup' })
-  await c.mutate(soup, { optimistic: false })
-  assertEquals(keys.slice(0, 2), ['soup', 'soup'])
-  assertEquals(keys[2]?.startsWith('outbox:'), true)
-  c.close()
+let namedKeys: (string | null)[] = []
+let namedClient = client(heldVocab, [], {
+  url: 'http://box.test',
+  vault: false,
+  wireVault: false,
+  fetch: async (request) => {
+    namedKeys.push(request.headers.get('idempotency-key'))
+    return Response.json(await heldServer.apply(await request.json()))
+  },
+  report: () => {},
+})
+let soup: Bundle[] = [{ entity: { eid: 'r2' }, doc: { title: 'Soup' } }]
+// The repeated first send is fixture state; the next act verifies key reuse.
+await namedClient.mutate(soup, { key: 'soup' })
+test('a named write carries its key on a repeated send', async () => {
+  await namedClient.mutate(soup, { key: 'soup' })
+  assertEquals(namedKeys, ['soup', 'soup'])
+})
+test('an unnamed acknowledged write mints an outbox key', async () => {
+  try {
+    await namedClient.mutate(soup, { optimistic: false })
+    assertEquals(namedKeys[2]?.startsWith('outbox:'), true)
+  } finally {
+    namedClient.close()
+  }
 })
 
 let dal = (eid = 'r1'): Bundle => ({
@@ -344,6 +353,12 @@ for (let transport of ['watch', 'write answer'] as const) {
     },
   })
 
+  // The accepted response is the fixture for retention; strict caller input
+  // is checked separately below. Keep response transport setup out of the read.
+  if (transport == 'write answer') {
+    c.mutate([{ entity: row.entity, doc: { title: 'Better dal' } }])
+    await c.wire!.idle()
+  }
   test(`a client holds an accepted word ref from its store: ${transport}`, async () => {
     try {
       if (transport == 'watch') {
@@ -352,17 +367,8 @@ for (let transport of ['watch', 'write answer'] as const) {
         assertEquals(w.ready, true)
         assertEquals(comp(w.value[0], 'recipe').cook, 'forgotten-cook')
         w.close()
-      } else {
-        c.mutate([{ entity: row.entity, doc: { title: 'Better dal' } }])
-        await c.wire!.idle()
       }
       assertEquals(comp(c.ent('r1'), 'recipe').cook, 'forgotten-cook')
-      assertThrows(
-        () => c.mutate([{ entity: { eid: 'r2' }, recipe: row.recipe }]),
-        Error,
-        'forgotten-cook names nothing',
-      )
-      assertEquals(c.ent('r2'), undefined)
       assertEquals(watched?.trouble ?? trouble, [])
       assertEquals(
         c.ent('r1')?.doc,
@@ -372,6 +378,23 @@ for (let transport of ['watch', 'write answer'] as const) {
       )
     } finally {
       c.close()
+    }
+  })
+  // Already accepted data stays readable, but cannot be copied into a new
+  // caller-authored row. This admission check has a separate loaded copy.
+  let strictClient = client(box, [], { vault: false, wireVault: false })
+  await land(strictClient.graph, { id: 'accepted', bundles: [row] })
+  test(`accepted word refs do not loosen new writes: ${transport}`, () => {
+    try {
+      assertThrows(
+        () =>
+          strictClient.mutate([{ entity: { eid: 'r2' }, recipe: row.recipe }]),
+        Error,
+        'forgotten-cook names nothing',
+      )
+      assertEquals(strictClient.ent('r2'), undefined)
+    } finally {
+      strictClient.close()
     }
   })
 }

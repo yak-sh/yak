@@ -24,18 +24,24 @@ let fed = (bytes: Uint8Array, runs: number[]): string => {
 let some = (n: number): Uint8Array<ArrayBuffer> =>
   Uint8Array.from({ length: n }, (_, i) => (i * 37 + 11) % 256)
 
-test("the digest is the platform's, at every padding boundary", async () => {
-  // 55/56/64 are where the length word does and does not fit in the block.
-  for (let n of [0, 1, 3, 55, 56, 63, 64, 65, 119, 120, 128, 1000]) {
+// Platform digests are fixture expectations, not the incremental hash under
+// test. OS worker scheduling does not belong in either assertion's timing.
+let padding = await Promise.all(
+  [0, 1, 3, 55, 56, 63, 64, 65, 119, 120, 128, 1000].map(async (n) => {
     let bytes = some(n)
-    assertEquals(fed(bytes, [n || 1]), await subtle(bytes), `${n} bytes`)
+    return { n, bytes, want: await subtle(bytes) }
+  }),
+)
+let bytes = some(1000), want = await subtle(bytes)
+
+test("the digest is the platform's, at every padding boundary", () => {
+  for (let { n, bytes, want } of padding) {
+    assertEquals(fed(bytes, [n || 1]), want, `${n} bytes`)
   }
 })
 
-test('how the bytes arrive is nothing to the digest', async () => {
-  let bytes = some(1000)
-  let want = await subtle(bytes)
-  for (let runs of [[1], [7], [63], [64], [65], [1, 100, 3], [500]]) {
+for (let runs of [[1], [7], [63], [64], [65], [1, 100, 3], [500]]) {
+  test(`incremental digest accepts byte runs of ${runs.join('+')}`, () => {
     assertEquals(fed(bytes, runs), want, runs.join('+'))
-  }
-})
+  })
+}
