@@ -65,7 +65,7 @@ let containers = () => {
   }
 }
 
-test('a member cannot read another member’s grant through leftover sandbox code', async () => {
+let memberIsolation = await (async () => {
   let box = containers()
   let env = { SANDBOX: box.SANDBOX, OAUTH_KV: oauth, SESSION_SECRET: secret }
   let [theirs, mine] = [named(space, 'editor'), named(space, 'owner')]
@@ -73,10 +73,15 @@ test('a member cannot read another member’s grant through leftover sandbox cod
   let editor = await provider.wake({ id: theirs })
   let leftover = await editor.machine.start('leftover-process')
   let owner = await provider.wake({ id: mine })
+  await book.wear(mine, owned)
+  return { box, env, theirs, mine, editor, leftover, owner }
+})()
+
+test('a member cannot read another member’s grant through leftover sandbox code', async () => {
+  let { env, theirs, mine, editor, leftover, owner } = memberIsolation
   // The placeholder the owner's command holds is swapped for the owner's
   // token, as the key it was sealed under reads it, and only in the owner's
   // container.
-  await book.wear(mine, owned)
   let [lend] = await lent(env, mine)
   match(await held(lend.value, secret, book), {
     person: 'owner',
@@ -107,7 +112,7 @@ test('a personal sandbox keeps its files and process across calls and a space re
   equal((await next.machine.look(process))?.exit, undefined)
 })
 
-test('a legacy compile and workspace survive without giving its leftover code fresh credentials', async () => {
+let legacyFixture = async () => {
   let box = containers()
   let env = {
     SANDBOX: box.SANDBOX,
@@ -120,11 +125,29 @@ test('a legacy compile and workspace survive without giving its leftover code fr
   let sharedBox = await old.wake(ref)
   await sharedBox.machine.write('/workspace/artifact', 'compiled')
   let process = await sharedBox.machine.start('leftover-process')
+  return { box, env, old, ref, process }
+}
+let legacyIsolation = await legacyFixture()
+let continuedLegacy = await legacyFixture()
+let continuedOwner = await workbench(
+  continuedLegacy.env,
+  space,
+  'owner',
+  spending(),
+)
+await continuedOwner.machine.start('owner-command')
+
+test('a legacy compile and workspace survive without giving its leftover code fresh credentials', async () => {
+  let { env, old, ref, process } = legacyIsolation
   let owner = await workbench(env, space, 'owner', spending())
   await owner.machine.start('owner-command')
   equal(await owner.machine.read('/workspace/artifact'), 'compiled')
   equal((await owner.machine.look(process))?.exit, undefined)
   equal((await old.exec(ref, 'read-owner-environment')).stdout, 'absent')
+})
+
+test('a migrated personal workspace keeps later edits and destroys every sandbox', async () => {
+  let { box, env, ref } = continuedLegacy, owner = continuedOwner
   await owner.machine.write('/workspace/artifact', 'new work')
   let next = await workbench(env, space, 'owner', spending())
   equal(await next.machine.read('/workspace/artifact'), 'new work')

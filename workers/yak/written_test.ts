@@ -237,15 +237,23 @@ let made = () => {
   }
 }
 
-test('a write sent again sends only what did not land, and says so', async () => {
-  let { write, puts } = made()
+// Each case has its own store; construction and initial state are inputs,
+// while writes and their assertions stay in the timed behavior.
+let firstWrite = made()
+let repeatedWrite = made()
+await repeatedWrite.write({ 'a.txt': 'one', 'b.txt': 'two' })
+repeatedWrite.puts.length = 0
+test('a first write sends every new file at its content address', async () => {
+  let { write, puts } = firstWrite
   let first = await write({ 'a.txt': 'one', 'b.txt': 'two' })
   assertEquals(first.wrote, ['a.txt', 'b.txt'])
   assertEquals(
     puts.sort(),
     [addressed(sha('one')), addressed(sha('two'))].sort(),
   )
-  puts.length = 0
+})
+test('a write sent again sends only what did not land, and says so', async () => {
+  let { write, puts } = repeatedWrite
   let again = await write({ 'a.txt': 'one', 'b.txt': 'two', 'c.txt': 'three' })
   assertEquals(puts, [addressed(sha('three'))])
   assertEquals({ wrote: again.wrote, already: again.already }, {
@@ -307,11 +315,18 @@ test('a file deleted comes back, and a delete sent again says so', async () => {
   )
 })
 
+let concurrentWrites = made()
+let sameHeadWrites = made()
+await sameHeadWrites.write({ 'a.txt': 'one' })
 test('two writers at once lose neither write', async () => {
-  let { write, read, past, collisions } = made()
+  let { write, read } = concurrentWrites
   await Promise.all([write({ 'a.txt': 'one' }), write({ 'b.txt': 'two' })])
   assertEquals(await read('a.txt'), 'one')
   assertEquals(await read('b.txt'), 'two')
+})
+
+test('same-head writers retry and preserve both versions in history', async () => {
+  let { write, read, past, collisions } = sameHeadWrites
   let before = collisions()
   await Promise.all([write({ 'a.txt': 'left' }), write({ 'a.txt': 'right' })])
   let now = await read('a.txt')
@@ -327,10 +342,18 @@ test('two writers at once lose neither write', async () => {
   )
 })
 
+let clockedWrites = made()
+let resumedClockWrites = made()
+await resumedClockWrites.write({ 'a.txt': 'one' })
+resumedClockWrites.skew(-60_000)
+await resumedClockWrites.write({ 'a.txt': 'left' })
+await resumedClockWrites.write({ 'a.txt': 'right' })
+let otherClockedWrites = made()
+await clockedWrites.write({ 'a.txt': 'one' })
+let firstClockedAt = (await clockedWrites.past('a.txt'))[0].at!
 test('edits sort after their persisted head when the clock stops or moves back', async () => {
-  let { write, read, past, time, skew } = made()
-  await write({ 'a.txt': 'one' })
-  let first = (await past('a.txt'))[0].at!
+  let { write, read, past, skew } = clockedWrites
+  let first = firstClockedAt
   skew(-60_000)
   await write({ 'a.txt': 'left' })
   await write({ 'a.txt': 'right' })
@@ -348,13 +371,20 @@ test('edits sort after their persisted head when the clock stops or moves back',
     restoring(all, sha('right'), { at: Date.parse(first) + 1 }).want,
     sha('left'),
   )
+})
+
+test('a resumed clock supplies the next edit timestamp', async () => {
+  let { write, read, past, time, skew } = resumedClockWrites
   skew(0)
   await time.advance(60_000)
   await write({ 'a.txt': 'two' })
   assertEquals((await past('a.txt'))[0].at, new Date(time.now()).toISOString())
   assertEquals(await read('a.txt'), 'two')
-  // A separate app starts at its own clock, not another draft's future stamp.
-  let other = made()
+})
+
+test('a separate app starts at its own clock, not another draft’s future stamp', async () => {
+  let first = firstClockedAt
+  let other = otherClockedWrites
   await other.write({ 'b.txt': 'three' })
   assertEquals((await other.past('b.txt'))[0].at, first)
 })

@@ -225,33 +225,34 @@ test('the dashboard is at the apex, whatever serves the space', async () => {
   }
 })
 
-test('an app that throws is marked on the dashboard, with what to ask', () => {
-  // Two reports of one throw, as the tracker holds them, are one break.
-  let chores = { eid: 'a1', slug: 'chores' } as App
-  let report = (eid: string): Seen => ({
-    app: chores,
-    hit: {
-      kind: 'error',
-      entity: { eid },
-      error: {
-        message: 'chores is not a function',
-        at: `2026-10-14T00:0${eid}`,
-      },
+// Two reports of one throw, as the tracker holds them, are one break.
+let chores = { eid: 'a1', slug: 'chores' } as App
+let report = (eid: string): Seen => ({
+  app: chores,
+  hit: {
+    kind: 'error',
+    entity: { eid },
+    error: {
+      message: 'chores is not a function',
+      at: `2026-10-14T00:0${eid}`,
     },
-  })
-  let page = (errors: Plain[]) =>
-    library(
-      {
-        space: 'fixme',
-        apps: [
-          { eid: 'a1', slug: 'chores', title: 'chores', errors },
-          { eid: 'a2', slug: 'notes', title: 'notes' },
-        ],
-      } as Parameters<typeof library>[0],
-      {},
-    )
+  },
+})
+let page = (errors: Plain[]) =>
+  library(
+    {
+      space: 'fixme',
+      apps: [
+        { eid: 'a1', slug: 'chores', title: 'chores', errors },
+        { eid: 'a2', slug: 'notes', title: 'notes' },
+      ],
+    } as Parameters<typeof library>[0],
+    {},
+  )
 
-  let html = page(folds([report('1'), report('2')]).map(plain))
+let reports = [report('1'), report('2')]
+test('an app that throws is marked on the dashboard, with what to ask', () => {
+  let html = page(folds(reports).map(plain))
   // One mark, on the app that broke, linking to what to do about it.
   assertEquals(html.match(/Apps_Tag-warn[^>]*>[^<]*/g)?.length, 1)
   assertMatch(
@@ -262,7 +263,9 @@ test('an app that throws is marked on the dashboard, with what to ask', () => {
   assertStringIncludes(fix, 'chores is not a function')
   assertStringIncludes(fix, '2 times')
   assertStringIncludes(fix, 'Fix the errors in my chores app on yaks.app')
-  // Fixed, as the assistant says it: nothing is left to mark.
+})
+
+test('a fixed app has no dashboard error mark or repair request', () => {
   assert(!/Apps_Tag-warn|class="Card Fix"/.test(page([])))
 })
 

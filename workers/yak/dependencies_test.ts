@@ -15,6 +15,8 @@ let packages = {
 }
 let lock = (packages: unknown): Lock =>
   ({ lockfileVersion: 3, packages }) as Lock
+let inputLock = JSON.stringify(lock(packages))
+let installedLock = JSON.stringify(lock({ 'node_modules/dep': pkg }))
 
 test('npm cache reuse follows package contents, including omitted optional packages', () => {
   let wanted = lock(packages)
@@ -44,15 +46,14 @@ let notFound = new Deno.errors.NotFound(),
 let memory = () => {
   type Entry = string | null | { target: string }
   let entries = new Map<string, Entry>([['/', null]])
+  let links = new Map<string, string>()
   let missing = (_path: string): never => {
     throw notFound
   }
   let resolve = (path: string): string => {
-    let parts = path.split('/')
-    for (let i = 2; i <= parts.length; i++) {
-      let prefix = parts.slice(0, i).join('/'), entry = entries.get(prefix)
-      if (entry && typeof entry === 'object') {
-        return resolve(entry.target + path.slice(prefix.length))
+    for (let [link, target] of links) {
+      if (path === link || path.startsWith(link + '/')) {
+        return resolve(target + path.slice(link.length))
       }
     }
     return path
@@ -86,14 +87,21 @@ let memory = () => {
     let slash = path.lastIndexOf('/')
     path = resolve(path.slice(0, slash) || '/') + path.slice(slash)
     for (let name of entries.keys()) {
-      if (name === path || name.startsWith(path + '/')) entries.delete(name)
+      if (name === path || name.startsWith(path + '/')) {
+        entries.delete(name)
+        links.delete(name)
+      }
     }
   }
   let copy = (from: string, to: string) => {
     if (!entries.has(from)) return missing(from)
     for (let [path, entry] of [...entries]) {
       if (path === from || path.startsWith(from + '/')) {
-        entries.set(to + path.slice(from.length), entry)
+        let destination = to + path.slice(from.length)
+        entries.set(destination, entry)
+        if (entry && typeof entry === 'object') {
+          links.set(destination, entry.target)
+        }
       }
     }
   }
@@ -122,6 +130,7 @@ let memory = () => {
     symlink: (target, path) => {
       if (entries.has(path)) throw alreadyExists
       entries.set(path, { target })
+      links.set(path, target)
     },
     link: (path) => {
       let entry = entries.get(path)
@@ -145,7 +154,7 @@ let memory = () => {
     for (
       let [file, contents] of [
         ['package.json', '{"private":true}'],
-        ['package-lock.json', JSON.stringify(lock(packages))],
+        ['package-lock.json', inputLock],
       ]
     ) write(`${root}/${file}`, source ? read(`${source}/${file}`) : contents)
   }
@@ -153,7 +162,7 @@ let memory = () => {
     mkdir(`${root}/node_modules/dep`, true)
     write(
       `${root}/node_modules/.package-lock.json`,
-      JSON.stringify(lock({ 'node_modules/dep': pkg })),
+      installedLock,
     )
   }
   let api = dependencies(host), root = '/checkout', cache = '/cache'
@@ -195,8 +204,10 @@ let memory = () => {
   }
 }
 
-test('a legacy npm cache with omitted metadata supplies a fresh checkout without installing', async () => {
-  let m = memory()
+// Each mutating case owns its filesystem; only setup precedes its timed act.
+let legacyCache = memory()
+{
+  let m = legacyCache
   let files = ['package.json', 'package-lock.json'].map(
     (file) => [file, m.read(`${m.root}/${file}`)],
   )
@@ -206,6 +217,22 @@ test('a legacy npm cache with omitted metadata supplies a fresh checkout without
   let project = `${m.cache}/yak-installed/${key}`
   m.inputs(project, m.root)
   m.tree(project)
+}
+let coldCache = memory(),
+  seedCache = memory(),
+  failedCache = memory(),
+  retryCache = memory(),
+  mismatchCache = memory()
+await seedCache.installed(seedCache.root)
+await mismatchCache.installed(mismatchCache.root)
+retryCache.code(13)
+try {
+  await retryCache.restore()
+} catch { /* A failed install is the successful retry's starting state. */ }
+retryCache.code(0)
+
+test('a legacy npm cache with omitted metadata supplies a fresh checkout without installing', async () => {
+  let m = legacyCache
   assertEquals(await m.restore(), false)
   assertEquals(m.state(), [0, false])
   m.remove(`${m.root}/node_modules/dep`)
@@ -213,7 +240,7 @@ test('a legacy npm cache with omitted metadata supplies a fresh checkout without
 })
 
 test('npm installs cold and reuses the tree for a fresh checkout and deploy', async () => {
-  let m = memory()
+  let m = coldCache
   assertEquals(await m.restore(), true)
   assertEquals(m.state(), [1, false])
   m.remove(`${m.root}/node_modules`)
@@ -237,8 +264,7 @@ for (let changed of ['lock metadata', 'manifest']) {
 }
 
 test('npm reuses a matching seed and installs when inputs or a package differ', async () => {
-  let m = memory(), seed = '/seed'
-  await m.installed(m.root)
+  let m = seedCache, seed = '/seed'
   m.diagnostic('seed missing')
   m.inputs(seed, m.root)
   assertEquals(await m.installed(seed, { seed: m.root }), false)
@@ -256,11 +282,15 @@ test('npm reuses a matching seed and installs when inputs or a package differ', 
   m.diagnostic('tree incomplete: "/checkout/node_modules/dep"')
 })
 
-test('npm retries failed installs and keeps the successful retry ready', async () => {
-  let m = memory()
+test('a failed npm install leaves its tree stale', async () => {
+  let m = failedCache
   m.code(13)
   await assertRejects(m.restore, Error, 'exited 13')
   assertEquals(m.state(), [1, true])
+})
+
+test('npm retries failed installs and keeps the successful retry ready', async () => {
+  let m = retryCache
   m.code(0)
   assertEquals(await m.restore(), true)
   assertEquals(await m.restore(), false)
@@ -301,8 +331,7 @@ test('a concurrent npm caller retries after the first installer fails', async ()
 })
 
 test('npm diagnoses each mismatching package identity before replacing the tree', async () => {
-  let m = memory()
-  await m.installed(m.root)
+  let m = mismatchCache
   for (let field of ['version', 'resolved', 'integrity', 'link']) {
     let path = `${m.root}/node_modules/.package-lock.json`,
       held = JSON.parse(m.read(path))

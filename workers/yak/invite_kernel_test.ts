@@ -286,8 +286,16 @@ let [bo, ana, cy] = ['bo', 'ana', 'cy'].map(emailOf)
 let emails = (them: Person[]) =>
   them.map((p) => shown(p)).map((p) => `${p.email} ${p.role}`)
 
+let ownerSeats = [{ space, role: 'owner' as const }]
+let ownedApps = [diary]
+let namedRoster = (await peopleOwned(roster, ownerSeats, ownedApps)).get(
+  space.eid,
+)!
+let pageRoster = (await peopleOwned(roster, ownerSeats, ownedApps)).get(
+  space.eid,
+)!
 test('the owner and their assistant see who is in and who has not accepted', async () => {
-  let here = (await peopleOwned(roster, [{ space, role: 'owner' }], [diary]))
+  let here = (await peopleOwned(roster, ownerSeats, ownedApps))
     .get(space.eid)!
 
   // The words name who has yet to accept, which is what someone may be
@@ -300,15 +308,16 @@ test('the owner and their assistant see who is in and who has not accepted', asy
   assert(emails(here.members).includes(`${bo} editor`))
   assertEquals(emails(here.invited), [`${cy} viewer`])
   assertEquals(emails(here.apps[0].guests), [`${ana} editor`])
-  // Asked, the words name them too: everyone in the space, and whoever can
-  // open the app.
-  let named = aloud(here, JEFF, {}, true).join('\n')
+})
+
+test('asked by name, the assistant lists every member and app guest', () => {
+  let named = aloud(namedRoster, JEFF, {}, true).join('\n')
   assertStringIncludes(named, `${bo} (editor)`)
   assertStringIncludes(named, `Guests of Diary: ${ana} (editor)`)
+})
 
-  // The People page lists all of them, and offers another letter to the one
-  // who has not accepted.
-  let page = people({ space: 'jeff', apps: [], people: here })
+test('the People page lists members and offers to resend a pending invitation', () => {
+  let page = people({ space: 'jeff', apps: [], people: pageRoster })
   for (let them of [ana, bo, cy]) assertStringIncludes(page, them)
   assertStringIncludes(page, 'not accepted yet')
   assertStringIncludes(page, 'name="again" value="cy/sp"')

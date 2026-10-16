@@ -576,20 +576,23 @@ test('destroying the container revokes what it was wearing', async () => {
   assert(await held(next, SECRET, book))
 })
 
+// The workbench is setup; signing the command and checking every handoff is timed.
+let placeholderBox = sandboxes(() => ({ stdout: 'ok' }))
+let placeholderEnv = {
+  SANDBOX: placeholderBox.SANDBOX,
+  WORKSPACES: workspaces(placeholderBox.SANDBOX),
+  OAUTH_KV: kv(),
+  SESSION_SECRET: SECRET,
+}
+let { machine: placeholderMachine } = await workbench(
+  placeholderEnv,
+  { eid: 'ada', slug: 'ada' } as Space,
+  ADA,
+  spending(),
+)
+
 test('the container holds a placeholder, never the token, and neither reaches the transcript', async () => {
-  let box = sandboxes(() => ({ stdout: 'ok' }))
-  let env = {
-    SANDBOX: box.SANDBOX,
-    WORKSPACES: workspaces(box.SANDBOX),
-    OAUTH_KV: kv(),
-    SESSION_SECRET: SECRET,
-  }
-  let { machine } = await workbench(
-    env,
-    { eid: 'ada', slug: 'ada' } as Space,
-    ADA,
-    spending(),
-  )
+  let box = placeholderBox, machine = placeholderMachine
   await machine.start('yak app_list')
 
   let placeholder = box.env.at(-1)!.YAKS_TOKEN

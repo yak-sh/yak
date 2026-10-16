@@ -54,9 +54,14 @@ let alarm = await fixture()
 await alarm.object().alarm()
 let idleAlarm = await alarm.db.getAlarm()
 
-test('cold and warm tracker boots reuse readiness and mail without writes', async () => {
+test('a cold tracker boot reuses readiness and mail without writes', async () => {
   idle.writes.length = 0
   await cold.boot()
+  equal(idle.writes, [])
+})
+
+test('a warm tracker boot reuses readiness and mail without writes', async () => {
+  idle.writes.length = 0
   await warmed.boot()
   equal(idle.writes, [])
 })

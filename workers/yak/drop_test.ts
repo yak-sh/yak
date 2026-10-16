@@ -293,7 +293,8 @@ let body = new Uint8Array(
   ]).arrayBuffer(),
 )
 
-test('a drop many times what is held at once lands file by file', async () => {
+// The stream and destination are this case's input, not its decoding work.
+let streamedDrop = (() => {
   let read = 0
   let req = new Request('https://jeff.yaks.app/deploy', {
     method: 'POST',
@@ -312,11 +313,18 @@ test('a drop many times what is held at once lands file by file', async () => {
     stored.set(key, bytes)
     return Promise.resolve()
   }
+  return { req, stored, put, first: () => first }
+})()
+let expectedDrop = files.map((f) => [f.path.slice('site/'.length), f.content])
+
+test('a drop many times what is held at once lands file by file', async () => {
+  let { req, stored, put } = streamedDrop
   let got = await received(req, { put }, Infinity, held)
   assertEquals(got.asked, 'site')
   assertEquals(
     got.files.map((f) => [f.path, stored.get(addressed(f.sha ?? ''))]),
-    files.map((f) => [f.path.slice('site/'.length), f.content]),
+    expectedDrop,
   )
+  let first = streamedDrop.first()
   assert(first < body.length / 2, `the first put waited for ${first} bytes`)
 })

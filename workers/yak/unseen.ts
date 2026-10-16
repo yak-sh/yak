@@ -584,6 +584,7 @@ export let serve = async (
   who: Who,
   app?: App,
   all = false,
+  read = trackedIn,
 ) => {
   if (app) {
     return offered(
@@ -595,7 +596,7 @@ export let serve = async (
       all,
     )
   }
-  let open = await trackedIn(env, space, who, all)
+  let open = await read(env, space, who, all)
   if (!open.size) return []
   let each = await Promise.all(
     (await appsOf(env, space)).filter((a) => !a.trashed && open.has(a.eid))

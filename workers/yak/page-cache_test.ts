@@ -87,16 +87,20 @@ test("a sandboxed page and a worker's page are never kept", () => {
   assert(!keepable({ access: 'public', worker: 'app-script' }))
 })
 
+// Prime the cache as setup, retaining the first answer for the timed comparison.
+let cachedText = 'one'
+let cachedOrigins = 0
+let cachedGateway = gateway(
+  () => (cachedOrigins++, keep(page(cachedText), space, app)),
+)
+let firstCachedPage = (await cachedGateway.get())!
+let firstCachedText = await firstCachedPage.text()
+cachedText = 'two'
+
 test('a public page is answered from the edge after its first view', async () => {
-  let text = 'one'
-  let origins = 0
-  let g = gateway(() => (origins++, keep(page(text), space, app)))
-  let first = (await g.get())!
-  // Changed under it, the kept page is what answers, and the app was not read.
-  text = 'two'
-  let again = (await g.get())!
-  assertEquals(await again.text(), await first.text())
-  assertEquals(origins, 1)
+  let again = (await cachedGateway.get())!
+  assertEquals(await again.text(), firstCachedText)
+  assertEquals(cachedOrigins, 1)
   assertEquals(again.headers.get('cache-control'), 'public, no-cache')
   for (let name of ['cache-tag', 'x-yak-seen', 'x-yak-browser-cache', 'age']) {
     assertEquals(again.headers.get(name), null, name)

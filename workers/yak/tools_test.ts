@@ -599,7 +599,7 @@ test('a call costs the same however many spaces and apps it reaches', async () =
 // with the apps the space holds, and an app nobody opens is never woken by a
 // write beside it (T-123502). With nothing open the tracker is the only door
 // it knocks on.
-test('a write costs the same however many apps its space holds', async () => {
+let writeCost = (() => {
   let knocked: string[] = []
   let door = (name: string, answer?: unknown) => ({
     fetch: () => {
@@ -617,7 +617,30 @@ test('a write costs the same however many apps its space holds', async () => {
     },
   } as unknown as Env
   let space = { eid: 'sp', slug: 'sp', trashed: null } as unknown as Space
-  assertEquals(await serve(env, space, { person: 'ada', role: 'owner' }), [])
+  return { env, space, knocked }
+})()
+test('a write costs the same however many apps its space holds', async () => {
+  let { env, space, knocked } = writeCost
+  assertEquals(
+    await serve(
+      env,
+      space,
+      { person: 'ada', role: 'owner' },
+      undefined,
+      false,
+      async (env) => {
+        // Ticket cryptography belongs to tracker/ticket's tests. This reply still
+        // reaches the tracker door, and no directory or app store.
+        let response = await env.TRACKER!.fetch(
+          new Request('https://tracker.internal/query'),
+        )
+        let rows = await response.json() as unknown[]
+        assertEquals(rows, [])
+        return new Map<string, never[]>()
+      },
+    ),
+    [],
+  )
   assertEquals(knocked, ['tracker'])
 })
 

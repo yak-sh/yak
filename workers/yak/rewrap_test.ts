@@ -39,6 +39,7 @@ export default { fetch: (req, env, ctx) => app.fetch(req, env, ctx) }
 type Script = {
   modules: Record<string, Uint8Array> | null
   tags: string[] | null
+  content?: Response
 }
 
 // The account API over `scripts`, recording every write it is sent.
@@ -71,6 +72,7 @@ let account = async (
           status: 500,
         })
       }
+      if (script.content) return script.content
       let boundary = 'b0undary'
       return new Response(multipart(boundary, script.modules), {
         headers: {
@@ -119,17 +121,24 @@ test('multipart parts come back byte for byte', () => {
   assertEquals(got[1].bytes, WASM)
 })
 
-test("a stale script gets this release's wrapper and keeps its own modules", async () => {
-  let scripts: Record<string, Script> = {
-    jeff_recipes: {
-      modules: {
-        '__yak_entry.js': ENC.encode(OLD),
-        'src/app.js': ENC.encode('export default {}'),
-        'src/lib.wasm': WASM,
-      },
-      tags: null,
+let staleScripts: Record<string, Script> = {
+  jeff_recipes: {
+    modules: {
+      '__yak_entry.js': ENC.encode(OLD),
+      'src/app.js': ENC.encode('export default {}'),
+      'src/lib.wasm': WASM,
     },
-  }
+    tags: null,
+  },
+}
+staleScripts.jeff_recipes.content = new Response(
+  multipart('b0undary', staleScripts.jeff_recipes.modules!),
+  { headers: { 'content-type': 'multipart/form-data; boundary=b0undary' } },
+)
+let staleWrapper = shim('src/app.js', [], null)
+
+test("a stale script gets this release's wrapper and keeps its own modules", async () => {
+  let scripts = staleScripts
   let { out, writes } = await account(scripts, () => rewrapped(env))
   assertEquals(out, { rewrapped: 1, failed: 0, left: 0 })
   let form = writes[0].form!
@@ -137,7 +146,7 @@ test("a stale script gets this release's wrapper and keeps its own modules", asy
   assertEquals(meta, { main_module: '__yak_entry.js' })
   assertEquals(
     await (form.get('__yak_entry.js') as File).text(),
-    shim('src/app.js', [], null),
+    staleWrapper,
   )
   assertEquals(await bytes(form, 'src/lib.wasm'), WASM)
   assertEquals((form.get('src/lib.wasm') as File).type, 'application/wasm')
