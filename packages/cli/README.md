@@ -162,8 +162,8 @@ config file.
 The CLI never allocates new numbers to sessions, letters, knocks or internal
 records (including archetype descriptors), even in an existing config using
 `numbers: true`. `except` adds to these exclusions. Existing numbers stay valid
-addresses; new unnumbered entities use @yaks/id's short handles (`#` plus ten eid
-characters), accepted by `graph show`, `session peek` and the web view.
+addresses; new unnumbered entities use @yaks/id's short handles (`#` plus ten
+eid characters), accepted by `graph show`, `session peek` and the web view.
 
 There is no default database path. `compose` throws unless `db` or `$DB_PATH` is
 present.

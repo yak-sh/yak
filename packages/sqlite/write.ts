@@ -64,7 +64,6 @@ import {
   isNull,
   lit,
   not,
-  notNull,
   oneOf,
   op,
   or,
