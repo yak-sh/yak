@@ -83,6 +83,9 @@ retyped. A new capability is a new component, not a new tool.
 Deeper: <https://yaks.app/docs/components.md> — every component with its
 properties, and vocab.json for components of your own.
 
+Deeper: <https://yaks.app/docs/storage.md> — `sync`, `durable`, `pace` and
+`save`: what players see, what stays in a browser, and what the store keeps.
+
 ## Coming back later
 
 An app has no cron and nothing sitting awake. Any row can carry a `wake`

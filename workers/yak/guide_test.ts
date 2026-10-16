@@ -10,6 +10,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
+import { storable } from '@yaks/vocab'
 import { coreDocs, reserved, wordOf } from './vocab.ts'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -445,4 +446,32 @@ test('domain guidance directs unpaid users to settings, not checkout', () => {
   const tool = TOOLS.find((t) => t.name == 'domain_attach')!
   assert(tool.description.includes('plan-settings URL'))
   assert(tool.description.includes('returns no checkout link'))
+})
+
+// A copied storage declaration has to pass the same storable profile as an
+// app's manifest. The movement example is also Mossvale's actual declaration,
+// so changing its save condition cannot leave the guide teaching another one.
+let storageExamples = [
+  ...pageText('storage').matchAll(/```json\n([\s\S]*?)\n```/g),
+]
+  .map((m) => JSON.parse(m[1]))
+let mossvalePosition = JSON.parse(Deno.readTextFileSync(
+  new URL('../../apps/vale/vocab.json', import.meta.url),
+)).$defs.position
+
+test('the storage page declares usable local input and Mossvale position', () => {
+  let examples = storageExamples
+  assertEquals(examples.length, 2)
+  for (let example of examples) assertEquals(storable(example), [])
+  assertEquals(examples[0].$defs.unsent.sync, 'none')
+  assertEquals(examples[0].$defs.unsent.durable, 'forever')
+  let actual = mossvalePosition
+  let shown = examples[1].$defs.position
+  for (let key of ['component', 'type', 'sync', 'durable', 'pace', 'save']) {
+    assertEquals(shown[key], actual[key], `position.${key}`)
+  }
+  assertEquals(Object.keys(shown.properties), Object.keys(actual.properties))
+  for (let key of Object.keys(shown.properties)) {
+    assertEquals(shown.properties[key].type, actual.properties[key].type, key)
+  }
 })

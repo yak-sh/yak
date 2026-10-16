@@ -456,6 +456,11 @@ value, not read — so `"search": true` anywhere else is refused at deploy, in a
 message naming the property. A property that declares nothing extra is stored
 and readable and simply never searched.
 
+**Where it lives and who sees it.** `sync`, `durable`, `pace` and `save` belong
+beside `properties`. For local input, relayed movement, saved positions and
+disconnects, follow <https://yaks.app/docs/storage.md>. Omitting these keywords
+keeps the ordinary stored component: `sync: server`, `durable: forever`.
+
 **Who writes it, and how often.** A component can say who may write it and how
 often each of them may, beside its `properties`, and the store holds both at
 every door a person writes through: the page's `./api/apply` and `graph_apply`

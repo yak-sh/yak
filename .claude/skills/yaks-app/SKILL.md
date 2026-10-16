@@ -311,6 +311,18 @@ them (M-37856; the owner on one such example, verbatim: "these are still
 made-up scenarios"). The guide's list of taken words lives in
 `public/docs/components.md`, and `guide_test.ts` keeps it true.
 
+Guide pages live in `workers/yak/public/docs/<slug>.md`; their frontmatter
+supplies the connector's title, brief and description. Link each offered page
+from `workers/yak/public/docs.md` and add its slug to `PAGES` in
+`workers/yak/guide.ts`. After editing a page, run `deno task content`
+to regenerate `workers/yak/content.ts` and the connector skills under
+`plugins/yaks.app/`; don't edit those projections by hand. Check with
+`deno task content --check` and
+`deno task test workers/yak/guide_test.ts workers/yak/content_test.ts`, plus
+`deno task test:budget` on the tests you change. Examples and claims must be
+checked against the implementing packages and working apps, not just against
+other prose.
+
 ## Debugging an app
 
 These commands pick a yaks.app account with `--as`. Without it they act as the

@@ -127,6 +127,13 @@ export let PAGES: Record<string, Page> = {
       "Visitor counts for an app: what one page view records and the six things it never does — no address, no visitor id, not even the browser's own string — app_stats and the window it covers, the block on their space page, the endpoint a page reads its own numbers from, and why a small number is usually crawlers.",
     'brief': 'who opened an app, and from where',
   },
+  'storage': {
+    'slug': 'storage',
+    'title': 'What players see, and what is kept',
+    'description':
+      "Choose which component values stay in one page, reach the store, or are relayed to other pages. Learn sync, durable, pace and save through Mossvale's saved positions and Holdfast's timed creatures, including disconnects, local drafts and the difference between relay and storage.",
+    'brief': 'sync, durable, pace and save for multiplayer state',
+  },
   'store': {
     'slug': 'store',
     'title': 'The store, from a page',
