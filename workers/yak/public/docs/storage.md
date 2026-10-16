@@ -162,9 +162,10 @@ The app also declares and stores `player` on each hero. Its moving page writes
 When the player disconnects, saving still checks the latest pending position. If
 it must wait for the stored timestamp to age, it keeps that pending value for
 the retry; disconnect does not force an ineligible save. That pending value is
-held in server memory, not a durable queue. A reload restores the last _saved_
-snapshot, not a promise of the final animation frame. Saved snapshots survive a
-server restart; unsaved movement does not.
+held in server memory, not a durable queue. A reload can receive a newer value
+still held by the relay; the last _saved_ snapshot is its durable fallback, not
+a promise of the final animation frame. Saved snapshots survive a server
+restart; unsaved movement does not.
 
 Use a timestamp belonging to this component for a component's save interval. An
 unrelated write can change `updated.at`, so testing that instead may keep
