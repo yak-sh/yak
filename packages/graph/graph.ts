@@ -1007,9 +1007,7 @@ export let graph = (opts: Options): Graph => {
                   held,
                   (b) => {
                     let all = declaring()
-                    let rules = opts.runs
-                      ? all.filter((r) => opts.runs!(r, o))
-                      : defaultDeclarations
+                    let rules = opts.runs ? all : defaultDeclarations
                     if (!rules.length) return b
                     // A resource a declared rule writes (`+result.at=#Now`)
                     // is the same singleton the rules written in code read,
@@ -1041,6 +1039,7 @@ export let graph = (opts: Options): Graph => {
                       tracing && live(tracing) && peek(g)
                         ? { ...tracing, parent: current }
                         : undefined,
+                      opts.runs ? (r) => opts.runs!(r, o) : undefined,
                     )
                   },
                   holds,

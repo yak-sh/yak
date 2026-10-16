@@ -112,3 +112,31 @@ test('a rule output selects another rule in the same fixpoint', () => {
     true,
   )
 })
+
+let policyAllowed = false
+let policyCalls = 0
+let policyGraph = graph({
+  vocab,
+  storage: ram(vocab),
+  provenance: false,
+  plugins: [{
+    name: 'rules',
+    declared: [...unrelated, { name: 'input', match: '.input, +!output' }],
+  }],
+  runs: () => {
+    policyCalls++
+    return policyAllowed
+  },
+})
+policyGraph.apply([{ entity: { eid: 'policy' }, input: {} }])
+
+test('a changing write policy is checked only on eligible declared rules', () => {
+  policyAllowed = true
+  policyCalls = 0
+  let rows = policyGraph.apply([{
+    entity: { eid: 'policy' },
+    input: {},
+  }]) as Bundle[]
+  assertEquals(output(rows), true)
+  assertEquals(policyCalls, 2)
+})

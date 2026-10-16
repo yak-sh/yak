@@ -227,7 +227,7 @@ let selection = (rules: Ready[], vocab: Vocab): Selection => {
     // reverse paths, disjunctions and absence can all match without it.
     if (
       c.kind == 'pred' && c.path.length == 1 && c.op == '!' &&
-      !c.value && vocab.comp(c.path[0])
+      !c.value && vocab.comp(c.path[0]) && !vocab.assoc(c.path[0])
     ) return c.path[0]
     if (c.kind == 'gone') return c.comp
   }
@@ -266,6 +266,7 @@ export let settle = (
   resource: (name: string) => unknown = () => undefined,
   admit: (made: Bundle[]) => Bundle[] | Promise<Bundle[]> = (made) => made,
   tracing?: Context,
+  eligible: (rule: Ready) => boolean = () => true,
 ): Bundle[] | Promise<Bundle[]> => {
   // An empty batch is about nothing, and a match with no batch under it is
   // asked of the whole graph (a template's invocation): the rules have
@@ -284,7 +285,11 @@ export let settle = (
         }
       }
       if (!selected.size) return bundles
-      let indices = [...selected].sort((a, b) => a - b)
+      let indices = [...selected].filter((i) => eligible(rules[i])).sort((
+        a,
+        b,
+      ) => a - b)
+      if (!indices.length) return bundles
       let plans = indices.map((i) => rules[i].plan)
       let covers = [...new Set(indices.flatMap((i) => compiled.covers[i]))]
       return after(ask(plans, bundles, covers), (found) => {
