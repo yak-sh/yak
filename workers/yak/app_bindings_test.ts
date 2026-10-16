@@ -33,7 +33,7 @@ let configuration = {
 // The tools, directory, and app store run together, as in serving_test.ts.
 // Only Cloudflare's account API is replaced: its resources and multipart
 // uploads are the effects this lifecycle test needs to inspect.
-let fixture = async () => {
+let fixture = async (active = true) => {
   let scenario = platform('bindings-probe', {
     CF_ACCOUNT: 'acct',
     CF_WORKERS_TOKEN: 'test-token',
@@ -93,7 +93,7 @@ let fixture = async () => {
   }
   let resources = new Map<string, Record<string, unknown>>()
   let was = globalThis.fetch
-  globalThis.fetch = (async (input: string | Request, init?: RequestInit) => {
+  let fetching = (async (input: string | Request, init?: RequestInit) => {
     let request = new Request(input as string, init)
     let url = new URL(request.url)
     if (url.hostname != 'api.cloudflare.com') return was(request)
@@ -161,6 +161,11 @@ let fixture = async () => {
     }
     return Response.json({ success: true, errors: [], result })
   }) as typeof fetch
+  let activate = () => {
+    was = globalThis.fetch
+    globalThis.fetch = fetching
+  }
+  if (active) activate()
   // The dispatch namespace a page asks for the app's worker, which answers as
   // a worker that passes to the files; `asked` is every script asked for.
   let asked: string[] = []
@@ -176,6 +181,7 @@ let fixture = async () => {
     },
   } as typeof env
   return {
+    activate,
     env,
     serving,
     asked,
@@ -341,10 +347,22 @@ test('a static app may deploy its browser entry.js', async () => {
 // Deletion runs before the in-flight API call creates its remote effect.
 // The late reply must compensate, since deletion could not see that resource.
 for (let phase of ['beforeCreate', 'beforeUploadReply'] as const) {
-  test(`permanent deletion cleans a late ${phase == 'beforeCreate' ? 'resource creation' : 'worker upload'}`, async () => {
-    let k = await fixture()
+  // Prepare this case's own store and files without holding the fetch mock
+  // across other cases. A second module load prepares a new fixture.
+  let prepared = phase == 'beforeCreate' ? await fixture(false) : undefined
+  if (prepared) {
     try {
-      await k.write(configuration)
+      await prepared.write(configuration)
+    } catch (error) {
+      await prepared.done()
+      throw error
+    }
+  }
+  test(`permanent deletion cleans a late ${phase == 'beforeCreate' ? 'resource creation' : 'worker upload'}`, async () => {
+    let k = prepared ?? await fixture()
+    if (prepared) k.activate()
+    try {
+      if (!prepared) await k.write(configuration)
       k.state[phase] = () => k.tool('app_delete', { forever: true })
       await assertRejects(() => k.tool('app_deploy'))
       assertEquals(await k.rows(`.entity.eid=${k.app.eid}&.app`), [])
