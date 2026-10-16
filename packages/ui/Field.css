@@ -1,26 +1,30 @@
-/* A text field: typed ink on nothing, with a hairline under it while it has
-   the keyboard. How wide it runs and how big its type are its host's. A bare
-   field draws no line: its host's frame is the edge. */
+/* A field has a visible edge before focus, so an empty placeholder is still
+   recognizably a control. Bare fields belong inside an already framed part. */
 .Field {
   font: inherit;
   color: var(--text);
-  background: none;
-  border: 0;
-  border-bottom: 1px solid transparent;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   outline: 0;
-  padding: 2px 0;
+  padding: 4px var(--half-gap);
   resize: none;
   cursor: text;
-  user-select: text; /* a host that turns selection off still lets you type */
+  user-select: text;
 }
 .Field::placeholder {
-  color: var(--dim);
+  color: var(--muted);
 }
 .Field:focus {
-  border-bottom-color: var(--border);
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .Field-bare,
 .Field-bare:focus {
-  border-bottom: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
   padding: 0;
 }

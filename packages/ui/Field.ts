@@ -34,7 +34,8 @@ export let description = 'A text field: one line to type in, or several.'
 
 /** Typed text is ink, whatever it sits in. */
 export let sheet = (c: Colors): Sheet => ({
-  Field: { fg: c.text },
+  Field: { fg: c.text, bg: c.surface, border: c.border },
+  'Field-bare': { fg: c.text },
 })
 
 /** Empty, typed in, typed in with the caret shown, and bare. */
