@@ -72,7 +72,7 @@ store deletion.
 A person's unsent input is precious. Keep it in the store as a **draft**, not in
 a browser-only component. Import the public client and bind a field:
 
-```js
+```js ignore
 import { drafts } from './api/client.js'
 const desk = drafts()
 const unbind = desk.bind(document.querySelector('textarea'), 'recipe:notes')
