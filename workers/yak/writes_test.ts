@@ -17,6 +17,7 @@ import {
   Pending,
   received,
   retry as retryWrite,
+  ROOM,
 } from './writes.ts'
 
 let NAME = 'ada/notes'
@@ -718,6 +719,20 @@ test('an ordinary receipt expires with its parts once its window has passed', as
   try {
     receipt('large', [titled('n', '🦊'.repeat(2_000_000))])
     receipt('small', [titled('s', 'small')])
+    receipt('Outbox:ordinary', [])
+    let large = [titled('durable-large', 'x'.repeat(ROOM))]
+    receipt('outbox:large', large)
+    receipt('outbox:small', [titled('durable-small', 'kept')])
+    // Completing a held intent must retain its receipt just like a live one.
+    let seq = keepWrite(
+      d,
+      new Request('http://store/apply', {
+        method: 'POST',
+        headers: { [IDEMPOTENCY]: 'outbox:held' },
+      }),
+      '[]',
+    )
+    landed(d, seq, () => [])
     let backlog = Array.from({ length: 40 }, (_, i) => `expired-${i}`)
     for (let key of backlog) receipt(key, [titled(key, 'small')])
     at += 5 * 60_000
@@ -730,9 +745,105 @@ test('an ordinary receipt expires with its parts once its window has passed', as
     for (let i = 0; i < 4; i++) receipt(`drain-${i}`, [])
     assertEquals([first(d, 'large'), first(d, 'small')], [null, null])
     assert(backlog.every((key) => first(d, key) == null))
-    assertEquals(scan(d, 'yak_write_answers'), [])
+    assertEquals(first(d, 'Outbox:ordinary'), null)
+    assertEquals(JSON.parse(first(d, 'outbox:large')!.answer), large)
+    assertEquals(JSON.parse(first(d, 'outbox:small')!.answer), [
+      titled('durable-small', 'kept'),
+    ])
+    assertEquals(JSON.parse(first(d, 'outbox:held')!.answer), [])
+    assert(
+      scan(d, 'yak_write_answers').every((r) =>
+        r.seq == first(d, 'outbox:large')!.seq
+      ),
+    )
     assert(first(d, 'later') && first(d, 'last'))
   } finally {
     Date.now = now
   }
 })
+
+// Boot outside the cases: these checks time the write door, not Store setup.
+let durableReplay = object()
+await durableReplay.apply([titled('edited', 'before')])
+let refusedOutbox = object()
+await refusedOutbox.query('.doc')
+
+let offlineIntent = await (async () => {
+  let o = durableReplay
+  let body = JSON.stringify([
+    titled('$new', 'offline intent'),
+    titled('edited', 'accepted', sha256('before')),
+  ])
+  let send = () =>
+    o.fetch(
+      new Request('http://store/apply', {
+        method: 'POST',
+        headers: { ...KERNEL, [IDEMPOTENCY]: 'outbox:replay' },
+        body,
+      }),
+    )
+  let now = Date.now, at = now()
+  Date.now = () => at
+  try {
+    let accepted = await send()
+    assertEquals(accepted.status, 200)
+    let answer = await accepted.text()
+    await o.apply([titled('edited', 'changed since acceptance')])
+    at += 6 * 60 * 60_000
+    // An unrelated write runs expiry before the client resends; a new Store
+    // also proves this does not depend on an incarnation's in-memory state.
+    received(db(o.ctx), {
+      request: new Request('http://store/apply', {
+        headers: { [IDEMPOTENCY]: 'expiry-trigger' },
+      }),
+    }, () => [])
+    o.wake()
+    await o.query('.doc')
+    return { o, send, answer }
+  } finally {
+    Date.now = now
+  }
+})()
+
+test('an outbox intent replays its minted alias and guarded answer hours later', async () => {
+  let { o, send, answer } = offlineIntent
+  let replay = await send()
+  assertEquals(replay.status, 200)
+  assertEquals(await replay.text(), answer)
+  let alias = JSON.parse(answer).find((b: Bundle) => b.$alias == '$new')
+  assertEquals(
+    (await o.query('.doc.title="offline intent"')).map((b) => b.entity.eid),
+    [alias.entity.eid],
+  )
+  assertEquals(await o.title('edited'), 'changed since acceptance')
+})
+
+for (
+  let [kind, body] of [
+    ['oversized', JSON.stringify([titled('too-large', 'x'.repeat(ROOM))])],
+    [
+      'secret',
+      JSON.stringify([{
+        entity: { eid: 'not-vaulted' },
+        secret: { name: 'outbox-refusal', value: 'not-a-real-secret' },
+        doc: { title: 'must not apply' },
+      }]),
+    ],
+  ]
+) {
+  test(`a${kind == 'oversized' ? 'n' : ''} ${kind} outbox intent is refused rather than applied without a receipt`, async () => {
+    let o = refusedOutbox
+    let before = o.writes()
+    let response = await o.fetch(
+      new Request('http://store/apply', {
+        method: 'POST',
+        headers: { ...KERNEL, [IDEMPOTENCY]: `outbox:${kind}` },
+        body,
+      }),
+    )
+    assertEquals(response.status, 400)
+    assertEquals((await response.json()).error, 'Refused')
+    assertEquals(o.writes(), before)
+    assertEquals(await o.query('.doc'), [])
+  })
+}

@@ -313,6 +313,7 @@ import {
   constrained,
   dead,
   done,
+  durable,
   first,
   fits,
   held,
@@ -3413,7 +3414,18 @@ export class Store {
       let req = new Request(request, { body })
       return await this.#ready(req) ?? this.#serve(req)
     }
-    if (!fits(body) || keyed(body)) return unkept()
+    if (!fits(body) || keyed(body)) {
+      // A browser keeps retrying its intent until acceptance. Never apply it
+      // without the receipt that makes a later resend safe.
+      if (durable(key)) {
+        return refuse(
+          new Refused(
+            'outbox writes must fit in the write log and cannot carry secret values',
+          ),
+        )
+      }
+      return unkept()
+    }
     try {
       was = key ? first(this.#sql, key) : null
       // No pending/running row for a successful live write. Readiness may

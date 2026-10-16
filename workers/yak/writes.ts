@@ -9,7 +9,8 @@
 // Pending writes replay oldest first. Failed writes wait for another
 // incarnation; interrupted and legacy unreviewed attempts require explicit
 // review. Reviewed retries retain their input and complete outcome forever.
-// Ordinary receipts expire after the resend window; held input never expires.
+// Ordinary receipts expire after the resend window; browser outbox receipts
+// and held input never expire.
 //
 // These plain tables belong to no vocabulary or app migration. Their placement
 // beside the graph makes receipt persistence and mutation atomic even when
@@ -87,8 +88,8 @@ export let schema = (): Stmt[] => [
     unique: true,
     ifNot: true,
   },
-  // Successful keyed writes keep their receipt for ten minutes. Neither
-  // finding pending work nor expiring receipts may scan that retained log.
+  // Ordinary keyed receipts last ten minutes; outbox receipts last forever.
+  // Neither pending work nor expiry may scan that retained history.
   {
     t: 'create index',
     name: `${LOG}_pending`,
@@ -99,10 +100,10 @@ export let schema = (): Stmt[] => [
   },
   {
     t: 'create index',
-    name: `${LOG}_expiry`,
+    name: `${LOG}_expiring`,
     on: LOG,
     cols: [col('at')],
-    where: and(eq(col('state'), lit('applied')), not(eq(col('audit'), lit(1)))),
+    where: EXPIRABLE,
     ifNot: true,
   },
   {
@@ -137,6 +138,8 @@ export let raise = (db: Driver) => {
     }
   }
   for (let stmt of schema().slice(2)) db.query(stmt)
+  // The old index included durable receipts: retire it after its replacement.
+  db.query({ t: 'drop', kind: 'index', name: `${LOG}_expiry`, ifExists: true })
 }
 
 // How long an applied write keeps its answer for a resend. The kernel resends
@@ -160,6 +163,17 @@ let RUNNING = eq(col('state'), lit('running'))
 let INTERRUPTED = eq(col('state'), lit('interrupted'))
 let UNREVIEWED = eq(col('state'), lit('unreviewed'))
 let AUDIT = eq(col('audit'), lit(1))
+// Case-sensitive, just like the browser's stable key prefix. Keep this in the
+// partial index too, so expiry never walks indefinitely retained receipts.
+let EXPIRABLE = and(
+  APPLIED,
+  not(AUDIT),
+  or(isNull(col(KEY)), not(op('glob', col(KEY), lit('outbox:*')))),
+)
+
+/** Browser outbox intents need the same answer even after hours offline. */
+export let durable = (key: string | null): boolean =>
+  key?.startsWith('outbox:') ?? false
 let at = (seq: number) => eq(col('seq'), val(seq))
 
 let outcome = (db: Driver, seq: number) => {
@@ -330,7 +344,7 @@ let expire = (db: Driver) => {
       select({
         cols: [col('seq')],
         from: table(LOG),
-        where: and(APPLIED, not(AUDIT), lt(col('at'), val(gone))),
+        where: and(EXPIRABLE, lt(col('at'), val(gone))),
         order: [col('at')],
         limit: lit(BATCH),
       }),
