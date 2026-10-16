@@ -77,57 +77,60 @@ test('anatomy is a descriptor-safe allowlist with all seventeen groups', () => {
   })
 })
 
-test('anatomy IDs and edges preserve owner, extension and registration identity', () => {
-  let docs = anatomyDocuments([
-    {
-      title: 'base',
-      package: 'base',
-      $defs: {
-        book: {
-          component: true,
-          type: 'object',
-          properties: { owner: { ref: 'person' } },
-          before: ['person'],
-        },
-        person: { component: true, type: 'object', properties: {} },
-        book_list: {
-          tool: true,
-          input: {},
-          outputSchema: { type: 'array' },
-          readOnly: true,
-        },
-        seen: { effect: true, created: ['book'] },
+let docs = anatomyDocuments([
+  {
+    title: 'base',
+    package: 'base',
+    $defs: {
+      book: {
+        component: true,
+        type: 'object',
+        properties: { owner: { ref: 'person' } },
+        before: ['person'],
+      },
+      person: { component: true, type: 'object', properties: {} },
+      book_list: {
+        tool: true,
+        input: {},
+        outputSchema: { type: 'array' },
+        readOnly: true,
+      },
+      seen: { effect: true, created: ['book'] },
+    },
+  },
+  {
+    title: 'extra',
+    package: 'extra',
+    $defs: {
+      book: {
+        component: true,
+        extends: true,
+        type: 'object',
+        properties: { label: { type: 'string' } },
       },
     },
-    {
-      title: 'extra',
-      package: 'extra',
-      $defs: {
-        book: {
-          component: true,
-          extends: true,
-          type: 'object',
-          properties: { label: { type: 'string' } },
-        },
-      },
-    },
-  ])
-  let source: AnatomySource = {
-    host: 'one',
-    scope: 'native',
-    ...docs,
-    packages: [{ name: 'base', configured: true }, {
-      name: 'extra',
-      configured: true,
-    }],
-    roles: [{ name: 'graph', facets: ['vocab', 'tools'], loaded: true }],
-    facets: [{
-      name: 'vocab',
-      package: 'base',
-      selected: true,
-      attempted: true,
-    }, { name: 'tools', package: 'base', selected: true, attempted: false }],
-  }
+  },
+])
+let source: AnatomySource = {
+  host: 'one',
+  scope: 'native',
+  ...docs,
+  packages: [{ name: 'base', configured: true }, {
+    name: 'extra',
+    configured: true,
+  }],
+  roles: [{ name: 'graph', facets: ['vocab', 'tools'], loaded: true }],
+  facets: [{
+    name: 'vocab',
+    package: 'base',
+    selected: true,
+    attempted: true,
+  }, { name: 'tools', package: 'base', selected: true, attempted: false }],
+}
+let registrationSource = structuredClone(source)
+let registrationBefore = anatomy(registrationSource)
+
+test('anatomy IDs and edges preserve owner and extension identity', () => {
   let before = anatomy(source)
   assertEquals(before.tools[0].loaded, false)
   assertEquals(before.effects[0].loaded, false)
@@ -144,11 +147,16 @@ test('anatomy IDs and edges preserve owner, extension and registration identity'
   )
   assert(before.edges.some((e) => e.from == base.id && e.kind == 'ref:owner'))
   assert(before.edges.some((e) => e.from == base.id && e.kind == 'before'))
-  source.tools![0].loaded = source.tools![0].bound = true
-  source.tools!.push({ ...source.tools![0] })
-  let after = anatomy(source)
+})
+
+test('anatomy preserves registration identity when a tool binds twice', () => {
+  registrationSource.tools![0].loaded =
+    registrationSource.tools![0].bound =
+      true
+  registrationSource.tools!.push({ ...registrationSource.tools![0] })
+  let after = anatomy(registrationSource)
   assertEquals(after.tools.length, 1)
-  assertEquals(after.tools[0].id, before.tools[0].id)
+  assertEquals(after.tools[0].id, registrationBefore.tools[0].id)
   assert(
     after.edges.some((e) => e.to == after.tools[0].id && e.kind == 'binds'),
   )

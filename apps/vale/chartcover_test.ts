@@ -46,14 +46,17 @@ test('coverage retains explored slivers outside the region lattice cell', () => 
   assert(bent)
 })
 
+let worldCells = cellsOf([WORLD[0], WORLD[1], SIZE], CHUNK)
+let explored = new Set(['mossvale'])
+
 test('WORLD cells far from explored ground need no detailed sampling', () => {
   let samples = 0
   let cover = coverage(() => {
     samples++
     throw new Error('unknown ground must be pruned before sampling')
   })
-  for (let cell of cellsOf([WORLD[0], WORLD[1], SIZE], CHUNK)) {
-    assertEquals(cover(cell, new Set(['mossvale'])), false)
+  for (let cell of worldCells) {
+    assertEquals(cover(cell, explored), false)
   }
   assertEquals(samples, 0)
 })

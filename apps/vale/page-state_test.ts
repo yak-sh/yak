@@ -220,22 +220,47 @@ test('base and Vale kitDocs compose and the interactive List specimen draws', ()
     })
   ))
 
-test('page controllers keep navigation in the supplied game graph and leave it open', async () => {
-  let shared = pageState('game')
-  let page = pageState('navigation', shared.front)
-  try {
+let sharedPages = await Promise.all(
+  ['open', 'select', 'dispose'].map(async (name) => {
+    let shared = pageState(`game-${name}`)
+    let page = pageState('navigation', shared.front)
     await shared.ready
+    return { shared, page }
+  }),
+)
+
+test('page controllers open navigation in the supplied game graph', () => {
+  let { shared, page } = sharedPages[0]
+  try {
     page.open('hero', 'trades')
     equal(page.front, shared.front)
     equal(shared.front.ent('navigation')?.Panels, {
       panel: 'hero',
       pane: 'trades',
     })
+  } finally {
+    page.dispose()
+    shared.dispose()
+  }
+})
+
+test('page controllers select rows in the supplied game graph', () => {
+  let { shared, page } = sharedPages[1]
+  try {
     page.select('recipes', 'sword1')
     equal(shared.front.ent(page.listAt('recipes'))?.List, {
       cursor: 'sword1',
       pane: 'list',
     })
+  } finally {
+    page.dispose()
+    shared.dispose()
+  }
+})
+
+test('disposing a page controller leaves the supplied game graph open', () => {
+  let { shared, page } = sharedPages[2]
+  try {
     page.dispose()
     shared.select('still-open', 'yes')
     equal(shared.cursor('still-open'), 'yes')

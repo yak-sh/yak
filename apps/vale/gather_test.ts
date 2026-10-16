@@ -49,17 +49,17 @@ test('a rock is named for its form even when its haul is the same', () => {
   assertEquals(nodeName(LODES.copper), 'Stone')
 })
 
+let x = Array.from({ length: 100 }, (_, i) => i + 5).find((x) =>
+  yieldOf(
+    naturalEid({ kind: 'rock', x, z: 5, seed: 1, natural: true }),
+    0,
+    LODES.copper,
+  ) == 'shard'
+)!
+let prop: Prop = { kind: 'rock', x, z: 5, seed: 1, natural: true }
+let natural: Natural[] = [{ prop, at: [x, 5, 5] }]
+let eid = naturalEid(prop), v = flat(5, [], [prop])
 test('one rock life gives the same possible mineral to a player and companion', () => {
-  let x = Array.from({ length: 100 }, (_, i) => i + 5).find((x) =>
-    yieldOf(
-      naturalEid({ kind: 'rock', x, z: 5, seed: 1, natural: true }),
-      0,
-      LODES.copper,
-    ) == 'shard'
-  )!
-  let prop: Prop = { kind: 'rock', x, z: 5, seed: 1, natural: true }
-  let natural: Natural[] = [{ prop, at: [x, 5, 5] }]
-  let eid = naturalEid(prop), v = flat(5, [], [prop])
   let work = (hero: string, now: number, directive?: string) => {
     let rows: Bundle[] = []
     let toil = working({

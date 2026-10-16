@@ -177,7 +177,7 @@ test('leases and duplicate listeners close independently on the exact graph', ()
   }
 })
 
-test('observation history is bounded, frozen and normalized, with valid zero durations', () => {
+test('observation history is frozen and normalized, with valid zero durations', () => {
   let graph = {}
   let observation = observe(graph)
   let restore = fixedNow(7)
@@ -189,7 +189,31 @@ test('observation history is bounded, frozen and normalized, with valid zero dur
     assertEquals(finished.node, 'phase:prepare')
     assertEquals(finished.id, observation.history()[0].id)
     assert(Object.isFrozen(finished))
+  } finally {
+    restore()
+    observation.close()
+  }
+})
+
+// Seed an overflowing producer through the same phase and instant event paths.
+// The history case measures its bounded reads, not 300 unrelated emissions.
+let boundedHistory = (() => {
+  let graph = {}
+  let observation = observe(graph)
+  let restore = fixedNow(7)
+  try {
+    channel(graph).begin({ kind: 'phase', name: 'graph.prepare' })!
+      .end({ counts: { bundles: 0 } })
     emit(graph, 300)
+    return observation
+  } finally {
+    restore()
+  }
+})()
+
+test('observation history is bounded and normalizes read limits without exposing its array', () => {
+  let observation = boundedHistory
+  try {
     assertEquals(observation.history().length, 256)
     assertEquals(observation.history()[0].seq, 47)
     assertEquals(observation.history(0), [])
@@ -201,7 +225,6 @@ test('observation history is bounded, frozen and normalized, with valid zero dur
     copy.pop()
     assertEquals(observation.history().length, 256)
   } finally {
-    restore()
     observation.close()
   }
 })

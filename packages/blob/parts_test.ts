@@ -94,14 +94,30 @@ let setup = async (file: Uint8Array, sha?: string) => {
 let file = new Uint8Array(150).map((_, i) => (i * 7) & 0xff)
 let all = [1, 2, 3]
 
+let starting = await setup(file)
+let interrupted = async () => {
+  let upload = await setup(file)
+  await upload.up.post(file.length)
+  await upload.send(1)
+  await upload.send(3)
+  upload.up = upload.reopen()
+  return upload
+}
+let resuming = await interrupted()
+let completing = await interrupted()
+await completing.up.post(file.length)
+await completing.send(2)
+
+test('a new upload asks for every part', async () => {
+  equal(await starting.up.post(file.length), { part: 64, need: all })
+})
+
 test('an interrupted upload sends only the parts it lacks', async () => {
-  let { up, reopen, send, held, key, ledger } = await setup(file)
-  equal(await up.post(file.length), { part: 64, need: all })
-  await send(1)
-  await send(3)
-  up = reopen()
-  equal(await up.post(file.length), { part: 64, need: [2] })
-  await send(2)
+  equal(await resuming.up.post(file.length), { part: 64, need: [2] })
+})
+
+test('sending the missing part completes the upload and clears its ledger', async () => {
+  let { up, held, key, ledger } = completing
   equal(await up.post(file.length), {
     part: 64,
     need: [],

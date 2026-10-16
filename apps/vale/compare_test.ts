@@ -69,27 +69,26 @@ test('upgrade ranges use the compact text and the icons of finished gear', () =>
   }
 })
 
-test('a number is coloured only where it would change, Better or Worse as it goes', () => {
-  let secs = (n: number) => `${n.toFixed(2)} s`
-  for (
-    let [more, now, low, high, marks, shows = String] of [
-      [true, 3, 3, 3, []],
-      [true, 3, 4, 6, [['Better', '4-6']]],
-      [true, 3, 1, 2, [['Worse', '1-2']]],
-      [true, 3, 1, 5, []],
-      [true, 0, 0, 17, []],
-      [false, 5, 4, 4, [['Better', '4']]],
-      [false, 5, 5, 6, []],
-      [false, 0.5, 0.498, 0.499, [], secs],
-    ] as [boolean, number, number, number, string[][], typeof String?][]
-  ) {
+// Each range is an independent rendering decision, not eight renders timed as one.
+let secs = (n: number) => `${n.toFixed(2)} s`
+for (
+  let [label, more, now, low, high, marks, shows = String] of [
+    ['unchanged', true, 3, 3, 3, []],
+    ['better', true, 3, 4, 6, [['Better', '4-6']]],
+    ['worse', true, 3, 1, 2, [['Worse', '1-2']]],
+    ['straddling', true, 3, 1, 5, []],
+    ['zero lower bound', true, 0, 0, 17, []],
+    ['lower is better', false, 5, 4, 4, [['Better', '4']]],
+    ['lower is worse', false, 5, 5, 6, []],
+    ['rounded seconds', false, 0.5, 0.498, 0.499, [], secs],
+  ] as [string, boolean, number, number, number, string[][], typeof String?][]
+) {
+  test(`a range colours only a visible change: ${label}`, () => {
     let ems = drawn(toRange(more, now, low, high, shows)).querySelectorAll('em')
     equal(
-      [...ems].map((
-        e,
-      ) => [e.className.replace('Stats_', ''), e.textContent]),
+      [...ems].map((e) => [e.className.replace('Stats_', ''), e.textContent]),
       marks,
       `${now} → ${low}-${high}`,
     )
-  }
-})
+  })
+}

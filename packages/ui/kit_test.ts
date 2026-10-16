@@ -41,17 +41,32 @@ test('a browser gets the theme, then every part', async () => {
   assert(css.includes('.Menu_Item-danger'))
 })
 
-test('a part paints in a terminal in the theme: shape a glyph, tone a colour', () => {
-  let c = everforest.colors
-  let cases: [string[], string][] = [
-    [[], `\x1b[${fg(c.dim)}m●`],
-    [['half', 'active'], `\x1b[${fg(c.active)}m◐`],
-    [['check', 'positive'], `\x1b[${fg(c.positive)}m✓`],
-    [['alert', 'negative'], `\x1b[${fg(c.negative)};1m!`],
-  ]
-  for (let [mod, want] of cases) {
+for (
+  let [name, mod, want] of [
+    ['default', [], `\x1b[${fg(everforest.colors.dim)}m●`],
+    [
+      'half active',
+      ['half', 'active'],
+      `\x1b[${fg(everforest.colors.active)}m◐`,
+    ],
+    [
+      'check positive',
+      ['check', 'positive'],
+      `\x1b[${fg(everforest.colors.positive)}m✓`,
+    ],
+    [
+      'alert negative',
+      ['alert', 'negative'],
+      `\x1b[${fg(everforest.colors.negative)};1m!`,
+    ],
+  ] as [string, string[], string][]
+) {
+  test(`a ${name} part paints its glyph in the theme's colour`, () => {
     assert(print(h(Dot, { mod }), 20, dress).includes(want), want)
-  }
+  })
+}
+
+test('a terminal menu paints button items as rows separated by a rule', () => {
   // A menu's items are rows, as in a browser, though each is a button.
   let { Item, Rule } = Menu
   let menu: VNode = h(

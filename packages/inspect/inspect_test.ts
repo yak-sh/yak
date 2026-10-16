@@ -286,20 +286,45 @@ let SAID: Bundle = {
   comment: { target: 't1' },
 }
 
-// The page as markup, split at its Links section: what a page's parts draw
-// needs no document to be read, so there is none to build. The host is built
-// beside the test, so it times only the page.
-let commented = host([T1, NOTE, SAID])
+// Query answers are fixtures; each case still renders its own page through
+// the inspector, including the combined page's duplicate suppression.
+let commentHost = (comments: Bundle[]) =>
+  host({
+    '.comment&.task&.comment.target=t1&.limit=100&*': {
+      rows: comments.filter((b) => b.task),
+    },
+    '.refs=t1&.limit=200': { rows: comments },
+    '.entity.eid=c2': { rows: comments.filter((b) => b.entity.eid == 'c2') },
+  })
+// Only the task heading is relevant to comment placement, not its owner,
+// status fields or document prose. Render the same minimal page in all cases.
+let commentPage: Bundle = { entity: T1.entity, task: {} }
+let commented = commentHost([NOTE, SAID])
+let noted = commentHost([NOTE])
+let said = commentHost([SAID])
 
-test('a comment is drawn once on its page: a note under its heading, any other among the links', () => {
+test('a comment is drawn once on its page even when notes and other comments coexist', () => {
   let t = commented
-  let page = renderToString(t.draw(h(t.Door, { e: T1, view: 'Inspect.Page' })))
-  let [facts, links] = page.split('data-section="Links"')
+  let page = renderToString(
+    h(t.Door, { e: { entity: T1.entity }, view: 'Inspect.Page' }),
+  )
   let drawn = (eid: string) =>
     page.split(`<a href="${pagePath(eid)}">`).length - 1
   assertEquals(drawn('c1'), 1)
   assertEquals(drawn('c2'), 1)
+})
+
+test('a note is drawn under its heading before the page links', () => {
+  let t = noted
+  let page = renderToString(h(t.Door, { e: commentPage, view: 'Inspect.Page' }))
+  let [facts] = page.split('data-section="Links"')
   assert(facts.includes('owner should be required'))
+})
+
+test('a comment that is not a note is drawn among the page links', () => {
+  let t = said
+  let page = renderToString(h(t.Door, { e: commentPage, view: 'Inspect.Page' }))
+  let [, links] = page.split('data-section="Links"')
   assert(links.includes(`<a href="${pagePath('c2')}">N-c2</a>`))
 })
 

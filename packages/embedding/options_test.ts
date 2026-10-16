@@ -52,15 +52,23 @@ test('a provider row serves the model under its own name, and the space is the m
   assertEquals(seen[0].body.model, 'snowflake-arctic-embed:33m')
 })
 
+let sameSpace = {
+  here: await serving(OLLAMA, 'arctic-s', 'snowflake-arctic-embed:33m'),
+  away: await serving(
+    { name: 'hosted', api: 'openai', base: 'https://api.example' },
+    'arctic-s',
+    'Snowflake/arctic-embed-s',
+  ),
+}
+
 test('the same model from another provider is the same space', async () => {
-  let there = { name: 'hosted', api: 'openai', base: 'https://api.example' }
   let here = await embedderOf(
     { embedder: { provider: 'gpu', model: 'arctic-s', dim: 256 } },
-    await serving(OLLAMA, 'arctic-s', 'snowflake-arctic-embed:33m'),
+    sameSpace.here,
   )
   let away = await embedderOf(
     { embedder: { provider: 'hosted', model: 'arctic-s', dim: 256 } },
-    await serving(there, 'arctic-s', 'Snowflake/arctic-embed-s'),
+    sameSpace.away,
   )
   assertEquals(here.embedder?.model, 'arctic-s#256')
   assertEquals(away.embedder?.model, here.embedder?.model)
@@ -76,29 +84,40 @@ test('two widths of one model are two spaces', () => {
   assertNotEquals(spaceOf({ ...potion, dim: 256 }), spaceOf(potion))
 })
 
-test('what is missing is waiting, never a boot failure, and the space is known anyway', async () => {
-  let waits = async (embedder: Named | undefined, rows = none) => {
-    let said = await embedderOf({ embedder }, rows)
-    assertEquals(said.embedder, undefined)
-    return said
-  }
+let missing = {
+  model: await serving(OLLAMA, 'arctic-s'),
+  api: await serving({ name: 'gpu', base: 'https://box' }, 'arctic-s'),
+  base: await serving({ name: 'gpu', api: 'ollama' }, 'arctic-s'),
+}
+let waits = async (embedder: Named | undefined, rows = none) => {
+  let said = await embedderOf({ embedder }, rows)
+  assertEquals(said.embedder, undefined)
+  return said
+}
+
+test('an unnamed embedder waits rather than failing boot', async () => {
   assert((await waits(undefined)).waiting?.includes('no `embedder` is named'))
+})
+
+test('a missing provider waits and the space is known anyway', async () => {
   let gone = await waits({ provider: 'gpu', model: 'qwen3' })
   assert(gone.waiting?.includes('no provider called "gpu"'), gone.waiting)
   // the model still names the space, so `.near` ranks over what is stored
   assertEquals(gone.model, 'qwen3')
-  let g = await serving(OLLAMA, 'arctic-s')
-  let other = await waits({ provider: 'gpu', model: 'qwen3' }, g)
+})
+
+test('a model the provider does not serve waits rather than failing boot', async () => {
+  let other = await waits({ provider: 'gpu', model: 'qwen3' }, missing.model)
   assert(other.waiting?.includes('serves no model called "qwen3"'))
-  let mute = await waits(
-    { provider: 'gpu', model: 'arctic-s' },
-    await serving({ name: 'gpu', base: 'https://box' }, 'arctic-s'),
-  )
+})
+
+test('a provider without an API waits rather than failing boot', async () => {
+  let mute = await waits({ provider: 'gpu', model: 'arctic-s' }, missing.api)
   assert(mute.waiting?.includes('provider.api'), mute.waiting)
-  let lost = await waits(
-    { provider: 'gpu', model: 'arctic-s' },
-    await serving({ name: 'gpu', api: 'ollama' }, 'arctic-s'),
-  )
+})
+
+test('a provider without a base URL waits rather than failing boot', async () => {
+  let lost = await waits({ provider: 'gpu', model: 'arctic-s' }, missing.base)
   assert(lost.waiting?.includes('provider.base'), lost.waiting)
 })
 

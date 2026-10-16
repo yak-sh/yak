@@ -99,8 +99,6 @@ let order = (look: Box[], see: (v: Vec) => Vec): Box[] => {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * import { metal } from '@yaks/voxel/mesh'
- * import type { Box, View } from './items.ts'
  * let span = (fs: Face[], i: number) => {
  *   let vs = fs.flatMap((f) => f.at.map((p) => p[i]))
  *   return Math.max(...vs) - Math.min(...vs)
@@ -109,10 +107,23 @@ let order = (look: Box[], see: (v: Vec) => Vec): Box[] => {
  * let cube = faces([[[0, 0, 0], [1, 1, 1], 0x808080]], 64, 4)
  * assertEquals(cube.map((f) => f.rgb).sort(), [0x4f4f4f, 0x666666, 0x8a8a8a])
  * assertEquals(Math.round(span(cube, 1)), 56)
+ * ```
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
  * // a pole lying leans over, its foot at the bottom left
  * let pole = faces([[[0, 0, 0], [0.1, 2, 0.1], 0x808080]], 64, 4, 'lying')
  * let foot = pole[0].at[0]
  * assertEquals(foot[0] < 32 && foot[1] > 32, true)
+ * ```
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import type { Box, View } from './items.ts'
+ * let span = (fs: Face[], i: number) => {
+ *   let vs = fs.flatMap((f) => f.at.map((p) => p[i]))
+ *   return Math.max(...vs) - Math.min(...vs)
+ * }
  * // turning around the long axis sends a blade's edge down, not across
  * let edge: Box[] = [[[0, 0, 0], [0.03, 0.03, 0.6], 0x808080]]
  * let sweep = (v: View) => {
@@ -123,15 +134,34 @@ let order = (look: Box[], see: (v: Vec) => Vec): Box[] => {
  * assertEquals(across > down, true)
  * let chopped = sweep('chop')
  * assertEquals(chopped[1] > chopped[0], true)
+ * ```
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import type { Box, View } from './items.ts'
+ * let span = (fs: Face[], i: number) => {
+ *   let vs = fs.flatMap((f) => f.at.map((p) => p[i]))
+ *   return Math.max(...vs) - Math.min(...vs)
+ * }
  * // a plate standing face on is wide from the front and thin from the side
  * let plate: Box[] = [[[0, 0, 0], [1, 1, 0.1], 0x808080]]
  * let wide = (v: View) => span(faces(plate, 64, 4, v), 0)
  * assertEquals(wide('front') > 2 * wide('side'), true)
+ * ```
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import type { Box } from './items.ts'
  * // what stands before another is drawn after it, whatever its size
  * let slab: Box = [[-1, 0, -1], [2, 0.1, 2], 0x101010]
  * let knob: Box = [[-0.9, 0.1, -0.9], [0.1, 0.1, 0.1], 0x808080]
  * let fs = faces([knob, slab], 64, 4)
  * assertEquals(fs.slice(-3).every((f) => (f.rgb & 255) > 0x40), true)
+ * ```
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { metal } from '@yaks/voxel/mesh'
  * // a blade's faces are metal, and shine
  * let blade = faces([[[0, 0, 0], [0.1, 1, 0.02], metal(0xdfe6ee)]], 64, 4)
  * assertEquals(blade.map((f) => f.metal), [true, true, true])

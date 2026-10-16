@@ -77,13 +77,17 @@ let fixture = (
   }
 }
 
-test('past its bound, a head no build deployed gets one start', async () => {
-  let f = fixture()
-  f.at.now = landed + BOUND - MIN
-  equal((await f.look()).step, 'wait')
-  equal(f.looked, 0)
+let beforeBound = fixture()
+beforeBound.at.now = landed + BOUND - MIN
+let atBound = fixture()
+atBound.at.now = landed + BOUND
+test('before its bound, a head does not look for a live build', async () => {
+  equal((await beforeBound.look()).step, 'wait')
+  equal(beforeBound.looked, 0)
+})
 
-  f.at.now = landed + BOUND
+test('past its bound, a head no build deployed gets one start', async () => {
+  let f = atBound
   equal((await f.look()).step, 'rebuild')
   let [row] = await f.g.get([HEAD])
   equal((row.rebuilt as { said: string }).said, 'build aa194fb5 queued')
@@ -132,12 +136,14 @@ test('a live head, the same source or a newer rollback starts nothing', async ()
   }
 })
 
+let unmarked = fixture()
+unmarked.at.now = landed + BOUND
+await unmarked.look()
+await unmarked.g.apply([{ entity: { eid: HEAD }, rebuilt: null }])
+unmarked.at.now += MIN
+
 test('removing the marks asks for another start', async () => {
-  let f = fixture()
-  f.at.now = landed + BOUND
-  await f.look()
-  await f.g.apply([{ entity: { eid: HEAD }, rebuilt: null }])
-  f.at.now += MIN
+  let f = unmarked
   equal((await f.look()).step, 'rebuild')
   equal(f.started, 2)
 })
