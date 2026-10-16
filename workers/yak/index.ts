@@ -11,12 +11,7 @@ import {
 // may live in a different Worker from the one that binds it, and so are the
 // Wire object (stream.ts), which holds a person's open agent stream, and the
 // Builder (build.ts), which holds a space's build conversation.
-import {
-  DurableObject,
-  env,
-  waitUntil,
-  WorkerEntrypoint,
-} from 'cloudflare:workers'
+import { DurableObject, waitUntil, WorkerEntrypoint } from 'cloudflare:workers'
 import type { Caller } from '@yaks/egress'
 import { Builder as Built } from './build.ts'
 import { Store as Stored } from './graph.ts'
@@ -26,8 +21,6 @@ import * as filePart from './files.ts'
 import { builds } from './builds.ts'
 import type { Env, Inbound } from './env.ts'
 import { handler, type Lent } from './kernel.ts'
-import { apex } from './host.ts'
-import { swapped } from './sandbox.ts'
 export { WorkspaceStore as Workspaces } from './workspaces.ts'
 import { outbound } from './outbound.ts'
 import * as sitePart from './site.ts'
@@ -46,49 +39,9 @@ export let Store = instrument(Stored)
 export let Wire = instrument(Wired)
 export let Builder = instrument(Built)
 
-// The builder's workbench (sandbox.ts, T-34264): Cloudflare's own Sandbox
-// Durable Object, whose container uses the stable toolchain image named in
-// wrangler.toml. The live Worker supplies its CLI. This is the one place the package is named
-// as a value — it imports `cloudflare:workers`, which only the runtime can
-// load, and sandbox.ts types the binding instead so every test can reach the
-// tools that use it.
-//
-// Its network is the whole internet, and only this platform's own hosts are
-// intercepted: the apex and every space's address. A request the container
-// makes to one is handed to `ContainerProxy`, which runs it through
-// sandbox.ts `swapped` so the container's placeholder becomes the token of the
-// grant it wears where that grant reaches; everything else leaves the
-// container directly. The SDK puts the interception's certificate authority
-// in the container's trust store itself. The class keeps the SDK's name, since
-// the Durable Object binding and its migration are keyed by it.
-//
-// A sandbox the allowlist reached (T-37883) keeps that list in its own
-// storage, and the SDK has no call that forgets one: the constructor clears
-// it before the SDK next applies it, so an older sandbox reaches the internet
-// as a new one does.
-//
-// The SDK is awaited, not imported (T-37974). Its RPC library makes an Error
-// as it loads, and in local workerd an Error made while the bundle's top-level
-// code is on the stack has V8 collect source positions for that whole
-// function: a second parse of the 3 MB script, about 80 ms of each start of
-// the test kernel and of `wrangler dev`. Production's startup did not move.
-// Awaited, it loads in a microtask with none of the bundle's top level
-// beneath it.
-let sdk = await import('@cloudflare/sandbox')
-export let ContainerProxy = sdk.ContainerProxy
-export class Sandbox extends sdk.Sandbox<Env> {
-  override interceptHttps = true
-  constructor(...made: ConstructorParameters<typeof sdk.Sandbox<Env>>) {
-    super(...made)
-    Object.assign(this, { allowedHostsOverride: undefined })
-  }
-}
-// Assigned rather than declared `static`: the SDK's setter is what files the
-// handlers where `ContainerProxy` finds them, in every isolate that loads this
-// module.
-let platform = (req: Request, env: Env, out: { containerId: string }) =>
-  swapped(env, out.containerId, req)
-Sandbox.outboundByHost = { [apex(env)]: platform, [`*.${apex(env)}`]: platform }
+// Stable runtime class names and bindings; the SDK loads with a Sandbox
+// incarnation or an outbound proxy fetch, never with a page request.
+export { ContainerProxy, Sandbox } from './sandbox-entry.ts'
 
 // The kernel's cached file entrypoint (cache.ts, wrangler.toml
 // `[exports.Files]`). The default entrypoint below is

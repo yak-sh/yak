@@ -231,3 +231,44 @@ identically before and after the revert. Raw captures, local runs, admin checks
 and subsequent landing measurements live in `/home/yaks/bench-T-125930/`. There
 is **no demonstrated MCP startup speedup**: this task retains the existing lazy
 boundary rather than claiming a no-op import change improved it.
+
+## T-125931: Sandbox initialization belongs to its runtime entries
+
+The existing awaited Sandbox import did evaluate the SDK at startup; the await
+only moved it into a microtask. Unlike MCP, this needed a runtime change. The
+synchronous exported `Sandbox` now exposes the binding's twelve RPC methods plus
+`fetch`/`alarm`, forwarding with the real SDK object as receiver. Its
+constructor loads the implementation inside the real state's
+`blockConcurrencyWhile` and passes that same branded state to the SDK. SDK
+storage initialization, container monitoring, alarms and lifecycle callbacks
+remain the SDK's, not a copy. The real subclass keeps its `Sandbox` name, HTTPS
+interception and old allowlist reset. No DO binding or migration name changes.
+
+`ContainerProxy` is separately lazy: its fetch loads the same implementation
+module before constructing the SDK proxy, so an isolate handling only outbound
+traffic still registers the setter-based exact/wildcard handlers. Registering
+only during DO construction would be wrong: the proxy can run in another
+isolate. No Worker split, SDK upgrade or vocabulary change is involved.
+
+The Docker-free manual integration probe is
+`workers/yak/sandbox-entry-probe.ts`. It bundles the actual facade/runtime
+sources and real installed SDK with only three test seams: a fake
+`ctx.container` on the real branded state, an SDK observation subclass, and a
+non-network outbound handler. It proves concurrent first RPC initializes once,
+nested SDK input gates finish before RPC, proxy-only exact/wildcard dispatch,
+actual alarm callback, stored configuration after runtime restart, and SDK fetch
+reaching container start. It does **not** prove a real container starts or
+executes a command; production sandbox calls must cover that separately. No
+budget exception is added.
+
+Emitted-bundle initializer markers show Sandbox/Containers/capnweb evaluation at
+baseline startup and **none** at candidate startup. Literal dynamic imports stay
+real deferred initializers in the single bundle; parsing/compilation can still
+cost startup time. Evidence, raw builds, manual probes, scoped production calls
+and CF startup records are under `/home/yaks/bench-T-125931/`.
+
+A seven-pair alternating/reversed workerd run measured baseline/candidate ready
+medians **1376.1 → 1316.8 ms**, median paired difference **-137.5 ms**, but only
+**4/7** candidate observations were faster (wide shared-host ranges). This is
+not strong evidence of a reproducible speedup and is not Cloudflare CPU time.
+Production's own stored record is measured separately after landing.
