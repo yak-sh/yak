@@ -25,6 +25,7 @@ import {
   homed,
   lentDocs,
   livesIn,
+  loadPackages,
   meant,
   numbered,
   platformApart,
@@ -602,6 +603,7 @@ test('app vocab keeps external UX state page-only, including transient events', 
 // The vocabulary of an app that declares nothing: the core alone, composed once
 // for the file, as a store keeps it for its isolate.
 let bare = appVocab({})
+await loadPackages({ packages: ['@yaks/journal', '@yaks/ux'] })
 
 // Journal names in a manifest are refused; an app never loads them implicitly,
 // nor by naming @yaks/journal as a dependency.
@@ -625,6 +627,7 @@ test('app vocabularies never load journal components', () => {
 // A package an app names as a "platform" dependency, and the word it lends,
 // read off the package rather than written down here.
 let LENDER = '@yaks/tmux'
+await loadPackages({ packages: [LENDER] })
 let lends = Object.keys(tmuxDocs[0].$defs ?? {})[0]
 let pkgJson = (deps: Record<string, string>) =>
   JSON.stringify({ dependencies: deps })

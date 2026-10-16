@@ -55,6 +55,7 @@ import {
   appKeywords,
   appVocab,
   lentDocs,
+  loadPackages,
   packagesOf,
   platformDocs,
 } from './vocab.ts'
@@ -795,6 +796,7 @@ export let vocabAt = async (
   let speaks =
     lensSpoken(new Request('https://store/vocab', { headers })).speaks
   if (!speaks) return doc
+  await loadPackages(doc)
   let docs = compile(lensesIn([lensDocAt(storeName(space, app), doc)]), speaks)
     .schema(appVocab(doc).docs)
   let own = new Set(Object.keys(doc.$defs ?? {}))
@@ -849,6 +851,7 @@ let spoken = async (env: Env, reach: Reach[]) => {
       doc: await vocabAt(env, r.space, r.app, r.headers),
     })),
   )
+  await Promise.all(own.map(({ doc }) => loadPackages(doc)))
   let words = new Map<string, Reach[]>()
   for (let { r, doc } of own) {
     for (let w of Object.keys(doc.$defs ?? {})) {

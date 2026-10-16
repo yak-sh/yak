@@ -338,6 +338,7 @@ let loaded = await formatted(
       ]),
     ],
     local,
+    imports(Object.values(configs), manifests),
   ),
 )
 let files = await packaged()

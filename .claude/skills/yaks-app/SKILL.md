@@ -251,8 +251,15 @@ not built. Shaping the word is `vocabulary`'s ground.
 An app's `"platform"` dependencies (its package.json) add their packages'
 words on top (`vocab.ts` `lent`), as their code reaches its pages: the
 declaration a deploy hands the store carries `packages` (`stated`), and every
-package's `./vocab` is bundled into the Worker (load.ts) so a store composes
-them with no list of its own. A dependency adds the components a store keeps
+package's `./vocab` is bundled into the Worker (load.ts). Configured facets
+stay static for synchronous store composition; extra package facets initialize
+only when named. Async doors await `loadPackages` before synchronous `appVocab`,
+`lentDocs`, `unlent` or `grew` reads them: wake loads the remembered declaration,
+and release selection prepares the target before its transaction. The checked
+`vocabFacet` accessor refuses an unprepared known facet rather than silently
+lending nothing. Literal dynamic imports keep real deferred initializers in
+the single Worker bundle; a static import behind a getter would not. A dependency
+adds the components a store keeps
 (not page-only `sync: none` ones, nor its rules, tools or effects), never
 changes a word the store already speaks, and lends no `_` machinery word (no
 journal). Its word declared in vocab.json too refuses the deploy (`unlent`), and one a

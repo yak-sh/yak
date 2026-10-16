@@ -10,7 +10,7 @@ import { selected } from '@yaks/host/documents'
 import { once } from '@yaks/fp'
 import { toolsIn } from '@yaks/vocab/tools'
 import { configs } from './config.ts'
-import { load, vocabFacets } from './load.ts'
+import { load, vocabFacet } from './load.ts'
 import { type Door, PLATFORM_STORE, storeOf } from './door.ts'
 import { mailbox } from './directory.ts'
 import { KERNEL } from './meta.ts'
@@ -32,7 +32,7 @@ let contributions = (kind: Kind) =>
     let facets = facetsOf(p)
     if (facets && !facets.includes('tools')) return []
     let plugin = used(p)
-    let docs = selected(vocabFacets[plugin]?.docs ?? [], chosen(p), plugin)
+    let docs = selected(vocabFacet(plugin)?.docs ?? [], chosen(p), plugin)
     return [{ plugin, docs, options: given(p) }]
   })
 
