@@ -110,7 +110,8 @@ async function boot() {
   // purchase would allocate another ledger entry and could charge twice.
   let mutate = (batch: Row[]) =>
     recover(batch, {
-      write: async (sent) => await front.mutate(sent as Bundle[]),
+      write: async (sent) =>
+        await front.mutate(sent as Bundle[], { optimistic: false }),
       read: async () => {
         let query = `.entity.eid=${batch.map((r) => r.entity.eid).join(',')}&*`
         let response = await fetch(
