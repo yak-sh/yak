@@ -12,12 +12,7 @@
     <script type="importmap">
     {
       "imports": {
-        "@yaks/graph": "https://esm.sh/jsr/@yaks/graph@0.2.10",
-        "@yaks/vocab": "https://esm.sh/jsr/@yaks/vocab@0.2.10",
-        "@yaks/ram": "https://esm.sh/jsr/@yaks/ram@0.2.10",
-        "@yaks/cli": "https://esm.sh/jsr/@yaks/cli@0.2.10",
-        "@yaks/graph/tools": "https://esm.sh/jsr/@yaks/graph@0.2.10/tools",
-        "@yaks/tools": "https://esm.sh/jsr/@yaks/tools@0.2.10"
+        "@yaks/cli": "https://esm.sh/jsr/@yaks/cli@0.2.10"
       }
     }
     </script>
@@ -126,14 +121,14 @@
               <div
                 class="panel-head"><span>Command line</span><span id="runtime-status" role="status">Load on first run</span></div>
               <div class="examples"
-                aria-label="Example commands"><button data-command="graph query .book">List books</button><button data-command="graph query .book.pages>400">Filter pages</button><button data-command="graph apply --change '[{&quot;entity&quot;:{&quot;eid&quot;:&quot;c3272ad7-1f5b-475a-b934-cd6d0a15ab41&quot;},&quot;book&quot;:{&quot;pages&quot;:500}}]'">Patch a book</button></div>
+                aria-label="Example commands"><button data-command="graph query .book">List books</button><button data-command="graph query .book.pages>400">Filter pages</button><button data-command="graph apply c3272ad7-1f5b-475a-b934-cd6d0a15ab41 .book.pages=500">Patch a book</button></div>
               <pre id="output" class="output"
                 aria-live="polite">A book is waiting in the graph.
 Choose an example, or type a command below.</pre>
               <form
                 id="command-form"><label class="prompt" for="command">yak</label><input id="command" name="command" value="graph query .book" spellcheck="false" autocomplete="off" aria-label="yak command"><button type="submit" id="run">Run ↵</button></form>
               <p
-                class="console-note">Published @yaks packages via esm.sh. First run needs a network connection.</p>
+                class="console-note">Workspace graph runtime; CLI parser pinned via esm.sh. First run needs a network connection.</p>
             </div>
             <div class="live-data">
               <div
@@ -146,7 +141,7 @@ Choose an example, or type a command below.</pre>
                 </article>
               </div>
               <p
-                class="data-note">The command and this view read the same in-memory graph. Change the pages and watch it update.</p>
+                class="data-note">The command and this view read the same in-memory graph. Change the pages and watch it update. You can also name the target explicitly: <code>graph apply .entity.eid=c3272ad7-1f5b-475a-b934-cd6d0a15ab41 .book.pages=500</code>.</p>
             </div>
           </div>
           <p

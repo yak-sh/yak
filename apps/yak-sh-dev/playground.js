@@ -1,18 +1,20 @@
 // A real in-memory graph and yak's CLI parser. Commands call the graph directly;
 // this is a deliberately small book vocabulary, not the hosted app's store.
-import { graph, mint, offered } from '@yaks/graph'
-import { ram } from '@yaks/ram'
-import { loadVocab } from '@yaks/vocab'
 import { cli, helpTool } from '@yaks/cli'
-import { tier } from '@yaks/graph/tools'
 import {
   answerOf,
   faulted,
+  graph,
+  loadVocab,
+  mint,
+  offered,
+  ram,
   runner,
   structured,
+  tier,
   toolEid,
   toolsDoc,
-} from '@yaks/tools'
+} from './runtime.js'
 
 // Preserve quoted JSON as one argument, including empty quoted values.
 export function words(line) {
@@ -61,27 +63,49 @@ export async function create() {
   const commands = [
     ...tools.map((tool) => ({
       ...tool,
-      run: async (args, context) => {
-        const landed = await calls.call({
-          entity: { eid: mint() },
-          call: { to: toolEid(tool.name), args: args ?? {} },
-        })
-        let value = structured(tool, answerOf(landed))
-        // Older releases wrap query JSON in the result’s content body.
-        const body = value.result?.[0]?.content?.body
-        if (body) {
-          try {
-            value = { result: JSON.parse(body) }
-          } catch { /* Keep non-JSON tool text. */ }
+      // CLI 0.2.10 reads options.{positional,rest}; workspace declarations
+      // put a trailing "..." on the rest argument. Its rest accepts arrays
+      // or key=value pairs, so carry query words as an array and join below.
+      inputSchema: tool.inputSchema?.properties.q
+        ? {
+          ...tool.inputSchema,
+          properties: {
+            ...tool.inputSchema.properties,
+            q: {
+              ...tool.inputSchema.properties.q,
+              type: 'array',
+              items: { type: 'string' },
+            },
+          },
         }
+        : tool.inputSchema,
+      options: {
+        positional: tool.positional?.filter((name) => !name.endsWith('...')),
+        rest: tool.positional?.find((name) => name.endsWith('...'))?.slice(
+          0,
+          -3,
+        ),
+      },
+      run: async (args, context) => {
+        const id = mint()
+        const landed = await calls.call({
+          entity: { eid: id },
+          call: {
+            to: toolEid(tool.name),
+            args: Array.isArray(args?.q)
+              ? { ...args, q: args.q.join(' ') }
+              : args ?? {},
+          },
+        })
+        const value = structured(tool, answerOf(landed, id))
         context.out(JSON.stringify(value, null, 2))
-        return faulted(landed) ? 1 : 0
+        return faulted(landed, id) ? 1 : 0
       },
     })),
     helpTool({
       name: 'yak',
       about:
-        'An in-memory book graph. Commands: graph query <q>, graph apply --bundles <JSON>.',
+        'An in-memory book graph. Commands: graph query <q>, graph apply <uuid> .book.pages=500 (or .entity.eid=<uuid> .book.pages=500), graph apply --bundles <JSON>.',
     }),
   ]
   return {

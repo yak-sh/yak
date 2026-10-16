@@ -45,10 +45,10 @@ async function run(command) {
       id.textContent = bundle.entity.eid
       row.append(symbol, id)
       const title = document.createElement('h3')
-      title.textContent = bundle.book.title
+      title.textContent = bundle.book.title ?? 'Untitled'
       const pages = document.createElement('p')
       const count = document.createElement('strong')
-      count.textContent = bundle.book.pages
+      count.textContent = bundle.book.pages ?? '—'
       pages.append(count, ' pages')
       article.append(row, title, pages)
       return article
