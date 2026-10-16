@@ -1762,23 +1762,26 @@ test('app archetypes classify writes and migrate old rows only on schema changes
   let descriptors = await (await get(store, '/query?q=.archetype', owner))
     .json() as Bundle[]
   assert(descriptors.some((b) => b.entity.eid == original))
-  // A returned pointer is not a writable classification.
-  let refused = await post(store, '/apply', [{
-    entity: { eid: CAKE, archetype: 'forged' },
+  // Read identities roundtrip, but even a forged pointer cannot classify a row.
+  let wrote = await post(store, '/apply', [{
+    entity: { ...rows[0].entity, archetype: 'forged' },
     recipe: { serves: 5 },
   }], owner)
-  assertEquals(refused.status, 400)
-  assertStringIncludes(
-    (await refused.json()).message,
-    'entity.archetype is server-owned',
-  )
-  assertEquals(((await read(store))[0].recipe as { serves: number }).serves, 4)
-  await post(store, '/apply', [{
-    entity: { eid: CAKE },
-    recipe: { serves: 5 },
-  }], owner)
-  let updated = (await read(store))[0].entity.archetype
+  assertEquals(wrote.status, 200)
+  rows = await read(store)
+  assertEquals((rows[0].recipe as { serves: number }).serves, 5)
+  let updated = rows[0].entity.archetype
   assert(updated != 'forged')
+  // Updating also adds the store's modification stamp, hence a new shape.
+  let shapes = await (await get(store, '/query?q=.archetype', owner))
+    .json() as Bundle[]
+  let shape = shapes.find((b) => b.entity.eid == updated)
+  assert(shape)
+  let tables = JSON.parse(
+    (shape.archetype as { tables: string }).tables,
+  ) as string[]
+  assert(tables.includes('recipe'))
+  assert(tables.includes('doc'))
   original = updated
   // Simulate a pre-feature store whose data and blob values already exist.
   unclassified(ctx, 'previous-schema')
@@ -1818,15 +1821,25 @@ test('app archetype descriptors are read-only and vocabulary extension tracks ne
   let descriptors = await (await get(store, '/query?q=.archetype', owner))
     .json() as Bundle[]
   let before = JSON.stringify(descriptors)
-  let refused = await post(store, '/apply', [{
-    entity: descriptors[0].entity,
-    archetype: { tables: '["recipe"]' },
+  let [row] = await (await get(store, '/query?q=.recipe', owner))
+    .json() as Bundle[]
+  let descriptor = descriptors.find((b) => b.entity.eid == row.entity.archetype)
+  assert(descriptor)
+  let tables = JSON.parse(
+    (descriptor.archetype as { tables: string }).tables,
+  ) as string[]
+  assert(!tables.includes('doc'))
+  // Descriptor facets are non-wire: both echoes and edits are ignored.
+  let echoed = await post(store, '/apply', [{
+    entity: descriptor.entity,
+    archetype: descriptor.archetype,
   }], owner)
-  assertEquals(refused.status, 400)
-  assertStringIncludes(
-    (await refused.json()).message,
-    'entity.archetype is server-owned',
-  )
+  assertEquals(echoed.status, 200)
+  let ignored = await post(store, '/apply', [{
+    entity: descriptor.entity,
+    archetype: { tables: JSON.stringify([...tables, 'doc'].sort()) },
+  }], owner)
+  assertEquals(ignored.status, 200)
   assertEquals(
     JSON.stringify(
       await (await get(store, '/query?q=.archetype', owner)).json(),
