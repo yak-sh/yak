@@ -22,6 +22,26 @@ import { propViews } from './Prop.ts'
 // including the query table and any inline reference.
 let schemaTiles: View[] = ['_package', '_comp', '_prop'].flatMap((name) => [
   {
+    view: 'Inspect.Schema.Summary',
+    match: parse(`.${name}`),
+    Render: ({ e, io }) => {
+      let title = str(e, name, 'name')
+      let n = name == '_package'
+        ? io.vocab.all.filter((c) =>
+          (io.vocab.comp(c)?.package ?? '') ==
+            (title == 'Unpackaged' ? '' : title)
+        ).length
+        : io.vocab.props(title).length
+      return `${title} · ${n} ${
+        name == '_package'
+          ? n == 1 ? 'component' : 'components'
+          : n == 1
+          ? 'property'
+          : 'properties'
+      }`
+    },
+  },
+  {
     view: 'Tile',
     match: parse(`.${name}`),
     Render: ({ e, io }) =>

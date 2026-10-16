@@ -26,13 +26,13 @@ counted.query({
   rows: [[lit('private')]],
 })
 
-test('inspection counts stored rows and indexes without reading values', () => {
+test('inspection reports unknown physical rows rather than scanning values', () => {
   using db = Object.assign(counted, { [Symbol.dispose]: counted.close })
   assertEquals(inspect(db), {
     tables: 1,
     shown: [{
       name: 'note',
-      rows: 1,
+      rows: null,
       indexCount: 1,
       indexes: ['note_body'],
     }],

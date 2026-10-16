@@ -125,7 +125,7 @@ let useAnswers = (asks: Asks): Record<string, Answer> => {
 // that render when an inspector control or history pager changes it, or a
 // view sets state of its own there (a @yaks/ux Disclosure's).
 let turn = signal(0)
-front.watch('.inspector|.table').subscribe(() => turn.value++)
+front.watch('.inspector|.table|.Disclosure').subscribe(() => turn.value++)
 
 export let inspectIo: Io = {
   vocab,

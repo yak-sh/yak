@@ -1,11 +1,13 @@
 // Bounded physical facts about a SQLite store. The caller sees names and
 // counts, never definitions, statement text, or row values.
 
-import { by, col, type Driver, lit, select, table, tally } from '@yaks/sql'
+import { populations } from './population.ts'
+import { by, col, type Driver, lit, select, table } from '@yaks/sql'
 
 export type TableSize = {
   name: string
-  rows: number
+  /** Exact live owners for components, unknown for physical infrastructure. */
+  rows: number | null
   indexCount: number
   indexes: string[]
 }
@@ -33,12 +35,18 @@ export let inspect = (
       Number(first.has(b)) - Number(first.has(a)) ||
       a.localeCompare(b)
     )
+  let buckets = populations(db)
   let shown = names.slice(0, Math.max(0, Math.min(limit, 160))).map((name) => {
     let indexes = db.query({ t: 'pragma', name: 'index_list', arg: name })
       .map((r) => String(r.name))
     return {
       name,
-      rows: tally(db, name),
+      rows: buckets && (name == 'entity' || buckets.some((b) =>
+          b.tables.includes(name)
+        ))
+        ? buckets.reduce((n, b) =>
+          n + (name == 'entity' || b.tables.includes(name) ? b.n : 0), 0)
+        : null,
       indexCount: indexes.length,
       indexes: indexes.slice(0, 16),
     }

@@ -1,3 +1,4 @@
+import { POPULATION_VERSION } from './population.ts'
 // What a store's `install()` runs, known once per vocabulary and read
 // overrides, and the store's part of a composed schema's print (./follow.ts).
 // Shared by the writing store (./mod.ts) and the reading one (./read-store.ts),
@@ -44,7 +45,9 @@ export let plan = (
     // The fitting's revision rides beside them (ddl.ts `FIT`): what fitting
     // changes is read off the file, so a fitting that learns something new
     // installs again over a file whose statements are as they were.
-    print: sha256([FIT, ...stmts.map((s) => render(s).sql)].join(';\n')),
+    print: sha256(
+      [FIT, POPULATION_VERSION, ...stmts.map((s) => render(s).sql)].join(';\n'),
+    ),
     raised,
     made: raised.map((s) => s.name),
   }

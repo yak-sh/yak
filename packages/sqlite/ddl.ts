@@ -843,15 +843,11 @@ export let analyzed = (
   })
 }
 
-// Whether a table expected to be empty holds rows. SQLite's plain fast count
-// bills nothing for an empty table, where `limit 1` bills a row; it bills every
-// row of a populated one, so this is never asked of a table likely to be. The
-// comparison stays in JavaScript: a SQL expression disables that optimization.
+// A table remembered as empty may have filled since installation. Probe only
+// one row: a plain count bills every owner once it is no longer empty.
 let populated = (driver: Driver, name: string) =>
-  Number(
-    driver.query(select({ cols: [as(fn('count'), 'n')], from: table(name) }))[0]
-      ?.n,
-  ) > 0
+  driver.query(select({ cols: [lit(1)], from: table(name), limit: lit(1) }))
+    .length > 0
 
 // Whether a table expected to hold rows does: one billed row at most.
 let holds = (driver: Driver, name: string) =>

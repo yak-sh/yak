@@ -53,5 +53,11 @@ for Inspect.
 ## Limits
 
 Inspect serves no page or terminal app, and owns no stack or URL. Browse
-integrates these views into its app. The census asks the graph for archetype
-rows and counts, rather than running a count query for each component.
+integrates these views into its app. The schema map starts with packages, then
+opens components and properties on demand from the loaded vocabulary. It needs
+no graph query or census to paint. Expansion stays in the page graph.
+
+Detail pages share a census of archetype rows and populations rather than
+running a count for each component. SQLite and the Cloudflare Store answer the
+unfiltered population tally and component counts from maintained metadata;
+filtered counts still run their candidate query.

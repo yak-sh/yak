@@ -112,13 +112,12 @@ import {
 } from '@yaks/api'
 import { blobRead, blobSchema, sqliteBlobs } from '@yaks/blob'
 import {
-  as,
   col,
-  count,
   type CreateTable,
   type Derived,
   type Driver,
   eq,
+  lit,
   notNull,
   type Raw,
   render,
@@ -1421,6 +1420,7 @@ export class Store {
             // minted, while an app's entities are pointed at by the eid its client
             // minted and never by a number, so nothing mints one for them.
             number: numbered(vocab),
+            counts: 'lazy',
             schemaReady: () =>
               this.#stood(shape) || printed(drive, shape.print),
             extend,
@@ -2860,6 +2860,7 @@ export class Store {
       g = graph({
         vocab,
         storage: sqliteStorage(this.#sql, vocab, {
+          counts: 'lazy',
           schemaReady: () => true,
           derived,
           number: numbered(vocab),
@@ -4896,18 +4897,19 @@ export class Store {
     })
   }
 
-  // How many rows one component holds, or with a property, how many hold a
+  // Whether one component holds rows, or with a property, any hold a
   // value there — the question only a store can answer, and what decides
   // whether a word the manifest stopped naming may leave. A table or a column
   // that is not there holds nothing.
   #rows(name: string, prop?: string): number {
     try {
       let [row] = this.#sql.query(select({
-        cols: [as(count(), 'n')],
+        cols: [lit(1)],
         from: table(name),
         where: prop ? notNull(col(prop)) : undefined,
+        limit: lit(1),
       }))
-      return Number(row?.n ?? 0)
+      return row ? 1 : 0
     } catch {
       return 0
     }

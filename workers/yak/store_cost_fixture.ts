@@ -197,6 +197,58 @@ export let storeCost = async (storage: Storage, kind: string) => {
     return { kind, reports: reports.length, samples }
   }
   await post('/apply', [{ entity: { eid: app }, doc: { title: 'baseline' } }])
+  if (kind == 'cardinality') {
+    let cardinality = async () => {
+      let res = await store.fetch(
+        new Request('http://store/query?q=.doc%20.count&trusted=1', {
+          headers: { ...headers, 'x-yak-kernel': '1' },
+        }),
+      )
+      if (!res.ok) throw Error(await res.text())
+      return res.json() as Promise<{ count: number }>
+    }
+    counting = true
+    let seeded = await measured.run('count activation', cardinality)
+    measured.flush(Date.now() + 120_000)
+    let activation = samples.pop()!
+    counting = false
+    await post(
+      '/apply',
+      Array.from(
+        { length: 20 },
+        (_, i) => ({
+          entity: { eid: `real-count-${i}` },
+          doc: { title: 'same' },
+        }),
+      ),
+    )
+    counting = true
+    let first = await measured.run('count steady', cardinality)
+    measured.flush(Date.now() + 120_000)
+    let firstCost = samples.pop()!
+    counting = false
+    await post(
+      '/apply',
+      Array.from(
+        { length: 200 },
+        (_, i) => ({
+          entity: { eid: `more-count-${i}` },
+          doc: { title: 'same' },
+        }),
+      ),
+    )
+    counting = true
+    let second = await measured.run('count steady', cardinality)
+    measured.flush(Date.now() + 120_000)
+    let secondCost = samples.pop()!
+    return {
+      kind,
+      reports: reports.length,
+      samples: [],
+      cardinality: { seeded, activation, first, firstCost, second, secondCost },
+    }
+  }
+
   // Let the initial report finish; no clock or alarm delivers a report.
   await Promise.resolve()
   if (!reports.length) throw new Error('Store did not report its initial size')

@@ -42,7 +42,7 @@ export let countCost = (durable: DurableStorage) => {
       },
     },
   }])
-  let store = storage(db, vocab)
+  let store = storage(db, vocab, { counts: 'lazy' })
   store.install()
   store.tx((tx) =>
     tx.patch([
@@ -100,6 +100,11 @@ export let countCost = (durable: DurableStorage) => {
     }))
     db.query(insert('tombstone', { entity: Number(dead.id) }))
   }
+  read = written = 0
+  counting = true
+  let activated = store.rows('.t .count')
+  counting = false
+  let activation = { rows: activated, read, written }
   let counts = Object.fromEntries(targets.flatMap((component) => {
     let entity = '!private|.private.by=reader'
     let components = { [component]: `.entity.eid!=${component}-2` }
@@ -165,5 +170,43 @@ export let countCost = (durable: DurableStorage) => {
       counting = false
     }
   }))
-  return { owners, counts, nearby }
+  // More owners wearing an existing descriptor cannot increase global
+  // cardinality work. Measure actual cursor reads on both sides, cold adapters.
+  let cardinality = () => {
+    read = written = 0
+    counting = true
+    try {
+      let cold = storage({ ...db }, vocab, { schemaReady: () => true })
+      let component = cold.rows('.t .count')
+      let tally = cold.rows('.tally=entity.archetype')
+      let total = cold.rows('.count')
+      return {
+        component,
+        tally: {
+          length: tally.length,
+          total: tally.reduce((n, r) => n + Number(r.n), 0),
+        },
+        total,
+        read,
+        written,
+      }
+    } finally {
+      counting = false
+    }
+  }
+  let before = cardinality()
+  store.tx((tx) =>
+    tx.patch(Array.from({ length: 1024 }, (_, i) => ({
+      entity: { eid: `same-set-${i}` },
+      t: {},
+    })))
+  )
+  let after = cardinality()
+  return {
+    owners,
+    counts,
+    nearby,
+    activation,
+    cardinality: { before, after, added: 1024 },
+  }
 }

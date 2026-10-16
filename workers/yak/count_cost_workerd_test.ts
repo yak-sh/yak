@@ -7,7 +7,16 @@ test('cold owner queries read their candidates without unrelated descriptors', a
   let res = await fetch(`${workerd().base}/__play_cost/?count=1`)
   assertEquals(res.status, 200, await res.clone().text())
   let report = await res.json() as ReturnType<typeof countCost>
-  console.log('COUNT_COST', JSON.stringify(report))
+  console.log(
+    'COUNT_COST',
+    JSON.stringify({
+      ...report,
+      cardinality: {
+        before: { read: report.cardinality.before.read },
+        after: { read: report.cardinality.after.read },
+      },
+    }),
+  )
   for (let [name, cost] of Object.entries(report.counts)) {
     assertEquals(cost.rows, [{
       value: '',
@@ -19,6 +28,15 @@ test('cold owner queries read their candidates without unrelated descriptors', a
     let budget = cost.owners * (name.endsWith('/plain') ? 2 : 6) + 3
     assert(cost.read <= budget, `${name}: ${cost.read} billed rows`)
   }
+  assertEquals(report.activation.rows, [{ value: '', n: report.owners - 1 }])
+  assert(report.activation.written > 0, 'first count seeds populations once')
+  let { before, after, added } = report.cardinality
+  assertEquals(after.component[0].n, Number(before.component[0].n) + added)
+  assertEquals(after.total[0].n, Number(before.total[0].n) + added)
+  assertEquals(after.tally.length, before.tally.length)
+  assertEquals(after.tally.total, before.tally.total + added)
+  assertEquals(after.read, before.read)
+  assertEquals([before.written, after.written], [0, 0])
   for (let [name, cost] of Object.entries(report.nearby)) {
     assertEquals(cost.rows, cost.expected)
     assertEquals(cost.written, 0)

@@ -1,3 +1,4 @@
+import { cardinality, population } from './population.ts'
 // @yaks/sqlite — a storage adapter that turns the yaks query/vocabulary/SQL
 // stack into a working SQLite-backed store. It composes three sibling packages:
 //
@@ -310,6 +311,11 @@ export type Store = {
  * as text through `doc_value`.
  */
 export type Opts = BindOpts & {
+  /** Activate maintained global populations at the first unscoped aggregate.
+   * File stores install eagerly; metered hosts can defer their one-time seed
+   * and all upkeep until someone actually asks for a global count. */
+  counts?: 'lazy'
+
   /** How big a table is before a file owes its schema work, and the rows a
    * window does of it (./owe.ts `SIZES`): what a test shrinks. */
   sizes?: Sizes
@@ -875,6 +881,9 @@ export let storage = (
         driver.query(keys('on'))
       }
     }
+    if (classified && base.counts != 'lazy') {
+      unit(driver, () => population(driver))
+    }
     let analyze = () => {
       let statistics = analyzed(driver, receipt?.statistics, unchanged)
       if (statistics && receipt) analyzedAt(driver, receipt.schema, statistics)
@@ -941,7 +950,14 @@ export let storage = (
     },
     rows: (query, o) => {
       ensure()
-      return asked(ast(query), o)
+      let parsed = ast(query)
+      if (
+        classified && base.counts == 'lazy' &&
+        cardinality(parsed, vocab, { ...opts(), ...o })
+      ) {
+        unit(driver, () => population(driver))
+      }
+      return asked(parsed, o)
     },
     screen: (query, o) => {
       ensure()

@@ -3,9 +3,9 @@
  * entities are made of (@yaks/archetype), and how many entities are made of
  * each. From it, how many entities carry each component, which sets a
  * component is found in, and how many edges state each relation: no page asks
- * the graph to count those again. The tally reads every entity, so it is asked
- * once for as long as the page is open (./live.ts), and shared by every page
- * that reads it.
+ * the graph to count those again. The storage adapters answer this unfiltered
+ * tally from maintained archetype populations, not by reading their owners. It is asked once and
+ * shared by the detail pages that read it; the initial schema map needs none.
  *
  * @module
  */

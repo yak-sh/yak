@@ -522,11 +522,11 @@ request that installed (a Durable Object, from its alarm), since one table's
 analysis reads every row of its indexes. A table is owed when it held no rows at
 its last analysis and holds some now, when a schema change leaves a populated
 table or index without statistics, and every table holding rows is owed when
-stored bytes grow tenfold. Empty tables are remembered; their plain counts cost
-zero billed rows while they stay empty. This measures byte growth, not row
-density. An unchanged store with complete existing statistics adopts them once
-without reanalysis. Reads and writes do not refresh statistics; a host calls
-`install()` at deployment. Optimize alone cannot gate full analysis: empty
+stored bytes grow tenfold. Empty tables are remembered; their bounded presence
+probes cost zero billed rows while they stay empty. This measures byte growth,
+not row density. An unchanged store with complete existing statistics adopts
+them once without reanalysis. Reads and writes do not refresh statistics; a host
+calls `install()` at deployment. Optimize alone cannot gate full analysis: empty
 tables retain no statistics row and repeatedly scan existing statistics during
 analysis.
 
@@ -815,12 +815,69 @@ try {
 }
 ```
 
+### Exact global counts
+
+A **population** is the number of live entities wearing one archetype. The
+adapter keeps populations in `_yaks_population`, with `_yaks_membership` mapping
+component names to archetypes. Entity archetype and tombstone triggers update
+populations in the same transaction as the owner. Updating an ordinary property
+without changing its archetype does not write either metadata table.
+
+The first installation over an existing file seeds populations by reading its
+entities once. That migration and its triggers commit atomically; a rollback
+leaves neither behind. Later openers read the persisted populations, without
+recounting owners. File adapters install populations eagerly. The Cloudflare
+Store uses `counts: 'lazy'`: its first unscoped global aggregate activates
+populations inside a transaction, including this one-time seed. Apps that never
+ask for a global count incur no population upkeep; once activated, later openers
+keep the persisted populations and triggers. A local writer installs before its
+read-only readers open, so those readers find persisted populations without
+migrating on a read.
+
+Unfiltered `.count`, `.component&.count` and `.tally=entity.archetype` read
+these metadata tables rather than scanning component or entity tables. Component
+counts seek only the archetypes containing that component; tally work scales
+with the number of archetypes, not the number of entities. For example:
+
+```ts
+import { equal } from '@yaks/testing'
+import { archetypeDoc, archetypes } from '@yaks/archetype'
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { open } from '@yaks/sqlite/db'
+import { storage } from '@yaks/sqlite'
+
+let sql = open(':memory:')
+try {
+  let vocab = loadVocab([archetypeDoc, {
+    $defs: {
+      entity: { component: true, type: 'object' },
+      note: { component: true, type: 'object' },
+    },
+  }])
+  let store = storage(sql, vocab)
+  let g = graph({ storage: store, vocab, plugins: [archetypes()] })
+  g.apply([{ entity: { eid: 'one' }, note: {} }])
+  equal(store.rows('.note&.count'), [{ value: '', n: 1 }])
+} finally {
+  sql.close()
+}
+```
+
+Filtered counts, derived components, custom backings and permission-scoped
+counts retain their ordinary query plans: their predicates inherently need to
+visit candidates. A global population cannot answer a caller-specific count
+without bypassing its permissions. Pending unclassified writes also use ordinary
+queries, so transactional reads never substitute a committed intermediate count.
+
 ### Diagnostic tools
 
-`inspect(driver, limit?, preferred?)` counts tables and indexes without reading
-component values; `identity(driver, eid)` reports physical presence and
-tombstoning. Both cap inspection at 160 tables. The tools declared by
-`sqliteDoc` check foreign keys, SQLite integrity, and archetype pointers;
+`inspect(driver, limit?, preferred?)` lists tables and indexes without scanning
+component rows. Component `rows` are exact live-owner counts from populations;
+infrastructure `rows` are `null` (unknown), never an implicit table count;
+`identity(driver, eid)` reports physical presence and tombstoning. Both cap
+inspection at 160 tables. The tools declared by `sqliteDoc` check foreign keys,
+SQLite integrity, and archetype pointers;
 `runs({ storage: storage(sql, vocab) }, { sample })` implements them on the
 application's connection. They report findings without repairing data.
 

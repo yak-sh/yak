@@ -29,3 +29,17 @@ for (let kind of ['directory', 'app']) {
     }
   })
 }
+
+test('real Store global counts activate once and never scan owners with extensions loaded', async () => {
+  let response = await fetch(`${workerd().base}/__store_cost/?kind=cardinality`)
+  assertEquals(response.status, 200, await response.clone().text())
+  let result = await response.json()
+  let c = result.cardinality
+  assert(c.activation.total.rowsWritten > 0)
+  assertEquals(c.second.count, c.first.count + 200)
+  assertEquals(c.secondCost.total.rowsRead, c.firstCost.total.rowsRead)
+  assertEquals(
+    [c.firstCost.total.rowsWritten, c.secondCost.total.rowsWritten],
+    [0, 0],
+  )
+})

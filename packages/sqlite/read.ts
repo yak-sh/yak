@@ -1,3 +1,9 @@
+import {
+  cardinality,
+  classified,
+  populationCount,
+  populations,
+} from './population.ts'
 // Reads: a query in, whole entities out. This is the SELECT half of the
 // adapter. The heavy lifting — turning a query into SQL — belongs to the
 // sibling packages: @yaks/query parses the query text into an AST, @yaks/vocab
@@ -83,9 +89,24 @@ export let rows = (
   opts: BindOpts = {},
 ): Row[] => {
   let indexed = !!vocab.comp('archetype')
-  let ask = () =>
-    driver.query(compile(ast(query), vocab, catalogued(driver, vocab, opts)))
+  let ask = () => {
+    let parsed = ast(query)
+    let shape = cardinality(parsed, vocab, opts)
+    if (
+      shape && (!opts.archetypes || opts.archetypes({}) != undefined) &&
+      classified(driver)
+    ) {
+      if (shape.tally) {
+        let buckets = populations(driver)
+        if (buckets) return buckets.map(({ value, n }) => ({ value, n }))
+      } else {
+        let n = populationCount(driver, shape.comp)
+        if (n != undefined) return [{ value: '', n }]
+      }
+    }
+    return driver.query(compile(parsed, vocab, catalogued(driver, vocab, opts)))
       .map((r) => projected(vocab, r))
+  }
   // The catalog and entity statement must see the same commit. Otherwise a
   // concurrent writer could introduce a new matching set between the two. A
   // read unit is one snapshot without the write lock, so a long query never
