@@ -337,13 +337,14 @@ let writing = (
   let held = byProp.get(prop ?? PLAIN)
   if (held) return held
   let built: z.ZodTypeAny | undefined
-  let bundles = z.lazy(() =>
+  let bundles: z.ZodTypeAny = z.lazy(() =>
     built ??= z.array(
       bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
     )
   )
   let input = zodInput(said)
   let about = said.properties?.bundles?.description
+  if (!said.required?.includes('bundles')) bundles = bundles.optional()
   input.bundles = about ? bundles.describe(about) : bundles
   byProp.set(prop ?? PLAIN, input)
   return input

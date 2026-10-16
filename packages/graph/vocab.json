@@ -9,9 +9,13 @@
       "tool": true,
       "noun": "graph",
       "verb": "apply",
-      "title": "Apply a batch of bundles",
-      "description": "Create, patch or delete stored records (entities) and their named groups of fields (components) in one atomic transaction: the whole batch is accepted or refused. `bundles` is an array of bundles, each one entity as {entity: {eid}, <component>: {<properties>}}, the shape a client's apply() takes. An omitted property is unchanged, a null property is cleared, a null component is removed, and $delete: true deletes the entity. Generate the eid (an entity's unique string id) yourself, or write '$name' and read the assigned eid from the result. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write idempotent: the same name again patches the entity holding it, and a name works wherever an eid does. $was: {doc: {body: \"<hash>\"}} states what a read-modify-write was based on: per component and property, the SHA-256 of the value you read (null for none); if one has changed since, the whole batch is refused, naming the property and its current value. That is compare-and-set: of two callers spending the same balance, only one succeeds. The result is the transaction as applied, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps added (created, updated) and the '$alias' you used; each deleted entity, consequences included, is {entity, tombstone: {}} alone. The input schema is the store's vocabulary, every component, property and type (graph_schema says the same at length). It is open: a component or property declared after you connected still reaches the graph, and the server refuses one nobody declared. check: true is a dry run: every check is made and the transaction rolled back, answering what a kept write would (each '$name' resolved) or its exact refusal, which is how a plan of several entities and their edges is proven before any of it is written. With secret{name, value}, an optional doc{title, body} in the same bundle can say what the secret is for and who uses it; never put a credential or vault handle there. Documentation: https://yaks.app/docs/store.",
+      "title": "Apply a query patch or a batch of bundles",
+      "description": "Create, patch or delete stored records (entities) and their named groups of fields (components) in one atomic transaction: the whole batch is accepted or refused. `bundles` is an array of bundles, each one entity as {entity: {eid}, <component>: {<properties>}}, the shape a client's apply() takes. An omitted property is unchanged, a null property is cleared, a null component is removed, and $delete: true deletes the entity. Generate the eid (an entity's unique string id) yourself, or write '$name' and read the assigned eid from the result. Where this store keeps names, alias: {name: '<your name>'} beside a '$name' eid makes the write idempotent: the same name again patches the entity holding it, and a name works wherever an eid does. $was: {doc: {body: \"<hash>\"}} states what a read-modify-write was based on: per component and property, the SHA-256 of the value you read (null for none); if one has changed since, the whole batch is refused, naming the property and its current value. That is compare-and-set: of two callers spending the same balance, only one succeeds. The result is the transaction as applied, one bundle per entity: {entity: {eid, num}}, every component as written, the stamps added (created, updated) and the '$alias' you used; each deleted entity, consequences included, is {entity, tombstone: {}} alone. The input schema is the store's vocabulary, every component, property and type (graph_schema says the same at length). It is open: a component or property declared after you connected still reaches the graph, and the server refuses one nobody declared. check: true is a dry run: every check is made and the transaction rolled back, answering what a kept write would (each '$name' resolved) or its exact refusal, which is how a plan of several entities and their edges is proven before any of it is written. With secret{name, value}, an optional doc{title, body} in the same bundle can say what the secret is for and who uses it; never put a credential or vault handle there. Documentation: https://yaks.app/docs/store. Alternatively, q writes one entity using the shared query grammar: '.entity.eid=<id> .book.pages=500' or '<id> .book.pages=500'. Values follow the property's schema: numbers and booleans become those types; text, references and enum values stay strings. The scalar null clears a property (quoted null also clears); .component adds it and !component removes it. The target is an existing eid, human id or name; '$name' or a fresh UUID creates an entity. Exactly one target is required; unsupported predicates are refused, not ignored. For several entities use bundles. Pass q or bundles, never both.",
       "input": {
+        "q": {
+          "type": "string",
+          "description": "one entity patch: '.entity.eid=<id> .book.pages=500' or '<id> .book.pages=500'; schema-typed values, null clears (also quoted null), !component removes; $name or a fresh UUID creates an entity"
+        },
         "bundles": {
           "type": "array",
           "items": {
@@ -24,10 +28,10 @@
           "description": "true to validate without keeping the proposed changes and return what would have been written; default false"
         }
       },
-      "required": [
-        "bundles"
-      ],
-      "destructive": true
+      "destructive": true,
+      "positional": [
+        "q..."
+      ]
     },
     "graph_query": {
       "tool": true,

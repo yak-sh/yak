@@ -358,3 +358,25 @@ test('a usage mistake is a refusal, never a reported defect', () => {
     true,
   )
 })
+
+// The graph's declaration owns this spelling, also when listed remotely.
+test('graph apply accepts a query line, a leading address or bundles', async () => {
+  let { declared } = await import('@yaks/graph/vocab')
+  let apply = declared().find((tool) => tool.name == 'graph_apply')!
+  assertEquals(await argsFor(apply, ['.entity.eid=T-1 .book.pages=500']), {
+    q: '.entity.eid=T-1 .book.pages=500',
+  })
+  assertEquals(await argsFor(apply, ['T-1', '.book.pages=500', '--check']), {
+    q: 'T-1 .book.pages=500',
+    check: true,
+  })
+  assertEquals(
+    await argsFor(apply, [
+      '--bundles',
+      '[{"entity":{"eid":"$new"},"book":{}}]',
+    ]),
+    {
+      bundles: [{ entity: { eid: '$new' }, book: {} }],
+    },
+  )
+})

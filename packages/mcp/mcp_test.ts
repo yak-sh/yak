@@ -202,20 +202,18 @@ test('a client listed before an argument was renamed is still answered', async (
   }
 })
 
-test('a call missing its argument altogether is told which one', () => {
+test('query patches and bundles both pass the published write schema', () => {
   let apply = core({ vocab: shop }).find((t) => t.name == 'graph_apply')!
-  let told = z.object(shapeOf(apply)).safeParse({})
-  assertEquals(
-    told.error?.issues.map((i) => `${i.path}: ${i.message}`),
-    ['bundles: Required'],
-  )
+  let schema = z.object(shapeOf(apply))
+  assert(schema.safeParse({ q: 'b1 .book.price=20' }).success)
+  assert(schema.safeParse({ bundles: [spring] }).success)
 })
 
 test('a checked batch says what would land and keeps none of it', async () => {
   let g = shopGraph()
   let client = await connect({ graph: g, actor: ada })
   let out = await called(client, 'graph_apply', {
-    bundles: [{ entity: { eid: '$new' }, doc: { title: 'Emma' } }],
+    q: '$new .doc.title=Emma',
     check: true,
   })
   assertEquals(out.isError, undefined)

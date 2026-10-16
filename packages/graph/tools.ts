@@ -29,7 +29,7 @@
 // declaration means validating it, which means a JSON Schema validator, which
 // has no business in a browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
-import { conjoin, parse } from '@yaks/query'
+import { adopt, conjoin, eq, map, parse } from '@yaks/query/core'
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { aggregate, reduced } from './aggregate.ts'
@@ -132,7 +132,68 @@ export let runs = (seams: Seams = {}): Runs => {
     // the runner signed as the caller, and the batch as applied is what comes
     // back. `check: true` makes the call a rehearsal, which the runner answers
     // with what a kept write would have returned (@yaks/tools).
-    graph_apply: (call) => formed(argsOf(call).bundles),
+    graph_apply: (call, graph) => {
+      let { q, bundles } = argsOf(call)
+      if (q === undefined) {
+        if (bundles === undefined) {
+          throw new Refused('graph_apply needs q or bundles')
+        }
+        return formed(bundles)
+      }
+      if (bundles !== undefined) {
+        throw new Refused('graph_apply takes q or bundles, not both')
+      }
+      try {
+        let ast = parse(str(q))
+        let first = ast.clauses[0]
+        // A leading address is the sole shorthand around the shared grammar.
+        // Leave every other clause to strict adoption, never a second parser.
+        if (first?.kind == 'text') {
+          ast = {
+            ...ast,
+            clauses: [eq('entity.eid', first.value), ...ast.clauses.slice(1)],
+          }
+        } else if (first?.kind == 'var' && first.value === undefined) {
+          ast = {
+            ...ast,
+            clauses: [
+              eq('entity.eid', '$' + first.name),
+              ...ast.clauses.slice(1),
+            ],
+          }
+        }
+        let targets = 0
+        map(ast, (clause) => {
+          if (
+            clause.kind == 'pred' && clause.path.join('.') == 'entity.eid'
+          ) targets++
+          return clause
+        })
+        if (targets != 1) {
+          throw new Refused(
+            'graph_apply needs exactly one entity.eid; use bundles for several entities',
+          )
+        }
+        let patch = adopt(ast, graph.vocab, { strict: true })
+        let eid = patch.entity?.eid
+        if (typeof eid != 'string' || !eid) {
+          throw new Refused('graph_apply needs a nonempty entity.eid')
+        }
+        if (!Object.keys(patch).some((name) => name != 'entity')) {
+          throw new Refused(
+            'graph_apply needs a component or property to write',
+          )
+        }
+        // Addressing is the write door's job, just as for --bundles: names and
+        // human ids must already exist; a fresh UUID or $name creates an entity.
+        return formed([{ ...patch, entity: { eid } }])
+      } catch (error) {
+        if (error instanceof TypeError || error instanceof SyntaxError) {
+          throw new Refused(error.message)
+        }
+        throw error
+      }
+    },
     // The one concession to typing by hand is the query line:
     // `.book.status=shelved` is the grammar @yaks/query owns, so this takes it as a string, and each
     // of the optional `filters` narrows the whole of it (`conjoin`). It stays a
