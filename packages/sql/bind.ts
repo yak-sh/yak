@@ -3004,8 +3004,9 @@ let anchorWhere = (after: After): Frag =>
 let anchor = (ctx: Ctx, after: After, field = 'id'): Frag => {
   let where = anchorWhere(after)
   return {
-    sql:
-      `(select "__cur"."${field}" from ${ctx.d.spine} as "__cur" where ${where.sql})`,
+    sql: `(select "__cur"."${field}" from ${
+      source(ctx, 'entity')
+    } as "__cur" where ${where.sql})`,
     params: where.params,
   }
 }
@@ -3051,7 +3052,7 @@ let keyset = (
   let owner = anchor(ctx, after)
   if (physical) return spliced(`${ctx.d.ownerKey('entity')} > `, owner)
   let exists = spliced(
-    `exists (select 1 from ${ctx.d.spine} as "__cur" where `,
+    `exists (select 1 from ${source(ctx, 'entity')} as "__cur" where `,
     anchorWhere(after),
     ')',
   )
