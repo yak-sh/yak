@@ -29,9 +29,14 @@ test('playground refuses an unclosed quoted command', () => {
   throws(() => words("graph query '.book"))
 })
 
-test('playground patches a book by its leading UUID', async () => {
-  equal(await patch.run(`graph apply ${id} .book.pages=500`, ignored), 0)
-  equal((await patch.books())[0].book, { title: 'Dune', pages: 500 })
+const patchedCode = await patch.run(
+  `graph apply ${id} .book.pages=500`,
+  ignored,
+)
+const patchedBook = (await patch.books())[0].book
+test('playground patches a book by its leading UUID', () => {
+  equal(patchedCode, 0)
+  equal(patchedBook, { title: 'Dune', pages: 500 })
 })
 
 test('playground patches a book by explicit entity.eid', async () => {
@@ -82,20 +87,17 @@ test('playground still accepts a JSON batch', async () => {
   equal((await batch.books())[0].book.pages, 600)
 })
 
-test('playground queries the same graph and starts each tab fresh', async () => {
-  const output: string[] = []
-  equal(
-    await queried.run(
-      'graph query .book.pages>400',
-      (s: string) => output.push(s),
-    ),
-    0,
-  )
-  equal(JSON.parse(output.join('')).result[0].book, {
-    title: 'Dune',
-    pages: 412,
-  })
-  equal((await fresh.books())[0].book, { title: 'Dune', pages: 412 })
+const queryOutput: string[] = []
+const queryCode = await queried.run(
+  'graph query .book.pages>400',
+  (s: string) => queryOutput.push(s),
+)
+const queryBook = JSON.parse(queryOutput.join('')).result[0].book
+const freshBook = (await fresh.books())[0].book
+test('playground queries the same graph and starts each tab fresh', () => {
+  equal(queryCode, 0)
+  equal(queryBook, { title: 'Dune', pages: 412 })
+  equal(freshBook, { title: 'Dune', pages: 412 })
 })
 
 const page = await Deno.readTextFile(new URL('./index.html', import.meta.url))
