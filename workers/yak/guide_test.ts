@@ -11,6 +11,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { front } from '@yaks/yaml'
 import { storable } from '@yaks/vocab'
+import { fixedStep, ownerOf } from '@yaks/game'
 import { coreDocs, reserved, wordOf } from './vocab.ts'
 import { upload } from './dispatch.ts'
 import type { Env } from './env.ts'
@@ -474,4 +475,29 @@ test('the storage page declares usable local input and Mossvale position', () =>
   for (let key of Object.keys(shown.properties)) {
     assertEquals(shown.properties[key].type, actual.properties[key].type, key)
   }
+})
+
+// The guide's dependency example is copied from the working app, while its
+// pure-rules fence executes without browser resources. Read fixtures outside
+// the measured transition; only the declaration and rules are under test.
+let gameText = pageText('games')
+let gameDependencies = JSON.parse(
+  /```json\n([\s\S]*?)\n```/.exec(gameText)![1],
+)
+let holdfastDependencies = JSON.parse(Deno.readTextFileSync(
+  new URL('../../apps/holdfast/package.json', import.meta.url),
+))
+let gameRulesExample = /```ts\n([\s\S]*?)\n```/.exec(gameText)![1]
+  .replace(/^import .* from .*\n/gm, '')
+  .replace(' as const', '')
+let runGameRulesExample = new Function(
+  'fixedStep',
+  'ownerOf',
+  'equal',
+  gameRulesExample,
+)
+
+test('the games page uses Holdfast dependencies and runnable rules', () => {
+  assertEquals(gameDependencies, holdfastDependencies)
+  runGameRulesExample(fixedStep, ownerOf, assertEquals)
 })

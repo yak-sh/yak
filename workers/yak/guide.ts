@@ -431,6 +431,7 @@ export let PAGES: Page[] = [
   'querying',
   'components',
   'storage',
+  'games',
   'entities',
   'wakes',
   'files',

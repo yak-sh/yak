@@ -171,6 +171,10 @@ and a component every app's store already has stays as it is.
   while anything is stored in them, so what was saved stays readable. A
   dependency whose components hold nothing leaves, and they go with it.
 
+For a working game using these dependencies, including page-only controls,
+shared Three.js and the words its store keeps, follow
+<https://yaks.app/docs/games.md>.
+
 ## The fall-through rule
 
 Every request for the app that is not under `/api/` reaches the worker first,

@@ -64,6 +64,13 @@ export let PAGES: Record<string, Page> = {
     'brief':
       'files, releases, yak-release, reload, uploads, big files in parts, resuming, deleting them, pictures',
   },
+  'games': {
+    'slug': 'games',
+    'title': 'Build a multiplayer game',
+    'description':
+      "Build on Holdfast's working multiplayer pattern: platform dependencies and their words, @yaks/game rules, controls and HUD, @yaks/stage presentation, @yaks/voxel geometry and its /three look, a shared clock, one page moving each creature, and recovering an order without charging twice.",
+    'brief': 'games with rules, controls, a HUD and a replaceable look',
+  },
   'home': {
     'slug': 'home',
     'title': 'The front page, and routing the space',

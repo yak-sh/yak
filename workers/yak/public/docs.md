@@ -86,6 +86,16 @@ properties, and vocab.json for components of your own.
 Deeper: <https://yaks.app/docs/storage.md> — `sync`, `durable`, `pace` and
 `save`: what players see, what stays in a browser, and what the store keeps.
 
+## Games
+
+A game's page reads the graph, computes rules and writes bundles. `@yaks/game`
+provides rules, controls and HUD parts; `@yaks/stage` draws ordinary geometry
+and sound, and `@yaks/voxel/three` supplies a voxel look. One elected page
+advances shared creatures; the others draw their relayed values.
+
+Deeper: <https://yaks.app/docs/games.md> — Holdfast's working multiplayer
+pattern, toolkit dependencies, shared time, owner handoff and dropped orders.
+
 ## Coming back later
 
 An app has no cron and nothing sitting awake. Any row can carry a `wake`

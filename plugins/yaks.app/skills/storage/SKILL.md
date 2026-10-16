@@ -177,3 +177,6 @@ Mossvale's `motion` uses `sync: peers`, `durable: connection` and `pace: 100ms`:
 other pages need the current direction and gait, but a returning hero does not
 need yesterday's walking animation. Pick the lifetime for the recovery you
 intend, rather than making every component permanent.
+
+For controls, rendering, owner election and recovering an order, continue with
+<https://yaks.app/docs/games.md>.
