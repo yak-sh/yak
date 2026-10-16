@@ -1,3 +1,4 @@
+import './sqlitepath.ts'
 // Selective session and machine reads must not build global visible component
 // owning sets, even when statistics still describe the small initial graph.
 import { Database } from '@db/sqlite'
