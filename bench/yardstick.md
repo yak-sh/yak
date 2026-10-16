@@ -169,3 +169,10 @@ three-case suite and `deno task test:budget bench/yardstick-tree_test.ts` pass
 the Unicode fixture fail, then restoring the emitter passes. A two-file
 end-to-end smoke run exercises parse/spool/load/diffs/reads/fresh-process
 restart with answer checks.
+
+Measurement engine/package code is pinned to corpus/base commit
+`64debacbd3129ba0bcb08bd5de583bd36d57172b`. Landing rebased the harness onto
+newer main (including SQL changes); the reported full-corpus numbers are **not**
+measurements of that newer main. The focused suite, type check and two-file
+end-to-end smoke were repeated after rebasing. For engine comparisons use the
+pinned engine code and identical corpus/grammar hashes, not floating main.
