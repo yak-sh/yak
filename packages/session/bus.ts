@@ -32,6 +32,7 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
         unsaid(
           present('comment'),
           present('comment.target.created.via.session'),
+          absent('created.via.session'),
         ),
       ]
       : [],

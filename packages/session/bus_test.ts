@@ -476,6 +476,7 @@ let question = {
 let createdThread = async (
   store: Storage,
   mode: 'outside' | 'native' | 'ended' | 'stopped' | 'own' | 'claimed',
+  agent = false,
 ) => {
   let g = bare(store)
   await g.apply([
@@ -484,6 +485,7 @@ let createdThread = async (
     { entity: { eid: 'operator' }, persona: { home: 'p' } },
     { entity: { eid: 'stranger' }, persona: { home: 'elsewhere' } },
     { entity: { eid: 'owner' }, doc: { title: 'Owner' } },
+    { entity: { eid: 'agent' }, session: { id: 'agent' } },
     {
       entity: { eid: 'creator' },
       session: { id: 'creator', ...mode == 'ended' ? { ended: true } : {} },
@@ -531,66 +533,74 @@ let createdThread = async (
   await g.apply(['decision', 'assigned'].map((target) => ({
     entity: { eid: `comment-${target}` },
     comment: { target },
-    doc: { body: `owner answered ${target}` },
-    $actor: mode == 'own' ? { by: 'creator', via: 'creator' } : { by: 'owner' },
+    doc: { body: `another actor answered ${target}` },
+    $actor: mode == 'own'
+      ? { by: 'creator', via: 'creator' }
+      : agent
+      ? { by: 'agent', via: 'agent' }
+      : { by: 'owner', via: 'owner' },
   })))
   return g
 }
 // Freeze the history's computed status and use storage's read interface, as
 // the held-news fixture above does: delivery, not graph hooks, is under test.
-for (
-  let mode of [
-    'outside',
-    'native',
-    'ended',
-    'stopped',
-    'own',
-    'claimed',
-  ] as const
-) {
-  let seeded = await createdThread(memory(), mode)
-  let rows = await seeded.read('*')
-  let statuses = new Map(
-    rows.filter((b) => b.session).map((b) => [
-      b.entity.eid,
-      statusOf(
-        rows.filter((e) =>
-          (e.entry as { session?: string })?.session == b.entity.eid
+for (let agent of [false, true]) {
+  for (
+    let mode of [
+      'outside',
+      'native',
+      'ended',
+      'stopped',
+      'own',
+      'claimed',
+    ] as const
+  ) {
+    let seeded = await createdThread(memory(), mode, agent)
+    let rows = await seeded.read('*')
+    let statuses = new Map(
+      rows.filter((b) => b.session).map((b) => [
+        b.entity.eid,
+        statusOf(
+          rows.filter((e) =>
+            (e.entry as { session?: string })?.session == b.entity.eid
+          ),
         ),
-      ),
-    ]),
-  )
-  let store = laid(
-    rows,
-    ram(vocab, {
-      computed: { 'session.status': (b) => statuses.get(b.entity.eid) },
-    }),
-  )
-  let g = bare(store)
-  g.get = store.get
-  g.read = (q, opts) => store.read(typeof q == 'string' ? parse(q) : q, opts)
-  let inherited = mode == 'ended' || mode == 'stopped'
-  test(`creator comments reach ${mode} sessions without claiming the question`, async () => {
-    let recipient = inherited ? 'next' : 'creator'
-    let lines = mode == 'native' || inherited
-      ? (await due(g)).map((b) => [b.session, b.item.entity.eid])
-      : (await pending(g, recipient)).map((b) => [recipient, b.item.entity.eid])
-    assertEquals(
-      lines,
-      mode == 'own' ? [] : [
-        [recipient, 'comment-decision'],
-        [recipient, 'comment-assigned'],
-      ],
+      ]),
     )
-  })
-  if (mode == 'outside') {
-    test('a project operator cannot take a live creator’s comments', async () => {
-      assertEquals(await pending(g, 'next'), [])
+    let store = laid(
+      rows,
+      ram(vocab, {
+        computed: { 'session.status': (b) => statuses.get(b.entity.eid) },
+      }),
+    )
+    let g = bare(store)
+    g.get = store.get
+    g.read = (q, opts) => store.read(typeof q == 'string' ? parse(q) : q, opts)
+    let inherited = mode == 'ended' || mode == 'stopped'
+    test(`${agent ? 'agent' : 'person'} comments on created records for ${mode} sessions`, async () => {
+      let recipient = inherited ? 'next' : 'creator'
+      let lines = mode == 'native' || inherited
+        ? (await due(g)).map((b) => [b.session, b.item.entity.eid])
+        : (await pending(g, recipient)).map((
+          b,
+        ) => [recipient, b.item.entity.eid])
+      assertEquals(
+        lines,
+        mode == 'own' || (agent && mode != 'claimed') ? [] : [
+          [recipient, 'comment-decision'],
+          ...agent ? [] : [[recipient, 'comment-assigned']],
+        ],
+      )
     })
-  }
-  if (inherited) {
-    test(`another project cannot take the ${mode} creator’s comments`, async () => {
-      assertEquals(await pending(g, 'other'), [])
-    })
+    if (!agent && mode == 'outside') {
+      test('a project operator cannot take a live creator’s comments', async () => {
+        assertEquals(await pending(g, 'next'), [])
+      })
+    }
+    if (!agent && inherited) {
+      test(`another project cannot take the ${mode} creator’s comments`, async () => {
+        assertEquals(await pending(g, 'other'), [])
+      })
+    }
   }
 }

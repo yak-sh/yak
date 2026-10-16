@@ -11,8 +11,9 @@
 // command's output goes to the agent's own harness, never to a file a second
 // loop watches, which can vanish and take every line after it.
 //
-// Comments on records a session created follow it without a claim; once it
-// ends they are held for the project the record is filed under, just like mail.
+// Person-written comments on records a session created follow it without a
+// claim; once it ends they are held for the project the record is filed under,
+// just like mail.
 // A reply is the old session's while it may still hear it, and the project's
 // once it cannot. The session that wrote a letter hears the answer, wherever
 // the far side sent it, until that session is over (its harness ended it, or
@@ -107,6 +108,7 @@ export let addressedTo = (
         unsaid(
           present('comment'),
           eq('comment.target.created.via', session),
+          absent('created.via.session'),
         ),
         ...claimedComments
           ? [unsaid(
@@ -277,12 +279,14 @@ export let knocked = (projects?: Eid[]): And =>
     absent(NOTIFIED),
   )
 
-/** Unsaid comments on records filed under these projects and created through
- * a session. They are that session's while it can hear, then the project's. */
+/** Unsaid person-written comments on records filed under these projects and
+ * created through a session. They are that session's while it can hear, then
+ * the project's. */
 export let commented = (projects?: Eid[]): And =>
   and(
     present('comment'),
     present('comment.target.created.via.session'),
+    absent('created.via.session'),
     projects
       ? eq('comment.target.filed.project', value(projects))
       : present('comment.target.filed.project'),
