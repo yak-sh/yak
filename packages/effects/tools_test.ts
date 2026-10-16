@@ -59,6 +59,23 @@ test('a run pending past the cutoff is a warn, a fresh one is not', async () => 
   )
 })
 
+test('a run held by a claim its worker renews is being worked, one it let lapse is not', async () => {
+  let held = async (expiry: number) =>
+    (await checkup(
+      await pooled({
+        handler: 'post_note',
+        state: 'pending',
+        at: ago(90),
+        lease_owner: 'worker',
+        lease_token: 'claim',
+        lease_expiry: ago(expiry),
+      }),
+      pooledBlog,
+    )).level
+  assertEquals(await held(-1), undefined)
+  assertEquals(await held(5), 'warn')
+})
+
 test('a graph that keeps no pool has nothing to be behind on', async () => {
   let said = await checkup(blogGraph(), blog)
   assertEquals(said.level, undefined)

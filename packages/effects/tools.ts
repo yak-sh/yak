@@ -10,10 +10,10 @@
 //
 // The other half is a row that never got that far: a run is written pending
 // by the commit that owes it, so a row that has been waiting since long before
-// it came due means nobody is working the pool — no process serves the
-// effects role, or none of them handles that effect. That failure is invisible
-// from every other angle: the writes commit, the graph looks normal, the mail
-// just never goes out.
+// it came due, with no claim a worker renews, means nobody is working the
+// pool — no process serves the effects role, or none of them handles that
+// effect. That failure is invisible from every other angle: the writes
+// commit, the graph looks normal, the mail just never goes out.
 //
 // And the person it tells can act: `effect_retry` puts failed runs back to
 // pending for the pool to work again, `effect_drop` deletes the ones whose work
@@ -153,10 +153,13 @@ export let runs = (
         .filter((b) => {
           // Since when it has been waiting: a failure that reported is owed its
           // next run at `next`, not at the instant the run was first written
-          // down — a backoff is not a symptom.
+          // down — a backoff is not a symptom. A claim its worker still renews
+          // is a run in progress, however long ago it was owed: a transcript's
+          // run lasts as long as the transcript does.
           let row = comp(b)
           let at = Date.parse(String(row?.next ?? row?.at ?? ''))
-          return !isNaN(at) && at < cutoff
+          let held = Date.parse(String(row?.lease_expiry ?? '')) > Date.now()
+          return !isNaN(at) && at < cutoff && !held
         })
       let found: Finding[] = []
       if (failed.length) {
