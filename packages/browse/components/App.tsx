@@ -219,7 +219,13 @@ export let Page = ({ at }: { at: string }) => {
           : search != null
           ? <SearchPage query={search} />
           : place
-          ? <QueryList eid={filter!} query={place.query} />
+          ? (
+            <QueryList
+              eid={filter!}
+              query={place.query}
+              edges={place.key != 'sessions'}
+            />
+          )
           : read?.state.status == 'failed'
           ? <SubscriptionFailure read={read} />
           : read && !read.ready

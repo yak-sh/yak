@@ -59,7 +59,7 @@ test('session list Tile names its brief without exposing IDs', () => {
   let mounted = mount(h(resolve(e, 'List.Tile').Render, { e }))
   try {
     assertEquals(
-      mounted.root.querySelector('.SessionRow_Title')?.textContent,
+      mounted.root.querySelector('.Tile_Title')?.textContent,
       'Ship the update',
     )
     assertEquals(

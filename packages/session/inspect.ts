@@ -280,8 +280,72 @@ export let SessionPage = ({ e, io }: Props): JSX.Element => {
   )
 }
 
+/** A session in any list: its work first, then state and latest turn.
+ * Reads are bounded and projected; naming a row never loads a transcript. */
+export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
+  let eid = e.entity.eid
+  let work = str(rows(got.work)[0], 'edge', 'to') || str(e, SESSION, 'source')
+  let named = io.ask(
+    work ? { work: `.entity.eid=${work}&.fields=doc.title` } : {},
+  )
+  let task = rows(got.claim)[0] ?? rows(named.work)[0]
+  // Read components through the host bundle interface (which may be lazy).
+  // A child's starting instruction is a notice, rather than human input.
+  let prose = rows(got.first).filter((b) =>
+    b.content && !b.output && !b.call && !b.result && !b.reasoning &&
+    !b.prompt && !b.stop && !b.ask && !b.exception && !b.refusal &&
+    !b.interrupted
+  )
+  let first = str(prose.find((b) => !b.notice) ?? prose[0], 'content', 'body')
+  let brief = str(e, 'brief', 'text')
+  let title = str(task, 'doc', 'title') || str(e, 'doc', 'title') ||
+    cut((first || brief).trim().replace(/\s+/g, ' '), 180) ||
+    (comp(e, SESSION).operator ? 'Personal conversation' : 'Session')
+  let at = str(rows(got.last)[0], 'created', 'at')
+  let status = str(e, SESSION, 'status')
+  let ready = Object.values(got).every((a) => a.ready)
+  return h(
+    ui.Tile,
+    { href: io.link(eid) },
+    h(ui.Tile.Kind, {}, 'session'),
+    h(ui.Tile.Title, {}, title),
+    h(
+      ui.Tile.Sub,
+      {},
+      [
+        status,
+        at
+          ? `active ${io.when(at)}`
+          : ready
+          ? 'no turns yet'
+          : 'loading activity…',
+      ]
+        .filter(Boolean).join(' · '),
+    ),
+  )
+}
+
+/** The shared list summary. A bounded opening preview keeps old transcripts cheap. */
+let sessionTile: View = {
+  view: 'List.Tile',
+  match: parse(`.${SESSION}`),
+  Render: SessionTile,
+  asks: (e) => {
+    let eid = e.entity.eid
+    return {
+      claim: `.claim.session=${eid}&.fields=doc.title&.limit=1`,
+      work: `.worked&.edge.from=${eid}&.fields=edge.to&.limit=1`,
+      first:
+        `.entry.session=${eid}&.order=entry.seq&.limit=12&?content&?output&?notice&?prompt&?call&?result&?reasoning&?stop&?exception&?refusal&?ask&?interrupted`,
+      last:
+        `.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq,created.at`,
+    }
+  },
+}
+
 /** The pages and parts this package draws in the inspector. */
 export let inspectViews: View[] = [
+  sessionTile,
   { view: 'Inspect.Turn', match: parse(`.${ENTRY}`), Render: EntryTurn },
   {
     view: 'Inspect.Conversation',

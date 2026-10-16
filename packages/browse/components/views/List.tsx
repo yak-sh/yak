@@ -71,7 +71,11 @@ export let BoardList = ({ e }: { e: Ent }) => (
 
 // Saved boards and built-in listings share filtering, paging and row faces.
 export let QueryList = (
-  { eid, query: saved }: { eid: string; query: string },
+  { eid, query: saved, edges = true }: {
+    eid: string
+    query: string
+    edges?: boolean
+  },
 ) => {
   let root = useRef<HTMLDivElement>(null)
   let [size, setSize] = useState(0)
@@ -102,7 +106,7 @@ export let QueryList = (
       let [comp, prop] = field.split('.')
       return !!vocab.prop(comp, prop)
     })
-    if (vocab.comp('edge')) {
+    if (edges && vocab.comp('edge')) {
       line += '&.edges.peers=' + peers.join(',') + '&.edges.limit=' +
         Math.max(size, limit) * 4
     }

@@ -14,6 +14,8 @@ import { Tray } from './Tray.tsx'
 import { mount } from './mount.ts'
 import { SessionRelated } from './views/SessionManage.tsx'
 import { useSessions } from './useSessions.ts'
+import { contribute } from './inspect.tsx'
+import * as sessionFacet from '@yaks/session/views'
 import { leaseEid } from '../../effects/lease.ts'
 
 let list = 'destination:sessions'
@@ -32,6 +34,7 @@ let sessions: Bundle[] = Array.from({ length: 15 }, (_, i) => ({
 }))
 
 test('All sessions reuses the paged list and accepts words and query filters, newest first', async () => {
+  await summaries()
   let prior = config.host
   config.host = 'browser.test'
   cache.value = {}
@@ -39,16 +42,15 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
     computed: { 'session.status': (b) => (b.session as Comp)?.status },
   })
   let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
+  await contribute([sessionFacet])
   let mounted = mount(
     <>
       <FilterInput eid={list} />
-      <QueryList eid={list} query={allSessionsQuery} />
+      <QueryList eid={list} query={allSessionsQuery} edges={false} />
     </>,
   )
   let titles = () =>
-    [...mounted.root.querySelectorAll('.SessionRow_Title')].map((e) =>
-      e.textContent
-    )
+    [...mounted.root.querySelectorAll('.Tile_Title')].map((e) => e.textContent)
   try {
     await until(() => titles().length == 10)
     assertEquals(
@@ -175,3 +177,79 @@ test('personal lists prioritize live roots and drop expired leases without graph
     config.host = prior
   }
 })
+
+async function summaries() {
+  let prior = config.host
+  config.host = 'browser.test'
+  cache.value = {}
+  let s = sessions[0].entity.eid
+  let other = sessions[1].entity.eid
+  let task = 'task-for-session'
+  let at = new Date().toISOString()
+  let read = reader(
+    [
+      { ...sessions[0], doc: undefined },
+      { ...sessions[1], doc: undefined },
+      {
+        entity: { eid: 'tool-result' },
+        entry: { session: other, seq: 0 },
+        result: {},
+        content: { body: 'This is tool output, not the conversation' },
+      },
+      {
+        entity: { eid: task },
+        task: {},
+        doc: { title: 'Make Sessions useful' },
+        claim: { session: s },
+      },
+      {
+        entity: { eid: 'input' },
+        entry: { session: other, seq: 1 },
+        content: { body: 'Review the project direction' },
+        created: { at },
+      },
+      {
+        entity: { eid: 'last' },
+        entry: { session: s, seq: 42 },
+        content: { body: 'done' },
+        output: {},
+        created: { at },
+      },
+    ].map((b) =>
+      Object.fromEntries(Object.entries(b).filter(([, v]) => v !== undefined))
+    ) as Bundle[],
+    {
+      computed: { 'session.status': (b) => (b.session as Comp)?.status },
+    },
+  )
+  let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
+  await contribute([sessionFacet])
+  let mounted = mount(
+    <QueryList eid='sessions-summary' query={allSessionsQuery} />,
+  )
+  try {
+    await until(() =>
+      mounted.root.textContent?.includes('Make Sessions useful') &&
+      mounted.root.textContent.includes('Review the project direction') &&
+      mounted.root.textContent.includes('active just now')
+    )
+    assertEquals(
+      [...mounted.root.querySelectorAll('.Tile_Sub')].map((e) => e.textContent),
+      [
+        'settled · active just now',
+        'pending · active just now',
+      ],
+    )
+    assertEquals(
+      [...mounted.root.querySelectorAll('.Tile')].every((e) =>
+        e.tagName == 'A'
+      ),
+      true,
+    )
+  } finally {
+    mounted.free()
+    wire.free()
+    cache.value = {}
+    config.host = prior
+  }
+}

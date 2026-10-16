@@ -50,7 +50,8 @@ export let sessionFields = [
   'using.model',
   'using.effort',
   'doc.title',
-  'brief.text',
+  'session.source',
+  'session.operator',
 ]
 
 // The Sessions destination (navigation.ts): a view of the store, not a saved
