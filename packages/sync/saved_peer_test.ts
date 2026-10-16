@@ -33,17 +33,34 @@ let row = (x: number): Bundle => ({
   position: { x },
 })
 
-test('a saved peer snapshot initializes a fresh graph and replaces absent saved fields', async () => {
-  let g = fresh()
-  await snapshot(g, [row(1)])
-  assertEquals((await g.get(['a']))[0].position, { x: 1 })
-  await g.apply([{ ...row(2), position: { x: 2, y: 3 }, cursor: { x: 4 } }])
-  await snapshot(g, [row(5)])
-  let [held] = await g.get(['a'])
+let initial = fresh()
+let replaced = fresh()
+await snapshot(replaced, [row(1)])
+await replaced.apply([{
+  ...row(2),
+  position: { x: 2, y: 3 },
+  cursor: { x: 4 },
+}])
+let cleared = fresh()
+await snapshot(cleared, [row(1)])
+await cleared.apply([{ ...row(2), position: { x: 2, y: 3 }, cursor: { x: 4 } }])
+await snapshot(cleared, [row(5)])
+
+test('a saved peer snapshot initializes a fresh graph', async () => {
+  await snapshot(initial, [row(1)])
+  assertEquals((await initial.get(['a']))[0].position, { x: 1 })
+})
+
+test('a saved peer snapshot replaces absent saved fields and keeps unsaved peers', async () => {
+  await snapshot(replaced, [row(5)])
+  let [held] = await replaced.get(['a'])
   assertEquals(held.position, { x: 5, y: null })
   assertEquals(held.cursor, { x: 4 })
-  await snapshot(g, [{ entity: { eid: 'a' }, avatar: {} }])
-  assertEquals((await g.get(['a']))[0].position, undefined)
+})
+
+test('a saved peer snapshot clears a saved component absent from the snapshot', async () => {
+  await snapshot(cleared, [{ entity: { eid: 'a' }, avatar: {} }])
+  assertEquals((await cleared.get(['a']))[0].position, undefined)
 })
 
 test('a reset keeps its saved peer position, clears absent unsaved peers, and takes a newer relay', async () => {

@@ -42,22 +42,28 @@ let page = () => {
   return { c, watch, socket, frame }
 }
 
-test('a new page reads its saved peer position from the initial subscription snapshot', async () => {
-  for (let i = 0; i < 2; i++) {
-    let { c, watch, frame } = page()
-    try {
-      await c.ready
-      assertEquals(c.ent('a'), undefined)
-      frame([row(4)], { reset: true })
-      await c.wire!.idle()
-      assertEquals(watch.ready, true)
-      assertEquals(watch.value[0].position, { x: 4 })
-      assertEquals(c.ent('a')?.position, { x: 4 })
-    } finally {
-      c.close()
-    }
-  }
-})
+let freshPages = [page(), page()]
+await Promise.all(freshPages.map(({ c }) => c.ready))
+
+for (let [i, { c, watch, frame }] of freshPages.entries()) {
+  test(
+    i === 0
+      ? 'a new page reads its saved peer position from the initial subscription snapshot'
+      : 'another new page independently reads its saved peer position',
+    async () => {
+      try {
+        assertEquals(c.ent('a'), undefined)
+        frame([row(4)], { reset: true })
+        await c.wire!.idle()
+        assertEquals(watch.ready, true)
+        assertEquals(watch.value[0].position, { x: 4 })
+        assertEquals(c.ent('a')?.position, { x: 4 })
+      } finally {
+        c.close()
+      }
+    },
+  )
+}
 
 let moving = page()
 

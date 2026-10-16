@@ -75,10 +75,16 @@ test('server evaluation never parses, filters or primes the query locally', asyn
   c.close()
 })
 
+// Each case owns its client; construction is not the watch behavior under test.
+let membership = fixture()
+let membershipWatch = membership.c.watch(
+  '.recipe.cook.doc.title=unloaded',
+  server,
+)
+membership.frame({ id: 's1', bundles: [row('hit')] })
 test('server membership is authoritative even when fields/far targets are unloaded', () => {
-  let { c, frame } = fixture()
-  let w = c.watch('.recipe.cook.doc.title=unloaded', server)
-  frame({ id: 's1', bundles: [row('hit')] })
+  let { c } = membership
+  let w = membershipWatch
   assertEquals(ids(w.value), ['hit'])
   assertEquals(w.ready, true)
   let n = 0
@@ -134,8 +140,10 @@ test('an aggregate watch carries its answer, and every later one', () => {
   c.close()
 })
 
+// Each case owns its client; construction is not the watch behavior under test.
+let refusal = fixture()
 test('a refused watch says why, until the server answers it', () => {
-  let { c, frame } = fixture()
+  let { c, frame } = refusal
   let w = c.watch('.nope', server)
   let heard = 0
   w.subscribe(() => heard++)
@@ -240,14 +248,29 @@ test('server-only reopens restore bounded semantic membership without local matc
   next.close()
 })
 
-test('cache observers see commits and physical eviction without tombstones or outbound writes', () => {
-  let { c, frame } = fixture({ retention: 0 })
+// Each case owns its client; construction is not the watch behavior under test.
+let observerFixture = () => {
+  let f = fixture({ retention: 0 })
   let seen: [string, boolean][] = []
-  let stop = c.cache.onRows((eids) => {
-    for (let eid of eids) seen.push([eid, !!c.ent(eid)])
+  let stop = f.c.cache.onRows((eids) => {
+    for (let eid of eids) seen.push([eid, !!f.c.ent(eid)])
   })
-  let w = c.watch('.near=a', server)
+  let w = f.c.watch('.near=a', server)
+  return { ...f, seen, stop, w }
+}
+let committedObserver = observerFixture()
+let evictedObserver = observerFixture()
+evictedObserver.frame({ id: 's1', bundles: [row('hit')] })
+
+test('cache observers see committed rows', () => {
+  let { c, frame, seen } = committedObserver
   frame({ id: 's1', bundles: [row('hit')] })
+  assertEquals(seen, [['hit', true]])
+  c.close()
+})
+
+test('cache observers see commits and physical eviction without tombstones or outbound writes', () => {
+  let { c, frame, seen, stop, w } = evictedObserver
   assertEquals(seen, [['hit', true]])
   w.close()
   assertEquals(seen, [['hit', true], ['hit', false]])
@@ -416,19 +439,40 @@ test('opt-in one-shot properties retain paint, not coverage, within the row budg
   c.close()
 })
 
-test('body omission is unloaded while covered omission is a known absence', () => {
-  let { c, frame } = fixture()
-  c.watch('bodyless', server)
-  frame({
+// Each case owns its client; construction is not the watch behavior under test.
+let bodyFixture = () => {
+  let f = fixture()
+  f.c.watch('bodyless', server)
+  f.frame({
     id: 's1',
     bundles: [{ ...row('a'), doc: { title: 'a', body: 'old' } }],
   })
+  return f
+}
+let bodyless = bodyFixture()
+let covered = bodyFixture()
+covered.frame({
+  id: 's1',
+  bundles: [row('a')],
+  coverage: { a: { doc: ['title'] } },
+  reset: true,
+})
+
+test('body omission is unloaded while covered omission is a known absence', () => {
+  let { c, frame } = bodyless
   frame({
     id: 's1',
     bundles: [row('a')],
     coverage: { a: { doc: ['title'] } },
     reset: true,
   })
+  assertEquals(comp(c.ent('a'), 'doc').body, undefined)
+  assertEquals(c.cache.loaded('a', 'doc', 'body'), false)
+  c.close()
+})
+
+test('a covered omission is a known absence', () => {
+  let { c, frame } = covered
   assertEquals(comp(c.ent('a'), 'doc').body, undefined)
   assertEquals(c.cache.loaded('a', 'doc', 'body'), false)
   frame({
@@ -717,14 +761,17 @@ test('identity-only projections restore as members without invented loaded prope
   next.close()
 })
 
+let departureDisk = wireStash()
+let departure = fixture({ wireVault: departureDisk, epoch: 'boot' })
+await departure.c.ready
+departure.c.watch('one', server)
+departure.c.watch('two', server)
+departure.frame({ id: 's1', bundles: [row('a')] })
+departure.frame({ id: 's2', peers: [row('a')] })
+
 test('authoritative departure does not drop another payload owners disk row', async () => {
-  let disk = wireStash()
-  let { c, frame } = fixture({ wireVault: disk, epoch: 'boot' })
-  await c.ready
-  c.watch('one', server)
-  c.watch('two', server)
-  frame({ id: 's1', bundles: [row('a')] })
-  frame({ id: 's2', peers: [row('a')] })
+  let { c, frame } = departure
+  let disk = departureDisk
   frame({ id: 's1', gone: ['a'] })
   await c.cache.idle()
   assertEquals((await disk.load('boot', 10)).map((r) => r.eid), ['a'])

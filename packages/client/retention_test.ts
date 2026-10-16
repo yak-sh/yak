@@ -218,11 +218,13 @@ let overlapping = fixture({
   fetch: () => ++calls === 1 ? first.promise : second.promise,
   report: () => {},
 })
+overlapping.c.mutate([write('a')])
+overlapping.c.mutate([{ entity: { eid: 'a' }, doc: { title: 'second' } }])
+let overlappingResponse = Response.json([])
+
 test('overlapping pending writes release only their own pins; uncertain transport stays pinned', async () => {
   let { c } = overlapping
-  c.mutate([write('a')])
-  c.mutate([{ entity: { eid: 'a' }, doc: { title: 'second' } }])
-  first.resolve(Response.json([]))
+  first.resolve(overlappingResponse)
   await Promise.resolve()
   await Promise.resolve()
   assert(c.ent('a'))
@@ -312,23 +314,31 @@ test('epoch mismatch invalidates only server tier, including ready state', async
   c.close()
 })
 
+let burstWrites: Saved[][] = []
+let burstVault: WireVault = {
+  ...wireStash(),
+  save: (_epoch, rows) => {
+    burstWrites.push(rows)
+    return Promise.resolve()
+  },
+}
+let burst = fixture({ epoch: 'one', wireVault: burstVault })
+await burst.c.ready
+burst.c.cache.subscribe('s1', '.doc')
+
 test('a burst of frames is one vault write, flushed by idle', async () => {
-  let writes: Saved[][] = []
-  let vault: WireVault = {
-    ...wireStash(),
-    save: (_epoch, rows) => {
-      writes.push(rows)
-      return Promise.resolve()
-    },
-  }
-  let { c, frame } = fixture({ epoch: 'one', wireVault: vault })
-  await c.ready
-  c.watch('.doc')
-  frame('s1', [row('a')])
-  frame('s1', [row('b'), {
-    entity: { eid: 'a', num: 10 },
-    doc: { title: 'a2' },
-  }])
+  let { c } = burst
+  let writes = burstWrites
+  // The retention owner receives decoded frames. Socket decoding is covered
+  // by the surrounding client tests; this case owns the write coalescing.
+  c.cache.land({ id: 's1', bundles: [row('a')] })
+  c.cache.land({
+    id: 's1',
+    bundles: [row('b'), {
+      entity: { eid: 'a', num: 10 },
+      doc: { title: 'a2' },
+    }],
+  })
   assertEquals(writes, [])
   await c.cache.idle()
   assertEquals(writes.length, 1)
@@ -396,11 +406,13 @@ test('retention validates bounds and never defaults to an unbounded disk read', 
   }
 })
 
+let enumerated = fixture({ retention: 2 })
+let enumeratedWatch = enumerated.c.watch('.doc')
+enumerated.frame('s1', [row('a'), row('b')])
+enumeratedWatch.close()
+
 test('storage enumeration and reactive refresh do not touch LRU', async () => {
-  let { c, frame } = fixture({ retention: 2 })
-  let w = c.watch('.doc')
-  frame('s1', [row('a'), row('b')])
-  w.close()
+  let { c } = enumerated
   await c.graph.read('.doc')
   await replicate(c.graph, [row('c')])
   await Promise.resolve()
@@ -519,26 +531,29 @@ test('a synchronous first frame filters stale shared hits before watch returns',
   c.close()
 })
 
-test('query replica applies transient frames without persisting projections', async () => {
-  const c = client(
-    loadVocab([{
-      $defs: {
-        text: {
-          component: true,
-          properties: { body: { type: 'string' } },
-        },
+const transientClient = client(
+  loadVocab([{
+    $defs: {
+      text: {
+        component: true,
+        properties: { body: { type: 'string' } },
       },
-    }]),
-    [],
-    { vault: false },
-  )
+    },
+  }]),
+  [],
+  { vault: false },
+)
+transientClient.cache.subscribe('live', '.text')
+await transientClient.cache.land({
+  id: 'live',
+  bundles: [{ entity: { eid: 'd' }, text: { body: '' } }],
+})
+const transientWatch = transientClient.watch('.text')
+
+test('query replica applies transient frames without persisting projections', async () => {
+  const c = transientClient
+  const watch = transientWatch
   try {
-    c.cache.subscribe('live', '.text')
-    await c.cache.land({
-      id: 'live',
-      bundles: [{ entity: { eid: 'd' }, text: { body: '' } }],
-    })
-    const watch = c.watch('.text')
     await c.cache.land({
       id: 'live',
       transient: [{

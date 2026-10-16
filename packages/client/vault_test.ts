@@ -10,7 +10,7 @@ import { boxClient, comp, fakeDb, fakeIdb } from './testing.ts'
 import { stash, type Vault } from './vault.ts'
 
 // One page load, then the next, over the same vault.
-let reload = async (vault: Vault) => {
+let remember = async (vault: Vault) => {
   let first = boxClient(undefined, { vault })
   await first.ready
   await first.mutate([{
@@ -21,7 +21,10 @@ let reload = async (vault: Vault) => {
     sieve: { text: 'cum' },
   }])
   first.close()
+}
 
+let reload = async (vault: Vault) => {
+  await remember(vault)
   let next = boxClient(undefined, { vault })
   await next.ready
   return next
@@ -36,8 +39,13 @@ test('a local comp survives a rebuild; a none comp does not', async () => {
   next.close()
 })
 
+let indexedVault = fakeIdb(fakeDb())
+await remember(indexedVault)
+let indexedReload = boxClient(undefined, { vault: indexedVault })
+
 test('the same, kept in IndexedDB', async () => {
-  let next = await reload(fakeIdb(fakeDb()))
+  let next = indexedReload
+  await next.ready
   assertEquals(comp(next.ent('r1'), 'draft').text, 'more cumin?')
   assertEquals(comp(next.ent('r1'), 'sieve'), {})
   next.close()

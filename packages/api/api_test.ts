@@ -285,18 +285,30 @@ test('a moved precondition answers 409, naming what it holds now', async () => {
 })
 
 let checkedWrite = shop()
+let checkedBatch = post('/apply?check=1', [
+  { entity: { eid: 'b1' }, doc: { title: 'Spring' }, book: { price: 12 } },
+])
+let checkedAbsence = shop()
+await checkedAbsence(post('/apply?check=1', [
+  { entity: { eid: 'b1' }, doc: { title: 'Spring' }, book: { price: 12 } },
+]))
 
 test('/apply?check=1 answers the batch it would take, and keeps none of it', async () => {
   let handler = checkedWrite
-  let asked = await handler(post('/apply?check=1', [
-    { entity: { eid: 'b1' }, doc: { title: 'Spring' }, book: { price: 12 } },
-  ]))
+  let asked = await handler(checkedBatch)
   assertEquals(asked.status, 200)
   let applied: Bundle[] = await body(asked)
   assertEquals(comp(applied[0], 'book'), { price: 12 })
-  assertEquals(await body(await handler(ask('.book.price<20'))), [])
-  // And a batch it would refuse is refused at the same status a commit is.
-  let no = await handler(post('/apply?check=1', [{
+})
+
+test('/apply?check=1 keeps none of the checked batch', async () => {
+  assertEquals(await body(await checkedAbsence(ask('.book.price<20'))), [])
+})
+
+let refusedCheck = shop()
+
+test('/apply?check=1 refuses a conflicting batch at the commit status', async () => {
+  let no = await refusedCheck(post('/apply?check=1', [{
     entity: { eid: 'b1' },
     book: { price: 20 },
     $was: { book: { price: token(99) } },

@@ -173,7 +173,7 @@ test('a refused store write keeps local and relayed values', async () => {
   b.wire.close()
 })
 
-test('a refused write on an entity the server never had leaves it bare', async () => {
+let refusedNewEntity = (() => {
   let srv = server()
   srv.graph.use({
     name: 'the cook',
@@ -184,6 +184,11 @@ test('a refused write on an entity the server never had leaves it bare', async (
     },
   })
   let c = client(srv)
+  return c
+})()
+
+test('a refused write on an entity the server never had leaves it bare', async () => {
+  let c = refusedNewEntity
   c.graph.apply([dal()])
   await c.idle()
   assertEquals(comp(at(c.graph, 'r1'), 'recipe'), {})
@@ -193,7 +198,7 @@ test('a refused write on an entity the server never had leaves it bare', async (
   c.wire.close()
 })
 
-test('a delete waits for the server, and a refused one leaves the entity', async () => {
+let refusedDelete = await (async () => {
   let srv = server()
   srv.graph.use({
     name: 'the cook',
@@ -208,6 +213,11 @@ test('a delete waits for the server, and a refused one leaves the entity', async
   c.graph.apply([dal()])
   await c.idle()
 
+  return { srv, c }
+})()
+
+test('a delete waits for the server, and a refused one leaves the entity', async () => {
+  let { srv, c } = refusedDelete
   c.graph.apply([{ entity: { eid: 'r1' }, $delete: true }])
   assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 4) // not optimistic
   await c.idle()

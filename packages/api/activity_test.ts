@@ -99,6 +99,7 @@ test('a reader overlay cannot steal composed graph activity or fanout parent', a
 
 let subscriptionActivity = await (async () => {
   let g = shopGraph()
+  await g.apply([{ entity: { eid: 'book-private' }, book: { price: 2 } }])
   let subs = subscriptions(g)
   let count = { frames: 0 }
   await subs.open(
@@ -110,12 +111,14 @@ let subscriptionActivity = await (async () => {
   )
   let c = channel(g)
   let off = c.subscribe(() => {})
-  return { g, c, off, count }
+  return { subs, c, off, count }
 })()
 
 test('subscription activity counts work but never queries, sink IDs or rows', async () => {
-  let { g, c, off, count } = subscriptionActivity
-  await g.apply([{ entity: { eid: 'book-private' }, book: { price: 3 } }])
+  let { subs, c, off, count } = subscriptionActivity
+  // Drive the registry's commit-feed door: graph write/request ancestry is
+  // checked above; this case owns fanout counts and activity redaction.
+  await subs.commit([{ entity: { eid: 'book-private' }, book: { price: 3 } }])
   ok(count.frames >= 2)
   let fan = ok(c.history().find((e) => e.kind == 'fanout' && e.stage == 'end'))
   equal(fan.counts?.transactions, 1)

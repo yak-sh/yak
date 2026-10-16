@@ -302,7 +302,7 @@ test('a durable duration clears itself, and each write restarts it', () => {
   assertEquals(relayed(two.take()), [{ entity: { eid: 'b1' }, typing: null }])
 })
 
-test('a value held through a lost memory can still be cleared', () => {
+let lostMemory = (() => {
   let graph = shop()
   graph.apply([{ entity: { eid: 'b1' }, book: { price: 12 } }])
   let subs = subscriptions(graph)
@@ -311,7 +311,11 @@ test('a value held through a lost memory can still be cleared', () => {
   subs.open(two.to, 's', '.book')
   one.take(), two.take()
   subs.relay(one.to, [{ entity: { eid: 'b1' }, browsing: { x: 7, y: 7 } }])
-  let keys = subs.relaying(one.to)
+  return { graph, keys: subs.relaying(one.to) }
+})()
+
+test('a value held through a lost memory can still be cleared', () => {
+  let { graph, keys } = lostMemory
   assertEquals(keys, ['b1 browsing'])
 
   // A hibernation: the registry is new and remembers nothing, but the keys

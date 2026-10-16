@@ -278,8 +278,37 @@ test('identical local watches share evaluation but not listener ownership', () =
   c.close()
 })
 
+// A subscription registry needs wire answers, not an API and another graph.
+let sharedSocket = pair().client
+let answered = 0
+let sharedRemote = Object.assign(
+  client(box, [], {
+    url: 'http://box.test',
+    vault: false,
+    wireVault: false,
+    connect: () => sharedSocket,
+  }),
+  {
+    socket: () => sharedSocket,
+    idle: async () => {
+      let sent = subscribes(sharedSocket.sent) as { id: string }[]
+      for (let sub of sent.slice(answered)) {
+        sharedSocket.emit(
+          'message',
+          JSON.stringify({ id: sub.id, bundles: [] }),
+        )
+      }
+      answered = sent.length
+      await sharedRemote.wire!.idle()
+    },
+  },
+)
+sharedRemote.wire!.open()
+sharedSocket.emit('open')
+await sharedRemote.ready
+
 test('remote watches share one sub until the last independent close', async () => {
-  let c = boxClient(server())
+  let c = sharedRemote
   let a = c.watch('.recipe.course=dinner')
   let b = c.watch('.recipe.course=dinner', { remote: true })
   assertEquals(a.ready, false)
@@ -356,58 +385,72 @@ let mine = {
 let page = loadVocab([{ $defs: { Panels: mine, Completion: mine } }])
 // The store knows neither page-owned component. Drive its empty answer and
 // refusal directly; this contract needs no API server or server graph.
-let pageSocket = pair().client
-let pageWrites = 0
-let pageTrouble: unknown[] = []
-let pageClient = client(page, [], {
-  url: 'http://box.test',
-  vault: false,
-  wireVault: false,
-  connect: () => pageSocket,
-  fetch: () => {
-    pageWrites++
-    return Response.json([])
-  },
-  report: (trouble) => void pageTrouble.push(trouble),
-})
-pageClient.wire!.open()
-pageSocket.emit('open')
-await pageClient.ready
-
-test("a remote watch shows the page's own rows, which no server answers", async () => {
-  let c = pageClient
-  let shows = async (query: string, row: Bundle, unknown = false) => {
-    let w = c.watch(query)
-    let heard: number[] = []
-    w.subscribe((rows) => heard.push(rows.length))
-    assertEquals(w.value, [])
-    let sub = subscribes(pageSocket.sent)?.at(-1) as { id: string }
-    pageSocket.emit(
-      'message',
-      JSON.stringify({
-        id: sub.id,
-        ...unknown
-          ? {
-            refused: {
-              error: 'Refused',
-              message: 'unknown component Completion',
-            },
-          }
-          : { bundles: [] },
-      }),
-    )
-    await c.wire!.idle()
-    await c.mutate([row])
-    return [heard.at(-1), w.value.length]
+let pageFixture = async () => {
+  let pageSocket = pair().client
+  let pageWrites = 0
+  let pageTrouble: unknown[] = []
+  let pageClient = client(page, [], {
+    url: 'http://box.test',
+    vault: false,
+    wireVault: false,
+    connect: () => pageSocket,
+    fetch: () => {
+      pageWrites++
+      return Response.json([])
+    },
+    report: (trouble) => void pageTrouble.push(trouble),
+  })
+  pageClient.wire!.open()
+  pageSocket.emit('open')
+  await pageClient.ready
+  return {
+    c: pageClient,
+    socket: pageSocket,
+    writes: () => pageWrites,
+    trouble: pageTrouble,
   }
-  let menu = { entity: { eid: 'hero/menu' }, Panels: { at: 'bag' } }
-  assertEquals(await shows('.entity.eid="hero/menu"', menu), [1, 1])
-  let chat = { entity: { eid: 'chat' }, Completion: { at: '/w' } }
-  assertEquals(await shows('.Completion', chat, true), [1, 1])
-  assertEquals(pageWrites, 0)
-  assertEquals(pageTrouble.length, 1) // only the unknown-component refusal
-  c.close()
-})
+}
+
+for (let unknown of [false, true]) {
+  let page = await pageFixture()
+  let query = unknown ? '.Completion' : '.entity.eid="hero/menu"'
+  let w = page.c.watch(query)
+  test(
+    unknown
+      ? 'a remote watch shows the page own rows after an unknown-component refusal'
+      : "a remote watch shows the page's own rows, which no server answers",
+    async () => {
+      let { c, socket } = page
+      let row: Bundle = unknown
+        ? { entity: { eid: 'chat' }, Completion: { at: '/w' } }
+        : { entity: { eid: 'hero/menu' }, Panels: { at: 'bag' } }
+      let heard: number[] = []
+      w.subscribe((rows) => heard.push(rows.length))
+      assertEquals(w.value, [])
+      let sub = subscribes(socket.sent)?.at(-1) as { id: string }
+      socket.emit(
+        'message',
+        JSON.stringify({
+          id: sub.id,
+          ...unknown
+            ? {
+              refused: {
+                error: 'Refused',
+                message: 'unknown component Completion',
+              },
+            }
+            : { bundles: [] },
+        }),
+      )
+      await c.wire!.idle()
+      await c.mutate([row])
+      assertEquals([heard.at(-1), w.value.length], [1, 1])
+      assertEquals(page.writes(), 0)
+      assertEquals(page.trouble.length, unknown ? 1 : 0)
+      c.close()
+    },
+  )
+}
 
 test('cached results do not make a new or disconnected remote watch ready', async () => {
   let srv = server()
