@@ -773,7 +773,10 @@ Stores without archetypes and unclassified low-level writes fall back to
 inspecting component presence. An incomplete catalog declines the query
 optimization instead of hiding entities.
 
-```ts
+The same diagnostic sequence is exercised by `inspect_test.ts`; installation and
+repair are outside its measured assertions.
+
+```ts ignore
 import { open } from '@yaks/sqlite/db'
 import {
   drift,
@@ -791,7 +794,10 @@ import { equal } from '@yaks/testing'
 
 let sql = open(':memory:')
 try {
-  let store = storage(sql, loadVocab([archetypeDoc, docDoc]))
+  // Inspection needs exact component populations before its first report.
+  let store = storage(sql, loadVocab([archetypeDoc, docDoc]), {
+    counts: 'eager',
+  })
   store.tx((tx) => tx.patch([{ entity: { eid: 'a' }, doc: { title: 'A' } }]))
   equal(drift(sql).drifted, 0)
   equal(identity(sql, 'a').tables, ['doc'])
@@ -823,15 +829,14 @@ component names to archetypes. Entity archetype and tombstone triggers update
 populations in the same transaction as the owner. Updating an ordinary property
 without changing its archetype does not write either metadata table.
 
-The first installation over an existing file seeds populations by reading its
-entities once. That migration and its triggers commit atomically; a rollback
-leaves neither behind. Later openers read the persisted populations, without
-recounting owners. File adapters install populations eagerly. The Cloudflare
-Store uses `counts: 'lazy'`: its first unscoped global aggregate activates
-populations inside a transaction, including this one-time seed. Apps that never
-ask for a global count incur no population upkeep; once activated, later openers
-keep the persisted populations and triggers. A local writer installs before its
-read-only readers open, so those readers find persisted populations without
+The first unscoped global aggregate seeds populations by reading existing
+entities once, inside a transaction with its triggers. A rollback leaves neither
+behind. Stores that never ask for a global count incur no population upkeep;
+once activated, later openers keep persisted populations and triggers without
+recounting owners. This lazy activation is the default on both local and metered
+hosts. A caller that will count immediately can request `counts: 'eager'` to
+seed during installation instead. A local writer serving read-only readers can
+use that eager option so those readers find persisted populations without
 migrating on a read.
 
 Unfiltered `.count`, `.component&.count` and `.tally=entity.archetype` read

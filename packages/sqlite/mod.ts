@@ -311,10 +311,10 @@ export type Store = {
  * as text through `doc_value`.
  */
 export type Opts = BindOpts & {
-  /** Activate maintained global populations at the first unscoped aggregate.
-   * File stores install eagerly; metered hosts can defer their one-time seed
-   * and all upkeep until someone actually asks for a global count. */
-  counts?: 'lazy'
+  /** Maintain global populations after the first unscoped aggregate (default).
+   * Stores that need counts immediately may seed them during installation;
+   * other stores never pay for upkeep until a count actually asks for it. */
+  counts?: 'lazy' | 'eager'
 
   /** How big a table is before a file owes its schema work, and the rows a
    * window does of it (./owe.ts `SIZES`): what a test shrinks. */
@@ -881,7 +881,7 @@ export let storage = (
         driver.query(keys('on'))
       }
     }
-    if (classified && base.counts != 'lazy') {
+    if (classified && base.counts == 'eager') {
       unit(driver, () => population(driver))
     }
     let analyze = () => {
@@ -952,7 +952,7 @@ export let storage = (
       ensure()
       let parsed = ast(query)
       if (
-        classified && base.counts == 'lazy' &&
+        classified && base.counts != 'eager' &&
         cardinality(parsed, vocab, { ...opts(), ...o })
       ) {
         unit(driver, () => population(driver))

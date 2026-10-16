@@ -78,7 +78,7 @@ test('population rollback is atomic and raw graves move liveness before classifi
 // then close its connection and reopen the persisted metadata through a reader.
 let dir = Deno.makeTempDirSync({ prefix: 'population-' })
 let file = `${dir}/graph.db`
-let disk = open(file), diskStore = storage(disk, vocab)
+let disk = open(file), diskStore = storage(disk, vocab, { counts: 'eager' })
 diskStore.install()
 let diskGraph = graph({ storage: diskStore, vocab, plugins: [archetypes()] })
 diskGraph.apply([{ entity: { eid: 'old' }, note: { text: 'kept' } }])
@@ -131,15 +131,15 @@ test('plain and filtered cardinalities agree while global queries read buckets',
   )
 })
 
-// A metered host defers all population upkeep until its first global count.
-let lazyDb = mem(), lazy = storage(lazyDb, vocab, { counts: 'lazy' })
+// Every host defers population upkeep until its first global count.
+let lazyDb = mem(), lazy = storage(lazyDb, vocab)
 lazy.install()
 let lazyGraph = graph({ storage: lazy, vocab, plugins: [archetypes()] })
 lazyGraph.apply([{ entity: { eid: 'lazy-one' }, note: {} }])
 let filteredLazy = lazy.rows('.note.text=not-here&.count')
 let dormant = lazyDb.query({ t: 'pragma', name: 'table_info', arg: POPULATION })
 let seeded = lazy.rows('.note&.count')
-let lazyReopened = storage(lazyDb, vocab, { counts: 'lazy' })
+let lazyReopened = storage(lazyDb, vocab)
 lazyReopened.install()
 lazyGraph.apply([{ entity: { eid: 'lazy-two' }, note: {} }])
 let resumed = lazyReopened.rows('.note&.count')
@@ -157,4 +157,22 @@ test('lazy populations activate once, survive reopen and permit unrelated query 
 
 test('unknown component counts retain compiler refusal', () => {
   assertThrows(() => f.store.rows('.unknown_component&.count'))
+})
+
+// A caller that plans to count at once can move the seed to installation.
+let eagerDb = mem(), eager = storage(eagerDb, vocab, { counts: 'eager' })
+eager.install()
+let eagerGraph = graph({ storage: eager, vocab, plugins: [archetypes()] })
+eagerGraph.apply([{ entity: { eid: 'eager-one' }, note: {} }])
+let eagerBuckets = populations(eagerDb)!
+let eagerCount = eager.rows('.note&.count')
+test('explicit eager populations are maintained before a first count', () => {
+  assertEquals(
+    eagerBuckets.filter((b) => b.tables.includes('note')).reduce(
+      (n, b) => n + b.n,
+      0,
+    ),
+    1,
+  )
+  assertEquals(eagerCount, [{ value: '', n: 1 }])
 })

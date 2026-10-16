@@ -103,3 +103,47 @@ test('identity inspection sees graves and live component presence without values
     omitted: 0,
   })
 })
+
+// The README's physical diagnostic/repair example. Setup and repair are not
+// the observation: capture each result before the timed behavior assertions.
+let diagnosticDb = open(':memory:')
+let diagnosticStore = storage(diagnosticDb, loadVocab([archetypeDoc, docDoc]), {
+  counts: 'eager',
+})
+diagnosticStore.tx((tx) =>
+  tx.patch([{ entity: { eid: 'diagnostic' }, doc: { title: 'A' } }])
+)
+let diagnosticBefore = {
+  drift: drift(diagnosticDb).drifted,
+  tables: identity(diagnosticDb, 'diagnostic').tables,
+  rows: inspect(diagnosticDb).shown.find((t) => t.name == 'doc')?.rows,
+}
+diagnosticDb.query({
+  t: 'update',
+  table: 'entity',
+  set: { archetype: lit(null) },
+  where: by({ eid: 'diagnostic' }),
+})
+let diagnosticDrift = drift(diagnosticDb).sample
+let diagnosticMended = mend(diagnosticDb)
+diagnosticStore.tx(() => {
+  diagnosticDb.query({ t: 'delete', from: 'doc' })
+  reclassify(diagnosticDb, ['diagnostic'])
+})
+let diagnosticAfter = {
+  drift: drift(diagnosticDb).drifted,
+  rows: diagnosticStore.read('.doc'),
+}
+diagnosticDb.close()
+test('physical diagnostics observe and repair an unclassified owner', () => {
+  assertEquals(diagnosticBefore, { drift: 0, tables: ['doc'], rows: 1 })
+  assertEquals(diagnosticDrift, ['diagnostic'])
+  assertEquals(diagnosticMended, 1)
+  assertEquals(diagnosticAfter, { drift: 0, rows: [] })
+})
+
+import { drift, mend, reclassify, storage } from './mod.ts'
+import { loadVocab } from '@yaks/vocab'
+import { archetypeDoc } from '@yaks/archetype'
+import { docDoc } from '@yaks/doc'
+import { by } from '@yaks/sql'
