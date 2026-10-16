@@ -1910,3 +1910,24 @@ test('an invalid plugin config creates no absent database', async () => {
     Deno.removeSync(dir, { recursive: true })
   }
 }, { tags: ['migration'] })
+
+test('a draining process stops advertising duties before its graph closes', async () => {
+  let host = await composing(
+    { db: ':memory:', plugins: ['m'] },
+    ['graph', 'effects'],
+    only({ m: { ...shop, vocab: { docs: [doc, processDoc, effectDoc] } } }),
+  )
+  try {
+    let [before] = await host.graph.get([me])
+    assertEquals((before.process as Comp).roles, ['graph', 'effects'])
+    host.stop()
+    await until(async () => {
+      let [row] = await host.graph.get([me])
+      return JSON.stringify((row.process as Comp).roles) == '["graph"]'
+    })
+    let [draining] = await host.graph.get([me])
+    assertEquals(draining.exit, undefined)
+  } finally {
+    await host.close()
+  }
+})

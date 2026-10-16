@@ -1,11 +1,11 @@
-// Fallback decisions and readiness failures without touching the owner's
+// Coverage monitoring and readiness failures without touching the owner's
 // graph, service manager or launching background workers.
 
 import { assertEquals, assertRejects } from '@std/assert'
-import { test } from '@yaks/testing'
+import { clock, test, until } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { PROCESS, type Store } from '@yaks/process'
-import { fallback, missing, ready } from './external.ts'
+import { missing, monitor, ready } from './external.ts'
 
 let processes = (rows: Bundle[]): Store => ({
   apply: (rows) => rows,
@@ -35,25 +35,6 @@ test('only live unexited duty roles cover the fallback', async () => {
     ),
     ['wake', 'process'],
   )
-})
-
-test('empty or covered duties start no worker; partial coverage starts only missing', async () => {
-  let starts: string[][] = []
-  let inspected = 0
-  let uncovered = () => {
-    inspected++
-    return Promise.resolve([])
-  }
-  let start = (roles: string[]) => {
-    starts.push(roles)
-    return Promise.resolve()
-  }
-  await fallback([], uncovered, start)
-  assertEquals(inspected, 0)
-  await fallback(['effects'], uncovered, start)
-  assertEquals(starts, [])
-  await fallback(['effects', 'wake'], () => Promise.resolve(['wake']), start)
-  assertEquals(starts, [['wake']])
 })
 
 let child = (status = new Promise<{ code: number }>(() => {})) => {
@@ -115,15 +96,317 @@ test('bounded readiness timeout stops only this failed launch', async () => {
   assertEquals(run.counts(), { unrefs: 1, kills: 1 })
 })
 
-test('launch failure propagates instead of hiding missing duties', async () => {
-  await assertRejects(
-    () =>
-      fallback(
-        ['wake'],
-        () => Promise.resolve(['wake']),
-        () => Promise.reject(new Error('setsid unavailable')),
-      ),
-    Error,
-    'setsid unavailable',
+let deferred = <T>() => {
+  let resolve!: (value: T) => void
+  let promise = new Promise<T>((done) => resolve = done)
+  return { promise, resolve }
+}
+
+let fixture = (initial: string[] = []) => {
+  let time = clock()
+  let needed = initial
+  let inspect = () => Promise.resolve(needed)
+  let launch = (_roles: string[], _signal: AbortSignal) => Promise.resolve()
+  let notify = () => {}
+  let unsubscribed = 0
+  let events: {
+    kind: string
+    roles?: string[]
+    role?: string
+    error?: unknown
+  }[] = []
+  let control = new AbortController()
+  let coverage = monitor({
+    uncovered: () => inspect(),
+    start: (roles, signal) => {
+      events.push({ kind: 'start', roles })
+      return launch(roles, signal)
+    },
+    report: (error, role) => {
+      events.push({ kind: 'report', role, error })
+    },
+    subscribe: (changed) => {
+      notify = changed
+      return () => {
+        unsubscribed++
+      }
+    },
+    signal: control.signal,
+    interval: 100,
+    now: time.now,
+    after: time.after,
+  })
+  return {
+    coverage,
+    time,
+    control,
+    events,
+    notify: () => notify(),
+    needed: (roles: string[]) => {
+      needed = roles
+    },
+    inspect: (next: typeof inspect) => {
+      inspect = next
+    },
+    launch: (next: typeof launch) => {
+      launch = next
+    },
+    unsubscribed: () => unsubscribed,
+  }
+}
+
+test('coverage reports each absent duty before a launch can succeed', async () => {
+  let f = fixture(['effects', 'wake'])
+  let launched = deferred<void>()
+  let starting = deferred<void>()
+  f.launch(() => {
+    starting.resolve()
+    return launched.promise
+  })
+  // Inspect/report do not wait for worker readiness.
+  await starting.promise
+  assertEquals(f.events.map((e) => [e.kind, e.role ?? e.roles]), [
+    ['report', 'effects'],
+    ['report', 'wake'],
+    ['start', ['effects', 'wake']],
+  ])
+  launched.resolve()
+  await f.coverage.checked
+  await f.coverage.close()
+})
+
+test('covered duty loss notifies immediately and is reported again after recovery', async () => {
+  let f = fixture()
+  try {
+    await f.coverage.checked
+    assertEquals(f.events, [])
+    f.needed(['wake'])
+    f.notify()
+    await until(() => f.events.some((e) => e.kind == 'start'))
+    assertEquals(
+      f.events.filter((e) => e.kind == 'report').map((e) => e.role),
+      ['wake'],
+    )
+    f.needed([])
+    await f.time.advance(100)
+    f.needed(['wake'])
+    await f.time.advance(100)
+    assertEquals(
+      f.events.filter((e) => e.kind == 'report').map((e) => e.role),
+      ['wake', 'wake'],
+    )
+    assertEquals(f.events.filter((e) => e.kind == 'start').length, 2)
+  } finally {
+    await f.coverage.close()
+  }
+})
+
+test('failed recovery retries on a bounded poll, without flooding missing reports', async () => {
+  let f = fixture(['wake'])
+  f.launch(() => Promise.reject(new Error('cannot spawn')))
+  try {
+    await f.coverage.checked
+    assertEquals(f.events.map((e) => e.kind), ['report', 'start', 'report'])
+    for (let i = 0; i < 20; i++) f.notify()
+    await f.time.advance(99)
+    assertEquals(f.events.filter((e) => e.kind == 'start').length, 1)
+    await f.time.advance(100)
+    // The poll is relative to the last inspection, but always bounded.
+    assertEquals(f.events.filter((e) => e.kind == 'start').length, 2)
+    assertEquals(
+      f.events.filter((e) =>
+        e.kind == 'report' && String(e.error).includes('No live process')
+      ).length,
+      1,
+    )
+  } finally {
+    await f.coverage.close()
+  }
+})
+
+test('process notifications during inspection/launch coalesce without overlap', async () => {
+  let f = fixture()
+  await f.coverage.checked
+  let inspected = deferred<string[]>()
+  let launched = deferred<void>()
+  let inspecting = 0
+  let peak = 0
+  f.inspect(async () => {
+    peak = Math.max(peak, ++inspecting)
+    let roles = await inspected.promise
+    inspecting--
+    return roles
+  })
+  f.launch(() => launched.promise)
+  try {
+    f.notify()
+    await Promise.resolve()
+    for (let i = 0; i < 20; i++) f.notify()
+    inspected.resolve(['wake'])
+    await until(() => f.events.some((e) => e.kind == 'start'))
+    for (let i = 0; i < 20; i++) f.notify()
+    assertEquals(peak, 1)
+    assertEquals(f.events.filter((e) => e.kind == 'start').length, 1)
+    launched.resolve()
+  } finally {
+    launched.resolve()
+    await f.coverage.close()
+  }
+  assertEquals(peak, 1)
+})
+
+test('dead pid polling detects loss without a process notification', async () => {
+  let f = fixture()
+  try {
+    await f.coverage.checked
+    f.needed(['process'])
+    await f.time.advance(100)
+    assertEquals(f.events.map((e) => e.kind), ['report', 'start'])
+  } finally {
+    await f.coverage.close()
+  }
+})
+
+test('web shutdown cancels pending launch, unsubscribes and stops retrying', async () => {
+  let f = fixture(['wake'])
+  let started = deferred<void>()
+  let aborted = false
+  f.launch((_roles, signal) =>
+    new Promise((_resolve, reject) => {
+      started.resolve()
+      signal.addEventListener('abort', () => {
+        aborted = true
+        reject(new Error('cancelled'))
+      }, { once: true })
+    })
   )
+  await started.promise
+  f.control.abort()
+  await f.coverage.close()
+  assertEquals(aborted, true)
+  assertEquals(f.events.map((e) => e.kind), ['report', 'start'])
+  f.notify()
+  await f.time.advance(1000)
+  assertEquals(f.events.map((e) => e.kind), ['report', 'start'])
+  assertEquals(f.unsubscribed(), 1)
+})
+
+test('readiness cancellation stops only an unfinished launch', async () => {
+  let run = child()
+  let stop = new AbortController()
+  let reading = deferred<void>()
+  let waiting = ready(
+    run.process,
+    () => {
+      reading.resolve()
+      return new Promise(() => {})
+    },
+    undefined,
+    undefined,
+    undefined,
+    stop.signal,
+  )
+  await reading.promise
+  stop.abort(new Error('web closed'))
+  await assertRejects(() => waiting, Error, 'web closed')
+  assertEquals(run.counts(), { unrefs: 1, kills: 1 })
+})
+
+test('successful readiness survives subsequent web cancellation', async () => {
+  let run = child()
+  let stop = new AbortController()
+  await ready(
+    run.process,
+    () => Promise.resolve('123'),
+    undefined,
+    undefined,
+    undefined,
+    stop.signal,
+  )
+  stop.abort()
+  assertEquals(run.counts(), { unrefs: 1, kills: 0 })
+})
+
+test('tracker failure does not prevent launch or bounded retries', async () => {
+  let time = clock()
+  let starts = 0
+  let coverage = monitor({
+    uncovered: () => Promise.resolve(['wake']),
+    report: () => Promise.reject(new Error('tracker offline')),
+    start: () => {
+      starts++
+      return Promise.reject(new Error('spawn failed'))
+    },
+    interval: 100,
+    after: time.after,
+    now: time.now,
+  })
+  try {
+    await coverage.checked
+    assertEquals(starts, 1)
+    await time.advance(100)
+    assertEquals(starts, 2)
+  } finally {
+    await coverage.close()
+  }
+})
+
+test('pending tracker delivery never blocks duty recovery or monitor close', async () => {
+  let starts = 0
+  let coverage = monitor({
+    uncovered: () => Promise.resolve(['effects']),
+    report: () => new Promise(() => {}),
+    start: () => {
+      starts++
+      return Promise.resolve()
+    },
+  })
+  await coverage.checked
+  assertEquals(starts, 1)
+  await coverage.close()
+})
+
+test('an already closed web neither observes nor launches', async () => {
+  let stop = new AbortController()
+  stop.abort()
+  let checked = 0
+  let coverage = monitor({
+    signal: stop.signal,
+    uncovered: () => {
+      checked++
+      return Promise.resolve(['effects'])
+    },
+    subscribe: () => {
+      throw new Error('must not subscribe')
+    },
+    report: () => {
+      throw new Error('must not report')
+    },
+    start: () => {
+      throw new Error('must not launch')
+    },
+  })
+  await coverage.checked
+  await coverage.close()
+  assertEquals(checked, 0)
+})
+
+test('coverage probes only requested duties and stops once all are covered', async () => {
+  let checked: string[] = []
+  let store = processes([
+    row('web', ['graph', 'web']),
+    row('agent', ['graph']),
+    row('dead', ['effects', 'wake']),
+    row('duties', ['effects', 'wake']),
+    row('redundant', ['effects', 'wake']),
+  ])
+  let over = (eid: string) => {
+    checked.push(eid)
+    return Promise.resolve(eid == 'dead')
+  }
+  assertEquals(await missing(store, ['effects', 'wake'], over), [])
+  assertEquals(checked, ['dead', 'duties'])
+  checked.length = 0
+  assertEquals(await missing(store, [], over), [])
+  assertEquals(checked, [])
 })

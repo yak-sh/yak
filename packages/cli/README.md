@@ -486,6 +486,14 @@ surrendered its lease. Other command hosts can still use a duty thread through
 box graph for the roles it is handed. The same package works the pool and leased
 services for independent `yak work` processes.
 
+A web checks coverage on process changes and every second, including with
+`--no-duties`. An uncovered duty role reports immediately to the tracker's
+durable spool, before an independent replacement is started. Failed launches are
+reported and retried; a draining process withdraws its duties before its
+in-flight work ends. Config `duties: false` disables this too, for deliberately
+inert hosts. Readiness identifies only this invocation's validated launcher,
+never a PID inherited from a different worker's environment.
+
 On the box, `yak-web@` units run `serve --no-duties --share --ready <file>`, and
 independent `yak-work@` units run the pool and plugin services. The independent
 tracker uses `yak-tracker@` workers over its own config and `yak-tracker-web@`
@@ -509,11 +517,12 @@ captures the candidate's systemd state before cleanup can unload the instance
 and erase its execution timestamps. A missing InvocationID after cleanup is not
 evidence that the replacement never started.
 
-`yak --no-duties` (config `duties: false`) turns them off for a host that stays
-up: it takes no lease, works no effects, and runs neither the services nor the
-start-up passes `@yaks/session` and `@yaks/spawn` hold a lease for; what it
-commits is left written down for another host. `yak --no-duties serve` answers
-requests while another process, or none, does the duties.
+`yak --no-duties` turns inline duties off for a host that stays up: it takes no
+lease, works no effects, and runs neither the services nor the start-up passes
+`@yaks/session` and `@yaks/spawn` hold a lease for; what it commits is left
+written down for another host. `yak --no-duties serve` answers requests while
+independent workers do the duties; its monitor starts one if needed. Config
+`duties: false` disables inline duties and external recovery for an inert host.
 
 `stop()` winds a host down with the graph still open: it aborts `host.stopping`,
 so the duties stop, a server takes no new request and a transcript starts no new
@@ -598,7 +607,7 @@ page groups verbs under their noun. `yak graph`, `yak graph --help`, and
 | `--json`          | Print structured results as JSON.                                        |
 | `--tui`           | Hold the answer in the terminal until Ctrl-C, drawn by plugins' `./tui`. |
 | `--timing`        | Print response timing to stderr. `$YAKS_TIMING=1` enables it globally.   |
-| `--no-duties`     | Take no lease and run no duties (config `duties: false`).                |
+| `--no-duties`     | No inline duties; serve still monitors and restores independent workers. |
 | `--help`, `-h`    | Print general or command-specific help.                                  |
 
 An argument value written as `@path` is read from that file; `-` reads from

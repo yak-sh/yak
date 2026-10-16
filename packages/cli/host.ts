@@ -740,8 +740,9 @@ let composed = async (
     // and that plugin's duty stops — the others keep going, the way a failing
     // effect is telemetry rather than a broken host. The duties this host
     // handed to a thread of its own run beside these, under the same signal.
-    // A config that turned them off (`duties: false`, `yak --no-duties`)
-    // takes no lease, works no effects and runs none of them, in either form:
+    // A config that turned them off (`duties: false`) takes no lease, works
+    // no effects and runs none of them, in either form. The CLI's
+    // `--no-duties` disables inline duties; web still restores external workers:
     // what it commits is left written down for a process that does.
     //
     // A thread gone without closing — ended where it stood, or failed — ran in
@@ -778,6 +779,20 @@ let composed = async (
         dutiesHost.duties(until, only),
       ]).then(() => {})
     }
+    // A draining process is alive but no longer covers its duty roles. Publish
+    // that before waiting for in-flight steps, so the web can replace it.
+    let retiring: Promise<unknown> | undefined
+    let retire = () =>
+      retiring ??= self && opts.process !== false && !opts.readOnly
+        ? Promise.resolve(record([{
+          entity: { eid: selfEid() },
+          process: {
+            roles: roles.filter((role) => role == 'graph' || role == 'web'),
+          },
+        }])).catch((error) =>
+          report(error, { tags: { step: 'retire duties' } })
+        )
+        : Promise.resolve()
     // Its effects, drained once: begun by the first of `stop` and `close`,
     // and awaited by `close`.
     let draining: Promise<void> | undefined
@@ -816,11 +831,13 @@ let composed = async (
       // still running are ended first, as interrupted, so none is left to
       // lapse.
       stop: () => {
+        void retire()
         stopping.abort()
         dutiesHost.stop()
         if (!opts.readOnly) void drained()
       },
       close: async (code?: number) => {
+        await retire()
         stopping.abort()
         dutiesHost.stop()
         await opts.thread?.close().catch(lose)

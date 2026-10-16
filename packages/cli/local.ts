@@ -59,6 +59,7 @@ import { thread } from '@yaks/threads'
 import { during, peek } from '@yaks/trace'
 import { dutyRoles, rolesOf } from './roles.ts'
 import { declarations } from './declarations.ts'
+import { readinessPid } from './runtime.ts'
 export { rolesOf } from './roles.ts'
 
 /** The duty roles of a config's graph that a process serving `mine` does not
@@ -105,7 +106,9 @@ let open = async (
     }
     return host
   }
-  if (!duties || readOnly) {
+  if (
+    readOnly || config.duties === false || (!duties && !roles.includes('web'))
+  ) {
     return withReader(
       await compose({ ...config, duties: false }, roles, facet, {
         reader,
@@ -118,7 +121,34 @@ let open = async (
     try {
       // Only a web host starts workers for its duties, so only it loads how.
       let { external } = await import('./external.ts')
-      await external(host.graph, path, dutiesOf(host.vocab, config, roles))
+      let coverage = external(
+        host.graph,
+        path,
+        dutiesOf(host.vocab, config, roles),
+        {
+          signal: host.stopping,
+          report: (error, role) =>
+            host.report?.(error, {
+              tags: { step: 'duty coverage', ...role ? { role } : {} },
+            }),
+          subscribe: host.feed && ((changed) =>
+            host.feed!((rows) => {
+              if (
+                rows.some((row) =>
+                  'process' in row || 'exit' in row || 'tombstone' in row
+                )
+              ) {
+                changed()
+              }
+            })),
+        },
+      )
+      let close = host.close
+      host.close = async (code) => {
+        await coverage.close()
+        await close(code)
+      }
+      await coverage.checked
     } catch (error) {
       await host.close()
       await reader?.close()
@@ -143,9 +173,10 @@ let open = async (
 }
 
 /** The graph a config names, open for the roles a command's own thread serves,
- * with duties available to a host that explicitly starts them. `duties: false`
- * (`--no-duties`) disables them. Assembled once per config path and roles;
- * {@link close} closes it when the command is done. */
+ * with duties available to a host that explicitly starts them. `--no-duties`
+ * disables inline duties, not external web recovery; config `duties: false`
+ * disables both. Assembled once per config path and roles; {@link close}
+ * closes it when the command is done. */
 export let opened = (
   path: string,
   roles: Role[],
@@ -192,7 +223,7 @@ export let work = async (
       // graph's process row identifies the child running these duties.
       await Deno.writeTextFile(
         ready,
-        `${Deno.env.get('YAK_LAUNCH_PID') ?? Deno.pid}\n`,
+        `${readinessPid()}\n`,
       )
     }
     await running

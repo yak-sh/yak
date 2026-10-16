@@ -50,7 +50,7 @@ export type Ctx = {
    * Absent where the command named an MCP server instead ({@link aimed}). */
   config?: string
   /** Whether this command may run duties if it explicitly starts them —
-   * false under `--no-duties`, which takes no lease and runs none. */
+   * false under `--no-duties`: no inline duties; web still restores external workers. */
   duties: boolean
   json: boolean
   /** Whether an answer is held in the terminal (@yaks/tui) rather than

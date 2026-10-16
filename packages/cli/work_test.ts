@@ -41,7 +41,7 @@ let child = (args: string[], cwd: string, env: Record<string, string>) => {
   let exit = async (timeout = 15000) => {
     await until(() => ended, { timeout, label: `pid ${proc.pid} exits` })
     let result = await output
-    assertEquals(result.code, 0, text(result.stderr))
+    assertEquals(result.code, 143, text(result.stderr))
     return result
   }
   return { proc, output, kill, exit, ended: () => ended }

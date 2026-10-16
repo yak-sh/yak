@@ -67,8 +67,8 @@ let TAIL =
   --tui           hold the answer in the terminal, scrollable, until Ctrl-C
   --timing        one line on stderr per response, with its Server-Timing
                   (or YAKS_TIMING=1)
-  --no-duties     take no lease and run no duty — the effects, the
-                  plugins' services — in the graph this opens
+  --no-duties     run no inline effects or services; serve still monitors
+                  and restores independent workers for uncovered duty roles
   --help         this page, or one subcommand's own
 
 An argument value written @path is read from that file, and - is read from

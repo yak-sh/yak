@@ -14,6 +14,14 @@ let digest = async (bytes: Uint8Array) =>
     ),
   )
 
+// Inherited environment is not ownership. Only runtime() consuming this
+// invocation's launch handshake may identify the launcher a caller can signal.
+let launcherPid: number | undefined
+
+/** The process a caller owns: its validated runtime launcher, or itself when
+ * work() was imported directly rather than launched through the CLI. */
+export let readinessPid = (): number => launcherPid ?? Deno.pid
+
 /** Runtime metadata belongs only to code loaded from that runtime's tree,
  * not to another checkout invoked with an inherited environment. */
 export let runtimeRoot = (): boolean =>
@@ -309,7 +317,10 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     // child, even if it inherits this process's environment and sources.
     Deno.env.delete('YAK_RUNTIME_PINNED')
     let launcher = Number(Deno.env.get('YAK_LAUNCH_PID'))
-    if (launcher > 0) orphaned(launcher)
+    if (launcher > 0 && launcher == Deno.ppid && alive(launcher)) {
+      launcherPid = launcher
+      orphaned(launcher)
+    }
     return
   }
   let child: Deno.ChildProcess | undefined
@@ -358,7 +369,11 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     }).spawn()
     // The child's command line now names its slot, so no launcher rewrites it.
     unlock()
-    return (await child.status).code
+    let status = await child.status
+    // A command can finish normally while it drains. The launcher was still
+    // interrupted: preserve failure semantics so systemd restarts a worker
+    // signalled outside an explicit unit stop.
+    return stopped ? 143 : status.code
   } finally {
     unlock()
     finished.resolve()

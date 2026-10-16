@@ -41,10 +41,10 @@ let child = (dir: string, args: string[], env: Record<string, string>) => {
   let kill = (signal: 'SIGTERM' | 'SIGKILL') => {
     if (!ended) proc.kill(signal)
   }
-  let exit = async () => {
+  let exit = async (code = 0) => {
     await until(() => ended, { timeout: 10000, label: 'CLI exits' })
     let result = await output
-    assertEquals(result.code, 0, text(result.stderr))
+    assertEquals(result.code, code, text(result.stderr))
     return result
   }
   // The launcher forwards a SIGTERM and waits for its command to drain; a
@@ -108,7 +108,7 @@ test('ordinary serve fallback outlives HTTP shutdown', async () => {
     assert(worker != web.proc.pid)
     Deno.kill(worker, 0)
     web.kill('SIGTERM')
-    await web.exit()
+    await web.exit(143)
     Deno.kill(worker, 0)
     let freed = Deno.listen({ hostname: '127.0.0.1', port })
     freed.close()

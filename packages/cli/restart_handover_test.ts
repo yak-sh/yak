@@ -81,7 +81,7 @@ test('restart drains tracker intake without losing its spool or a web request', 
   let exit = async (child: typeof children[number]) => {
     await wait(() => child.ended, `${child.unit} exits`)
     let result = await child.output
-    assertEquals(result.code, 0, text(result.stderr))
+    assertEquals(result.code, 143, text(result.stderr))
   }
   let answering = async (port: number) => {
     try {
