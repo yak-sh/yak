@@ -44,7 +44,7 @@ import {
 export * from './join.ts'
 import type { Tx } from './storage.ts'
 import { after } from '@yaks/fp'
-import type { Value } from '@yaks/query'
+import type { Clause, Value } from '@yaks/query'
 import { type Prop, syncOf, type Vocab } from '@yaks/vocab'
 
 /**
@@ -197,6 +197,55 @@ export let emitted = (
   return out
 }
 
+// A binding must touch an entity in this batch, not necessarily a component
+// this batch changed. Index a necessary *presence* on every possible anchor
+// pattern; absence-only patterns stay in the fallback. Looking at the stored
+// entities as well as the patches preserves rules triggered by unrelated edits.
+// Nested collections are not anchors. A join with an unguarded outer pattern
+// is always eligible, even if another pattern has a selective guard.
+type Selection = {
+  by: Map<string, number[]>
+  always: number[]
+  covers: string[][]
+}
+let selections = new WeakMap<Ready[], WeakMap<Vocab, Selection>>()
+let selection = (rules: Ready[], vocab: Vocab): Selection => {
+  let held = selections.get(rules)
+  if (!held) selections.set(rules, held = new WeakMap())
+  let known = held.get(vocab)
+  if (known) return known
+  let by = new Map<string, number[]>()
+  let always: number[] = []
+  let guard = (c: Clause): string | undefined => {
+    if (c.kind == 'and') {
+      for (let child of c.clauses) {
+        let name = guard(child)
+        if (name) return name
+      }
+    }
+    // Only an explicit component presence is used as a proof. Properties,
+    // reverse paths, disjunctions and absence can all match without it.
+    if (
+      c.kind == 'pred' && c.path.length == 1 && c.op == '!' &&
+      !c.value && vocab.comp(c.path[0])
+    ) return c.path[0]
+    if (c.kind == 'gone') return c.comp
+  }
+  rules.forEach(({ plan }, i) => {
+    let anchors = plan.patterns.filter((p) => !p.makes)
+    let names = anchors.map((p) => guard(p.filter))
+    if (!anchors.length || names.some((n) => !n)) always.push(i)
+    else {for (let name of new Set(names as string[])) {
+        let bucket = by.get(name)
+        if (!bucket) by.set(name, bucket = [])
+        bucket.push(i)
+      }}
+  })
+  let out = { by, always, covers: rules.map((r) => reads(r.plan, vocab)) }
+  held.set(vocab, out)
+  return out
+}
+
 /**
  * Run a set of declared rules over a batch until nothing new fires.
  *
@@ -223,15 +272,25 @@ export let settle = (
   // nothing to fire on.
   if (!rules.length || !bundles.length || !tx.bindings) return bundles
   let ask = tx.bindings
-  let plans = rules.map((r) => r.plan)
-  let covers = cover(rules, vocab)
+  let compiled = selection(rules, vocab)
   let fired = new Set<string>()
-  let round = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> =>
-    after(
-      ask(plans, bundles, covers),
-      (found) => {
+  let round = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
+    let ids = [...new Set(bundles.map((b) => b.entity.eid))]
+    return after(tx.get(ids), (stored) => {
+      let selected = new Set(compiled.always)
+      for (let b of [...stored, ...bundles]) {
+        for (let name of Object.keys(b)) {
+          for (let i of compiled.by.get(name) ?? []) selected.add(i)
+        }
+      }
+      if (!selected.size) return bundles
+      let indices = [...selected].sort((a, b) => a - b)
+      let plans = indices.map((i) => rules[i].plan)
+      let covers = [...new Set(indices.flatMap((i) => compiled.covers[i]))]
+      return after(ask(plans, bundles, covers), (found) => {
         let made: Bundle[] = []
-        rules.forEach((r, i) => {
+        indices.forEach((index, i) => {
+          let r = rules[index]
           for (let row of found[i] ?? []) {
             let key = firing(r.rule, row)
             if (fired.has(key)) {
@@ -252,8 +311,12 @@ export let settle = (
                 parent: tracing.parent,
                 plugin: tracing.plugin,
               })
-              made.push(...during(span, () =>
-                emitted(r, row, vocab, resource)) as Bundle[])
+              made.push(
+                ...during(
+                  span,
+                  () => emitted(r, row, vocab, resource),
+                ) as Bundle[],
+              )
             }
           }
         })
@@ -264,10 +327,13 @@ export let settle = (
         // vocabulary does not declare is dropped, and a value it rejects
         // refuses the whole batch. A rule is server code, so it is allowed to
         // write server-owned properties.
-        return after(admit(made), (accepted) =>
-          round([...bundles, ...accepted]))
-      },
-    )
+        return after(
+          admit(made),
+          (accepted) => round([...bundles, ...accepted]),
+        )
+      })
+    })
+  }
   return round(bundles)
 }
 
