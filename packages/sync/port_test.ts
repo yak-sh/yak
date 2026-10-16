@@ -177,3 +177,35 @@ test('request deadline override can wait indefinitely but disconnect still rejec
     port2.close()
   }
 })
+
+// The documentation example: real portLink request/reply and frame handling,
+// without charging its contract for the OS MessageChannel dispatch latency.
+let examplePorts = messages()
+let exampleFrames: import('./socket.ts').Frame[] = []
+let exampleDelivered = () => {}
+let exampleReceived = new Promise<void>((resolve) => exampleDelivered = resolve)
+let exampleClient = portLink(examplePorts.port1, {
+  frame: (frame) => {
+    exampleFrames.push(frame)
+    exampleDelivered()
+  },
+})
+let exampleServer = portLink(examplePorts.port2, {
+  receive: (_method, value) => value,
+})
+
+test('the port example carries its reply and frame, and counts that frame once', async () => {
+  try {
+    let echoed = exampleClient.request('echo', { title: 'Dune' }, {
+      timeout: null,
+    })
+    exampleServer.frame({ id: 'books', bundles: [] })
+    assertEquals(await echoed, { title: 'Dune' })
+    await exampleReceived
+    assertEquals(exampleFrames, [{ id: 'books', bundles: [] }])
+    assertEquals(exampleClient.stats.frames, 1)
+  } finally {
+    exampleClient.close()
+    exampleServer.close()
+  }
+})

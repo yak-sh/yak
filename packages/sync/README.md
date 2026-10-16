@@ -483,35 +483,17 @@ or `MessagePort`, using structured-clone messages. `portLink()` creates one end;
 no graph policy, authorization, optimistic writes, reconnection, or frame
 backpressure.
 
-```ts
-import type { Frame } from '@yaks/sync'
-import { portLink } from '@yaks/sync/port'
-import { equal } from '@yaks/testing'
+The full request/reply and frame example runs beside `portLink` in
+[`port_test.ts`](./port_test.ts); native `MessagePort` delivery is checked there
+too. Both endpoints belong to the caller and are closed separately from the
+link.
 
-const { port1, port2 } = new MessageChannel()
-const frames: Frame[] = []
-let delivered = () => {}
-const received = new Promise<void>((resolve) => delivered = resolve)
-const client = portLink(port1, {
-  frame: (frame) => {
-    frames.push(frame)
-    delivered()
-  },
-})
-const server = portLink(port2, { receive: (_method, value) => value })
-try {
-  const echoed = client.request('echo', { title: 'Dune' }, { timeout: null })
-  server.frame({ id: 'books', bundles: [] })
-  equal(await echoed, { title: 'Dune' })
-  await received
-  equal(frames, [{ id: 'books', bundles: [] }])
-  equal(client.stats.frames, 1)
-} finally {
-  client.close()
-  server.close()
-  port1.close()
-  port2.close()
-}
+```ts
+import { portLink } from '@yaks/sync/port'
+
+// const client = portLink(worker, { frame: (frame) => render(frame) })
+// const answer = await client.request('echo', { title: 'Dune' })
+// client.close() // the caller still owns worker
 ```
 
 Requests default to a 30-second timeout and at most 256 outstanding requests.
