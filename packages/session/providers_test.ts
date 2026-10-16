@@ -153,7 +153,21 @@ let discovery = async (pending = true) => {
   return { g, ids, fake, errors, ask, asks: () => asks }
 }
 
-test('confirmed models without a price do not list models on any turn', async () => {
+// Drive separate real graph/resolver scenarios while the module prepares. Each
+// assertion below observes a frozen outcome; no test depends on another test's
+// graph, clock, or execution order.
+let clocked = async <T>(run: (advance: (ms: number) => void) => Promise<T>) => {
+  let now = Date.now
+  let clock = 1_800_000_000_000
+  Date.now = () => clock
+  try {
+    return await run((ms) => clock += ms)
+  } finally {
+    Date.now = now
+  }
+}
+
+let confirmedWithoutPrice = await (async () => {
   let h = await discovery(false)
   let lists = 0
   h.fake.list = () => {
@@ -162,32 +176,54 @@ test('confirmed models without a price do not list models on any turn', async ()
   }
   await Promise.all(Array.from({ length: 5 }, () => h.ask()))
   await h.ask()
-  assertEquals([lists, h.asks()], [0, 6])
+  return Object.freeze({ lists, asks: h.asks() })
+})()
+
+test('confirmed models without a price do not list models on any turn', () => {
+  assertEquals(confirmedWithoutPrice, { lists: 0, asks: 6 })
 })
 
-test('concurrent pending models share one in-flight listing and retain an empty catalog', async () => {
+let concurrentDiscovery = await (async () => {
   let h = await discovery()
   let lists = 0
   let release!: () => void
+  let entered!: () => void
   let gate = new Promise<void>((resolve) => release = resolve)
+  let started = new Promise<void>((resolve) => entered = resolve)
   h.fake.list = async () => {
     lists++
+    entered()
     await gate
     return []
   }
   let batch = Promise.all(h.ids.map((id) => h.ask(id)))
-  // Let both graph resolutions reach discovery while the provider is blocked.
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  assertEquals(lists, 1)
+  await started
+  // Drain the graph/resolver continuations while the listing stays blocked.
+  // No wall-clock sleep: both pending asks must share this unresolved result.
+  for (let i = 0; i < 20; i++) await Promise.resolve()
+  let inFlight = lists
   release()
   await batch
-  // A newly requested model in the same runner must use the empty cache too.
+  let afterBatch = Object.freeze({ lists, asks: h.asks() })
   await h.g.apply([{ entity: { eid: h.ids[0] }, pending: {} }])
   await h.ask()
-  assertEquals([lists, h.asks()], [1, 3])
+  return Object.freeze({
+    inFlight,
+    afterBatch,
+    afterEmptyCache: Object.freeze({ lists, asks: h.asks() }),
+  })
+})()
+
+test('concurrent pending models share one in-flight listing', () => {
+  assertEquals(concurrentDiscovery.inFlight, 1)
+  assertEquals(concurrentDiscovery.afterBatch, { lists: 1, asks: 2 })
 })
 
-test('transient metadata exhaustion reports once, cools down and never suppresses asks', async () => {
+test('an empty discovery catalog is retained for a newly pending model', () => {
+  assertEquals(concurrentDiscovery.afterEmptyCache, { lists: 1, asks: 3 })
+})
+
+let exhaustedDiscovery = await clocked(async (advance) => {
   let h = await discovery()
   let lists = 0
   let failure = new ModelError('http_429', 'Model listing says 429', {
@@ -197,26 +233,53 @@ test('transient metadata exhaustion reports once, cools down and never suppresse
     lists++
     return Promise.reject(failure)
   }
-  let now = Date.now
-  let clock = now()
-  Date.now = () => clock
-  try {
-    await Promise.all(h.ids.map((id) => h.ask(id)))
-    assertEquals([lists, h.asks(), h.errors], [1, 2, [failure]])
-    await h.g.apply([{ entity: { eid: h.ids[0] }, pending: {} }])
-    clock += 60_001
-    await h.ask()
-    assertEquals([lists, h.asks(), h.errors.length], [1, 3, 1])
-    await h.g.apply([{ entity: { eid: h.ids[0] }, pending: {} }])
-    clock += 60_000
-    await h.ask()
-    assertEquals([lists, h.asks(), h.errors.length], [2, 4, 2])
-  } finally {
-    Date.now = now
-  }
+  let snapshot = () =>
+    Object.freeze({
+      lists,
+      asks: h.asks(),
+      reports: h.errors.length,
+      originalError: h.errors.every((error) => error === failure),
+    })
+  await Promise.all(h.ids.map((id) => h.ask(id)))
+  let initial = snapshot()
+  await h.g.apply([{ entity: { eid: h.ids[0] }, pending: {} }])
+  advance(60_001)
+  await h.ask()
+  let duringCooldown = snapshot()
+  await h.g.apply([{ entity: { eid: h.ids[0] }, pending: {} }])
+  advance(60_000)
+  await h.ask()
+  return Object.freeze({ initial, duringCooldown, afterCooldown: snapshot() })
 })
 
-test('metadata success and missing-price info are cached for five minutes', async () => {
+test('transient metadata exhaustion reports once without suppressing concurrent asks', () => {
+  assertEquals(exhaustedDiscovery.initial, {
+    lists: 1,
+    asks: 2,
+    reports: 1,
+    originalError: true,
+  })
+})
+
+test('metadata failure cooldown honors the longer provider retry delay', () => {
+  assertEquals(exhaustedDiscovery.duringCooldown, {
+    lists: 1,
+    asks: 3,
+    reports: 1,
+    originalError: true,
+  })
+})
+
+test('metadata discovery retries after the provider cooldown expires', () => {
+  assertEquals(exhaustedDiscovery.afterCooldown, {
+    lists: 2,
+    asks: 4,
+    reports: 2,
+    originalError: true,
+  })
+})
+
+let infoCache = await clocked(async (advance) => {
   let h = await discovery(false)
   let infos = 0
   h.fake.info = (name) => {
@@ -226,21 +289,26 @@ test('metadata success and missing-price info are cached for five minutes', asyn
   h.fake.list = () => {
     throw new Error('info must not list')
   }
-  let now = Date.now
-  let clock = now()
-  Date.now = () => clock
-  try {
-    await Promise.all([h.ask(), h.ask()])
-    assertEquals(infos, 1)
-    clock += 299_999
-    await h.ask()
-    assertEquals(infos, 1)
-    clock += 2
-    await h.ask()
-    assertEquals(infos, 2)
-  } finally {
-    Date.now = now
-  }
+  await Promise.all([h.ask(), h.ask()])
+  let concurrent = infos
+  advance(299_999)
+  await h.ask()
+  let beforeExpiry = infos
+  advance(2)
+  await h.ask()
+  return Object.freeze({ concurrent, beforeExpiry, afterExpiry: infos })
+})
+
+test('missing-price metadata shares concurrent per-model info requests', () => {
+  assertEquals(infoCache.concurrent, 1)
+})
+
+test('metadata without pricing remains cached before five minutes', () => {
+  assertEquals(infoCache.beforeExpiry, 1)
+})
+
+test('metadata without pricing refreshes after five minutes', () => {
+  assertEquals(infoCache.afterExpiry, 2)
 })
 
 test('process providers with native implementations do not take managed sessions', async () => {

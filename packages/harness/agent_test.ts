@@ -89,7 +89,10 @@ test('a new session opens with what its host found for it', async () => {
   await assertRejects(() => a.start('pong'), Error, 'gone')
 })
 
-test('native metadata listing retries 429 then 200 and reports exhausted discovery without failing a turn', async () => {
+// Run independent real native sessions before registering outcome assertions.
+// Each scenario owns and closes its host; tests only read immutable snapshots.
+let nativeDiscovery = await (async () => {
+  let outcomes = []
   for (let outage of [1, Infinity]) {
     let { h, release } = await host()
     let calls = 0
@@ -136,24 +139,56 @@ test('native metadata listing retries 429 then 200 and reports exhausted discove
         Array.from({ length: 5 }, () => a.start('ping')),
       )
       await Promise.all(sessions.map((s) => a.idle(s)))
-      for (let s of sessions) {
-        assertEquals(statusOf(await a.transcript(s)), 'settled')
-      }
-      assertEquals(calls, outage == 1 ? 2 : 3)
-      assertEquals(pauses, outage == 1 ? [2000] : [2000, 4000])
-      assertEquals(
-        reports.map((r) => r.phase),
-        outage == 1 ? [] : ['model-metadata'],
+      let statuses = await Promise.all(
+        sessions.map(async (s) => statusOf(await a.transcript(s))),
       )
-      if (outage != 1) {
-        assertEquals(reports[0].error instanceof ModelError, true)
-      }
+      let firstCalls = calls
+      let firstPauses = Object.freeze([...pauses])
+      let phases = Object.freeze(reports.map((r) => r.phase))
+      let retryable = reports.length
+        ? reports[0].error instanceof ModelError
+        : undefined
       await Promise.all(sessions.map((s) => a.send(s, 'again')))
       await Promise.all(sessions.map((s) => a.idle(s)))
-      assertEquals(calls, outage == 1 ? 2 : 3)
+      outcomes.push(Object.freeze({
+        statuses: Object.freeze(statuses),
+        firstCalls,
+        pauses: firstPauses,
+        phases,
+        retryable,
+        followupCalls: calls,
+        followupStatuses: Object.freeze(
+          await Promise.all(
+            sessions.map(async (s) => statusOf(await a.transcript(s))),
+          ),
+        ),
+      }))
     } finally {
       await a.close()
       release()
     }
+  }
+  return Object.freeze(outcomes)
+})()
+
+test('native metadata listing retries 429 then 200 before concurrent turns settle', () => {
+  assertEquals(nativeDiscovery[0].statuses, Array(5).fill('settled'))
+  assertEquals(nativeDiscovery[0].firstCalls, 2)
+  assertEquals(nativeDiscovery[0].pauses, [2000])
+  assertEquals(nativeDiscovery[0].phases, [])
+})
+
+test('native metadata exhaustion reaches its reporter without failing concurrent turns', () => {
+  assertEquals(nativeDiscovery[1].statuses, Array(5).fill('settled'))
+  assertEquals(nativeDiscovery[1].firstCalls, 3)
+  assertEquals(nativeDiscovery[1].pauses, [2000, 4000])
+  assertEquals(nativeDiscovery[1].phases, ['model-metadata'])
+  assertEquals(nativeDiscovery[1].retryable, true)
+})
+
+test('native followup turns do not rediscover successful or exhausted metadata', () => {
+  for (let outcome of nativeDiscovery) {
+    assertEquals(outcome.followupCalls, outcome.firstCalls)
+    assertEquals(outcome.followupStatuses, Array(5).fill('settled'))
   }
 })
