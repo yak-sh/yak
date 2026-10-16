@@ -273,7 +273,9 @@
     "@sqlite-vector-linux-aarch64": "npm:@sqliteai/sqlite-vector-linux-arm64@1.1.2",
     "@sqlite-vector-darwin-x86_64": "npm:@sqliteai/sqlite-vector-darwin-x86_64@1.1.2",
     "@sqlite-vector-darwin-aarch64": "npm:@sqliteai/sqlite-vector-darwin-arm64@1.1.2",
-    "@sqlite-vector-windows-x86_64": "npm:@sqliteai/sqlite-vector-win32-x86_64@1.1.2"
+    "@sqlite-vector-windows-x86_64": "npm:@sqliteai/sqlite-vector-win32-x86_64@1.1.2",
+    "web-tree-sitter": "npm:web-tree-sitter@0.20.8",
+    "tree-sitter-wasms/package.json": "npm:tree-sitter-wasms@0.1.13/package.json"
   },
   "scopes": {
     "https://jsr.io/@db/sqlite/0.13.0/": {
@@ -293,5 +295,8 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact"
   },
-  "unstable": ["net", "lazy-dynamic-imports"]
+  "unstable": [
+    "net",
+    "lazy-dynamic-imports"
+  ]
 }
