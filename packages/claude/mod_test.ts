@@ -12,7 +12,10 @@ let req = {
   items: [{ kind: 'user' as const, text: 'hello' }],
   tools: [tool],
 }
-test('Claude CLI turn yields only harness calls, then replays results', async () => {
+// Subprocess startup and stream delivery prepare the transcript; each check
+// below observes the provider's public turn/result contract without timing OS
+// process scheduling as the assertion's own work.
+let turns = await (async () => {
   let model = claude({
     command: Deno.execPath(),
     args: ['run', '-A', new URL('./fake_cli.ts', import.meta.url).pathname],
@@ -29,6 +32,19 @@ test('Claude CLI turn yields only harness calls, then replays results', async ()
       return Promise.resolve()
     },
   })
+  let second = await model({
+    ...req,
+    items: [...req.items, ...first.items, {
+      kind: 'result',
+      id: 'call-1',
+      output: 'found',
+    }],
+  })
+  return { model, first, second, submitted, marks }
+})()
+
+test('Claude CLI turn yields only harness calls, then replays results', () => {
+  let { model, first, second, submitted, marks } = turns
   assertEquals(first.items, [{
     kind: 'assistant',
     text: 'checking',
@@ -39,14 +55,6 @@ test('Claude CLI turn yields only harness calls, then replays results', async ()
     name: 'graph_query',
     args: '{"q":"hello"}',
   }])
-  let second = await model({
-    ...req,
-    items: [...req.items, ...first.items, {
-      kind: 'result',
-      id: 'call-1',
-      output: 'found',
-    }],
-  })
   assertEquals(second.items, [{
     kind: 'assistant',
     text: 'done',
