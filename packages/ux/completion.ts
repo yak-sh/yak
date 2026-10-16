@@ -73,6 +73,8 @@ export type FieldProps = {
   /** the field's entity in the front-end graph */
   id: string
   placeholder?: string
+  /** the field's accessible name */
+  'aria-label'?: string
   /** several lines: a newline can be typed (shift+Enter) */
   lines?: boolean
   /** @yaks/ui `Field` variants */
@@ -342,6 +344,7 @@ export let completion = (front: Front, opts: Opts): Controller => {
         mod: p.mod,
         class: p.class,
         placeholder: p.placeholder,
+        'aria-label': p['aria-label'],
         value: text,
         caret: p.active ? r?.caret ?? text.length : undefined,
         onInput: (e: InputEvent) => {
