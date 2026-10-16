@@ -160,15 +160,19 @@ test('a PUT to an address stores the bytes and mints the artifact', async () => 
   assertEquals(head.headers.get('content-length'), String(text.length))
 })
 
-test('the default backend uses supplied blobs without a SQL host', async () => {
-  let blobs = suppliedBlobs, ask = suppliedDoor
-  let sha = pngAddress
-  let made = await ask(suppliedUpload)
-  assertEquals(made.status, 200)
-  assertEquals(await blobs.get(sha), png)
-  let got = await ask(
-    new Request(new URL(made.headers.get('location')!, at(sha))),
-  )
+// Supply the bytes at load: each case checks one door, not an upload and
+// subsequent download charged to the same timer.
+let suppliedMade = await suppliedDoor(suppliedUpload)
+let suppliedLocation = new URL(
+  suppliedMade.headers.get('location')!,
+  at(pngAddress),
+)
+test('the default backend uploads through supplied blobs without a SQL host', async () => {
+  assertEquals(suppliedMade.status, 200)
+  assertEquals(await suppliedBlobs.get(pngAddress), png)
+})
+test('the default backend serves supplied blobs without a SQL host', async () => {
+  let got = await suppliedDoor(new Request(suppliedLocation))
   assertEquals(new Uint8Array(await got.arrayBuffer()), png)
 })
 
