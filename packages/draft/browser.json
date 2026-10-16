@@ -20,6 +20,7 @@
   },
   "entries": [
     ".",
-    "./input"
+    "./input",
+    "./browser"
   ]
 }

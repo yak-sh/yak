@@ -42,6 +42,9 @@ let page = async (k: Kernel) => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-socket-' })
   let source = await (await k.at(host, '/recipes/api/client.js')).text()
   Deno.writeTextFileSync(`${dir}/client.js`, source)
+  let draft = await k.at(host, '/recipes/api/_draft.js')
+  assertEquals(draft.status, 200)
+  Deno.writeTextFileSync(`${dir}/_draft.js`, await draft.text())
   let mod = await import(`file://${dir}/client.js`)
   let mine = browser(k, host, them.cookie)
   let wire = await relay(k, host, them.cookie, `https://${host}`)
@@ -52,6 +55,7 @@ let page = async (k: Kernel) => {
     wire: `${wire.origin}/recipes/api`,
     store: mod.store(`${mine.origin}/recipes/api/`),
     live: mod.store(`${wire.origin}/recipes/api/`),
+    another: () => mod.store(`${wire.origin}/recipes/api/`),
     stop: async () => {
       await mine.stop()
       await wire.stop()
@@ -347,5 +351,36 @@ test('a page watching its store hears a letter arrive', async () => {
   } finally {
     await p.stop()
     await k.stop()
+  }
+})
+
+test('public drafts follow a second interface through the store socket', async () => {
+  let p = await page(workerd())
+  let reports: unknown[] = []
+  let options = {
+    by: p.them.person,
+    stash: false,
+    pace: 0,
+    report: (error: unknown) => reports.push(error),
+  }
+  let first = p.live.drafts(options)
+  // Another desk on its own store instance and socket, as a second tab has.
+  let second = p.another().drafts(options)
+  try {
+    first.type('compose', 'Unsent from the first interface')
+    await until(() =>
+      second.text('compose') == 'Unsent from the first interface'
+    )
+    second.type('compose', 'Unsent from the first interface, continued here')
+    await until(() =>
+      first.text('compose') == 'Unsent from the first interface, continued here'
+    )
+    assertEquals(await second.spend('compose'), true)
+    await until(() => first.text('compose') == '')
+    assertEquals(reports, [])
+  } finally {
+    first.close()
+    second.close()
+    await p.stop()
   }
 })

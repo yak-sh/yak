@@ -98,3 +98,36 @@ drafts.spend('task.comment', [{
   doc: { body: drafts.text('task.comment') },
 }])
 ```
+
+## Plain browser fields
+
+The `./browser` entry binds an input or textarea to the same `desk`, without
+requiring a UI framework. yaks.app publishes it through the app's existing
+`./api/client.js` door:
+
+```js ignore
+import { drafts } from './api/client.js'
+const desk = drafts()
+desk.bind(document.querySelector('textarea'), 'recipe:notes')
+```
+
+A stable place finds the person's text on every device and tab. The binding
+listens for typing, preserves composition, and mirrors newer store revisions. It
+returns an unbind function: call it before replacing the element, then bind its
+replacement to the same place. Keep the desk across rerenders; `close()` unbinds
+its fields and stops its subscription and timers when the page unmounts. Every
+input is stashed synchronously, so closing before a paced write completes leaves
+a recovery copy for the next load. Accepted text lives in the store;
+localStorage holds only pending recovery, scoped to this app's API address and
+person.
+
+`text(place)`, `type(place, text)` and `restore(place, text, over)` are the
+desk's same methods. `spend(place, bundles)` clears a draft in the same write as
+the thing made from it, and resolves to a boolean: a refusal restores the text.
+The public client retries pending receipts with the same write identity; a watch
+never substitutes for durable acceptance. Pass `drafts({report(error) {
+… }})`
+to show a persistence refusal; without one it is raised for the page's error
+reporter. `by`, `stash` (or `false`) and `pace` may be supplied when a host
+already knows identity, supplies its own recovery storage, or needs a different
+write pace. The ordinary app needs none of them.

@@ -1739,7 +1739,7 @@ let api = async (
   // The store client an app's pages import (public/client.js), served beside
   // the doors it wraps so a page needs no address but its own. One file for
   // every app, so it comes from the platform's assets, not the app's blobs.
-  if (path == '/client.js' || path == '/storage.js') {
+  if (path == '/client.js' || path == '/storage.js' || path == '/_draft.js') {
     return platformFile(req, env, path)
   }
   let store = appStore(env.STORE, space, app, env)

@@ -59,30 +59,37 @@ memory. Don't use a local duration as a countdown timer, or `durable` on a
 server component as a scheduled deletion. Those declarations do not schedule
 store deletion.
 
-### Keep the player's input
+### Keep typed input: drafts
 
-This complete `vocab.json` keeps an unsent message in the writing browser:
+A person's unsent input is precious. Keep it in the store as a **draft**, not in
+a browser-only component. Import the public client and bind a field:
 
-```json
-{
-  "$defs": {
-    "unsent": {
-      "component": true,
-      "type": "object",
-      "sync": "none",
-      "durable": "forever",
-      "properties": { "text": { "type": "string" } }
-    }
-  }
-}
+```js
+import { drafts } from './api/client.js'
+const desk = drafts()
+const unbind = desk.bind(document.querySelector('textarea'), 'recipe:notes')
 ```
 
-Write `unsent: { text: '…' }` on the entity you use for the form. A reload can
-restore it from this browser; another player's page cannot read it from the
-store. Don't give typed input a connection lifetime. Use `sync: server` when the
-player needs it kept across browsers. Local persistence and its limits are in
-the client reference's **Component storage** section:
-<https://jsr.io/@yaks/client>.
+The same person and stable **place** find the same text on every device and in
+every tab. `bind` restores the field and keeps typing, including partial numbers
+in a text input with `inputmode="numeric"`. A recovery copy, scoped to the app
+and person, preserves pending input across reloads when the store is out of
+reach. Fields wait read-only until `me()` identifies the person.
+
+Before replacing a field, call `unbind()`, then bind its replacement to the same
+place. Keep the desk across renders; `desk.close()` stops its bindings,
+subscription and timers on unmount without discarding pending text.
+
+After validation, `await desk.spend(place, bundles)` empties the draft in the
+same atomic write as what it became. It returns `true` only on acknowledgement;
+a refusal or unknown outcome returns `false` and preserves the text. Include the
+permissions and stale-value guards your ordinary write needs. Do not clear
+`input.value` separately. `desk.text(place)` reads the latest text; pass
+`drafts({report: error => showError(error)})` to show a persistence failure.
+
+Choose place names that stay the same across renders and devices, such as
+`cooking:<step-eid>:seconds`. Do not mint draft ids or copy platform internals:
+this door uses <https://jsr.io/@yaks/draft>'s desk and merge implementation.
 
 ## Choose how often it travels: pace
 

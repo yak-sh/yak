@@ -48,3 +48,6 @@ node_modules.lock/
 # for the Worker asset upload.
 /workers/yak/public/_cli/
 /workers/yak/public/_compiler/
+
+# Browser draft helper, generated from @yaks/draft.
+/workers/yak/public/_draft.js

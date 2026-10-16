@@ -450,18 +450,20 @@ test('deploy prerequisites generate while npm is pending and settle before write
   }
 })
 
-for (let failed of ['web', 'catalog', 'cli'] as const) {
+for (let failed of ['web', 'catalog', 'cli', 'draft'] as const) {
   test(`failed ${failed} generation settles prepared Workers without uploading`, async () => {
     let web = Promise.withResolvers<void>()
     let catalog = Promise.withResolvers<void>()
     let cli = Promise.withResolvers<void>()
-    let lanes = { web, catalog, cli }
+    let draft = Promise.withResolvers<void>()
+    let lanes = { web, catalog, cli, draft }
     let failure = Error(`${failed} failed`)
     let made = readiness({
       dependencies: () => Promise.resolve(false),
       web: () => web.promise,
       catalog: () => catalog.promise,
       cli: () => cli.promise,
+      draft: () => draft.promise,
     })
     let prepared = Promise.withResolvers<void>()
     let removed = false, uploaded = false
@@ -492,6 +494,7 @@ for (let failed of ['web', 'catalog', 'cli'] as const) {
       web.resolve()
       catalog.resolve()
       cli.resolve()
+      draft.resolve()
       await deploy
     }
   })

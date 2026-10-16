@@ -460,14 +460,12 @@ let mossvalePosition = JSON.parse(Deno.readTextFileSync(
   new URL('../../apps/vale/vocab.json', import.meta.url),
 )).$defs.position
 
-test('the storage page declares usable local input and Mossvale position', () => {
+test('the storage page declares usable Mossvale position', () => {
   let examples = storageExamples
-  assertEquals(examples.length, 2)
+  assertEquals(examples.length, 1)
   for (let example of examples) assertEquals(storable(example), [])
-  assertEquals(examples[0].$defs.unsent.sync, 'none')
-  assertEquals(examples[0].$defs.unsent.durable, 'forever')
   let actual = mossvalePosition
-  let shown = examples[1].$defs.position
+  let shown = examples[0].$defs.position
   for (let key of ['component', 'type', 'sync', 'durable', 'pace', 'save']) {
     assertEquals(shown[key], actual[key], `position.${key}`)
   }

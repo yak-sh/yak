@@ -121,13 +121,15 @@ export let readiness = (
     web: () => Promise<void>
     catalog: () => Promise<void>
     cli?: () => Promise<void>
+    draft?: () => Promise<void>
   },
 ) => {
   let dependencies = Promise.resolve().then(make.dependencies)
   let web = Promise.resolve().then(make.web)
   let catalog = Promise.resolve().then(make.catalog)
   let cli = Promise.resolve().then(() => make.cli?.())
-  let all = Promise.allSettled([dependencies, web, catalog, cli]).then(
+  let draft = Promise.resolve().then(() => make.draft?.())
+  let all = Promise.allSettled([dependencies, web, catalog, cli, draft]).then(
     (completed) => {
       for (let result of completed) {
         if (result.status == 'rejected') throw result.reason
@@ -152,6 +154,9 @@ let preparing = (root = dir, timeout = 600_000) =>
           join(root, 'public/_web'),
           '@yaks/browse/web',
         ])),
+    draft: () =>
+      timed('Draft assets', () =>
+        generated('Draft asset', [join(root, 'draft-assets.ts')])),
     cli: () =>
       timed('Sandbox CLI', () =>
         generated('Sandbox CLI', [join(root, 'sandbox/cli-assets.ts')])),

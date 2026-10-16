@@ -1,3 +1,6 @@
+import { browserDrafts, draftEid } from './_draft.js'
+export { draftEid }
+
 // The store an app's own pages talk to: one ES module, no build, served by
 // the kernel at `<space>.yaks.app/<app>/api/client.js` beside the doors it
 // wraps. A page writes
@@ -531,7 +534,33 @@ export let store = (base) => {
       tell({ unsubscribe: name })
     }
   }
-  return { apply, me, query, search, subscribe, upload }
+  // A draft is accepted only by a durable receipt. Pending responses resend
+  // the exact batch with the same identity; the public apply answer stays as-is.
+  let draftApply = async (bundles) => {
+    let key = crypto.randomUUID()
+    for (let attempt = 0;; attempt++) {
+      let receipt = await ask('apply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'idempotency-key': key },
+        body: JSON.stringify({ entities: bundles }),
+      })
+      if (!receipt.pending) return receipt
+      if (attempt >= 5) {
+        throw new Error(receipt.message || 'Draft write is still pending')
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+  return {
+    apply,
+    me,
+    query,
+    search,
+    subscribe,
+    upload,
+    drafts: (opts) =>
+      browserDrafts({ apply: draftApply, me, subscribe }, String(base), opts),
+  }
 }
 
 // One subscription frame folded into its rows. A frame carries whole rows —
@@ -633,3 +662,6 @@ let rows = ({ rows, riders }) => {
 export let { apply, me, query, search, subscribe, upload } = store(
   new URL('.', import.meta.url),
 )
+
+/** Durable, synced fields: const desk = drafts(); desk.bind(input, place). */
+export let drafts = store(new URL('.', import.meta.url)).drafts
