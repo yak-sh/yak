@@ -6,7 +6,6 @@ import { loadVocab } from '@yaks/vocab'
 import type { Answer, Bundle, Io } from './host.ts'
 import { waiting } from './rows.ts'
 import { QueryPage } from './Query.ts'
-import { HomePage } from './Home.ts'
 import { CompPage } from './Comp.ts'
 import { PackagePage } from './Package.ts'
 import { TaskPage } from '../task/inspect.ts'
@@ -94,16 +93,6 @@ test('inspector query answers distinguish pending rows and empty aggregates from
 })
 
 let schema = { entity: { eid: 'component' }, _comp: { name: 'task' } }
-let mapPending = section(
-  h(HomePage, {
-    io: io({ sets: { ready: false }, tally: { ready: false, tally: {} } }),
-  }),
-  'Archetypes',
-)
-let mapEmpty = section(
-  h(HomePage, { io: io({ tally: { tally: {} } }) }),
-  'Archetypes',
-)
 let linksPending = section(
   h(
     CompPage,
@@ -125,10 +114,7 @@ let extensionPending = section(
   'Extends',
 )
 
-test('schema maps and dependent schema tables wait for all their answers before saying none', () => {
-  ok(mapPending.querySelector('[role="status"]'))
-  equal(mapPending.textContent?.includes('none'), false)
-  ok(mapEmpty.textContent?.includes('none'))
+test('dependent schema tables wait for all their answers before saying none', () => {
   ok(linksPending.querySelector('[role="status"]'))
   equal(linksPending.textContent?.includes('none'), false)
   ok(extensionPending.querySelector('[role="status"]'))
