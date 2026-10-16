@@ -18,6 +18,15 @@ application.
 - `input`, `body`, and `items` convert between model requests/replies and
   Responses API data. `ResponseError` describes transport failures; exported
   types describe options, credentials, events, results, usage, and images.
+- `listing(credential, fetch?, refresh?, headers?, options?)` reads the
+  credential's `/models` catalog. Transient HTTP failures (408, 409, 429, 5xx,
+  and provider capacity codes) and dropped connections retry at the fetch
+  boundary, twice by default. `options.retries` and `options.pause` configure
+  that bounded retry. Backoff grows from one second to at most a minute;
+  `Retry-After` seconds or HTTP dates are a lower bound, even above a minute.
+  Exhausted transient failures remain retryable `ModelError`s; authentication,
+  validation, and spent quota fail fast. A supplied Codex refresh runs once on
+  401. Catalog error messages never repeat the provider's response body.
 - `openaiDoc` and `OPENAI_COMP` describe the `openai{response_id}` component.
   `@yaks/openai/vocab` exports `openaiDoc` and `docs` for schema loading.
 

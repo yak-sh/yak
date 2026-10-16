@@ -3,8 +3,9 @@
 // much (D1 is the same SQL), and a transcript still runs to the end.
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
-import type { Comp } from '@yaks/graph'
-import type { Model } from '@yaks/model'
+import { type Comp, identityEid } from '@yaks/graph'
+import { type Model, ModelError } from '@yaks/model'
+import { listing, OPENAI } from '@yaks/openai'
 import { statusOf } from '@yaks/session'
 import { agent } from './agent.ts'
 import { harness } from './testing.ts'
@@ -86,4 +87,73 @@ test('a new session opens with what its host found for it', async () => {
   assertEquals(((await a.h.g.read('.session&*'))[0].home as Comp).cwd, '/work')
   await a.close(new Error('gone'))
   await assertRejects(() => a.start('pong'), Error, 'gone')
+})
+
+test('native metadata listing retries 429 then 200 and reports exhausted discovery without failing a turn', async () => {
+  for (let outage of [1, Infinity]) {
+    let { h, release } = await host()
+    let calls = 0
+    let pauses: number[] = []
+    let reports: { error: unknown; phase: string }[] = []
+    let fake: Model = (req) => echo(req)
+    fake.list = () =>
+      listing(
+        { token: 'secret', base: OPENAI },
+        () => {
+          calls++
+          return Promise.resolve(
+            calls <= outage
+              ? new Response('', {
+                status: 429,
+                headers: { 'Retry-After': '2' },
+              })
+              : Response.json({ data: [{ id: 'metadata-model' }] }),
+          )
+        },
+        undefined,
+        {},
+        {
+          pause: (ms) => {
+            pauses.push(ms)
+            return Promise.resolve()
+          },
+        },
+      )
+    let a = agent({
+      h,
+      model: fake,
+      name: 'metadata-model',
+      report: (error, where) => reports.push({ error, phase: where.phase }),
+    })
+    try {
+      // Only an unconfirmed model needs discovery. Confirmed models lacking
+      // prices used to list on every turn, including all resumed sessions.
+      await h.g.apply([{
+        entity: { eid: identityEid('model', ['metadata-model']) },
+        pending: {},
+      }])
+      let sessions = await Promise.all(
+        Array.from({ length: 5 }, () => a.start('ping')),
+      )
+      await Promise.all(sessions.map((s) => a.idle(s)))
+      for (let s of sessions) {
+        assertEquals(statusOf(await a.transcript(s)), 'settled')
+      }
+      assertEquals(calls, outage == 1 ? 2 : 3)
+      assertEquals(pauses, outage == 1 ? [2000] : [2000, 4000])
+      assertEquals(
+        reports.map((r) => r.phase),
+        outage == 1 ? [] : ['model-metadata'],
+      )
+      if (outage != 1) {
+        assertEquals(reports[0].error instanceof ModelError, true)
+      }
+      await Promise.all(sessions.map((s) => a.send(s, 'again')))
+      await Promise.all(sessions.map((s) => a.idle(s)))
+      assertEquals(calls, outage == 1 ? 2 : 3)
+    } finally {
+      await a.close()
+      release()
+    }
+  }
 })

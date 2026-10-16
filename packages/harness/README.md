@@ -1155,3 +1155,22 @@ Access policy, and tailnet access remains trusted.
 Agent/anonymous/foreign-process calls cannot use this fallback. A multi-user or
 unprotected deployment must supply real request authentication, not rely on
 `person`.
+
+### Model metadata discovery and transient failures
+
+A native turn does not refresh the model catalog merely because its model has no
+price. OpenAI's catalog has no pricing, so that condition would otherwise list
+`/models` before every request. Unconfirmed models may need discovery; the
+runner shares that in-flight request across resumed sessions and retains
+metadata (including an empty result) for five minutes. Providers with a
+per-model metadata API can use that instead of a full catalog listing.
+
+The OpenAI listing retries transient HTTP errors and dropped connections at the
+provider fetch boundary, honoring `Retry-After` before another attempt. If
+metadata discovery still fails transiently, the ask continues without that
+optional enrichment and discovery cools down for at least a minute. The harness
+reports the exhausted failure through its reporter with phase `model-metadata`
+(the native host wires this to the tracker). Successful recovery within the
+provider's retry budget is not a terminal session failure. Previously a listing
+429 became a terminal `ModelError`, which the session treated as a provider
+refusal and did **not** send to the defect reporter.

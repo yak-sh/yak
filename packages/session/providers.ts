@@ -85,125 +85,172 @@ export let providerResolver = (
   implementations: Readonly<Record<string, Model>>,
   override?: Model,
   executorFor?: (provider: string) => Promise<Executor | undefined>,
-): (using: Comp | undefined, model: Bundle) => Promise<Served> =>
-async (using, model) => {
-  let all = await offers(g, model.entity.eid, implementations)
-  if (using?.provider && !all.some((o) => o.provider == using.provider)) {
-    let [row] = await g.get([String(using.provider)])
-    let provider = String((row?.provider as Comp | undefined)?.name ?? '')
-    all.push({
-      provider: String(using.provider),
-      model: model.entity.eid,
-      name: String((model.model as Comp).name),
-      serve: implementations[provider],
+  report?: (error: unknown) => void,
+): (using: Comp | undefined, model: Bundle) => Promise<Served> => {
+  // A resolver lives with its runner. Share discovery across simultaneously
+  // resumed transcripts, not just requests for the same selected model. An
+  // empty catalog is a result too; catalogs need not supply prices at all.
+  let catalogs = new WeakMap<
+    Model,
+    Map<string, {
+      until: number
+      value: Promise<Listed[]>
+    }>
+  >()
+  let describeOnce = (serve: Model, name?: string): Promise<Listed[]> => {
+    let key = name ?? ''
+    let cache = catalogs.get(serve)
+    if (!cache) catalogs.set(serve, cache = new Map())
+    let kept = cache.get(key)
+    if (kept && kept.until > Date.now()) return kept.value
+    let entry = {
+      until: Infinity,
+      value: Promise.resolve([] as Listed[]),
+    }
+    cache.set(key, entry)
+    entry.value = Promise.resolve().then(async () => {
+      try {
+        let listed = name == null
+          ? await serve.list?.() ?? []
+          : [await serve.info?.(name)].filter((m): m is Listed => !!m)
+        entry.until = Date.now() + 300_000
+        return listed
+      } catch (error) {
+        if (error instanceof ModelError && !error.retry) {
+          cache.delete(key)
+          throw error
+        }
+        // Discovery is optional preparation, not a paid model request. An
+        // exhausted transient outage must not fail the session; cool down even
+        // when the endpoint returns no metadata, and report the lost enrichment.
+        entry.until = Date.now() + Math.max(
+          60_000,
+          error instanceof ModelError ? error.retry?.after ?? 0 : 0,
+        )
+        report?.(error)
+        return []
+      }
     })
+    return entry.value
   }
-  let found = override && using?.provider == null
-    ? {
-      serve: override,
-      provider: all[0]?.provider ?? String(using?.provider ?? ''),
-      name: all[0]?.name ?? String((model.model as Comp).name),
+  return async (using, model) => {
+    let all = await offers(g, model.entity.eid, implementations)
+    if (using?.provider && !all.some((o) => o.provider == using.provider)) {
+      let [row] = await g.get([String(using.provider)])
+      let provider = String((row?.provider as Comp | undefined)?.name ?? '')
+      all.push({
+        provider: String(using.provider),
+        model: model.entity.eid,
+        name: String((model.model as Comp).name),
+        serve: implementations[provider],
+      })
     }
-    : offerFor(
-      override ? all.map((o) => ({ ...o, serve: override })) : all,
-      using?.provider,
-    )
-  if (typeof found == 'string') {
-    let refuse: Model = () => Promise.reject(new ModelError('provider', found))
-    return { model: refuse, name: String((model.model as Comp).name) }
-  }
-  let serve = found.serve!
-  let describe = async () => {
-    let listing = model.pending || !model.price
-      ? serve.info
-        ? await serve.info(found.name).catch((e) => {
-          if (e instanceof ModelError) throw e
-          return undefined
-        })
-        : (await serve.list?.().catch((e) => {
-          if (e instanceof ModelError) throw e
-          return []
-        }))?.find((m) => m.name == found.name)
-      : undefined
-    return listing
-  }
-  let prepare = (req: Parameters<Model>[0], listing?: Listed) => {
-    let modalities = listing?.modalities?.filter(
-      (m): m is 'text' | 'image' | 'audio' =>
-        m == 'text' || m == 'image' || m == 'audio',
-    )
-    return {
-      ...req,
-      ...!req.modalities && modalities?.length ? { modalities } : {},
+    let found = override && using?.provider == null
+      ? {
+        serve: override,
+        provider: all[0]?.provider ?? String(using?.provider ?? ''),
+        name: all[0]?.name ?? String((model.model as Comp).name),
+      }
+      : offerFor(
+        override ? all.map((o) => ({ ...o, serve: override })) : all,
+        using?.provider,
+      )
+    if (typeof found == 'string') {
+      let refuse: Model = () =>
+        Promise.reject(new ModelError('provider', found))
+      return { model: refuse, name: String((model.model as Comp).name) }
     }
-  }
-  let confirm = async (listing?: Listed) => {
-    if (
-      found.provider &&
-      (model.pending || !all.some((o) => o.provider == found.provider))
-    ) {
-      await g.apply(
-        confirmed(found.provider, String((model.model as Comp).name), listing),
-        { trusted: true },
+    let serve = found.serve!
+    let describe = async () => {
+      let [current] = await g.get([model.entity.eid])
+      // Listing all names is useful only for a newly requested model. A missing
+      // price is not evidence that a catalog is missing: OpenAI never lists one.
+      if (!current?.pending && (current?.price || !serve.info)) return undefined
+      return (await describeOnce(serve, serve.info ? found.name : undefined))
+        .find((m) => m.name == found.name)
+    }
+    let prepare = (req: Parameters<Model>[0], listing?: Listed) => {
+      let modalities = listing?.modalities?.filter(
+        (m): m is 'text' | 'image' | 'audio' =>
+          m == 'text' || m == 'image' || m == 'audio',
+      )
+      return {
+        ...req,
+        ...!req.modalities && modalities?.length ? { modalities } : {},
+      }
+    }
+    let confirm = async (listing?: Listed) => {
+      if (
+        found.provider &&
+        (model.pending || !all.some((o) => o.provider == found.provider))
+      ) {
+        await g.apply(
+          confirmed(
+            found.provider,
+            String((model.model as Comp).name),
+            listing,
+          ),
+          { trusted: true },
+        )
+      }
+    }
+    let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
+      let listing = await describe()
+      // Read retention per dispatch, not at startup or completion. The answer's
+      // explicit expiry wins; unknown providers must not inherit another TTL.
+      let [providerRow] = found.provider
+        ? await g.get([found.provider], ['provider'])
+        : []
+      let cache = {
+        requestedAt: Date.now(),
+        retention: (providerRow?.provider as Comp | undefined)?.cache_retention,
+      }
+      let reply = await serve(prepare(req, listing))
+      await confirm(listing)
+      return {
+        ...reply,
+        cacheExpiresAt: prefixCacheMark(reply, cache).cache_expires_at,
+      }
+    }, serve)
+    let executor: Executor | undefined
+    if (executorFor) {
+      let [provider] = await g.get([found.provider], ['provider'])
+      executor = await executorFor(
+        String((provider?.provider as Comp | undefined)?.name ?? ''),
       )
     }
-  }
-  let wrapped: Model = Object.assign(async (req: Parameters<Model>[0]) => {
-    let listing = await describe()
-    // Read retention per dispatch, not at startup or completion. The answer's
-    // explicit expiry wins; unknown providers must not inherit another TTL.
-    let [providerRow] = found.provider
-      ? await g.get([found.provider], ['provider'])
-      : []
-    let cache = {
-      requestedAt: Date.now(),
-      retention: (providerRow?.provider as Comp | undefined)?.cache_retention,
-    }
-    let reply = await serve(prepare(req, listing))
-    await confirm(listing)
+    let listing: Listed | undefined
     return {
-      ...reply,
-      cacheExpiresAt: prefixCacheMark(reply, cache).cache_expires_at,
+      model: wrapped,
+      name: found.name,
+      provider: found.provider,
+      ...executor
+        ? {
+          executor: {
+            ...executor,
+            submit: async (call, req) => {
+              listing = await describe()
+              // Metadata is free preparation; pricing must survive a Store restart
+              // so settlement can weigh a provider that does not report dollars.
+              if (listing) {
+                let { price, ...named } = listing
+                await g.apply([{
+                  entity: model.entity,
+                  model: { ...named, name: String((model.model as Comp).name) },
+                  ...price ? { price } : {},
+                }], { trusted: true })
+              }
+              await executor.submit(call, prepare(req, listing))
+            },
+            resume: async (call) => {
+              let reply = await executor.resume(call)
+              if (reply) await confirm(listing)
+              return reply
+            },
+          },
+        }
+        : {},
     }
-  }, serve)
-  let executor: Executor | undefined
-  if (executorFor) {
-    let [provider] = await g.get([found.provider], ['provider'])
-    executor = await executorFor(
-      String((provider?.provider as Comp | undefined)?.name ?? ''),
-    )
-  }
-  let listing: Listed | undefined
-  return {
-    model: wrapped,
-    name: found.name,
-    provider: found.provider,
-    ...executor
-      ? {
-        executor: {
-          ...executor,
-          submit: async (call, req) => {
-            listing = await describe()
-            // Metadata is free preparation; pricing must survive a Store restart
-            // so settlement can weigh a provider that does not report dollars.
-            if (listing) {
-              let { price, ...named } = listing
-              await g.apply([{
-                entity: model.entity,
-                model: { ...named, name: String((model.model as Comp).name) },
-                ...price ? { price } : {},
-              }], { trusted: true })
-            }
-            await executor.submit(call, prepare(req, listing))
-          },
-          resume: async (call) => {
-            let reply = await executor.resume(call)
-            if (reply) await confirm(listing)
-            return reply
-          },
-        },
-      }
-      : {},
   }
 }
 

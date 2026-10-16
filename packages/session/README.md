@@ -290,6 +290,18 @@ records `inference{executor, request, receipt}` on the ask, and dispatches the
 same instance idempotently. The runner releases its lease while the receipt is
 pending.
 
+Model metadata is optional preparation, not a prerequisite for an ask.
+`providerResolver` lists a provider's catalog only for a pending (unconfirmed)
+model. A confirmed model with no price does not trigger another full listing:
+some providers never publish prices. A provider with `info(name)` can still
+supply per-model metadata. The runner's resolver shares in-flight discovery
+across concurrent sessions and caches successful results (including missing
+metadata) for five minutes. After a transient discovery failure it continues the
+ask and cools down for at least a minute, or the error's longer retry delay. A
+host can supply a fifth `report(error)` argument to observe exhausted metadata
+discovery failures; permanent provider refusals still propagate. Provider
+implementations own HTTP retry/backoff before that fallback.
+
 `providerResolver` accepts an executor factory as its fourth argument, keyed by
 the selected provider's name. It prepares the provider's metadata and modalities
 before submission and confirms the model on receipt. An executor's `available()`
