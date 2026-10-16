@@ -176,3 +176,205 @@ newer main (including SQL changes); the reported full-corpus numbers are **not**
 measurements of that newer main. The focused suite, type check and two-file
 end-to-end smoke were repeated after rebasing. For engine comparisons use the
 pinned engine code and identical corpus/grammar hashes, not floating main.
+
+## File and declaration JSONB grains (T-126603)
+
+The same harness now has a `coarse` mode; it reuses the emitter, per-file spool,
+graph composition, timers and checks above, not another benchmark. Input is the
+**same 3,267 files / 6,677,779 nodes / 586,576 fixture references**, hash
+`3f3b695f310be24469305a30a1ca40cbdc294754f9c93340900fe7a21e717186`, exported
+from the pinned corpus commit. Host is the same i7-8700K / 24 GiB box. SQLite is
+**3.53.3**. Coarse runs use package code at
+**ab8e2225fc2674c6a3b8633fa9ae3e5c6ff999bf**; the historical node rows above use
+**64debac**. Do not attribute the difference solely to grain: the engine is not
+identical (notably query binder changes). The report `engineSha` records the
+harness checkout at report time (the measurement process started earlier in the
+same branch); package code stayed unchanged throughout all four runs. No
+production code changed for this measurement; the new SQL integration tests
+exercise capabilities already present. Raw reports:
+`yardstick.coarse.results.json`.
+
+### What is stored
+
+**Actual SQLite JSONB BLOBs**, not JSON strings or an imagined future feature:
+`tree.value` is an object property and the current adapter writes it through
+`jsonb(?)`. The harness checks `typeof(value)='blob'` for every coarse entity,
+the sum of all stored `json_array_length(value,'$.nodes')` against the corpus
+node count, graph round-trips after each edit, and SQL answers after reopen.
+JSON text is still encoded at the JS/SQLite boundary; JSONB is the disk value.
+
+A file entity holds one `{nodes:[...]}` value. Declaration units are each
+**program child subtree**, including top-level functions/classes/exports and
+residual imports, comments, statements and punctuation; one extra unit retains
+the program root. This broader partition deliberately loses no syntax. Nested
+functions remain inside their top-level owner's value. Nodes keep kind, relative
+byte span, local parent index, sibling ordinal, compact original ID suffix,
+identifier spelling and the baseline fixture reference target when present. The
+separate `tree.start` is the absolute base. Thus moving a later declaration need
+not rewrite its JSONB value. This is normalization/packing as well as entity
+coarsening: the old baseline repeats file and full parent IDs on all node rows;
+the coarse layout does not. It **adds identifier spellings** so cross-file name
+traffic can be measured. No source text or retained journal is stored at either
+grain. Bytes/node includes the whole checkpointed database, not just JSON
+payload.
+
+Two serial fresh-database/fresh-process repetitions per grain; run order is file
+A, declaration A, file B, declaration B. Spool I/O and packing are timed
+separately from normal `graph.apply` batches (at most 1,000 entities). Reads
+include answer validation and materialization. First use is not cold disk; no
+host-wide cache changes. Shared-host load is recorded in every raw report.
+
+| Measure                                      |                File A / B |         Declaration A / B |
+| -------------------------------------------- | ------------------------: | ------------------------: |
+| Graph entities                               |             3,267 / 3,267 |         102,086 / 102,086 |
+| Load graph apply (s)                         |             52.42 / 49.20 |             60.36 / 63.07 |
+| Packing (s), excluded from apply             |               8.56 / 7.38 |               7.15 / 6.27 |
+| Spool read/decode (s), excluded              |             26.79 / 11.34 |             13.11 / 10.26 |
+| Checkpointed base DB (B)                     | 474,841,088 / 474,841,088 | 500,015,104 / 500,015,104 |
+| Base database bytes / syntax node            |             71.11 / 71.11 |             74.88 / 74.88 |
+| Sampled load peak RSS (MiB)                  |           412.74 / 396.02 |           399.54 / 334.59 |
+| Node location index build (ms)               |             13.70 / 13.84 |           140.17 / 124.72 |
+| Node location index growth (B)               |         122,880 / 122,880 |     3,833,856 / 3,833,856 |
+| Name/path side-table extraction + insert (s) |             14.48 / 11.06 |             11.02 / 11.49 |
+| Name/path side-table growth (B)              |   17,338,368 / 17,338,368 |   17,170,432 / 17,170,432 |
+| Name covering-index build (s)                |               1.13 / 0.94 |               0.89 / 0.85 |
+| Name covering-index growth (B)               |   17,887,232 / 17,887,232 |   17,719,296 / 17,719,296 |
+| Name side table + index total growth (B)     |   35,225,600 / 35,225,600 |   34,889,728 / 34,889,728 |
+| Base + both query indexes (B/node)           |             76.40 / 76.40 |             80.68 / 80.68 |
+| Load apply + both index builds (s)           |             68.05 / 61.21 |             72.41 / 75.54 |
+
+Historical every-node baseline beside these new rows: **715.95–1,095.78 s** load
+and **294.15 B/node**, versus the coarse base and indexed totals above. This is
+descriptive, not a controlled same-engine speedup ratio. Index bytes are
+incremental checkpointed file growth (including page allocation/slack), not an
+isolated logical payload size. Peak RSS is sampled after graph batches.
+
+| Query (warm ms, p50 / p95)             |                File A |               File B |         Declaration A |         Declaration B |
+| -------------------------------------- | --------------------: | -------------------: | --------------------: | --------------------: |
+| Read function through graph + slice    |         12.41 / 15.51 |        21.14 / 26.54 |         11.16 / 16.72 |         16.82 / 31.49 |
+| Read node by JSON path, scan           |           5.59 / 6.53 |          3.97 / 4.82 |         54.80 / 62.27 |         61.38 / 67.42 |
+| Read node by JSON path, indexed        |           0.33 / 0.38 |          0.31 / 0.36 |           0.22 / 0.24 |           0.18 / 0.23 |
+| References to `graph`, JSON tree scan  | 10,943.15 / 11,717.81 | 9,937.71 / 12,699.09 | 10,080.71 / 12,221.20 | 10,783.68 / 14,265.85 |
+| References to `graph`, name/path index |       473.50 / 582.96 |      330.39 / 373.49 |       106.83 / 133.40 |       107.21 / 124.63 |
+
+Node/function reads and indexed refs have **21 warm samples**; the full JSON
+reference scan has **7**, plus one first use for each. Each reference query
+returns **1,869 node objects**, not just a count. First-use times and all
+samples are in the raw reports. Node paths are file `$.nodes[3353]` and
+declaration `$.nodes[1842]`; both identify the same function root. A JSON
+node-path read returns one root object; the graph function read returns all
+**443 nodes**.
+
+| Function edit, seven samples         |                        File A / B |                Declaration A / B |
+| ------------------------------------ | --------------------------------: | -------------------------------: |
+| Graph patch bundles                  |                             1 / 1 |                            5 / 5 |
+| Whole JSON values changed            |                             1 / 1 |                            2 / 2 |
+| UTF-8 JSON input bytes rewritten     |                 890,492 / 890,492 |                739,037 / 739,037 |
+| Parse/diff/pack preparation (ms)     |                   183.64 / 246.61 |                  233.05 / 210.93 |
+| Graph apply p50 / p95 (ms)           | 122.61 / 274.43 / 101.37 / 341.68 | 104.65 / 203.09 / 75.29 / 151.36 |
+| Name/path maintenance p50 / p95 (ms) |    45.23 / 68.74 / 53.28 / 105.48 |  94.52 / 169.90 / 81.94 / 148.08 |
+
+### Queries inside the values and their indexes
+
+Every statement is built through **`@yaks/sql`'s AST**, including table-function
+arguments, `json_tree`, `json_extract`, joins, `INSERT ... SELECT`, DDL and
+`EXPLAIN QUERY PLAN`. No SQL strings or production AST extensions were needed.
+`packages/sql/json_tree_test.ts` proves JSONB traversal, expression-index
+matching, and index search versus scan. A fixed expression-index path must be
+`lit(path)` in both index and query, not a bound path parameter. An expression
+index cannot index every arbitrary array member; the benchmark uses a small side
+table for the multi-valued name lookup instead.
+
+- **Node by path:** identical node object from `json_extract(value, path)`. Scan
+  disables secondary indexes on `tree`; selection is file/base plus root ID
+  (needed because a program residual and first child may share base zero).
+  Indexed selection adds `(file,start)`, then reads the same path. Plans confirm
+  `SCAN tree` versus
+  `SEARCH tree USING INDEX tree_location (file=? AND start=?)`. The path is a
+  local JSON array address, not a persistent graph identity.
+- **Every reference to a name across files:** traverse
+  `json_tree(value,
+  '$.nodes')`, select object entries with `name='graph'` and
+  a non-null fixture `target`. This is the **same deliberately file-local
+  first-occurrence resolver** as the baseline, gathered across all files, not
+  TypeScript binding resolution or all lexical occurrences. The first occurrence
+  in each file is not a reference. Expected IDs/targets/spellings are
+  independently gathered from the spool and checked against all returned
+  objects; scan/index answers also agree in full, not merely count.
+- **Name index:** `name_path(owner,path,name)` contains **only the 586,576
+  fixture reference sources**, built from stored JSONB with `INSERT ... SELECT`
+  and indexed on `(name,owner,path)`. Lookup searches that covering name index,
+  fetches the owner by integer primary key, then `json_extract(value,path)`
+  returns the node, not a cached node object in the side table. Plans are in the
+  reports. The side table is not 6.7M graph entities, nor an all-node index.
+  Extraction/population time and secondary-index build time/bytes are reported
+  separately. These are bulk-build costs after load, not online incremental
+  import throughput; base plus index times gives the measured combined work.
+
+The selected function is `apps/vale/buildings/kit.ts#3353` (443 syntax nodes) at
+both grains. It is nested inside a large top-level owner, so declaration grain
+rewrites that owner's subtree, **not only those 443 function nodes**. The
+changed declaration values include the tiny program-root residual because its
+end span grows; later units receive base-only patches. This fixture is not a
+best-case standalone top-level function. The selected function is the same at
+both grains; a numeric expression in its body is replaced by `(n + 1)`, using
+the existing explicit identity/diff mapper. The fixture selection now rejects
+TypeScript's `number` keyword (this grammar calls that a `number` too), requires
+a parse without errors, and checks the edit preserves parse validity. An earlier
+pilot editing that keyword was discarded; none of its measurements are reported.
+Seven identical edits restore original content outside timing. Unchanged later
+declarations patch only `tree.start`; changed values are replaced whole.
+Reported rewrite bytes are **UTF-8 JSON input bytes**, not physical BLOB/WAL
+write amplification. Name/path entries for changed values are deleted/rebuilt in
+their own transaction, timed separately. The two phases are **not atomic
+together**: this is an index-maintenance cost measurement, not a
+production-ready transactional side-index implementation. No per-node history is
+inferred from created/updated stamps.
+
+### What the graph/query language would need
+
+Current `@yaks/query` routes declared component/reference paths; a JSON-valued
+property supports presence/whole-value reads, but the SQL binder rejects value
+filter/order/tally on it (`packages/sql/bind.ts`, `opaque`). These measured SQL
+queries are **not currently expressible as graph query strings**. Supporting
+Jeff's suggestion needs a typed JSON-path operator distinct from reference hops,
+array/recursive descent or an `exists`/unnest scope so predicates refer to the
+same node, projection of owner + local path + node, defined missing/null/type
+and comparison semantics, and planner/index registration for fixed expressions
+or maintained multi-valued side indexes. None requires changing package
+boundaries, and this benchmark does not propose a concrete grammar spelling.
+
+Without that extension, both coarse grains lose direct graph queries over
+internal nodes. SQL JSON traversal **can recover those predicates** (with the
+measured scan/index trade-off); it does not automatically restore graph
+identity, referential integrity, or history. An edge can target a
+file/declaration entity; an edge to a nested node needs an explicit
+`(owner, stable node ID/path)` address contract, path repair on edits and
+validation, not a normal entity ref. File-grain history would replace the whole
+file value; declaration history could replace just its owner value. Neither
+supplies independently versioned per-node history. A positional path alone
+shifts under insertion. The optional name index restores selected lookup speed,
+not arbitrary node-query coverage.
+
+Reproduce using the same spool and scratch-only paths:
+
+```sh
+deno run -A bench/yardstick.ts coarse /path/to/spool /scratch/file-a.db /scratch/file-a.json file
+deno run -A bench/yardstick.ts coarse /path/to/spool /scratch/decl-a.db /scratch/decl-a.json declaration
+# Repeat serially into new file-b.db / decl-b.db.
+```
+
+Focused checks include six emitter/packing/edit tests, four SQL AST/JSON/index
+integration cases, type check, `deno fmt` and `deno lint`. Both coarse grains
+also pass a separate synthetic end-to-end smoke corpus and independently reopen
+the measured databases. Ten focused tests pass on a forced rerun. The diagnostic
+1 ms test budget run flags the function packing/edit test at 1.6 ms under shared
+host load; no budget exception was added. All scratch databases, WAL/SHM, source
+archive and spool were deleted after preserving reports; no live graph was used
+as benchmark data.
+
+Cleanup: **3,133,486,440 B (2.92 GiB)** of benchmark databases/WAL/SHM deleted,
+including discarded pilots; **4,250,910,222 B** of final scratch tree + child
+worktrees removed (in addition to the **1,022,711,144 B** of discarded database
+files removed earlier). Logical file lengths, not allocated blocks. Zero scratch
+databases remain. Cleanup manifest is retained in the raw report.
