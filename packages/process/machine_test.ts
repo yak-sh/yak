@@ -6,6 +6,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { type Comp, graph } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { modelDoc } from '@yaks/model'
 import { EXIT, processDoc, processes } from '@yaks/process'
 import { ram } from '@yaks/ram'
@@ -193,4 +194,37 @@ test('write makes the directory it needs, and read gives the text back', async (
     'wrote src/lib.rs',
   )
   assertEquals(await read.run({ path: `${dir}/src/lib.rs` }), 'fn main() {}')
+})
+
+// A lend constructs a new machine; it must not buy another directory scan.
+test('newly lent machines share process-directory tidy', async () => {
+  let g = tracked()
+  let o = opts()
+  let call = 'tidy-receipt'
+  let eid = derivedEid(`shell process ${call}`)
+  await g.apply([{ entity: { eid }, process: {} }])
+  let readDir = Deno.readDir
+  let scans = 0
+  let scanned!: () => void
+  let done = new Promise<void>((go) => scanned = go)
+  Deno.readDir = (path) => {
+    if (path != o.dir) return readDir(path)
+    scans++
+    return (async function* () {
+      try {
+        yield* readDir(path)
+      } finally {
+        scanned()
+      }
+    })()
+  }
+  try {
+    assertEquals(await processMachine(g, o).start('true', undefined, call), eid)
+    await done
+    await Promise.resolve()
+    assertEquals(await processMachine(g, o).start('true', undefined, call), eid)
+    assertEquals(scans, 1)
+  } finally {
+    Deno.readDir = readDir
+  }
 })

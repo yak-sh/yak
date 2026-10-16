@@ -437,10 +437,21 @@ export let clean = (eid: string, o: Opts = {}): void => {
   for (let path of Object.values(files(dirOf(o), eid))) clear(path)
 }
 
+let fileInfo = (path: string) => {
+  try {
+    return Deno.lstatSync(path)
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+    return undefined
+  }
+}
+
 /**
  * Clean every run in the directory that ended more than `age` ms ago, by its
  * exit-code file's time: what a reader that never cleaned leaves behind, such
- * as a call nobody waited on or an answer lost to a crash. Answers how many.
+ * as a call nobody waited on or an answer lost to a crash. Requires a launch
+ * marker and a complete exit code. With a store, preserves sessions, services
+ * and processes whose exit has not been recorded. Answers how many.
  *
  * ```ts
  * import { sweep } from '@yaks/process'
@@ -448,17 +459,53 @@ export let clean = (eid: string, o: Opts = {}): void => {
  * // await sweep(24 * 60 * 60 * 1000)   // every run that ended a day ago
  * ```
  */
-export let sweep = async (age: number, o: Opts = {}): Promise<number> => {
+export let sweep = async (
+  age: number,
+  o: Opts = {},
+  processes?: Pick<Store, 'get'>,
+): Promise<number> => {
   let dir = dirOf(o)
   let before = Date.now() - age
   let n = 0
-  try {
-    for await (let e of Deno.readDir(dir)) {
-      if (!e.name.endsWith('.code')) continue
-      if ((mtimeOf(`${dir}/${e.name}`) ?? before) >= before) continue
-      clean(e.name.slice(0, -'.code'.length), o)
+  let candidates: string[] = []
+  let remove = async () => {
+    let rows = processes ? await processes.get(candidates) : []
+    let held = new Set(
+      rows.filter((b) => b.session || b[SERVICE] || (b[PROCESS] && !b[EXIT]))
+        .map((b) => b.entity.eid),
+    )
+    for (let eid of candidates) {
+      if (held.has(eid)) continue
+      let f = files(dir, eid)
+      // An old .code alone is not ours to remove. Require the launch marker
+      // and the wrapper's complete ending, and recheck after the graph read:
+      // a service or managed session may already be on its next attempt.
+      let code = fileInfo(f.code)
+      let started = fileInfo(f.started)
+      let start = codeOf(f.started)
+      let end = code?.mtime?.getTime()
+      let exit = exitIn(f.code)
+      if (
+        !code?.isFile || !started?.isFile || start == null || start <= 0 ||
+        end == null || end >= before || start > end ||
+        exit == null || !Number.isInteger(exit) || exit < 0 || exit > 255
+      ) continue
+      clean(eid, o)
       n++
     }
+    candidates = []
+  }
+  try {
+    for await (let e of Deno.readDir(dir)) {
+      if (!e.isFile || !e.name.endsWith('.code')) continue
+      if ((mtimeOf(`${dir}/${e.name}`) ?? before) >= before) continue
+      let eid = e.name.slice(0, -'.code'.length)
+      // No launch marker means another package's file, not a finished run.
+      if (mtimeOf(files(dir, eid).started) == null) continue
+      candidates.push(eid)
+      if (candidates.length == 128) await remove()
+    }
+    await remove()
   } catch (e) {
     if (!(e instanceof Deno.errors.NotFound)) throw e
   }

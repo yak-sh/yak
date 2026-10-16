@@ -135,12 +135,75 @@ test('a sweep cleans only the runs that ended longer ago than its age', async ()
   }
   let old = await echo('old'), fresh = await echo('fresh')
   let past = new Date(Date.now() - 60_000)
+  Deno.writeTextFileSync(`${at}/${old}.started`, String(past.getTime() - 1))
   Deno.utimeSync(`${at}/${old}.code`, past, past)
 
   assertEquals(await sweep(30_000, { dir: at }), 1)
   assertEquals(tail(old, 1, { dir: at }), [])
   assertEquals(tail(fresh, 1, { dir: at }), ['fresh'])
   assertEquals(await sweep(30_000, { dir: dir() + '/none' }), 0)
+})
+
+test('a sweep preserves incomplete, foreign and managed run files', async () => {
+  let at = dir()
+  let g = tracked()
+  let past = new Date(Date.now() - 60_000)
+  let cases = [
+    'finished',
+    'foreign',
+    'empty',
+    'partial',
+    'invalid',
+    'running',
+    'managed',
+    'service',
+    'directory',
+    'symlink',
+    'restarted',
+  ]
+  for (let eid of cases) {
+    for (let ext of ['out', 'err', 'pid', 'started', 'code']) {
+      Deno.writeTextFileSync(
+        `${at}/${eid}.${ext}`,
+        ext == 'code'
+          ? '0\n'
+          : ext == 'started'
+          ? String(past.getTime() - 1)
+          : 'keep',
+      )
+    }
+    Deno.utimeSync(`${at}/${eid}.code`, past, past)
+  }
+  Deno.removeSync(`${at}/foreign.started`)
+  for (
+    let [eid, text] of [['empty', ''], ['partial', '0'], ['invalid', 'wat\n']]
+  ) {
+    Deno.writeTextFileSync(`${at}/${eid}.code`, text)
+    Deno.utimeSync(`${at}/${eid}.code`, past, past)
+  }
+  Deno.removeSync(`${at}/directory.code`)
+  Deno.mkdirSync(`${at}/directory.code`)
+  Deno.removeSync(`${at}/symlink.code`)
+  Deno.symlinkSync(`${at}/managed.code`, `${at}/symlink.code`)
+  Deno.writeTextFileSync(`${at}/restarted.started`, String(Date.now()))
+  await g.apply([
+    { entity: { eid: 'running' }, process: { pid: 1 } },
+    { entity: { eid: 'managed' }, session: {}, process: {}, exit: { code: 0 } },
+    {
+      entity: { eid: 'service' },
+      service: { command: 'true' },
+      exit: { code: 0 },
+    },
+  ])
+  assertEquals(await sweep(30_000, { dir: at }, store(g)), 1)
+  assertEquals(Deno.readTextFileSync(`${at}/foreign.out`), 'keep')
+  for (let eid of cases.slice(1)) {
+    assertEquals(Deno.readTextFileSync(`${at}/${eid}.out`), 'keep', eid)
+  }
+  assertEquals(
+    [...Deno.readDirSync(at)].some((e) => e.name == 'finished.out'),
+    false,
+  )
 })
 
 test('a machine with no launcher is refused before anything starts', async () => {

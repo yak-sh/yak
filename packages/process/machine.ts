@@ -16,9 +16,9 @@ import {
   type Process,
   signal as processSignal,
   store,
-  sweep,
   tail,
 } from '@yaks/process'
+import { tidy } from './tidy.ts'
 import type {
   LentMachine,
   Machine,
@@ -29,9 +29,6 @@ import type {
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
-
-let HOUR = 60 * 60 * 1000
-let DAY = 24 * HOUR
 
 /**
  * A configured local filesystem as a machine: commands run by bash with the harness's environment,
@@ -48,14 +45,6 @@ export let processMachine = (
   let opts: Opts = { ...o, poll: o.poll ?? 100 }
   let processes = store(g)
   let processFor = (call: string) => derivedEid(`shell process ${call}`)
-  // At most once an hour, as a command starts: nothing is left to sweep on a
-  // machine that runs none.
-  let swept = 0
-  let tidy = () => {
-    if (Date.now() - swept < HOUR) return
-    swept = Date.now()
-    sweep(DAY, opts).catch((e) => console.error('process sweep failed:', e))
-  }
   let look = async (eid: string): Promise<Proc | null> => {
     let [self] = await g.get([eid])
     if (!self) return null
@@ -69,7 +58,7 @@ export let processMachine = (
   return {
     poll: opts.poll,
     start: async (command, directory, call, session) => {
-      tidy()
+      tidy(processes, opts)
       let eid = call ? processFor(call) : undefined
       if (eid) {
         let [prior] = await g.get([eid])
