@@ -233,7 +233,9 @@ export let write = async (
 ): Promise<Response> => {
   let key = request.headers.get('idempotency-key')
   if (poured(request)) {
-    if (key) throw new Refused('Idempotency-Key requires a JSON apply')
+    if (key?.startsWith('outbox:')) {
+      throw new Refused('Durable outbox keys require a JSON apply')
+    }
     return pour(graph, request, who, activity, context, opts)
   }
   let text = await readBody(request)
