@@ -276,10 +276,10 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     // Components are immutable; their unique keys stay held by the same eid
     // when another component changes. Row-bearing indexes still move below.
     if (hasUnique) {
-      for (let comp of Object.keys(was ?? {})) {
-        if (was![comp] !== b?.[comp]) checks.push(...uniqueOf(comp))
+      for (let comp in was) {
+        if (was[comp] !== b?.[comp]) checks.push(...uniqueOf(comp))
       }
-      for (let comp of Object.keys(b ?? {})) {
+      for (let comp in b) {
         if (!was || !(comp in was)) checks.push(...uniqueOf(comp))
       }
     }
@@ -300,12 +300,12 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       if (to !== undefined) held.set(to, eid)
     }
     if (was) {
-      for (let name of Object.keys(was)) {
+      for (let name in was) {
         if (name != 'entity' && !(b && name in b)) worn.get(name)?.delete(eid)
       }
     }
     if (b) {
-      for (let name of Object.keys(b)) {
+      for (let name in b) {
         if (name == 'entity') continue
         let at = worn.get(name)
         if (!at) worn.set(name, at = new Map())
