@@ -190,3 +190,44 @@ Raw final evidence: `final-{direct,local}.jsonl`, `land-paired-direct.jsonl`,
 Admin checks showed 0 current occurrences/bugs and 0 unresolved tracker bugs.
 After rebase, the combined budget rerun passed 214 Deno cases plus the Site
 workerd case; generated content still checked clean.
+
+## T-125930: MCP evaluation was already deferred
+
+Rechecked after rebasing onto `ef5e9a7c97d3584d163d04a9ee015a4069a23d43`, which
+reverts `448d3d43b`: its lazy vocabulary change broke Mossvale with
+`@yaks/game/vocab has not been loaded`. Do not restore that change as part of
+these SDK investigations. The earlier landed-result section records the
+historical measurement, not a currently retained optimization.
+
+The ablation above removed code, not just initializer execution. It therefore
+identified a bundle closure cost, **not an eager MCP evaluation bug**. The
+router already imports `mcp.ts` dynamically (T-37977). Builder imports
+`agent.ts`/Zod only downstream of `build.ts`'s dynamic `builder.ts` import.
+`stream.ts` imports only the pure `@yaks/mcp/roster` helper. The genuinely eager
+`@cfworker/json-schema` validator is shared by graph admission and tool argument
+checks; moving it behind the MCP door would break another door.
+
+A manual emitted-bundle probe marks source-mapped module initializer bodies in
+an external copy of the production build, then loads it in fresh workerd.
+Against the rebuilt reverted baseline, startup runs only the roster helper; none
+of 126 SDK/Zod/MCP server/schema initializers runs. A positive control invokes
+the existing MCP initializer and observes all 127 marked bodies. This proves
+module evaluation, not actual page-cache HIT/MISS requests, network latency, or
+elimination of parse/compile cost. No import rewrite is warranted.
+
+Reproduction and raw evidence:
+`/home/yaks/bench-T-125930/runtime-marker/{probe.cjs,REPORT.md,rebased/result.json}`.
+The probe accepts a built `index.js`/map directory, a checkout with the pinned
+Worker dependencies installed, and an output directory; run it with Node's
+`--expose-internals` for its Acorn parser. It changes only that external copy.
+The unmodified built-entry workerd baseline has seven fresh observations, median
+1431.0 ms (1196.3–2279.9 ms); this is local ready time, not Cloudflare CPU.
+
+Cloudflare's stored baseline for the revert is **115 ms**, version
+`77f1985d-38f5-4797-94e5-014b821ad599`, live at 100% on October 16, 2026. The
+scoped admin connector's full 63-tool `tools/list` response (including all
+names, input and output schemas) and a successful `graph_schema` call compare
+identically before and after the revert. Raw captures, local runs, admin checks
+and subsequent landing measurements live in `/home/yaks/bench-T-125930/`. There
+is **no demonstrated MCP startup speedup**: this task retains the existing lazy
+boundary rather than claiming a no-op import change improved it.
