@@ -1,4 +1,5 @@
 import { browserDrafts, draftEid } from './_draft.js'
+import { durableOutbox } from './_outbox.js'
 export { draftEid }
 
 // The store an app's own pages talk to: one ES module, no build, served by
@@ -94,8 +95,33 @@ let door = (base) => async (path, init) => {
   }
   let r = await fetch(new URL(path, base), init)
   let body = await r.text()
-  if (!r.ok) throw refused(r, body)
-  return body ? JSON.parse(body) : null
+  if (!r.ok) {
+    let error = refused(r, body)
+    // A timeout, overload or proxy HTML is not a deliberate store refusal.
+    let explicit = false
+    try {
+      explicit = !!JSON.parse(body).error
+    } catch { /* unknown response */ }
+    if (
+      path == 'apply' && explicit && r.status < 500 &&
+      ![408, 425, 429].includes(r.status)
+    ) {
+      error.outcome = 'refused'
+    }
+    throw error
+  }
+  let receipt = body ? JSON.parse(body) : null
+  if (
+    path == 'apply' && (r.status == 202 || receipt?.pending ||
+      receipt?.ok !== true || !receipt?.aliases ||
+      typeof receipt.aliases != 'object' || Array.isArray(receipt.aliases) ||
+      !Array.isArray(receipt?.bundles))
+  ) {
+    throw new Error(
+      receipt?.message || 'Write is still unsaved; its outcome is unknown',
+    )
+  }
+  return receipt
 }
 
 // The release the platform's tags in this page name (page-script.ts) is the
@@ -353,14 +379,74 @@ export let store = (base) => {
   // One bundle or many, in; `{ok, aliases, bundles}` back, where `aliases`
   // maps each `$alias` to the eid it minted and `bundles` is the batch as
   // applied.
-  let apply = (bundles) =>
-    ask('apply', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        entities: Array.isArray(bundles) ? bundles : [bundles],
-      }),
+  // Identity is part of the disk scope. A failed identity lookup must never
+  // replay another person's writes under an anonymous (or replacement) cookie.
+  let queue, starting, closed = false
+  let listeners = new Set()
+  let notify = () => {
+    for (let fn of listeners) fn()
+  }
+  let boot = () =>
+    starting ??= ask('me').then(async ({ person }) => {
+      if (closed) throw new Error('Write outbox is closed')
+      queue = durableOutbox({
+        scope: `${base}:${person ?? 'anonymous'}`,
+        send: async (key, payload) => {
+          let current = await ask('me')
+          if (current.person !== person) {
+            throw new Error(
+              'Write is unsaved: the signed-in person has changed',
+            )
+          }
+          return ask('apply', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'idempotency-key': key,
+            },
+            body: JSON.stringify(payload),
+          })
+        },
+      })
+      queue.onPending(notify)
+      await queue.ready
+      notify()
     })
+  let outbox = {
+    get ready() {
+      return boot()
+    },
+    pending: () => queue?.pending() ?? [],
+    onPending: (fn) => {
+      listeners.add(fn)
+      void boot().catch(() => {})
+      return () => listeners.delete(fn)
+    },
+    retry: async (key) => {
+      await boot()
+      return queue.retry(key)
+    },
+    forget: async (key) => {
+      await boot()
+      return queue.forget(key)
+    },
+    close: () => {
+      closed = true
+      queue?.close()
+      listeners.clear()
+    },
+  }
+  // Browser stores recover on opening, even when the page has no new write.
+  // Non-browser imports have no disk to recover and need no identity request.
+  if (globalThis.indexedDB) void boot().catch(() => {})
+  let apply = async (bundles) => {
+    // Snapshot intent before the asynchronous identity lookup.
+    let payload = JSON.parse(JSON.stringify({
+      entities: Array.isArray(bundles) ? bundles : [bundles],
+    }))
+    await boot()
+    return queue.submit(payload)
+  }
   // The filter line, the grammar the boards speak: '.doc.title~=cake',
   // '.opaque.format=recipe', 'id=<eid>', 'limit='. Oldest first, in the order
   // the rows were written; a windowed read is the newest page of that same
@@ -534,32 +620,16 @@ export let store = (base) => {
       tell({ unsubscribe: name })
     }
   }
-  // A draft is accepted only by a durable receipt. Pending responses resend
-  // the exact batch with the same identity; the public apply answer stays as-is.
-  let draftApply = async (bundles) => {
-    let key = crypto.randomUUID()
-    for (let attempt = 0;; attempt++) {
-      let receipt = await ask('apply', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'idempotency-key': key },
-        body: JSON.stringify({ entities: bundles }),
-      })
-      if (!receipt.pending) return receipt
-      if (attempt >= 5) {
-        throw new Error(receipt.message || 'Draft write is still pending')
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    }
-  }
   return {
     apply,
+    outbox,
     me,
     query,
     search,
     subscribe,
     upload,
     drafts: (opts) =>
-      browserDrafts({ apply: draftApply, me, subscribe }, String(base), opts),
+      browserDrafts({ apply, me, subscribe }, String(base), opts),
   }
 }
 
@@ -659,9 +729,7 @@ let rows = ({ rows, riders }) => {
   return [...out.values()]
 }
 
-export let { apply, me, query, search, subscribe, upload } = store(
-  new URL('.', import.meta.url),
-)
-
-/** Durable, synced fields: const desk = drafts(); desk.bind(input, place). */
-export let drafts = store(new URL('.', import.meta.url)).drafts
+export let { apply, drafts, me, outbox, query, search, subscribe, upload } =
+  store(
+    new URL('.', import.meta.url),
+  )

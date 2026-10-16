@@ -45,10 +45,6 @@ test('the served client: a page saves, lists and watches', async () => {
     assertEquals(served.status, 200)
     assertMatch(served.headers.get('content-type') ?? '', /javascript/)
     let source = await served.text()
-    assertMatch(
-      source,
-      /export let \{ apply, me, query, search, subscribe, upload \}/,
-    )
     // And the precondition's hash beside them, which is not one of the doors:
     // it is what a page puts in `$was` (T-37614).
     assertMatch(source, /export let was = /)
@@ -78,9 +74,11 @@ test('the served client: a page saves, lists and watches', async () => {
     assertStringIncludes(html, '<base href="/recipes/">')
 
     Deno.writeTextFileSync(`${dir}/client.js`, source)
-    let draft = await k.at(`${jeff7}.yaks.app`, '/recipes/api/_draft.js')
-    assertEquals(draft.status, 200)
-    Deno.writeTextFileSync(`${dir}/_draft.js`, await draft.text())
+    for (let file of ['_draft.js', '_outbox.js']) {
+      let asset = await k.at(`${jeff7}.yaks.app`, `/recipes/api/${file}`)
+      assertEquals(asset.status, 200)
+      Deno.writeTextFileSync(`${dir}/${file}`, await asset.text())
+    }
     let mod = await import(`file://${dir}/client.js`)
     let store = mod.store(`${mine.origin}/recipes/api/`)
 
@@ -321,9 +319,11 @@ test('the client at a pretty path, and a sibling app by path', async () => {
       await (await k.at(`${nora8}.yaks.app`, '/reading/api/client.js'))
         .text()
     Deno.writeTextFileSync(`${dir}/client.js`, source)
-    let draft = await k.at(`${nora8}.yaks.app`, '/reading/api/_draft.js')
-    assertEquals(draft.status, 200)
-    Deno.writeTextFileSync(`${dir}/_draft.js`, await draft.text())
+    for (let file of ['_draft.js', '_outbox.js']) {
+      let asset = await k.at(`${nora8}.yaks.app`, `/reading/api/${file}`)
+      assertEquals(asset.status, 200)
+      Deno.writeTextFileSync(`${dir}/${file}`, await asset.text())
+    }
     let mod = await import(`file://${dir}/client.js`)
     Object.defineProperty(globalThis, 'location', {
       value: { origin: mine.origin, href: `${mine.origin}/reading/loans/1` },

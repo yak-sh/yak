@@ -122,6 +122,7 @@ export let readiness = (
     catalog: () => Promise<void>
     cli?: () => Promise<void>
     draft?: () => Promise<void>
+    outbox?: () => Promise<void>
   },
 ) => {
   let dependencies = Promise.resolve().then(make.dependencies)
@@ -129,13 +130,15 @@ export let readiness = (
   let catalog = Promise.resolve().then(make.catalog)
   let cli = Promise.resolve().then(() => make.cli?.())
   let draft = Promise.resolve().then(() => make.draft?.())
-  let all = Promise.allSettled([dependencies, web, catalog, cli, draft]).then(
-    (completed) => {
-      for (let result of completed) {
-        if (result.status == 'rejected') throw result.reason
-      }
-    },
-  )
+  let outbox = Promise.resolve().then(() => make.outbox?.())
+  let all = Promise.allSettled([dependencies, web, catalog, cli, draft, outbox])
+    .then(
+      (completed) => {
+        for (let result of completed) {
+          if (result.status == 'rejected') throw result.reason
+        }
+      },
+    )
   return { dependencies, web, catalog, all }
 }
 
@@ -157,6 +160,9 @@ let preparing = (root = dir, timeout = 600_000) =>
     draft: () =>
       timed('Draft assets', () =>
         generated('Draft asset', [join(root, 'draft-assets.ts')])),
+    outbox: () =>
+      timed('Outbox assets', () =>
+        generated('Outbox asset', [join(root, 'outbox-assets.ts')])),
     cli: () =>
       timed('Sandbox CLI', () =>
         generated('Sandbox CLI', [join(root, 'sandbox/cli-assets.ts')])),

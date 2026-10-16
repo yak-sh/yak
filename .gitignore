@@ -51,3 +51,6 @@ node_modules.lock/
 
 # Browser draft helper, generated from @yaks/draft.
 /workers/yak/public/_draft.js
+
+# Browser write outbox, generated from @yaks/sync.
+/workers/yak/public/_outbox.js

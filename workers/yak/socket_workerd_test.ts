@@ -42,9 +42,11 @@ let page = async (k: Kernel) => {
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-socket-' })
   let source = await (await k.at(host, '/recipes/api/client.js')).text()
   Deno.writeTextFileSync(`${dir}/client.js`, source)
-  let draft = await k.at(host, '/recipes/api/_draft.js')
-  assertEquals(draft.status, 200)
-  Deno.writeTextFileSync(`${dir}/_draft.js`, await draft.text())
+  for (let file of ['_draft.js', '_outbox.js']) {
+    let asset = await k.at(host, `/recipes/api/${file}`)
+    assertEquals(asset.status, 200)
+    Deno.writeTextFileSync(`${dir}/${file}`, await asset.text())
+  }
   let mod = await import(`file://${dir}/client.js`)
   let mine = browser(k, host, them.cookie)
   let wire = await relay(k, host, them.cookie, `https://${host}`)
