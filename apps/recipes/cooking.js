@@ -1,7 +1,8 @@
 // The platform serves this module beside the page, not inside the repository.
-const { apply, me, subscribe, was } = await import(
+const { apply, drafts, me, subscribe, was } = await import(
   new URL('./api/client.js', import.meta.url).href
 )
+import { bindDurations, durationHTML } from './cooking-inputs.js'
 import {
   cookingIngredients,
   formatSeconds,
@@ -32,6 +33,7 @@ const personId = (who) => typeof who === 'string' ? who : who?.person
 const own = (session, who) => ownsSession(session, personId(who))
 const writable = (who) => !!personId(who) && who?.writes !== false
 const cleanups = new WeakMap()
+const draftDesks = new WeakMap()
 let lastError = ''
 const pending = new Set()
 // A receipt bridges a delayed subscription; picks themselves live in the store.
@@ -100,16 +102,24 @@ export function watchCooking(render, fail, who) {
   const emit = () => {
     if (!active) return
     const activeInput = document.activeElement
+    const duration = activeInput?.dataset?.cookDraft
+    const caret = duration
+      ? [activeInput.selectionStart, activeInput.selectionEnd]
+      : null
     const picker = activeInput?.name === 'cook-recipe'
       ? activeInput.value
       : null
     try {
       render(parts.flat())
-      const selector = picker
+      const selector = duration
+        ? `[data-cook-draft="${CSS.escape(duration)}"]`
+        : picker
         ? `[name="cook-recipe"][value="${CSS.escape(picker)}"]`
         : null
       if (selector) {
-        document.querySelector(selector)?.focus({ preventScroll: true })
+        const replacement = document.querySelector(selector)
+        replacement?.focus({ preventScroll: true })
+        if (caret && replacement) replacement.setSelectionRange(...caret)
       }
     } catch (error) {
       showError(error, fail)
@@ -185,7 +195,7 @@ export function cookingHTML(rows, who, recipes = []) {
   )
   let html =
     `<section class="cooking" aria-label="Live cooking"><header><h2>Cook together</h2>
-    <p>Choose recipes, then work through their interleaved steps. Timers and progress follow you across devices.</p><p>Each timer uses the first duration written in its step (the upper end of a range). Check it before starting; use the duration buttons to adjust it. This page must be open to show an elapsed timer.</p></header>
+    <p>Choose recipes, then work through their interleaved steps. Timers and progress follow you across devices.</p><p>Each timer uses the first duration written in its step (the upper end of a range). Check it before starting; use the duration buttons or enter custom seconds to adjust it. This page must be open to show an elapsed timer.</p></header>
     <p class="cook-error" role="alert" data-cook-error ${
       lastError ? '' : 'hidden'
     }>${escape(lastError)}</p>`
@@ -310,7 +320,7 @@ export function cookingHTML(rows, who, recipes = []) {
           delta > 0 ? '+' : ''
         }${delta}s</button>`
       }
-      html += '</div></div></li>'
+      html += `</div>${durationHTML(id, locked || done)}</div></li>`
     }
     html += '</ol></article>'
   }
@@ -345,6 +355,11 @@ async function guardSession(session) {
 /** Rewire after render; call returned cleanup on unmount. The clock only edits outputs. */
 export function wireCooking(rows, who, fail, root = document, recipes = []) {
   cleanups.get(root)?.()
+  let desk = draftDesks.get(root)
+  if (!desk) {
+    desk = drafts({ report: (error) => showError(error, fail) })
+    draftDesks.set(root, desk)
+  }
   const find = (id) => rows.find((r) => r.entity.eid === id)
   const parent = (step) => find(step.cook_step.session)
   const requireWrite = (session) => {
@@ -499,12 +514,34 @@ export function wireCooking(rows, who, fail, root = document, recipes = []) {
       output.classList.toggle('is-expired', left === 0)
     }
   }
+  const unbindDurations = bindDurations(root, desk, {
+    run,
+    bundles: async (id, seconds) => {
+      const row = find(id)
+      const session = parent(row)
+      requireWrite(session)
+      if (session.completed) {
+        throw new Error('Reopen the session before changing its steps.')
+      }
+      const timer = timerChange(row, 'reset', Date.now(), seconds)
+      return [
+        await guardSession(session),
+        {
+          entity: { eid: row.entity.eid },
+          timer,
+          cook_step: { seconds },
+          $was: { ...await completionGuard(row), ...await timerGuard(row) },
+        },
+      ]
+    },
+  })
   root.addEventListener('change', selection)
   root.addEventListener('click', click)
   root.addEventListener('submit', submit)
   tick()
   const clock = setInterval(tick, 1000)
   const cleanup = () => {
+    unbindDurations()
     clearInterval(clock)
     root.removeEventListener('change', selection)
     root.removeEventListener('click', click)
@@ -512,5 +549,11 @@ export function wireCooking(rows, who, fail, root = document, recipes = []) {
     cleanups.delete(root)
   }
   cleanups.set(root, cleanup)
-  return cleanup
+  return () => {
+    // An old render's cleanup must not tear down the current bindings.
+    if (cleanups.get(root) !== cleanup) return
+    cleanup()
+    desk.close()
+    draftDesks.delete(root)
+  }
 }

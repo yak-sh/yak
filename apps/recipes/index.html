@@ -404,11 +404,17 @@
     import { cookingHTML, watchCooking, wireCooking } from './cooking.js'
     let cookingRows = []
     let stopCooking = () => {}
+    let stopCookingInputs = () => {}
     function renderCooking() {
       const root = $('cooking')
       root.innerHTML = cookingHTML(cookingRows, who, recipes)
-      wireCooking(cookingRows, who, fail, root, recipes)
+      stopCookingInputs = wireCooking(cookingRows, who, fail, root, recipes)
     }
+    window.addEventListener('pagehide', (event) => {
+      if (event.persisted) return
+      stopCooking()
+      stopCookingInputs()
+    })
     let photos = null
     window.addEventListener('beforeunload', (e) => {
       if (photos?.api.hasUnsaved()) {
