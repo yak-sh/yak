@@ -96,3 +96,21 @@ unique-constraint scans when the vocabulary has no unique constraints, and
 avoids constructing a matcher view for plain `get` calls that need neither
 visibility nor derived values. Index maintenance and rollback still use the same
 `put` path; graph admission and all registered hooks remain unchanged.
+
+### Rebase and final same-window control
+
+Landing rebased onto `c06467bba`, including binary storage support. The conflict
+resolution preserves byte copying on writes and reads. The inconclusive
+`Object.keys` loop experiment was then removed; final source is `25779cea0`. The
+original Deno/Chrome table above measures the pre-rebase candidate only.
+
+The final Deno control loads baseline and candidate in one process and
+alternates them every frame (three fresh pairs, 100 warmup and 400 measured
+frames each). Pooled median/p95/p99/max milliseconds: baseline
+**3.772/6.367/8.790/15.510**, candidate **3.707/6.395/8.602/45.016**. Median
+improvement is small; p95 is effectively unchanged and the scheduling/GC maximum
+is worse. No tail improvement or hard bound is claimed. Raw final and
+intermediate comparisons are retained in `postRebase` in the report. Final
+RAM/graph/client tests passed **444**, types and lint passed. Repeated
+post-rebase budget runs still showed pre-existing client/SQL cases just over 1
+ms under load; no budget was raised. No graph write-path bypass was added.
