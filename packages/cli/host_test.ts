@@ -367,15 +367,12 @@ test('a config may keep a component off the human number line', async () => {
     }
     assertEquals(made.find((b) => b.entity.eid == 'book')?.entity.num, 1)
   })
-  test('an unnumbered session retains its short address', async () => {
-    try {
-      assertEquals(
-        (await host.graph.address(['#a3f19c024b'])).get('#a3f19c024b'),
-        session,
-      )
-    } finally {
-      await host.close()
-    }
+  // Resolution is the behavior; closing the fixture also drains host effects
+  // and cannot be charged to reading one short address.
+  let addressed = (await host.graph.address(['#a3f19c024b'])).get('#a3f19c024b')
+  await host.close()
+  test('an unnumbered session retains its short address', () => {
+    assertEquals(addressed, session)
   })
 }
 
