@@ -136,8 +136,11 @@ export let sessionStatus = {
     text: (stored: Expr) => Expr = (stored) => stored,
   ): Expr => {
     // Each fact about an entry is said once (`marks`), and each fact about
-    // the transcript is computed once, as a common table expression the next
+    // the transcript is said once, as a common table expression the next
     // reads: its newest entry (LATEST) and the anchors of its turn (ANCHOR).
+    // Both name the owner, so SQLite runs them again at every reference,
+    // whatever the hint: they are left for the planner to flatten rather than
+    // materialized, and each is referenced as few times as the rule allows.
     // The turn's rows are read once, and every fact in the decision is
     // reduced from them in one pass. Each read seeks its own rows through the
     // entry index, so the cost is bounded by the turn, whatever the
@@ -371,26 +374,29 @@ export let sessionStatus = {
       ),
     )
     // The turn: its entries from its start through the newest, or the newest
-    // alone in a transcript written before entries were sequenced. Each row
-    // reads every component it wears in one pass: through the archetype, else
-    // a join per component.
-    let span = unionAll(
-      select({
-        cols: [col('entity', 'i'), col('seq', 'i'), star('anchor')],
-        from: table(ANCHOR, 'anchor'),
-        joins: [cross(table('entry', 'i'))],
-        where: and(
-          mine('i'),
-          notNull(anchor('newest_seq')),
-          ge(col('seq', 'i'), start),
+    // alone in a transcript written before entries were sequenced. The
+    // anchors are read once, so the turn's rows hang off them as a left join
+    // rather than a union of two reads. Each row reads every component it
+    // wears in one pass: through the archetype, else a join per component.
+    let span = select({
+      cols: [
+        as(fn('coalesce', col('entity', 'i'), anchor('newest')), 'entity'),
+        col('seq', 'i'),
+        star('anchor'),
+      ],
+      from: table(ANCHOR, 'anchor'),
+      joins: [
+        left(
+          table('entry', 'i'),
+          and(
+            mine('i'),
+            notNull(anchor('newest_seq')),
+            ge(col('seq', 'i'), start),
+          ),
         ),
-      }),
-      select({
-        cols: [anchor('newest'), lit(null), star('anchor')],
-        from: table(ANCHOR, 'anchor'),
-        where: isNull(anchor('newest_seq')),
-      }),
-    )
+      ],
+      where: or(isNull(anchor('newest_seq')), notNull(col('entity', 'i'))),
+    })
     let joins: Join[] = typed ? archetype('span') : []
     let wears = typed ? shaped : (comp: string) => notNull(col('entity', comp))
     // Each component the rule reads, where the entry wears it: its id.
@@ -670,8 +676,8 @@ export let sessionStatus = {
         'coalesce',
         sub(select({
           with: [
-            { name: LATEST, q: latest, materialized: true },
-            { name: ANCHOR, q: anchors, materialized: true },
+            { name: LATEST, q: latest, materialized: false },
+            { name: ANCHOR, q: anchors, materialized: false },
           ],
           cols: [
             iff(
