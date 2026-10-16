@@ -1,6 +1,8 @@
 import { test, until } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { api } from '@yaks/api'
+import { apiDoc } from '@yaks/api/vocab'
+import { loadVocab } from '@yaks/vocab'
 import { graph, signed } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { pair } from '../../packages/sync/testing.ts'
@@ -15,7 +17,8 @@ import type { Frame } from './play.ts'
 
 test('two heroes invite and accept through their pages into one party', async () => {
   seedDesigns()
-  let vocab = appVocab(words)
+  let app = appVocab(words)
+  let vocab = loadVocab([...app.docs, apiDoc], app.keywords)
   let store = graph({ vocab, storage: ram(vocab) })
   let heroes = { a: crypto.randomUUID(), b: crypto.randomUUID() }
   let owners = { a: crypto.randomUUID(), b: crypto.randomUUID() }

@@ -13,6 +13,7 @@ import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { type Bundle, derivedEid, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { api, type Handler, subscriptions } from '@yaks/api'
+import { apiDoc } from '@yaks/api/vocab'
 import { marks } from './mark.ts'
 import type { Connect, Socket, Timer } from './socket.ts'
 import { type Sync, sync } from './sync.ts'
@@ -110,7 +111,7 @@ export let boxDoc: VocabDoc = {
 }
 
 /** The recipe-box vocabulary this package's tests read and write against. */
-export let box: Vocab = loadVocab(boxDoc)
+export let box: Vocab = loadVocab([boxDoc, apiDoc])
 
 /** A graph over a fresh map. `adopt` is what a client store needs: the numbers
  * come from the server, not from this map. */

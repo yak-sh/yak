@@ -24,6 +24,7 @@ import { modelDoc } from '@yaks/model'
 import { processDoc } from '@yaks/process'
 import { watches } from '@yaks/client'
 import { api, subscriptions } from '@yaks/api'
+import { apiDoc } from '@yaks/api/vocab'
 import { and, every, present } from '@yaks/query'
 import { type Fake, pair } from '../sync/testing.ts'
 import { group } from '@yaks/tracker'
@@ -63,6 +64,7 @@ let vocab = loadVocab([
 ], [kernelKeywords, edgeKeywords])
 
 let trackerVocab = loadVocab([
+  apiDoc,
   pick(
     kernelDoc,
     'entity',
@@ -540,7 +542,7 @@ let remote = async (unstamped = false) => {
     ready,
     posts: () => posts,
     down: (value: boolean) => unavailable = value,
-    lose: () => lose = true,
+    lose: (value = true) => lose = value,
     drop: () => {
       socket.close()
       next = pair()
@@ -871,10 +873,11 @@ await put(transport.g, [{
   entity: { eid: taskEid(bug) },
   cancelled: { at: '2026-10-02T00:00:02Z' },
 }])
-let owed: Bundle[] = []
+let transportBug = transport.watch.value[0]
+let markKeys: (string | undefined)[] = []
 let sendMark = () =>
-  follow(transport.g)(transport.watch.value[0], url, (rows, opts) => {
-    owed = rows
+  follow(transport.g)(transportBug, url, (rows, opts) => {
+    markKeys.push(opts?.key)
     return transport.watch.mutate(rows, opts)
   })
 transport.down(true)
@@ -882,7 +885,9 @@ await throws(sendMark, 'tracker is down')
 transport.down(false)
 test('the headless client admits a retried mark through the tracker API', async () => {
   ok(!transport.watch.value[0].archived)
-  await transport.watch.mutate(owed, { optimistic: false })
+  await sendMark()
+  ok(markKeys[0])
+  equal(markKeys[1], markKeys[0])
   ok((await transport.tracker.get([bug]))[0].archived)
   equal(transport.posts(), 1)
   transport.watch.close()
@@ -895,17 +900,19 @@ await put(lost.g, [{
   entity: { eid: taskEid(bug) },
   cancelled: { at: '2026-10-02T00:00:02Z' },
 }])
+let lostBug = lost.watch.value[0]
 lost.lose()
 await throws(
-  () => follow(lost.g)(lost.watch.value[0], url, lost.watch.mutate),
+  () => follow(lost.g)(lostBug, url, lost.watch.mutate),
   'acknowledgement lost',
 )
 await lost.ready()
 lost.trackerCommits.length = 0
 test('a lost tracker acknowledgement replays without another write', async () => {
   ok((await lost.tracker.get([bug]))[0].archived)
-  await follow(lost.g)(lost.watch.value[0], url, lost.watch.mutate)
-  equal(lost.posts(), 1)
+  lost.lose(false)
+  await follow(lost.g)(lostBug, url, lost.watch.mutate)
+  equal(lost.posts(), 2)
   equal(lost.trackerCommits, [])
   lost.watch.close()
   lost.close()

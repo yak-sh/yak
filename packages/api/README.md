@@ -105,10 +105,13 @@ body itself is not retained. The canonical answer is retained before caller
 answer projection and projected again when replayed. Receipt rows are
 server-owned, `sync: none`, and hidden from graph reads and aggregates by
 `@yaks/api/graph`. The box composes that facet with the API vocabulary. A custom
-graph must load `@yaks/api/vocab`; the HTTP door installs receipt hooks when
-first needed. Dry runs (`?check`) do not consume keys. Keyed NDJSON imports are
-refused because they span transactions; unkeyed requests keep their ordinary
-behavior.
+graph must include `apiDoc` from `@yaks/api/vocab` when loading its vocabulary,
+with `loadVocab([apiDoc, domainDoc])`; the HTTP door installs receipt hooks when
+first needed. This includes custom servers used with `@yaks/sync` or
+`@yaks/client`, whose ordinary writes carry idempotency keys. A keyed write to a
+graph without the receipt vocabulary is refused, not retried as an unkeyed
+write. Dry runs (`?check`) do not consume keys. Keyed NDJSON imports are refused
+because they span transactions; unkeyed requests keep their ordinary behavior.
 
 ## Exports
 

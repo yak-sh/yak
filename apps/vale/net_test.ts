@@ -11,6 +11,7 @@ import { seedDesigns } from './designs_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
 import { docDoc } from '@yaks/doc'
+import { apiDoc } from '@yaks/api/vocab'
 
 test('a vocabulary 500 recovers before the page can query created', async () => {
   using time = new FakeTime()
@@ -373,7 +374,7 @@ test('a gathering refused locally or by the store does not break later writes', 
   seedDesigns()
   for (let where of ['page', 'store'] as const) {
     using time = new FakeTime()
-    let vocab = loadVocab([words, core])
+    let vocab = loadVocab([words, core, apiDoc])
     let store = graph({ storage: ram(vocab), vocab })
     store.apply([{ entity: { eid: 'hero' }, player: {} }, harvest('first')])
     let serve = api({

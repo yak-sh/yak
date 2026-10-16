@@ -26,6 +26,15 @@ let comp = (row: Bundle | undefined, name: string) =>
 let str = (value: unknown) => value == null ? '' : String(value)
 let moment = (value: unknown) => Date.parse(str(value))
 
+// A later service pass can resend a mark while the headless client's unknown
+// outcome is still queued. The same guarded intent must keep the same receipt;
+// an opening after a regression is a different intent, even for the same task.
+let mark = (mutate: Client['mutate'], rows: Bundle[], opening?: unknown) =>
+  mutate(rows, {
+    optimistic: false,
+    key: `outbox:heal:${token([rows, opening ?? null])}`,
+  })
+
 // A new bug is news for whoever works for the project: a knock at it, which a
 // session of the project hears on its bus (@yaks/session). It lands with the
 // task, so a replay that finds the task knocks no second time.
@@ -65,10 +74,10 @@ let take = async (
   if (str(comp(fixer, 'fixer')?.bug) != bug.entity.eid || fixer.exit) return
   let back = moment(comp(bug, 'regressed')?.at)
   if (bug.taken && !(back > moment(comp(bug, 'taken')?.at))) return
-  await mutate([{
+  await mark(mutate, [{
     entity: { eid: bug.entity.eid },
     taken: { task: task.entity.num ? human(g.vocab)(task) : task.entity.eid },
-  }], { optimistic: false })
+  }], [bug.regressed ?? null, bug.taken ?? null])
 }
 
 /** Reconcile a tracker answer. The caller retries either store's failed writes. */
@@ -146,7 +155,7 @@ export let follow = (
         // a resolution needs its explanation, which the resolver writes on
         // the bug itself, and that resolution completes the task above.
         if (task.cancelled) {
-          await mutate([{
+          await mark(mutate, [{
             entity: { eid: bug.entity.eid },
             archived: {},
             // A new regression or someone else's mark invalidates this answer.
@@ -159,7 +168,7 @@ export let follow = (
                 error: token(comp(bug, 'regressed')?.error),
               },
             },
-          }], { optimistic: false })
+          }])
         }
         if (task.cancelled || bug.resolved) return
         if (task.completed && !reopen) return
