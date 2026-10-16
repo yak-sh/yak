@@ -38,6 +38,25 @@ import {
 // reference is rejected the way it would be in production.
 export let mem = (): Driver => open(':memory:')
 
+/** A Driver over a fresh in-memory database, and the virtual machine steps its
+ * statements have taken (counted by tens): what a read costs, however few the
+ * rows it answers. */
+export let stepping = (): { driver: Driver; steps: () => number } => {
+  let db = new Database(':memory:')
+  let n = 0
+  let tick = new Deno.UnsafeCallback(
+    { parameters: ['pointer'], result: 'i32' },
+    () => (n += 10, 0),
+  )
+  Deno.dlopen(sqlitePath, {
+    sqlite3_progress_handler: {
+      parameters: ['pointer', 'i32', 'function', 'pointer'],
+      result: 'void',
+    },
+  }).symbols.sqlite3_progress_handler(db.unsafeHandle, 10, tick.pointer, null)
+  return { driver: driver(db), steps: () => n }
+}
+
 const image = Symbol('schema snapshot')
 /** An installed schema and fixed fixture rows, kept as bytes. */
 export type Snapshot = { [image]: Uint8Array }

@@ -122,8 +122,17 @@ let told = (o: Opts) => o.report ?? ((err: unknown) => console.error(err))
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
-  (await g.get([eid]))[0]
+let one = async (
+  g: Graph,
+  eid: string,
+  comps?: string[],
+): Promise<Bundle | undefined> => (await g.get([eid], comps))[0]
+
+// How a session's run stands: its process, how it exited, and whether it was
+// asked to stop. Read alone wherever a run is watched: the rest a session
+// wears (its computed status and cost) reads every entry of its transcript.
+let ran = (g: Graph, session: string) =>
+  one(g, session, [PROCESS, EXIT, 'stop'])
 
 /** What a session was asked for, as the graph holds it. */
 export type Asked = Job & {
@@ -251,11 +260,11 @@ export let follow = async (
     let wait = poll
     try {
       t ??= await tail(g, paths(session, o).out, { session })
-      let row = await one(g, session)
+      let row = await ran(g, session)
       let over = comp(row, EXIT) != null
       await pull(g, t, read, { final: over, report: told(o) })
       if (over) {
-        let now = await one(g, session)
+        let now = await ran(g, session)
         let pid = (b?: Bundle) => comp(b, PROCESS)?.pid
         if (comp(now, EXIT) == null || pid(now) != pid(row)) return
         let well = await finish(g, session, o, run.through)
@@ -399,7 +408,7 @@ export let start = async (
   })
   // A stop can land while the wrapper starts, before its process row exists.
   // The stop effect had no pid then; now that launch has stamped one, answer it.
-  if ((await one(g, session))?.stop) down(g, session, o).catch(told(o))
+  if ((await ran(g, session))?.stop) down(g, session, o).catch(told(o))
   let through = String(job.ask.through)
   follow(g, session, answering(adapter.read, job.ask), o, { through, tail: t })
     .catch(told(o))
@@ -455,7 +464,7 @@ export let finish = async (
 ): Promise<boolean | undefined> => {
   await ended(g, session, o, through)
   try {
-    let well = cleanEnd(await one(g, session))
+    let well = cleanEnd(await ran(g, session))
     if (well) await rouse(g, session)
     return well
   } catch (e) {
@@ -564,7 +573,7 @@ let ended = async (
   ])
   let seq = (b?: Bundle) => Number(comp(b, 'entry')?.seq ?? 0)
   if (stop && seq(stop) > seq(request)) return
-  let code = comp(await one(g, session), EXIT)?.code
+  let code = comp(await ran(g, session), EXIT)?.code
   await g.apply([{
     entity: { eid: (o.mint ?? uuid)() },
     entry: { session },
@@ -614,9 +623,9 @@ export let down = async (
   session: string,
   o: Opts = {},
 ): Promise<void> => {
-  let over = async () => comp(await one(g, session), EXIT) != null
+  let over = async () => comp(await ran(g, session), EXIT) != null
   let pid = Number(
-    (comp(await one(g, session), PROCESS) as Process | undefined)?.pid ?? 0,
+    (comp(await ran(g, session), PROCESS) as Process | undefined)?.pid ?? 0,
   )
   if (!pid || await over()) return
   await signal(session, pid, 'TERM', o)

@@ -1,9 +1,13 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
+import { processes } from '@yaks/process'
+import { sessionDerived, sessions } from '@yaks/session'
+import { storage } from '@yaks/sqlite'
+import { stepping } from '../sqlite/testing.ts'
 import { claude } from './adapters.ts'
-import { asked, follow, resume } from './run.ts'
-import { asking, FAKE, tracked, until } from './testing.ts'
+import { asked, down, follow, resume } from './run.ts'
+import { asking, FAKE, host, tracked, until } from './testing.ts'
 
 // A log file and the run that wrote it, both already over: `follow` then does
 // one pass and returns, which is the whole importer without a process.
@@ -154,4 +158,34 @@ test('a run that ended while nobody read its log is read to its end on start-up'
   } finally {
     close()
   }
+})
+
+// A run is watched four times a second while its transcript grows, and a
+// session's computed status and cost read every entry of it.
+let ENTRIES = 200
+let watched = stepping()
+let long = await (async () => {
+  let s = storage(watched.driver, host, { derived: sessionDerived(host) })
+  s.install()
+  let g = graph({ storage: s, vocab: host, plugins: [sessions(), processes()] })
+  await g.apply(asking('S1', 'E1', 'do it'))
+  await g.apply(Array.from({ length: ENTRIES }, (_, n) => ({
+    entity: { eid: `said-${n}` },
+    entry: { session: 'S1' },
+    content: { body: 'said' },
+    output: { source: 'S1' },
+  })))
+  await g.apply([{
+    entity: { eid: 'S1' },
+    process: { pid: 1, command: 'fake' },
+    exit: { code: 0 },
+  }])
+  return g
+})()
+
+test('a run is asked how it stands without reading its transcript', async () => {
+  let before = watched.steps()
+  await down(long, 'S1')
+  let steps = watched.steps() - before
+  assert(steps < ENTRIES, `${steps} steps`)
 })
