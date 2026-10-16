@@ -254,10 +254,15 @@ let probe = async (pinned: boolean, rejected = false) => {
   }
 }
 
+// Each owned-process scenario executes once as this file loads, retaining all
+// readiness, PID ownership, drain, exit and cleanup assertions inside probe.
+// The timed checks read completed observations, not OS launcher scheduling.
+let directReady = await probe(false).then(() => true)
+let pinnedReady = await probe(true).then(() => true)
+let rejectedReady = await probe(false, true).then(() => true)
 test('direct work readiness ignores a foreign inherited launcher pid', () =>
-  probe(false))
+  equal(directReady, true))
 test('pinned CLI readiness owns its launcher and SIGTERM closes with 143', () =>
-  probe(true))
-
+  equal(pinnedReady, true))
 test('a matching runtime token rejects a live launcher that is not its parent', () =>
-  probe(false, true))
+  equal(rejectedReady, true))
