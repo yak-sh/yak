@@ -239,8 +239,15 @@ export let basis = (
  * answer. The query is one `basis` follows.
  */
 export let local = (vocab: Vocab, q: And): boolean => {
-  let own = (segs: string[], facet = false) =>
-    vocab.aim(segs.join('.'), facet).length <= 1
+  let own = (segs: string[], facet = false) => {
+    try {
+      return vocab.aim(segs.join('.'), facet).length <= 1
+    } catch {
+      // Extension-owned paths (including rankings) need the compiler, not a
+      // local cache proof. Leave their validation to that extension.
+      return false
+    }
+  }
   let visit = (c: Clause): boolean => {
     switch (c.kind) {
       case 'and':

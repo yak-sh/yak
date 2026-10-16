@@ -11,7 +11,7 @@ import { club } from '../member/testing.ts'
 import { grant, ids, setMode } from '../member/testing.ts'
 import { kitchen, mem, preparedStore, RECIPE } from './testing.ts'
 import { get, read } from './read.ts'
-import { basis, memoized } from './memo.ts'
+import { basis, local, memoized } from './memo.ts'
 import { parse } from '@yaks/query'
 
 let vocab = loadVocab([{
@@ -858,4 +858,13 @@ test('an answer stands through a write that moves nothing it selects', () => {
     tx.patch([{ entity: { eid: 'imp' }, player: { active: true } }])
   )
   assertEquals(ask(), ['mob', 'imp'])
+})
+
+// An extension's ranking is not a vocabulary path. Scoped reads must leave
+// its validation to the compiler rather than throwing from the cache proof.
+let ranking = parse('.order=similar')
+let descendingRanking = parse('.order=-similar')
+test('local cache proof declines extension-owned rankings', () => {
+  assertEquals(local(vocab, ranking), false)
+  assertEquals(local(vocab, descendingRanking), false)
 })
