@@ -504,8 +504,8 @@ async function coarse(
       }
     }
     // Identical chosen function at either grain, deterministic corpus order.
-    if (!chosen && tree.nodes.length >= 9000) {
-      let f = functionLiteral(tree)
+    if (!chosen && tree.errors == 0 && tree.nodes.length >= 9000) {
+      let f = functionLiteral(tree, source)
       if (f) {
         for (let p of packed) {
           let index = p.tree.value.nodes.findIndex((n) =>
@@ -763,6 +763,10 @@ async function coarse(
     original,
     original.nodes.find((n) => n.entity.eid == chosen!.literal)!,
   )
+  if (
+    diff.after.errors != original.errors ||
+    diff.after.nodes[0].node.kind != original.nodes[0].node.kind
+  ) throw new Error('edit changed parse validity')
   let after = pack(diff.after, diff.changed, grain),
     before = pack(original, source, grain)
   let prior = new Map(before.map((p) => [p.entity.eid, p]))

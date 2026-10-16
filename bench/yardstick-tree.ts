@@ -282,10 +282,19 @@ export function containingFunction(
 }
 export function functionLiteral(
   tree: FileTree,
+  source?: string,
 ): { function: Emitted; literal: Emitted } | undefined {
+  let bytes = source == null ? undefined : new TextEncoder().encode(source)
+  let decode = new TextDecoder()
   let byId = new Map(tree.nodes.map((r) => [r.entity.eid, r]))
   for (let literal of tree.nodes) {
     if (literal.node.kind == 'number') {
+      if (
+        bytes &&
+        !/^(?:0[xob][0-9a-f_]+|[0-9][0-9_.]*(?:e[+-]?[0-9]+)?)n?$/i.test(
+          decode.decode(bytes.slice(literal.node.start, literal.node.end)),
+        )
+      ) continue
       let current: Emitted | undefined = literal
       while (current) {
         if (current.node.kind == 'function_declaration') {
