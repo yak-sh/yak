@@ -9,6 +9,8 @@ import {
 } from '@yaks/game'
 import type { Creep, Point, Row, TowerDesign } from './model.ts'
 
+export class OrderRefused extends Error {}
+
 export const towerId = (run: string, slot: number) =>
   uuidOf(`${run}/slot/${slot}`)
 export const conductorId = (run: string) => uuidOf(`${run}/conductor`)
@@ -58,15 +60,15 @@ export const view = (rows: Row[], runId: string) => {
 }
 const active = (rows: Row[], runId: string) => {
   let v = view(rows, runId)
-  if (!v.run || !v.map) throw new Error('This run is not ready yet.')
+  if (!v.run || !v.map) throw new OrderRefused('This run is not ready yet.')
   if (v.run.completed || v.lives <= 0) {
-    throw new Error('This defense has ended. Start a new run.')
+    throw new OrderRefused('This defense has ended. Start a new run.')
   }
   return v
 }
 const design = (rows: Row[], id: string): TowerDesign => {
   let value = rows.find((r) => r.entity.eid == id)?.tower_design
-  if (!value) throw new Error('Choose a tower first.')
+  if (!value) throw new OrderRefused('Choose a tower first.')
   return value
 }
 const ledger = (
@@ -91,16 +93,16 @@ export const build = (
 ): Row[] => {
   let v = active(rows, runId), d = design(rows, designId)
   if (!Number.isInteger(slot) || !v.map!.slots[slot]) {
-    throw new Error('Choose a marked building site.')
+    throw new OrderRefused('Choose a marked building site.')
   }
   if (v.towers.some((r) => r.tower!.slot == slot)) {
-    throw new Error('A tower already stands here.')
+    throw new OrderRefused('A tower already stands here.')
   }
   if (rows.some((r) => r.tower_design?.upgrade == designId)) {
-    throw new Error('Build the first tier, then upgrade it.')
+    throw new OrderRefused('Build the first tier, then upgrade it.')
   }
   if (v.gold < d.cost) {
-    throw new Error(`You need ${d.cost - v.gold} more gold.`)
+    throw new OrderRefused(`You need ${d.cost - v.gold} more gold.`)
   }
   let eid = towerId(runId, slot)
   return [{
@@ -111,12 +113,12 @@ export const build = (
 export const upgrade = (rows: Row[], runId: string, slot: number): Row[] => {
   let v = active(rows, runId),
     tower = v.towers.find((r) => r.tower!.slot == slot)
-  if (!tower) throw new Error('There is no tower here to upgrade.')
+  if (!tower) throw new OrderRefused('There is no tower here to upgrade.')
   let next = design(rows, tower.tower!.design).upgrade
-  if (!next) throw new Error('This tower is fully upgraded.')
+  if (!next) throw new OrderRefused('This tower is fully upgraded.')
   let d = design(rows, next)
   if (v.gold < d.cost) {
-    throw new Error(`You need ${d.cost - v.gold} more gold.`)
+    throw new OrderRefused(`You need ${d.cost - v.gold} more gold.`)
   }
   return [
     { entity: tower.entity, tower: { ...tower.tower!, design: next } },
@@ -126,7 +128,7 @@ export const upgrade = (rows: Row[], runId: string, slot: number): Row[] => {
 export const sell = (rows: Row[], runId: string, slot: number): Row[] => {
   let v = active(rows, runId),
     tower = v.towers.find((r) => r.tower!.slot == slot)
-  if (!tower) throw new Error('There is no tower here to sell.')
+  if (!tower) throw new OrderRefused('There is no tower here to sell.')
   let investment = design(rows, tower.tower!.design).cost
   let ancestor = tower.tower!.design
   let seen = new Set<string>([ancestor])
@@ -146,10 +148,10 @@ export const sell = (rows: Row[], runId: string, slot: number): Row[] => {
 export const startWave = (rows: Row[], runId: string, now: number): Row[] => {
   let v = active(rows, runId)
   if (v.conductor?.conductor) {
-    throw new Error('The wave is already on its way.')
+    throw new OrderRefused('The wave is already on its way.')
   }
   if (!v.waves.some((r) => r.wave_design!.n == v.wave)) {
-    throw new Error('Every wave has been held.')
+    throw new OrderRefused('Every wave has been held.')
   }
   return [{
     entity: { eid: conductorId(runId) },

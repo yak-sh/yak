@@ -102,7 +102,7 @@ const crafts = [
 
 let notice = (page: Page) => {
   let message = !page.online
-    ? 'Reconnecting. Building and the next wave will wait for the shared world.'
+    ? 'The shared defense is catching up. Your orders will follow.'
     : !page.canPlay
     ? 'You’re watching. Join through this app’s sharing to build with the team.'
     : page.message

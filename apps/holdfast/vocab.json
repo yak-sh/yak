@@ -453,10 +453,6 @@
         },
         "paint": {
           "type": "number"
-        },
-        "uncertain": {
-          "type": "boolean",
-          "description": "A server write outcome is unknown; reload to reconcile before this page advances play."
         }
       },
       "sync": "none",

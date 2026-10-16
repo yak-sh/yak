@@ -134,9 +134,9 @@ loop.
 
 `Build{run, slot, design, map, message, pending}` holds the page's choices,
 feedback and an order in progress.
-`Simulation{then, remainder, busy, pulse, paint, uncertain}` holds scheduling
-values; `Presentation{view, frame}` holds the orbit and draw timestamp. These
-components declare `sync: none`. `Controls{…}` comes from `@yaks/game`, and
+`Simulation{then, remainder, busy, pulse, paint}` holds scheduling values;
+`Presentation{view, frame}` holds the orbit and draw timestamp. These components
+declare `sync: none`. `Controls{…}` comes from `@yaks/game`, and
 `Disclosure{open}` comes from `@yaks/ux`; both are controlled through the same
 page graph.
 
@@ -186,3 +186,16 @@ yak --host yaks.app app_errors --space yourname --app holdfast --as admin
 This releases the app without publishing a gallery offering. Git remains its
 source; do not edit its live files outside the repository. See
 [the apps directory](../README.md).
+
+### Recovery
+
+A dropped socket is the sync package’s job, not the player's. Peer orders remain
+on their original rows and are resent by sync. An unexpected frame error is
+reported and the next frame continues from the graph; there is no paused
+connection mode and no instruction to reload.
+
+A durable order whose response is lost keeps its original batch, including its
+immutable purchase/wave receipt. The page reads that receipt from the server: if
+present it restores the accepted rows and finishes the peer reply; otherwise it
+sends the same transaction again. It never replans a purchase against an
+optimistic purse or allocates a second receipt for the same order.

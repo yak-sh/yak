@@ -1,6 +1,9 @@
 /** Holdfast's page: the graph is the only owner of play and interface state. */
-import { client, WriteUnknown } from '@yaks/client'
+import { client, WriteRefused, WriteUnknown } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
+import { comps, dead } from '@yaks/graph/bundle'
+import { replicate, syncOf } from '@yaks/sync'
+import { recover } from './recovery.ts'
 import { mint } from '@yaks/graph/identity'
 import { parse } from '@yaks/query'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -14,7 +17,15 @@ import { kit as hudKit } from '@yaks/game/hud'
 import { createLook, type View } from './look.ts'
 import { type Actions, renderUI } from './ui.ts'
 import { ids, seed } from './seed.ts'
-import { build, sell, startWave, step, upgrade, view } from './rules.ts'
+import {
+  build,
+  OrderRefused,
+  sell,
+  startWave,
+  step,
+  upgrade,
+  view,
+} from './rules.ts'
 import type { Row } from './model.ts'
 
 type Build = {
@@ -30,7 +41,6 @@ type Simulation = {
   remainder: number
   busy: boolean
   pulse: number
-  uncertain?: boolean
 }
 type Reply = { run: string; defender: string; message: string; at: number }
 
@@ -81,11 +91,8 @@ async function boot() {
       vault: false,
       wireVault: false,
       report: (e) => {
-        console.error('Holdfast sync', e)
-        return message(
-          e.refused?.message ??
-            'Connection interrupted. Your shared defense will reconnect.',
-        )
+        if (e.refused) message(e.refused.message)
+        else if (!(e.error instanceof WriteUnknown)) reportError(e.error)
       },
     },
   )
@@ -99,7 +106,54 @@ async function boot() {
   let message = (text: string) => {
     void local('Build', { message: text, pending: false })
   }
-  let mutate = (batch: Row[]) => front.mutate(batch as Bundle[])
+  // Keep the original transaction while its outcome is unknown. Replanning a
+  // purchase would allocate another ledger entry and could charge twice.
+  let mutate = (batch: Row[]) =>
+    recover(batch, {
+      write: async (sent) => await front.mutate(sent as Bundle[]),
+      read: async () => {
+        let query = `.entity.eid=${batch.map((r) => r.entity.eid).join(',')}&*`
+        let response = await fetch(
+          new URL(`query?q=${encodeURIComponent(query)}`, base),
+        )
+        if (!response.ok) {
+          throw new Error(`Defense read: HTTP ${response.status}`)
+        }
+        return await response.json() as Row[]
+      },
+      accept: async (current) => {
+        let stored = current.map((r) => ({
+          entity: r.entity,
+          ...Object.fromEntries(
+            comps(r as Bundle).filter(([name]) =>
+              syncOf(front.vocab, name) === 'server'
+            ),
+          ),
+        }))
+        for (let r of batch) {
+          if (
+            dead(r as Bundle) &&
+            !current.some((v) => v.entity.eid === r.entity.eid)
+          ) {
+            stored.push({ entity: r.entity, tombstone: {} } as Bundle)
+          }
+        }
+        await replicate(front.graph, stored as Bundle[])
+        // Held deletes defer peer companions until the server accepted them.
+        let companions = batch.flatMap((r) => {
+          if (dead(r as Bundle)) return []
+          let own = Object.fromEntries(
+            comps(r as Bundle).filter(([name]) =>
+              syncOf(front.vocab, name) !== 'server'
+            ),
+          )
+          return Object.keys(own).length ? [{ entity: r.entity, ...own }] : []
+        })
+        if (companions.length) await front.mutate(companions as Bundle[])
+      },
+      wait: () => new Promise((resolve) => setTimeout(resolve, 1000)),
+      report: (error) => reportError(error),
+    })
   let watch = front.watch('.map_design&*')
   let runWatch: ReturnType<typeof front.watch> | undefined
   let runEntityWatch: ReturnType<typeof front.watch> | undefined
@@ -210,8 +264,8 @@ async function boot() {
         await local('Build', { message: 'Order sent to the team…' })
       }
     } catch (error) {
-      message('Order could not be delivered. Reconnect and try again.')
-      console.error(error)
+      message('That order could not be completed. You can keep playing.')
+      reportError(error)
     }
   }
   let select = (slot: number) => {
@@ -257,9 +311,9 @@ async function boot() {
         history.replaceState(null, '', url)
       } catch (error) {
         message(
-          'Could not create the defense. Check the connection and try again.',
+          'Could not create this defense. You can try another.',
         )
-        console.error(error)
+        reportError(error)
       } finally {
         await local('Build', { pending: false })
       }
@@ -325,7 +379,7 @@ async function boot() {
   async function tick(stamp: number, dt: number, _elapsed: number) {
     let sim = (row(page)?.Simulation ?? {}) as Simulation
     let s = state(), time = now()
-    if (document.hidden || !ready() || sim.uncertain) return
+    if (document.hidden || !ready()) return
     if (s.run && who.writes && time - (sim.pulse ?? 0) > 800) {
       void local('Simulation', { pulse: time })
       void mutate([{
@@ -439,12 +493,9 @@ async function boot() {
             },
           }])
         } catch (error) {
-          if (!(error instanceof Error)) throw error
-          if (error instanceof WriteUnknown) {
-            await local('Simulation', { uncertain: true })
-            message(
-              'The server has not confirmed this order. Reload to reconcile the shared defense before another order.',
-            )
+          if (
+            !(error instanceof OrderRefused) && !(error instanceof WriteRefused)
+          ) {
             throw error
           }
           await mutate([{
@@ -478,10 +529,7 @@ async function boot() {
   })
   requestAnimationFrame(frameLoop((stamp, dt, elapsed) => {
     void tick(stamp, dt, elapsed).catch((error) => {
-      message(
-        'The defense paused after an unexpected error. Reload to reconnect.',
-      )
-      console.error(error)
+      reportError(error)
     })
   }, performance.now()))
   addEventListener('pagehide', () => {
