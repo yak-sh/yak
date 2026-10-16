@@ -35,6 +35,42 @@ transaction. The **host** composes the graph and lends capabilities to plugins.
 An **ask** is a recorded model request; a **settled** session has finished its
 current turn without more calls to execute and can accept new input.
 
+## Asynchronous native tools
+
+Native tool calls run as independent `session_tool` effects, not under the
+transcript's lease. The completed model response writes each `call` with a
+`tool_async` mark and an immutable `tool_progress{call}` entry in the same
+transaction. Progress is a model-facing result, not `result{call}`: only the
+ordinary tools runner's final result completes execution. Calls overlap and a
+person can steer while they run. Final results wake `session_run`; there is no
+model polling loop. If nothing independent remains, the model ends its current
+response and the graph asks it again when a result arrives.
+
+The transcript stays running while tool finals are outstanding, even after
+assistant prose. Stop prevents unstarted calls; already admitted tool effects
+finish recording their outcomes. Outstanding calls prevent machine release.
+Execution claims and restart inspection are still owned by `@yaks/tools`;
+recovery never blindly repeats an uncertain side effect.
+
+Tool effects share the configured effects-pool concurrency bound (64 by
+default). Input is admitted immediately, but provider work can be delayed when
+all effect slots are occupied; a tool that waits on work queued in the same
+saturated pool is not guaranteed immediate progress. This is not unbounded
+background concurrency or a reserved steering lane.
+
+Submitted progress is never replaced by final text. Model replies are projected
+immediately after their frozen `ask.through` boundary, before updates which
+arrived during that request. Thus full-context replay extends the submitted
+prefix instead of inserting a final result into its middle. OpenAI receives two
+`function_call_output` items with the same call ID (progress, then final). Other
+provider routes conservatively receive the final as a labeled user notification
+after the first tool output. This preserves both outcomes without assuming every
+Responses-compatible endpoint accepts duplicate tool outputs. The configured
+Codex route was live-tested with `gpt-6.1-sol`: full-context progress/final
+works; `previous_response_id` and `store: true` are refused there. This says
+nothing about public OpenAI API continuation support. Prefix stability preserves
+cache eligibility, not a guarantee of a cache hit.
+
 ## Repository skills
 
 A local native session receives repository skill titles and descriptions before

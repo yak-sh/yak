@@ -382,3 +382,53 @@ test('machine resolver provisions only on a file call and resolves paths from se
   equal(paths, ['/checkout/sub/file'])
   equal(f.requests.length, 1)
 })
+
+// A stopped transcript may still have a durable tool effect using its machine.
+let { toolsDoc } = await import('@yaks/tools/vocab')
+let { kernelDoc } = await import('@yaks/kernel/vocab')
+let { machineDone } = await import('./session_machines.ts')
+let asyncLeasing = loadVocab([
+  ...docs,
+  machineDoc,
+  ...sessionDocs,
+  gitDoc,
+  effectDoc,
+  toolsDoc,
+  kernelDoc,
+])
+let pendingMachines = await Promise.all(
+  ['stopped', 'completed'].map(async (outcome) => {
+    let f = fixture(asyncLeasing)
+    await f.g.apply([
+      {
+        entity: { eid: 'borrower' },
+        session: outcome == 'stopped' ? { ended: true } : {},
+        ...(outcome == 'completed' ? { completed: {} } : {}),
+      },
+      {
+        entity: { eid: 'pending-call' },
+        entry: { session: 'borrower' },
+        call: {},
+        tool_async: {},
+      },
+      {
+        entity: { eid: 'progress' },
+        entry: { session: 'borrower' },
+        tool_progress: { call: 'pending-call' },
+      },
+    ])
+    return { outcome, f }
+  }),
+)
+for (let { outcome, f } of pendingMachines) {
+  test(`a ${outcome} session keeps its machine until its async tool has a final result`, async () => {
+    let session = (await f.g.get(['borrower']))[0]
+    equal(await machineDone(f.g, session), false)
+    await f.g.apply([{
+      entity: { eid: 'final-result' },
+      entry: { session: 'borrower' },
+      result: { call: 'pending-call' },
+    }])
+    equal(await machineDone(f.g, session), true)
+  })
+}

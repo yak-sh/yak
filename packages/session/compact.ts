@@ -7,7 +7,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { seqOf } from './state.ts'
 
 let callOf = (b: Bundle): string | undefined => {
-  let call = (b.result as Comp | undefined)?.call
+  let call = ((b.result ?? b.tool_progress) as Comp | undefined)?.call
   return call == null ? undefined : String(call)
 }
 

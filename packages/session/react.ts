@@ -151,6 +151,10 @@ export type Served = {
 export type Deps = {
   /** Experimental durable request admission with transient text. */
   owner?: Eid
+  /** Dispatch native calls through independent durable effects. */
+  asyncTools?: boolean
+  /** Internal effect execution of one recorded call (never a model request). */
+  runCall?: Eid
   streaming?: boolean
   /** Minimum interval between durable stream checkpoints; zero disables. */
   checkpointMs?: number
@@ -175,7 +179,11 @@ export type Deps = {
   resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Served>
   tools: Tool[]
   /** Resolve a stable tool registry for one execution step. */
-  toolSnapshot?: (phase: 'ask' | 'call', session: Eid) => Promise<Tool[]>
+  toolSnapshot?: (
+    phase: 'ask' | 'call',
+    session: Eid,
+    boundary?: Eid,
+  ) => Promise<Tool[]>
   /** Tools offered only to a turn whose `using.tools` names them, beside the
    * runner's own: the ones a host can run that every transcript need not
    * carry. Asked for only when a turn names some. */
@@ -330,6 +338,7 @@ export let statusEntries = async (
     ASK,
     CALL,
     RESULT,
+    'tool_progress',
     OUTPUT,
     USING,
     'attempt',
@@ -421,11 +430,35 @@ export let project = (
     media?: Map<Eid, Item[]>
     history?: boolean
     inputText?: Deps['inputText']
+    /** Strict routes accept one tool output; append later updates as user text. */
+    resultUpdatesAsUser?: boolean
   } = {},
 ): Item[] => {
   let out: Item[] = []
   let byId = new Map(transcript.map((b) => [b.entity.eid, b]))
-  for (let b of window) {
+  // A tool can finish (or a person steer) while the provider is answering.
+  // Those entries were not in that request. Keep its response immediately
+  // after its frozen boundary, then append the unsent updates. Never move or
+  // replace a previously submitted running result: the next full-context
+  // request must extend the previous request + response byte-for-byte.
+  let logical = [...window]
+  for (const ask of ordered(transcript).filter((b) => b.ask)) {
+    const reply = logical.filter((b) => {
+      if (comp(b, OUTPUT)?.source == ask.entity.eid) return true
+      if (comp(b, CALL)?.source == ask.entity.eid) return true
+      const call = byId.get(String(comp(b, 'tool_progress')?.call))
+      return call && comp(call, CALL)?.source == ask.entity.eid
+    })
+    if (!reply.length) continue
+    const rest = logical.filter((b) => !reply.includes(b))
+    const boundary = rest.findIndex((b) =>
+      b.entity.eid == comp(ask, ASK)?.through
+    )
+    if (boundary >= 0) rest.splice(boundary + 1, 0, ...reply)
+    else continue
+    logical = rest
+  }
+  for (let b of logical) {
     let kind = kindOf(b)
     let c = comp(b, CALL)
     if (b.prompt || b.checkpoint || b.task_context) {
@@ -453,7 +486,7 @@ export let project = (
         args: c!.args == null ? textOf(b) || '{}' : JSON.stringify(c!.args),
       })
     } else if (kind == 'result') {
-      let eid = String(comp(b, RESULT)?.call)
+      let eid = String(comp(b, RESULT)?.call ?? comp(b, 'tool_progress')?.call)
       let call = byId.get(eid)
       if (!call?.call) {
         throw new Error(
@@ -462,11 +495,16 @@ export let project = (
       }
       let text = opts.results?.get(b.entity.eid) ?? textOf(b)
       let ms = comp(b, RESULT)?.ms
-      out.push({
-        kind: 'result',
-        id: String(comp(call, CALL)?.id ?? ''),
-        output: typeof ms == 'number' ? took(text, ms) : text,
-      })
+      const output = typeof ms == 'number' ? took(text, ms) : text
+      const id = String(comp(call, CALL)?.id ?? '')
+      if (
+        opts.resultUpdatesAsUser && b.result &&
+        transcript.some((v) =>
+          comp(v, 'tool_progress')?.call == eid && seqOf(v) < seqOf(b)
+        )
+      ) {
+        out.push({ kind: 'user', text: `Tool ${id} completed:\n${output}` })
+      } else out.push({ kind: 'result', id, output })
     }
     out.push(...opts.media?.get(b.entity.eid) ?? [])
   }
@@ -729,11 +767,26 @@ export let react = async (
   let newest = entries.at(-1)
   let asked = newestAsk(entries)
   let open = openCalls(entries)
+  if (deps.runCall) {
+    open = open.filter((b) => b.entity.eid == deps.runCall)
+    asked = entries.find((b) =>
+      b.entity.eid == comp(open[0] ?? {} as Bundle, CALL)?.source
+    )
+    if (!open.length) return nothing
+  }
+  // Async calls are executed by session_tool, not by the transcript's lease.
+  // A progress entry answers the wire protocol without completing the tool.
+  if (deps.asyncTools && !deps.runCall) {
+    open = open.filter((b) => !b.tool_async)
+  }
   let older = open.some((b) => (b.call as Comp)?.source != asked?.entity.eid)
-  if (!newest || status == 'stopped' || status == 'settled' && !older) {
+  if (
+    !newest ||
+    !deps.runCall && (status == 'stopped' || status == 'settled' && !older)
+  ) {
     return nothing
   }
-  if (status == 'failed') return nothing
+  if (status == 'failed' && !deps.runCall) return nothing
   let mint = deps.mint ?? (() => crypto.randomUUID() as Eid)
   // Who a line of this turn is written by. The pair is the one the fleet
   // resolves for an agent's write (src/db.ts actorFor/writerVia): the
@@ -836,6 +889,7 @@ export let react = async (
     }
     let added: Bundle[] = [finalAsk]
     let textIndex = 0
+    const progress: Bundle[] = []
     for (let item of reply.items) {
       if (item.kind == 'assistant') {
         const active = stream.get(item.id ?? String(textIndex))
@@ -858,7 +912,7 @@ export let react = async (
         // spells. Text that spells no object is kept as the model wrote it, so
         // the transcript resends it verbatim, and the call is refused (`served`).
         let args = objectIn(item.args)
-        added.push(line(
+        const call = line(
           {
             [CALL]: {
               to: byName.get(item.name),
@@ -866,11 +920,27 @@ export let react = async (
               ...args ? { args } : {},
               source: ask.entity.eid,
             },
+            ...deps.asyncTools ? { tool_async: {} } : {},
           },
           args ? undefined : item.args,
-        ))
+        )
+        added.push(call)
+        if (deps.asyncTools) {
+          progress.push({
+            ...line(
+              { tool_progress: { call: call.entity.eid } },
+              'Status: in_progress. This call is still running, not finished. ' +
+                'Its final result will be appended automatically and you will be called again. ' +
+                'Do independent work now, or END THIS RESPONSE if nothing independent remains. ' +
+                'Ending your response does not cancel this call. Do not poll, wait, ' +
+                'invent its result, or repeat this call.',
+            ),
+            entity: { eid: call.entity.eid + ':progress' },
+          })
+        }
       }
     }
+    added.push(...progress)
     // One entry per answer, said as a line too, so a person reading the
     // transcript sees what was decided and a query can match
     // `.answer.question=plan`. No later turn reads it (`lines`).
@@ -945,7 +1015,9 @@ export let react = async (
       for (const active of stream.values()) active.writer.discard()
     }
   }
-  const unfinished = entries.find((b) => attemptState(b) == 'inflight')
+  const unfinished = deps.runCall
+    ? undefined
+    : entries.find((b) => attemptState(b) == 'inflight')
   let original: Served | undefined
   let executor = deps.executor
   if (unfinished) {
@@ -1060,17 +1132,17 @@ export let react = async (
       ? await deps.toolSnapshot(
         open.length ? 'call' : 'ask',
         session,
+        open.length
+          ? comp(asked ?? {} as Bundle, ASK)?.through as Eid | undefined
+          : newest.entity.eid,
       )
       : deps.tools,
     deps.named ?? (() => []),
     using?.tools,
   )
-  // Open tool calls: perform every one the current ask asked for that has no
-  // result yet, in one batch, so the model is never asked with a call it made
-  // still unanswered (the provider refuses that). A tool that throws is an
-  // exception and a result saying so, so the model hears what happened and
-  // the session goes on. This is the same set statusOf reads as `running`, so
-  // a transcript is never called settled with work left here (T-35230).
+  // Legacy synchronous calls are run here. Native async calls have already
+  // been given progress and are owned by their separate session_tool effect;
+  // only that effect enters this branch with runCall naming one invocation.
   // Resolve the finite offered/called identities, not every tool in the
   // store. Canonical tools are named by their declaration; retained calls
   // may name an older stored identity and still resolve from that row.
@@ -1097,9 +1169,8 @@ export let react = async (
     // it came from. The runner lands them beside the `result{call, ms}` entity
     // it derives, and that result is the transcript's entry.
     //
-    // Its plugin is deliberately not registered on this graph: a call here is
-    // run in the order the transcript asked for, one at a time, and an
-    // effect-phase runner would race that.
+    // The generic runner owns claims/results. Native effects invoke exactly
+    // one call; the compatibility synchronous path walks them in order.
     // What a session tool is, expressed as a graph tool: the text it returns
     // carries `content` and `output{source}`, so the answer names the call it
     // came from and the runner lands it like any other. A call carrying text
@@ -1150,7 +1221,9 @@ export let react = async (
       owner: deps.owner ?? session,
       report: (error) => deps.report?.(error, session, 'tool'),
     })
-    let older = open.filter((b) => comp(b, CALL)?.source != asked?.entity.eid)
+    let older = deps.runCall
+      ? []
+      : open.filter((b) => comp(b, CALL)?.source != asked?.entity.eid)
     let unstarted = older.filter((b) => !b.execution)
     let inspect = (call: Bundle) =>
       append([
@@ -1193,8 +1266,31 @@ export let react = async (
     // Leave it for inspection rather than replaying it.
     if (older.length) return inspect(older[0])
     for (const pending of open) {
-      if (await currentStatus(g, session) == 'stopped') break
+      if (await currentStatus(g, session) == 'stopped' && !pending.execution) {
+        added.push(
+          ...await run.interruptCall(
+            pending.entity.eid,
+            'Session stopped before this tool started; it was not run.',
+          ),
+        )
+        continue
+      }
       try {
+        // A crashed async tool may have performed its external action. The
+        // generic runner can redrive lapsed owners, but native sessions must
+        // inspect/recover instead. Make that uncertain claim anonymous so its
+        // normal UnfinishedCall path records a recovered/interrupted outcome.
+        const holder = comp(pending, 'execution')?.by
+        if (deps.runCall && holder != null) {
+          const [owner] = await g.get([String(holder)], ['exit'])
+          if (owner?.exit) {
+            await g.apply([{
+              entity: pending.entity,
+              execution: { by: null },
+              $was: { execution: { by: token(holder) } },
+            }], { trusted: true })
+          }
+        }
         added.push(...await run.run(pending.entity.eid))
       } catch (error) {
         if (!(error instanceof UnfinishedCall)) throw error
@@ -1236,7 +1332,7 @@ export let react = async (
       added,
     }
   }
-  if (status == 'running') return nothing
+  if (deps.runCall || status == 'running') return nothing
 
   // Pending, or an error under the bound: ask the model. The anchor is the
   // newest ask the model can continue from; only what followed it travels.
@@ -1285,8 +1381,8 @@ export let react = async (
       seqOf(b) > seqOf(asked!) ||
       // An input committed while this ask was in flight was not sent to the
       // provider, even though its sequence precedes the recorded ask result.
-      (boundary && seqOf(b) > seqOf(boundary) && kindOf(b) == 'input' &&
-        !b.notice)
+      (boundary && seqOf(b) > seqOf(boundary) &&
+        ['input', 'result'].includes(kindOf(b) ?? '') && !b.notice)
     )
     : recent(said, using?.window)
   if (!bodies) {
@@ -1373,6 +1469,8 @@ export let react = async (
           results,
           media,
           inputText: deps.inputText,
+          resultUpdatesAsUser: using?.provider != null &&
+            using.provider != identityEid(PROVIDER, ['openai']),
         },
       ),
     ],

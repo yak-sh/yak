@@ -32,6 +32,8 @@ import { subagent } from './readers.ts'
 import { imported } from './tail.ts'
 import {
   kindOf,
+  modelReady,
+  openCalls,
   sessionDerived,
   statusOf,
   type TranscriptStatus,
@@ -57,8 +59,115 @@ let request = (n: number) =>
 let said = (n: number, source: string) =>
   entry(n, { content: { body: 'done' }, output: { source } })
 
+let asyncTurn = () => [
+  request(1),
+  entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+  entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
+  entry(4, {
+    tool_progress: { call: 'e3' },
+    content: { body: 'working' },
+    output: { source: 'e3' },
+  }),
+]
+let asyncReply = () => [
+  ...asyncTurn(),
+  entry(5, { ask: { to: M, through: 'e4' }, attempt: { by: null } }),
+  said(6, 'e5'),
+]
+
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
+  [
+    'progress permits a model turn without completing the call',
+    asyncTurn(),
+    'pending',
+  ],
+  ['prose before progress is still ready', [
+    ...asyncTurn(),
+    said(5, 'e2'),
+  ], 'pending'],
+  [
+    'assistant final while a progressed older call is pending',
+    asyncReply(),
+    'running',
+  ],
+  [
+    'an empty completed ask still waits for an older final',
+    asyncReply().slice(0, -1),
+    'running',
+  ],
+  ['a final for an older progressed call wakes the model', [
+    ...asyncReply(),
+    entry(7, { result: { call: 'e3' }, content: { body: 'finished' } }),
+  ], 'pending'],
+  ['final received during an ask is not acknowledged by its later output', [
+    ...asyncReply().slice(0, -1),
+    entry(6, { result: { call: 'e3' }, content: { body: 'finished' } }),
+    said(7, 'e5'),
+  ], 'pending'],
+  ['new input while an older progressed call waits', [
+    ...asyncReply(),
+    input(7),
+  ], 'pending'],
+  ['progress does not interrupt a request in flight', [
+    ...asyncReply().slice(0, -1),
+    entry(5, { ask: { to: M, through: 'e4' }, attempt: { by: S } }),
+  ], 'running'],
+  ['a final after stop cannot resume async work', [
+    ...asyncReply(),
+    entry(7, { stop: {} }),
+    entry(8, { result: { call: 'e3' }, content: { body: 'finished' } }),
+  ], 'stopped'],
+  ['all async finals consumed by the latest ask settles', [
+    ...asyncReply(),
+    entry(7, { result: { call: 'e3' }, content: { body: 'finished' } }),
+    entry(8, { ask: { to: M, through: 'e7' }, attempt: { by: null } }),
+    said(9, 'e8'),
+  ], 'settled'],
+  ['one finished async call wakes the model while another stays pending', [
+    ...asyncReply(),
+    entry(7, { call: { to: T, id: 'c2', source: 'e5' }, tool_async: {} }),
+    entry(8, {
+      tool_progress: { call: 'e7' },
+      content: { body: 'working too' },
+    }),
+    entry(9, { ask: { to: M, through: 'e8' }, attempt: { by: null } }),
+    said(10, 'e9'),
+    entry(11, { result: { call: 'e3' }, content: { body: 'first finished' } }),
+  ], 'pending'],
+  ['consuming one final still waits for the other pending final', [
+    ...asyncReply(),
+    entry(7, { call: { to: T, id: 'c2', source: 'e5' }, tool_async: {} }),
+    entry(8, {
+      tool_progress: { call: 'e7' },
+      content: { body: 'working too' },
+    }),
+    entry(9, { result: { call: 'e3' }, content: { body: 'first finished' } }),
+    entry(10, { ask: { to: M, through: 'e9' }, attempt: { by: null } }),
+    said(11, 'e10'),
+  ], 'running'],
+  ['a final during an ask is still unseen by its reply', [
+    ...asyncTurn(),
+    entry(5, { ask: { to: M, through: 'e4' }, attempt: { by: null } }),
+    entry(6, { result: { call: 'e3' }, content: { body: 'final' } }),
+    said(7, 'e5'),
+  ], 'pending'],
+  ['a recovered final before the ask record is still unseen', [
+    ...asyncTurn(),
+    entry(5, { result: { call: 'e3' }, content: { body: 'final' } }),
+    entry(6, { ask: { to: M, through: 'e4' }, attempt: { by: null } }),
+    said(7, 'e6'),
+  ], 'pending'],
+  ['unseen progress is not lost between the context boundary and ask record', [
+    ...asyncTurn(),
+    entry(5, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    said(6, 'e5'),
+  ], 'pending'],
+  ['an unanswered synchronous call still blocks beside async progress', [
+    ...asyncTurn(),
+    entry(5, { call: { to: T, id: 'c2', source: 'e2' } }),
+  ], 'running'],
+
   ...[
     '[Request interrupted by user]',
     '[Request interrupted by user for tool use]',
@@ -843,3 +952,14 @@ for (let typed of [false, true]) {
     )
   })
 }
+
+test('progress is projected as a result but only final results close calls', () => {
+  let entries = asyncTurn()
+  assertEquals(kindOf(entries.at(-1)!), 'result')
+  assertEquals(openCalls(entries).map((b) => b.entity.eid), ['e3'])
+  assertEquals(modelReady(entries), true)
+  assertEquals(modelReady(asyncReply()), false)
+  let finished = [...asyncReply(), entry(7, { result: { call: 'e3' } })]
+  assertEquals(openCalls(finished), [])
+  assertEquals(modelReady(finished), true)
+})

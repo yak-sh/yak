@@ -18,6 +18,7 @@ test('configured remote MCP tool publishes mockup through existing call/result t
   const h = await harness()
   const calls: string[] = []
   let requests = 0
+  let published = false
   await h.g.apply([{
     entity: { eid: 'site' },
     mcp_server: {
@@ -45,15 +46,20 @@ test('configured remote MCP tool publishes mockup through existing call/result t
           }],
         })
       }
-      assert(
-        req.items.some((i) =>
-          i.kind === 'result' && i.output.includes('mockup/1')
-        ),
+      published = req.items.some((i) =>
+        i.kind === 'result' && i.id === 'remote-call' &&
+          i.output.includes('mockup/1') ||
+        i.kind === 'user' &&
+          i.text.startsWith('Tool remote-call completed:') &&
+          i.text.includes('mockup/1')
       )
       return Promise.resolve({
-        id: 'r2',
+        id: `r${requests}`,
         model: 'fake',
-        items: [{ kind: 'assistant', text: 'Published' }],
+        items: [{
+          kind: 'assistant',
+          text: published ? 'Published' : 'Waiting for publication',
+        }],
       })
     },
   })
@@ -61,6 +67,7 @@ test('configured remote MCP tool publishes mockup through existing call/result t
     const id = await a.start('publish mockup')
     await a.idle(id)
     const entries = await a.transcript(id)
+    assert(published, 'model receives the completed publication result')
     assertEquals(entries.filter((b) => b.call).length, 1)
     assertEquals(entries.filter((b) => b.result).length, 1)
     assertEquals(

@@ -587,6 +587,28 @@ let release = async (g: Graph, e: Event): Promise<void> => {
  * ```
  */
 export let running = (g: Graph, r: Runner): Handlers => ({
+  ...declared(g, 'session_tool')
+    ? {
+      session_tool: async (e: Event) => {
+        let [call] = await g.get([e.entity.eid])
+        let session = (call?.entry as Comp | undefined)?.session
+        if (!call?.tool_async || !session || !r.asyncTools) return
+        const source = (call.call as Comp | undefined)?.source
+        const [asked] = source ? await g.get([String(source)], ['using']) : []
+        if (
+          r.answers && !await r.answers(asked?.using as Comp | undefined)
+        ) return
+        // The tool runner's claim, not the session's lease, serializes this call.
+        // A restarted effect inspects uncertain execution instead of replaying it.
+        await react(g, String(session), {
+          ...r,
+          owner: r.holder,
+          asyncTools: false,
+          runCall: call.entity.eid,
+        })
+      },
+    }
+    : {},
   session_run: async (e, _tx, _write, attempt) => {
     // Every transcript the event names is answered; a failure in one, a
     // request to ask again among them, is thrown once the others are.

@@ -99,15 +99,14 @@ test('tool-driven vision reaches the next model request and survives database re
   let h = await harness(dir + '/test.db')
   let record = await artifactStore(h.artifacts)(png, 'image/png')
   await h.g.apply([{ entity: { eid: 'picture' }, artifact: record }])
-  let turn = 0
-  let prefix: Item[] = []
+  let requests: Item[][] = []
   let a = local({
     h,
     cwd: dir,
     name: 'fake',
     model: (req) => {
-      turn++
-      if (turn == 1) {
+      requests.push(req.items.slice())
+      if (requests.length == 1) {
         return Promise.resolve({
           id: 'one',
           model: 'fake',
@@ -127,24 +126,60 @@ test('tool-driven vision reaches the next model request and survives database re
           ],
         })
       }
-      assertEquals(req.items.filter((i) => i.kind == 'image').length, 1)
-      assertEquals(req.items.filter((i) => i.kind == 'result').length, 2)
-      if (turn == 2) prefix = req.items.slice()
-      else assertEquals(req.items.slice(0, prefix.length), prefix)
       return Promise.resolve({
-        id: 'two',
+        id: `reply-${requests.length}`,
         model: 'fake',
-        items: [{ kind: 'assistant', text: 'seen' }],
+        // Progress-only turns have no observation to report yet.
+        items: req.items.some((item) => item.kind == 'image') &&
+            req.items.filter((item) =>
+                item.kind == 'result' && item.output.startsWith('{')
+              ).length == 2
+          ? [{ kind: 'assistant', text: 'seen' }]
+          : [],
       })
     },
   })
   try {
     let session = await a.start('inspect and attach')
     await a.idle(session)
-    assertEquals(turn, 2)
+    // Async tools can prompt progress-only turns before their final images.
+    let completed = requests.findLast((items) =>
+      items.some((item) => item.kind == 'image')
+    )
+    assert(completed, 'a completed image_view must reach the model')
+    let images = completed.filter((item) => item.kind == 'image')
+    assertEquals(images.length, 1)
+    assertEquals(images[0].bytes, png)
+    let finals = (items: Item[]) =>
+      items.filter((item) =>
+        item.kind == 'result' && item.output.startsWith('{')
+      ).map((item) => {
+        assert(item.kind == 'result')
+        return { id: item.id, ...JSON.parse(item.output.split('\n')[0]) }
+      }).sort((a, b) => b.id.localeCompare(a.id))
+    assertEquals(finals(completed), [
+      {
+        id: 'view-call',
+        artifact: 'picture',
+        media_type: 'image/png',
+        size: png.length,
+        audience: 'model',
+      },
+      {
+        id: 'attach-call',
+        artifact: 'picture',
+        media_type: 'image/png',
+        size: png.length,
+        audience: 'user',
+      },
+    ])
+    let turns = requests.length
     await a.send(session, 'What did you see?')
     await a.idle(session)
-    assertEquals(turn, 3)
+    assertEquals(requests.length, turns + 1)
+    assertEquals(requests.at(-1)!.slice(0, completed.length), completed)
+    assertEquals(requests.at(-1)!.filter((i) => i.kind == 'image').length, 1)
+    assertEquals(finals(requests.at(-1)!), finals(completed))
     let entries = await a.transcript(session)
     assertEquals(entries.filter((e) => e.attachment).length, 2)
     assertEquals(entries.filter((e) => e.exception).length, 0)

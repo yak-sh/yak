@@ -4,7 +4,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { prefix } from './compact.ts'
+import { context, prefix, suffix } from './compact.ts'
 
 let entry = (
   seq: number,
@@ -24,4 +24,27 @@ test('a compaction prefix does not split an interleaved call and result', () => 
   assertEquals(cut(3), ['e1', 'e2'])
   // The only cut keeping two lines would part the result from its call.
   assertEquals(cut(2), ['e1', 'e2', 'e3', 'e4', 'e5'])
+})
+
+test('progress stays paired with its call across windows and checkpoints', () => {
+  let entries = [
+    entry(1, { content: { body: 'start' } }),
+    entry(2, { call: { to: 'tool', id: 'c1' } }),
+    entry(3, { tool_progress: { call: 'e2' }, content: { body: 'working' } }),
+    entry(4, { content: { body: 'later input' } }),
+  ]
+  assertEquals(suffix(entries, 2).map((b) => b.entity.eid), ['e2', 'e3', 'e4'])
+  assertEquals(prefix(entries, [40, 1, 1, 1], 3).map((b) => b.entity.eid), [
+    'e1',
+  ])
+  let mark = entry(5, {
+    checkpoint: { through: 'e2' },
+    content: { body: 'summary' },
+  })
+  assertEquals(context([...entries, mark]).map((b) => b.entity.eid), [
+    'e5',
+    'e2',
+    'e3',
+    'e4',
+  ])
 })

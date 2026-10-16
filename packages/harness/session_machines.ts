@@ -322,6 +322,13 @@ export let machineDone = async (
   let record = comp(session, 'session')
   if (!record || (session.process && !session.exit)) return false
   if (await runningAt(g, session.entity.eid)) return false
+  // Tool effects outlive the transcript lease, even after a stop/completion.
+  if (
+    ['tool_async', 'call', 'result'].every((c) => g.vocab.comp(c)) &&
+    (await g.read(
+      `.entry.session=${session.entity.eid}&.call&.tool_async&!results&.limit=1`,
+    )).length
+  ) return false
   if (session.completed || record.ended || record.status == 'stopped') {
     return true
   }

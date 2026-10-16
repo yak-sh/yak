@@ -40,6 +40,7 @@ import {
   ENTRY,
   humanCaller,
   live,
+  openCalls,
   passing,
   providerResolver,
   type Runner,
@@ -337,6 +338,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   // name, and a server reconfigured mid-ask serves that name from somewhere
   // else: the calls an ask issued run on the handlers it was offered.
   const offered = new Map<Eid, Tool[]>()
+  const offerSessions = new Map<Eid, Eid>()
   // Seeded by the first step, not when lent: a host lends the runner while it
   // is being put together, before anything may be written in its name.
   let seeded: unknown
@@ -356,6 +358,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     : undefined
   return {
     holder: h.me,
+    asyncTools: true,
     gone: h.gone,
     taskDefaults,
     maxChildren,
@@ -374,7 +377,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     answers: answers(h.g, implementations, opts.model),
     tools,
     named: opts.named,
-    toolSnapshot: async (phase, session) => {
+    toolSnapshot: async (phase, session, boundary) => {
       if (compact && !compact.name) {
         let using = await defaultUsing(h.g, 'openai')
         let [row] = await h.g.get([String(using.model)])
@@ -383,10 +386,36 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       await (seeded ??= h.g.apply(seed({ provider, model: name, tools }), {
         trusted: true,
       }))
-      const held = phase === 'call' && offered.get(session)
+      const key = boundary ?? session
+      const held = phase === 'call' && offered.get(key)
       if (held) return [...tools, ...held]
       const served = await remote()
-      offered.set(session, served)
+      // Several asks may overlap older calls. Keep each original offer until
+      // all of its calls have final results; a later catalogue refresh must
+      // not redirect an in-progress call to a newly configured MCP server.
+      if (phase === 'ask' && offered.size) {
+        const entries = await transcript(h.g, session)
+        const outstanding = new Set(
+          openCalls(entries).flatMap((call) => {
+            const ask = entries.find((b) =>
+              b.entity.eid == (call.call as Comp)?.source
+            )
+            const through = (ask?.ask as Comp | undefined)?.through
+            return through == null ? [] : [String(through)]
+          }),
+        )
+        for (const old of offered.keys()) {
+          if (
+            old != key && offerSessions.get(old) == session &&
+            !outstanding.has(old)
+          ) {
+            offered.delete(old)
+            offerSessions.delete(old)
+          }
+        }
+      }
+      offered.set(key, served)
+      offerSessions.set(key, session)
       const all = [...tools, ...served]
       if (
         new Set(all.map((t) => t.name)).size !== all.length

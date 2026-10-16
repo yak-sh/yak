@@ -131,10 +131,18 @@ test('model receives bounded tool result, UI keeps original and prompt/user stay
   try {
     const id = await a.start(user)
     await a.idle(id)
-    const sent = requests[1].items.find((i) => i.kind == 'result')
-    assert(sent?.kind == 'result')
-    assert(sent.output.length < 2000)
-    assert(sent.output.includes('graph_value_read'))
+    // Progress can be offered before the bounded final output. A completion
+    // may arrive as a result or as a user update to an earlier progress result.
+    const sent = requests.flatMap((req) => req.items).find((i) =>
+      i.kind == 'result' && i.id == 'call-large' &&
+        i.output.includes('graph_value_read') ||
+      i.kind == 'user' && i.text.startsWith('Tool call-large completed:') &&
+        i.text.includes('graph_value_read')
+    )
+    assert(sent?.kind == 'result' || sent?.kind == 'user')
+    const output = sent.kind == 'result' ? sent.output : sent.text
+    assert(output.length < 2000)
+    assert(output.includes('graph_value_read'))
     assertEquals(
       requests[0].items.find((i) => i.kind == 'user')?.text.replace(
         /^\[Sent [^\n]*\]\n/,

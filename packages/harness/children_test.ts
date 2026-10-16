@@ -139,7 +139,8 @@ test('wait resolves while child completion waits behind the parent tool', async 
   let childAsked = deferred<void>()
   let waiting = deferred<void>()
   let childReply = deferred<Reply>()
-  let turns = 0
+  let spawned = false
+  let waited = false
   let h = await harness()
   let tools = sessionTools(h.g)
   let wait = tools.find((t) => t.name == 'wait')!
@@ -153,11 +154,25 @@ test('wait resolves while child completion waits behind the parent tool', async 
       childAsked.resolve()
       return childReply.promise
     }
-    if (turns++ == 0) return Promise.resolve(call('spawn', { prompt: 'child' }))
-    if (turns == 2) {
-      let result = req.items.findLast((i) => i.kind == 'result')!
+    if (!spawned) {
+      spawned = true
+      return Promise.resolve(call('spawn', { prompt: 'child' }))
+    }
+    // A progress result is not the child ID returned by spawn. Wait only
+    // after the real result (or its completion update) has arrived.
+    let result = req.items.findLast((i) =>
+      i.kind == 'result' && i.id == 'spawn' &&
+        !i.output.startsWith('Status: in_progress.') ||
+      i.kind == 'user' && i.text.startsWith('Tool spawn completed:\n')
+    )
+    if (!waited && result) {
+      assert(result.kind == 'result' || result.kind == 'user')
+      let output = result.kind == 'result'
+        ? result.output
+        : result.text.replace(/^Tool spawn completed:\n/, '')
+      waited = true
       return Promise.resolve(call('wait', {
-        children: [(result as { output: string }).output.split('\n')[0]],
+        children: [output.split('\n')[0]],
         timeout: 1000,
       }))
     }

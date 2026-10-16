@@ -2050,3 +2050,60 @@ test('a text-only turn never enumerates the graph tool catalog', async () => {
   assertEquals(await rest(g, ids.s, { model, tools: [echo], mint }), 'settled')
   assertEquals(catalog, 0)
 })
+
+// A final committed while a provider was answering has a lower sequence than
+// the completed ask, but was not part of that ask's frozen input boundary.
+const asyncAnchorRace = world()
+await asyncAnchorRace.apply([{
+  entity: { eid: 'async-anchor-origin' },
+  entry: { session: ids.s },
+  ask: { to: ids.m, through: 'e1' },
+  using: { provider: ids.p, model: ids.m },
+  fake: { reply: 'origin' },
+}, {
+  entity: { eid: 'async-anchor-call' },
+  entry: { session: ids.s },
+  call: {
+    to: ids.t,
+    id: 'async-c1',
+    args: { text: 'hi' },
+    source: 'async-anchor-origin',
+  },
+  tool_async: {},
+}, {
+  entity: { eid: 'async-anchor-progress' },
+  entry: { session: ids.s },
+  tool_progress: { call: 'async-anchor-call' },
+  content: { body: 'in progress' },
+}, {
+  entity: { eid: 'async-anchor-final' },
+  entry: { session: ids.s },
+  result: { call: 'async-anchor-call' },
+  content: { body: 'FINAL_DURING_ANCHORED_ASK' },
+}, {
+  entity: { eid: 'async-anchor-held' },
+  entry: { session: ids.s },
+  ask: { to: ids.m, through: 'async-anchor-progress' },
+  using: { provider: ids.p, model: ids.m },
+  fake: { reply: 'held-anchor' },
+}, {
+  entity: { eid: 'async-anchor-held-output' },
+  entry: { session: ids.s },
+  output: { source: 'async-anchor-held' },
+  content: { body: 'held reply' },
+}], { trusted: true })
+
+test('an anchored continuation includes a tool final committed during its preceding ask', async () => {
+  let { model, asked } = scripted([says('async-anchor-done', 'saw final')])
+  await react(asyncAnchorRace, ids.s, {
+    model,
+    tools: [echo],
+    asyncTools: true,
+  })
+  assertEquals(asked.length, 1)
+  assertEquals(asked[0].anchor, 'held-anchor')
+  assertEquals(asked[0].items, [{
+    kind: 'user',
+    text: 'Tool async-c1 completed:\nFINAL_DURING_ANCHORED_ASK',
+  }, { kind: 'assistant', text: 'held reply' }])
+})

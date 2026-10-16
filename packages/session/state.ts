@@ -63,6 +63,7 @@ let KINDS: [string, Kind][] = [
   [ASK, 'ask'],
   [CALL, 'call'],
   [RESULT, 'result'],
+  ['tool_progress', 'result'],
   ['interrupted', 'interrupted'],
 ]
 
@@ -96,7 +97,7 @@ export let newestAsk = (entries: Bundle[]): Bundle | undefined =>
 
 let callsIn = (all: Bundle[]): Bundle[] => {
   let answered = new Set(
-    all.filter((b) => kindOf(b) == 'result')
+    all.filter((b) => RESULT in b)
       .map((b) => String((b[RESULT] as Comp)?.call)),
   )
   return all.filter((b) => kindOf(b) == 'call' && !answered.has(b.entity.eid))
@@ -106,6 +107,21 @@ let callsIn = (all: Bundle[]): Bundle[] => {
  * keeps a transcript running past the prose the model returned beside them. */
 export let openCalls = (entries: Bundle[]): Bundle[] =>
   callsIn(ordered(entries))
+
+/** Whether input or a tool answer has arrived beyond the newest request's
+ * context boundary. Progress is a model-facing answer, not a final result.
+ * This says the model owes work, independently of tools still running. */
+export let modelReady = (entries: Bundle[]): boolean => {
+  let all = ordered(entries).filter((b) => !b.notice)
+  let ask = newestAsk(all)
+  let through = all.find((b) =>
+    b.entity.eid == (ask?.ask as Comp | undefined)?.through
+  )
+  let boundary = through ? seqOf(through) : ask ? seqOf(ask) : 0
+  return all.some((b) =>
+    seqOf(b) > boundary && ['input', 'result'].includes(kindOf(b) ?? '')
+  )
+}
 
 // An anonymous claim belongs to the process that made it. If that process
 // vanished before answering, the session runner recovers it without replay.
@@ -142,7 +158,14 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (kindOf(control ?? newest) == 'stop') return 'stopped'
   let asked = all.findLast((b) => kindOf(b) == 'ask')
   let turn = all.filter((b) => !asked || seqOf(b) >= seqOf(asked))
-  let calls = callsIn(turn)
+  let progressed = new Set(all.flatMap((b) => {
+    let call = (b.tool_progress as Comp | undefined)?.call
+    return call == null ? [] : [String(call)]
+  }))
+  // Progress answers the provider protocol, but only result answers the work.
+  // Unlike legacy synchronous calls, progressed calls can outlive many asks.
+  let calls = callsIn(turn).filter((b) => !progressed.has(b.entity.eid))
+  let pending = callsIn(all).some((b) => progressed.has(b.entity.eid))
   if (abandoned(calls)) return 'running'
   if (kind == 'exception') return 'failed'
   if (kind == 'interrupted' && newest.failed && !newest.ask && !newest.call) {
@@ -179,6 +202,8 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
       : 'pending'
   }
   if (calls.length) return 'running'
+  if (progressed.size && modelReady(all)) return 'pending'
+  if (pending) return 'running'
   if (
     kind == 'ask' && attemptState(newest) == 'completed'
   ) return 'settled'

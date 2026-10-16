@@ -151,6 +151,7 @@ export let sessionStatus = {
       'output',
       'notice',
       'result',
+      'tool_progress',
       'refusal',
       'exception',
       'ask',
@@ -329,7 +330,14 @@ export let sessionStatus = {
               '+',
               col('seq', 'boundary'),
               iff(
-                marks(probed('boundary'), cancellation('boundary')).halted,
+                or(
+                  probed('boundary')('stop'),
+                  iff(
+                    probed('boundary')('notice'),
+                    cancellation('boundary'),
+                    lit(false),
+                  ),
+                ),
                 lit(0),
                 lit(1),
               ),
@@ -413,6 +421,7 @@ export let sessionStatus = {
       'ask',
       'call',
       'result',
+      'tool_progress',
       'output',
       'attempt',
       'execution',
@@ -481,6 +490,20 @@ export let sessionStatus = {
             : lit(null),
           'answered',
         ),
+        as(
+          declared('tool_progress')
+            ? iff(
+              wears('call'),
+              exists(select({
+                cols: [lit(1)],
+                from: table('tool_progress', 'p'),
+                where: eq(col('call', 'p'), col('entity', 'span')),
+              })),
+              lit(false),
+            )
+            : lit(false),
+          'progressed',
+        ),
         col('boundary_seq', 'span'),
         col('refused_source', 'span'),
         as(eq(col('entity', 'span'), col('newest', 'span')), 'newest'),
@@ -499,7 +522,12 @@ export let sessionStatus = {
     let has = (comp: string, alias = 't') => notNull(col(comp, alias))
     let lacks = (comp: string, alias = 't') => isNull(col(comp, alias))
     let current = col('current', 't')
-    let open = and(current, has('call'), lacks('answered'))
+    let open = and(
+      current,
+      has('call'),
+      lacks('answered'),
+      not(col('progressed', 't')),
+    )
     let inflight = and(
       current,
       has('attempt'),
@@ -549,6 +577,37 @@ export let sessionStatus = {
           ),
         ),
         flag('inflight', inflight),
+        as(
+          declared('tool_progress')
+            ? sub(select({
+              cols: [fn(
+                'max',
+                iff(
+                  not(exists(select({
+                    cols: [lit(1)],
+                    from: table(RESULT, 'r'),
+                    where: eq(col('call', 'r'), col('call', 'p')),
+                  }))),
+                  lit(1),
+                  lit(0),
+                ),
+              )],
+              from: table('__progress', 'p'),
+            }))
+            : lit(null),
+          'progress_pending',
+        ),
+        as(
+          fn(
+            'max',
+            iff(
+              or(row.input, has('result'), has('tool_progress')),
+              col('seq', 't'),
+              lit(null),
+            ),
+          ),
+          'ready_seq',
+        ),
         as(fn('max', iff(row.input, col('seq', 't'), lit(null))), 'input_seq'),
         as(fn('max', iff(row.halted, col('seq', 't'), lit(null))), 'stop_seq'),
         flag('served', or(has('using'), has('ask'))),
@@ -635,6 +694,17 @@ export let sessionStatus = {
       [f('open'), lit('running')],
       [
         and(
+          gt(
+            f('ready_seq'),
+            fn('coalesce', f('n_boundary_seq'), f('a_seq'), lit(0)),
+          ),
+          notNull(f('progress_pending')),
+        ),
+        lit('pending'),
+      ],
+      [f('progress_pending'), lit('running')],
+      [
+        and(
           n('ask'),
           n('attempt'),
           isNull(col('n_attempt_by', 'f')),
@@ -677,7 +747,25 @@ export let sessionStatus = {
         sub(select({
           with: [
             { name: LATEST, q: latest, materialized: false },
+            // The anchor is consumed once by the sequenced branch (or its
+            // legacy fallback). Inlining avoids a billed temporary-row read;
+            // its newest-entry and ask seeks remain bounded.
             { name: ANCHOR, q: anchors, materialized: false },
+            ...declared('tool_progress')
+              ? [{
+                name: '__progress',
+                materialized: true,
+                q: select({
+                  cols: [col('call', 'p')],
+                  from: table('tool_progress', 'p'),
+                  joins: [{
+                    ...cross(table('entry', 'pe')),
+                    on: eq(col('entity', 'pe'), col('entity', 'p')),
+                  }],
+                  where: mine('pe'),
+                }),
+              }]
+              : [],
           ],
           cols: [
             iff(

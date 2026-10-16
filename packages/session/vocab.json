@@ -746,7 +746,9 @@
         "stop",
         "completed",
         "cancelled",
-        "admitted"
+        "admitted",
+        "result",
+        "tool_progress"
       ],
       "changed": [
         "dispatch.state",
@@ -790,6 +792,33 @@
     "native": {
       "component": true,
       "description": "A transcript run by the native model/tool loop, not an outside CLI agent."
+    },
+    "tool_async": {
+      "component": true,
+      "type": "object",
+      "description": "a native transcript call dispatched by its own durable effect; no session lease waits for it",
+      "properties": {}
+    },
+    "tool_progress": {
+      "component": true,
+      "type": "object",
+      "description": "an immutable in-progress tool result; the final result is a separate appended entry, never a replacement",
+      "properties": {
+        "call": {
+          "type": "string",
+          "ref": "call",
+          "death": "cascade"
+        }
+      }
+    },
+    "session_tool": {
+      "effect": true,
+      "created": [
+        "tool_async"
+      ],
+      "target": ".call&.entry&.tool_async",
+      "sweep": ".call&.entry&.tool_async&!results",
+      "description": "execute one asynchronous native tool call independently of the session lease; the tools runner owns its execution claim and final result"
     }
   }
 }
