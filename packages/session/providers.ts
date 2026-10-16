@@ -224,12 +224,16 @@ export let answers = (
   implementations: Readonly<Record<string, Model>>,
   override?: Model,
 ) =>
-async (using: Comp | undefined): Promise<boolean> => {
+async (using: Comp | undefined, session?: Eid): Promise<boolean> => {
   let provider = using?.provider
   if (provider != null) {
     let [row] = await g.get([String(provider)])
     let named = row?.provider as Comp | undefined
     if (!named) return false
+    if (named.transport == 'process') {
+      let [owner] = session ? await g.get([session]) : []
+      if (!owner?.native) return false
+    }
     if (override) return named.transport != 'process'
     return typeof named.name == 'string' &&
       Object.hasOwn(implementations, named.name)

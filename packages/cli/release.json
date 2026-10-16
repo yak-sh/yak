@@ -5,6 +5,7 @@
   "@yaks/blob",
   "@yaks/builders",
   "@yaks/canvas",
+  "@yaks/claude",
   "@yaks/cli",
   "@yaks/client",
   "@yaks/code",

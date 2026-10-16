@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/claude",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Claude Code print mode as a one-turn model; the graph harness alone executes tools.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "fake_cli.ts"
+    ]
+  }
+}

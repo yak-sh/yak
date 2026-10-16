@@ -9,7 +9,7 @@ import { type Model, modelDoc } from '@yaks/model'
 import { ram } from '@yaks/ram'
 import { test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
-import { providerResolver } from './providers.ts'
+import { answers, providerResolver } from './providers.ts'
 
 test('metadata transport failure does not suppress a model ask', async () => {
   let vocab = loadVocab(
@@ -108,4 +108,27 @@ test('resolved provider snapshots dispatch retention on every reply and keeps ex
   explicit = null
   reply = await served.model({ model: served.name, items: [], tools: [] })
   assertEquals(reply.cacheExpiresAt, null)
+})
+
+test('process providers with native implementations do not take managed sessions', async () => {
+  let { sessionDoc } = await import('./vocab.ts')
+  let vocab = loadVocab([kernelDoc, edgeDoc, modelDoc, sessionDoc], [
+    kernelKeywords,
+    edgeKeywords,
+  ])
+  let g = graph({ storage: ram(vocab), vocab })
+  let provider = identityEid('provider', ['claude'])
+  await g.apply([
+    {
+      entity: { eid: provider },
+      provider: { name: 'claude', transport: 'process' },
+    },
+    { entity: { eid: 'managed' }, session: {} },
+    { entity: { eid: 'native' }, session: {}, native: {} },
+  ])
+  let fake: Model = (req) =>
+    Promise.resolve({ id: 'x', model: req.model, items: [] })
+  let check = answers(g, { claude: fake })
+  assertEquals(await check({ provider }, 'managed'), false)
+  assertEquals(await check({ provider }, 'native'), true)
 })

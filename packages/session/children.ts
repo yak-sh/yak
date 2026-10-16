@@ -280,6 +280,7 @@ let delegation = (
           entity: { eid },
           dispatch: { state: 'queued', args: JSON.stringify(args), order },
           session: { id: eid },
+          native: {},
           spawned: {
             parent: ctx.session,
             ...minted ? {} : { call: ctx.call.entity.eid },

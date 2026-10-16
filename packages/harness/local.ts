@@ -2,6 +2,7 @@
 // graph and machines, never a host checkout. Credentials, MCP and diagnostics
 // remain host integrations; shell and file work is routed through providers.
 
+import { claude } from '@yaks/claude'
 import { responses as openrouter } from '@yaks/openrouter'
 import { responses } from '@yaks/openai'
 import { artifactStore } from '@yaks/blob'
@@ -145,6 +146,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     model: opts.model,
     providers: {
       openai: model,
+      claude: claude(),
       openrouter: openrouter({
         media: { store: artifactStore(h.artifacts) },
         key: async () =>

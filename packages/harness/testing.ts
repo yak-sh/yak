@@ -48,6 +48,7 @@ export let PLUGINS: string[] = [
   '@yaks/model',
   '@yaks/openai',
   '@yaks/openrouter',
+  '@yaks/claude',
   '@yaks/process',
   '@yaks/machine',
   '@yaks/context',

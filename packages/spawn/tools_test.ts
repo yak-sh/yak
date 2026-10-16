@@ -462,3 +462,24 @@ test('session stop ends a native transcript', async () => {
     })),
   )
 })
+
+test('session stop honors native ownership even for a process provider', async () => {
+  let g = transcriptGraph(nativeVocab)
+  await g.apply([
+    { entity: { eid: 'claude-native' }, session: {}, native: {} },
+    {
+      entity: { eid: 'input-c' },
+      entry: { session: 'claude-native' },
+      using: { provider: P, model: M },
+      content: { body: 'go' },
+    },
+    { entity: { eid: P }, provider: { name: 'claude', transport: 'process' } },
+    { entity: { eid: M }, model: { name: 'haiku' } },
+  ])
+  await tools.session_stop!(...asked(g, { session: 'claude-native' }))
+  assertEquals(
+    statusOf(await g.read('.entry.session=claude-native&*')),
+    'stopped',
+  )
+  assertEquals((await g.get(['claude-native']))[0].stop, undefined)
+})

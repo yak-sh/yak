@@ -83,7 +83,11 @@ export { given, used } from '@yaks/host/config'
 // quietly runs without its rules is worse than one that refuses to start.
 let unexported = (error: unknown, spec: string): boolean => {
   if (!(error instanceof TypeError)) return false
-  if (error.message == `Module not found "${spec}".`) return true
+  // A failed batched import may be cached with an importer location. Only
+  // its first line identifies the missing module; dependencies still differ.
+  if (error.message.split('\n', 1)[0] == `Module not found "${spec}".`) {
+    return true
+  }
   let pkg = /^(?:jsr:)?(@[^/]+\/[^/@]+)(?:@[^/]+)?\/(.+)$/.exec(spec)
   return !!pkg && error.message.startsWith(
     `Unknown export './${pkg[2]}' for '${pkg[1]}'.`,

@@ -108,6 +108,13 @@ newline). On a new session, NORMAL `P` chooses a persona from the graph for that
 session. `--persona` accepts a persona id or registered name; the session keeps
 that choice and snapshots its instructions before its first message.
 
+The local host also serves `--provider claude --model haiku|sonnet|opus` through
+`@yaks/claude`: a signed-in `claude -p` supplies one model turn while this
+harness alone executes tools and records calls/results. Compose `@yaks/claude`
+to declare its reply metadata. See `packages/claude/README.md` for the CLI/graph
+boundary. New native transcripts carry `native`; outside managed Claude sessions
+(including heal fixers) remain on `@yaks/spawn`.
+
 A session starts without borrowing the CLI's current directory or filesystem.
 Its first machine call requests a sandbox from the host's default provider.
 `--machine <machine-id>` names an existing machine record; `--cwd <directory>`

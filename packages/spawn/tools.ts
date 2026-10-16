@@ -273,7 +273,8 @@ export let runs = (host: Host, options: Options = {}): Runs => {
           return [said(call, `${name} already stopped`)]
         }
         let provider = await one(graph, str(usingBefore(entries)?.provider))
-        managed = comp(provider, 'provider')?.transport == 'process'
+        managed = !row.native &&
+          comp(provider, 'provider')?.transport == 'process'
       }
       await graph.apply(signed([{
         entity: { eid: managed ? row.entity.eid : uuid() },

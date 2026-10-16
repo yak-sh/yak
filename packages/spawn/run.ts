@@ -177,6 +177,8 @@ export let asked = async (
   g: Graph,
   session: string,
 ): Promise<Asked | null> => {
+  let [owner] = await g.get([session])
+  if (owner?.native) return null
   let entries = await g.read(`.entry.session=${session}&.order=entry.seq&*`)
   let request = entries.find((b) => b.using)
   if (!request) return null

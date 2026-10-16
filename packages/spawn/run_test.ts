@@ -6,7 +6,7 @@ import { sessionDerived, sessions } from '@yaks/session'
 import { storage } from '@yaks/sqlite'
 import { stepping } from '../sqlite/testing.ts'
 import { claude } from './adapters.ts'
-import { asked, down, follow, resume } from './run.ts'
+import { asked, down, follow, resume, start } from './run.ts'
 import { asking, FAKE, host, tracked, until } from './testing.ts'
 
 // A log file and the run that wrote it, both already over: `follow` then does
@@ -188,4 +188,22 @@ test('a run is asked how it stands without reading its transcript', async () => 
   await down(long, 'S1')
   let steps = watched.steps() - before
   assert(steps < ENTRIES, `${steps} steps`)
+})
+
+test('native graph sessions are never launched by the outside adapter', async () => {
+  let { g } = tracked()
+  await g.apply(asking('S-native', 'E-native', 'fix it'))
+  await g.apply([{ entity: { eid: 'S-native' }, native: {} }])
+  assertEquals(await asked(g, 'S-native'), null)
+  let launched = false
+  assertEquals(
+    await start(g, 'S-native', {
+      launch: () => {
+        launched = true
+        throw Error('wrong runner')
+      },
+    }),
+    null,
+  )
+  assertEquals(launched, false)
 })

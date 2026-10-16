@@ -203,7 +203,8 @@
     "./packages/timing",
     "./packages/inbox",
     "./packages/host",
-    "./packages/game"
+    "./packages/game",
+    "./packages/claude"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

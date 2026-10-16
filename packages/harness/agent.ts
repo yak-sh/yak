@@ -271,6 +271,7 @@ export let begin = async (
         operator,
         ...o.persona ? { persona: o.persona } : {},
       },
+      native: {},
       ...o.home ? { home: o.home } : {},
       ...prompt ? {} : { using: o.using },
       $actor: through(session, o.by),

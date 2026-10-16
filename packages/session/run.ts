@@ -74,7 +74,10 @@ export type Runner = Deps & ChildLimits & {
   holder: Eid
   /** whether this host answers a transcript asking with this `using`
    * (./providers.ts `answers`); one it does not is left to whoever does */
-  answers?: (using: Comp | undefined) => boolean | Promise<boolean>
+  answers?: (
+    using: Comp | undefined,
+    session?: Eid,
+  ) => boolean | Promise<boolean>
   /** each step, as it lands */
   each?: (step: Step) => void
   /** reconcile borrowed resources after this pass releases its lease */
@@ -512,12 +515,12 @@ export let answering = async (
         `.entry.session=${session}&.ask&.fields=entity.eid&.limit=1`,
       )
       return asks.length > 0 &&
-        (r.answers ? await r.answers(undefined) : true)
+        (r.answers ? await r.answers(undefined, session) : true)
     }
   }
   let entries = asked.length ? asked : await statusEntries(g, session)
   if (!entries.some((b) => b.using || b.ask)) return false
-  return r.answers ? await r.answers(usingBefore(entries)) : true
+  return r.answers ? await r.answers(usingBefore(entries), session) : true
 }
 
 /** Answer a transcript's request for a turn here, where this host answers the
