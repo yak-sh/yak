@@ -19,7 +19,7 @@ let served = async (
 ) => {
   let source = await (await k.at(host, '/photos/api/client.js')).text()
   Deno.writeTextFileSync(`${dir}/client.js`, source)
-  for (let file of ['_draft.js', '_outbox.js']) {
+  for (let file of ['_draft.js', '_outbox.js', '_wire.js']) {
     let asset = await k.at(host, `/photos/api/${file}`)
     assertEquals(asset.status, 200)
     Deno.writeTextFileSync(`${dir}/${file}`, await asset.text())

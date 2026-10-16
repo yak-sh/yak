@@ -12,7 +12,7 @@ let k = await kernel()
 let slug = unique('draftclient')
 await seed(k, [{ slug, apps: ['notes'] }])
 let dir = Deno.makeTempDirSync({ prefix: 'tasks-client-drafts-' })
-for (let file of ['client.js', '_draft.js', '_outbox.js']) {
+for (let file of ['client.js', '_draft.js', '_outbox.js', '_wire.js']) {
   let response = await k.at(`${slug}.yaks.app`, `/notes/api/${file}`)
   assertEquals(response.status, 200)
   Deno.writeTextFileSync(`${dir}/${file}`, await response.text())
