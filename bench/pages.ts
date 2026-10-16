@@ -9,6 +9,12 @@
  * fails the run, saying which mark never appeared, so a page that never loads
  * is a failure and not a very slow figure.
  *
+ * A person's browser is already running, so each new one first opens a blank
+ * page on another origin before anything is timed. A browser's first
+ * navigation starts its network stack, which on a busy box took anywhere from
+ * 0.3 to 5 s for a one-line page, and that is the box, not the page. The page
+ * itself stays cold: its origin has no cache, no stored rows and no connection.
+ *
  * The measurement only reads. Every request the page makes passes through
  * the DevTools Fetch domain, and anything but GET, HEAD or OPTIONS (the
  * `opened` mark a task page writes, a draft) is refused there before it
@@ -78,8 +84,20 @@ let devtools = async (
   return { send, close: () => socket.close() }
 }
 
+/** A blank page on an origin of its own, for a new browser's first navigation. */
+let primer = () => {
+  let server = Deno.serve(
+    { hostname: '127.0.0.1', port: 0, onListen: () => {} },
+    () => new Response('<p>', { headers: { 'content-type': 'text/html' } }),
+  )
+  return {
+    url: `http://127.0.0.1:${server.addr.port}/`,
+    close: server.shutdown,
+  }
+}
+
 /** Open `page` in a new browser twice, and say how long each took to paint. */
-let open = async (base: string, page: Page) => {
+let open = async (base: string, page: Page, prime: string) => {
   let dir = await Deno.makeTempDir({ dir: '/tmp', prefix: 'cdp-pages-' })
   let chrome = new Deno.Command('google-chrome', {
     args: [
@@ -142,27 +160,43 @@ let open = async (base: string, page: Page) => {
         requestAnimationFrame(look)
       })()`,
     })
+    // Navigate, then the value of `expression` once it holds, or a failure
+    // saying what never did.
+    let visit = async (url: string, expression: string, what: string) => {
+      await tab.send('Page.navigate', { url })
+      let until = Date.now() + PATIENCE
+      while (Date.now() < until) {
+        let { result } = await tab.send('Runtime.evaluate', {
+          expression,
+          returnByValue: true,
+        }) as { result: { value?: unknown } }
+        if (result.value) return result.value
+        await sleep(50)
+      }
+      throw new Error(`${what} within ${PATIENCE / 1000} s`)
+    }
     let paint = async () => {
       // The last document's mark must not answer for the next one.
       await tab.send('Runtime.evaluate', {
         expression: 'delete globalThis.__painted',
       })
-      await tab.send('Page.navigate', { url: base + page.path })
-      let until = Date.now() + PATIENCE
-      while (Date.now() < until) {
-        let { result } = await tab.send('Runtime.evaluate', {
-          expression: 'globalThis.__painted',
-          returnByValue: true,
-        }) as { result: { value?: number } }
-        if (typeof result.value == 'number') return Math.round(result.value)
-        await sleep(50)
-      }
-      throw new Error(
-        `${page.name} (${page.path}) did not paint within ${
-          PATIENCE / 1000
-        } s: ${page.painted.replace(/\s+/g, ' ')} never held`,
+      return Math.round(
+        await visit(
+          base + page.path,
+          'globalThis.__painted',
+          `${page.name} (${page.path}) did not paint: ${
+            page.painted.replace(/\s+/g, ' ')
+          } never held`,
+        ) as number,
       )
     }
+    await visit(
+      prime,
+      `location.href == ${
+        JSON.stringify(prime)
+      } && document.readyState == 'complete'`,
+      `the blank page ${prime} did not load`,
+    )
     let cold = await paint()
     await sleep(SETTLE)
     let warm = await paint()
@@ -196,7 +230,14 @@ export let suite = (args: string[] = []): CollectedSuite => {
     ),
     collect: async () => {
       let out: Record<string, number> = {}
-      for (let page of measured) Object.assign(out, await open(base, page))
+      let blank = primer()
+      try {
+        for (let page of measured) {
+          Object.assign(out, await open(base, page, blank.url))
+        }
+      } finally {
+        await blank.close()
+      }
       return out
     },
   }

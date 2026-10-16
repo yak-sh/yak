@@ -41,12 +41,14 @@ unit, that is after each `yak restart`. What it last saw is kept in
 
 `pages` (bench/pages.ts) measures tasks.yak.sh as a person gets it: browse's
 home `/` and a task page, each opened cold in a new headless Chrome profile and
-then warm in the same one, against the box's live server. A figure is the time
-from navigation to the frame where the page shows what it is for: home's first
-rows (or the owner's inbox, its threads loaded) or the task's title. A page that
-has not painted in 30 s fails the run. It only reads: the browser refuses every
-request but GET, HEAD and OPTIONS before it leaves. `--url=` and `--task=` after
-`--` point it elsewhere.
+then warm in the same one, against the box's live server. Each new browser opens
+a blank page on another origin first, so a cold figure times the page and not
+the browser starting its network stack, which a person's running browser never
+pays. A figure is the time from navigation to the frame where the page shows
+what it is for: home's first rows (or the owner's inbox, its threads loaded) or
+the task's title. A page that has not painted in 30 s fails the run. It only
+reads: the browser refuses every request but GET, HEAD and OPTIONS before it
+leaves. `--url=` and `--task=` after `--` point it elsewhere.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
