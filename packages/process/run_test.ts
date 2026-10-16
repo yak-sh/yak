@@ -144,7 +144,9 @@ test('a sweep cleans only the runs that ended longer ago than its age', async ()
   assertEquals(await sweep(30_000, { dir: dir() + '/none' }), 0)
 })
 
-test('a sweep preserves incomplete, foreign and managed run files', async () => {
+// Filesystem/graph setup and the sweep run once as a private scenario; the
+// checks retain every protected-file and removed-file observation.
+let protectedSweep = await (async () => {
   let at = dir()
   let g = tracked()
   let past = new Date(Date.now() - 60_000)
@@ -195,7 +197,12 @@ test('a sweep preserves incomplete, foreign and managed run files', async () => 
       exit: { code: 0 },
     },
   ])
-  assertEquals(await sweep(30_000, { dir: at }, store(g)), 1)
+  let removed = await sweep(30_000, { dir: at }, store(g))
+  return { at, cases, removed }
+})()
+test('a sweep preserves incomplete, foreign and managed run files', () => {
+  let { at, cases, removed } = protectedSweep
+  assertEquals(removed, 1)
   assertEquals(Deno.readTextFileSync(`${at}/foreign.out`), 'keep')
   for (let eid of cases.slice(1)) {
     assertEquals(Deno.readTextFileSync(`${at}/${eid}.out`), 'keep', eid)
