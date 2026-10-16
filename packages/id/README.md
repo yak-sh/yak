@@ -166,6 +166,12 @@ equal(Object.fromEntries(resolved), {
 })
 ```
 
+Allocation policy does not invalidate an address already given out. The CLI
+leaves existing numbers intact when excluding sessions, letters, knocks and
+internal records from new allocations. Old `S-…`, `E-…` and `K-…` references
+keep resolving; new unnumbered entities use the short handles above, including
+in `yak session peek '#…'` and web paths with `%23` in place of `#`.
+
 Numbers are opt in. Without `numbers()`, a graph refuses `$num` unless another
 plugin declares it. A storage adapter can instead number every entity when
 writing it, as [@yaks/sqlite](../sqlite/README.md) does with `number: true`. The

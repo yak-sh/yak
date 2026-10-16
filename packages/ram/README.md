@@ -279,7 +279,8 @@ Numbers are off by default. With `number: true`, entities receiving their own
 components receive sequential numbers starting at 1; reference-only identities
 remain unnumbered until their own components arrive. Rollback restores the
 counter. `number: { except: ['componentName'] }` leaves entities carrying those
-components unnumbered; adding an excluded component removes an existing number.
+components unnumbered at allocation. Existing numbers remain valid addresses,
+even after adding an excluded component.
 
 `adopt: true` accepts supplied `entity.num` values and stores incoming computed
 values. It never generates numbers. For a new identity, adoption requires
@@ -306,7 +307,7 @@ store.tx((tx) =>
 )
 equal(store.get(['b1', 'c1']).map((b) => b.entity.num), [1, undefined])
 store.tx((tx) => tx.patch([{ entity: { eid: 'b1' }, cache: {} }]))
-equal(store.get(['b1'])[0].entity.num, undefined)
+equal(store.get(['b1'])[0].entity.num, 1)
 const copy = ram(vocab, { number: true, adopt: true })
 copy.tx((tx) =>
   tx.patch([

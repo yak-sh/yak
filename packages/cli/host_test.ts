@@ -9,7 +9,7 @@ import type { Handler } from '@yaks/api'
 import { argsOf, type Bundle, type Comp, detached, mint } from '@yaks/graph'
 import { answerOf, CallError, toolEid } from '@yaks/tools'
 import type { VocabDoc } from '@yaks/vocab'
-import { prefixes } from '@yaks/id'
+import { idKeywords, prefixes } from '@yaks/id'
 import { kits, themes } from '@yaks/ui'
 import { ids } from '@yaks/id/graph'
 import { blobKeywords, blobRead } from '@yaks/blob'
@@ -311,6 +311,66 @@ test('a config may keep a component off the human number line', async () => {
   assertEquals(book.entity.num, 1)
   assertEquals(note.entity.num, null)
   host.close()
+})
+
+test('sessions, letters and internal records spend no task numbers', async () => {
+  let host = await compose(
+    { db: ':memory:', plugins: ['shop'], numbers: true },
+    only({
+      shop: {
+        graph: { plugins: (host) => [ids(host.vocab)] },
+        vocab: {
+          docs: [{
+            ...doc,
+            $defs: {
+              ...doc.$defs,
+              session: { component: true, kind: true, prefix: 'S' },
+              mail: { component: true, kind: true, prefix: 'E' },
+              knock: { component: true, kind: true, prefix: 'K' },
+              context_output: { component: true },
+              subscription: { component: true },
+              build: { component: true },
+              gitobj: { component: true },
+            },
+          }],
+          keywords: [idKeywords],
+        },
+      },
+    }),
+  )
+  try {
+    let session = 'a3f19c02-4b00-4000-8000-000000000001'
+    let made = await host.graph.apply([
+      { entity: { eid: session }, session: {} },
+      { entity: { eid: 'letter' }, mail: {} },
+      { entity: { eid: 'knock' }, knock: {} },
+      { entity: { eid: 'snapshot' }, context_output: {} },
+      { entity: { eid: 'watch' }, subscription: {} },
+      { entity: { eid: 'binding' }, build: {} },
+      { entity: { eid: 'blob' }, gitobj: {} },
+      { entity: { eid: 'book' }, book: { title: 'Dune' } },
+    ])
+    for (
+      let eid of [
+        session,
+        'letter',
+        'knock',
+        'snapshot',
+        'watch',
+        'binding',
+        'blob',
+      ]
+    ) {
+      assertEquals(made.find((b) => b.entity.eid == eid)?.entity.num, null)
+    }
+    assertEquals(made.find((b) => b.entity.eid == 'book')?.entity.num, 1)
+    assertEquals(
+      (await host.graph.address(['#a3f19c024b'])).get('#a3f19c024b'),
+      session,
+    )
+  } finally {
+    host.close()
+  }
 })
 
 test('a config that numbers entities and reads no number back refuses', async () => {

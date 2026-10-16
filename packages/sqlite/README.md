@@ -858,11 +858,10 @@ Exclusions inspect all patches in the admitted write, including a reference
 whose target appears later, and override other components on the same entity.
 `@yaks/ram` accepts the same policy.
 
-Adding an excluded component clears an existing number. Removing it does not
-allocate a replacement. Applications enabling exclusions on existing data must
-clear historical numbers themselves. A bare reference created in an earlier
-transaction may already have consumed a number before its eventual components
-were known.
+Exclusions govern allocation, not existing addresses. An entity that already has
+a number keeps it, even when an excluded component arrives or the store reopens
+with a new exclusion policy. References in comments, transcripts and URLs
+therefore keep resolving; new excluded entities consume no numbers.
 
 The transactional `entity_sequence` high-water mark is initialized from existing
 numbers and advanced by insert/update triggers. Clearing a number does not

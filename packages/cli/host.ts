@@ -51,6 +51,7 @@ import { machineCapabilities } from './machines.ts'
  * @module
  */
 
+import { UNNUMBERED } from './init.ts'
 import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import type { Vocab } from '@yaks/vocab'
 import {
@@ -568,7 +569,18 @@ let composed = async (
           absent: behind.absent,
           backed,
           extend,
-          number: config.numbers ?? false,
+          number: config.numbers
+            ? {
+              except: [
+                ...new Set([
+                  ...UNNUMBERED,
+                  ...typeof config.numbers == 'object'
+                    ? config.numbers.except
+                    : [],
+                ]),
+              ],
+            }
+            : false,
           adopt: config.adopt ?? false,
         })
         return store

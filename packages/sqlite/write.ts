@@ -647,11 +647,10 @@ export let patch = (
       for (let b of alive) if (b[name] != null) excluded.add(b.entity.eid)
     }
     // What a known entity already wears is asked only where it decides
-    // something: a number it has to lose, or one a bundle of its own would
-    // give it.
+    // whether a bundle of its own would give it a number.
     let asked = [...new Set(alive.map((b) => b.entity.eid))].filter((eid) => {
       let k = known.get(eid)
-      if (!k || excluded.has(eid) || (k.num == null && !own.has(eid))) {
+      if (!k || k.num != null || excluded.has(eid) || !own.has(eid)) {
         return false
       }
       // Memory answers for an entity it knows wholly: one it knows wears an
@@ -662,15 +661,8 @@ export let patch = (
       return !wears && held.some((h) => h === undefined)
     })
     for (let eid of wears(driver, tables, asked)) excluded.add(eid)
-    for (let eid of excluded) {
-      if (known.get(eid)?.num == null) continue
-      driver.query({
-        t: 'update',
-        table: 'entity',
-        set: { num: lit(null) },
-        where: and(eq(col('eid'), val(eid)), notNull(col('num'))),
-      })
-    }
+    // Exclusions govern allocation, not addresses already given out. A number
+    // in a comment, transcript or URL keeps resolving after policy changes.
   }
   // The number an entity is born with: none where the store numbers nothing or
   // the entity wears an excepted component, the stated one where the store is

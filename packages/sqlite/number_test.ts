@@ -6,6 +6,8 @@ import { ram } from '@yaks/ram'
 import { among, by, col, select, table, val } from '@yaks/sql'
 import { mem } from './testing.ts'
 import { mintSql, storage } from './mod.ts'
+import { idKeywords } from '@yaks/id'
+import { ids } from '@yaks/id/graph'
 
 let vocab = loadVocab([{
   $defs: {
@@ -43,7 +45,7 @@ for (let backend of ['sqlite', 'ram']) {
         assertEquals(tx.get(['task'])[0].entity.num, 1)
         assertEquals(tx.get(['second'])[0].entity.num, 2)
         tx.patch([{ entity: { eid: 'second' }, entry: { seq: 2 } }])
-        assertEquals(tx.get(['second'])[0].entity, { eid: 'second' })
+        assertEquals(tx.get(['second'])[0].entity, { eid: 'second', num: 2 })
         tx.patch([{ entity: { eid: 'third' }, task: {} }])
         assertEquals(tx.get(['third'])[0].entity.num, 3)
       })
@@ -90,6 +92,90 @@ for (let backend of ['sqlite', 'ram']) {
     })
   })
 }
+
+for (let backend of ['sqlite', 'ram']) {
+  test(
+    backend + ': a new exclusion keeps historic addresses through later writes',
+    () => {
+      let d = mem()
+      let s = backend == 'sqlite'
+        ? storage(d, vocab, { number: true })
+        : ram(vocab, { number: true })
+      s.install()
+      s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
+      // SQLite can reopen with a new policy; both backends can gain an excluded
+      // component on an entity already addressed by number.
+      if (backend == 'sqlite') {
+        s = storage(d, vocab, { number: { except: ['entry'] } })
+        s.install()
+      } else {
+        s = ram(vocab, { number: { except: ['entry'] } })
+        s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
+      }
+      s.tx((tx) => {
+        tx.patch([{ entity: { eid: 'old' }, entry: { seq: 1 } }])
+        tx.patch([{ entity: { eid: 'old' }, entry: { seq: 2 } }])
+        tx.patch([{ entity: { eid: 'new' }, entry: { seq: 3 } }])
+        tx.patch([{ entity: { eid: 'next' }, task: {} }])
+        assertEquals(tx.read('.entity.num=1')[0].entity.eid, 'old')
+        assertEquals(tx.get(['new'])[0].entity.num ?? null, null)
+        assertEquals(tx.get(['next'])[0].entity.num, 2)
+      })
+    },
+  )
+}
+
+test('historic session, letter and knock addresses survive a policy change and reopen', () => {
+  let v = loadVocab([{
+    $defs: {
+      entity: {
+        component: true,
+        properties: { num: { type: 'number', stamped: true } },
+      },
+      task: { component: true, kind: true },
+      session: { component: true, kind: true, prefix: 'S' },
+      mail: { component: true, kind: true, prefix: 'E' },
+      knock: { component: true, kind: true, prefix: 'K' },
+    },
+  }], [idKeywords])
+  let d = mem()
+  let old = storage(d, v, { number: true })
+  old.install()
+  old.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'old-session' }, session: {} },
+      { entity: { eid: 'old-mail' }, mail: {} },
+      { entity: { eid: 'old-knock' }, knock: {} },
+    ])
+  )
+  let s = storage(d, v, { number: { except: ['session', 'mail', 'knock'] } })
+  s.install()
+  s.tx((tx) => {
+    tx.patch([
+      { entity: { eid: 'old-session' }, session: {} },
+      { entity: { eid: 'old-mail' }, mail: {} },
+      { entity: { eid: 'old-knock' }, knock: {} },
+      { entity: { eid: 'new-session' }, session: {} },
+      { entity: { eid: 'new-mail' }, mail: {} },
+      { entity: { eid: 'new-knock' }, knock: {} },
+      { entity: { eid: 'next-task' }, task: {} },
+    ])
+    assertEquals(
+      Object.fromEntries(
+        ids(v).address!(tx, ['S-1', 'E-2', 'K-3']) as Map<string, string>,
+      ),
+      {
+        'S-1': 'old-session',
+        'E-2': 'old-mail',
+        'K-3': 'old-knock',
+      },
+    )
+    assertEquals(tx.get(['next-task'])[0].entity.num, 4)
+    for (let b of tx.get(['new-session', 'new-mail', 'new-knock'])) {
+      assertEquals(b.entity.num ?? null, null)
+    }
+  })
+})
 
 test('SQLite migration retains historic high-water across clearing and reopen', () => {
   let d = mem()

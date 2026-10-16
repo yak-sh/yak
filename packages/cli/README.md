@@ -159,6 +159,12 @@ config file.
 | `lease`    | Duty lease and effect-run claim duration in milliseconds; defaults to `30000` and `60000`.        |
 | `duties`   | Whether this process runs its duties; defaults to `true`.                                         |
 
+The CLI never allocates new numbers to sessions, letters, knocks or internal
+records (including archetype descriptors), even in an existing config using
+`numbers: true`. `except` adds to these exclusions. Existing numbers stay valid
+addresses; new unnumbered entities use @yaks/id's short handles (`#` plus ten eid
+characters), accepted by `graph show`, `session peek` and the web view.
+
 There is no default database path. `compose` throws unless `db` or `$DB_PATH` is
 present.
 

@@ -38,21 +38,38 @@ export let STARTER = [
   '@yaks/canvas',
 ]
 
-/** What nobody types a number for: the record a tool call, an effect, a lease
- * or a transcript line leaves. Numbered, they would spend the numbers a person
- * reads — a first task would be T-27. A name here no plugin declares excepts
- * nothing, so a plugin added later needs no edit here. */
+/** What nobody needs a new number for: sessions, letters, knocks and internal
+ * records. Content-addressed artifacts and Git objects already have addresses.
+ * Numbered, these would spend the numbers a person reads — a first task would
+ * be T-27. A name here no plugin declares excepts nothing. Existing numbers
+ * remain addresses; this policy only governs allocation. */
 export let UNNUMBERED = [
+  'archetype',
+  'artifact',
+  'build',
   'call',
+  'chat',
+  'context_output',
   'edge',
   'effect',
   'entry',
   'execution',
+  'file',
+  'gitobj',
+  'key',
+  'knock',
   'lease',
+  'mail',
+  'module',
   'output',
+  'package',
   'process',
+  'ref',
   'result',
   'secret',
+  'session',
+  'subscription',
+  'symbol',
   'tool',
 ]
 

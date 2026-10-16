@@ -285,11 +285,11 @@ test('a patch asks about numbering exceptions only where they decide a number', 
   assertEquals(cost([{ entity: { eid: 's' }, doc: null }]), 0)
   // Memory knows what an entity it wrote wholly wears.
   assertEquals(cost([{ entity: { eid: 'p' }, doc: { title: 'Mug' } }]), 0)
-  // A numbered entity given the exception still loses its number.
+  // A numbered entity given the exception keeps its existing address.
   write(s, [{ entity: { eid: 'p' }, shelf: { aisle: 'B', slot: 1 } }])
   assertEquals(
     s.tx((tx) => tx.get(['s', 'p'])).map((b) => b.entity.num ?? null),
-    [null, null],
+    [null, 1],
   )
 })
 

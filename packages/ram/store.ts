@@ -588,13 +588,8 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         }
         for (let b of bundles) if (b[name] != null) excluded.add(b.entity.eid)
       }
-      for (let eid of excluded) {
-        let rec = rows.get(eid)
-        if (rec && rec.entity.num != null) {
-          save(eid)
-          put(eid, { ...rec, entity: { eid } })
-        }
-      }
+      // Exclusions stop new allocations; an existing number is an address
+      // somebody may already hold, so it stays with its entity.
     }
     // An eid a reference only names gets a record to hold the pointer and no
     // number, until a bundle of its own arrives (@yaks/sqlite `patch`): one

@@ -98,13 +98,11 @@ test('a composed host finds exactly the two states we broke', async () => {
     )
 
     let claim = await ask(h, 'claim_check')
-    assert(claim.includes('T-3 is locked by S-4'), claim)
+    assert(claim.includes('is locked by #s1'), claim)
     assert(claim.includes('whose transcript stopped'), claim)
 
     let board = await ask(h, 'board_check')
-    // The numbers start at 2, not 1: this process is an entity too, and its
-    // row is the first thing composing the host writes.
-    assert(board.includes('B-7 no longer routes'), board)
+    assert(board.includes('no longer routes'), board)
     assert(board.includes('.staus=open'), board)
 
     // And the checks nothing broke still answer, rather than staying silent.
