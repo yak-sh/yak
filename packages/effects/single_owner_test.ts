@@ -6,24 +6,29 @@ import { ram } from '@yaks/ram'
 import { equal, ok, test, until } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { effects, type Opts } from './registry.ts'
-import { pooledBlog } from './testing.ts'
+import { owes, pooledBlog } from './testing.ts'
+import { effectDoc } from './pool.ts'
 
 let vocab = loadVocab([...pooledBlog.docs, {
   $defs: { boot: { effect: true, start: true } },
 }])
 let store = () => ram(vocab)
-let proc = (storage: Storage = store(), opts: Partial<Opts> = {}) => {
+let proc = (
+  storage: Storage = store(),
+  opts: Partial<Opts> = {},
+  schema = vocab,
+) => {
   let ran: string[] = []
   let errors: unknown[] = []
   let writes: Bundle[] = []
-  let fx = effects(vocab, {
+  let fx = effects(schema, {
     singleOwner: true,
     defer: true,
     write: (b) => g.apply(b, { trusted: true }),
     report: (e) => void errors.push(e),
     ...opts,
   })
-  let g = graph({ storage, vocab, plugins: [fx] })
+  let g = graph({ storage, vocab: schema, plugins: [fx] })
   let apply = g.apply
   g.apply = async (b, o) => {
     let result = await apply(b, o)
@@ -78,7 +83,19 @@ test('single owner recorded success writes only attempt and outcome, without lea
 // Joining the empty pool is fixture setup; the writes must start their own
 // runs. The birth, written at load, owes a note and a sweep; the case times a
 // change, which owes one more note, and checks every run either write owed.
-let writer = proc(store(), { defer: false })
+let writerVocab = loadVocab([effectDoc, owes, {
+  $defs: {
+    post: {
+      component: true,
+      properties: {
+        title: { type: 'string' },
+        published: { type: 'boolean' },
+      },
+    },
+    boot: { effect: true, start: true },
+  },
+}])
+let writer = proc(ram(writerVocab), { defer: false }, writerVocab)
 await writer.fx.work(writer.g)
 await writer.g.apply([post('p1')])
 await writer.fx.idle()

@@ -24,34 +24,23 @@ target entity; its pool component records its state and attempts.
 
 ## Declare an effect and handle it
 
+These introductory examples use the small [post vocabularies](./testing.ts):
+`announceExample` declares `post` (`title`, `published`) and `post_announce`
+(`created: ['post']`, `changed: ['post.published']`); `observerExample` declares
+only `post.published`. Load these declarations with `loadVocab` in an
+application.
+
 Without the `effect` component, a handled effect runs in the process that
 committed. A handler failure goes to `report` and cannot roll back the committed
 [batch](../graph/README.md#data-model).
 
 ```ts
 import { graph } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
+import { announceExample as vocab } from './testing.ts'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { equal } from '@yaks/testing'
 
-let vocab = loadVocab({
-  $defs: {
-    post: {
-      component: true,
-      properties: {
-        title: { type: 'string' },
-        published: { type: 'boolean' },
-      },
-    },
-    post_announce: {
-      effect: true,
-      created: ['post'],
-      changed: ['post.published'],
-      description: 'tell subscribers about a post',
-    },
-  },
-})
 let fx = effects(vocab)
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 let announced: string[] = []
@@ -111,16 +100,11 @@ keeps both, so a removal's row is never larger than the component it is about.
 
 ```ts
 import { graph } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
+import { observerExample as vocab } from './testing.ts'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { equal } from '@yaks/testing'
 
-let vocab = loadVocab({
-  $defs: {
-    post: { component: true, properties: { published: { type: 'boolean' } } },
-  },
-})
 let fx = effects(vocab)
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 let seen: unknown[] = []
@@ -167,16 +151,11 @@ trigger again when touched; this is not a false-to-true transition test.
 
 ```ts
 import { graph } from '@yaks/graph'
-import { loadVocab } from '@yaks/vocab'
+import { observerExample as vocab } from './testing.ts'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { equal } from '@yaks/testing'
 
-let vocab = loadVocab({
-  $defs: {
-    post: { component: true, properties: { published: { type: 'boolean' } } },
-  },
-})
 let fx = effects(vocab)
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 let matched: string[] = []

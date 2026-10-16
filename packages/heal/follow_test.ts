@@ -13,7 +13,6 @@ import { ram } from '@yaks/ram'
 import { edgeDoc, edgeEid, edgeKeywords, link } from '@yaks/edge'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
-import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
@@ -50,7 +49,7 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
 let vocab = loadVocab([
-  pick(kernelDoc, 'entity', 'created', 'updated', 'completed', 'about'),
+  pick(kernelDoc, 'entity', 'created', 'completed', 'about'),
   edgeDoc,
   pick(docDoc, 'doc'),
   pick(taskDoc, 'task', 'cancelled'),
@@ -64,12 +63,10 @@ let vocab = loadVocab([
 ], [kernelKeywords, edgeKeywords])
 
 let trackerVocab = loadVocab([
-  archetypeDoc,
   pick(
     kernelDoc,
     'entity',
     'created',
-    'updated',
     'resolved',
     'archived',
   ),
@@ -77,22 +74,42 @@ let trackerVocab = loadVocab([
   pick(trackerDoc, 'bug', 'error', 'during', 'regressed', 'taken', 'resolved'),
   pick(mailDoc, 'notified'),
 ], [kernelKeywords])
-let trackerGraph = () =>
-  graph({
-    vocab: trackerVocab,
-    storage: ram(trackerVocab, { computed }),
-    plugins: [archetypes()],
+let bareTrackerVocab = loadVocab(
+  trackerVocab.docs.map((doc) => ({
+    ...doc,
+    $defs: Object.fromEntries(
+      Object.entries(doc.$defs ?? {}).filter(([name]) => name !== 'created'),
+    ),
+  })),
+  [kernelKeywords],
+)
+let trackerGraph = (unstamped = false) => {
+  let schema = unstamped ? bareTrackerVocab : trackerVocab
+  return graph({
+    vocab: schema,
+    storage: ram(schema, { computed }),
     clock: () => '2026-10-02T00:00:10Z',
   })
+}
 
 // Assembly and seed data are fixtures, outside each timed behavior. Every test
 // owns both stores; only the vocabulary is shared.
-let fixture = async (options: Options = {}) => {
+let unstampedVocab = loadVocab(
+  vocab.docs.map((doc) => ({
+    ...doc,
+    $defs: Object.fromEntries(
+      Object.entries(doc.$defs ?? {}).filter(([name]) => name !== 'created'),
+    ),
+  })),
+  [kernelKeywords, edgeKeywords],
+)
+let fixture = async (options: Options = {}, unstamped = false) => {
+  let schema = unstamped ? unstampedVocab : vocab
   let commits: Bundle[][] = []
   let broken = false
   let g = graph({
-    vocab,
-    storage: ram(vocab),
+    vocab: schema,
+    storage: ram(schema),
     plugins: [{
       name: 'record',
       hooks: {
@@ -113,7 +130,7 @@ let fixture = async (options: Options = {}) => {
     { entity: { eid: project }, project: {} },
     { entity: { eid: other }, project: {} },
   ], { trusted: true })
-  let tracker = trackerGraph()
+  let tracker = trackerGraph(unstamped)
   let trackerCommits: Bundle[][] = []
   let trackerDown = false
   tracker.use({
@@ -195,9 +212,11 @@ let count = async (g: Graph, component: string) =>
   (await g.read(selected[component])).length
 let put = (g: Graph, bundles: Bundle[]) => g.apply(bundles, { trusted: true })
 
-let fresh = await fixture()
+let fresh = await fixture({}, true)
+let [freshBug] = await fresh.tracker.get([bug])
+let fileFresh = follow(fresh.g, fresh.config)
 test('the tracker follower files task, evidence edge and fixer atomically', async () => {
-  await fresh.replay()
+  await fileFresh(freshBug, url, (rows) => put(fresh.tracker, rows))
   let { g, tracker, commits } = fresh
   equal(commits.length, 1)
   let written = await g.get(commits[0].map((row) => row.entity.eid))
@@ -371,13 +390,15 @@ test('a completed task waits for a regression, not another occurrence', async ()
   done.close()
 })
 
-let retry = await fixture({ provider: undefined })
+let retry = await fixture({ provider: undefined }, true)
 retry.breakBox(true)
+let retryWatch = retry.config.open!(url)
 test('the service retries an unwritable box without another tracker event', async () => {
   let waits = 0
   let stop = new AbortController()
   await service(retry.host, {
     ...retry.config,
+    open: () => retryWatch,
     wait: async () => {
       if (++waits == 1) {
         equal(
@@ -448,8 +469,8 @@ test('the follower reuses a task already linked to its tracker bug', async () =>
 })
 
 // The transport uses the graph's API and sync's socket pairs, with no network.
-let remote = async () => {
-  let f = await fixture({ provider: undefined })
+let remote = async (unstamped = false) => {
+  let f = await fixture({ provider: undefined }, unstamped)
   let unavailable = false, lose = false, posts = 0
   let due: (() => void)[] = []
   let pending: Fake[] = []
@@ -470,6 +491,15 @@ let remote = async () => {
     }),
     socketTimer: () => {},
   })
+  let prepare = () => {
+    let halves = next
+    let send = halves.server.send
+    halves.server.send = (data) => frames.push(() => send(data))
+    pending.push(halves.server)
+    let upgraded = Promise.resolve(handler(request))
+    return { halves, upgraded }
+  }
+  let prepared = prepare()
   let watch = track(url, {
     fetch: async (request) => {
       if (unavailable) throw new Error('tracker is down')
@@ -479,14 +509,11 @@ let remote = async () => {
       return answer
     },
     connect: () => {
-      let halves = next
-      // A socket delivers in a later turn, independently of the HTTP response.
-      // Queue frames so an /apply test does not also time its socket echo.
-      let send = halves.server.send
-      halves.server.send = (data) => frames.push(() => send(data))
+      let { halves, upgraded } = prepared
       socket = halves.client
-      pending.push(halves.server)
-      opened = Promise.resolve(handler(request)).then(() => {
+      // Only transport assembly is prepared; opening the connection still
+      // sends the real query through the API and replaces replica membership.
+      opened = upgraded.then(() => {
         halves.server.emit('open')
         halves.client.emit('open')
       })
@@ -517,6 +544,7 @@ let remote = async () => {
     drop: () => {
       socket.close()
       next = pair()
+      prepared = prepare()
     },
     reconnect: () => due.shift()?.(),
   }
@@ -533,7 +561,7 @@ test('a disconnected tracker answer cannot file its cached bugs', async () => {
   offline.close()
 })
 
-let reconnected = await remote()
+let reconnected = await remote(true)
 reconnected.drop()
 let replacement = identityEid('bug', ['another failure'])
 await put(reconnected.tracker, [
@@ -837,7 +865,7 @@ test('the follower marks the bug only in the tracker that holds its eid', async 
   emptySeen.close()
 })
 
-let transport = await remote()
+let transport = await remote(true)
 await transport.run()
 await put(transport.g, [{
   entity: { eid: taskEid(bug) },

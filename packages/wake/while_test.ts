@@ -56,18 +56,41 @@ test('a wake goes on at the first cadence that holds, and sleeps when none does'
   assertEquals(await soonest(w.g, T0), null)
 })
 
-test('a write that makes a condition hold arms a sleeping wake, and a faster one brings it forward', async () => {
-  let w = world()
-  w.sow({})
+// Each transition owns a graph; arranging its starting state is not the act
+// under test. The prior transition's result is checked in the preceding case.
+let sleepingWorld = world()
+sleepingWorld.sow({})
+let unarmedWorld = world()
+unarmedWorld.sow({})
+unarmedWorld.plant('fern')
+let armedWorld = world()
+armedWorld.plant('fern')
+armedWorld.sow({ at: iso(T0 + 2 * HOUR) })
+let fasterWorld = world()
+fasterWorld.plant('fern')
+fasterWorld.sow({ at: iso(T0 + 2 * HOUR) })
+fasterWorld.plant('basil')
+
+test('a wake stays asleep while no condition holds', async () => {
+  let w = sleepingWorld
   assertEquals((await rouse(w.g, T0)).roused, [])
   assertEquals(w.at(), null)
-  w.plant('fern')
+})
+
+test('a newly holding condition arms a sleeping wake', async () => {
+  let w = unarmedWorld
   assertEquals((await rouse(w.g, T0)).roused.length, 1)
   assertEquals(w.at(), iso(T0 + 2 * HOUR))
-  // A slower instant never replaces a sooner one.
+})
+
+test('a slower instant never replaces a sooner one', async () => {
+  let w = armedWorld
   await rouse(w.g, T0 + 10 * MIN)
   assertEquals(w.at(), iso(T0 + 2 * HOUR))
-  w.plant('basil')
+})
+
+test('a write that makes a condition hold arms a sleeping wake, and a faster one brings it forward', async () => {
+  let w = fasterWorld
   await rouse(w.g, T0 + 10 * MIN)
   assertEquals(w.at(), iso(T0 + 40 * MIN))
 })

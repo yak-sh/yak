@@ -5,7 +5,9 @@ import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { pooledBlog } from './testing.ts'
 import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
 import { cleanupDone, settleStale } from './cleanup.ts'
+import { effectDoc } from './pool.ts'
 
 test('legacy cleanup is bounded, guarded and leaves failures and human data', async () => {
   let sql = open(':memory:')
@@ -55,21 +57,25 @@ test('legacy cleanup is bounded, guarded and leaves failures and human data', as
   }
 })
 
+// Provenance and storage numbers do not participate in stale-claim guards.
+let claimVocab = loadVocab([effectDoc, {
+  $defs: { subscriber: { component: true } },
+}])
 for (let sqlite of [true, false]) {
+  let sql = sqlite ? open(':memory:') : undefined
+  let persistent = sql ? storage(sql, claimVocab) : undefined
+  persistent?.install()
+  let db = persistent ?? ram(claimVocab)
+  let g = graph({ storage: db, vocab: claimVocab })
+  await g.apply([
+    { entity: { eid: 'worker' }, subscriber: {} },
+    {
+      entity: { eid: 'run' },
+      effect: { handler: 'post_note', state: 'pending' },
+    },
+  ], { trusted: true })
   test(`stale settlement preserves a new claim (${sqlite ? 'sqlite' : 'ram'})`, async () => {
-    let sql = sqlite ? open(':memory:') : undefined
-    let persistent = sql ? storage(sql, pooledBlog) : undefined
-    persistent?.install()
-    let db = persistent ?? ram(pooledBlog)
-    let g = graph({ storage: db, vocab: pooledBlog })
     try {
-      await g.apply([
-        { entity: { eid: 'worker' }, subscriber: {} },
-        {
-          entity: { eid: 'run' },
-          effect: { handler: 'post_note', state: 'pending' },
-        },
-      ], { trusted: true })
       let door = {
         ...g,
         apply: async (...args: Parameters<typeof g.apply>) => {

@@ -136,12 +136,32 @@ test('retry puts a failed run back to the pool, which then finishes it', async (
   assertEquals(landed, 1)
 })
 
-let droppedRuns = await mixed()
+// Each door has its own seeded pool; only the transition under test is timed.
+let dropPool = async () => {
+  let g = graph({ storage: ram(retryVocab), vocab: retryVocab })
+  await g.apply(
+    (await (await mixed()).read('.effect')).map((b) => ({
+      entity: { eid: b.entity.eid },
+      effect: b.effect,
+    })),
+    { trusted: true },
+  )
+  return g
+}
+let droppedFailed = await dropPool()
+let droppedOrphan = await dropPool()
+await door(droppedOrphan, 'effect_drop', 'r0')
 
-test('drop deletes a failed run and an orphan, and the check stops naming them', async () => {
-  let g = droppedRuns
+test('drop deletes a failed run without hiding the orphan', async () => {
+  let g = droppedFailed
   assert((await checkup(g, pooledBlog)).body.includes('no plugin declares'))
   assert((await door(g, 'effect_drop', 'r0')).startsWith('dropped 1'))
+  assertEquals(await row(g, 'r0'), undefined)
+  assert((await checkup(g, pooledBlog)).body.includes('no plugin declares'))
+})
+
+test('drop deletes a failed run and an orphan, and the check stops naming them', async () => {
+  let g = droppedOrphan
   assert((await door(g, 'effect_drop', 'gone')).startsWith('dropped 1'))
   assertEquals((await checkup(g, pooledBlog)).level, undefined)
 })

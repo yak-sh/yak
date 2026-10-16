@@ -93,3 +93,27 @@ export let blogGraph = (
   plugins: Options['plugins'] = [],
   vocab: Vocab = blog,
 ): Graph => graph({ storage: ram(vocab, { number: true }), vocab, plugins })
+
+/** The small post vocabularies used in the introductory README examples. */
+export let observerExample = loadVocab({
+  $defs: {
+    post: { component: true, properties: { published: { type: 'boolean' } } },
+  },
+})
+export let announceExample = loadVocab({
+  $defs: {
+    post: {
+      component: true,
+      properties: {
+        title: { type: 'string' },
+        published: { type: 'boolean' },
+      },
+    },
+    post_announce: {
+      effect: true,
+      created: ['post'],
+      changed: ['post.published'],
+      description: 'tell subscribers about a post',
+    },
+  },
+})

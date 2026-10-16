@@ -136,16 +136,7 @@ let cron = (every: string, tz: string): Cron | null => {
  * twice in autumn fires once, at the first occurrence. These are Croner's
  * existing calendar semantics.
  *
- * ```ts
- * import { assertEquals } from '@std/assert'
- * import { recur } from './every.ts'
- *
- * let t = Date.parse('2026-03-08T05:00:00Z')
- * assertEquals(
- *   recur('30 2 * * * America/New_York', t, t),
- *   Date.parse('2026-03-08T07:30:00Z'), // 03:30, because 02:30 is missing
- * )
- * ```
+ * A calendar reused from the preceding day still resolves the DST gap:
  *
  * @param every the recurrence: a duration, a cron line, or a `@` shorthand
  * @param from the instant a duration counts from (a cron line ignores it)
@@ -155,6 +146,10 @@ let cron = (every: string, tz: string): Cron | null => {
  * @returns the instant, in epoch milliseconds, or `null` if `every` cannot be
  * parsed
  */
+/// let t = Date.parse('2026-03-08T05:00:00Z')
+/// let calendar = '30 2 * * * America/New_York'
+/// recur(calendar, t - 86400_000, t - 86400_000)
+/// recur(calendar, t, t) -> Date.parse('2026-03-08T07:30:00Z')
 export let recur = (
   every: string,
   from: number,

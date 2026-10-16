@@ -75,13 +75,33 @@ export let due = (
  * a cron line is evaluated against the calendar. See
  * {@link https://jsr.io/@yaks/wake/doc/~/recur | recur}.
  *
+ * A fixed duration counts from the supplied instant:
+ *
  * ```ts
  * import { assertEquals } from '@std/assert'
  * import { next } from '@yaks/wake'
  *
  * let from = Date.parse('2026-01-01T09:00:00Z')
  * assertEquals(next('1d', from), '2026-01-02T09:00:00.000Z')
+ * ```
+ *
+ * A cron line reads its named calendar:
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { next } from '@yaks/wake'
+ *
+ * let from = Date.parse('2026-01-01T09:00:00Z')
  * assertEquals(next('@daily', from, 'America/Detroit'), '2026-01-02T05:00:00.000Z')
+ * ```
+ *
+ * A one-shot has no next instant:
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { next } from '@yaks/wake'
+ *
+ * let from = Date.parse('2026-01-01T09:00:00Z')
  * assertEquals(next({ at: '2026-01-01T09:00:00Z' }, from), null)
  * ```
  */

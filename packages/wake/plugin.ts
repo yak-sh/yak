@@ -51,21 +51,19 @@ export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
  * The wake plugin: the `wake` and `fired` components, and the two hooks
  * above.
  *
- * ```ts
- * import { loadVocab } from '@yaks/vocab'
- * import { graph } from '@yaks/graph'
- * import { ram } from '@yaks/ram'
- * import { wakeDoc, wakes } from '@yaks/wake'
- *
- * let vocab = loadVocab([wakeDoc])
- * let g = graph({ storage: ram(vocab), vocab, plugins: [wakes()] })
- * g.apply([{ entity: { eid: 'w1' }, wake: { every: '@daily', note: 'water the plants' } }])
- * ```
- *
  * The application calls `tick(graph, now)` to fire due wakes. Rules matching
  * `.wake, *fired` run in their declared phases; the driver itself calls no
  * handler.
  */
+/// let { loadVocab } = await import('@yaks/vocab')
+/// let { graph } = await import('@yaks/graph')
+/// let { ram } = await import('@yaks/ram')
+/// let { wakeDoc } = await import('./comp.ts')
+/// let vocab = loadVocab([wakeDoc])
+/// let now = () => Date.parse('2026-01-01T09:17:00Z')
+/// let storage = ram(vocab)
+/// let g = graph({ storage, vocab, plugins: [wakes({ now })] })
+/// (await g.apply([{ entity: { eid: 'w1' }, wake: { every: '@daily', note: 'water the plants' } }]))[0].wake.at -> '2026-01-02T00:00:00.000Z'
 export let wakes = (opts: Opts = {}): Plugin => ({
   name: '@yaks/wake',
   admission: () => true,
