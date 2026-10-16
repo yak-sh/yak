@@ -19,11 +19,9 @@
 import { type Bundle, mint } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { client } from './client.ts'
-import { standaloneMain } from '../../bench/standalone.ts'
 
-if (import.meta.main) {
-  await standaloneMain('client-frame')
-} else {
+/** The same bounded world and frame in Deno and a throwaway browser. */
+export function frameFixture() {
   let num = { type: 'number' }
   let text = { type: 'string' }
   let vocab = loadVocab([{
@@ -161,16 +159,23 @@ if (import.meta.main) {
 
   // One frame of the loop. Each part is what a game does every frame; together
   // they are the graph's whole bill for that frame.
-  let frame = () => {
+  let frame = (shape: 'game' | 'batch' | 'alone' = 'game') => {
     tick++
-    c.mutate([move(me, 0.1)])
-    c.mutate(players.slice(1).map((eid) => move(eid, 0.2)))
-    c.mutate(
-      busy().map((eid, i): Bundle => ({
-        ...move(eid, 0.05),
-        ...i < HURT ? { health: { hp: (tick + i) % 21 } } : {},
-      })),
-    )
+    let local = [move(me, 0.1)]
+    let peers = players.slice(1).map((eid) => move(eid, 0.2))
+    let simulation = busy().map((eid, i): Bundle => ({
+      ...move(eid, 0.05),
+      ...i < HURT ? { health: { hp: (tick + i) % 21 } } : {},
+    }))
+    if (shape == 'game') {
+      c.mutate(local)
+      c.mutate(peers)
+      c.mutate(simulation)
+    } else if (shape == 'batch') {
+      c.mutate([...local, ...peers, ...simulation])
+    } else {
+      for (let bundle of [...local, ...peers, ...simulation]) c.mutate([bundle])
+    }
     let p = where.get(me)!
     let near = c.read(`.creature&${around(p, 16)}&?health`)
     let loot = c.read(`.item&${around(p, 4)}`)
@@ -179,36 +184,114 @@ if (import.meta.main) {
       watches.reduce((n, w) => n + w.value.length, 0)
   }
 
-  Deno.bench(
-    `frame: 50k-entity world, 208 bundles, 3 reads, ${watches.length} watches`,
-    () => {
-      frame()
+  return {
+    frame,
+    watches: watches.length,
+    verify: () => {
+      let rows = c.graph.get([...players, ...creatures]) as Bundle[]
+      if (rows.length != PLAYERS + CREATURES) throw new Error('Lost movers')
+      for (let row of rows) {
+        let expected = where.get(row.entity.eid)!
+        let position = row.pos as { x: number; z: number } | undefined
+        if (position?.x != expected.x || position?.z != expected.z) {
+          throw new Error(`Position did not change: ${row.entity.eid}`)
+        }
+      }
+      if (c.read('.entity').length != world.length) {
+        throw new Error('World grew')
+      }
     },
-  )
+    parts: {
+      'part: one patch (the local player steps)': () =>
+        c.mutate([move(me, 0.1)]),
+      'part: a 200-bundle batch (the simulation)': () => {
+        tick++
+        c.mutate(busy().map((eid) => move(eid, 0.05)))
+      },
+      'part: what is near (range over creatures)': () =>
+        c.read(`.creature&${around(where.get(me)!, 16)}`),
+      'part: what lies at its feet (range over items)': () =>
+        c.read(`.item&${around(where.get(me)!, 4)}`),
+      'part: what a player carries (a reference)': () =>
+        c.read(`.carried.by=${me}&?item`),
+      'part: what is alive (a property over one component)': () =>
+        c.read('.creature&.health.hp>0'),
+    },
+    close: () => {
+      c.close()
+      console.error(`watch notifications: ${heard}`)
+    },
+  }
+}
 
-  // The parts, apart: which share of a frame each one costs.
-  Deno.bench('part: one patch (the local player steps)', () => {
-    c.mutate([move(me, 0.1)])
-  })
-  Deno.bench('part: a 200-bundle batch (the simulation)', () => {
-    tick++
-    c.mutate(busy().map((eid) => move(eid, 0.05)))
-  })
-  Deno.bench('part: what is near (range over creatures)', () => {
-    c.read(`.creature&${around(where.get(me)!, 16)}`)
-  })
-  Deno.bench('part: what lies at its feet (range over items)', () => {
-    c.read(`.item&${around(where.get(me)!, 4)}`)
-  })
-  Deno.bench('part: what a player carries (a reference)', () => {
-    c.read(`.carried.by=${me}&?item`)
-  })
-  Deno.bench('part: what is alive (a property over one component)', () => {
-    c.read('.creature&.health.hp>0')
-  })
+/** Per-frame tails, without Deno's adaptive grouping or world construction.
+ * A fresh deterministic world per repeat keeps comparisons like for like.
+ * Values change every frame; coordinates wrap and entity count stays bounded.
+ */
+export function frameDistribution(
+  warmup = 100,
+  count = 300,
+  shape: 'game' | 'batch' | 'alone' = 'game',
+) {
+  let f = frameFixture()
+  try {
+    for (let i = 0; i < warmup; i++) f.frame(shape)
+    let samples = Array.from({ length: count }, () => {
+      let start = performance.now()
+      f.frame(shape)
+      return performance.now() - start
+    })
+    f.verify()
+    let sorted = samples.toSorted((a, b) => a - b)
+    let at = (p: number) => sorted[Math.ceil(count * p) - 1]
+    return {
+      unit: 'ms/frame',
+      shape,
+      count,
+      warmup,
+      watches: f.watches,
+      median: at(.5),
+      p95: at(.95),
+      p99: at(.99),
+      max: sorted[count - 1],
+      samples,
+    }
+  } finally {
+    f.close()
+  }
+}
 
-  addEventListener('unload', () => {
-    c.close()
-    console.error(`watch notifications: ${heard}`)
-  })
+if (typeof Deno != 'undefined') {
+  if (import.meta.main) {
+    if (Deno.args.includes('--distribution')) {
+      let shape: 'game' | 'batch' | 'alone' = Deno.args.includes('--alone')
+        ? 'alone'
+        : Deno.args.includes('--batch')
+        ? 'batch'
+        : 'game'
+      console.log(
+        JSON.stringify(
+          Array.from({ length: 3 }, () => frameDistribution(100, 300, shape)),
+        ),
+      )
+    } else {
+      await (await import('../../bench/standalone.ts')).standaloneMain(
+        'client-frame',
+      )
+    }
+  } else {
+    let f = frameFixture()
+    Deno.bench(
+      `frame: 50k-entity world, 208 bundles, 3 reads, ${f.watches} watches`,
+      () => {
+        f.frame()
+      },
+    )
+    for (let [name, fn] of Object.entries(f.parts)) {
+      Deno.bench(name, () => {
+        fn()
+      })
+    }
+    addEventListener('unload', f.close)
+  }
 }

@@ -233,6 +233,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
     return got
   }
+  let hasUnique = vocab.all.some((name) =>
+    vocab.indexes(name).some((i) => i.unique)
+  )
   let uniqueKey = (
     b: Bundle | undefined,
     comp: string,
@@ -272,11 +275,13 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let checks: Unique[] = []
     // Components are immutable; their unique keys stay held by the same eid
     // when another component changes. Row-bearing indexes still move below.
-    for (let comp in was) {
-      if (was[comp] !== b?.[comp]) checks.push(...uniqueOf(comp))
-    }
-    for (let comp in b) {
-      if (!was || !(comp in was)) checks.push(...uniqueOf(comp))
+    if (hasUnique) {
+      for (let comp of Object.keys(was ?? {})) {
+        if (was![comp] !== b?.[comp]) checks.push(...uniqueOf(comp))
+      }
+      for (let comp of Object.keys(b ?? {})) {
+        if (!was || !(comp in was)) checks.push(...uniqueOf(comp))
+      }
     }
     for (let { comp, index, held } of checks) {
       let key = uniqueKey(b, comp, index.props, index.present)
@@ -295,12 +300,12 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       if (to !== undefined) held.set(to, eid)
     }
     if (was) {
-      for (let name in was) {
+      for (let name of Object.keys(was)) {
         if (name != 'entity' && !(b && name in b)) worn.get(name)?.delete(eid)
       }
     }
     if (b) {
-      for (let name in b) {
+      for (let name of Object.keys(b)) {
         if (name == 'entity') continue
         let at = worn.get(name)
         if (!at) worn.set(name, at = new Map())
@@ -387,8 +392,24 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
   }
 
-  let isRef = (comp: string, prop: string) =>
-    vocab.prop(comp, prop)?.category == 'ref'
+  // Resolve storage policy once per component, not on every moving cell.
+  // The vocabulary belongs to this store and is fixed for its lifetime.
+  let cells = new Map<string, { refs: Set<string>; kept: Set<string> }>()
+  let cellsOf = (comp: string) => {
+    let held = cells.get(comp)
+    if (!held) {
+      let refs = new Set<string>()
+      let kept = new Set<string>()
+      for (let name of vocab.props(comp)) {
+        let prop = vocab.prop(comp, name)!
+        if (prop.category == 'ref') refs.add(name)
+        if (!prop.computed || base.adopt) kept.add(name)
+      }
+      cells.set(comp, held = { refs, kept })
+    }
+    return held
+  }
+  let isRef = (comp: string, prop: string) => cellsOf(comp).refs.has(prop)
 
   // The properties of a patch this vocabulary stores. A component whose patch
   // names none is still a component: its presence is the fact. A store that
@@ -419,16 +440,18 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     return out
   }
 
+  // A mirror also keeps computed values its source sent. Bytes retain the
+  // storage boundary's by-value ownership.
   let stored = (comp: string, patch: Comp): Comp => {
     let out: Comp = {}
+    let kept = cellsOf(comp).kept
     for (let p in patch) {
-      let prop = vocab.prop(comp, p)
-      if (prop && (!prop.computed || base.adopt)) {
-        let value = patch[p]
-        out[p] = prop.scalar == 'binary' && value instanceof Uint8Array
+      if (!kept.has(p)) continue
+      let value = patch[p]
+      out[p] =
+        value instanceof Uint8Array && vocab.prop(comp, p)?.scalar == 'binary'
           ? value.slice()
           : value
-      }
     }
     return out
   }
@@ -682,13 +705,16 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let get = (eids: Eid[], names?: string[], opts: ReadOpts = {}): Bundle[] => {
     let cut = only(names ? new Set(names) : null)
     let out: Bundle[] = []
-    let among = visible(opts) as Index
+    // Plain committed gets need neither a matcher view nor its closures.
+    let among = opts.visibility || statuses.length || derived.length
+      ? visible(opts) as Index
+      : undefined
     let scoped = opts.visibility
-      ? new Map(among.list.map((b) => [b.entity.eid, b as Bundle]))
+      ? new Map(among!.list.map((b) => [b.entity.eid, b as Bundle]))
       : rows
     for (let eid of eids) {
       let rec = scoped.get(eid)
-      if (rec) out.push(detached(cut(computed(rec, among))))
+      if (rec) out.push(detached(cut(among ? computed(rec, among) : rec)))
     }
     return out
   }
