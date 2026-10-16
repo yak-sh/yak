@@ -144,3 +144,42 @@ profiles, raw runs, paired ranges and limitations:
   is explicitly a manual integration probe, not a slow new budget case.
 - Changed TypeScript, including tests and the probe, passes `deno check`, lint
   and formatting; generated content is current. No budget allowance added.
+
+## Landed result: no demonstrated total-startup improvement
+
+Landed code **448d3d43b5a9406a5fbae397c99a4c270c465ceb** with `yak land`.
+Cloudflare version **e17c9d76-aa72-4aec-ba86-3e85557a36d1** was live at 100% at
+11:34:26 UTC on October 16, 2026. Its own startup record is **128 ms**. The
+immediate pre-land parent `8c80d25178d2395ba02a224042740e936e8fd508` (version
+`94b4fd41-e11b-4848-8844-e91cbd66b738`) records **102 ms**: **+26 ms, not an
+improvement**. Against this task's starting `0b06fed8114` record of 160 ms it is
+-32 ms, but intervening documentation/content deploys make that an uncontrolled
+comparison. These are n=1 stored records, not statistically comparable medians.
+
+The final built-entry local run, alternating exact immediate parent versus
+landed code for 15 fresh workerd instances each, measured:
+
+| Build                        | Min / median / max ready ms |
+| ---------------------------- | --------------------------: |
+| Immediate parent `8c80d2517` |    1092.2 / 1286.9 / 1877.7 |
+| Landed `448d3d43b`           |    1130.5 / 1274.2 / 1711.3 |
+
+Median paired candidate-minus-parent was **+29.6 ms**; candidate faster only
+5/15 times. Therefore the 12.7 ms difference of medians is **not evidence of a
+speedup**. A separate seven-round final-versus-starting-checkout run also showed
+no benefit (1182.3 → 1205.3 ms direct-ready; deferred import 130.3 → 131.2 ms).
+The earlier prototype's apparent saving did not reproduce.
+
+The useful delivered guarantee is demand-driven optional-facet evaluation,
+proved in a real single bundle, without weakening clash/rollback behavior;
+**this task has not made the kernel materially faster**. Most optional facets
+are small JSON declarations and their dependencies can remain reachable through
+other imports. Keep the measured follow-ups separate, and do not treat this as
+resolving T-125631's cold miss or deciding T-124087's split.
+
+Raw final evidence: `final-{direct,local}.jsonl`, `land-paired-direct.jsonl`,
+`cloudflare/captures/*-candidate/` and `*-baseline-parent/`,
+`deploys-after.txt`, `errors-after.txt`, under `/home/yaks/bench-T-125212/`.
+Admin checks showed 0 current occurrences/bugs and 0 unresolved tracker bugs.
+After rebase, the combined budget rerun passed 214 Deno cases plus the Site
+workerd case; generated content still checked clean.
