@@ -22,10 +22,16 @@ test('D1 round-trips a byte view and an empty BLOB through its native bindings',
     Uint8Array.of(0, 255, 128),
     new Uint8Array(),
   ])
+})
+
+test('D1 filters a byte value through its native bindings', async () => {
   assertEquals(
     (await s.read('.document.bytes=AP+A')).map((b) => b.entity.eid),
     ['full'],
   )
+})
+
+test('D1 projects byte values and empty BLOBs through its native bindings', async () => {
   assertEquals(await s.rows('.document .fields=document.bytes'), [
     { eid: 'full', 'document.bytes': Uint8Array.of(0, 255, 128) },
     { eid: 'empty', 'document.bytes': new Uint8Array() },

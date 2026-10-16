@@ -98,11 +98,19 @@ export let binaryCases = (make: () => Store): void => {
   put(filters, 'c', Uint8Array.of(255))
   put(filters, 'empty', new Uint8Array())
   put(filters, 'null', null)
-  test('binary equality, inequality and lists compare base64 operands by bytes', () => {
-    assertEquals(ids(filters, '.document.bytes=AP+A'), ['a'])
-    assertEquals(ids(filters, '.document.bytes=AP8='), ['b'])
-    assertEquals(ids(filters, '.document.bytes=AP8'), ['b'])
-    assertEquals(ids(filters, '.document.bytes=AP+A,/w=='), ['a', 'c'])
+  for (
+    let [operand, expected] of [
+      ['AP+A', ['a']],
+      ['AP8=', ['b']],
+      ['AP8', ['b']],
+      ['AP+A,/w==', ['a', 'c']],
+    ] as const
+  ) {
+    test(`binary equality and lists compare ${operand} by bytes`, () => {
+      assertEquals(ids(filters, `.document.bytes=${operand}`), [...expected])
+    })
+  }
+  test('binary inequality compares base64 operands by bytes', () => {
     assertEquals(ids(filters, '.document.bytes!=AP8='), [
       'a',
       'c',
@@ -110,22 +118,26 @@ export let binaryCases = (make: () => Store): void => {
       'null',
     ])
   })
-  test('binary query operands refuse malformed base64 and text operations', () => {
-    for (let operand of ['%', 'A', 'AP9=', 'AP8===']) {
+  for (let operand of ['%', 'A', 'AP9=', 'AP8===']) {
+    test(`binary query operands refuse malformed base64 ${operand}`, () => {
       assertThrows(
         () => filters.read(`.document.bytes=${operand}`),
         Error,
         'base64',
       )
-    }
-    for (
-      let query of [
-        '.document.bytes~=AP8=',
-        '.document.bytes<AP8=',
-        '.document.bytes=AA==..AQ==',
-      ]
-    ) assertThrows(() => filters.read(query), Error, 'cannot compile')
-  })
+    })
+  }
+  for (
+    let query of [
+      '.document.bytes~=AP8=',
+      '.document.bytes<AP8=',
+      '.document.bytes=AA==..AQ==',
+    ]
+  ) {
+    test(`binary query operands refuse text operation ${query}`, () => {
+      assertThrows(() => filters.read(query), Error, 'cannot compile')
+    })
+  }
 
   let aggregates = make()
   put(aggregates, 'a', Uint8Array.of(255))
@@ -133,7 +145,7 @@ export let binaryCases = (make: () => Store): void => {
   put(aggregates, 'c', Uint8Array.of(0, 255))
   put(aggregates, 'empty', new Uint8Array())
   put(aggregates, 'null', null)
-  test('binary ordering and aggregates retain byte values and content identity', () => {
+  test('binary ordering retains byte values and content identity', () => {
     assertEquals(ids(aggregates, '.document .order=document.bytes'), [
       'null',
       'empty',
@@ -141,11 +153,15 @@ export let binaryCases = (make: () => Store): void => {
       'b',
       'a',
     ])
+  })
+  test('binary distinct retains byte values and content identity', () => {
     assertEquals(aggregates.rows('.document .distinct=document.bytes'), [
       { value: new Uint8Array() },
       { value: Uint8Array.of(0, 255) },
       { value: Uint8Array.of(255) },
     ])
+  })
+  test('binary tally retains byte values and content identity', () => {
     assertEquals(aggregates.rows('.document .tally=document.bytes'), [
       { value: new Uint8Array(), n: 1 },
       { value: Uint8Array.of(0, 255), n: 2 },
@@ -187,9 +203,22 @@ export let binaryCases = (make: () => Store): void => {
     )
   })
 
+  let visible = make()
+  put(visible, 'a', Uint8Array.of(0, 255))
+  test('binary writes are visible in their transaction', () => {
+    visible.tx((tx) => {
+      tx.patch([{
+        entity: { eid: 'a' },
+        document: { bytes: Uint8Array.of(128) },
+      }])
+      assertEquals(bytes(tx.get(['a'])[0]), Uint8Array.of(128))
+      assertEquals(bytes(tx.read('.document')[0]), Uint8Array.of(128))
+    })
+  })
+
   let rollback = make()
   put(rollback, 'a', Uint8Array.of(0, 255))
-  test('binary writes are visible in their transaction and roll back on failure', () => {
+  test('binary writes roll back on failure', () => {
     assertThrows(
       () =>
         rollback.tx((tx) => {
@@ -197,8 +226,6 @@ export let binaryCases = (make: () => Store): void => {
             entity: { eid: 'a' },
             document: { bytes: Uint8Array.of(128) },
           }])
-          assertEquals(bytes(tx.get(['a'])[0]), Uint8Array.of(128))
-          assertEquals(bytes(tx.read('.document')[0]), Uint8Array.of(128))
           throw new Error('rollback bytes')
         }),
       Error,

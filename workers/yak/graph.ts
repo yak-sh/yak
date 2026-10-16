@@ -224,7 +224,8 @@ import {
   retired,
 } from '@yaks/query'
 import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
-import { BINARY, decode as fromWire, stringify, unpack } from '@yaks/vocab/wire'
+import { decode as fromWire, stringify } from '@yaks/vocab/wire'
+import { binaryRequest, isBinaryApply } from './binary.ts'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import type { Runner } from '@yaks/tools'
@@ -3307,20 +3308,10 @@ export class Store {
         let leave = await this.#enter(base != null)
         let answer: Response
         try {
-          if (
-            request.headers.get('content-type')?.split(';')[0].trim() ==
-              BINARY &&
-            new URL(request.url).pathname == '/apply'
-          ) {
+          if (isBinaryApply(request)) {
             let no = await this.#ready(request)
             if (no) return no
-            let packed = unpack(await request.arrayBuffer())
-            let body = stringify(
-              fromWire(this.#vocab, packed.value, packed.payload),
-            )
-            let headers = new Headers(request.headers)
-            headers.set('content-type', 'application/json')
-            request = new Request(request, { headers, body })
+            request = await binaryRequest(request, this.#vocab)
           }
           if (logged(request)) answer = await this.#write(request)
           else {

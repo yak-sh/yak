@@ -28,11 +28,12 @@ let vocab = loadVocab({
   },
 })
 let make = () => graph({ vocab, storage: ram(vocab) })
-let http = make(), streamed = make(), socketGraph = make()
+let streamed = make()
 let expected = new Uint8Array([0, 255, 128])
 let tag = { $bytes: '00ff80', encoding: 'hex' }
 
 for (let data of ['AP+A', { $bytes: 'AP+A', encoding: 'base64' }, tag]) {
+  let http = make()
   test(`HTTP binary apply/query roundtrip ${JSON.stringify(data)}`, async () => {
     let handler = api({ graph: http })
     let res = await handler(req('/apply', {
@@ -68,39 +69,60 @@ test('NDJSON apply emits binary values and preserves literal JSON tags', async (
   equal(row.payload.json, tag)
 })
 
-test('socket relay accepts hex/base64, subscription sends bytes, JSON tags remain objects', async () => {
-  await socketGraph.apply([{
+let socketFixture = async () => {
+  let g = make()
+  await g.apply([{
     entity: { eid: 'p' },
     payload: { data: expected, json: tag },
   }])
-  let subs = subscriptions(socketGraph)
+  let subs = subscriptions(g)
   let reader = fake(), writer = fake()
   let due: (() => void)[] = []
   attach(subs, reader, (fn) => due.push(fn))
   attach(subs, writer, (fn) => due.push(fn))
-  reader.emit(
-    'message',
-    JSON.stringify({ id: 's', subscribe: '.payload&?motion' }),
-  )
-  equal(reader.sent[0].bundles?.[0].payload, {
-    data: { $bytes: 'AP+A', encoding: 'base64' },
-    json: tag,
-  })
-  for (let data of [tag, { $bytes: 'AP+A', encoding: 'base64' }]) {
-    writer.emit(
-      'message',
-      JSON.stringify({ relay: [{ entity: { eid: 'p' }, motion: { data } }] }),
-    )
-    await subs.check()
-    while (due.length) due.shift()!()
-    let frame = reader.taken().findLast((f) => f.relay?.length)
-    equal(frame?.relay?.[0].motion, {
-      data: { $bytes: 'AP+A', encoding: 'base64' },
-    })
+  let subscribe = JSON.stringify({ id: 's', subscribe: '.payload&?motion' })
+  let close = () => {
+    reader.emit('close')
+    writer.emit('close')
   }
-  reader.emit('close')
-  writer.emit('close')
+  return { subs, reader, writer, due, subscribe, close }
+}
+
+let subscribing = await socketFixture()
+test('socket subscription sends bytes and leaves JSON tags as objects', () => {
+  let { reader, subscribe, close } = subscribing
+  try {
+    reader.emit('message', subscribe)
+    equal(reader.sent[0].bundles?.[0].payload, {
+      data: { $bytes: 'AP+A', encoding: 'base64' },
+      json: tag,
+    })
+  } finally {
+    close()
+  }
 })
+
+for (let data of [tag, { $bytes: 'AP+A', encoding: 'base64' }]) {
+  let { subs, reader, writer, due, subscribe, close } = await socketFixture()
+  reader.emit('message', subscribe)
+  reader.taken()
+  let message = JSON.stringify({
+    relay: [{ entity: { eid: 'p' }, motion: { data } }],
+  })
+  test(`socket relay accepts ${data.encoding} and subscription sends bytes`, async () => {
+    try {
+      writer.emit('message', message)
+      await subs.check()
+      while (due.length) due.shift()!()
+      let frame = reader.taken().findLast((f) => f.relay?.length)
+      equal(frame?.relay?.[0].motion, {
+        data: { $bytes: 'AP+A', encoding: 'base64' },
+      })
+    } finally {
+      close()
+    }
+  })
+}
 
 let rawHttp = make()
 test('HTTP raw binary body lands bytes and rejects invalid references before apply', async () => {
@@ -130,11 +152,12 @@ test('HTTP raw binary body lands bytes and rejects invalid references before app
   equal(await rawHttp.get(['bad']), [])
 })
 
+let rawSocketGraph = make()
+let rawSubs = subscriptions(rawSocketGraph)
+let rawSocket = fake()
+attach(rawSubs, rawSocket)
 test('socket binary ArrayBuffer relay decodes raw bytes and refuses invalid references', async () => {
-  let g = make()
-  let subs = subscriptions(g)
-  let socket = fake()
-  attach(subs, socket)
+  let subs = rawSubs, socket = rawSocket
   socket.emit(
     'message',
     binary({ relay: [{ entity: { eid: 'raw' }, motion: { data: expected } }] })
