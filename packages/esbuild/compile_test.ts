@@ -231,6 +231,9 @@ let counter = (v: number) => ({
   'more.js': "export { state as more } from './index.js'",
 })
 let npm = async () => {
+  // The timing assertions below measure cold analysis, even when the runner
+  // loads this module twice in one compiler process.
+  let entry = `main-${crypto.randomUUID()}.ts`
   let { get } = registry({
     counter: { '1.0.0': counter(1), '2.0.0': counter(2) },
   })
@@ -259,9 +262,9 @@ let npm = async () => {
           'package.json': JSON.stringify({
             dependencies: { '@yaks/stage': 'platform', counter: version },
           }),
-          'main.ts': main,
+          [entry]: main,
         },
-        pages: ['main.ts'],
+        pages: [entry],
       },
       stage,
       'https://yaks.app',
@@ -275,8 +278,8 @@ let npm = async () => {
   ok(first.timing!.carried > 0)
   ok(first.timing!.used > 0)
   ok(first.timing!.hits + first.timing!.misses > 0)
-  equal((await run(first.pages['main.ts'], first.shared)).one, 1)
-  let got = await run(second.pages['main.ts'], second.shared)
+  equal((await run(first.pages[entry], first.shared)).one, 1)
+  let got = await run(second.pages[entry], second.shared)
   equal([got.one, got.keys], [2, ['idle', 'state']])
   equal(Object.keys(first.shared!).filter((path) => path in second.shared!), [])
   let emitted = (shared: Answer['shared']) =>
