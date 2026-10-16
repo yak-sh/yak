@@ -1,3 +1,5 @@
+import { stringify } from '@yaks/vocab/wire'
+
 // The vault a browser has: one IndexedDB object store, keyed by eid, holding
 // one record per entity that has a browser-owned component.
 //
@@ -110,7 +112,7 @@ export let idb = (opts: IdbOpts = {}): Vault => {
         req.onsuccess = () => {
           let current = req.result
           if (!current) return
-          if (JSON.stringify(current) == JSON.stringify(row)) {
+          if (stringify(current) == stringify(row)) {
             table.delete(row.eid)
           } else changed.push(current)
         }

@@ -1,10 +1,11 @@
-import { typesOf } from './vocab.ts'
+import { isBinary, typesOf } from './vocab.ts'
 import type { PropSchema, VocabDoc } from './types.ts'
 
 /** Whether two declarations speak the same type and format, ignoring prose
  * and keyword changes. Type unions are sets, not ordered lists. */
 export let same = (a: PropSchema, b: PropSchema): boolean =>
   a.format == b.format &&
+  isBinary(a) == isBinary(b) &&
   typesOf(a).sort().join() == typesOf(b).sort().join()
 
 /** The words another document drops, adds or retypes. A whole definition is

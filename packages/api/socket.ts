@@ -9,6 +9,7 @@
 // runtime, and a subscription opened on that first tick would otherwise throw
 // while sending its own initial result.
 
+import { decode as fromWire, stringify, unpack } from '@yaks/vocab/wire'
 import { fault, refusal } from './refuse.ts'
 import { isPromise } from '@yaks/fp'
 import { during, peek, scope } from '@yaks/trace'
@@ -58,7 +59,7 @@ let gates = new WeakMap<Subs, WeakMap<Sink, ReturnType<typeof admission>>>()
  * can use the decoded shape to route its own work without parsing it again. */
 export type Incoming =
   | { error: unknown; id?: string }
-  | { value: unknown }
+  | { value: unknown; payload?: Uint8Array }
 
 // A refusal must name the request even when its query is too large to parse.
 // Scan without copying the payload, and decode only bounded top-level ids.
@@ -103,6 +104,8 @@ export let decode = (data: unknown): Incoming => {
       new TextEncoder().encode(raw).byteLength > MAX_MESSAGE
     : data instanceof ArrayBuffer
     ? data.byteLength > MAX_MESSAGE
+    : data instanceof Uint8Array
+    ? data.byteLength > MAX_MESSAGE
     : data instanceof Blob && data.size > MAX_MESSAGE
   if (large) {
     let error = new Error(`socket message exceeds ${MAX_MESSAGE} bytes`)
@@ -110,8 +113,11 @@ export let decode = (data: unknown): Incoming => {
     return { error, id: raw === undefined ? undefined : requestId(raw) }
   }
   try {
+    if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+      return unpack(data)
+    }
     if (raw === undefined) {
-      throw new SyntaxError('expected a text socket message')
+      throw new SyntaxError('expected a text or binary socket message')
     }
     return { value: JSON.parse(raw) }
   } catch (error) {
@@ -132,7 +138,7 @@ export let clockReply = (
   if (!value || typeof value != 'object' || !('clock' in value)) return false
   let clock = value.clock
   if (typeof clock != 'number' || !Number.isFinite(clock)) return false
-  socket.send(JSON.stringify({ clock, received, sent: now() }))
+  socket.send(stringify({ clock, received, sent: now() }))
   return true
 }
 
@@ -202,12 +208,12 @@ export let queue = (
         }
         resume.sent?.(group, token)
         socket.send(
-          JSON.stringify(
+          stringify(
             frames ? { frames: group, ack: token } : { ...frame, ack: token },
           ),
         )
       } else {
-        socket.send(JSON.stringify(frame))
+        socket.send(stringify(frame))
       }
     }
     if (ready() && waiting.length && (!owed || peerOnly(waiting[0]))) {
@@ -345,10 +351,17 @@ let dispatch = (
       return subs.close(to, String(msg.unsubscribe))
     }
     if ('relay' in msg && Array.isArray(msg.relay)) {
-      let verdict = gate(subs, to, now)(msg.relay)
+      let relay = subs.vocab
+        ? fromWire(
+          subs.vocab,
+          msg.relay,
+          'payload' in input ? input.payload : undefined,
+        )
+        : msg.relay
+      let verdict = gate(subs, to, now)(relay)
       if (verdict == 'close') return 'close'
       if (verdict == 'skip') return
-      let out = (subs.enqueue ?? subs.relay)(to, msg.relay, writer)
+      let out = (subs.enqueue ?? subs.relay)(to, relay, writer)
       if (isPromise(out)) return out.catch(fail)
       return
     }
@@ -382,10 +395,10 @@ export let attach = (
     if (isPromise(out)) out.catch((err) => fault(err, 'socket close'))
   }
   socket.addEventListener('open', q.flush)
-  socket.addEventListener('message', (e) => {
+  let message = (data: unknown) => {
     if (shut) return
     let received = (now ?? Date.now)()
-    let input = decode(e.data)
+    let input = decode(data)
     let msg = 'value' in input && input.value && typeof input.value == 'object'
       ? input.value as Record<string, unknown>
       : undefined
@@ -397,12 +410,24 @@ export let attach = (
     ) q.enable(msg.frames === true)
     let out = scope(
       undefined,
-      () => receive(subs, to, e.data, now, input, opts, writer),
+      () => receive(subs, to, data, now, input, opts, writer),
     )
     if (out == 'close') {
       drop()
       socket.close?.(1008, 'relay flood')
     }
+  }
+  let pending: Promise<void> | undefined
+  socket.addEventListener('message', (e) => {
+    if (e.data instanceof Blob && e.data.size <= MAX_MESSAGE || pending) {
+      let data = e.data
+      pending = (pending ?? Promise.resolve()).then(async () => {
+        message(data instanceof Blob ? await data.arrayBuffer() : data)
+      }).catch((error) => fault(error, 'socket message')).finally(() => {
+        if (pending === next) pending = undefined
+      })
+      let next = pending
+    } else message(e.data)
   })
   socket.addEventListener('close', drop)
   return to

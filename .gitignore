@@ -54,3 +54,6 @@ node_modules.lock/
 
 # Browser write outbox, generated from @yaks/sync.
 /workers/yak/public/_outbox.js
+
+# Browser binary wire codec, generated from @yaks/vocab.
+/workers/yak/public/_wire.js

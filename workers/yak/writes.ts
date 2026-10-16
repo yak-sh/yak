@@ -1,3 +1,5 @@
+import { stringify } from '@yaks/vocab/wire'
+
 // The write log and successful receipts share the Store's own SQLite.
 // A live keyed request commits its mutation and receipt in one graph
 // transaction. Successful input needs no earlier pending/running row: the
@@ -484,7 +486,7 @@ export let received = (
   let key = receipt.request.headers.get(IDEMPOTENCY)
   if (!key) return
   expire(db)
-  let text = JSON.stringify(composed(answer()))
+  let text = stringify(composed(answer()))
   let whole = fits(text)
   // Its sequence number is asked back only for an answer kept in parts: a
   // returned row is a row read.
@@ -541,7 +543,7 @@ export let landed = (db: Driver, seq: number, answer: () => Bundle[]) => {
   }))
   if (row?.[KEY] == null && row?.audit != 1) return done(db, seq)
   let all = composed(answer())
-  let text = JSON.stringify(all)
+  let text = stringify(all)
   if (row.audit == 1 || !fits(text)) chunks(db, seq, text)
   db.query({
     t: 'update',

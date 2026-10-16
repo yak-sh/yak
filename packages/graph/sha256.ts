@@ -6,7 +6,7 @@
 // batch, so the cost of hashing them here is nothing next to making the whole
 // pipeline asynchronous.
 //
-// This is FIPS 180-4 SHA-256 over the UTF-8 bytes of a string, hex-encoded —
+// This is FIPS 180-4 SHA-256 over bytes (or a string's UTF-8 bytes), hex-encoded —
 // the same digest `crypto.subtle.digest('SHA-256', …)` produces, and the same
 // one any other implementation produces, since a precondition token travels
 // between a reader and a writer that share no code.
@@ -93,14 +93,18 @@ let kept = new Uint8Array(256)
 // length as a 64-bit big-endian tail, rounded up to whole 64-byte blocks. An
 // ASCII string, which nearly every eid and token is, is its own bytes, copied
 // without a trip through the encoder.
-let padded = (input: string): Uint8Array => {
-  let ascii = ASCII.test(input)
-  let bytes = ascii ? null : encoder.encode(input)
+let padded = (input: string | Uint8Array): Uint8Array => {
+  let ascii = typeof input == 'string' && ASCII.test(input)
+  let bytes = input instanceof Uint8Array
+    ? input
+    : ascii
+    ? null
+    : encoder.encode(input as string)
   let len = bytes ? bytes.length : input.length
   let size = (((len + 8) >> 6) + 1) << 6
   let out = size <= kept.length ? kept : new Uint8Array(size)
   if (bytes) out.set(bytes)
-  else for (let i = 0; i < len; i++) out[i] = input.charCodeAt(i)
+  else for (let i = 0; i < len; i++) out[i] = (input as string).charCodeAt(i)
   out.fill(0, len, size)
   out[len] = 0x80
   let bits = len * 8
@@ -139,11 +143,11 @@ let h = new Int32Array(8)
 let w = new Int32Array(64)
 
 /**
- * The SHA-256 of a string's UTF-8 bytes, as lowercase hex. Synchronous by
+ * The SHA-256 of bytes or a string's UTF-8 bytes, as lowercase hex. Synchronous by
  * design — the `$was` precondition hashes with it inside a transaction that
  * must not be forced to become a promise.
  */
-export let sha256 = (input: string): string => {
+export let sha256 = (input: string | Uint8Array): string => {
   let msg = padded(input)
   h.set(IV)
   for (let at = 0; at < msg.length; at += 64) {
@@ -184,8 +188,13 @@ export let sha256 = (input: string): string => {
 /** The token a caller puts in `$was`: the SHA-256 of a value it read, or
  * `null` when it read no value. One function, so both ends hash the same
  * way. A JSON value (an `object` or `array` property) is hashed as its JSON
- * text, so two different objects never share a token. */
+ * text. A binary property hashes its bytes, including only an offset view's
+ * own bytes, never its surrounding buffer. */
 export let token = (value: unknown): string | null =>
-  value == null
-    ? null
-    : sha256(typeof value == 'object' ? JSON.stringify(value) : String(value))
+  value == null ? null : sha256(
+    value instanceof Uint8Array
+      ? value
+      : typeof value == 'object'
+      ? JSON.stringify(value)
+      : String(value),
+  )

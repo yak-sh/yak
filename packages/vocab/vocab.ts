@@ -186,6 +186,11 @@ export let typesOf = (s: PropSchema): string[] =>
 
 // A property whose value is a JSON value rather than a scalar: an object, an
 // array, or a union of types. It is stored as SQLite's binary JSON.
+// A byte value in code. The schema's encoding annotates its JSON form;
+// transport doors may also decode other encodings before admission.
+export let isBinary = (s: PropSchema): boolean =>
+  s.type == 'string' && s.contentEncoding == 'base64'
+
 export let jsonb = (s: PropSchema): boolean =>
   Array.isArray(s.type) || s.type == 'object' || s.type == 'array'
 
@@ -205,6 +210,7 @@ let typed = (comp: string, prop: string, s: PropSchema): void => {
 // reconstructed from native JSON Schema (`type` + `format`), so a vocabulary
 // authored in plain JSON Schema round-trips to this compact type set.
 let scalarOf = (s: PropSchema): Scalar => {
+  if (isBinary(s)) return 'binary'
   if (jsonb(s)) return 'jsonb'
   if (s.type == 'boolean') return 'bool'
   if (s.type == 'number' || s.type == 'integer') {
@@ -251,7 +257,7 @@ let affinityOf = (
   scalar: Scalar | undefined,
   type: PropSchema['type'],
 ): Prop['affinity'] =>
-  scalar == 'jsonb'
+  scalar == 'jsonb' || scalar == 'binary'
     ? 'blob'
     : category == 'ref' || scalar == 'bool' || type == 'integer'
     ? 'integer'
@@ -459,6 +465,7 @@ let declared = (c: Prop): string => {
   if (c.category == 'enum') return c.values!.join('|')
   if (c.category == 'ref') return `ref ${c.ref}`
   if (c.scalar == 'jsonb') return c.types!.join('|')
+  if (c.scalar == 'binary') return 'bytes'
   let type = c.scalar == 'bool'
     ? 'boolean'
     : c.scalar == 'number' || c.scalar == 'priority'
@@ -931,6 +938,12 @@ let composed = (docs: VocabDoc[], keywords: Keywords[]): Vocab => {
           continue
         }
         if (val == null) continue // a null clears the property
+        if (c.scalar == 'binary') {
+          if (!(val instanceof Uint8Array)) {
+            errs.push(`${comp}.${k} holds bytes (Uint8Array)`)
+          }
+          continue
+        }
         if (c.scalar == 'jsonb') {
           if (!holds(c.types!, val)) {
             errs.push(`${comp}.${k} is ${c.types!.map(a).join(' or ')}`)

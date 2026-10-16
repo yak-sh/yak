@@ -22,6 +22,7 @@
 //              wrong about that turns a network blip into data loss.
 
 import type { Bundle, Graph } from '@yaks/graph'
+import { decode, stringify } from '@yaks/vocab/wire'
 import { formed } from '@yaks/graph/bundle'
 import { replicate } from './mark.ts'
 import { guessed, inverse, outward } from './tier.ts'
@@ -140,7 +141,7 @@ export let exchange = async (
           ...opts.headers,
           ...(opts.key ? { 'idempotency-key': opts.key } : {}),
         },
-        body: JSON.stringify(sent),
+        body: stringify(sent),
       }),
     )
   } catch (error) {
@@ -170,7 +171,7 @@ export let exchange = async (
   }
   let applied: Bundle[]
   try {
-    applied = formed(await res.json())
+    applied = formed(decode(graph.vocab, await res.json()))
   } catch (error) {
     return unknown(error)
   }

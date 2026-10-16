@@ -385,6 +385,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   graph.use(plugin)
 
   let w: Wire = wire({
+    vocab: graph.vocab,
     url: opts.url,
     connect: opts.connect,
     timer,

@@ -125,6 +125,8 @@ export type Opening = { sink: Sink; id: string; query: Ask; opts?: ReadOpts }
 /** The subscription registry: what the socket layer talks to, and what an
  * application can drive directly. */
 export type Subs = {
+  /** Vocabulary for decoding binary relay properties at the JSON door. */
+  vocab?: import('@yaks/vocab').Vocab
   /** Runtime activity target, shared with the graph even through read overlays. */
   activity?: object
   /** Read bundles using the graph's query and read-option contract, with held
@@ -2245,6 +2247,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   return {
+    vocab: graph.vocab,
     activity: opts.activity ?? graph,
     // A host can read while its own graph apply is saving a relay. This read
     // takes the currently admitted held values without entering ordered work.

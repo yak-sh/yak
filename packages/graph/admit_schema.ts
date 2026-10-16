@@ -119,7 +119,15 @@ export let admitSchema = (vocab: Vocab): Plugin => {
           }
           for (let [prop, verify] of said.get(comp) ?? []) {
             if (value[prop] == null) continue
-            let errors = verify(value[prop])
+            let propValue = value[prop]
+            // JSON Schema describes the encoded representation. Only a
+            // declared binary property projects to it; the stored row and
+            // caller's bytes remain untouched.
+            let input = vocab.prop(comp, prop)?.scalar == 'binary' &&
+                propValue instanceof Uint8Array
+              ? propValue.toBase64()
+              : propValue
+            let errors = verify(input)
             if (errors.length) {
               throw new Refused(`${comp}.${prop}: ${errorsText(errors)}`)
             }

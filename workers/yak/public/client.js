@@ -1,3 +1,4 @@
+import { decode, stringify, unpack } from './_wire.js'
 import { browserDrafts, draftEid } from './_draft.js'
 import { durableOutbox } from './_outbox.js'
 export { draftEid }
@@ -375,7 +376,31 @@ let lanes = async (items, go) => {
 
 export let store = (base) => {
   base = based(base)
-  let ask = door(base)
+  let rawAsk = door(base)
+  let vocabulary
+  let readWire = async (value, payload) => {
+    // No extra request for a page whose answers contain no byte tags. Only
+    // the vocabulary, never a global JSON reviver, gives the tag meaning.
+    if (!payload && !JSON.stringify(value).includes('"$bytes"')) return value
+    vocabulary ??= rawAsk('vocab.json').then((docs) => {
+      let defs = {}
+      for (let doc of docs) {
+        for (let [name, def] of Object.entries(doc.$defs ?? {})) {
+          defs[name] = {
+            ...defs[name],
+            ...def,
+            properties: { ...defs[name]?.properties, ...def.properties },
+          }
+        }
+      }
+      return { def: (name) => defs[name] }
+    }).catch((error) => {
+      vocabulary = undefined
+      throw error
+    })
+    return decode(await vocabulary, value, payload)
+  }
+  let ask = async (path, init) => readWire(await rawAsk(path, init))
   // One bundle or many, in; `{ok, aliases, bundles}` back, where `aliases`
   // maps each `$alias` to the eid it minted and `bundles` is the batch as
   // applied.
@@ -404,7 +429,7 @@ export let store = (base) => {
               'content-type': 'application/json',
               'idempotency-key': key,
             },
-            body: JSON.stringify(payload),
+            body: stringify(payload),
           })
         },
       })
@@ -441,9 +466,9 @@ export let store = (base) => {
   if (globalThis.indexedDB) void boot().catch(() => {})
   let apply = async (bundles) => {
     // Snapshot intent before the asynchronous identity lookup.
-    let payload = JSON.parse(JSON.stringify({
+    let payload = structuredClone({
       entities: Array.isArray(bundles) ? bundles : [bundles],
-    }))
+    })
     await boot()
     return queue.submit(payload)
   }
@@ -564,16 +589,39 @@ export let store = (base) => {
         s.send(JSON.stringify({ subscribe: sub.q, id: name }))
       }
     }
-    s.onmessage = (e) => {
-      let f = JSON.parse(e.data)
+    let receiving
+    let land = (f) => {
       let sub = subs.get(f.id)
       if (!sub) return
       sub.heard = true
-      // The store's own sentence about a query it could not serve; uncaught
-      // on purpose, so the reporter tells the person's agent about it.
       if (f.refused) throw new Error(f.refused.message ?? f.refused.error)
       fold(sub, f)
       sub.cb(rows(sub))
+    }
+    s.onmessage = (e) => {
+      let frame = typeof e.data == 'string' ? JSON.parse(e.data) : undefined
+      if (!receiving && frame && !e.data.includes('"$bytes"')) {
+        return land(frame)
+      }
+      let next = (receiving ?? Promise.resolve()).then(async () => {
+        let data = e.data instanceof Blob ? await e.data.arrayBuffer() : e.data
+        let packed = data instanceof ArrayBuffer ? unpack(data) : undefined
+        land(
+          await readWire(
+            packed ? packed.value : frame ?? JSON.parse(data),
+            packed?.payload,
+          ),
+        )
+      })
+      receiving = next.catch((error) => {
+        // Report the bad frame without poisoning the next frame's queue.
+        queueMicrotask(() => {
+          throw error
+        })
+      }).finally(() => {
+        if (receiving === held) receiving = undefined
+      })
+      let held = receiving
     }
     s.onclose = () => {
       sock = null
@@ -584,7 +632,7 @@ export let store = (base) => {
   }
   let tell = (frame) => {
     let s = open()
-    if (s.readyState == 1) s.send(JSON.stringify(frame))
+    if (s.readyState == 1) s.send(stringify(frame))
   }
   // The filter's matches now, and again on every change — a write from
   // another device, another tab, or an agent. `cb` is handed the same rows

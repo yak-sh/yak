@@ -125,6 +125,12 @@ let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
 let rank = (v: unknown): number => v == null ? 0 : typeof v == 'number' ? 1 : 2
 let compare = (a: unknown, b: unknown): number => {
   if (rank(a) != rank(b)) return rank(a) - rank(b)
+  if (a instanceof Uint8Array && b instanceof Uint8Array) {
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      if (a[i] != b[i]) return a[i] - b[i]
+    }
+    return a.length - b.length
+  }
   if (rank(a) == 0) return 0
   if (rank(a) == 1) return (a as number) - (b as number)
   return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0
@@ -470,12 +476,18 @@ export let rows = (
     }
     let path = (agg as Distinct | Tally).path.join('.')
     let { read, tag } = field(ctx, path)
-    let counted = tallied(tag)
+    let counted = tag == 'binary' ? 'binary' : tallied(tag)
     if (!counted) {
       throw new Unsupported('.distinct/.tally', `over a ${tag} property`, BY)
     }
     let key = (v: unknown) =>
-      v == null ? null : counted == 'number' ? v : String(v) || null
+      v == null
+        ? null
+        : counted == 'binary'
+        ? (v as Uint8Array).toBase64()
+        : counted == 'number'
+        ? v
+        : String(v) || null
     return (bs: Source) => {
       let among = indexed(bs)
       let n = new Map<unknown, number>()
@@ -483,10 +495,14 @@ export let rows = (
         let k = key(read(b, among))
         if (k != null) n.set(k, (n.get(k) ?? 0) + 1)
       }
-      let values = [...n.keys()].sort(compare)
+      let restored = (v: unknown) =>
+        counted == 'binary' ? Uint8Array.fromBase64(v as string) : v
+      let values = [...n.keys()].sort((a, b) =>
+        compare(restored(a), restored(b))
+      )
       return agg.kind == 'tally'
-        ? values.map((value) => ({ value, n: n.get(value) }))
-        : values.map((value) => ({ value }))
+        ? values.map((value) => ({ value: restored(value), n: n.get(value) }))
+        : values.map((value) => ({ value: restored(value) }))
     }
   })
 

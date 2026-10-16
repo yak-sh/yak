@@ -1,3 +1,4 @@
+import { BINARY } from '@yaks/vocab/wire'
 import { copyOf, publicDirectory } from './directory-copy.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
 // hosted implementation (D-32318 §v1 sequencing). One fetch handler: it
@@ -1741,7 +1742,7 @@ let api = async (
   // every app, so it comes from the platform's assets, not the app's blobs.
   if (
     path == '/client.js' || path == '/storage.js' || path == '/_draft.js' ||
-    path == '/_outbox.js'
+    path == '/_outbox.js' || path == '/_wire.js'
   ) {
     return platformFile(req, env, path)
   }
@@ -2057,6 +2058,16 @@ let api = async (
   if (path == '/apply') {
     if (req.method != 'POST') return json(405, 'method_not_allowed')
     if (!mayPost) return refused()
+    if (req.headers.get('content-type')?.split(';')[0].trim() == BINARY) {
+      let body = await req.arrayBuffer()
+      let stopped = await full(env, space, body.byteLength)
+      if (stopped) return json(413, 'space_full', stopped)
+      return store('/apply', {
+        method: 'POST',
+        body,
+        headers: { 'content-type': BINARY },
+      }, { ...headers, ...resend(req), ...(await named(env, who, app)) })
+    }
     let body = await req.text()
     // The free tier's byte ceiling (T-32758). Data costs money to hold, so
     // this is a refusal — one the page shows in the platform's own sentence,

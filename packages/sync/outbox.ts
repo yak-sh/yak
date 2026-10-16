@@ -1,3 +1,5 @@
+import { stringify } from '@yaks/vocab/wire'
+
 // Intent is separate from the replica: eviction and subscription resets must
 // never erase a write whose answer we have not heard.
 export type Pending<T> = {
@@ -180,7 +182,7 @@ export let durableOutbox = <T, R>(opts: {
     // Freeze intent at the call boundary, before identity/disk startup yields.
     let copy: T
     try {
-      copy = JSON.parse(JSON.stringify(sent)) as T
+      copy = structuredClone(sent)
     } catch (error) {
       return Promise.reject(error)
     }
@@ -189,7 +191,7 @@ export let durableOutbox = <T, R>(opts: {
         await ready
         if (closed) throw new Error('Write outbox is closed')
         let old = entries.get(key)
-        if (old && JSON.stringify(old.sent) !== JSON.stringify(copy)) {
+        if (old && stringify(old.sent) !== stringify(copy)) {
           throw new Error('Write key already names different intent')
         }
         if (old?.state === 'refused') {

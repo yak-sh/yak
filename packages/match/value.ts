@@ -21,7 +21,7 @@
 // a comparison against an operand the property's type cannot hold. The caller
 // turns that into an `Unsupported` refusal rather than a wrong answer.
 
-import { timeEdges, type Value } from '@yaks/query/core'
+import { binaryOperand, timeEdges, type Value } from '@yaks/query/core'
 import { held, type Tag } from '@yaks/sql/core'
 
 /**
@@ -67,6 +67,7 @@ let stamp = (v: unknown): v is string =>
  * true.
  */
 export let cmp = (op: string, value: string, tag: Tag): Check | null => {
+  if (tag == 'binary') return null
   if (NUMERIC.includes(tag)) {
     let n = held(value, tag)
     if (!numeric(n)) return null
@@ -105,7 +106,9 @@ export let eq = (value: string | Value, tag: Tag): Check | null => {
     value = { kind: 'scalar', raw: value }
   }
   if ((value.kind == 'scalar' || value.kind == 'time') && value.raw == '') {
-    return (v) => v == null || String(v) == ''
+    return tag == 'binary'
+      ? (v) => v == null || v instanceof Uint8Array && v.length == 0
+      : (v) => v == null || String(v) == ''
   }
   if (value.kind == 'range') {
     if (!('raw' in value.lo) || !('raw' in value.hi)) return null
@@ -118,6 +121,13 @@ export let eq = (value: string | Value, tag: Tag): Check | null => {
     let parts = value.items.map((p) => eq(p, tag))
     if (parts.some((p) => !p)) return null
     return (v) => v != null && parts.some((p) => p!(v))
+  }
+  if (tag == 'binary') {
+    if (value.kind != 'scalar') return null
+    let bytes = binaryOperand(value.raw)
+    return (v) =>
+      v instanceof Uint8Array && v.length == bytes.length &&
+      bytes.every((byte, i) => v[i] == byte)
   }
   if (NUMERIC.includes(tag)) {
     // An operand that does not survive a round trip through number formatting
@@ -216,6 +226,7 @@ export let check = (
   }
   if (op == '') return eq(value, tag)
   if (op == '!') return ne(value, tag)
+  if (tag == 'binary') return null
   let raw = textOf(value)
   if (op == '~') return contains(raw)
   if (['<', '<=', '>', '>='].includes(op)) {

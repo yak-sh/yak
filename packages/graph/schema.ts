@@ -13,7 +13,7 @@
 // Everything is derived: a description is the one the vocabulary carries, and
 // a property that has none is described without one.
 
-import { type PropSchema, typesOf, type Vocab } from '@yaks/vocab'
+import { isBinary, type PropSchema, typesOf, type Vocab } from '@yaks/vocab'
 
 /** Where a component is documented at length, when the program that opened
  * the graph has such a page — `mail` → the guide's mail page. The vocabulary
@@ -48,6 +48,7 @@ let sample = (s: PropSchema): unknown => {
   if (s.examples?.length) return s.examples[0]
   if (s.enum?.length) return s.enum[0]
   if (s.ref) return '$other'
+  if (isBinary(s)) return 'AP+A'
   let t = typesOf(s)[0]
   return t == 'boolean'
     ? true
@@ -90,7 +91,10 @@ let cut = (vocab: Vocab, name: string): PropSchema => {
     properties: Object.fromEntries(
       Object.entries(def.properties ?? {}).map((
         [p, s],
-      ) => [p, { type: s.type }]),
+      ) => [p, {
+        type: s.type,
+        ...(s.contentEncoding ? { contentEncoding: s.contentEncoding } : {}),
+      }]),
     ),
   }
 }
@@ -165,6 +169,8 @@ let typed = (s: PropSchema): string =>
     ? `one of ${listed(s.enum)}`
     : s.ref
     ? `reference to ${s.ref}`
+    : isBinary(s)
+    ? 'bytes (base64 in JSON)'
     : s.format ?? typesOf(s).join(' or ')
 
 // What is true of a property beyond its type, a word or two each: who writes

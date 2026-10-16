@@ -776,6 +776,7 @@ export let memoized = (
       let text = JSON.stringify(v)
       return text === undefined ? LOST : JSON.parse(text)
     }
+    if (p.scalar == 'binary') return v instanceof Uint8Array ? v.slice() : LOST
     if (p.scalar == 'bool') return typeof v == 'boolean' ? v : LOST
     if (p.affinity == 'text') return typeof v == 'string' ? v : LOST
     if (p.affinity == 'integer' || p.affinity == 'real') {

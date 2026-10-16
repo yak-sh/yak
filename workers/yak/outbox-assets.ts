@@ -8,5 +8,9 @@ export let assets = async (
     to,
     await bundle(new URL('../../packages/sync/outbox.ts', import.meta.url)),
   )
+  await Deno.writeTextFile(
+    new URL('./_wire.js', to),
+    await bundle(new URL('../../packages/vocab/wire.ts', import.meta.url)),
+  )
 }
 if (import.meta.main) await assets()

@@ -52,3 +52,11 @@ test('a guard token hashes the value as text, and absence is null', () => {
   assertEquals(token(42), sha256('42'))
   assertEquals(token('42'), sha256('42'))
 })
+
+test('binary tokens hash exactly the visible bytes', async () => {
+  let bytes = new Uint8Array([19, 0, 255, 128, 19]).subarray(1, 4)
+  let digest = await crypto.subtle.digest('SHA-256', bytes)
+  assertEquals(token(bytes), hex(digest))
+  assertEquals(token(bytes), token(new Uint8Array([0, 255, 128])))
+  assertEquals(token(new Uint8Array()), sha256(''))
+})

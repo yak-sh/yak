@@ -14,7 +14,7 @@
 // when a deploy is rejected.
 
 import type { Composite, PropSchema, VocabDoc } from './types.ts'
-import { composite, jsonb, TYPES, typesOf } from './vocab.ts'
+import { composite, isBinary, jsonb, TYPES, typesOf } from './vocab.ts'
 import { kept, lives, paced, saved, SYNC, type Sync } from './lifetime.ts'
 import { constraintErrors } from './constraints.ts'
 
@@ -55,6 +55,11 @@ let storableProp = (
   if (odd.length) {
     return [`${comp}.${prop} has type '${odd[0]}' — one of ${TYPES.join(', ')}`]
   }
+  if (isBinary(s) && (s.ref != null || s.enum != null || s.format != null)) {
+    return [
+      `${comp}.${prop} holds bytes, not a reference, enum or formatted string`,
+    ]
+  }
   if (s.properties && !said.includes('object')) {
     return [`${comp}.${prop} has properties — say "type": "object"`]
   }
@@ -91,6 +96,7 @@ let composites = (s: PropSchema): { props: string[]; present?: string[] }[] =>
 let storableDefault = (comp: string, prop: string, s: PropSchema): string[] => {
   let d = s.default
   if (d === undefined) return []
+  if (isBinary(s)) return [`${comp}.${prop} holds bytes and takes no default`]
   if (jsonb(s)) return [`${comp}.${prop} holds JSON and takes no default`]
   if (typeof d == 'string' || typeof d == 'number' || typeof d == 'boolean') {
     return []
@@ -115,7 +121,7 @@ let WORDLESS = ['date-time', 'uri', 'query', 'json']
 let searched = (comp: string, prop: string, s: PropSchema): string[] =>
   s.search !== true ||
     (s.computed !== true && s.ref == null && s.enum == null &&
-      s.type == 'string' &&
+      s.type == 'string' && !isBinary(s) &&
       !WORDLESS.includes(s.format ?? ''))
     ? []
     : [

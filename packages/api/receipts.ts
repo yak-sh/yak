@@ -1,3 +1,5 @@
+import { decode, stringify } from '@yaks/vocab/wire'
+
 // Successful keyed JSON writes keep their canonical answer in the mutation's
 // transaction. The request token is an in-process capability, not client input.
 import { after } from '@yaks/fp'
@@ -61,7 +63,12 @@ export let receipts = (): Plugin => {
                 'Idempotency-Key already used with a different body',
               )
             }
-            throw new Replay(JSON.parse(receipt.answer))
+            throw new Replay(
+              decode(
+                (context!.graph as Graph).vocab,
+                JSON.parse(receipt.answer),
+              ),
+            )
           }
           writes.set(context.transaction!, held)
           return bundles.flatMap((b) => {
@@ -76,7 +83,7 @@ export let receipts = (): Plugin => {
       commit: (bundles, tx, _error, context) => {
         let held = context?.transaction && writes.get(context.transaction)
         if (!held) return bundles
-        let answer = JSON.stringify(
+        let answer = stringify(
           published((context!.graph as Graph).vocab, composed(bundles)),
         )
         return after(

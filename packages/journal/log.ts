@@ -559,7 +559,7 @@ export let log = (opts: LogOpts): Log => {
       written(value).forEach(([prop, v], i) =>
         cas && cas.at(comp, prop) && typeof v == 'string'
           ? field(i, prop, null, cas.put(v))
-          : field(i, prop, JSON.stringify(v) ?? 'null', null)
+          : field(i, prop, enc(v) ?? 'null', null)
       )
     })
     return seq

@@ -350,6 +350,9 @@ export let collected = (
  * filled(match('+foo.bar=$x'), { x: 5 }).patterns[0].sets
  * ```
  */
+let operand = (value: unknown): string =>
+  value instanceof Uint8Array ? value.toBase64() : String(value)
+
 export let filled = (
   m: Match | string,
   args: Record<string, unknown> | string,
@@ -362,14 +365,14 @@ export let filled = (
     // the property must equal what the argument said.
     let binds = p.binds.filter((b) => {
       if (!(b.name in values)) return true
-      clauses.push(eq(b.path.join('.'), String(values[b.name])))
+      clauses.push(eq(b.path.join('.'), operand(values[b.name])))
       return false
     })
     // In a write position it supplies the value instead.
     let sets = p.sets.map((s) => {
       let name = variable(s.value)
       return name && name in values
-        ? { ...s, value: scalar(String(values[name])) }
+        ? { ...s, value: scalar(operand(values[name])) }
         : s
     })
     // Binding the pattern's entity variable pins it to one entity: the pattern
@@ -405,7 +408,7 @@ export let filled = (
 export let narrowed = (m: Match, choices: Record<string, unknown[]>): Match => {
   let patterns = [...m.patterns]
   for (let [name, values] of Object.entries(choices)) {
-    let one = [...new Set(values.filter((v) => v != null).map(String))]
+    let one = [...new Set(values.filter((v) => v != null).map(operand))]
     if (!one.length) return { ...m, empty: true }
     let i = patterns.findIndex((p) =>
       p.entity == name || p.binds.some((b) => b.name == name)

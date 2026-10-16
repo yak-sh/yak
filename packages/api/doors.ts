@@ -21,6 +21,7 @@ import { readBody, receiveBody } from './body.ts'
 import { fault, json, refusal } from './refuse.ts'
 import { published } from './publish.ts'
 import { received } from './receipts.ts'
+import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
 
 /** Context the application gives each incoming write before authentication
  * signs it. Streaming imports call it once per chunk, including checks. */
@@ -147,7 +148,7 @@ export let pour = (
   let bytes = new TextEncoder()
   // Awaited, so a slow reader slows the import down rather than piling the
   // whole response up behind itself.
-  let say = (v: unknown) => writer.write(bytes.encode(`${JSON.stringify(v)}\n`))
+  let say = (v: unknown) => writer.write(bytes.encode(`${stringify(v)}\n`))
 
   let run = async () => {
     let held: Bundle[] = []
@@ -183,7 +184,7 @@ export let pour = (
       for await (let [n, line] of lines(body, request)) {
         if (!line.trim()) continue
         blame = n
-        held.push(JSON.parse(line) as Bundle)
+        held.push(decode(graph.vocab, JSON.parse(line)) as Bundle)
         at.push(n)
         if (held.length == CHUNK) await flush()
       }
@@ -238,8 +239,17 @@ export let write = async (
     }
     return pour(graph, request, who, activity, context, opts)
   }
-  let text = await readBody(request)
-  let body = JSON.parse(text)
+  let text: string
+  let body: unknown
+  if (request.headers.get('content-type')?.split(';')[0].trim() == BINARY) {
+    let raw = await receiveBody(request, () => request.arrayBuffer())
+    let packet = unpack(raw)
+    body = decode(graph.vocab, packet.value, packet.payload)
+    text = stringify(body)
+  } else {
+    text = await readBody(request)
+    body = decode(graph.vocab, JSON.parse(text))
+  }
   if (!Array.isArray(body)) {
     throw new Refused('/apply takes a JSON array of bundles')
   }
@@ -321,7 +331,7 @@ let listed = (items: unknown[]): Response => {
       pull: (c) => {
         let piece = ''
         while (next < items.length && piece.length < PIECE) {
-          piece += (next ? ',' : '') + JSON.stringify(items[next++])
+          piece += (next ? ',' : '') + stringify(items[next++])
         }
         c.enqueue(bytes.encode(next < items.length ? piece : piece + ']'))
         if (next == items.length) c.close()

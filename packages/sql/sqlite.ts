@@ -20,7 +20,7 @@
 // query excludes it.
 
 import type { Prop, Scalar, Vocab } from '@yaks/vocab'
-import { timeEdges, type Value } from '@yaks/query/core'
+import { binaryOperand, timeEdges, type Value } from '@yaks/query/core'
 import { bounded, type Frag, spelled } from './ast.ts'
 import { literal, nest } from './render.ts'
 
@@ -309,6 +309,7 @@ let cmp = (
   tag: Tag,
   textAffinity = false,
 ): Frag | null => {
+  if (tag == 'binary') return null
   if (NUMERIC_TAGS.includes(tag)) {
     let n = held(value, tag)
     return numeric(n) ? { sql: `${c} ${op} ?`, params: [Number(n)] } : null
@@ -331,6 +332,17 @@ let eq = (
   tag: Tag,
   textAffinity = false,
 ): Frag | null => {
+  if (tag == 'binary') {
+    if (value.kind == 'list') {
+      if (!value.items.length) return { sql: '0', params: [] }
+      let parts = value.items.map((item) => eq(c, item, tag))
+      return parts.some((p) => p == null) ? null : anyOf(parts as Frag[])
+    }
+    if (value.kind != 'scalar') return null
+    return value.raw == ''
+      ? { sql: `(${c} is null or ${c} = ?)`, params: [new Uint8Array()] }
+      : { sql: `${c} = ?`, params: [binaryOperand(value.raw)] }
+  }
   if ((value.kind == 'scalar' || value.kind == 'time') && value.raw == '') {
     return {
       sql: `(${c} is null or ${textOf(c, textAffinity)} = '')`,
@@ -479,8 +491,10 @@ export let sqlite: Dialect = {
  * would not read as JavaScript writes it (a real 2 is `2.0`), and a boolean
  * is 0 or 1 here where a bundle holds `false` or `true`.
  */
-export let tallied = (tag: Tag): 'number' | 'text' | null =>
-  tag == 'number' || tag == 'priority'
+export let tallied = (tag: Tag): 'number' | 'text' | 'binary' | null =>
+  tag == 'binary'
+    ? 'binary'
+    : tag == 'number' || tag == 'priority'
     ? 'number'
     : tag == 'text' || tag == 'enum' || tag == 'eid'
     ? 'text'

@@ -10,6 +10,7 @@
 // `status`: the one table every door reads to tell a caller's refusal from a
 // defect, which any package's error joins by setting its own `name`.
 
+import { stringify } from '@yaks/vocab/wire'
 import { status } from '@yaks/graph/errors'
 
 /** A refusal, as a client reads it: the error's name, its message, and any
@@ -56,7 +57,7 @@ export let fault = (err: unknown, where: string): void => {
 
 /** A JSON response. */
 export let json = (body: unknown, code = 200): Response =>
-  new Response(JSON.stringify(body), {
+  new Response(stringify(body), {
     status: code,
     headers: { 'content-type': 'application/json' },
   })

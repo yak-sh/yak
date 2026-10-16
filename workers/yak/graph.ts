@@ -225,6 +225,7 @@ import {
   retired,
 } from '@yaks/query'
 import { effectsIn, loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { BINARY, decode as fromWire, stringify, unpack } from '@yaks/vocab/wire'
 import { type Anatomy, anatomy } from '@yaks/code/anatomy'
 import { workerAnatomy } from './anatomy.ts'
 import type { Runner } from '@yaks/tools'
@@ -3305,6 +3306,21 @@ export class Store {
         let leave = await this.#enter(base != null)
         let answer: Response
         try {
+          if (
+            request.headers.get('content-type')?.split(';')[0].trim() ==
+              BINARY &&
+            new URL(request.url).pathname == '/apply'
+          ) {
+            let no = await this.#ready(request)
+            if (no) return no
+            let packed = unpack(await request.arrayBuffer())
+            let body = stringify(
+              fromWire(this.#vocab, packed.value, packed.payload),
+            )
+            let headers = new Headers(request.headers)
+            headers.set('content-type', 'application/json')
+            request = new Request(request, { headers, body })
+          }
           if (logged(request)) answer = await this.#write(request)
           else {
             let no = await this.#ready(request)
@@ -3367,6 +3383,9 @@ export class Store {
         : run())
     } catch (error) {
       if (error instanceof Refused) return refuse(error)
+      if (error instanceof Error && error.name == 'Refused') {
+        return refuse(new Refused(error.message))
+      }
       throw error
     }
   }
@@ -3625,7 +3644,9 @@ export class Store {
     ) return response
     let bundles = await response.json() as Bundle[]
     return new Response(
-      JSON.stringify(await this.#callerAnswer(request, bundles)),
+      stringify(
+        await this.#callerAnswer(request, fromWire(this.#vocab, bundles)),
+      ),
       response,
     )
   }
@@ -3706,7 +3727,7 @@ export class Store {
     }
     try {
       let text = await readBody(request)
-      let body = JSON.parse(text)
+      let body = fromWire(this.#vocab, JSON.parse(text))
       if (!Array.isArray(body)) {
         throw new Refused('/apply takes a JSON array of bundles')
       }
@@ -4178,7 +4199,7 @@ export class Store {
             message: (failure.content as Comp)?.body,
           }, failure.exception ? 500 : 400)
         }
-        return Response.json(await this.#speak(answer))
+        return json(await this.#speak(answer))
       } catch (e) {
         return refuse(e, request)
       }
@@ -4294,7 +4315,7 @@ export class Store {
       }
       return agg
         ? await this.#counted(line, agg, { administrative: true })
-        : Response.json(await this.#kernelGraph(this.#graph).read(line))
+        : json(await this.#kernelGraph(this.#graph).read(line))
     }
     if (agg && !live) {
       await this.#auth(request)
@@ -4436,8 +4457,12 @@ export class Store {
     let rows = await answer.json()
     if (!Array.isArray(rows)) return Response.json(rows)
     // The rows already carry what the line names (@yaks/graph `wanted`).
-    let ranked = this.#ranked(rows as Bundle[], line, readOpts)
-    return Response.json(await this.#speak(ranked.map(this.#kind)))
+    let ranked = this.#ranked(
+      fromWire(this.#vocab, rows) as Bundle[],
+      line,
+      readOpts,
+    )
+    return json(await this.#speak(ranked.map(this.#kind)))
   }
 
   // The same rows on a subscription's frames, because a subscription is that
@@ -4511,6 +4536,7 @@ export class Store {
         ),
       close: (sink, id) => subs.close(by(sink), id),
       drop: (sink) => subs.drop(by(sink)),
+      vocab: subs.vocab,
       commit: subs.commit,
       check: subs.check,
       // Hibernated writers keep the same instrument identity as HTTP writes,

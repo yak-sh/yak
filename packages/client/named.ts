@@ -1,3 +1,5 @@
+import { decode, stringify, unpack } from '@yaks/vocab/wire'
+
 // Named server watches over a generic client: shared wires, readiness retained
 // across reconnects, and landed frames delivered to their owning watch names.
 import {
@@ -96,7 +98,17 @@ export let namedClient = (opts: {
       // A message is one frame, or several the host batched for one
       // acknowledgement (@yaks/sync `frames`); each is reported alike.
       let land = (e: Event & { data?: unknown }) => {
-        let packet = JSON.parse(String(e.data)) as Frame | { frames: Frame[] }
+        let packed =
+          e.data instanceof ArrayBuffer || e.data instanceof Uint8Array
+            ? unpack(e.data)
+            : undefined
+        let packet = decode(
+          opts.vocab,
+          packed ? packed.value : JSON.parse(String(e.data)),
+          packed?.payload,
+        ) as Frame | {
+          frames: Frame[]
+        }
         let frames = 'frames' in packet ? packet.frames : [packet]
         let lined = frames.map((f) => ({
           f,
@@ -121,7 +133,8 @@ export let namedClient = (opts: {
       // the coalescing point on purpose: the message events already queued
       // behind this one run before it.
       let arrived: (Event & { data?: unknown })[] = []
-      s.addEventListener(type, (e: Event & { data?: unknown }) => {
+      let pending: Promise<void> | undefined
+      let accept = (e: Event & { data?: unknown }) => {
         arrived.push(e)
         if (arrived.length > 1) return
         setTimeout(() => {
@@ -131,6 +144,21 @@ export let namedClient = (opts: {
             frames.forEach(land)
           )
         })
+      }
+      s.addEventListener(type, (e: Event & { data?: unknown }) => {
+        if (e.data instanceof Blob || pending) {
+          let data = e.data
+          pending = (pending ?? Promise.resolve()).then(async () => {
+            accept(
+              new MessageEvent('message', {
+                data: data instanceof Blob ? await data.arrayBuffer() : data,
+              }),
+            )
+          }).finally(() => {
+            if (pending === held) pending = undefined
+          })
+          let held = pending
+        } else accept(e)
       })
     },
   })
@@ -197,7 +225,7 @@ export let namedClient = (opts: {
     let id = h && [...lines].find(([, line]) => line === h.watch.query)?.[0]
     if (id && deliver) {
       deliver(
-        { data: JSON.stringify({ ...body, id }) } as Event & { data: string },
+        { data: stringify({ ...body, id }) } as Event & { data: string },
       )
     }
   }

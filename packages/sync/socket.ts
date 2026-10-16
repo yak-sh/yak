@@ -17,6 +17,8 @@
 // the connection that closed.
 
 import type { Bundle, Eid } from '@yaks/graph'
+import { decode, stringify, unpack } from '@yaks/vocab/wire'
+import type { Vocab } from '@yaks/vocab'
 import { coalesced } from '@yaks/graph/bundle'
 import type { Coverage } from './coverage.ts'
 import { clock } from './clock.ts'
@@ -101,6 +103,8 @@ export type Frame = {
 
 /** The socket's half of a sync: what it has to be told, and what it reports. */
 export type WireOpts = {
+  /** Interpret binary properties only when their vocabulary declares them. */
+  vocab?: Vocab
   /** the server's base URL — `https://…` or `http://…` */
   url: string
   /** the socket constructor (default: the global `WebSocket`) */
@@ -219,7 +223,7 @@ export let wire = (opts: WireOpts): Wire => {
   }
 
   let send = (msg: unknown) => {
-    if (socket && socket.readyState == OPEN) socket.send(JSON.stringify(msg))
+    if (socket && socket.readyState == OPEN) socket.send(stringify(msg))
   }
   let flush = () => {
     if (!waiting.length) return
@@ -303,12 +307,12 @@ export let wire = (opts: WireOpts): Wire => {
       probe()
       // Said before anything is asked, so no answer hands back an older copy.
       let said = opts.again?.() ?? []
-      if (said.length) s.send(JSON.stringify({ relay: said }))
+      if (said.length) s.send(stringify({ relay: said }))
       for (let [id, query] of asks) {
         if (refused.has(id)) continue
         resetting.add(id) // its answer will be the whole set, as it now stands
         s.send(
-          JSON.stringify({ subscribe: query, id, acks: true, frames: true }),
+          stringify({ subscribe: query, id, acks: true, frames: true }),
         )
       }
     })
@@ -316,7 +320,7 @@ export let wire = (opts: WireOpts): Wire => {
     let landing = false
     let ack = (frame: Frame) => {
       if (frame.ack && socket == s && s.readyState == OPEN) {
-        s.send(JSON.stringify({ ack: frame.ack }))
+        s.send(stringify({ ack: frame.ack }))
       }
     }
     let drain = () => {
@@ -346,10 +350,14 @@ export let wire = (opts: WireOpts): Wire => {
         }
       }
     }
-    s.addEventListener('message', (e) => {
+    let message = (data: unknown) => {
       if (socket != s || closed) return
       try {
-        let value = JSON.parse(String(e.data))
+        let packed = data instanceof ArrayBuffer || data instanceof Uint8Array
+          ? unpack(data)
+          : undefined
+        let value = packed ? packed.value : JSON.parse(String(data))
+        if (opts.vocab) value = decode(opts.vocab, value, packed?.payload)
         if (value && typeof value == 'object' && 'clock' in value) {
           if (trip !== undefined && value.clock === trip) {
             agreed.sample(trip, value.received, value.sent)
@@ -373,6 +381,18 @@ export let wire = (opts: WireOpts): Wire => {
       } catch (err) {
         opts.report(err)
       }
+    }
+    let pending: Promise<void> | undefined
+    s.addEventListener('message', (e) => {
+      if (e.data instanceof Blob || pending) {
+        let data = e.data
+        pending = (pending ?? Promise.resolve()).then(async () => {
+          message(data instanceof Blob ? await data.arrayBuffer() : data)
+        }).catch(opts.report).finally(() => {
+          if (pending === next) pending = undefined
+        })
+        let next = pending
+      } else message(e.data)
     })
     s.addEventListener('error', (e) => {
       if (told || wait < most) return

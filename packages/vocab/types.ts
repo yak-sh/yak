@@ -41,6 +41,7 @@ export type Scalar =
   | 'query'
   | 'json'
   | 'jsonb'
+  | 'binary'
   | 'time'
   | 'url'
 
@@ -241,6 +242,7 @@ export type PropSchema = {
   short?: string
   // native
   format?: string
+  contentEncoding?: string
   enum?: readonly string[]
   const?: unknown
   default?: unknown

@@ -394,11 +394,41 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // names none is still a component: its presence is the fact. A store that
   // mirrors another graph keeps the computed values that graph sent, since it
   // holds no rule to derive them.
+  // Bytes cross the storage boundary by value, just as a database BLOB does.
+  // Keep the ordinary immutable-bundle path allocation-free.
+  let binary = vocab.all.flatMap((comp) => {
+    let props = vocab.props(comp).filter((p) =>
+      vocab.prop(comp, p)?.scalar == 'binary'
+    )
+    return props.length ? [{ comp, props }] : []
+  })
+  let detached = (b: Bundle): Bundle => {
+    let out = b
+    for (let { comp, props } of binary) {
+      let held = b[comp] as Comp | undefined
+      if (!held) continue
+      for (let prop of props) {
+        let value = held[prop]
+        if (value instanceof Uint8Array) {
+          if (out === b) out = { ...b }
+          if (out[comp] === held) out[comp] = { ...held }
+          ;(out[comp] as Comp)[prop] = value.slice()
+        }
+      }
+    }
+    return out
+  }
+
   let stored = (comp: string, patch: Comp): Comp => {
     let out: Comp = {}
     for (let p in patch) {
       let prop = vocab.prop(comp, p)
-      if (prop && (!prop.computed || base.adopt)) out[p] = patch[p]
+      if (prop && (!prop.computed || base.adopt)) {
+        let value = patch[p]
+        out[p] = prop.scalar == 'binary' && value instanceof Uint8Array
+          ? value.slice()
+          : value
+      }
     }
     return out
   }
@@ -495,7 +525,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     let gathered = statuses.length || derived.length
       ? found.map((b) => computed(b, among))
       : found
-    return comps ? gathered.map(only(new Set(comps))) : gathered
+    return (comps ? gathered.map(only(new Set(comps))) : gathered).map(detached)
   }
 
   // The raw-rows path: one `{ eid }` per match, or an aggregate's rows in the
@@ -507,7 +537,15 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       storageOrder: opts.storageOrder,
       eids: opts.eids,
       computed: base.computed,
-    })(visible(opts))
+    })(visible(opts)).map((row) => {
+      if (!Object.values(row).some((v) => v instanceof Uint8Array)) return row
+      return Object.fromEntries(
+        Object.entries(row).map(([key, value]) => [
+          key,
+          value instanceof Uint8Array ? value.slice() : value,
+        ]),
+      )
+    })
 
   // The number an identity gets: the one it arrived with when this store
   // mirrors another graph (none until it is told), else the next one this
@@ -650,7 +688,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       : rows
     for (let eid of eids) {
       let rec = scoped.get(eid)
-      if (rec) out.push(cut(computed(rec, among)))
+      if (rec) out.push(detached(cut(computed(rec, among))))
     }
     return out
   }

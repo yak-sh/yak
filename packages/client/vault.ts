@@ -1,3 +1,5 @@
+import { stringify } from '@yaks/vocab/wire'
+
 // The vault: the state this browser owns and keeps between page loads.
 //
 // A client graph holds three kinds of state at once, and two keywords in the
@@ -105,7 +107,7 @@ export let stash = (seed: Saved[] = []): Vault => {
       for (let row of rows) {
         let current = held.get(row.eid)
         if (!current) continue
-        if (JSON.stringify(current) == JSON.stringify(row)) {
+        if (stringify(current) == stringify(row)) {
           held.delete(row.eid)
         } else changed.push(current)
       }

@@ -80,6 +80,40 @@ rule and effect entries and unmarked scalar schemas. An unmarked entry with
 `type: 'object'` or `properties` throws: it looks like a component whose marker
 was omitted.
 
+### Bytes
+
+A byte-valued property declares JSON Schema's binary content annotation:
+
+```json
+{ "type": "string", "contentEncoding": "base64" }
+```
+
+This property holds a `Uint8Array` in code and a BLOB in storage, not JSON text
+or binary JSON. Empty arrays, zero bytes, non-UTF-8 bytes and subarray views
+keep exactly their bytes. `null` clears it like any other property. Binary
+properties have no defaults, references, enums or full-text indexes.
+
+The annotation describes its JSON representation, not a requirement that every
+transport use base64. Admission takes bytes. JSON doors decode bare base64
+strings or explicit `{ "$bytes": "…", "encoding": "base64" }` and
+`{ "$bytes": "00ff", "encoding": "hex" }` values at declared binary properties
+before applying the bundle. Responses encode bytes with the base64 tag. Tags at
+ordinary JSON properties remain ordinary JSON; existing app payloads do not
+change meaning. In-process calls pass `Uint8Array` directly.
+
+Raw-byte apply bodies use `application/vnd.yaks.bundle+binary`; WebSockets also
+accept this envelope as a binary frame. `binary(value)` from `@yaks/vocab/wire`
+writes a four-byte unsigned big-endian UTF-8 JSON header length, the JSON
+header, then concatenated raw bytes. At binary properties the header references
+the payload with `{ "$bytes": offset, "length": count }`; offset is measured
+from the start of the raw payload. Bounds are checked and the referenced bytes
+copied before admission. `unpack` and `decode` read the same envelope. JSON/text
+replies remain the default, so existing clients need not change framing.
+
+Binary query equality and list operands use standard base64 text. Byte values
+compare by content; ordering is lexicographic by unsigned byte, and ordinary
+text operations on binary properties are refused.
+
 Every property declares `type`. A reference or enum declares `type: 'string'`.
 An authored component name starts with a lowercase letter and contains letters,
 digits or underscores, up to 40 characters. Property names follow the same rule
@@ -126,7 +160,8 @@ search, embedding, synchronization and write behavior.
 
 A **scalar** is a loaded property's type name reconstructed from `type` and
 `format`: `text`, `number`, `priority`, `bool`, `query`, `time`, `url`, `json`
-or `jsonb`. `Prop.category` distinguishes `scalar`, `enum` and `ref`.
+or `jsonb`, or `binary` (`type: 'string'` with `contentEncoding: 'base64'`).
+`Prop.category` distinguishes `scalar`, `enum` and `ref`.
 
 `jsonb` holds a JSON value: an object, array or type union. `json` holds JSON
 text in a string. A null clears a property; the string `'null'` is JSON text

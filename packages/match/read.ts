@@ -100,7 +100,7 @@ export let index = (bundles: readonly Bundle[]): Index => {
 
 /**
  * The key a property's value is filed under in a {@link Index.keyed} index:
- * the value as storage reads it, as text. Equality on a text, enum or eid
+ * the value as storage reads it, as text (base64 for bytes). Equality on a text, enum or eid
  * property is exactly "files under the operand", so those are the lookups a
  * query hands to a keyed index. An absent value files under nothing.
  *
@@ -113,7 +113,11 @@ export let index = (bundles: readonly Bundle[]): Index => {
  * ```
  */
 export let keyOf = (v: unknown): string | undefined =>
-  v == null ? undefined : String(held(v))
+  v == null
+    ? undefined
+    : v instanceof Uint8Array
+    ? v.toBase64()
+    : String(held(v))
 
 /**
  * One component of a bundle, or `undefined` when the entity does not have it.

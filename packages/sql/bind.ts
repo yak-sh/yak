@@ -490,6 +490,7 @@ let lowerScalar = (
 ): Frag | null => {
   let d = ctx.d
   if (op == EXISTS) return { sql: `${c} is not null`, params: [] }
+  if (tag == 'binary' && op != '' && op != '!') return null
   value ??= { kind: 'scalar', raw: '' }
   if ((tag == 'time' || tag == 'number') && op != '~') {
     let t = d.time(c, op, value, ctx.now, tag)
@@ -2505,7 +2506,7 @@ let lower = (
     if (!counted) {
       throw new Unsupported('.distinct/.tally', `over a ${tag} property`)
     }
-    let value = counted == 'number' ? expr : `cast(${expr} as text)`
+    let value = counted == 'text' ? `cast(${expr} as text)` : expr
     // Grouped by the stored reference where there is one, so each group's eid
     // is read once: counting 2.4M entities by archetype read an eid per entity,
     // four times over, in 3.5 s, and grouped by the integer takes 0.8 s, most
@@ -2515,7 +2516,7 @@ let lower = (
     // which grouped every change apart.
     let held = key
       ? `${key} is not null`
-      : counted == 'number'
+      : counted != 'text'
       ? `${expr} is not null`
       : `${expr} is not null and ${value} != ''`
     return finished(relation(ctx.d.spine, {

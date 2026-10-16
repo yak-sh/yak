@@ -74,7 +74,7 @@ test('the served client: a page saves, lists and watches', async () => {
     assertStringIncludes(html, '<base href="/recipes/">')
 
     Deno.writeTextFileSync(`${dir}/client.js`, source)
-    for (let file of ['_draft.js', '_outbox.js']) {
+    for (let file of ['_draft.js', '_outbox.js', '_wire.js']) {
       let asset = await k.at(`${jeff7}.yaks.app`, `/recipes/api/${file}`)
       assertEquals(asset.status, 200)
       Deno.writeTextFileSync(`${dir}/${file}`, await asset.text())
@@ -319,7 +319,7 @@ test('the client at a pretty path, and a sibling app by path', async () => {
       await (await k.at(`${nora8}.yaks.app`, '/reading/api/client.js'))
         .text()
     Deno.writeTextFileSync(`${dir}/client.js`, source)
-    for (let file of ['_draft.js', '_outbox.js']) {
+    for (let file of ['_draft.js', '_outbox.js', '_wire.js']) {
       let asset = await k.at(`${nora8}.yaks.app`, `/reading/api/${file}`)
       assertEquals(asset.status, 200)
       Deno.writeTextFileSync(`${dir}/${file}`, await asset.text())

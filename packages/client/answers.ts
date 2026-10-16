@@ -1,3 +1,5 @@
+import { stringify } from '@yaks/vocab/wire'
+
 // The saved results of server subscriptions: a query key, its members in
 // order, and which properties the server covered for each. Only ids and that
 // coverage are saved here — the entities themselves stay in memory only.
@@ -43,7 +45,7 @@ export let answerCache = (limit: number = ANSWER_BYTES): {
       return entry?.answer
     },
     put: (answer) => {
-      let bytes = new TextEncoder().encode(JSON.stringify(answer)).length
+      let bytes = new TextEncoder().encode(stringify(answer)).length
       size -= entries.get(answer.key)?.bytes ?? 0
       entries.delete(answer.key)
       if (bytes <= limit) {

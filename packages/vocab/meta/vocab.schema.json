@@ -533,6 +533,9 @@
             }
           ]
         },
+        "contentEncoding": {
+          "type": "string"
+        },
         "format": {
           "type": "string"
         },

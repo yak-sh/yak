@@ -1,3 +1,4 @@
+import { unpack } from '@yaks/vocab/wire'
 // One page socket over the app store and every component home it uses. Each
 // source's raw batch feed invalidates the page's own query; the answer is
 // read through page-graph, where ownership and cross-store composition live.
@@ -13,7 +14,7 @@ import { vouched, type Who } from './session.ts'
 type Socket = {
   readyState: number
   accept(): void
-  send(data: string): void
+  send(data: string | ArrayBuffer): void
   close(): void
   addEventListener(
     type: string,
@@ -163,7 +164,8 @@ export let pageSocket = async (
   front.addEventListener('message', (e) => {
     let received = Date.now()
     try {
-      let msg = JSON.parse(String(e.data)) as {
+      let packed = e.data instanceof ArrayBuffer ? unpack(e.data) : undefined
+      let msg = (packed ? packed.value : JSON.parse(String(e.data))) as {
         clock?: unknown
         id?: string
         subscribe?: string | true
@@ -186,7 +188,9 @@ export let pageSocket = async (
         return
       }
       if (Array.isArray(msg.relay)) {
-        links[0]?.send(JSON.stringify({ relay: msg.relay }))
+        links[0]?.send(
+          packed ? e.data as ArrayBuffer : JSON.stringify({ relay: msg.relay }),
+        )
         return
       }
       throw new SyntaxError('expected {subscribe}, {unsubscribe} or {relay}')

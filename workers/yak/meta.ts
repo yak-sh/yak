@@ -1,3 +1,5 @@
+import { stringify } from '@yaks/vocab/wire'
+
 // A store as a graph (T-33814, T-33815): bundles in, bundles out, and one
 // filter line for a read. Every caller that reaches the meta space — the
 // directory part's door, sign-in, the platform's own crash reports, the
@@ -119,7 +121,7 @@ export let metaOf = (
       written,
       {
         method: 'POST',
-        body: JSON.stringify(bundles),
+        body: stringify(bundles),
       },
       { ...base, ...headers },
     )
