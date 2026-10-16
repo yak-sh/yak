@@ -98,6 +98,7 @@ import { type Arm, ARMS, arms, cut } from './compound.ts'
 import {
   type Dialect,
   field,
+  indexName,
   refEqAt,
   sqlite,
   type Tag,
@@ -777,7 +778,7 @@ let chain = (ctx: Ctx, hops: Hop[], start: string): string => {
 // The index that leads with a property and covers every row, by name.
 let leading = (ctx: Ctx, comp: string, prop: string): string | undefined => {
   let index = ctx.v.indexes(comp).find((i) => i.props[0] == prop && !i.present)
-  return index && `${comp}_${index.props.join('_')}`
+  return index && indexName(ctx.v, comp, index.props)
 }
 
 // Whether a path's equality can be read from its far end, one index seek per

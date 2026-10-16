@@ -116,6 +116,54 @@ export type Dialect = {
 // physical column. The wire and vocabulary always keep the person's name.
 export let field = (prop: string): string => prop == 'entity' ? '$entity' : prop
 
+// Every plain index name a vocabulary's indexes would take, counted.
+let plains = new WeakMap<Vocab, Map<string, number>>()
+let plained = (v: Vocab): Map<string, number> => {
+  let held = plains.get(v)
+  if (held) return held
+  held = new Map()
+  for (let comp of v.all) {
+    for (let i of v.indexes(comp)) {
+      let name = `${comp}_${i.props.join('_')}`
+      held.set(name, (held.get(name) ?? 0) + 1)
+    }
+  }
+  plains.set(v, held)
+  return held
+}
+
+/**
+ * The name of the index over `comp`'s `props`: `<comp>_<props>`. Underscores
+ * cannot say where one name ends, and SQLite keeps tables and indexes in one
+ * namespace, so where that name is also a component's table (`tower` +
+ * `design` is `tower_design`) or another index's, it is `<comp>.<props>`,
+ * which no vocabulary name can spell.
+ *
+ * ```ts
+ * import { indexName } from '@yaks/sql/core'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let ref = { type: 'string', ref: 'entity', death: 'keep' }
+ * let v = loadVocab({ $defs: {
+ *   tower: { component: true, properties: { design: ref, run: ref } },
+ *   tower_design: { component: true, properties: {} },
+ * } })
+ * equal(indexName(v, 'tower', ['run']), 'tower_run')
+ * equal(indexName(v, 'tower', ['design']), 'tower.design')
+ * ```
+ */
+export let indexName = (
+  v: Vocab,
+  comp: string,
+  props: readonly string[],
+): string => {
+  let plain = `${comp}_${props.join('_')}`
+  return v.comp(plain) || (plained(v).get(plain) ?? 0) > 1
+    ? `${comp}.${props.join('.')}`
+    : plain
+}
+
 let q = (name: string) => `"${name}"`
 
 let table = (comp: string): string => q(comp)

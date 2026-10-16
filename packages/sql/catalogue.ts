@@ -23,8 +23,15 @@ export type SchemaObject = {
 type Held = {
   at: number
   entries: readonly SchemaObject[]
-  names: ReadonlySet<string>
+  kinds: ReadonlyMap<string, string>
 }
+
+// The namespace SQLite keeps an object of this type in, as far as `if not
+// exists` goes: a table, a virtual table and a view are one kind, an index
+// another, a trigger a third. A create over a name another kind holds is
+// refused, not left out.
+let kind = (type: string): string =>
+  type == 'view' || type == 'virtual table' ? 'table' : type
 
 // By driver, not connection: a statement through a driver no revision has
 // seen yet moves no token, so a driver that has read nothing reads afresh.
@@ -44,7 +51,11 @@ let read = (driver: Driver): Held => {
     tbl_name: String(r.tbl_name),
     sql: r.sql == null ? null : String(r.sql),
   })).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
-  kept = { at, entries, names: new Set(entries.map((o) => o.name)) }
+  kept = {
+    at,
+    entries,
+    kinds: new Map(entries.map((o) => [o.name, kind(o.type)])),
+  }
   held.set(driver, kept)
   return kept
 }
@@ -56,9 +67,10 @@ export let catalogue = (driver: Driver): readonly SchemaObject[] =>
 
 /**
  * Run `stmts` in order, leaving out each `create … if not exists` of an object
- * the schema already holds by that name, which SQLite would leave as it is.
- * The schema is read once, before the first; what the statements themselves
- * make and drop is counted as they go.
+ * the schema already holds by that name and kind, which SQLite would leave as
+ * it is. One over a name another kind holds runs, and SQLite refuses it (an
+ * index named for a table). The schema is read once, before the first; what
+ * the statements themselves make and drop is counted as they go.
  *
  * ```ts
  * import { catalogue, erect, revision, type Stmt } from '@yaks/sql'
@@ -76,12 +88,15 @@ export let catalogue = (driver: Driver): readonly SchemaObject[] =>
  * ```
  */
 export let erect = (driver: Driver, stmts: readonly Stmt[]): void => {
-  let names = new Set(stmts.length ? read(driver).names : [])
+  let held = new Map(stmts.length ? read(driver).kinds : [])
   for (let s of stmts) {
     let made = s.t.startsWith('create ') && 'name' in s ? s.name : null
-    if (made != null && 'ifNot' in s && s.ifNot && names.has(made)) continue
+    let as = kind(s.t.slice('create '.length))
+    if (made != null && 'ifNot' in s && s.ifNot && held.get(made) == as) {
+      continue
+    }
     driver.query(s)
-    if (made != null) names.add(made)
-    if (s.t == 'drop') names.delete(s.name)
+    if (made != null) held.set(made, as)
+    if (s.t == 'drop') held.delete(s.name)
   }
 }

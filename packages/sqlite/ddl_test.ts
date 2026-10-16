@@ -89,6 +89,43 @@ test('a look survives reference upgrades and rollbacks', () => {
   })
 })
 
+// `tower.design`'s index and the `tower_design` table would share a name.
+let towerWords = (design = true) =>
+  loadVocab({
+    $defs: {
+      ...design && {
+        tower_design: {
+          component: true,
+          properties: { name: { type: 'string' } },
+        },
+      },
+      tower: {
+        component: true,
+        properties: {
+          design: { type: 'string', ref: 'entity', death: 'keep' },
+        },
+      },
+    },
+  })
+
+test('an index reads where its name is a component table', () => {
+  for (let first of [towerWords(), towerWords(false)]) {
+    let d = mem()
+    let before = storage(d, first)
+    before.install()
+    before.tx((tx) =>
+      tx.patch([{ entity: { eid: 't' }, tower: { design: 'd' } }])
+    )
+    let s = storage(d, towerWords())
+    s.install()
+    s.tx((tx) =>
+      tx.patch([{ entity: { eid: 'd' }, tower_design: { name: 'x' } }])
+    )
+    assertEquals(s.read('.tower.design=d').map((b) => b.entity.eid), ['t'])
+    assertEquals(s.read('.tower_design').map((b) => b.entity.eid), ['d'])
+  }
+})
+
 test('a changed identity retires its old unique index', () => {
   let shape = (identity: string[]) =>
     loadVocab({

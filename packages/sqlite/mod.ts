@@ -830,6 +830,8 @@ export let storage = (
       let make = () =>
         unit(driver, () => {
           if (matches()) return
+          // Retired first: a component may take a name an index held.
+          for (let stmt of retired(driver, vocab)) driver.query(stmt)
           let tables = retabled(driver, vocab, base.derived)
           erect(driver, tables)
           let after = (comp: string) =>
@@ -843,7 +845,6 @@ export let storage = (
             return owes
           })
           forgo(driver, kept)
-          for (let stmt of retired(driver, vocab)) driver.query(stmt)
           left = [...unfit, ...build(driver, indexed(vocab), base.sizes)]
           left.forEach(report)
           clean = !left.length

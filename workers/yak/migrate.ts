@@ -21,6 +21,7 @@ import {
   type Derived,
   type Driver,
   erect,
+  indexName,
   lit,
   notNull,
   select,
@@ -385,20 +386,21 @@ let sameIndex = (a: Index, b: Index) =>
   a.props.join('\0') == b.props.join('\0') &&
   (a.present ?? []).join('\0') == (b.present ?? []).join('\0')
 
-/** Retire indexes whose declaring vocabulary changed before raising the next
- * schema. A release candidate calls this inside a transaction it rolls back;
- * the serving store calls it when the directory selects that release. */
+/** Retire indexes whose declaration or name changed before raising the next
+ * schema: a component the next one adds may take an index's old name. A
+ * release candidate calls this inside a transaction it rolls back; the serving
+ * store calls it when the directory selects that release. */
 export let retire = (d: Driver, before: Vocab, after: Vocab) => {
   for (let comp of before.all) {
     let kept = after.indexes(comp)
     for (let old of before.indexes(comp)) {
-      if (kept.some((now) => sameIndex(old, now))) continue
-      d.query({
-        t: 'drop',
-        kind: 'index',
-        name: `${comp}_${old.props.join('_')}`,
-        ifExists: true,
-      })
+      let name = indexName(before, comp, old.props)
+      if (
+        kept.some((now) =>
+          sameIndex(old, now) && indexName(after, comp, now.props) == name
+        )
+      ) continue
+      d.query({ t: 'drop', kind: 'index', name, ifExists: true })
     }
   }
 }
@@ -429,7 +431,7 @@ export let shed = (
         ![...old.props, ...(old.present ?? [])].includes(prop) &&
         after.indexes(name).some((now) => sameIndex(old, now))
       )
-      .map((i) => `${name}_${i.props.join('_')}`),
+      .map((i) => indexName(before, name, i.props)),
   )
   for (let i of indexes) {
     if (kept.has(i.name)) continue
@@ -451,9 +453,10 @@ export let install = (
   vocab: Vocab,
   derived: Derived = {},
 ): Error[] => {
+  // Retired first: a component may take a name an index held.
+  for (let stmt of retired(d, vocab)) d.query(stmt)
   erect(d, retabled(d, vocab, derived))
   let unfit = fit(d, vocab)
-  for (let stmt of retired(d, vocab)) d.query(stmt)
   unfit.push(...build(d, indexed(vocab)))
   // Search is app composition, after all indexed columns have been raised:
   // the full-text indexes, and the table the vectors are kept in beside the

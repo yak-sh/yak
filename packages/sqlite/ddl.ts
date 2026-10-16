@@ -37,7 +37,7 @@
 // the engine, except a `keep` reference, which outlives the row it points at
 // and stays key-free.
 
-import { field } from '@yaks/sql'
+import { field, indexName } from '@yaks/sql'
 import type { Index, Prop, Vocab } from '@yaks/vocab'
 import {
   among,
@@ -240,14 +240,14 @@ let tableDdl = (
   ],
 })
 
-// One declared index, named `<comp>_<props>` — derived from what it covers, so
-// the same declaration always names the same index and a second install is a
+// One declared index, named for what it covers (@yaks/sql `indexName`), so the
+// same declaration always names the same index and a second install is a
 // no-op. A partial one covers only the rows that hold its `present`
 // properties: the rows without them are as many as they like, the rows with
 // them are one.
-let indexDdl = (comp: string, i: Index): CreateIndex => ({
+let indexDdl = (v: Vocab, comp: string, i: Index): CreateIndex => ({
   t: 'create index',
-  name: `${comp}_${i.props.join('_')}`,
+  name: indexName(v, comp, i.props),
   on: comp,
   cols: i.props.map((p) => col(field(p))),
   unique: i.unique,
@@ -359,23 +359,31 @@ export let indexed = (vocab: Vocab): CreateIndex[] => [
   ...(vocab.comp('archetype')
     ? [
       ...vocab.prop('entity', 'num')
-        ? [indexDdl('entity', { props: ['archetype', 'num'], unique: false })]
-        : [indexDdl('entity', { props: ['archetype'], unique: false })],
+        ? [
+          indexDdl(vocab, 'entity', {
+            props: ['archetype', 'num'],
+            unique: false,
+          }),
+        ]
+        : [indexDdl(vocab, 'entity', { props: ['archetype'], unique: false })],
     ]
     : []),
   ...tables(vocab)
-    .flatMap((name) => vocab.indexes(name).map((i) => indexDdl(name, i))),
+    .flatMap((name) =>
+      vocab.indexes(name).map((i) => indexDdl(vocab, name, i))
+    ),
 ]
 
-// A vocabulary index has the name of its table and indexed columns. Inspect
-// the engine's column list too: another package's index on a component table
-// is not ours to retire merely because its name starts with that table's name.
+// A vocabulary index has the name of its table and indexed columns, joined by
+// underscores or dots (@yaks/sql `indexName`). Inspect the engine's column list
+// too: another package's index on a component table is not ours to retire
+// merely because its name starts with that table's name.
 let managed = (driver: Driver, table: string, name: string): boolean => {
   let cols = driver.query({ t: 'pragma', name: 'index_info', arg: name })
     .toSorted((a, b) => Number(a.seqno) - Number(b.seqno))
     .map((r) => r.name)
   return !!cols.length && cols.every((c) => typeof c == 'string') &&
-    name == `${table}_${cols.join('_')}`
+    ['_', '.'].some((by) => name == [table, ...cols].join(by))
 }
 
 let predicate = (sql: string): string =>
@@ -400,7 +408,7 @@ export let retired = (driver: Driver, vocab: Vocab): Stmt[] => {
     if (!(table == 'entity' || vocab.comp(table))) return []
     if (!managed(driver, table, name)) return []
     let now = wanted.get(name)
-    if (now) {
+    if (now?.on == table) {
       let held = listed.get(table)
       if (!held) {
         held = new Map(

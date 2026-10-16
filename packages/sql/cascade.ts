@@ -53,7 +53,7 @@ import {
   val,
 } from './ast.ts'
 import { render } from './render.ts'
-import { type Dialect, sqlite } from './sqlite.ts'
+import { type Dialect, indexName, sqlite } from './sqlite.ts'
 
 /** How far a cascade's rungs are counted before the number stops climbing.
  * Depth only decides the order the deleted entities come back in; it never
@@ -86,7 +86,7 @@ export let narrow = (v: Vocab, terms: number = ARMS): boolean =>
 let reference = (v: Vocab, comp: string, prop: string): string => {
   let index = v.indexes(comp).find((i) => i.props[0] == prop && !i.present)
   return index
-    ? sqlite.indexed!(comp, `${comp}_${index.props.join('_')}`)
+    ? sqlite.indexed!(comp, indexName(v, comp, index.props))
     : sqlite.table(comp)
 }
 
