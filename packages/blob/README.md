@@ -304,74 +304,18 @@ the whole. A broken chain, or a part of the wrong length, throws `Wrong`. `Gone`
 says the upload is not under way, so it is begun again. `memoryMultipart(put)`
 holds the parts in memory for a bucket with no multipart of its own.
 
-```ts
-import { equal } from '@yaks/testing'
-import { type Bucket, bucketObjects, fold, START } from '@yaks/blob'
-import { memoryMultipart, parts } from '@yaks/blob'
+The complete three-part bucket example runs in
+[`multipart_example_test.ts`](./multipart_example_test.ts): a third part lands,
+a new uploader reads its ledger, and only the two missing parts are sent before
+checking the exact completed bytes and empty ledger. Its bucket and bytes are
+prepared outside that behavior's timer.
 
-// One chunk is enough for these tiny parts; no HTTP response is needed.
-let stream = (bytes: Uint8Array) =>
-  new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(bytes)
-      controller.close()
-    },
-  })
-let held = new Map<string, Uint8Array>()
-let now = <T>(v: T) => Promise.resolve(v)
-let bucket: Bucket = {
-  head: (k) =>
-    now(held.has(k) ? { size: held.get(k)!.length, etag: '' } : null),
-  get: (k) => {
-    let b = held.get(k)
-    return now(
-      b
-        ? {
-          etag: '',
-          body: stream(b),
-          arrayBuffer: () => now(b.slice().buffer),
-        }
-        : null,
-    )
-  },
-  put: (k, v) => now(void held.set(k, v as Uint8Array)),
-  delete: (ks) => now([ks].flat().forEach((k) => held.delete(k))),
-  list: ({ prefix }) =>
-    now({
-      truncated: false,
-      objects: [...held].filter(([k]) => k.startsWith(prefix))
-        .map(([key, b]) => ({ key, size: b.length, uploaded: new Date(0) })),
-    }),
-}
-let file = new Uint8Array(150).fill(7)
-let sha = fold(START, file, file.length)
-let objects = bucketObjects(bucket)
-let multipart = memoryMultipart(bucket.put)
-let at = {
-  key: sha,
-  sha,
-  ledger: 'uploads/',
-  part: 64,
-}
-let up = parts(objects, multipart, at)
-let send = (n: number) => {
-  let bytes = file.slice((n - 1) * 64, n * 64)
-  let from = fold(START, file.slice(0, (n - 1) * 64))
-  return up.put(n, stream(bytes), bytes.length, from)
-}
-equal((await up.post(150)).need, [1, 2, 3])
-await send(3) // and then the connection drops
-up = parts(objects, multipart, at) // a new request resumes from the ledger
-equal((await up.post(150)).need, [1, 2])
-await Promise.all([send(1), send(2)])
-equal(await up.post(150), {
-  part: 64,
-  need: [],
-  whole: { bytes: 150, head: file, made: true },
-})
-equal(await objects.list('uploads/'), [])
-equal(await objects.list(''), [sha])
-equal(held.get(sha), file)
+```ts
+import { parts } from '@yaks/blob'
+
+// const upload = parts(objects, multipart, { key, sha, ledger: 'uploads/' })
+// const { need } = await upload.post(bytes) // resume from its durable ledger
+// await upload.put(part, stream, length, stateBeforePart)
 ```
 
 R2 takes parts of at least 5 MiB, every one but the last the same size, and
