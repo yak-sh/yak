@@ -40,7 +40,9 @@ let registration = (
         Deno.env.get('BASE_GRAPH') ?? 'same-build',
       ])
       : args.length
-      ? JSON.stringify([1, ...args])
+      ? JSON.stringify([name == 'relay-admission' ? 2 : 1, ...args])
+      : name == 'relay-admission'
+      ? 2
       : 1,
     benches: names.map((name) => ({ name, unit })),
     collect: async () => {

@@ -23,8 +23,4 @@ export const relayBenchmarkNames = () => RELAY_ENTITIES.map(relayBenchmarkName)
 export const benchmarkNames =
   () => [...storageNames(), ...applyBenchmarkNames(), ...relayBenchmarkNames()]
 export const bundlesPerOp = (name: string) =>
-  name.startsWith('apply/')
-    ? Number(name.split('/')[2].split('-').at(-1))
-    : name.startsWith('relay/')
-    ? RELAY_TICKS * Number(name.split('-').at(-1))
-    : 1
+  name.startsWith('apply/') ? Number(name.split('/')[2].split('-').at(-1)) : 1

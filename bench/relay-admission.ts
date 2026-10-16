@@ -18,9 +18,7 @@ export async function measure(
         const samples: number[] = []
         for (let round = 0; round < 3; round++) {
           fixture.reset()
-          const start = performance.now()
-          fixture.run(N)
-          samples.push(performance.now() - start)
+          samples.push(await fixture.run(N) / 1e6)
         }
         const count = fixture.counts(), values = N * entities
         results[variant + '/' + entities + '-entities'] = samples.map(
@@ -30,7 +28,7 @@ export async function measure(
             counts: { values, entities, simulatedSeconds: N / 10, ...count },
             details: {
               note: variant == 'store-relay'
-                ? 'synchronous message/admission/coalescing, no observers; fanout timer excluded'
+                ? 'submission through admission/staging on simulated clock; fanout and delivery verification excluded'
                 : 'ordinary graph.apply(check) on durable SQLite + member/schema; rolled back',
             },
           }),

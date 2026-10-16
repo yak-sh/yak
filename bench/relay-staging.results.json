@@ -1,0 +1,2559 @@
+{
+  "cause": "24ef8e577e7d4ef62c8ca708243972701ef5758b",
+  "parent": "77ebf5d382047088fd4aae26df43c6d12b044eca",
+  "current": "fcb9fa0dc13d337e4ff2b3483f1527f5e3570436",
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "boundary": "one submission through admission and staging; fanout and checked delivery excluded; simulated clock held until delivery",
+  "method": "7 alternating parent/main Deno averages; median of 7; copied identical relay-fixture.ts and relay_bench.ts to parent, no production patches; tolerance unchanged",
+  "nsPerValue": {
+    "parent": [
+      {
+        "relay/store/entities-1": 312957.0,
+        "relay/store/entities-10": 260343.0,
+        "relay/store/entities-100": 263298.0
+      },
+      {
+        "relay/store/entities-1": 337117.0,
+        "relay/store/entities-10": 287859.0,
+        "relay/store/entities-100": 280011.0
+      },
+      {
+        "relay/store/entities-1": 352334.0,
+        "relay/store/entities-10": 271937.0,
+        "relay/store/entities-100": 257815.0
+      },
+      {
+        "relay/store/entities-1": 337740.0,
+        "relay/store/entities-10": 283161.0,
+        "relay/store/entities-100": 257993.0
+      },
+      {
+        "relay/store/entities-1": 397613.0,
+        "relay/store/entities-10": 337690.0,
+        "relay/store/entities-100": 247965.0
+      },
+      {
+        "relay/store/entities-1": 309055.0,
+        "relay/store/entities-10": 264336.0,
+        "relay/store/entities-100": 253905.0
+      },
+      {
+        "relay/store/entities-1": 343332.0,
+        "relay/store/entities-10": 276223.0,
+        "relay/store/entities-100": 255573.0
+      }
+    ],
+    "main": [
+      {
+        "relay/store/entities-1": 319640.0,
+        "relay/store/entities-10": 264070.0,
+        "relay/store/entities-100": 269030.0
+      },
+      {
+        "relay/store/entities-1": 337713.0,
+        "relay/store/entities-10": 272692.0,
+        "relay/store/entities-100": 288817.0
+      },
+      {
+        "relay/store/entities-1": 317361.0,
+        "relay/store/entities-10": 271164.0,
+        "relay/store/entities-100": 308106.0
+      },
+      {
+        "relay/store/entities-1": 328165.0,
+        "relay/store/entities-10": 287953.0,
+        "relay/store/entities-100": 275990.0
+      },
+      {
+        "relay/store/entities-1": 322541.0,
+        "relay/store/entities-10": 287617.0,
+        "relay/store/entities-100": 285574.0
+      },
+      {
+        "relay/store/entities-1": 346843.0,
+        "relay/store/entities-10": 282259.0,
+        "relay/store/entities-100": 276545.0
+      },
+      {
+        "relay/store/entities-1": 335125.0,
+        "relay/store/entities-10": 273000.0,
+        "relay/store/entities-100": 266311.0
+      }
+    ]
+  },
+  "comparison": {
+    "relay/store/entities-1": {
+      "parent": 337740.0,
+      "main": 328165.0,
+      "ratio": 0.9716497897791201,
+      "limit": 415757.94000000006
+    },
+    "relay/store/entities-10": {
+      "parent": 276223.0,
+      "main": 273000.0,
+      "ratio": 0.9883318912617703,
+      "limit": 303845.30000000005
+    },
+    "relay/store/entities-100": {
+      "parent": 257815.0,
+      "main": 276545.0,
+      "ratio": 1.0726489924946183,
+      "limit": 283596.5
+    }
+  },
+  "standaloneUsPerValue": {
+    "parent": [
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 429.0144299999973,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 340.07584999999546,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 322.500265000001,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 767.9364599999982,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 678.9436400000034,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 681.7687199999934,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 300.847374499999,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 267.2873260000052,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 283.37029050000507,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 579.4826519999989,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 544.4222380000044,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 521.2849630000057,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 249.59014250000757,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 221.20455900000636,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 222.0605379499856,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 524.4729678499922,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 468.33198055002333,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 487.977261799993,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      },
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 556.0386350000012,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 467.03518000000076,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 397.6131000000016,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 892.0809100000048,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 913.3023750000051,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 877.7436499999878,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 413.46187799999865,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 358.85548550000095,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 323.88848149998324,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 620.500986999992,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 579.3303780000053,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 528.3911144999963,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 269.18908925000125,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 236.269291149994,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 219.92369359998796,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 531.4175497500304,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 497.90782204998203,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 486.1560510999849,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      },
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 530.0457950000025,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 435.63704999999953,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 437.3471149999982,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 1027.224399999993,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 948.8853450000008,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 938.0623199999814,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 358.1268784999982,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 307.1656769999956,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 295.9292975000042,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 652.2629765000058,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 522.2830170000035,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 484.5012040000067,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 251.50347720000408,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 223.89353980000084,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 236.4262651500205,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 534.1302377499951,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 499.7126191499702,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 502.3509139000031,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      },
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 473.5722949999916,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 367.2257100000041,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 380.5155550000009,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 846.4429749999997,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 692.3778450000021,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 666.0546400000104,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 391.10963550000247,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 338.9832649999915,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 314.8174339999889,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 630.4480539999975,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 557.9886784999891,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 511.77207849998854,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 280.97127135000494,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 222.9234883999851,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 226.49366880001625,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 521.3478462000214,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 491.3128285500337,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 479.35942579998215,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      }
+    ],
+    "main": [
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 468.70482999999876,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 362.70931999999897,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 336.9761699999992,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 781.7349449999979,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 649.7881000000027,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 693.1587799999988,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 361.9247815000001,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 384.29165950000237,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 316.1537725000009,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 592.6858074999806,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 545.9969469999905,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 531.7054659999985,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 258.97609544999654,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 226.5465036999961,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 231.10162510001385,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 537.4001847999866,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 499.888324100006,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 511.0209116999604,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      },
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 492.0814449999928,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 377.35409500000003,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 409.2528550000014,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 978.1061100000022,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 659.2363349999937,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 599.3792399999936,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 368.43211950000483,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 325.08492249999796,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 317.21760699999606,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 635.749645499994,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 610.7827524999904,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 543.1857560000072,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 255.27657555000982,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 241.80187194999792,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 226.22994729999942,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 505.7677081499811,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 500.4815926000328,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 505.28491140001734,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      },
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 458.612439999993,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 342.8409799999974,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 328.3172599999955,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 775.0574400000061,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 651.5391599999986,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 689.5990300000032,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 348.6362175000018,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 314.1726855000017,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 307.171603499998,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 697.8980639999916,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 580.7129475000006,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 526.3401324999827,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 271.7699767000017,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 234.9106459499939,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 238.0013568999802,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 512.7332520999835,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 519.8505923999843,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 509.3564494500012,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      },
+      {
+        "store-relay/1-entities": [
+          {
+            "value": 531.9302800000023,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 391.3891400000056,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 347.1353199999974,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 200
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/1-entities": [
+          {
+            "value": 804.2470800000078,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 738.7594100000046,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 818.1992000000041,
+            "source": "batch",
+            "counts": {
+              "values": 200,
+              "entities": 1,
+              "simulatedSeconds": 20,
+              "sql": 1800,
+              "reads": 1200,
+              "writes": 600,
+              "transactions": 200
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/10-entities": [
+          {
+            "value": 374.6115589999962,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 321.75613150000373,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 305.8024940000142,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/10-entities": [
+          {
+            "value": 639.0962785000038,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 556.909302000005,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 538.6027144999987,
+            "source": "batch",
+            "counts": {
+              "values": 2000,
+              "entities": 10,
+              "simulatedSeconds": 20,
+              "sql": 18000,
+              "reads": 12000,
+              "writes": 6000,
+              "transactions": 2000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ],
+        "store-relay/100-entities": [
+          {
+            "value": 254.8673544999931,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 225.99639425000953,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          },
+          {
+            "value": 234.4345146500038,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 0,
+              "reads": 0,
+              "writes": 0,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "submission through admission/staging on simulated clock; fanout and delivery verification excluded"
+            }
+          }
+        ],
+        "graph-full-check/100-entities": [
+          {
+            "value": 515.1680668999815,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 492.32214525002513,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          },
+          {
+            "value": 510.02640710002345,
+            "source": "batch",
+            "counts": {
+              "values": 20000,
+              "entities": 100,
+              "simulatedSeconds": 20,
+              "sql": 180000,
+              "reads": 120000,
+              "writes": 60000,
+              "transactions": 20000
+            },
+            "details": {
+              "note": "ordinary graph.apply(check) on durable SQLite + member/schema; rolled back"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "standaloneComparison": {
+    "store-relay/1-entities": {
+      "parentReference": 408.93133499999954,
+      "main": 377.0492300000023,
+      "limit": 797.4161032499991
+    },
+    "graph-full-check/1-entities": {
+      "parentReference": 621.2107299999997,
+      "main": 691.3789050000009,
+      "limit": 801.3618416999996
+    },
+    "store-relay/10-entities": {
+      "parentReference": 323.07447099999354,
+      "main": 323.42052700000085,
+      "limit": 522.0883451359896
+    },
+    "graph-full-check/10-entities": {
+      "parentReference": 566.5019235000001,
+      "main": 568.8111247500028,
+      "limit": 735.3194967030001
+    },
+    "store-relay/100-entities": {
+      "parentReference": 231.3814799750051,
+      "main": 236.217935774992,
+      "limit": 272.567383410556
+    },
+    "graph-full-check/100-entities": {
+      "parentReference": 518.2443982,
+      "main": 510.5236593999919,
+      "limit": 581.9884591786
+    }
+  }
+}

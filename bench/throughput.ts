@@ -52,7 +52,7 @@ export let throughput = (input: Input = {}): CollectedSuite => {
   return {
     name: 'throughput',
     metric: 'median-of-7-deno-avg-ns',
-    workload: WORKLOAD_VERSION,
+    workload: `${WORKLOAD_VERSION}/relay-staging-2`,
     benches: [
       ...(recording ? applyNames : benchmarkNames()).map((name) => ({
         name,

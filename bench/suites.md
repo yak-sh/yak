@@ -81,3 +81,44 @@ committed baseline, it records without comparison.
 
 Long command names use a shortened filename with a digest; the JSON keeps the
 complete suite name, so distinct narrowed commands retain distinct results.
+
+## Relay admission boundary (T-125978)
+
+`relay/store/entities-*` measures **one value**, from WebSocket submission
+through admission and staging, on a warmed Store. The simulated clock stays
+fixed through that work. A controlled 16 ms timer registration queues the
+endpoint microtask: admission has completed and the registering call stack has
+filled the pending batch. Only afterward does the fixture flush fanout and
+verify the observer got exactly that value. A skipped or refused value fails
+instead of becoming a cheap sample. SQL counts cover the same interval. The
+benchmark runs in isolation and restores its clock and timer overrides even on
+failure.
+
+The former synchronous loop stopped at `await #ensureStarted()`, before
+admission. `24ef8e577e7d` moved decoding before that await for clock probes,
+exposing the wrong boundary rather than making admission three times slower.
+Workload `1/relay-staging-2` replaces only the relay timing and transaction
+references with measurements of the corrected fixture on that commit's parent,
+`77ebf5d382`. It is not acceptance of slower current-main observations:
+tolerances and unrelated references stay unchanged. `relay-admission` uses the
+same boundary (workload 2); its direct graph-check references remain unchanged.
+
+`relay-staging.results.json` preserves the alternating seven-run parent/main
+comparison and four repeated standalone comparisons. To reproduce the throughput
+comparison, copy `bench/relay-fixture.ts` and `bench/relay_bench.ts` unchanged
+into a detached worktree at `24ef8e577^`, then alternate this command between it
+and main (hold the shared lock; never remove its file):
+
+```sh
+flock /tmp/yaks-throughput-bench.lock deno bench -A --no-check --json \
+  --filter '/^relay\/store\/entities-(1|10|100)$/' bench/relay_bench.ts
+```
+
+Each report's average is already ns/value (one value/op); take each name's
+median across seven invocations. Standalone comparisons use the current fixture
+against either checkout root:
+
+```sh
+flock /tmp/yaks-throughput-bench.lock deno run -A bench/standalone-worker.ts \
+  bench/relay-admission.ts /absolute/path/to/checkout
+```

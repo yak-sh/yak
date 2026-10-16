@@ -1,6 +1,7 @@
 // T-64601's ordinary-admission workload, retained by T-64638 (ed5e921b1).
-// The measured work is message/admission/coalescing on a warmed Store with no
-// observers. Simulated 100ms turns satisfy presence's pace; fanout is excluded.
+// A sample submits one value and waits for admission/staging on a warmed Store.
+// Simulated 100ms turns satisfy presence's pace; fanout and checked delivery
+// to an observer run outside timing. The same fixture accepts a historical root.
 import type { durable } from '../packages/durable-object/testing.ts'
 
 import { RELAY_ENTITIES, RELAY_TICKS, relayBenchmarkName } from './names.ts'
@@ -43,6 +44,7 @@ export type RelayCounts = {
   transactions: number
 }
 const measured = (db: ReturnType<typeof durable>) => {
+  let counting = false
   let counts: RelayCounts
   const reset = () => {
     counts = { sql: 0, reads: 0, writes: 0, transactions: 0 }
@@ -50,20 +52,28 @@ const measured = (db: ReturnType<typeof durable>) => {
   reset()
   const exec = db.sql.exec.bind(db.sql), tx = db.transactionSync.bind(db)
   db.sql.exec = (q, ...args) => {
-    counts.sql++
-    if (/^\s*(?:select|with|pragma)\b/i.test(q)) counts.reads++
-    if (/^\s*(?:insert|update|delete|replace)\b/i.test(q)) counts.writes++
+    if (counting) counts.sql++
+    if (counting && /^\s*(?:select|with|pragma)\b/i.test(q)) counts.reads++
+    if (counting && /^\s*(?:insert|update|delete|replace)\b/i.test(q)) {
+      counts.writes++
+    }
     return exec(q, ...args)
   }
   db.transactionSync = (fn) => {
-    counts.transactions++
+    if (counting) counts.transactions++
     return tx(fn)
   }
-  return { db, reset, counts: () => ({ ...counts }) }
+  return {
+    db,
+    reset,
+    counting: (on: boolean) => counting = on,
+    counts: () => ({ ...counts }),
+  }
 }
 
 export type RelayFixture = {
-  run(ticks?: number): void
+  run(ticks?: number): Promise<number>
+  next(timing: { start(): void; end(): void }): Promise<void>
   reset(): void
   counts(): RelayCounts
   close(): Promise<void>
@@ -80,20 +90,15 @@ export async function relayFixture(
     (_, i) => `c0000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
   )
   let now = Date.now(), value = 0
-  const clock = (fn: () => void) => {
-    const date = Date.now
-    Date.now = () => now
-    try {
-      fn()
-    } finally {
-      Date.now = date
-    }
-  }
   const batch = (eid: string, x: number) => [{
     entity: { eid },
     presence: { x },
   }]
-  let send: (i: number, x: number) => void
+  let send: (
+    i: number,
+    x: number,
+    timing: { start(): void; end(): void },
+  ) => void | Promise<void>
   let close: () => Promise<void>
   if (variant == 'store-relay') {
     const { Store } = await import(root + '/workers/yak/graph.ts')
@@ -140,38 +145,95 @@ export async function relayFixture(
       live.push(ws)
       return ws
     })
-    send = (i, x) => {
-      store.webSocketMessage(
-        wires[i],
-        JSON.stringify({ relay: batch(eids[i], x) }),
-      )
-      if (refused) throw new Error('Relay fixture value refused')
+    const received: { entity: { eid: string }; presence?: { x?: number } }[] =
+      []
+    let timingValue = false
+    const observer = {
+      readyState: 1,
+      send: (raw: string) => {
+        const frame = JSON.parse(raw)
+        if (frame.refused) throw new Error(JSON.stringify(frame.refused))
+        if (frame.relay && timingValue) {
+          throw new Error('Fanout ran inside admission timing')
+        }
+        received.push(...(frame.relay ?? []))
+      },
+      close: () => {},
+      serializeAttachment: (_value: unknown) => {},
+      deserializeAttachment: () => null,
     }
-    // Warm restored sinks and peer-value caches, then drain the fanout timer.
-    const warming: (void | Promise<void>)[] = []
-    clock(() => {
-      for (let i = 0; i < entities; i++) {
-        warming.push(store.webSocketMessage(
-          wires[i],
-          JSON.stringify({ relay: batch(eids[i], -1) }),
-        ))
-        now += 100
+    live.push(observer)
+    await store.webSocketMessage(
+      observer,
+      JSON.stringify({ subscribe: '.hero', id: 'observe' }),
+    )
+    received.length = 0
+    send = async (i, x, timing) => {
+      const set = globalThis.setTimeout, clear = globalThis.clearTimeout
+      let flush: (() => void) | undefined, cancelled = false, flushing = false
+      const delivery: (() => void)[] = []
+      const staged = Promise.withResolvers<void>()
+      // This isolated benchmark owns its timers. Registration occurs after
+      // admission; its microtask runs after stage has filled the pending batch.
+      globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+        if (flushing && ms === 16) {
+          delivery.push(fn)
+          return -2
+        }
+        if (ms !== 16 || flush) throw new Error(`Unexpected relay timer: ${ms}`)
+        flush = fn
+        queueMicrotask(() => {
+          try {
+            timing.end()
+            timingValue = false
+            staged.resolve()
+          } catch (error) {
+            staged.reject(error)
+          }
+        })
+        return -1
+      }) as typeof setTimeout
+      globalThis.clearTimeout = ((id?: number) => {
+        if (id === -2) return
+        if (id !== -1) return clear(id)
+        if (!flushing) throw new Error('Relay staging cancelled before fanout')
+        cancelled = true
+      }) as typeof clearTimeout
+      try {
+        const raw = JSON.stringify({ relay: batch(eids[i], x) })
+        timingValue = true
+        timing.start()
+        const done = store.webSocketMessage(wires[i], raw)
+        await Promise.race([
+          staged.promise,
+          done.then(() => {
+            throw new Error('Relay finished without staging a value')
+          }),
+        ])
+        flushing = true
+        flush!()
+        await done
+        while (delivery.length) delivery.shift()!()
+        if (!cancelled || refused) {
+          throw new Error(
+            `Relay value was not admitted cancelled=${cancelled} refused=${refused}`,
+          )
+        }
+        const expected = batch(eids[i], x)
+        if (JSON.stringify(received) !== JSON.stringify(expected)) {
+          throw new Error(
+            `Relay delivery mismatch: ${JSON.stringify(received)}`,
+          )
+        }
+        received.length = 0
+      } finally {
+        timingValue = false
+        globalThis.setTimeout = set
+        globalThis.clearTimeout = clear
       }
-    })
-    await Promise.all(warming)
-    // The second value exercises admission with a held peer overlay too.
-    warming.length = 0
-    clock(() => {
-      now += 100
-      for (let i = 0; i < entities; i++) {
-        warming.push(store.webSocketMessage(
-          wires[i],
-          JSON.stringify({ relay: batch(eids[i], -2) }),
-        ))
-      }
-    })
-    await Promise.all(warming)
+    }
     close = async () => {
+      await store.webSocketClose(observer)
       for (const ws of wires) await store.webSocketClose(ws)
       m.db[Symbol.dispose]()
     }
@@ -199,7 +261,8 @@ export async function relayFixture(
     })
     g.use(members({ app: APP, vocab }))
     g.use(admitSchema(vocab))
-    send = (i, x) => {
+    send = (i, x, timing) => {
+      timing.start()
       const result = g.apply(
         signed(batch(eids[i], x), { by: ADA, via: VIA }),
         { check: true },
@@ -207,23 +270,51 @@ export async function relayFixture(
       if (result instanceof Promise) {
         throw new Error('Graph check became asynchronous; update the benchmark')
       }
+      timing.end()
     }
     close = () => {
       m.db[Symbol.dispose]()
       return Promise.resolve()
     }
   } else throw new Error(`Unknown relay variant: ${variant}`)
-  const run = (ticks = 1) => {
-    clock(() => {
-      for (let tick = 0; tick < ticks; tick++) {
-        now += 100
-        for (let i = 0; i < entities; i++) send(i, value)
-        value++
-      }
-    })
+  let index = 0
+  const next = async (timing: { start(): void; end(): void }) => {
+    const date = Date.now
+    if (index === 0) now += 100
+    Date.now = () => now
+    try {
+      await send(index, value, {
+        start: () => {
+          m.counting(true)
+          timing.start()
+        },
+        end: () => {
+          timing.end()
+          m.counting(false)
+        },
+      })
+    } finally {
+      m.counting(false)
+      Date.now = date
+    }
+    if (++index === entities) {
+      index = 0
+      value++
+    }
   }
+  const run = async (ticks = 1) => {
+    let ns = 0, start = 0
+    for (let i = 0; i < ticks * entities; i++) {
+      await next({
+        start: () => start = performance.now(),
+        end: () => ns += (performance.now() - start) * 1e6,
+      })
+    }
+    return ns
+  }
+  await run(2)
   m.reset()
-  return { run, reset: m.reset, counts: m.counts, close }
+  return { run, next, reset: m.reset, counts: m.counts, close }
 }
 
 export async function measureRelayCounts(ticks = RELAY_TICKS) {
@@ -231,7 +322,7 @@ export async function measureRelayCounts(ticks = RELAY_TICKS) {
   for (const entities of RELAY_ENTITIES) {
     const fixture = await relayFixture(entities)
     try {
-      fixture.run(ticks)
+      await fixture.run(ticks)
       result[relayBenchmarkName(entities)] = Object.fromEntries(
         Object.entries(fixture.counts()).map(([key, n]) => [
           key,

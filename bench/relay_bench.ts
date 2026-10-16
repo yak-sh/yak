@@ -1,24 +1,16 @@
-// Deno reports one op per ten simulated turns; the ratchet divides by the
-// values (ten times entities) to record ns/value. Boot and cleanup are excluded.
+// One value from submission through admission and staging, excluding fanout.
 import {
   RELAY_ENTITIES,
-  RELAY_TICKS,
   relayBenchmarkName,
   relayFixture,
 } from './relay-fixture.ts'
 
 for (const entities of RELAY_ENTITIES) {
+  const fixture = await relayFixture(entities)
   Deno.bench({
     name: relayBenchmarkName(entities),
     fn: async (b) => {
-      const fixture = await relayFixture(entities)
-      try {
-        b.start()
-        fixture.run(RELAY_TICKS)
-        b.end()
-      } finally {
-        await fixture.close()
-      }
+      await fixture.next(b)
     },
   })
 }

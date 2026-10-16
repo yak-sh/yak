@@ -53,7 +53,7 @@ test('throughput refuses synthetic 30% timing and statement regressions without 
     equal(await regressed([names[0]]), [names[0]])
     equal(await regressed(names), names)
     equal(bundlesPerOp('apply/file/edit-alone-1000'), 1000)
-    equal(bundlesPerOp('relay/store/entities-100'), 1000)
+    equal(bundlesPerOp('relay/store/entities-100'), 1)
   } finally {
     await Deno.remove(directory, { recursive: true })
   }
@@ -96,7 +96,7 @@ test('throughput collects each storage report separately from normalized apply a
     )
     equal(
       (collected['relay/store/entities-100'] as { value: number }).value,
-      .1,
+      100,
     )
     equal((collected['sqlite/file/point'] as { value: number }).value, 100)
   }
