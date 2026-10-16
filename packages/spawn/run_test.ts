@@ -190,20 +190,24 @@ test('a run is asked how it stands without reading its transcript', async () => 
   assert(steps < ENTRIES, `${steps} steps`)
 })
 
-test('native graph sessions are never launched by the outside adapter', async () => {
+// A separate graph prepares the native exclusion scenario before assertions.
+let nativeExclusion = await (async () => {
   let { g } = tracked()
   await g.apply(asking('S-native', 'E-native', 'fix it'))
   await g.apply([{ entity: { eid: 'S-native' }, native: {} }])
-  assertEquals(await asked(g, 'S-native'), null)
+  let request = await asked(g, 'S-native')
   let launched = false
-  assertEquals(
-    await start(g, 'S-native', {
-      launch: () => {
-        launched = true
-        throw Error('wrong runner')
-      },
-    }),
-    null,
-  )
-  assertEquals(launched, false)
+  let run = await start(g, 'S-native', {
+    launch: () => {
+      launched = true
+      throw Error('wrong runner')
+    },
+  })
+  return Object.freeze({ request, run, launched })
+})()
+
+test('native graph sessions are never launched by the outside adapter', () => {
+  assertEquals(nativeExclusion.request, null)
+  assertEquals(nativeExclusion.run, null)
+  assertEquals(nativeExclusion.launched, false)
 })

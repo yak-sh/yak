@@ -4,9 +4,12 @@ import { claude } from '@yaks/claude'
 import { agent } from './agent.ts'
 import { harness } from './testing.ts'
 
-test('Claude CLI model turns, calls and results use the native transcript loop', async () => {
+// Drive an independent real CLI/harness session at load; close it before
+// budgeted assertions observe its immutable public transcript outcome.
+let nativeLoop = await (async () => {
   let h = await harness()
   let executed = 0
+  let received: unknown[] = []
   let a = agent({
     h,
     provider: 'claude',
@@ -28,7 +31,7 @@ test('Claude CLI model turns, calls and results use the native transcript loop',
       parameters: { type: 'object', properties: { q: { type: 'string' } } },
       run: (args) => {
         executed++
-        assertEquals(args, { q: 'hello' })
+        received.push(structuredClone(args))
         return Promise.resolve('found')
       },
     }],
@@ -37,15 +40,28 @@ test('Claude CLI model turns, calls and results use the native transcript loop',
     let s = await a.start('work')
     await a.idle(s)
     let rows = await a.transcript(s)
-    assertEquals(executed, 1)
-    let turns = rows.filter((b) => b.ask).length
-    assertEquals(turns >= 2 && turns <= 3, true)
-    assertEquals(rows.filter((b) => b.call).length, 1)
-    assertEquals(rows.filter((b) => b.result).length, 1)
-    assertEquals(rows.filter((b) => b.output && b.content).length, turns)
-    assertEquals(rows.filter((b) => b.claude).length, turns)
-    assertEquals((await h.g.get([s]))[0].native, {})
+    return Object.freeze({
+      executed,
+      received: JSON.stringify(received),
+      turns: rows.filter((b) => b.ask).length,
+      calls: rows.filter((b) => b.call).length,
+      results: rows.filter((b) => b.result).length,
+      outputs: rows.filter((b) => b.output && b.content).length,
+      claude: rows.filter((b) => b.claude).length,
+      native: JSON.stringify((await h.g.get([s]))[0].native),
+    })
   } finally {
     await a.close()
   }
+})()
+
+test('Claude CLI model turns, calls and results use the native transcript loop', () => {
+  assertEquals(nativeLoop.executed, 1)
+  assertEquals(nativeLoop.received, '[{"q":"hello"}]')
+  assertEquals(nativeLoop.turns >= 2 && nativeLoop.turns <= 3, true)
+  assertEquals(nativeLoop.calls, 1)
+  assertEquals(nativeLoop.results, 1)
+  assertEquals(nativeLoop.outputs, nativeLoop.turns)
+  assertEquals(nativeLoop.claude, nativeLoop.turns)
+  assertEquals(nativeLoop.native, '{}')
 })
