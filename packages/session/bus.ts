@@ -7,7 +7,17 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { who } from '@yaks/graph/call'
-import { absent, and, type Clause, every, present } from '@yaks/query'
+import {
+  absent,
+  and,
+  type Clause,
+  eq,
+  every,
+  fields,
+  list,
+  present,
+} from '@yaks/query'
+import { CLAIM, SESSION } from './comp.ts'
 import {
   arrived,
   commented,
@@ -85,33 +95,43 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       ].filter((id): id is Eid => typeof id == 'string'),
     ),
   ]
-  let rows = await g.get(targets)
+  // A target is a session itself, or names the session that created or
+  // claimed it; only those two references are read, never the whole record.
+  let rows = targets.length
+    ? await g.read(and(
+      eq('entity.eid', list(...targets)),
+      fields('created.via', `${CLAIM}.session`),
+    ))
+    : []
   return [
     ...new Set([
-      ...rows.flatMap((b) => [
-        ...typeof comp(b, 'created').via == 'string'
-          ? [String(comp(b, 'created').via)]
-          : [],
-        ...b.session ? [b.entity.eid] : [],
-        ...typeof comp(b, 'claim').session == 'string'
-          ? [String(comp(b, 'claim').session)]
-          : [],
-      ]),
+      ...targets,
+      ...rows.flatMap((b) =>
+        [comp(b, 'created').via, comp(b, CLAIM).session].filter((
+          id,
+        ): id is Eid => typeof id == 'string')
+      ),
       ...await heirs(g, [...replies, ...reached, ...projects, ...comments]),
     ]),
   ]
 }
 
-// Indexed, bounded reads distinguish a native transcript from an outside
-// session without loading its transcript on every tool reply.
-let native = async (g: Graph, session: Bundle): Promise<boolean> => {
-  if (!session.session || session.process) return false
-  let id = session.entity.eid
-  let [using, ended] = await Promise.all([
-    g.read(`.entry.session=${id}&.using&.limit=1`),
-    over(g, session),
-  ])
-  return using.length > 0 && !ended
+// The native transcripts among these entities, found in one indexed read: a
+// session with a `using` entry and no `process`, which is not over. An outside
+// session's long log is never loaded to tell.
+let natives = async (g: Graph, ids: Eid[]): Promise<Eid[]> => {
+  let found = ids.length
+    ? await g.read(and(
+      eq('entity.eid', list(...ids)),
+      present(SESSION),
+      ...g.vocab.comp('process') ? [absent('process')] : [],
+      present('entries.using'),
+      fields(`${SESSION}.ended`),
+    ))
+    : []
+  let out: Eid[] = []
+  for (let s of found) if (!await over(g, s)) out.push(s.entity.eid)
+  return out
 }
 
 /** A line a native transcript is owed: the item, what is said of it, and the
@@ -123,9 +143,7 @@ export type Due = { session: Eid; item: Bundle; line: string }
 export let due = async (g: Graph): Promise<Due[]> => {
   if (!g.vocab.comp('notified')) return []
   let out: Due[] = []
-  for (let id of await candidates(g)) {
-    let [session] = await g.get([id])
-    if (!session || !await native(g, session)) continue
+  for (let id of await natives(g, await candidates(g))) {
     for (let said of await pending(g, id)) out.push({ session: id, ...said })
   }
   return out
@@ -170,9 +188,9 @@ export let reply = async (g: Graph, call: Bundle): Promise<Bundle[]> => {
   let id = who(call)?.via
   if (!id) return []
   let [session] = await g.get([id])
-  if (!session?.session || session.hooked || await native(g, session)) {
-    return []
-  }
+  if (
+    !session?.session || session.hooked || (await natives(g, [id])).length
+  ) return []
   return (await owed(g, id)).map(({ item, line }) => ({
     entity: {
       eid: derivedEid(`session reply ${call.entity.eid} ${item.entity.eid}`),
