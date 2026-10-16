@@ -1,6 +1,6 @@
 // The places the sidebar offers, as data: home, the destinations, and the
 // schema. A destination is a page listing what a query finds, at `/?<key>`.
-// Browse offers the ones that read its own words (favorites, recent opens,
+// Browse offers the ones that read its own words (favorites, recent edits,
 // sessions); a package offers its own from its `./views` facet as
 // `destinations`, so a tracker lists its bugs without Browse knowing a bug.
 // A favorite is a facet, so marking a task never changes its kind, id, or
@@ -38,7 +38,7 @@ export let favoriteLabel = (e: Ent) =>
  * order, then the sessions; a key once, the first offer kept. */
 export let destinations = (
   vocab: Vocab,
-  actor: string | undefined,
+  _actor: string | undefined,
   sessions: string,
   contributed: Destination[],
 ): Destination[] => {
@@ -52,12 +52,12 @@ export let destinations = (
         query: '.favorite *',
       }]
       : [],
-    ...actor && vocab.prop('opened', 'by')
+    ...vocab.comp('updated')
       ? [{
         key: 'recent',
         name: 'Recent',
         icon: 'clock',
-        query: `.opened.by=${actor} * .order=-opened.at .limit=50`,
+        query: '.updated * .order=-updated.at .limit=50',
       }]
       : [],
     ...contributed,

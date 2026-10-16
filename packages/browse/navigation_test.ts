@@ -35,21 +35,24 @@ test('a favorite is a reversible facet write', () => {
   assertEquals(favoriteChange(entity(true)).comp, null)
 })
 
-test('recent lists this person’s newest opens, and favorites what they marked', () => {
+test('recent lists actual edits, independent of who opened a page', () => {
   let rows = [
-    { entity: { eid: 'old' }, opened: { by: actor, at: '2026-10-01T00:00Z' } },
-    { entity: { eid: 'new' }, opened: { by: actor, at: '2026-10-03T00:00Z' } },
-    { entity: { eid: 'theirs' }, opened: { by: 'b', at: '2026-10-04T00:00Z' } },
+    { entity: { eid: 'old' }, updated: { by: actor, at: '2026-10-01T00:00Z' } },
+    { entity: { eid: 'new' }, updated: { by: actor, at: '2026-10-03T00:00Z' } },
+    {
+      entity: { eid: 'theirs' },
+      updated: { by: 'b', at: '2026-10-04T00:00Z' },
+    },
     { entity: { eid: 'kept' }, favorite: {} },
   ]
   let all = destinations(vocab, actor, '', [])
   let read = (key: string) =>
     reader(rows)(all.find((d) => d.key == key)!.query).map((b) => b.entity.eid)
-  assertEquals(read('recent'), ['new', 'old'])
+  assertEquals(read('recent'), ['theirs', 'new', 'old'])
   assertEquals(read('favorites'), ['kept'])
   assertEquals(
     destinations(vocab, undefined, '', []).some((d) => d.key == 'recent'),
-    false,
+    true,
   )
 })
 

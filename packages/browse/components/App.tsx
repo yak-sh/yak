@@ -1,6 +1,4 @@
 import { InspectPage } from './inspect.tsx'
-import { effect } from '@preact/signals'
-import { opened } from '../opened.ts'
 import { hosting } from '../hosting.ts'
 import { left, scrolledTo } from '../history.ts'
 import { destinationAt, schemaAt } from '../navigation.ts'
@@ -103,9 +101,6 @@ export let Page = ({ at }: { at: string }) => {
   // The owner's home page holds what its view asks, never the owner's
   // neighborhood, and opening it is not opening the owner.
   let rootEid = offered ? undefined : t?.eid
-  useEffect(() => {
-    if (rootEid) return effect(() => opened(rootEid))
-  }, [rootEid])
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
   let e = t ? ent(t.eid) : undefined
   let tabs = e ? applicable(e) : []

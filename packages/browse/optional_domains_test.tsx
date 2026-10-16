@@ -55,7 +55,7 @@ test('a document-only vocabulary browses without task, session or box-only reads
     assertEquals(seen.root.textContent?.includes('App document'), true)
     assertEquals(
       [...seen.root.querySelectorAll('.Shell_Label')].map((l) => l.textContent),
-      ['Home'],
+      ['Home', 'Recent'],
     )
     assertEquals(wire.asked().length, 0)
     // Its page holds the entity, and asks for no edges the store can't keep.
