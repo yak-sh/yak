@@ -3,8 +3,10 @@ import { WriteRefused, WriteUnknown } from '@yaks/client'
 import type { Row } from './model.ts'
 
 export type RecoveryPorts = {
-  /** Send this exact batch, including its original ledger id and guards. */
-  write: (batch: Row[]) => Promise<unknown>
+  /** Send this exact batch, including its original ledger id and guards,
+   * under `key`: the same on every send, so the store applies it once and
+   * answers each resend as it answered the first. */
+  write: (batch: Row[], key: string) => Promise<unknown>
   /** Authoritative server rows for ALL batch ids, never the optimistic replica. */
   read: (batch: Row[]) => Promise<Row[]>
   /** Restore returned server rows/deletions and apply held nonserver companions.
@@ -63,6 +65,7 @@ export async function recover(
         : []
     )
   )
+  let key = crypto.randomUUID()
   let unknown = false
   // A failed read says nothing about acceptance. Delay and read again; do not
   // resend until a successful authoritative read has checked the receipts.
@@ -96,7 +99,7 @@ export async function recover(
     for (;;) {
       let refusal: WriteRefused | undefined
       try {
-        await ports.write(batch)
+        await ports.write(batch, key)
         return
       } catch (error) {
         if (error instanceof WriteUnknown) {

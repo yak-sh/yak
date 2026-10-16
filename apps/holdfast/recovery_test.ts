@@ -60,12 +60,13 @@ const lost = (batch: Row[]) =>
 
 function fixture(batch: Row[]) {
   let writes: Row[][] = [], reads: Row[][] = [], accepts: Row[][] = []
-  let reports: unknown[] = [], waits = 0
+  let keys: string[] = [], reports: unknown[] = [], waits = 0
   let error = lost(batch)
   let server: Row[] = []
   let ports: RecoveryPorts = {
-    write: (value) => {
+    write: (value, key) => {
       writes.push(value)
+      keys.push(key)
       return writes.length === 1 ? Promise.reject(error) : Promise.resolve()
     },
     read: (value) => {
@@ -86,6 +87,7 @@ function fixture(batch: Row[]) {
   return {
     ports,
     writes,
+    keys,
     reads,
     accepts,
     reports,
@@ -104,6 +106,8 @@ test('a lost request retries the original guarded purchase, not a new ledger', a
   await recover(purchase, before.ports)
   equal(before.writes.length, 2)
   ok(before.writes.every((batch) => batch === purchase))
+  // One write, sent twice: the store answers the resend as the first.
+  equal(new Set(before.keys).size, 1)
   ok(before.reads[0] === purchase)
   equal(before.waits, 1)
   equal(before.accepts.length, 0)

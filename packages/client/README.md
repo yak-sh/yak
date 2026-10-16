@@ -139,6 +139,11 @@ Use it to hold local visibility until the server accepts, such as marking work
 delivered. Browser-owned components in the batch land after that answer. Without
 a server, the mutation applies to the local graph.
 
+`mutate(bundles, {key})` holds the write the same way and names it. A caller
+that sends it again after a `WriteUnknown` passes the same key, and a yaks.app
+store answers the resend as it answered the first, so a guarded write is never
+taken twice or refused by its own first landing.
+
 With a server connection, `mutate()` also accepts `alias: {name}` when the
 vocabulary declares `alias`. A name may belong to an entity absent from the
 page's cache, so this write waits for the server's resolved eid and then lands

@@ -141,7 +141,7 @@ import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
-import type { Door } from './door.ts'
+import { type Door, IDEMPOTENCY } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
@@ -2072,6 +2072,10 @@ let api = async (
         headers: { 'content-type': 'application/x-ndjson' },
       }, { ...headers, ...(await named(env, who, app)) })
     }
+    // A page that sends the write again after a 202 names it, and the store
+    // answers the resend as it answered the first (writes.ts `first`) rather
+    // than keeping a second copy that its guards refuse once the first lands.
+    let key = req.headers.get(IDEMPOTENCY)
     // Each wire in, the same wire out (wire.ts): the page's envelope is
     // answered `{ok, aliases, bundles}`, and the Store's bare array, which a
     // page keeping its own copy sends, is answered with the batch as applied.
@@ -2079,18 +2083,19 @@ let api = async (
     try {
       sent = JSON.parse(body)
       let graph = await sources(env, space, app, who, headers)
+      let as = {
+        ...(await named(env, who, app)),
+        ...(key ? { [IDEMPOTENCY]: key } : {}),
+      }
       let applied = graph.reach.length > 1
         ? (await written(
           env,
           graph.reach,
           graph.reach[0],
           batched(sent),
-          await named(env, who, app),
+          as,
         )).bundles
-        : await metaOf(store).apply(batched(sent), {
-          ...headers,
-          ...(await named(env, who, app)),
-        })
+        : await metaOf(store).apply(batched(sent), { ...headers, ...as })
       return Response.json(
         receipt(sent, applied),
       )

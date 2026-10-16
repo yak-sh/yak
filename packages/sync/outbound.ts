@@ -86,6 +86,10 @@ export type PostOpts = {
   /** the write was held out of the local graph, not applied: a refusal has
    * nothing to revert */
   held?: boolean
+  /** The write's idempotency key. Sending the same batch again under it is
+   * the same write: a server that kept or applied it answers as it did the
+   * first time, rather than taking it again. */
+  key?: string
 }
 
 export type PostResult = {
@@ -131,7 +135,11 @@ export let exchange = async (
     res = await opts.fetch(
       new Request(`${opts.url.replace(/\/$/, '')}/apply`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...opts.headers },
+        headers: {
+          'content-type': 'application/json',
+          ...opts.headers,
+          ...(opts.key ? { 'idempotency-key': opts.key } : {}),
+        },
         body: JSON.stringify(sent),
       }),
     )

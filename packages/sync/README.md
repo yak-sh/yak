@@ -145,10 +145,14 @@ may have committed. Callers retain their recovery copies while they reconcile or
 retry. See [@yaks/client](../client/README.md#use) for the assembled mutation
 interface.
 
-`submit(bundles)` uses the same HTTP queue but waits for the server to resolve
-identity before applying its answer. It rejects on refusal or transport failure.
-Its caller must remove browser-owned components first;
-[@yaks/client](../client/README.md) does this for alias writes.
+`submit(bundles, key?)` uses the same HTTP queue but waits for the server to
+resolve identity before applying its answer. It rejects on refusal or transport
+failure. Its caller must remove browser-owned components first;
+[@yaks/client](../client/README.md) does this for alias writes. `key` is sent as
+the request's `idempotency-key`: a caller that sends the same batch again after
+a `WriteUnknown` passes the same key, and a server that keeps a write log (a
+yaks.app store) answers the resend as it answered the first instead of taking it
+twice.
 
 ## Select outgoing state
 

@@ -132,8 +132,10 @@ export type Sync = {
   /** why the server refused this subscription, until it answers it again */
   refusal: (id: string) => Refusal | undefined
   /** Send an input batch whose identity the server must resolve before this
-   * graph can hold it. The caller has separated browser-owned components. */
-  submit: (sent: Bundle[]) => Promise<Bundle[]>
+   * graph can hold it. The caller has separated browser-owned components.
+   * `key` names the write, so a send after a `WriteUnknown` under the same key
+   * is answered as the first one was, never applied twice. */
+  submit: (sent: Bundle[], key?: string) => Promise<Bundle[]>
   /** Apply optimistically, but answer only after server acceptance. Local-only
    * writes stay synchronous. Refusals and unknown outcomes reject. */
   apply: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
@@ -252,7 +254,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     return answer
   }
 
-  let submit = (sent: Bundle[]): Promise<Bundle[]> =>
+  let submit = (sent: Bundle[], key?: string): Promise<Bundle[]> =>
     queue(async () => {
       let result
       try {
@@ -264,6 +266,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           report,
           held: true,
           sent,
+          key,
         })
       } catch (error) {
         report({ sent, error, reverted: false })

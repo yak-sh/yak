@@ -261,7 +261,9 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
   // again; that one error passes through. A send may have committed before
   // its answer was lost, so every send carries one idempotency key, and a
   // store that applied one answers the next as it answered the first
-  // (writes.ts) rather than applying it again.
+  // (writes.ts) rather than applying it again. A caller that will send the
+  // write again itself (a page resending after a 202) names the key, and this
+  // door keeps it rather than minting one per call.
   let door = doorOf(
     (req) => ns.get(ns.idFromName(name)).fetch(req),
     name,
@@ -275,7 +277,7 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
     consuming = false,
     options: { replayable?: boolean } = {},
   ) => {
-    let once = { ...headers, [IDEMPOTENCY]: crypto.randomUUID() }
+    let once = { [IDEMPOTENCY]: crypto.randomUUID(), ...headers }
     let method = init instanceof Request ? init.method : init.method ?? 'GET'
     let safe = method == 'GET' || method == 'HEAD'
     let request = `store ${path.split('?')[0]}`

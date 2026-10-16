@@ -69,6 +69,26 @@ test('an acknowledged mutation waits for admission and rejects an offline server
   heldClient.close()
 })
 
+test('a named write carries its key on every send', async () => {
+  let keys: (string | null)[] = []
+  let c = client(heldVocab, [], {
+    url: 'http://box.test',
+    vault: false,
+    wireVault: false,
+    fetch: async (request) => {
+      keys.push(request.headers.get('idempotency-key'))
+      return Response.json(await heldServer.apply(await request.json()))
+    },
+    report: () => {},
+  })
+  let soup: Bundle[] = [{ entity: { eid: 'r2' }, doc: { title: 'Soup' } }]
+  await c.mutate(soup, { key: 'soup' })
+  await c.mutate(soup, { key: 'soup' })
+  await c.mutate(soup, { optimistic: false })
+  assertEquals(keys, ['soup', 'soup', null])
+  c.close()
+})
+
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
   doc: { title: 'Dal' },

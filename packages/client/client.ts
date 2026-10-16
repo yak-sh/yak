@@ -150,10 +150,12 @@ export type Client = {
   /** Show edits locally at once, then resolve with the server-applied bundles
    * after its rules and stamps. Reject with WriteRefused on deliberate refusal
    * or WriteUnknown when acceptance is unknown. Local-only writes stay local.
-   * With `optimistic: false`, hold the edits until acceptance too. */
+   * With `optimistic: false`, hold the edits until acceptance too. `key` names
+   * a held write: sending it again under the same key after a WriteUnknown is
+   * the same write, which the server applies once and answers each time. */
   mutate: (
     bundles: Bundle[],
-    opts?: { optimistic?: boolean },
+    opts?: { optimistic?: boolean; key?: string },
   ) => Bundle[] | Promise<Bundle[]>
   /** close the WebSocket and every watch */
   close: () => void
@@ -504,10 +506,11 @@ export let client = (
       return store.tx((tx) => tx.get([eid]))[0]
     },
     mutate: (bundles, opts = {}) => {
-      let claim = wire && submission(vocab, bundles, opts.optimistic === false)
+      let held = opts.optimistic === false || opts.key != null
+      let claim = wire && submission(vocab, bundles, held)
       if (!wire) return g.apply(bundles)
       if (!claim) return wire.apply(bundles)
-      return wire.submit(claim.sent).then(async (applied) => {
+      return wire.submit(claim.sent, opts.key).then(async (applied) => {
         let at = new Map(
           applied.flatMap((b) =>
             typeof b.$alias == 'string'
