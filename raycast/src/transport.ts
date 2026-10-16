@@ -53,12 +53,17 @@ export class MCPClient {
     const headers = new Headers({
       'Content-Type': 'application/json',
       Accept: 'application/json, text/event-stream',
+      // Suppress the legacy MCP connection transcript. This is a client label,
+      // never an actor id: authentication still belongs to the host door.
+      'X-Via': 'yak-raycast',
     })
-    if (method !== 'initialize')
+    if (method !== 'initialize') {
       headers.set('MCP-Protocol-Version', this.protocol)
+    }
     if (this.session) headers.set('Mcp-Session-Id', this.session)
-    if (this.authenticated)
+    if (this.authenticated) {
       headers.set('Authorization', `Bearer ${await getAccessToken()}`)
+    }
     let response: Response
     try {
       response = await this.request(this.endpoint, {
@@ -80,10 +85,11 @@ export class MCPClient {
     }
     if (!response.ok) {
       await response.body?.cancel()
-      if (response.status === 401 || response.status === 403)
+      if (response.status === 401 || response.status === 403) {
         throw new Error(
           `Yak authentication was rejected (${response.status}). Sign out of Yak in Raycast preferences and sign in again. The call was not retried.`,
         )
+      }
       if (response.status === 404 && this.session) {
         this.initialized = undefined
         this.session = undefined
@@ -106,20 +112,26 @@ export class MCPClient {
         ? await this.sse(response, id!)
         : ((await response.json()) as RPC)
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('MCP stream'))
+      if (error instanceof Error && error.message.startsWith('MCP stream')) {
         throw error
+      }
       throw new Error(
         `MCP ${method} returned an invalid or incomplete response. The call was not retried.`,
       )
     }
-    if (!message || message.jsonrpc !== '2.0' || message.id !== id)
+    if (!message || message.jsonrpc !== '2.0' || message.id !== id) {
       throw new Error(`MCP ${method} returned a mismatched response.`)
-    if (message.error)
+    }
+    if (message.error) {
       throw new Error(
-        `MCP ${method}: ${safeMessage(message.error.message)} (${message.error.code})`,
+        `MCP ${method}: ${safeMessage(
+          message.error.message,
+        )} (${message.error.code})`,
       )
-    if (!('result' in message))
+    }
+    if (!('result' in message)) {
       throw new Error(`MCP ${method} returned no result.`)
+    }
     return message.result
   }
 
@@ -140,8 +152,9 @@ export class MCPClient {
       for (;;) {
         const { value, done } = await reader.read()
         buffer += decoder.decode(value, { stream: !done })
-        if (buffer.length > 8 * 1024 * 1024)
+        if (buffer.length > 8 * 1024 * 1024) {
           throw new Error('MCP stream exceeded the response limit.')
+        }
         let newline: RegExpExecArray | null
         // CRLF may be split across chunks, so hold a trailing CR until the next read.
         while ((newline = /\r\n|\n|\r(?!$)/.exec(buffer))) {
@@ -151,12 +164,14 @@ export class MCPClient {
             const found = event()
             if (found) return found
           } else if (line === 'data') data.push('')
-          else if (line.startsWith('data:'))
+          else if (line.startsWith('data:')) {
             data.push(line.slice(5).replace(/^ /, ''))
+          }
         }
         if (done) {
-          if (buffer.startsWith('data:'))
+          if (buffer.startsWith('data:')) {
             data.push(buffer.slice(5).replace(/^ /, '').replace(/\r$/, ''))
+          }
           const found = event()
           if (found) return found
           throw new Error(
@@ -177,8 +192,9 @@ export class MCPClient {
         capabilities: {},
         clientInfo: { name: 'yak-raycast', version: '1.0.0' },
       })) as { protocolVersion?: string }
-      if (![PROTOCOL, '2025-03-26'].includes(result?.protocolVersion ?? ''))
+      if (![PROTOCOL, '2025-03-26'].includes(result?.protocolVersion ?? '')) {
         throw new Error('Yak negotiated an unsupported MCP protocol version.')
+      }
       this.protocol = result.protocolVersion!
       await this.rpc('notifications/initialized', undefined, true)
     })().catch((error) => {
@@ -199,16 +215,18 @@ export class MCPClient {
       structuredContent?: unknown
       isError?: boolean
     }
-    if (!result || typeof result !== 'object')
+    if (!result || typeof result !== 'object') {
       throw new Error(`Yak tool ${name} returned no content.`)
+    }
     const text = result.content
       ?.filter((item) => item.type === 'text')
       .map((item) => item.text ?? '')
       .join('\n')
-    if (result.isError)
+    if (result.isError) {
       throw new Error(
         `Yak tool ${name}: ${safeMessage(text || 'Call refused')}`,
       )
+    }
     if (result.structuredContent !== undefined) {
       const value = result.structuredContent
       return (
@@ -217,8 +235,9 @@ export class MCPClient {
           : value
       ) as T
     }
-    if (text === undefined)
+    if (text === undefined) {
       throw new Error(`Yak tool ${name} returned no readable content.`)
+    }
     try {
       return JSON.parse(text) as T
     } catch {

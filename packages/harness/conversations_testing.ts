@@ -108,6 +108,7 @@ export let conversationFixture = async () => {
   )
   let handler = mcp({
     graph: h.g,
+    sessions: h.g,
     tools,
     authenticate: () => ({ by: h.me, via: h.me }),
   })
@@ -119,6 +120,7 @@ export let conversationFixture = async () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json, text/event-stream',
           'MCP-Protocol-Version': '2025-03-26',
+          'X-Via': 'yak-raycast',
         },
         body: JSON.stringify({
           jsonrpc: '2.0',
