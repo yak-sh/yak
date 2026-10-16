@@ -203,6 +203,7 @@ import { DELIVER, MAIL } from '@yaks/mail'
 import {
   actorOf,
   Denied,
+  edits,
   type Floors,
   type Level,
   level,
@@ -314,6 +315,7 @@ import {
   dead,
   done,
   durable,
+  fingerprinted,
   first,
   fits,
   held,
@@ -329,6 +331,7 @@ import {
   raise,
   type Receipt,
   received,
+  remembered,
   replayed,
   retry,
   revived,
@@ -3426,14 +3429,22 @@ export class Store {
       }
       return unkept()
     }
+    if (durable(key)) {
+      try {
+        await this.#outboxAuthority(request)
+        request = fingerprinted(request, body)
+      } catch (e) {
+        return refuse(e)
+      }
+    }
     try {
-      was = key ? first(this.#sql, key) : null
+      was = key ? first(this.#sql, key, request) : null
       // No pending/running row for a successful live write. Readiness may
       // yield, so check the key again afterwards and inside #commit, immediately
       // before synchronous apply. Concurrent same-key requests cannot mutate twice.
       if (!was && key) {
         let no = await this.#ready(request)
-        was = key ? first(this.#sql, key) : null
+        was = key ? first(this.#sql, key, request) : null
         if (
           !was && !no && !this.#stuck && !this.#draining && !waiting(this.#sql)
         ) {
@@ -3442,7 +3453,7 @@ export class Store {
           })
           if (r.status < 500) return this.#callerResponse(request, r)
           // An error after the transaction must not enqueue its mutation again.
-          let committed = key ? first(this.#sql, key) : null
+          let committed = key ? first(this.#sql, key, request) : null
           if (committed?.state == 'applied') {
             return this.#callerResponse(
               request,
@@ -3456,12 +3467,13 @@ export class Store {
       }
       seq = was?.seq ?? keep(this.#sql, request, body)
     } catch (e) {
+      if (e instanceof Refused) return refuse(e)
       defect(e, { request: 'write log', store: this.#name() })
       // Readiness can throw too. Keep that input if storage still works;
       // never bypass a keyed receipt after an error and risk a second mutation.
       if (key) {
         try {
-          let was = first(this.#sql, key)
+          let was = first(this.#sql, key, request)
           if (was?.state == 'applied') {
             return this.#callerResponse(
               request,
@@ -3643,6 +3655,23 @@ export class Store {
     return speaks ? rows.map((b) => ({ ...b, $speaks: speaks })) : rows
   }
 
+  // Cached acceptance is still a write answer: today's authority, not the
+  // authority held when the receipt was committed, controls its disclosure.
+  async #outboxAuthority(request: Request) {
+    if (request.headers.get('x-yak-kernel') == '1') return
+    await this.#auth(request)
+    let app = this.#get('app')
+    if (!app) return
+    let may = policy(this.#graph.storage, { ignore: this.#staleGrant })
+    let v = vouchOf(request)
+    let m = await may.modeOf(app)
+    let has = v.level ?? await may.levelOf(v.person, app)
+    if (!edits(m, has)) {
+      if (!v.person) throw new Unauthorized('sign in to write this app')
+      throw new Denied(v.person, app, 'editor')
+    }
+  }
+
   /**
    * One batch in at `/apply`, the kernel's or a caller's. The graph's own
    * `apply()` is called in one synchronous step after `#landing` names the
@@ -3676,7 +3705,8 @@ export class Store {
       return refuse(no)
     }
     try {
-      let body = JSON.parse(await readBody(request))
+      let text = await readBody(request)
+      let body = JSON.parse(text)
       if (!Array.isArray(body)) {
         throw new Refused('/apply takes a JSON array of bundles')
       }
@@ -3686,12 +3716,23 @@ export class Store {
         opts = { ...opts, stamp: false }
       }
       let who = kernel ? null : await this.#auth(request)
+      let key = request.headers.get(IDEMPOTENCY)
+      if (durable(key)) {
+        await this.#outboxAuthority(request)
+        request = fingerprinted(request, text)
+        // Only a matching durable receipt may substitute for rehearsal. A
+        // fresh rehearsal still runs every guard and never writes a receipt.
+        if (opts.check) {
+          let answer = remembered(this.#sql, key!, request)
+          if (answer) return this.#callerResponse(request, answer)
+        }
+      }
       body = this.#spokenWrites(request, body)
       let apply = async () => {
         try {
           if (seq != null && typeof seq != 'number') {
             let key = seq.request.headers.get(IDEMPOTENCY)
-            let was = key ? first(this.#sql, key) : null
+            let was = key ? first(this.#sql, key, request) : null
             if (was?.state == 'applied') {
               return new Response(was.answer, JSONED)
             }
@@ -4171,7 +4212,8 @@ export class Store {
     // A batch is applied here, whoever sent it; a dry run is @yaks/api's.
     if (
       path == '/apply' && request.method == 'POST' &&
-      (kernel || logged(request))
+      (kernel || logged(request) ||
+        durable(request.headers.get(IDEMPOTENCY)))
     ) {
       return this.#commit(request, null, {
         check: new URL(request.url).searchParams.has('check'),

@@ -15,7 +15,7 @@
 // These plain tables belong to no vocabulary or app migration. Their placement
 // beside the graph makes receipt persistence and mutation atomic even when
 // the graph above storage cannot stand.
-import type { Bundle } from '@yaks/graph'
+import { type Bundle, sha256 } from '@yaks/graph'
 import { composed } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
 import { carries } from '@yaks/secrets'
@@ -379,6 +379,24 @@ export let keep = (db: Driver, req: Request, body: string): number => {
   return Number(row.seq)
 }
 
+// Internal evidence binds both the routed bytes and the original spanning intent.
+// Recompute at the Store door: a caller-supplied digest is never evidence.
+export let INTENT = 'x-yak-outbox-intent'
+let FINGERPRINT = 'x-yak-outbox-fingerprint'
+export let fingerprinted = (request: Request, body: string): Request => {
+  if (!durable(request.headers.get(IDEMPOTENCY))) return request
+  let headers = new Headers(request.headers)
+  headers.set(
+    FINGERPRINT,
+    sha256(JSON.stringify([
+      body,
+      headers.get(INTENT),
+      headers.get('x-yak-person'),
+    ])),
+  )
+  return new Request(request, { headers, body })
+}
+
 /** A write the log already holds under an idempotency key. */
 export type Sent = {
   seq: number
@@ -389,12 +407,30 @@ export type Sent = {
 }
 
 /** The write a key was first sent with, if the log holds it. */
-export let first = (db: Driver, key: string): Sent | null => {
+export let first = (
+  db: Driver,
+  key: string,
+  request?: Request,
+): Sent | null => {
   let [row] = db.query(select({
-    cols: [col('seq'), col('state'), col('why'), col('answer'), col('audit')],
+    cols: [
+      col('seq'),
+      col('state'),
+      col('why'),
+      col('answer'),
+      col('audit'),
+      ...(durable(key) && request ? [col('headers')] : []),
+    ],
     from: table(LOG),
     where: eq(col(KEY), val(key)),
   }))
+  if (row && durable(key) && request) {
+    let before = new Headers(JSON.parse(String(row.headers)))
+    let digest = request.headers.get(FINGERPRINT)
+    if (!digest || before.get(FINGERPRINT) != digest) {
+      throw new Refused('outbox key was already used for a different intent')
+    }
+  }
   return row
     ? {
       seq: Number(row.seq),
@@ -405,6 +441,21 @@ export let first = (db: Driver, key: string): Sent | null => {
         : String(row.answer ?? '[]'),
       audit: row.audit == 1,
     }
+    : null
+}
+
+/** Cached acceptance after the caller has checked current write authority.
+ * Durable requests must have been fingerprinted from their body at the door. */
+export let remembered = (
+  db: Driver,
+  key: string,
+  request: Request,
+): Response | null => {
+  let was = first(db, key, request)
+  return was?.state == 'applied'
+    ? new Response(was.answer, {
+      headers: { 'content-type': 'application/json' },
+    })
     : null
 }
 

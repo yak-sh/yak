@@ -34,7 +34,10 @@ import type { Bundle, Entity, Projection } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { flat, projection } from '@yaks/graph/read'
 import { requested } from '@yaks/graph/bundle'
-import { resolve } from '@yaks/graph/identity'
+import { derivedEid, resolve } from '@yaks/graph/identity'
+import { sha256 } from '@yaks/graph'
+import { IDEMPOTENCY } from './door.ts'
+import { durable, INTENT } from './writes.ts'
 import { identities } from '@yaks/graph/identity'
 import { misfit, status } from '@yaks/graph/errors'
 import { keys } from '@yaks/key'
@@ -874,7 +877,12 @@ let isComp = (k: string) => !NOT_A_COMP.includes(k) && !k.startsWith('$')
 // entities out of one — so the door derives content-addressed ids by the same
 // rules as a store, mints the rest, and hands every store the one answer. A
 // bundle with no address at all is minted the same way, for the same reason.
-let minted = (bundles: Bundle[], vocab: Vocab) => {
+let minted = (bundles: Bundle[], vocab: Vocab, key?: string) => {
+  let ordinal = 0
+  let mint = () =>
+    key
+      ? derivedEid(JSON.stringify(['outbox', key, ordinal++]))
+      : crypto.randomUUID()
   let stated = bundles.map((e) => {
     let eid = e.entity?.eid
     if (typeof eid == 'string') return e
@@ -887,7 +895,7 @@ let minted = (bundles: Bundle[], vocab: Vocab) => {
         'entity.num addresses nothing here — name the entity by its eid',
       )
     }
-    return { ...e, entity: { ...e.entity, eid: crypto.randomUUID() } }
+    return { ...e, entity: { ...e.entity, eid: mint() } }
   })
   let derive = {
     ...identities(vocab),
@@ -895,7 +903,7 @@ let minted = (bundles: Bundle[], vocab: Vocab) => {
     ...edges(vocab).derive,
     ...keys(vocab).derive,
   }
-  let resolved = resolve(stated, vocab, derive, () => crypto.randomUUID())
+  let resolved = resolve(stated, vocab, derive, mint)
   let aliases = Object.fromEntries(
     resolved.flatMap((e) =>
       typeof e.$alias == 'string' ? [[e.$alias, e.entity.eid]] : []
@@ -982,13 +990,14 @@ let routed = async (
   reach: Reach[],
   named: Reach | undefined,
   bundles: Bundle[],
+  key?: string,
 ) => {
   // A sandboxed copy owns only writes aimed at it. Limit every routing
   // decision together: declarations, existing homes, deaths and the fallback
   // for a shared word must all choose from the same eligible destinations.
   reach = reach.filter((r) => !sandboxed(r.app) || r == named)
   let { words, apart, vocab } = await spoken(env, reach)
-  let { entities, eids, aliases } = minted(bundles, vocab)
+  let { entities, eids, aliases } = minted(bundles, vocab, key)
   // Where the entity already lives, read only when the answer depends on it:
   // a death fans out to whoever holds the eid, and a shared word with no app
   // named goes to the app that already wears it.
@@ -1143,7 +1152,17 @@ export let written = async (
   // lost. `$app` is the door's own (agent.ts `aimed`), which is why it is
   // named beside the graph's.
   requested(bundles, ['$app'])
-  let { parts, aliases } = await routed(env, reach, named, bundles)
+  let key = new Headers(headers).get(IDEMPOTENCY)
+  if (durable(key)) {
+    headers = { ...headers, [INTENT]: sha256(JSON.stringify(bundles)) }
+  }
+  let { parts, aliases } = await routed(
+    env,
+    reach,
+    named,
+    bundles,
+    durable(key) ? key! : undefined,
+  )
   if (!parts.length) throw refuse('arguments', 'entities: nothing to write')
   if (parts.length > 1 && !check) {
     await Promise.all(parts.map((p) => sent(env, p, true, headers)))
