@@ -8,7 +8,7 @@ import { entityPath, searchAt } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { ent, mode, routeSub } from '../live.ts'
-import { block, Shell, Tabs, Viewport } from '@yaks/ui'
+import { block, Section, Shell, Tabs, Viewport } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { TabFace } from './Card.tsx'
@@ -236,10 +236,27 @@ export let Page = ({ at }: { at: string }) => {
           ? <Entity eid={e.eid} view={view} />
           : list
           ? (
-            <QueryList
-              eid='app-browse'
-              query={hosting().home?.query ?? '.doc'}
-            />
+            <Section>
+              <Section.Title>Browse the graph</Section.Title>
+              <Section.Sub>
+                {hosting().home
+                  ? (
+                    <>
+                      Entities matching <code>{hosting().home!.query}</code>.
+                    </>
+                  )
+                  : (
+                    <>
+                      Entities with documents, newest created first. Recent
+                      shows recently changed entities instead.
+                    </>
+                  )} Use the filter to narrow this list.
+              </Section.Sub>
+              <QueryList
+                eid='app-browse'
+                query={hosting().home?.query ?? '.doc'}
+              />
+            </Section>
           )
           : offered
           ? (

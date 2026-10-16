@@ -65,6 +65,7 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
     )
     let more = [...mounted.root.querySelectorAll('button')]
       .find((b) => /more/.test(b.textContent ?? ''))!
+    assertEquals(more.textContent?.trim(), 'Load more')
     await act(() => more.click())
     let grown = await page(2)
     assertEquals(titles(mounted.root), shown)

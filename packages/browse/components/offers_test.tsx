@@ -106,6 +106,12 @@ test('without an offered home page, / lists the host query and calls itself Home
   try {
     await act(() => Promise.resolve())
     assertEquals(text(seen.root, '.Shell_Title'), ['Home'])
+    assertEquals(
+      seen.root.textContent?.includes(
+        'Entities with documents, newest created first.',
+      ),
+      true,
+    )
     assertEquals(seen.root.querySelector('.Desk'), null)
     assertEquals(
       w.wire.asked().some((a) => a.subscribe.startsWith('.doc')),

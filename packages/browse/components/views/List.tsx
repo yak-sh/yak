@@ -109,6 +109,7 @@ export let QueryList = (
   let page = usePage(query, line, !!query.trim() && size > 0)
   let boardRead = page.subscription
   let win = boardRead ? subWindow(boardRead.sub) : undefined
+  let total = win?.total
   let more = Math.max(
     0,
     Math.min(
@@ -167,7 +168,7 @@ export let QueryList = (
       {more > 0 && (
         <Rows.More>
           <Button type='button' mod='quiet' onClick={grow}>
-            +{more} more
+            Load more{total != null && ` (${more} remaining)`}
           </Button>
         </Rows.More>
       )}
