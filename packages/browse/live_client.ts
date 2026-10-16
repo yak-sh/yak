@@ -54,6 +54,7 @@ export let liveClient = (opts: {
   changed: (eids: string[]) => void
   ready: (sub: string) => void
   frame: (subs: string[], f: Frame, reset: boolean) => void
+  outbox?: ClientOpts['outbox']
   disk?: boolean
 }) => {
   let core = namedClient({

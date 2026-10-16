@@ -7,18 +7,26 @@ import type { Change } from './types.ts'
  * a component stays ordered, because it replaces the held component. */
 export let bundlesOf = (changes: Change[]): Bundle[] => {
   let rows = new Map<string, Bundle[]>()
-  for (let { eid, name, comp } of changes) {
+  for (let { eid, name, comp, was } of changes) {
     let parts = rows.get(eid)
     if (!parts) rows.set(eid, parts = [{ entity: { eid } }])
     let row = parts.at(-1)!
     if (name == 'entity') {
-      if (comp === null) rows.set(eid, [{ entity: { eid }, tombstone: {} }])
+      if (was) row.$was = { ...row.$was, entity: was }
+      if (comp === null) {
+        rows.set(eid, [{
+          entity: { eid },
+          tombstone: {},
+          ...row.$was ? { $was: row.$was } : {},
+        }])
+      }
       continue
     }
     if (row.tombstone) continue
     if (row[name] === null && comp !== null) {
       parts.push(row = { entity: { eid } })
     }
+    if (was) row.$was = { ...row.$was, [name]: { ...row.$was?.[name], ...was } }
     let { eid: _, ...cols } = comp ?? {}
     row[name] = comp === null
       ? null

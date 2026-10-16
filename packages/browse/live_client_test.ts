@@ -74,7 +74,7 @@ test('the browser replica writes optimistically and waits for the host', async (
     let receipt = Promise.resolve(c.box.mutate([write('write-local', 'local')]))
     assertEquals(c.box.ent('write-local')?.doc, { title: 'local' })
     let settled = false
-    receipt.then(() => settled = true)
+    receipt.then(() => settled = true, () => {})
     await Promise.resolve()
     assertEquals(settled, false)
   } finally {

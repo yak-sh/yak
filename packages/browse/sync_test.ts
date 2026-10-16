@@ -10,45 +10,45 @@
 import { test } from '@yaks/testing'
 import './testing.ts'
 import { assert, assertEquals, assertStringIncludes } from '@std/assert'
-import { type Change } from './types.ts'
 import * as live from './live.ts'
 
 let uid = () => crypto.randomUUID()
 
-// An in-memory outbox double (no IndexedDB under Deno), mirroring idb's
-// key = delivery id.
-type Parked = { changes: Change[]; at: number }
-let fakeOutbox = () => {
-  let disk = new Map<string, Parked>()
-  return {
-    park: (id: string, o: Parked) => void disk.set(id, o),
-    unpark: (id: string) => void disk.delete(id),
-    parked: () => Promise.resolve([...disk] as [string, Parked][]),
-  }
-}
-
-let indicatorOutbox = fakeOutbox()
-let indicatorChange: Change = {
-  eid: crypto.randomUUID(),
-  name: 'doc',
-  comp: { title: 'held' },
-}
-
-test('the indicator mirrors the outbox: a mutate adds, an ack clears', () => {
-  let restore = live.useRoute(() => {})
-  let prev = live.useOutboxStore(indicatorOutbox)
+test('the indicator follows shared delivery until the host answers', async () => {
+  let answer!: (response: Response) => void
+  let waiting = new Promise<Response>((resolve) => {
+    answer = resolve
+  })
+  let sends = 0
+  let sending!: () => void
+  let sent = new Promise<void>((resolve) => {
+    sending = resolve
+  })
+  let restore = live.useRoute((frame) => {
+    if ((frame as { request?: Request }).request) {
+      sends++
+      sending()
+      return waiting
+    }
+  })
   try {
-    let before = live.outboxWrites.value.length
-    live.mutate(indicatorChange)
-    assertEquals(live.outboxWrites.value.length, before + 1)
-    let w = live.outboxWrites.value.at(-1)!
-    assertEquals(w.count, 1) // one change in the write
-    assert(w.since > 0) // and the moment it was first queued, for "how long"
-    // Only the ack releases it — and the indicator empties with the outbox.
-    for (let id of live.unsent()) live.acked(id)
+    let receipt = live.apply([{
+      entity: { eid: uid() },
+      doc: { title: 'held' },
+    }])
+    await sent
+    assertEquals(live.outboxWrites.value.length, 1)
+    let w = live.outboxWrites.value[0]
+    assert(w.id.startsWith('outbox:'))
+    assertEquals(w.count, 2) // the entity identity and doc patch
+    assert(w.since > 0)
+    assertEquals(live.unsent(), [w.id])
+    answer(Response.json([]))
+    await receipt
     assertEquals(live.outboxWrites.value.length, 0)
+    assertEquals(sends, 1)
   } finally {
-    live.useOutboxStore(prev)
+    answer(Response.json([]))
     live.useRoute(restore)
   }
 })

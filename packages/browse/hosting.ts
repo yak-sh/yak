@@ -51,3 +51,12 @@ export let scopedStorage = (store: Storage): Storage => {
     clear: () => keys().forEach((key) => store.removeItem(key)),
   }
 }
+
+// Only old account-named hosted queues and the single-owner box have enough
+// provenance to migrate. Leave an unscoped hosted queue untouched for recovery.
+export let legacyOutboxName = (): string | undefined =>
+  hosting().storage
+    ? storageKey('tasks-outbox')
+    : declared()
+    ? undefined
+    : 'tasks-outbox'

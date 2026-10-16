@@ -4,6 +4,7 @@ import {
   apiPath,
   door,
   hosting,
+  legacyOutboxName,
   localPath,
   pagePath,
   scopedStorage,
@@ -68,13 +69,17 @@ test('app and person browser intent is isolated without moving box keys', () => 
     assertEquals(ada.getItem('draft:edit'), null)
     ada.setItem('draft:edit', 'Ada draft')
     assertEquals(storageKey('tasks-outbox'), 'tasks-outbox:notes:ada')
+    assertEquals(legacyOutboxName(), 'tasks-outbox:notes:ada')
     host.YAK_WEB = { ...hosting(), storage: 'notes:eli' }
     let eli = scopedStorage(disk)
     assertEquals(eli.length, 0)
     assertEquals(eli.getItem('draft:edit'), null)
     host.YAK_WEB = { ...hosting(), storage: 'other:ada' }
     assertEquals(scopedStorage(disk).getItem('draft:edit'), null)
+    host.YAK_WEB = { ...hosting(), storage: undefined }
+    assertEquals(legacyOutboxName(), undefined)
     host.YAK_WEB = prior
+    assertEquals(legacyOutboxName(), 'tasks-outbox')
     assertEquals(scopedStorage(disk).getItem('draft:edit'), 'box draft')
     assertEquals(storageKey('tasks-outbox'), 'tasks-outbox')
   } finally {

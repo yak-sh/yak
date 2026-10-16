@@ -2,13 +2,12 @@
 // where an absent field must paint nothing. A renderer is a component: every
 // case mounts it through Preact (mount.ts) and asserts on the resulting DOM,
 // never on a bare call's vnode tree.
-import { test, tick } from '../../testing.ts'
+import { test, tick, until } from '../../testing.ts'
 import { test as preparedTest } from '@yaks/testing'
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { assert, assertEquals, assertExists } from '@std/assert'
 import {
-  acked,
   cache,
   config,
   deps,
@@ -696,8 +695,9 @@ test('the status pip picks a status through its Edit and writes marks', async ()
   }
   let sent: Change[] = []
   let restore = useRoute((frame) => {
-    let write = frame as { apply?: Change[]; id: string }
-    if (write.apply) sent.push(...write.apply), acked(write.id)
+    let write = frame as { apply?: Change[]; request?: Request }
+    if (write.apply) sent.push(...write.apply)
+    if (write.request) return Response.json([])
   })
   let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   cache.value = {
@@ -718,7 +718,7 @@ test('the status pip picks a status through its Edit and writes marks', async ()
       document.querySelectorAll('.Prop_Tab .Dot').length,
     )
     tabs.find((t) => t.textContent == 'done')!.click()
-    assert(sent.some((c) => c.name == 'completed'))
+    await until(() => sent.some((c) => c.name == 'completed'))
     assert(!sent.some((c) => c.name == 'task' && c.comp && 'status' in c.comp))
   } finally {
     render(null, root)

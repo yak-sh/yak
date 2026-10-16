@@ -11,9 +11,7 @@ import {
   makeHome,
   myActor,
   owner,
-  replayOutbox,
   rootCanvas,
-  useOutboxStore,
 } from './live.ts'
 import { actionsFor, applicable, resolve } from './components/registry.ts'
 import { screenTarget } from './components/nav.tsx'
@@ -133,32 +131,5 @@ test('a cold web module graph loads without canvas', async () => {
     assertEquals(result.success, true, new TextDecoder().decode(result.stderr))
   } finally {
     await Deno.remove(file)
-  }
-})
-
-test('uninstalled-plugin edits stay parked without being replayed or cleared', async () => {
-  learn(without)
-  let removed: string[] = []
-  let previous = useOutboxStore({
-    park: () => {},
-    unpark: (id) => {
-      removed.push(id)
-    },
-    parked: () =>
-      Promise.resolve([['missing-plugin-edit', {
-        at: Date.now(),
-        changes: [{ eid: 'canvas', name: 'canvas', comp: {} }],
-      }]]),
-  })
-  let wire = host()
-  try {
-    await replayOutbox()
-    await tick()
-    assertEquals(wire.sent, [])
-    assertEquals(removed, [])
-  } finally {
-    wire.free()
-    useOutboxStore(previous)
-    learn(docs)
   }
 })

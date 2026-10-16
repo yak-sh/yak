@@ -1,4 +1,4 @@
-import { hosting, storageKey } from './hosting.ts'
+import { hosting, legacyOutboxName, storageKey } from './hosting.ts'
 // The browser half: one graph cache, narrow render signals, one socket,
 // one identity, one camera. Boots are cold and subscription-shaped (T-21491):
 // ~3.4 MB for the root canvas, formerly ~3.4 GB; patches publish only the rows
@@ -72,7 +72,9 @@ import { type LiveClient, liveClient, quiet } from './live_client.ts'
 import type { Socket } from '@yaks/sync'
 import type { Bundle, Entity } from '@yaks/graph'
 import { normalizeChanges } from './props.ts'
-import * as idb from './idb.ts'
+import { forgetLegacy } from './idb.ts'
+import { scopedOutbox } from './outbox.ts'
+import { legacyOutbox } from './legacy_outbox.ts'
 import { bundlesOf, changesOf, yakLine } from './wire.ts'
 import { diff, gaps } from './subs.ts'
 import { dead } from '@yaks/graph/bundle'
@@ -127,10 +129,23 @@ let componentView = (comp: Record<string, unknown>) => {
 }
 let replica: LiveClient | undefined
 let replacing = false
-let makeClient = () =>
-  liveClient({
+let makeClient = () => {
+  let outbox = typeof location !== 'undefined' && config.host
+    ? scopedOutbox({
+      endpoint: new URL(hosting().apply, base()).href,
+      storage: hosting().storage,
+      owner: authenticatedOwner,
+      // Hosted unscoped queues have no trustworthy account provenance. Leave
+      // them untouched; the box is single-owner, hosted mounts name accounts.
+      legacy: legacyOutboxName()
+        ? legacyOutbox(legacyOutboxName()!)
+        : undefined,
+    })
+    : undefined
+  return liveClient({
     url: config.host ? base() : 'http://replica.invalid',
     fetch: async (request) => {
+      await outbox?.assertOwner()
       let bundles = await request.clone().json() as Bundle[]
       let changes = changesOf(bundles)
       let response = await route({ apply: changes, request }, uuid())
@@ -141,6 +156,7 @@ let makeClient = () =>
     },
     connect: (url) => socketFor(url),
     disk: typeof location !== 'undefined',
+    outbox,
     frame: (subs, f, reset) => {
       if (replacing) return
       let changes = changesOf(f.bundles ?? [])
@@ -219,15 +235,19 @@ let makeClient = () =>
       publishLocal(changes, new Set(eids), deaths)
     },
   })
+}
 // Tests/hosts may replace cache wholesale. Import that explicitly rather than
 // leaving a second writable store beside RAM. Production never takes this arm.
 let ensureClient = (): LiveClient => {
   if (replica && cache.peek() === liveGraph) return replica
   let rows = cache.peek()
   replacing = true
+  stopPending?.()
   replica?.box.close()
   let client = makeClient()
   replica = client
+  stopPending = client.box.wire?.onPending(() => syncOutbox(client))
+  syncOutbox(client)
   liveGraph = rows
   let changes = Object.entries(rows).flatMap(([eid, row]) =>
     Object.entries(row).map(([name, comp]) => ({
@@ -1332,36 +1352,30 @@ export let pending = (e: Ent, comp = 'doc', prop = 'body') => {
   return true
 }
 
-// The outbox: every local edit is HELD here until the server acknowledges it
-// by delivery id (T-21413 — fire-and-forget lost owner edits across a restart:
-// applyLocal showed success while the frame died on a closing socket, and
-// nothing ever retried or complained). An entry leaves only on `{ack}` (or a
-// rejection frame, which surfaces and heals) — never on a send ATTEMPT.
-let pendingPins = new Map<string, () => void>()
-let outbox = new Map<string, { changes: Change[]; at: number }>()
-export let unsent = () => [...outbox.keys()]
-
-// A reactive mirror of the outbox for the standing sync indicator (T-21441).
-// The Map above stays plain — the hot redelivery loop must not walk a signal —
-// so this signal is rebuilt from it on every outbox mutation, and a view
-// re-renders only when what is pending actually changes. `since` is the moment a
-// write was FIRST queued, held apart from the entry's `at` (which redelivery
-// bumps on each retry), so "how long has this waited" stays honest; a write
-// replayed from a prior life carries its parked `at` forward as that origin.
+// Delivery belongs to the shared client: browse only projects its queue for
+// the standing sync indicator. Neither rendering nor reconnect sends a retry.
+let stopPending: (() => void) | undefined
+export let unsent = () => outboxWrites.peek().map((w) => w.id)
 export let outboxWrites = signal<
   { id: string; since: number; count: number }[]
 >([])
 let firstSeen = new Map<string, number>()
-let syncOutbox = () => {
-  for (let [id, o] of outbox) if (!firstSeen.has(id)) firstSeen.set(id, o.at)
-  for (let id of [...firstSeen.keys()]) {
-    if (!outbox.has(id)) firstSeen.delete(id)
+let syncOutbox = (client = ensureClient()) => {
+  let writes = client.box.wire?.pending() ?? []
+  let keys = new Set(writes.map((w) => w.key))
+  for (let id of firstSeen.keys()) if (!keys.has(id)) firstSeen.delete(id)
+  outboxWrites.value = writes.filter((w) => w.state === 'pending').map((w) => {
+    if (!firstSeen.has(w.key)) firstSeen.set(w.key, Date.now())
+    return {
+      id: w.key,
+      since: firstSeen.get(w.key)!,
+      count: changesOf(w.sent).length,
+    }
+  })
+  for (let w of writes) {
+    if (w.state !== 'refused') continue
+    refuse(w.key, w.refusal?.message ?? 'Write refused', changesOf(w.sent))
   }
-  outboxWrites.value = [...outbox].map(([id, o]) => ({
-    id,
-    since: firstSeen.get(id) ?? o.at,
-    count: o.changes.length,
-  }))
 }
 
 // The refusal ledger (T-21441, M-16612): a write the server REJECTED (a moved
@@ -1439,6 +1453,7 @@ export let refuse = (id: string, reason: string, changes: Change[] = []) => {
   problem.value = reason
 }
 export let clearRefusal = (id: string) => {
+  void replica?.box.wire?.forget(id)
   refusalStore.clear(id)
   syncRefused()
 }
@@ -1446,138 +1461,14 @@ export let clearRefusal = (id: string) => {
 // durability guarantee.
 export let loadRefusals = () => syncRefused()
 
-// The durable outbox's disk door (T-21440). The map above is lost on a tab
-// crash or a manual reload, so — before either can discard an unacked write —
-// every entry is mirrored to IndexedDB (idb.ts) under the SAME delivery id it
-// carries in memory, and replayed at boot. This seam is the mirror: park on
-// deliver, unpark on ack, read what a prior life left at boot. Defaults to the
-// IDB store; the TUI and the tests — neither has IndexedDB — swap an
-// in-memory double via useOutboxStore. Every op is best-effort, so a failure
-// degrades to the in-memory-only outbox, never a broken frame.
-type Parked = { changes: Change[]; at: number }
-type OutboxStore = {
-  park: (id: string, o: Parked) => void
-  unpark: (id: string) => void
-  parked: () => Promise<[string, Parked][]>
-}
-let outboxStore: OutboxStore = {
-  park: (id, o) => void idb.parkWrite(id, o),
-  unpark: (id) => void idb.unparkWrite(id),
-  parked: () => idb.parkedWrites(),
-}
-export let useOutboxStore = (s: OutboxStore): OutboxStore => {
-  let prev = outboxStore
-  outboxStore = s
-  return prev
-}
-
-// Redelivery: an unacked write is re-routed until the server confirms it.
-// Re-applying the same patch is harmless (apply() is a merge of the same
-// values); the id is stable across retries so the transport dedups, and the
-// timer disarms itself when the outbox drains — no idle tick.
-//
-// The gap between retries BACKS OFF exponentially (T-21442). A fixed RESEND
-// cadence turned a slow or wedged server into a runaway: every unacked write
-// re-routed every 3s, and each re-apply wrote journal rows that wedged the
-// server further — a positive feedback loop that ballooned the journal to
-// ~1GB and took the graph down. So a write's gap DOUBLES on each retry
-// (RESEND, 2·RESEND, … capped at RESEND_MAX), probing a stuck server on a
-// widening interval instead of hammering it; a recovered server resets the
-// cadence (resetBackoff on reconnect) so retries turn prompt again.
-export let RESEND = 3_000
-export let RESEND_MAX = 60_000
-export let backoff = (wait: number) => Math.min(wait * 2, RESEND_MAX)
-// Per-write current gap, keyed by delivery id. Absent = the first retry waits
-// RESEND. Transient retry state, NOT parked — a reload starts a fresh cadence.
-let waits = new Map<string, number>()
-let redeliver: ReturnType<typeof setInterval> | undefined
-export let redeliverNow = (force = false, now = Date.now()) => {
-  if (!outbox.size) {
-    if (redeliver !== undefined) clearInterval(redeliver)
-    redeliver = undefined
-    waits.clear()
-    return
-  }
-  for (let [id, o] of outbox) {
-    let wait = waits.get(id) ?? RESEND
-    if (!force && now - o.at < wait) continue
-    o.at = now
-    waits.set(id, backoff(wait))
-    route({ apply: o.changes, id }, id)
-  }
-}
-// A reconnect means the server is reachable again: drop every write's backoff
-// so the next tick re-sends unacked writes promptly instead of at a stale 60s.
-export let resetBackoff = () => waits.clear()
-let armRedeliver = () => {
-  if (redeliver !== undefined) return
-  redeliver = setInterval(redeliverNow, RESEND) // Headless (TUI, tests): an armed retry must never hold the process open.
-  ;(globalThis as { Deno?: { unrefTimer?: (id: number) => void } })
-    .Deno?.unrefTimer?.(redeliver as unknown as number)
+// Historical callers may ask for a replay; construction of the shared client
+// already loads and replays its durable queue, and notifies onPending on load.
+export let replayOutbox = () => {
+  syncOutbox()
+  return Promise.resolve()
 }
 let deliver = (changes: Change[]) => {
-  let id = uuid()
-  let o = { changes, at: Date.now() }
-  outbox.set(id, o)
-  let client = ensureClient()
-  pendingPins.set(
-    id,
-    client.box.cache.protect(changes.map((c) => c.eid)),
-  )
-  outboxStore.park(id, o) // durable: outlive a crash/reload before the ack
-  syncOutbox() // the standing indicator now shows this write as unsent
-  armRedeliver()
-  route({ apply: changes, id }, id)
-}
-// Acks that arrived before the durable outbox was read back: the replay must
-// drop these entries, not redeliver a write the server already took.
-let ackedEarly = new Set<string>()
-export let acked = (id: string) => {
-  if (!outbox.has(id)) ackedEarly.add(id)
-  pendingPins.get(id)?.()
-  pendingPins.delete(id)
-  outbox.delete(id)
-  waits.delete(id) // the backoff leaves with its write
-  outboxStore.unpark(id) // the durable copy leaves with the in-memory one
-  syncOutbox()
-  if (!outbox.size) redeliverNow()
-}
-
-// Replay a crashed or reloaded tab's undelivered writes (T-21440). A prior
-// life may have parked writes it never saw acked; load them back under their
-// ORIGINAL delivery ids and route them once. The id is stable, so redelivery
-// dedups (the outbox id) and a re-apply is the same harmless value-merge —
-// so replaying from more than one hydrating tab is safe: whichever boots first
-// owns them, the rest re-add nothing (the outbox.has guard) and their sends
-// collapse on that id. A write whose entity was since tombstoned is swallowed
-// by apply() when its `$was` was read before the delete, and otherwise brings
-// the entity back (@yaks/graph mutate.ts); either way it settles the id, never
-// crashing boot. Runs behind the socket, never ahead of it: an ack that lands
-// first is remembered in ackedEarly, and its entry is dropped here.
-export let replayOutbox = async () => {
-  let woke = false
-  for (let [id, o] of await outboxStore.parked()) {
-    if (ackedEarly.has(id)) {
-      outboxStore.unpark(id)
-      continue
-    }
-    // Keep the complete parked write for when all of its plugins return.
-    if (o.changes.some((c) => !vocab.comp(c.name))) continue
-    if (outbox.has(id)) continue
-    outbox.set(id, o)
-    let client = ensureClient()
-    pendingPins.set(
-      id,
-      client.box.cache.protect(o.changes.map((c) => c.eid)),
-    )
-    woke = true
-  }
-  ackedEarly.clear()
-  if (woke) {
-    syncOutbox()
-    armRedeliver()
-    redeliverNow(true)
-  }
+  void apply(bundlesOf(changes)).then(() => tell(changes), () => {})
 }
 
 /** Optimistic visibility through the shared client, with its server receipt
@@ -1602,7 +1493,6 @@ export let mutate = (...changes: Change[]) => {
   problem.value = ''
   let parsed = normalizeChanges(changes, { resolve: findEid })
   if (!parsed.length) return
-  applyLocal(parsed)
   deliver(parsed)
 }
 
@@ -1668,67 +1558,13 @@ export let useSocket = (fn: typeof socketFor): typeof socketFor => {
 
 // Put a batch the host answered back into the rows it touched: the host's
 // rows replace this side's, and a row the host does not have leaves.
-let heal = async (changes: Change[]) => {
-  let eids = [...new Set(changes.map((c) => c.eid))]
-  let res = await fetch(
-    `${base()}/query?q=${encodeURIComponent(`.entity.eid=${eids.join(',')}`)}`,
-  )
-  if (!res.ok) return
-  let rows = await res.json() as Bundle[]
-  let found = new Set(rows.map((b) => b.entity.eid))
-  let back: Change[] = eids.filter((eid) => !found.has(eid)).map((eid) => ({
-    eid,
-    name: 'entity',
-    comp: null,
-  }))
-  for (let b of rows) {
-    let had = cache.peek()[b.entity.eid] ?? {}
-    for (let name of Object.keys(had)) {
-      if (name != 'entity') back.push({ eid: b.entity.eid, name, comp: null })
-    }
-  }
-  applyLocal([...back, ...changesOf(rows)])
-}
-
-// A write leaves through the person's /web/apply door over @yaks/api. The answer is the
-// batch as applied, which lands like any patch. A refusal settles the write:
-// it is kept where the person can see it (refuse) and the rows it touched are
-// read back, so the optimistic edit heals. An unreachable or failing host
-// leaves the write in the outbox, and redelivery tries again.
-let post = async (changes: Change[], id: string) => {
-  let res: Response
-  try {
-    res = await fetch(new URL(hosting().apply, base()).href, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(bundlesOf(changes)),
-    })
-  } catch {
-    return
-  }
-  if (res.status >= 500) return
-  if (!res.ok) {
-    let why = await res.text()
-    refuse(id, why, outbox.get(id)?.changes ?? changes)
-    acked(id)
-    await heal(changes).catch(() => {})
-    return
-  }
-  let applied = await res.json() as Bundle[]
-  acked(id)
-  applyLocal(changesOf(applied))
-  tell(changes)
-}
-
 // The write seam: a test counts deliveries without a host. Returns the prior
 // route so the test can restore it.
-let defaultRoute = (frame: unknown, id?: string): void | Promise<Response> => {
+let defaultRoute = (frame: unknown, _id?: string): void | Promise<Response> => {
   let request = (frame as { request?: Request }).request
   if (request) {
     return fetch(new Request(new URL(hosting().apply, base()), request))
   }
-  let batch = (frame as { apply?: Change[] }).apply
-  if (batch && id) void post(batch, id)
 }
 let route: (frame: unknown, id?: string) => unknown = defaultRoute
 export let useRoute = (fn: typeof route): typeof route => {
@@ -2497,18 +2333,27 @@ export let restore = () => {
 // left undelivered, and the refusals it kept, come back first.
 let booted = false
 export let owner = signal<string | undefined>()
+let authenticatedOwner = async () => {
+  let res = await fetch(new URL(hosting().owner, base()).href)
+  if (!res.ok) throw new Error('Could not identify the write owner')
+  let identity = (await res.json()).owner
+  if (typeof identity !== 'string' || !identity) {
+    throw new Error('Could not identify the write owner')
+  }
+  owner.value = identity
+  return identity
+}
 
 export let boot = async () => {
   if (booted) return
   booted = true
   ensureClient()
   if (config.host) {
-    owner.value =
-      (await (await fetch(new URL(hosting().owner, base()).href)).json()).owner
+    await authenticatedOwner()
   }
   loadRefusals()
   await replayOutbox()
-  idb.forgetLegacy()
+  forgetLegacy()
 }
 // Probe hooks: subscription/membership/wire counters over the active adapter.
 // `store()` remains false: the legacy IDB resolver is no longer a live surface.

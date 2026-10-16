@@ -13,7 +13,6 @@ import {
   boardsOver,
   boardSub,
   boardTasks,
-  boot,
   byWarmth,
   cache,
   census,
@@ -71,7 +70,6 @@ import {
   subscriptionState,
   topZ,
   unsubscribe,
-  useOutboxStore,
   useRoute,
   useSocket,
 } from './live.ts'
@@ -3023,34 +3021,6 @@ test('a list of rows is held in one sub and freed by its last holder', async () 
   }
 })
 
-// T-37445: boot waits on nothing from disk. The durable outbox here never
-// answers, as a gigabyte legacy IndexedDB did for up to a minute in a long
-// profile; an answer still paints the moment the socket carries it.
-test('boot paints the first answer while the durable outbox never answers', async () => {
-  let restoreStore = useOutboxStore({
-    park: () => {},
-    unpark: () => {},
-    parked: () => new Promise(() => {}),
-  })
-  let D = 'd0c00000-0000-4000-8000-0000000000d1'
-  cache.value = {}
-  let wire = host((a) =>
-    a.subscribe.startsWith(`.entity.eid=${D}`)
-      ? { bundles: [{ entity: { eid: D, num: 7 }, doc: { title: 't' } }] }
-      : undefined
-  )
-  let off = () => {}
-  try {
-    void boot()
-    off = routeSub(D, ROW)
-    await until(() => ent(D).doc?.title == 't')
-  } finally {
-    off()
-    useOutboxStore(restoreStore)
-    wire.free()
-  }
-})
-
 // A fresh graph has no canvas for `/` to name (T-39749). Until the server has
 // answered, nothing is made: a graph still loading may hold one. Once it says
 // there is none, the page makes the first, `/` names it, and asking again
@@ -3060,6 +3030,7 @@ test('a graph that answers it has no canvas gets its first', async () => {
   let made: Change[] = []
   let restore = useRoute((frame) => {
     made.push(...(frame as { apply?: Change[] }).apply ?? [])
+    if ((frame as { request?: Request }).request) return Response.json([])
   })
   config.host = 'browser.test'
   cache.value = {}
@@ -3075,7 +3046,7 @@ test('a graph that answers it has no canvas gets its first', async () => {
     await until(() => homeless())
     makeHome()
     makeHome()
-    assertEquals(canvases(), 1)
+    await until(() => canvases() === 1)
     // The server takes the write, and its answer names the new canvas.
     let eid = made.find((c) => c.name == 'canvas')!.eid
     let ask = wire.asked().find((a) => a.subscribe.startsWith('.canvas'))!
