@@ -16,3 +16,13 @@
   font-size: var(--small);
   color: var(--muted);
 }
+
+/* A feed of unlike things: each entry has its own edge and breathing room. */
+.Rows-ruled > .Rows_Item {
+  padding: var(--half-gap) 0;
+  border-bottom: 1px solid var(--border2);
+}
+.Rows_Kind {
+  font-size: var(--small);
+  color: var(--muted);
+}

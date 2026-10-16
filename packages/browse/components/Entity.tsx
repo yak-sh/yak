@@ -67,7 +67,7 @@ import { Persona } from './views/Persona.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
 import { BoardMeta, BoardTile } from './views/BoardTile.tsx'
-import { BoardList, List, ListTile } from './views/List.tsx'
+import { BoardList, List, ListEntry, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { IdFace, Inline, SessionId, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
@@ -150,6 +150,11 @@ define([
       <r.Render {...ctx} e={domainBundle(e)} />
     ),
   })),
+  {
+    view: 'Feed.Tile',
+    match: and(),
+    Render: (props) => <ListEntry {...props} />,
+  },
   { view: 'Tile', match: parse('.memory'), Render: MemoryTile },
   // TaskTile walks back through Entity for its Meta row; defer the binding
   // for the same reason as Canvas above.

@@ -133,7 +133,7 @@ export let QueryList = (
   let failed = boardRead?.state.status == 'failed' ? boardRead : undefined
   if (failed) {
     return (
-      <Rows elRef={root}>
+      <Rows elRef={root} mod='ruled'>
         <SubscriptionFailure read={failed} />
       </Rows>
     )
@@ -153,7 +153,7 @@ export let QueryList = (
   // silent truncation this row exists to prevent. The ephemeral filter is
   // part of this page's query, so the total follows it too.
   return (
-    <Rows elRef={root}>
+    <Rows elRef={root} mod='ruled'>
       {rows.map((t) => (
         // a feed row dragged onto a canvas spawns the entity as a card
         <Rows.Item
@@ -161,7 +161,7 @@ export let QueryList = (
           draggable={capable('canvas')}
           onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
         >
-          <Entity eid={t.eid} view='List.Tile' />
+          <Entity eid={t.eid} view='Feed.Tile' />
         </Rows.Item>
       ))}
       {more > 0 && (
@@ -194,4 +194,13 @@ export let ListTile = ({ e, slots, onOpen }: TileProps) => (
     {slot(slots, 'after')}
     {slot(slots, 'body')}
   </Line>
+)
+
+// Every feed asks for this shared face; the kind-specific Tile still owns
+// what the entity says, including session and letter summaries.
+export let ListEntry = ({ e, ...props }: TileProps) => (
+  <>
+    <Rows.Kind>{e.kind}</Rows.Kind>
+    <Entity eid={e.eid} view='Tile' {...props} />
+  </>
 )

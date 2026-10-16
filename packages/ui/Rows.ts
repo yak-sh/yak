@@ -15,10 +15,15 @@ import { Dot } from './Dot.ts'
 import { Tile } from './Tile.ts'
 
 /** A list of rows. */
-export let Rows: Part & Record<'Item' | 'More', Part> = block('div', 'Rows', {
-  Item: 'div',
-  More: 'div',
-})
+export let Rows: Part & Record<'Item' | 'More' | 'Kind', Part> = block(
+  'div',
+  'Rows',
+  {
+    Item: 'div',
+    More: 'div',
+    Kind: 'div',
+  },
+)
 
 /** What it is, in a line. */
 export let description = 'A list of rows, and what was left out.'
@@ -27,6 +32,8 @@ export let description = 'A list of rows, and what was left out.'
 export let sheet = (c: Colors): Sheet => ({
   'Rows-nested': { indent: 2 },
   Rows_More: { fg: c.muted },
+  Rows_Kind: { fg: c.muted },
+  'Rows-ruled': { gap: true },
 })
 
 let { Item, More } = Rows
@@ -57,6 +64,15 @@ export let specimens = (): Specimen[] => [
       row('T-1', 'first'),
       row('T-2', 'second'),
       h(More, {}, '48 more'),
+    ),
+  ],
+  [
+    'Rows-ruled',
+    h(
+      Rows,
+      { mod: 'ruled' },
+      h(Item, {}, h(Rows.Kind, {}, 'task'), 'Inspect the model'),
+      h(Item, {}, h(Rows.Kind, {}, 'session'), 'Working on the model'),
     ),
   ],
   ['Rows-nested', h(Rows, { mod: 'nested' }, row('C-3', 'a comment'))],

@@ -53,6 +53,16 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
     await (await page(1))()
     let shown = titles(mounted.root)
     assertEquals(shown.length, 10)
+    assertEquals(
+      [...mounted.root.querySelectorAll('.Rows_Kind')].map((n) =>
+        n.textContent
+      ),
+      Array(10).fill('task'),
+    )
+    assertEquals(
+      mounted.root.querySelector('.Rows')?.classList.contains('Rows-ruled'),
+      true,
+    )
     let more = [...mounted.root.querySelectorAll('button')]
       .find((b) => /more/.test(b.textContent ?? ''))!
     await act(() => more.click())
