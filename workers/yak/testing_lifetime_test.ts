@@ -7,7 +7,9 @@ let p = platform('alarm lifetime')
 let store = p.object('lifetime/alarm')
 let ctx = p.states.get('lifetime/alarm')!
 
-test('platform teardown retains storage through an active alarm delivery', async () => {
+// Drive an actual in-flight alarm and teardown once; assertions below check
+// its completed storage boundary, not runtime scheduling of the alarm.
+await (async () => {
   let entered = Promise.withResolvers<void>()
   let resume = Promise.withResolvers<void>()
   store.alarm = async () => {
@@ -21,6 +23,8 @@ test('platform teardown retains storage through an active alarm delivery', async
   let closing = p[Symbol.asyncDispose]()
   resume.resolve()
   await Promise.all([ringing, closing])
+})()
+test('platform teardown retains storage through an active alarm delivery', () => {
   assertThrows(
     () => ctx.storage.beneath(select({ cols: [lit(1)] })),
     Error,
