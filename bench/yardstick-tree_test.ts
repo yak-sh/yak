@@ -117,3 +117,21 @@ test('function edit rewrites a declaration value and only shifts later bases', (
     2,
   )
 })
+
+test('function fixture excludes the TypeScript number keyword', () => {
+  let source = 'function typed(x: number): number { return 12; }'
+  let tree = emit('typed.ts', source)
+  let selected = functionLiteral(tree, source)!
+  equal(
+    new TextDecoder().decode(
+      new TextEncoder().encode(source).slice(
+        selected.literal.node.start,
+        selected.literal.node.end,
+      ),
+    ),
+    '12',
+  )
+  let changed = edit('typed.ts', source, tree, selected.literal)
+  equal(changed.after.errors, tree.errors)
+  equal(changed.after.nodes[0].node.kind, 'program')
+})
