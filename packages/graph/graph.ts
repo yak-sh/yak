@@ -387,6 +387,8 @@ export let graph = (opts: Options): Graph => {
   let phaseHooks = new Map<Phase, [string, Hook][]>()
   let phaseRules = new Map<Phase, Rule[]>()
   let declarations: Ready[] = []
+  let defaultDeclarations: Ready[] = []
+  let noRules: Rule[] = []
   let declarationKey: string | undefined
 
   // Every content-addressed component's id-deriving function, by component
@@ -493,22 +495,28 @@ export let graph = (opts: Options): Graph => {
   // vocabulary is fixed; the plugins' are checked at every write.
   let loaded = new Set(vocab.docs)
   let declaring = () => {
+    // Nothing mutable to inspect until a plugin is installed through use().
+    if (!plugins.length && declarationKey !== undefined) return declarations
     let vocabRules = declaredIn(vocab)
     let theirs = plugins.flatMap((p) => [
       ...(p.declared ?? []),
       ...rulesIn((p.vocab ?? []).filter((d) => !loaded.has(d))),
     ])
-    let key = JSON.stringify(theirs)
+    let key = theirs.length ? JSON.stringify(theirs) : ''
     if (key !== declarationKey) {
       declarations = ready([...vocabRules, ...theirs].map((r) => ({
         ...r,
         ...(r.before ? { before: [...r.before] } : {}),
       })))
+      // The default policy depends only on these plans and the fixed vocab.
+      // Keep its array identity too: settle indexes candidates by Ready[].
+      defaultDeclarations = declarations.filter((r) => !own(r, vocab))
       declarationKey = key
     }
     return declarations
   }
   let ruled = (phase: Phase, stamp = true): Rule[] => {
+    if (!plugins.length) return (stamp && stamping.get(phase)) || noRules
     let found = phaseRules.get(phase)
     let i = 0
     let same = !!found
@@ -998,9 +1006,10 @@ export let graph = (opts: Options): Graph => {
                   'rules',
                   held,
                   (b) => {
-                    let rules = declaring().filter((r) =>
-                      opts.runs ? opts.runs(r, o) : !own(r, vocab)
-                    )
+                    let all = declaring()
+                    let rules = opts.runs
+                      ? all.filter((r) => opts.runs!(r, o))
+                      : defaultDeclarations
                     if (!rules.length) return b
                     // A resource a declared rule writes (`+result.at=#Now`)
                     // is the same singleton the rules written in code read,
