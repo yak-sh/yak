@@ -94,38 +94,81 @@ for (let backend of ['sqlite', 'ram']) {
 }
 
 for (let backend of ['sqlite', 'ram']) {
-  test(
-    backend + ': a new exclusion keeps historic addresses through later writes',
-    () => {
-      let d = mem()
-      let s = backend == 'sqlite'
-        ? storage(d, vocab, { number: true })
-        : ram(vocab, { number: true })
+  for (
+    let behavior of [
+      'gains an exclusion',
+      'updates an exclusion',
+      'creates an exclusion',
+      'numbers the next task',
+    ]
+  ) {
+    let d = mem()
+    let s = backend == 'sqlite'
+      ? storage(d, vocab, { number: true })
+      : ram(vocab, { number: { except: ['entry'] } })
+    s.install()
+    s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
+    // Reopen under the changed policy; RAM gains the excluded facet instead.
+    if (backend == 'sqlite') {
+      s = storage(d, vocab, { number: { except: ['entry'] } })
       s.install()
-      s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
-      // SQLite can reopen with a new policy; both backends can gain an excluded
-      // component on an entity already addressed by number.
-      if (backend == 'sqlite') {
-        s = storage(d, vocab, { number: { except: ['entry'] } })
-        s.install()
-      } else {
-        s = ram(vocab, { number: { except: ['entry'] } })
-        s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
-      }
+    }
+    if (behavior != 'gains an exclusion') {
+      s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, entry: { seq: 1 } }]))
+    }
+    if (
+      behavior == 'creates an exclusion' || behavior == 'numbers the next task'
+    ) {
+      s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, entry: { seq: 2 } }]))
+    }
+    if (behavior == 'numbers the next task') {
+      s.tx((tx) => tx.patch([{ entity: { eid: 'new' }, entry: { seq: 3 } }]))
+    }
+    test(`${backend}: historic numbering when a row ${behavior}`, () => {
       s.tx((tx) => {
-        tx.patch([{ entity: { eid: 'old' }, entry: { seq: 1 } }])
-        tx.patch([{ entity: { eid: 'old' }, entry: { seq: 2 } }])
-        tx.patch([{ entity: { eid: 'new' }, entry: { seq: 3 } }])
-        tx.patch([{ entity: { eid: 'next' }, task: {} }])
-        assertEquals(tx.read('.entity.num=1')[0].entity.eid, 'old')
-        assertEquals(tx.get(['new'])[0].entity.num ?? null, null)
-        assertEquals(tx.get(['next'])[0].entity.num, 2)
+        if (behavior == 'creates an exclusion') {
+          tx.patch([{ entity: { eid: 'new' }, entry: { seq: 3 } }])
+          assertEquals(tx.get(['new'])[0].entity.num ?? null, null)
+        } else if (behavior == 'numbers the next task') {
+          tx.patch([{ entity: { eid: 'next' }, task: {} }])
+          assertEquals(tx.get(['next'])[0].entity.num, 2)
+        } else {
+          tx.patch([{
+            entity: { eid: 'old' },
+            entry: { seq: behavior == 'gains an exclusion' ? 1 : 2 },
+          }])
+        }
+        assertEquals(tx.get(['old'])[0].entity.num, 1)
       })
-    },
-  )
+    })
+  }
 }
 
-test('historic session, letter and knock addresses survive a policy change and reopen', () => {
+// Number lookup is a read behavior separate from changing an excluded facet.
+for (let backend of ['sqlite', 'ram']) {
+  let d = mem()
+  let s = backend == 'sqlite'
+    ? storage(d, vocab, { number: true })
+    : ram(vocab, { number: { except: ['entry'] } })
+  s.install()
+  s.tx((tx) => tx.patch([{ entity: { eid: 'old' }, task: {} }]))
+  if (backend == 'sqlite') {
+    s = storage(d, vocab, { number: { except: ['entry'] } })
+    s.install()
+  }
+  s.tx((tx) => {
+    tx.patch([{ entity: { eid: 'old' }, entry: { seq: 1 } }])
+    tx.patch([{ entity: { eid: 'old' }, entry: { seq: 2 } }])
+    tx.patch([{ entity: { eid: 'new' }, entry: { seq: 3 } }])
+  })
+  test(`${backend}: a historic number still finds an excluded row`, () => {
+    assertEquals(s.read('.entity.num=1')[0].entity.eid, 'old')
+  })
+}
+
+for (
+  let [component, prefix] of [['session', 'S'], ['mail', 'E'], ['knock', 'K']]
+) {
   let v = loadVocab([{
     $defs: {
       entity: {
@@ -141,41 +184,58 @@ test('historic session, letter and knock addresses survive a policy change and r
   let d = mem()
   let old = storage(d, v, { number: true })
   old.install()
-  old.tx((tx) =>
-    tx.patch([
-      { entity: { eid: 'old-session' }, session: {} },
-      { entity: { eid: 'old-mail' }, mail: {} },
-      { entity: { eid: 'old-knock' }, knock: {} },
-    ])
-  )
+  old.tx((tx) => tx.patch([{ entity: { eid: 'old' }, [component]: {} }]))
   let s = storage(d, v, { number: { except: ['session', 'mail', 'knock'] } })
   s.install()
-  s.tx((tx) => {
+  s.tx((tx) =>
     tx.patch([
-      { entity: { eid: 'old-session' }, session: {} },
-      { entity: { eid: 'old-mail' }, mail: {} },
-      { entity: { eid: 'old-knock' }, knock: {} },
-      { entity: { eid: 'new-session' }, session: {} },
-      { entity: { eid: 'new-mail' }, mail: {} },
-      { entity: { eid: 'new-knock' }, knock: {} },
-      { entity: { eid: 'next-task' }, task: {} },
+      { entity: { eid: 'old' }, [component]: {} },
+      { entity: { eid: 'new' }, [component]: {} },
     ])
-    assertEquals(
-      Object.fromEntries(
-        ids(v).address!(tx, ['S-1', 'E-2', 'K-3']) as Map<string, string>,
-      ),
-      {
-        'S-1': 'old-session',
-        'E-2': 'old-mail',
-        'K-3': 'old-knock',
-      },
-    )
-    assertEquals(tx.get(['next-task'])[0].entity.num, 4)
-    for (let b of tx.get(['new-session', 'new-mail', 'new-knock'])) {
-      assertEquals(b.entity.num ?? null, null)
-    }
+  )
+  test(`historic ${component} addresses survive a policy change and reopen`, () => {
+    s.tx((tx) => {
+      assertEquals(
+        Object.fromEntries(
+          ids(v).address!(tx, [`${prefix}-1`]) as Map<string, string>,
+        ),
+        { [`${prefix}-1`]: 'old' },
+      )
+      assertEquals(tx.get(['new'])[0].entity.num ?? null, null)
+    })
   })
-})
+}
+
+for (let component of ['session', 'mail', 'knock']) {
+  let v = loadVocab([{
+    $defs: {
+      entity: {
+        component: true,
+        properties: { num: { type: 'number', stamped: true } },
+      },
+      task: { component: true },
+      [component]: { component: true },
+    },
+  }])
+  let d = mem()
+  let old = storage(d, v, { number: true })
+  old.install()
+  old.tx((tx) => tx.patch([{ entity: { eid: 'old' }, [component]: {} }]))
+  let s = storage(d, v, { number: { except: [component] } })
+  s.install()
+  s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'old' }, [component]: {} }, {
+      entity: { eid: 'new' },
+      [component]: {},
+    }])
+  )
+  test(`a task follows historic ${component} numbers after reopening`, () => {
+    s.tx((tx) => {
+      tx.patch([{ entity: { eid: 'next-task' }, task: {} }])
+      assertEquals(tx.get(['next-task'])[0].entity.num, 2)
+    })
+  })
+}
 
 test('SQLite migration retains historic high-water across clearing and reopen', () => {
   let d = mem()
