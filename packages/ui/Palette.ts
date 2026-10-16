@@ -1,20 +1,26 @@
 /** A searchable overlay: paint only; its caller owns the query and choices. */
 import { h } from 'preact'
-import { block } from './el.ts'
+import { block, type Part } from './el.ts'
 import { Field } from './Field.ts'
 import { Value } from './Value.ts'
 import type { Colors, Specimen } from './theme.ts'
 import type { Sheet } from '@yaks/tui/theme'
 
 /** A veil, query line, grouped choices and their feedback. */
-export let Palette = block('div', 'Palette', {
-  Box: 'div',
-  Line: 'div',
-  Page: 'a',
-  Head: 'div',
-  Hit: 'div',
-  Message: 'div',
-})
+export let Palette:
+  & Part
+  & Record<'Box' | 'Line' | 'Page' | 'Head' | 'Hit' | 'Message', Part> = block(
+    'div',
+    'Palette',
+    {
+      Box: 'div',
+      Line: 'div',
+      Page: 'a',
+      Head: 'div',
+      Hit: 'div',
+      Message: 'div',
+    },
+  )
 export let description = 'A query and its choices above the current page.'
 export let sheet = (c: Colors): Sheet => ({
   Palette_Box: { col: true },

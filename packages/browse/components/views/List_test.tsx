@@ -98,7 +98,7 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
 
 // A session has no numbered handle. Its secondary text is part of the same
 // navigable entry as its heading, and a native link can open it in a new tab.
-test('a favorite session opens from its whole entry, without a numbered handle', async () => {
+test('a favorite session opens from its whole entry, without a numbered handle', () => {
   let id = uuid()
   applyLocal([
     { eid: id, name: 'entity', comp: { eid: id } },
