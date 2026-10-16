@@ -42,7 +42,7 @@ for (let kind of ['fork', 'spawn']) {
     let model: Model = (req) => {
       if (
         req.items.at(-1)?.kind == 'user' &&
-        (req.items.at(-1) as { text: string }).text == 'child work'
+        (req.items.at(-1) as { text: string }).text.endsWith('child work')
       ) {
         childAsked.resolve(req)
         return childReply.promise
@@ -109,7 +109,9 @@ for (let kind of ['fork', 'spawn']) {
       ),
     )
     assertEquals(
-      req.items.filter((i) => i.kind == 'user').map((i) => i.text),
+      req.items.filter((i) => i.kind == 'user').map((i) =>
+        i.text.replace(/^\[Sent [^\n]*\]\n/, '')
+      ),
       kind == 'fork' ? ['parent context', 'child work'] : ['child work'],
     )
     // No inherited unanswered delegation call can fork recursively.
@@ -147,7 +149,7 @@ test('wait resolves while child completion waits behind the parent tool', async 
     return run(args, ctx)
   }
   let model: Model = (req) => {
-    if (req.items.some((i) => i.kind == 'user' && i.text == 'child')) {
+    if (req.items.some((i) => i.kind == 'user' && i.text.endsWith('child'))) {
       childAsked.resolve()
       return childReply.promise
     }
@@ -179,7 +181,7 @@ test('child capacity queues without rejection; root starts retain their separate
   let h = await harness()
   let turns = 0
   let model: Model = (req) => {
-    if (req.items.some((i) => i.kind == 'user' && i.text == 'child')) {
+    if (req.items.some((i) => i.kind == 'user' && i.text.endsWith('child'))) {
       childAsked.resolve()
       return pending.promise
     }
@@ -345,7 +347,7 @@ test('child completion is queued behind an in-flight parent ask without collidin
     tools: sessionTools(h.g),
     model: (req) => {
       if (
-        req.items.some((i) => i.kind == 'user' && i.text == 'child')
+        req.items.some((i) => i.kind == 'user' && i.text.endsWith('child'))
       ) return childReply.promise
       if (turns++ == 0) {
         return Promise.resolve(call('spawn', { prompt: 'child' }))

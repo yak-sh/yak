@@ -416,7 +416,8 @@ test('task mode paints claimed work and subagent, then its delivered result with
     model: (req) => {
       if (
         req.items.some((i) =>
-          i.kind == 'user' && i.text.startsWith('microtask')
+          i.kind == 'user' &&
+          i.text.replace(/^\[Sent [^\n]*\]\n/, '').startsWith('microtask')
         )
       ) {
         childAsked.resolve()

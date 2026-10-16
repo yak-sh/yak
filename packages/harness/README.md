@@ -477,6 +477,23 @@ The harness neither sweeps host worktrees nor monitors a host disk.
 
 <a id="prompt-context-pilot"></a>
 
+### Input times
+
+The native runner renders each timed input as
+`[Sent <UTC time>; previous reply ended <UTC time>]` followed by its unchanged
+prose. The second time is the completion of the model reply to an earlier input,
+not its streaming start: a sent time before that end means the person may not
+have read the reply yet. The runner follows `output.source` → `ask.through`, so
+an input sent during a reply has the same comparison whether its entry precedes
+or follows the streamed output entry. Each input carries its own comparison,
+including in a fork or a bounded/anchored request.
+
+Times come from the input's `created.at` and the completed ask's `updated.at`;
+no clock is guessed for imported history. The first input says `none` for its
+previous reply, a reply without a known completion says `unknown`, and an input
+without a sent time keeps its original prose. Passive notices are not stamped as
+a person's messages. Stored content and UI transcript text stay unchanged.
+
 ### Instruction files and prompt history
 
 `prompt{scope,source,revision}` on an entry explicitly marks its `content.body`

@@ -45,7 +45,11 @@ test('model selection derives provider, does not ask, and applies only to select
     await a.idle(other)
     assertEquals(seen.map(([p]) => p), ['openrouter', 'openai', 'openrouter'])
     assertEquals(seen[2][1].anchor, undefined)
-    assert(seen[2][1].items.some((i) => i.kind == 'user' && i.text == 'other'))
+    assert(
+      seen[2][1].items.some((i) =>
+        i.kind == 'user' && i.text.endsWith('other')
+      ),
+    )
     await assertRejects(
       () => a.selectModel(other, crypto.randomUUID()),
       Error,
@@ -134,7 +138,9 @@ test('passive model controls do not add invented user text to the next request',
     await a.send(s, 'second')
     await a.idle(s)
     assertEquals(
-      seen[1].items.filter((i) => i.kind == 'user').map((i) => i.text),
+      seen[1].items.filter((i) => i.kind == 'user').map((i) =>
+        i.text.replace(/^\[Sent [^\n]*\]\n/, '')
+      ),
       ['first', 'second'],
     )
   } finally {

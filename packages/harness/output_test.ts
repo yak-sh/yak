@@ -135,7 +135,13 @@ test('model receives bounded tool result, UI keeps original and prompt/user stay
     assert(sent?.kind == 'result')
     assert(sent.output.length < 2000)
     assert(sent.output.includes('graph_value_read'))
-    assertEquals(requests[0].items.find((i) => i.kind == 'user')?.text, user)
+    assertEquals(
+      requests[0].items.find((i) => i.kind == 'user')?.text.replace(
+        /^\[Sent [^\n]*\]\n/,
+        '',
+      ),
+      user,
+    )
     const entries = await a.transcript(id)
     assertEquals(
       (entries.find((b) => b.result)?.content as { body: string }).body,

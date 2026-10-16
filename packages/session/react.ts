@@ -189,6 +189,8 @@ export type Deps = {
   instructions?: string
   /** Resolve inherited base instructions for future asks without rewriting history. */
   resolveInstructions?: (inherited: string | undefined) => string | undefined
+  /** Host rendering of an input's prose; stored content stays unchanged. */
+  inputText?: (entry: Bundle, transcript: Bundle[]) => string
   /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
   resultText?: (entry: Bundle) => Promise<string>
   /** Resolve explicitly admitted multimodal context without storing bytes in entries. */
@@ -418,6 +420,7 @@ export let project = (
     results?: Map<Eid, string>
     media?: Map<Eid, Item[]>
     history?: boolean
+    inputText?: Deps['inputText']
   } = {},
 ): Item[] => {
   let out: Item[] = []
@@ -435,9 +438,14 @@ export let project = (
         )
       }
       out.push({ kind: 'instruction', text: textOf(b) })
-    } else if (kind == 'input') out.push({ kind: 'user', text: textOf(b) })
-    else if (kind == 'output') out.push({ kind: 'assistant', text: textOf(b) })
-    else if (kind == 'call' && c?.source != opts.anchor) {
+    } else if (kind == 'input') {
+      out.push({
+        kind: 'user',
+        text: opts.inputText?.(b, transcript) ?? textOf(b),
+      })
+    } else if (kind == 'output') {
+      out.push({ kind: 'assistant', text: textOf(b) })
+    } else if (kind == 'call' && c?.source != opts.anchor) {
       out.push({
         kind: 'call',
         id: String(c!.id),
@@ -576,6 +584,7 @@ let compaction = async (o: {
   fixed: number
   share: number
   resultText?: (entry: Bundle) => Promise<string>
+  inputText?: Deps['inputText']
   force?: boolean
 }): Promise<
   { chunk: Bundle[]; results?: Map<Eid, string> } | undefined
@@ -593,7 +602,11 @@ let compaction = async (o: {
         ),
       )
       : undefined
-    let sizes = project(o.entries, lines, o.tools, { results, history: true })
+    let sizes = project(o.entries, lines, o.tools, {
+      results,
+      history: true,
+      inputText: o.inputText,
+    })
       .map((i) => tokens(JSON.stringify(i).length))
     return { sizes, results }
   }
@@ -673,6 +686,7 @@ let summarize = async (
         project(entries, summaryLines(entries, chunk, tasks), tools, {
           results,
           history: true,
+          inputText: deps.inputText,
         }),
       ),
     }],
@@ -1358,6 +1372,7 @@ export let react = async (
           anchor: anchorId ? asked!.entity.eid : undefined,
           results,
           media,
+          inputText: deps.inputText,
         },
       ),
     ],
@@ -1395,12 +1410,17 @@ export let react = async (
         String(req.instructions ?? '').length +
           JSON.stringify(dynamic).length +
           JSON.stringify(req.tools).length +
-          JSON.stringify(project(entries, retained(entries), toolEntities))
+          JSON.stringify(
+            project(entries, retained(entries), toolEntities, {
+              inputText: deps.inputText,
+            }),
+          )
             .length +
           JSON.stringify(taskItems(snapshot(held))).length,
       ),
       share: deps.compactAt ?? SHARE,
       resultText: deps.resultText,
+      inputText: deps.inputText,
     }
     : undefined
   let summarizing = cut && using?.window == null

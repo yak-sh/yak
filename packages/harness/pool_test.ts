@@ -53,8 +53,9 @@ test('shared FIFO pool admits IDs before preparation and never over-admits acros
     ...bound,
     model: (req) => {
       let text = req.items.find((i) => i.kind == 'user') as { text: string }
-      starts.push(text.text)
-      return replies[Number(text.text)].promise
+      starts.push(text.text.replace(/^\[Sent [^\n]*\]\n/, ''))
+      return replies[Number(text.text.replace(/^\[Sent [^\n]*\]\n/, ''))]
+        .promise
     },
   })
   await h.g.apply([
@@ -153,9 +154,8 @@ test('cap one nested delegated wait releases and reacquires its slot', async () 
     h,
     maxChildren: 1,
     model: (req) => {
-      let name = (req.items.find((i) =>
-        i.kind == 'user'
-      ) as { text: string }).text
+      let name = (req.items.find((i) => i.kind == 'user') as { text: string })
+        .text.replace(/^\[Sent [^\n]*\]\n/, '')
       let n = turns.get(name) ?? 0
       turns.set(name, n + 1)
       let call = (tool: string, args: unknown): Reply => ({

@@ -271,7 +271,7 @@ test('child marks task done through a tool before its final answer: one final re
     tools,
     model: (req) => {
       let child = req.items.some((i) =>
-        i.kind == 'user' && i.text == 'Child work'
+        i.kind == 'user' && i.text.endsWith('Child work')
       )
       let tool = child
         ? childTurns++ == 0 ? 'complete' : null

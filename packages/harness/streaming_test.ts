@@ -189,10 +189,14 @@ test('new input while streaming is outside frozen ask boundary and served in fol
     await a.idle(id)
     assertEquals(calls, 2)
     assert(
-      !requests[0].items.some((i) => i.kind == 'user' && i.text == 'second'),
+      !requests[0].items.some((i) =>
+        i.kind == 'user' && i.text.endsWith('second')
+      ),
     )
     assert(
-      requests[1].items.some((i) => i.kind == 'user' && i.text == 'second'),
+      requests[1].items.some((i) =>
+        i.kind == 'user' && i.text.endsWith('second')
+      ),
     )
   } finally {
     release()
@@ -405,13 +409,17 @@ test('operational interruption retains partial context, waits, and continues fro
     assertEquals(requests.length, 3)
     assertEquals(requests[2].anchor, 'r1')
     assert(
-      requests[2].items.some((i) => i.kind == 'user' && i.text == 'second'),
+      requests[2].items.some((i) =>
+        i.kind == 'user' && i.text.endsWith('second')
+      ),
     )
     assert(
       requests[2].items.some((i) => i.kind == 'assistant' && i.text == 'That'),
     )
     assert(
-      requests[2].items.some((i) => i.kind == 'user' && i.text == 'continue'),
+      requests[2].items.some((i) =>
+        i.kind == 'user' && i.text.endsWith('continue')
+      ),
     )
     rows = await a.transcript(id)
     assertEquals(statusOf(rows), 'settled')
@@ -478,9 +486,15 @@ test('input admitted during an aborted turn is served once after interruption', 
     abort()
     await a.idle(id)
     assertEquals(requests.length, 2)
-    assert(requests[1].items.some((i) => i.kind == 'user' && i.text == 'first'))
     assert(
-      requests[1].items.some((i) => i.kind == 'user' && i.text == 'correction'),
+      requests[1].items.some((i) =>
+        i.kind == 'user' && i.text.endsWith('first')
+      ),
+    )
+    assert(
+      requests[1].items.some((i) =>
+        i.kind == 'user' && i.text.endsWith('correction')
+      ),
     )
     assert(
       requests[1].items.some((i) =>

@@ -17,7 +17,12 @@ let echo: Model = (req) =>
     items: [{
       kind: 'assistant',
       text: req.items.at(-1)?.kind == 'user'
-        ? `heard: ${(req.items.at(-1) as { text: string }).text}`
+        ? `heard: ${
+          (req.items.at(-1) as { text: string }).text.replace(
+            /^\[Sent [^\n]*\]\n/,
+            '',
+          )
+        }`
         : 'nothing said',
     }],
   })
@@ -490,10 +495,43 @@ test('send commits during a provider turn and unserved input reaches the next an
     assertEquals(requests[1].anchor, 'r-first')
     assert(
       requests[1].items.some((i) =>
-        i.kind == 'user' && i.text == 'while waiting'
+        i.kind == 'user' && i.text.endsWith('while waiting')
       ),
     )
     let entries = await a.transcript(s)
+    let sent = (entries.find((b) =>
+      (b.content as Comp)?.body == 'while waiting'
+    )!.created as Comp).at
+    let ended = (entries.find((b) =>
+      b.openai && (b.openai as Comp).response_id == 'r-first'
+    )!.updated as Comp).at
+    let user = requests[1].items.find((i) =>
+      i.kind == 'user' && i.text.endsWith('while waiting')
+    )!
+    assertEquals(user, {
+      kind: 'user',
+      text: `[Sent ${sent}; previous reply ended ${ended}]\nwhile waiting`,
+    })
+    await a.send(s, 'after reading')
+    await a.idle(s)
+    entries = await a.transcript(s)
+    let after = entries.find((b) =>
+      (b.content as Comp)?.body == 'after reading'
+    )!
+    let lastReply = entries.filter((b) =>
+      b.ask
+    ).at(-2)!
+    assertEquals(
+      requests.at(-1)!.items.find((i) =>
+        i.kind == 'user' && i.text.endsWith('after reading')
+      ),
+      {
+        kind: 'user',
+        text: `[Sent ${(after.created as Comp).at}; previous reply ended ${
+          (lastReply.updated as Comp).at
+        }]\nafter reading`,
+      },
+    )
     let seqs = entries.map((b) => Number((b.entry as Comp).seq))
     assertEquals(new Set(seqs).size, seqs.length)
     assertEquals(statusOf(entries), 'settled')

@@ -50,7 +50,9 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
     assertEquals(seen.map(([p]) => p), ['openai', 'openrouter'])
     assertEquals(seen[1][1].anchor, undefined)
     assert(
-      seen[1][1].items.some((i) => i.kind === 'user' && i.text === 'initial'),
+      seen[1][1].items.some((i) =>
+        i.kind === 'user' && i.text.endsWith('initial')
+      ),
     )
     const transcript = await a.transcript(s)
     assert(transcript.some((b) => b.openrouter))
