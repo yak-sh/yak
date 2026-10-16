@@ -314,48 +314,53 @@ test("a worker keeps its runtime's imports and bundles the rest", async () => {
   equal(imports(got.worker!.code), ['cloudflare:workers', 'node:buffer'])
 })
 
+// Independent bad inputs own their catalogs; no case mutates a catalog while
+// another compilation is reading it.
+let mistakes: [Ask, RegExp, Catalog][] = [
+  [page({ 'main.ts': 'let x = (' }), /^main\.ts:1:10: Unexpected end/, catalog],
+  [
+    page({ 'main.ts': "export { n } from '@yaks/kit/absent'" }),
+    /missing browser.*export/,
+    catalog,
+  ],
+  [
+    page({ 'main.ts': "export { n } from '@yaks/absent'" }),
+    /missing browser.*package/,
+    catalog,
+  ],
+  [
+    page({
+      'main.ts': "import { u } from './util.js'\nconsole.log(u)",
+      'util.ts': 'export let u = 1',
+    }),
+    /imports \.\/util\.js, which is util\.ts/,
+    catalog,
+  ],
+  [
+    worker("import pad from 'left-pad'\nexport default pad"),
+    /name left-pad in package\.json dependencies/,
+    catalog,
+  ],
+]
+for (let spec of ['./missing.js', '../../../private.ts', '/private.ts']) {
+  let bad = structuredClone(catalog)
+  bad['@yaks/kit'].files['lib/mod.ts'] = `export { n } from '${spec}'`
+  mistakes.push([
+    page({
+      'main.ts': "export { n } from '@yaks/kit'",
+      'private.ts': 'export let n = "PRIVATE"',
+    }),
+    /no emitted file/,
+    bad,
+  ])
+}
+
 test("an app's mistakes come back as lines that say where", async () => {
-  for (
-    let [ask, said] of [
-      [page({ 'main.ts': 'let x = (' }), /^main\.ts:1:10: Unexpected end/],
-      [
-        page({ 'main.ts': "export { n } from '@yaks/kit/absent'" }),
-        /missing browser.*export/,
-      ],
-      [
-        page({ 'main.ts': "export { n } from '@yaks/absent'" }),
-        /missing browser.*package/,
-      ],
-      [
-        page({
-          'main.ts': "import { u } from './util.js'\nconsole.log(u)",
-          'util.ts': 'export let u = 1',
-        }),
-        /imports \.\/util\.js, which is util\.ts/,
-      ],
-      [
-        worker("import pad from 'left-pad'\nexport default pad"),
-        /name left-pad in package\.json dependencies/,
-      ],
-    ] as const
-  ) {
+  await Promise.all(mistakes.map(async ([ask, said, catalog]) => {
     let got = await compile(ask, catalog)
     equal(got.errors.length, 1, String(got.errors))
     match(got.errors[0], said)
-  }
-  let bad = structuredClone(catalog)
-  for (let spec of ['./missing.js', '../../../private.ts', '/private.ts']) {
-    bad['@yaks/kit'].files['lib/mod.ts'] = `export { n } from '${spec}'`
-    let got = await compile(
-      page({
-        'main.ts': "export { n } from '@yaks/kit'",
-        'private.ts': 'export let n = "PRIVATE"',
-      }),
-      bad,
-    )
-    equal(got.errors.length, 1)
-    match(got.errors[0], /no emitted file/)
-  }
+  }))
 })
 
 // esbuild's own process, a child of this one.

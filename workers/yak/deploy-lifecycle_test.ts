@@ -291,8 +291,10 @@ test('updates carry every crossed required source mark but exclude the installed
   assertEquals((await read.json())[0].cost, { euros: 12 })
 })
 
-test('rollback selects kept bytes without minting or changing deploys, then deploy allocates above history', async () => {
-  await using scenario = platform('rollback-secret')
+// Each module load owns its two kept releases. Only pointer changes, reports
+// and the next release belong to the rollback case's measured work.
+let rollback = await (async () => {
+  let scenario = platform('rollback-secret')
   let f = await fixture(scenario.env)
   await f.write('one')
   await call(f.ctx, 'app_deploy', f.args)
@@ -304,6 +306,13 @@ test('rollback selects kept bytes without minting or changing deploys, then depl
   })
   await call(f.ctx, 'app_deploy', f.args)
   let before = await f.history()
+  await scenario.settled()
+  return { scenario, f, before }
+})()
+
+test('rollback selects kept bytes without minting or changing deploys, then deploy allocates above history', async () => {
+  await using scenario = rollback.scenario
+  let { f, before } = rollback
   let notices: unknown[] = []
   let wire = scenario.env.WIRE as unknown as Namespace
   let env = {
