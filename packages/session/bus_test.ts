@@ -13,10 +13,11 @@ import { personaDoc } from '@yaks/persona/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { ram } from '@yaks/ram'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { taskDoc } from '@yaks/task/vocab'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { test, until } from '@yaks/testing'
 import { due, feed, heard, reply } from './bus.ts'
-import { pendingItems } from './listen.ts'
+import { pending, pendingItems } from './listen.ts'
 import { statusOf } from './state.ts'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived, statusComputed } from './status.ts'
@@ -33,6 +34,7 @@ let vocab = loadVocab([
   notifyDoc,
   personaDoc,
   projectDoc,
+  taskDoc,
   sessionDoc,
   toolsDoc,
 ])
@@ -460,3 +462,135 @@ test('project-held news waits for a native turn, but addressed news never waits'
     news,
   ])
 })
+
+// A decision and an assigned task are correspondence even without a claim.
+// Seed each private graph before timing the delivery, through real provenance.
+let question = {
+  question: 'May the probe proceed?',
+  choices: [
+    { label: 'yes', description: 'Proceed' },
+    { label: 'no', description: 'Stop' },
+  ],
+  recommended: 'yes',
+}
+let createdThread = async (
+  store: Storage,
+  mode: 'outside' | 'native' | 'ended' | 'stopped' | 'own' | 'claimed',
+) => {
+  let g = bare(store)
+  await g.apply([
+    { entity: { eid: 'p' }, project: {} },
+    { entity: { eid: 'elsewhere' }, project: {} },
+    { entity: { eid: 'operator' }, persona: { home: 'p' } },
+    { entity: { eid: 'stranger' }, persona: { home: 'elsewhere' } },
+    { entity: { eid: 'owner' }, doc: { title: 'Owner' } },
+    {
+      entity: { eid: 'creator' },
+      session: { id: 'creator', ...mode == 'ended' ? { ended: true } : {} },
+    },
+    { entity: { eid: 'next' }, session: { persona: 'operator' } },
+    { entity: { eid: 'other' }, session: { persona: 'stranger' } },
+    {
+      entity: { eid: 'next-start' },
+      entry: { session: 'next' },
+      using: {},
+      content: { body: 'at work' },
+    },
+    ...mode == 'native'
+      ? [{
+        entity: { eid: 'creator-start' },
+        entry: { session: 'creator' },
+        using: {},
+        content: { body: 'at work' },
+      }]
+      : [],
+    ...mode == 'stopped'
+      ? [{
+        entity: { eid: 'creator-stop' },
+        entry: { session: 'creator' },
+        stop: {},
+      }]
+      : [],
+  ], { trusted: true })
+  await g.apply([
+    {
+      entity: { eid: 'decision' },
+      task: {},
+      decision: question,
+      filed: { project: 'p', assignee: 'owner' },
+      ...mode == 'claimed' ? { claim: { session: 'creator' } } : {},
+      $actor: { by: 'creator', via: 'creator' },
+    },
+    {
+      entity: { eid: 'assigned' },
+      task: {},
+      filed: { project: 'p', assignee: 'owner' },
+      $actor: { by: 'creator', via: 'creator' },
+    },
+  ])
+  await g.apply(['decision', 'assigned'].map((target) => ({
+    entity: { eid: `comment-${target}` },
+    comment: { target },
+    doc: { body: `owner answered ${target}` },
+    $actor: mode == 'own' ? { by: 'creator', via: 'creator' } : { by: 'owner' },
+  })))
+  return g
+}
+// Freeze the history's computed status and use storage's read interface, as
+// the held-news fixture above does: delivery, not graph hooks, is under test.
+for (
+  let mode of [
+    'outside',
+    'native',
+    'ended',
+    'stopped',
+    'own',
+    'claimed',
+  ] as const
+) {
+  let seeded = await createdThread(memory(), mode)
+  let rows = await seeded.read('*')
+  let statuses = new Map(
+    rows.filter((b) => b.session).map((b) => [
+      b.entity.eid,
+      statusOf(
+        rows.filter((e) =>
+          (e.entry as { session?: string })?.session == b.entity.eid
+        ),
+      ),
+    ]),
+  )
+  let store = laid(
+    rows,
+    ram(vocab, {
+      computed: { 'session.status': (b) => statuses.get(b.entity.eid) },
+    }),
+  )
+  let g = bare(store)
+  g.get = store.get
+  g.read = (q, opts) => store.read(typeof q == 'string' ? parse(q) : q, opts)
+  let inherited = mode == 'ended' || mode == 'stopped'
+  test(`creator comments reach ${mode} sessions without claiming the question`, async () => {
+    let recipient = inherited ? 'next' : 'creator'
+    let lines = mode == 'native' || inherited
+      ? (await due(g)).map((b) => [b.session, b.item.entity.eid])
+      : (await pending(g, recipient)).map((b) => [recipient, b.item.entity.eid])
+    assertEquals(
+      lines,
+      mode == 'own' ? [] : [
+        [recipient, 'comment-decision'],
+        [recipient, 'comment-assigned'],
+      ],
+    )
+  })
+  if (mode == 'outside') {
+    test('a project operator cannot take a live creator’s comments', async () => {
+      assertEquals(await pending(g, 'next'), [])
+    })
+  }
+  if (inherited) {
+    test(`another project cannot take the ${mode} creator’s comments`, async () => {
+      assertEquals(await pending(g, 'other'), [])
+    })
+  }
+}

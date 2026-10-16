@@ -1,5 +1,5 @@
 // What a session hears about its work, one line at a time: a comment on an
-// entity it holds a lock on, a knock at it or at that entity, a letter
+// entity it created or holds a lock on, a knock at it or at that entity, a letter
 // delivered to it, a letter answering one it wrote. `yak session listen` is
 // the command a harness runs under a monitor — Claude Code's Monitor tool reads
 // each line a command prints as one event — so a running agent learns about its
@@ -11,6 +11,8 @@
 // command's output goes to the agent's own harness, never to a file a second
 // loop watches, which can vanish and take every line after it.
 //
+// Comments on records a session created follow it without a claim; once it
+// ends they are held for the project the record is filed under, just like mail.
 // A reply is the old session's while it may still hear it, and the project's
 // once it cannot. The session that wrote a letter hears the answer, wherever
 // the far side sent it, until that session is over (its harness ended it, or
@@ -92,7 +94,11 @@ let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 /** The queries for what is addressed to one session and not yet said. Each
  * asks about one component the graph declares; a graph without knocks or
  * letters has nothing to hear about them. */
-export let addressedTo = (vocab: Vocab, session: Eid): And[] => {
+export let addressedTo = (
+  vocab: Vocab,
+  session: Eid,
+  claimedComments = true,
+): And[] => {
   let has = (name: string) => !!vocab.comp(name)
   let unsaid = (...clauses: Clause[]) => and(...clauses, absent(NOTIFIED))
   return [
@@ -100,8 +106,14 @@ export let addressedTo = (vocab: Vocab, session: Eid): And[] => {
       ? [
         unsaid(
           present('comment'),
-          eq(`comment.target.${CLAIM}.session`, session),
+          eq('comment.target.created.via', session),
         ),
+        ...claimedComments
+          ? [unsaid(
+            present('comment'),
+            eq(`comment.target.${CLAIM}.session`, session),
+          )]
+          : [],
       ]
       : [],
     ...has('knock')
@@ -192,23 +204,36 @@ export let worksFor = async (
   return home ? await family(graph, home, '->') : []
 }
 
-// The project a held item reached: a letter's target, or a knock's.
-let reachedBy = (b: Bundle): string =>
-  str(comp(b, 'mail').target) || str(comp(b, 'knock').target)
+// The project a held item reached: a letter or knock's target, or the
+// project the commented-on record is filed under.
+let reachedBy = async (
+  graph: Pick<Graph, 'get'>,
+  b: Bundle,
+): Promise<string> => {
+  if (!b.comment) {
+    return str(comp(b, 'mail').target) || str(comp(b, 'knock').target)
+  }
+  let [target] = await graph.get([str(comp(b, 'comment').target)], ['filed'])
+  return str(comp(target, 'filed').project)
+}
 
 /** The native transcripts at work that may hear these items once they are
  * held: mid-turn, each wearing a persona whose home is a project an item
  * reached, or a project that one is filed under. One settled between turns
  * hears none of it, and an outside session hears it on its own calls, so the
- * feed never reads either. Whether a letter is held yet is {@link held}'s to
+ * feed never reads either. Whether an item is held yet is {@link held}'s to
  * say. */
 export let heirs = async (
-  graph: Pick<Graph, 'vocab' | 'read'>,
+  graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   letters: Bundle[],
 ): Promise<Eid[]> => {
   if (!graph.vocab.prop('persona', 'home')) return []
   let reached = [
-    ...new Set(letters.map(reachedBy).filter(Boolean)),
+    ...new Set(
+      (await Promise.all(letters.map((b) => reachedBy(graph, b)))).filter(
+        Boolean,
+      ),
+    ),
   ]
   if (!reached.length) return []
   let homes = [
@@ -252,6 +277,18 @@ export let knocked = (projects?: Eid[]): And =>
     absent(NOTIFIED),
   )
 
+/** Unsaid comments on records filed under these projects and created through
+ * a session. They are that session's while it can hear, then the project's. */
+export let commented = (projects?: Eid[]): And =>
+  and(
+    present('comment'),
+    present('comment.target.created.via.session'),
+    projects
+      ? eq('comment.target.filed.project', value(projects))
+      : present('comment.target.filed.project'),
+    absent(NOTIFIED),
+  )
+
 /** The addresses filed under these projects: entities wearing `email` that
  * are not projects themselves. A letter to one reached the project. */
 let addresses = async (
@@ -266,9 +303,9 @@ let addresses = async (
     ))).map((b) => b.entity.eid)
     : []
 
-/** What is held for these projects, unsaid: every knock at one, and each
- * letter that answers no letter, or one no session wrote, or one a session
- * other than `session` wrote and is over. */
+/** What is held for these projects, unsaid: every knock at one, each letter
+ * that answers no letter or one no session wrote, and replies to letters or
+ * comments on records created by another session that is over. */
 export let held = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
@@ -278,12 +315,19 @@ export let held = async (
   let knocks = graph.vocab.comp('knock')
     ? await graph.read(and(...knocked(projects).clauses, every()))
     : []
-  if (!graph.vocab.comp('mail')) return knocks
+  let comments =
+    graph.vocab.comp('comment') && graph.vocab.prop('filed', 'project')
+      ? await graph.read(and(...commented(projects).clauses, every()))
+      : []
   let reach = [...projects, ...await addresses(graph, projects)]
-  let mail = await graph.read(and(...arrived(reach).clauses, every()))
-  if (!mail.length) return knocks
-  let to = (b: Bundle) => str(comp(b, 'mail').reply_to)
-  let answered = [...new Set(mail.map(to).filter(Boolean))]
+  let mail = graph.vocab.comp('mail')
+    ? await graph.read(and(...arrived(reach).clauses, every()))
+    : []
+  let replies = [...mail, ...comments]
+  if (!replies.length) return knocks
+  let to = (b: Bundle) =>
+    str(comp(b, 'comment').target) || str(comp(b, 'mail').reply_to)
+  let answered = [...new Set(replies.map(to).filter(Boolean))]
   let writer = new Map(
     (answered.length ? await graph.get(answered, ['created']) : [])
       .map((b) => [b.entity.eid, str(comp(b, 'created').via)]),
@@ -304,7 +348,9 @@ export let held = async (
   let by = (b: Bundle) => writer.get(to(b)) ?? ''
   return [
     ...knocks,
-    ...mail.filter((b) => !wrote.has(by(b)) || gone.has(by(b))),
+    ...replies.filter((b) =>
+      gone.has(by(b)) || (!b.comment && !wrote.has(by(b)))
+    ),
   ]
 }
 
@@ -356,8 +402,8 @@ let pause = (every: Ear['every'], stop?: AbortSignal) =>
 /** Select what this listener hears. Addressed items do not wait for a turn;
  * project-held items do, for native transcripts only. Read held items lazily:
  * a native transcript at rest must neither consume nor read its project's news.
- * Author exclusion, native comment exclusion and deduplication are shared by
- * the native bus and outside listeners. */
+ * Author exclusion and deduplication are shared by the native bus and outside
+ * listeners. */
 export let pendingItems = async (
   session: Eid,
   native: boolean,
@@ -374,7 +420,7 @@ export let pendingItems = async (
     ]
   ) {
     if (
-      seen.has(b.entity.eid) || author(b) == session || (native && b.comment)
+      seen.has(b.entity.eid) || author(b) == session
     ) {
       continue
     }
@@ -390,8 +436,8 @@ export let pending = async (
   session: Eid,
 ): Promise<{ item: Bundle; line: string }[]> => {
   let vocab = graph.vocab
-  // A comment stays a thread message: the bus never feeds one to a native
-  // transcript. An outside harness claiming work retains its listener exception.
+  // Ordinary claimed-thread comments stay out of native transcripts. Replies
+  // on records a session created reach native and outside sessions alike.
   let [owner] = await graph.read(
     and(
       eq('entity.eid', session),
@@ -404,7 +450,7 @@ export let pending = async (
   let native = !process?.process &&
     (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0
   let addressed: Bundle[] = []
-  for (let q of addressedTo(vocab, session)) {
+  for (let q of addressedTo(vocab, session, !native)) {
     addressed.push(...await graph.read(and(...q.clauses, every())))
   }
   let working = !native || (await atWork(graph, [session])).length > 0

@@ -8,7 +8,15 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { who } from '@yaks/graph/call'
 import { absent, and, type Clause, every, present } from '@yaks/query'
-import { arrived, deliver, heirs, knocked, over, pending } from './listen.ts'
+import {
+  arrived,
+  commented,
+  deliver,
+  heirs,
+  knocked,
+  over,
+  pending,
+} from './listen.ts'
 import { sessionFor } from './who.ts'
 
 let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
@@ -19,6 +27,14 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   let unsaid = (...clauses: Clause[]) =>
     and(...clauses, absent('notified'), every())
   let queries = [
+    ...g.vocab.comp('comment')
+      ? [
+        unsaid(
+          present('comment'),
+          present('comment.target.created.via.session'),
+        ),
+      ]
+      : [],
     ...g.vocab.comp('knock')
       ? [
         unsaid(
@@ -35,7 +51,7 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       )]
       : [],
   ]
-  // A reply is for the session that wrote the letter it answers, and once
+  // A reply is for the session that wrote the letter or record it answers, and once
   // that session is over, for a session of the project it reached; any other
   // letter that reached a project, and a knock at one, is that project's from
   // the start.
@@ -47,6 +63,9 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       g.read(and(...arrived().clauses, every())),
     ])
     : [[], []]
+  let comments = g.vocab.comp('comment') && g.vocab.prop('filed', 'project')
+    ? await g.read(and(...commented().clauses, every()))
+    : []
   let projects = g.vocab.comp('knock') && g.vocab.comp('project')
     ? await g.read(and(...knocked().clauses, every()))
     : []
@@ -69,12 +88,15 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   return [
     ...new Set([
       ...rows.flatMap((b) => [
+        ...typeof comp(b, 'created').via == 'string'
+          ? [String(comp(b, 'created').via)]
+          : [],
         ...b.session ? [b.entity.eid] : [],
         ...typeof comp(b, 'claim').session == 'string'
           ? [String(comp(b, 'claim').session)]
           : [],
       ]),
-      ...await heirs(g, [...replies, ...reached, ...projects]),
+      ...await heirs(g, [...replies, ...reached, ...projects, ...comments]),
     ]),
   ]
 }
