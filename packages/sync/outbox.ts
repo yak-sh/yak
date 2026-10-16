@@ -63,6 +63,17 @@ export let outboxIdb = <T>(scope: string): OutboxStore<T> => {
   }
 }
 
+/** The observable delivery handle. Only an acceptance removes pending intent. */
+export type Outbox<T, R> = {
+  ready: Promise<void>
+  submit: (sent: T, key?: string) => Promise<R>
+  pending: () => Pending<T>[]
+  onPending: (fn: () => void) => () => void
+  retry: (key: string) => Promise<void>
+  forget: (key: string) => Promise<void>
+  close: () => void
+}
+
 /** A durable, ordered queue. An unknown answer rejects that caller (unsaved),
  * but retains and retries the exact intent/key. A refusal is retained for the
  * person to inspect, never silently discarded or automatically resubmitted.
@@ -76,7 +87,7 @@ export let durableOutbox = <T, R>(opts: {
   timer?: (fn: () => void, ms: number) => unknown
   cancelTimer?: (handle: unknown) => void
   wait?: number
-}) => {
+}): Outbox<T, R> => {
   let disk = opts.store ??
     (globalThis.indexedDB ? outboxIdb<T>(opts.scope) : undefined)
   let entries = new Map<string, Pending<T>>()

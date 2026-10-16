@@ -130,6 +130,7 @@ export { type Coverage, covers, delivered } from './coverage.ts'
 
 export {
   durableOutbox,
+  type Outbox,
   outboxIdb,
   type OutboxStore,
   type Pending,
