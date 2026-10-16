@@ -272,3 +272,32 @@ medians **1376.1 → 1316.8 ms**, median paired difference **-137.5 ms**, but on
 **4/7** candidate observations were faster (wide shared-host ranges). This is
 not strong evidence of a reproducible speedup and is not Cloudflare CPU time.
 Production's own stored record is measured separately after landing.
+
+### Deployed T-125931 result
+
+Landed `a27df7e8f8e7a75bce25cb724c4ec4cddfcc4c46` with `yak land`. Cloudflare
+version `556077b6-2205-4c27-990b-3c9c0b6e30be` was live at 100% at **12:24:15
+UTC on October 16, 2026**. Its own stored startup record is **94 ms**, versus
+immediate deployed parent `f5aad38b85`/`77d396b7` **224 ms**: **-130 ms**. These
+are one stored scalar per version, with unknown internal repetitions; the
+earlier `ef5e9a7c9` version had identical JS to `f5aad38b85` yet recorded 115
+ms. The candidate record is lower, but the 130 ms difference is not a
+repeatable-effect estimate. The local seven-pair comparison above is noisy.
+
+The built candidate has six source-mapped SDK/Containers/capnweb initializer
+markers; none runs at startup or after two actual kernel `/docs/code` responses
+(200, 54,774 bytes each). This is a static page, not a Cloudflare cache HIT/MISS
+or graph-backed homepage benchmark. The facade workerd probe passes and breaking
+`getState` forwarding in an external copy makes it fail; production source was
+never mutated for that check.
+
+Production before/after probes ran in the throwaway `sdk125931` account/space,
+not a person's sandbox: real shell command, file write/read, background-process
+stop/wait, and HTTPS to both apex and space host pass. HTTPS status alone does
+not prove every credential-swap case. The full 63-tool `tools/list` JSON,
+including names, arguments and output schemas, and a successful `graph_schema`
+reply compare identically over the scoped admin connector before and after.
+`yak --host yaks.app app_errors` returns no open errors for `yourname/vale` and
+`yourname/holdfast`; admin deploys confirms 100% and errors shows zero current
+occurrences/bugs. Budget tests for the changed kernel/sandbox/MCP/Site paths,
+including provider and Site workerd behavior, pass; types/lint/format pass.
