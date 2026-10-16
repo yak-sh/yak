@@ -74,45 +74,17 @@ declarations replace plugin declarations and extensions of the same name;
 extensions in `opts.docs` still add to plugin components. Duplicate plugin
 declarations are errors even when the graph shadows that name.
 
-```ts
-import { assembly, type Load } from '@yaks/host'
-import { effects } from '@yaks/effects'
-import { memoryBlobs } from '@yaks/blob'
-import { ram } from '@yaks/ram'
-import { ramVault } from '@yaks/secrets'
-import { equal } from '@yaks/testing'
+The complete in-memory binding example runs in
+[`assembly_example_test.ts`](./assembly_example_test.ts), where it binds the
+host, writes a book through the graph and reads it back. The vocabulary plan is
+prepared independently of those binding and graph operations.
 
-let load: Load = () => Promise.resolve(null)
-let plan = await assembly({ plugins: [] }, ['graph'], load, {
-  docs: [{
-    $defs: {
-      book: { component: true, properties: { title: { type: 'string' } } },
-    },
-  }],
-})
-let blobs = memoryBlobs()
-let { host } = plan.bind({
-  host: {
-    me: 'example',
-    vault: ramVault(),
-    blobs,
-    artifacts: blobs,
-    stopping: new AbortController().signal,
-    duties: () => Promise.resolve(),
-    end: () => Promise.resolve(),
-    bury: () => Promise.resolve([]),
-    gone: () => Promise.resolve(false),
-  },
-  storage: (host) => ram(host.vocab),
-  effects: (host, disabled) =>
-    effects(host.vocab, {
-      disabled,
-      owes: 'declared',
-      write: (bundles) => host.graph.apply(bundles),
-    }),
-})
-await host.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
-equal((await host.graph.get(['b']))[0].book, { title: 'Dune' })
+```ts
+import { assembly } from '@yaks/host'
+
+// const plan = await assembly(config, ['graph'], load, { docs })
+// const { host } = plan.bind(binding) // host-supplied storage, effects and resources
+// await host.graph.apply([{ entity: { eid: 'b' }, book: { title: 'Dune' } }])
 ```
 
 `Binding.storage` receives the host and a shared query-extension list. After
