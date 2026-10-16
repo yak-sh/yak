@@ -15,6 +15,7 @@ import {
   type Deployment,
   deploymentLists,
   deploysIn,
+  git,
   marksIn,
   rollbackTarget,
   rowsIn,
@@ -334,6 +335,14 @@ test('stopping a platform command interrupts its whole process group', async () 
   } finally {
     Deno.removeSync(dir, { recursive: true })
   }
+})
+
+test('a git run cut off by shutdown is an interruption, not a git failure', async () => {
+  let error = await assertRejects(
+    () => git(Deno.cwd(), ['status'], AbortSignal.abort()),
+    Interrupted,
+  )
+  assertEquals(error.code, 'signal')
 })
 
 test('a command failure is still a defect when the host is not stopping', async () => {

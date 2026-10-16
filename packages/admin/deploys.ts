@@ -2,12 +2,13 @@
 // it traffic can. Keep every stored-shape boundary in this history, even after
 // someone rolls the code back. The directory does not roll its rows back.
 import type { Ran } from '@yaks/git/land'
-import { CallError } from '@yaks/tools/errors'
+import { CallError, Interrupted } from '@yaks/tools/errors'
 import { WRANGLER } from '../../workers/yak/wrangler.ts'
 import { Refused } from './refusal.ts'
 import { output } from './subprocess.ts'
 
 // One git run in `cwd`, answered as it came — the runner @yaks/git lands with.
+// A run cut off by shutdown is no answer from git, so it is thrown as it came.
 export let git = async (
   cwd: string,
   args: string[],
@@ -29,7 +30,7 @@ export let git = async (
       err: text.decode(ran.stderr),
     }
   } catch (error) {
-    if (error instanceof CallError) throw error
+    if (error instanceof CallError || error instanceof Interrupted) throw error
     return {
       ok: false,
       code: -1,

@@ -15,6 +15,7 @@
 import { checkout } from './checkout.ts'
 import type { Comp, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
+import { Interrupted } from '@yaks/tools/errors'
 import type { Host } from '@yaks/host'
 import { sleep } from '@yaks/fp'
 import { WATCHED } from '../../workers/yak/wrangler.ts'
@@ -246,9 +247,14 @@ export let service = async (
       if (SETTLED.includes(done.step)) settled = done.sha
       failing = false
     } catch (error) {
-      // A dead wrangler sign-in is one report, not one a minute.
-      if (!failing) await report(error, { tags: { duty: 'deploy catch-up' } })
-      failing = true
+      // A look cut off by shutdown has not failed. A dead wrangler sign-in is
+      // one report, not one a minute.
+      if (!(error instanceof Interrupted)) {
+        if (!failing) {
+          await report(error, { tags: { duty: 'deploy catch-up' } })
+        }
+        failing = true
+      }
     }
     if (signal.aborted) return
     await doors.wait(options.every ?? EVERY, signal)

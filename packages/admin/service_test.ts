@@ -6,6 +6,7 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { Interrupted } from '@yaks/tools/errors'
 import { BOUND } from './catchup.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
@@ -171,4 +172,27 @@ test('the service reads a settled head no more, and a failing look once', async 
   equal(f.looked, 1)
   equal(reports.length, 1)
   match(String(reports[0]), /origin is unreachable/)
+})
+
+test('a look cut off by shutdown is not reported', async () => {
+  let f = fixture({ sha: HEAD })
+  let stop = new AbortController()
+  let reports: unknown[] = []
+  let main = f.doors.main
+  let passes = 0
+  // The child's signal can reach it before the host's own abort does.
+  f.doors.main = () => {
+    if (++passes == 1) {
+      return Promise.reject(new Interrupted('cut off', 'signal'))
+    }
+    stop.abort()
+    return main()
+  }
+  await service(
+    { graph: f.g, report: (error) => void reports.push(error) },
+    { every: 0 },
+    stop.signal,
+    f.doors,
+  )
+  equal([passes, reports.length], [2, 0])
 })
