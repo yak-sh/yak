@@ -837,9 +837,11 @@ migrating on a read.
 Unfiltered `.count`, `.component&.count` and `.tally=entity.archetype` read
 these metadata tables rather than scanning component or entity tables. Component
 counts seek only the archetypes containing that component; tally work scales
-with the number of archetypes, not the number of entities. For example:
+with the number of archetypes, not the number of entities. The contracts in
+`population_test.ts` check the live counts, rollback and reopen behavior with
+private fixtures; this example includes opening and installing the whole store.
 
-```ts
+```ts ignore
 import { equal } from '@yaks/testing'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { graph } from '@yaks/graph'
