@@ -15,13 +15,14 @@ import { Dot } from './Dot.ts'
 import { Tile } from './Tile.ts'
 
 /** A list of rows. */
-export let Rows: Part & Record<'Item' | 'More' | 'Kind', Part> = block(
+export let Rows: Part & Record<'Item' | 'More' | 'Kind' | 'Link', Part> = block(
   'div',
   'Rows',
   {
     Item: 'div',
     More: 'div',
     Kind: 'div',
+    Link: 'div',
   },
 )
 

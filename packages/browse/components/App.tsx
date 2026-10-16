@@ -230,27 +230,29 @@ export let Page = ({ at }: { at: string }) => {
           ? <Entity eid={e.eid} view={view} />
           : list
           ? (
-            <Section>
-              <Section.Title>Browse the graph</Section.Title>
-              <Section.Sub>
-                {hosting().home
-                  ? (
-                    <>
-                      Entities matching <code>{hosting().home!.query}</code>.
-                    </>
-                  )
-                  : (
-                    <>
-                      Entities with documents, newest created first. Recent
-                      shows recently changed entities instead.
-                    </>
-                  )} Use the filter to narrow this list.
-              </Section.Sub>
+            <>
+              <Section>
+                <Section.Title>Browse the graph</Section.Title>
+                <Section.Sub>
+                  {hosting().home
+                    ? (
+                      <>
+                        Entities matching <code>{hosting().home!.query}</code>.
+                      </>
+                    )
+                    : (
+                      <>
+                        Entities with documents, newest created first. Recent
+                        shows entities you opened, most recently opened first.
+                      </>
+                    )} Use the filter to narrow this list.
+                </Section.Sub>
+              </Section>
               <QueryList
                 eid='app-browse'
                 query={hosting().home?.query ?? '.doc'}
               />
-            </Section>
+            </>
           )
           : offered
           ? (

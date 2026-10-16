@@ -205,8 +205,8 @@ export let ListTile = ({ e, slots, onOpen }: TileProps) => (
 // Every feed asks for this shared face; the kind-specific Tile still owns
 // what the entity says, including session and letter summaries.
 export let ListEntry = ({ e, ...props }: TileProps) => (
-  <>
+  <Rows.Link {...tileLink(e, props.onOpen)}>
     <Rows.Kind>{e.kind}</Rows.Kind>
     <Entity eid={e.eid} view='Tile' {...props} />
-  </>
+  </Rows.Link>
 )

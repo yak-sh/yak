@@ -7,12 +7,13 @@ import { act } from 'preact/test-utils'
 import type { Bundle } from '@yaks/graph'
 import { applyLocal, cache, config, ent } from '../../live.ts'
 import { host, reader } from '../../host_testing.ts'
+import { entityPath } from '../../url.ts'
 import { until } from '../../testing.ts'
-import { uuid } from '../../types.ts'
+import { idOf, uuid } from '../../types.ts'
 
 // Enter through the registry, as the app does (Board_test.tsx).
 await import('../Entity.tsx')
-let { BoardList } = await import('./List.tsx')
+let { BoardList, ListEntry } = await import('./List.tsx')
 let { mount } = await import('../mount.ts')
 
 // Twelve tasks, newest last; the oldest was edited most recently.
@@ -92,5 +93,29 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
     wire.free()
     cache.value = {}
     config.host = prior
+  }
+})
+
+// A session has no numbered handle. Its secondary text is part of the same
+// navigable entry as its heading, and a native link can open it in a new tab.
+test('a favorite session opens from its whole entry, without a numbered handle', async () => {
+  let id = uuid()
+  applyLocal([
+    { eid: id, name: 'entity', comp: { eid: id } },
+    { eid: id, name: 'session', comp: {} },
+    { eid: id, name: 'doc', comp: { title: 'Investigating the problem' } },
+    { eid: id, name: 'brief', comp: { text: 'Found the cause' } },
+    { eid: id, name: 'favorite', comp: {} },
+  ])
+  let mounted = mount(<ListEntry e={ent(id)} />)
+  try {
+    let brief = mounted.root.querySelector<HTMLElement>('.Rows_Kind')!
+    assertEquals(
+      brief.closest('a')?.getAttribute('href'),
+      entityPath(idOf(ent(id))),
+    )
+    assertEquals(mounted.root.querySelectorAll('a a').length, 0)
+  } finally {
+    mounted.free()
   }
 })

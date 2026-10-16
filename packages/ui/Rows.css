@@ -26,3 +26,19 @@
   font-size: var(--small);
   color: var(--muted);
 }
+
+/* An entry's whole surface opens it, including a renderer's secondary text. */
+.Rows_Link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+  border-radius: var(--radius);
+}
+.Rows_Link:hover {
+  background: var(--soft);
+}
+.Rows_Link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
