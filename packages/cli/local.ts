@@ -40,7 +40,6 @@ import { EFFECT } from '@yaks/effects'
 import { answerOf, faulted, structured, toolEid } from '@yaks/tools/result'
 import { registry, show, terminal } from './answer.ts'
 import { type Config, exported, read, used } from './config.ts'
-import { facetsOf } from '@yaks/host/config'
 import { asides, hosts } from './held.ts'
 import type { Listing } from './subcommands.ts'
 import { VIA } from './rpc.ts'
@@ -54,12 +53,12 @@ import {
   person,
   type Role,
   type Served,
-  words,
 } from './host.ts'
 import { readThread } from './read_thread.ts'
 import { thread } from '@yaks/threads'
 import { during, peek } from '@yaks/trace'
-import { rolesOf } from './roles.ts'
+import { dutyRoles, rolesOf } from './roles.ts'
+import { declarations } from './declarations.ts'
 export { rolesOf } from './roles.ts'
 
 /** The duty roles of a config's graph that a process serving `mine` does not
@@ -71,13 +70,7 @@ export let dutiesOf = (
   config: Config,
   mine: readonly Role[],
   has: (plugin: string, facet: string) => boolean = exported,
-): Role[] =>
-  [
-    ...vocab.comp(EFFECT) ? ['effects'] : [],
-    ...(config.plugins ?? []).filter((p) =>
-      facetsOf(p)?.includes('service') ?? true
-    ).map(used).filter((p) => has(p, 'service')),
-  ].filter((r) => !mine.includes(r))
+): Role[] => dutyRoles(config, !!vocab.comp(EFFECT), mine, has)
 
 // The graph a command opens: composed for its own roles, with its duty roles
 // external for web, otherwise planned in a thread beside it. Only a host
@@ -175,8 +168,13 @@ export let work = async (
   only?: string[],
 ): Promise<void> => {
   let config = read(path)
-  let said = await words(config)
-  let duties = dutiesOf(said.vocab, config, [])
+  let said = await declarations(config)
+  let duties = dutyRoles(
+    config,
+    said.pooled,
+    [],
+    (p, name) => said.facets[p].includes(name),
+  )
   if (only?.some((role) => !duties.includes(role))) {
     throw new Error('work was asked for a role this config does not serve')
   }

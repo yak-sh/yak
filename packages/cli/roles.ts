@@ -1,3 +1,4 @@
+import { facetsOf, used } from '@yaks/host/config'
 // The facets a process serves, and the roles one command needs. This data is
 // shared by import preparation and composition; reading it opens nothing.
 import type { Declared } from './words.ts'
@@ -13,3 +14,17 @@ export let rolesOf = (
 ): Role[] => [
   ...new Set(['graph', ...pooled ? [] : ['effects'], ...tool.roles ?? []]),
 ]
+
+/** Duties depend on declarations, not a second vocabulary runtime. */
+export let dutyRoles = (
+  config: import('./config.ts').Config,
+  pooled: boolean,
+  mine: readonly Role[],
+  has: (plugin: string, facet: string) => boolean,
+): Role[] =>
+  [
+    ...pooled ? ['effects'] : [],
+    ...(config.plugins ?? []).filter((p) =>
+      facetsOf(p)?.includes('service') ?? true
+    ).map(used).filter((p) => has(p, 'service')),
+  ].filter((role) => !mine.includes(role))
