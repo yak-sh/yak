@@ -2015,7 +2015,11 @@ let indexedRelation = (
       !ctx.v.prop(c.path[0], c.path[1])?.computed &&
       !ctx.derived[c.path.join('.')] && needs(opOf(c), c.value)
     )
-    if (scalar && ctx.d.owned) {
+    // A marker drives a reference's equality only when nothing can measure
+    // it: under a presence spine, the gate below takes it while it is sparse
+    // (a world's few players) and seeks the reference once it is crowded (an
+    // `about` edge for every link, of which a bug has a handful).
+    if (scalar && ctx.d.owned && !ctx.present) {
       for (let c of flattened(clauses)) {
         if (
           c.kind != 'pred' || c.not || c.where || c.path.length != 1 ||

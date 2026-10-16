@@ -130,3 +130,59 @@ test('a disjunction reads its candidates once', () => {
     db.close()
   }
 })
+
+// A crowded marker must not be read whole for the few rows a reference seeks:
+// a bug's work is found by the `about` edges to it, among thousands of others.
+let crowded = (() => {
+  let db = new Database(':memory:'), d = driver(db)
+  let vocab = loadVocab([archetypeDoc, {
+    $defs: {
+      entity: { component: true, type: 'object' },
+      hidden: { component: true, type: 'object' },
+      about: { component: true, type: 'object' },
+      edge: {
+        component: true,
+        type: 'object',
+        properties: {
+          from: { type: 'string', ref: 'entity' },
+          to: { type: 'string', ref: 'entity' },
+        },
+      },
+    },
+  }])
+  let store = storage(d, vocab)
+  store.install()
+  for (let i = 0; i < 5000; i += 500) {
+    store.tx((tx) =>
+      tx.patch(Array.from({ length: 500 }, (_, j) => ({
+        entity: { eid: `link${i + j}` },
+        about: {},
+        edge: { from: 'work', to: i + j ? `bug${i + j}` : 'target' },
+      })))
+    )
+  }
+  d.query({ t: 'pragma', name: 'optimize', value: 0x10002 })
+  // Read plainly and through a visibility policy, which tests each row read.
+  let reads = [undefined, { entity: '!hidden' }].map((visibility) =>
+    render(
+      compile(parse('.about&.edge.to=target'), vocab, {
+        archetypes: catalog(d),
+        visibility,
+      }),
+    )
+  )
+  return { db, reads }
+})()
+
+test('a crowded marker is probed by the rows a reference seeks', () => {
+  for (let sql of crowded.reads) {
+    let stmt = crowded.db.prepare(sql.sql)
+    try {
+      ok(stmt.all(...sql.params).length == 1)
+      let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
+      ok(steps < 1000, `${steps} VM steps\n${sql.sql}`)
+    } finally {
+      stmt.finalize()
+    }
+  }
+})
