@@ -166,17 +166,41 @@ export let observe = async (
     wait = pause,
   } = {},
 ) => {
+  let siblings: Version[] = []
+  let discovering = false
+  let refreshAt = -Infinity
+  let discovery = Promise.resolve()
+  let failure: { error: unknown } | undefined
+  let refresh = () => {
+    if (!sha || !names(version, sha) || discovering || now() < refreshAt) return
+    discovering = true
+    discovery = (async () => {
+      try {
+        siblings = await related()
+      } catch (error) {
+        failure = { error }
+      } finally {
+        discovering = false
+        refreshAt = now() + 10_000
+      }
+    })()
+  }
   let serving = async () => {
+    // Discovery has its own cadence and one owned flight. A slow wrangler
+    // listing must never sit between consecutive target probes.
+    refresh()
     let problem = await check(version.id)
-    if (!problem) return { problem, sibling: false }
-    if (sha && names(version, sha)) {
-      for (let v of await related()) {
-        if (v.id != version.id && names(v, sha) && !await check(v.id)) {
-          return { problem: null, sibling: true }
-        }
+    let observed = new Date(now()).toISOString()
+    if (!problem) return { problem, sibling: false, observed }
+    // Backfills have no polling loop, so finish their one discovery first.
+    if (backfill) await discovery
+    if (failure) throw failure.error
+    for (let v of siblings) {
+      if (v.id != version.id && sha && names(v, sha) && !await check(v.id)) {
+        return { problem: null, sibling: true, observed }
       }
     }
-    return { problem, sibling: false }
+    return { problem, sibling: false, observed }
   }
   let activation = async () => {
     // A late recorder or a serving sibling verifies the commit, but only
@@ -193,20 +217,26 @@ export let observe = async (
       Date.parse(first),
     )).toISOString()
   }
-  let result = await serving()
-  if (!result.problem) return { live: await activation(), problem: null }
-  let due = now() + 120_000
-  while (!backfill && result.problem && now() < due) {
-    await wait()
-    result = await serving()
-  }
-  return {
-    live: result.problem
-      ? null
-      : result.sibling
-      ? await activation()
-      : new Date(now()).toISOString(),
-    problem: result.problem,
+  try {
+    let result = await serving()
+    if (!result.problem) return { live: await activation(), problem: null }
+    let due = now() + 120_000
+    while (!backfill && result.problem && now() < due) {
+      await wait()
+      result = await serving()
+    }
+    return {
+      live: result.problem
+        ? null
+        : result.sibling
+        ? await activation()
+        : result.observed,
+      problem: result.problem,
+    }
+  } finally {
+    // Join even on success/error: no orphaned listing, and cleanup cannot
+    // move a successful target probe's recorded completion time.
+    await discovery
   }
 }
 

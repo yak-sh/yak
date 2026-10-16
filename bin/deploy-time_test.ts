@@ -1,4 +1,4 @@
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   append,
@@ -200,6 +200,91 @@ test('deploy time: a later successful probe stamps its own clock', async () => {
   })
   assertEquals(attempts, 2)
   assertEquals(result, { live: version(31).metadata.created_on, problem: null })
+})
+
+test('deploy time: slow discovery cannot delay target verification or rewrite its timestamp', async () => {
+  let time = clock(Date.parse(PUSHED) + 30_000)
+  let discovery = Promise.withResolvers<Version[]>()
+  let verified = Promise.withResolvers<void>()
+  let checked: number[] = []
+  let listings = 0
+  let settled = false
+  let result = observe(version(20, `${SHA} worker`), false, {
+    now: () => {
+      if (checked.length == 2) verified.resolve()
+      return time.now()
+    },
+    wait: () => time.advance(1000),
+    related: () => {
+      listings++
+      return discovery.promise
+    },
+    check: async () => {
+      checked.push(time.now())
+      if (checked.length == 1) return 'inactive version'
+      await time.advance(250)
+      return null
+    },
+    history: () => {
+      throw new Error('a later target verification must not use activation')
+    },
+  }).then((row) => {
+    settled = true
+    return row
+  })
+  await verified.promise
+  assertEquals(checked, [
+    Date.parse(PUSHED) + 30_000,
+    Date.parse(PUSHED) + 31_000,
+  ])
+  assertEquals(listings, 1)
+  assertEquals(settled, false)
+  // The pending listing is owned until it settles, but verification has
+  // already happened. Its 38s cleanup cannot backdate or delay that stamp.
+  await time.advance(38_000)
+  assertEquals(settled, false)
+  discovery.resolve([])
+  assertEquals(await result, {
+    live: version(31.25).metadata.created_on,
+    problem: null,
+  })
+  assertEquals(settled, true)
+})
+
+test('deploy time: discovery refreshes are spaced, single-flight, and retain sibling activation', async () => {
+  let time = clock(Date.parse(PUSHED) + 30_000)
+  let uploaded = version(20, `${SHA} worker`)
+  let sibling = version(40, `${SHA} images`)
+  let discovery = Promise.withResolvers<Version[]>()
+  let listings: number[] = []
+  let checked: number[] = []
+  let start = time.now()
+  let result = await observe(uploaded, false, {
+    now: time.now,
+    wait: () => time.advance(1000),
+    related: () => {
+      listings.push(time.now() - start)
+      return listings.length == 1
+        ? discovery.promise
+        : Promise.resolve([sibling])
+    },
+    check: (id) => {
+      if (id == sibling.id) return Promise.resolve(null)
+      let elapsed = time.now() - start
+      checked.push(elapsed)
+      if (elapsed == 15_000) discovery.resolve([])
+      return Promise.resolve('inactive version')
+    },
+    history: () =>
+      Promise.resolve([{
+        id: 'first',
+        created_on: version(25).metadata.created_on,
+        versions: [{ version_id: uploaded.id, percentage: 100 }],
+      }]),
+  })
+  assertEquals(listings, [0, 25_000])
+  assertEquals(checked, Array.from({ length: 26 }, (_, n) => n * 1000))
+  assertEquals(result, { live: version(25).metadata.created_on, problem: null })
 })
 
 test('deploy time: a serving same-commit sibling verifies the earliest activation', async () => {
