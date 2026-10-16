@@ -302,6 +302,46 @@ preparedTest(
   },
 )
 
+// The server-owned text result is already held when the tab's signals reset.
+// Seed it alongside the other independent subscriptions, not in the timed act.
+let textualQuery = parseQuery('needle')
+let textualHost = config.host
+config.host = 'browser.test'
+let textualSocket = useSocket(quiet)
+let textualIds = holdQuery(textualQuery)
+let textualSub = querySubscription(textualQuery)!.sub
+landSub({
+  sub: textualSub,
+  replace: true,
+  changes: [
+    { eid: 'ranked', name: 'entity', comp: { eid: 'ranked', num: 12 } },
+    { eid: 'ranked', name: 'doc', comp: { title: 'Server ranking' } },
+  ],
+})
+// A local text hit is not a member until the server says it is.
+applyLocal([
+  { eid: 'local', name: 'entity', comp: { eid: 'local', num: 13 } },
+  { eid: 'local', name: 'doc', comp: { title: 'needle' } },
+])
+useSocket(textualSocket)
+config.host = textualHost
+preparedTest(
+  'a textual query keeps server membership across a signal reset',
+  () => {
+    config.host = 'browser.test'
+    let socket = useSocket(quiet)
+    try {
+      resetSignals()
+      assertEquals(textualIds.value, ['ranked'])
+      assertStrictEquals(queryEids(textualQuery), textualIds)
+    } finally {
+      dropQuery(textualQuery)
+      useSocket(socket)
+      config.host = textualHost
+    }
+  },
+)
+
 // Status is DERIVED (D-24102): to make a cache Ent read as done/wip/cancelled,
 // give it the mark/claim comp statusOf keys off, not a stored status column.
 let mark = (status: string, eid: string): Record<string, unknown> =>
@@ -403,39 +443,6 @@ test('server-resolve: a cache hit never touches the wire', () => {
     assertEquals(f.calls.length, 0)
   } finally {
     f.restore()
-  }
-})
-
-let textualQuery = parseQuery('needle')
-
-test('a textual query keeps server membership across a signal reset', () => {
-  let prior = config.host
-  config.host = 'browser.test'
-  let socket = useSocket(quiet)
-  let preds = textualQuery
-  let ids = holdQuery(preds)
-  let sub = querySubscription(preds)!.sub
-  try {
-    landSub({
-      sub,
-      replace: true,
-      changes: [
-        { eid: 'ranked', name: 'entity', comp: { eid: 'ranked', num: 1 } },
-        { eid: 'ranked', name: 'doc', comp: { title: 'Server ranking' } },
-      ],
-    })
-    // A local text hit is not a member until the server says it is.
-    applyLocal([
-      { eid: 'local', name: 'entity', comp: { eid: 'local', num: 2 } },
-      { eid: 'local', name: 'doc', comp: { title: 'needle' } },
-    ])
-    resetSignals()
-    assertEquals(ids.value, ['ranked'])
-    assertStrictEquals(queryEids(preds), ids)
-  } finally {
-    dropQuery(preds)
-    useSocket(socket)
-    config.host = prior
   }
 })
 

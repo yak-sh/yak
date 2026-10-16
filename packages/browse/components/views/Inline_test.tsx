@@ -9,6 +9,34 @@ import { mount } from '../mount.ts'
 import { resolve } from '../Entity.tsx'
 import { Id, Inline, TaskInline } from './Inline.tsx'
 
+// A link says what the entity's Title view says, so a package that titles its
+// kind (a bug by its headline, not its whole message) is read that way in
+// every link to it.
+cache.value = {
+  bug: {
+    entity: { eid: 'bug', num: 1 },
+    doc: { eid: 'bug', title: 'TypeError: a long message\n  at frames' },
+  },
+}
+let prior = registry.renderers
+registry.renderers = [
+  { view: 'Title', match: parse('.doc'), Render: () => <i>TypeError</i> },
+  ...prior,
+]
+let titledBug = ent('bug')
+// Mount the package-contributed Title with its own fixture; the case reads
+// the link a person sees and still fails if Inline bypasses that view.
+let titledMount = mount(<Inline e={titledBug} />)
+test('a link draws its entity through the Title a package contributes', () => {
+  try {
+    assertEquals(titledMount.root.textContent, 'TypeError')
+  } finally {
+    titledMount.free()
+    registry.renderers = prior
+    cache.value = {}
+  }
+})
+
 test('Inline renderers say the title without the id', () => {
   cache.value = {
     doc: {
@@ -37,31 +65,6 @@ test('Inline renderers say the title without the id', () => {
     }
   }
   cache.value = {}
-})
-
-// A link says what the entity's Title view says, so a package that titles its
-// kind (a bug by its headline, not its whole message) is read that way in
-// every link to it.
-test('a link draws its entity through the Title a package contributes', () => {
-  cache.value = {
-    bug: {
-      entity: { eid: 'bug', num: 1 },
-      doc: { eid: 'bug', title: 'TypeError: a long message\n  at frames' },
-    },
-  }
-  let prior = registry.renderers
-  registry.renderers = [
-    { view: 'Title', match: parse('.doc'), Render: () => <i>TypeError</i> },
-    ...prior,
-  ]
-  let { root, free } = mount(<Inline e={ent('bug')} />)
-  try {
-    assertEquals(root.textContent, 'TypeError')
-  } finally {
-    free()
-    registry.renderers = prior
-    cache.value = {}
-  }
 })
 
 // A dependency row paints a PEER: what an edge rider projected
