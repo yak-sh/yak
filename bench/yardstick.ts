@@ -1,14 +1,41 @@
 /** SQLite-only baseline. Parse to a file spool first; replay it in fresh processes.
  * deno run -A bench/yardstick.ts parse <repo> <spool>
  * deno run -A bench/yardstick.ts run <spool> <db> <result.json>
+ * deno run -A bench/yardstick.ts coarse <spool> <db> <result.json> file|declaration
  * deno run -A bench/yardstick.ts restart <db> <file> <expected count>
  */
 import { type Bundle, graph } from '@yaks/graph'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
-import { edit, emit, type FileTree, init } from './yardstick-tree.ts'
+import {
+  edit,
+  emit,
+  type FileTree,
+  functionLiteral,
+  init,
+  pack,
+  type Packed,
+} from './yardstick-tree.ts'
 import { createHash } from 'node:crypto'
+import {
+  and,
+  as,
+  call,
+  col,
+  cross,
+  eq,
+  type Expr,
+  fn,
+  join,
+  lit,
+  notNull,
+  op,
+  type Select,
+  select,
+  table,
+  val,
+} from '@yaks/sql'
 
 let definitions: VocabDoc['$defs'] = {
   node: {
@@ -47,6 +74,21 @@ for (let name of ['created', 'updated']) {
   }
 }
 let vocab = loadVocab({ $defs: definitions })
+let coarseVocab = loadVocab({
+  $defs: {
+    ...definitions,
+    tree: {
+      component: true,
+      index: [['file']],
+      type: 'object',
+      properties: {
+        file: { type: 'string' },
+        start: { type: 'number' },
+        value: { type: 'object' },
+      },
+    },
+  },
+})
 let decoder = new TextDecoder()
 async function command(cmd: string, args: string[], cwd?: string) {
   let r = await new Deno.Command(cmd, {
@@ -70,11 +112,12 @@ async function environment() {
     os: await command('uname', ['-a']),
   }
 }
-function connect(path: string) {
+function connect(path: string, coarse = false) {
+  let schema = coarse ? coarseVocab : vocab
   let driver = open(path)
-  let store = storage(driver, vocab)
+  let store = storage(driver, schema)
   store.install()
-  let g = graph({ storage: store, vocab })
+  let g = graph({ storage: store, vocab: schema })
   return { driver, g }
 }
 let now = () => performance.now()
@@ -399,11 +442,516 @@ async function run(spool: string, db: string, out: string) {
     }),
   )
 }
+/** JSONB workloads share the parser, spool, graph composition and timing helpers
+ * with the every-node baseline. The only extra SQL relation is a derived index;
+ * it stores no AST values and is rebuilt from the stored JSONB, not the spool. */
+async function coarse(
+  spool: string,
+  db: string,
+  out: string,
+  grain: 'file' | 'declaration',
+) {
+  if (!['file', 'declaration'].includes(grain)) throw new Error('coarse grain')
+  try {
+    await Deno.stat(db)
+    throw new Error(`load requires a fresh database: ${db}`)
+  } catch (e) {
+    if (!(e instanceof Deno.errors.NotFound)) throw e
+  }
+  let manifest = JSON.parse(await Deno.readTextFile(`${spool}/manifest.json`))
+  let env = await environment()
+  let start = now()
+  let { driver, g } = connect(db, true)
+  let openMs = now() - start
+  let applyMs = 0, prepareMs = 0, spoolReadMs = 0, entities = 0
+  let peakRss = Deno.memoryUsage().rss
+  let batches: number[] = []
+  let expectedRefs: {
+    file: string
+    id: number | string
+    name: string
+    target: string
+  }[] = []
+  let chosen: {
+    i: number
+    packed: Packed
+    index: number
+    literal: string
+    functionId: string
+  } | undefined
+  let name = 'graph'
+  for (let i = 0; i < manifest.files.length; i++) {
+    start = now()
+    let tree: FileTree = JSON.parse(
+      await Deno.readTextFile(`${spool}/${i}.json`),
+    )
+    let source = await Deno.readTextFile(`${spool}/${i}.source`)
+    spoolReadMs += now() - start
+    start = now()
+    let packed = pack(tree, source, grain)
+    prepareMs += now() - start
+    entities += packed.length
+    for (let p of packed) {
+      for (let n of p.tree.value.nodes) {
+        if (n.name == name && n.target) {
+          expectedRefs.push({
+            file: p.tree.file,
+            id: n.id,
+            name,
+            target: n.target,
+          })
+        }
+      }
+    }
+    // Identical chosen function at either grain, deterministic corpus order.
+    if (!chosen && tree.nodes.length >= 9000) {
+      let f = functionLiteral(tree)
+      if (f) {
+        for (let p of packed) {
+          let index = p.tree.value.nodes.findIndex((n) =>
+            `${p.tree.file}#${n.id}` == f.function.entity.eid
+          )
+          if (index >= 0) {
+            chosen = {
+              i,
+              packed: p,
+              index,
+              literal: f.literal.entity.eid,
+              functionId: f.function.entity.eid,
+            }
+          }
+        }
+      }
+    }
+    for (let j = 0; j < packed.length; j += 1000) {
+      start = now()
+      await g.apply(packed.slice(j, j + 1000))
+      let ms = now() - start
+      applyMs += ms
+      batches.push(ms)
+      peakRss = Math.max(peakRss, Deno.memoryUsage().rss)
+    }
+    if (i % 200 == 0) {
+      console.error(
+        `${grain} load ${i}/${manifest.files.length}, ${
+          Math.round(applyMs)
+        } ms`,
+      )
+    }
+  }
+  let size = () => {
+    driver.query({ t: 'pragma', name: 'wal_checkpoint' })
+    return Deno.statSync(db).size
+  }
+  let bytes = size()
+  let storedNodes = Number(
+    driver.query(
+      select({
+        cols: [
+          as(
+            fn('sum', fn('json_array_length', col('value'), val('$.nodes'))),
+            'n',
+          ),
+        ],
+        from: table('tree'),
+      }),
+    )[0].n,
+  )
+  if (storedNodes != manifest.nodes) throw new Error('stored node count')
+  if (!chosen || !expectedRefs.length) throw new Error('missing query fixtures')
+  let types = driver.query(
+    select({
+      cols: [as(fn('typeof', col('value')), 'type'), as(fn('count'), 'n')],
+      from: table('tree'),
+      group: [fn('typeof', col('value'))],
+    }),
+  )
+  if (
+    types.length != 1 || types[0].type != 'blob' ||
+    Number(types[0].n) != entities
+  ) throw new Error('not JSONB')
+  let sqlite = driver.query(
+    select({ cols: [as(fn('sqlite_version'), 'version')] }),
+  )
+  let pragmas = ['journal_mode', 'synchronous', 'page_size', 'cache_size'].map(
+    (name) => ({ name, value: driver.query({ t: 'pragma', name }) }),
+  )
+  let owner = Number(
+    driver.query(
+      select({
+        cols: [col('id')],
+        from: table('entity'),
+        where: eq(col('eid'), val(chosen.packed.entity.eid)),
+      }),
+    )[0].id,
+  )
+  let path = `$.nodes[${chosen.index}]`
+  let nodeCols = [
+    col('entity'),
+    as(op('||', fn('json_extract', col('value'), val(path)), lit('')), 'node'),
+  ]
+  let nodeScan = select({
+    cols: nodeCols,
+    from: table('tree', undefined, false),
+    where: and(
+      eq(col('file'), val(chosen.packed.tree.file)),
+      eq(col('start'), val(chosen.packed.tree.start)),
+      eq(
+        fn('json_extract', col('value'), val('$.nodes[0].id')),
+        val(chosen.packed.tree.value.nodes[0].id),
+      ),
+    ),
+  })
+  let nodeIndexed = {
+    ...nodeScan,
+    from: table('tree', undefined, 'tree_location'),
+  }
+  let wantNode = JSON.stringify(chosen.packed.tree.value.nodes[chosen.index])
+  let readNode = (q: Select) => {
+    let rows = driver.query(q)
+    if (rows.length != 1 || rows[0].node != wantNode) {
+      throw new Error('node path answer')
+    }
+    return rows
+  }
+  let at = (key: string): Expr =>
+    fn('json_extract', col('value', 'j'), val(`$.${key}`))
+  let refsSource = call('json_tree', [col('value', 't'), val('$.nodes')], 'j')
+  let refsWhere = and(
+    eq(col('type', 'j'), lit('object')),
+    notNull(at('target')),
+  )
+  let refCols = [
+    as(col('entity', 't'), 'owner'),
+    as(col('fullkey', 'j'), 'path'),
+    as(op('||', col('value', 'j'), lit('')), 'node'),
+  ]
+  let refScan = select({
+    cols: refCols,
+    from: table('tree', 't'),
+    joins: [cross(refsSource)],
+    where: and(refsWhere, eq(at('name'), val(name))),
+  })
+  let plans: Record<string, unknown> = {}
+  let plan = (label: string, q: Select) =>
+    plans[label] = driver.query({ t: 'explain query plan', of: q })
+  plan('nodeScan', nodeScan)
+  plan('referenceScan', refScan)
+  let sort = (rows: Record<string, unknown>[]) =>
+    rows.sort((a, b) =>
+      Number(a.owner) - Number(b.owner) ||
+      String(a.path).localeCompare(String(b.path))
+    )
+  let expected = expectedRefs.map((r) => JSON.stringify(r)).sort()
+  let checkRefs = (rows: Record<string, unknown>[]) => {
+    let got = rows.map((r) => {
+      let node = JSON.parse(String(r.node))
+      return JSON.stringify({
+        file: String(node.target).split('#')[0],
+        id: node.id,
+        name: node.name,
+        target: node.target,
+      })
+    }).sort()
+    if (JSON.stringify(got) != JSON.stringify(expected)) {
+      throw new Error('reference answer')
+    }
+    return sort(rows)
+  }
+  let nodeScanRead = timedRead(() => readNode(nodeScan))
+  let beforeLocationBytes = size()
+  start = now()
+  driver.query({
+    t: 'create index',
+    name: 'tree_location',
+    on: 'tree',
+    cols: [col('file'), col('start')],
+  })
+  let locationMs = now() - start
+  let locationBytes = size() - beforeLocationBytes
+  plan('nodeIndexed', nodeIndexed)
+  let nodeIndexedRead = timedRead(() => readNode(nodeIndexed))
+  // Scans use seven warm repetitions: traversing the whole corpus is deliberate.
+  let referenceScan = timedRead(() => checkRefs(driver.query(refScan)), 7)
+  let graphFunction = timedRead(() => {
+    let rows = g.read(`.entity.eid=${chosen!.packed.entity.eid}`) as Bundle[]
+    let nodes = (rows[0].tree as Packed['tree']).value.nodes
+    let root = nodes[chosen!.index]
+    let result = nodes.filter((n, i) =>
+      i >= chosen!.index && n.start >= root.start && n.end <= root.end
+    )
+    if (JSON.stringify(root) != wantNode || !result.length) {
+      throw new Error('function answer')
+    }
+    return result
+  })
+  let beforeIndexBytes = size()
+  start = now()
+  driver.query({
+    t: 'create table',
+    name: 'name_path',
+    cols: [{ name: 'owner', type: 'integer', notNull: true }, {
+      name: 'path',
+      type: 'text',
+      notNull: true,
+    }, { name: 'name', type: 'text', notNull: true }],
+  })
+  // Build every baseline reference source's name/path, not only the timed name.
+  driver.query({
+    t: 'insert',
+    into: 'name_path',
+    cols: ['owner', 'path', 'name'],
+    q: select({
+      cols: [col('entity', 't'), col('fullkey', 'j'), at('name')],
+      from: table('tree', 't'),
+      joins: [cross(refsSource)],
+      where: refsWhere,
+    }),
+  })
+  let indexExtractMs = now() - start
+  let sideTableBytes = size() - beforeIndexBytes
+  start = now()
+  driver.query({
+    t: 'create index',
+    name: 'name_path_name',
+    on: 'name_path',
+    cols: [col('name'), col('owner'), col('path')],
+  })
+  let indexBuildMs = now() - start
+  let indexBytes = size() - beforeIndexBytes - sideTableBytes
+  let sideRows = Number(
+    driver.query(
+      select({ cols: [as(fn('count'), 'n')], from: table('name_path') }),
+    )[0].n,
+  )
+  if (sideRows != manifest.references) throw new Error('side table count')
+  let refIndexed = select({
+    cols: [
+      as(col('owner', 'i'), 'owner'),
+      col('path', 'i'),
+      as(
+        op(
+          '||',
+          fn('json_extract', col('value', 't'), col('path', 'i')),
+          lit(''),
+        ),
+        'node',
+      ),
+    ],
+    from: table('name_path', 'i'),
+    joins: [
+      join(table('tree', 't'), eq(col('entity', 't'), col('owner', 'i'))),
+    ],
+    where: eq(col('name', 'i'), val(name)),
+  })
+  plan('referenceIndexed', refIndexed)
+  let referenceIndexed = timedRead(() => checkRefs(driver.query(refIndexed)))
+  // Equal path/node answers, not merely equal hit counts.
+  if (
+    JSON.stringify(sort(driver.query(refScan))) !=
+      JSON.stringify(sort(driver.query(refIndexed)))
+  ) throw new Error('scan/index disagreement')
+  await init()
+  let original: FileTree = JSON.parse(
+    await Deno.readTextFile(`${spool}/${chosen.i}.json`),
+  )
+  let source = await Deno.readTextFile(`${spool}/${chosen.i}.source`)
+  start = now()
+  let diff = edit(
+    chosen.packed.tree.file,
+    source,
+    original,
+    original.nodes.find((n) => n.entity.eid == chosen!.literal)!,
+  )
+  let after = pack(diff.after, diff.changed, grain),
+    before = pack(original, source, grain)
+  let prior = new Map(before.map((p) => [p.entity.eid, p]))
+  let changed = after.filter((p) =>
+    JSON.stringify(p) != JSON.stringify(prior.get(p.entity.eid))
+  )
+  let valueChanged = changed.filter((p) =>
+    JSON.stringify(p.tree.value) !=
+      JSON.stringify(prior.get(p.entity.eid)?.tree.value)
+  )
+  let changedValueIds = new Set(valueChanged.map((p) => p.entity.eid))
+  let writes: Bundle[] = changed.map((p) =>
+    changedValueIds.has(p.entity.eid)
+      ? p
+      : { entity: p.entity, tree: { start: p.tree.start } }
+  )
+  let live = new Set(after.map((p) => p.entity.eid))
+  for (let p of before) {
+    if (!live.has(p.entity.eid)) {
+      writes.push({ entity: p.entity, $delete: true })
+    }
+  }
+  let prepareEditMs = now() - start
+  let restore: Bundle[] = [
+    ...before,
+    ...after.filter((p) => !prior.has(p.entity.eid)).map((p) => ({
+      entity: p.entity,
+      $delete: true,
+    })),
+  ]
+  let valueBytesRewritten = valueChanged.reduce(
+    (n, p) => n + new TextEncoder().encode(JSON.stringify(p.tree.value)).length,
+    0,
+  )
+  let valueChanges = after.filter((p) =>
+    JSON.stringify(p.tree.value) !=
+      JSON.stringify(prior.get(p.entity.eid)?.tree.value)
+  ).length
+  let editGraph: number[] = [], editIndex: number[] = []
+  let transaction = (body: () => void) => {
+    driver.query({ t: 'begin', mode: 'immediate' })
+    try {
+      body()
+      driver.query({ t: 'commit' })
+    } catch (e) {
+      driver.query({ t: 'rollback' })
+      throw e
+    }
+  }
+  let refresh = (ids: string[]) => {
+    for (let eid of ids) {
+      let owner = driver.query(
+        select({
+          cols: [col('id')],
+          from: table('entity'),
+          where: eq(col('eid'), val(eid)),
+        }),
+      )[0]?.id
+      if (owner == null) continue
+      driver.query({
+        t: 'delete',
+        from: 'name_path',
+        where: eq(col('owner'), val(Number(owner))),
+      })
+      driver.query({
+        t: 'insert',
+        into: 'name_path',
+        cols: ['owner', 'path', 'name'],
+        q: select({
+          cols: [col('entity', 't'), col('fullkey', 'j'), at('name')],
+          from: table('tree', 't'),
+          joins: [cross(refsSource)],
+          where: and(refsWhere, eq(col('entity', 't'), val(Number(owner)))),
+        }),
+      })
+    }
+  }
+  let ids = [
+    ...changedValueIds,
+    ...before.filter((p) => !live.has(p.entity.eid)).map((p) => p.entity.eid),
+  ]
+  for (let i = 0; i < 7; i++) {
+    start = now()
+    await g.apply(writes)
+    editGraph.push(now() - start)
+    start = now()
+    transaction(() => refresh(ids))
+    editIndex.push(now() - start)
+    let actual = g.read(
+      `.tree.file=${chosen.packed.tree.file}&.limit=1000000`,
+    ) as Bundle[]
+    let got = actual.map((p) => ({
+      entity: { eid: p.entity.eid },
+      tree: p.tree,
+    })).sort((a, b) => a.entity.eid.localeCompare(b.entity.eid))
+    let want = after.toSorted((a, b) =>
+      a.entity.eid.localeCompare(b.entity.eid)
+    )
+    if (JSON.stringify(got) != JSON.stringify(want)) {
+      throw new Error('coarse edit roundtrip')
+    }
+    await g.apply(restore)
+    transaction(() => refresh(ids))
+  }
+  // Verify again after restores and in an independently reopened connection.
+  checkRefs(driver.query(refIndexed))
+  let finalBytes = size()
+  driver.close()
+  let reopened = open(db, { readOnly: true })
+  let reopenRows = reopened.query(nodeIndexed)
+  if (reopenRows.length != 1 || reopenRows[0].node != wantNode) {
+    throw new Error('reopen node')
+  }
+  checkRefs(reopened.query(refIndexed))
+  reopened.close()
+  let report = {
+    grain,
+    env,
+    storedNodes,
+    engineSha: await command('git', ['rev-parse', 'HEAD']),
+    corpusSha: manifest.sha,
+    corpusHash: manifest.corpusHash,
+    files: manifest.files.length,
+    nodes: manifest.nodes,
+    references: manifest.references,
+    entities,
+    openMs,
+    spoolReadMs,
+    prepareMs,
+    applyMs,
+    batchMs: summary(batches),
+    bytes,
+    bytesPerNode: bytes / manifest.nodes,
+    peakRss,
+    sqlite,
+    pragmas,
+    types,
+    fixture: {
+      file: chosen.packed.tree.file,
+      functionId: chosen.functionId,
+      owner,
+      path,
+      name,
+      hits: expectedRefs.length,
+    },
+    nodeScan: nodeScanRead,
+    nodeIndexed: nodeIndexedRead,
+    graphFunction,
+    referenceScan,
+    referenceIndexed,
+    locationIndex: { bytes: locationBytes, buildMs: locationMs },
+    index: {
+      rows: sideRows,
+      extractMs: indexExtractMs,
+      buildMs: indexBuildMs,
+      sideTableBytes,
+      indexBytes,
+      totalBytes: sideTableBytes + indexBytes,
+      totalMs: indexExtractMs + indexBuildMs,
+    },
+    edit: {
+      bundles: writes.length,
+      valueChanges,
+      valueBytesRewritten,
+      prepareMs: prepareEditMs,
+      graphMs: summary(editGraph),
+      indexMs: summary(editIndex),
+      atomic: false,
+    },
+    plans,
+    finalBytes,
+    endEnvironment: await environment(),
+  }
+  await Deno.writeTextFile(out, JSON.stringify(report, null, 2))
+  console.log(
+    JSON.stringify({
+      ...report,
+      batchMs: { ...report.batchMs, samples: undefined },
+    }),
+  )
+}
+
 if (import.meta.main) {
   let [mode, a, b, c] = Deno.args
   if (mode == 'parse') await parse(a, b)
   else if (mode == 'run') await run(a, b, c)
-  else if (mode == 'restart') {
+  else if (mode == 'coarse') {
+    await coarse(a, b, c, Deno.args[4] as 'file' | 'declaration')
+  } else if (mode == 'restart') {
     let start = now()
     let { driver, g } = connect(a)
     let openMs = now() - start

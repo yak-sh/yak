@@ -1,5 +1,12 @@
 import { equal, ok, test } from '@yaks/testing'
-import { edit, emit, init } from './yardstick-tree.ts'
+import {
+  containingFunction,
+  edit,
+  emit,
+  functionLiteral,
+  init,
+  pack,
+} from './yardstick-tree.ts'
 
 await init()
 let source = 'const π = "😀"; let a = 12; function f() { return a + π; }'
@@ -45,4 +52,68 @@ test('yardstick reference fixture is file-local and points to live syntax', () =
     ok(next.has(ref.target))
     equal(row.entity.eid, `ref:${ref.source}`)
   }
+})
+
+test('coarse packing retains all syntax, names, fixture refs and local parents', () => {
+  for (let grain of ['file', 'declaration'] as const) {
+    let packed = pack(before, source, grain)
+    equal(packed.flatMap((p) => p.tree.value.nodes).length, before.nodes.length)
+    let restored = packed.flatMap((p) =>
+      p.tree.value.nodes.map((n) => {
+        let eid = `${p.tree.file}#${n.id}`
+        let original = prior.get(eid)!
+        equal(n.start + p.tree.start, original.start)
+        equal(n.end + p.tree.start, original.end)
+        equal(n.ordinal, original.ordinal)
+        equal(n.kind, original.kind)
+        if (n.parent != null) {
+          equal(
+            `${p.tree.file}#${p.tree.value.nodes[n.parent].id}`,
+            original.parent,
+          )
+        } else if (eid != before.nodes[0].entity.eid) {
+          equal(original.parent, before.nodes[0].entity.eid)
+        }
+        if (n.kind == 'identifier' || n.kind == 'type_identifier') {
+          equal(
+            n.name,
+            new TextDecoder().decode(bytes.slice(original.start, original.end)),
+          )
+        }
+        return eid
+      })
+    )
+    equal(restored.toSorted(), before.nodes.map((r) => r.entity.eid).toSorted())
+    equal(
+      packed.flatMap((p) => p.tree.value.nodes).filter((n) => n.target).length,
+      before.references.length,
+    )
+  }
+})
+
+test('function edit rewrites a declaration value and only shifts later bases', () => {
+  let source =
+    'let a=0; export function f(){ return 12; }\nfunction g(){return 2;} '
+  let tree = emit('unit.ts', source)
+  let selected = functionLiteral(tree)!
+  equal(selected.function.node.kind, 'function_declaration')
+  equal(
+    containingFunction(tree, selected.literal)?.entity.eid,
+    selected.function.entity.eid,
+  )
+  let changed = edit('unit.ts', source, tree, selected.literal)
+  let before = pack(tree, source, 'declaration')
+  let after = pack(changed.after, changed.changed, 'declaration')
+  let last = before.at(-1)!
+  let moved = after.find((p) => p.entity.eid == last.entity.eid)!
+  equal(last.tree.value, moved.tree.value)
+  equal(moved.tree.start, last.tree.start + 6)
+  let old = new Map(before.map((p) => [p.entity.eid, p]))
+  equal(
+    after.filter((p) =>
+      JSON.stringify(p.tree.value) !=
+        JSON.stringify(old.get(p.entity.eid)?.tree.value)
+    ).length,
+    2,
+  )
 })

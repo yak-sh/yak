@@ -121,8 +121,13 @@ export function emit(file: string, source: string): FileTree {
 /** Replace a numeric literal by an expression, retaining unrelated subtree IDs.
  * Matching uses kind and transformed byte spans, never parser handles. Ancestors
  * spanning the replacement retain identity too; new syntax gets new IDs. */
-export function edit(file: string, source: string, before: FileTree) {
-  let literal = before.nodes.find((n) => n.node.kind == 'number')
+export function edit(
+  file: string,
+  source: string,
+  before: FileTree,
+  selected?: Emitted,
+) {
+  let literal = selected ?? before.nodes.find((n) => n.node.kind == 'number')
   if (!literal) throw new Error(`no numeric literal in ${file}`)
   let { start, end } = literal.node
   let bytes = new TextEncoder().encode(source)
@@ -185,5 +190,111 @@ export function edit(file: string, source: string, before: FileTree) {
     changed,
     writes: [...writes, ...deletes],
     retained: next.length - writes.length,
+  }
+}
+
+export type PackedNode = {
+  id: number | string
+  kind: string
+  start: number
+  end: number
+  parent: number | null
+  ordinal: number
+  name?: string
+  target?: string
+}
+export type Packed = {
+  entity: { eid: string }
+  tree: { file: string; start: number; value: { nodes: PackedNode[] } }
+}
+/** All program children are units, including residual non-declarations. The
+ * program root is its own residual unit; no syntax or fixture refs disappear.
+ * Spans are relative to the unit, so moving a later unit patches only its base.
+ * IDs keep the emitter's suffix: addresses are (owner entity, local JSON path),
+ * not graph identities. Declaration roots attach to the residual program root. */
+export function pack(
+  tree: FileTree,
+  source: string,
+  grain: 'file' | 'declaration',
+): Packed[] {
+  let bytes = new TextEncoder().encode(source), decode = new TextDecoder()
+  let targets = new Map(tree.references.map((r) => {
+    let ref = r.reference as { source: string; target: string }
+    return [ref.source, ref.target]
+  }))
+  let groups: Emitted[][] = []
+  let owners = new Map<string, Emitted[]>()
+  let program = tree.nodes[0]
+  for (let row of tree.nodes) {
+    let group: Emitted[]
+    if (grain == 'file') {
+      group = groups[0] ?? (groups[0] = [])
+    } else if (!row.node.parent || row.node.parent == program.entity.eid) {
+      group = []
+      groups.push(group)
+    } else {
+      group = owners.get(row.node.parent)!
+    }
+    group.push(row)
+    owners.set(row.entity.eid, group)
+  }
+  return groups.map((rows) => {
+    let root = rows[0], local = new Map(rows.map((r, i) => [r.entity.eid, i]))
+    return {
+      entity: { eid: `tree:${root.entity.eid}` },
+      tree: {
+        file: root.node.file,
+        start: root.node.start,
+        value: {
+          nodes: rows.map((row) => {
+            let { kind, start, end, parent, ordinal } = row.node
+            let suffix = row.entity.eid.slice(row.node.file.length + 1)
+            let n: PackedNode = {
+              id: /^\d+$/.test(suffix) ? Number(suffix) : suffix,
+              kind,
+              start: start - root.node.start,
+              end: end - root.node.start,
+              parent: parent ? local.get(parent) ?? null : null,
+              ordinal,
+            }
+            if (kind == 'identifier' || kind == 'type_identifier') {
+              n.name = decode.decode(bytes.slice(start, end))
+            }
+            let target = targets.get(row.entity.eid)
+            if (target) n.target = target
+            return n
+          }),
+        },
+      },
+    }
+  })
+}
+export function containingFunction(
+  tree: FileTree,
+  node: Emitted,
+): Emitted | undefined {
+  let byId = new Map(tree.nodes.map((r) => [r.entity.eid, r]))
+  let current: Emitted | undefined = node
+  while (current) {
+    if (current.node.kind == 'function_declaration') return current
+    current = current.node.parent ? byId.get(current.node.parent) : undefined
+  }
+}
+export function functionLiteral(
+  tree: FileTree,
+): { function: Emitted; literal: Emitted } | undefined {
+  let byId = new Map(tree.nodes.map((r) => [r.entity.eid, r]))
+  for (let literal of tree.nodes) {
+    if (literal.node.kind == 'number') {
+      let current: Emitted | undefined = literal
+      while (current) {
+        if (current.node.kind == 'function_declaration') {
+          return { function: current, literal }
+        }
+        current = current.node.parent
+          ? byId.get(current.node.parent)
+          : undefined
+      }
+    }
   }
 }
