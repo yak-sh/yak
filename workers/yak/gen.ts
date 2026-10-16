@@ -26,6 +26,7 @@
 // literal facet imports that esbuild can bundle without runtime discovery,
 // and every package's `./vocab`, which an app may name as a dependency.
 import { front, read } from '@yaks/yaml'
+import { contentIdentity } from './content-identity.ts'
 import { fileURLToPath } from 'node:url'
 import { configs, domains } from './config.ts'
 import { imports, loader, type Manifest, vocabs } from './load-gen.ts'
@@ -71,9 +72,7 @@ let guides = () =>
     let doc = meta.doc as Record<string, unknown> ?? {}
     let guide = meta.guide as Record<string, unknown> | undefined
     if (!guide) return []
-    if (guide.slug != slug) {
-      refuse(`${file}: guide.slug is ${guide.slug}, not ${slug}`)
-    }
+    contentIdentity(meta, 'guide', slug, file)
     return [{
       slug,
       title: said(doc.title, `${file} doc.title`),
@@ -106,9 +105,7 @@ let prompts = () => {
     let name = file.slice(0, -3)
     let { meta, body } = front(Deno.readTextFileSync(new URL(file, dir)), at)
     let row = meta.prompt as Record<string, unknown> ?? {}
-    if (row.name != name) {
-      refuse(`${at}: prompt.name is ${row.name}, not ${name}`)
-    }
+    contentIdentity(meta, 'prompt', name, at)
     out[name] = {
       name,
       title: said(row.title, `${at} prompt.title`),

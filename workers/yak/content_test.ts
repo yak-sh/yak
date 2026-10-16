@@ -5,10 +5,11 @@
 // name, declared `identity: true` in content.vocab.json, and the eid is
 // derived from that value (@yaks/graph identity.ts).
 //
-// What is proven here is the whole of the claim: the files say it that way,
-// and a file's own frontmatter applied twice to a store is one entity.
+// Generation enforces the file identity at a per-file seam, and a file's
+// own frontmatter applied twice to a store is one entity.
 import { test } from '@yaks/testing'
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
+import { contentIdentity } from './content-identity.ts'
 import { front } from '@yaks/yaml'
 import type { Bundle } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
@@ -42,56 +43,51 @@ let vocab = loadVocab([core, content as VocabDoc])
 let file = (path: string) =>
   front(Deno.readTextFileSync(new URL(path, import.meta.url)), path)
 
-// Every file of a kind in a directory, by the row it declares: a documentation
-// page saying no `guide` row is not a guide page (the technical page is drawn
-// by docs.ts and offered by nobody), and gen.ts skips it for the same reason.
-let named = (dir: string, comp: string) =>
-  [...Deno.readDirSync(new URL(dir, import.meta.url))]
-    .map((e) => e.name)
-    .filter((n) => n.endsWith('.md') && file(`${dir}${n}`).meta[comp])
-    .sort()
-
-// The two rosters, walked rather than listed: a page or a prompt added
-// tomorrow is covered the day it lands.
-let pages = named('./public/docs/', 'guide')
-let prompts = named('./prompts/', 'prompt')
-
-test('no content file names an entity — the identity property does', () => {
-  assert(pages.length > 1 && prompts.length > 1)
-  for (
-    let [dir, comp, prop, names] of [
-      ['./public/docs/', 'guide', 'slug', pages],
-      ['./prompts/', 'prompt', 'name', prompts],
-    ] as const
-  ) {
-    for (let name of names) {
-      let { meta } = file(`${dir}${name}`)
-      let row = meta[comp] as Record<string, unknown>
-      assert(row, `${dir}${name} says no ${comp}`)
-      assertEquals(
-        meta.entity,
-        undefined,
-        `${dir}${name} names an entity — its ${comp}.${prop} is what does that`,
-      )
-      // The file's name and its identity are one fact, which is also what
-      // gen.ts refuses on (a page's row is keyed by slug).
-      assertEquals(
-        row[prop],
-        name.slice(0, -3),
-        `${dir}${name} ${comp}.${prop}`,
-      )
-    }
-  }
-})
+// Generation calls this for every guide and prompt; exercise its decision on
+// bounded frontmatter, rather than rereading the growing guide in a test.
+for (let [kind, prop] of [['guide', 'slug'], ['prompt', 'name']] as const) {
+  let meta = { [kind]: { [prop]: 'sample' } }
+  let path = `${kind}/sample.md`
+  test(`${kind} content uses its identity property without an entity`, () => {
+    contentIdentity(meta, kind, 'sample', path)
+  })
+  test(`${kind} content refuses an explicit entity`, () => {
+    assertThrows(
+      () =>
+        contentIdentity(
+          { ...meta, entity: { eid: '$page' } },
+          kind,
+          'sample',
+          path,
+        ),
+      Error,
+      'names an entity',
+    )
+  })
+  test(`${kind} content refuses an identity different from its filename`, () => {
+    assertThrows(
+      () => contentIdentity(meta, kind, 'other', path),
+      Error,
+      `not other`,
+    )
+  })
+  test(`${kind} content requires its identity row`, () => {
+    assertThrows(
+      () => contentIdentity({}, kind, 'sample', path),
+      Error,
+      `says no ${kind}`,
+    )
+  })
+}
 
 // The store the page is applied to, and the page as read, both made once.
 let g = graph({ storage: memory(), vocab })
 let { meta } = file('./public/docs/store.md')
+let once = g.apply([{ ...meta, entity: { eid: '$page' } }]) as Bundle[]
 
 test('a page applied twice is one entity, at the id its slug names', () => {
   let eid = identityEid('guide', ['store'])
 
-  let once = g.apply([{ ...meta, entity: { eid: '$page' } }]) as Bundle[]
   assertEquals(once[0].entity.eid, eid)
   assertEquals(typeof once[0].entity.num, 'number') // born
 
