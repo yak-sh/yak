@@ -85,7 +85,8 @@ test('a named write carries its key on every send', async () => {
   await c.mutate(soup, { key: 'soup' })
   await c.mutate(soup, { key: 'soup' })
   await c.mutate(soup, { optimistic: false })
-  assertEquals(keys, ['soup', 'soup', null])
+  assertEquals(keys.slice(0, 2), ['soup', 'soup'])
+  assertEquals(keys[2]?.startsWith('outbox:'), true)
   c.close()
 })
 

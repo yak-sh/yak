@@ -118,11 +118,6 @@ await g.apply([{ entity: { eid: 'b1' }, book: { title: 'Unconfirmed' } }])
 await link.idle()
 equal((await g.get(['b1']))[0].book, { title: 'Unconfirmed' })
 equal(trouble[1].reverted, false)
-unreachable = false
-await g.apply([{ entity: { eid: 'b1' }, $delete: true }])
-await link.idle()
-equal((await g.get(['b1']))[0].tombstone, undefined)
-equal(trouble[2].reverted, false)
 link.close()
 ```
 
@@ -614,3 +609,28 @@ runtime types. Inject transports when a runtime lacks compatible defaults.
 ## License
 
 Apache-2.0
+
+## Durable write intent
+
+Every HTTP write has a stable `outbox:` identity. In a browser sync commits its
+immutable server batch to IndexedDB **before** posting it. A new page for the
+same store and identity replays pending entries, in order, with the same key.
+Replica eviction and a closed socket do not remove intent. Non-browser runtimes
+use the same delivery queue in memory unless `outbox` supplies a disk store.
+`outboxScope` isolates applications and authenticated accounts sharing an
+origin; cookie-authenticated callers must supply an account-specific scope (or
+an `OutboxStore` whose startup waits for the account).
+
+A lost response or HTTP 202 rejects the awaiting caller with `WriteUnknown`,
+which means **unsaved**, not refused or lost. Background delivery retries while
+the page is alive; closing a page pauses delivery, not persistence. A definite
+refusal rejects with `WriteRefused` and remains inspectable, not retried without
+an explicit choice. `pending()` and `onPending()` expose both states;
+`retry(key)` deliberately retries, and `forget(key)` explicitly discards that
+intent. Never label a pending entry saved because an optimistic row rendered.
+IndexedDB failure fails the write before posting, instead of quietly degrading a
+browser write to an in-memory queue. Keep the editable draft until acceptance.
+
+The server must retain durable acceptance receipts for these keys. Replaying a
+bare merge or a `$was` guard is not a substitute: after a committed response is
+lost, a guard can be stale and an alias can otherwise mint twice.

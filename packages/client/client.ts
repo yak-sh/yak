@@ -57,6 +57,9 @@ import {
 /** How a client is put together. Every field has a default; `{}` is a graph
  * in this page alone, connected to no server and storing nothing. */
 export type ClientOpts = {
+  /** Override durable write storage or its per-app/identity scope. */
+  outbox?: import('@yaks/sync').OutboxStore<Bundle[]>
+  outboxScope?: string
   /** the server's base URL — the origin `/apply`, `/query` and `/ws` are
    * served under. Omit it and the graph is local only: nothing is posted
    * anywhere. */
@@ -263,6 +266,8 @@ export let client = (
   let wire = opts.url
     ? sync(g, {
       url: opts.url,
+      outbox: opts.outbox,
+      outboxScope: opts.outboxScope,
       fetch: opts.fetch,
       connect: opts.connect,
       timer: opts.timer,

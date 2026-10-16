@@ -127,3 +127,10 @@ export {
 } from './port.ts'
 
 export { type Coverage, covers, delivered } from './coverage.ts'
+
+export {
+  durableOutbox,
+  outboxIdb,
+  type OutboxStore,
+  type Pending,
+} from './outbox.ts'

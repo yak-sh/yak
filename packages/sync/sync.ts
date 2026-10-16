@@ -45,6 +45,7 @@ import {
   WriteUnknown,
 } from './outbound.ts'
 import { outward, relayed, syncOf } from './tier.ts'
+import { durableOutbox, type OutboxStore, type Pending } from './outbox.ts'
 import { pacer } from './pace.ts'
 import { type Mine, saying } from './saying.ts'
 import { land } from './inbound.ts'
@@ -80,6 +81,10 @@ export type SubscribeOpts = {
 /** How a graph is connected to a server. Only `url` is required; both
  * transports default to the platform's own. */
 export type SyncOpts = {
+  /** Durable intent storage; defaults to IndexedDB in a browser. */
+  outbox?: OutboxStore<Bundle[]>
+  /** Isolate apps/identities sharing an origin. Defaults to URL + headers. */
+  outboxScope?: string
   /** the server's base URL — the origin `/apply`, `/query` and `/ws` sit under */
   url: string
   /** Working-set ownership, retention and pending-write protection. */
@@ -139,6 +144,10 @@ export type Sync = {
   /** Apply optimistically, but answer only after server acceptance. Local-only
    * writes stay synchronous. Refusals and unknown outcomes reject. */
   apply: (bundles: Bundle[]) => Bundle[] | Promise<Bundle[]>
+  pending: () => Pending<Bundle[]>[]
+  onPending: (fn: () => void) => () => void
+  retry: (key: string) => Promise<void>
+  forget: (key: string) => Promise<void>
   /** resolves when every write in flight has been answered */
   idle: () => Promise<void>
   /** close the socket and stop reconnecting */
@@ -169,6 +178,54 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let report = opts.report ?? warn
   let timer: Timer = opts.timer ?? ((fn, ms) => setTimeout(fn, ms))
   let sending: Promise<void> = Promise.resolve()
+  let originals = new Map<string, {
+    bundles: Bundle[]
+    held: boolean
+    release?: (accepted?: boolean) => void
+  }>()
+  let outbox = durableOutbox<Bundle[], Bundle[]>({
+    scope: opts.outboxScope ?? JSON.stringify([opts.url, opts.headers ?? {}]),
+    store: opts.outbox,
+    report: (error) => {
+      if (
+        !(error instanceof WriteUnknown) && !(error instanceof WriteRefused)
+      ) {
+        report({ sent: [], error, reverted: false })
+      }
+    },
+    send: async (key, sent) => {
+      let original = originals.get(key)
+      let result = await exchange(original?.bundles ?? sent, {
+        graph,
+        url: opts.url,
+        fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
+        headers: opts.headers,
+        report,
+        held: original?.held ?? true,
+        sent,
+        key,
+      })
+      if (result.refused) {
+        original?.release?.(false)
+        originals.delete(key)
+        throw new WriteRefused(sent, result.refused)
+      }
+      if (result.error) throw result.error
+      original?.release?.(!original.held && !!result.applied?.length)
+      originals.delete(key)
+      return result.applied ?? []
+    },
+  })
+  let deliver = (
+    bundles: Bundle[],
+    sent: Bundle[],
+    held: boolean,
+    key: string = `outbox:${crypto.randomUUID()}`,
+    release?: (accepted?: boolean) => void,
+  ) => {
+    originals.set(key, { bundles, held, release })
+    return outbox.submit(sent, key)
+  }
   let writes = 0
   let receipts = new Map<number, { answer?: Promise<Bundle[] | undefined> }>()
   let asks = new Map<string, Ask>()
@@ -189,8 +246,10 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   let said = saying()
 
   let queue = <T>(run: () => Promise<T>): Promise<T> => {
-    let pending = sending.then(run)
-    sending = pending.then(() => {}, () => {})
+    // Start admission now, not behind an HTTP response. Otherwise a second
+    // write could die in a promise chain before it ever reached durable disk.
+    let pending = run()
+    sending = Promise.all([sending, pending.catch(() => {})]).then(() => {})
     return pending
   }
 
@@ -202,22 +261,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     if (!sent.length) return
     let release = opts.replica?.protect(bundles.map((b) => b.entity.eid))
     let answer = queue(() =>
-      exchange(bundles, {
-        graph,
-        url: opts.url,
-        fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
-        headers: opts.headers,
-        report,
-        held,
-        sent,
-      }).then(async (result) => {
-        if (result.settled || held) {
-          release?.(!held && !!result.applied?.length)
-        }
-        if (result.refused) throw new WriteRefused(sent, result.refused)
-        if (result.error) {
-          throw result.error
-        }
+      deliver(bundles, sent, held, undefined, release).then(async (applied) => {
         // A held deletion deferred the whole caller batch. The HTTP door
         // admits only server components, so its accepted answer cannot carry
         // the page/peer half. Apply that half now through the ordinary graph
@@ -234,7 +278,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           })
           : []
         let local = companions.length ? await graph.apply(companions) : []
-        return [...result.applied ?? [], ...local]
+        return [...applied, ...local]
       })
     ).catch((error) => {
       if (
@@ -255,27 +299,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
   }
 
   let submit = (sent: Bundle[], key?: string): Promise<Bundle[]> =>
-    queue(async () => {
-      let result
-      try {
-        result = await exchange(sent, {
-          graph,
-          url: opts.url,
-          fetch: opts.fetch ?? ((r) => globalThis.fetch(r)),
-          headers: opts.headers,
-          report,
-          held: true,
-          sent,
-          key,
-        })
-      } catch (error) {
-        report({ sent, error, reverted: false })
-        throw error
-      }
-      if (result.refused) throw new WriteRefused(sent, result.refused)
-      if (result.error) throw result.error
-      return result.applied ?? []
-    })
+    queue(() => deliver(sent, sent, true, key))
 
   let apply = (bundles: Bundle[]): Bundle[] | Promise<Bundle[]> => {
     let id = ++writes
@@ -418,7 +442,13 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
       )
       return out
     },
-    report: (error) => report({ sent: [], error, reverted: false }),
+    report: (error) => {
+      if (
+        !(error instanceof WriteUnknown) && !(error instanceof WriteRefused)
+      ) {
+        report({ sent: [], error, reverted: false })
+      }
+    },
   })
   let relay = pacer(graph.vocab, w.relay, timer)
 
@@ -470,7 +500,12 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     submit,
     apply,
     idle: () => sending,
+    pending: outbox.pending,
+    onPending: outbox.onPending,
+    retry: outbox.retry,
+    forget: outbox.forget,
     close: () => {
+      outbox.close()
       w.close()
       for (let id of asks.keys()) opts.replica?.unsubscribe(id)
       asks.clear()
