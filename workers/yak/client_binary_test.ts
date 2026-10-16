@@ -19,11 +19,11 @@ let docs = [{
     },
   },
 }]
-let json = (value: unknown) => new Response(stringify(value))
+let json = (value: unknown) => Promise.resolve(new Response(stringify(value)))
 
 test('public client apply and query return Uint8Array, leaving legacy JSON tags untouched', async () => {
   let requests: string[] = []
-  using _fetch = stub(globalThis, 'fetch', async (url, init) => {
+  using _fetch = stub(globalThis, 'fetch', (url, init) => {
     let path = new URL(String(url)).pathname.split('/').at(-1)!
     requests.push(path)
     if (path == 'me') return json({ person: 'binary-owner' })
