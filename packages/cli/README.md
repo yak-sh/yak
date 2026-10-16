@@ -502,7 +502,12 @@ open after its grace ([@yaks/api](../api/README.md)). Inactive or uninstalled
 optional units stay untouched; discovery and enqueue failures are reported. A
 session requesting its own restart can finish that request. A failed handover
 before readiness cleans up only the replacement; once ready, a replacement
-survives later enqueue errors.
+survives later enqueue errors. Readiness allows two minutes per replacement,
+including systemd job scheduling, pinned-runtime preparation and graph startup;
+`--no-block start` acknowledges the job, not readiness. On timeout the error
+captures the candidate's systemd state before cleanup can unload the instance
+and erase its execution timestamps. A missing InvocationID after cleanup is not
+evidence that the replacement never started.
 
 `yak --no-duties` (config `duties: false`) turns them off for a host that stays
 up: it takes no lease, works no effects, and runs neither the services nor the

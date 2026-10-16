@@ -38,8 +38,8 @@ export let ROLES: Role[] = [
   },
 ]
 
-/** How long a replacement has to say it is ready (ms). */
-export let PATIENCE = 15_000
+/** Includes systemd scheduling, preparing the pinned runtime and graph startup. */
+export let PATIENCE = 120_000
 
 let run: NonNullable<RestartOptions['run']> = async (command, args) => {
   let result = await new Deno.Command(command, {
@@ -124,7 +124,21 @@ export let restart = async (options: RestartOptions): Promise<string> => {
       let deadline = began + PATIENCE
       while (true) {
         if (now() >= deadline) {
-          throw new Error(`Timed out after ${PATIENCE}ms waiting for ${file}`)
+          // Inspect before cleanup: systemd may unload the stopped instance,
+          // losing precisely the evidence of whether it ever started.
+          let state: string
+          try {
+            state = await call(
+              'show',
+              candidate.unit,
+              '--property=ActiveState,SubState,Result,Job,InvocationID,MainPID,ExecMainStartTimestamp,ExecMainStatus',
+            )
+          } catch (error) {
+            state = String(error)
+          }
+          throw new Error(
+            `Timed out after ${PATIENCE}ms waiting for ${file}\n${state.trim()}`,
+          )
         }
         let found = await exists(file)
         if (found && now() < deadline) break

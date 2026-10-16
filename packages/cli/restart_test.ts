@@ -1,7 +1,7 @@
 // Handover ordering and failures, with no systemd or filesystem operations.
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
-import { restart, type RestartOptions } from './restart.ts'
+import { PATIENCE, restart, type RestartOptions } from './restart.ts'
 
 // A box running two primary workers and a web, with no tracker; `extra`
 // adds active units to what systemd lists.
@@ -131,15 +131,15 @@ test('restart starts unique replacements and stops nothing on a bare box', async
   assert(!first.includes('stopping'), first)
 })
 
-test('restart bounds readiness to 15 seconds and stops only its replacement', async () => {
+test('restart bounds readiness to two minutes and stops only its replacement', async () => {
   let f = fixture()
   f.options.ready = () => Promise.resolve(false)
   await assertRejects(
     () => restart(f.options),
     Error,
-    'Timed out after 15000ms',
+    'Timed out after 120000ms',
   )
-  assertEquals(f.elapsed(), 15_000)
+  assertEquals(f.elapsed(), PATIENCE)
   assertEquals(stopped(f), [started(f)])
 })
 
@@ -147,7 +147,7 @@ test('restart rejects readiness that arrives after its deadline', async () => {
   let f = fixture()
   let sleep = f.options.sleep!
   f.options.ready = async () => {
-    await sleep(15_001)
+    await sleep(PATIENCE + 1)
     return true
   }
   await assertRejects(() => restart(f.options), Error, 'Timed out')
@@ -218,4 +218,33 @@ test('a replacement that never readies leaves the old units and earlier replacem
   let [work, tracker, web] = started(f)
   assertEquals(stopped(f), [[web]])
   assert(work && tracker)
+})
+
+test('restart lets a running replacement take more than 15 seconds to ready', async () => {
+  let f = fixture()
+  f.options.ready = () => Promise.resolve(f.elapsed() >= 20_000)
+  await restart(f.options)
+  assertEquals(f.elapsed(), 20_000)
+  assertEquals(stopped(f).length, 1)
+  assert(!f.calls.some((c) => c[0] == 'show'))
+})
+
+test('restart captures startup evidence before timeout cleanup can unload it', async () => {
+  let f = fixture()
+  let run = f.options.run!
+  f.options.run = async (command, args) => {
+    let result = await run(command, args)
+    return args.includes('show')
+      ? {
+        ...result,
+        stdout: 'ActiveState=active\nSubState=running\nMainPID=42\nJob=\n',
+      }
+      : result
+  }
+  f.options.ready = () => Promise.resolve(false)
+  let error = await assertRejects(() => restart(f.options), Error, 'MainPID=42')
+  assertMatch(error.message, /ActiveState=active/)
+  let show = f.calls.findIndex((c) => c[0] == 'show')
+  let stop = f.calls.findIndex((c) => c.includes('stop'))
+  assert(show > 0 && show < stop)
 })
