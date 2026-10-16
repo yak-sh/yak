@@ -2663,6 +2663,85 @@ let lower = (
       order: ordered,
     }))
   }
+  // A numbered component page need not sort that component's whole history.
+  // Try a bounded prefix in the exact requested order. Only when it holds a
+  // complete page can later entities be excluded; a sparse recent prefix takes
+  // the original component-driven road instead. Population density alone says
+  // nothing about where a component's newest numbered owners lie.
+  if (
+    limit && limit.n > 0 && Number.isSafeInteger(limit.n) &&
+    order?.value == '-entity.num' && numbered && !after && !fields &&
+    !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
+    !ctx.ext.some((e) => e.order) &&
+    !ctx.spine && !ctx.eids && !ctx.correlated &&
+    !cs.some((c) => c.kind != 'edges' && claims(ctx, c.kind)) &&
+    ctx.ext.filter((e) => e.compile.edges).every((e) =>
+      e.name == '@yaks/edge'
+    ) &&
+    !reads.length && filters.filter((c) => c.kind != 'edges').length == 1 &&
+    ctx.present &&
+    facetOf(ctx, filters.find((c) => c.kind != 'edges')!)?.present &&
+    !computed(vocab, ctx.present) && ctx.d.owned &&
+    (ctx.d.scoped || ctx.d.spine == '"entity"')
+  ) {
+    let prefix = fresh(ctx, [], '__number_prefix_')
+    let hits = fresh(ctx, [], '__number_hits_')
+    let cap = Math.max(64, Math.min(Number.MAX_SAFE_INTEGER, limit.n * 4))
+    let recent = rel(ctx.d.spine, {
+      cols: ['"entity".*'],
+      joins: [],
+      where: TRUE,
+      order: [...new Set(ordered)],
+    })
+    let matching = rel(`"${prefix}" as "entity"`, {
+      cols: [owner + ' as "id"'],
+      joins: paged,
+      // Presence was elided when its component became the planned spine.
+      // The prefix must test it again, through the same visibility relation.
+      where: and(windowed, probed(ctx, ctx.present)),
+      order: ordered,
+    })
+    let full = raw(`exists (select 1 from "${hits}" limit 1 offset ?)`, [
+      limit.n - 1,
+    ])
+    let fallback = relation(ctx.d.spine, {
+      cols: [owner + ' as "id"'],
+      joins: paged,
+      where: windowed,
+      order: ordered,
+    })
+    // LIMIT, unlike WHERE, gates the whole fallback before its driving scan.
+    fallback.limit = { t: 'case', arms: [[full, val(0)]], else: val(limit.n) }
+    let slow = render(fallback)
+    let selected = render({
+      t: 'compound',
+      op: 'union all',
+      parts: [
+        select({ cols: [raw('"id"')], from: raw(`"${hits}"`), where: full }),
+        select({
+          cols: [raw('"id"')],
+          from: raw(`(${slow.sql})`, slow.params),
+        }),
+      ],
+    })
+    return finished({
+      ...rel(ctx.d.spine, { cols, joins: [], where: TRUE, order: ordered }),
+      with: [
+        { name: prefix, q: { ...recent, limit: val(cap) }, materialized: true },
+        {
+          name: hits,
+          q: { ...matching, limit: val(limit.n) },
+          materialized: true,
+        },
+      ],
+      from: raw(`(${selected.sql}) as "__number_page"`, selected.params),
+      joins: [{
+        how: 'cross',
+        src: raw(ctx.d.spine, [], 'entity'),
+        on: raw(`"__number_page"."id" = ${owner}`),
+      }],
+    })
+  }
   return finished({
     ...relation(ctx.d.spine, {
       cols,
