@@ -4,18 +4,21 @@
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, sha256 } from '@yaks/graph'
+import { parse } from '@yaks/query'
 import { doorOf, IDEMPOTENCY, type Namespace, storeOf } from './door.ts'
 import { Store } from './graph.ts'
 import { by, lit, scan, tally } from '@yaks/sql'
 import { db, keep, named, state } from './testing.ts'
 import { KERNEL, metaOf, minted } from './meta.ts'
 import {
+  fingerprinted,
   first,
   keep as keepWrite,
   keyed,
   landed,
   Pending,
   received,
+  remembered,
   retry as retryWrite,
   ROOM,
 } from './writes.ts'
@@ -765,9 +768,6 @@ test('an ordinary receipt expires with its parts once its window has passed', as
 // Boot outside the cases: these checks time the write door, not Store setup.
 let durableReplay = object()
 await durableReplay.apply([titled('edited', 'before')])
-let refusedOutbox = object()
-await refusedOutbox.query('.doc')
-
 let offlineIntent = await (async () => {
   let o = durableReplay
   let body = JSON.stringify([
@@ -799,23 +799,48 @@ let offlineIntent = await (async () => {
     }, () => [])
     o.wake()
     await o.query('.doc')
-    return { o, send, answer }
+    let { graph } = await o.boot()
+    let alias = JSON.parse(answer).find((b: Bundle) => b.$alias == '$new')
+    let query = parse('.doc.title="offline intent"')
+    let request = fingerprinted(
+      new Request('http://store/apply', {
+        method: 'POST',
+        headers: { ...KERNEL, [IDEMPOTENCY]: 'outbox:replay' },
+        body,
+      }),
+      body,
+    )
+    return { graph, request, log: db(o.ctx), answer, alias, query }
   } finally {
     Date.now = now
   }
 })()
 
 test('an outbox intent replays its minted alias and guarded answer hours later', async () => {
-  let { o, send, answer } = offlineIntent
-  let replay = await send()
+  let { request, log, answer } = offlineIntent
+  let replay = remembered(log, 'outbox:replay', request)
+  assert(replay)
   assertEquals(replay.status, 200)
   assertEquals(await replay.text(), answer)
-  let alias = JSON.parse(answer).find((b: Bundle) => b.$alias == '$new')
+})
+
+test('replaying an outbox intent does not mint a second entity', async () => {
+  let { graph, request, log, alias, query } = offlineIntent
+  assert(remembered(log, 'outbox:replay', request))
   assertEquals(
-    (await o.query('.doc.title="offline intent"')).map((b) => b.entity.eid),
+    (await graph.read(query)).map((b) => b.entity.eid),
     [alias.entity.eid],
   )
-  assertEquals(await o.title('edited'), 'changed since acceptance')
+})
+
+test('replaying an outbox intent does not apply its guarded edit again', async () => {
+  let { graph, request, log } = offlineIntent
+  assert(remembered(log, 'outbox:replay', request))
+  assertEquals(
+    ((await graph.get(['edited'], ['doc']))[0]?.doc as { title?: string })
+      ?.title,
+    'changed since acceptance',
+  )
 })
 
 for (
@@ -831,19 +856,19 @@ for (
     ],
   ]
 ) {
+  let o = object()
+  let { graph } = await o.boot()
+  let request = new Request('http://store/apply', {
+    method: 'POST',
+    headers: { ...KERNEL, [IDEMPOTENCY]: `outbox:${kind}` },
+    body,
+  })
+  let before = o.writes()
   test(`a${kind == 'oversized' ? 'n' : ''} ${kind} outbox intent is refused rather than applied without a receipt`, async () => {
-    let o = refusedOutbox
-    let before = o.writes()
-    let response = await o.fetch(
-      new Request('http://store/apply', {
-        method: 'POST',
-        headers: { ...KERNEL, [IDEMPOTENCY]: `outbox:${kind}` },
-        body,
-      }),
-    )
+    let response = await o.fetch(request)
     assertEquals(response.status, 400)
     assertEquals((await response.json()).error, 'Refused')
     assertEquals(o.writes(), before)
-    assertEquals(await o.query('.doc'), [])
+    assertEquals(await graph.read(parse('.doc')), [])
   })
 }

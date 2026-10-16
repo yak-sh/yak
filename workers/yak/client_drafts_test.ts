@@ -142,7 +142,9 @@ let closeOutboxes = () => {
   for (let s of stores.splice(0)) s.outbox.close()
 }
 
-test('public drafts recover a reload without crossing app or person scopes', async () => {
+// A closed page has already stashed this text. Constructing its store and
+// seeding persistence are fixtures; the case measures recovering another page.
+let recovery = await (async () => {
   let calls: Call[] = [], reports: unknown[] = []
   using _wire = transport((call) => {
     calls.push(call)
@@ -157,8 +159,20 @@ test('public drafts recover a reload without crossing app or person scopes', asy
   }
   let first = store(base).drafts(opts)
   first.type('compose', 'A precious unsent thought')
-  assertEquals(first.text('compose'), 'A precious unsent thought')
+  let text = first.text('compose')
+  await settled(() => reports.length == 1)
   first.close()
+  closeOutboxes()
+  return { calls, reports, stash, opts, text }
+})()
+
+test('public drafts recover a reload without crossing app or person scopes', async () => {
+  let { calls, reports, stash, opts, text } = recovery
+  using _wire = transport((call) => {
+    calls.push(call)
+    return json({ error: { message: 'offline' } }, 503)
+  })
+  assertEquals(text, 'A precious unsent thought')
   let otherApp = store('https://draft-client.test/other/api/')
     .drafts(opts)
   let otherPerson = store(base).drafts({ ...opts, by: 'al' })
@@ -234,15 +248,17 @@ test('public drafts retry a pending receipt with one identity and keep typing un
   }
 })
 
-test('public drafts preserve a pending send across reload instead of accepting watch text', async () => {
+// A saved draft is the starting point; only spending it and recovering the
+// still-pending send belong to the timed behavior.
+let pendingSend = await (async () => {
   let calls: Call[] = [], reports: unknown[] = []
-  let saved = deferred<Response>()
-  using _timers = retryTimers()
   using wire = transport((call) => {
     calls.push(call)
-    // Saving the draft succeeds. Sending it remains pending at every retry.
-    if (calls.length == 1) return saved.promise
-    return json({ pending: true, bundles: call.bundles }, 202)
+    return json({
+      bundles: [
+        row(publicClient.draftEid('jo', 'compose'), 'Never lose this send', 1),
+      ],
+    })
   })
   let stash = storage()
   let opts = {
@@ -251,12 +267,22 @@ test('public drafts preserve a pending send across reload instead of accepting w
     pace: 0,
     report: (e: unknown) => reports.push(e),
   }
-  let desk = store(base).drafts(opts)
+  let client = publicClient.store(base)
+  let desk = client.drafts(opts)
   let eid = publicClient.draftEid('jo', 'compose')
+  desk.type('compose', 'Never lose this send')
+  await settled(() => stash.length == 0)
+  return { calls, reports, stash, opts, client, desk, eid, hear: wire.hear }
+})()
+
+test('public drafts preserve a pending send across reload instead of accepting watch text', async () => {
+  let { calls, reports, stash, opts, client, desk, eid, hear } = pendingSend
+  using _timers = retryTimers()
+  using _wire = transport((call) => {
+    calls.push(call)
+    return json({ pending: true, bundles: call.bundles }, 202)
+  })
   try {
-    desk.type('compose', 'Never lose this send')
-    saved.resolve(json({ bundles: [row(eid, 'Never lose this send', 1)] }))
-    await settled(() => stash.length == 0)
     let send = desk.spend('compose', [{
       entity: { eid: 'message' },
       doc: { body: 'Never lose this send' },
@@ -264,7 +290,7 @@ test('public drafts preserve a pending send across reload instead of accepting w
     await Promise.resolve()
     assertEquals(desk.text('compose'), '')
     assertEquals(stash.length, 1)
-    wire.hear([row(eid, '', 2)])
+    hear([row(eid, '', 2)])
     assertEquals(await send, false)
     assertEquals(desk.text('compose'), 'Never lose this send')
     assertEquals(reports.length, 1)
@@ -283,6 +309,7 @@ test('public drafts preserve a pending send across reload instead of accepting w
     reload.close()
   } finally {
     desk.close()
+    client.outbox.close()
     closeOutboxes()
   }
 })
