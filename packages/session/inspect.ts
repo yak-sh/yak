@@ -346,6 +346,8 @@ let sessionTile: View = {
 /** The pages and parts this package draws in the inspector. */
 export let inspectViews: View[] = [
   sessionTile,
+  { ...sessionTile, view: 'Feed.Tile' },
+  { ...sessionTile, view: 'Search.Tile' },
   { view: 'Inspect.Turn', match: parse(`.${ENTRY}`), Render: EntryTurn },
   {
     view: 'Inspect.Conversation',
