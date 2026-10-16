@@ -38036,7 +38036,8 @@
     "forcedFocusedTests": 10,
     "result": "passed",
     "diagnosticBudget": "one new packing/edit fixture at 1.6 ms over 1ms; no exception added",
-    "smokeOverlap": "synthetic smoke processes overlapped the final part of declaration B; full corpus processes otherwise ran serially"
+    "smokeOverlap": "synthetic smoke processes overlapped the final part of declaration B; full corpus processes otherwise ran serially",
+    "postRebaseForcedFocusedTests": "10 passed; types, fmt and lint passed after pulling current main"
   },
   "cleanup": {
     "task": "T-126603",
@@ -38179,6 +38180,8 @@
       }
     ],
     "remainingScratchDatabaseFiles": 0,
-    "note": "Logical file lengths counted before removal, not allocated disk blocks. Prior discarded database paths were later reused for reported fresh runs; their bytes are counted as separate creations. No benchmark database was live."
+    "note": "Logical file lengths counted before removal, not allocated disk blocks. Prior discarded database paths were later reused for reported fresh runs; their bytes are counted as separate creations. No benchmark database was live.",
+    "removedFinalScratchAndChildWorktreeBytes": 4251226658,
+    "postRebaseAdditionalScratchBytes": 32967
   }
 }

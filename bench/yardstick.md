@@ -374,7 +374,10 @@ archive and spool were deleted after preserving reports; no live graph was used
 as benchmark data.
 
 Cleanup: **3,133,486,440 B (2.92 GiB)** of benchmark databases/WAL/SHM deleted,
-including discarded pilots; **4,250,910,222 B** of final scratch tree + child
+including discarded pilots; **4,251,226,658 B** of final scratch tree + child
 worktrees removed (in addition to the **1,022,711,144 B** of discarded database
 files removed earlier). Logical file lengths, not allocated blocks. Zero scratch
 databases remain. Cleanup manifest is retained in the raw report.
+
+Post-rebase focused checks pass again (10 tests); another **32,967 B** of check
+logs and task-local helper files were removed, with no new database files.
