@@ -55,22 +55,28 @@ test('pages: staging sign-in and error pages link to their own apex', async () =
   }
 })
 
-test('pages: the sign-in card names the app it hands back to', async () => {
-  let lead = async (back: string | null) => {
+for (
+  let [back, wanted] of [
+    [
+      'https://ada.yaks.fyi/potluck/',
+      'Sign in to continue to ada.yaks.fyi/potluck.',
+    ],
+    [null, 'Build an app by asking Claude or ChatGPT.'],
+    ['/connect', 'Build an app by asking Claude or ChatGPT.'],
+    [
+      'https://elsewhere.test/yaks.fyi/',
+      'Build an app by asking Claude or ChatGPT.',
+    ],
+  ] as const
+) {
+  test(`pages: the sign-in card names only its own app return: ${back}`, async () => {
     let html = await askEmail(null, back, undefined, undefined, 200, env).text()
-    // The card is the subject, not parsing the shared head's stylesheet on
-    // every return address. Keep its actual markup and direct-child check.
+    // Check the card's actual direct-child markup, not shared stylesheet parsing.
     let card = html.slice(html.indexOf('<main>'), html.indexOf('</main>') + 7)
-    return parseHTML(card).document.querySelector('main > p')?.textContent
-  }
-  assertEquals(
-    await lead('https://ada.yaks.fyi/potluck/'),
-    'Sign in to continue to ada.yaks.fyi/potluck.',
-  )
-  for (let back of [null, '/connect', 'https://elsewhere.test/yaks.fyi/']) {
-    assertEquals(await lead(back), 'Build an app by asking Claude or ChatGPT.')
-  }
-})
+    let lead = parseHTML(card).document.querySelector('main > p')?.textContent
+    assertEquals(lead, wanted)
+  })
+}
 
 test('pages: staging space management and connector forms keep their host', async () => {
   for (let view of ['apps', 'settings', 'connect', 'selling'] as const) {
