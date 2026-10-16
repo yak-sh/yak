@@ -90,7 +90,7 @@ import {
 import { declarationOf } from './declaration.ts'
 import { KERNEL, type Meta, metaOf, minted } from './meta.ts'
 import { Pending } from './writes.ts'
-import { batched, lined, receipt } from './wire.ts'
+import { batched, lined, receipt, resend } from './wire.ts'
 import {
   binned,
   desk as deskPage,
@@ -141,7 +141,7 @@ import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
-import { type Door, IDEMPOTENCY } from './door.ts'
+import type { Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
@@ -2075,7 +2075,6 @@ let api = async (
     // A page that sends the write again after a 202 names it, and the store
     // answers the resend as it answered the first (writes.ts `first`) rather
     // than keeping a second copy that its guards refuse once the first lands.
-    let key = req.headers.get(IDEMPOTENCY)
     // Each wire in, the same wire out (wire.ts): the page's envelope is
     // answered `{ok, aliases, bundles}`, and the Store's bare array, which a
     // page keeping its own copy sends, is answered with the batch as applied.
@@ -2085,7 +2084,7 @@ let api = async (
       let graph = await sources(env, space, app, who, headers)
       let as = {
         ...(await named(env, who, app)),
-        ...(key ? { [IDEMPOTENCY]: key } : {}),
+        ...resend(req),
       }
       let applied = graph.reach.length > 1
         ? (await written(

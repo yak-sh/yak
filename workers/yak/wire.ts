@@ -28,6 +28,14 @@ import type { Bundle } from '@yaks/graph'
 import { tokens } from '@yaks/query'
 import { minted } from './meta.ts'
 import { refuse } from './tool.ts'
+import { IDEMPOTENCY } from './door.ts'
+
+/** Forward a page's resend identity; an unnamed write lets the store door
+ * mint its own identity for that attempt. */
+export let resend = (request: Request): Record<string, string> => {
+  let key = request.headers.get(IDEMPOTENCY)
+  return key ? { [IDEMPOTENCY]: key } : {}
+}
 
 // The riders the page's grammar writes bare and the Store's writes dotted. They
 // are the same three words meaning the same three things; only the syntax

@@ -108,23 +108,41 @@ let towerWords = (design = true) =>
     },
   })
 
-test('an index reads where its name is a component table', () => {
-  for (let first of [towerWords(), towerWords(false)]) {
-    let d = mem()
-    let before = storage(d, first)
-    before.install()
-    before.tx((tx) =>
-      tx.patch([{ entity: { eid: 't' }, tower: { design: 'd' } }])
-    )
-    let s = storage(d, towerWords())
-    s.install()
-    s.tx((tx) =>
-      tx.patch([{ entity: { eid: 'd' }, tower_design: { name: 'x' } }])
-    )
-    assertEquals(s.read('.tower.design=d').map((b) => b.entity.eid), ['t'])
-    assertEquals(s.read('.tower_design').map((b) => b.entity.eid), ['d'])
-  }
-})
+// Each schema history owns its installed and seeded database. The timed
+// subject is reading through the index beside the colliding component table.
+for (let design of [true, false]) {
+  let d = open(':memory:')
+  let before = storage(d, towerWords(design))
+  before.install()
+  before.tx((tx) =>
+    tx.patch([{ entity: { eid: 't' }, tower: { design: 'd' } }])
+  )
+  let s = storage(d, towerWords())
+  s.install()
+  s.tx((tx) =>
+    tx.patch([{ entity: { eid: 'd' }, tower_design: { name: 'x' } }])
+  )
+  test(
+    design
+      ? 'an index reads where its name is a component table'
+      : 'an index reads when a component takes its former name',
+    () => {
+      assertEquals(s.read('.tower.design=d').map((b) => b.entity.eid), ['t'])
+    },
+  )
+  test(
+    design
+      ? 'a component reads beside a colliding index name'
+      : 'a component reads after taking an index name',
+    () => {
+      try {
+        assertEquals(s.read('.tower_design').map((b) => b.entity.eid), ['d'])
+      } finally {
+        d.close()
+      }
+    },
+  )
+}
 
 test('a changed identity retires its old unique index', () => {
   let shape = (identity: string[]) =>
