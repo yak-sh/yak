@@ -5,7 +5,7 @@ import { appendEntry } from './append.ts'
 // durable queue order and fork prefix commit with the child. Replays find
 // that same child; preparation is deferred until the runner admits it
 // (./run.ts).
-import { aside, dispatchStatus } from './admission.ts'
+import { aside, dispatchStatus, tail } from './admission.ts'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
@@ -245,12 +245,7 @@ let delegation = (
         ...b,
         entry: { session: eid },
       }))
-      let order = Math.max(
-        0,
-        ...(await g.read('.dispatch')).map((b) =>
-          Number((b.dispatch as Comp).order ?? 0)
-        ),
-      ) + 1
+      let order = await tail(g)
       await g.apply([
         ...minted
           ? [{

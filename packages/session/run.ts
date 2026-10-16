@@ -45,7 +45,14 @@ import { token } from '@yaks/graph/sha256'
 import { effectsIn } from '@yaks/vocab'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { dependents } from '@yaks/task'
-import { active, admitNext, dispatchStatus, queue, swap } from './admission.ts'
+import {
+  active,
+  admitNext,
+  dispatchStatus,
+  queue,
+  swap,
+  tail,
+} from './admission.ts'
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
@@ -168,17 +175,11 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
       !input.content || input.imported || input.output || input.call ||
       input.result
     ) return true
-    let order = Math.max(
-      0,
-      ...(await g.read('.dispatch')).map((b) =>
-        Number(comp(b, 'dispatch')?.order ?? 0)
-      ),
-    ) + 1
     try {
       await g.apply([{
         entity: { eid: session },
         // Expansion writers retain legacy state until the explicit cutover.
-        dispatch: { state: 'queued', order },
+        dispatch: { state: 'queued', order: await tail(g) },
         $was: {
           dispatch: { state: null, args: null, order: null },
           spawned: {
@@ -209,12 +210,7 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
     d = comp(self, 'dispatch')
   }
   if (dispatchStatus(self) == 'settled') {
-    let order = Math.max(
-      0,
-      ...(await g.read('.dispatch')).map((b) =>
-        Number(comp(b, 'dispatch')?.order ?? 0)
-      ),
-    ) + 1
+    let order = await tail(g)
     if (!await swap(g, session, 'settled', { state: 'queued', order })) {
       return false
     }

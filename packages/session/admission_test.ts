@@ -1,6 +1,6 @@
 // Both writers coexist until cutover: legacy transitions remain readable by
 // the old server, while converted envelopes change only the two core marks.
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -14,6 +14,7 @@ import {
   dispatchStatus,
   queue,
   swap,
+  tail,
 } from './admission.ts'
 
 let store = () => {
@@ -154,4 +155,47 @@ test('RAM admission retains legacy queue order and respects occupied places', as
   await admitNext(g, { maxChildren: 1 })
   assertEquals(dispatchStatus((await g.get(['first']))[0]), 'active')
   assertEquals((await queue(g)).map((b) => b.entity.eid), ['later'])
+})
+
+// A legacy row keeps its dispatch once settled, so settled children outnumber
+// the rest, and each transcript read whole costs its every entry.
+let SETTLED = 20
+let read = 0
+let counted = await (async () => {
+  let vocab = loadVocab([kernelDoc, sessionDoc])
+  let s = ram(vocab)
+  let g = graph({
+    vocab,
+    storage: {
+      ...s,
+      read: async (...asked) => {
+        let got = await s.read(...asked)
+        read += got.length
+        return got
+      },
+    },
+  })
+  await g.apply([
+    ...Array.from({ length: SETTLED }, (_, n) => ({
+      entity: { eid: `done-${n}` },
+      session: {},
+      dispatch: { state: 'settled', order: n },
+    })),
+    {
+      entity: { eid: 'holder' },
+      session: {},
+      dispatch: { state: 'active', order: SETTLED },
+      admitted: {},
+    },
+    { entity: { eid: 'next' }, session: {}, dispatch: { order: SETTLED + 1 } },
+  ], { trusted: true })
+  return g
+})()
+
+test('admission counts and queues the children with a place, reading no settled one', async () => {
+  read = 0
+  assertEquals(await active(counted), 1)
+  assertEquals((await queue(counted)).map((b) => b.entity.eid), ['next'])
+  assertEquals(await tail(counted), SETTLED + 2)
+  assert(read < SETTLED, `${read} read`)
 })

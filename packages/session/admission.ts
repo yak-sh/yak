@@ -8,6 +8,7 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
+import { and, limit, ne, order, present, want } from '@yaks/query'
 import type { ChildLimits } from './children.ts'
 
 let dispatch = (b: Bundle | undefined) => b?.dispatch as Comp | undefined
@@ -21,8 +22,25 @@ export let dispatchStatus = (b: Bundle | undefined): unknown => {
     (b?.waiting ? 'waiting' : b?.admitted ? 'active' : 'queued')
 }
 
-let state = async (g: Graph, eid: Eid) =>
-  dispatchStatus((await g.get([eid]))[0])
+// What admission reads of a transcript: its place and the marks naming it,
+// never the rest it wears (a session's computed status reads every entry).
+// A narrow consumer's vocabulary may lack the marks.
+let marks = (g: Graph) =>
+  ['admitted', 'waiting'].filter((name) => g.vocab.comp(name))
+
+let place = async (g: Graph, eid: Eid) =>
+  (await g.get([eid], ['dispatch', ...marks(g)]))[0]
+
+// The children in `status`. A legacy row keeps its dispatch once settled, and
+// those outnumber the rest many times over: they are never read.
+let placed = async (g: Graph, status: string): Promise<Bundle[]> =>
+  (await g.read(and(
+    present('dispatch'),
+    ne('dispatch.state', 'settled'),
+    ...marks(g).map(want),
+  ))).filter((b) => dispatchStatus(b) == status)
+
+let state = async (g: Graph, eid: Eid) => dispatchStatus(await place(g, eid))
 
 /** Patch a transcript's `dispatch` only if its state is still `was`. */
 export let swap = async (
@@ -32,7 +50,7 @@ export let swap = async (
   patch: Comp,
   together: Bundle[] = [],
 ): Promise<boolean> => {
-  let b = (await g.get([eid]))[0]
+  let b = await place(g, eid)
   if (dispatchStatus(b) != was || !b?.dispatch) return false
   let d = dispatch(b)!
   let next = patch.state
@@ -83,15 +101,21 @@ export let swap = async (
 
 /** The children waiting for a place, oldest first. */
 export let queue = async (g: Graph): Promise<Bundle[]> =>
-  (await g.read('.dispatch&*')).filter((b) => dispatchStatus(b) == 'queued')
-    .toSorted((a, b) =>
-      Number(dispatch(a)?.order ?? 0) - Number(dispatch(b)?.order ?? 0)
-    )
+  (await placed(g, 'queued')).toSorted((a, b) =>
+    Number(dispatch(a)?.order ?? 0) - Number(dispatch(b)?.order ?? 0)
+  )
 
 /** How many children hold a place. */
 export let active = async (g: Graph): Promise<number> =>
-  (await g.read('.dispatch&*')).filter((b) => dispatchStatus(b) == 'active')
-    .length
+  (await placed(g, 'active')).length
+
+/** The order a child joining the queue takes: behind every other. */
+export let tail = async (g: Graph): Promise<number> => {
+  let [last] = await g.read(
+    and(present('dispatch.order'), order('-dispatch.order'), limit(1)),
+  )
+  return Math.max(0, Number(dispatch(last)?.order ?? 0)) + 1
+}
 
 /** Admit the oldest queued children while fewer than the bound are active. */
 export let admitNext = async (
