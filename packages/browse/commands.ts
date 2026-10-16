@@ -1,3 +1,4 @@
+import { vocab } from './types.ts'
 // The `:` command line's grammar — one vocabulary for both faces. A verb
 // is a pure function from (line, context) to INTENT: changes to land, an
 // entity to open, a line for the status bar. Nothing here touches the
@@ -41,8 +42,8 @@ import {
   uniq,
   UUID,
 } from './client.ts'
-import { adopt, matchQuery, parseQuery, selected } from './query.ts'
-import { timeInstant } from '@yaks/query'
+import { matchQuery, parseQuery, selected } from './query.ts'
+import { adopt, parse, timeInstant } from '@yaks/query'
 import { type Arg, id, slotsOf, text } from './verb.ts'
 
 // A `:` command's argument, built terse: `a('id', 'T-42', { kind: id })`. The
@@ -245,11 +246,11 @@ let go = (id: string, ctx: Ctx): Result => {
 // its query's scalar equalities — the same adopt() a board drop uses, so
 // the task JOINS the board — a project hands over itself, and a task the
 // project it belongs to.
-let inherit = (ctx: Ctx): Record<string, Record<string, unknown>> => {
+let inherit = (ctx: Ctx): Record<string, Record<string, unknown> | null> => {
   let r = ctx.eid ? graphOf(ctx).find(ctx.eid) : undefined
   if (!r) return {}
   if (r.comps.board) {
-    return adopt(parseQuery(String(r.comps.board.query ?? '')))
+    return adopt(parse(String(r.comps.board.query ?? '')), vocab)
   }
   if (r.comps.project) return { filed: { project: r.eid } }
   let p = r.comps.filed?.project

@@ -7,6 +7,23 @@ builders, and interpreters that need one shared format.
 `@yaks/query/core` exports the AST builders, parser, traversal, and time values
 without loading completion or grammar teaching. The root export includes both.
 
+## Queries as writes
+
+`adopt(parse('.book.pages=500'), vocab)` returns `{ book: { pages: 500 } }`. The
+vocabulary decides the type: numbers and booleans become their native values;
+text, enums and references stay strings, even when they look numeric. `null`
+(including quoted `"null"`) clears a property, `!book` removes a component, and
+`.book` ensures it. Structured JSON and binary properties use bundles instead.
+
+Board drops use `adopt` to inherit scalar equalities and the target of a forward
+reference walk (`.filed.project-><id>`). Lists, ranges, comparisons, reverse
+walks, and other filters pin down no single value and are ignored. With
+`{ strict: true }`, explicit writes reject these instead of silently applying a
+partial patch; they also reject unknown fields, invalid scalar types, duplicate
+assignments, and removal mixed with patching. `adopt` returns a grouped
+component patch; entity addressing and applying the patch remain the caller's
+job.
+
 ## Query model
 
 A **query** describes which [entities](../graph/README.md#data-model) to select

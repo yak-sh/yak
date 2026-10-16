@@ -1,3 +1,5 @@
+import { adopt, parse } from '@yaks/query'
+import { vocab } from '../../types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { type Change, type Ent, statusOf } from '../../types.ts'
 import {
@@ -15,7 +17,7 @@ import {
   uuid,
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
-import { adopt, fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
+import { fieldsOf, orderOf, parseQuery, windowOf } from '../../query.ts'
 import { drafts, useDraft } from '@yaks/draft/input'
 import { bundlesOf } from '../../wire.ts'
 import { useBoardTally } from '../subscriptions.ts'
@@ -313,7 +315,7 @@ export let Board = ({ e }: { e: Ent }) => {
       : next == null
       ? prev + 1
       : (prev + next) / 2
-    let grouped = adopt(parseQuery(String(e.board?.query ?? '')))
+    let grouped = adopt(parse(String(e.board?.query ?? '')), vocab)
     mutate(
       ...Object.entries(grouped).filter(([name]) =>
         name != 'task' && name != 'filed'
@@ -342,7 +344,7 @@ export let Board = ({ e }: { e: Ent }) => {
     if (!title) return
     for (
       let [comp, values] of Object.entries(
-        adopt(parseQuery(String(e.board?.query ?? ''))),
+        adopt(parse(String(e.board?.query ?? '')), vocab),
       )
     ) {
       grouped[comp] = { ...values, ...grouped[comp] }

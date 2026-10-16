@@ -1,9 +1,10 @@
+import { adopt, and, eq, parse } from '@yaks/query'
+import { vocab } from './types.ts'
 import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { scalar } from '@yaks/query'
 import {
-  adopt,
   edgeRider,
   matchQuery,
   pageRanked,
@@ -20,7 +21,7 @@ let select = (q: string) => {
 
 test('browser matching keeps a quoted list a list, which no drop adopts', () => {
   assertEquals(select('.doc.title="a,b"'), ['a', 'b'])
-  assertEquals(adopt(parseQuery('.doc.title="a,b"')), {})
+  assertEquals(adopt(parse('.doc.title="a,b"'), vocab), {})
 })
 
 test('browser matching keeps a quoted range a range', () => {
@@ -45,7 +46,9 @@ test('browser matching and adoption take a literal AST scalar as one value', () 
       titles.filter((title) => matchQuery({ doc: { title } }, preds)),
       [value],
     )
-    assertEquals(adopt(preds), { doc: { title: value } })
+    assertEquals(adopt(and(eq('doc.title', scalar(value))), vocab), {
+      doc: { title: value },
+    })
   }
 })
 
@@ -104,8 +107,8 @@ test('a saved reference query resolves against each caller without changing it',
 })
 
 test('a drop on a board of everything under a project files it there', () => {
-  assertEquals(adopt(parseQuery('.filed.project->p1&.filed.priority=2')), {
+  assertEquals(adopt(parse('.filed.project->p1&.filed.priority=2'), vocab), {
     filed: { project: 'p1', priority: 2 },
   })
-  assertEquals(adopt(parseQuery('.filed.project<-p1')), {})
+  assertEquals(adopt(parse('.filed.project<-p1'), vocab), {})
 })
