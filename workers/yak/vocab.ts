@@ -37,7 +37,7 @@ import {
 } from '@yaks/host/words'
 import { selected } from '@yaks/host/documents'
 import { dependencies, Unplanned } from '@yaks/esbuild'
-import { load, vocabFacet } from './load.ts'
+import { vocabFacets } from './load.ts'
 import { once } from '@yaks/fp'
 export {
   appsDoc,
@@ -66,7 +66,7 @@ let configured = Object.fromEntries(
     (config.plugins ?? []).flatMap((plug): Taken<'vocab'> => {
       // A plugin that declares no words (yak/pages, which only purges).
       if (facetsOf(plug)?.includes('vocab') === false) return []
-      let plugin = used(plug), facet = vocabFacet(plugin)
+      let plugin = used(plug), facet = vocabFacets[plugin]
       if (!facet) throw new Error(`no vocabulary facet for ${plugin}`)
       return [[facet, given(plug), plugin, chosen(plug), facetsOf(plug)]]
     }),
@@ -80,13 +80,6 @@ export let storeWords = (kind: StoreKind, own?: VocabDoc[]): Words =>
  * (`stated`, from its package.json). */
 export let packagesOf = (doc: VocabDoc): string[] =>
   Array.isArray(doc.packages) ? doc.packages : []
-
-/** Prepare only the optional facets this declaration names. Composition stays
- * synchronous after this boundary, including clash checks and retained words. */
-export let loadPackages = async (source: unknown = {}): Promise<void> => {
-  let doc = appDoc(source)
-  await Promise.all(packagesOf(doc).map((pkg) => load(pkg, 'vocab')))
-}
 
 // Every name an app store speaks before its own words and its dependencies':
 // the configured packages' and the meta vocabulary.
@@ -103,7 +96,7 @@ let everywhere = once(() =>
 // journal, its lenses), which the platform turns on; and a package's tools,
 // rules and effects stay with the processes its configuration binds.
 let entriesOf = (pkg: string) =>
-  (vocabFacet(pkg)?.docs ?? []).flatMap((d) => Object.entries(d.$defs ?? {}))
+  (vocabFacets[pkg]?.docs ?? []).flatMap((d) => Object.entries(d.$defs ?? {}))
     .filter(([name, s]) =>
       s?.component === true && s.sync != 'none' && !name.startsWith('_')
     )
@@ -134,7 +127,7 @@ export let lent = (
       s?.extends === true ? lending.has(name) : !held.has(name)
     ).map(([name]) => name)
     return names.length
-      ? [[vocabFacet(pkg)!, {}, pkg, [...new Set(names)], ['vocab']]]
+      ? [[vocabFacets[pkg], {}, pkg, [...new Set(names)], ['vocab']]]
       : []
   })
 }

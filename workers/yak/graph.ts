@@ -358,7 +358,6 @@ import {
   appWords,
   gitVocab,
   grew,
-  loadPackages,
   meant,
   metaKeywords,
   numbered,
@@ -1136,9 +1135,6 @@ export class Store {
     this.#reshaping()
     let remembered = this.#get('name')
     await this.#prepare(request?.headers.get('x-store') ?? remembered ?? '')
-    if (!ownStore(request?.headers.get('x-store') ?? remembered ?? '')) {
-      await loadPackages(this.#get('vocab') ?? '{}')
-    }
     this.#atomic(() => {
       // The waking request supplies the capabilities the first binding needs.
       // Remember them before building, rather than replacing that binding in
@@ -1790,10 +1786,10 @@ export class Store {
   // the app's declaration pointer. That pointer is the serving decision:
   // every request selects its declarations here, so a failed release keeps
   // answering with the old vocabulary and commands even after preparation.
-  async #select(req: Request): Promise<{
+  #select(req: Request): {
     deploymentMoved: boolean
     effects: (() => void | Promise<void>)[]
-  }> {
+  } {
     let unchanged = () => ({ deploymentMoved: false, effects: [] })
     if (this.#candidate(req)) return unchanged()
     // The platform's own stores have no release of their own: the Worker's
@@ -1801,19 +1797,8 @@ export class Store {
     if (ownStore(this.#name() ?? '')) return unchanged()
     let release = req.headers.get('x-yak-release')
     if (release == null || !/^[a-z0-9-]+$/.test(release)) return unchanged()
-    if (this.#get('release') == release) return unchanged()
-    // Ordinary visits can overlap while importing. Use only a prepared snapshot,
-    // and retry if another visit changed the target while this one yielded.
-    let target = () =>
-      this.#get(`vocab:${release}`) ?? this.#get('vocab') ?? '{}'
-    let next = target()
-    while (true) {
-      await loadPackages(next)
-      if (this.#get('release') == release) return unchanged()
-      if (target() == next) break
-      next = target()
-    }
     let active = this.#get('release')
+    if (active == release) return unchanged()
     let deploymentMoved = false
     let effects: (() => void | Promise<void>)[] = []
     this.#atomic(() => {
@@ -1825,6 +1810,7 @@ export class Store {
       let words = ['vocab', 'uses', 'tools'] as const
       let was = this.#get('vocab') ?? '{}'
       let toolsWas = this.#get('tools') ?? '{}'
+      let next = this.#get(`vocab:${release}`) ?? this.#get('vocab') ?? '{}'
       if (active != '0' && release != '0') next = this.#prepared(next)
       for (let word of words) {
         this.#put(`${word}:${active}`, this.#get(word) ?? '{}')
@@ -3342,7 +3328,7 @@ export class Store {
               // refused, so fixed code can heal it on the next incarnation.
               let refused = this.#refused
               this.#refused = null
-              await this.#select(
+              this.#select(
                 new Request('http://store/', {
                   headers: { 'x-yak-release': base },
                 }),
@@ -3390,7 +3376,7 @@ export class Store {
     )
     this.#learn(request)
     if (this.#refused) return this.#stalled()
-    let selected = await this.#select(request)
+    let selected = this.#select(request)
     if (this.#refused) return this.#stalled()
     await this.#live.wake()
     // A read does not owe deployment work. App declarations, descriptions and
@@ -4657,7 +4643,6 @@ export class Store {
         throw new Refused('/seed takes a JSON array of bundles')
       }
       let actor = await this.#auth(request)
-      await loadPackages(this.#get(`vocab:${release}`) ?? '{}')
       let rollback = Symbol('candidate seed')
       try {
         this.#tx(() => {
@@ -4723,12 +4708,10 @@ export class Store {
     }
     return readBody(request).then(async (body) => {
       try {
-        let sent = appDoc(body)
-        await loadPackages(sent)
         let was = appDoc(this.#get('vocab') ?? '{}')
         let accepted = JSON.parse(request.headers.get(ACCEPTED) ?? '[]')
         let next = unlent(
-          unsaid(sent, was, 'vocab.json', accepted),
+          unsaid(appDoc(body), was, 'vocab.json', accepted),
           was,
           'vocab.json',
           accepted,

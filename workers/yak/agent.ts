@@ -62,13 +62,7 @@ import {
   TOOLS,
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-import {
-  appVocab,
-  loadPackages,
-  packagesOf,
-  platformApart,
-  wordOf,
-} from './vocab.ts'
+import { appVocab, packagesOf, platformApart, wordOf } from './vocab.ts'
 import { bare, joined, lined } from './wire.ts'
 import { apex, type Host, hosted } from './host.ts'
 import { refuse } from './tool.ts'
@@ -514,7 +508,6 @@ let spoken = async (
   // And the words their `"platform"` dependencies lend (vocab.ts `lent`),
   // beneath every app's own.
   let packages = [...new Set(said.flatMap(packagesOf))].sort()
-  await loadPackages({ packages })
   return {
     vocab: appVocab({ $defs: defs, ...packages.length ? { packages } : {} }),
     clashes,

@@ -58,7 +58,6 @@ import {
   type Homes,
   lentDocs,
   livesIn,
-  loadPackages,
   meant,
   stated,
   teach,
@@ -863,7 +862,6 @@ let fits = async (
     '/vocab',
     async (r) => r.ok ? meant(await r.json()) : {},
   )
-  await Promise.all([loadPackages(mine), loadPackages(split.mine)])
   grew(mine, split.mine)
 }
 
@@ -1230,7 +1228,6 @@ let published = async (
   // core every app's store plants, the app's own, the ones its dependencies
   // lend, and the ones it borrows.
   let accepting = appDoc(JSON.parse(taken))
-  await loadPackages(accepting)
   let words = [
     ...componentsOf(coreDocs()),
     ...componentsOf([accepting, ...lentDocs(accepting)]),
