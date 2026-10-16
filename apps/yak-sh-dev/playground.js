@@ -1,6 +1,6 @@
 // A real in-memory graph and yak's CLI parser. Commands call the graph directly;
 // this is a deliberately small book vocabulary, not the hosted app's store.
-import { graph, offered } from '@yaks/graph'
+import { graph, mint, offered } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { cli, helpTool } from '@yaks/cli'
@@ -52,7 +52,7 @@ export async function create() {
   const g = graph({ vocab, storage: ram(vocab) })
   await g.install()
   await g.apply([{
-    entity: { eid: 'book:dune' },
+    entity: { eid: 'c3272ad7-1f5b-475a-b934-cd6d0a15ab41' },
     book: { title: 'Dune', pages: 412 },
   }])
   const tools = tier().filter(offered('cli'))
@@ -63,7 +63,7 @@ export async function create() {
       ...tool,
       run: async (args, context) => {
         const landed = await calls.call({
-          entity: { eid: '$call' },
+          entity: { eid: mint() },
           call: { to: toolEid(tool.name), args: args ?? {} },
         })
         let value = structured(tool, answerOf(landed))
