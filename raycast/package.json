@@ -1,0 +1,59 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "yak",
+  "title": "Yak",
+  "description": "Talk to your system, continue conversations, and search your graph.",
+  "icon": "icon.png",
+  "author": "jeff",
+  "license": "Apache-2.0",
+  "platforms": [
+    "macOS"
+  ],
+  "categories": [
+    "Communication",
+    "Productivity"
+  ],
+  "commands": [
+    {
+      "name": "talk",
+      "title": "Talk to Yak",
+      "description": "Start a conversation in a project, or send and get back to work",
+      "mode": "view"
+    },
+    {
+      "name": "search",
+      "title": "Search Graph",
+      "description": "Find anything in your graph and open it in your browser",
+      "mode": "view"
+    },
+    {
+      "name": "inbox",
+      "title": "Inbox",
+      "description": "Read your inbox and open results in your browser",
+      "mode": "view"
+    }
+  ],
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build",
+    "lint": "ray lint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@raycast/api": "2.8.2",
+    "react": "19.0.0"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "2.2.0",
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "eslint": "^9.39.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  }
+}
