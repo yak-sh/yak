@@ -91,11 +91,12 @@ let fixture = async (rules: Rule[] = []) => {
     body,
     begins,
     finishes,
-    ask: (path: string) =>
+    ask: (path: string, body?: unknown) =>
       store.fetch(
         new Request(`http://store${path}`, {
           method: 'POST',
           headers: { 'x-store': PLATFORM_STORE, ...KERNEL },
+          body: body == null ? undefined : JSON.stringify(body),
         }),
       ),
     move: () => store.alarm(),
@@ -275,6 +276,31 @@ await proof(
       equal((rows[0].app as { access: string }).access, 'public')
       equal(f.finishes, [])
       equal(blocked, true)
+    }
+  },
+)
+
+await proof(
+  'a write whose fence resumes after a newer commit lands under a fresh one',
+  async () => {
+    let f = await fixture()
+    let release!: () => void
+    let held = new Promise<void>((r) => release = r)
+    f.onBegin(() => {
+      f.onBegin(() => Promise.resolve())
+      return held
+    })
+    f.onFinish(() => Promise.resolve(release()))
+    let used = (eid: string) => f.ask('/used', { eid })
+    let first = used('app'), second = used('space')
+    let statuses = [(await first).status, (await second).status]
+    let rows = await f.at.query('.used')
+    return () => {
+      equal(statuses, [200, 200])
+      equal(rows.map((r) => r.entity.eid).sort(), ['app', 'space'])
+      ok(f.begins.length > f.finishes.length, 'a fence was lost and retaken')
+      equal(f.committed().epoch, String(f.saved().revision))
+      equal(f.saved().blocked, false)
     }
   },
 )

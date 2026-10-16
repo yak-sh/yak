@@ -38,6 +38,35 @@ export type ServingCopies = {
 export let copyOf = (env: Pick<Env, 'SERVING_COPY'>) =>
   env.SERVING_COPY?.get(env.SERVING_COPY.idFromName('public'))
 
+/** A directory write refused at commit for holding a fence older than one
+ * already committed. Nothing of it was written. */
+export class Unfenced extends Error {
+  constructor(what = 'Directory write') {
+    super(`${what} lost its serving fence`)
+  }
+}
+
+// The copy grants fences in order, but their answers resume the directory in
+// any order, so a write can come back holding a revision older than one a
+// concurrent write already committed under. Its commit refuses it, and it
+// takes a fresh fence; only a write that keeps losing the race fails.
+export let fenced = async <T>(
+  copy: ServingCopyDoor,
+  write: (revision: number) => T | Promise<T>,
+  tries = 4,
+): Promise<T> => {
+  let revision = await copy.begin()
+  try {
+    let out = await write(revision)
+    // A failed write leaves the copy fenced; never resurrect it on rollback.
+    await copy.finish(revision)
+    return out
+  } catch (e) {
+    if (!(e instanceof Unfenced) || tries <= 1) throw e
+    return fenced(copy, write, tries - 1)
+  }
+}
+
 export let EPOCH = 'x-yak-directory-revision'
 let timer: DirectoryCopyTimer = {
   now: Date.now,

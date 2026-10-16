@@ -1,4 +1,4 @@
-import { copyOf, EPOCH } from './directory-copy.ts'
+import { copyOf, EPOCH, fenced, Unfenced } from './directory-copy.ts'
 import { statements } from '@yaks/sqlite'
 import { recovering } from './models.ts'
 import { attributed } from './attribution.ts'
@@ -1473,7 +1473,7 @@ export class Store {
                       revision == null ||
                       revision < Number(this.#get('directory-revision') ?? 0)
                     ) {
-                      throw new Error('Directory write lost its serving fence')
+                      throw new Unfenced()
                     }
                     this.#put('directory-revision', String(revision))
                     return bundles
@@ -1558,15 +1558,11 @@ export class Store {
           }
           // Effects may themselves write the directory and acquire a newer
           // fence. Only explicit synchronous mover batches reuse an epoch.
-          return copy.begin().then((revision) =>
-            this.#copyWrite.run(revision, async () => {
-              let out = await trusted(opts, () => apply(bundles, opts))
-              // Failure leaves the independent copy fenced; never resurrect it on
-              // rollback or lose the directory's successful authoritative write.
-              await copy.finish(revision)
-              return out
-            })
-          )
+          return fenced(copy, (revision) =>
+            this.#copyWrite.run(
+              revision,
+              () => trusted(opts, () => apply(bundles, opts)),
+            ))
         }
         g.admit = (bundles, opts) =>
           this.#copyWrite.run(
@@ -2950,7 +2946,6 @@ export class Store {
         try {
           let m = this.#mover(held, rule)
           let copy = name == PLATFORM_STORE ? copyOf(this.#bind) : undefined
-          let revision = await copy?.begin()
           let plan = this.#tx(() => batch(m, rule, was, SIZE))
           if (plan.forward.length) {
             if (!this.#bind.ERRORS) {
@@ -2960,19 +2955,20 @@ export class Store {
               await this.#bind.ERRORS.send([record])
             }
           }
-          s = this.#copyBatch.run(revision ?? -1, () =>
-            this.#tx(() => {
-              if (revision != null) {
-                if (
-                  revision < Number(this.#get('directory-revision') ?? 0)
-                ) throw new Error('Mover lost its serving fence')
-                this.#put('directory-revision', String(revision))
-              }
-              let s = step(m, rule, was, SIZE, now, plan)
-              this.#put(rule.mark, JSON.stringify(s))
-              return s
-            }))
-          if (revision != null) await copy!.finish(revision)
+          let moved = (revision = -1) =>
+            this.#copyBatch.run(revision, () =>
+              this.#tx(() => {
+                if (revision != -1) {
+                  if (
+                    revision < Number(this.#get('directory-revision') ?? 0)
+                  ) throw new Unfenced('Mover')
+                  this.#put('directory-revision', String(revision))
+                }
+                let s = step(m, rule, was, SIZE, now, plan)
+                this.#put(rule.mark, JSON.stringify(s))
+                return s
+              }))
+          s = copy ? await fenced(copy, moved) : moved()
         } catch (e) {
           this.#kv.clear()
           this.#halted.add(rule.mark)
