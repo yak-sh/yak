@@ -17,7 +17,7 @@ import { define, type Renderer } from '@yaks/render'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { bindHistory } from '../history.ts'
-import { cache, owner } from '../live.ts'
+import { cache, owner, searchOpen } from '../live.ts'
 import { start } from '../terminal-route.ts'
 import { views as docViews } from '@yaks/doc/views'
 import { inspectViews } from '@yaks/inspect/views'
@@ -30,7 +30,7 @@ test('terminal CLI routes ids, map and queries to Browse pages', () => {
   equal(start('.task .count', true), '/?q=.task%20.count')
   equal(start('.doc.title~=Hello', true), '/?q=.doc.title~%3DHello')
 })
-test('the shared Browse App paints its sidebar and home; its search field goes to a query page', async () => {
+test('the shared Browse App paints its sidebar and home; its search button opens the same palette as /', async () => {
   let root = new TElement('root')
   let target = root as unknown as Parameters<typeof render>[1]
   let port = terminalHistory({ path: '/', state: null })
@@ -51,18 +51,16 @@ test('the shared Browse App paints its sidebar and home; its search field goes t
     )
     ok(root.textContent.includes('Favorites'))
     ok(root.textContent.includes('Sessions'))
-    let field = root.querySelector('input')!
-    ok(field)
-    keys.focus(field)
-    await act(() => {
-      keys.press({ name: 'char', text: '.task .count' })
-    })
+    let search = root.querySelector('[aria-label="Search (/)"]')!
+    ok(search)
+    keys.focus(search)
     await act(() => {
       keys.press({ name: 'enter' })
     })
-    equal(port.read().path, '/?q=.task%20.count')
-    port.back()
+    equal(searchOpen.value, true)
     equal(port.read().path, '/')
+    ok(root.textContent.includes('Type words or a query'))
+    searchOpen.value = false
   } finally {
     render(null, target)
     cache.value = {}

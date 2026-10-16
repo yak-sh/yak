@@ -13,13 +13,12 @@ import {
   placeAt,
   places,
 } from '../navigation.ts'
-import { owner } from '../live.ts'
+import { owner, searchOpen } from '../live.ts'
 import { sessionQueries } from '../tray_query.ts'
 import { vocab } from '../types.ts'
-import { searchPath } from '../url.ts'
-import { fields, front } from './fields.tsx'
+import { front } from './fields.tsx'
 import { Icon } from './icons.tsx'
-import { follow, navigate, route } from './nav.tsx'
+import { follow, route } from './nav.tsx'
 import { destinationOffers, homeOffer } from './offers.ts'
 import { Waiting } from './inspect.tsx'
 
@@ -82,8 +81,6 @@ export let SidebarMenu = () => (
   </Shell.Menu>
 )
 
-let FIELD = 'sidebar:query'
-
 // The app's name: the box's, or an app store's slug under its mount.
 let brand = () => hosting().page.split('/').filter(Boolean)[0] ?? 'Tasks'
 
@@ -104,20 +101,17 @@ export let Navigation = () => {
         <Shell.Icon>
           <Icon name='search' size={16} />
         </Shell.Icon>
-        <fields.Filter
-          id={FIELD}
-          mod='bare'
-          placeholder='Search'
-          aria-label='Search'
-          onKey={(ev: KeyboardEvent) => {
-            let text = fields.row(FIELD)?.text?.trim() ?? ''
-            if (ev.key != 'Enter' || !text) return
-            ev.preventDefault()
-            fields.set(FIELD, '')
-            navigate(searchPath(text))
+        <Button
+          type='button'
+          mod='quiet'
+          aria-label='Search (/)'
+          onClick={() => {
             openSidebar(false)
+            searchOpen.value = true
           }}
-        />
+        >
+          Search <kbd>/</kbd>
+        </Button>
       </Find>
       {allPlaces().map((p) => (
         <Item

@@ -25,6 +25,7 @@ import * as inbox from './Inbox.ts'
 import * as menu from './Menu.ts'
 import * as loading from './Loading.ts'
 import * as notes from './Notes.ts'
+import * as palette from './Palette.ts'
 import * as overlay from './Overlay.ts'
 import * as pager from './Pager.ts'
 import * as pairs from './Pairs.ts'
@@ -83,6 +84,7 @@ let modules = {
     Section: section,
     Panes: panes,
     Overlay: overlay,
+    Palette: palette,
     Catalog: catalog,
     Gallery: gallery,
   },

@@ -7,7 +7,7 @@ import { act } from 'preact/test-utils'
 import { config, owner } from '../live.ts'
 import { host } from '../host_testing.ts'
 import { bindHistory, route } from '../history.ts'
-import { fields } from './fields.tsx'
+import { searchOpen } from '../live.ts'
 import { Navigation } from './Navigation.tsx'
 import { offerPlaces } from './offers.ts'
 import { mount } from './mount.ts'
@@ -56,10 +56,10 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
     assertEquals(lit(), 'Home')
     await send(line('Bugs'), 'click')
     assertEquals([route.value, lit()], ['/?bugs', 'Bugs'])
-    await act(() => fields.set('sidebar:query', 'needle'))
-    await send(root.querySelector('input')!, 'keydown', 'Enter')
-    assertEquals([route.value, lit()], ['/?q=needle', undefined])
-    assertEquals(fields.row('sidebar:query')?.text ?? '', '')
+    await send(root.querySelector('[aria-label="Search (/)"]')!, 'click')
+    assertEquals(searchOpen.value, true)
+    assertEquals(route.value, '/?bugs')
+    searchOpen.value = false
   } finally {
     free()
     wire.free()

@@ -1,0 +1,80 @@
+.Palette {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: color-mix(in srgb, var(--bg) 45%, transparent);
+}
+.Palette_Box {
+  width: min(600px, 92vw);
+  max-height: 76dvh;
+  margin: 12vh auto 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 45%, transparent);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+.Palette_Line {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  padding-left: var(--gap);
+  border-bottom: 1px solid var(--border);
+  color: var(--muted); /* the glyph; the input restores its own ink */
+}
+.Palette_Line > .Field {
+  flex: 1;
+}
+/* The board chip mid-flight: the veil stops catching pointers so the
+   drop hit-tests through to the canvas, and fades to show the target. */
+.Palette-drag {
+  pointer-events: none;
+  opacity: 0.15;
+}
+.Palette_Page {
+  display: flex;
+  align-items: center;
+  padding: var(--half-gap);
+  margin-right: var(--half-gap);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  cursor: grab;
+}
+.Palette_Page:hover {
+  color: var(--text);
+  background: var(--soft);
+}
+/* A kind's section label. The demoted variant (mail, comment) carries a
+   divider so the navigational sections read as the palette's top. */
+.Palette_Head {
+  padding: var(--half-gap) var(--gap) 2px;
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Palette_Head-demoted {
+  margin-top: var(--half-gap);
+  border-top: 1px solid var(--border);
+}
+.Palette_Hit {
+  padding: 2px var(--gap);
+  cursor: pointer;
+}
+.Palette_Hit-sel {
+  background: var(--soft);
+}
+.Palette_Message {
+  display: block;
+  font-size: var(--small);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: var(--half-gap) var(--gap);
+}
+.Palette_Message mark {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--text);
+  border-radius: 2px;
+}

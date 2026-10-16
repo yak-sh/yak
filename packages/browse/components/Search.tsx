@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural } from '../types.ts'
 import { ent, searchOpen } from '../live.ts'
 import { follow } from './nav.tsx'
-import { block, Loading } from '@yaks/ui'
+import { Loading, Palette as Frame } from '@yaks/ui'
 import { Icon } from './icons.tsx'
 import { fields } from './fields.tsx'
 import { Entity } from './Entity.tsx'
@@ -18,15 +18,7 @@ import { hits as queryHits } from './hits.ts'
 // (fields.tsx), whose text is the person's draft until the palette closes.
 export { searchOpen }
 
-let Frame = block('div', 'Search', {
-  Box: 'div',
-  Line: 'div',
-  Page: 'a',
-  Head: 'div',
-  Hit: 'div',
-  Snip: 'span',
-})
-let { Box, Line, Page, Head, Hit: Row, Snip } = Frame
+let { Box, Line, Page, Head, Hit: Row, Message: Snip } = Frame
 
 // The palette is a NAVIGATOR — you open a board or project, not read mail —
 // so hits group by kind: navigational kinds lead, bulky content kinds
@@ -60,7 +52,6 @@ let FIELD = 'search'
 export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
   let [err, setErr] = useState('')
-  let [answered, setAnswered] = useState<string | undefined>()
   let [sel, setSel] = useState(0)
   let q = fields.text(FIELD)
   let [drag, setDrag] = useState(false)
@@ -80,9 +71,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     if (!q.trim()) {
       setHits([])
       setErr('')
-      setAnswered(undefined)
       return
     }
+    setHits([])
+    setErr('')
     let abort = new AbortController()
     let timer = setTimeout(() => seek(q, abort.signal), 150)
     return () => {
@@ -116,8 +108,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       if (signal.aborted) return
       bad = e instanceof Error ? e.message : String(e)
     }
-    if (mine != seq.current) return // a newer keystroke owns the list
-    if (signal.aborted) return
+    if (signal.aborted || mine != seq.current) return // a newer keystroke owns the list
     setHits(found)
     setAnswered(q)
     setErr(bad)
@@ -160,22 +151,23 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       // to the shell beneath (Menu does the same).
       onPointerDown={(e: PointerEvent) => e.stopPropagation()}
     >
-      <Box>
+      <Box role='dialog' aria-label='Search' aria-modal='true'>
         <Line>
           <Icon name='search' />
           <fields.Filter
             id={FIELD}
             mod='bare'
             elRef={box}
-            placeholder='search the graph… (* = prefix, .task.status=done .updated.at=today filter, ⌘⏎ = new tab)'
+            placeholder='Search the graph…'
+            aria-label='Search the graph'
             onKey={key}
           />
           {!!q.trim() && (
             <Page
               href={searchPath(q)}
               draggable
-              aria-label='Open search as page'
-              data-tip='open search as page — or drag its link'
+              aria-label='Open query as table'
+              data-tip='open query as table — or drag its link'
               onClick={(ev: MouseEvent) => {
                 follow(searchPath(q))(ev)
                 if (ev.defaultPrevented) close()
@@ -192,11 +184,15 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             </Page>
           )}
         </Line>
-        {waiting
-          ? <Loading>Searching…</Loading>
-          : err
-          ? <Snip>{err}</Snip>
-          : answered == q && !ordered.length && <Snip>No results.</Snip>}
+        <Snip role='status' aria-live='polite'>
+          {err || (waiting
+            ? 'Searching…'
+            : !q.trim()
+            ? 'Type words or a query · Escape closes · ⌘/Ctrl+Enter opens a new tab'
+            : !hits.length
+            ? 'No matches'
+            : '')}
+        </Snip>
         {
           /* Each registry tile is its own real entity anchor. The result shell
           intercepts only a plain click, whose search contract is to replace
