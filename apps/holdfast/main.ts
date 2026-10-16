@@ -3,7 +3,7 @@ import { client, WriteRefused, WriteUnknown } from '@yaks/client'
 import type { Bundle } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
 import { replicate, syncOf } from '@yaks/sync'
-import { recover } from './recovery.ts'
+import { orderFeedback, recover } from './recovery.ts'
 import { mint } from '@yaks/graph/identity'
 import { parse } from '@yaks/query'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
@@ -91,7 +91,7 @@ async function boot() {
       vault: false,
       wireVault: false,
       report: (e) => {
-        if (e.refused) message(e.refused.message)
+        if (e.refused) return
         else if (!(e.error instanceof WriteUnknown)) reportError(e.error)
       },
     },
@@ -505,7 +505,7 @@ async function boot() {
             reply: {
               run: s.run,
               defender: c.defender,
-              message: error.message,
+              message: orderFeedback(error),
               at: time,
             },
           }])

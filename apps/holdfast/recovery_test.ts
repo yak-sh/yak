@@ -3,7 +3,7 @@ import type { Bundle } from '@yaks/graph'
 import { equal, ok, test } from '@yaks/testing'
 import { assertRejects } from '@std/assert'
 import { WriteRefused, WriteUnknown } from '@yaks/client'
-import { recover, type RecoveryPorts } from './recovery.ts'
+import { orderFeedback, recover, type RecoveryPorts } from './recovery.ts'
 import type { Row } from './model.ts'
 
 const ledger: Row = {
@@ -200,13 +200,13 @@ rejection.ports.write = (batch) => {
   rejection.writes.push(batch)
   return Promise.reject(no)
 }
-test('an explicit initial refusal is reported and thrown without reads or retries', async () => {
+test('an explicit initial refusal is game feedback, without reporting or retries', async () => {
   let error = await assertRejects(() => recover(purchase, rejection.ports))
   ok(error === no)
   equal(rejection.writes.length, 1)
   equal(rejection.reads.length, 0)
   equal(rejection.waits, 0)
-  ok(rejection.reports[0] === no)
+  equal(rejection.reports.length, 0)
 })
 
 const late = fixture(purchase)
@@ -243,7 +243,11 @@ test('a retry refusal without matching receipt remains a refusal, not an infinit
   equal(stale.writes.length, 2)
   equal(stale.reads.length, 2)
   equal(stale.accepts.length, 0)
-  ok(stale.reports[1] === other)
+  equal(stale.reports.length, 1)
+  equal(
+    orderFeedback(other),
+    'The team changed this site or its gold before your order landed. Choose your next move.',
+  )
 })
 
 const broken = fixture(purchase)

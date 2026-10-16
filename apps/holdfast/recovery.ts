@@ -115,7 +115,6 @@ export async function recover(
       }
       let { rows, landed } = await reconcile()
       if (landed) {
-        if (refusal) ports.report(refusal)
         await ports.accept(rows)
         return
       }
@@ -123,7 +122,15 @@ export async function recover(
       // Never regenerate a purchase, allocate a new ledger or drop its guard.
     }
   } catch (error) {
-    ports.report(error)
+    if (!(error instanceof WriteRefused)) ports.report(error)
     throw error
   }
 }
+
+/** A lost ledger race is game feedback, not an unexpected page failure. */
+export const orderFeedback = (error: unknown): string =>
+  error instanceof WriteRefused
+    ? 'The team changed this site or its gold before your order landed. Choose your next move.'
+    : error instanceof Error
+    ? error.message
+    : 'That order could not be completed.'
