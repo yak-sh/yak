@@ -418,6 +418,9 @@ export let store = (base) => {
         scope: `${base}:${person ?? 'anonymous'}`,
         send: async (key, payload) => {
           let current = await ask('me')
+          // Closing while identity is in flight must not start another write
+          // after the page (or its transport) has gone away.
+          if (closed) throw new Error('Write outbox is closed')
           if (current.person !== person) {
             throw new Error(
               'Write is unsaved: the signed-in person has changed',

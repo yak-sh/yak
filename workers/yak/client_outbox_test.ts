@@ -162,3 +162,31 @@ test('public outbox fails closed when browser IndexedDB cannot open', async () =
     else delete (globalThis as { indexedDB?: unknown }).indexedDB
   }
 })
+
+// Closing a page while its pre-send identity request is in flight cannot
+// begin a write later, under a replacement page's cookie or transport.
+test('public outbox closed during identity recheck never starts the write', async () => {
+  let identity = Promise.withResolvers<Response>()
+  let checking = Promise.withResolvers<void>()
+  let client = store(base), checks = 0, sends = 0
+  using _fetch = stub(globalThis, 'fetch', (url) => {
+    if (String(url).endsWith('/me')) {
+      if (++checks == 1) return Promise.resolve(json({ person: 'jo' }))
+      checking.resolve()
+      return identity.promise
+    }
+    sends++
+    return Promise.resolve(json(receipt))
+  })
+  try {
+    let answer = assertRejects(() => client.apply(payload), Error, 'closed')
+    await checking.promise
+    client.outbox.close()
+    identity.resolve(json({ person: 'jo' }))
+    await answer
+    assertEquals(sends, 0)
+  } finally {
+    client.outbox.close()
+    identity.resolve(json({ person: 'jo' }))
+  }
+})
