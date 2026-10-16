@@ -6,6 +6,19 @@ offers, or the host's own list where none does. `/T-9` opens T-9's page, `?v=`
 picks its view, and every card on screen is live: an edit anywhere reaches the
 page over the socket.
 
+## Search
+
+The sidebar's **Search /** button and the `/` key open the same palette over any
+page. Type words or query filters, use arrow keys to select a result, and Enter
+to open it. Escape closes it; Ctrl/⌘+Enter opens the selected result in a new
+tab. Word searches rank by relevance unless the query names its own order.
+Loading, a refused query, and no matches have distinct feedback.
+
+Each result is the entity's shared tile, so a mail has its subject, a comment
+its words, and a session its work—not a search-specific untitled placeholder.
+The arrow beside the query opens an inspector table at `/?q=…`; that address is
+also a draggable link for keeping or sharing a query.
+
 ## An app store on yaks.app
 
 Open `https://<space>.yaks.app/<app>/_web` while signed in to that space. The
