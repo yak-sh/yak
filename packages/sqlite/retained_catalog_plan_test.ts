@@ -34,6 +34,7 @@ test('a session request lookup reads its entries instead of unrelated requests',
           type: 'object',
           properties: { provider: { type: 'string' } },
         },
+        hidden: { component: true, type: 'object' },
       },
     }])
     let s = storage(d, vocab)
@@ -58,22 +59,32 @@ test('a session request lookup reads its entries instead of unrelated requests',
         })))
       )
     }
+    let reads = [
+      ['.entry.session=target .using .limit=1', ['new']],
+      ['.using .entry.session=target .order=-entry.seq .limit=2', [
+        'new',
+        'old',
+      ]],
+      ['.entry.session=target .using .order=entry.seq', ['old', 'new']],
+    ] as const
+    // A visibility scope reads each component through a policy, where an
+    // owning set of the dense requests costs every request in the graph, and
+    // tests each row it does read. Under 1,000 steps, neither road reads the
+    // 5,000 unrelated requests.
+    let scopes = [undefined, { entity: '!hidden' }]
     for (
-      let [query, expected] of [
-        ['.entry.session=target .using .limit=1', ['new']],
-        ['.using .entry.session=target .order=-entry.seq .limit=2', [
-          'new',
-          'old',
-        ]],
-        ['.entry.session=target .using .order=entry.seq', ['old', 'new']],
-      ] as const
+      let [[query, expected], visibility] of scopes.flatMap((scope) =>
+        reads.map((read) => [read, scope] as const)
+      )
     ) {
-      let q = render(compile(parse(query), vocab, { archetypes: catalog(d) }))
+      let q = render(
+        compile(parse(query), vocab, { archetypes: catalog(d), visibility }),
+      )
       let stmt = db.prepare(q.sql)
       try {
         equal(stmt.all(...q.params).map((r) => r.eid), [...expected])
         let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
-        ok(steps < 500, `${steps} VM steps\n${q.sql}`)
+        ok(steps < 1000, `${steps} VM steps\n${q.sql}`)
       } finally {
         stmt.finalize()
       }

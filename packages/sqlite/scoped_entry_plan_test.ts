@@ -31,6 +31,7 @@ test('finite entry window identities do not sort their unbounded session', () =>
           type: 'object',
           properties: { at: { type: 'string', index: true } },
         },
+        hidden: { component: true, type: 'object' },
       },
     })
     storage(d, v).install()
@@ -40,32 +41,17 @@ test('finite entry window identities do not sort their unbounded session', () =>
       d.query(insert('entry', { entity: n, session: 1, seq: null }))
       d.query(insert('created', { entity: n, at: `${n}` }))
     }
-    let finite = render(
-      compile(
-        parse(
-          '.entry.session=session&?created&.order=-created.at&.limit=2&.entity.eid=e2,e3,e4',
-        ),
-        v,
-      ),
-    )
+    let lines = [
+      '.entry.session=session&?created&.order=-created.at&.limit=2&.entity.eid=e2,e3,e4',
+      '.entry.session=session&.order=-entry.seq&.limit=1',
+      '.entry.session=session&.fields=entry.seq&.order=-entry.seq&.limit=1',
+    ]
+    // A visibility scope reads the entity table through a policy.
+    let scopes = [undefined, { entity: '!hidden' }]
     for (
-      let q of [
-        finite,
-        render(
-          compile(
-            parse('.entry.session=session&.order=-entry.seq&.limit=1'),
-            v,
-          ),
-        ),
-        render(
-          compile(
-            parse(
-              '.entry.session=session&.fields=entry.seq&.order=-entry.seq&.limit=1',
-            ),
-            v,
-          ),
-        ),
-      ]
+      let q of scopes.flatMap((visibility) =>
+        lines.map((line) => render(compile(parse(line), v, { visibility })))
+      )
     ) {
       let s = db.prepare(q.sql)
       try {

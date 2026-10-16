@@ -244,6 +244,12 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
     })
 }
 
+// Whether the selected row wears `comp`, probed by its own key, for a driving
+// set already chosen. Its owning set is never built: a scoped source (a
+// visibility policy) can build one only by reading every row it holds.
+let probed = (ctx: Ctx, comp: string): Cond =>
+  owned({ ...ctx, correlated: true, owner: ctx.d.ownerKey('entity') }, comp)
+
 // The two halves of the extension point. `claims` reports whether any
 // registered extension handles a clause kind, so that a directive that would
 // otherwise be refused is not; `extended` runs them in registration order, and
@@ -2077,13 +2083,7 @@ let indexedRelation = (
       // When candidates replace it, check that component by each owner's key.
       where: and(
         s.where ? holding(s.where, ctx.candidates.test) : TRUE,
-        ...ctx.present
-          ? [owned({
-            ...ctx,
-            correlated: true,
-            owner: ctx.d.ownerKey('entity'),
-          }, ctx.present)]
-          : [],
+        ...ctx.present ? [probed(ctx, ctx.present)] : [],
       ),
       from: raw(
         `(${ctx.candidates.sql}) as "${
@@ -2129,9 +2129,14 @@ let indexedRelation = (
       ? raw(`(${gated.sql}) as "${root.comp}"`, gated.params)
       : raw(src),
     // The presence filter was elided when its table was the planned spine.
-    // An indexed predicate can replace that spine; keep requiring its rows.
+    // An indexed predicate can replace that spine; keep requiring its rows. A
+    // seek probes each row it finds by key: it is the road taken when they
+    // are many.
     where: ctx.present && root.comp != ctx.present
-      ? and(s.where ?? TRUE, owned(ctx, ctx.present))
+      ? and(
+        s.where ?? TRUE,
+        root.index ? probed(ctx, ctx.present) : owned(ctx, ctx.present),
+      )
       : s.where,
     order: ctx.present || root.index
       ? s.order?.map((order) =>
@@ -2188,10 +2193,14 @@ let indexedRelation = (
     // replies/requests number only a handful. Conversely, a populated request
     // table must not replace a two-entry session seek. Probe a bounded prefix
     // in this statement, not stale planner statistics or private cached state.
-    // Both roads apply the identical selector, ordering and page afterwards.
+    // Both roads apply the identical selector, ordering and page afterwards,
+    // so the probe counts stored rows: never through a visibility policy,
+    // whose test it would pay for each.
     let cap = Math.max(64, (find<Limit>(clauses, 'limit')?.n ?? 16) * 4)
     let dense = raw(
-      `exists (select 1 from ${ctx.d.table(present)} limit 1 offset ?)`,
+      `exists (select 1 from ${
+        ctx.d.owned?.(present) ?? ctx.d.table(present)
+      } limit 1 offset ?)`,
       [cap],
     )
     let sparse = rel(from, o)
@@ -2254,6 +2263,12 @@ let indexedRelation = (
         },
         ...(s.joins ?? []).map((j): Join => ({
           ...j,
+          // Each selected row came through its root's row, so that join is
+          // inner. An outer one after a scoped spine is planned on a tiny
+          // graph's statistics as a scan of the root's table per row.
+          how: j.src.t == 'raw' && j.src.sql == joining(ctx, root!.comp)
+            ? 'cross'
+            : j.how,
           src:
             j.src.t == 'raw' && ctx.d.owned && /^"[a-z_0-9]+"$/.test(j.src.sql)
               ? raw(ctx.d.owned(j.src.sql.slice(1, -1)))
@@ -2607,7 +2622,12 @@ let lower = (
       }),
       limit: val(limit.n),
     })
-    if (!ctx.spine && ctx.d.owned && ctx.d.spine == '"entity"') {
+    // The page drives the projection, a scoped spine's too (the entity table
+    // read through a visibility policy): re-selected through the selection's
+    // own joins, the page's rows are found by walking its seek's whole index.
+    if (
+      !ctx.spine && ctx.d.owned && (ctx.d.spine == '"entity"' || ctx.d.scoped)
+    ) {
       let projected = rel(ctx.d.spine, {
         cols,
         joins: joinsOf(ctx),
