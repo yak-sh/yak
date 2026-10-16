@@ -215,6 +215,16 @@ test('repeated runs bank the best median and the slack their spread asks for', a
   )
 })
 
+test('a check of several runs compares each bench at its best run', async () => {
+  let f = fixture()
+  let options = { ...f.options, rounds: 1 }
+  await run(f.suite, { ...options, mode: 'accept', tolerance: .1 })
+  f.suite.benches[0].sample = costs(130, 105, 125)
+  let checked = await run(f.suite, { ...options, mode: 'check', runs: 3 })
+  equal([checked.verdict, checked.benches[0].median], ['passed', 105])
+  await throws(() => run(f.suite, { ...options, mode: 'check' }))
+})
+
 for (let bad of ['null', '{}', '{', '{"version":2}']) {
   let calls = 0
   let f = fixture([{

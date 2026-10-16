@@ -42,6 +42,40 @@ export let spread = (medians: readonly number[], better: Direction): number => {
   return best == 0 ? 0 : (high - low) / best
 }
 
+/** Repeated runs of one suite as one run: each bench as the run that measured
+ * it best, the median acceptance banks, so a check compares like for like.
+ *
+ * ```ts
+ * import { best, type Run } from '@yaks/benchmark'
+ * import { equal } from '@yaks/testing'
+ *
+ * let run = (write: number, rate: number) => ({
+ *   benches: [
+ *     { name: 'write', better: 'lower', median: write },
+ *     { name: 'rate', better: 'higher', median: rate },
+ *   ],
+ * }) as Run
+ * equal(best([run(12, 40), run(10, 30)]).benches.map((b) => b.median), [10, 40])
+ * ```
+ */
+export let best = (runs: readonly Run[]): Run => {
+  let last = runs.at(-1)
+  if (!last) throw new Error('Expected at least one run')
+  return {
+    ...last,
+    benches: last.benches.map((b) =>
+      runs.map((r) => r.benches.find((c) => c.name == b.name)!).reduce((
+        a,
+        c,
+      ) =>
+        (b.better == 'lower' ? c.median < a.median : c.median > a.median)
+          ? c
+          : a
+      )
+    ),
+  }
+}
+
 export let validate = (base: Baseline): void => {
   if (
     base.version !== 1 ||

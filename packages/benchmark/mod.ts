@@ -21,7 +21,14 @@ export {
   type Suite,
   type Workload,
 } from './result.ts'
-export { baseline, compare, type Coverage, limit, spread } from './ratchet.ts'
+export {
+  baseline,
+  best,
+  compare,
+  type Coverage,
+  limit,
+  spread,
+} from './ratchet.ts'
 export {
   configure,
   type Host,

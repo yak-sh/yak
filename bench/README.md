@@ -13,25 +13,29 @@ retain raw samples, round medians, commit, runtime, CPU and load average in
 ## Banking a baseline
 
 `bench:ratchet <suite>` measures the suite three times over (`--runs=<n>` for
-another count) and banks each bench's best median. Each bench also banks its own
-slack: twice the spread between those runs' medians, never under 10% (`FLOOR` in
-bench/run.ts, day-to-day drift the runs cannot see) and never over 95%. A
-baseline only moves toward faster: a bench that measured slower keeps its banked
-median. Banking a slower one is the owner's call, made with `--slower`. Bank on
-an idle box; a baseline banked under load is loose for every later check.
+another count) and banks each bench's best median. `bench:check` measures the
+same way and compares each bench's best median, so a check measures what its
+baseline banked; `--runs=1` is a quicker, noisier look. Each bench also banks
+its own slack: twice the spread between those runs' medians, never under 10%
+(`FLOOR` in bench/run.ts, day-to-day drift the runs cannot see) and never over
+95%. A baseline only moves toward faster: a bench that measured slower keeps its
+banked median. Banking a slower one is the owner's call, made with `--slower`.
+Bank on an idle box; a baseline banked under load is loose for every later
+check.
 
 ## The monitor
 
 Nothing gates on a bench; bench/monitor.ts watches them instead. It checks every
-suite the box measures itself (`SUITES`), measures a regression a second time
-before it counts, and reports a confirmed one to the tracker as a bug: each
-figure over its limit, the run's load, and the commits since the suite's last
-good run. A suite that cannot run (no baseline, a crash, a page that never
-paints) is reported as a failure. @yaks/heal sends both to an agent like any
-other bug. Cron runs it from the main checkout through bin/bench-monitor: every
-suite at 02:23, and every 15 minutes with `--restarted`, which measures `pages`
-once after each change of the live web unit, that is after each `yak restart`.
-What it last saw is kept in `~/.cache/yak/bench/monitor.json`.
+suite the box measures itself (`SUITES`) with one run, confirms a regression
+with a check of three runs before it counts, and reports a confirmed one to the
+tracker as a bug: each figure over its limit, the run's load, and the commits
+since the suite's last good run. A suite that cannot run (no baseline, a crash,
+a page that never paints) is reported as a failure. @yaks/heal sends both to an
+agent like any other bug. Cron runs it from the main checkout through
+bin/bench-monitor: every suite at 02:23, and every 15 minutes with
+`--restarted`, which measures `pages` once after each change of the live web
+unit, that is after each `yak restart`. What it last saw is kept in
+`~/.cache/yak/bench/monitor.json`.
 
 ## Pages
 

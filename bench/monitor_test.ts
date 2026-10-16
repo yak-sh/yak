@@ -40,8 +40,12 @@ let outcome = (v: Outcome['verdict']): Outcome =>
 let monitor = async (checks: Record<string, Outcome['verdict'][]>) => {
   let state: State = { good: { s: { commit: 'c1', at: 'at-c1' } } }
   let reports: string[] = [], asked: (string | undefined)[] = []
+  let runs: (number | undefined)[] = []
   let verdicts = await watch(Object.keys(checks), state, {
-    check: (suite) => Promise.resolve(outcome(checks[suite].shift()!)),
+    check: (suite, n) => {
+      runs.push(n)
+      return Promise.resolve(outcome(checks[suite].shift()!))
+    },
     report: (error, suite, kind) => {
       reports.push(`${kind} ${suite}: ${error.message.split('\n')[0]}`)
       return Promise.resolve()
@@ -54,15 +58,16 @@ let monitor = async (checks: Record<string, Outcome['verdict'][]>) => {
   let good = Object.fromEntries(
     Object.entries(state.good).map(([k, g]) => [k, g.commit]),
   )
-  return { reports, verdicts, good, asked }
+  return { reports, verdicts, good, asked, runs }
 }
 
-test('a regression counts only when a second run confirms it', async () => {
+test('a regression counts only when a check as banked confirms it', async () => {
   equal(await monitor({ s: ['regressed', 'passed'] }), {
     reports: [],
     verdicts: { s: 'passed' },
     good: { s: 'c2' },
     asked: [],
+    runs: [1, undefined],
   })
   equal(await monitor({ s: ['regressed', 'regressed'] }), {
     reports: [
@@ -71,6 +76,7 @@ test('a regression counts only when a second run confirms it', async () => {
     verdicts: { s: 'regressed' },
     good: { s: 'c1' },
     asked: ['c1'],
+    runs: [1, undefined],
   })
 })
 
@@ -80,5 +86,6 @@ test('a suite that cannot run is reported, and others still run', async () => {
     verdicts: { s: 'failed', t: 'passed' },
     good: { s: 'c1', t: 'c2' },
     asked: [],
+    runs: [1, 1],
   })
 })

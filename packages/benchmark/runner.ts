@@ -17,6 +17,7 @@ import {
 } from './result.ts'
 import {
   baseline,
+  best,
   compare,
   type Coverage,
   covered,
@@ -57,9 +58,11 @@ export type Options = {
   /** Required for acceptance: the least slack any bench is banked with.
    * Checks use the baseline's own. */
   tolerance?: number
-  /** Acceptance measures the suite this many times over, banking each bench's
-   * best median and the slack its spread between runs asks for (ratchet.ts
-   * `baseline`). One run banks the suite's tolerance alone. */
+  /** Measure the suite this many times over, keeping each bench's best median
+   * (ratchet.ts `best`). Acceptance banks it with the slack its spread
+   * between runs asks for (ratchet.ts `baseline`), and a check compares it, so
+   * a check taken as its baseline was banked measures what it banked. One run
+   * banks the suite's tolerance alone. */
   runs?: number
   /** Bank a worse median than the baseline's. Without it acceptance only ever
    * moves a bench toward better. */
@@ -150,7 +153,7 @@ let execute = async (
   if (mode == 'check' && options.tolerance != null) {
     throw new Error('Checks use the baseline tolerance')
   }
-  let repeats = mode == 'accept' ? options.runs ?? 1 : 1
+  let repeats = options.runs ?? 1
   if (!Number.isSafeInteger(repeats) || repeats < 1) {
     throw new Error('Expected a positive integer run count')
   }
@@ -171,7 +174,7 @@ let execute = async (
   for (let i = 0; i < repeats; i++) {
     runs.push(await measure(suite, rounds, context))
   }
-  let current = runs.at(-1)!
+  let current = best(runs)
   current.tolerance = mode == 'accept'
     ? options.tolerance!
     : base?.tolerance ?? null

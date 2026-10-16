@@ -2,9 +2,11 @@
  * become slower, so @yaks/heal sends it to an agent like any other bug. It is
  * monitoring, not a gate: nothing waits on it and nothing is refused.
  *
- * Each suite is checked against its banked baseline (`deno task bench:check`).
- * A regression is measured a second time before it counts, so one noisy run
- * on a busy box reports nothing. A confirmed one is reported with every
+ * Each suite is screened against its banked baseline with one run
+ * (`deno task bench:check <suite> --runs=1`). A regression counts only when a
+ * check taken as the baseline was banked confirms it: each bench's best median
+ * of three runs, so one slow run on a busy box reports nothing. A confirmed
+ * one is reported with every
  * figure over its limit, the run's load, and the commits since the suite's
  * last good run; a suite that cannot run (no baseline, a crash, a page that
  * never paints) is reported as a failure. Each suite reports under one fault,
@@ -57,7 +59,8 @@ export type Outcome =
 export type Good = { commit: string; at: string }
 export type State = { web?: string; good: Record<string, Good> }
 export type Monitor = {
-  check: (suite: string) => Promise<Outcome>
+  /** One check of a suite, over `runs` runs, else as its baseline was banked. */
+  check: (suite: string, runs?: number) => Promise<Outcome>
   report: (
     error: Error,
     suite: string,
@@ -85,7 +88,7 @@ export let regressed = (
   [
     `${suite} got slower: ${over(run.regressions[0])}`,
     ...run.regressions.slice(1).map((r) => `also ${over(r)}`),
-    `measured twice at ${run.commit?.slice(0, 9)} on ${run.at}, load ${
+    `confirmed at ${run.commit?.slice(0, 9)} on ${run.at}, load ${
       run.load.map((n) => n.toFixed(1)).join(' ')
     }`,
     good
@@ -97,8 +100,9 @@ export let regressed = (
     `re-run: deno task bench:check ${suite}`,
   ].join('\n')
 
-/** Check each suite, confirm a regression with a second run, report what is
- * confirmed or broken, and say which suites are good now. */
+/** Screen each suite with one run, confirm a regression with a check taken as
+ * its baseline was banked, report what is confirmed or broken, and say which
+ * suites are good now. */
 export let watch = async (
   suites: string[],
   state: State,
@@ -106,7 +110,7 @@ export let watch = async (
 ): Promise<Record<string, Outcome['verdict']>> => {
   let out: Record<string, Outcome['verdict']> = {}
   for (let suite of suites) {
-    let outcome = await m.check(suite)
+    let outcome = await m.check(suite, 1)
     if (outcome.verdict == 'regressed') outcome = await m.check(suite)
     out[suite] = outcome.verdict
     if (outcome.verdict == 'failed') {
@@ -177,7 +181,7 @@ let web = async (): Promise<string | undefined> => {
 
 /** `deno task bench:check <suite>` in this checkout, read back from the run
  * it writes. */
-let check = async (suite: string): Promise<Outcome> => {
+let check = async (suite: string, runs?: number): Promise<Outcome> => {
   if (MEASURE[suite]) {
     let timed = await new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', ...MEASURE[suite]],
@@ -199,7 +203,14 @@ let check = async (suite: string): Promise<Outcome> => {
   let results = `${root}bench/${suite}.results.json`
   await Deno.remove(results).catch(() => {})
   let child = await new Deno.Command(Deno.execPath(), {
-    args: ['run', '-A', 'bench/run.ts', 'check', suite],
+    args: [
+      'run',
+      '-A',
+      'bench/run.ts',
+      'check',
+      suite,
+      ...runs ? [`--runs=${runs}`] : [],
+    ],
     cwd: root,
     env,
     stdout: 'inherit',

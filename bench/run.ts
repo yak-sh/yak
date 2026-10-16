@@ -44,10 +44,12 @@ export let main = async (args = Deno.args): Promise<number> => {
     console.log(`${name}: ${current?.verdict ?? 'no data (bootstrap)'}`)
     return 0
   }
-  // Acceptance's own flags; everything else reaches the suite.
+  // The runner's own flags; everything else reaches the suite. A check and an
+  // acceptance take three runs, so a check measures what banking measured.
   let slower = rest.includes('--slower')
   let runs = Number(
-    rest.find((a) => a.startsWith('--runs='))?.slice('--runs='.length) ?? 3,
+    rest.find((a) => a.startsWith('--runs='))?.slice('--runs='.length) ??
+      (action == 'run' ? 1 : 3),
   )
   rest = rest.filter((a) => a != '--slower' && !a.startsWith('--runs='))
   let recording = name == 'throughput' && rest.includes('--recording')
