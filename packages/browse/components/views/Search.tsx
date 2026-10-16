@@ -13,8 +13,15 @@ let marked = (s: string) =>
   })
 
 export let hitSlots = (h: Hit) => ({
-  title: marked(h.title_hit || h.title || '(untitled)'),
-  body: <Value>{marked(h.snip)}{h.retired && ' · retired'}</Value>,
+  // A plain title in a hit is only the server's generic fallback. Keep the
+  // domain renderer's own reading (decoded mail, a session's work, a comment)
+  // unless there is an actual title match to highlight.
+  title: h.title_hit?.includes('\x01') && h.title_hit.includes('\x02')
+    ? marked(h.title_hit)
+    : undefined,
+  body: h.snip || h.retired
+    ? <Value>{marked(h.snip)}{h.retired && ' · retired'}</Value>
+    : undefined,
 })
 
 export let SearchTile = ({ e, hit }: { e: Ent; hit?: Hit }) =>

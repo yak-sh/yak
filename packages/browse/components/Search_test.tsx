@@ -47,7 +47,7 @@ test('search fills tile titles and bodies with marked matches', () => {
     snip: 'Body \x01match\x02',
   })
   let title = slots.title as unknown[]
-  let body = slots.body
+  let body = slots.body!
   assertEquals(title[0], 'One ')
   assertEquals((title[1] as { type: unknown }).type, 'mark')
   let snip = (body.props.children as unknown[]).flat()
@@ -161,7 +161,7 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
     fields.set('search', 'fleet .task')
     searchOpen.value = true
     render(h(Search, { open: () => {} }), root)
-    let link = root.querySelector('a.Search_Page')!
+    let link = root.querySelector('a.Palette_Page')!
     assertEquals(link.getAttribute('href'), '/?q=fleet%20.task')
     assertEquals(link.hasAttribute('draggable'), true)
     let payload: Record<string, string> = {}

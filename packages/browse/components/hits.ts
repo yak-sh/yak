@@ -17,8 +17,10 @@ export let rows = async (
   limit = 20,
   signal?: AbortSignal,
 ): Promise<Bundle[]> => {
+  // Pickers draw domain views, not projections: a filter such as .session
+  // must still carry its brief and a .comment must carry what it says.
   let r = await fetch(
-    `${base()}/query?q=${encodeURIComponent(`${q}&.limit=${limit}`)}`,
+    `${base()}/query?q=${encodeURIComponent(`${q}&* .limit=${limit}`)}`,
     { signal },
   )
   if (!r.ok) throw new Error(await r.text())

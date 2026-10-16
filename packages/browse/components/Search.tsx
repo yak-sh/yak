@@ -52,6 +52,7 @@ let FIELD = 'search'
 export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
   let [err, setErr] = useState('')
+  let [answered, setAnswered] = useState<string | undefined>()
   let [sel, setSel] = useState(0)
   let q = fields.text(FIELD)
   let [drag, setDrag] = useState(false)
@@ -184,15 +185,13 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             </Page>
           )}
         </Line>
-        <Snip role='status' aria-live='polite'>
-          {err || (waiting
-            ? 'Searching…'
-            : !q.trim()
-            ? 'Type words or a query · Escape closes · ⌘/Ctrl+Enter opens a new tab'
-            : !hits.length
-            ? 'No matches'
-            : '')}
-        </Snip>
+        {waiting
+          ? <Loading>Searching…</Loading>
+          : err
+          ? <Snip>{err}</Snip>
+          : !q.trim()
+          ? <Snip>Type words or a query · Escape closes · ⌘/Ctrl+Enter opens a new tab</Snip>
+          : answered == q && !ordered.length && <Snip>No results.</Snip>}
         {
           /* Each registry tile is its own real entity anchor. The result shell
           intercepts only a plain click, whose search contract is to replace
