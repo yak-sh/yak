@@ -11,7 +11,7 @@ import {
   subWindow,
 } from '../../live.ts'
 import { orderOf, parseQuery, windowOf } from '../../query.ts'
-import { block, Button, Rows } from '@yaks/ui'
+import { block, Button, Loading, Rows } from '@yaks/ui'
 import { menuAt } from '../nav.tsx'
 import { filteredQuery, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
@@ -41,6 +41,7 @@ export let List = ({ e }: { e: Ent }) => {
   }
   return (
     <Rows>
+      {!pass.ready && <Loading />}
       {ps
         .toSorted((a, b) => b.z - a.z)
         .filter((p) => pass(p.target))
@@ -154,7 +155,7 @@ export let QueryList = (
   // silent truncation this row exists to prevent. The ephemeral filter is
   // part of this page's query, so the total follows it too.
   return (
-    <Rows elRef={root} mod='ruled'>
+    <Rows elRef={root} mod='ruled' aria-busy={!page.ready}>
       {rows.map((t) => (
         // a feed row dragged onto a canvas spawns the entity as a card
         <Rows.Item
@@ -165,7 +166,11 @@ export let QueryList = (
           <Entity eid={t.eid} view='Feed.Tile' />
         </Rows.Item>
       ))}
-      {more > 0 && (
+      {!page.ready && (
+        <Loading>{rows.length ? 'Loading more…' : 'Loading…'}</Loading>
+      )}
+      {page.ready && !rows.length && <Rows.More>No results.</Rows.More>}
+      {page.ready && more > 0 && (
         <Rows.More>
           <Button type='button' mod='quiet' onClick={grow}>
             Load more{total != null && ` (${more} remaining)`}

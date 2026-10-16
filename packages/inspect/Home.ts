@@ -20,7 +20,7 @@
  */
 
 import { h, type JSX } from 'preact'
-import { Head, Value } from '@yaks/ui'
+import { Head, Loading, Value } from '@yaks/ui'
 import type { Bundle, Io } from './host.ts'
 import { useCensus } from './census.ts'
 import { Grid } from './grid.ts'
@@ -45,8 +45,9 @@ let useConcept = (io: Io, name: string, heading: string) => {
 // A row standing for a name, for a table of names.
 let named = (n: string): Bundle => ({ entity: { eid: n } })
 
-// A count, or `…` while the census is out.
-let tallied = (ready: boolean, n: number) => ready ? count(n) : '…'
+// Keep known counts visible during a refresh, not zeroes before the census.
+let tallied = (ready: boolean, n: number) =>
+  ready || n ? count(n) : h(Loading, {})
 
 /** The first page. */
 export let HomePage = ({ io }: { io: Io }): JSX.Element => {
@@ -97,8 +98,18 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
         h('span', {}, `${count(packs.length)} packages`),
         h('span', {}, `${count(vocab.all.length)} components`),
         h('span', {}, `${count(rels.length)} relations`),
-        h('span', {}, `${count(sets.length)} archetypes`),
-        h('span', {}, ready ? `${count(total)} entities` : '… entities'),
+        h(
+          'span',
+          {},
+          ready || sets.length
+            ? `${count(sets.length)} archetypes`
+            : h(Loading, {}),
+        ),
+        h(
+          'span',
+          {},
+          ready || total ? `${count(total)} entities` : h(Loading, {}),
+        ),
       ),
     ),
     h(
@@ -236,7 +247,7 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
         io,
         ...useConcept(io, 'archetype', 'Archetypes'),
         heading: 'Archetypes',
-        count: sets.length || undefined,
+        count: ready ? sets.length : undefined,
       },
       waiting({
         rows: sets,

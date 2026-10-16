@@ -156,7 +156,7 @@ export let History = (p: HistoryProps): JSX.Element => {
   return h(
     Part,
     { io, eid, subject: about(io, e), heading, count: total, notes: p.notes },
-    waiting(got.rows) ?? h(
+    waiting(got.rows && { ...got.rows, rows: told }) ?? h(
       'div',
       {},
       !told.length ? none() : h(

@@ -213,7 +213,7 @@ let FarEnds = (
       once: true,
     },
   })
-  return got.far?.tally ? spread(io, census, got.far.tally) : '…'
+  return waiting(got.far) ?? spread(io, census, got.far?.tally ?? {})
 }
 
 // What it refers to, and what refers to it: through its reference properties
@@ -276,8 +276,8 @@ let Refers = (
     })),
     ...byRelation(got.in?.tally).map((r) => edge('←', r)),
   ]
-  let ready = props.ready && got.into?.ready &&
-    (!archs.length || (!!got.out?.tally && !!got.in?.tally))
+  let ready = props.ready && got.into?.ready && census.ready &&
+    (!archs.length || (got.out?.ready && got.in?.ready))
   let tie = new Map(ties.map((t) => [t.entity.eid, t]))
   let of = (b: Bundle) => tie.get(b.entity.eid)!
   return h(
@@ -291,7 +291,12 @@ let Refers = (
       count: ready ? ties.length : undefined,
       notes,
     },
-    waiting(props) ?? waiting(got.into) ?? h(Grid, {
+    waiting({
+      rows: ties.map((t): Bundle => ({ entity: t.entity })),
+      ready: !!ready,
+      error: props.error ?? got.into?.error ?? census.error ??
+        got.out?.error ?? got.in?.error,
+    }) ?? h(Grid, {
       io,
       id: key(eid, 'Refers to'),
       local: true,

@@ -82,11 +82,15 @@ let Comments = (
       count: got.comments?.ready ? all.length : undefined,
       notes,
     },
-    h(
-      ui.Notes,
-      {},
-      all.map((b) => io.show(b, 'Task.Comment', {})),
-    ),
+    got.comments?.error
+      ? h(ui.Rows.More, {}, got.comments.error)
+      : !got.comments?.ready && !all.length
+      ? h(ui.Loading, {})
+      : h(
+        ui.Notes,
+        {},
+        all.map((b) => io.show(b, 'Task.Comment', {})),
+      ),
   )
 }
 

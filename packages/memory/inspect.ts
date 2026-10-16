@@ -108,14 +108,18 @@ let Evidence = (
       count: got.cites?.ready ? cited.length : undefined,
       notes,
     },
-    !ready
-      ? h(ui.Rows.More, {}, '…')
+    got.cites?.error || whole.cited?.error
+      ? h(ui.Rows.More, {}, got.cites?.error ?? whole.cited?.error)
+      : !ready && !held.size
+      ? h(ui.Loading, {})
       : !cited.length
       ? h(ui.Rows.More, {}, 'it cites nothing')
       : cited.map((to) => {
         let m = held.get(to)
         return m
           ? io.show(m, 'Belief.Cited', {})
+          : !whole.cited?.ready
+          ? h(ui.Loading, { key: to })
           : h(ui.Rows.More, { key: to }, mention(io, to), ' is gone')
       }),
   )
@@ -165,8 +169,10 @@ let Beliefs = (
       count: got.beliefs?.ready ? all.length : undefined,
       notes,
     },
-    !got.beliefs?.ready && !all.length
-      ? h(ui.Rows.More, {}, '…')
+    got.beliefs?.error
+      ? h(ui.Rows.More, {}, got.beliefs.error)
+      : !got.beliefs?.ready && !all.length
+      ? h(ui.Loading, {})
       : !all.length
       ? h(ui.Rows.More, {}, 'nothing is believed about it yet')
       : h(

@@ -6,7 +6,7 @@
  */
 
 import { h, type JSX } from 'preact'
-import { Rows } from '@yaks/ui'
+import { Loading, Rows } from '@yaks/ui'
 import type { Answer, Bundle } from './host.ts'
 
 /** The answer's rows, or none while it is out. */
@@ -17,8 +17,9 @@ export let rows = (a?: Answer): Bundle[] => a?.rows ?? []
 export let waiting = (a?: Answer): JSX.Element | null =>
   a?.error
     ? h(Rows.More, {}, a.error)
-    : !a?.ready && !a?.rows.length && a?.count == null && !a?.tally
-    ? h(Rows.More, {}, '…')
+    : !a?.ready && !a?.rows.length && a?.count == null &&
+        !Object.keys(a?.tally ?? {}).length
+    ? h(Loading, {})
     : null
 
 /** What a table with no rows says. */

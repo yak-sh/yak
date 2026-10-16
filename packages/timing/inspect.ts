@@ -16,7 +16,7 @@ import {
   type View,
 } from '@yaks/inspect'
 import { all as baseViews } from '@yaks/inspect'
-import { Head, Section, Tabs, Tile } from '@yaks/ui'
+import { Head, Loading, Section, Tabs, Tile } from '@yaks/ui'
 import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
 import {
   amount,
@@ -58,7 +58,7 @@ let status = (answer: Props['got'][string] | undefined, what: string) =>
   answer?.error
     ? h(Section.Sub, { role: 'alert' }, answer.error)
     : !answer?.ready
-    ? h(Section.Sub, { role: 'status' }, `Reading ${what}…`)
+    ? h(Loading, {}, `Loading ${what}…`)
     : null
 
 /** Where a trace ran, by name: the store, space and app its context names. */

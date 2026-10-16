@@ -43,11 +43,11 @@ export let useCensus = (io: Io): Census => {
   let sets = (got.sets?.rows ?? []).toSorted((a, b) =>
     (tally[b.entity.eid] ?? 0) - (tally[a.entity.eid] ?? 0)
   )
-  let ready = !!got.tally?.tally && !!got.sets?.ready
+  let ready = !!got.tally?.ready && !!got.sets?.ready
   return {
     sets,
     tally,
-    carried: ready ? carrying(sets, tally) : {},
+    carried: carrying(sets, tally),
     ready,
     error: got.sets?.error ?? got.tally?.error,
   }

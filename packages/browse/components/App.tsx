@@ -5,8 +5,8 @@ import { destinationAt, schemaAt } from '../navigation.ts'
 import { entityPath, searchAt } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { ent, mode, routeSub } from '../live.ts'
-import { block, Section, Shell, Tabs, Viewport } from '@yaks/ui'
+import { config, ent, entityRead, mode, routeSub } from '../live.ts'
+import { block, Loading, Section, Shell, Tabs, Viewport } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
 import { TabFace } from './Card.tsx'
@@ -37,6 +37,7 @@ import {
 } from './Navigation.tsx'
 import { QueryList } from './views/List.tsx'
 import { Id } from './views/Inline.tsx'
+import { SubscriptionFailure } from './SubscriptionFailure.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -73,14 +74,7 @@ let Lost = ({ at }: { at: string }) => {
 // (M-16612). It settles to the entity or to Lost when the resolve lands.
 let Resolving = ({ at }: { at: string }) => {
   let path = new URL(at, 'http://x').pathname
-  return (
-    <LostFrame>
-      <Code>…</Code>
-      <p>
-        resolving <LostFrame.Id>{decodeURIComponent(path)}</LostFrame.Id>
-      </p>
-    </LostFrame>
-  )
+  return <Loading>Loading {decodeURIComponent(path)}…</Loading>
 }
 
 // The one page the address names, under its bar: `/` is home (the owner, in
@@ -102,6 +96,7 @@ export let Page = ({ at }: { at: string }) => {
   // neighborhood, and opening it is not opening the owner.
   let rootEid = offered ? undefined : t?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
+  let read = rootEid && config.host ? entityRead(rootEid) : undefined
   let e = t ? ent(t.eid) : undefined
   let tabs = e ? applicable(e) : []
   // A coarse pointer with no explicit view defaults a Canvas to List: its
@@ -225,6 +220,10 @@ export let Page = ({ at }: { at: string }) => {
           ? <SearchPage query={search} />
           : place
           ? <QueryList eid={filter!} query={place.query} />
+          : read?.state.status == 'failed'
+          ? <SubscriptionFailure read={read} />
+          : read && !read.ready
+          ? <Loading />
           : offered && e
           ? <Entity eid={e.eid} view={offered.view} />
           : e

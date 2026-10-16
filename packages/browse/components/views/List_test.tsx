@@ -50,7 +50,17 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
       act(() => wire.say({ id: ask.id, bundles: read(ask.subscribe) }))
   }
   try {
-    await (await page(1))()
+    let first = await page(1)
+    assertEquals(
+      mounted.root.querySelector('[role=status]')?.textContent,
+      'Loading…',
+    )
+    assertEquals(mounted.root.textContent?.includes('No results.'), false)
+    await act(() => wire.say({ id: pages()[0].id, bundles: [] }))
+    assertEquals(mounted.root.querySelector('[role=status]'), null)
+    assertEquals(mounted.root.textContent, 'No results.')
+    await first()
+    assertEquals(mounted.root.querySelector('[role=status]'), null)
     let shown = titles(mounted.root)
     assertEquals(shown.length, 10)
     assertEquals(
@@ -69,7 +79,12 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
     await act(() => more.click())
     let grown = await page(2)
     assertEquals(titles(mounted.root), shown)
+    assertEquals(
+      mounted.root.querySelector('[role=status]')?.textContent,
+      'Loading more…',
+    )
     await grown()
+    assertEquals(mounted.root.querySelector('[role=status]'), null)
     assertEquals(titles(mounted.root).slice(0, 10), shown)
     assertEquals(titles(mounted.root).length, 12)
   } finally {

@@ -68,6 +68,7 @@ test('search sends only the settled query while typing', async () => {
   })
   let { document, window } = parseHTML('<main></main>')
   let asked: string[] = []
+  let finish: (r: Response) => void = () => {}
   // The line rides /query as `q`, the typed word its leading term (hits.ts).
   let term = (input: string | URL | Request) =>
     new URL(String(input), 'http://tasks.test').searchParams.get('q')
@@ -77,7 +78,7 @@ test('search sends only the settled query while typing', async () => {
     fetch: {
       value: (input: string | URL | Request) => {
         asked.push(term(input))
-        return Promise.resolve(Response.json([]))
+        return new Promise<Response>((resolve) => finish = resolve)
       },
       configurable: true,
     },
@@ -99,6 +100,11 @@ test('search sends only the settled query while typing', async () => {
       label: 'the settled query to be sent',
     })
     assertEquals(asked, ['type'])
+    assertEquals(root.querySelector('[role=status]')?.textContent, 'Searching…')
+    assertEquals(root.textContent?.includes('No results.'), false)
+    finish(Response.json([]))
+    await until(() => root.textContent?.includes('No results.'))
+    assertEquals(root.querySelector('[role=status]'), null)
   } finally {
     config.host = host
     searchOpen.value = false

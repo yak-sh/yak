@@ -1,3 +1,4 @@
+import { Loading } from '@yaks/ui'
 import { type Ent, idOf, statusOf } from '../../types.ts'
 import { ent, pending } from '../../live.ts'
 import { el } from '@yaks/ui'
@@ -39,6 +40,7 @@ export let Md = ({ e }: { e: Ent }) => {
     'materialized',
     !!e.persona,
   ) as Materialized | undefined
+  if (e.persona && materialized === undefined) return <Loading />
   let text = e.persona ? (materialized?.text ?? '…\n') : mdText(e)
   let lit = highlight(text, 'markdown')
   return (

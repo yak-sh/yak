@@ -23,6 +23,7 @@ import * as id from './Id.ts'
 import * as index from './Index.ts'
 import * as inbox from './Inbox.ts'
 import * as menu from './Menu.ts'
+import * as loading from './Loading.ts'
 import * as notes from './Notes.ts'
 import * as overlay from './Overlay.ts'
 import * as pager from './Pager.ts'
@@ -76,6 +77,7 @@ let modules = {
     Inbox: inbox,
   },
   Page: {
+    Loading: loading,
     Shell: shell,
     Head: head,
     Section: section,

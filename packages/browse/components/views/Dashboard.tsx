@@ -1,3 +1,4 @@
+import { Loading } from '@yaks/ui'
 import { awake, type Ent } from '../../types.ts'
 import { ent, sessionDetail } from '../../live.ts'
 import { block } from '@yaks/ui'
@@ -52,7 +53,7 @@ let Facet = (
         )
       )
       : reads.some((r) => !r.ready)
-      ? <Empty>Loading…</Empty>
+      ? <Loading />
       : ids.length
       ? (
         <Rows>

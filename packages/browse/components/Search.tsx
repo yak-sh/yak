@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural } from '../types.ts'
 import { ent, searchOpen } from '../live.ts'
 import { follow } from './nav.tsx'
-import { block } from '@yaks/ui'
+import { block, Loading } from '@yaks/ui'
 import { Icon } from './icons.tsx'
 import { fields } from './fields.tsx'
 import { Entity } from './Entity.tsx'
@@ -60,6 +60,7 @@ let FIELD = 'search'
 export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
   let [err, setErr] = useState('')
+  let [answered, setAnswered] = useState<string | undefined>()
   let [sel, setSel] = useState(0)
   let q = fields.text(FIELD)
   let [drag, setDrag] = useState(false)
@@ -79,6 +80,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     if (!q.trim()) {
       setHits([])
       setErr('')
+      setAnswered(undefined)
       return
     }
     let abort = new AbortController()
@@ -92,12 +94,14 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
 
   // The kind-grouped list, flattened: the selection index and every key
   // walk THIS order, so arrowing crosses sections in the order they paint.
-  let ordered = group(hits, q)
+  let waiting = !!q.trim() && answered != q
+  let ordered = group(waiting ? [] : hits, q)
 
   let close = () => {
     seq.current++
     searchOpen.value = false
     setHits([])
+    setAnswered(undefined)
     setSel(0)
     fields.set(FIELD, '')
     setDrag(false)
@@ -113,7 +117,9 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
       bad = e instanceof Error ? e.message : String(e)
     }
     if (mine != seq.current) return // a newer keystroke owns the list
+    if (signal.aborted) return
     setHits(found)
+    setAnswered(q)
     setErr(bad)
     setSel(0)
   }
@@ -186,7 +192,11 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
             </Page>
           )}
         </Line>
-        {err && <Snip>{err}</Snip>}
+        {waiting
+          ? <Loading>Searching…</Loading>
+          : err
+          ? <Snip>{err}</Snip>
+          : answered == q && !ordered.length && <Snip>No results.</Snip>}
         {
           /* Each registry tile is its own real entity anchor. The result shell
           intercepts only a plain click, whose search contract is to replace

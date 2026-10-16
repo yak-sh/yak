@@ -9,7 +9,7 @@
 
 import { h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
-import { Head } from '@yaks/ui'
+import { Head, Loading } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'
 import { type Census, useCensus } from './census.ts'
 import { Grid } from './grid.ts'
@@ -58,7 +58,7 @@ let Declares = (
           cell: (b) =>
             census.ready
               ? count(census.carried[str(b, '_comp', 'name')] ?? 0)
-              : '…',
+              : h(Loading, {}),
         },
       ],
     }),
@@ -80,7 +80,11 @@ let Extends = (
       count: props.ready && comps.ready ? theirs.length : undefined,
       notes,
     },
-    waiting(props) ?? waiting(comps) ?? h(Grid, {
+    waiting({
+      rows: theirs,
+      ready: props.ready && comps.ready,
+      error: props.error ?? comps.error,
+    }) ?? h(Grid, {
       io,
       id: key(e.entity.eid, 'Extends'),
       local: true,

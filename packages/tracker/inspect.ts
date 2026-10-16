@@ -21,6 +21,7 @@ import {
 import {
   Dot,
   Head,
+  Loading,
   Pairs,
   Rows,
   Section,
@@ -415,8 +416,8 @@ let BugPage = ({ e, io, got }: Props): JSX.Element => {
         'Occurrences',
         h(Section.Count, {}, errors.length),
       ),
-      !got.errors?.ready
-        ? h(Section.Sub, { role: 'status' }, 'Reading occurrences…')
+      !got.errors?.ready && !errors.length
+        ? h(Loading, {})
         : errors.length
         ? h(Occurrences, { io, errors, owner })
         : h(Section.Sub, {}, 'No occurrence is kept.'),
@@ -448,8 +449,8 @@ let Traces = (
         { role: 'alert' },
         `Traces unavailable: ${got.traces.error}`,
       )
-      : !got.traces?.ready
-      ? h(Section.Sub, { role: 'status' }, 'Reading traces…')
+      : !got.traces?.ready && !got.traces?.rows.length
+      ? h(Loading, {})
       : got.traces.rows.length
       ? h('div', {}, got.traces.rows.map((b) => io.show(b, 'List.Tile')))
       : h(Section.Sub, {}, 'No recorded trace matches this occurrence.'),
@@ -596,7 +597,7 @@ let RemoteBug = (
   }
   let rows = held?.rows ?? [], [e] = rows
   if (!e) {
-    return h(Section.Sub, { role: 'status' }, `Reading the bug from ${side}…`)
+    return h(Loading, {}, `Loading the bug from ${side}…`)
   }
   let errors = rows.filter((b) => b.error)
   // An occurrence opens on this page; the bug and the requests read with it

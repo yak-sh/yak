@@ -158,9 +158,19 @@ export let Conversation = ({ e, io, ctx }: Props): JSX.Element | null => {
     ahead.length == before
       ? h(ui.Turns.More, {}, 'earlier turns are in ', mention(io, at.session))
       : null,
+    got.before?.error
+      ? h(ui.Rows.More, {}, got.before.error)
+      : !got.before?.ready && !ahead.length
+      ? h(ui.Loading, {})
+      : null,
     [...ahead, e, ...behind].map((b) =>
       io.show(b, 'Inspect.Turn', { on: b == e, whole: b == e && whole })
     ),
+    got.after?.error
+      ? h(ui.Rows.More, {}, got.after.error)
+      : !got.after?.ready && !behind.length
+      ? h(ui.Loading, {})
+      : null,
   )
 }
 
@@ -237,8 +247,12 @@ let Latest = (
       ),
       notes,
     },
-    !turns.length
-      ? h(ui.Rows.More, {}, got.turns?.ready ? 'nothing said yet' : '…')
+    got.turns?.error
+      ? h(ui.Rows.More, {}, got.turns.error)
+      : !turns.length && !got.turns?.ready
+      ? h(ui.Loading, {})
+      : !turns.length
+      ? h(ui.Rows.More, {}, 'nothing said yet')
       : h(ui.Turns, {}, turns.map((b) => io.show(b, 'Inspect.Turn', {}))),
   )
 }

@@ -7,7 +7,9 @@ import { Composer } from '@yaks/kernel/Comments'
 import { Entity } from '../Entity.tsx'
 import { load, providers } from '../Run.tsx'
 import { useModel } from '../subscriptions.ts'
-import { block } from '@yaks/ui'
+import { block, Loading } from '@yaks/ui'
+import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
+import type { QueryResult } from '../useQuery.ts'
 import { useQueryResult } from '../useQuery.ts'
 
 let Frame = block('div', 'SessionManage', {
@@ -83,12 +85,16 @@ export let SessionInput = ({ e }: { e: Ent }) => {
   )
 }
 
-let Links = ({ name, ids }: { name: string; ids: string[] }) => (
+let Links = ({ name, read }: { name: string; read: QueryResult }) => (
   <Group>
-    <Gist>{name} · {ids.length}</Gist>
+    <Gist>{name} · {read.ready ? read.eids.length : '…'}</Gist>
     <List>
-      {ids.length
-        ? ids.map((eid) => (
+      {read.subscription?.state.status == 'failed'
+        ? <SubscriptionFailure read={read.subscription} />
+        : !read.ready
+        ? <Loading />
+        : read.eids.length
+        ? read.eids.map((eid) => (
           <Entity key={eid} eid={eid} view='Session.Related.List.Tile' />
         ))
         : <Empty>none</Empty>}
@@ -109,8 +115,8 @@ export let SessionRelated = ({ eid }: { eid: string }) => {
   )
   return (
     <Related>
-      <Links name='children' ids={children.eids} />
-      <Links name='claims' ids={claims.eids} />
+      <Links name='children' read={children} />
+      <Links name='claims' read={claims} />
     </Related>
   )
 }

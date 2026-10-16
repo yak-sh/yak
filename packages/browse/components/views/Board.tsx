@@ -20,7 +20,7 @@ import { drafts, useDraft } from '@yaks/draft/input'
 import { bundlesOf } from '../../wire.ts'
 import { useBoardTally } from '../subscriptions.ts'
 import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
-import { block } from '@yaks/ui'
+import { block, Loading } from '@yaks/ui'
 import { Dot } from '../Dot.tsx'
 import { Prio } from '../Prio.tsx'
 import { filteredQuery } from '../Filter.tsx'
@@ -260,7 +260,11 @@ export let Board = ({ e }: { e: Ent }) => {
     )
   }
   if (screen?.state.status == 'loading') {
-    return <Frame elRef={root}>Loading board preferences…</Frame>
+    return (
+      <Frame elRef={root}>
+        <Loading>Loading board preferences…</Loading>
+      </Frame>
+    )
   }
   let folded = new Set(
     String(row?.statuses ?? '').split(',').filter(Boolean),
@@ -385,7 +389,9 @@ export let Board = ({ e }: { e: Ent }) => {
             <ColName onDblClick={() => fold(s)}>
               <Dot status={s} />
               {s}
-              <Count>{counts?.[s] ?? win?.total ?? list.length}</Count>
+              <Count>
+                {counts?.[s] ?? win?.total ?? (read.ready ? list.length : '…')}
+              </Count>
               {!folded.has(s) && adding != s && !drafted(s) && (
                 <Add onClick={() => setAdding(s)} title={`new ${s} task`}>
                   +
@@ -419,7 +425,12 @@ export let Board = ({ e }: { e: Ent }) => {
                     <Entity eid={k.eid} view='Board.List.Tile' />
                   </Item>
                 ))}
-                {more > 0 && (
+                {!read.ready && (
+                  <Loading>
+                    {list.length ? 'Loading more…' : 'Loading…'}
+                  </Loading>
+                )}
+                {read.ready && more > 0 && (
                   <More
                     type='button'
                     onClick={grow}

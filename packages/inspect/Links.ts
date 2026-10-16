@@ -183,24 +183,25 @@ export let Links = ({ e, io, ctx }: Props): JSX.Element | null => {
       count: got.refs?.ready ? all.length : undefined,
       notes,
     },
-    waiting(got.refs) ?? (editing ? h(Table, { e, io, all, rels }) : h(
-      Pairs,
-      {},
-      groups.flatMap(([said, bs]) => [
-        h(Pairs.Key, { key: `${said} k` }, said),
-        h(
-          Pairs.Value,
-          { key: `${said} v` },
-          bs.slice(0, NAMED).flatMap((b, i) => [
-            i ? ', ' : null,
-            mention(io, end(b)),
-          ]),
-          bs.length > NAMED
-            ? h(Rows.More, {}, `and ${count(bs.length - NAMED)} more`)
-            : null,
-        ),
-      ]),
-    )),
+    waiting(got.refs && { ...got.refs, rows: all }) ??
+      (editing ? h(Table, { e, io, all, rels }) : h(
+        Pairs,
+        {},
+        groups.flatMap(([said, bs]) => [
+          h(Pairs.Key, { key: `${said} k` }, said),
+          h(
+            Pairs.Value,
+            { key: `${said} v` },
+            bs.slice(0, NAMED).flatMap((b, i) => [
+              i ? ', ' : null,
+              mention(io, end(b)),
+            ]),
+            bs.length > NAMED
+              ? h(Rows.More, {}, `and ${count(bs.length - NAMED)} more`)
+              : null,
+          ),
+        ]),
+      )),
     editing ? h(Link, { e, io }) : null,
   )
 }

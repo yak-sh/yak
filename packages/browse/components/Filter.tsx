@@ -48,6 +48,7 @@ export let filteredQuery = (eid: string, query: string): string => {
 // the face's half: the current pass predicate for this entity's rows
 export type Pass = ((eid: string) => boolean) & {
   subscription?: SubscriptionRead
+  ready: boolean
 }
 
 export let usePassOf = (
@@ -65,8 +66,13 @@ export let usePassOf = (
   // same server subscription as a saved board instead of tokenizing locally.
   let result = useQueryResult(valid ? line : '')
   let hits = new Set(result.eids)
-  let pass: Pass = !line.trim() || !valid ? () => true : (row) => hits.has(row)
-  pass.subscription = result.subscription
+  let pass: Pass = Object.assign(
+    !line.trim() || !valid ? () => true : (row: string) => hits.has(row),
+    {
+      ready: !line.trim() || !valid || result.ready,
+      subscription: result.subscription,
+    },
+  )
   return pass
 }
 
