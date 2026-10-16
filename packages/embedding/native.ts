@@ -46,6 +46,7 @@ import {
   type Raw,
   select,
   type Statements,
+  sub,
   table,
   val,
 } from '@yaks/sql'
@@ -117,13 +118,13 @@ export let installed = (db: Statements): boolean => {
 
 // The one model every stored vector is under, or null while two spaces share
 // the table: an index over both would rank vectors of different lengths.
+// Separate aggregates each seek an edge of the model index. Together SQLite
+// scans every model, even when this build check finds nothing to do.
 let only = (db: Statements): string | null => {
+  let edge = (f: string) =>
+    sub(select({ cols: [fn(f, col('model'))], from: table(TABLE) }))
   let row = db.query(select({
-    cols: [
-      as(fn('min', col('model')), 'lo'),
-      as(fn('max', col('model')), 'hi'),
-    ],
-    from: table(TABLE),
+    cols: [as(edge('min'), 'lo'), as(edge('max'), 'hi')],
   }))[0]
   return row?.lo != null && row.lo == row.hi ? String(row.lo) : null
 }
