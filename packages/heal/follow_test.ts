@@ -436,30 +436,34 @@ await put(
     resolved: {},
   })),
 )
-test('a flood of hits on one bug replays it, not every closed bug', async () => {
-  // Every entity the passes read, which names each bug's work.
-  let read: string[] = []
-  let g = flood.g
-  let graph = Object.create(g, {
-    get: {
-      value: (eids: string[], ...rest: never[]) => (
-        read.push(...eids), g.get(eids, ...rest)
-      ),
-    },
-  })
-  let hits = 7
-  let stop = new AbortController()
-  await service({ ...flood.host, graph }, {
-    ...flood.config,
-    wait: async () => {
-      if (++hits == 12) return stop.abort()
-      await put(flood.tracker, [{ entity: { eid: bug }, bug: { hits } }])
-    },
-  }, stop.signal)
-  let asked = (b: string) => read.filter((eid) => eid == taskEid(b)).length
+// Every entity the passes read, which names each bug's work.
+let floodRead: string[] = []
+let floodGraph = flood.g
+let watchedFlood = Object.create(floodGraph, {
+  get: {
+    value: (eids: string[], ...rest: never[]) => (
+      floodRead.push(...eids), floodGraph.get(eids, ...rest)
+    ),
+  },
+})
+let floodHits = 7
+let floodStop = new AbortController()
+await service({ ...flood.host, graph: watchedFlood }, {
+  ...flood.config,
+  wait: async () => {
+    if (++floodHits == 12) return floodStop.abort()
+    await put(flood.tracker, [{
+      entity: { eid: bug },
+      bug: { hits: floodHits },
+    }])
+  },
+}, floodStop.signal)
+let asked = (b: string) => floodRead.filter((eid) => eid == taskEid(b)).length
+// The completed replay is the fixture; timed checks inspect its observations.
+flood.close()
+test('a flood of hits on one bug replays it, not every closed bug', () => {
   equal(gone.map(asked), [1, 1, 1])
   ok(asked(bug) > 2)
-  flood.close()
 })
 
 let outage = await fixture({ provider: undefined })
