@@ -52,7 +52,8 @@ for (let fork of [false, true]) {
       {
         entity: { eid: 'input' },
         entry: { session: fork ? 'child' : 'parent', seq: 3 },
-        using: { model: m, window: 16 },
+        using: { model: m },
+        sending: { window: 16 },
         content: { body: 'now' },
       },
     ]
@@ -120,7 +121,8 @@ for (let fork of [false, true]) {
       {
         entity: { eid: 'input' },
         entry: { session: fork ? 'child' : 'parent', seq: 41 },
-        using: { model: m, window: 16 },
+        using: { model: m },
+        sending: { window: 16 },
         content: { body: 'now' },
       },
     ])
@@ -185,7 +187,8 @@ test('the runner inspects finite-window status without loading old transcript pr
       entity: { eid: 'input' },
       entry: { session: 'runner', seq: 41 },
       content: { body: 'now' },
-      using: { model: m, window: 16 },
+      using: { model: m },
+      sending: { window: 16 },
     },
   ])
   let bodies = 0, read = g.read.bind(g)
@@ -259,7 +262,8 @@ for (let legacy of [false, true]) {
         entity: { eid: 'input' },
         entry: { session: 'child', seq: 26 },
         content: { body: 'typed current request' },
-        using: { model: m, window: 5 },
+        using: { model: m },
+        sending: { window: 5 },
         questions: {
           asked: {
             where: {

@@ -40,6 +40,8 @@ test('native input shadows preserve main and reach recorded calls and sessions',
       content: { body: 'Compose $song' },
       using: {
         model,
+      },
+      sending: {
         input: { lyrics: 'old', audio_setting: { format: 'mp3' } },
       },
       staged: {},
@@ -61,13 +63,11 @@ test('native input shadows preserve main and reach recorded calls and sessions',
   assert(String((shadow.build as Comp).variant).startsWith('shadow:'))
   let [call] = await g.get([String((shadow.build as Comp).call)])
   let effective = { audio_setting: { format: 'mp3' }, ...input }
-  assertEquals(((call.call as Comp).args as Comp).using, {
-    model,
-    input: effective,
-  })
+  assertEquals(((call.call as Comp).args as Comp).using, { model })
+  assertEquals(((call.call as Comp).args as Comp).sending, { input: effective })
   await g.apply(await tool.run(call, g), { trusted: true })
-  let [entry] = await g.read('.entry&?using')
-  assertEquals((entry.using as Comp).input, effective)
+  let [entry] = await g.read('.entry&?sending')
+  assertEquals((entry.sending as Comp).input, effective)
   assertEquals(await build(g, vocab, ask, null), [shadowId])
   assertEquals(await g.get([shadowId]), [shadow])
   let [other] = await build(g, vocab, {

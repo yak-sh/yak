@@ -556,7 +556,7 @@ and `@yaks/context`, along with any prompt snapshots their caller supplies.
 Starting one does not read the CLI host's instruction files. Reading a machine
 file through a tool does not make it instructions: the caller must explicitly
 admit it through the prompt channel. Existing `opts.instructions` and
-`using.instructions` remain the base instruction channel; delegated
+`sending.instructions` remain the base instruction channel; delegated
 `instructions` append local guidance rather than replacing that base.
 
 Fresh children copy shared prompt snapshots from their parent. Forks copy no

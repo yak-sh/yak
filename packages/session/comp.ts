@@ -19,7 +19,8 @@
 //                            Beside a result, refusal or exception, theirs
 //     + output{source}       what produced the prose beside it: the ask, for
 //                            what a model said
-//     + using{provider, model, effort, instructions}
+//     + using{provider, model, effort}
+//     + sending{input, instructions, window, tools}
 //                            set or switch on an input; served on an ask
 //     + questions{asked}     typed questions the next ask carries
 //     + ask{to, through}     the model was asked, from the prefix at `through`

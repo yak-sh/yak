@@ -255,8 +255,8 @@ test('an expired run lease requeues a waiting child in order under the child bou
   assertEquals(recovered.waiting, undefined)
   assertEquals(recovered.admitted, undefined)
   assertEquals(dispatch(recovered)?.order, 3)
-  assertEquals(dispatch(recovered)?.state, null)
-  assertEquals(dispatch(recovered)?.args, null)
+  assertEquals(dispatch(recovered)?.state, undefined)
+  assertEquals(dispatch(recovered)?.args, undefined)
   assertEquals(
     (await p.g.read('.dispatch.status=queued')).map((b) => b.entity.eid).sort(),
     ['newer', 'older', 'recovered'],
@@ -372,7 +372,7 @@ test('a native continuation without dispatch rejoins the tail under a full bound
   let [native] = await p.g.get(['native'])
   assertEquals(dispatch(native)?.state, 'queued')
   assertEquals(dispatch(native)?.order, 11)
-  assertEquals(dispatch(native)?.args, null)
+  assertEquals(dispatch(native)?.args, undefined)
   assertEquals(native.admitted, undefined)
   assertEquals(p.asked.length, 0)
   assertEquals(prepared, 0)

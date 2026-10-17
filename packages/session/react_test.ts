@@ -202,7 +202,7 @@ test('a turn whose using names tools is offered those alone, the runner’s by n
   }
   await g.apply([
     { entity: { eid: toolEid('shout') }, tool: { name: 'shout' } },
-    { entity: { eid: 'e1' }, using: { tools: ['shout', 'nothing'] } },
+    { entity: { eid: 'e1' }, sending: { tools: ['shout', 'nothing'] } },
   ])
   let { model, asked } = scripted([{
     id: 'r1',
@@ -1051,7 +1051,7 @@ test('media transcripts compact only through a text model without persona instru
       entry: { session: ids.s },
       content: { body: 'Remember the blue bridge. '.repeat(20) },
     },
-    { entity: { eid: 'e1' }, using: { instructions: persona } },
+    { entity: { eid: 'e1' }, sending: { instructions: persona } },
   ])
   assertEquals(
     await rest(g, ids.s, {
@@ -1757,7 +1757,8 @@ test('a window sends the newest entries, from the input that began their turn', 
       entity: { eid },
       entry: { session: ids.s },
       content: { body },
-      using: { provider: ids.p, model: ids.m, window },
+      using: { provider: ids.p, model: ids.m },
+      sending: { window },
     }])
     await rest(g, ids.s, deps)
     return asked.at(-1)!.items.map((i) => i.kind)
@@ -1803,7 +1804,8 @@ test("a window counts the conversation, never a wake's typed questions", async (
       entity: { eid },
       entry: { session: ids.s },
       content: { body },
-      using: { provider: ids.p, model: ids.m, window: 3 },
+      using: { provider: ids.p, model: ids.m },
+      sending: { window: 3 },
       ...more,
     }])
     await rest(g, ids.s, deps)
@@ -2003,12 +2005,12 @@ for (let committed of [false, true]) {
 test('explicit native model input reaches the provider and the recorded ask', async () => {
   let g = world()
   let input = { lyrics: '[Chorus]\nOoh\nAh', is_instrumental: false }
-  await g.apply([{ entity: { eid: 'e1' }, using: { input } }])
+  await g.apply([{ entity: { eid: 'e1' }, sending: { input } }])
   let { model, asked } = scripted([says('r1', 'done')])
   await rest(g, ids.s, { model, tools: [], mint })
   assertEquals(asked[0].input, input)
   let entries = await transcript(g, ids.s)
-  assertEquals((entries.find((e) => e.ask)?.using as Comp).input, input)
+  assertEquals((entries.find((e) => e.ask)?.sending as Comp).input, input)
 })
 
 test('private media checkpoint records cost on the original ask before delivery fails', async () => {

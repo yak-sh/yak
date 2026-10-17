@@ -139,7 +139,7 @@ test('fork and spawn selecting an existing model are served by a provider that s
       )!
       // openai does not serve the child's model, so the provider is left to
       // the one that does
-      assertEquals((input.using as Comp).provider, null)
+      assertEquals((input.using as Comp).provider, undefined)
     }
     assertEquals(seen.filter((p) => p == 'openrouter').length, 2)
   } finally {

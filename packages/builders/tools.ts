@@ -59,11 +59,15 @@ export let build = async (
   let kept = await graph.storage.tx((tx) => preserve(tx, definition, vocab))
   if (kept.length) await graph.apply(signed(kept, actor), { trusted: true })
   let base = definition.using as Comp | undefined
-  let native = base?.input as Comp | undefined
+  let sent = definition.sending as Comp | undefined
+  let native = sent?.input as Comp | undefined
   let using = {
     ...base,
     ...ask.provider ? { provider: ask.provider } : {},
     ...ask.model ? { model: ask.model } : {},
+  }
+  let sending = {
+    ...sent,
     ...ask.input == null ? {} : {
       input: {
         ...native,
@@ -77,7 +81,7 @@ export let build = async (
   let alternate = ask.provider != null || ask.model != null ||
     ask.template != null || ask.input != null
   let variant = alternate
-    ? `shadow:${sha256(JSON.stringify([using, template]))}`
+    ? `shadow:${sha256(JSON.stringify([using, sending, template]))}`
     : 'main'
   let only = ask.only?.map(eid)
   let limit = ask.limit
@@ -90,6 +94,7 @@ export let build = async (
         vocab,
         variant,
         using,
+        sending,
         template: str(template),
         only,
         limit,

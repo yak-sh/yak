@@ -41,7 +41,7 @@ export const selectedUsing = async (
   const rows = await g.read(
     '.entry.session=' + session + '&.using&!ask' +
       (before == null ? '' : '&.entry.seq<=' + before) +
-      '&.order=-entry.seq&.limit=1&.fields=using.model,using.provider,using.effort,using.instructions',
+      '&.order=-entry.seq&.limit=1&.fields=using.model,using.provider,using.effort',
   )
   if (rows.length) return rows[0].using as Comp
   const [owner] = await g.get([session])

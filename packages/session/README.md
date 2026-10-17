@@ -105,11 +105,17 @@ await appendEntry(g, 'session', 'Build completed', {
 })
 ```
 
-`using.tools` names the tools a turn is offered: exactly those, found among the
-runner's own and then among the ones it runs only for a turn that names them
+**Sending** is what goes to a model:
+`sending{input, instructions, window, tools}`. It is selected independently of
+`using{provider, model, effort}` on an input and recorded on each ask.
+`sending.input` carries explicit model-native fields, such as lyrics or
+duration, validated by the provider.
+
+`sending.tools` names the tools a turn is offered: exactly those, found among
+the runner's own and then among the ones it runs only for a turn that names them
 (`Deps.named`, `offered()`); without it a turn gets the runner's own.
-`using.instructions` are the system instructions a turn is asked with, and
-`using.window` bounds what it sends: the newest that many lines, reaching back
+`sending.instructions` are the system instructions a turn is asked with, and
+`sending.window` bounds what it sends: the newest that many lines, reaching back
 to the input that began the turn they cut into, so a long transcript costs a
 turn no more than a short one. A line is what a model is sent (an input, a
 reply, a call, a result); the asks and errors kept beside them are not lines,
@@ -351,7 +357,7 @@ equal(submitted, ['ask-1'])
 equal(await served.executor!.resume('ask-1'), undefined)
 ```
 
-The hosted ask records its exact offered tool names in `using.tools`. Returned
+The hosted ask records its exact offered tool names in `sending.tools`. Returned
 tool calls keep those tools' stable graph identities, and execution uses the
 source ask's offer even when a later input selects different tools.
 

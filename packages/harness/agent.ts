@@ -162,7 +162,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   tools?: Tool[]
   /** tools served from elsewhere, offered afresh to every ask */
   remote?: () => Promise<Tool[]>
-  /** tools offered only to a transcript whose `using.tools` names them
+  /** tools offered only to a transcript whose `sending.tools` names them
    * (@yaks/session `Deps.named`) */
   named?: () => Tool[]
   streaming?: boolean

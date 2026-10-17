@@ -34,6 +34,7 @@ import {
   kindOf,
   modelReady,
   openCalls,
+  sendingBefore,
   sessionDerived,
   statusOf,
   type TranscriptStatus,
@@ -1000,4 +1001,20 @@ test('progress is projected as a result but only final results close calls', () 
   let finished = [...asyncReply(), entry(7, { result: { call: 'e3' } })]
   assertEquals(openCalls(finished), [])
   assertEquals(modelReady(finished), true)
+})
+
+let aspectEntries = [
+  entry(1, { using: { model: 'a' }, sending: { instructions: 'base' } }),
+  entry(2, { using: { model: 'b' } }),
+  entry(3, { sending: { tools: [] } }),
+  entry(4, {
+    ask: { to: 'a', through: 'e1' },
+    using: { model: 'a' },
+    sending: { instructions: 'base' },
+  }),
+]
+test('model and sent context selections survive independently across late asks', () => {
+  assertEquals(usingBefore(aspectEntries)?.model, 'b')
+  assertEquals(sendingBefore(aspectEntries, 2), { instructions: 'base' })
+  assertEquals(sendingBefore(aspectEntries), { tools: [] })
 })

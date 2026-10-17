@@ -82,7 +82,6 @@ export let compactAsk = async (
   let using = {
     model,
     ...provider ? { provider } : {},
-    instructions: req.instructions,
   }
   let compacted: Reply
   try {
@@ -97,6 +96,7 @@ export let compactAsk = async (
       {
         entity: { eid: ask },
         using,
+        sending: { instructions: req.instructions },
         attempt: { by: null },
         completed: {},
         ...usage ? { usage } : {},
@@ -125,6 +125,7 @@ export let compactAsk = async (
     {
       entity: { eid: ask },
       using,
+      sending: { instructions: req.instructions },
       attempt: { by: null },
       completed: {},
       ...empty

@@ -164,6 +164,8 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
         using: {
           provider: identityEid('provider', ['openai']),
           model: a.model,
+        },
+        sending: {
           tools: ['task_new'],
         },
       },

@@ -41,6 +41,7 @@ export let definitionKey = (
   tool: Bundle,
   template?: string,
   using?: Record<string, unknown>,
+  sending?: Record<string, unknown>,
 ): string => {
   let definition = builder.builder as
     | { to?: string; wiring?: Wiring }
@@ -51,6 +52,7 @@ export let definitionKey = (
   return sha256(JSON.stringify([
     template ?? (builder.content as { body?: string } | undefined)?.body ?? '',
     details(using ?? builder.using ?? {}),
+    details(sending ?? builder.sending ?? {}),
     definition?.to,
     (tool.tool as { revision?: string }).revision ?? '',
     ...wiring.length ? [wiring] : [],
@@ -65,9 +67,10 @@ export let key = (
   template?: string,
   using?: Record<string, unknown>,
   nonce = '',
+  sending?: Record<string, unknown>,
 ): string =>
   sha256(JSON.stringify([
-    definitionKey(builder, tool, template, using),
+    definitionKey(builder, tool, template, using, sending),
     inputKey(binding),
     nonce,
   ]))

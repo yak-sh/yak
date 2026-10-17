@@ -27,6 +27,7 @@ export type Options = {
   variant?: string
   template?: string
   using?: Comp
+  sending?: Comp
   /** build only the bindings whose outer entities these name */
   only?: Eid[]
   /** build only the first n bindings */
@@ -53,6 +54,7 @@ export type Plan = {
   to: Eid
   template: string
   using: Comp
+  sending?: Comp
   wiring?: Wiring
 }
 
@@ -258,6 +260,7 @@ export let start = (
           definition: p.definition,
           template: p.template,
           using: p.using,
+          sending: p.sending ?? {},
           ...p.wiring ? { wiring: p.wiring } : {},
         },
       },
@@ -352,14 +355,23 @@ export let reconcile = (
         definition: definitionKey(builder, tool, o.template, {
           ...comp(builder, 'using'),
           ...o.using,
-        }),
-        key: key(builder, tool, binding, o.template, {
-          ...comp(builder, 'using'),
-          ...o.using,
-        }),
+        }, { ...comp(builder, 'sending'), ...o.sending }),
+        key: key(
+          builder,
+          tool,
+          binding,
+          o.template,
+          {
+            ...comp(builder, 'using'),
+            ...o.using,
+          },
+          '',
+          { ...comp(builder, 'sending'), ...o.sending },
+        ),
         to,
         template: o.template ?? str(comp(builder, 'content'), 'body'),
         using: { ...comp(builder, 'using'), ...o.using },
+        sending: { ...comp(builder, 'sending'), ...o.sending },
         wiring: definition.wiring as Wiring | undefined,
       }
       plans.push(p)
@@ -407,6 +419,7 @@ export let reconcile = (
           o.template,
           p.using,
           (o.eid ?? mint)(),
+          p.sending,
         )
         if (!here) {
           writes.push(...start(p, before, o.eid))

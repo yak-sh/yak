@@ -166,7 +166,7 @@ at work. It is read once its ask's `attempt` completes, since a streamed reply
 is written as it arrives. A session that fails for good records failure while
 keeping its attempt key, so automatic reconciliation does not spend again. A
 tool's refusal answered to the model and a request the runner retries do not
-fail the build. `using.tools` names the tools the session is offered
+fail the build. `sending.tools` names the tools the session is offered
 (@yaks/session), so a builder's model reads and writes the graph through exactly
 the tools its builder names. `builder.to` points at `modelToolEid()` for this
 adapter. The tool runner records the call and result; builders does not run a
@@ -228,8 +228,8 @@ unchanged ones. Both combine with `--only` and `--limit`:
 
 An alternate model, provider, template or native input creates a shadow variant.
 Unchanged inputs create no call unless a redo flag selects them.
-`--input @input.json` merges the object into `using.input` for that shadow run,
-without editing the builder. A scheduled wake checks the builder again. A
+`--input @input.json` merges the object into `sending.input` for that shadow
+run, without editing the builder. A scheduled wake checks the builder again. A
 configured `rest` advances `floor` after a call starts.
 
 `builder build <builder> --only <id…>` builds only the bindings whose outer

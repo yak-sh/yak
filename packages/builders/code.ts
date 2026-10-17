@@ -23,6 +23,7 @@ export type Args = {
   definition: string
   template: string
   using: Comp
+  sending?: Comp
   wiring?: Wiring
 }
 
@@ -36,6 +37,7 @@ let ASKED = {
     definition: { type: 'string' },
     template: { type: 'string' },
     using: { type: 'object' },
+    sending: { type: 'object' },
     wiring: { type: 'object' },
   },
   required: ['binding', 'key'],

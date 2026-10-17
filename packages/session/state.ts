@@ -238,12 +238,13 @@ export let statusComputed: Computed = {
     ),
 }
 
-/** The `using` in force at an entry: the newest one at or before it. */
-export let usingBefore = (
+/** A selected aspect at an entry, with late ask records bounded by their prefix. */
+let aspectBefore = (
   entries: Bundle[],
+  name: string,
   seq = Infinity,
 ): Comp | undefined => {
-  let all = ordered(entries).filter((b) => seqOf(b) <= seq && USING in b)
+  let all = ordered(entries).filter((b) => seqOf(b) <= seq && name in b)
   let latest = all.at(-1)
   let ask = latest?.ask as Comp | undefined
   // An ask records what was served, not a choice: a selection made after that
@@ -253,5 +254,17 @@ export let usingBefore = (
     entries.find((b) => b.entity.eid == ask!.through)
   return (chosen && (!through || seqOf(chosen) > seqOf(through))
     ? chosen
-    : latest)?.[USING] as Comp | undefined
+    : latest)?.[name] as Comp | undefined
 }
+
+/** The model selection in force at an entry. */
+export let usingBefore = (
+  entries: Bundle[],
+  seq = Infinity,
+): Comp | undefined => aspectBefore(entries, USING, seq)
+
+/** What is sent, selected independently of who answers. */
+export let sendingBefore = (
+  entries: Bundle[],
+  seq = Infinity,
+): Comp | undefined => aspectBefore(entries, 'sending', seq)

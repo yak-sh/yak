@@ -1100,7 +1100,7 @@ test("a build's cost sums what its calls said and its sessions spent", async () 
   let cost = async (build: string) => comp(await one(g, build), 'build')?.cost
   await g.apply([source('a'), builder()])
   let build = await runOf(g, ['a'])
-  assertEquals(await cost(build), null)
+  assertEquals(await cost(build), undefined)
   await drive(g, runner, build)
   let [asked] = await calls(g, build)
   assertEquals(comp(await one(g, asked.entity.eid), 'cost'), {
@@ -1258,7 +1258,7 @@ test('a chosen take is current only while its frozen inputs match, regardless of
 test('model builder instruction prefix is shared across bindings and appended once', async () => {
   let { g } = await shop()
   let tool = modelTool()
-  let invoke = async (id: string, using: Comp) => {
+  let invoke = async (id: string, using: Comp, sending?: Comp) => {
     let call: Bundle = {
       entity: { eid: 'call-' + id },
       call: {
@@ -1266,6 +1266,7 @@ test('model builder instruction prefix is shared across bindings and appended on
           binding: { entities: [id], vars: { source: id } },
           template: 'Summarize $source',
           using,
+          sending,
         },
       },
     }
@@ -1276,11 +1277,12 @@ test('model builder instruction prefix is shared across bindings and appended on
   let using = {
     model: ids.model,
     effort: 'low',
-    instructions: 'Base instruction',
   }
-  let a = await invoke('a', using), b = await invoke('b', using)
+  let sending = { instructions: 'Base instruction' }
+  let a = await invoke('a', using, sending),
+    b = await invoke('b', using, sending)
   assertEquals(a.using, b.using)
-  let fixed = String(comp(a, 'using')?.instructions)
+  let fixed = String(comp(a, 'sending')?.instructions)
   assert(fixed.startsWith('Base instruction\n\n'))
   assert(fixed.includes('Answer with JSON:'))
   assert(fixed.includes('Cite only selected input ids.'))
@@ -1289,9 +1291,9 @@ test('model builder instruction prefix is shared across bindings and appended on
   assertEquals(comp(await invoke('c', comp(a, 'using')!), 'using'), a.using)
   let none = await invoke('d', { model: ids.model })
   assert(
-    String(comp(none, 'using')?.instructions).startsWith('Answer with JSON:'),
+    String(comp(none, 'sending')?.instructions).startsWith('Answer with JSON:'),
   )
-  assertEquals(using.instructions, 'Base instruction')
+  assertEquals(sending.instructions, 'Base instruction')
 })
 
 test('definition edits never spend; explicit outdated and rebuild select work', async () => {

@@ -138,7 +138,7 @@ test('queued intent survives a restart, and closing does not drain the durable q
       (await h.g.read('.dispatch.state=settled&*')).length == 1
     )
     assertEquals((await b.children('p'))[0].entity.eid, id)
-    assertEquals(((await b.children('p'))[0].dispatch as Comp).args, null)
+    assertEquals(((await b.children('p'))[0].dispatch as Comp).args, undefined)
   } finally {
     await a.close()
     await b?.close()

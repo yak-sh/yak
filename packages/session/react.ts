@@ -30,7 +30,7 @@ import { transient } from '@yaks/graph/read'
 // the newest ask), the model is asked with that anchor plus only what followed;
 // otherwise the conversation is sent every time (`lines`: never the asks,
 // errors, or other turns' typed questions and answers kept beside it), or its
-// newest lines where the turn's `using.window` bounds them. That one rule is what
+// newest lines where the turn's `sending.window` bounds them. That one rule is what
 // makes a fork's first ask cheap where the provider allows it: the anchor is
 // the parent's last reply, and only the fork's new input is sent. What the
 // provider keeps about an ask is its own component on the ask entry
@@ -79,6 +79,7 @@ import {
   newestAsk,
   openCalls,
   ordered,
+  sendingBefore,
   seqOf,
   statusOf,
   textOf,
@@ -185,7 +186,7 @@ export type Deps = {
     session: Eid,
     boundary?: Eid,
   ) => Promise<Tool[]>
-  /** Tools offered only to a turn whose `using.tools` names them, beside the
+  /** Tools offered only to a turn whose `sending.tools` names them, beside the
    * runner's own: the ones a host can run that every transcript need not
    * carry. Asked for only when a turn names some. */
   named?: () => Tool[]
@@ -253,7 +254,7 @@ let objectIn = (text: string): Record<string, unknown> | undefined => {
 
 /**
  * The tools a turn is offered: the runner's own, or, where the turn's
- * `using.tools` names some, exactly those, each found among the runner's own
+ * `sending.tools` names some, exactly those, each found among the runner's own
  * and then among the ones it runs only by name, which are asked for only
  * then. A name nothing answers to is left out.
  *
@@ -342,6 +343,7 @@ export let statusEntries = async (
     'tool_progress',
     OUTPUT,
     USING,
+    'sending',
     'attempt',
     'execution',
     'interrupted',
@@ -410,7 +412,7 @@ let turnEntries = async (
       attemptState(b) == 'inflight' || b.checkpoint || b.prompt ||
       b.task_context
     ) ||
-    !(Math.floor(Number(usingBefore(entries)?.window)) >= 1)
+    !(Math.floor(Number(sendingBefore(entries)?.window)) >= 1)
   ) return full()
   return { entries, bodies: false }
 }
@@ -531,7 +533,7 @@ export let lines = (entries: Bundle[], asking?: Bundle): Bundle[] =>
 
 /** The newest `n` lines of a transcript, reaching back to the input that
  * began the turn they cut into, so no call or result is sent without its
- * pair: what a turn sends when its `using.window` is `n`. All of them when
+ * pair: what a turn sends when its `sending.window` is `n`. All of them when
  * `n` is not a count. */
 export let recent = (entries: Bundle[], n?: unknown): Bundle[] => {
   let size = Math.floor(Number(n))
@@ -550,7 +552,7 @@ let askingOf = (entries: Bundle[]): Bundle | undefined => {
   let last = newestAsk(entries)
   let since = last ? seqOf(last) : 0
   let asking = entries.filter((b) =>
-    (QUESTIONS in b || USING in b) && seqOf(b) > since
+    (QUESTIONS in b || USING in b || 'sending' in b) && seqOf(b) > since
   ).at(-1)
   let asked = asking && comp(asking, QUESTIONS)?.asked
   return asked && typeof asked == 'object' && !Array.isArray(asked)
@@ -1124,6 +1126,11 @@ export let react = async (
     : open.length && asked
     ? comp(asked, USING) ?? usingBefore(entries)
     : usingBefore(entries)
+  let sending = unfinished && executor
+    ? comp(unfinished, 'sending')
+    : open.length
+    ? (asked ? comp(asked, 'sending') : undefined) ?? sendingBefore(entries)
+    : sendingBefore(entries)
   const tools = offered(
     deps.toolSnapshot
       ? await deps.toolSnapshot(
@@ -1135,7 +1142,7 @@ export let react = async (
       )
       : deps.tools,
     deps.named ?? (() => []),
-    using?.tools,
+    sending?.tools,
   )
   // Legacy synchronous calls are run here. Native async calls have already
   // been given progress and are owned by their separate session_tool effect;
@@ -1381,7 +1388,7 @@ export let react = async (
       (boundary && seqOf(b) > seqOf(boundary) &&
         ['input', 'result'].includes(kindOf(b) ?? '') && !b.notice)
     )
-    : recent(said, using?.window)
+    : recent(said, sending?.window)
   if (!bodies) {
     let loaded = new Map(
       (await g.get(window.map((b) => b.entity.eid), [CONTENT])).map((
@@ -1444,17 +1451,21 @@ export let react = async (
   let req: Request = {
     signal: deps.signal,
     model: spelled,
-    ...using?.input ? { input: using.input as Record<string, unknown> } : {},
+    ...sending?.input
+      ? { input: sending.input as Record<string, unknown> }
+      : {},
     ...modalities ? { modalities } : {},
     ...questions ? { questions } : {},
     effort: effort == null ? undefined : String(effort),
     instructions: deps.resolveInstructions
       ? deps.resolveInstructions(
-        using?.instructions == null ? undefined : String(using.instructions),
+        sending?.instructions == null
+          ? undefined
+          : String(sending.instructions),
       )
-      : using?.instructions == null
+      : sending?.instructions == null
       ? deps.instructions
-      : String(using.instructions),
+      : String(sending.instructions),
     items: [
       ...dynamic,
       ...project(
@@ -1524,7 +1535,7 @@ export let react = async (
       inputText: deps.inputText,
     }
     : undefined
-  let summarizing = cut && using?.window == null
+  let summarizing = cut && sending?.window == null
     ? await compaction(cut)
     : undefined
   if (summarizing && !checkpoint) {
@@ -1587,10 +1598,17 @@ export let react = async (
   }
   let ask = unfinished && executor ? unfinished : line({
     [ASK]: { to: modelEid, through: newest.entity.eid },
-    ...using || req.instructions || executor
+    ...using
       ? {
         [USING]: {
           ...using,
+        },
+      }
+      : {},
+    ...sending || req.instructions || executor
+      ? {
+        sending: {
+          ...sending,
           instructions: req.instructions ?? null,
           ...executor ? { tools: req.tools.map((tool) => tool.name) } : {},
         },

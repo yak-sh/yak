@@ -33,7 +33,6 @@ test('blob-backed graph remains writable after SQL failure and rolls back the wh
     }])
     assertEquals((await h.g.read('.doc&*'))[0].doc, {
       body: 'accepted text',
-      title: null,
     })
   } finally {
     h.close()

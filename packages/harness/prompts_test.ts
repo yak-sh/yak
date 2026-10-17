@@ -250,19 +250,19 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
     let ask = history.find((b) => b.ask)!
     await h.g.apply([{
       entity: { eid: ask.entity.eid },
-      using: { instructions: retired },
+      sending: { instructions: retired },
     }])
     await a.send(id, 'continue')
     await a.idle(id)
     assertEquals(requests.at(-1)!.instructions, undefined)
     assertEquals(
       ((await a.transcript(id)).find((b) => b.entity.eid == ask.entity.eid)!
-        .using as Comp).instructions,
+        .sending as Comp).instructions,
       retired,
     )
     let current = await a.transcript(id)
     let latest = current.filter((b) => b.ask).at(-1)!
-    assertEquals((latest.using as Comp).instructions, null)
+    assertEquals((latest.sending as Comp | undefined)?.instructions, undefined)
     // A child of historical context must not reintroduce the old baseline.
     let child = crypto.randomUUID()
     await h.g.apply([
@@ -275,14 +275,15 @@ test('retired CLI instructions are omitted on future asks without rewriting hist
         entity: { eid: crypto.randomUUID() },
         entry: { session: child },
         content: { body: 'child assignment' },
-        using: { ...(ask.using as Comp), instructions: retired },
+        using: ask.using,
+        sending: { ...(ask.sending as Comp), instructions: retired },
       },
     ])
     await a.idle(child)
     assertEquals(requests.at(-1)!.instructions, undefined)
     await h.g.apply([{
       entity: { eid: latest.entity.eid },
-      using: { instructions: 'Custom instructions stay.' },
+      sending: { instructions: 'Custom instructions stay.' },
     }])
     await a.send(id, 'custom')
     await a.idle(id)

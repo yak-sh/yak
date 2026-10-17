@@ -277,6 +277,9 @@
         "wiring": {
           "type": "object",
           "description": "the frozen output recipe"
+        },
+        "sending": {
+          "type": "object"
         }
       },
       "required": [
@@ -314,7 +317,7 @@
         },
         "input": {
           "type": "object",
-          "description": "native request fields merged into using.input for a shadow variant; --input @input.json reads an object"
+          "description": "native request fields merged into sending.input for a shadow variant; --input @input.json reads an object"
         },
         "only": {
           "type": "array",
@@ -369,7 +372,8 @@
         "builder.immediate",
         "builder.wiring",
         "content.body",
-        "using"
+        "using",
+        "sending"
       ],
       "description": "reconcile a builder after its definition changes"
     },

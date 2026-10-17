@@ -776,6 +776,7 @@ export let sessionStatus = {
       'failed',
       'provisional',
       'using',
+      'sending',
       'ask',
       'call',
       'result',

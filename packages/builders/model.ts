@@ -121,8 +121,10 @@ export let modelTool = (desk: Desk = {}): Tool => ({
       binding: Binding
       template?: string
       using?: Comp
+      sending?: Comp
     }
     let using = args.using ?? {}
+    let sending = args.sending ?? {}
     if (!using.model) throw new Error('model builder has no using.model')
     // Retrying the adapter must not open another model session, including a
     // call whose session was minted before this idempotency boundary existed.
@@ -145,7 +147,11 @@ export let modelTool = (desk: Desk = {}): Tool => ({
         entity: { eid: derivedEid(`builder_prompt|${call.entity.eid}`) },
         entry: { session, seq: 1 },
         content: { body: prompt },
-        using: { ...using, instructions: instructions(using.instructions) },
+        using,
+        sending: {
+          ...sending,
+          instructions: instructions(sending.instructions),
+        },
       },
       ...(desk.persona ? [link(session, 'references', desk.persona)] : []),
     ]

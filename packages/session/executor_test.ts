@@ -23,6 +23,7 @@ let vocab = loadVocab([
     'entry',
     'ask',
     'using',
+    'sending',
     'attempt',
     'notice',
     'stop',
@@ -123,7 +124,7 @@ scenario(
     let call = p.submitted[0].call!
     equal(p.submitted[0].conversation, 'session')
     let [ask] = await p.g.get([call])
-    equal((ask.using as Record<string, unknown>).tools, [])
+    equal((ask.sending as Record<string, unknown>).tools, [])
     equal(ask.ask != null, true)
   },
 )
@@ -329,12 +330,13 @@ scenario(
     p.r.named = () => [old]
     await p.g.apply([
       { entity: { eid: toolEid('old') }, tool: { name: 'old' } },
-      { entity: { eid: 'ask' }, using: { tools: ['old'] } },
+      { entity: { eid: 'ask' }, sending: { tools: ['old'] } },
       {
         entity: { eid: 'later' },
         entry: { session: 'session' },
         content: { body: 'the following turn uses different tools' },
-        using: { provider: P, model: M, tools: [] },
+        using: { provider: P, model: M },
+        sending: { tools: [] },
       },
     ])
     p.reply({
@@ -369,7 +371,8 @@ scenario(
         entity: { eid: 'ask' },
         entry: { session: 'session' },
         ask: { to: M, through: 'input' },
-        using: { provider: P, model: M, tools: ['old'] },
+        using: { provider: P, model: M },
+        sending: { tools: ['old'] },
         attempt: { by: null },
       },
       {
@@ -381,7 +384,8 @@ scenario(
         entity: { eid: 'later' },
         entry: { session: 'session' },
         content: { body: 'the following turn uses different tools' },
-        using: { provider: P, model: M, tools: [] },
+        using: { provider: P, model: M },
+        sending: { tools: [] },
       },
     ])
     await react(p.g, 'session', p.r)
