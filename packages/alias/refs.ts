@@ -14,11 +14,10 @@
 // down must never find their write land on a different row because a name was
 // later created over it.
 //
-// And it takes one round trip, because a name's key entity has an id derived
-// from the name (@yaks/key): the lookup is `get([the id, the id's key entity])`
-// and a check of which came back. No query, no index, no scan. A value shaped
-// like an id these packages generate — a UUID, a content hash — is not looked
-// up at all, so ordinary eid references cost nothing.
+// A name's key entity has an id derived from the name (@yaks/key). Read
+// that key alone first, then check for a live eid only where a key exists.
+// Ordinary references do not gather the entity's computed properties just to
+// resolve its name. UUIDs and content hashes are never looked up as names.
 
 import type { Eid, ReadTx } from '@yaks/graph'
 import { after } from '@yaks/fp'
@@ -47,15 +46,26 @@ export let addressed = (
 ): Map<string, Eid> | Promise<Map<string, Eid>> => {
   let ask = [...new Set(ids.filter(wordish))]
   if (!ask.length) return new Map()
-  return after(tx.get([...ask, ...ask.map(aliasEid)]), (rows) => {
-    let by = new Map(rows.map((b) => [b.entity.eid, b]))
-    let at = new Map<string, Eid>()
-    for (let id of ask) {
-      // A live eid wins. An empty identity or tombstone is only a name.
-      if (alive(by.get(id))) continue
-      let of = ofOf(by.get(aliasEid(id)))
-      if (of) at.set(id, of)
-    }
-    return at
+  // Most references have no alias. Read only the key first: gathering the
+  // referenced entity here would evaluate its computed properties just to
+  // discover that its identity did not need resolving.
+  let names = ask.map((id) => [id, aliasEid(id)] as const)
+  return after(tx.get(names.map(([, key]) => key), ['key']), (keys) => {
+    let by = new Map(keys.map((b) => [b.entity.eid, b]))
+    let named = new Map(names.flatMap(([id, key]) => {
+      let of = ofOf(by.get(key))
+      return of ? [[id, of] as const] : []
+    }))
+    if (!named.size) return new Map<string, Eid>()
+    return after(tx.get([...named.keys()]), (rows) => {
+      let live = new Map(rows.map((b) => [b.entity.eid, b]))
+      let at = new Map<string, Eid>()
+      for (let [id, of] of named) {
+        // A live eid wins. An empty identity or tombstone is only a name.
+        if (alive(live.get(id))) continue
+        at.set(id, of)
+      }
+      return at
+    })
   })
 }
