@@ -91,7 +91,7 @@ test('failed oracle queries remain in the call and fork ledger', async () => {
   equal(totals(calls).inputTokens, null)
 })
 
-test('role is attached at call entry despite interleaved completions', async () => {
+let interleavedRoles = await (async () => {
   let resolve: (value: Awaited<ReturnType<Model>>) => void = () => {}
   let pending: Model = () =>
     new Promise((r) => {
@@ -107,6 +107,9 @@ test('role is attached at call entry despite interleaved completions', async () 
   await recording(immediate, calls, true, 'candidate')(req)
   resolve({ id: 'slow', model: 'synthetic', items: [] })
   await slow
-  equal(calls.map((c) => c.role), ['oracle', 'candidate'])
-  equal(calls.map((c) => c.response?.id), ['slow', 'fast'])
+  return calls
+})()
+test('role is attached at call entry despite interleaved completions', () => {
+  equal(interleavedRoles.map((c) => c.role), ['oracle', 'candidate'])
+  equal(interleavedRoles.map((c) => c.response?.id), ['slow', 'fast'])
 })
