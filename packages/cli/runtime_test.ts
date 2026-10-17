@@ -1,6 +1,6 @@
 // Source paths follow a private runtime; data and other checkouts do not. A
 // launcher's child never outlives its launcher.
-import { equal, ok, test, until } from '@yaks/testing'
+import { equal, test, until } from '@yaks/testing'
 import { alive, runtimePath, runtimeStack } from './runtime.ts'
 
 test('a runtime remaps source paths without moving neighboring checkouts or data', () => {
@@ -34,16 +34,16 @@ let text = (bytes: Uint8Array) => new TextDecoder().decode(bytes)
 let exists = (path: string) => Deno.stat(path).then(() => true, () => false)
 
 // A scratch directory holding the scripts a case runs, gone afterwards.
-let scratch = async (
+let scratch = async <T>(
   prefix: string,
   body: (
     script: (name: string, code: string) => Promise<string[]>,
     dir: string,
-  ) => Promise<void>,
-) => {
+  ) => Promise<T>,
+): Promise<T> => {
   let dir = await Deno.makeTempDir({ prefix })
   try {
-    await body(async (name, code) => {
+    return await body(async (name, code) => {
       await Deno.writeTextFile(`${dir}/${name}.ts`, code)
       return ['run', '-A', '--config', config, `${dir}/${name}.ts`]
     }, dir)
@@ -54,30 +54,31 @@ let scratch = async (
 
 // A launcher's child started the way runtime() starts one, which marks itself
 // started and then spins deaf to the SIGTERM it handles, as a worker stuck at
-// full CPU does. Each case ends the launcher its own way; the child goes too.
+// full CPU does. Each case ends the launcher its own way and says what became
+// of the child: 'gone', or how waiting for that failed.
 let tethering = (end: (launcher: Deno.ChildProcess) => void) =>
   scratch('yak-tether-', async (script, dir) => {
+    let spin = await script(
+      'spin',
+      `Deno.addSignalListener('SIGTERM', () => {})
+      Deno.writeTextFileSync(${JSON.stringify(`${dir}/started`)}, '')
+      while (true) {}`,
+    )
+    let launcher = new Deno.Command(Deno.execPath(), {
+      args: await script(
+        'launch',
+        `import { tethered } from ${JSON.stringify(runtime)}
+        let [command, ...args] = tethered(${
+          JSON.stringify([Deno.execPath(), ...spin])
+        })
+        let child = new Deno.Command(command, { args }).spawn()
+        console.log(child.pid)
+        await child.status`,
+      ),
+      stdout: 'piped',
+    }).spawn()
     let child = 0
     try {
-      let spin = await script(
-        'spin',
-        `Deno.addSignalListener('SIGTERM', () => {})
-        Deno.writeTextFileSync(${JSON.stringify(`${dir}/started`)}, '')
-        while (true) {}`,
-      )
-      let launcher = new Deno.Command(Deno.execPath(), {
-        args: await script(
-          'launch',
-          `import { tethered } from ${JSON.stringify(runtime)}
-          let [command, ...args] = tethered(${
-            JSON.stringify([Deno.execPath(), ...spin])
-          })
-          let child = new Deno.Command(command, { args }).spawn()
-          console.log(child.pid)
-          await child.status`,
-        ),
-        stdout: 'piped',
-      }).spawn()
       let out = launcher.stdout.getReader()
       child = Number(text((await out.read()).value!))
       await out.cancel()
@@ -87,23 +88,26 @@ let tethering = (end: (launcher: Deno.ChildProcess) => void) =>
       })
       end(launcher)
       await launcher.status
-      await until(() => !alive(child), { label: `child ${child} gone` })
+      return await until(() => !alive(child), { label: `child ${child} gone` })
+        .then(() => 'gone', (error: Error) => error.message)
     } finally {
-      // Only the child this test's own launcher started, if it outlived it.
+      // Only what this case started: the child, if it outlived its launcher,
+      // and the launcher, if the case failed before ending it.
       if (child && alive(child)) Deno.kill(child, 'SIGKILL')
+      try {
+        launcher.kill('SIGKILL')
+      } catch {
+        // It has ended, as the case meant.
+      }
+      await launcher.status
     }
   })
 
-test('a launcher killed outright takes its spinning child with it', () =>
-  tethering((launcher) => launcher.kill('SIGKILL')))
-
-test('a launcher ended any other way takes its child too', () =>
-  tethering((launcher) => launcher.kill('SIGTERM')))
-
 // A pinned child's handshake: its parent is its owner; a live stranger named
 // by an inherited environment is not, and the child runs on as its own; a
-// launcher gone before the tie was made ends the child at once.
-test('a pinned child owns its parent, ignores a stranger, ends without either', () =>
+// launcher gone before the tie was made ends the child at once. Each answer
+// is what the child said, or its stderr when it said nothing.
+let handshake = () =>
   scratch('yak-handshake-', async (script) => {
     let gone = new Deno.Command('true').spawn()
     await gone.status
@@ -129,12 +133,29 @@ test('a pinned child owns its parent, ignores a stranger, ends without either', 
         stdout: 'piped',
         stderr: 'piped',
       }).output()
-      ok(stdout.length, text(stderr))
-      return JSON.parse(text(stdout))
+      return stdout.length ? JSON.parse(text(stdout)) : text(stderr)
     }
-    equal(await Promise.all([Deno.pid, 1, gone.pid].map(ask)), [
-      { code: null, owner: 'parent' },
-      { code: null, owner: 'self' },
-      { code: 137, owner: 'self' },
-    ])
-  }))
+    return await Promise.all([Deno.pid, 1, gone.pid].map(ask))
+  })
+
+// Each scenario runs once as the file loads, all at once, and its test reads
+// what it left. They start processes, not stand-ins: the kernel's tie between
+// a launcher and its child is what these tests hold.
+let [killed, ended, shaken] = await Promise.all([
+  tethering((launcher) => launcher.kill('SIGKILL')),
+  tethering((launcher) => launcher.kill('SIGTERM')),
+  handshake(),
+])
+
+test('a launcher killed outright takes its spinning child with it', () =>
+  equal(killed, 'gone'))
+
+test('a launcher ended any other way takes its child too', () =>
+  equal(ended, 'gone'))
+
+test('a pinned child owns its parent, ignores a stranger, ends without either', () =>
+  equal(shaken, [
+    { code: null, owner: 'parent' },
+    { code: null, owner: 'self' },
+    { code: 137, owner: 'self' },
+  ]))
