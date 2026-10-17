@@ -145,6 +145,7 @@ let app = async (
     read,
     kernel,
     call: (name: string, args: Comp) => kernel('/call', { name, args }),
+    settled: p.settled,
     [Symbol.asyncDispose]: () => p[Symbol.asyncDispose](),
   }
 }
@@ -504,36 +505,42 @@ test('shadow outputs do not start downstream immediate builders', async () => {
   assertEquals((await v.read(`.build.builder=${next}&*`)).length, 1)
 })
 
+// The supply case's store, seeded and quiet when the file loads so the case
+// times only what it checks: a staged builder over one source, and a song an
+// account already made.
+let SONG = 'a0000000-0000-4000-8000-0000000000cc'
+let supplied = await app()
+assertEquals(
+  (await supplied.send('/apply', [{
+    entity: { eid: SOURCE },
+    doc: { title: 'Source', body: 'Village.' },
+  }, {
+    entity: { eid: SONG },
+    artifact: { address: 'existing-song', media_type: 'audio/wav', size: 4 },
+  }, {
+    entity: { eid: BUILDER },
+    content: { body: 'Make a villager from $body.' },
+    using: {
+      model: MODEL,
+      provider: identityEid('provider', ['workers-ai']),
+    },
+    builder: {
+      query: '$s .doc.title=Source, doc.body=$body',
+      to: toolEid('builder_model'),
+    },
+    staged: {},
+  }])).status,
+  200,
+)
+await supplied.settled()
+
 test('builder_supply in an app store is current without any model spending', async () => {
-  let v = await app()
-  let artifact = 'a0000000-0000-4000-8000-0000000000cc'
-  assertEquals(
-    (await v.send('/apply', [{
-      entity: { eid: SOURCE },
-      doc: { title: 'Source', body: 'Village.' },
-    }, {
-      entity: { eid: artifact },
-      artifact: { address: 'existing-song', media_type: 'audio/wav', size: 4 },
-    }, {
-      entity: { eid: BUILDER },
-      content: { body: 'Make a villager from $body.' },
-      using: {
-        model: MODEL,
-        provider: identityEid('provider', ['workers-ai']),
-      },
-      builder: {
-        query: '$s .doc.title=Source, doc.body=$body',
-        to: toolEid('builder_model'),
-      },
-      staged: {},
-    }])).status,
-    200,
-  )
+  await using v = supplied
   let ask = {
     builder: BUILDER,
     for: SOURCE,
     slot: 'song',
-    artifact,
+    artifact: SONG,
     args: { prompt: 'Original prompt', model: 'Original model', loudness: -16 },
   }
   assertEquals(
@@ -544,7 +551,7 @@ test('builder_supply in an app store is current without any model spending', asy
   assertEquals(r.status, 200)
   let output = await answerId(r)
   let [made] = await v.read(`.entity.eid=${output}&*`)
-  assertEquals((made.built as Comp).artifact, artifact)
+  assertEquals((made.built as Comp).artifact, SONG)
   assertEquals((made.built as Comp).current, true)
   assertEquals((made.created as Comp).by, ADA)
   let [call] = await v.read(`.entity.eid=${(made.built as Comp).call}&*`)
