@@ -736,7 +736,20 @@ test('Session paints the newest page and loads earlier entries on demand', async
     },
   }
   resetSignals()
+  let priorStyle = Object.getOwnPropertyDescriptor(
+    globalThis,
+    'getComputedStyle',
+  )
+  let styleReads = 0
+  Object.defineProperty(globalThis, 'getComputedStyle', {
+    configurable: true,
+    value: (el: HTMLElement) => {
+      styleReads++
+      return { overflowY: el.tagName == 'MAIN' ? 'auto' : 'visible' }
+    },
+  })
   let mounted = mount(<Session e={ent(eid)} />)
+  let initialStyleReads = styleReads
   let change = (seq: number) => [
     { eid: `entry-${seq}`, name: 'entry', comp: { session: eid, seq } },
     { eid: `entry-${seq}`, name: 'content', comp: { body: `line ${seq}` } },
@@ -754,6 +767,9 @@ test('Session paints the newest page and loads earlier entries on demand', async
     })
     await tick()
     assertEquals(lines().includes('line 201'), true)
+    // The growing transcript keeps its host scroller. Discovering it again
+    // here forces style/layout over all the newly mounted entry rows.
+    assertEquals(styleReads, initialStyleReads)
     assertEquals(lines().includes('line 1'), false)
     let earlier = mounted.root.querySelector('.Session_Earlier') as HTMLElement
     assertEquals(earlier?.textContent, '↑ Earlier entries')
@@ -775,6 +791,10 @@ test('Session paints the newest page and loads earlier entries on demand', async
     assertEquals(mounted.root.querySelector('.Session_Earlier'), null)
   } finally {
     mounted.free()
+    if (priorStyle) {
+      Object.defineProperty(globalThis, 'getComputedStyle', priorStyle)
+    } else {delete (globalThis as { getComputedStyle?: unknown })
+        .getComputedStyle}
     useRoute(off)
     cache.value = {}
     resetSignals()

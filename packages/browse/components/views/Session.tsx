@@ -472,6 +472,16 @@ let useTranscript = (
   load: () => void,
 ) => {
   let frame = useRef<HTMLDivElement>(null)
+  // Find the host's scroll container while the transcript is still empty.
+  // Re-reading computed style after every appended tail forces the browser
+  // to lay out the whole transcript just to rediscover the same ancestor.
+  let scroller = useRef<HTMLElement | null | undefined>(undefined)
+  let scroll = () => {
+    if (scroller.current === undefined) {
+      scroller.current = scrollerOf(frame.current)
+    }
+    return scroller.current
+  }
   let stuck = useRef(true)
   let [shown, setShown] = useState(WINDOW)
   let anchor = useRef<number | null>(null)
@@ -487,14 +497,14 @@ let useTranscript = (
     let { start, more, pending, load } = page.current
     if (anchor.current != null || pending) return
     if (!start && !more) return
-    let s = scrollerOf(frame.current)
+    let s = scroll()
     anchor.current = s ? s.scrollHeight - s.scrollTop : 0
     setShown((n) => n + WINDOW)
     if (!start) load()
   }
   useLayoutEffect(() => {
     if (anchor.current == null || pending) return
-    let s = scrollerOf(frame.current)
+    let s = scroll()
     if (s) s.scrollTop = s.scrollHeight - anchor.current
     anchor.current = null
   }, [shown, loaded, pending])
@@ -503,7 +513,7 @@ let useTranscript = (
   let startRef = useRef(start)
   startRef.current = start
   useEffect(() => {
-    let s = scrollerOf(frame.current)
+    let s = scroll()
     if (!s) return
     let sample = () => {
       // within a scrollbar-rounding of the end still counts as AT it
@@ -531,7 +541,7 @@ let useTranscript = (
   // Pin the bottom while stuck (the tail moved).
   useLayoutEffect(() => {
     if (!stuck.current) return
-    let s = scrollerOf(frame.current)
+    let s = scroll()
     if (s) s.scrollTop = s.scrollHeight
   }, [tail])
 
