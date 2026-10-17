@@ -22,6 +22,7 @@ import type { Host } from '@yaks/host'
 import { MODEL, PROVIDER } from '@yaks/model'
 import { parse } from '@yaks/query'
 import { transcript, usingBefore } from '@yaks/session'
+import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
 import { defaultUsing, selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
@@ -50,14 +51,14 @@ let settled = async (
   s: Eid,
   stopping?: AbortSignal,
 ): Promise<Bundle[]> => {
-  for (;;) {
+  for await (let done of changes(graph, { signal: stopping })) {
     let [self] = await graph.get([s], ['session'])
     let status = (self?.session as Comp | undefined)?.status
-    if (!WORKING.includes(String(status)) || stopping?.aborted) {
+    if (!WORKING.includes(String(status)) || done) {
       return (await transcript(graph, s)).slice(-1)
     }
-    await new Promise((go) => setTimeout(go, 100))
   }
+  throw new Error('wait ended without a final read')
 }
 
 // Who called: what they asked a session is theirs (@yaks/tools signs the call

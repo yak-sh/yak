@@ -11,8 +11,7 @@
 // tool works the same way, for the same reason.
 //
 // Waiting is polling. There is no separate notification channel: the wait asks
-// the graph the same question a person would, on the same interval this package
-// already reads its logs on, until the run is over. Whether a run is over
+// the graph the same question a person would, only after committed data changes, until the run is over. Whether a run is over
 // depends on what is behind the session — one with a `process` component ends
 // when that process exits (a provider often prints its final event and then
 // lingers, so its own `stop` entry does not mean the run ended), and one with
@@ -41,12 +40,12 @@ import {
 } from '@yaks/session'
 import { render } from '@yaks/text'
 import { CallError } from '@yaks/tools/errors'
+import { changes } from '@yaks/session/wait'
 import { spelling } from './run.ts'
 
 /** What config can set for these tools. */
 export type Options = {
-  /** how often a wait re-reads the graph (ms, default 250 — the same beat
-   * ./effects.ts reads a log on) */
+  /** how often a wait re-reads the graph (ms, default 1000) */
   poll?: number
   /** how long a wait runs before it reports "still going" (default `30m`) */
   timeout?: string
@@ -60,7 +59,6 @@ export type Host = { graph: Graph; stopping?: AbortSignal }
 
 let uuid = () => crypto.randomUUID() as string
 let str = (v: unknown): string => v == null ? '' : String(v)
-let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
@@ -145,7 +143,7 @@ let over = (row: Bundle | undefined, entries: Bundle[]): boolean =>
   row?.[PROCESS] ? comp(row, EXIT) != null : ENDED.has(statusOf(entries))
 
 export let runs = (host: Host, options: Options = {}): Runs => {
-  let beat = Number(options.poll ?? 250)
+  let beat = Number(options.poll ?? 1000)
   let patience = (said: unknown) =>
     every(said, every(options.timeout, 30 * 60_000))
   let lines = (said: unknown) => {
@@ -165,7 +163,7 @@ export let runs = (host: Host, options: Options = {}): Runs => {
     return [head, briefOf(row, entries)].filter(Boolean).join('\n')
   }
 
-  // The wait itself: the same two reads, on the beat, until the run is over,
+  // Re-read only when the committed revision changes, until the run is over,
   // the patience runs out, or the process answering it starts to stop, which
   // answers now rather than holding that stop: the caller asks again, of
   // whichever process answers next.
@@ -174,7 +172,13 @@ export let runs = (host: Host, options: Options = {}): Runs => {
     session: string,
     timeout: number,
   ): Promise<string> => {
-    for (let end = Date.now() + timeout;;) {
+    for await (
+      let done of changes(graph, {
+        every: beat,
+        timeout,
+        signal: host.stopping,
+      })
+    ) {
       let row = (await one(graph, session))!
       let entries = await entriesOf(graph, session)
       if (over(row, entries)) return ending(graph, row, entries)
@@ -184,11 +188,11 @@ export let runs = (host: Host, options: Options = {}): Runs => {
       if (host.stopping?.aborted) {
         return `${still}; this server is stopping, so wait again`
       }
-      if (Date.now() >= end) {
+      if (done) {
         return `${still} after ${Math.round(timeout / 1000)}s`
       }
-      await sleep(Math.min(beat, Math.max(0, end - Date.now())))
     }
+    throw new Error('wait ended without a final read')
   }
 
   return {
