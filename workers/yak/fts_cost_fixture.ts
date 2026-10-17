@@ -286,6 +286,11 @@ export let ftsCost = (storage: DurableStorage) => {
     counting = false
     lookups[name] = { rows, read, written }
   }
+  read = written = 0
+  counting = true
+  let prefixRows = db.query(compile(parse('.entity.eid=near..nearg'), vocab))
+  counting = false
+  let prefix = { rows: prefixRows, read, written }
   // Every text hit in this multi-term query is already a comment: eligibility
   // adds probes but cannot reduce its intermediate owner sets.
   db.query({
@@ -330,6 +335,7 @@ export let ftsCost = (storage: DurableStorage) => {
     screened,
     queries,
     lookups,
+    prefix,
     broad,
     all,
     wide: large,

@@ -88,6 +88,12 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
     report.few.parameters <= 100,
     `${report.few.parameters} bound parameters`,
   )
+  assertEquals(report.prefix.rows, [{ eid: 'near' }])
+  assertEquals(report.prefix.written, 0)
+  assert(
+    report.prefix.read < 30,
+    `${report.prefix.read} prefix lookup billed rows`,
+  )
   assertEquals(report.lookups.stable.rows, report.lookups.linear.rows)
   assertEquals(report.lookups.bound.rows, report.lookups.linear.rows)
   assertEquals(report.lookups.stable.written, 0)

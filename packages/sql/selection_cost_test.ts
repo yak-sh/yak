@@ -54,3 +54,26 @@ test('extension candidates retain absence tests', () =>
   assertEquals(ids(sql.query(absent)), ['far']))
 test('extension candidates retain component visibility', () =>
   assertEquals(ids(sql.query(hidden)), []))
+
+// A printed #handle is resolved as a range over the text eid, not a scan of
+// every entity. Numeric-looking text remains text, including leading zeros.
+let handles = [
+  ['.entity.eid=near..nearg', ['near']],
+  ['.entity.eid>nea .entity.eid<neas', ['near']],
+  ['.entity.eid=far', ['far']],
+] as const
+for (let [line, expected] of handles) {
+  let compiled = query(line)
+  let explanation = sql.query({ t: 'explain query plan', of: compiled })
+    .map((r) => String(r.detail)).join('\n')
+  test(`eid lookup seeks the spine index: ${line}`, () => {
+    let stmt = db.prepare(compiled.sql)
+    try {
+      assertEquals(ids(stmt.all(...compiled.params)), [...expected])
+      let scans = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 1, 0)
+      assert(scans < 20, `${scans} full-scan advances\n${explanation}`)
+    } finally {
+      stmt.finalize()
+    }
+  })
+}

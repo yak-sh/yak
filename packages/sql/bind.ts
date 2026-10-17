@@ -461,7 +461,10 @@ export let readAt = (
   return {
     expr,
     tag: tagAt(v, derived, comp, prop),
-    textAffinity: def?.affinity == 'text' && def.category != 'ref',
+    // The spine's eid is stored as TEXT, just like a declared text column.
+    // Casting it hides the unique index from prefix/range lookups.
+    textAffinity: comp == 'entity' && prop == 'eid' ||
+      def?.affinity == 'text' && def.category != 'ref',
   }
 }
 
