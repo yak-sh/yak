@@ -177,3 +177,16 @@ test('pageEntries pages the rendered log by sequence', () => {
     [5],
   )
 })
+
+test('pending tool results are system frames, never the owner speaking', () => {
+  let log = graphLog([{
+    eid: 'pending',
+    seq: 1,
+    comps: { tool_progress: { call: 'call' }, content: { body: 'Pending.' } },
+  }])
+  assertEquals(log.entries[0].row, {
+    kind: 'sys',
+    tag: 'pending',
+    text: 'Pending.',
+  })
+})

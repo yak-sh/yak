@@ -387,3 +387,28 @@ test('expanded entries offer only specifically rendered faces', () =>
       true,
     )
   }))
+
+const pendingViews: unknown[] = []
+withDom((root) => {
+  let e = {
+    eid: 'progress',
+    entry: { session: 'session', seq: 4 },
+    content: { body: 'Pending.' },
+    tool_progress: { call: 'call' },
+  } as unknown as Ent
+  for (let view of ['Entry.Summary', 'Entry.Full', 'Tile']) {
+    render(h(resolve(e, view).Render, { e }), root)
+    pendingViews.push([
+      root.querySelector('.Entry_SysTag')?.textContent,
+      root.querySelector('.Entry_SysText')?.textContent,
+      root.querySelector('.Entry-user'),
+      root.querySelector('.Entry_Speaker'),
+    ])
+  }
+})
+test('pending entries resolve as system news in every prose view', () => {
+  assertEquals(
+    pendingViews,
+    Array.from({ length: 3 }, () => ['pending', 'Pending.', null, null]),
+  )
+})

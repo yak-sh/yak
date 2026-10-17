@@ -329,6 +329,17 @@ export let ResultSummary = (
   )
 }
 
+// Progress is runtime news, not prose from the person or the model.
+export let PendingSummary = ({ e }: { e: Ent }) => (
+  <EntryBody
+    x={{
+      seq: 0,
+      line: '',
+      row: { kind: 'sys', tag: 'pending', text: body(e) },
+    }}
+  />
+)
+
 export let MessageSummary = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
   return (

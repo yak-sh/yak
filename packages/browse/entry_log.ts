@@ -100,6 +100,9 @@ let shown = (
       ? { kind: 'exec', command: args.command, desc: tool }
       : { kind: 'tool', name: tool, detail: clip(JSON.stringify(args)) }
   }
+  if (c.tool_progress) {
+    return { kind: 'sys', tag: 'pending', text: textOf(b) }
+  }
   if (kind == 'result') {
     let call = byEid.get(text(c.result?.call))
     let body = clip(textOf(b))

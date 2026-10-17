@@ -2111,3 +2111,42 @@ test('an anchored continuation includes a tool final committed during its preced
     text: 'Tool async-c1 completed:\nFINAL_DURING_ANCHORED_ASK',
   }, { kind: 'assistant', text: 'held reply' }])
 })
+
+const pendingSession = world()
+const pendingModel = scripted([
+  calls(['pending-c1', 'hi']),
+  says('pending-r2', 'working'),
+], false)
+await react(pendingSession, ids.s, {
+  model: pendingModel.model,
+  tools: [echo],
+  asyncTools: true,
+  mint,
+})
+await react(pendingSession, ids.s, {
+  model: pendingModel.model,
+  tools: [echo],
+  asyncTools: true,
+  mint,
+})
+
+const pendingEntries = await transcript(pendingSession, ids.s)
+
+test('async calls send a small pending result and teach its behavior once', () => {
+  let progress = pendingEntries.find((b) => b.tool_progress)!
+  assertEquals(kindOf(progress), 'result')
+  assertEquals(textOf(progress), 'Pending.')
+  assertEquals(progress.result, undefined)
+  let req = pendingModel.asked[1]
+  assertEquals(req.items.filter((item) => item.kind == 'result'), [{
+    kind: 'result',
+    id: 'pending-c1',
+    output: 'Pending.',
+  }])
+  assertEquals(req.tools[0].description.includes('Do not poll'), true)
+  assertEquals(
+    req.tools.map((tool) => tool.description).join('').split('Tools may return')
+      .length,
+    2,
+  )
+})

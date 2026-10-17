@@ -930,11 +930,7 @@ export let react = async (
           progress.push({
             ...line(
               { tool_progress: { call: call.entity.eid } },
-              'Status: in_progress. This call is still running, not finished. ' +
-                'Its final result will be appended automatically and you will be called again. ' +
-                'Do independent work now, or END THIS RESPONSE if nothing independent remains. ' +
-                'Ending your response does not cancel this call. Do not poll, wait, ' +
-                'invent its result, or repeat this call.',
+              'Pending.',
             ),
             entity: { eid: derivedEid(call.entity.eid + ':progress') },
           })
@@ -1475,9 +1471,15 @@ export let react = async (
         },
       ),
     ],
-    tools: tools.map(({ name, description, parameters }) => ({
+    tools: tools.map(({ name, description, parameters }, index) => ({
       name,
-      description,
+      description: deps.asyncTools && index == 0
+        ? description + '\n\n' +
+          'Tools may return "Pending." while still running. Their final results ' +
+          'arrive automatically and wake you again. Do independent work or end ' +
+          'your response; ending does not cancel pending calls. Do not poll, ' +
+          'wait for, repeat, or invent the results of pending calls.'
+        : description,
       parameters,
     })),
     anchor: anchorId,
