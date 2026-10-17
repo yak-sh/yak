@@ -572,6 +572,48 @@ test('modern header without its envelope is refused by the SDK after authenticat
   assertEquals(body.error.code, -32602)
 })
 
+// ChatGPT names the protocol in the body's envelope and sends none of the
+// standard headers that mirror it.
+test('a modern request without its standard headers is answered from its body', async () => {
+  let door = mcp({ graph: shopGraph(), authenticate: () => ada })
+  let modern = (method: string, params: Record<string, unknown> = {}) =>
+    new Request('http://shop.test/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method,
+        params: {
+          ...params,
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {},
+            'io.modelcontextprotocol/clientInfo': { name: 'gpt', version: '1' },
+          },
+        },
+      }),
+    })
+  let answer = async (r: Request) => {
+    let text = await (await door(r)).text()
+    let data = text.split('\n').find((l) => l.startsWith('data:'))
+    return JSON.parse(data ? data.slice(5) : text)
+  }
+  let listed = await answer(modern('tools/list'))
+  assert(listed.result.tools.length >= 4, JSON.stringify(listed))
+  let read = await answer(modern('tools/call', {
+    name: 'graph_query',
+    arguments: { q: '.book' },
+  }))
+  assertEquals(read.result.isError, undefined, JSON.stringify(read))
+  let lying = modern('tools/list')
+  lying.headers.set('mcp-method', 'tools/call')
+  assertEquals((await answer(lying)).error.code, -32020)
+})
+
 test('stdio selects modern or legacy using the same attributed tool factory', async () => {
   let { Client: ModernClient, InMemoryTransport: ModernPair } = await import(
     '@modelcontextprotocol/client'

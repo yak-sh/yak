@@ -26,6 +26,7 @@ import {
   createMcpHandler,
   InMemoryTransport,
   isLegacyRequest,
+  PROTOCOL_VERSION_META_KEY,
   readRequestBody,
 } from '@modelcontextprotocol/server'
 import {
@@ -112,6 +113,56 @@ let connected = async (
     },
   }])
   return { session, id: fresh }
+}
+
+// The modern protocol's standard headers (SEP-2243) mirror what the body
+// already says: its protocol version (in `_meta`), its method, and the name it
+// acts on. The SDK refuses a request missing a mirror, and ChatGPT sends the
+// body alone, so a missing mirror is filled from the body. A header the client
+// sent is kept, so one that disagrees with its body is still refused.
+let NAMED: Record<string, string> = {
+  'tools/call': 'name',
+  'prompts/get': 'name',
+  'resources/read': 'uri',
+  'tasks/get': 'taskId',
+  'tasks/update': 'taskId',
+  'tasks/cancel': 'taskId',
+}
+
+// A value a header carries as it is, or else in the SDK's Base64 sentinel.
+let PLAIN = /^[\x21-\x7e]([\x20-\x7e]*[\x21-\x7e])?$/
+let headed = (value: string) =>
+  PLAIN.test(value) && !value.startsWith('=?base64?')
+    ? value
+    : `=?base64?${
+      btoa(String.fromCharCode(...new TextEncoder().encode(value)))
+    }?=`
+
+let mirrors = (body: unknown): [string, unknown][] => {
+  if (!body || typeof body != 'object' || !('method' in body)) return []
+  let { method, params } = body as { method: unknown; params?: unknown }
+  let p = params && typeof params == 'object'
+    ? params as Record<string, unknown>
+    : {}
+  let meta = p._meta && typeof p._meta == 'object'
+    ? p._meta as Record<string, unknown>
+    : {}
+  let named = typeof method == 'string' ? NAMED[method] : undefined
+  return [
+    ['mcp-protocol-version', meta[PROTOCOL_VERSION_META_KEY]],
+    ['mcp-method', method],
+    ['mcp-name', named ? p[named] : undefined],
+  ]
+}
+
+let mirrored = (request: Request, body: unknown): Request => {
+  let missing = mirrors(body).filter(([name, value]) =>
+    typeof value == 'string' && !request.headers.has(name)
+  )
+  if (!missing.length) return request
+  let headers = new Headers(request.headers)
+  for (let [name, value] of missing) headers.set(name, headed(value as string))
+  return new Request(request, { headers })
 }
 
 // One JSON-RPC request, answered by an MCP server object of its own. The
@@ -281,13 +332,14 @@ export let mcp = (opts: MountOptions): Handler => {
           typeof body.method == 'string'
         ? { method: body.method }
         : undefined
-      callers.set(request, { actor, exchange })
+      let sent = mirrored(request, body)
+      callers.set(sent, { actor, exchange })
       try {
         // The SDK owns the exchange lifetime, including SSE and cancellation.
         // Closing here would truncate a response whose stream is still active.
-        return await modern.fetch(request, { parsedBody: body })
+        return await modern.fetch(sent, { parsedBody: body })
       } finally {
-        callers.delete(request)
+        callers.delete(sent)
       }
     } catch (err) {
       return refusing(err, request)

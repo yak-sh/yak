@@ -2752,6 +2752,7 @@
       "a call is answered while a subscriber is still reading what it wrote": 21.7,
       "a caller-owned MCP session does not write into the tool graph": 2.7,
       "a pinned modern HTTP client discovers awaited facets and records malformed calls through the runner": 80,
+      "a modern request without its standard headers is answered from its body": 6,
       "a slow tool answers with its committed outcome": 1.8,
       "an MCP connection writes through its own graph session": 5.3,
       "authentication keeps its actor while the MCP session names the run": 4.7,
@@ -2761,6 +2762,7 @@
       "stdio selects modern or legacy using the same attributed tool factory": 26.8,
       "the door answers the protocol, and signs what a tool writes": 3.9,
       "the door hands over the face it was given": 7,
+      "the door refuses a body it cannot parse, and leaves an unreadable modern one to the SDK": 1.2,
       "what the host owes a direct call rides after the answer, which is unchanged": 1.4,
       "x-via keeps its session, and a one-shot CLI call gets one": 11.3
     },
