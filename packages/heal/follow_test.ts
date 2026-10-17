@@ -219,11 +219,14 @@ let put = (g: Graph, bundles: Bundle[]) => g.apply(bundles, { trusted: true })
 let fresh = await fixture({}, true)
 let [freshBug] = await fresh.tracker.get([bug])
 let fileFresh = follow(fresh.g, fresh.config)
+await fileFresh(freshBug, url, (rows) => put(fresh.tracker, rows))
+let freshWritten = await fresh.g.get(
+  fresh.commits[0].map((row) => row.entity.eid),
+)
 test('the tracker follower files task, evidence edge and fixer atomically', async () => {
-  await fileFresh(freshBug, url, (rows) => put(fresh.tracker, rows))
-  let { g, tracker, commits } = fresh
+  let { tracker, commits } = fresh
   equal(commits.length, 1)
-  let written = await g.get(commits[0].map((row) => row.entity.eid))
+  let written = freshWritten
   let task = written.find((row) => row.task)!
   let fixer = written.find((row) => row.fixer)!
   let entry = written.find((row) => row.entry)!
@@ -1492,3 +1495,28 @@ for (let source of [url, 'yaks.app']) {
     f.close()
   })
 }
+
+// A manually claimed native task need not wear fixer history. Its completed
+// local task is not proof that the authoritative tracker was resolved.
+let untagged = await settledCase()
+await put(untagged.f.g, [
+  { entity: { eid: untagged.holder }, fixer: null },
+  {
+    entity: { eid: taskEid(bug) },
+    completed: {},
+    claim: { session: untagged.holder },
+  },
+])
+await untagged.f.replay()
+let untaggedFixers = await rows(untagged.f.g, 'fixer')
+let [untaggedTask] = await untagged.f.g.get([taskEid(bug)])
+await untagged.f.replay()
+let untaggedReplayed = await count(untagged.f.g, 'fixer')
+test('completed task held by an untagged settled native session gets one tracker fixer', () => {
+  equal(untaggedFixers.length, 1)
+  ok(untaggedFixers[0].entity.eid != untagged.holder)
+  equal(comp(untaggedTask, 'claim').session, untaggedFixers[0].entity.eid)
+  ok(!untaggedTask.completed)
+  equal(untaggedReplayed, 1)
+  untagged.f.close()
+})
