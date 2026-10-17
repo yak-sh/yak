@@ -211,7 +211,7 @@ let page = <Node>(e: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
 }
 
 /** Draws a bug or an error by name. */
-export let views = define([
+export let views: import('@yaks/render').Registry = define([
   {
     view: 'Title',
     match: parse('.bug .doc.title'),
@@ -234,5 +234,5 @@ export let views = define([
   ]),
 ])
 
-export let inspectViews = () =>
+export let inspectViews = (): Promise<import('@yaks/inspect').View[]> =>
   import('./inspect.ts').then((m) => m.inspectViews)

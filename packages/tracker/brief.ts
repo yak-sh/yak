@@ -104,7 +104,10 @@ export let count = (n: number, noun: string): string =>
 /** Whom a bug reached, from the people its occurrences name and the kind of
  * account they reached (`bug.people`, `bug.account`): a person's failure
  * reads apart from a probe's at a glance. */
-export let whom = (people: number, account: string | null | undefined) =>
+export let whom = (
+  people: number,
+  account: string | null | undefined,
+): string =>
   account == 'test'
     ? 'test accounts only'
     : people

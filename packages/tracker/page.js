@@ -1,3 +1,4 @@
+// @ts-self-types="./page.d.ts"
 // Browser capture and the empty-page fallback, woven inline into every page
 // an app serves, ahead of the page's own scripts (page-script.ts). Wrapped,
 // so none of its names land in the page's global scope, where a classic

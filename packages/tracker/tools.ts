@@ -30,7 +30,11 @@ let one = (g: Graph, eid: string): Bundle | Promise<Bundle> =>
   })
 
 /** Bug reads preserve caller ordering, defaulting to worst first. */
-export let bugs = (g: Graph, query: Query, count = 50) =>
+export let bugs = (
+  g: Graph,
+  query: Query,
+  count = 50,
+): Bundle[] | Promise<Bundle[]> =>
   g.read(and(
     present('bug'),
     ...query.clauses,

@@ -8,7 +8,7 @@
 import { after } from '@yaks/fp'
 import type { Bundle, Comp, Plugin } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { hook } from '@yaks/graph/plugin'
+import { type Hook, hook } from '@yaks/graph/plugin'
 import { headline, sha } from './brief.ts'
 import { comp, str } from './model.ts'
 import { said } from './reading.ts'
@@ -58,7 +58,7 @@ let refused = (eid: string, missing: string[]) =>
 
 /** The precondition: each bug a batch resolves is explained, counting what
  * its mark already holds. */
-export let explaining = hook(['resolved'], (bundles, tx) => {
+export let explaining: Hook = hook(['resolved'], (bundles, tx) => {
   let writes = bundles.filter((b) => b.resolved)
   if (!writes.length) return bundles
   return after(tx.get(writes.map((b) => b.entity.eid)), (rows) => {
