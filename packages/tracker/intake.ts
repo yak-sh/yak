@@ -3,7 +3,13 @@
 
 import type { Bundle, Graph } from '@yaks/graph'
 
-export type Record = { rows: Bundle[]; ack: () => void | Promise<void> }
+export type Record = {
+  rows: Bundle[]
+  ack: () => void | Promise<void>
+  /** A durable local receipt, retained until remote delivery is acknowledged. */
+  admitted?: boolean
+  admit?: () => void | Promise<void>
+}
 export type Source = () => AsyncIterable<Record>
 
 export let ingest = async (g: Graph, rows: Bundle[]): Promise<void> => {

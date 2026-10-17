@@ -65,8 +65,18 @@ export let files = (dir: string): {
       let rows: Bundle[] = text.trimEnd().split('\n').flatMap((line) =>
         JSON.parse(line)
       )
+      let admitted = name.endsWith('.local.jsonl')
       yield {
         rows,
+        admitted,
+        admit: async () => {
+          if (admitted) return
+          let next = path.replace(/\.jsonl$/, '.local.jsonl')
+          await Deno.rename(path, next)
+          path = next
+          admitted = true
+          await sync(dir)
+        },
         ack: async () => {
           try {
             await Deno.remove(path)

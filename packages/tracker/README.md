@@ -253,11 +253,18 @@ imports count without causing a release regression.
 
 The CLI reporter writes each caught failure to the durable spool, with its
 handler and target. The tracker service admits those records into the box
-tracker. When `remote` is configured, the service first delivers each record
-through the Worker's signed platform intake; acknowledgement follows both remote
-and local admission. A failed delivery leaves its original record for retry and
-never adds a delivery error to the same outbox. Immutable global eids make
-interrupted and repeated delivery safe.
+tracker independently of the remote forwarding loop. When `remote` is
+configured, local admission atomically renames an error segment to
+`.local.jsonl` and fsyncs the spool directory. That durable receipt survives
+restarts and local occurrence retention without recounting. Remote delivery
+reads only admitted error records and their request companions through the
+Worker's signed platform intake; acknowledgement removes the segment only after
+success. Each loop retries on its own clock, so even a stalled remote connection
+cannot delay local admission. Sources supplied by a host must support
+independent replayable scans; file sources supply `admitted` and `admit`
+receipts. A failed delivery leaves its original record for retry and never adds
+a delivery error to the same outbox. Immutable global eids make interrupted and
+repeated delivery safe.
 
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit
