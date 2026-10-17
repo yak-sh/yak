@@ -38,7 +38,7 @@ import * as apps from './apps.ts'
 import { ctxOf } from './connections.ts'
 import { refusal } from './models.ts'
 import { as as signedIn, visit } from './serving-probe.ts'
-import { test, until } from '@yaks/testing'
+import { cleanup, test, until } from '@yaks/testing'
 import { hosting } from './inference.ts'
 import {
   type Env as ExecutorEnv,
@@ -182,10 +182,16 @@ let vale = async (
     read,
     landed,
     spent: async () => (await dir.space('ada'))!,
+    settled: p.settled,
+    close: p[Symbol.asyncDispose],
   }
 }
 
-test('a connected OpenRouter model puts generated audio in the app store', async () => {
+// Ada's app with OpenRouter connected through its vault, a model allowance
+// with 12.5 cents left, a builder's `call` in its store, and the hosted
+// executor running each submission in this process: `dispatched` holds what
+// it was handed, `workflows` its runs.
+let hosted = async () => {
   let dispatched: Inference[] = []
   let workflows: Promise<unknown>[] = []
   let key = 'probe-openrouter-key'
@@ -238,6 +244,36 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     attempt,
     callback: 'https://yaks.app/connections/callback?code=probe',
   })
+  let builder = crypto.randomUUID(), build = crypto.randomUUID()
+  let call = crypto.randomUUID()
+  assertEquals(
+    (await v.send('/apply', [
+      { entity: { eid: builder }, builder: { query: '' }, staged: {} },
+      { entity: { eid: build }, build: { builder } },
+      { entity: { eid: call }, call: { source: build } },
+    ])).status,
+    200,
+  )
+  // Until neither the stores nor the executor have anything left running, so
+  // a read finds an answer instead of polling for it.
+  let quiet = async () => {
+    for (let runs = -1; runs != workflows.length;) {
+      runs = workflows.length
+      await Promise.all(workflows)
+      await v.settled()
+    }
+  }
+  await quiet()
+  return { v, key, space, build, call, dispatched, workflows, quiet }
+}
+
+// Built when the file loads, so the case times its asks and not a platform's
+// start; the case closes it, paying for what its asks leave running.
+let openRouter = await hosted()
+
+test('a connected OpenRouter model puts generated audio in the app store', async () => {
+  let { v, key, space, build, call, dispatched, workflows, quiet } = openRouter
+  cleanup(v.close)
   let bytes = new Uint8Array([
     0xff,
     0xfb,
@@ -276,19 +312,10 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     }) as typeof fetch
   try {
     let session = crypto.randomUUID()
-    let builder = crypto.randomUUID(), build = crypto.randomUUID()
-    let call = crypto.randomUUID()
     let request = asking(session, SEED)
     request[0] = { ...request[0], session: { source: call } }
-    assertEquals(
-      (await v.send('/apply', [
-        { entity: { eid: builder }, builder: { query: '' }, staged: {} },
-        { entity: { eid: build }, build: { builder } },
-        { entity: { eid: call }, call: { source: build } },
-        ...request,
-      ])).status,
-      200,
-    )
+    assertEquals((await v.send('/apply', request)).status, 200)
+    await quiet()
     let [attachment] = await v.landed(`.entry.session=${session}&.attachment&*`)
     let eid = (attachment.attachment as Comp).artifact as string
     let [artifact] = await v.read(`.entity.eid=${eid}&.artifact&*`)
@@ -348,7 +375,9 @@ test('a connected OpenRouter model puts generated audio in the app store', async
         return Promise.resolve()
       },
     }
-    for (let cost of [0, undefined]) {
+    // An ask of its own that the executor finished with `reply`: its frozen
+    // request copied from the first, its receipt, and its rows to write.
+    let receipted = async (reply: Comp, more: Comp = {}) => {
       let call = crypto.randomUUID(), session = crypto.randomUUID()
       let next = {
         ...job,
@@ -366,28 +395,37 @@ test('a connected OpenRouter model puts generated audio in the app store', async
       )
       await v.env.MODEL_RECEIPTS!.put(
         next.receipt,
-        JSON.stringify({
-          call,
-          reply: {
-            id: 'text',
-            model: SEED,
-            items: [{ kind: 'assistant', text: 'saved answer' }],
-            cost,
-          },
-        }),
+        JSON.stringify({ call, reply: { model: SEED, ...reply } }),
       )
-      await store.apply([
-        { entity: { eid: session }, session: {} },
-        {
-          entity: { eid: call },
-          entry: { session },
-          ask: { to: identityEid('model', [SEED]) },
-          inference: { executor: next.executor, request: next.request },
-        },
-      ])
+      return {
+        job: next,
+        rows: [
+          { entity: { eid: session }, session: {} },
+          {
+            ...more,
+            entity: { eid: call },
+            entry: { session },
+            ask: { to: identityEid('model', [SEED]) },
+            inference: { executor: next.executor, request: next.request },
+          },
+        ],
+      }
+    }
+    let texts = await Promise.all([0, undefined].map(async (cost) => ({
+      cost,
+      ...await receipted({
+        id: 'text',
+        items: [{ kind: 'assistant', text: 'saved answer' }],
+        cost,
+      }),
+    })))
+    await store.apply(texts.flatMap((text) => text.rows))
+    for (let { cost, job: next } of texts) {
       await host.delivered(next)
       await host.delivered(next)
-      let [ask] = await store.query(`.entity.eid=${call}&*`, { trusted: true })
+      let [ask] = await store.query(`.entity.eid=${next.call}&*`, {
+        trusted: true,
+      })
       assertEquals((ask.inference as Comp).receipt, next.receipt)
       assertEquals(
         ask.cost,
@@ -403,6 +441,7 @@ test('a connected OpenRouter model puts generated audio in the app store', async
     assertEquals((built.build as Comp).cost, 0.125)
     let blocked = crypto.randomUUID()
     await v.send('/apply', asking(blocked, SEED))
+    await quiet()
     let [error] = await v.landed(`.entry.session=${blocked}&.refusal&*`)
     assertEquals((error.refusal as Comp).code, 'limit')
     assertEquals(calls, 2)
@@ -413,39 +452,11 @@ test('a connected OpenRouter model puts generated audio in the app store', async
         .includes(key),
     )
     // A paid receipt still owes the account even after the app is trashed.
-    let dormantCall = crypto.randomUUID()
-    let dormant = {
-      ...job,
-      call: dormantCall,
-      request: `inference/${job.executor}/${dormantCall}/request`,
-      receipt: `inference/${job.executor}/${dormantCall}/receipt`,
-    }
-    await v.env.MODEL_RECEIPTS!.put(
-      dormant.request,
-      JSON.stringify({
-        ...privateRequest,
-        call: dormantCall,
-        request: { ...privateRequest.request, call: dormantCall },
-      }),
+    let { job: dormant, rows } = await receipted(
+      { id: 'paid', items: [], cost: 0.02 },
+      { submitted: { at: new Date().toISOString() } },
     )
-    await v.env.MODEL_RECEIPTS!.put(
-      dormant.receipt,
-      JSON.stringify({
-        call: dormantCall,
-        reply: { id: 'paid', model: SEED, items: [], cost: 0.02 },
-      }),
-    )
-    let dormantSession = crypto.randomUUID()
-    await store.apply([
-      { entity: { eid: dormantSession }, session: {} },
-      {
-        entity: { eid: dormantCall },
-        entry: { session: dormantSession },
-        ask: { to: identityEid('model', [SEED]) },
-        submitted: { at: new Date().toISOString() },
-        inference: { executor: dormant.executor, request: dormant.request },
-      },
-    ])
+    await store.apply(rows)
     await appMeta(v.env).apply([{
       entity: { eid: v.app.eid },
       trashed: { at: new Date().toISOString(), by: ADA },
