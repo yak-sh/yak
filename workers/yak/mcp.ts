@@ -1,3 +1,4 @@
+import { copyOf, signedDirectory } from './directory-copy.ts'
 // The connector (D-32318 §The agent door): `POST /mcp` at the apex, an MCP
 // server over Streamable HTTP — one JSON-RPC request in, one JSON reply out,
 // no session held — so a restart strands nobody and a Worker isolate holds
@@ -524,7 +525,10 @@ let stranger = async (
   }
   let ctx: Ctx = {
     env,
-    dir: directory(bound(env.DIRECTORY, dirPart.fetch, env), true),
+    dir: directory(
+      signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+      true,
+    ),
     // Nobody. Everything below reads this as no reach, no membership and no
     // mailbox rather than as a person whose eid happens to be empty
     // (directory.ts `member`, agent.ts `platform`).
@@ -587,7 +591,10 @@ let stranger = async (
 let CANARY = '/api/defect'
 let canary = async (req: Request, env: Env): Promise<Response> => {
   let { who } = await asking(env, req)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(
+    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    true,
+  )
   if (!who || !isTestAddress(await dir.emailAt(who.person) ?? '')) {
     return json(404, { error: { code: 'not_found' } })
   }
@@ -761,7 +768,10 @@ let answered = async (
   // (directory.ts). A deploy from anywhere else is news this request has to
   // have (C-32905 item 5). Within the request a line is read once, until the
   // request itself writes to the directory.
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env), true)
+  let dir = directory(
+    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    true,
+  )
   // The person is active whatever the call does: an assistant's tool calls
   // are theirs (the directory's "last active", used.ts).
   if (rpc.method == 'tools/call' && auth.person) {

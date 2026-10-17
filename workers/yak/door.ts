@@ -132,6 +132,7 @@ let VOUCH = [
   'x-yak-app',
   'x-yak-space',
   'x-yak-access',
+  'x-yak-policy',
   'x-yak-mail',
   'x-yak-release',
   'x-yak-speaks',
@@ -157,6 +158,8 @@ let VOUCH = [
  * only the directory knows the app's current slug and whether it is the
  * space's home — a store is named at birth and never renamed (`storeName`). */
 export type Served = {
+  /** Directory authorization revision, checked independently by the Store. */
+  policy?: number
   eid: string
   space?: string
   access: string
@@ -196,6 +199,9 @@ export let doorOf = (
       req.headers.set('x-yak-app', app.eid)
       if (app.space) req.headers.set('x-yak-space', app.space)
       req.headers.set('x-yak-access', app.access)
+      if (app.policy != null) {
+        req.headers.set('x-yak-policy', String(app.policy))
+      }
       if (app.mail) req.headers.set('x-yak-mail', app.mail)
       if (app.release != null) {
         req.headers.set('x-yak-release', String(app.release))

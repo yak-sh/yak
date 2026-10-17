@@ -241,6 +241,20 @@ class PublicDirectoryStore extends DurableObject<Env> {
       },
     })
   }
+  valid(revision: number) {
+    return this.#copy.valid(revision)
+  }
+  publish(revision: number, key: string, body: string) {
+    return this.#copy.publish(revision, key, body)
+  }
+  read(key: string) {
+    try {
+      return this.#copy.read(key)
+    } catch (e) {
+      if (e instanceof ServingCopyUnavailable) return null
+      throw e
+    }
+  }
   begin() {
     return this.#copy.begin()
   }

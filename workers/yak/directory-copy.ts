@@ -1,22 +1,9 @@
 import { cookieValue } from './lib/token.ts'
-// Only anonymous page/file rendering may use this copy. It is not standing:
-// stale members, grants or app modes could reauthorize a private store, and a
-// Store can remember an older vouched mode. Never use it for API, workers,
-// hostnames, MCP, signed-in access or writes.
-//
-// Purge cannot revoke a copy in another isolate. The independent serving
-// object is consulted ONLY on a missed directory deadline, not on warm reads.
-// Every directory mutation fences and clears it before entering SQLite, and
-// the directory records that fence in its commit. Revision-matched fills
-// cannot resurrect pre-mutation rows. A lost finish leaves it closed; the
-// next successful write recovers it. No historical-query recomputation, no
-// lease/TTL authorization and no remote await inside transactionSync.
-//
-// Unlike hop-free stale authorization this costs no coordination on a warm
-// request. Its tradeoff is deliberate: an unrelated directory mutation drops
-// the copy too. Cold/fenced/private reads still wait for the directory. Wider
-// signed-in availability needs independent revocable serving authority, durable
-// publication/recovery and monotonic Store policy, not a longer cache TTL.
+// Anonymous pages retain the hop-free warm path (publicDirectory). Signed
+// access uses signedDirectory: every body is pinned to one committed revision
+// and checked against the independent durable serving authority. Directory
+// mutations revoke that revision before committing, not through cache purge.
+// Cold/fenced copies still wait for the directory; no TTL grants standing.
 import type { Fetcher } from './door.ts'
 import type { Env } from './env.ts'
 import { background } from './defects.ts'
@@ -26,6 +13,9 @@ export type DirectoryCopyTimer = {
 }
 
 export type ServingCopyDoor = {
+  read?(key: string): Promise<{ revision: number; body: string } | null>
+  valid?(revision: number): Promise<boolean>
+  publish?(revision: number, key: string, body: string): Promise<boolean>
   begin(): Promise<number>
   finish(revision: number): Promise<boolean>
   put(revision: number, key: string, body: string): Promise<boolean>
@@ -154,3 +144,95 @@ export let anonymousPage = (req: Request) =>
   !['authorization', 'upgrade', 'x-yak-caller'].some((h) =>
     req.headers.has(h)
   ) && !/\/(?:api|_web)(?:\/|$)|\/~/.test(new URL(req.url).pathname)
+
+/** A request-scoped, revision-pinned view of the independently revocable
+ * directory. Bodies are data, not authority: every answer checks the current
+ * fence, including warm directory answers. Never share this door across requests. */
+export let signedDirectory = (
+  via: Fetcher,
+  copy: ServingCopyDoor | undefined,
+  time = timer,
+): Fetcher & { signed?: boolean } => {
+  if (!copy) return via
+  let began = time.now()
+  let pinned: number | undefined
+  let unavailable = () =>
+    new Response('Serving authority unavailable', { status: 503 })
+  let accept = async (revision: number, body: string) => {
+    if (pinned !== undefined && pinned !== revision) return unavailable()
+    if (!await copy.valid?.(revision)) return unavailable()
+    if (pinned !== undefined && pinned !== revision) return unavailable()
+    pinned = revision
+    return new Response(body, { headers: { [EPOCH]: String(revision) } })
+  }
+  return {
+    signed: true,
+    fetch: (req) => {
+      if (req.method !== 'GET') {
+        return via.fetch(req).then((answer) => {
+          if (answer.ok) {
+            pinned = undefined
+            began = time.now()
+          }
+          return answer
+        })
+      }
+      let key = new URL(req.url).searchParams.get('q') ?? ''
+      return new Promise<Response>((resolve) => {
+        let settled = false
+        let done = (answer: Response) => {
+          if (settled) {
+            void answer.body?.cancel()
+            return
+          }
+          settled = true
+          cancel()
+          resolve(answer)
+        }
+        let fallback = async () => {
+          try {
+            let answer = await copy.read?.(key)
+            // A miss cannot turn a healthy but slow first read into a 503.
+            if (answer) done(await accept(answer.revision, answer.body))
+          } catch { /* Wait for the directory on a cold or fenced miss. */ }
+        }
+        let cancel = time.after(Math.max(0, began + 25 - time.now()), () => {
+          void fallback()
+        })
+        let headers = new Headers(req.headers)
+        headers.set(EPOCH, '1')
+        void (async () => {
+          // Nothing has escaped before the first accepted answer. A concurrent
+          // directory write may overtake that first read; reread it a bounded
+          // number of times, never resetting an established request revision.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            let answer: Response
+            try {
+              answer = await via.fetch(new Request(req, { headers }))
+            } catch {
+              await fallback()
+              return
+            }
+            if (!answer.ok) {
+              done(answer)
+              return
+            }
+            let epoch = answer.headers.get(EPOCH)
+            if (epoch == null || !/^\d+$/.test(epoch)) {
+              done(unavailable())
+              return
+            }
+            let revision = Number(epoch)
+            let body = await answer.text()
+            await copy.publish?.(revision, key, body)
+            let accepted = await accept(revision, body)
+            if (accepted.ok || pinned !== undefined || attempt == 2) {
+              done(accepted)
+              return
+            }
+          }
+        })().catch(() => done(unavailable()))
+      })
+    },
+  }
+}

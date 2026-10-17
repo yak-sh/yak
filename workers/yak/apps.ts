@@ -1,5 +1,5 @@
 import { BINARY } from '@yaks/vocab/wire'
-import { copyOf, publicDirectory } from './directory-copy.ts'
+import { copyOf, publicDirectory, signedDirectory } from './directory-copy.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
 // hosted implementation (D-32318 §v1 sequencing). One fetch handler: it
 // reads the hostname and path (route.ts), resolves the space and app through
@@ -1659,7 +1659,13 @@ let gave = async (
 let named = (env: Env, who: Who, app?: App) =>
   app && itsApp(who, app)
     ? Promise.resolve({} as Record<string, string>)
-    : titling(directory(bound(env.DIRECTORY, dirPart.fetch, env)), who.person)
+    : titling(
+      directory(
+        signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+        true,
+      ),
+      who.person,
+    )
 
 // What a write answers, either way it was routed: the entities it touched, and
 // the aliases the batch minted for the `$alias` names it was written with. One
@@ -2352,7 +2358,10 @@ let manage = async (req: Request, env: Env): Promise<Response> => {
   let url = new URL(req.url)
   let view = manageView(url.pathname)
   if (!view) return nothingHere(env)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let dir = directory(
+    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    true,
+  )
   let { person, until } = await whoIs(
     req,
     env.SESSION_SECRET,
@@ -2840,7 +2849,7 @@ let served = async (
   let direct = bound(env.DIRECTORY, dirPart.fetch, env)
   let serving = edge
     ? publicDirectory(direct, copyOf(env), undefined, copied)
-    : direct
+    : signedDirectory(direct, copyOf(env))
   let dir = directory(serving, edge)
   let routing = edge ? c.time('route', () => dir.page(r.space!, r.app)) : null
   let reading = routing
@@ -3067,7 +3076,7 @@ let served = async (
     paper && (!env.SESSION_SECRET ||
       !await paged(paper.token, env.SESSION_SECRET, store))
   ) return json(401, 'not_a_reader', 'This page token does not open this app')
-  let itself = await granted(req, env.SESSION_SECRET, store)
+  let itself = await granted(req, env.SESSION_SECRET, store, app.policy)
   if (bearing(req) && !itself) {
     return json(
       401,

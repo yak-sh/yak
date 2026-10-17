@@ -78,6 +78,7 @@ let state = (name = '') => {
 // The headers the kernel puts on a request to a store. A client never sends
 // one: every request to an object is built from scratch by the Worker.
 type Vouch = {
+  policy?: number
   app?: string
   access?: string
   person?: string
@@ -89,6 +90,7 @@ type Vouch = {
 
 let headers = (v: Vouch = {}): Record<string, string> => ({
   'x-store': 'ada/cookbook',
+  ...(v.policy == null ? {} : { 'x-yak-policy': String(v.policy) }),
   ...(v.app ? { 'x-yak-app': v.app } : {}),
   ...(v.access ? { 'x-yak-access': v.access } : {}),
   ...(v.person ? { 'x-yak-person': v.person } : {}),
@@ -2064,3 +2066,174 @@ test(
   },
   { tags: ['T-65211'] },
 )
+
+// Local ordering and durable floors are distinct from independent revocation.
+// These stores intentionally have no serving binding, so a stale request that
+// passes an authority check can still be exercised after a newer local request.
+let policyFloor = await (async () => {
+  let ctx = state()
+  let store = await cookbook(ctx, SCHEMA, {
+    ...owner,
+    access: 'private',
+    policy: 8,
+  })
+  return { ctx, store }
+})()
+test('Store policy rejects stale mode and person standing before remembering either', async () => {
+  let { store } = policyFloor
+  for (
+    let v of [
+      { app: APP, access: 'public', policy: 7 },
+      { app: APP, access: 'private', person: ADA, role: 'owner', policy: 7 },
+      { app: APP, access: 'open', person: ADA, role: 'editor', policy: 7 },
+      { app: APP, access: 'public' },
+    ]
+  ) {
+    equal((await get(store, '/query?q=.doc', v)).status, 503)
+  }
+  equal(
+    (await get(store, '/query?q=.doc', {
+      app: APP,
+      policy: 8,
+      access: 'private',
+    })).status,
+    401,
+  )
+  equal(
+    (await get(store, '/query?q=.doc', {
+      ...owner,
+      policy: 8,
+      access: 'private',
+    })).status,
+    200,
+  )
+  let reopened = new Store(
+    policyFloor.ctx,
+    {},
+    undefined,
+    undefined,
+    fixtureLoad,
+  )
+  equal(
+    (await get(reopened, '/query?q=.doc', {
+      app: APP,
+      access: 'public',
+      policy: 7,
+    })).status,
+    503,
+  )
+})
+
+let independentlyRevoked = await (async () => {
+  let ctx = state()
+  await cookbook(ctx)
+  let current = 10, blocked = false, checks = 0
+  let copy = {
+    valid: (revision: number) => {
+      checks++
+      return Promise.resolve(!blocked && revision == current)
+    },
+    begin: () => Promise.resolve(++current),
+    finish: () => Promise.resolve(true),
+    put: () => Promise.resolve(false),
+    get: () => Promise.resolve(null),
+  }
+  let bound = new Store(
+    ctx,
+    {
+      SERVING_COPY: {
+        idFromName: (name: string) => name,
+        get: () => copy,
+      },
+    },
+    undefined,
+    undefined,
+    fixtureLoad,
+  )
+  return {
+    store: bound,
+    checks: () => checks,
+    block: () => {
+      blocked = true
+    },
+  }
+})()
+test('Store authority rejects stale policy before seeing a newer request and checks equal requests each time', async () => {
+  let f = independentlyRevoked
+  for (
+    let v of [
+      { app: APP, access: 'public', policy: 9 },
+      { ...owner, access: 'private', policy: 9 },
+      { app: APP, access: 'open', person: ADA, role: 'editor', policy: 9 },
+      { ...owner, access: 'private' },
+    ]
+  ) equal((await get(f.store, '/query?q=.doc', v)).status, 503)
+  let current = { ...owner, access: 'private', policy: 10 }
+  equal((await get(f.store, '/query?q=.doc', current)).status, 200)
+  let before = f.checks()
+  equal((await get(f.store, '/query?q=.doc', current)).status, 200)
+  equal(f.checks() - before, 1)
+  f.block()
+  equal((await get(f.store, '/query?q=.doc', current)).status, 503)
+})
+
+let reorderedPolicy = await (async () => {
+  let ctx = state()
+  await cookbook(ctx)
+  let entered!: () => void, release!: (valid: boolean) => void
+  let checking = new Promise<void>((resolve) => entered = resolve)
+  let pending = new Promise<boolean>((resolve) => release = resolve)
+  let copy = {
+    valid: (revision: number) => {
+      if (revision == 10) {
+        entered()
+        return pending
+      }
+      return Promise.resolve(revision == 11)
+    },
+    begin: () => Promise.resolve(11),
+    finish: () => Promise.resolve(true),
+    put: () => Promise.resolve(false),
+    get: () => Promise.resolve(null),
+  }
+  let store = new Store(
+    ctx,
+    {
+      SERVING_COPY: {
+        idFromName: (name: string) => name,
+        get: () => copy,
+      },
+    },
+    undefined,
+    undefined,
+    fixtureLoad,
+  )
+  return { store, checking, release }
+})()
+test('a delayed successful authority response cannot lower a newer Store floor', async () => {
+  let f = reorderedPolicy
+  let old = get(f.store, '/query?q=.doc', {
+    ...owner,
+    access: 'public',
+    policy: 10,
+  })
+  await f.checking
+  equal(
+    (await get(f.store, '/query?q=.doc', {
+      ...owner,
+      access: 'private',
+      policy: 11,
+    })).status,
+    200,
+  )
+  f.release(true)
+  equal((await old).status, 503)
+  equal(
+    (await get(f.store, '/query?q=.doc', {
+      app: APP,
+      access: 'private',
+      policy: 11,
+    })).status,
+    401,
+  )
+})

@@ -293,6 +293,12 @@ export let sockets = (
     /** A host whose authenticated standing expires on wake can require a
      * new handshake before this writer relays again. */
     writer?: (writer: PeerWriter) => boolean | Promise<boolean>
+    /** Current read/delivery authority. Denial or failure retires the socket.
+     * Checked on recovery, input, and at transport delivery (including ACKs). */
+    authorize?: (
+      read: ReadOpts | undefined,
+      writer: PeerWriter | undefined,
+    ) => boolean | Promise<boolean>
     /** How a burst of watch changes is put off until its stored map is
      * written once (default: a timer of {@link SETTLE} ms, which also keeps
      * the object from hibernating before the write is made). */
@@ -459,6 +465,26 @@ export let sockets = (
   // before may still be one it inherited, so its stored subscriptions are
   // re-opened here — the client is sent its current results, which is the
   // resync.
+  let authorize = (ws: Wire): boolean | Promise<boolean> => {
+    if (!opts.authorize) return true
+    let refused = () => {
+      finish(ws)
+      try {
+        ws.close?.(1012, 'authorization handshake required')
+      } catch { /* closed */ }
+      return false
+    }
+    try {
+      let held = ws.deserializeAttachment() as Held | null
+      let out = opts.authorize(reading(held), held?.writer)
+      return isPromise(out)
+        ? out.then((ok) => ok && !closed.has(ws) || refused(), refused)
+        : out && !closed.has(ws) || refused()
+    } catch {
+      return refused()
+    }
+  }
+
   let sink = (
     ws: Wire,
     openings?: Opening[],
@@ -471,7 +497,34 @@ export let sockets = (
     if (!held?.owed && held?.seen?.length) {
       delivery(ws, undefined, [], asks(ws))
     }
-    let fresh = queue(ws, undefined, () => open(ws), {
+    // Gate the transport, not just the registry sink: ACKs and timer flushes
+    // can release frames long after the subscription's last read.
+    let pending = Promise.resolve()
+    let queued = 0
+    let transport = !opts.authorize ? ws : {
+      get bufferedAmount() {
+        return ws.bufferedAmount
+      },
+      send: (data: string) => {
+        if (++queued > 64) {
+          finish(ws)
+          ws.close?.(1012, 'authorization delivery backlog')
+          return
+        }
+        pending = pending.then(async () => {
+          if (closed.has(ws) || !open(ws)) return
+          if (await authorize(ws) && !closed.has(ws) && open(ws)) ws.send(data)
+        }).catch(() => {
+          finish(ws)
+          try {
+            ws.close?.(1012, 'authorization handshake required')
+          } catch { /* closed */ }
+        }).finally(() => {
+          queued--
+        })
+      },
+    }
+    let fresh = queue(transport, undefined, () => open(ws), {
       owed: held?.owed,
       fits: (frames) => {
         let held = ws.deserializeAttachment() as Held | null
@@ -593,8 +646,15 @@ export let sockets = (
             return
           }
           return after(
-            sink(ws, undefined, !!opts.deferStatic && !!relay),
+            after(
+              authorize(ws),
+              (ok) =>
+                ok
+                  ? sink(ws, undefined, !!opts.deferStatic && !!relay)
+                  : undefined,
+            ),
             (to) => {
+              if (!to) return
               let ask = asked('value' in input ? input.value : null)
               let sender = sinks.get(ws)!
               if (ask?.ack) return sender.ack(ask.ack)
@@ -664,7 +724,10 @@ export let sockets = (
         over(ctx.getWebSockets(), (ws) => {
           if (closed.has(ws) || !open(ws)) return
           try {
-            let restored = sink(ws, openings)
+            let restored = after(
+              authorize(ws),
+              (ok) => ok ? sink(ws, openings) : undefined,
+            )
             if (isPromise(restored)) {
               return restored.then(() => {}, (error) => retire(ws, error))
             }

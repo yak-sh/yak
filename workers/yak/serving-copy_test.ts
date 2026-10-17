@@ -264,3 +264,15 @@ test('serving copy: configured bound must remain between one and 1000', () => {
     ok(caught)
   }
 })
+
+test('serving copy: equal publication has no persistent warm cost', () => {
+  let f = fixture()
+  equal(f.copy.publish(0, 'private', 'body'), true)
+  let before = f.stats()
+  for (let i = 0; i < 100; i++) {
+    equal(f.copy.publish(0, 'private', 'body'), true)
+    equal(f.copy.valid(0), true)
+    equal(f.copy.read('private'), { revision: 0, body: 'body' })
+  }
+  equal(f.stats(), before)
+})

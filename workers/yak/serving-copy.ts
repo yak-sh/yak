@@ -85,6 +85,7 @@ export class ServingCopy {
    */
   put(revision: number, key: string, body: string): boolean {
     if (this.#blocked || revision !== this.#revision) return false
+    if (this.#answers.get(key) === body) return true
     let answers = new Map(this.#answers)
     answers.delete(key)
     // Directory answers can be listings. Bound UTF-16 code units as well as
@@ -103,6 +104,23 @@ export class ServingCopy {
     let body = this.#answers.get(key)
     if (body === undefined) throw new ServingCopyUnavailable()
     return body
+  }
+
+  /** Serving authority, checked even for a warm directory response. */
+  valid(revision: number): boolean {
+    return !this.#blocked && revision === this.#revision
+  }
+
+  read(key: string): { revision: number; body: string } {
+    return { revision: this.#revision, body: this.get(key) }
+  }
+
+  /** Only a read of the committed matching directory epoch can recover a
+   * lost finish. A precommit or delayed response has an older epoch. */
+  publish(revision: number, key: string, body: string): boolean {
+    if (revision !== this.#revision) return false
+    this.finish(revision)
+    return this.put(revision, key, body)
   }
 
   #trim(answers: Map<string, string>): void {

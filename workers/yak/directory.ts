@@ -186,6 +186,7 @@ export type Space = {
   tunnel: Tunnel | null
 }
 export type App = {
+  policy?: number
   eid: string
   slug: string
   space: string
@@ -370,6 +371,7 @@ export let idOf = (v: Id): string => typeof v == 'string' ? v : v.eid
 /** A directory row as a read hands it back: the components the kernel reads,
  * each optional, since a row is whichever of them it wears. */
 export type Row = {
+  policy?: { revision: number }
   switched?: {
     app: string
     from?: string | null
@@ -872,6 +874,7 @@ let unsaid = (app: string): Access => {
 }
 
 export let appOf = (r: Row): App => ({
+  ...(r.policy === undefined ? {} : { policy: r.policy.revision }),
   eid: r.entity.eid,
   slug: r.app!.slug,
   space: idOf(r.app!.space),
@@ -1016,6 +1019,7 @@ export let handle = (space: Pick<Space, 'slug'>, slug: string, eid: string) =>
 // name — the meta store, the usage sweep — have no app to name and use
 // `storeOf` directly.
 let served = (space: Space, app: App, env: HostEnv) => ({
+  ...(app.policy == null ? {} : { policy: app.policy }),
   eid: app.eid,
   space: space.eid,
   access: app.access,
@@ -1177,9 +1181,30 @@ let remote = (via: Fetcher): Part => ({
 // (hops.ts `recall`). What is kept is the text: every caller parses rows of
 // its own.
 export let directory = (via: Fetcher | Part, now = false) => {
+  let signed = 'signed' in via && !!via.signed
   let door = 'fetch' in via ? remote(via) : via
-  let query = async (q: string, fresh = now): Promise<Row[]> =>
-    JSON.parse(await recall(META_STORE, q, () => door.query(q, fresh), fresh))
+  let query = async (q: string, fresh = now): Promise<Row[]> => {
+    if (signed && 'fetch' in via) {
+      // The revision belongs to this response, not a shared mutable last
+      // response slot: parallel reads can resume in either order.
+      let answer = await via.fetch(
+        new Request(
+          `http://directory/query?q=${encodeURIComponent(q)}`,
+          { headers: { [FRESH]: '1' } },
+        ),
+      )
+      if (!answer.ok) throw await answered(answer)
+      let epoch = answer.headers.get(EPOCH)
+      let rows: Row[] = await answer.json()
+      return epoch == null ? rows : rows.map((row) => ({
+        ...row,
+        policy: { revision: Number(epoch) },
+      }))
+    }
+    return JSON.parse(
+      await recall(META_STORE, q, () => door.query(q, fresh), fresh),
+    )
+  }
   let one = async (q: string, fresh = now) => (await query(q, fresh))[0]
   let write = (
     mutation: { entities: Bundle[] },

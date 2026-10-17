@@ -1321,3 +1321,119 @@ test('a watch change beyond attachment space compacts then keeps later deltas', 
   for (let write of ctx.owed.splice(0)) write()
   assertEquals(written(), 1)
 })
+
+// Authorization is a host policy; socket plumbing must check it at delivery,
+// not merely when a writer relays or the subscription is initially restored.
+let authorizedFixture = () => {
+  let ctx = hibernation(), ws = wire()
+  let g = graph({ storage: store(shop), vocab: shop })
+  let allowed = true, broken = false, checks = 0
+  let closed = new Promise<void>((resolve) => {
+    let close = ws.close
+    ws.close = (code, reason) => {
+      close(code, reason)
+      resolve()
+    }
+  })
+  ctx.live.push(ws)
+  ws.serializeAttachment({ writer: { actor: { by: PERSON } } })
+  let live = sockets(subscriptions(g), ctx, undefined, {
+    authorize: () => {
+      checks++
+      return broken
+        ? Promise.reject(Error('authority unavailable'))
+        : Promise.resolve(allowed)
+    },
+    defer: (write) => void ctx.owed.push(write),
+  })
+  return {
+    ws,
+    closed,
+    g,
+    live,
+    checks: () => checks,
+    revoke: () => allowed = false,
+    fail: () => broken = true,
+  }
+}
+let authorizedFixtures = await (async () => {
+  let delivery = authorizedFixture(), ack = authorizedFixture()
+  let restore = authorizedFixture(), failure = authorizedFixture()
+  for (let f of [delivery, failure]) {
+    await f.live.message(f.ws, ask('p', '.product'))
+    await until(() => f.ws.sent.length == 1)
+  }
+  await send(ack.live, ack.ws, { subscribe: '.product', id: 'p', acks: true })
+  await until(() => ack.ws.sent.length == 1)
+  return { delivery, ack, restore, failure }
+})()
+
+test('socket delivery reauthorizes an existing subscription after revocation', async () => {
+  let f = authorizedFixtures.delivery
+  f.ws.sent.length = 0
+  f.revoke()
+  await f.g.apply([{ entity: { eid: 'p1' }, product: { price: 3 } }])
+  await f.closed
+  assertEquals(f.ws.sent, [])
+  assertEquals(f.ws.closed, [[1012, 'authorization handshake required']])
+})
+
+test('socket ACK-released frames reauthorize after the earlier read', async () => {
+  let f = authorizedFixtures.ack
+  let token = (f.ws.sent[0] as Frame & { ack: string }).ack
+  assert(token)
+  await f.g.apply([{ entity: { eid: 'p1' }, product: { price: 7 } }])
+  assertEquals(f.ws.sent.length, 1)
+  f.revoke()
+  await send(f.live, f.ws, { ack: token })
+  await f.closed
+  assertEquals(f.ws.sent.length, 1)
+})
+
+test('socket restoration fails closed before reading revoked watches', async () => {
+  let f = authorizedFixtures.restore
+  f.ws.serializeAttachment({
+    subs: { p: '.product' },
+    writer: { actor: { by: PERSON } },
+  })
+  f.revoke()
+  await f.live.wake()
+  assertEquals(f.ws.sent, [])
+  assertEquals(f.ws.closed, [[1012, 'authorization handshake required']])
+})
+
+test('socket delivery fails closed when current authority throws', async () => {
+  let f = authorizedFixtures.failure
+  f.fail()
+  await f.g.apply([{ entity: { eid: 'p1' }, product: { price: 9 } }])
+  await f.closed
+  assertEquals(f.ws.sent.length, 1)
+})
+
+let pendingAuthorization = (() => {
+  let ctx = hibernation(), ws = wire()
+  let g = graph({ storage: store(shop), vocab: shop })
+  ctx.live.push(ws)
+  let release!: (ok: boolean) => void
+  let entered!: () => void
+  let checking = new Promise<void>((r) => entered = r)
+  let checks = 0
+  let live = sockets(subscriptions(g), ctx, undefined, {
+    authorize: () =>
+      ++checks == 1 ? true : new Promise<boolean>((r) => {
+        release = r
+        entered()
+      }),
+  })
+  return { ws, live, checking, release: (ok: boolean) => release(ok) }
+})()
+test('socket delivery cannot send after close while authorization is pending', async () => {
+  let { ws, live, checking, release } = pendingAuthorization
+  await live.message(ws, ask('p', '.product'))
+  await checking
+  ws.closing()
+  await live.close(ws)
+  release(true)
+  for (let n = 0; n < 16; n++) await Promise.resolve()
+  assertEquals(ws.sent, [])
+})

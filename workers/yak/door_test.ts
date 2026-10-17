@@ -231,3 +231,19 @@ test('the store door strips a visitor administrative claim and carries only its 
     assertEquals(seen, [null, '1'])
   }
 })
+
+test('Store policy is carried only from Served, never visitor headers', async () => {
+  let seen: (string | null)[] = []
+  let send = (req: Request) => {
+    seen.push(req.headers.get('x-yak-policy'))
+    return Promise.resolve(new Response(''))
+  }
+  let incoming = () =>
+    new Request('http://visitor', { headers: { 'x-yak-policy': '999' } })
+  await doorOf(send, 'app')('/query', incoming())
+  await doorOf(send, 'app', { eid: 'app', access: 'private', policy: 12 })(
+    '/query',
+    incoming(),
+  )
+  assertEquals(seen, [null, '12'])
+})

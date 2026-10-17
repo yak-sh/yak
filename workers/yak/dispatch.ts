@@ -104,6 +104,7 @@ VOUCH.push(COMMAND_CALL, COMMAND_AT, COMMAND_SOURCE)
 let LIFE = 60
 
 type Grant = {
+  policy?: number
   store: string
   person: string | null
   role: Role | null
@@ -272,11 +273,17 @@ export let wrapping = (text: string) => {
 }
 
 // The visitor an app's worker acts as, for one minute, on one store.
-export let granting = (secret: string, store: string, who: Who) =>
+export let granting = (
+  secret: string,
+  store: string,
+  who: Who,
+  policy?: number,
+) =>
   seal(
     'visit',
     {
       store,
+      ...(policy == null ? {} : { policy }),
       person: who.person,
       role: who.role,
       ...(who.via ? { via: who.via } : {}),
@@ -292,7 +299,12 @@ export let granting = (secret: string, store: string, who: Who) =>
 // (@yaks/member `guarding`, `governs`). The eid comes from the directory's own
 // row for the app, never from the request.
 export let owning = (secret: string, store: string, app: App) =>
-  granting(secret, store, { person: app.eid, role: 'editor', via: app.eid })
+  granting(
+    secret,
+    store,
+    { person: app.eid, role: 'editor', via: app.eid },
+    app.policy,
+  )
 
 /** Whether this caller is the app acting as itself rather than as its visitor
  * — the app entity is not a person, so nothing asks the directory to name it
@@ -318,11 +330,13 @@ export let granted = async (
   req: Request,
   secret: string | undefined,
   store: string,
+  policy?: number,
 ): Promise<Who | null> => {
   let sealed = req.headers.get(GRANT)
   if (!sealed || !secret) return null
   let g = await opened<Grant>('visit', sealed, secret)
   if (!g || g.store != store || !(g.exp * 1000 > Date.now())) return null
+  if (policy != null && g.policy !== policy) return null
   return {
     person: g.person ?? null,
     role: g.role ?? null,
@@ -368,7 +382,7 @@ let handed = async (
   if (call) headers.set(COMMAND_CALL, call)
   if (at) headers.set(COMMAND_AT, at)
   if (source) headers.set(COMMAND_SOURCE, source)
-  headers.set(GRANT, await granting(secret, store, who))
+  headers.set(GRANT, await granting(secret, store, who, app.policy))
   headers.set(SELF, await owning(secret, store, app))
   return new Request(req, { headers })
 }
