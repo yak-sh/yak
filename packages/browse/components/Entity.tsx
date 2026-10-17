@@ -151,7 +151,7 @@ define([
     ),
   })),
   {
-    view: 'Feed.Tile',
+    view: 'Feed.List.Tile',
     match: and(),
     Render: (props) => <ListEntry {...props} />,
   },

@@ -167,7 +167,7 @@ export let QueryList = (
           draggable={capable('canvas')}
           onDragStart={(ev: DragEvent) => dragData(ev, t.eid, 'Full')}
         >
-          <Entity eid={t.eid} view='Feed.Tile' />
+          <Entity eid={t.eid} view='Feed.List.Tile' />
         </Rows.Item>
       ))}
       {!page.ready && (
@@ -210,7 +210,6 @@ export let ListTile = ({ e, slots, onOpen }: TileProps) => (
 // what the entity says, including session and letter summaries.
 export let ListEntry = ({ e, ...props }: TileProps) => (
   <Rows.Link {...tileLink(e, props.onOpen)}>
-    <Rows.Kind>{e.kind}</Rows.Kind>
-    <Entity eid={e.eid} view='Tile' {...props} />
+    <Entity eid={e.eid} view='List.Tile' {...props} />
   </Rows.Link>
 )

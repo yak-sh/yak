@@ -259,7 +259,7 @@ async function summaries() {
         e.getAttribute('title')
       ),
       anchors: [...mounted.root.querySelectorAll('.Tile')].every((e) =>
-        e.tagName == 'A'
+        e.closest('a') != null
       ),
     }
   } finally {

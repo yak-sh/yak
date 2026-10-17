@@ -64,12 +64,7 @@ test('a list grows by appending, and keeps its rows while it loads', async () =>
     assertEquals(mounted.root.querySelector('[role=status]'), null)
     let shown = titles(mounted.root)
     assertEquals(shown.length, 10)
-    assertEquals(
-      [...mounted.root.querySelectorAll('.Rows_Kind')].map((n) =>
-        n.textContent
-      ),
-      Array(10).fill('task'),
-    )
+    assertEquals(mounted.root.querySelector('.Rows_Kind'), null)
     assertEquals(
       mounted.root.querySelector('.Rows')?.classList.contains('Rows-ruled'),
       true,
@@ -117,7 +112,7 @@ let favoriteMount = mount(<ListEntry e={favoriteEntry} />)
 test('a favorite session opens from its whole entry, without a numbered handle', () => {
   let mounted = favoriteMount
   try {
-    let brief = mounted.root.querySelector<HTMLElement>('.Rows_Kind')!
+    let brief = mounted.root.querySelector<HTMLElement>('.Rows_Link')!
     assertEquals(
       brief.closest('a')?.getAttribute('href'),
       favoriteHref,
