@@ -19,7 +19,7 @@ for (let registration of standalone) {
     let options = {
       output: 'result.json',
       baseline: registration.baseline,
-      rounds: 3,
+      rounds: 1,
       host: () => ({
         config: {},
         configURL: null,

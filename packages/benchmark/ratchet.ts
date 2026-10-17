@@ -110,7 +110,8 @@ export let incomparable = (
 /** Bank one run, or several repeated runs of one suite, as a baseline. Each
  * bench banks its best median. Repeated runs also bank each bench's slack:
  * NOISE times the spread of their medians, never under `allowed` and never
- * over CAP. With a previous baseline, a bench keeps its banked median where the
+ * over CAP; zero explicitly banks no slack. Existing slack never increases.
+ * With a previous baseline, a bench keeps its banked median where the
  * new one is worse, unless `slower` says to bank the worse one, and a scoped
  * acceptance retains the workloads it did not measure. */
 export let baseline = (
@@ -136,7 +137,7 @@ export let baseline = (
     workload: last.workload,
     runtime: last.runtime,
     cpu: last.cpu,
-    tolerance: tolerance(allowed),
+    tolerance: Math.min(tolerance(allowed), previous?.tolerance ?? allowed),
     benches: last.benches.map(({ name, unit, better, resolution }) => {
       let medians = runs.map((r) =>
         r.benches.find((b) => b.name == name)!.median
@@ -148,8 +149,11 @@ export let baseline = (
         : pick(...medians)
       // Rounded up to a tenth of a percent, so a baseline reads plainly.
       let noise = Math.ceil(NOISE * spread(medians, better) * 1000) / 1000
-      let slack = runs.length > 1
-        ? Math.min(CAP, Math.max(allowed, noise))
+      let slack = allowed == 0 ? 0 : runs.length > 1
+        ? Math.min(
+          old?.tolerance ?? previous?.tolerance ?? CAP,
+          Math.min(CAP, Math.max(allowed, noise)),
+        )
         : old?.tolerance
       return {
         name,

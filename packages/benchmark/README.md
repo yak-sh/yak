@@ -134,10 +134,11 @@ runtime, CPU or workload version is no reference, and an exact acceptance banks
 the suite as measured. With `runs: n`, a run measures the suite n times over and
 keeps each bench's `best()` median. Acceptance banks it with a **slack** of its
 own: `NOISE` (2) times the `spread()` of its n medians, never under the explicit
-tolerance and never over `CAP` (0.95). A check compares it, so a check of as
-many runs as banked its baseline measures what was banked. A check holds each
-bench to its own slack, else the baseline's tolerance, and each regression
-carries the `limit()` it passed.
+tolerance and never over `CAP` (0.95). An explicit zero tolerance banks no
+slack, regardless of the spread; acceptance never increases existing slack. A
+check compares it, so a check of as many runs as banked its baseline measures
+what was banked. A check holds each bench to its own slack, else the baseline's
+tolerance, and each regression carries the `limit()` it passed.
 
 ```ts
 import { Regressed, run } from '@yaks/benchmark'

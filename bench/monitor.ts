@@ -13,8 +13,9 @@
  * so a suite that stays slow adds hits to its open bug, and one that turns
  * slow again after its bug was resolved reopens it.
  *
- * The box runs this from cron: every suite once a day, and `--restarted`
- * every 15 minutes, which measures `pages` only when the live web unit has
+ * The box runs this from cron: every suite once a day, and `--hourly`
+ * every 30 minutes for user-facing waits; `--restarted` every 15 minutes
+ * measures pages only when the live web unit has
  * changed since it last looked, that is once after each `yak restart`.
  *
  *   deno run -A bench/monitor.ts [suite ...] [--restarted]
@@ -22,7 +23,12 @@
  * What it last saw (the web unit, each suite's last good commit) is kept in
  * `~/.cache/yak/bench/monitor.json`; losing it only widens the commits listed
  * to those since the suite's baseline was banked. */
-import type { Regression, Run } from '@yaks/benchmark'
+import {
+  type Baseline,
+  baseline,
+  type Regression,
+  type Run,
+} from '@yaks/benchmark'
 import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
 
@@ -30,6 +36,10 @@ import { reporter, revision } from '../packages/cli/report.ts'
  * timed where they run. */
 export let SUITES = [
   'pages',
+  'page-content',
+  'person-commands',
+  'platform-waits',
+  'worker-health',
   'web-client',
   'client-frame',
   'client-rules',
@@ -45,9 +55,16 @@ export let SUITES = [
   'app-deploy',
 ]
 
-/** A suite whose check reads rows something else records: the monitor takes a
- * fresh measurement first, so each daily run (and each confirming run) times
- * real deploys on yaks.app as a throwaway account. */
+/** User-facing waits are checked every half hour, independent of slow throughput. */
+export let HOURLY = [
+  'pages',
+  'page-content',
+  'person-commands',
+  'platform-waits',
+  'worker-health',
+]
+
+/** Deploy checks need fresh observations before comparison. */
 export let MEASURE: Record<string, string[]> = {
   'app-deploy': ['bench/run.ts', 'app-deploy', 'time'],
 }
@@ -68,6 +85,7 @@ export type Monitor = {
   ) => Promise<void>
   /** Commits after `from` up to the checkout's head, one line each. */
   since: (suite: string, from?: string) => Promise<string[]>
+  bank?: (suite: string, run: Run) => Promise<void>
 }
 
 let figure = (n: number, unit: string) =>
@@ -110,8 +128,29 @@ export let watch = async (
 ): Promise<Record<string, Outcome['verdict']>> => {
   let out: Record<string, Outcome['verdict']> = {}
   for (let suite of suites) {
-    let outcome = await m.check(suite, 1)
-    if (outcome.verdict == 'regressed') outcome = await m.check(suite)
+    let safe = async (runs?: number): Promise<Outcome> => {
+      try {
+        return await m.check(suite, runs)
+      } catch (error) {
+        return {
+          verdict: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
+    let outcome = await safe(1)
+    if (outcome.verdict == 'regressed') outcome = await safe()
+    if (outcome.verdict != 'failed') {
+      try {
+        await m.bank?.(suite, outcome.run)
+      } catch (error) {
+        await m.report(
+          new Error(`${suite} best could not be saved: ${error}`),
+          suite,
+          'failed',
+        )
+      }
+    }
     out[suite] = outcome.verdict
     if (outcome.verdict == 'failed') {
       await m.report(
@@ -146,7 +185,7 @@ let git = async (...args: string[]) => {
 }
 let home = Deno.env.get('HOME') ?? '/tmp'
 let STATE = `${home}/.cache/yak/bench/monitor.json`
-/** Where the monitor's app-deploy rows go, beside its state, so a daily run
+/** Where the monitor's app-deploy rows go, beside its state, so a scheduled run
  * leaves the checkout clean. The suite's baseline stays in the repo. */
 export let RECORDS = `${home}/.cache/yak/bench/app-deploys.jsonl`
 let env = { APP_DEPLOY_RECORD: RECORDS }
@@ -160,6 +199,65 @@ let load = async (): Promise<State> => {
 let save = async (state: State) => {
   await Deno.mkdir(STATE.replace(/\/[^/]+$/, ''), { recursive: true })
   await Deno.writeTextFile(STATE, JSON.stringify(state, null, 2) + '\n')
+}
+
+/** Keep the monitor's moving best beside its state. The committed reference
+ * and local best both bind it; neither a checkout nor a slower run raises it. */
+let bank = async (path: string, value: Baseline) => {
+  let tmp = `${path}.${Deno.pid}.tmp`
+  try {
+    await Deno.writeTextFile(tmp, JSON.stringify(value, null, 2) + '\n')
+    await Deno.rename(tmp, path)
+  } finally {
+    await Deno.remove(tmp).catch(() => {})
+  }
+}
+let reference = async (suite: string) => {
+  let committed: Baseline = JSON.parse(
+    await Deno.readTextFile(`${root}bench/${suite}.baseline.json`),
+  )
+  let dir = `${home}/.cache/yak/bench/best`
+  await Deno.mkdir(dir, { recursive: true })
+  let path = `${dir}/${suite}.baseline.json`
+  let previous: Baseline | undefined
+  try {
+    previous = JSON.parse(await Deno.readTextFile(path))
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error
+  }
+  // A protocol change gets its own committed reference, not incomparable old data.
+  if (
+    previous && ['suite', 'metric', 'workload', 'runtime', 'cpu'].some(
+      (key) =>
+        previous![key as keyof Baseline] != committed[key as keyof Baseline],
+    )
+  ) previous = undefined
+  let next = previous
+    ? {
+      ...committed,
+      tolerance: 0,
+      benches: committed.benches.map((b) => {
+        let old = previous!.benches.find((c) => c.name == b.name)
+        return {
+          ...b,
+          tolerance: 0,
+          median: old && old.unit == b.unit && old.better == b.better &&
+              old.resolution == b.resolution
+            ? (b.better == 'lower' ? Math.min : Math.max)(
+              old.median,
+              b.median,
+            )
+            : b.median,
+        }
+      }),
+    }
+    : {
+      ...committed,
+      tolerance: 0,
+      benches: committed.benches.map((b) => ({ ...b, tolerance: 0 })),
+    }
+  await bank(path, next)
+  return path
 }
 
 /** The live web unit, as `systemctl --user` names it. */
@@ -200,15 +298,21 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
       }
     }
   }
-  let results = `${root}bench/${suite}.results.json`
+  let path = await reference(suite)
+  let results = `${home}/.cache/yak/bench/${suite}.${Deno.pid}.results.json`
   await Deno.remove(results).catch(() => {})
-  let child = await new Deno.Command(Deno.execPath(), {
+  let child = await new Deno.Command('timeout', {
     args: [
+      '--kill-after=10',
+      HOURLY.includes(suite) ? '600' : '10800',
+      Deno.execPath(),
       'run',
       '-A',
       'bench/run.ts',
       'check',
       suite,
+      `--baseline=${path}`,
+      `--output=${results}`,
       ...runs ? [`--runs=${runs}`] : [],
     ],
     cwd: root,
@@ -235,13 +339,14 @@ if (import.meta.main) {
   let restarted = Deno.args.includes('--restarted')
   let named = Deno.args.filter((a) => !a.startsWith('--'))
   let state = await load()
-  let suites = named.length ? named : SUITES
+  let hourly = Deno.args.includes('--hourly')
+  let suites = named.length ? named : hourly ? HOURLY : SUITES
   if (restarted) {
     let now = await web()
     if (!now || now == state.web) Deno.exit(0)
     state.web = now
     await save(state)
-    suites = ['pages']
+    suites = ['pages', 'page-content']
   }
   let path = configPath()
   let send = reporter(path ? read(path) : {}, undefined, revision(), {
@@ -249,6 +354,11 @@ if (import.meta.main) {
   })
   let verdicts = await watch(suites, state, {
     check,
+    bank: async (suite, run) => {
+      let path = await reference(suite)
+      let before = await Deno.readTextFile(path)
+      await bank(path, baseline(run, 0, JSON.parse(before) as Baseline))
+    },
     report: (error, suite, kind) =>
       send(error, {
         fault: `bench ${kind}: ${suite}`,

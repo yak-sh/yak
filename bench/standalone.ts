@@ -3,7 +3,10 @@
 import { type CollectedSuite, host, type Samples } from '@yaks/benchmark'
 import { type DenoReport, extract } from '@yaks/benchmark/deno'
 import { RELAY_ENTITIES } from './names.ts'
-import { suite as pages } from './pages.ts'
+import { contentSuite, suite as pages } from './pages.ts'
+import { suite as platformWaits } from './platform-waits.ts'
+import { suite as workerHealth } from './worker-health.ts'
+import { PERSON_COMMANDS } from './person-commands.ts'
 
 let deno = (
   name: string,
@@ -70,6 +73,17 @@ let registration = (
 })
 
 export let standalone: Registration[] = [
+  measured('person-commands', 'bench/person-commands.ts', [...PERSON_COMMANDS]),
+  {
+    baseline: 'bench/worker-health.baseline.json',
+    suite: workerHealth,
+    floor: 0,
+  },
+  {
+    baseline: 'bench/platform-waits.baseline.json',
+    suite: platformWaits,
+    floor: 0,
+  },
   deno('client-frame', 'packages/client/frame_bench.ts', [
     'frame: 50k-entity world, 208 bundles, 3 reads, 40 watches',
     'part: one patch (the local player steps)',
@@ -147,10 +161,12 @@ export let standalone: Registration[] = [
     ),
     'us/value',
   ),
-  // A page paints in Chrome beside the box's other work, and its warm figures
-  // drift by about a fifth over a day as that work changes, which three runs
-  // a minute apart never see.
-  { baseline: 'bench/pages.baseline.json', suite: pages, floor: .25 },
+  { baseline: 'bench/pages.baseline.json', suite: pages, floor: 0 },
+  {
+    baseline: 'bench/page-content.baseline.json',
+    suite: contentSuite,
+    floor: 0,
+  },
 ]
 
 /** A bench file remains a convenient entry point for the shared CLI. */

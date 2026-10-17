@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "suite": "platform-waits",
+  "metric": "median-of-round-medians",
+  "workload": "v2/local-kernel-http-and-chrome/1-space/1-app/256-docs/7-samples/warm",
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "tolerance": 0,
+  "benches": [
+    {
+      "name": "management/html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 4.500597000000198,
+      "tolerance": 0
+    },
+    {
+      "name": "management/settings-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.805921000000126,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connections-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 5.265554999999949,
+      "tolerance": 0
+    },
+    {
+      "name": "management/trash-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.0191759999997885,
+      "tolerance": 0
+    },
+    {
+      "name": "management/billing-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.0451920000000428,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connect-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.2202940000001945,
+      "tolerance": 0
+    },
+    {
+      "name": "app/html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.821668000000045,
+      "tolerance": 0
+    },
+    {
+      "name": "app/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 30.59999990463257,
+      "tolerance": 0
+    },
+    {
+      "name": "app/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 23,
+      "tolerance": 0
+    },
+    {
+      "name": "connector/app-list",
+      "unit": "ms",
+      "better": "lower",
+      "median": 12.40692799999988,
+      "tolerance": 0
+    },
+    {
+      "name": "connector/file-list",
+      "unit": "ms",
+      "better": "lower",
+      "median": 11.51252199999999,
+      "tolerance": 0
+    },
+    {
+      "name": "connector/graph-query",
+      "unit": "ms",
+      "better": "lower",
+      "median": 12.122250999999778,
+      "tolerance": 0
+    },
+    {
+      "name": "connector/graph-apply",
+      "unit": "ms",
+      "better": "lower",
+      "median": 16.006692000000385,
+      "tolerance": 0
+    }
+  ]
+}

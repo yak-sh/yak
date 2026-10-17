@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "suite": "worker-health",
+  "metric": "median-of-round-medians",
+  "workload": "v2/active-systemd-worker-cgroups/1000ms/cpu-us-per-second",
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "tolerance": 0,
+  "benches": [
+    {
+      "name": "workers/cpu",
+      "unit": "cpu-us/s",
+      "better": "lower",
+      "median": 930807.7462481373,
+      "tolerance": 0
+    }
+  ]
+}

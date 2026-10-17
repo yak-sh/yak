@@ -15,13 +15,11 @@ retain raw samples, round medians, commit, runtime, CPU and load average in
 `bench:ratchet <suite>` measures the suite three times over (`--runs=<n>` for
 another count) and banks each bench's best median. `bench:check` measures the
 same way and compares each bench's best median, so a check measures what its
-baseline banked; `--runs=1` is a quicker, noisier look. Each bench also banks
-its own slack: twice the spread between those runs' medians, never under 10%
-(`FLOOR` in bench/run.ts, day-to-day drift the runs cannot see; a suite that
-drifts more names its own `floor` in bench/standalone.ts) and never over 95%. A
-baseline only moves toward faster: a bench that measured slower keeps its banked
-median. Banking a slower one is the owner's call, made with `--slower`. Bank on
-an idle box; a baseline banked under load is loose for every later check.
+baseline banked; `--runs=1` is a quicker, noisier look. Acceptance uses zero
+tolerance: no slack, including the spread between runs. A baseline only moves
+toward faster, and existing tolerance never grows. Banking a slower one is a
+separate explicit operation (`--slower`), not monitoring. Repeated checks use
+the best median to distinguish contention from a slowdown.
 
 ## The monitor
 
@@ -32,10 +30,19 @@ tracker as a bug: each figure over its limit, the run's load, and the commits
 since the suite's last good run. A suite that cannot run (no baseline, a crash,
 a page that never paints) is reported as a failure. @yaks/heal sends both to an
 agent like any other bug. Cron runs it from the main checkout through
-bin/bench-monitor: every suite at 02:23, and every 15 minutes with
-`--restarted`, which measures `pages` once after each change of the live web
-unit, that is after each `yak restart`. What it last saw is kept in
-`~/.cache/yak/bench/monitor.json`.
+bin/bench-monitor: every suite at 02:23, user-facing suites every 30 minutes
+(`--hourly`), and pages after each web-unit change (`--restarted`, checked every
+15 minutes). The user-facing lane runs suites independently; a slow throughput
+check cannot queue in front of it. Each user-facing check has ten minutes to
+screen and ten to confirm. Missing baselines, crashes, hung checks and unpainted
+content all file tracker bugs.
+
+The monitor keeps its best measurements in `~/.cache/yak/bench/best/`. Each
+confirmed run banks faster figures with zero slack, even when a different figure
+regressed. A committed reference and the local best both bind the next check;
+neither slower observations nor a checkout raise the reference. Normal checks
+never rewrite the committed baseline. Last good commits and the web unit are
+kept in `~/.cache/yak/bench/monitor.json`.
 
 ## Pages
 
@@ -46,17 +53,28 @@ a blank page on another origin first, so a cold figure times the page and not
 the browser starting its network stack, which a person's running browser never
 pays. A figure is the time from navigation to the frame where the page shows
 what it is for: home's first rows (or the owner's inbox, its threads loaded) or
-the task's title. A page that has not painted in 30 s fails the run. Its slack
-is never under 25%: a page paints in Chrome beside the box's other work, and its
-warm figures move by about a fifth over a day while the page's own code stays
-the same. It only reads: the browser refuses every request but GET, HEAD and
-OPTIONS before it leaves. `--url=` and `--task=` after `--` point it elsewhere.
+the task's title. A page that has not painted in 30 s fails the run. Its banked
+reference has no slack. It only reads: the browser refuses every request but
+GET, HEAD and OPTIONS before it leaves. `--url=` and `--task=` after `--` point
+it elsewhere.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
 [command wall clocks](suites.md), [platform deploy](deploys.md) and
 [app deploy](app-deploys.md) use the same runner and ratchet with their own
 baselines.
+
+## Waiting paths
+
+The [waiting-path inventory](waits.md) maps user-facing operations to their
+timed boundaries. `page-content` opens browse routes to actual content,
+including a long session transcript. `person-commands` measures CLI
+spawn-to-exit, the prompt hook over a one-MiB transcript, MCP responses and
+terminal paint/navigation over an isolated 2,000-task SQLite graph.
+`platform-waits` measures management HTML, app HTML and browser paint, and
+connector tools over an isolated production kernel. `worker-health` reads CPU of
+active worker cgroups, including all threads and children, without signalling
+them.
 
 ## Other suites
 
@@ -74,8 +92,9 @@ The suites are `client-frame`, `client-rules`, `harness-startup`,
 Each writes `bench/<suite>.results.json` and checks
 `bench/<suite>.baseline.json`. A suite without a banked baseline can run; a
 check refuses until its baseline has been explicitly accepted. Take that
-measurement on an idle box, then review and commit its baseline. Do not bank
-numbers taken on a loaded box.
+measurement on an idle box, then review and commit its baseline. A bank taken
+under load is recorded as such; monitoring immediately ratchets drops when later
+checks are faster. Never replace a faster reference with it.
 
 Arguments after `--` reach the selected suite. For example, compare relay
 admission in a checkout over 200 ticks with:

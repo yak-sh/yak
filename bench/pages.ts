@@ -22,10 +22,11 @@
  *
  *   deno task bench pages [-- --url=http://127.0.0.1:5173 --task=T-121470] */
 import type { CollectedSuite } from '@yaks/benchmark'
+import { compEid, packEid, propEid } from '../packages/inspect/schema.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 
 /** A page and the mark that says it has painted, as a page expression. */
-type Page = { name: string; path: string; painted: string }
+type Page = { name: string; path: string; painted: string; patience?: number }
 
 /** The pages measured. The task is a finished one nobody holds, with the
  * owner's words and a few comments, so its page holds still. Home is the
@@ -167,7 +168,8 @@ let open = async (base: string, page: Page, prime: string) => {
     // saying what never did.
     let visit = async (url: string, expression: string, what: string) => {
       await tab.send('Page.navigate', { url })
-      let until = Date.now() + PATIENCE
+      let patience = page.patience ?? PATIENCE
+      let until = Date.now() + patience
       while (Date.now() < until) {
         let { result } = await tab.send('Runtime.evaluate', {
           expression,
@@ -176,7 +178,13 @@ let open = async (base: string, page: Page, prime: string) => {
         if (result.value) return result.value
         await sleep(50)
       }
-      throw new Error(`${what} within ${PATIENCE / 1000} s`)
+      let diagnostic = await tab.send('Runtime.evaluate', {
+        expression: 'document.body.innerText.slice(0, 2200)',
+        returnByValue: true,
+      })
+      throw new Error(
+        `${what} within ${patience / 1000} s: ${JSON.stringify(diagnostic)}`,
+      )
     }
     let paint = async () => {
       // The last document's mark must not answer for the next one.
@@ -237,6 +245,98 @@ export let suite = (args: string[] = []): CollectedSuite => {
       try {
         for (let page of measured) {
           Object.assign(out, await open(base, page, blank.url))
+        }
+      } finally {
+        await blank.close()
+      }
+      return out
+    },
+  }
+}
+
+/** Missing route families, measured to their content rather than their heading.
+ * The fixed long session is the one reported in T-127085. No synthetic fixture
+ * replaces it: a slow transcript remains a slow figure until its fix ships.
+ * Schema pages share inspect's package/component/property renderers; search is
+ * its query renderer. Inbox is not offered by the current live host; it is not
+ * replaced by a heading or an empty fallback here. Each route gets its own cold profile and one warm navigation.
+ */
+export let contentPages = (): Page[] => {
+  let rows = `!!document.querySelector('.Shell_Body .Rows_Item')`
+  let table = `!!document.querySelector('.Shell_Body .Table_Body .Table_Row')`
+  return [{
+    name: 'session-transcript',
+    path: '/%2399a53270db',
+    painted:
+      `Array.from(document.querySelectorAll('.Shell_Body .Session_Log .Session_Content'))
+      .some(row => !!row.textContent.trim()) &&
+      !document.querySelector('.Shell_Body .Session [role=status]')`,
+    patience: 45_000,
+  }, {
+    name: 'sessions',
+    path: '/?sessions',
+    painted: rows,
+  }, {
+    name: 'project',
+    path: '/P-19?v=List',
+    painted: rows,
+  }, {
+    name: 'query',
+    path: '/?q=' + encodeURIComponent('.task&.limit=20'),
+    painted: `!!document.querySelector('.Shell_Body [data-query]') && ${table}`,
+  }, {
+    name: 'visualize',
+    path: '/visualize',
+    painted:
+      `!!document.querySelector('.Map_Node[data-node]:not([data-node^="phase:"])')`,
+  }, {
+    name: 'map',
+    path: '/?map',
+    painted: `!!document.querySelector('.Shell_Body .Head_Title')
+      ?.textContent.includes('Schema') && ${rows}`,
+  }, {
+    name: 'inspect-package',
+    path: '/' + packEid('@yaks/task'),
+    painted: table,
+  }, {
+    name: 'inspect-component',
+    path: '/' + compEid('task'),
+    painted: table,
+  }, {
+    name: 'inspect-property',
+    path: '/' + propEid('doc', 'title'),
+    painted: `!!document.querySelector('.Shell_Body [data-inspect]') &&
+      Array.from(document.querySelectorAll('.Shell_Body button'))
+        .some(b => b.textContent.trim() == 'rank them') &&
+      /[0-9,]+ entities carry doc/.test(document.querySelector('.Shell_Body').textContent)`,
+  }]
+}
+
+/** Page-to-content coverage has its own baseline; the original pages workload
+ * and banked figures are unchanged. An alternate server is a different workload.
+ */
+export let contentSuite = (args: string[] = []): CollectedSuite => {
+  let base = args.find((a) => a.startsWith('--url='))?.slice(6) ?? live()
+  let measured = contentPages()
+  return {
+    name: 'page-content',
+    metric: 'median-of-round-medians',
+    workload: args.length ? JSON.stringify([1, base]) : 1,
+    benches: measured.flatMap((p) =>
+      ['cold', 'warm'].map((w) => ({
+        name: `${p.name}/${w}`,
+        unit: 'ms',
+        resolution: 1,
+      }))
+    ),
+    collect: async () => {
+      let out: Record<string, number> = {}
+      let blank = primer()
+      try {
+        for (let page of measured) {
+          let figures = await open(base, page, blank.url)
+          console.error(`${page.name}: ${JSON.stringify(figures)}`)
+          Object.assign(out, figures)
         }
       } finally {
         await blank.close()

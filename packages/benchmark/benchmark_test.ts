@@ -649,3 +649,16 @@ test('a symlinked output directory cannot overwrite the baseline', async () => {
     await Deno.remove(directory, { recursive: true })
   }
 })
+
+test('zero slack stays strict through noisy repeated banking and later acceptance', async () => {
+  let f = fixture()
+  let options = { ...f.options, rounds: 1 }
+  f.suite.benches[0].sample = costs(100, 140, 120)
+  await run(f.suite, { ...options, mode: 'accept', tolerance: 0, runs: 3 })
+  equal(banked(f), { work: [100, 0] })
+  f.suite.benches[0].sample = () => 101
+  let error = await throws(() => run(f.suite, { ...options, mode: 'check' }))
+  ok(error instanceof Regressed)
+  await run(f.suite, { ...options, mode: 'accept', tolerance: .5 })
+  equal(banked(f), { work: [100, 0] })
+})

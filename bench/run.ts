@@ -17,6 +17,14 @@ export let main = async (args = Deno.args): Promise<number> => {
     rest = args.slice(2)
     action = 'run'
   }
+  let reference = rest.find((a) => a.startsWith('--baseline='))?.slice(
+    '--baseline='.length,
+  )
+  rest = rest.filter((a) => !a.startsWith('--baseline='))
+  let output = rest.find((a) => a.startsWith('--output='))?.slice(
+    '--output='.length,
+  )
+  rest = rest.filter((a) => !a.startsWith('--output='))
   if (name == 'box') {
     if (!['run', 'check', 'accept', 'ratchet'].includes(action)) {
       throw new Error(`Unknown action: ${action}`)
@@ -38,9 +46,12 @@ export let main = async (args = Deno.args): Promise<number> => {
     let suite = name == 'deploy'
       ? await import('./deploy.ts')
       : await import('./app-deploy.ts')
-    // A deploy is timed once per push, on Cloudflare: no repeated runs to
-    // measure its noise, so it keeps a fixed slack.
-    let current = await suite.run(options(name, action, 1, .25))
+    // Deploys use their recorded observations; acceptance still has no slack.
+    let current = await suite.run({
+      ...options(name, action, 1, 0),
+      ...(reference ? { baseline: reference } : {}),
+      ...(output ? { output } : {}),
+    })
     console.log(`${name}: ${current?.verdict ?? 'no data (bootstrap)'}`)
     return 0
   }
@@ -85,21 +96,22 @@ export let main = async (args = Deno.args): Promise<number> => {
   let current = await run(definition, {
     ...options(name, action, rounds, floor),
     runs,
+    ...(reference ? { baseline: reference } : {}),
     slower,
     coverage: recording ? 'subset' : 'exact',
-    output: recording
-      ? 'bench/apply-recording.results.json'
-      : `bench/${name}.results.json`,
-    lock: '/tmp/yaks-throughput-bench.lock',
+    output: output ??
+      (recording
+        ? 'bench/apply-recording.results.json'
+        : `bench/${name}.results.json`),
+    lock: `/tmp/yaks-bench-${name}.lock`,
   })
   for (let b of current.benches) console.log(`${b.name}: ${b.median} ${b.unit}`)
   console.log(`${name}: ${current.verdict}; load ${current.load.join(', ')}`)
   return 0
 }
-/** The least slack a bench is banked with: day-to-day drift on this box that
- * the runs banking it cannot see. Each bench's own spread between those runs
- * may ask for more (@yaks/benchmark `baseline`). */
-export let FLOOR = .1
+/** Acceptance banks today's best without slack. Repeated checks, rather than
+ * a wider limit, distinguish contention from a persistent slowdown. */
+export let FLOOR = 0
 
 let options = (
   name: string,

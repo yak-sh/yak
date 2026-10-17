@@ -89,3 +89,34 @@ test('a suite that cannot run is reported, and others still run', async () => {
     runs: [1, 1],
   })
 })
+
+test('a thrown check is reported and cannot hide the next suite', async () => {
+  let reports: string[] = []
+  let out = await watch(['broken', 'good'], { good: {} }, {
+    check: (suite) => {
+      if (suite == 'broken') throw new Error('baseline missing')
+      return Promise.resolve(outcome('passed'))
+    },
+    since: () => Promise.resolve([]),
+    report: (error) => {
+      reports.push(error.message)
+      return Promise.resolve()
+    },
+  })
+  equal(out, { broken: 'failed', good: 'passed' })
+  equal(reports, ['broken could not be measured: baseline missing'])
+})
+
+test('confirmed measurements bank drops even when another metric regressed', async () => {
+  let banked: string[] = []
+  await watch(['s'], { good: {} }, {
+    check: () => Promise.resolve(outcome('regressed')),
+    since: () => Promise.resolve([]),
+    report: () => Promise.resolve(),
+    bank: (suite, run) => {
+      banked.push(`${suite}:${run.verdict}`)
+      return Promise.resolve()
+    },
+  })
+  equal(banked, ['s:regressed'])
+})
