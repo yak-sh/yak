@@ -581,51 +581,92 @@ export let sessionStatus = {
     // before entries were sequenced. The first arm with a row ends the read,
     // so a sequenced ask never pays for the search.
     let onAsk = eq(col('entity', 'a'), col('entity', 'e'))
+    // A correlated scalar cannot flatten into the join whose tiny ANALYZE
+    // estimate makes SQLite scan all asks instead of seeking their primary key.
+    let askField = (alias: string, name: string): Expr =>
+      sub(select({
+        cols: [col(name, 'point_ask')],
+        from: table(ASK, 'point_ask'),
+        where: eq(col('entity', 'point_ask'), col('entity', alias)),
+      }))
     let askAt = (where: Expr): Select =>
       select({
         cols: [star()],
         from: from(select({
-          cols: [col('entity', 'e'), col('seq', 'e'), col('through', 'a')],
-          from: table('entry', 'e'),
-          joins: [join(table(ASK, 'a'), onAsk)],
-          where,
-          order: [desc(col('seq', 'e'))],
+          cols: [
+            col('entity', 'candidate'),
+            col('seq', 'candidate'),
+            as(
+              fn('json_extract', col('request', 'candidate'), lit('$[1]')),
+              'through',
+            ),
+          ],
+          from: from(
+            select({
+              cols: [
+                col('entity', 'e'),
+                col('seq', 'e'),
+                as(
+                  sub(select({
+                    cols: [
+                      fn(
+                        'json_array',
+                        col('entity', 'point_ask'),
+                        col('through', 'point_ask'),
+                      ),
+                    ],
+                    from: table(ASK, 'point_ask'),
+                    where: eq(col('entity', 'point_ask'), col('entity', 'e')),
+                  })),
+                  'request',
+                ),
+              ],
+              from: table('entry', 'e'),
+              where,
+              order: [desc(col('seq', 'e'))],
+              // Keep the scalar row together: flattening would evaluate it once
+              // for presence and again for through, billing the ask twice.
+              limit: lit(-1),
+            }),
+            'candidate',
+          ),
+          where: notNull(col('request', 'candidate')),
           limit: lit(1),
         })),
       })
-    // A transcript with no sequenced ask must not search every other
-    // transcript's asks: its NULL-sequence range is the fallback's scope.
-    let unsequenced = (source: Source, joins: Join[]) =>
+    let unsequenced = (source: Source, joins: Join[], point = false) =>
       sub(select({
         cols: [col('entity', 'e')],
         from: source,
         joins,
-        where: and(mine('e'), isNull(col('seq', 'e'))),
+        where: and(
+          mine('e'),
+          isNull(col('seq', 'e')),
+          ...(point ? [notNull(askField('e', 'entity'))] : []),
+        ),
         order: [desc(col('seq', 'e'))],
         limit: lit(1),
       }))
     let ask = {
       ...unionAll(
         askAt(and(mine('e'), notNull(col('seq', 'e')))),
-        askAt(eq(
-          col('entity', 'e'),
-          iff(
-            // Choose within this statement, never from stale statistics:
-            // a small ask set is cheaper than a lifetime of NULL sequences.
-            exists(select({
-              cols: [lit(1)],
-              from: table(ASK),
-              limit: lit(1),
-              offset: lit(64),
-            })),
-            unsequenced(table('entry', 'e'), [{
-              ...cross(table(ASK, 'a')),
-              on: onAsk,
-            }]),
-            unsequenced(table(ASK, 'a'), [{
-              ...cross(table('entry', 'e')),
-              on: onAsk,
-            }]),
+        askAt(and(
+          mine('e'),
+          eq(
+            col('entity', 'e'),
+            iff(
+              exists(select({
+                cols: [lit(1)],
+                from: table(ASK),
+                limit: lit(1),
+                offset: lit(64),
+              })),
+              unsequenced(table('entry', 'e'), [], true),
+              unsequenced(table(ASK, 'a'), [{
+                ...cross(table('entry', 'e')),
+                on: onAsk,
+              }]),
+            ),
           ),
         )),
       ),
@@ -957,11 +998,9 @@ export let sessionStatus = {
     let refused = sub(select({
       cols: [col('seq', 'b')],
       from: table('entry', 'b'),
-      joins: [
-        join(table(ASK, 'r'), eq(col('entity', 'r'), col('entity', 'b'))),
-      ],
       where: and(
         mine('b'),
+        notNull(askField('b', 'entity')),
         eq(col('entity', 'b'), col('n_refused_source', 'f')),
       ),
     }))
@@ -972,10 +1011,11 @@ export let sessionStatus = {
         select({
           cols: [col('seq', 'e'), as(probe.worn('interrupted'), 'interrupted')],
           from: table('entry', 'e'),
-          joins: [
-            join(table(ASK, 'r'), eq(col('entity', 'r'), col('entity', 'e'))),
-          ],
-          where: and(mine('e'), not(probe.passive)),
+          where: and(
+            mine('e'),
+            notNull(askField('e', 'entity')),
+            not(probe.passive),
+          ),
           order: [desc(col('seq', 'e'))],
           limit: lit(RETRIES),
         }),
