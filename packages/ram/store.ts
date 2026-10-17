@@ -477,10 +477,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     }
     for (let [name, prop, read] of derived) {
       if (!b[name]) continue
-      out = {
-        ...out,
-        [name]: { ...out[name] as Comp, [prop]: read(b, among) },
-      }
+      let value = read(b, among)
+      let comp = { ...out[name] as Comp }
+      if (value == null) delete comp[prop]
+      else comp[prop] = value
+      out = { ...out, [name]: comp }
     }
     return out
   }
@@ -520,7 +521,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
             isRef(name, prop) && typeof value[prop] == 'string' &&
             !present.has(value[prop] as string)
           ) {
-            out[name] = { ...out[name] as Comp, [prop]: null }
+            let comp = { ...out[name] as Comp }
+            delete comp[prop]
+            out[name] = comp
           }
         }
       }

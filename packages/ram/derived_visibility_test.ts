@@ -114,7 +114,7 @@ for (let [name, storage] of Object.entries(stores)) {
   test(`${name} owner component selection keeps the owner's private aspect`, () =>
     assertEquals(owner.rows('.private'), [{ eid: 'owner-1' }]))
   test(`${name} computed getters use visible sources`, () =>
-    assertEquals(value(g.get(['other']) as Bundle[]), { value: null }))
+    assertEquals(value(g.get(['other']) as Bundle[]), {}))
   test(`${name} computed predicates use visible sources`, () =>
     assertEquals(g.rows('.public.value=secret'), []))
   test(`${name} computed projections use visible sources`, () =>
