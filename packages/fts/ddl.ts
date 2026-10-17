@@ -371,21 +371,29 @@ let declared = (db: Driver, fts: string): string[] => {
 }
 
 // The schema objects of one type, with the text each was created by.
-let objects = (db: Driver, type: string, name?: string) =>
-  catalogue(db).filter((o) =>
-    o.type == type && (name == null || o.name == name)
-  )
+let objects = (
+  schema: ReturnType<typeof catalogue>,
+  type: string,
+  name?: string,
+) => schema.filter((o) => o.type == type && (name == null || o.name == name))
 
 // The text a schema object was created by, or undefined when there is none.
-let stored = (db: Driver, type: string, name: string): string | undefined => {
-  let row = objects(db, type, name)[0]
+let stored = (
+  schema: ReturnType<typeof catalogue>,
+  type: string,
+  name: string,
+): string | undefined => {
+  let row = objects(schema, type, name)[0]
   return row ? String(row.sql ?? '') : undefined
 }
 
 // Where an index reads its content back from: the `content=` name in its own
 // definition, or undefined when the index does not exist.
-let source = (db: Driver, fts: string): string | undefined =>
-  /content='([^']*)'/.exec(stored(db, 'table', fts) ?? '')?.[1]
+let source = (
+  schema: ReturnType<typeof catalogue>,
+  fts: string,
+): string | undefined =>
+  /content='([^']*)'/.exec(stored(schema, 'table', fts) ?? '')?.[1]
 
 // A definition with its `create view [if not exists]` preamble removed. SQLite
 // stores the statement it was given minus the `if not exists`, with its leading
@@ -398,11 +406,11 @@ let body = (sql: string, name: string): string => {
 
 // The names of any triggers that write into an index other than this package's
 // own.
-let strays = (db: Driver, ix: Index): string[] => {
+let strays = (schema: ReturnType<typeof catalogue>, ix: Index): string[] => {
   let fts = indexName(ix.name)
   let ours = new Set(owned(ix))
   let word = new RegExp(`\\b${fts}\\b`)
-  return objects(db, 'trigger')
+  return objects(schema, 'trigger')
     .filter((r) => !ours.has(String(r.name)) && word.test(String(r.sql ?? '')))
     .map((r) => String(r.name))
 }
@@ -483,6 +491,9 @@ export let adopt = (
   opts: AdoptOpts = {},
 ): Adopted => {
   let recut: string[] = [], dropped: string[] = []
+  // Adoption compares the objects that stood when it began. Its own DDL
+  // must not make every later comparison reread the entire schema.
+  let before = catalogue(db)
   let gone = (kind: 'trigger' | 'view' | 'table', name: string) =>
     db.query({ t: 'drop', kind, name, ifExists: true })
   // What one of `mine` would be stored as, by the name it creates.
@@ -497,8 +508,8 @@ export let adopt = (
     let have = declared(db, fts)
     let same = have.length == ix.props.length &&
       have.every((c, i) => c == ix.props[i]) &&
-      source(db, fts) == sourceOf(ix, derived)
-    for (let t of strays(db, ix)) {
+      source(before, fts) == sourceOf(ix, derived)
+    for (let t of strays(before, ix)) {
       gone('trigger', t)
       dropped.push(t)
     }
@@ -510,7 +521,7 @@ export let adopt = (
       ...owned(ix).map((t): ['trigger', string] => ['trigger', t]),
     ]
     for (let [kind, name] of ours) {
-      let had = stored(db, kind, name)
+      let had = stored(before, kind, name)
       let now = text(mine, name)
       if (
         had != null &&

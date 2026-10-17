@@ -455,3 +455,31 @@ test('schema adoption retains unchanged content and repairs changed writers with
   assertEquals(adopt(db, text, {}, { heal: false }).recut, ['book_fts'])
   assertEquals(scans, 0)
 })
+
+// Repair both indexes in one boot: changing the first must not make every
+// comparison for the second reread the file's entire schema.
+let repair = (() => {
+  let db = shelf(), query = db.query.bind(db), scans = 0
+  for (let name of ['book_fts_insert', 'review_fts_insert']) {
+    let writer = schema(fields(shop)).find((s) =>
+      s.t == 'create trigger' && s.name == name
+    )!
+    db.query({ ...writer, name: 'old_' + name } as Stmt)
+    db.query({ t: 'drop', kind: 'trigger', name })
+  }
+  db.query = (stmt) => {
+    if (
+      stmt.t == 'select' && JSON.stringify(stmt.from).includes('sqlite_schema')
+    ) {
+      scans++
+    }
+    return query(stmt)
+  }
+  let done = adopt(db, fields(shop), {}, { heal: false })
+  return { done, scans }
+})()
+
+test('repairing search writers keeps schema comparisons on the pre-repair snapshot', () => {
+  assertEquals(repair.done.recut, ['book_fts', 'review_fts'])
+  assert(repair.scans <= 3, `repair scanned the schema ${repair.scans} times`)
+})
