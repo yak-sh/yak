@@ -70,85 +70,92 @@ let b64u = (b: ArrayBuffer) =>
   btoa(String.fromCharCode(...new Uint8Array(b)))
     .replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 
+// The agent case owns real OAuth grants seeded before timing reads and revocation.
+let agentGrants = await (async () => {
+  let k = await kernel()
+  let owner = await signIn(k)
+  let at = (
+    host: string,
+    path: string,
+    headers: Record<string, string> = {},
+  ) => k.at(host, path, { headers })
+  let snapshots = async (): Promise<Agent[]> => {
+    let res = await at('yaks.app', '/oauth/agents', {
+      cookie: owner.cookie,
+    })
+    assertEquals(res.status, 200)
+    assertEquals(res.headers.get('cache-control'), 'private, no-store')
+    return (await res.json()).agents
+  }
+  assertEquals(await snapshots(), [])
+
+  let authorize = async (back: string, name: string) => {
+    let registered = await k.at('yaks.app', '/oauth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_name: name,
+        redirect_uris: [back],
+        token_endpoint_auth_method: 'none',
+        grant_types: ['authorization_code', 'refresh_token'],
+        response_types: ['code'],
+      }),
+    })
+    assertEquals(registered.status, 201)
+    let client_id = (await registered.json()).client_id
+    let verifier = crypto.randomUUID() + crypto.randomUUID()
+    let q = new URLSearchParams({
+      response_type: 'code',
+      client_id,
+      redirect_uri: back,
+      scope: 'graph',
+      code_challenge: b64u(
+        await crypto.subtle.digest(
+          'SHA-256',
+          new TextEncoder().encode(verifier),
+        ),
+      ),
+      code_challenge_method: 'S256',
+    }).toString()
+    let allow = await allowed(k, q, owner.cookie)
+    assertEquals(allow.status, 302)
+    await allow.body?.cancel()
+    let code = new URL(allow.headers.get('location')!).searchParams.get(
+      'code',
+    )!
+    let token = await form(k, '/oauth/token', {
+      grant_type: 'authorization_code',
+      client_id,
+      redirect_uri: back,
+      code,
+      code_verifier: verifier,
+    })
+    assertEquals(token.status, 200)
+    let tokens: { access_token: string; refresh_token: string } = await token
+      .json()
+    return { client_id, ...tokens }
+  }
+  let chatgpt = await authorize(
+    'https://chatgpt.com/callback',
+    'A web client',
+  )
+  let claude = await authorize(
+    'https://claude.ai/callback',
+    'Another web client',
+  )
+  let another = await authorize(
+    'https://chatgpt.com/other-callback',
+    'A second installation',
+  )
+  return { k, owner, at, snapshots, authorize, chatgpt, claude, another }
+})()
+
 test(
   'agents identify existing grants and belong to the signed-in browser',
   async () => {
-    let k = await kernel()
+    let { k, owner, at, snapshots, authorize, chatgpt, claude, another } =
+      agentGrants
     try {
-      let owner = await signIn(k)
-      let at = (
-        host: string,
-        path: string,
-        headers: Record<string, string> = {},
-      ) => k.at(host, path, { headers })
-      let snapshots = async (): Promise<Agent[]> => {
-        let res = await at('yaks.app', '/oauth/agents', {
-          cookie: owner.cookie,
-        })
-        assertEquals(res.status, 200)
-        assertEquals(res.headers.get('cache-control'), 'private, no-store')
-        return (await res.json()).agents
-      }
-      assertEquals(await snapshots(), [])
-
-      let authorize = async (back: string, name: string) => {
-        let registered = await k.at('yaks.app', '/oauth/register', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            client_name: name,
-            redirect_uris: [back],
-            token_endpoint_auth_method: 'none',
-            grant_types: ['authorization_code', 'refresh_token'],
-            response_types: ['code'],
-          }),
-        })
-        assertEquals(registered.status, 201)
-        let client_id = (await registered.json()).client_id
-        let verifier = crypto.randomUUID() + crypto.randomUUID()
-        let q = new URLSearchParams({
-          response_type: 'code',
-          client_id,
-          redirect_uri: back,
-          scope: 'graph',
-          code_challenge: b64u(
-            await crypto.subtle.digest(
-              'SHA-256',
-              new TextEncoder().encode(verifier),
-            ),
-          ),
-          code_challenge_method: 'S256',
-        }).toString()
-        let allow = await allowed(k, q, owner.cookie)
-        assertEquals(allow.status, 302)
-        await allow.body?.cancel()
-        let code = new URL(allow.headers.get('location')!).searchParams.get(
-          'code',
-        )!
-        let token = await form(k, '/oauth/token', {
-          grant_type: 'authorization_code',
-          client_id,
-          redirect_uri: back,
-          code,
-          code_verifier: verifier,
-        })
-        assertEquals(token.status, 200)
-        let tokens: { access_token: string; refresh_token: string } =
-          await token.json()
-        return { client_id, ...tokens }
-      }
-      let chatgpt = await authorize(
-        'https://chatgpt.com/callback',
-        'A web client',
-      )
-      let claude = await authorize(
-        'https://claude.ai/callback',
-        'Another web client',
-      )
-      let another = await authorize(
-        'https://chatgpt.com/other-callback',
-        'A second installation',
-      )
       let found = await snapshots()
       assertEquals(found.map((c) => [c.id, c.name, c.brand]), [
         ['chatgpt', 'ChatGPT', 'chatgpt'],

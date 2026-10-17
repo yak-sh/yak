@@ -9,8 +9,9 @@ let doc = (type = 'string') => ({
   $defs: { note: { type: 'object', properties: { text: { type } } } },
 })
 
-test('release door reads immutable JSON/YAML vocab, caches pairs, and follows the fresh app version', async () => {
-  await using scenario = platform()
+// Seed this case's directory and immutable releases before timing its reads.
+let vocabRelease = await (async () => {
+  let scenario = platform()
   let { env, files } = scenario
   let { app } = await seeded(env)
   files.held.set('sha/old', bytes(JSON.stringify(doc())))
@@ -40,6 +41,11 @@ test('release door reads immutable JSON/YAML vocab, caches pairs, and follows th
     stamp(env, {
       entities: [{ entity: { eid: app.eid }, app: { version } }],
     })
+  return { scenario, env, files, app, current }
+})()
+test('release door reads immutable JSON/YAML vocab, caches pairs, and follows the fresh app version', async () => {
+  await using _scenario = vocabRelease.scenario
+  let { env, files, current } = vocabRelease
   let get = async (version: number) => {
     let res = await apps.fetch(
       visit(`/cookbook/api/release?version=${version}`),
@@ -88,8 +94,9 @@ test('release door gates readers and validates the page version', async () => {
   assertEquals((await get('?version=1')).status, 401)
 })
 
-test('crossing a required release raises the reload level even with equal vocab and only cosmetic file changes', async () => {
-  await using scenario = platform()
+// Seed this case's directory and immutable releases before timing its reads.
+let requiredRelease = await (async () => {
+  let scenario = platform()
   let { env, files } = scenario
   let { app } = await seeded(env)
   files.held.set('sha/words', bytes(JSON.stringify(doc())))
@@ -110,6 +117,11 @@ test('crossing a required release raises the reload level even with equal vocab 
   await stamp(env, {
     entities: [{ entity: { eid: app.eid }, app: { version: 3 } }],
   })
+  return { scenario, env, files, app }
+})()
+test('crossing a required release raises the reload level even with equal vocab and only cosmetic file changes', async () => {
+  await using _scenario = requiredRelease.scenario
+  let { env, app } = requiredRelease
   let get = async (version: number) => {
     let res = await apps.fetch(
       visit(`/cookbook/api/release?version=${version}`),

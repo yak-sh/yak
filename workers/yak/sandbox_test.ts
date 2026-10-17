@@ -844,9 +844,16 @@ test('the guide and the limits page say the same image', () => {
   }
 })
 
-test('a lone connector call pays for itself and leaves the container', async () => {
+// This connector case owns a seeded platform, separate from the two-space case.
+let loneConnector = await (async () => {
   let box = sandboxes(() => ({ stdout: 'ok' }))
-  let { env, space } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let seed = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  return { ...seed, box }
+})()
+
+test('a lone connector call pays for itself and leaves the container', async () => {
+  await using fixture = loneConnector
+  let { env, space, box } = fixture
   // No `spend` on the Ctx: this is somebody's own agent over the connector,
   // not a build we are running.
   let ctx: Ctx = { env, dir: dirOf(env), person: ADA }

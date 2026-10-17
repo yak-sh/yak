@@ -1755,10 +1755,16 @@ test('an app in the trash serves nothing, and says so to its owner', async () =>
 // it is still wearing it — and the space is a space with no front page until
 // it comes back. The restore itself is a form on that space's own page: no
 // assistant, no script, one POST.
-test("a trashed front page is nobody's, and the owner restores it there", async () => {
-  await using k = await router()
+// The trash case starts from its own populated front page, not a timed boot.
+let trashedFrontPage = await (async () => {
+  let k = await router()
   k.put('ada/cookbook/index.html', '<!doctype html><body>cookbook</body>')
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
+  return k
+})()
+
+test("a trashed front page is nobody's, and the owner restores it there", async () => {
+  await using k = trashedFrontPage
   let stores = k.env.STORE, opened: string[] = []
   k.env.STORE = {
     ...stores,
@@ -2191,8 +2197,9 @@ let pages: [string, string, [number, string, string]][] = [
   ]],
 ]
 for (let [path, name, want] of pages) {
+  let page = build()
   test(`a build's pages: ${name}`, async () => {
-    let r = await build()(path)
+    let r = await page(path)
     assertEquals([r.status, r.file, r.body.replace(/<[^>]*>/g, '')], want)
   })
 }
