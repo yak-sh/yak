@@ -952,9 +952,11 @@ export let sessionStatus = {
                   lit(0),
                 ),
               )],
-              from: table('tool_progress', 'p'),
+              // Keep the complete owner history, but seek it before probing
+              // progress. Starting at progress visits every transcript's work.
+              from: table('entry', 'pe'),
               joins: [{
-                ...cross(table('entry', 'pe')),
+                ...cross(table('tool_progress', 'p')),
                 on: eq(col('entity', 'pe'), col('entity', 'p')),
               }],
               where: mine('pe'),
