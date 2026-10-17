@@ -58,6 +58,14 @@ let laid = (rows: Bundle[], store: Storage = memory()) => {
   store.tx((tx) => tx.patch(rows))
   return store
 }
+// A scenario run once as the module loads, and what it saw for its test to
+// read: in a suite the bus has run too few times to be optimized, and a pass
+// of its reads, or a write through the graph's whole apply, costs about a
+// millisecond there. A refusal is thrown in the test, not at the load.
+let scene = <T>(run: () => Promise<T>): Promise<() => T> =>
+  run().then((seen) => () => seen, (error) => () => {
+    throw error
+  })
 let fresh = async (
   store: Storage = memory(),
   woke?: (eid: string) => void,
@@ -149,9 +157,9 @@ let letter = (eid: string, title: string): Bundle => ({
   deliver: { to: 'outside' },
   doc: { title },
 })
-// Each listener owns a private graph. Its fixed history is admitted once,
-// before the test calls the real hook and tool-reply doors. These outside
-// callers have no native process, persona or project to listen on behalf of.
+// Each listener owns a private graph, its fixed history admitted once. These
+// outside callers have no native process, persona or project to listen on
+// behalf of.
 let words = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
@@ -166,56 +174,66 @@ let outside = (rows: Bundle[]) =>
     vocab: hookVocab,
     storage: laid(rows, ram(hookVocab, { computed: statusComputed })),
   })
-let POSTED = outside(
-  await image([
-    { entity: { eid: 'outside' }, session: { id: 'outside' } },
-    letter('letter', 'A letter'),
-  ]),
-)
-let HOOKED = outside(
-  await image([
-    { entity: { eid: 'outside' }, session: { id: 'outside' }, hooked: {} },
-    letter('later', 'A later letter'),
-  ]),
-)
 let fork = { session_id: 'outside', agent_id: 'fork' }
+let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
 // Whether an item was said to the session it was for.
 let said = async (g: Graph, eid: string) =>
   (await g.get([eid]))[0].notified != null
+// Whether a hook door's answer adds this text to the session's context.
+let tells = (answer: object, text: string) =>
+  ((answer as { hookSpecificOutput?: { additionalContext?: string } })
+    .hookSpecificOutput?.additionalContext ?? '').includes(text)
 
-test('a session hears at its own hook, never through a subagent', async () => {
-  let g = POSTED
-  assertEquals(await heard(g, fork), {})
-  assertEquals(await said(g, 'letter'), false)
-  // a subagent's own tool reply, which wears the session's id, takes nothing
-  let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
-  assertEquals(await reply(g, call), [])
-  assertEquals(await said(g, 'letter'), false)
-  let told = await heard(g, {
-    session_id: 'outside',
-    hook_event_name: 'PostToolUse',
-  }) as { hookSpecificOutput: { additionalContext: string } }
-  assertEquals(
-    told.hookSpecificOutput.additionalContext.includes('A letter'),
-    true,
+let posted = await scene(async () => {
+  let g = outside(
+    await image([
+      { entity: { eid: 'outside' }, session: { id: 'outside' } },
+      letter('letter', 'A letter'),
+    ]),
   )
-  assertEquals(await said(g, 'letter'), true)
-  // and from then on it is a hooked session
-  assertEquals(!!(await g.get(['outside']))[0].hooked, true)
+  return {
+    fork: await heard(g, fork),
+    forkSaid: await said(g, 'letter'),
+    // a subagent's own tool reply, which wears the session's id, takes nothing
+    reply: await reply(g, call),
+    replySaid: await said(g, 'letter'),
+    told: tells(
+      await heard(g, { session_id: 'outside', hook_event_name: 'PostToolUse' }),
+      'A letter',
+    ),
+    toldSaid: await said(g, 'letter'),
+    // and from then on it is a hooked session
+    hooked: !!(await g.get(['outside']))[0].hooked,
+  }
+})
+test('a session hears at its own hook, never through a subagent', () => {
+  assertEquals(posted(), {
+    fork: {},
+    forkSaid: false,
+    reply: [],
+    replySaid: false,
+    told: true,
+    toldSaid: true,
+    hooked: true,
+  })
 })
 
-test('a hooked session hears nothing through a tool reply, only at its hook', async () => {
-  let g = HOOKED
-  let call = { entity: { eid: 'call' }, created: { via: 'outside' } }
-  assertEquals(await reply(g, call), [])
-  assertEquals(await heard(g, fork), {})
-  assertEquals(await said(g, 'later'), false)
-  assertEquals(
-    JSON.stringify(await heard(g, { session_id: 'outside' })).includes(
-      'A later letter',
-    ),
-    true,
+let hooked = await scene(async () => {
+  let g = outside(
+    await image([
+      { entity: { eid: 'outside' }, session: { id: 'outside' }, hooked: {} },
+      letter('later', 'A later letter'),
+    ]),
   )
+  return {
+    reply: await reply(g, call),
+    fork: await heard(g, fork),
+    forkSaid: await said(g, 'later'),
+    told: tells(await heard(g, { session_id: 'outside' }), 'A later letter'),
+  }
+})
+test('a hooked session hears nothing through a tool reply, only at its hook', () => {
+  assertEquals(hooked(), { reply: [], fork: {}, forkSaid: false, told: true })
 })
 
 test('the session duty delivers without a Claude transcript directory', async () => {
@@ -544,6 +562,7 @@ let createdThread = async (
 }
 // Freeze the history's computed status and use storage's read interface, as
 // the held-news fixture above does: delivery, not graph hooks, is under test.
+// Each pass of the bus over it is a scene.
 for (let agent of [false, true]) {
   for (
     let mode of [
@@ -577,15 +596,17 @@ for (let agent of [false, true]) {
     g.get = store.get
     g.read = (q, opts) => store.read(typeof q == 'string' ? parse(q) : q, opts)
     let inherited = mode == 'ended' || mode == 'stopped'
-    test(`${agent ? 'agent' : 'person'} comments on created records for ${mode} sessions`, async () => {
-      let recipient = inherited ? 'next' : 'creator'
-      let lines = mode == 'native' || inherited
+    let recipient = inherited ? 'next' : 'creator'
+    let lines = await scene(async () =>
+      mode == 'native' || inherited
         ? (await due(g)).map((b) => [b.session, b.item.entity.eid])
         : (await pending(g, recipient)).map((
           b,
         ) => [recipient, b.item.entity.eid])
+    )
+    test(`${agent ? 'agent' : 'person'} comments on created records for ${mode} sessions`, () => {
       assertEquals(
-        lines,
+        lines(),
         mode == 'own' || (agent && mode != 'claimed') ? [] : [
           [recipient, 'comment-decision'],
           ...agent ? [] : [[recipient, 'comment-assigned']],
@@ -593,13 +614,15 @@ for (let agent of [false, true]) {
       )
     })
     if (!agent && mode == 'outside') {
-      test('a project operator cannot take a live creator’s comments', async () => {
-        assertEquals(await pending(g, 'next'), [])
+      let taken = await scene(() => pending(g, 'next'))
+      test('a project operator cannot take a live creator’s comments', () => {
+        assertEquals(taken(), [])
       })
     }
     if (!agent && inherited) {
-      test(`another project cannot take the ${mode} creator’s comments`, async () => {
-        assertEquals(await pending(g, 'other'), [])
+      let taken = await scene(() => pending(g, 'other'))
+      test(`another project cannot take the ${mode} creator’s comments`, () => {
+        assertEquals(taken(), [])
       })
     }
   }
