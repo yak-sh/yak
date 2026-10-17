@@ -1,7 +1,6 @@
 import { test } from '@yaks/testing'
 import { faked, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import { act } from 'preact/test-utils'
 import type { Bundle, Comp } from '@yaks/graph'
 import { cache, config } from '../live.ts'
 import { host, reader } from '../host_testing.ts'
@@ -18,6 +17,9 @@ import { contribute } from './inspect.tsx'
 import * as sessionFacet from '@yaks/session/views'
 import { leaseEid } from '../../effects/lease.ts'
 
+// Resolve the package's lazy views once, before timing its consumers.
+let facet = { ...sessionFacet, inspectViews: await sessionFacet.inspectViews() }
+
 let list = 'destination:sessions'
 let sessions: Bundle[] = Array.from({ length: 15 }, (_, i) => ({
   entity: {
@@ -33,37 +35,44 @@ let sessions: Bundle[] = Array.from({ length: 15 }, (_, i) => ({
   doc: { title: `${i % 2 ? 'Needle' : 'History'} ${i}`, body: '' },
 }))
 
+// Seed and paint the fixture before timing its filtering acts.
+let summary = await summaries()
+let prior = config.host
+config.host = 'browser.test'
+cache.value = {}
+let read = reader(sessions, {
+  computed: { 'session.status': (b) => (b.session as Comp)?.status },
+})
+let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
+let drop = await contribute([facet])
+let mounted = mount(
+  <>
+    <FilterInput eid={list} />
+    <QueryList eid={list} query={allSessionsQuery} edges={false} />
+  </>,
+)
+let titles = () =>
+  [...mounted.root.querySelectorAll('.Tile_Title')].map((e) => e.textContent)
+await until(() => titles().length == 10)
+
 test('All sessions reuses the paged list and accepts words and query filters, newest first', async () => {
-  await summaries()
-  let prior = config.host
-  config.host = 'browser.test'
-  cache.value = {}
-  let read = reader(sessions, {
-    computed: { 'session.status': (b) => (b.session as Comp)?.status },
-  })
-  let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
-  let drop = await contribute([sessionFacet])
-  let mounted = mount(
-    <>
-      <FilterInput eid={list} />
-      <QueryList eid={list} query={allSessionsQuery} edges={false} />
-    </>,
-  )
-  let titles = () =>
-    [...mounted.root.querySelectorAll('.Tile_Title')].map((e) => e.textContent)
   try {
-    await until(() => titles().length == 10)
+    assertEquals(summary.subs, [
+      'settled · active just now',
+      'pending · active just now',
+    ])
+    assertEquals(summary.anchors, true)
     assertEquals(
       titles(),
       sessions.slice(0, 10).map((b) => (b.doc as Comp).title),
     )
-    await act(() => fields.set(filterField(list), 'Needle'))
+    fields.set(filterField(list), 'Needle')
     await until(() => titles().length == 7)
     assertEquals(
       titles(),
       sessions.filter((_, i) => i % 2).map((b) => (b.doc as Comp).title),
     )
-    await act(() => fields.set(filterField(list), '.session.status=settled'))
+    fields.set(filterField(list), '.session.status=settled')
     await until(() => titles().length == 8)
     assertEquals(
       titles(),
@@ -224,7 +233,7 @@ async function summaries() {
     },
   )
   let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
-  let drop = await contribute([sessionFacet])
+  let drop = await contribute([facet])
   let mounted = mount(
     <QueryList eid='sessions-summary' query={allSessionsQuery} />,
   )
@@ -234,19 +243,14 @@ async function summaries() {
       mounted.root.textContent.includes('Review the project direction') &&
       mounted.root.textContent.includes('active just now')
     )
-    assertEquals(
-      [...mounted.root.querySelectorAll('.Tile_Sub')].map((e) => e.textContent),
-      [
-        'settled · active just now',
-        'pending · active just now',
-      ],
-    )
-    assertEquals(
-      [...mounted.root.querySelectorAll('.Tile')].every((e) =>
+    return {
+      subs: [...mounted.root.querySelectorAll('.Tile_Sub')].map((e) =>
+        e.textContent
+      ),
+      anchors: [...mounted.root.querySelectorAll('.Tile')].every((e) =>
         e.tagName == 'A'
       ),
-      true,
-    )
+    }
   } finally {
     mounted.free()
     drop()

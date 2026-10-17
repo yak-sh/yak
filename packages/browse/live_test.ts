@@ -1,7 +1,22 @@
 // The cache derivations: what the field pickers read out of the live
 // world. Pure functions of the cache signal — no DOM, no socket.
-import { test, tick, until } from './testing.ts'
+import { tick, until } from './testing.ts'
 import { test as preparedTest } from '@yaks/testing'
+import { resetArchetypesForTest } from './live_archetypes.ts'
+
+// Each case owns a clean tab. Leave its client lazy: pure cache derivations
+// need none, and socket/route fixtures already boot their own replica.
+let test: typeof preparedTest = (name, body, options) =>
+  preparedTest(name, async () => {
+    clearForTest()
+    resetArchetypesForTest()
+    try {
+      await body()
+    } finally {
+      clearForTest()
+      resetArchetypesForTest()
+    }
+  }, options)
 import {
   agreementProbe,
   applyLocal,
