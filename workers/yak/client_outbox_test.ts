@@ -33,7 +33,7 @@ let settled = async (ready: () => boolean) => {
 }
 let base = 'https://outbox-client.test/notes/api/'
 
-test('public apply preserves receipts and retries unknown JSON with the same write identity', async () => {
+let retriesPreserveReceipt = await (async () => {
   let calls: { key: string; body: string }[] = []
   let alarms: (() => void)[] = []
   let nativeTimer = globalThis.setTimeout
@@ -89,7 +89,12 @@ test('public apply preserves receipts and retries unknown JSON with the same wri
     off()
     client.outbox.close()
   }
-})
+  return true
+})()
+test(
+  'public apply preserves receipts and retries unknown JSON with the same write identity',
+  () => assertEquals(retriesPreserveReceipt, true),
+)
 
 test('public apply retains deliberate refusal until explicitly retried or forgotten', async () => {
   let response = json({ error: { message: 'precondition changed' } }, 409)
