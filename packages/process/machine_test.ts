@@ -241,3 +241,24 @@ test('newly lent machines share process-directory tidy', async () => {
     Deno.readDir = readDir
   }
 })
+
+// File fixtures are ready before a case times the read itself.
+let readDir = Deno.makeTempDirSync({ prefix: 'yaks-machine-read-' })
+await Deno.mkdir(`${readDir}/runtime`)
+await Deno.symlink(`${readDir}/runtime`, `${readDir}/linked`)
+await Deno.writeTextFile(`${readDir}/text`, 'still a text file')
+let readMachine = processMachine(tracked(), {}, undefined, readDir)
+addEventListener('unload', () => Deno.removeSync(readDir, { recursive: true }))
+
+test('directory reads are path refusals, including symlinked directories', async () => {
+  for (let path of ['runtime', `${readDir}/runtime`, 'linked']) {
+    let error = await assertRejects(() => readMachine.read(path), CallError)
+    assertEquals(error.code, 'path')
+    assertMatch(error.message, /Is a directory/)
+  }
+})
+
+test('file reads still return text after path refusal classification', async () => {
+  assertEquals(await readMachine.read('text'), 'still a text file')
+  await assertRejects(() => readMachine.read('absent'), CallError)
+})
