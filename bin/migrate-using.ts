@@ -6,7 +6,7 @@ import { type Bundle, type Comp, graph, token } from '@yaks/graph'
 import { loadVocab, pick } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { archetypeDoc } from '@yaks/archetype/vocab'
-import { storage } from '@yaks/sqlite'
+import { reclassify, storage } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
 import { journal, log } from '@yaks/journal'
 import {
@@ -166,6 +166,7 @@ try {
     }
     if (patches.length) {
       await g.apply(patches)
+      reclassify(sql, patches.map((b) => b.entity.eid))
       changed += patches.length
     }
   }
