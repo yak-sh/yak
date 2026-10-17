@@ -36,15 +36,18 @@ s.tx((tx) =>
 )
 let g = graph({ storage: s, vocab })
 
-test('opening an imported tail skips status derivation', async () => {
-  calls = 0
-  let t = await tail(g, '/missing/import-read.jsonl', { session: 's' })
-  assertEquals(t.session, 's')
-  assertEquals(t.operator, true)
-  assertEquals(t.own, true)
-  assertEquals(t.line, 0)
-  assertEquals(calls, 0)
-  // A whole-session read must execute status, even with cached compilation.
-  await g.get(['s'])
-  assertGreater(calls, 0)
+// Read the actual imported tail and positive control once. The captured
+// query counts prove this door excludes derivation while whole reads keep it.
+calls = 0
+let imported = await tail(g, '/missing/import-read.jsonl', { session: 's' })
+let importCalls = calls
+await g.get(['s'])
+let wholeCalls = calls
+test('opening an imported tail skips status derivation', () => {
+  assertEquals(imported.session, 's')
+  assertEquals(imported.operator, true)
+  assertEquals(imported.own, true)
+  assertEquals(imported.line, 0)
+  assertEquals(importCalls, 0)
+  assertGreater(wholeCalls, 0)
 })

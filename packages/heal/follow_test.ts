@@ -883,15 +883,24 @@ let sendMark = () =>
 transport.down(true)
 await throws(sendMark, 'tracker is down')
 transport.down(false)
-test('the headless client admits a retried mark through the tracker API', async () => {
-  ok(!transport.watch.value[0].archived)
-  await sendMark()
-  ok(markKeys[0])
-  equal(markKeys[1], markKeys[0])
-  ok((await transport.tracker.get([bug]))[0].archived)
-  equal(transport.posts(), 1)
-  transport.watch.close()
-  transport.close()
+// Replay through the real tracker API before checking its receipt. Capture
+// the pre-send state too, so retry acceptance cannot hide an early archive.
+let retryBefore = !!transport.watch.value[0].archived
+await sendMark()
+let retriedMark = {
+  before: retryBefore,
+  keys: [...markKeys],
+  archived: !!(await transport.tracker.get([bug]))[0].archived,
+  posts: transport.posts(),
+}
+transport.watch.close()
+transport.close()
+test('the headless client admits a retried mark through the tracker API', () => {
+  ok(!retriedMark.before)
+  ok(retriedMark.keys[0])
+  equal(retriedMark.keys[1], retriedMark.keys[0])
+  ok(retriedMark.archived)
+  equal(retriedMark.posts, 1)
 })
 
 let lost = await remote()
