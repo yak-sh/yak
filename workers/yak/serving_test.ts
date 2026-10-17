@@ -30,6 +30,7 @@ import {
   assertRejects,
   assertStringIncludes,
 } from '@std/assert'
+import { FakeTime } from '@std/testing/time'
 import type { Wire } from '@yaks/durable-object'
 import { test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
@@ -1639,8 +1640,28 @@ test('rung 1½: a router that throws is skipped, and written on the home app', a
 test(
   'rung 1½: a router that hangs is skipped when its patience runs out',
   async () => {
-    await using k = await fronted(() => new Promise<Response>(() => {}))
-    assertStringIncludes(await (await k.at('/garden/print')).text(), 'garden')
+    let entered = Promise.withResolvers<void>()
+    await using k = await fronted(() => {
+      entered.resolve()
+      return new Promise<Response>(() => {})
+    })
+    let response: Response | undefined
+    let failed: unknown
+    {
+      // Exercise the real one-second router deadline without sleeping for it.
+      // Install after fixture setup, and restore before unrelated store reads.
+      using time = new FakeTime(Date.now())
+      void k.at('/garden/print').then(
+        (r) => response = r,
+        (e) => failed = e,
+      )
+      await entered.promise
+      await time.tickAsync(1_000)
+    }
+    await until(() => failed !== undefined || response !== undefined)
+    if (failed) throw failed
+    assert(response)
+    assertStringIncludes(await response.text(), 'garden')
     let open = await openIn(k.env, k.space, k.app, OWNER, true)
     assertEquals(open.length, 1)
     assertStringIncludes(open[0].exception?.message ?? '', 'did not answer')
