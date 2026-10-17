@@ -871,12 +871,25 @@ export let lasting = (
   // alarm it arms for the wakes it holds (graph.ts, D-37562). A test reads the
   // instant back off it, which is what the runtime would deliver.
   let states = new Map<string, ReturnType<typeof state>>()
+  // The runtime indexes armed alarms. Idle objects need no storage read on
+  // every clock tick, even when a shared kernel has opened many of them.
+  let armed = new Set<string>()
   let object = (name: string) => {
     let held = objects.get(name)
     if (!held) {
       let ctx = Object.assign(ownedState(name), {
         id: { toString: () => name },
       })
+      let setAlarm = ctx.storage.setAlarm.bind(ctx.storage)
+      let deleteAlarm = ctx.storage.deleteAlarm.bind(ctx.storage)
+      ctx.storage.setAlarm = async (...args) => {
+        await setAlarm(...args)
+        armed.add(name)
+      }
+      ctx.storage.deleteAlarm = async () => {
+        await deleteAlarm()
+        armed.delete(name)
+      }
       sockets.set(name, ctx.live)
       recovery.set(name, ctx.pitr)
       states.set(name, ctx)
@@ -995,7 +1008,8 @@ export let lasting = (
     if (closing) return Promise.resolve()
     if (ringing) return ringing
     return ringing = (async () => {
-      for (let [name, ctx] of states) {
+      for (let name of [...armed]) {
+        let ctx = states.get(name)!
         let at = await ctx.storage.getAlarm()
         if (at == null || at > Date.now()) continue
         await ctx.storage.deleteAlarm()

@@ -1,3 +1,4 @@
+import { lasting } from './testing.ts'
 // The in-memory runtime keeps a store's native storage alive for background
 // work, just as a Durable Object retains its waitUntil context.
 import { assertEquals, assertThrows } from '@std/assert'
@@ -74,4 +75,56 @@ test('the runtime bucket stores strings and the bytes selected by a view', async
     new Uint8Array(await (await r2.get('view'))!.arrayBuffer()),
     new Uint8Array([1, 2]),
   )
+})
+
+// Open stores before timing delivery: the runtime's task is choosing due
+// alarms, not rebuilding each object's schema on every tick.
+let alarms = lasting('alarm-index-probe')
+let dormant = alarms.object('alarm-index/dormant')
+let due = alarms.object('alarm-index/due')
+let later = alarms.object('alarm-index/later')
+let idleReads = 0
+let idleAlarm = alarms.states.get('alarm-index/dormant')!.storage.getAlarm
+alarms.states.get('alarm-index/dormant')!.storage.getAlarm = () => {
+  idleReads++
+  return idleAlarm()
+}
+let delivered: string[] = []
+dormant.alarm = () => {
+  delivered.push('dormant')
+  return Promise.resolve()
+}
+due.alarm = async () => {
+  delivered.push('due')
+  // Re-arming the same object is for the next delivery, even when due now.
+  await alarms.states.get('alarm-index/due')!.storage.setAlarm(0)
+}
+later.alarm = () => {
+  delivered.push('later')
+  return Promise.resolve()
+}
+// Observe real deliveries once as the runtime fixture is built; timed checks
+// inspect the independent outcomes rather than schema shutdown scheduling.
+let alarmDeliveries: string[][] = []
+try {
+  let dueStorage = alarms.states.get('alarm-index/due')!.storage
+  let laterStorage = alarms.states.get('alarm-index/later')!.storage
+  await dueStorage.setAlarm(0)
+  await laterStorage.setAlarm(Date.now() + 60_000)
+  await alarms.ring()
+  alarmDeliveries.push([...delivered])
+  await dueStorage.deleteAlarm()
+  await laterStorage.deleteAlarm()
+  await alarms.ring()
+  alarmDeliveries.push([...delivered])
+  await dueStorage.setAlarm(0)
+  await alarms.ring()
+  alarmDeliveries.push([...delivered])
+  await dueStorage.deleteAlarm()
+} finally {
+  await alarms[Symbol.asyncDispose]()
+}
+test('alarm delivery skips idle objects and delivers a rearm on the next tick', () => {
+  assertEquals(alarmDeliveries, [['due'], ['due'], ['due', 'due']])
+  assertEquals(idleReads, 0)
 })
