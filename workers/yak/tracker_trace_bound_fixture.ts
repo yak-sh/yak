@@ -87,6 +87,7 @@ export let trackerBound = async (db: TraceStorage) => {
       transactionSync: (body) => db.transactionSync(body),
       get: () => Promise.resolve(undefined),
       put: () => Promise.resolve(),
+      getAlarm: () => Promise.resolve(null),
       setAlarm: () => Promise.resolve(),
     },
     getWebSockets: () => [],
