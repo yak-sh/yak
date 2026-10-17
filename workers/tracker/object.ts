@@ -239,6 +239,7 @@ export class Tracker {
       ? Promise.resolve()
       : caught(error, { sink: this.sink, ...this.#origin(entrypoint, request) })
   recover = async (error: unknown, entrypoint: string, request?: Request) => {
+    console.error(entrypoint, error)
     await this.#report(error, entrypoint, request)
     try {
       await this.ctx.storage.setAlarm(this.now() + 1000)

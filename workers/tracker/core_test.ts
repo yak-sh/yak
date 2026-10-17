@@ -265,3 +265,15 @@ test('deployed resolves prior versions but keeps the serving version open', asyn
   equal(open.length, 1)
   equal((open[0].bug as Comp)?.fault, 'current')
 })
+
+test('box captures retain generated child session references across independent stores', async () => {
+  let g = fixture()
+  let child = 'child:3b21904a-b0fa-479b-8934-4286ae9c0cb1'
+  let rows = records()
+  rows[0].during = { session: child }
+  let result = await deliver(g, [rows, rows])
+  equal([result.ack, result.retry], [2, 0])
+  equal(result.rows.length, 1)
+  equal((result.rows[0].during as Comp).session, child)
+  equal((result.bugs[0].bug as Comp).hits, 1)
+})
