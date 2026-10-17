@@ -38,7 +38,10 @@ let comp = (b: Bundle | undefined, name: string) =>
 let row = async (g: Graph, eid: Eid) => (await g.get([eid]))[0]
 
 // Waiting needs only the child's place, not its computed transcript status/cost.
-export let childPlace = async (g: Graph, eid: Eid) =>
+export let childPlace = async (
+  g: Graph,
+  eid: Eid,
+): Promise<Bundle | undefined> =>
   (await g.get(
     [eid],
     ['dispatch', 'admitted', 'waiting'].filter((name) => g.vocab.comp(name)),
