@@ -33,8 +33,10 @@ let replay = (g: Desk, row: Bundle, more: Options = {}) =>
 let follow = (g: Desk, row: Bundle) => followed(g, row.entity.eid, options)
 let letters = (g: Desk) => g.read('.mail *')
 
-let check = (name: string, run: (g: Desk) => Promise<void>) =>
-  test(name, () => run(bare()))
+let check = (name: string, run: (g: Desk) => Promise<void>) => {
+  let g = bare()
+  test(name, () => run(g))
+}
 
 // Two bugs that opened in the same minute.
 let pair = bare()
@@ -130,8 +132,10 @@ check(
   },
 )
 
-check('a regression and a resolve answer the opening letter', async (g) => {
-  let row = bug()
+// Multi-occasion scenarios own their writes at load; assertions inspect the
+// resulting letters, including duplicate delivery and a later regression.
+let regression = await (async () => {
+  let g = bare(), row = bug()
   await put(g, [row])
   await replay(g, row)
   let [opening] = await letters(g)
@@ -147,9 +151,13 @@ check('a regression and a resolve answer the opening letter', async (g) => {
     regressed: { at: '2026-10-02T00:02:00Z' },
   }])
   await replay(g, row)
-  let later = (await letters(g)).filter((m) =>
-    m.entity.eid != opening.entity.eid
-  )
+  return {
+    opening,
+    later: (await letters(g)).filter((m) => m.entity.eid != opening.entity.eid),
+  }
+})()
+test('a regression and a resolve answer the opening letter', () => {
+  let { opening, later } = regression
   equal(later.length, 2)
   for (let m of later) {
     equal(comp(m, 'mail').reply_to, opening.entity.eid)
@@ -157,45 +165,47 @@ check('a regression and a resolve answer the opening letter', async (g) => {
   }
 })
 
-check(
-  'a resolution is told with its explanation, and a bare one waits for it',
-  async (g) => {
-    let row = bug()
-    row.bug = { ...comp(row, 'bug'), first: at }
-    await put(g, [row, ...occurrence(row, crypto.randomUUID())])
-    await replay(g, row)
-    let resolve = async (resolved: Record<string, string>) => {
-      await put(g, [{ entity: row.entity, resolved }])
-      await followed(g, row.entity.eid, {
-        ...options,
-        repo: 'https://github.com/yak-sh/yak',
-      })
-      return (await letters(g)).map((m) => str(comp(m, 'doc').body)).slice(1)
-    }
-    equal(await resolve({ at: '2026-10-02T00:04:10Z' }), [])
-    let [body] = await resolve({
-      broke: 'Saving a drill failed for one test account.',
-      cause: 'The query door timed out under a cold start.',
-      since: 'a'.repeat(40),
-      fix: 'b'.repeat(40),
-      recur: 'No: the door now waits for the store to warm.',
+let resolution = await (async () => {
+  let g = bare(), row = bug()
+  row.bug = { ...comp(row, 'bug'), first: at }
+  await put(g, [row, ...occurrence(row, crypto.randomUUID())])
+  await replay(g, row)
+  let resolve = async (resolved: Record<string, string>) => {
+    await put(g, [{ entity: row.entity, resolved }])
+    await followed(g, row.entity.eid, {
+      ...options,
+      repo: 'https://github.com/yak-sh/yak',
     })
-    for (
-      let said of [
-        'Resolved 2026-10-02 00:04:10 UTC, 4m after it opened.',
-        'Saving a drill failed for one test account.',
-        'test accounts only',
-        'The query door timed out under a cold start.',
-        `[aaaaaaa](https://github.com/yak-sh/yak/commit/${'a'.repeat(40)})`,
-        `[bbbbbbb](https://github.com/yak-sh/yak/commit/${'b'.repeat(40)})`,
-        'No: the door now waits for the store to warm.',
-      ]
-    ) ok(body.includes(said), said)
-  },
-)
+    return (await letters(g)).map((m) => str(comp(m, 'doc').body)).slice(1)
+  }
+  let bareResolution = await resolve({ at: '2026-10-02T00:04:10Z' })
+  let explained = await resolve({
+    broke: 'Saving a drill failed for one test account.',
+    cause: 'The query door timed out under a cold start.',
+    since: 'a'.repeat(40),
+    fix: 'b'.repeat(40),
+    recur: 'No: the door now waits for the store to warm.',
+  })
+  return { bareResolution, explained }
+})()
+test('a resolution is told with its explanation, and a bare one waits for it', () => {
+  equal(resolution.bareResolution, [])
+  let [body] = resolution.explained
+  for (
+    let said of [
+      'Resolved 2026-10-02 00:04:10 UTC, 4m after it opened.',
+      'Saving a drill failed for one test account.',
+      'test accounts only',
+      'The query door timed out under a cold start.',
+      `[aaaaaaa](https://github.com/yak-sh/yak/commit/${'a'.repeat(40)})`,
+      `[bbbbbbb](https://github.com/yak-sh/yak/commit/${'b'.repeat(40)})`,
+      'No: the door now waits for the store to warm.',
+    ]
+  ) ok(body.includes(said), said)
+})
 
-check('a fixer taking the bug is said once per opening', async (g) => {
-  let row = bug()
+let taking = await (async () => {
+  let g = bare(), row = bug()
   await put(g, [row])
   await replay(g, row)
   let take = async (at: string) => {
@@ -206,19 +216,27 @@ check('a fixer taking the bug is said once per opening', async (g) => {
     (await letters(g)).map((m) => str(comp(m, 'doc').body)).slice(1)
   await take('2026-10-02T00:01:00Z')
   await take('2026-10-02T00:01:30Z')
-  let [word, ...more] = await said()
-  equal(more.length, 0)
-  ok(word.includes('A fixer started on it'), word)
-  ok(word.includes('working T-7'), word)
+  let first = await said()
   await put(g, [{
     entity: row.entity,
     regressed: { at: '2026-10-02T00:02:00Z' },
   }])
   await replay(g, row)
   await follow(g, row)
-  equal((await said()).filter((b) => b.includes('fixer')).length, 1)
+  let replayed = (await said()).filter((b) => b.includes('fixer')).length
   await take('2026-10-02T00:03:00Z')
-  equal((await said()).filter((b) => b.includes('fixer')).length, 2)
+  return {
+    first,
+    replayed,
+    retaken: (await said()).filter((b) => b.includes('fixer')).length,
+  }
+})()
+test('a fixer taking the bug is said once per opening', () => {
+  let [word, ...more] = taking.first
+  equal(more.length, 0)
+  ok(word.includes('A fixer started on it'), word)
+  ok(word.includes('working T-7'), word)
+  equal([taking.replayed, taking.retaken], [1, 2])
 })
 
 check(

@@ -296,11 +296,12 @@ for (let [verb, name] of [['resolve', 'resolved'], ['archive', 'archived']]) {
     equal(await boxOnly.box.read('.bug.status=open'), [])
   })
   let missing = await marking(undefined, undefined, false, false)
+  let missingError = await throws(
+    () => missing.call(`bug_${verb}`, { bug: ids[0], source: 'yaks.app' }),
+    'Remote tracker bug not found',
+  )
   test(`platform bug ${verb} refuses a bug the Worker does not hold`, async () => {
-    await throws(
-      () => missing.call(`bug_${verb}`, { bug: ids[0], source: 'yaks.app' }),
-      'Remote tracker bug not found',
-    )
+    ok(String(missingError).includes('Remote tracker bug not found'))
     equal(await missing.box.read('.bug'), [])
   })
   let platformOnly = await marking(undefined, undefined, false)

@@ -38,8 +38,9 @@ let polled = (open: Polled) =>
     })
   })
 
+let pagedWorker = worker(230)
 test('a poll answers every page of the platform tracker, and marks reach it', async () => {
-  let { doors, marks } = worker(230)
+  let { doors, marks } = pagedWorker
   let open = await polled(poll(remote, '.bug', { doors }))
   equal(open.value.length, 230)
   await open.mutate([
