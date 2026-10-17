@@ -58,82 +58,89 @@ let child = (dir: string, args: string[], env: Record<string, string>) => {
   return { proc, output, kill, exit, stop }
 }
 
-test('ordinary serve fallback outlives HTTP shutdown', async () => {
-  let dir = await Deno.makeTempDir({ prefix: 'yak-fallback-cli-' })
-  let socket = Deno.listen({ hostname: '127.0.0.1', port: 0 })
-  let port = socket.addr.port
-  socket.close()
-  let at = `http://127.0.0.1:${port}`
-  let worker: number | undefined
-  let web: ReturnType<typeof child> | undefined
-  let rows = async () => {
-    try {
-      let res = await fetch(`${at}/query?q=${encodeURIComponent('.process&*')}`)
-      return res.ok ? await res.json() : []
-    } catch {
-      return []
+for (let role of ['effects', '@yaks/mail']) {
+  test(`ordinary serve fallback for ${role} outlives HTTP shutdown`, async () => {
+    let dir = await Deno.makeTempDir({ prefix: 'yak-fallback-cli-' })
+    let socket = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+    let port = socket.addr.port
+    socket.close()
+    let at = `http://127.0.0.1:${port}`
+    let worker: number | undefined
+    let web: ReturnType<typeof child> | undefined
+    let rows = async () => {
+      try {
+        let res = await fetch(
+          `${at}/query?q=${encodeURIComponent('.process&*')}`,
+        )
+        return res.ok ? await res.json() : []
+      } catch {
+        return []
+      }
     }
-  }
-  try {
-    await Deno.writeTextFile(
-      `${dir}/yak.json`,
-      JSON.stringify({
-        db: 'yak.db',
-        hostname: '127.0.0.1',
-        port,
-        plugins: [
-          '@yaks/kernel',
-          '@yaks/process',
-          '@yaks/api',
-          '@yaks/effects',
-        ],
-      }),
-    )
-    let installed = await compose(
-      read(`${dir}/yak.json`),
-      ['graph'],
-      undefined,
-      { process: false },
-    )
-    await installed.close()
-    web = child(dir, ['--config', `${dir}/yak.json`, 'serve'], {})
-    await until(async () => {
-      let found = (await rows()).find((row: {
-        process?: { pid: number; roles: string[]; cwd: string }
-      }) => row.process?.roles.includes('effects') && row.process.cwd == dir)
-      worker = found?.process.pid
-      return worker != null
-    }, { timeout: 15000, label: 'owned fallback effects process' })
-    assert(worker != null)
-    assert(worker != web.proc.pid)
-    Deno.kill(worker, 0)
-    web.kill('SIGTERM')
-    await web.exit(143)
-    Deno.kill(worker, 0)
-    let freed = Deno.listen({ hostname: '127.0.0.1', port })
-    freed.close()
-  } finally {
-    let result = await web?.stop()
-    if (result?.code) console.error(text(result.stderr))
-    if (worker != null && !absent(worker)) Deno.kill(worker, 'SIGTERM')
     try {
-      await until(() => worker == null || absent(worker), {
-        timeout: 10000,
-        label: 'owned fallback pid gone',
-      })
-    } finally {
-      if (worker != null && !absent(worker)) Deno.kill(worker, 'SIGKILL')
-      await until(() => worker == null || absent(worker), {
-        timeout: 5000,
-        label: 'fallback cleanup complete',
-      })
-      if (web) assert(absent(web.proc.pid))
+      await Deno.writeTextFile(
+        `${dir}/yak.json`,
+        JSON.stringify({
+          db: 'yak.db',
+          hostname: '127.0.0.1',
+          port,
+          plugins: [
+            '@yaks/kernel',
+            '@yaks/process',
+            '@yaks/api',
+            ...(role == 'effects' ? ['@yaks/effects'] : [{
+              use: '@yaks/mail',
+              with: { pull: { url: at, token: 'probe' } },
+            }]),
+          ],
+        }),
+      )
+      let installed = await compose(
+        read(`${dir}/yak.json`),
+        ['graph'],
+        undefined,
+        { process: false },
+      )
+      await installed.close()
+      web = child(dir, ['--config', `${dir}/yak.json`, 'serve'], {})
+      await until(async () => {
+        let found = (await rows()).find((row: {
+          process?: { pid: number; roles: string[]; cwd: string }
+        }) => row.process?.roles.includes(role) && row.process.cwd == dir)
+        worker = found?.process.pid
+        return worker != null
+      }, { timeout: 15000, label: `owned fallback ${role} process` })
+      assert(worker != null)
+      assert(worker != web.proc.pid)
+      Deno.kill(worker, 0)
+      web.kill('SIGTERM')
+      await web.exit(143)
+      Deno.kill(worker, 0)
       let freed = Deno.listen({ hostname: '127.0.0.1', port })
       freed.close()
-      await Deno.remove(dir, { recursive: true })
+    } finally {
+      let result = await web?.stop()
+      if (result?.code) console.error(text(result.stderr))
+      if (worker != null && !absent(worker)) Deno.kill(worker, 'SIGTERM')
+      try {
+        await until(() => worker == null || absent(worker), {
+          timeout: 10000,
+          label: 'owned fallback pid gone',
+        })
+      } finally {
+        if (worker != null && !absent(worker)) Deno.kill(worker, 'SIGKILL')
+        await until(() => worker == null || absent(worker), {
+          timeout: 5000,
+          label: 'fallback cleanup complete',
+        })
+        if (web) assert(absent(web.proc.pid))
+        let freed = Deno.listen({ hostname: '127.0.0.1', port })
+        freed.close()
+        await Deno.remove(dir, { recursive: true })
+      }
     }
-  }
-})
+  })
+}
 
 test('restart CLI queues replacements before old stops with no blocking shutdown', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-restart-cli-' })

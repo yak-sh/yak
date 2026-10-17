@@ -208,6 +208,10 @@ let start = async (
     // Null stdio and a new session keep the worker outside web shutdown's
     // process group. Never call `yak` from PATH: it may name another checkout.
     signal.throwIfAborted()
+    // Role names may start with @ (a package service). The CLI expands @file
+    // values, so pass the list through a file rather than as a literal path.
+    let selected = `${dir}/roles`
+    await Deno.writeTextFile(selected, roles.join(','))
     let child = new Deno.Command('setsid', {
       args: [
         Deno.execPath(),
@@ -220,7 +224,7 @@ let start = async (
         resolve(path),
         'work',
         '--roles',
-        roles.join(','),
+        `@${selected}`,
         '--ready',
         file,
       ],
