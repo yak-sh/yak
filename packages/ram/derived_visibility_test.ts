@@ -161,5 +161,5 @@ for (
     }],
   })
   test(`${name} gathered computed values use visible sources`, () =>
-    assertEquals((g.read(gathered) as Bundle[])[0].public, { value: null }))
+    assertEquals((g.read(gathered) as Bundle[])[0].public, {}))
 }
