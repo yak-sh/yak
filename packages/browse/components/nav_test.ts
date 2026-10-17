@@ -175,7 +175,7 @@ test('short id chip and browser route round trip; a lettered handle is lost', as
   try {
     let row = { ...e, eid, num: 0 }
     let props = clickProps(row)
-    assertEquals(props.href, '/%233f9a1c2e7b')
+    assertEquals(props.href, '/3f9a1c2e7b')
     await ready(props.href)
     assertEquals(screenTarget(props.href)?.eid, eid)
     await ready('/T%233f9a1c2e7b')

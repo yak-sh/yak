@@ -30,7 +30,7 @@ test('an app mount keeps page addresses and API transport apart', () => {
     assertEquals(apiPath('/vocab'), '/notes/api/vocab')
     assertEquals(pagePath('/?q=hello'), '/notes/_web/?q=hello')
     assertEquals(localPath('/notes/_web/%23abcdef1234'), '/%23abcdef1234')
-    assertEquals(entityPath('#abcdef1234'), '/notes/_web/%23abcdef1234')
+    assertEquals(entityPath('#abcdef1234'), '/notes/_web/abcdef1234')
     assertEquals(door('freeze'), false)
     assertEquals(localPath('/other/_web/X-1'), '/other/_web/X-1')
   } finally {

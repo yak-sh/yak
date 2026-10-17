@@ -65,9 +65,9 @@ test('md: a bare id auto-links with data-ref', () => {
   assertStringIncludes(md('N-9 and P-19'), 'data-ref="N-9"')
 })
 
-test('md: sigilled ids link with an encoded path, not a browser fragment', () => {
+test('md: sigilled ids keep the sigil in prose, not the linked path', () => {
   let id = '#3f9a1c2e7b'
-  let path = '/' + encodeURIComponent(id)
+  let path = '/' + id.slice(1)
   assertStringIncludes(md(`see ${id}`), `href="${path}" data-ref="${id}"`)
   assertStringIncludes(
     mdAbs(`see ${id}`),

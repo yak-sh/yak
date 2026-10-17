@@ -7,9 +7,9 @@ import { EID } from './types.ts'
 
 let origin = webOrigin
 
-// Encode the path segment: a literal # would start a browser fragment, which
-// is never sent to the server. /%23abcdef1234 survives copy, reload and new tab.
-export let entityPath = (id: string) => pagePath(`/${encodeURIComponent(id)}`)
+// The # belongs to the prose handle, not the entity path.
+export let entityPath = (id: string) =>
+  pagePath(`/${encodeURIComponent(SHORT.test(id) ? id.slice(1) : id)}`)
 export let entityUrl = (id: string) => `${origin()}${entityPath(id)}`
 
 export { addressId } from '@yaks/id'

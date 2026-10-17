@@ -144,8 +144,8 @@ test('all commands share authenticated tools/call and preserve words/project', a
       '".task & x\\"" ?doc .limit=50',
     )
     assert.equal(
-      resultUrl('#entity/id'),
-      'https://tasks.yak.sh/%23entity%2Fid',
+      resultUrl('#a83446de17'),
+      'https://tasks.yak.sh/a83446de17',
     )
     await assert.rejects(client.drop(' \n', 'project'), /Say something/)
     await assert.rejects(

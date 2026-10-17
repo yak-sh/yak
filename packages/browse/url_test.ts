@@ -7,7 +7,7 @@ import { entityId, entityUrl, normalize } from './url.ts'
 test('entity links use the public board and direct id path', () => {
   assertEquals(entityUrl('T-42'), 'https://tasks.yak.sh/T-42')
   let short = '#a83446de17'
-  assertEquals(entityUrl(short), 'https://tasks.yak.sh/%23a83446de17')
+  assertEquals(entityUrl(short), 'https://tasks.yak.sh/a83446de17')
   for (let path of ['/%23a83446de17', '/a83446de17', '/#a83446de17']) {
     assertEquals(entityId(`https://tasks.yak.sh${path}`), short)
   }

@@ -127,5 +127,7 @@ const client = createClient(call)
 export const { projects, drop, recent, conversation, send, search, inbox } =
   client
 export function resultUrl(id: string): string {
-  return `https://tasks.yak.sh/${encodeURIComponent(id)}`
+  return `https://tasks.yak.sh/${
+    encodeURIComponent(id.replace(/^#(?=[0-9a-f]{6,64}$)/i, ''))
+  }`
 }
