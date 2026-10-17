@@ -97,7 +97,10 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     equal(refused, true)
     let [record] = await Array.fromAsync(files(config.tracker.spool).source())
     equal(record.rows.length, 3)
-    equal((await host.graph.read('.trace *')).length, 1)
+    // A refused delivery holds back no local admission: the box already sees
+    // the failure and both traces while the record waits to forward.
+    equal((await host.graph.read('.trace *')).length, 2)
+    equal((await host.graph.read('.error *')).length, 1)
     await delivery(remote, go)(record.rows.filter((row) =>
       row.error
     ))

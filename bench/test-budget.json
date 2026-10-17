@@ -12,9 +12,6 @@
     }
   },
   "platforms": {
-    "browser": 8594.7,
-    "deno": 223212.7,
-    "terminal": 1582.4,
     "workerd": 180558
   },
   "tests": {

@@ -98,6 +98,23 @@ test('a service told to stop takes no more records, and leaves the rest spooled'
   }
 })
 
+// Admit a record, reopen the spool and acknowledge it once, then inspect what
+// each reader saw. The receipt is the file's own name, so it outlives a reader.
+let receipts = await Deno.makeTempDir()
+await spool(files(receipts).append)(record('kept'))
+for await (let entry of files(receipts).source()) await entry.admit?.()
+let reopened = await Array.fromAsync(files(receipts).source())
+for (let entry of reopened) await entry.ack()
+let acked = await left(receipts)
+await Deno.remove(receipts, { recursive: true })
+test('an admitted record stays admitted across reopening until acknowledged', () => {
+  equal(
+    reopened.map((entry) => [entry.rows[0].entity.eid, entry.admitted]),
+    [['kept', true]],
+  )
+  equal(acked, [])
+})
+
 // Prepare the spool's partial and complete segments once, then inspect the
 // intake outcome and the files it retained.
 let partial = await Deno.makeTempDir()

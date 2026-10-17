@@ -11,8 +11,8 @@
 // - a test the list does not name fails when it takes over the budget;
 // - a listed test fails when it takes longer than its record allows: the
 //   record times `slack.tests.times`, plus `slack.tests.ms`;
-// - a platform's wall clock fails past its record by `slack.walls`, on the
-//   gate (CI), where its records are taken, and in a run of the whole suite.
+// - workerd's wall clock fails past its record by `slack.walls`, on the gate
+//   (CI), where its record is taken, and in a run of the whole suite.
 //   Elsewhere a run says its walls and holds none of them.
 //
 // A time over the line is measured again before it counts: the files holding
@@ -24,7 +24,9 @@
 // first test of a file pays for everything its file is the first to load.
 //
 // Workerd's tests are held by their platform's wall alone: each crosses into
-// the run's kernel, and there are few of them.
+// the run's kernel, and there are few of them. Every other platform's tests
+// are held one by one, so its wall is said, not held: it grows with each test
+// added, and on the shared runner with whatever else its host is running.
 //
 // Nothing ever joins the list, and a test renamed is a test not listed; an
 // example is listed by its code, not its line or block position (`listed`).
@@ -48,7 +50,7 @@ export type Budget = {
   leave: number
   /** How far past its record a listed test, or a platform's wall, may run. */
   slack: { tests: Slack; walls: Slack }
-  /** Each platform's wall clock on the gate, in milliseconds. */
+  /** The held platforms' wall clocks on the gate, in milliseconds. */
   platforms: Record<string, number>
   /** The offenders: by file, each test's record in milliseconds. */
   tests: Record<string, Record<string, number>>

@@ -108,8 +108,9 @@ stronger.
   `deno task test --tag=workerd workers/yak` once before landing it.
 - `deno task test:budget` runs the whole suite held to its budget, and the gate
   runs it: a test case over 1 ms fails unless bench/test-budget.json lists it,
-  a listed one fails past its record (times the list's slack), and so does a
-  platform's wall clock on the gate. Nothing joins the list: a new or renamed
+  a listed one fails past its record (times the list's slack), and so does
+  workerd's wall clock on the gate (the other platforms' walls are said, not
+  held: their tests are each held already). Nothing joins the list: a new or renamed
   test is held to 1 ms, so run `deno task test:budget <paths>` on what you
   changed before landing. Getting a kernel test under it pulls you to drop the
   checks that "only exist across the door". Nearly every one is a decision some
