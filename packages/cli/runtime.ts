@@ -263,46 +263,27 @@ export let alive = (pid: number): boolean => {
   }
 }
 
-/** What a child watching its launcher reads and does; a test gives its own. */
-export type Watch = {
-  /** how often it looks, in ms */
-  every?: number
-  /** its parent's pid */
-  ppid?: () => number
-  /** whether a pid names a process */
-  alive?: (pid: number) => boolean
-  /** how it ends once the launcher is gone */
-  end?: () => void
-  /** run `fn` after `ms`, never holding the process open; answers a cancel */
-  timer?: (fn: () => void, ms: number) => () => void
-}
-
-let unref = (fn: () => void, ms: number) => {
-  let id = setTimeout(fn, ms)
-  Deno.unrefTimer(id)
-  return () => clearTimeout(id)
-}
-
-/** End as the launcher would have asked, once it is gone. A launcher killed
- * outright forwards nothing, and its child, in a session of its own, would
- * outlive it holding the port and the graph. A gone launcher is a SIGTERM
- * not yet sent, so the child sends it to itself and winds down as usual. An
- * independent worker has a launcher of its own, so outliving the command that
- * started it is untouched. */
-export let orphaned = (launcher: number, {
-  every = 1000,
-  ppid = () => Deno.ppid,
-  alive: lives = alive,
-  end = () => Deno.kill(Deno.pid, 'SIGTERM'),
-  timer = unref,
-}: Watch = {}): () => void => {
-  let check = () => {
-    if (ppid() != launcher && !lives(launcher)) return end()
-    cancel = timer(check, every)
-  }
-  let cancel = timer(check, every)
-  return () => cancel()
-}
+/** The command line that starts a launcher's child: tied to the launcher, so
+ * it ends however the launcher ends, and in a session of its own.
+ *
+ * The tie is Linux's parent-death signal, set by util-linux `setpriv` before
+ * the child's program starts: once the launcher is gone, killed outright as
+ * surely as any other way, the kernel sends the child SIGKILL. Nothing in the
+ * child has to notice, which it cannot while its event loop is busy. So a
+ * unit that signals only its main process still cuts the child's drain at its
+ * stop timeout, when it kills the launcher. The kernel sends the signal when
+ * the thread that spawned the child ends; Deno spawns on its main thread,
+ * which lasts as long as the launcher.
+ *
+ * The session keeps a terminal interrupt from reaching the child twice:
+ * directly from the terminal and again through the launcher's wind hold. */
+export let tethered = (argv: string[]): string[] => [
+  'setpriv',
+  '--pdeathsig',
+  'KILL',
+  'setsid',
+  ...argv,
+]
 
 /** Run a persistent CLI command from immutable sources, forwarding its terminal
  * and interrupts and waiting for the child to drain. JSR releases are already
@@ -317,10 +298,10 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     // child, even if it inherits this process's environment and sources.
     Deno.env.delete('YAK_RUNTIME_PINNED')
     let launcher = Number(Deno.env.get('YAK_LAUNCH_PID'))
-    if (launcher > 0 && launcher == Deno.ppid && alive(launcher)) {
-      launcherPid = launcher
-      orphaned(launcher)
-    }
+    if (launcher > 0 && launcher == Deno.ppid) launcherPid = launcher
+    // The tie holds from when it was made: a launcher gone before then left
+    // this child to the reaper, so it ends now as the tie would have ended it.
+    else if (launcher > 0 && !alive(launcher)) return 137
     return
   }
   let child: Deno.ChildProcess | undefined
@@ -342,18 +323,17 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
     unlock = launched
     if (stopped) return 143
     let url = new URL(`file://${dir}`).href
-    // A separate session keeps a terminal interrupt from reaching the child
-    // twice: directly from the terminal and again through our wind hold.
-    child = new Deno.Command('setsid', {
-      args: [
-        Deno.execPath(),
-        'run',
-        '-A',
-        '--config',
-        `${dir}/deno.json`,
-        `${dir}/packages/cli/yak.ts`,
-        ...argv,
-      ],
+    let [command, ...args] = tethered([
+      Deno.execPath(),
+      'run',
+      '-A',
+      '--config',
+      `${dir}/deno.json`,
+      `${dir}/packages/cli/yak.ts`,
+      ...argv,
+    ])
+    child = new Deno.Command(command, {
+      args,
       env: {
         YAK_RUNTIME_FROM: privateTree
           ? Deno.env.get('YAK_RUNTIME_FROM')!

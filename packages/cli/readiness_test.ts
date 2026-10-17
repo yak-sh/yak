@@ -236,7 +236,7 @@ let probe = async (pinned: boolean, rejected = false) => {
   } finally {
     // Not a readiness pid, inherited pid, process group, or service unit.
     // If an assertion failed, only our spawn handles are killed. A pinned
-    // child detects its dead launcher and drains via the orphan watchdog.
+    // child is killed with its launcher.
     for (let run of children) run.kill('SIGKILL')
     await Promise.all(children.map((run) => run.output))
     if (worker && pinned) {

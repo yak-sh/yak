@@ -48,7 +48,7 @@ let child = (dir: string, args: string[], env: Record<string, string>) => {
     return result
   }
   // The launcher forwards a SIGTERM and waits for its command to drain; a
-  // SIGKILL reaches only the launcher, so it is the last resort.
+  // SIGKILL ends both undrained, so it is the last resort.
   let stop = async () => {
     kill('SIGTERM')
     await until(() => ended, { timeout: 10000, label: 'CLI stops' })
