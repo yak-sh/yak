@@ -28,9 +28,53 @@ import {
   unique,
 } from './probe.ts'
 
-test('a hostname finds its app, and only one app', async () => {
+// Her `/.well-known/` files, which her domain serves as the app's own.
+let mine: [string, string][] = [
+  ['/.well-known/acme-challenge/token', 'a token of her own'],
+  ['/.well-known/pki-validation/ca3.txt', 'proving her domain'],
+  ['/.well-known/apple-developer-merchantid-domain-association', 'pay'],
+  ['/.well-known/security.txt', 'Contact: mailto:her@x.com'],
+  ['/.well-known/assetlinks.json', '[]'],
+  ['/.well-known/apple-app-site-association', '{}'],
+]
+
+// The recipe box her domain will serve, made as the file loads: a person, her
+// space with two apps, and two releases of the box. The first is whole; the
+// second loads a script it never shipped, and is live until a report from a
+// page that broke takes it back.
+let box = await (async () => {
   let k = await kernel()
   let jeff9 = unique('jeff9')
+  let { cookie, eids } = await seed(k, [{
+    slug: jeff9,
+    apps: ['recipes', 'garden'],
+  }])
+  let owner = client(k, `${jeff9}.yaks.app`, 'recipes', cookie)
+  let agent = connector(k, cookie)
+  let deploy = async (files: [string, string][]) => {
+    // One at a time: each file is staged into the same draft.
+    for (let [path, body] of files) await owner.put(path, body)
+    await agent.tool('app_deploy', { space: jeff9, app: 'recipes' })
+  }
+  await deploy([
+    [
+      '/index.html',
+      '<!doctype html><h1>Our recipe box</h1><img src="photo.png">',
+    ],
+    ['/menu.html', '<!doctype html><h1>The menu</h1>'],
+    ['/photo.png', 'not really a png'],
+    ...mine,
+  ])
+  await deploy([
+    ['/main.js', "import './missing.js'"],
+    ['/index.html', '<script type="module" src="./main.js"></script>'],
+  ])
+  let apex = await (await k.at('yaks.app', '/')).text()
+  return { k, jeff9, cookie, eids, agent, apex }
+})()
+
+test('a hostname finds its app, and only one app', async () => {
+  let { k, jeff9, cookie, eids, agent, apex } = box
   let herbusiness101 = unique('herbusiness101') + '.com'
   let elsewhere = unique('elsewhere') + '.com'
   try {
@@ -39,26 +83,9 @@ test('a hostname finds its app, and only one app', async () => {
     // gets the branded "still connecting" page, never the apex's own home
     // page and never a blank — provisioning_test.ts holds that page to its
     // own bytes; this only has to know it is not the apex's.
-    let apex = await (await k.at('yaks.app', '/')).text()
     let before = await k.at(herbusiness101, '/')
     assertEquals(before.status, 503)
     assert((await before.text()) != apex)
-
-    let { cookie, eids } = await seed(k, [{
-      slug: jeff9,
-      apps: ['recipes', 'garden'],
-    }])
-    let owner = client(k, `${jeff9}.yaks.app`, 'recipes', cookie)
-    await owner.put(
-      '/index.html',
-      '<!doctype html><h1>Our recipe box</h1><img src="photo.png">',
-    )
-    await owner.put('/menu.html', '<!doctype html><h1>The menu</h1>')
-    await owner.put('/photo.png', 'not really a png')
-    await connector(k, cookie).tool('app_deploy', {
-      space: jeff9,
-      app: 'recipes',
-    })
 
     // The domain, written where the directory lives.
     let dir = meta(k)
@@ -69,6 +96,24 @@ test('a hostname finds its app, and only one app', async () => {
         stage: 'active',
       },
     }])
+
+    // A page that broke on the domain is reported there, and reaches the
+    // app's store: the live release failed to load its own script, so the
+    // store takes it back to the release before.
+    let failed = await k.at(herbusiness101, '/api/report', {
+      method: 'POST',
+      body: JSON.stringify({
+        version: 2,
+        url: `https://${herbusiness101}/main.js`,
+        message: `failed to load script https://${herbusiness101}/main.js`,
+      }),
+    })
+    assertEquals(failed.status, 204)
+    await failed.body?.cancel()
+    assertStringIncludes(
+      await agent.tool('app_versions', { space: jeff9, app: 'recipes' }),
+      'v1 (live)',
+    )
 
     // The app's `/` is the domain's `/` — served, not redirected into a path.
     let root = await k.at(herbusiness101, '/', { redirect: 'manual' })
@@ -103,19 +148,6 @@ test('a hostname finds its app, and only one app', async () => {
     // hers, so the authority is hers to grant. That is the same idea that
     // keeps them from an app on `<space>.yaks.app`, where the name is ours
     // (home_test.ts), not an exception to it.
-    let mine: [string, string][] = [
-      ['/.well-known/acme-challenge/token', 'a token of her own'],
-      ['/.well-known/pki-validation/ca3.txt', 'proving her domain'],
-      ['/.well-known/apple-developer-merchantid-domain-association', 'pay'],
-      ['/.well-known/security.txt', 'Contact: mailto:her@x.com'],
-      ['/.well-known/assetlinks.json', '[]'],
-      ['/.well-known/apple-app-site-association', '{}'],
-    ]
-    for (let [path, said] of mine) await owner.put(path, said)
-    await connector(k, cookie).tool('app_deploy', {
-      space: jeff9,
-      app: 'recipes',
-    })
     for (let [path, said] of mine) {
       let r = await k.at(herbusiness101, path)
       assertEquals(r.status, 200, `${path} never reached the app`)
@@ -184,31 +216,6 @@ test('a hostname finds its app, and only one app', async () => {
     )
     let still = await k.at(herbusiness101, '/')
     assertStringIncludes(await still.text(), 'Our recipe box')
-    await owner.put('/main.js', "import './missing.js'")
-    await owner.put(
-      '/index.html',
-      '<script type="module" src="./main.js"></script>',
-    )
-    let agent = connector(k, cookie)
-    await agent.tool('app_deploy', { space: jeff9, app: 'recipes' })
-    let failed = await k.at(herbusiness101, '/api/report', {
-      method: 'POST',
-      body: JSON.stringify({
-        version: 3,
-        url: `https://${herbusiness101}/main.js`,
-        message: `failed to load script https://${herbusiness101}/main.js`,
-      }),
-    })
-    assertEquals(failed.status, 204)
-    await failed.body?.cancel()
-    assertStringIncludes(
-      await agent.tool('app_versions', { space: jeff9, app: 'recipes' }),
-      'v2 (live)',
-    )
-    assertStringIncludes(
-      await (await k.at(herbusiness101, '/')).text(),
-      'Our recipe box',
-    )
   } finally {
     await k.stop()
   }
