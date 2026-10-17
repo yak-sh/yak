@@ -503,6 +503,8 @@ export let adopt = (
     )
     return s && render(s).sql
   }
+  let planned: { ix: Index; mine: Stmt[]; rebuild: boolean; cursor?: Expr }[] =
+    []
   for (let ix of indexes(fields)) {
     let fts = indexName(ix.name)
     let have = declared(db, fts)
@@ -537,20 +539,32 @@ export let adopt = (
     }
     if (!same) gone('table', fts)
     let rebuild = !same || opts.heal === false && changed
-    // The filler sizes the work by what the index reads its content through,
-    // so a view it reads is raised first.
-    if (rebuild && opts.fill) {
-      erect(
-        db,
-        mine.filter((s) => s.t == 'create view'),
-      )
+    planned.push({ ix, mine, rebuild })
+  }
+  // Size every fill against its content view before installing any indexes.
+  // Raising each index separately would invalidate the catalogue for the next
+  // one: a fresh host would repeatedly load its entire growing schema.
+  if (opts.fill) {
+    erect(
+      db,
+      planned.flatMap(({ mine, rebuild }) =>
+        rebuild ? mine.filter((s) => s.t == 'create view') : []
+      ),
+    )
+    for (let plan of planned) {
+      if (plan.rebuild) plan.cursor = opts.fill.owe(filling(plan.ix, derived))
     }
-    let cursor = rebuild ? opts.fill?.owe(filling(ix, derived)) : undefined
+  }
+  for (let plan of planned) {
     // Filled in windows: an emptied index, and triggers behind the cursor.
-    if (cursor) mine = behind(db, ix, derived, cursor)
-    erect(db, mine)
-    if (rebuild && !cursor) db.query(command(fts, 'rebuild'))
-    if (rebuild) recut.push(fts)
+    if (plan.cursor) plan.mine = behind(db, plan.ix, derived, plan.cursor)
+  }
+  erect(db, planned.flatMap(({ mine }) => mine))
+  for (let { ix, rebuild, cursor } of planned) {
+    if (!rebuild) continue
+    let fts = indexName(ix.name)
+    if (!cursor) db.query(command(fts, 'rebuild'))
+    recut.push(fts)
   }
   let healed = opts.heal === false ? [] : heal(db, fields, { ...opts, derived })
   return { recut, dropped, healed }

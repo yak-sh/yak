@@ -483,3 +483,58 @@ test('repairing search writers keeps schema comparisons on the pre-repair snapsh
   assertEquals(repair.done.recut, ['book_fts', 'review_fts'])
   assert(repair.scans <= 3, `repair scanned the schema ${repair.scans} times`)
 })
+
+// A fresh host installs many indexes at once. The catalogue cost belongs to
+// the installation phases, not to each index as its new objects invalidate it.
+let installation = (() => {
+  let db = mem(), query = db.query.bind(db), scans = 0
+  let text = Array.from({ length: 12 }, (_, i) => ({
+    comp: 'text' + i,
+    prop: 'body',
+  }))
+  for (let field of text) {
+    db.query({
+      t: 'create table',
+      name: field.comp,
+      cols: [{ name: 'entity', type: 'integer' }, {
+        name: 'body',
+        type: 'text',
+      }],
+    })
+    db.query(insert(field.comp, { entity: 1, body: 'first' }))
+  }
+  db.query = (stmt) => {
+    if (
+      stmt.t == 'select' && JSON.stringify(stmt.from).includes('sqlite_schema')
+    ) scans++
+    return query(stmt)
+  }
+  let done = adopt(db, text, {}, { heal: false })
+  let reads = scans
+  let counts = text.map(({ comp }) =>
+    query(select({
+      cols: [col('id')],
+      from: table(comp + '_fts_docsize'),
+    })).length
+  )
+  for (let { comp } of text) {
+    db.query(insert(comp, { entity: 2, body: 'second' }))
+  }
+  let written = text.map(({ comp }) =>
+    query(select({
+      cols: [col('id')],
+      from: table(comp + '_fts_docsize'),
+    })).length
+  )
+  return { done, reads, counts, written }
+})()
+
+test('installing many search indexes reads the catalogue by phase, not by index', () => {
+  assertEquals(installation.done.recut.length, 12)
+  assertEquals(installation.counts, Array(12).fill(1))
+  assertEquals(installation.written, Array(12).fill(2))
+  assert(
+    installation.reads <= 3,
+    `installation scanned the schema ${installation.reads} times`,
+  )
+})
