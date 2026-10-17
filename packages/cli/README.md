@@ -486,13 +486,15 @@ surrendered its lease. Other command hosts can still use a duty thread through
 box graph for the roles it is handed. The same package works the pool and leased
 services for independent `yak work` processes.
 
-A web checks coverage on process changes and every second, including with
-`--no-duties`. An uncovered duty role reports immediately to the tracker's
-durable spool, before an independent replacement is started. Failed launches are
-reported and retried; a draining process withdraws its duties before its
-in-flight work ends. Config `duties: false` disables this too, for deliberately
-inert hosts. Readiness identifies only this invocation's validated launcher,
-never a PID inherited from a different worker's environment.
+A web checks coverage, including with `--no-duties`: it reads the unexited
+processes once, then follows the process rows its feed hears, and every second
+asks whether the pids of the processes known to serve a duty still live; a store
+with no feed is read whole each second. An uncovered duty role reports
+immediately to the tracker's durable spool, before an independent replacement is
+started. Failed launches are reported and retried; a draining process withdraws
+its duties before its in-flight work ends. Config `duties: false` disables this
+too, for deliberately inert hosts. Readiness identifies only this invocation's
+validated launcher, never a PID inherited from a different worker's environment.
 
 On the box, `yak-web@` units run `serve --no-duties --share --ready <file>`, and
 independent `yak-work@` units run the pool and plugin services. The independent

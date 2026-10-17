@@ -5,14 +5,18 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { clock, test, until } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import { PROCESS, type Store } from '@yaks/process'
-import { missing, monitor, ready } from './external.ts'
+import { coverage, monitor, ready } from './external.ts'
 
-let processes = (rows: Bundle[]): Store => ({
-  apply: (rows) => rows,
-  get: (eids) => rows.filter((row) => eids.includes(row.entity.eid)),
-  running: () => rows.filter((row) => !row.exit),
-  services: () => [],
-})
+let processes = (rows: Bundle[]) => {
+  let reads = 0
+  let store: Store = {
+    apply: (rows) => rows,
+    get: (eids) => rows.filter((row) => eids.includes(row.entity.eid)),
+    running: () => (reads++, rows.filter((row) => !row.exit)),
+    services: () => [],
+  }
+  return { store, reads: () => reads }
+}
 
 let row = (eid: string, roles: string[], exit = false): Bundle => ({
   entity: { eid },
@@ -21,20 +25,89 @@ let row = (eid: string, roles: string[], exit = false): Bundle => ({
 })
 
 test('only live unexited duty roles cover the fallback', async () => {
-  let store = processes([
+  let { store } = processes([
     row('web', ['graph', 'web']),
     row('pool', ['graph', 'effects']),
     row('dead', ['wake']),
     row('ended', ['process'], true),
   ])
   assertEquals(
-    await missing(
+    await coverage(
       store,
       ['effects', 'wake', 'process'],
       (eid) => Promise.resolve(eid == 'dead'),
-    ),
+    ).missing(),
     ['wake', 'process'],
   )
+})
+
+// Each case: what the feed hears after the first look, whether that can move
+// coverage, and the roles missing at the next look.
+let heard: [string, Bundle[], boolean, string[]][] = [
+  ['a command beside the web', [row('cli', ['graph'])], false, ['wake']],
+  ['a worker taking a duty', [row('new', ['graph', 'wake'])], true, []],
+  [
+    'a worker retiring',
+    [{
+      entity: { eid: 'pool' },
+      [PROCESS]: {
+        roles: ['graph'],
+      },
+    }],
+    true,
+    ['effects', 'wake'],
+  ],
+  ['a worker exiting', [{ entity: { eid: 'pool' }, exit: { code: 0 } }], true, [
+    'effects',
+    'wake',
+  ]],
+  ['a worker deleted', [{ entity: { eid: 'pool' }, $delete: true }], true, [
+    'effects',
+    'wake',
+  ]],
+  [
+    'a patch that leaves roles alone',
+    [{
+      entity: { eid: 'pool' },
+      [PROCESS]: {
+        pid: 9,
+      },
+    }],
+    false,
+    ['wake'],
+  ],
+]
+for (let [name, rows, moves, left] of heard) {
+  test(`coverage follows the feed: ${name}, reading the store once`, async () => {
+    let p = processes([row('pool', ['graph', 'effects'])])
+    let covered = coverage(
+      p.store,
+      ['effects', 'wake'],
+      () => Promise.resolve(false),
+    )
+    assertEquals(await covered.missing(), ['wake'])
+    assertEquals(covered.hear(rows), moves)
+    assertEquals(await covered.missing(), left)
+    assertEquals(p.reads(), 1)
+  })
+}
+
+test('a known coverer whose pid is gone stops covering without a feed row', async () => {
+  let p = processes([row('pool', ['effects'])])
+  let dead = false
+  let covered = coverage(p.store, ['effects'], () => Promise.resolve(dead))
+  assertEquals(await covered.missing(), [])
+  dead = true
+  assertEquals(await covered.missing(), ['effects'])
+  assertEquals(p.reads(), 1)
+})
+
+test('a store with no feed is read whole at each look', async () => {
+  let p = processes([row('pool', ['effects'])])
+  let covered = coverage(p.store, ['effects'], undefined, false)
+  await covered.missing()
+  await covered.missing()
+  assertEquals(p.reads(), 2)
 })
 
 let child = (status = new Promise<{ code: number }>(() => {})) => {
@@ -413,7 +486,7 @@ test('an already closed web neither observes nor launches', async () => {
 
 test('coverage probes only requested duties and stops once all are covered', async () => {
   let checked: string[] = []
-  let store = processes([
+  let { store } = processes([
     row('web', ['graph', 'web']),
     row('agent', ['graph']),
     row('dead', ['effects', 'wake']),
@@ -424,9 +497,12 @@ test('coverage probes only requested duties and stops once all are covered', asy
     checked.push(eid)
     return Promise.resolve(eid == 'dead')
   }
-  assertEquals(await missing(store, ['effects', 'wake'], over), [])
+  assertEquals(
+    await coverage(store, ['effects', 'wake'], over).missing(),
+    [],
+  )
   assertEquals(checked, ['dead', 'duties'])
   checked.length = 0
-  assertEquals(await missing(store, [], over), [])
+  assertEquals(await coverage(store, [], over).missing(), [])
   assertEquals(checked, [])
 })

@@ -2,31 +2,83 @@
 // invocation of this checkout's CLI; singleton services still take the host's
 // leases, and effects remain a pool. A successful worker outlives the web host.
 
-import type { Graph } from '@yaks/graph'
-import { gone, PROCESS, type Store, store as machine } from '@yaks/process'
+import type { Bundle, Graph } from '@yaks/graph'
+import {
+  EXIT,
+  gone,
+  PROCESS,
+  type Store,
+  store as machine,
+} from '@yaks/process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-/** Roles advertised by running processes whose pids have not vanished. */
-export let missing = async (
+/** The commits other hosts made, handed over as they arrive (@yaks/host). */
+export type Feed = (each: (rows: Bundle[]) => void) => () => void
+
+/** Which duty roles no live process serves, kept rather than read again.
+ *
+ * Every unexited process, read whole, scans the whole process history, and the
+ * feed hands a web a process row for every `yak` command run beside it, so
+ * reading them all on each change and every second held the web's one thread
+ * for hundreds of milliseconds at a time. They are read once. After that the
+ * rows the feed hears say which processes took up or gave up a duty role, and
+ * a look asks only whether the pids of the ones known still live. A store with
+ * no feed says nothing of what changed, so each look reads it whole. */
+export let coverage = (
   processes: Store,
   roles: readonly string[],
   over: (eid: string) => Promise<boolean> = (eid) => gone(processes, eid),
-): Promise<string[]> => {
-  let needed = new Set(roles)
-  if (!needed.size) return []
-  for (let row of await processes.running()) {
+  fed = true,
+) => {
+  let wanted = new Set(roles)
+  // The duty roles a process row says it serves, or undefined when the row
+  // does not say (a patch that leaves its roles as they were).
+  let serves = (row: Bundle): string[] | undefined => {
     let process = row[PROCESS]
-    if (
-      !process || typeof process != 'object' || !('roles' in process) ||
-      !Array.isArray(process.roles) ||
-      !process.roles.some((role) => needed.has(role)) ||
-      await over(row.entity.eid)
-    ) continue
-    for (let role of process.roles) needed.delete(role)
-    if (!needed.size) return []
+    if (process === null) return []
+    if (!process || typeof process != 'object' || !('roles' in process)) return
+    let said = process.roles
+    return Array.isArray(said) ? said.filter((role) => wanted.has(role)) : []
   }
-  return roles.filter((role) => needed.has(role))
+  let known: Map<string, string[]> | undefined
+  let read = async () =>
+    new Map(
+      (await processes.running()).flatMap((row) => {
+        let duties = serves(row) ?? []
+        return duties.length ? [[row.entity.eid, duties] as const] : []
+      }),
+    )
+  return {
+    /** Fold what other hosts committed; true when coverage may have moved. */
+    hear: (rows: Bundle[]): boolean => {
+      let moved = false
+      for (let row of rows) {
+        let eid = row.entity.eid
+        let ended = row.$delete || row.tombstone || row[EXIT]
+        let duties = ended ? [] : serves(row)
+        if (!duties) continue
+        moved ||= duties.length > 0 || !!known?.has(eid)
+        if (!known) continue
+        if (duties.length) known.set(eid, duties)
+        else known.delete(eid)
+      }
+      return moved
+    },
+    /** The roles asked for that no live, unexited process serves. */
+    missing: async (): Promise<string[]> => {
+      if (!wanted.size) return []
+      if (!known || !fed) known = await read()
+      let needed = new Set(roles)
+      for (let [eid, duties] of [...known]) {
+        if (!duties.some((role) => needed.has(role))) continue
+        if (await over(eid)) known.delete(eid)
+        else duties.forEach((role) => needed.delete(role))
+        if (!needed.size) break
+      }
+      return roles.filter((role) => needed.has(role))
+    },
+  }
 }
 
 export type Monitor = {
@@ -259,19 +311,18 @@ export let external = (
   graph: Pick<Graph, 'read' | 'apply' | 'get'>,
   path: string,
   roles: readonly string[],
-  options: {
-    report: Report
-    signal: AbortSignal
-    subscribe?: (changed: () => void) => () => void
-  },
+  options: { report: Report; signal: AbortSignal; feed?: Feed },
 ): Monitor => {
   if (!roles.length) {
     return { checked: Promise.resolve(), close: () => Promise.resolve() }
   }
-  let processes = machine(graph)
+  let { feed, ...rest } = options
+  let covered = coverage(machine(graph), roles, undefined, !!feed)
   return monitor({
-    ...options,
-    uncovered: () => missing(processes, roles),
+    ...rest,
+    subscribe: feed &&
+      ((changed) => feed((rows) => void (covered.hear(rows) && changed()))),
+    uncovered: covered.missing,
     start: (roles, signal) => start(path, roles, signal),
   })
 }

@@ -131,16 +131,7 @@ let open = async (
             host.report?.(error, {
               tags: { step: 'duty coverage', ...role ? { role } : {} },
             }),
-          subscribe: host.feed && ((changed) =>
-            host.feed!((rows) => {
-              if (
-                rows.some((row) =>
-                  'process' in row || 'exit' in row || 'tombstone' in row
-                )
-              ) {
-                changed()
-              }
-            })),
+          feed: host.feed,
         },
       )
       let close = host.close
