@@ -1,3 +1,5 @@
+import { after } from '@yaks/fp'
+import { edgeEid } from '@yaks/edge'
 import { inputText } from './input_times.ts'
 import { dispatchStatus } from '@yaks/session/admission'
 // The harness is its agent: the rows every transcript is read from, the runner
@@ -73,30 +75,56 @@ import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 /** The provider, model and tool rows a transcript is served from, as one
- * idempotent batch written under `$alias`es: the graph derives every id from a
- * name, and the provider's offering of the model is a `serves` edge. */
+ * idempotent batch with identities derived from each name, and the provider's offering of the model is a `serves` edge. */
 export let seed = (
   o: { provider?: string; model?: string; tools?: Tool[] } = {},
 ): Bundle[] => {
   let model = o.model
+  let provider = identityEid(PROVIDER, [o.provider ?? 'openai'])
+  let selected = model ? identityEid(MODEL, [model]) : ''
   return [
     {
-      entity: { eid: '$provider' },
+      entity: { eid: provider },
       [PROVIDER]: { name: o.provider ?? 'openai' },
     },
     ...model
-      ? [{ entity: { eid: '$model' }, [MODEL]: { name: model } }, {
-        entity: { eid: '$serves' },
-        edge: { from: '$provider', to: '$model' },
+      ? [{ entity: { eid: selected }, [MODEL]: { name: model } }, {
+        entity: { eid: edgeEid(provider, 'serves', selected) },
+        edge: { from: provider, to: selected },
         serves: { name: model },
       }]
       : [],
-    ...(o.tools ?? []).map((t, i) => ({
-      entity: { eid: `$tool${i}` },
+    ...(o.tools ?? []).map((t) => ({
+      entity: { eid: toolEid(t.name) },
       [TOOL]: { name: t.name, description: t.description },
     })),
   ]
 }
+
+// Reopening a harness must not rewrite its unchanged provider/tool catalogue.
+// Compare only the properties the seed owns; discovery may enrich these rows.
+let seedMissing = (g: Graph, rows: Bundle[]) =>
+  after(
+    g.get(rows.map((b) => b.entity.eid), [
+      PROVIDER,
+      MODEL,
+      TOOL,
+      'edge',
+      'serves',
+    ]),
+    (held) => {
+      let byId = new Map(held.map((b) => [b.entity.eid, b]))
+      let changed = rows.filter((row) => {
+        let old = byId.get(row.entity.eid)
+        return Object.entries(row).some(([name, value]) =>
+          name != 'entity' && Object.entries(value as Comp).some(([key, v]) =>
+            (old?.[name] as Comp | undefined)?.[key] !== v
+          )
+        )
+      })
+      return changed.length ? g.apply(changed, { trusted: true }) : []
+    },
+  )
 
 /** What an agent runs over: a graph, the effects its commits raise, the
  * vocabulary it reads them with, the process working it, which a run's lease
@@ -383,9 +411,10 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
         let [row] = await h.g.get([String(using.model)])
         compact.name = String((row?.model as Comp).name)
       }
-      await (seeded ??= h.g.apply(seed({ provider, model: name, tools }), {
-        trusted: true,
-      }))
+      await (seeded ??= seedMissing(
+        h.g,
+        seed({ provider, model: name, tools }),
+      ))
       const key = boundary ?? session
       const held = phase === 'call' && offered.get(key)
       if (held) return [...tools, ...held]
@@ -424,9 +453,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
         served.map((t) => [t.name, t.description, t.parameters]),
       )
       if (signature !== remoteSignature) {
-        await h.g.apply(seed({ provider, model: name, tools: served }), {
-          trusted: true,
-        })
+        await seedMissing(h.g, seed({ provider, model: name, tools: served }))
         remoteSignature = signature
       }
       return all
@@ -472,7 +499,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   // flight is let finish.
   let stopping = new AbortController()
   let r: Runner = { ...lend(opts), stopping: stopping.signal }
-  h.g.apply(seed({ provider, model: name, tools }), { trusted: true })
+  seedMissing(h.g, seed({ provider, model: name, tools }))
   h.fx.handle(running(h.g, r))
   let working = h.fx.work(h.g, stopping.signal).catch((error) =>
     report(error, { phase: 'effects' })
