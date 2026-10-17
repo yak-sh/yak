@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { appendEntry } from './append.ts'
 // Delegation is transcript structure, not a process handle. A spawned session
 // names its parent and originating call; a fork additionally names a prefix.
@@ -141,7 +142,7 @@ let delegation = (
     ) {
       throw new ToolError('prompt', 'a nonempty prompt is required')
     }
-    let eid = `child:${ctx.call.entity.eid}`
+    let eid = derivedEid(`child:${ctx.call.entity.eid}`)
     if (await row(g, eid)) return eid
     return admit(g, ctx.session, limits, async () => {
       // A concurrent replay may have waited behind the original admission.
@@ -230,13 +231,13 @@ let delegation = (
         : ctx.entries.filter((b) =>
           (b.prompt as Comp | undefined)?.scope == 'shared'
         ).map((b, i) => ({
-          entity: { eid: eid + ':shared:' + i },
+          entity: { eid: derivedEid(eid + ':shared:' + i) },
           content: { body: textOf(b) },
           prompt: { ...(b.prompt as Comp) },
         }))
       if (fork) {
         context.push({
-          entity: { eid: eid + ':fork-context' },
+          entity: { eid: derivedEid(eid + ':fork-context') },
           prompt: { scope: 'local', source: 'harness:fork' },
           content: {
             body:
@@ -246,7 +247,7 @@ let delegation = (
       }
       if (args.instructions != null) {
         context.push({
-          entity: { eid: eid + ':guidance' },
+          entity: { eid: derivedEid(eid + ':guidance') },
           prompt: { scope: 'local', source: 'delegation:instructions' },
           content: { body: String(args.instructions) },
         })
@@ -259,7 +260,7 @@ let delegation = (
       await g.apply([
         ...minted
           ? [{
-            entity: { eid: 'notice:' + eid },
+            entity: { eid: derivedEid('notice:' + eid) },
             entry: {
               session: ctx.session,
             },
@@ -298,7 +299,7 @@ let delegation = (
           ...fork && anchor ? { fork: { from: anchor.entity.eid } } : {},
         },
         {
-          entity: { eid: `${eid}:input` },
+          entity: { eid: derivedEid(`${eid}:input`) },
           entry: { session: eid },
           content: { body: prompt },
           using,
@@ -490,11 +491,13 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     (taskStatus(g.vocab, task!) != 'done' ||
       comp(task, 'completed')?.by != String(link.parent))
   let receipt = (last: Bundle) =>
-    announceTask
-      ? `delivery:${child}:task:${task!.entity.eid}:${
-        taskStatus(g.vocab, task!)
-      }`
-      : `delivery:${child}:${last.entity.eid}`
+    derivedEid(
+      announceTask
+        ? `delivery:${child}:task:${task!.entity.eid}:${
+          taskStatus(g.vocab, task!)
+        }`
+        : `delivery:${child}:${last.entity.eid}`,
+    )
   let eid = receipt(last)
   if (await row(g, eid)) return
   entries ??= await transcript(g, child)
@@ -511,7 +514,7 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
       task!.entity.num != null ? `T-${task!.entity.num}` : task!.entity.eid
     } ${taskStatus(g.vocab, task!)}`
     : `child ${child} ${status}`
-  let notice = await row(g, 'notice:' + child)
+  let notice = await row(g, derivedEid('notice:' + child))
   let context = notice?.notice
     ? textOf(notice) + '\nOutcome: child ' + status +
       (ready ? '; task ' + taskStatus(g.vocab, task!) : '') + '\nResult:\n'

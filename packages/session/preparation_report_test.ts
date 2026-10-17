@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { equal, test, throws } from '@yaks/testing'
 import { type Runner, settle } from './run.ts'
 import { pages, transcriptGraph } from './testing.ts'
@@ -50,7 +51,7 @@ let rejected = fixture(true)
 
 test('a preparation defect reports its original error once and keeps history', async () => {
   let { g, told } = recorded
-  let [row] = await g.get(['child:preparation-error'])
+  let [row] = await g.get([derivedEid('child:preparation-error')])
   equal(row.exception, {
     type: defect.name,
     value: defect.message,

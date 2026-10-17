@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { h, render as mountTree } from 'preact'
 import { install, TElement } from '../tui/dom.ts'
@@ -155,7 +156,16 @@ test('user inputs share composer borders, machine entries do not', async () => {
       [{ notice: {} }, false],
       [{ result: { call: 'c' } }, false],
       [{ using: { model: 'm' } }, true],
-      [{ entity: { eid: 'delivery:child:last' } }, false],
+      [
+        {
+          entity: { eid: derivedEid('delivery:child:last') },
+          content: {
+            body:
+              'child abcdef01-2345-4789-abcd-0123456789ab settled\n**hello**',
+          },
+        },
+        false,
+      ],
     ] as [Partial<Bundle>, boolean][]
   ) {
     let entry: Bundle = {

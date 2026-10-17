@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 // Graph reads and working-tree views. A local view never imports files into
 // the graph: uncommitted edits belong to the checkout until its mirror runs.
 
@@ -220,7 +221,7 @@ let localSkills = async (
     let held = byPath.get(path)
     skills.push({
       ...held,
-      entity: held?.entity ?? { eid: `view:skill:${root}:${path}` },
+      entity: held?.entity ?? { eid: derivedEid(`view:skill:${root}:${path}`) },
       ...parsed,
     })
   }

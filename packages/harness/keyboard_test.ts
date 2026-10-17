@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -26,7 +27,9 @@ test('controlled NORMAL routing preserves draft, selects sources, and hides help
   let measured = 0
   let App = () => {
     useVisualController(
-      () => f.client.ent('visual')!.visual as VisualState,
+      () =>
+        f.client.ent(derivedEid('harness-frontend|visual'))!
+          .visual as VisualState,
       f.select,
     )
     let draft = f.draft.value[0].draft as Comp
@@ -58,8 +61,10 @@ test('controlled NORMAL routing preserves draft, selects sources, and hides help
     )
   }
   let ui = await mount(App, 80, 15)
-  let keys = () => f.client.ent('keyboard')!.keyboard as Comp
-  let text = () => (f.client.ent('draft')!.draft as Comp).text
+  let keys = () =>
+    f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp
+  let text = () =>
+    (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text
   try {
     f.keys({ focus: 'sidebar' })
     await ui.send('draft?')
@@ -85,7 +90,11 @@ test('controlled NORMAL routing preserves draft, selects sources, and hides help
     assertEquals(keys().mode, 'VISUAL')
     await ui.send('ly')
     assertEquals(keys().mode, 'NORMAL')
-    assertEquals((f.client.ent('visual')!.visual as Comp).yank, 'ro')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|visual'))!.visual as Comp)
+        .yank,
+      'ro',
+    )
     await ui.send('v\x1b')
     assertEquals(keys().mode, 'NORMAL')
     await ui.send('\tjl')
@@ -139,7 +148,9 @@ test('NORMAL sidebar commands use the same session actions and INSERT remains li
     100,
     30,
   )
-  let selected = () => (f.client.ent('view')!.frontend as Comp).selected
+  let selected = () =>
+    (f.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+      .selected
   try {
     await ui.send('draft')
     await ui.send('\x1b')
@@ -155,9 +166,15 @@ test('NORMAL sidebar commands use the same session actions and INSERT remains li
     assert(ui.text().includes('next / previous root'))
     await ui.send('\x1b')
     await ui.send('i?hjkl')
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, '?hjkl')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      '?hjkl',
+    )
     f.patch({ selected: null })
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'draft')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'draft',
+    )
     assertEquals(sent, [])
   } finally {
     ui.free()
@@ -189,19 +206,39 @@ test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a private 
   )
   try {
     setClipboard((text) => {
-      assertEquals((f.client.ent('draft')!.draft as Comp).text, source)
-      assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
+      assertEquals(
+        (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp)
+          .text,
+        source,
+      )
+      assertEquals(
+        (f.client.ent(derivedEid('harness-frontend|visual'))!.visual as Comp)
+          .yank,
+        source,
+      )
       writes.push(osc52(text))
     })
     for (let mode of ['INSERT']) {
       f.keys({ mode, focus: 'sidebar', help: false })
       f.edit({ text: source, at: 5 })
       await ui.send('\x15')
-      assertEquals(f.client.ent('draft')!.draft, { text: '', at: 0 })
-      assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
-      assertEquals((f.client.ent('keyboard')!.keyboard as Comp).mode, mode)
+      assertEquals(f.client.ent(derivedEid('harness-frontend|draft'))!.draft, {
+        text: '',
+        at: 0,
+      })
       assertEquals(
-        (f.client.ent('keyboard')!.keyboard as Comp).focus,
+        (f.client.ent(derivedEid('harness-frontend|visual'))!.visual as Comp)
+          .yank,
+        source,
+      )
+      assertEquals(
+        (f.client.ent(derivedEid('harness-frontend|keyboard'))!
+          .keyboard as Comp).mode,
+        mode,
+      )
+      assertEquals(
+        (f.client.ent(derivedEid('harness-frontend|keyboard'))!
+          .keyboard as Comp).focus,
         'sidebar',
       )
     }
@@ -211,15 +248,25 @@ test('Ctrl+U cuts the complete draft in INSERT and VISUAL, preserving a private 
     setClipboard()
     f.edit({ text: source, at: 0 })
     await ui.send('\x15')
-    assertEquals((f.client.ent('visual')!.visual as Comp).yank, source)
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, '')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|visual'))!.visual as Comp)
+        .yank,
+      source,
+    )
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      '',
+    )
     assert(ui.text().includes('clipboard unavailable'))
     setClipboard(() => {
       throw new Error('unavailable')
     })
     f.edit({ text: source, at: 2 })
     await ui.send('\x15')
-    assertEquals(f.client.ent('draft')!.draft, { text: source, at: 2 })
+    assertEquals(f.client.ent(derivedEid('harness-frontend|draft'))!.draft, {
+      text: source,
+      at: 2,
+    })
     assertEquals(sent, [])
   } finally {
     setClipboard()
@@ -259,7 +306,11 @@ test('NORMAL registry routes spatial focus and contextual movement without editi
     f.edit({ text: 'keep draft', at: 4 })
     f.keys({ mode: 'NORMAL', focus: 'transcript' })
     await ui.send('\x17l')
-    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).focus, 'sidebar')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .focus,
+      'sidebar',
+    )
     assertEquals(sidebar, [])
     await ui.send('jk\x15\x04ggG')
     assertEquals(sidebar, [
@@ -282,8 +333,15 @@ test('NORMAL registry routes spatial focus and contextual movement without editi
       { name: 'pageup' },
       { name: 'pagedown' },
     ])
-    assertEquals(f.client.ent('draft')!.draft, { text: 'keep draft', at: 4 })
-    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).mode, 'NORMAL')
+    assertEquals(f.client.ent(derivedEid('harness-frontend|draft'))!.draft, {
+      text: 'keep draft',
+      at: 4,
+    })
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .mode,
+      'NORMAL',
+    )
   } finally {
     ui.free()
     f.close()

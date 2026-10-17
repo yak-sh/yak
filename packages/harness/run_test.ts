@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
 import type { Model } from '@yaks/model'
@@ -250,7 +251,11 @@ test('resume delivers an ended child whose dispatch was interrupted', async () =
       return (child.dispatch as Comp).state == 'settled'
     }, { label: 'child dispatch to settle' })
     let entries = await a.transcript(parent)
-    assert(entries.some((b) => b.entity.eid == 'delivery:child:child-answer'))
+    assert(
+      entries.some((b) =>
+        b.entity.eid == derivedEid('delivery:child:child-answer')
+      ),
+    )
   } finally {
     await a.close()
   }

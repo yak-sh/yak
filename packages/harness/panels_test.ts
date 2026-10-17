@@ -96,7 +96,7 @@ test('context panel handles unavailable and optional usage without carrying old 
 })
 
 test('sidebar labels keep names and indicators without redundant status text', () => {
-  let child = 'child:abcdef01-2345-6789-abcd-0123456789ab'
+  let child = 'abcdef01-2345-4789-abcd-0123456789ab'
   let sessions: Bundle[] = [
     { entity: { eid: child }, session: { id: child, status: 'settled' } },
     {

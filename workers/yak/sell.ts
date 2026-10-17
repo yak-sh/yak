@@ -36,6 +36,7 @@
 // and the webhook's filing is capped so a stranger posting garbage at a public
 // door cannot write rows without end.
 import { sha256 } from '@yaks/graph/sha256'
+import { derivedEid } from '@yaks/graph/identity'
 import { moved } from './billing.ts'
 import { ask } from './stripe.ts'
 import { refusal } from '@yaks/hook'
@@ -905,7 +906,7 @@ let sold = async (env: Env, space: Space, event: Event) => {
       ? [
         { entity: { eid: '$them' }, email: { address: order.email } },
         {
-          entity: { eid: `${eid}-letter` },
+          entity: { eid: derivedEid(`${eid}-letter`) },
           doc: letter,
           mail: {},
           deliver: { to: '$them' },

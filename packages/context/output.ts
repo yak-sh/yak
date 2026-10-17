@@ -1,6 +1,7 @@
 /** Bounded model-facing views of stored tool results. No filesystem access. */
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { snapshot } from './mod.ts'
+import { derivedEid } from '@yaks/graph/identity'
 
 export const OUTPUT_LIMIT = 16_384
 const bodyOf = (b: Bundle) =>
@@ -21,7 +22,7 @@ export const outputView = async (
   const points = chars(text)
   if (points.length <= limit) return text
   const revision = (await snapshot(text, entry.entity.eid)).revision
-  const handle = 'output:' + entry.entity.eid + ':' + revision
+  const handle = derivedEid('output:' + entry.entity.eid + ':' + revision)
   const existing = (await g.read('.entity.eid=' + JSON.stringify(handle)))[0]
   if (!existing?.context_output) {
     await g.apply([{

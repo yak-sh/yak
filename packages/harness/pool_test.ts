@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Comp } from '@yaks/graph'
@@ -231,7 +232,7 @@ test('queued cancellation skips expensive prep; prep failure has one terminal re
     }
     await h.g.apply([{
       entity: { eid: 'stop-cancel' },
-      entry: { session: 'child:cancel', seq: 2 },
+      entry: { session: derivedEid('child:cancel'), seq: 2 },
       stop: {},
     }])
     await a.close()
@@ -245,12 +246,15 @@ test('queued cancellation skips expensive prep; prep failure has one terminal re
     await until(async () =>
       (await h.g.read('.dispatch.state=settled&*')).length == 2
     )
-    await b.idle('child:fail')
+    await b.idle(derivedEid('child:fail'))
     await b.idle('p')
-    assertEquals(prepared, ['child:fail'])
+    assertEquals(prepared, [derivedEid('child:fail')])
     assertEquals(
       (await h.g.read('.entry.session=p&*')).filter((b) =>
-        b.entity.eid.startsWith('delivery:child:fail:')
+        b.entity.eid === derivedEid(
+          'delivery:' + derivedEid('child:fail') + ':' +
+            derivedEid(derivedEid('child:fail') + ':preparation-stop'),
+        )
       ).length,
       1,
     )

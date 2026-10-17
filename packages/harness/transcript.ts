@@ -153,7 +153,6 @@ export let transcriptViews = define([
       )
     },
   },
-  row('.entry&.content&.entity.eid~=delivery:', 'notice', 'Muted', true),
   row('.entry&.interrupted', 'interrupted', 'Muted'),
   row('.entry&.refusal', 'refusal', 'Bad'),
   row('.entry&.failed', 'failed', 'Bad'),
@@ -176,6 +175,21 @@ export let transcriptViews = define([
   row('.entry&.ask&.interrupted', 'interrupted', 'Muted'),
   row('.entry&.ask', 'ask', 'Muted'),
   row('.entry&.output', 'output', 'Accent', false, true),
-  row('.entry&.content', 'input', 'Good', false, true, true),
+  {
+    ...row('.entry&.content', 'input', 'Good', false, true, true),
+    render: (b, h, ctx) => {
+      // Child receipts are ordinary context entries, not control notices.
+      // Their envelope survives identity migration without treating human
+      // authorship as machine output or changing session readiness.
+      const body = String((b.content as Comp | undefined)?.body ?? '')
+      const receipt =
+        /^(?:child [0-9a-f-]{36} (?:settled|failed|stopped)|task (?:T-\d+|[0-9a-f-]{36}) (?:done|cancelled))\n/i
+          .test(body)
+      const selected = receipt
+        ? row('.entry&.content', 'notice', 'Muted', true)
+        : row('.entry&.content', 'input', 'Good', false, true, true)
+      return selected.render(b, h, ctx)
+    },
+  },
   row('.entry', 'entry', 'Muted'),
 ])

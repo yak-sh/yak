@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 /** Optional runtime view. Application selection and feedback remain graph state. */
 import { h } from 'preact'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
@@ -119,7 +120,8 @@ export let RuntimePanel = ({ ui, agent, session, subscribe }: {
     }
   }, [open, session, agent, subscribe, ui])
   useKeymap((key) => {
-    let current = ui.client.ent('keyboard')!.keyboard as Comp
+    let current = ui.client.ent(derivedEid('harness-frontend|keyboard'))!
+      .keyboard as Comp
     if (!current.runtime || current.mode != 'NORMAL') return false
     if (key.ctrl && key.text == 'c') return false
     if (key.name == 'escape' || key.text == 'r') {

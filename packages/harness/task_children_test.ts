@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, Refused } from '@yaks/graph'
 import { deliverChild, sessionTools, textOf, transcript } from '@yaks/session'
@@ -55,7 +56,7 @@ test('task spawn snapshots doc and commits claim before first entry effect; repl
   let { h, ctx, spawn } = await setup()
   let observations: string[] = []
   h.fx.created('entry', async (e) => {
-    if (e.comp?.session != 'child:call') return
+    if (e.comp?.session != derivedEid('child:call')) return
     let [task] = await h.g.read('.task&*')
     observations.push(String((task.claim as Comp).session))
   })
@@ -63,7 +64,7 @@ test('task spawn snapshots doc and commits claim before first entry effect; repl
   assertEquals(work.entity.num, undefined)
   let child = await spawn.run({ task: work.entity.eid }, ctx)
   assertEquals((await h.g.read('.spawned&*'))[0].entity.num, undefined)
-  assertEquals(child, 'child:call')
+  assertEquals(child, derivedEid('child:call'))
   assertEquals(observations, [child])
   assertEquals(
     (await h.g.read('.task.status=wip&*')).map((b) => b.entity.eid),
@@ -156,10 +157,10 @@ test('task wait uses done including contains/requires and cancellation; merged w
       { tasks: [] },
       { tasks: ['missing'] },
       { tasks: ['work'], timeout: -1 },
-      { tasks: ['work'], children: ['child:call'] },
+      { tasks: ['work'], children: [derivedEid('child:call')] },
       { tasks: ['work'], process: 'x' },
-      { children: ['child:call'], process: 'x' },
-      { tasks: ['work'], children: ['child:call'], process: 'x' },
+      { children: [derivedEid('child:call')], process: 'x' },
+      { tasks: ['work'], children: [derivedEid('child:call')], process: 'x' },
       {},
     ]
   ) {
@@ -186,7 +187,10 @@ test('task completion receipt is idempotent, keeps final message, and incomplete
   await deliverChild(h.g, child)
   let entries = await transcript(h.g, 'p')
   let receipt = entries.at(-1)!
-  assertEquals(receipt.entity.eid, `delivery:${child}:task:work:done`)
+  assertEquals(
+    receipt.entity.eid,
+    derivedEid(`delivery:${child}:task:work:done`),
+  )
   assertEquals((receipt.result as Comp).call, 'call')
   assertEquals(textOf(receipt), 'task work done\nFinal answer')
   await h.g.apply([{ entity: { eid: 'work' }, completed: null }])
@@ -236,7 +240,7 @@ for (let finish of ['complete', 'unlink']) {
     )
     let receipt = await until(async () =>
       (await transcript(h.g, 'p')).find((b) =>
-        b.entity.eid == `delivery:${child}:task:work:done`
+        b.entity.eid == derivedEid(`delivery:${child}:task:work:done`)
       )
     )
     assert(textOf(receipt).endsWith('\nFinished my part'))
@@ -300,7 +304,7 @@ test('child marks task done through a tool before its final answer: one final re
   for (let child of await a.children(parent)) await a.idle(child.entity.eid)
   await a.idle(parent)
   let receipts = (await a.transcript(parent)).filter((b) =>
-    b.entity.eid.startsWith('delivery:')
+    !b.output && textOf(b).endsWith('\nThe final answer')
   )
   assertEquals(receipts.length, 1)
   assert(textOf(receipts[0]).endsWith('\nThe final answer'))
@@ -321,7 +325,10 @@ test('cancelled task returns cancelled; stopped parents do not receive deliverie
   ])
   await deliverChild(h.g, child)
   let receipt = (await transcript(h.g, 'p')).at(-1)!
-  assertEquals(receipt.entity.eid, `delivery:${child}:task:work:cancelled`)
+  assertEquals(
+    receipt.entity.eid,
+    derivedEid(`delivery:${child}:task:work:cancelled`),
+  )
   assert(textOf(receipt).endsWith('cancelled\nCancelled safely'))
   let seq = Number((receipt.entry as Comp).seq)
   await h.g.apply([
@@ -388,7 +395,7 @@ for (let writer of ['p', 'child', 'other', 'external']) {
         (work.completed as Comp).by ?? null,
         writer == 'external' ? h.me : actor,
       )
-      let receiptId = 'delivery:' + child + ':task:work:done'
+      let receiptId = derivedEid('delivery:' + child + ':task:work:done')
       assertEquals(
         (await transcript(h.g, 'p')).some((b) => b.entity.eid == receiptId),
         writer != 'p',
@@ -443,7 +450,7 @@ test('parent completion does not suppress a later child response', async () => {
   let entries = await transcript(h.g, 'p')
   assertEquals(
     entries.at(-1)!.entity.eid,
-    'delivery:' + child + ':later-answer',
+    derivedEid('delivery:' + child + ':later-answer'),
   )
   assert(textOf(entries.at(-1)!).endsWith('New response'))
   h.close()
@@ -482,7 +489,7 @@ test('completion author survives database reopen; another parent still receives 
     await deliverChild(h.g, 'c')
     assertEquals(
       (await transcript(h.g, 'q')).at(-1)!.entity.eid,
-      'delivery:c:task:work:done',
+      derivedEid('delivery:c:task:work:done'),
     )
   } finally {
     h.close()
@@ -537,7 +544,7 @@ test('existing fork receipts do not read inherited transcript bodies on resume',
       output: { source: 'source' },
     },
     {
-      entity: { eid: 'delivery:child:child-answer' },
+      entity: { eid: derivedEid('delivery:child:child-answer') },
       entry: { session: 'parent' },
       content: { body: 'delivered' },
       output: { source: 'source' },
@@ -614,7 +621,7 @@ test('receipt fast-path refreshes its tail when a child finishes between reads',
     await deliverChild(h.g, 'c')
     let rows = await read('.entry.session=p&*')
     assertEquals(rows.length, 2)
-    assertEquals(rows[1].entity.eid, 'delivery:c:final')
+    assertEquals(rows[1].entity.eid, derivedEid('delivery:c:final'))
     assert(textOf(rows[1]).includes('final answer'))
   } finally {
     h.close()

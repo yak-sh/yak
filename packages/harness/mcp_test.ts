@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { local } from './local.ts'
@@ -198,6 +199,15 @@ test('remote images use external artifacts while large text retains bounded cont
       new TextDecoder().decode(await h.artifacts.get(address)),
       'image-bytes',
     )
+    const attached = await h.g.read('.attachment&*')
+    assertEquals(attached.length, 1)
+    assertEquals(attached[0].entity.eid, derivedEid('mcp-attachment:call:0'))
+    assertEquals(artifacts[0].entity.eid, address)
+    await tool.run({}, {
+      session: 's',
+      call: { entity: { eid: 'call' } },
+      entries: [],
+    })
     assertEquals((await h.g.read('.attachment&*')).length, 1)
     // The full text remains available for the ordinary context output policy.
     assert(text.endsWith('a'.repeat(100000)))

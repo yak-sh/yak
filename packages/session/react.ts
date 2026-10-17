@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { Unsupported } from '@yaks/match'
 import { compactAsk } from './compact_ask.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
@@ -935,7 +936,7 @@ export let react = async (
                 'Ending your response does not cancel this call. Do not poll, wait, ' +
                 'invent its result, or repeat this call.',
             ),
-            entity: { eid: call.entity.eid + ':progress' },
+            entity: { eid: derivedEid(call.entity.eid + ':progress') },
           })
         }
       }

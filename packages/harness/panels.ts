@@ -79,8 +79,7 @@ export let visibleSessions = (
   )
 
 /** Compact generated identifiers without truncating meaningful session names. */
-export let shortSessionId = (id: string): string =>
-  id.replace(/^child:/, '').slice(0, 8)
+export let shortSessionId = (id: string): string => id.slice(0, 8)
 
 export let sessionLine = (b: Bundle) => {
   let session = b.session as Comp

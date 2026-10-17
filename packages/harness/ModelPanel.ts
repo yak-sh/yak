@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 /** Graph-backed selection; provider identity is resolved by the backend. */
 import { h } from 'preact'
 import { useLayoutEffect } from 'preact/hooks'
@@ -43,12 +44,17 @@ export const ModelPanel = ({ ui, agent, session }: {
     }
   }, [agent, session, open, ui])
   const choose = async (id: string) => {
-    if ((ui.client.ent('keyboard')!.keyboard as Comp).modelBusy) return
+    if (
+      (ui.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .modelBusy
+    ) return
     ui.keys({ modelBusy: true, modelFeedback: '' })
     try {
       if (session) await agent.selectModel!(session, id)
       else ui.patch({ newModel: id })
-      const selected = (ui.client.ent('view')!.frontend as Comp).selected
+      const selected =
+        (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+          .selected
       if ((selected ?? undefined) == session) {
         ui.patch({ currentModel: id })
         ui.keys({ models: false })
@@ -60,7 +66,8 @@ export const ModelPanel = ({ ui, agent, session }: {
     }
   }
   useKeymap((key) => {
-    const k = ui.client.ent('keyboard')!.keyboard as Comp
+    const k = ui.client.ent(derivedEid('harness-frontend|keyboard'))!
+      .keyboard as Comp
     if (!k.models) return false
     if (key.ctrl && key.text == 'c') return false
     if (key.name == 'escape' || key.text == 'm') {

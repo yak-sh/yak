@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -41,24 +42,33 @@ test('P chooses a graph persona for a new session without changing the draft', a
     await terminal.send('\x1b')
     await terminal.send('P')
     assertEquals(
-      (f.client.ent('keyboard')!.keyboard as Comp).personas,
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .personas,
       true,
       terminal.text(),
     )
     await until(() => terminal.text().includes('Operator'), 'persona choices')
     await terminal.send('j')
     assertEquals(
-      (f.client.ent('keyboard')!.keyboard as Comp).personaIndex,
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .personaIndex,
       1,
       terminal.text(),
     )
     await terminal.send('\r')
     assertEquals(
-      (f.client.ent('view')!.frontend as Comp).newPersona,
+      (f.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+        .newPersona,
       'operator',
     )
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'keep this draft')
-    assert(!(f.client.ent('keyboard')!.keyboard as Comp).personas)
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'keep this draft',
+    )
+    assert(
+      !(f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .personas,
+    )
     await terminal.send('i\r')
     await until(() => started.length == 1, 'new session')
     assertEquals(started, [{ text: 'keep this draft', persona: 'operator' }])

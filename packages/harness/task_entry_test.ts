@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Comp, identityEid } from '@yaks/graph'
@@ -202,8 +203,10 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
     release()
     await a.idle(child)
     await a.idle(parent)
+    const last = (await a.transcript(child)).at(-1)!
+    const receipt = derivedEid(`delivery:${child}:${last.entity.eid}`)
     let receipts = (await a.transcript(parent)).filter((b) =>
-      b.entity.eid.startsWith('delivery:')
+      b.entity.eid === receipt
     )
     assertEquals(receipts.length, 1)
     let body = String((receipts[0].content as Comp).body)
@@ -220,9 +223,8 @@ test('auto-task notice is lazy, reaches next ask, and contextual completion is i
     await a.idle(child)
     await a.idle(parent)
     assertEquals(
-      (await a.transcript(parent)).filter((b) =>
-        b.entity.eid.startsWith('delivery:')
-      ).length,
+      (await a.transcript(parent)).filter((b) => b.entity.eid === receipt)
+        .length,
       1,
     )
   } finally {

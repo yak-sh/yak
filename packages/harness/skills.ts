@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 // Repository instructions are discovered by description and loaded on demand.
 // A session with a machine reads that machine's files; a session without one
 // discovers graph skills without asking a provider to provision anything.
@@ -73,7 +74,7 @@ let files = async (
       throw new Refused(`Cannot load ${path}: ${String(error)}`)
     }
     skills.push({
-      entity: { eid: `view:skill:${session}:${title}` },
+      entity: { eid: derivedEid(`view:skill:${session}:${title}`) },
       ...parsed,
     })
   }

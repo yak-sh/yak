@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h } from 'preact'
@@ -35,7 +36,10 @@ test('authorization UI captures pasted callback privately, preserving draft and 
       'http://127.0.0.1/callback?code=VERY_SECRET&state=public-state'
     await view.send('\x1b[200~' + callback + '\x1b[201~')
     assert(!view.out.join('').includes('VERY_SECRET'))
-    assert(!JSON.stringify(ui.client.ent('draft')).includes('VERY_SECRET'))
+    assert(
+      !JSON.stringify(ui.client.ent(derivedEid('harness-frontend|draft')))
+        .includes('VERY_SECRET'),
+    )
     await view.send('\r')
     assertEquals(received, [callback])
     assert(view.text().includes('Connected'))

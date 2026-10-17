@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 /** Frontend-local graph state. Only drafts and recovery data enter the local vault. */
 import { type Client, client, type Vault, type Watch } from '@yaks/client'
 import { loadVocab } from '@yaks/vocab'
@@ -14,7 +15,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     pending = pending.then(write).catch((error) => {
       failure = error
       mutate([{
-        entity: { eid: 'feedback' },
+        entity: { eid: derivedEid('harness-frontend|feedback') },
         feedback: {
           error: 'Draft recovery could not be saved: ' + String(error),
         },
@@ -41,19 +42,19 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     return result
   }
   mutate([{
-    entity: { eid: 'visual' },
+    entity: { eid: derivedEid('harness-frontend|visual') },
     visual: { surface: '', text: '', anchor: 0, at: 0, yank: '' },
   }])
   mutate([
     {
-      entity: { eid: 'view' },
+      entity: { eid: derivedEid('harness-frontend|view') },
       frontend: {
         showSettled: false,
         generation: 0,
       },
     },
     {
-      entity: { eid: 'keyboard' },
+      entity: { eid: derivedEid('harness-frontend|keyboard') },
       keyboard: {
         mode: 'INSERT',
         focus: 'transcript',
@@ -61,9 +62,18 @@ export let frontend = (vault: Vault | false = false): Frontend => {
         pending: '',
       },
     },
-    { entity: { eid: 'composer' }, composer: { mode: 'message' } },
-    { entity: { eid: 'feedback' }, feedback: { error: '' } },
-    { entity: { eid: 'draft' }, draft: { text: '', at: 0 } },
+    {
+      entity: { eid: derivedEid('harness-frontend|composer') },
+      composer: { mode: 'message' },
+    },
+    {
+      entity: { eid: derivedEid('harness-frontend|feedback') },
+      feedback: { error: '' },
+    },
+    {
+      entity: { eid: derivedEid('harness-frontend|draft') },
+      draft: { text: '', at: 0 },
+    },
   ])
   let view = c.watch('.frontend')
   let draft = c.watch('.draft')
@@ -72,9 +82,9 @@ export let frontend = (vault: Vault | false = false): Frontend => {
   const record = (id: string, comp: string) =>
     (c.ent(id)?.[comp] ?? {}) as Record<string, unknown>
   const slot = (selected: string | null) =>
-    'draft:' + (selected == null ? 'new' : 'session:' + selected)
+    derivedEid('draft:' + (selected == null ? 'new' : 'session:' + selected))
   const selected = (): string | null => {
-    const id = record('view', 'frontend').selected
+    const id = record(derivedEid('harness-frontend|view'), 'frontend').selected
     return id == null ? null : String(id)
   }
   let touched = false
@@ -82,18 +92,21 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     mutate([{
       entity: { eid: slot(selected()) },
       savedDraft: {
-        ...record('draft', 'draft'),
-        mode: record('composer', 'composer').mode,
+        ...record(derivedEid('harness-frontend|draft'), 'draft'),
+        mode: record(derivedEid('harness-frontend|composer'), 'composer').mode,
       },
     }])
   const restore = () => {
     const d = record(slot(selected()), 'savedDraft')
     mutate([
       {
-        entity: { eid: 'draft' },
+        entity: { eid: derivedEid('harness-frontend|draft') },
         draft: { text: d.text ?? '', at: d.at ?? 0 },
       },
-      { entity: { eid: 'composer' }, composer: { mode: d.mode ?? 'message' } },
+      {
+        entity: { eid: derivedEid('harness-frontend|composer') },
+        composer: { mode: d.mode ?? 'message' },
+      },
     ])
   }
   const ready = c.ready.then(() => {
@@ -123,13 +136,19 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     }
     for (const row of rows) mutate([{ entity: row.entity, pendingDraft: null }])
     interrupted.close()
-    const r = record('recovery', 'recovery')
+    const r = record(derivedEid('harness-frontend|recovery'), 'recovery')
     const restored = typeof r.selected == 'string' && r.selected
       ? r.selected
       : null
     mutate([
-      { entity: { eid: 'view' }, frontend: { selected: restored } },
-      { entity: { eid: 'visual' }, visual: { yank: r.yank ?? '' } },
+      {
+        entity: { eid: derivedEid('harness-frontend|view') },
+        frontend: { selected: restored },
+      },
+      {
+        entity: { eid: derivedEid('harness-frontend|visual') },
+        visual: { yank: r.yank ?? '' },
+      },
     ])
     restore()
   })
@@ -142,9 +161,10 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     },
     submission: () => {
       const owner = selected()
-      const generation = record('view', 'frontend').generation
-      const submitted = record('draft', 'draft')
-      const id = 'pending:' + crypto.randomUUID()
+      const generation =
+        record(derivedEid('harness-frontend|view'), 'frontend').generation
+      const submitted = record(derivedEid('harness-frontend|draft'), 'draft')
+      const id = crypto.randomUUID()
       mutate([{
         entity: { eid: id },
         pendingDraft: {
@@ -154,7 +174,10 @@ export let frontend = (vault: Vault | false = false): Frontend => {
           generation,
         },
       }])
-      mutate([{ entity: { eid: 'draft' }, draft: { text: '', at: 0 } }])
+      mutate([{
+        entity: { eid: derivedEid('harness-frontend|draft') },
+        draft: { text: '', at: 0 },
+      }])
       save()
       return {
         accepted: (session: string) => {
@@ -178,24 +201,32 @@ export let frontend = (vault: Vault | false = false): Frontend => {
             outstanding.close()
             if (
               selected() == null &&
-              generation === record('view', 'frontend').generation
+              generation ===
+                record(derivedEid('harness-frontend|view'), 'frontend')
+                  .generation
             ) {
-              const d = record('draft', 'draft')
+              const d = record(derivedEid('harness-frontend|draft'), 'draft')
               mutate([
                 {
                   entity: { eid: slot(session) },
                   savedDraft: {
                     ...d,
-                    mode: record('composer', 'composer').mode,
+                    mode: record(
+                      derivedEid('harness-frontend|composer'),
+                      'composer',
+                    ).mode,
                   },
                 },
                 {
                   entity: { eid: slot(null) },
                   savedDraft: { text: '', at: 0, mode: 'message' },
                 },
-                { entity: { eid: 'view' }, frontend: { selected: session } },
                 {
-                  entity: { eid: 'recovery' },
+                  entity: { eid: derivedEid('harness-frontend|view') },
+                  frontend: { selected: session },
+                },
+                {
+                  entity: { eid: derivedEid('harness-frontend|recovery') },
                   recovery: { selected: session },
                 },
               ])
@@ -205,7 +236,7 @@ export let frontend = (vault: Vault | false = false): Frontend => {
         failed: () => {
           const target = String(record(id, 'pendingDraft').owner ?? '') || null
           const d = target == selected()
-            ? record('draft', 'draft')
+            ? record(derivedEid('harness-frontend|draft'), 'draft')
             : record(slot(target), 'savedDraft')
           const text = [submitted.text, d.text].filter(Boolean).join('\n')
           mutate([{
@@ -220,16 +251,22 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     client: c,
     keyboard: c.watch('.keyboard'),
     keys: (fields: Record<string, string | boolean | number | null>) =>
-      mutate([{ entity: { eid: 'keyboard' }, keyboard: fields }]),
+      mutate([{
+        entity: { eid: derivedEid('harness-frontend|keyboard') },
+        keyboard: fields,
+      }]),
     visual: c.watch('.visual'),
     select: (state: import('@yaks/tui').VisualState) => {
       if (state.yank !== undefined) {
         mutate([{
-          entity: { eid: 'recovery' },
+          entity: { eid: derivedEid('harness-frontend|recovery') },
           recovery: { yank: state.yank },
         }])
       }
-      return mutate([{ entity: { eid: 'visual' }, visual: state }])
+      return mutate([{
+        entity: { eid: derivedEid('harness-frontend|visual') },
+        visual: state,
+      }])
     },
     view,
     draft,
@@ -249,28 +286,37 @@ export let frontend = (vault: Vault | false = false): Frontend => {
       if (switching) save()
       const result = mutate([
         ...Object.keys(selection).length
-          ? [{ entity: { eid: 'view' }, frontend: selection }]
+          ? [{
+            entity: { eid: derivedEid('harness-frontend|view') },
+            frontend: selection,
+          }]
           : [],
         ...next
           ? [
             {
-              entity: { eid: 'recovery' },
+              entity: { eid: derivedEid('harness-frontend|recovery') },
               recovery: { selected: destination ?? '' },
             },
             {
-              entity: { eid: 'draft' },
+              entity: { eid: derivedEid('harness-frontend|draft') },
               draft: { text: next.text ?? '', at: next.at ?? 0 },
             },
             {
-              entity: { eid: 'composer' },
+              entity: { eid: derivedEid('harness-frontend|composer') },
               composer: { mode: mode ?? next.mode ?? 'message' },
             },
           ]
           : mode !== undefined
-          ? [{ entity: { eid: 'composer' }, composer: { mode } }]
+          ? [{
+            entity: { eid: derivedEid('harness-frontend|composer') },
+            composer: { mode },
+          }]
           : [],
         ...error !== undefined
-          ? [{ entity: { eid: 'feedback' }, feedback: { error } }]
+          ? [{
+            entity: { eid: derivedEid('harness-frontend|feedback') },
+            feedback: { error },
+          }]
           : [],
       ])
       if (mode !== undefined) save()
@@ -278,7 +324,10 @@ export let frontend = (vault: Vault | false = false): Frontend => {
     },
     edit: (value: { text: string; at: number }) => {
       touched = true
-      const result = mutate([{ entity: { eid: 'draft' }, draft: value }])
+      const result = mutate([{
+        entity: { eid: derivedEid('harness-frontend|draft') },
+        draft: value,
+      }])
       save()
       return result
     },

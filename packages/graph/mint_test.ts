@@ -18,8 +18,10 @@ test('a generated id is told from a name somebody chose', () => {
   assert(!minted('lemon-cake'))
 })
 
-test('a generated child session id remains an identity without its source graph', () => {
-  assert(minted('child:3b21904a-b0fa-479b-8934-4286ae9c0cb1'))
-  assert(!minted('child:lemon-cake'))
-  assert(!minted('child:3b21904a-b0fa-479b-8934-4286ae9c0cb1-extra'))
+test('generated identities are UUIDs or full SHA addresses, never namespaced ids', () => {
+  assert(minted('3b21904a-b0fa-479b-8934-4286ae9c0cb1'))
+  assert(minted('a'.repeat(64)))
+  assert(!minted('a'.repeat(41)))
+  assert(!minted('child:3b21904a-b0fa-479b-8934-4286ae9c0cb1'))
+  assert(!minted('3b21904a-b0fa-479b-8934-4286ae9c0cb1:progress'))
 })

@@ -1,6 +1,7 @@
 /** Host composition: shared MCP connections, signed in through their connections. */
 import { graphMCP } from './mcp_registry.ts'
 import { toolName } from '@yaks/graph/call'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Harness } from './store.ts'
 import { type Tool, type ToolContext, ToolError } from '@yaks/session'
 import { artifactStore } from '@yaks/blob'
@@ -64,8 +65,9 @@ export const mcpTools = (
         if (call) {
           await g.apply([{
             entity: {
-              eid: 'mcp-attachment:' + call.call.entity.eid + ':' +
-                parts.length,
+              eid: derivedEid(
+                'mcp-attachment:' + call.call.entity.eid + ':' + parts.length,
+              ),
             },
             entry: { session: call.session },
             attachment: {

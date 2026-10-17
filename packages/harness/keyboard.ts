@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 /** Harness modes are graph state; the key interceptor and text surfaces are not. */
 import { h } from 'preact'
 import type { Comp } from '@yaks/graph'
@@ -117,16 +118,24 @@ export let Keyboard = ({ ui, action }: {
 }) => {
   let state = ui.keyboard.value[0].keyboard as Comp
   useKeymap((key) => {
-    let current = () => ui.client.ent('keyboard')!.keyboard as Comp
+    let current = () =>
+      ui.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp
     if (key.ctrl && key.text == 'c') return false
     if (
       key.ctrl && key.text == 'u' &&
       (current().mode == 'INSERT' ||
-        Boolean((ui.client.ent('visual')!.visual as VisualState).surface))
+        Boolean(
+          (ui.client.ent(derivedEid('harness-frontend|visual'))!
+            .visual as VisualState).surface,
+        ))
     ) {
-      let text = String((ui.client.ent('draft')!.draft as Comp).text ?? '')
+      let text = String(
+        (ui.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp)
+          .text ?? '',
+      )
       if (!text) return true
-      let visual = ui.client.ent('visual')!.visual as VisualState
+      let visual = ui.client.ent(derivedEid('harness-frontend|visual'))!
+        .visual as VisualState
       ui.select({ ...visual, yank: text })
       // Persist the recovery copy before requesting the clipboard or clearing input.
       try {
@@ -146,9 +155,11 @@ export let Keyboard = ({ ui, action }: {
     }
     if (key.alt && key.text == 'p') {
       const yank = String(
-        (ui.client.ent('visual')!.visual as VisualState).yank ?? '',
+        (ui.client.ent(derivedEid('harness-frontend|visual'))!
+          .visual as VisualState).yank ?? '',
       )
-      const draft = ui.client.ent('draft')!.draft as Comp
+      const draft = ui.client.ent(derivedEid('harness-frontend|draft'))!
+        .draft as Comp
       const text = String(draft.text ?? ''), at = Number(draft.at ?? 0)
       if (yank) {
         ui.edit({
@@ -162,10 +173,14 @@ export let Keyboard = ({ ui, action }: {
       return true
     }
     let s = current()
-    let visual = ui.client.ent('visual')!.visual as VisualState
+    let visual = ui.client.ent(derivedEid('harness-frontend|visual'))!
+      .visual as VisualState
     if (visual.surface) {
       visualKey(key)
-      if (!((ui.client.ent('visual')!.visual as VisualState).surface)) {
+      if (
+        !((ui.client.ent(derivedEid('harness-frontend|visual'))!
+          .visual as VisualState).surface)
+      ) {
         ui.keys({ mode: 'NORMAL', pending: '' })
       }
       return true
@@ -189,8 +204,10 @@ export let Keyboard = ({ ui, action }: {
     }
     if (s.models) return false
     if (key.name == 'escape') {
-      const session = (ui.client.ent('view')!.frontend as Comp).selected ??
-        'new'
+      const session =
+        (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+          .selected ??
+          'new'
       pressTo('transcript-' + session, key)
       ui.keys({
         mode: 'NORMAL',
@@ -203,7 +220,7 @@ export let Keyboard = ({ ui, action }: {
         // Keep the desired end position while a bounded transcript fetches its
         // tail. The list clamps these coordinates against the final entry.
         ui.client.mutate([{
-          entity: { eid: 'viewport-' + session },
+          entity: { eid: derivedEid('viewport-' + session) },
           viewport: {
             cursorRow: Number.MAX_SAFE_INTEGER,
             cursorCol: Number.MAX_SAFE_INTEGER,
@@ -220,7 +237,10 @@ export let Keyboard = ({ ui, action }: {
       // Preserve the previous explicit selection shortcut.
       if (key.alt && key.text == 'v') {
         beginVisual('input')
-        if ((ui.client.ent('visual')!.visual as VisualState).surface) {
+        if (
+          (ui.client.ent(derivedEid('harness-frontend|visual'))!
+            .visual as VisualState).surface
+        ) {
           ui.keys({ mode: 'VISUAL' })
         }
         return true
@@ -269,7 +289,8 @@ export let Keyboard = ({ ui, action }: {
       }
       if (
         text == 'P' &&
-        (ui.client.ent('view')!.frontend as Comp).selected == null
+        (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+            .selected == null
       ) {
         ui.keys({
           personas: true,
@@ -294,7 +315,8 @@ export let Keyboard = ({ ui, action }: {
       }
       if (text == 'i') {
         const selectedSession =
-          (ui.client.ent('view')!.frontend as Comp).selected ?? 'new'
+          (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+            .selected ?? 'new'
         pressTo('transcript-' + selectedSession, { name: 'escape' })
         ui.keys({ mode: 'INSERT', pending: '' })
         return true
@@ -307,7 +329,10 @@ export let Keyboard = ({ ui, action }: {
         return true
       }
       let id = 'transcript-' +
-        String((ui.client.ent('view')!.frontend as Comp).selected ?? 'new')
+        String(
+          (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+            .selected ?? 'new',
+        )
       if (k.name == 'enter' && s.focus == 'transcript') {
         ui.keys({
           detail: true,

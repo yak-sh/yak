@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 /**
  * A component's page (`_comp`, @yaks/vocab): what it is, its package, how many
  * entities carry it and how it is kept; its properties; the sets of
@@ -248,7 +249,7 @@ let Refers = (
     return [...by].toSorted(([, a], [, b]) => b - a)
   }
   let edge = (way: '→' | '←', [rel, n]: [string, number]): Tie => ({
-    entity: { eid: `${way} ${rel}` },
+    entity: { eid: derivedEid(`relation|${way}|${rel}`) },
     way,
     through: chip(io, rel),
     far: h(FarEnds, {

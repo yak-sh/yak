@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
@@ -139,7 +140,9 @@ test('worker frontend typing stays local after its subscribed view is ready', as
     await screen.send('draft stays here')
     assertEquals(r.traffic.sent, sent)
     assertEquals(
-      (local.client.ent('draft')!.draft as { text: string }).text,
+      (local.client.ent(derivedEid('harness-frontend|draft'))!.draft as {
+        text: string
+      }).text,
       'draft stays here',
     )
   } finally {

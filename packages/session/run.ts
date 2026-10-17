@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 // The runner: a transcript run until it has nothing more to do, in whichever
 // process claims the run. There is one runner, and it runs wherever the effects
 // role does — a box's `yak serve`, a command's duty thread, a store object on
@@ -252,12 +253,12 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
       entity: { eid: session },
       dispatch: { args: null },
     }, {
-      entity: { eid: `${session}:preparation-error` },
+      entity: { eid: derivedEid(`${session}:preparation-error`) },
       entry: { session },
       exception: exceptionOf(err),
       content: { body: String(err) },
     }, {
-      entity: { eid: `${session}:preparation-stop` },
+      entity: { eid: derivedEid(`${session}:preparation-stop`) },
       entry: { session },
       [STOP_ENTRY]: {},
     }], { trusted: true })
@@ -319,7 +320,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
     : []
   if (held.length && status != 'stopped') {
     await g.apply([{
-      entity: { eid: `${session}:cancelled` },
+      entity: { eid: derivedEid(`${session}:cancelled`) },
       entry: { session },
       [STOP_ENTRY]: {},
     }], { trusted: true })

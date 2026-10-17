@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { processProvider } from '@yaks/process/machine'
 // SQLite/runner integration tests; the fast-tier runner does not collect
 // packages. Deferred fake replies exercise concurrency without network calls.
@@ -346,7 +347,10 @@ test('tool admission serializes competing parents, replays a call once, and free
     content: { body: 'done' },
     output: { source: 'call1' },
   }])
-  assertEquals(await spawn.run({ prompt: 'two' }, ctx(2)), 'child:call2')
+  assertEquals(
+    await spawn.run({ prompt: 'two' }, ctx(2)),
+    derivedEid('child:call2'),
+  )
   h.close()
 })
 

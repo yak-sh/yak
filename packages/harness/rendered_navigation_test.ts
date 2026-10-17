@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { h, render } from 'preact'
@@ -63,7 +64,7 @@ test('NORMAL and VISUAL operate on rendered Markdown without replacing it; detai
   f.patch({ selected: 's' })
   f.keys({ mode: 'NORMAL', focus: 'transcript' })
   f.client.mutate([{
-    entity: { eid: 'viewport-s' },
+    entity: { eid: derivedEid('viewport-s') },
     viewport: { selected: 'e1', item: 'e1', offset: 0, follow: false },
   }])
   const ui = await mount(
@@ -78,12 +79,20 @@ test('NORMAL and VISUAL operate on rendered Markdown without replacing it; detai
     assert(ui.text().includes('bold and soft'), ui.text())
     assert(!ui.text().includes('**bold**'))
     await ui.send('vll')
-    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).mode, 'VISUAL')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .mode,
+      'VISUAL',
+    )
     assert(ui.text().includes('bold and soft'))
     assert(!ui.text().includes('**bold**'))
     await ui.send('y')
     assertEquals(copies, ['bol'])
-    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).mode, 'NORMAL')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .mode,
+      'NORMAL',
+    )
     await ui.send('\r')
     await settle()
     await ui.send('')
@@ -92,16 +101,24 @@ test('NORMAL and VISUAL operate on rendered Markdown without replacing it; detai
     await ui.send('\x1b')
     assert(!ui.text().includes('**bold**'))
     await ui.send('\x17l')
-    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).focus, 'sidebar')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .focus,
+      'sidebar',
+    )
     await ui.send('\x17h')
     assertEquals(
-      (f.client.ent('keyboard')!.keyboard as Comp).focus,
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .focus,
       'transcript',
     )
     await ui.send('i')
     const before = reads
     await ui.send('draft')
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'draft')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'draft',
+    )
     assertEquals(reads, before)
   } finally {
     setClipboard()
@@ -190,7 +207,7 @@ test('rendered cursor requests bounded neighboring windows and selects across ov
   f.patch({ selected: 's' })
   f.keys({ mode: 'NORMAL', focus: 'transcript' })
   f.client.mutate([{
-    entity: { eid: 'viewport-s' },
+    entity: { eid: derivedEid('viewport-s') },
     viewport: {
       selected: 'e0',
       item: 'e0',
@@ -221,7 +238,10 @@ test('rendered cursor requests bounded neighboring windows and selects across ov
     assert(copies[0]?.includes('row60'), String(copies))
     assert(copies[0]?.includes('row71'), String(copies))
     assert(requested.length < 20, JSON.stringify(requested))
-    assertEquals((f.client.ent('viewport-s')!.viewport as Comp).selected, 'e72')
+    assertEquals(
+      (f.client.ent(derivedEid('viewport-s'))!.viewport as Comp).selected,
+      'e72',
+    )
   } finally {
     setClipboard()
     ui.free()
@@ -272,7 +292,7 @@ test('INSERT Escape always selects the final rendered character, preserving the 
   f.patch({ selected: 's' })
   f.edit({ text: 'keep draft', at: 3 })
   f.client.mutate([{
-    entity: { eid: 'viewport-s' },
+    entity: { eid: derivedEid('viewport-s') },
     viewport: {
       selected: 'old',
       item: 'old',
@@ -293,21 +313,24 @@ test('INSERT Escape always selects the final rendered character, preserving the 
     await ui.send('\x1b')
     await settle()
     await ui.send('')
-    let point = f.client.ent('viewport-s')!.viewport as Comp
+    let point = f.client.ent(derivedEid('viewport-s'))!.viewport as Comp
     assertEquals([point.selected, point.cursorRow, point.cursorCol], [
       'last',
       1,
       14,
     ])
-    assertEquals(f.client.ent('draft')!.draft, { text: 'keep draft', at: 3 })
+    assertEquals(f.client.ent(derivedEid('harness-frontend|draft'))!.draft, {
+      text: 'keep draft',
+      at: 3,
+    })
     await ui.send('k')
     await ui.send('\x1b') // NORMAL Escape does not jump.
-    point = f.client.ent('viewport-s')!.viewport as Comp
+    point = f.client.ent(derivedEid('viewport-s'))!.viewport as Comp
     assertEquals(point.cursorRow, 0)
     await ui.send('i')
     await ui.send('\x1b')
     await ui.send('')
-    point = f.client.ent('viewport-s')!.viewport as Comp
+    point = f.client.ent(derivedEid('viewport-s'))!.viewport as Comp
     assertEquals([point.selected, point.cursorRow, point.cursorCol], [
       'last',
       1,
@@ -318,7 +341,7 @@ test('INSERT Escape always selects the final rendered character, preserving the 
     await ui.send('i')
     paged = true
     f.client.mutate([{
-      entity: { eid: 'viewport-s' },
+      entity: { eid: derivedEid('viewport-s') },
       viewport: {
         selected: 'old',
         item: 'old',
@@ -336,7 +359,7 @@ test('INSERT Escape always selects the final rendered character, preserving the 
     release()
     await settle()
     await ui.send('')
-    point = f.client.ent('viewport-s')!.viewport as Comp
+    point = f.client.ent(derivedEid('viewport-s'))!.viewport as Comp
     assertEquals([point.selected, point.cursorRow, point.cursorCol], [
       'last',
       1,

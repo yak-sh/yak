@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { identityEid } from '@yaks/graph'
@@ -144,7 +145,8 @@ test('mounted bounded transcript navigates beyond loaded edges and restores a de
     12,
   )
   let selected = () =>
-    (ui.client.ent('viewport-s')?.viewport as { selected?: string })?.selected
+    (ui.client.ent(derivedEid('viewport-s'))?.viewport as { selected?: string })
+      ?.selected
   try {
     await until(
       () => screen.text().includes('line 499'),
@@ -169,7 +171,10 @@ test('mounted bounded transcript navigates beyond loaded edges and restores a de
       'selection crosses initial page',
     )
     let anchor = {
-      ...(ui.client.ent('viewport-s')!.viewport as Record<string, unknown>),
+      ...(ui.client.ent(derivedEid('viewport-s'))!.viewport as Record<
+        string,
+        unknown
+      >),
     }
     ui.patch({ selected: 'other', generation: 1 })
     await until(
@@ -184,7 +189,8 @@ test('mounted bounded transcript navigates beyond loaded edges and restores a de
     pressTo('transcript-s', { name: 'end' })
     await until(() => screen.text().includes('line 499'), 'jump to actual end')
     assertEquals(
-      (ui.client.ent('viewport-s')!.viewport as { follow: boolean }).follow,
+      (ui.client.ent(derivedEid('viewport-s'))!.viewport as { follow: boolean })
+        .follow,
       true,
     )
     assert(maximum <= 64)

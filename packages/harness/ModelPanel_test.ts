@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import type { Comp } from '@yaks/graph'
 import { assert, assertEquals } from '@std/assert'
@@ -43,11 +44,14 @@ test('m chooses a model for a new draft; existing choice is passive, Esc preserv
     assert(terminal.text().includes('Enter choose'))
     await terminal.send('\r')
     await until(
-      () => !(ui.client.ent('keyboard')!.keyboard as Comp).models,
+      () =>
+        !(ui.client.ent(derivedEid('harness-frontend|keyboard'))!
+          .keyboard as Comp).models,
       'model chosen',
     )
     assertEquals(
-      (ui.client.ent('view')!.frontend as Comp).newModel,
+      (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+        .newModel,
       edgeEid(
         identityEid('provider', ['openrouter']),
         'serves',
@@ -60,22 +64,34 @@ test('m chooses a model for a new draft; existing choice is passive, Esc preserv
     await until(() => requests.length == 1, 'request')
     assertEquals(requests[0].model, 'a/model')
     await until(
-      () => !!(ui.client.ent('view')!.frontend as Comp).selected,
+      () =>
+        !!(ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+          .selected,
       'session selected',
     )
-    await a.idle(String((ui.client.ent('view')!.frontend as Comp).selected))
+    await a.idle(
+      String(
+        (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+          .selected,
+      ),
+    )
     await terminal.send('untouched')
     await terminal.send('\x1b')
     await terminal.send('m')
     await until(() => terminal.text().includes('Enter choose'), 'reopen')
     await terminal.send('j')
     await terminal.send('\x1b')
-    assertEquals((ui.client.ent('draft')!.draft as Comp).text, 'untouched')
+    assertEquals(
+      (ui.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'untouched',
+    )
     assertEquals(requests.length, 1)
     await terminal.send('m')
     await terminal.send('j\r')
     await until(
-      () => !(ui.client.ent('keyboard')!.keyboard as Comp).models,
+      () =>
+        !(ui.client.ent(derivedEid('harness-frontend|keyboard'))!
+          .keyboard as Comp).models,
       'switch model',
     )
     assertEquals(requests.length, 1)
@@ -121,11 +137,20 @@ test('model row mouse selection preserves INSERT and does not submit a draft', a
         (y + 1) + 'm',
     )
     await until(
-      () => !(ui.client.ent('keyboard')!.keyboard as Comp).models,
+      () =>
+        !(ui.client.ent(derivedEid('harness-frontend|keyboard'))!
+          .keyboard as Comp).models,
       'clicked',
     )
-    assertEquals((ui.client.ent('draft')!.draft as Comp).text, 'keep me')
-    assertEquals((ui.client.ent('keyboard')!.keyboard as Comp).mode, 'INSERT')
+    assertEquals(
+      (ui.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'keep me',
+    )
+    assertEquals(
+      (ui.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .mode,
+      'INSERT',
+    )
     assertEquals(requests, 0)
   } finally {
     terminal.free()

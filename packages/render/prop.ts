@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 /**
  * A vocabulary property as a matchable bundle. This is a projection for
  * selection, never a stored entity: editors receive the original bundle and
@@ -39,7 +40,7 @@ export let projection = (vocab: Vocab, ctx: Context): Bundle => {
   if (type == 'text') type = 'string'
   if (type == 'bool') type = 'boolean'
   return {
-    entity: { eid: `${comp}.${prop}` },
+    entity: { eid: derivedEid(`prop|${comp}|${prop}`) },
     prop: { comp, prop, type, ref: schema.ref },
   }
 }

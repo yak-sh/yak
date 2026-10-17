@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 // Run recovery with the core marks loaded: dispatch is an envelope, not a
 // second stored status, and a terminal transcript must be delivered before
 // its envelope disappears.
@@ -165,7 +166,7 @@ let output = (eid: string): Bundle => ({
 for (let mark of ['queued', 'admitted', 'waiting']) {
   test(`a terminal ${mark} marks-only child delivers before removing its envelope`, async () => {
     let observed: string[] = []
-    let receipt = 'delivery:finished:finished:output'
+    let receipt = derivedEid('delivery:finished:finished:output')
     let p = fixture([
       ...child('finished', 7),
       ...mark == 'queued' ? [] : [{

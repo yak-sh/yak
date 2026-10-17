@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 /** Authorization input is private component memory, deliberately outside draft/graph persistence. */
 import { h } from 'preact'
 import { useLayoutEffect, useMemo } from 'preact/hooks'
@@ -104,7 +105,8 @@ export const MCPAuthPanel = (
   useKeymap((key) => {
     const s = state.value
     if (!s.open) {
-      const mode = (ui.client.ent('keyboard')?.keyboard as Comp)?.mode
+      const mode = (ui.client.ent(derivedEid('harness-frontend|keyboard'))
+        ?.keyboard as Comp)?.mode
       if (
         mode !== 'NORMAL' || key.text !== 'A' || key.ctrl || key.alt ||
         !agent.authorizeMCP

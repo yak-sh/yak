@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { ModelPanel } from './ModelPanel.ts'
 import { PersonaPanel } from './PersonaPanel.ts'
 import { MCPAuthPanel } from './MCPAuthPanel.ts'
@@ -94,11 +95,15 @@ export let App = (
   // in the frontend graph; this map only serializes concurrent submissions.
   let pending = useMemo(() => new Map<string, Promise<Eid>>(), [])
   let current = () => {
-    let value = ui.client.ent('view')!.frontend as Comp
+    let value = ui.client.ent(derivedEid('harness-frontend|view'))!
+      .frontend as Comp
     return {
       id: value.selected == null ? undefined : String(value.selected),
       generation: Number(value.generation),
-      mode: String((ui.client.ent('composer')!.composer as Comp).mode),
+      mode: String(
+        (ui.client.ent(derivedEid('harness-frontend|composer'))!
+          .composer as Comp).mode,
+      ),
       showSettled: Boolean(value.showSettled),
       showArchived: Boolean(value.showArchived),
       browse: Boolean(value.browse),
@@ -183,7 +188,9 @@ export let App = (
     let alive = true, dirty = false, busy = false
     const active = () =>
       alive &&
-      !(ui.client.ent('view')?.frontend as Comp | undefined)?.shuttingDown
+      !(ui.client.ent(derivedEid('harness-frontend|view'))?.frontend as
+        | Comp
+        | undefined)?.shuttingDown
     // Transcript publication must not wait for sidebar projections or a quiet
     // database. Other sessions can keep producing changes indefinitely.
     let transcriptDirty = false, transcriptBusy = false
@@ -194,9 +201,10 @@ export let App = (
         while (active() && transcriptDirty) {
           transcriptDirty = false
           let s = current()
-          let position = ui.client.ent('viewport-' + s.id)?.viewport as
-            | Comp
-            | undefined
+          let position = ui.client.ent(derivedEid('viewport-' + s.id))
+            ?.viewport as
+              | Comp
+              | undefined
           let options: TranscriptWindow = position?.windowEdge
             ? { edge: position.windowEdge as 'start' | 'end' }
             : {
@@ -218,7 +226,7 @@ export let App = (
             if (position?.windowLoading) {
               let edge = position.windowEdge
               ui.client.mutate([{
-                entity: { eid: 'viewport-' + s.id },
+                entity: { eid: derivedEid('viewport-' + s.id) },
                 viewport: {
                   windowLoading: false,
                   windowAnchor: null,
@@ -377,7 +385,10 @@ export let App = (
     if (k.alt && k.text == 'a') {
       let root = rows.find((b) =>
         b.entity.eid ==
-          String((ui.client.ent('view')!.frontend as Comp).sidebar ?? state.id)
+          String(
+            (ui.client.ent(derivedEid('harness-frontend|view'))!
+              .frontend as Comp).sidebar ?? state.id,
+          )
       )
       if (root && a.archive) {
         let archiving = !root.archived
@@ -418,7 +429,8 @@ export let App = (
         }))
       )
       const cursor = String(
-        (ui.client.ent('view')!.frontend as Comp).sidebar ?? state.id ?? 'new',
+        (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+          .sidebar ?? state.id ?? 'new',
       )
       const at = choices.findIndex((r) => r.id == cursor)
       const height = metrics.value[choices[at]?.viewport ?? '']?.height ??
@@ -481,12 +493,16 @@ export let App = (
       : s.id
       ? send(s.id)
       : a.start(text, {
-        model: (ui.client.ent('view')!.frontend as Comp).newModel as
-          | string
-          | undefined,
-        persona: (ui.client.ent('view')!.frontend as Comp).newPersona as
-          | string
-          | undefined,
+        model:
+          (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+            .newModel as
+              | string
+              | undefined,
+        persona:
+          (ui.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+            .newPersona as
+              | string
+              | undefined,
       })
     pending.set(key, write)
     void write.then((id) => {
@@ -582,7 +598,9 @@ export let App = (
 
 let Visual = ({ ui }: { ui: Frontend }) => {
   useVisualController(
-    () => ui.client.ent('visual')!.visual as VisualState,
+    () =>
+      ui.client.ent(derivedEid('harness-frontend|visual'))!
+        .visual as VisualState,
     ui.select,
   )
   let value = ui.visual.value[0].visual as VisualState
@@ -628,16 +646,20 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
   items: { id: string; bundle: Bundle }[]
   agent: UIAgent
 }) => {
-  let viewport = useMemo(() => ui.viewport('viewport-' + id), [ui, id])
+  let viewport = useMemo(() => ui.viewport(derivedEid('viewport-' + id)), [
+    ui,
+    id,
+  ])
   useLayoutEffect(() => () => viewport.watch.close(), [viewport])
-  let position = (viewport.watch.value[0] ?? ui.client.ent('viewport-' + id))
-    ?.viewport as Comp | undefined
+  let position =
+    (viewport.watch.value[0] ?? ui.client.ent(derivedEid('viewport-' + id)))
+      ?.viewport as Comp | undefined
   return h(VirtualList<{ id: string; bundle: Bundle }>, {
     id: 'transcript-' + id,
     range: page,
     onRange: (request: { edge?: 'start' | 'end'; anchor?: string }) => {
       ui.client.mutate([{
-        entity: { eid: 'viewport-' + id },
+        entity: { eid: derivedEid('viewport-' + id) },
         viewport: {
           windowLoading: true,
           windowAnchor: request.anchor ?? null,
@@ -653,8 +675,10 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
         },
       }])
       ui.patch({
-        generation:
-          Number((ui.client.ent('view')!.frontend as Comp).generation) + 1,
+        generation: Number(
+          (ui.client.ent(derivedEid('harness-frontend|view'))!
+            .frontend as Comp).generation,
+        ) + 1,
       })
       load()
     },
@@ -696,14 +720,14 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
     onCursor: (point) => {
       // A page result can update selection before Preact replaces the old
       // layout. Do not let that layout overwrite the newly selected tail.
-      const current = ui.client.ent('viewport-' + id)?.viewport as
+      const current = ui.client.ent(derivedEid('viewport-' + id))?.viewport as
         | Comp
         | undefined
       if (current?.windowLoading || current?.selected !== position?.selected) {
         return
       }
       ui.client.mutate([{
-        entity: { eid: 'viewport-' + id },
+        entity: { eid: derivedEid('viewport-' + id) },
         viewport: {
           selected: point.id,
           cursorRow: point.row,
@@ -720,7 +744,10 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
         ui.keys({ clipboard: text })
         return
       }
-      ui.client.mutate([{ entity: { eid: 'visual' }, visual: { yank: text } }])
+      ui.client.mutate([{
+        entity: { eid: derivedEid('harness-frontend|visual') },
+        visual: { yank: text },
+      }])
       const copied = copyText(text)
       ui.keys({
         clipboard: copied
@@ -732,7 +759,7 @@ let Transcript = ({ ui, id, items, agent, pending, page, load }: {
     selectionClass: 'List_Selected',
     onSelect: (selected: string) =>
       ui.client.mutate([{
-        entity: { eid: 'viewport-' + id },
+        entity: { eid: derivedEid('viewport-' + id) },
         viewport: { selected },
       }]),
     textOf: (item: { bundle: Bundle }) =>
@@ -777,7 +804,9 @@ const EntryDetail = ({ ui, agent }: { ui: Frontend; agent: UIAgent }) => {
     | string
     | undefined
   const viewport = session
-    ? ui.client.ent('viewport-' + session)?.viewport as Comp | undefined
+    ? ui.client.ent(derivedEid('viewport-' + session))?.viewport as
+      | Comp
+      | undefined
     : undefined
   const eid = viewport?.selected as string | undefined
   useLayoutEffect(() => {

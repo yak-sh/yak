@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 import { test } from '@yaks/testing'
 import { frontend } from './frontend.ts'
 import { assert, assertEquals } from '@std/assert'
@@ -163,9 +164,20 @@ test('selected session opens alone and the browser requests one page at a time',
     assertEquals(asked.at(-1), undefined)
     await ui.send('\x17l') // focus sidebar
     await ui.send('jjj') // browse -> s1 -> s2 -> s3
-    await until(() => (f.client.ent('view')!.frontend as Comp).selected == 's3')
-    assertEquals((f.client.ent('view')!.frontend as Comp).browse, true)
-    assertEquals((f.client.ent('view')!.frontend as Comp).sidebar, 's3')
+    await until(() =>
+      (f.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+        .selected == 's3'
+    )
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+        .browse,
+      true,
+    )
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+        .sidebar,
+      's3',
+    )
     await ui.send('>')
     await until(() => asked.includes('s20'))
     await ui.send('<')
@@ -638,7 +650,9 @@ test('tree navigation skips children between roots and archive toggles stay in g
     130,
     40,
   )
-  let selected = () => (state.client.ent('view')!.frontend as Comp).selected
+  let selected = () =>
+    (state.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+      .selected
   try {
     await settle()
     await ui.send('\x0e')
@@ -667,7 +681,11 @@ test('tree navigation skips children between roots and archive toggles stay in g
     await settle()
     assertEquals(sessions[0].archived, undefined)
     await ui.send('hjkl') // never steal plain vim letters from the editor
-    assertEquals((state.client.ent('draft')!.draft as Comp).text, 'hjkl')
+    assertEquals(
+      (state.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp)
+        .text,
+      'hjkl',
+    )
   } finally {
     ui.free()
     state.close()
@@ -711,28 +729,37 @@ test('session return preserves detached anchors through loading; Ctrl+End follow
     await settle()
     assert(ui.text().includes('a-line-99'), ui.text())
     await ui.send('\x1b[5~')
-    let saved = { ...f.client.ent('viewport-a')!.viewport as Comp }
+    let saved = { ...f.client.ent(derivedEid('viewport-a'))!.viewport as Comp }
     assertEquals(saved.follow, false)
     await ui.send('\x0e')
     assert(ui.text().includes('b-line-99'), ui.text())
     waiting = deferred<Bundle[]>()
     await ui.send('\x10')
     await settle()
-    assertEquals(f.client.ent('viewport-a')!.viewport, saved)
+    assertEquals(f.client.ent(derivedEid('viewport-a'))!.viewport, saved)
     assert(ui.text().includes('b-line-99'), ui.text())
     assert(ui.text().includes('Harness — b · Loading a…'), ui.text())
     assert(ui.text().includes('█'), ui.text())
     waiting.resolve(entries('a'))
     await settle()
-    assertEquals(f.client.ent('viewport-a')!.viewport, saved)
+    assertEquals(f.client.ent(derivedEid('viewport-a'))!.viewport, saved)
     await ui.send('draft\x1b[1;5F')
-    assertEquals((f.client.ent('viewport-a')!.viewport as Comp).follow, true)
+    assertEquals(
+      (f.client.ent(derivedEid('viewport-a'))!.viewport as Comp).follow,
+      true,
+    )
     assert(ui.text().includes('a-line-99'), ui.text())
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'draft')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'draft',
+    )
     waiting = undefined
     await ui.send('\x0e\x10')
     await settle()
-    assertEquals((f.client.ent('viewport-a')!.viewport as Comp).follow, true)
+    assertEquals(
+      (f.client.ent(derivedEid('viewport-a'))!.viewport as Comp).follow,
+      true,
+    )
     assert(ui.text().includes('a-line-99'), ui.text())
   } finally {
     ui.free()
@@ -888,7 +915,9 @@ test('Ctrl directions navigate visual rows and spatial focus; legacy Enter and B
     120,
     40,
   )
-  let selected = () => (f.client.ent('view')!.frontend as Comp).selected
+  let selected = () =>
+    (f.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+      .selected
   let key = async (code: number) => {
     await ui.send('\x1b[' + code + ';5u')
     await settle()
@@ -902,7 +931,11 @@ test('Ctrl directions navigate visual rows and spatial focus; legacy Enter and B
     assert(!ui.text().includes('▾'))
     await key(108)
     assertEquals(selected(), 'root')
-    assertEquals((f.client.ent('keyboard')!.keyboard as Comp).focus, 'sidebar')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .focus,
+      'sidebar',
+    )
     await key(106)
     assertEquals(selected(), 'a')
     await key(106)
@@ -914,20 +947,30 @@ test('Ctrl directions navigate visual rows and spatial focus; legacy Enter and B
     await key(104)
     assertEquals(selected(), 'aa')
     assertEquals(
-      (f.client.ent('keyboard')!.keyboard as Comp).focus,
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))!.keyboard as Comp)
+        .focus,
       'transcript',
     )
     await ui.send('xy\x08')
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'x')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'x',
+    )
     await ui.send('\n')
     await settle()
     assertEquals(sent, ['x'])
     assertEquals(selected(), 'aa')
     await ui.send('preserve')
     await key(107)
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, '')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      '',
+    )
     f.patch({ selected: 'aa' })
-    assertEquals((f.client.ent('draft')!.draft as Comp).text, 'preserve')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))!.draft as Comp).text,
+      'preserve',
+    )
     assert(
       ui.out.join('').includes('48;2;52;63;68'),
       'selected background reaches ANSI',
@@ -972,7 +1015,9 @@ test('sidebar selectable contributions follow visual order and archive only sele
     120,
     40,
   )
-  const cursor = () => (f.client.ent('view')!.frontend as Comp).sidebar
+  const cursor = () =>
+    (f.client.ent(derivedEid('harness-frontend|view'))!.frontend as Comp)
+      .sidebar
   try {
     await settle()
     await ui.send('\x1bl') // legacy unrelated key stays editing; use NORMAL below
@@ -1038,25 +1083,53 @@ test('mouse clicks preserve mode while selecting sessions and new session', asyn
     )
     await settle()
   }
-  const mode = () => (f.client.ent('keyboard')?.keyboard as Comp)?.mode
+  const mode = () =>
+    (f.client.ent(derivedEid('harness-frontend|keyboard'))?.keyboard as Comp)
+      ?.mode
   try {
     await settle()
     await ui.send('unsent')
     assertEquals(mode(), 'INSERT')
     await click('s1')
     assertEquals(mode(), 'INSERT')
-    assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's1')
-    assertEquals((f.client.ent('keyboard')?.keyboard as Comp)?.focus, 'sidebar')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|view'))?.frontend as Comp)
+        ?.selected,
+      's1',
+    )
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|keyboard'))?.keyboard as Comp)
+        ?.focus,
+      'sidebar',
+    )
     await click('s2')
     assertEquals(mode(), 'INSERT')
-    assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, 's2')
-    assertEquals((f.client.ent('view')?.frontend as Comp)?.sidebar, 's2')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|view'))?.frontend as Comp)
+        ?.selected,
+      's2',
+    )
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|view'))?.frontend as Comp)
+        ?.sidebar,
+      's2',
+    )
     await click('New session')
     assertEquals(mode(), 'INSERT')
-    assertEquals((f.client.ent('view')?.frontend as Comp)?.selected, null)
-    assertEquals((f.client.ent('draft')?.draft as Comp)?.text, 'unsent')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|view'))?.frontend as Comp)
+        ?.selected,
+      null,
+    )
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))?.draft as Comp)?.text,
+      'unsent',
+    )
     await ui.send(' more')
-    assertEquals((f.client.ent('draft')?.draft as Comp)?.text, 'unsent more')
+    assertEquals(
+      (f.client.ent(derivedEid('harness-frontend|draft'))?.draft as Comp)?.text,
+      'unsent more',
+    )
     f.keys({ mode: 'NORMAL' })
     await settle()
     for (const label of ['s1', 's2', 'New session']) {
