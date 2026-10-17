@@ -1,9 +1,13 @@
 // Context that only reads a local transcript must not open the graph or wait
 // behind its writers. SessionStart still delegates to the ordinary tool.
-import type { CliFacet } from '@yaks/cli/host'
 import { promptContext, promptHook } from './prompt.ts'
 
-export let tools: NonNullable<CliFacet['tools']> = {
+export let tools: {
+  session_context: (
+    args: Record<string, unknown>,
+    context: { json: boolean; out: (text: string) => void },
+  ) => number | undefined
+} = {
   session_context: (args, context) => {
     // Structured output retains the ordinary tool runner's bundle contract.
     if (context.json) return undefined

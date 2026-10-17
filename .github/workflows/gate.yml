@@ -18,6 +18,12 @@
 # sandboxes' scopes. `runs-on` names the custom label `yak`, so a workflow can
 # never silently fall back to a hosted runner.
 #
+# Timing runs on CPUs 0-1,6-7 (two complete SMT cores). Explicit
+# lxc.cgroup2.cpuset.cpus entries in pve's LXC configs keep its balancer
+# from moving them: the other running containers use only 2-5,8-11.
+# Both the container root and /ns cgroups carry that affinity. Keeping
+# siblings together prevents agent work from stealing the measured core.
+#
 #   ssh pve 'pct exec 112 -- systemctl status actions.runner.yak-sh-yak.gh-runner-yak'
 #   gh api repos/yak-sh/yak/actions/runners   # does GitHub agree
 #
