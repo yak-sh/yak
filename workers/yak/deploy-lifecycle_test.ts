@@ -117,7 +117,7 @@ test('deploy reload marks survive recording, and pointer notices follow the comm
 })
 
 for (let mode of ['network', 'non-ok']) {
-  test(`a ${mode} release notice cannot fail a committed deploy`, async () => {
+  let history = await (async () => {
     await using scenario = platform('reload-secret')
     let store = scenario.env.STORE as unknown as Namespace
     let notices = 0
@@ -138,9 +138,10 @@ for (let mode of ['network', 'non-ok']) {
     await f.write('one')
     await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
     await until(() => notices == 1)
-    assertEquals((await f.history()).map((v) => [v.version, v.reload]), [
-      [1, 'required'],
-    ])
+    return (await f.history()).map((v) => [v.version, v.reload])
+  })()
+  test(`a ${mode} release notice cannot fail a committed deploy`, () => {
+    assertEquals(history, [[1, 'required']])
   })
 }
 
@@ -156,7 +157,8 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
   assertEquals(reported, 1)
 })
 
-test('updates carry every crossed required source mark but exclude the installed and later releases', async () => {
+// Capture every intermediate update before later releases move its pointer.
+let crossed = await (async () => {
   await using scenario = platform('reload-secret')
   let f = await fixture(scenario.env)
   // The source accepted this vocabulary before the platform reserved cost.
@@ -222,13 +224,13 @@ test('updates carry every crossed required source mark but exclude the installed
   await deploy(2)
   await publish()
   await update()
-  assertEquals((await installed())[0].reload, null)
+  let optional = (await installed())[0].reload
   await deploy(3, 'required')
   await deploy(4, 'optional')
   await publish()
   await deploy(5, 'required') // not offered: outside the crossed interval
   await update()
-  assertEquals((await installed())[0].reload, 'required')
+  let required = (await installed())[0].reload
   // Remove only the intermediate mark: neither the old pin nor unoffered v5
   // can supply required when the installed pin crosses the same interval again.
   let source = await f.history()
@@ -258,21 +260,18 @@ test('updates carry every crossed required source mark but exclude the installed
   }
   await remove()
   await update()
-  assertEquals((await installed())[0].reload, null)
+  let unmarked = (await installed())[0].reload
   // Removing an empty word and restoring the kept release must admit that
   // release's declaration again, without changing any version or file.
   let before = await installed()
   await remove()
   await call(f.ctx, 'app_rollback', { ...copy, version: 1 })
-  assertEquals((await installed()).slice(1), before)
-  assertEquals(
-    (await call(f.ctx, 'app_files', {
-      ...copy,
-      op: 'read',
-      path: 'vocab.json',
-    })).text,
-    words,
-  )
+  let after = (await installed()).slice(1)
+  let restoredWords = (await call(f.ctx, 'app_files', {
+    ...copy,
+    op: 'read',
+    path: 'vocab.json',
+  })).text
   let store = appStore(
     scenario.env.STORE,
     space,
@@ -286,9 +285,30 @@ test('updates carry every crossed required source mark but exclude the installed
       cost: { euros: 12 },
     }]),
   }, by)
-  assertEquals(wrote.status, 200, await wrote.text())
+  let write = { status: wrote.status, body: await wrote.text() }
   let read = await store('/query?q=.cost.euros=12', {}, by)
-  assertEquals((await read.json())[0].cost, { euros: 12 })
+  let cost = (await read.json())[0].cost
+  return {
+    optional,
+    required,
+    unmarked,
+    before,
+    after,
+    restoredWords,
+    words,
+    write,
+    cost,
+  }
+})()
+
+test('updates carry every crossed required source mark but exclude the installed and later releases', () => {
+  assertEquals(crossed.optional, null)
+  assertEquals(crossed.required, 'required')
+  assertEquals(crossed.unmarked, null)
+  assertEquals(crossed.after, crossed.before)
+  assertEquals(crossed.restoredWords, crossed.words)
+  assertEquals(crossed.write.status, 200, crossed.write.body)
+  assertEquals(crossed.cost, { euros: 12 })
 })
 
 // Each module load owns its two kept releases. Only pointer changes, reports
@@ -455,7 +475,7 @@ test('worker errors after rollback and an in-flight pointer move name the routed
   assertEquals(errors.includes('v2'), false, errors)
 })
 
-test('legacy source-less rollback keeps deploy rows unchanged and remains undoable', async () => {
+let legacyRollback = await (async () => {
   await using scenario = platform('rollback-legacy')
   let f = await fixture(scenario.env)
   await f.write('one')
@@ -471,10 +491,17 @@ test('legacy source-less rollback keeps deploy rows unchanged and remains undoab
   })
   let before = await f.history()
   await call(f.ctx, 'app_rollback', { ...f.args, version: 1 })
-  assertEquals(await f.history(), before)
+  let first = await f.history()
   await call(f.ctx, 'app_rollback', { ...f.args, version: 2 })
-  assertEquals(await f.history(), before)
+  let second = await f.history()
   await f.write('three')
   await call(f.ctx, 'app_deploy', f.args)
-  assertEquals((await f.history()).slice(1), before)
+  let third = (await f.history()).slice(1)
+  return { before, first, second, third }
+})()
+
+test('legacy source-less rollback keeps deploy rows unchanged and remains undoable', () => {
+  assertEquals(legacyRollback.first, legacyRollback.before)
+  assertEquals(legacyRollback.second, legacyRollback.before)
+  assertEquals(legacyRollback.third, legacyRollback.before)
 })

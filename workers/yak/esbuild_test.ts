@@ -5,7 +5,13 @@
 // test says it compiled; @yaks/esbuild's own tests hold the plan and the
 // compile.
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertStringIncludes,
+} from '@std/assert'
 import type { Answer, Ask } from '@yaks/esbuild'
 import catalog from './public/_compiler/packages.json' with { type: 'json' }
 import * as apps from './apps.ts'
@@ -168,7 +174,9 @@ test('TypeScript and npm imports compile at deploy, and serve as JavaScript', as
   assert(await s.seconds() >= 1)
 })
 
-test('a deploy reuses unchanged compiled entries', async () => {
+// Run each deployment history once per module load; timed cases check the
+// observations captured before the next edit changes the app.
+let reuse = await (async () => {
   await using s = await scenario(compiles)
   await s.write({
     'index.html': PAGE,
@@ -189,36 +197,65 @@ test('a deploy reuses unchanged compiled entries', async () => {
   }) as typeof s.env.BLOBS.get
   await s.write({ 'style.css': 'body { color: red }' })
   await s.tool('app_deploy')
-  assertEquals(s.asks.length, 1)
-  assertEquals(sourceReads, [])
-  assertEquals(await s.seconds(), spent)
-  assertEquals(await s.served('main.ts'), served)
-  assertEquals(
-    await (s.uploads.at(-1)!.get('worker.js') as File).text(),
-    worker,
-  )
+  let unchanged = {
+    asks: s.asks.length,
+    sourceReads: [...sourceReads],
+    spent: await s.seconds(),
+    served: await s.served('main.ts'),
+    worker: await (s.uploads.at(-1)!.get('worker.js') as File).text(),
+  }
 
   await s.write({ 'main.ts': 'let n: number = 2' })
   await s.tool('app_deploy')
-  assertEquals(s.asks.length, 2)
-  assertEquals(s.asks.at(-1)?.worker, undefined)
-  assertEquals(s.asks.at(-1)?.pages, ['main.ts'])
-  assertEquals(
-    await (s.uploads.at(-1)!.get('worker.js') as File).text(),
-    worker,
-  )
+  let pageChanged = {
+    asks: s.asks.length,
+    ask: s.asks.at(-1)!,
+    worker: await (s.uploads.at(-1)!.get('worker.js') as File).text(),
+  }
 
   await s.write({
     'worker.ts': 'export default { fetch: () => new Response("two") }',
   })
   await s.tool('app_deploy')
-  assertEquals(s.asks.at(-1)?.worker?.entry, 'worker.ts')
-  assertEquals(s.asks.at(-1)?.pages, [])
+  let workerChanged = s.asks.at(-1)!
 
   s.env.CF_VERSION_METADATA = { id: 'new compiler' }
   await s.tool('app_deploy')
-  assertEquals(s.asks.at(-1)?.worker?.entry, 'worker.ts')
-  assertEquals(s.asks.at(-1)?.pages, ['main.ts'])
+  let compilerChanged = s.asks.at(-1)!
+  return {
+    served,
+    worker,
+    spent,
+    unchanged,
+    pageChanged,
+    workerChanged,
+    compilerChanged,
+  }
+})()
+
+test('a deploy reuses unchanged compiled entries', () => {
+  let {
+    served,
+    worker,
+    spent,
+    unchanged,
+    pageChanged,
+    workerChanged,
+    compilerChanged,
+  } = reuse
+  assertEquals(unchanged.asks, 1)
+  assertEquals(unchanged.sourceReads, [])
+  assertEquals(unchanged.spent, spent)
+  assertEquals(unchanged.served, served)
+  assertEquals(unchanged.worker, worker)
+  assertEquals(pageChanged.asks, 2)
+  assertEquals(pageChanged.ask.worker, undefined)
+  assertEquals(pageChanged.ask.pages, ['main.ts'])
+  assertEquals(pageChanged.worker, worker)
+  assertEquals(workerChanged.worker?.entry, 'worker.ts')
+  assertEquals(workerChanged.pages, [])
+  assertEquals(compilerChanged.worker?.entry, 'worker.ts')
+  assertEquals(compilerChanged.pages, ['main.ts'])
 })
 
 test('a changed lock or previously plain script replans a release', async () => {
@@ -243,7 +280,7 @@ test('a changed lock or previously plain script replans a release', async () => 
   assertEquals(s.asks.at(-1)?.pages, ['plain.js'])
 })
 
-test('a compile that fails refuses the deploy, and the last release serves', async () => {
+let failedCompile = await (async () => {
   let broken = false
   await using s = await scenario((ask) =>
     broken
@@ -254,15 +291,23 @@ test('a compile that fails refuses the deploy, and the last release serves', asy
   await s.tool('app_deploy')
   broken = true
   await s.write({ 'main.ts': 'let n number = 1' })
-  await assertRejects(
-    () => s.tool('app_deploy'),
-    Error,
+  let refusal = await s.tool('app_deploy').then(
+    () => null,
+    (error: unknown) => error,
+  )
+  return { refusal, served: (await s.served('main.ts')).body }
+})()
+
+test('a compile that fails refuses the deploy, and the last release serves', () => {
+  assertInstanceOf(failedCompile.refusal, Error)
+  assertStringIncludes(
+    failedCompile.refusal.message,
     'main.ts:1:9: Expected ";" but found "number"',
   )
-  assertEquals((await s.served('main.ts')).body, '/* main.ts */')
+  assertEquals(failedCompile.served, '/* main.ts */')
 })
 
-test('draft files stay private through a refused deploy and rollback', async () => {
+let privateDraft = await (async () => {
   let broken = false
   await using s = await scenario((ask) =>
     broken ? { errors: ['main.ts cannot compile'] } : compiles(ask)
@@ -274,26 +319,52 @@ test('draft files stay private through a refused deploy and rollback', async () 
     'index.html': page('second'),
     'main.ts': 'let n: number = 2',
   })
-  assert((await s.served('index.html')).body.includes('first'))
-  assertEquals(
-    await s.tool('app_files', { op: 'read', path: 'index.html' }),
-    page('second'),
-  )
+  let draft = {
+    served: (await s.served('index.html')).body,
+    file: await s.tool('app_files', { op: 'read', path: 'index.html' }),
+  }
   await s.tool('app_deploy')
   broken = true
   await s.write({ 'index.html': page('candidate'), 'main.ts': 'let n number' })
-  assert((await s.served('index.html')).body.includes('second'))
-  await assertRejects(() => s.tool('app_deploy'), Error, 'cannot compile')
-  assert((await s.served('index.html')).body.includes('second'))
-  assertEquals((await s.served('main.ts')).body, '/* main.ts */')
-  assert((await s.tool('app_versions')).includes('2 versions'))
+  let candidate = (await s.served('index.html')).body
+  let refusal = await s.tool('app_deploy').then(
+    () => null,
+    (error: unknown) => error,
+  )
+  let refused = {
+    served: (await s.served('index.html')).body,
+    script: (await s.served('main.ts')).body,
+    versions: await s.tool('app_versions'),
+  }
   broken = false
   await s.tool('app_deploy')
-  assert((await s.served('index.html')).body.includes('candidate'))
-  assert((await s.tool('app_versions')).includes('3 versions'))
+  let accepted = {
+    served: (await s.served('index.html')).body,
+    versions: await s.tool('app_versions'),
+  }
   await s.tool('app_rollback', { version: 2 })
-  assert((await s.served('index.html')).body.includes('second'))
-  assert((await s.tool('app_versions')).includes('3 versions'))
+  let rolledBack = {
+    served: (await s.served('index.html')).body,
+    versions: await s.tool('app_versions'),
+  }
+  return { page, draft, candidate, refusal, refused, accepted, rolledBack }
+})()
+
+test('draft files stay private through a refused deploy and rollback', () => {
+  let { page, draft, candidate, refusal, refused, accepted, rolledBack } =
+    privateDraft
+  assert(draft.served.includes('first'))
+  assertEquals(draft.file, page('second'))
+  assert(candidate.includes('second'))
+  assertInstanceOf(refusal, Error)
+  assertStringIncludes(refusal.message, 'cannot compile')
+  assert(refused.served.includes('second'))
+  assertEquals(refused.script, '/* main.ts */')
+  assert(refused.versions.includes('2 versions'))
+  assert(accepted.served.includes('candidate'))
+  assert(accepted.versions.includes('3 versions'))
+  assert(rolledBack.served.includes('second'))
+  assert(rolledBack.versions.includes('3 versions'))
 })
 
 test('concurrent first edits share one private draft', async () => {
