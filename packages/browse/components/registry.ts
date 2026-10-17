@@ -158,7 +158,15 @@ export let defineActions = (cs: Contributor[]) => {
     get: () => installed(cs),
   })
 }
-export let extend = (rs: Entry[]) => overlay(registry, rs)
+/** Lay renderers over the app's registry, ahead of what it holds; the
+ * function returned puts back the renderers it found. */
+export let extend = (rs: Entry[]): () => void => {
+  let prior = registry.renderers
+  overlay(registry, rs)
+  return () => {
+    registry.renderers = prior
+  }
+}
 export let applicable = (e: Ent) => offered(registry, bundle(e), vocab)
 export let actionsFor = (e: Ent) => actions(registry, bundle(e), vocab, e)
 // Some app callers inspect native component identity before mounting. Preserve

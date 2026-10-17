@@ -14,7 +14,7 @@ import { route } from './nav.tsx'
 import { contributedViews } from './inspect.tsx'
 import * as facet from '@yaks/inspect/views'
 import { views } from '@yaks/inspect'
-import { extend, registry } from './registry.ts'
+import { extend } from './registry.ts'
 
 let hit = (num: number, kind: string, title: string) => ({
   eid: `${num}`,
@@ -216,8 +216,7 @@ test('search chip is a draggable link, modifiers keep native navigation', () => 
 // A configured Inspect facet exposes the same query-backed entries through
 // both exports. The host must adapt them once, not overwrite with raw Props.
 test('configured Inspect query renderer receives its host context', async () => {
-  let original = registry.renderers
-  extend(
+  let drop = extend(
     await contributedViews([{
       ...facet,
       views,
@@ -232,6 +231,6 @@ test('configured Inspect query renderer receives its host context', async () => 
     assertEquals(seen.root.textContent?.includes('count'), true)
   } finally {
     seen.free()
-    registry.renderers = original
+    drop()
   }
 })

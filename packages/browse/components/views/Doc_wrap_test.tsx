@@ -7,7 +7,7 @@ import { h } from 'preact'
 import { views } from '@yaks/doc/views'
 import { contributedViews } from '../inspect.tsx'
 import { cache, ent } from '../../live.ts'
-import { extend, registry, renderView } from '../registry.ts'
+import { extend, renderView } from '../registry.ts'
 import { mount } from '../mount.ts'
 import '../Entity.tsx'
 import { Md } from './Md.tsx'
@@ -16,8 +16,7 @@ let css = await Deno.readTextFile(new URL('../../styles.css', import.meta.url))
 
 test('configured doc Body wraps while the Markdown source tab remains preformatted', async () => {
   let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-  let prior = registry.renderers
-  extend(await contributedViews([{ views }]))
+  let drop = extend(await contributedViews([{ views }]))
   cache.value = {
     [eid]: {
       entity: { eid, num: 1 },
@@ -66,7 +65,7 @@ test('configured doc Body wraps while the Markdown source tab remains preformatt
     )
   } finally {
     mounted.free()
-    registry.renderers = prior
+    drop()
     cache.value = {}
   }
 })

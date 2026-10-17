@@ -51,18 +51,22 @@ let opens = async (b: Comps & Bundle) => {
 
 test('an entity an inspector view links to opens on its own page, not Debug', async () => {
   let own = () => h('p', { 'data-page': 'own' }, 'its own page')
-  extend([
+  let drop = extend([
     { view: 'Full', match: parse('.trace'), Render: own },
     { view: 'Full', match: parse('.effect'), Render: own },
   ])
-  await opens({
-    entity: { eid: 't', num: 7 },
-    trace: { op: 'effect', name: 'session_run' },
-  })
-  // One with no number is addressed by its short eid, as a vocabulary
-  // entity is.
-  await opens({
-    entity: { eid: '64ce287e-9f00-4000-8000-000000000001' },
-    effect: {},
-  })
+  try {
+    await opens({
+      entity: { eid: 't', num: 7 },
+      trace: { op: 'effect', name: 'session_run' },
+    })
+    // One with no number is addressed by its short eid, as a vocabulary
+    // entity is.
+    await opens({
+      entity: { eid: '64ce287e-9f00-4000-8000-000000000001' },
+      effect: {},
+    })
+  } finally {
+    drop()
+  }
 })

@@ -28,15 +28,20 @@ let offered: { home?: Home; tabs: Offer[]; destinations: Destination[] } = {
 }
 
 /** Set what the configured packages offer: a home page, and every tab and
- * destination in the order the packages come. */
+ * destination in the order the packages come. The function returned puts
+ * back what was offered before. */
 export let offerPlaces = (
   { home, tabs = [], destinations = [] }: {
     home?: Home
     tabs?: Offer[]
     destinations?: Destination[]
   },
-): void => {
+): () => void => {
+  let prior = offered
   offered = { home, tabs, destinations }
+  return () => {
+    offered = prior
+  }
 }
 
 /** The home page a package offers, if one does. */

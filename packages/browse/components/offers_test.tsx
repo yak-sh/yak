@@ -17,9 +17,8 @@ import { Page } from './App.tsx'
 import { Navigation } from './Navigation.tsx'
 import { TabFace } from './Card.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
-import { applicable, registry } from './registry.ts'
+import { applicable } from './registry.ts'
 import { contribute, type Facet } from './inspect.tsx'
-import { offerPlaces } from './offers.ts'
 import '../domain-host.tsx'
 
 let OWNER = 'aaaaaaaa-0000-4000-8000-00000000000a'
@@ -63,7 +62,7 @@ let facet: Facet = {
 }
 
 let world = async (offered: boolean) => {
-  let prior = { renderers: registry.renderers, host: config.host }
+  let prior = config.host
   config.host = 'browser.test'
   let wire = host(() => ({ bundles: [] }))
   cache.value = {
@@ -81,16 +80,15 @@ let world = async (offered: boolean) => {
   owner.value = OWNER
   waits = {}
   bindHistory(undefined)
-  if (offered) await contribute([facet])
+  let drop = offered ? await contribute([facet]) : () => {}
   return {
     wire,
     [Symbol.dispose]() {
       wire.free()
-      registry.renderers = prior.renderers
-      offerPlaces({})
+      drop()
       owner.value = undefined
       cache.value = {}
-      config.host = prior.host
+      config.host = prior
     },
   }
 }

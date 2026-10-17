@@ -30,7 +30,7 @@ cache.value = {
     quarantined: { eid: 'task', at: 'now' },
   },
 }
-extend([{
+let drop = extend([{
   view: 'Test.State',
   match: parse('.doc'),
   Render: ({ e, suffix }) => {
@@ -59,6 +59,7 @@ test('Entity mounts hooks with the original Ent and extra props', async () => {
     assertEquals(root.textContent, 'doc Changed! 1')
   } finally {
     free()
+    drop()
   }
 })
 

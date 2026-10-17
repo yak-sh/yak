@@ -500,7 +500,7 @@ test('the full face paints the body for a viewer with no actor', () => {
 })
 
 test('a view that throws fails in its own slot, and the page paints', async () => {
-  extend([{
+  let drop = extend([{
     view: 'Body',
     match: parse('.doc.title=Throws'),
     Render: () => {
@@ -527,6 +527,7 @@ test('a view that throws fails in its own slot, and the page paints', async () =
     assertEquals(root.textContent?.includes('still here'), true)
   } finally {
     free()
+    drop()
     console.error = quiet
     problem.value = ''
     cache.value = {}

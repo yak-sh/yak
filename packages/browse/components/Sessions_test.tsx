@@ -42,7 +42,7 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
     computed: { 'session.status': (b) => (b.session as Comp)?.status },
   })
   let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
-  await contribute([sessionFacet])
+  let drop = await contribute([sessionFacet])
   let mounted = mount(
     <>
       <FilterInput eid={list} />
@@ -71,6 +71,7 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
     )
   } finally {
     mounted.free()
+    drop()
     fields.set(filterField(list), '')
     wire.free()
     cache.value = {}
@@ -223,7 +224,7 @@ async function summaries() {
     },
   )
   let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
-  await contribute([sessionFacet])
+  let drop = await contribute([sessionFacet])
   let mounted = mount(
     <QueryList eid='sessions-summary' query={allSessionsQuery} />,
   )
@@ -248,6 +249,7 @@ async function summaries() {
     )
   } finally {
     mounted.free()
+    drop()
     wire.free()
     cache.value = {}
     config.host = prior

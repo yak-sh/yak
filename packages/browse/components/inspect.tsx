@@ -251,15 +251,21 @@ export let contributedViews = async (facets: Facet[]): Promise<Entry[]> =>
 
 /** Take in what the configured packages offer, before the app paints: their
  * views, destinations, home page, tabs and glyphs. Every door does this the
- * same way. */
-export let contribute = async (facets: Facet[]): Promise<void> => {
-  extend(await contributedViews(facets))
-  offerPlaces({
+ * same way, once. The function returned puts back the views and places they
+ * displaced, so a test that takes a package in leaves the app as it found it
+ * (the glyphs it learned stay). */
+export let contribute = async (facets: Facet[]): Promise<() => void> => {
+  let dropViews = extend(await contributedViews(facets))
+  let dropPlaces = offerPlaces({
     home: facets.find((f) => f.home)?.home,
     tabs: facets.flatMap((f) => f.tabs ?? []),
     destinations: facets.flatMap((f) => f.destinations ?? []),
   })
   for (let f of facets) learnGlyphs(f.icons ?? {})
+  return () => {
+    dropPlaces()
+    dropViews()
+  }
 }
 
 /** What waits at an offered place for an entity, as `children` says it; none
