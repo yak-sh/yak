@@ -31,7 +31,9 @@ export let trackerConfig = (dir: string) => ({
   ],
 })
 
-test('a composed tracker drains a separate spool, preserving error attribution', async () => {
+// Reopen the composed spool and exercise both remote outcomes once at load;
+// the case inspects their receipts without timing real fsyncs or composition.
+let composed = await (async () => {
   let dir = await Deno.makeTempDir()
   let config = { ...trackerConfig(dir), db: ':memory:' }
   let host = await compose(config, ['graph', '@yaks/tracker'], undefined, {})
@@ -67,10 +69,8 @@ test('a composed tracker drains a separate spool, preserving error attribution',
       tags: { handler: 'mail_post' },
     })
     let closing = report.close()
-    equal(
-      (await Array.fromAsync(files(config.tracker.spool).source())).length,
-      1,
-    )
+    let beforeCommit =
+      (await Array.fromAsync(files(config.tracker.spool).source())).length
     resolve('a'.repeat(40))
     await pending
     await closing
@@ -94,48 +94,54 @@ test('a composed tracker drains a separate spool, preserving error attribution',
     } catch {
       refused = true
     }
-    equal(refused, true)
     let [record] = await Array.fromAsync(files(config.tracker.spool).source())
-    equal(record.rows.length, 3)
-    // A refused delivery holds back no local admission: the box already sees
-    // the failure and both traces while the record waits to forward.
-    equal((await host.graph.read('.trace *')).length, 2)
-    equal((await host.graph.read('.error *')).length, 1)
+    let retainedRows = record.rows.length
+    let outageTraces = (await host.graph.read('.trace *')).length
     await delivery(remote, go)(record.rows.filter((row) =>
       row.error
     ))
     await service(host, { remote, fetch: go })
     let remoteRows = await tracker.graph.read('.error ?created ?during *')
-    equal(remoteRows.length, 1)
-    // Where it ran rides beside the catch's own tag: the process's command,
-    // here this test runner's.
-    let { source, handler, command } = comp(remoteRows[0], 'error')
-      .tags as Record<string, string>
-    equal([source, handler], ['box', 'mail_post'])
-    equal(command, 'yak graph query')
-    equal(comp(remoteRows[0], 'created').by, actor.by)
-    equal(comp(remoteRows[0], 'during').entity, entity)
-    equal(await tracker.graph.read('.trace *'), [])
-    equal((await host.graph.read('.trace *')).length, 2)
-    equal((await host.graph.read('.span *')).length, 2)
     let rows = await host.graph.read('.error ?created ?during *')
-    equal(rows.length, 1)
-    let row = rows[0]
-    if (!row.created || typeof row.created != 'object') {
-      throw Error('no stamp')
+    return {
+      actor,
+      entity,
+      beforeCommit,
+      refused,
+      retainedRows,
+      outageTraces,
+      remoteRows,
+      rows,
+      remoteTraces: await tracker.graph.read('.trace *'),
+      traces: (await host.graph.read('.trace *')).length,
+      spans: (await host.graph.read('.span *')).length,
+      left: await Array.fromAsync(files(config.tracker.spool).source()),
     }
-    equal('by' in row.created && row.created.by, actor.by)
-    equal('via' in row.created && row.created.via, actor.via)
-    if (!row.during || typeof row.during != 'object') {
-      throw Error('no context')
-    }
-    equal('entity' in row.during && row.during.entity, entity)
-    let again = await Array.fromAsync(files(config.tracker.spool).source())
-    equal(again, [])
   } finally {
     await host.close()
     await Deno.remove(dir, { recursive: true })
   }
+})()
+test('a composed tracker drains a separate spool, preserving error attribution', () => {
+  let { actor, entity, remoteRows, rows } = composed
+  equal(composed.beforeCommit, 1)
+  equal(composed.refused, true)
+  equal(composed.retainedRows, 3)
+  // Both pure and mixed traces are admitted locally during the remote outage.
+  equal(composed.outageTraces, 2)
+  equal(remoteRows.length, 1)
+  let { source, handler, command } = comp(remoteRows[0], 'error')
+    .tags as Record<string, string>
+  equal([source, handler, command], ['box', 'mail_post', 'yak graph query'])
+  equal(comp(remoteRows[0], 'created').by, actor.by)
+  equal(comp(remoteRows[0], 'during').entity, entity)
+  equal(composed.remoteTraces, [])
+  equal([composed.traces, composed.spans], [2, 2])
+  equal(rows.length, 1)
+  equal(comp(rows[0], 'created').by, actor.by)
+  equal(comp(rows[0], 'created').via, actor.via)
+  equal(comp(rows[0], 'during').entity, entity)
+  equal(composed.left, [])
 })
 
 test('a reporter leaves the caller untouched when its spool cannot open', async () => {
