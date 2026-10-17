@@ -344,8 +344,9 @@ test('the directory and an app spell one word apart: member.role', () => {
   assertEquals(appVocab().prop('member', 'role')?.values, ['owner', 'member'])
 })
 
+// The directory's schema is compiled once as the file loads.
+let platformIndexes = indexes(schema(platformVocab()))
 test('the platform declares the uniques its races are decided by', () => {
-  let platform = indexes(schema(platformVocab()))
   for (
     let want of [
       'space_slug space slug',
@@ -356,11 +357,11 @@ test('the platform declares the uniques its races are decided by', () => {
       'deploy_app_version deploy app version',
       'published_name published name',
     ]
-  ) assert(platform.includes(`unique ${want}`), `no ${want}`)
+  ) assert(platformIndexes.includes(`unique ${want}`), `no ${want}`)
   // And an address is no longer one of them (T-34657): `former` is history, so
   // two apps may hold one address a year apart. Which app answers at an address
   // now is the tools' word, not an index's.
-  assert(!platform.some((i) => i.split(' ')[2] == 'former'))
+  assert(!platformIndexes.some((i) => i.split(' ')[2] == 'former'))
 })
 
 test('none of the fleet vocabulary comes with it', () => {
