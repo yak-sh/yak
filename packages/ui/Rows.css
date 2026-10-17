@@ -30,7 +30,7 @@
 /* An entry's whole surface opens it, including a renderer's secondary text. */
 .Rows_Link {
   display: block;
-  color: inherit;
+  color: var(--text);
   text-decoration: none;
   min-width: 0;
   border-radius: var(--radius);
