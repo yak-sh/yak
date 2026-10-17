@@ -19,3 +19,24 @@ test('mailed waits for a new delivery rather than returning a spent code', async
     Deno.removeSync(log)
   }
 })
+
+test('a delivered letter does not wait for an unrelated shared-kernel alarm', async () => {
+  let log = Deno.makeTempFileSync()
+  let to = 'delivery@example.test'
+  try {
+    Deno.writeTextFileSync(
+      log,
+      `yak-mail ${
+        JSON.stringify({
+          to,
+          subject: 'Code 654321',
+          body: '',
+        })
+      }\n`,
+    )
+    let k = { log, settled: () => new Promise<void>(() => {}) }
+    assertEquals(await mailed(k, to), '654321')
+  } finally {
+    Deno.removeSync(log)
+  }
+})

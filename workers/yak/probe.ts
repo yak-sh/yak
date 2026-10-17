@@ -609,18 +609,14 @@ export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
     .map((m) => JSON.parse(m[1]) as Letter)
     .filter((l) => [l.to].flat().includes(to))
 
-// What `find` reads off the log, waited for. A letter leaves after the answer
-// that sent it (T-124082), so what the kernel's requests left running is
-// waited for first: a kernel in memory then holds the letter already, and
-// only a kernel in another process (workerd) is polled for it.
-let posted = async <T>(
-  k: Pick<Kernel, 'settled'>,
+// Wait for this delivery, not for every unrelated alarm in the shared kernel.
+// A mover or an in-flight request elsewhere can remain active after this
+// letter was delivered; its lifetime cannot gate reading the receipt.
+let posted = <T>(
+  _k: Pick<Kernel, 'settled'>,
   find: () => T,
   label: string,
-) => {
-  await k.settled?.()
-  return until(find, { timeout: 20_000, poll: 100, label })
-}
+) => until(find, { timeout: 20_000, poll: 10, label })
 
 // The latest letter to an address that says a thing, waited for: the one the
 // latest request sent.
