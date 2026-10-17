@@ -77,9 +77,11 @@ export type Options = {
    * into them — passes a separate graph here; the tools still read and write
    * `graph`. */
   calls?: Graph
-  /** where a tool's defect goes, with the call and the tool's name (default:
-   * the console). A refusal (`CallError`) is never reported. */
-  report?: RunnerOpts['report']
+  /** where a defect goes (default: the console): a tool's, with the call and
+   * the tool's name, and a request the SDK refused or failed on the modern
+   * leg, with neither, since a client this server cannot answer is a failure
+   * of ours. A tool's refusal (`CallError`) is never reported. */
+  report?: (err: unknown, call?: Bundle, tool?: string) => unknown
   /** what a call is owed beside its tool's answer (@yaks/tools `Reply`): the
    * host's, so a caller over MCP reads what a caller at the command line
    * reads. Used where a runner is built here; a runner passed in has its

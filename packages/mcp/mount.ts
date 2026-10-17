@@ -233,7 +233,13 @@ export let mcp = (opts: MountOptions): Handler => {
       runner: running(),
     })
     return await prepared(built, opts, caller?.exchange)
-  }, { legacy: 'reject' })
+  }, {
+    legacy: 'reject',
+    // The SDK answers what it refuses or fails on itself and throws nothing
+    // on to the host's watch, so it is told here or nowhere.
+    onerror: (err) =>
+      void Promise.resolve((opts.report ?? logged)(err)).catch(logged),
+  })
   let legacy = async (
     request: Request,
     actor: Actor | null,

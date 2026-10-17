@@ -212,9 +212,9 @@ let accountOf = async (ctx: Ctx): Promise<Hit | undefined> => {
 /** A connector failure keeps the named tool, space, app, client and account. */
 export let reporter =
   (ctx: Ctx, client?: string) =>
-  async (err: unknown, call: Bundle, tool?: string) =>
+  async (err: unknown, call?: Bundle, tool?: string) =>
     defect(err, {
       tool,
-      ...aimedAt((call.call as Comp | undefined)?.args),
+      ...aimedAt((call?.call as Comp | undefined)?.args),
       client,
     }, { hit: await accountOf(ctx) })

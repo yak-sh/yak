@@ -374,7 +374,9 @@ malformed JSON or anything other than one JSON-RPC request or notification, 401
 for `Unauthorized`, and 202 for notifications. Request arrays are rejected.
 Other thrown errors use [@yaks/api](../api/README.md#refusals)'s status mapping:
 a refusal is answered with its status, and a failure (500) is thrown on to the
-host, whose watch answers and reports it (@yaks/api `served`).
+host, whose watch answers and reports it (@yaks/api `served`). On the modern leg
+the SDK answers its own refusals and failures, and each one goes to the `report`
+option with no call.
 
 The legacy transport has no SSE stream. It waits for each call's outcome by
 default. A host can set `timeout` to limit how long it waits for a legacy reply;
