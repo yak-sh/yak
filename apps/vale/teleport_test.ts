@@ -183,7 +183,8 @@ test('teleport targets live positions and stored companion spots', async () => {
   })
 })
 
-test('teleport can meet a villager at their current world position', async () => {
+// Capture the world-backed request at load; the case checks its response and write.
+let villagerMove = await (async () => {
   let wrote: Bundle[] = []
   let env = {
     STORE: {
@@ -220,6 +221,11 @@ test('teleport can meet a villager at their current world position', async () =>
     }),
     env,
   )
+  return { moved, wrote }
+})()
+
+test('teleport can meet a villager at their current world position', () => {
+  let { moved, wrote } = villagerMove
   assertEquals(moved.status, 200)
   assertObjectMatch(wrote[0], {
     teleport_request: { player: 'hero', level: 'mossvale' },

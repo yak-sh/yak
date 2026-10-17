@@ -117,7 +117,10 @@ test('binding before hydration cannot replace a saved draft with empty input', a
     equal(input.value, '/restored')
     await tick()
     equal(await vault.load(), [])
-    equal(comp(net.client.ent(draftEid(by, 'chat')), 'draft').text, '/restored')
+    equal(
+      comp(net.client.ent(draftEid(by, 'chat')), 'draft').text,
+      '/restored',
+    )
   } finally {
     off()
     host.close()
@@ -404,7 +407,7 @@ test('command draft emergency stashes do not cross app installations', async () 
 // A store already holding the person's chat draft as 'hosted', a page stash
 // keeping `kept` under the key `at` names, the old vault holding `legacy`, and
 // a field over them waiting on that vault: one per case, made as the file
-// loads, so a case times the migration alone.
+// loads. Capture migration before timing the assertions on both copies of text.
 let hosted = (at: (by: string) => string, kept: object, legacy?: string) => {
   let net = remote(), by = mint(), stash = storage()
   net.client.mutate([{
@@ -422,35 +425,39 @@ let hosted = (at: (by: string) => string, kept: object, legacy?: string) => {
 // The page's text once migrated, and the store's once it has taken it.
 let migrated = async (
   { net, by, host, release }: ReturnType<typeof hosted>,
-  text: string,
 ) => {
   try {
     release()
     await host.ready
-    equal(host.drafts.text('chat'), text)
+    let local = host.drafts.text('chat')
     await tick()
-    equal(comp(net.client.ent(draftEid(by, 'chat')), 'draft').text, text)
+    let stored = comp(net.client.ent(draftEid(by, 'chat')), 'draft').text
+    return { local, stored }
   } finally {
     host.close()
     net.client.close()
   }
 }
 
-let independent = hosted(
+let independent = await migrated(hosted(
   (by) => `vale:commands:vale:${by}:draft:chat`,
   { text: 'hosted local', over: 'hosted', rev: 1 },
   'legacy',
-)
-test('migration keeps hosted recovery and independent legacy source text', () =>
-  migrated(independent, 'legacyhosted local'))
+))
+test('migration keeps hosted recovery and independent legacy source text', () => {
+  equal(independent.local, 'legacyhosted local')
+  equal(independent.stored, 'legacyhosted local')
+})
 
 let ancestor = hosted(
   (by) => `vale:commands:${by}:draft:chat`,
   { text: 'new source', over: 'old source', rev: 1 },
   'old source tail',
 )
-test('legacy emergency changes use their imported vault ancestor and preserve hosted text', async () => {
-  await migrated(ancestor, 'new source tailhosted')
+let ancestorText = await migrated(ancestor)
+test('legacy emergency changes use their imported vault ancestor and preserve hosted text', () => {
+  equal(ancestorText.local, 'new source tailhosted')
+  equal(ancestorText.stored, 'new source tailhosted')
   equal(ancestor.stash.length, 0)
 })
 
@@ -458,7 +465,9 @@ let sourceless = hosted(
   (by) => `vale:commands:${by}:draft:chat`,
   { text: 'private typed', over: 'hosted', rev: 1 },
 )
-test('a legacy emergency copy without its vault source cannot cancel hosted text', async () => {
-  await migrated(sourceless, 'private typedhosted')
+let sourcelessText = await migrated(sourceless)
+test('a legacy emergency copy without its vault source cannot cancel hosted text', () => {
+  equal(sourcelessText.local, 'private typedhosted')
+  equal(sourcelessText.stored, 'private typedhosted')
   equal(sourceless.stash.length, 0)
 })
