@@ -323,3 +323,39 @@ test('a listener told once says what waits for it, marks it said and ends', asyn
   equal(lines.length, 1)
   equal((await waiting.get(['mail']))[0].notified != null, true)
 })
+
+// With no project, status cannot change what is heard. Keep status unavailable
+// to prove addressed correspondence does not depend on reading a transcript.
+let withoutProject = graph({
+  vocab: words,
+  storage: ram(words, { computed: statusComputed }),
+})
+let projectlessRead = withoutProject.read
+withoutProject.read = (query, options) => {
+  if (JSON.stringify(query).includes('"status"')) {
+    throw new Error('a session without a project needs no transcript status')
+  }
+  return projectlessRead(query, options)
+}
+await withoutProject.apply([
+  { entity: { eid: 'unhomed' }, session: { id: 'unhomed' } },
+  {
+    entity: { eid: 'start-unhomed' },
+    entry: { session: 'unhomed' },
+    using: {},
+  },
+  {
+    entity: { eid: 'direct-unhomed' },
+    knock: { target: 'unhomed' },
+    doc: { body: 'your reply' },
+  },
+])
+let unhomedReply = await pending(withoutProject, 'unhomed').then(
+  (items) => () => items.map(({ item }) => item.entity.eid),
+  (error) => () => {
+    throw error
+  },
+)
+test('a native session without a project hears its addressed reply without transcript status', () => {
+  equal(unhomedReply(), ['direct-unhomed'])
+})

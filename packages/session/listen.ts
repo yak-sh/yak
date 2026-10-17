@@ -482,13 +482,17 @@ export let pending = async (
   for (let q of addressedTo(vocab, session, !native)) {
     addressed.push(...await graph.read(and(...q.clauses, every())))
   }
-  let working = !native || (await atWork(graph, [session])).length > 0
+  // A session with no project can hear only its addressed items. Deriving
+  // its transcript status cannot change that answer and reads its whole log.
+  let projects = await worksFor(graph, owner)
+  let working = !native ||
+    (projects.length > 0 && (await atWork(graph, [session])).length > 0)
   let items = await pendingItems(
     session,
     native,
     working,
     addressed,
-    async () => held(graph, session, await worksFor(graph, owner)),
+    () => held(graph, session, projects),
   )
   if (!items.length) return []
   let pointed = [
