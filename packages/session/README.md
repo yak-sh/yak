@@ -437,6 +437,11 @@ subscriptions.
 
 ## Harness hooks
 
+The `./cli` facet answers `UserPromptSubmit` context from its local transcript
+without opening the graph, so it cannot wait behind a graph writer. An empty or
+malformed hook without a session is also a local no-op. Other lifecycle events
+and `--json` delegate to the graph's tool runner.
+
 `yak hooks install` writes lifecycle hooks into a Claude-compatible settings
 file (default `~/.claude/settings.json`), replacing an earlier install and
 leaving every other entry alone. A harness runs each hook with the event as JSON
@@ -586,14 +591,15 @@ The main module exports:
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
 Additional entry points are `@yaks/session/vocab`, `/graph` (with
-`authenticate`), `/tools`, `/views`, `/service` (the duty that reads
-transcripts), and `/tail` (the importer). `/views` is `views`, the portable
-renderers, and `inspectViews`, how the inspector (@yaks/inspect) draws an entry
-and a session: an entry as a turn of its conversation (`Inspect.Turn`), the
-turns either side of it (`Inspect.Conversation`, what a belief citing the entry
-shows), the entry's page inside its conversation, and a session's page with its
-status, brief and latest turns. A **host** is the process that opened the graph;
-effects and tools receive its graph and, where needed, its process entity ID.
+`authenticate`), `/tools`, `/cli` (local context hooks), `/views`, `/service`
+(the duty that reads transcripts), and `/tail` (the importer). `/views` is
+`views`, the portable renderers, and `inspectViews`, how the inspector
+(@yaks/inspect) draws an entry and a session: an entry as a turn of its
+conversation (`Inspect.Turn`), the turns either side of it
+(`Inspect.Conversation`, what a belief citing the entry shows), the entry's page
+inside its conversation, and a session's page with its status, brief and latest
+turns. A **host** is the process that opened the graph; effects and tools
+receive its graph and, where needed, its process entity ID.
 
 <a id="what-is-deliberately-not-here"></a>
 <a id="compatibility"></a>

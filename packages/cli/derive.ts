@@ -50,6 +50,7 @@ export let derive = async (
         ? {
           commands: (v.commands ?? []).map(({ run: _, ...data }) => data),
           ...v.globals ? { globals: v.globals } : {},
+          ...v.tools ? { tools: Object.keys(v.tools) } : {},
         }
         : null,
     }

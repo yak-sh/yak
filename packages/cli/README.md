@@ -663,6 +663,17 @@ exporting `globals` from its `./cli` facet, keyed by tool name. For example,
 `admin_fee`'s `as` input. Commands passed directly to `cli` declare the same
 binding on `Command.globals`.
 
+A local plugin's `./cli` facet can also export `tools`, keyed by an existing
+tool name. Each callback receives validated arguments and the CLI context,
+without opening a graph. Returning an exit code finishes the invocation;
+returning `undefined` delegates to the ordinary tool runner. Remote calls always
+use the graph tool. For example, `@yaks/session` answers prompt timing from the
+local transcript and delegates session creation to the graph:
+
+```sh
+echo '{"hook_event_name":"UserPromptSubmit"}' | yak session context --hook -
+```
+
 | File                           | Contents                                                                |
 | ------------------------------ | ----------------------------------------------------------------------- |
 | `accounts.json`, `accounts.db` | The personal account graph on a machine with no configured graph        |

@@ -16,7 +16,11 @@ export type Declarations = {
   }[]
   controls: {
     plugin: string
-    value: { commands: Control[]; globals?: CliFacet['globals'] } | null
+    value: {
+      commands: Control[]
+      globals?: CliFacet['globals']
+      tools?: string[]
+    } | null
   }[]
   tools: Declared[]
   owners: Record<string, string>

@@ -41,8 +41,16 @@ export let commands = async (c: Ctx): Promise<Command[]> => {
     // and the same command typed against an MCP server are written
     // identically. Nothing is converted here: a transport that wants them in
     // another form restates them on its own side (@yaks/mcp `core`).
-    run: async (args: Record<string, unknown>): Promise<number> =>
-      (await local(declared)).tool(c, declared, args, listing),
+    run: async (args: Record<string, unknown>): Promise<number> => {
+      let plugin = said.owners[declared.name]
+      let control = said.controls.find((v) => v.plugin == plugin)?.value
+      if (control?.tools?.includes(declared.name)) {
+        let cli = await subpath<CliFacet>(plugin, 'cli')
+        let code = await cli?.tools?.[declared.name]?.(args, c)
+        if (code !== undefined) return code
+      }
+      return (await local(declared)).tool(c, declared, args, listing)
+    },
   }))
   let controls: Command[] = said.controls.flatMap(({ plugin, value }) =>
     (value?.commands ?? []).map((declared, i) => ({

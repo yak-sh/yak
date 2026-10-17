@@ -197,6 +197,15 @@ export type CliFacet = {
   commands?: CliCommand[]
   /** Explicit global-input bindings for this plugin's graph tools. */
   globals?: Record<string, NonNullable<Command['globals']>>
+  /** Local tool invocations that can finish without opening a graph. Undefined
+   * delegates to the ordinary tool runner. Arguments are already validated. */
+  tools?: Record<
+    string,
+    (
+      args: Record<string, unknown>,
+      context: Ctx,
+    ) => number | undefined | Promise<number | undefined>
+  >
 }
 
 /** An assembled host: everything a plugin factory was given, plus what only
