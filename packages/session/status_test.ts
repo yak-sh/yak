@@ -654,35 +654,35 @@ let apart = (name: string, entries: Bundle[]): Bundle[] => {
 }
 
 for (let typed of [false, true]) {
+  let v = typed
+    ? loadVocab([
+      sessionDoc,
+      toolsDoc,
+      modelDoc,
+      kernelDoc,
+      effectDoc,
+      archetypeDoc,
+    ], [kernelKeywords, blobKeywords])
+    : vocab
+  let d = mem()
+  let storage1 = storage(d, v, {
+    derived: { ...sessionDerived(v, blobRead(v)), ...blobRead(v) },
+  })
+  storage1.install()
+  for (let stmt of blobSchema()) d.query(stmt)
+  let g = graph({
+    storage: storage1,
+    vocab: v,
+    plugins: [blobs(v, sqliteBlobs(d))],
+  })
+  g.apply([{ entity: { eid: M }, model: { name: 'fake' } }, {
+    entity: { eid: T },
+    tool: { name: 'echo' },
+  }])
+  g.apply(shapes.flatMap(([name, entries]) => apart(name, entries)), {
+    trusted: true,
+  })
   test(`the SQL view answers the same word as the rule (archetypes: ${typed})`, () => {
-    let v = typed
-      ? loadVocab([
-        sessionDoc,
-        toolsDoc,
-        modelDoc,
-        kernelDoc,
-        effectDoc,
-        archetypeDoc,
-      ], [kernelKeywords, blobKeywords])
-      : vocab
-    let d = mem()
-    let storage1 = storage(d, v, {
-      derived: { ...sessionDerived(v, blobRead(v)), ...blobRead(v) },
-    })
-    storage1.install()
-    for (let stmt of blobSchema()) d.query(stmt)
-    let g = graph({
-      storage: storage1,
-      vocab: v,
-      plugins: [blobs(v, sqliteBlobs(d))],
-    })
-    g.apply([{ entity: { eid: M }, model: { name: 'fake' } }, {
-      entity: { eid: T },
-      tool: { name: 'echo' },
-    }])
-    g.apply(shapes.flatMap(([name, entries]) => apart(name, entries)), {
-      trusted: true,
-    })
     let want = Object.fromEntries(shapes.map(([name, , w]) => [name, w]))
     // Each word filters exactly the transcripts in that shape.
     for (let word of new Set(Object.values(want))) {
