@@ -6,6 +6,7 @@ import type { Bundle } from '@yaks/graph'
 import { mark, type Remote } from './remote.ts'
 import { type Read, read } from './routes.ts'
 import type { Mark } from './letter.ts'
+import { pollThread } from './poll_thread.ts'
 
 /** A polled answer of the platform tracker, with its mark door. */
 export type Polled = {
@@ -53,7 +54,7 @@ export type PollOpts = {
   timeout?: number
   /** a failed poll; the next one retries */
   report?: (error: unknown) => void
-  /** where it asks (default: the remote's {@link signed} doors) */
+  /** where it asks (default: signed doors on a dedicated worker event loop) */
   doors?: Doors
   /** how a wait is set — between polls, and a page's deadline — returning
    * what cancels it (default: `setTimeout`), so a test can hold the clock */
@@ -101,7 +102,8 @@ export let poll = (
   query = '.bug',
   opts: PollOpts = {},
 ): Polled => {
-  let doors = opts.doors ?? signed(remote)
+  let thread = opts.doors ? undefined : pollThread(remote)
+  let doors = opts.doors ?? thread!
   let timer = opts.timer ?? timeout
   let value: Bundle[] = [], ready = false
   let listeners = new Set<(bundles: Bundle[]) => void>()
@@ -167,7 +169,7 @@ export let poll = (
   ;(async () => {
     while (!stop.signal.aborted) {
       await pass()
-      await wait(opts.every ?? 30_000)
+      if (!stop.signal.aborted) await wait(opts.every ?? 30_000)
     }
   })()
   return {
@@ -182,7 +184,10 @@ export let poll = (
       listeners.add(fn)
       return () => void listeners.delete(fn)
     },
-    close: () => stop.abort(),
+    close: () => {
+      stop.abort()
+      thread?.close()
+    },
     mutate: async (bundles) => {
       for (let b of bundles) {
         let name = markOf(b)

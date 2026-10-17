@@ -271,6 +271,16 @@ receipts. A failed delivery leaves its original record for retry and never adds
 a delivery error to the same outbox. Immutable global eids make interrupted and
 repeated delivery safe.
 
+The heal service opens the platform `./poll` watch in its work host. Its signed
+reads and marks run on a dedicated worker event loop, not alongside the host's
+synchronous graph/effect work: signing, fetch, whole-body reads and attempt
+deadlines stay together even when the host is CPU-bound. The worker opens no
+graph or duties; closing the watch terminates only its owned worker and rejects
+outstanding calls. An unexpected worker failure rejects those calls and the next
+poll starts a replacement. `PollOpts.doors` still overrides the transport for an
+embedding host or a test. This placement changes no remote attempt timeout or
+retry count.
+
 `./remote` shares the signed transport with the read-through routes. Intake and
 bug marks each carry a separate capability, so a reader's ticket cannot submit
 errors or mark bugs. Box captures carry `error.tags.source=box`; the Worker
