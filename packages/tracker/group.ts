@@ -53,8 +53,9 @@ let inherited = (row: Bundle, bug: Bundle | undefined, before: Bundle[]) => {
   )
 }
 export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
-  !imported(row) && !!bug.resolved && !!release(row) &&
-  !before.some((old) => release(old) == release(row))
+  !imported(row) && !!bug.resolved &&
+  str(comp(row, 'error').at) > str(comp(bug, 'resolved').at) &&
+  !!release(row) && !before.some((old) => release(old) == release(row))
 
 export let grouped = (
   row: Bundle,

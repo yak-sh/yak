@@ -75,7 +75,12 @@ test('declared effects group intake and retain occurrences downstream', async ()
     )
   let [first] = await g.read('.mail *')
   for (let version of [2, 3]) {
-    await g.apply([{ entity: bug.entity, resolved: {} }], { trusted: true })
+    await g.apply([{
+      entity: bug.entity,
+      resolved: {
+        at: version == 2 ? '2026-10-02T00:00:09Z' : '2026-10-02T00:00:20Z',
+      },
+    }], { trusted: true })
     // Opening and regression are different occasions even if their clocks match.
     at = version == 2 ? '2026-10-02T00:00:10Z' : '2026-10-02T00:00:30Z'
     await hit(`back-${version}`, version)

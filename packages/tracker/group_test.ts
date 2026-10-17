@@ -183,7 +183,11 @@ test('old code counts without reopening; a new commit regresses once', async () 
   let g = fixture()
   await put(g, occurrence('1'))
   let [bug] = await bugs(g)
-  await g.apply([{ entity: bug.entity, resolved: {}, notified: {} }], {
+  await g.apply([{
+    entity: bug.entity,
+    resolved: { at: '2026-10-02T00:00:01Z' },
+    notified: {},
+  }], {
     trusted: true,
   })
   await put(g, occurrence('2'))
@@ -197,6 +201,52 @@ test('old code counts without reopening; a new commit regresses once', async () 
   await put(g, occurrence('4', c))
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })
+
+for (let kind of ['commit', 'version']) {
+  for (
+    let [when, at] of [
+      ['before', '2026-10-02T00:00:01Z'],
+      ['equal', '2026-10-02T00:00:02Z'],
+      ['after', '2026-10-02T00:00:03Z'],
+    ]
+  ) {
+    let g = fixture()
+    let first = occurrence('1')
+    let row = occurrence('2', b)
+    row.error = { ...comp(row, 'error'), at, hits: 7 }
+    if (kind == 'version') {
+      first.error = { ...comp(first, 'error'), commit: null, version: 1 }
+      row.error = { ...comp(row, 'error'), commit: null, version: 2 }
+    }
+    await put(g, first)
+    let [bug] = await bugs(g)
+    let marks = {
+      resolved: { at: '2026-10-02T00:00:02Z' },
+      notified: { at: '2026-10-02T00:00:02Z' },
+    }
+    await g.apply([{ entity: bug.entity, ...marks }], { trusted: true })
+    await put(g, row)
+    await group(g, row.entity.eid)
+    let [result] = await bugs(g)
+    let [linked] = await g.get([row.entity.eid])
+    test(`an unseen ${kind} ${when} resolution counts and only later occurrences reopen`, () => {
+      equal(comp(result, 'bug').hits, 8)
+      equal(comp(linked, 'error').bug, bug.entity.eid)
+      equal(comp(result, 'bug').last, at)
+      if (when == 'after') {
+        equal(result.resolved, undefined)
+        equal(result.notified, undefined)
+        equal(comp(result, 'regressed').error, row.entity.eid)
+        equal(comp(result, 'bug').status, 'open')
+      } else {
+        equal(result.resolved, marks.resolved)
+        equal(result.notified, marks.notified)
+        equal(result.regressed, undefined)
+        equal(comp(result, 'bug').status, 'resolved')
+      }
+    })
+  }
+}
 
 test('retention preserves the first per commit and historical hit count', async () => {
   let g = fixture()

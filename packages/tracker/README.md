@@ -141,6 +141,11 @@ replies own their own notified mark. Archived bugs still count but never notify.
 Retention keeps the newest hundred plus the first occurrence of each commit (or
 version without a commit).
 
+An occurrence regresses a resolved bug only when its `error.at` is later than
+`resolved.at` and its commit (or version without a commit) is unseen in the
+group. Earlier occurrences and occurrences at the resolution timestamp still
+count, but retain `resolved` and `notified` without adding `regressed`.
+
 ## Browsing
 
 The tracker writes the first error's exception type and value, or its
