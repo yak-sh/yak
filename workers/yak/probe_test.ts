@@ -40,3 +40,33 @@ test('a delivered letter does not wait for an unrelated shared-kernel alarm', as
     Deno.removeSync(log)
   }
 })
+
+test('a delivery observer waits for this request without waiting for platform alarms', async () => {
+  let log = Deno.makeTempFileSync()
+  let to = 'invite@example.test'
+  let seen = 0
+  try {
+    let k = {
+      log,
+      settled: () => new Promise<void>(() => {}),
+      deliveries: () => {
+        seen++
+        Deno.writeTextFileSync(
+          log,
+          `yak-mail ${
+            JSON.stringify({
+              to,
+              subject: 'Code 777777',
+              body: '',
+            })
+          }\n`,
+        )
+        return Promise.resolve()
+      },
+    }
+    assertEquals(await mailed(k, to), '777777')
+    assertEquals(seen, 1)
+  } finally {
+    Deno.removeSync(log)
+  }
+})

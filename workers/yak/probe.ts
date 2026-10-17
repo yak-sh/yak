@@ -91,6 +91,7 @@ export type Kernel = Door & {
   // And wait for what a request left running after it answered: the
   // effects a write owed, run by the store's pool.
   settled?: () => Promise<void>
+  deliveries?: () => Promise<void>
 }
 
 let want = (name: string) => {
@@ -273,6 +274,9 @@ let boot = async (
       reported,
       flushReports: () => reportClock.advance(10_000),
       settled,
+      deliveries: async () => {
+        while (held.size) await Promise.allSettled([...held])
+      },
       close,
     }
   } catch (e) {
@@ -612,16 +616,19 @@ export let letters = (k: Pick<Kernel, 'log'>, to: string): Letter[] =>
 // Wait for this delivery, not for every unrelated alarm in the shared kernel.
 // A mover or an in-flight request elsewhere can remain active after this
 // letter was delivered; its lifetime cannot gate reading the receipt.
-let posted = <T>(
-  _k: Pick<Kernel, 'settled'>,
+let posted = async <T>(
+  k: Pick<Kernel, 'settled' | 'deliveries'>,
   find: () => T,
   label: string,
-) => until(find, { timeout: 20_000, poll: 10, label })
+) => {
+  await k.deliveries?.()
+  return until(find, { timeout: 20_000, poll: 10, label })
+}
 
 // The latest letter to an address that says a thing, waited for: the one the
 // latest request sent.
 export let letter = (
-  k: Pick<Kernel, 'log' | 'settled'>,
+  k: Pick<Kernel, 'log' | 'settled' | 'deliveries'>,
   to: string,
   saying: string,
   after = 0,
@@ -638,7 +645,7 @@ export let letter = (
 // The code in the latest letter to an address, past the letters already
 // received before requesting another sign-in.
 export let mailed = (
-  k: Pick<Kernel, 'log' | 'settled'>,
+  k: Pick<Kernel, 'log' | 'settled' | 'deliveries'>,
   to: string,
   after = 0,
 ) =>
@@ -714,7 +721,7 @@ export let unique = (name: string) =>
 // how any directory row comes to be written at all (identity.ts).
 // A person, signed in through the address and the code, as anyone signs in.
 export let signIn = async (
-  k: Pick<Kernel, 'at' | 'host' | 'log' | 'secret' | 'settled'>,
+  k: Pick<Kernel, 'at' | 'host' | 'log' | 'secret' | 'settled' | 'deliveries'>,
   email = `${unique('probe')}@${k.host}`,
 ): Promise<Person> => {
   let form = (path: string, fields: Record<string, string>) =>
