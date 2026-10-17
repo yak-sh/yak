@@ -2,6 +2,7 @@ import { equal, test, throws } from '@yaks/testing'
 import {
   candidate,
   evidenceRows,
+  finalCandidate,
   readOnly,
   recording,
   score,
@@ -195,4 +196,68 @@ test('evidence strips queues, credentials and transcript semantics and rejects l
   }])
   throws(() => evidenceRows([row], '2020-01-01T00:00:00Z'))
   throws(() => evidenceRows([{ entity: row.entity }], '2020-01-02T00:00:00Z'))
+})
+
+test('native evidence compares instants rather than timestamp spellings', () => {
+  let row = {
+    entity: { eid: 'offset' },
+    created: { at: '2020-01-02T00:30:00+02:00' },
+    content: { body: 'prior' },
+  }
+  equal(evidenceRows([row], '2020-01-01T23:00:00Z').length, 1)
+  throws(() =>
+    evidenceRows(
+      [{ ...row, created: { at: '2020-01-01T22:30:00-02:00' } }],
+      '2020-01-01T23:00:00Z',
+    )
+  )
+  throws(() => evidenceRows([row], 'invalid'))
+})
+
+test('final candidate must consume completed tools, not oracle or pending prose', () => {
+  let entries = [
+    {
+      entity: { eid: 'input' },
+      entry: { seq: 1 },
+      content: { body: 'question' },
+    },
+    { entity: { eid: 'ask1' }, entry: { seq: 2 }, ask: { through: 'input' } },
+    { entity: { eid: 'call' }, entry: { seq: 3 }, call: {} },
+    {
+      entity: { eid: 'pending' },
+      entry: { seq: 4 },
+      output: { source: 'ask1' },
+      content: { body: 'Still pending' },
+    },
+    {
+      entity: { eid: 'result' },
+      entry: { seq: 5 },
+      result: { call: 'call' },
+      content: { body: 'Oracle prose' },
+    },
+  ]
+  equal(finalCandidate(entries), null)
+  // A delayed old response after the result still did not consume it.
+  equal(
+    finalCandidate([...entries, {
+      entity: { eid: 'late' },
+      entry: { seq: 6 },
+      output: { source: 'ask1' },
+      content: { body: 'old answer' },
+    }]),
+    null,
+  )
+  equal(
+    finalCandidate([...entries, {
+      entity: { eid: 'ask2' },
+      entry: { seq: 6 },
+      ask: { through: 'result' },
+    }, {
+      entity: { eid: 'final' },
+      entry: { seq: 7 },
+      output: { source: 'ask2' },
+      content: { body: 'Final interpretation' },
+    }]),
+    'Final interpretation',
+  )
 })

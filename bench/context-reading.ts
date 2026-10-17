@@ -153,7 +153,11 @@ export function readOnly(tools: Tool[]): Tool[] {
 export function evidenceRows(rows: Bundle[], cutoff: string): Bundle[] {
   return rows.map((row) => {
     let at = (row.created as { at?: string } | undefined)?.at
-    if (!at || at >= cutoff) {
+    if (
+      !at || !Number.isFinite(Date.parse(at)) ||
+      !Number.isFinite(Date.parse(cutoff)) ||
+      Date.parse(at) >= Date.parse(cutoff)
+    ) {
       throw new Error('Evidence must strictly precede the original message')
     }
     return {
@@ -163,6 +167,35 @@ export function evidenceRows(rows: Bundle[], cutoff: string): Bundle[] {
       created: { at },
     }
   })
+}
+
+/** A final interpretation must belong to the candidate transcript and consume
+ * every completed tool result. Oracle prose and pre-result outputs do not count.
+ */
+export function finalCandidate(entries: Bundle[]): string | null {
+  let seq = (b: Bundle | undefined) =>
+    (b?.entry as { seq?: number } | undefined)?.seq ?? 0
+  let all = entries.toSorted((a, b) => seq(a) - seq(b))
+  let byId = new Map(all.map((b) => [b.entity.eid, b]))
+  let results = all.filter((b) => b.result)
+  let answered = new Set(
+    results.map((b) => (b.result as { call?: string }).call),
+  )
+  if (all.some((b) => b.call && !answered.has(b.entity.eid))) return null
+  let lastResult = Math.max(0, ...results.map(seq))
+  let final = all.findLast((b) => {
+    if (!b.output || b.result || b.call || b.reasoning || b.tool_progress) {
+      return false
+    }
+    let body = (b.content as { body?: string } | undefined)?.body
+    if (!body?.trim() || seq(b) <= lastResult) return false
+    let ask = byId.get((b.output as { source?: string }).source ?? '')
+    let through = byId.get(
+      (ask?.ask as { through?: string } | undefined)?.through ?? '',
+    )
+    return !lastResult || seq(through) >= lastResult
+  })
+  return (final?.content as { body?: string } | undefined)?.body ?? null
 }
 
 /** Unknown/failed usage is not free. Every attempted call is in the total. */
@@ -495,11 +528,7 @@ export async function run(packet: Packet, options: {
           await a.idle(session)
           transcript = await a.transcript(session)
           if (
-            !calls.some((call) =>
-              call.response?.items.some((item) =>
-                item.kind == 'assistant' && item.text
-              )
-            ) || calls.some((call) =>
+            !finalCandidate(transcript) || calls.some((call) =>
               call.error ||
               !call.response
             )
