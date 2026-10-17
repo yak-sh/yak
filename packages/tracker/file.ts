@@ -77,6 +77,10 @@ export let files = (dir: string): {
           admitted = true
           await sync(dir)
         },
+        refuse: async () => {
+          await Deno.rename(path, path.replace(/\.jsonl$/, '.refused'))
+          await sync(dir)
+        },
         ack: async () => {
           try {
             await Deno.remove(path)

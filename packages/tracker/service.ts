@@ -2,7 +2,7 @@
 // Only admission plus successful forwarding may acknowledge an error record.
 
 import type { Graph } from '@yaks/graph'
-import { intake, type Record, type Source } from './intake.ts'
+import { each, intake, type Record, type Source } from './intake.ts'
 export { intake, type Record, type Source } from './intake.ts'
 import { sleep } from '@yaks/effects'
 import { files } from './file.ts'
@@ -43,17 +43,16 @@ export let service = async (
       if (stop?.aborted) return
       if (send && errors(record).some((row) => row.error)) {
         if (record.admitted) continue
-        yield { rows: record.rows, ack: record.admit ?? (() => {}) }
+        yield { ...record, ack: record.admit ?? (() => {}) }
       } else if (record.admitted) await record.ack()
       else yield record
     }
   }
   let forward = async () => {
     if (!send) return
-    for await (let record of source()) {
-      if (stop?.aborted) return
+    await each(source, stop, async (record) => {
       let rows = errors(record)
-      if (!rows.some((row) => row.error)) continue
+      if (!rows.some((row) => row.error)) return
       // The local loop owns admission. Bare reference spines do not count as
       // receipts; never remove a record before all its bundles are admitted.
       let admitted = record.admitted ?? (record.admit ? false : undefined)
@@ -65,10 +64,10 @@ export let service = async (
         )
         admitted = record.rows.every((row) => known.has(row.entity.eid))
       }
-      if (!admitted) continue
+      if (!admitted) return
       await send(rows)
       await record.ack()
-    }
+    })
   }
   let run = async (pass: () => Promise<void>, remote = false) => {
     do {
