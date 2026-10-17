@@ -103,10 +103,17 @@ test('a known coverer whose pid is gone stops covering without a feed row', asyn
 })
 
 test('a store with no feed is read whole at each look', async () => {
-  let p = processes([row('pool', ['effects'])])
-  let covered = coverage(p.store, ['effects'], undefined, false)
-  await covered.missing()
-  await covered.missing()
+  let rows: Bundle[] = []
+  let p = processes(rows)
+  let covered = coverage(
+    p.store,
+    ['effects'],
+    () => Promise.resolve(false),
+    false,
+  )
+  assertEquals(await covered.missing(), ['effects'])
+  rows.push(row('pool', ['effects']))
+  assertEquals(await covered.missing(), [])
   assertEquals(p.reads(), 2)
 })
 
