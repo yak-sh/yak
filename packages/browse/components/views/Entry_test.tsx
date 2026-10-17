@@ -163,35 +163,31 @@ test('message summaries preserve who spoke', () =>
     )
   }))
 
-test('full and normalized prose identify people and model output', () =>
-  withDom((root) => {
-    let e = { eid: 'input', content: { body: 'same words' } } as Ent
-    render(<MessageFull e={e} />, root)
-    assertEquals(root.querySelector('.Entry_Speaker')?.textContent, 'person')
+// Build both message representations once; the case compares their speakers.
+let proseSpeakers: (string | null | undefined)[] = []
+withDom((root) => {
+  let e = { eid: 'input', content: { body: 'same words' } } as Ent
+  render(<MessageFull e={e} />, root)
+  proseSpeakers.push(root.querySelector('.Entry_Speaker')?.textContent)
+  render(
+    <MessageFull
+      e={{ ...e, output: { eid: 'output', source: 'ask', id: 'reply' } }}
+    />,
+    root,
+  )
+  proseSpeakers.push(root.querySelector('.Entry_Speaker')?.textContent)
+  for (let role of ['user', 'agent'] as const) {
     render(
-      <MessageFull
-        e={{ ...e, output: { eid: 'output', source: 'ask', id: 'reply' } }}
+      <EntryBody
+        x={{ seq: 1, line: '', row: { kind: 'say', role, text: 'same words' } }}
       />,
       root,
     )
-    assertEquals(root.querySelector('.Entry_Speaker')?.textContent, 'model')
-    for (let role of ['user', 'agent'] as const) {
-      render(
-        <EntryBody
-          x={{
-            seq: 1,
-            line: '',
-            row: { kind: 'say', role, text: 'same words' },
-          }}
-        />,
-        root,
-      )
-      assertEquals(
-        root.querySelector('.Entry_Speaker')?.textContent,
-        role == 'user' ? 'person' : 'model',
-      )
-    }
-  }))
+    proseSpeakers.push(root.querySelector('.Entry_Speaker')?.textContent)
+  }
+})
+test('full and normalized prose identify people and model output', () =>
+  assertEquals(proseSpeakers, ['person', 'model', 'person', 'model']))
 
 test('session prompts are collapsed persona entries', () =>
   withDom((root) => {
