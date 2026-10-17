@@ -207,15 +207,31 @@ export let EntryPage = ({ e, io }: Props): JSX.Element => {
   )
 }
 
+// The session lifecycle wears the same pip in every shared renderer.
+let SessionDot = ({ e }: { e: Bundle }): JSX.Element => {
+  let status = str(e, SESSION, 'status')
+  let looks: Record<string, string[]> = {
+    idle: ['half', 'active'],
+    settled: ['half', 'active'],
+    pending: ['half', 'active'],
+    running: ['pulse', 'active'],
+    completed: ['check', 'positive'],
+    failed: ['cross', 'negative'],
+    interrupted: ['cross', 'caution'],
+    stopped: ['cross', 'caution'],
+    lost: ['dashed', 'special'],
+  }
+  return h(ui.Dot, { mod: looks[status], title: status || 'no status' })
+}
+
 // What a session is running, in a line: its status, the model it asks, and
 // the worktree it works in.
 let running = (io: Io, e: Bundle): ComponentChildren[] => {
-  let status = str(e, SESSION, 'status')
   let model = str(e, 'using', 'model')
   let branch = str(e, 'worktree', 'branch')
   let path = str(e, 'worktree', 'path')
   return [
-    status || 'no status',
+    h(SessionDot, { e }),
     model ? [' · asks ', mention(io, model)] : null,
     branch || path ? [' · in ', branch || path] : null,
   ]
@@ -302,18 +318,16 @@ export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
     cut((first || brief).trim().replace(/\s+/g, ' '), 180) ||
     (comp(e, SESSION).operator ? 'Personal conversation' : 'Session')
   let at = str(rows(got.last)[0], 'created', 'at')
-  let status = str(e, SESSION, 'status')
   let ready = Object.values(got).every((a) => a.ready)
   return h(
     ui.Tile,
     { href: io.link(eid) },
-    h(ui.Tile.Kind, {}, 'session'),
+    h(ui.Tile.Kind, {}, h(SessionDot, { e }), ' session'),
     h(ui.Tile.Title, {}, title),
     h(
       ui.Tile.Sub,
       {},
       [
-        status,
         at
           ? `active ${io.when(at)}`
           : ready

@@ -58,9 +58,14 @@ await until(() => titles().length == 10)
 test('All sessions reuses the paged list and accepts words and query filters, newest first', async () => {
   try {
     assertEquals(summary.subs, [
-      'settled · active just now',
-      'pending · active just now',
+      'active just now',
+      'active just now',
     ])
+    assertEquals(summary.dots, [
+      'Dot Dot-half Dot-active',
+      'Dot Dot-half Dot-active',
+    ])
+    assertEquals(summary.statuses, ['settled', 'pending'])
     assertEquals(summary.anchors, true)
     assertEquals(
       titles(),
@@ -246,6 +251,12 @@ async function summaries() {
     return {
       subs: [...mounted.root.querySelectorAll('.Tile_Sub')].map((e) =>
         e.textContent
+      ),
+      dots: [...mounted.root.querySelectorAll('.Tile .Dot')].map((e) =>
+        e.className
+      ),
+      statuses: [...mounted.root.querySelectorAll('.Tile .Dot')].map((e) =>
+        e.getAttribute('title')
       ),
       anchors: [...mounted.root.querySelectorAll('.Tile')].every((e) =>
         e.tagName == 'A'
