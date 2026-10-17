@@ -306,8 +306,10 @@ import {
   inSpace,
   type Out,
   ownSpace,
+  reacquire,
   refuse,
   rejected,
+  renew,
   type Row,
   seatIn,
   type Shape,
@@ -913,7 +915,7 @@ let published = async (
 ) => {
   let c = ctx.clock ?? clock()
   let blobs = files.files
-  let app = { ...standing, source: release }
+  let app: App = { ...standing, source: release }
   let prefix = fileKey(space, app, '')
   let bytesAt = (path: string) => blobs.read(prefix + path)
   // The reads the compile does not change, sent now and awaited after it,
@@ -1147,7 +1149,7 @@ let published = async (
     }
     let whole: VocabDoc = { ...was, $defs: defs }
     let release = crypto.randomUUID()
-    await answer(appStore(ctx.env.STORE, space, home), '/vocab')
+    await answer(appStore(ctx.env.STORE, space, home, ctx.env), '/vocab')
     await answer(
       draftStore(ctx.env.STORE, space, home, release),
       '/vocab',
@@ -1344,6 +1346,21 @@ let published = async (
         pointer,
       ),
   )
+  // Recording the release changed the directory epoch. Replace the app,
+  // caller and Store door together before any protected follow-up work.
+  if (ctx.reopen) {
+    let current = await reacquire(ctx, space, app)
+    if (
+      current.app!.source != release || current.app!.declaration != pointer ||
+      current.app!.version != version
+    ) {
+      throw refuse('conflict', 'release changed before its follow-up work')
+    }
+    space = current.space
+    app = current.app!
+    who = current.who
+    store = current.store!
+  }
   // What follows a live release asks three different doors and none waits on
   // another: the store hears its release, connected agents hear a moved view
   // list, and the tracker closes what earlier versions broke.
@@ -1472,6 +1489,13 @@ let released = async (
   { version: number; said: string; serves?: string; review?: DeployReview }
 > => {
   let c = ctx.clock ?? clock()
+  if (ctx.reopen) {
+    let current = await reacquire(ctx, space, app)
+    space = current.space
+    app = current.app!
+    who = current.who
+    store = current.store!
+  }
   let standing = await waiting(ctx.dir, space, app, who)
   if (expectedVersion != null && standing.version != expectedVersion) {
     throw refuse('stale', `v${expectedVersion} is no longer live`)
@@ -1488,6 +1512,18 @@ let released = async (
   let draft = standing.draft ?? null
   let reviewing = base != null && base < (standing.version ?? 0) && !confirm
   let fence = await c.time('fence', () => fenced(ctx.dir, standing, draft, who))
+  // The fence is a directory commit. Acquire a new app and caller together;
+  // none of the standing from before that commit authorizes the next phase.
+  if (ctx.reopen) {
+    let current = await reacquire(ctx, space, app)
+    if (current.app!.fence != fence) {
+      throw refuse('conflict', 'release changed while acquiring authorization')
+    }
+    space = current.space
+    standing = current.app!
+    who = current.who
+    store = current.store!
+  }
   // The app's pages leave the edge as the release begins, beside its work
   // rather than after it: Site keeps none of a fenced app's pages
   // (page-cache.ts `keep`), so the commit purges nothing of the app's
@@ -2553,7 +2589,7 @@ let OURS: Row[] = [
       // its author chose (T-32455), so the whole batch is bundles. Once
       // identity writes that row at sign-in (T-32327) it changes nothing and
       // apply drops it.
-      await ctx.dir.apply({
+      let made = await ctx.dir.apply({
         entities: [
           { entity: { eid: ctx.person }, person: {} },
           {
@@ -2567,7 +2603,15 @@ let OURS: Row[] = [
           },
         ],
       }, vouched(asCaller(ctx, 'owner')))
-      let space = (await ctx.dir.space(s))!
+      // The mint is committed; use its identity, not a slug that can be
+      // renamed/reused while acquiring this new scope.
+      renew(ctx)
+      let eid = made.find((row) => row.space)?.entity.eid
+      let space = eid ? await ctx.dir.at(eid) : null
+      if (!space) throw refuse('missing', 'the new space no longer exists')
+      if (ctx.reopen) {
+        space = (await reacquire(ctx, space, undefined, true)).space
+      }
       let at = `https://${spaceHost(ctx.env, s)}/`
       return {
         text: `space ${s} (${space.eid}): ${at}`,
@@ -2964,8 +3008,21 @@ let OURS: Row[] = [
       // order is not a choice anyone made. Said in the answer, because
       // nothing else tells a person the front page is theirs to set.
       let front = await ctx.dir.home(space)
-      await ctx.dir.apply({ entities }, vouched(who))
-      let app = (await ctx.dir.app(space, s))!
+      let applied = await ctx.dir.apply({ entities }, vouched(who))
+      let eid = applied.find((row) => row.app)?.entity.eid
+      if (!eid) throw new Error('app creation returned no identity')
+      renew(ctx)
+      let pair = await ctx.dir.appAt(eid)
+      if (!pair || pair.space.eid != space.eid) {
+        throw refuse('missing', 'the new app no longer exists here')
+      }
+      let app = pair.app
+      if (ctx.reopen) {
+        let current = await reacquire(ctx, space, app, true)
+        space = current.space
+        who = current.who
+        app = current.app!
+      }
       let at = url(space, app, ctx.env)
       return {
         text: `app ${space.slug}/${s} (${app.eid}): ${at}` +
@@ -3790,7 +3847,7 @@ let OURS: Row[] = [
         app,
         who,
         store,
-        { target: want },
+        { target: want, expectedVersion: app.version ?? undefined },
       )
       // What was left is kept, and the way to it is said, so the next agent
       // need not read app_versions to undo this one.
@@ -4238,7 +4295,13 @@ let OURS: Row[] = [
       }
       await ctx.dir.apply({ entities }, vouched(who))
       await blobs.delete(keys)
-      let now = (await ctx.dir.app(space, to ?? app.slug))!
+      let now: App
+      if (ctx.reopen) {
+        let current = await reacquire(ctx, space, app)
+        space = current.space
+        who = current.who
+        now = current.app!
+      } else now = (await ctx.dir.app(space, to ?? app.slug))!
       // The gallery, after the rest: what the letter names is the app as it
       // stands when the ask goes, title and address included, so a rename in
       // the same call is already in it.
@@ -5081,7 +5144,13 @@ let OURS: Row[] = [
       // app in hand has no offer on it at all.
       let shown: Standing | null = null
       if (show) {
-        let now = (await ctx.dir.app(space, app.slug))!
+        let now: App
+        if (ctx.reopen) {
+          let current = await reacquire(ctx, space, app)
+          space = current.space
+          who = current.who
+          now = current.app!
+        } else now = (await ctx.dir.app(space, app.slug))!
         shown = await toGallery(ctx, space, now)
       } else if (show == false && onGallery(app) != 'no') {
         await unGallery(ctx.env, app)
@@ -5286,10 +5355,29 @@ let OURS: Row[] = [
         }),
         installed: { of: offer.app.eid, version, ...sandboxing(false) },
       }]
-      await ctx.dir.apply({ entities }, vouched(who))
-      let app = (await ctx.dir.app(space, s))!
+      let applied = await ctx.dir.apply({ entities }, vouched(who))
+      let eid = applied.find((row) => row.app)?.entity.eid
+      if (!eid) throw new Error('app creation returned no identity')
+      renew(ctx)
+      let pair = await ctx.dir.appAt(eid)
+      if (!pair || pair.space.eid != space.eid) {
+        throw refuse('missing', 'the new app no longer exists here')
+      }
+      let app = pair.app
+      if (ctx.reopen) {
+        let current = await reacquire(ctx, space, app, true)
+        space = current.space
+        who = current.who
+        app = current.app!
+      }
       let onto = { space, app }
       let { wrote } = await copied(ctx, source, onto, who)
+      if (ctx.reopen) {
+        let current = await reacquire(ctx, space, app)
+        space = current.space
+        app = current.app!
+        who = current.who
+      }
       // A release of the copy, in the installer's own space: the components
       // its vocab.json declares planted in its store, its tools listed under
       // its slug, its worker.js uploaded as its own script.
@@ -5298,7 +5386,7 @@ let OURS: Row[] = [
         space,
         app,
         who,
-        appStore(ctx.env.STORE, space, app),
+        appStore(ctx.env.STORE, space, app, ctx.env),
         { preserve: true, accepted },
       )
       return {

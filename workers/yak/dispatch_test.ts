@@ -351,44 +351,46 @@ let token = await sign({
   via: crypto.randomUUID(),
 }, SECRET)
 
+let failureEnv = envOf(mirror(503).get)
+let failureError = new Error('worker fell over')
+let signedFailureVisit = visit('/hello', { cookie: `${COOKIE}=${token}` })
+let anonymousFailureVisit = visit()
+
 test('an app failure names the signed-in person who saw it, and nobody else', () =>
   tracked(async () => {
-    let env = envOf(mirror(503).get)
     let seenBy = async (req: Request) => {
       wrote = []
-      await workerBreak(env, space, app, req, new Error('worker fell over'))
+      await workerBreak(failureEnv, space, app, req, failureError)
       return (wrote[0].error as { tags: Record<string, unknown> }).tags.user_id
     }
     assertEquals(
-      await seenBy(visit('/hello', { cookie: `${COOKIE}=${token}` })),
+      await seenBy(signedFailureVisit),
       'p1',
     )
-    assertEquals(await seenBy(visit()), undefined)
+    assertEquals(await seenBy(anonymousFailureVisit), undefined)
   }))
+
+// Prepare the worker's cookie response and browser request, not the dispatch.
+let cookieHeaders = new Headers()
+for (
+  let set of [
+    'theme=dark; Path=/; Secure',
+    'yak_session=attackers.token; Domain=yaks.app; Path=/',
+    'yak_session=attackers.token; Path=/recipes/api',
+    'fix=1; domain=.jeff.yaks.app; Path=/',
+    'bare=1; Domain; Path=/',
+  ]
+) cookieHeaders.append('set-cookie', set)
+let cookieEnv = envOf(() => ({
+  fetch: () => Promise.resolve(new Response('hi', { headers: cookieHeaders })),
+}))
+let cookieVisit = visit()
 
 test('an app sets cookies for its own host, and none for the zone', async () => {
   // Login fixation (T-37876): an app that sets the platform's session, or any
   // cookie scoped past its own hostname, signs visitors elsewhere in as
   // whoever it likes. Its own host-only cookies are its business.
-  let headers = new Headers()
-  for (
-    let set of [
-      'theme=dark; Path=/; Secure',
-      'yak_session=attackers.token; Domain=yaks.app; Path=/',
-      'yak_session=attackers.token; Path=/recipes/api',
-      'fix=1; domain=.jeff.yaks.app; Path=/',
-      'bare=1; Domain; Path=/',
-    ]
-  ) headers.append('set-cookie', set)
-  let out = await ran(
-    envOf(() => ({
-      fetch: () => Promise.resolve(new Response('hi', { headers })),
-    })),
-    space,
-    app,
-    visit(),
-    who,
-  )
+  let out = await ran(cookieEnv, space, app, cookieVisit, who)
   assertEquals(out!.headers.getSetCookie(), ['theme=dark; Path=/; Secure'])
   assertEquals(await out!.text(), 'hi')
 })
@@ -1205,4 +1207,33 @@ test('a wasm module goes up as a module part of its own type', async () => {
     WASM,
   )
   assertEquals(await part('worker.js').text(), new TextDecoder().decode(APP))
+})
+
+let anonymousPolicyGrant = await granting(SECRET, 'jeff/recipes', {
+  person: null,
+  role: null,
+})
+let personPolicyGrant = await granting(SECRET, 'jeff/recipes', {
+  person: 'ada',
+  role: 'viewer',
+}, 7)
+test('a current mode still governs anonymous grants while person standing needs its epoch', async () => {
+  let request = (token: string) =>
+    new Request('https://jeff.yaks.app/recipes/api/query', {
+      headers: { 'x-yak-grant': token },
+    })
+  assertEquals(
+    (await granted(request(anonymousPolicyGrant), SECRET, 'jeff/recipes', 8))
+      ?.role,
+    null,
+  )
+  assertEquals(
+    await granted(request(personPolicyGrant), SECRET, 'jeff/recipes', 8),
+    null,
+  )
+  assertEquals(
+    (await granted(request(personPolicyGrant), SECRET, 'jeff/recipes', 7))
+      ?.role,
+    'viewer',
+  )
 })

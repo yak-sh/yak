@@ -1181,10 +1181,11 @@ let remote = (via: Fetcher): Part => ({
 // (hops.ts `recall`). What is kept is the text: every caller parses rows of
 // its own.
 export let directory = (via: Fetcher | Part, now = false) => {
-  let signed = 'signed' in via && !!via.signed
+  let versioned = ('signed' in via && !!via.signed) ||
+    ('versioned' in via && !!via.versioned)
   let door = 'fetch' in via ? remote(via) : via
   let query = async (q: string, fresh = now): Promise<Row[]> => {
-    if (signed && 'fetch' in via) {
+    if (versioned && 'fetch' in via) {
       // The revision belongs to this response, not a shared mutable last
       // response slot: parallel reads can resume in either order.
       let answer = await via.fetch(

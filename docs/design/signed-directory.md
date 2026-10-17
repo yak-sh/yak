@@ -151,3 +151,26 @@ is `workers/yak/directory-copy.ts`, `serving-copy.ts`, the Durable Object
 adapter in `index.ts`, and the directory/Store paths in `directory.ts` and
 `graph.ts`. The surrounding package documentation is `workers/yak/README.md`,
 especially “Store composition”.
+
+## Authorization operations during tools
+
+A tool invocation owns its directory view. A committed directory write does not
+renew that view or its captured Store doors. `reacquire` opens a provisional
+view and resolves stable space/app identities, then reads the caller's current
+membership and administrative standing. Only after every check succeeds does it
+return the new metadata, Who and Store door together. Removal, downgrade, trash
+and credential narrowing still refuse the operation. Names are never resolved a
+second time to choose a replacement target.
+
+Deployment checkpoints retain the release/fence compare-and-set conditions. The
+protected continuation runs with newly acquired metadata, not by mutating old
+doors or relaxing the Store floor. Read-only provisional acquisition may restart
+if overtaken by another commit; tool execution, compilation and writes are never
+replayed to repair authorization. Post-tool private news acquires its own
+current standing, so a tool that removes its own membership still reports its
+result without leaking unseen details.
+
+For anonymous rendering, a versioned directory response may carry its epoch
+without an added copy RPC on the warm path. Any Store request still validates
+that epoch against the independent authority. A copied body is never an
+unchecked authorization grant.

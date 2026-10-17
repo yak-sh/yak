@@ -7,6 +7,7 @@ import {
   type ServingCopyDoor,
 } from './directory-copy.ts'
 import { ServingCopy } from './serving-copy.ts'
+import { directory } from './directory.ts'
 
 let fixture = () => {
   let state = new ServingCopy({
@@ -174,4 +175,66 @@ let directWinner = await (async () => {
 })()
 test('directory deadline: a late copy cannot make an authoritative winner uncacheable', () => {
   assertEquals(directWinner, { body: 'authority', stale: false, used: 0 })
+})
+
+// The Store independently validates this revision; the public transport only
+// preserves the stamp attached to these exact bytes, without a valid RPC.
+let publicPolicies = await (async () => {
+  let row = {
+    entity: { eid: 'page' },
+    app: { slug: 'page', space: 'space', access: 'public' },
+  }
+  let f = fixture(), time = clock(), validations = 0
+  f.copy.valid = () => {
+    validations++
+    return Promise.resolve(true)
+  }
+  let direct = publicDirectory(
+    {
+      fetch: () =>
+        Promise.resolve(Response.json([row], {
+          headers: { [EPOCH]: '7' },
+        })),
+    },
+    f.copy,
+    time,
+  )
+  let current = await directory(direct, true).app(
+    { eid: 'space', slug: 'space' } as never,
+    'page',
+  )
+  f.copy.read = () =>
+    Promise.resolve({ revision: 8, body: JSON.stringify([row]) })
+  let copied = directory(
+    publicDirectory({ fetch: () => new Promise(() => {}) }, f.copy, time),
+    true,
+  )
+    .app({ eid: 'space', slug: 'space' } as never, 'page')
+  await time.advance(25)
+  let held = await copied
+  delete f.copy.read
+  let legacy = directory(
+    publicDirectory({ fetch: () => new Promise(() => {}) }, {
+      ...f.copy,
+      get: () => Promise.resolve(JSON.stringify([row])),
+    }, time),
+    true,
+  ).app({ eid: 'space', slug: 'space' } as never, 'page')
+  await time.advance(25)
+  return {
+    current: current?.policy,
+    copied: held?.policy,
+    legacy: (await legacy)?.policy,
+    reads: f.reads(),
+    validations,
+  }
+})()
+test('public directory stamps current and copied Apps but never invents legacy authority', () => {
+  assertEquals(publicPolicies, {
+    current: 7,
+    copied: 8,
+    legacy: undefined,
+    reads: 0,
+    validations: 0,
+  })
 })

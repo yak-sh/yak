@@ -1,3 +1,5 @@
+import type { Who } from './session.ts'
+import { reacquire } from './tool.ts'
 // The agent door's two halves (T-33812), so mcp.ts is a mount and nothing
 // else: the caller's reach as one `Graph`, and the platform's own tools as a
 // `Plugin` on it.
@@ -149,18 +151,28 @@ export let answered = async (
   // on the other, so they are asked together, each a stage on the call's
   // `Server-Timing` (timing.ts).
   let space = out.space
+  let currentWho: Who | undefined
+  if (space && ctx.person && !readOnly && ctx.reopen) {
+    // Output metadata is not standing. The tool may have committed a change
+    // (including removing its own seat); only a fresh seat gets private news.
+    try {
+      let current = await reacquire(ctx, space, undefined, false)
+      space = current.space
+      currentWho = current.who
+    } catch {
+      space = undefined
+    }
+  }
   let c = ctx.clock ?? clock()
   let text = !space || !ctx.person || readOnly
     ? out.text
     : out.text + (await Promise.all([
-      c.time('breaks', () =>
-        ctx.dir.role(space, ctx.person).then(async (role) =>
-          unseenBlock(
-            await serve(ctx.env, space, { person: ctx.person, role }),
-          )
-        )),
-      c.time('ceiling', () =>
-        ceiling(ctx.env, space)),
+      c.time('breaks', async () => {
+        let who = currentWho ??
+          { person: ctx.person, role: await ctx.dir.role(space, ctx.person) }
+        return unseenBlock(await serve(ctx.env, space, who))
+      }),
+      c.time('ceiling', () => ceiling(ctx.env, space)),
     ])).join('')
   // A call to say it came from, where there is one: the builder runs these
   // same tools in its own loop (builder.ts), with nothing to point at.
@@ -184,10 +196,12 @@ export let answered = async (
  * second copy of these two lines is a second `app_new`.
  */
 export let running =
-  (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) =>
-    t.run({ ...ctx, ...(call ? { call } : {}) }, args).then((out) =>
-      answered(ctx, out, call, t.readOnly)
+  (ctx: Ctx, t: Sugar) => (args: Record<string, unknown>, call?: Eid) => {
+    let invocation = { ...ctx, ...(call ? { call } : {}) }
+    return t.run(invocation, args).then((out) =>
+      answered(invocation, out, call, t.readOnly)
     )
+  }
 
 // What the transport says about a tool beside its schemas: what it declares
 // about signing in where that is not the door's own (preauth.ts NOAUTH — every

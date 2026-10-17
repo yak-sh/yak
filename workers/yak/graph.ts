@@ -1780,7 +1780,11 @@ export class Store {
     this.#policyFloor(req)
     // The authority check yields. Recheck the local floor inside #remember:
     // another request may have accepted a newer revision while it was away.
-    if (this.#heard(req).length || revision != null) {
+    // An equal persisted revision with unchanged metadata has nothing to write.
+    if (
+      this.#heard(req).length ||
+      (revision != null && this.#get('policy') != String(revision))
+    ) {
       this.#atomic(() => this.#remember(req))
     } else if (this.#appMetadata(req) && this.#get('policy') != null) {
       this.#remember(req)
@@ -2021,7 +2025,13 @@ export class Store {
     let ns = this.#bind.STORE
     if (!ns) throw new Refused('directory unavailable')
     return signedDirectory({
-      fetch: (req) => directoryFetch(req, { STORE: ns }),
+      fetch: (req) => {
+        // Store authorization never takes the directory part's TTL, even in
+        // hosts without the independent-copy binding (including cold wakes).
+        let headers = new Headers(req.headers)
+        headers.set(EPOCH, '1')
+        return directoryFetch(new Request(req, { headers }), { STORE: ns })
+      },
     }, this.#bind.SERVING_COPY ? copyOf(this.#bind as Env) : undefined)
   }
 

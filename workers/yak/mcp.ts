@@ -768,22 +768,24 @@ let answered = async (
   // (directory.ts). A deploy from anywhere else is news this request has to
   // have (C-32905 item 5). Within the request a line is read once, until the
   // request itself writes to the directory.
-  let dir = directory(
-    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
-    true,
-  )
+  let reopen = () => {
+    let dir = directory(
+      signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+      true,
+    )
+    return auth.space ? narrowed(dir, auth.space, auth.spaceEid) : dir
+  }
+  let dir = reopen()
   // The person is active whatever the call does: an assistant's tool calls
   // are theirs (the directory's "last active", used.ts).
-  if (rpc.method == 'tools/call' && auth.person) {
-    scheduleUse(env, auth.person)
-  }
   let ctx: Ctx = {
     env,
     // A grant narrowed to one space is narrowed here, over the directory every
     // tool reads membership out of (grants.ts `narrowed`), so the narrowing
     // holds for the generic tier, the platform tier and an app's own tools at
     // once rather than tool by tool.
-    dir: auth.space ? narrowed(dir, auth.space, auth.spaceEid) : dir,
+    dir,
+    reopen,
     person: auth.person,
     who: auth,
     clock: c,
@@ -803,7 +805,20 @@ let answered = async (
     : req.headers.get('mcp-session-id') ?? ''
   let instrument = await instrumentOf(session, auth.person, env.SESSION_SECRET)
   if (instrument) ctx.who = { ...auth, instrument }
-  let built = await c.time('door', () => door(ctx, session))
+  // Building the reach and tool schemas is read-only. If a directory commit
+  // overtakes it, discard the entire provisional reach, not just its epoch.
+  let built: Awaited<ReturnType<typeof door>> | undefined
+  for (let attempt = 0; !built; attempt++) {
+    ctx.dir = reopen()
+    try {
+      built = await c.time('door', () => door(ctx, session))
+    } catch (error) {
+      if (
+        attempt >= 2 || error == null || typeof error != 'object' ||
+        !('status' in error) || error.status != 503
+      ) throw error
+    }
+  }
   let out = timed(
     await built.handle(
       new Request(req.url, {
@@ -814,6 +829,7 @@ let answered = async (
     ),
     c,
   )
+  if (rpc.method == 'tools/call' && auth.person) scheduleUse(env, auth.person)
   if (rpc.method != 'initialize') return out
   // The list this client is about to cache, remembered for the session it is
   // caching it under: every later reply is compared against this.

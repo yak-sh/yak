@@ -25,7 +25,9 @@ import {
   META,
   type Space,
 } from './directory.ts'
-import type { Env } from './env.ts'
+import { bound, type Env } from './env.ts'
+import { directory } from './directory.ts'
+import * as directoryPart from './directory.ts'
 import type { Spend } from './sandbox.ts'
 import type { Caller, Who } from './session.ts'
 import type { Clock } from './timing.ts'
@@ -33,6 +35,8 @@ import type { Clock } from './timing.ts'
 export type Ctx = {
   env: Env
   dir: Directory
+  /** Start a new authorization operation; no standing crosses this boundary. */
+  reopen?: () => Directory
   person: string
   /** The invocation whose work a forwarded store call records as its source. */
   call?: string
@@ -72,6 +76,12 @@ export type Ctx = {
   // names each round trip it waits on, and mcp.ts puts the marks on the
   // answer as `Server-Timing`, so a slow deploy says which hop was slow.
   clock?: Clock
+}
+
+/** Discard only the directory view, never carry its role or app into the next
+ * operation. Callers must acquire both again before doing authorized work. */
+export let renew = (ctx: Ctx) => {
+  if (ctx.reopen) ctx.dir = ctx.reopen()
 }
 
 /** This caller at one permission level. A door's verified credential names
@@ -183,7 +193,9 @@ let STATUS: Record<number, string> = {
 /** What a door answered, as a throwable: a 4xx is its refusal of what the
  * caller asked, and anything else is ours to fix. */
 export let rejected = (status: number, text: string) =>
-  status < 500 ? refuse(STATUS[status] ?? 'arguments', text) : new Error(text)
+  status < 500
+    ? refuse(STATUS[status] ?? 'arguments', text)
+    : Object.assign(new Error(text), { status })
 
 export let str = (description: string) => ({ type: 'string', description })
 
@@ -248,7 +260,15 @@ export let ownSpace = async (ctx: Ctx, app?: unknown) => {
       `space: name one of ${owned.map((s) => s.slug).join(', ')}`,
     )
   }
-  return owned[0] ?? await ctx.dir.own(ctx.person)
+  if (owned[0]) return owned[0]
+  // The legacy default may mint its space. That internal write uses an
+  // authoritative client and starts a new scope before any role is used.
+  let space =
+    await (ctx.reopen
+      ? directory(bound(ctx.env.DIRECTORY, directoryPart.fetch, ctx.env), true)
+      : ctx.dir).own(ctx.person)
+  if (ctx.reopen) return (await reacquire(ctx, space, undefined, false)).space
+  return space
 }
 
 // The platform's admin: an owner of the meta space, the seat every platform
@@ -284,6 +304,13 @@ let callerIn = async (
   write: boolean,
   over: boolean,
 ) => {
+  if (
+    ctx.who?.spaceEid
+      ? ctx.who.spaceEid != space.eid
+      : ctx.who?.space && ctx.who.space != space.slug
+  ) {
+    throw refuse('access', 'this credential does not open that space')
+  }
   let who = asCaller(ctx, await roleIn(ctx, space, over))
   if (over && await admin(ctx)) who.administrative = true
   if (!who.role) throw refuse('access', `not a member of ${space.slug}`)
@@ -325,11 +352,68 @@ let seated = async (
   over: boolean,
   trash: boolean,
 ) => {
-  let space = await spaceOf(ctx, args)
-  let who = await callerIn(ctx, space, write, over)
-  if (write && !trash) awake(space)
-  if (write) ctx.ahead?.(space, who)
-  return { space, who }
+  let selected: Space | undefined
+  for (let attempt = 0;; attempt++) {
+    let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+    try {
+      let space = selected
+        ? await scope.dir.at(selected.eid)
+        : await spaceOf(scope, args)
+      if (!space) throw refuse('missing', 'the selected space no longer exists')
+      selected = space
+      let who = await callerIn(scope, space, write, over)
+      if (write && !trash) awake(space)
+      ctx.dir = scope.dir
+      if (write) ctx.ahead?.(space, who)
+      return { space, who }
+    } catch (error) {
+      if (!ctx.reopen || attempt >= 2 || !unavailable(error)) throw error
+    }
+  }
+}
+
+export let unavailable = (error: unknown) =>
+  error != null && typeof error == 'object' && 'status' in error &&
+  error.status === 503
+
+/** Reacquire a held target by identity after a directory commit. This never
+ * reruns slug/default selection and returns new metadata, standing and door
+ * together. Old doors stay invalid; no effects are retried. */
+export let reacquire = async (
+  ctx: Ctx,
+  previous: Space,
+  held?: App,
+  write = true,
+  over = false,
+  trash = false,
+) => {
+  for (let attempt = 0;; attempt++) {
+    let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+    try {
+      let pair = held ? await scope.dir.appAt(held.eid) : null
+      let space = pair?.space ?? await scope.dir.at(previous.eid)
+      if (
+        !space || space.eid != previous.eid ||
+        held && (!pair || pair.app.space != space.eid)
+      ) {
+        throw refuse('missing', 'the authorized target no longer exists')
+      }
+      let who = await callerIn(scope, space, write, over)
+      let app = pair?.app
+      if (!trash) awake(space, app)
+      ctx.dir = scope.dir
+      return {
+        space,
+        app,
+        who,
+        store: app ? appStore(ctx.env.STORE, space, app, ctx.env) : undefined,
+      }
+    } catch (error) {
+      // Only these provisional reads restart. No rights escaped, and no
+      // tool, compiler, directory write or Store write is replayed.
+      if (!ctx.reopen || attempt >= 2 || !unavailable(error)) throw error
+    }
+  }
 }
 
 // The caller in the space a call names. A write into a space in the trash is
@@ -373,25 +457,38 @@ let reached = async (
   over: boolean,
   trash: boolean,
 ) => {
-  let space = await spaceOf(ctx, args)
-  let [seat, named] = await Promise.allSettled([
-    callerIn(ctx, space, write, over),
-    (async () => {
-      let slug = text(args.app, 'app')
-      return { slug, app: await ctx.dir.app(space, slug) }
-    })(),
-  ])
-  if (seat.status == 'rejected') throw seat.reason
-  if (named.status == 'rejected') throw named.reason
-  let who = seat.value
-  let { slug, app } = named.value
-  if (!app) throw refuse('missing', `no app ${slug} in ${space.slug}`)
-  awake(space, trash ? undefined : app)
-  if (write) ctx.ahead?.(space, who)
-  return {
-    space,
-    app,
-    who,
-    store: appStore(ctx.env.STORE, space, app, ctx.env),
+  let selectedSpace: Space | undefined
+  let selectedApp: App | undefined
+  let slug = text(args.app, 'app')
+  for (let attempt = 0;; attempt++) {
+    let scope = { ...ctx, dir: ctx.reopen?.() ?? ctx.dir }
+    try {
+      let space = selectedSpace
+        ? await scope.dir.at(selectedSpace.eid)
+        : await spaceOf(scope, args)
+      if (!space) throw refuse('missing', 'the selected space no longer exists')
+      selectedSpace = space
+      // Bind identities as soon as a target has been observed. A failed
+      // provisional admission never reselects an already observed entity.
+      let app = selectedApp
+        ? (await scope.dir.appAt(selectedApp.eid))?.app
+        : await scope.dir.app(space, slug)
+      if (!app || app.space != space.eid) {
+        throw refuse('missing', `no app ${slug} in ${space.slug}`)
+      }
+      selectedApp = app
+      let who = await callerIn(scope, space, write, over)
+      awake(space, trash ? undefined : app)
+      ctx.dir = scope.dir
+      if (write) ctx.ahead?.(space, who)
+      return {
+        space,
+        app,
+        who,
+        store: appStore(ctx.env.STORE, space, app, ctx.env),
+      }
+    } catch (error) {
+      if (!ctx.reopen || attempt >= 2 || !unavailable(error)) throw error
+    }
   }
 }

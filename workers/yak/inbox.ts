@@ -1,3 +1,4 @@
+import { copyOf, signedDirectory } from './directory-copy.ts'
 // A letter that arrived (T-33687): the platform's third entry point, and the
 // only one no URL names. Email Routing's catch-all on the yaks.app zone hands
 // every address the specific rules did not claim to `email()` (index.ts), and
@@ -64,7 +65,10 @@ let opened = async (
 ): Promise<{ space: Space; app: App }> => {
   let box = mailedTo(to, env)
   if (!box) throw new Refused(`no mailbox for ${to}`)
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let dir = directory(
+    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    true,
+  )
   // A subdomain the space has left still finds it, as its old hostname does
   // (apps.ts `served`, T-34658): a rename moves `space.slug` and keeps the old
   // one in the space's `former`, so a letter to `<was>.<app>@yaks.app` lands

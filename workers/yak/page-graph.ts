@@ -4,6 +4,7 @@
 import { listed, type Row } from './listing.ts'
 import { type App, appStore, directory, type Space } from './directory.ts'
 import * as dirPart from './directory.ts'
+import { copyOf, signedDirectory } from './directory-copy.ts'
 import { USES } from './door.ts'
 import { bound, type Env } from './env.ts'
 import { sandboxed } from './installed.ts'
@@ -28,7 +29,10 @@ export let usesOf = (env: Env, space: Space, app: App) => {
 }
 
 let appsAt = async (env: Env, space: Space, slugs: string[]) => {
-  let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  let dir = directory(
+    signedDirectory(bound(env.DIRECTORY, dirPart.fetch, env), copyOf(env)),
+    true,
+  )
   return (await Promise.all(slugs.map((s) => dir.app(space, s))))
     .filter((a): a is App => !!a && !sandboxed(a))
 }

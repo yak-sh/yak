@@ -72,10 +72,11 @@ export let publicDirectory = (
   copy: ServingCopyDoor | undefined,
   time = timer,
   used: () => void = () => {},
-): Fetcher & { stale?: boolean } => {
+): Fetcher & { stale?: boolean; versioned?: boolean } => {
   if (!copy) return via
   let began = time.now()
-  let door: Fetcher & { stale?: boolean } = {
+  let door: Fetcher & { stale?: boolean; versioned?: boolean } = {
+    versioned: true,
     fetch: (req) => {
       if (req.method != 'GET') return via.fetch(req)
       let key = new URL(req.url).searchParams.get('q') ?? ''
@@ -85,13 +86,23 @@ export let publicDirectory = (
       return new Promise<Response>((resolve, reject) => {
         let settled = false
         let cancel = time.after(Math.max(0, began + 25 - time.now()), () => {
-          void copy.get(key).then((body) => {
-            if (body == null || settled) return
-            settled = true
-            door.stale = true
-            used()
-            resolve(new Response(body))
-          }, () => {})
+          void (copy.read
+            ? copy.read(key)
+            : copy.get(key).then((body) =>
+              body == null ? null : { body, revision: undefined }
+            )).then((answer) => {
+              if (answer == null || settled) return
+              settled = true
+              door.stale = true
+              used()
+              resolve(
+                new Response(answer.body, {
+                  headers: answer.revision == null
+                    ? {}
+                    : { [EPOCH]: String(answer.revision) },
+                }),
+              )
+            }, () => {})
         })
         void direct.then((answer) => {
           cancel()
@@ -168,15 +179,7 @@ export let signedDirectory = (
   return {
     signed: true,
     fetch: (req) => {
-      if (req.method !== 'GET') {
-        return via.fetch(req).then((answer) => {
-          if (answer.ok) {
-            pinned = undefined
-            began = time.now()
-          }
-          return answer
-        })
-      }
+      if (req.method !== 'GET') return via.fetch(req)
       let key = new URL(req.url).searchParams.get('q') ?? ''
       return new Promise<Response>((resolve) => {
         let settled = false

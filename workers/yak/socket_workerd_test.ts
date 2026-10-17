@@ -343,7 +343,7 @@ test('a page watching its store hears a letter arrive', async () => {
           'Potluck Friday.',
         ),
       })
-      assertEquals(landed.status, 200)
+      assertEquals(landed.status, 200, await landed.clone().text())
       let [letter] = await mail.showing((rows) => rows.length == 1)
       assertEquals([letter.kind, letter.doc.title], ['mail', 'Bring a dish'])
       assertEquals(letter.mail.from, 'ana@books.example')

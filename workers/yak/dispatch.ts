@@ -336,7 +336,12 @@ export let granted = async (
   if (!sealed || !secret) return null
   let g = await opened<Grant>('visit', sealed, secret)
   if (!g || g.store != store || !(g.exp * 1000 > Date.now())) return null
-  if (policy != null && g.policy !== policy) return null
+  // An anonymous instrument carries no standing to revoke. Its current app
+  // mode still decides access; every person/app grant must match authority.
+  if (
+    policy != null && (g.person != null || g.role != null) &&
+    g.policy !== policy
+  ) return null
   return {
     person: g.person ?? null,
     role: g.role ?? null,

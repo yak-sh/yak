@@ -1326,7 +1326,7 @@ test('a watch change beyond attachment space compacts then keeps later deltas', 
 // not merely when a writer relays or the subscription is initially restored.
 let authorizedFixture = () => {
   let ctx = hibernation(), ws = wire()
-  let g = graph({ storage: store(shop), vocab: shop })
+  let g = graph({ storage: ram(shop), vocab: shop })
   let allowed = true, broken = false, checks = 0
   let closed = new Promise<void>((resolve) => {
     let close = ws.close
@@ -1412,7 +1412,7 @@ test('socket delivery fails closed when current authority throws', async () => {
 
 let pendingAuthorization = (() => {
   let ctx = hibernation(), ws = wire()
-  let g = graph({ storage: store(shop), vocab: shop })
+  let g = graph({ storage: ram(shop), vocab: shop })
   ctx.live.push(ws)
   let release!: (ok: boolean) => void
   let entered!: () => void

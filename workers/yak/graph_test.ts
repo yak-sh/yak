@@ -2068,9 +2068,8 @@ test(
 )
 
 // Local ordering and durable floors are distinct from independent revocation.
-// These stores intentionally have no serving binding, so a stale request that
-// passes an authority check can still be exercised after a newer local request.
-let policyFloor = await (async () => {
+// Each case owns a deployed, booted store; only the request under test is timed.
+let policyFixture = async () => {
   let ctx = state()
   let store = await cookbook(ctx, SCHEMA, {
     ...owner,
@@ -2078,44 +2077,65 @@ let policyFloor = await (async () => {
     policy: 8,
   })
   return { ctx, store }
-})()
-test('Store policy rejects stale mode and person standing before remembering either', async () => {
-  let { store } = policyFloor
-  for (
-    let v of [
-      { app: APP, access: 'public', policy: 7 },
-      { app: APP, access: 'private', person: ADA, role: 'owner', policy: 7 },
-      { app: APP, access: 'open', person: ADA, role: 'editor', policy: 7 },
-      { app: APP, access: 'public' },
-    ]
-  ) {
-    equal((await get(store, '/query?q=.doc', v)).status, 503)
-  }
+}
+for (
+  let [standing, v] of [
+    ['public mode', { app: APP, access: 'public', policy: 7 }],
+    ['owner standing', { ...owner, access: 'private', policy: 7 }],
+    ['editor standing', {
+      app: APP,
+      access: 'open',
+      person: ADA,
+      role: 'editor',
+      policy: 7,
+    }],
+    ['unversioned mode', { app: APP, access: 'public' }],
+  ] as [string, Vouch][]
+) {
+  let { store } = await policyFixture()
+  test(`Store policy rejects stale ${standing} before remembering it`, async () => {
+    equal((await get(store, '/query?q=.recipe', v)).status, 503)
+  })
+}
+let privatePolicy = await policyFixture()
+test('Store policy retains private mode after rejecting stale standing', async () => {
   equal(
-    (await get(store, '/query?q=.doc', {
+    (await get(privatePolicy.store, '/query?q=.recipe', {
+      app: APP,
+      access: 'public',
+      policy: 7,
+    })).status,
+    503,
+  )
+  equal(
+    (await get(privatePolicy.store, '/query?q=.recipe', {
       app: APP,
       policy: 8,
       access: 'private',
     })).status,
     401,
   )
+})
+let currentPolicy = await policyFixture()
+test('Store policy accepts current owner standing', async () => {
   equal(
-    (await get(store, '/query?q=.doc', {
+    (await get(currentPolicy.store, '/query?q=.recipe', {
       ...owner,
       policy: 8,
       access: 'private',
     })).status,
     200,
   )
-  let reopened = new Store(
-    policyFloor.ctx,
-    {},
-    undefined,
-    undefined,
-    fixtureLoad,
-  )
+})
+let reopenedPolicy = await (async () => {
+  let { ctx } = await policyFixture()
+  let store = new Store(ctx, {}, undefined, undefined, fixtureLoad)
+  await store.door
+  return store
+})()
+test('Store policy retains its durable floor across wake', async () => {
   equal(
-    (await get(reopened, '/query?q=.doc', {
+    (await get(reopenedPolicy, '/query?q=.recipe', {
       app: APP,
       access: 'public',
       policy: 7,
@@ -2124,9 +2144,9 @@ test('Store policy rejects stale mode and person standing before remembering eit
   )
 })
 
-let independentlyRevoked = await (async () => {
+let authorityFixture = async (policy?: number) => {
   let ctx = state()
-  await cookbook(ctx)
+  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy })
   let current = 10, blocked = false, checks = 0
   let copy = {
     valid: (revision: number) => {
@@ -2138,48 +2158,94 @@ let independentlyRevoked = await (async () => {
     put: () => Promise.resolve(false),
     get: () => Promise.resolve(null),
   }
-  let bound = new Store(
+  let store = new Store(
     ctx,
     {
-      SERVING_COPY: {
-        idFromName: (name: string) => name,
-        get: () => copy,
-      },
+      SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
     },
     undefined,
     undefined,
     fixtureLoad,
   )
+  await store.door
   return {
-    store: bound,
+    store,
     checks: () => checks,
     block: () => {
       blocked = true
     },
   }
-})()
-test('Store authority rejects stale policy before seeing a newer request and checks equal requests each time', async () => {
-  let f = independentlyRevoked
-  for (
-    let v of [
-      { app: APP, access: 'public', policy: 9 },
-      { ...owner, access: 'private', policy: 9 },
-      { app: APP, access: 'open', person: ADA, role: 'editor', policy: 9 },
-      { ...owner, access: 'private' },
-    ]
-  ) equal((await get(f.store, '/query?q=.doc', v)).status, 503)
-  let current = { ...owner, access: 'private', policy: 10 }
-  equal((await get(f.store, '/query?q=.doc', current)).status, 200)
+}
+for (
+  let [standing, v] of [
+    ['public mode', { app: APP, access: 'public', policy: 9 }],
+    ['owner standing', { ...owner, access: 'private', policy: 9 }],
+    ['editor standing', {
+      app: APP,
+      access: 'open',
+      person: ADA,
+      role: 'editor',
+      policy: 9,
+    }],
+    ['unversioned standing', { ...owner, access: 'private' }],
+  ] as [string, Vouch][]
+) {
+  let f = await authorityFixture()
+  test(`Store authority rejects stale ${standing} without a newer local request`, async () => {
+    equal((await get(f.store, '/query?q=.recipe', v)).status, 503)
+  })
+}
+let acceptedAuthority = await authorityFixture(10)
+// Learn the private metadata and owner before timing the authorized read.
+let currentOwner = { ...owner, access: 'private', policy: 10 }
+equal(
+  (await get(
+    acceptedAuthority.store,
+    '/query?q=.entity.eid=missing',
+    currentOwner,
+  ))
+    .status,
+  200,
+)
+test('Store authority permits a current owner to read', async () => {
+  let before = acceptedAuthority.checks()
+  equal(
+    (await get(
+      acceptedAuthority.store,
+      '/query?q=.entity.eid=missing',
+      currentOwner,
+    ))
+      .status,
+    200,
+  )
+  equal(acceptedAuthority.checks() - before, 1)
+})
+let repeatedAuthority = await authorityFixture(10)
+test('Store authority checks equal requests each time', async () => {
+  let f = repeatedAuthority
+  let current = { app: APP, access: 'private', policy: 10 }
+  equal((await get(f.store, '/query?q=.recipe', current)).status, 401)
   let before = f.checks()
-  equal((await get(f.store, '/query?q=.doc', current)).status, 200)
+  equal((await get(f.store, '/query?q=.recipe', current)).status, 401)
   equal(f.checks() - before, 1)
+})
+let revokedAuthority = await authorityFixture(10)
+test('Store authority rejects independently revoked current standing', async () => {
+  let f = revokedAuthority
   f.block()
-  equal((await get(f.store, '/query?q=.doc', current)).status, 503)
+  equal(
+    (await get(f.store, '/query?q=.recipe', {
+      ...owner,
+      access: 'private',
+      policy: 10,
+    })).status,
+    503,
+  )
 })
 
 let reorderedPolicy = await (async () => {
   let ctx = state()
-  await cookbook(ctx)
+  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy: 10 })
   let entered!: () => void, release!: (valid: boolean) => void
   let checking = new Promise<void>((resolve) => entered = resolve)
   let pending = new Promise<boolean>((resolve) => release = resolve)
@@ -2199,37 +2265,35 @@ let reorderedPolicy = await (async () => {
   let store = new Store(
     ctx,
     {
-      SERVING_COPY: {
-        idFromName: (name: string) => name,
-        get: () => copy,
-      },
+      SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
     },
     undefined,
     undefined,
     fixtureLoad,
   )
+  await store.door
   return { store, checking, release }
 })()
 test('a delayed successful authority response cannot lower a newer Store floor', async () => {
   let f = reorderedPolicy
-  let old = get(f.store, '/query?q=.doc', {
+  let old = get(f.store, '/query?q=.recipe', {
     ...owner,
     access: 'public',
     policy: 10,
   })
   await f.checking
   equal(
-    (await get(f.store, '/query?q=.doc', {
-      ...owner,
+    (await get(f.store, '/query?q=.recipe', {
+      app: APP,
       access: 'private',
       policy: 11,
     })).status,
-    200,
+    401,
   )
   f.release(true)
   equal((await old).status, 503)
   equal(
-    (await get(f.store, '/query?q=.doc', {
+    (await get(f.store, '/query?q=.recipe', {
       app: APP,
       access: 'private',
       policy: 11,
