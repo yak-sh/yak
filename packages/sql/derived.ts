@@ -59,6 +59,12 @@ export type DerivedProp = {
   values?: string[]
   deps?: string[]
   expr: (owner: Expr) => Expr
+  // Exact integer owners whose value equals any supplied literal operand.
+  // Operands have the same tag coercion as scalar equality; implementations may
+  // decline unsupported operands.
+  // Undefined declines this optimization; projection and other operators keep
+  // using expr. The binder retains the owning-component presence guard.
+  select?: (values: Expr[]) => Select | undefined
   // Reads a value that is being replaced, without looking up the owner row.
   // Full-text-search triggers have to read the old and new values, and by then
   // the owner row may already have changed or been deleted, so an expression

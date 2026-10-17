@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, graph, type ReadOpts } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { col, eq, select, sub, table } from '@yaks/sql'
+import { among, col, eq, select, sub, table } from '@yaks/sql'
 import { preparedStore } from './testing.ts'
 
 let vocab = loadVocab({
@@ -20,6 +20,12 @@ let vocab = loadVocab({
 let derived = {
   'public.value': {
     tag: 'text' as const,
+    select: (values: ReturnType<typeof col>[]) =>
+      select({
+        cols: [col('entity', 'p')],
+        from: table('private', 'p'),
+        where: among(col('text', 'p'), values),
+      }),
     expr: (owner: ReturnType<typeof col>) =>
       sub(select({
         cols: [col('text', 'p')],

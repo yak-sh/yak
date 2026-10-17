@@ -654,6 +654,36 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       return test
     }
   }
+  // A selector is an exact owner set, not a read expression. Bounded and
+  // correlated probes retain the keyed expression rather than building a
+  // global candidate set for a single owner.
+  let selected = ctx.derived[`${hop.comp}.${hop.prop}`]
+  let operands = op == '' && !ctx.bounded && !ctx.correlated && !ctx.owner
+    ? literals(p.value)
+    : undefined
+  if (selected?.select && operands?.length) {
+    // Use the same typed equality lowering as the scalar expression.
+    // Unsupported equality operands decline instead of changing their meaning.
+    let typed = operands.map((operand) => {
+      let lowered = lowerScalar(ctx, '__operand', '', {
+        kind: 'scalar',
+        raw: operand,
+      }, selected.tag)
+      if (!lowered || lowered.sql == '0') return undefined
+      return lowered.params.length == 1 && lowered.sql.includes(' = ?')
+        ? val(lowered.params[0])
+        : undefined
+    })
+    let set = typed.every((v): v is Cond => v != null)
+      ? selected.select(typed)
+      : undefined
+    if (set) {
+      let hit = among(raw(ctx.d.ownerKey('entity')), set)
+      return selected.worn === false || hop.comp == 'entity'
+        ? hit
+        : and(owned(ctx, hop.comp), hit)
+    }
+  }
   let read = readProp(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
   if (!read) {
     throw new Unsupported(
@@ -2078,6 +2108,42 @@ let indexedRelation = (
       }
     }
   }
+  // Entity identity paging follows the entity's ordered EID index. Driving
+  // a presence table instead scans and sorts its entire history for each page.
+  // Keep the same presence guard, which binding elided for the planned spine.
+  let eidOrder = flattened(clauses).some((c) =>
+    c.kind == 'order' && (c.value == 'entity.eid' || c.value == '-entity.eid')
+  )
+  if (!root && !ctx.candidates && ctx.present && eidOrder) {
+    let entity = ctx.d.admitted ?? from
+    return {
+      ...s,
+      from: raw(entity, [], 'entity'),
+      where: and(
+        s.where ?? TRUE,
+        probed(ctx, ctx.present),
+        ...(() => {
+          let after = find<After>(clauses, 'after')
+          let order = find<Order>(clauses, 'order')
+          if (!after || !('eid' in after)) return []
+          let down = order?.value.startsWith('-')
+          // A missing or invisible anchor still means the first page. A
+          // scalar bound preserves that rule without an OR that prevents the
+          // EID index from seeking. The original keyset excludes the anchor.
+          return [raw(
+            `"entity"."eid" ${
+              down ? '<=' : '>='
+            } coalesce((select "__eid_anchor"."eid" from ${
+              ctx.d.admitted ?? from
+            } as "__eid_anchor" where "__eid_anchor"."eid" = ?), ${
+              down ? "X'FF'" : "''"
+            })`,
+            [after.eid],
+          )]
+        })(),
+      ),
+    }
+  }
   root ??= ctx.present && !ctx.candidates ? { comp: ctx.present } : undefined
   if (!root) {
     if (!ctx.candidates || ctx.spine || from != ctx.d.spine) return s
@@ -2845,7 +2911,18 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   let made = Object.fromEntries(
     Object.entries(derived).map(([path, prop]) => [
       path,
-      { ...prop, expr: (owner: Cond) => sources(prop.expr(owner), source) },
+      {
+        ...prop,
+        expr: (owner: Cond) => sources(prop.expr(owner), source),
+        ...prop.select
+          ? {
+            select: (values: Cond[]) => {
+              let set = prop.select!(values)
+              return set && sources(set, source)
+            },
+          }
+          : {},
+      },
     ]),
   )
   if (!cache) byVocab.set(derived, cache = new Map())
@@ -3051,6 +3128,17 @@ let visible = (
           path,
           {
             ...prop,
+            ...prop.select
+              ? {
+                select: (values: Cond[]) => {
+                  let set = prop.select!(values)
+                  return set && sources(set, (name, alias) =>
+                    vocab.comp(name)
+                      ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
+                      : table(name, alias))
+                },
+              }
+              : {},
             expr: (owner: Cond) =>
               sources(
                 prop.expr(owner),

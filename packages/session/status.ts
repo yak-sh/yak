@@ -129,6 +129,323 @@ export let sessionStatus = {
     'failed',
   ],
   deps: ['session'],
+  select: (
+    values: Expr[],
+    dispatch = dispatchStatus,
+    declared: (name: string) => boolean = () => true,
+    text: (stored: Expr) => Expr = (stored) => stored,
+  ): Select | undefined => {
+    if (
+      !values.every((v) =>
+        (v.t == 'val' || v.t == 'lit') && typeof v.v == 'string'
+      )
+    ) return undefined
+    let wanted = values.map((v) => (v as { v: string }).v)
+    if (
+      !wanted.every((v) =>
+        ['pending', 'running', 'queued', 'stopped'].includes(v)
+      )
+    ) return undefined
+    let owner = col('entity', 'candidate')
+    let wears = (name: string, entry: Expr) =>
+      declared(name)
+        ? exists(
+          select({
+            cols: [lit(1)],
+            from: table(name, 'mark'),
+            where: eq(col('entity', 'mark'), entry),
+          }),
+        )
+        : lit(false)
+    let cancelled = (entry: Expr) =>
+      ['notice', 'content', 'imported'].every(declared)
+        ? exists(select({
+          cols: [lit(1)],
+          from: table('content', 'prose'),
+          joins: [
+            join(
+              table('imported', 'origin'),
+              eq(col('entity', 'origin'), col('entity', 'prose')),
+            ),
+          ],
+          where: and(
+            eq(col('entity', 'prose'), entry),
+            among(text(col('body', 'prose')), claudeStops.map(lit)),
+          ),
+        }))
+        : lit(false)
+    // Seek one latest meaningful entry per owner, not the status expression
+    // for every owner. A notice is passive except historical cancellation.
+    let latest = sub(select({
+      cols: [col('entity', 'recent')],
+      from: table('entry', 'recent'),
+      where: and(
+        eq(col('session', 'recent'), col('entity', 's')),
+        or(
+          not(wears('notice', col('entity', 'recent'))),
+          cancelled(col('entity', 'recent')),
+        ),
+      ),
+      order: [desc(col('seq', 'recent'))],
+      limit: lit(1),
+    }))
+    let candidates = select({
+      cols: [col('entity', 's'), col('ended', 's'), as(latest, 'latest')],
+      from: table('session', 's'),
+    })
+    let stopped = wanted.includes('stopped')
+    let actionable = wanted.some((v) => v != 'stopped')
+    let newest = col('latest', 'candidate')
+    let ended = fn('coalesce', col('ended', 'candidate'), lit(false))
+    let quickStop = or(ended, wears('stop', newest))
+    // A stopped transcript must either be ended or contain a stop/control.
+    // Historical controls are candidates, never an alternative status rule.
+    let tableOwners = (name: string) =>
+      select({ cols: [col('session')], from: table(name) })
+    let controls = ['stop', 'notice'].filter(declared).map((name) =>
+      select({
+        cols: [col('session', 'ce')],
+        from: table(name, 'cm'),
+        joins: [
+          {
+            ...cross(table('entry', 'ce')),
+            on: eq(col('entity', 'ce'), col('entity', 'cm')),
+          },
+        ],
+        ...name == 'notice' ? { where: cancelled(col('entity', 'ce')) } : {},
+      })
+    )
+    let controlOwners = controls.length
+      ? unionAll(...controls)
+      : select({ cols: [lit(null)], where: lit(false) })
+    // A transcript with no asks has no runner boundary. Only outstanding
+    // legacy work can keep its latest output running. Read those owners once
+    // from the much smaller mark tables, never scan entry history per owner.
+    let inputKinds = [
+      'output',
+      'notice',
+      'result',
+      'tool_progress',
+      'refusal',
+      'exception',
+      'ask',
+      'call',
+      'stop',
+      'interrupted',
+    ].filter(declared)
+    let asks = select({
+      cols: [
+        col('entity', 'qa'),
+        col('session', 'qe'),
+        col('seq', 'qe'),
+        as(col('seq', 'qb'), 'boundary'),
+      ],
+      from: table('ask', 'qa'),
+      joins: [
+        {
+          ...cross(table('entry', 'qe')),
+          on: eq(col('entity', 'qe'), col('entity', 'qa')),
+        },
+        left(
+          table('entry', 'qb'),
+          eq(col('entity', 'qb'), col('through', 'qa')),
+        ),
+      ],
+    })
+    let unseen = exists(select({
+      cols: [lit(1)],
+      from: table('entry', 'qi'),
+      where: and(
+        eq(col('session', 'qi'), col('session', 'qa')),
+        gt(col('seq', 'qi'), col('boundary', 'qa')),
+        or(
+          wears('result', col('entity', 'qi')),
+          wears('tool_progress', col('entity', 'qi')),
+          and(
+            wears('content', col('entity', 'qi')),
+            ...inputKinds.map((name) => not(wears(name, col('entity', 'qi')))),
+          ),
+        ),
+      ),
+    }))
+    let riskyAsks = select({
+      cols: [col('session', 'qa')],
+      from: table('__status_asks', 'qa'),
+      joins: [
+        join(
+          table('__status_ask_bounds', 'qm'),
+          eq(col('session', 'qm'), col('session', 'qa')),
+        ),
+      ],
+      where: or(
+        isNull(col('seq', 'qa')),
+        and(
+          eq(col('seq', 'qa'), col('seq', 'qm')),
+          or(
+            wears('interrupted', col('entity', 'qa')),
+            and(notNull(col('boundary', 'qa')), unseen),
+          ),
+        ),
+      ),
+    })
+    // Only the newest ask can affect a plain output. Ordinary completed asks
+    // do not make every historical transcript a candidate for an exact turn
+    // evaluation. Unknown sequences, interrupted asks and unacknowledged input
+    // remain candidates. All exceptional work is retained conservatively.
+    let currentWork = declared('ask')
+      ? or(
+        isNull(col('seq', 'we')),
+        ge(
+          col('seq', 'we'),
+          fn(
+            'coalesce',
+            sub(
+              select({
+                cols: [col('seq', 'wb')],
+                from: table('__status_ask_bounds', 'wb'),
+                where: eq(col('session', 'wb'), col('session', 'we')),
+              }),
+            ),
+            lit(0),
+          ),
+        ),
+      )
+      : lit(true)
+    let work = ['call', 'attempt', 'tool_progress', 'stop', 'notice'].filter(
+      declared,
+    ).map((name) =>
+      select({
+        cols: [col('session', 'we')],
+        from: table(name, 'wm'),
+        joins: [{
+          ...cross(table('entry', 'we')),
+          on: eq(col('entity', 'we'), col('entity', 'wm')),
+        }],
+        where: name == 'call'
+          ? and(
+            currentWork,
+            declared('result')
+              ? not(exists(select({
+                cols: [lit(1)],
+                from: table('result', 'answer'),
+                where: eq(col('call', 'answer'), col('entity', 'wm')),
+              })))
+              : lit(true),
+          )
+          : name == 'attempt'
+          ? and(
+            currentWork,
+            notNull(col('by', 'wm')),
+            not(wears('interrupted', col('entity', 'wm'))),
+          )
+          : name == 'notice'
+          ? cancelled(col('entity', 'wm'))
+          : lit(true),
+      })
+    )
+    if (declared('ask')) work.push(riskyAsks)
+    let simpleOutput = and(
+      wears('output', newest),
+      ...[
+        'stop',
+        'exception',
+        'refusal',
+        'interrupted',
+        'ask',
+        'call',
+        'result',
+        'tool_progress',
+      ].map((name) => not(wears(name, newest))),
+      work.length
+        ? not(
+          among(
+            owner,
+            select({ cols: [col('session')], from: table('__status_work') }),
+          ),
+        )
+        : lit(true),
+      not(eq(fn('coalesce', dispatch.expr(owner), lit('')), lit('queued'))),
+    )
+    let eligible = or(
+      stopped
+        ? or(quickStop, among(owner, tableOwners('__status_controls')))
+        : lit(false),
+      actionable
+        ? and(
+          not(ended),
+          notNull(newest),
+          not(wears('stop', newest)),
+          not(simpleOutput),
+        )
+        : lit(false),
+    )
+    // Materialization is essential: SQLite must apply the cheap candidate
+    // filter before it evaluates the exact turn expression.
+    return select({
+      with: [
+        { name: '__status_latest', materialized: true, q: candidates },
+        ...stopped
+          ? [{
+            name: '__status_controls',
+            materialized: true,
+            q: controlOwners,
+          }]
+          : [],
+        ...declared('ask') && actionable
+          ? [
+            { name: '__status_asks', materialized: true, q: asks },
+            {
+              name: '__status_ask_bounds',
+              materialized: true,
+              q: select({
+                cols: [col('session'), as(fn('max', col('seq')), 'seq')],
+                from: table('__status_asks'),
+                group: [col('session')],
+              }),
+            },
+          ]
+          : [],
+        ...work.length && actionable
+          ? [{
+            name: '__status_work',
+            materialized: true,
+            q: unionAll(
+              ...work.slice(0, 4),
+              select({
+                cols: [col('session')],
+                from: from(
+                  { ...unionAll(...work.slice(4)), limit: lit(-1) },
+                  'rest',
+                ),
+              }),
+            ),
+          }]
+          : [],
+        {
+          name: '__status_candidates',
+          materialized: true,
+          q: select({
+            cols: [owner, col('ended', 'candidate'), newest],
+            from: table('__status_latest', 'candidate'),
+            where: eligible,
+          }),
+        },
+      ],
+      cols: [col('entity', 'chosen')],
+      from: table('__status_candidates', 'chosen'),
+      where: among(
+        iff(
+          or(
+            fn('coalesce', col('ended', 'chosen'), lit(false)),
+            wears('stop', col('latest', 'chosen')),
+          ),
+          lit('stopped'),
+          sessionStatus.expr(col('entity', 'chosen'), dispatch, declared, text),
+        ),
+        values,
+      ),
+    })
+  },
   expr: (
     owner: Expr,
     dispatch = dispatchStatus,
@@ -805,6 +1122,13 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
     ...states,
     'session.status': {
       ...sessionStatus,
+      select: (values) =>
+        sessionStatus.select(
+          values,
+          dispatch,
+          (name) => !!vocab.comp(name),
+          text,
+        ),
       expr: (owner) =>
         sessionStatus.expr(
           owner,

@@ -77,6 +77,18 @@ let asyncReply = () => [
 
 // Every shape, as the entries that make it.
 let shapes: [string, Bundle[], TranscriptStatus][] = [
+  ['askless interrupted unanswered call beside output', [
+    input(1),
+    entry(2, { call: { to: T }, interrupted: {} }),
+    said(3, S),
+  ], 'running'],
+  ['askless unresolved progress beside output', [
+    input(1),
+    entry(2, { call: { to: T } }),
+    entry(3, { tool_progress: { call: 'e2' } }),
+    said(4, S),
+  ], 'pending'],
+
   [
     'progress permits a model turn without completing the call',
     asyncTurn(),
@@ -421,6 +433,12 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(3, { call: { to: T, source: 'e2' } }),
     input(4),
   ], 'running'],
+  ['answered progress still supplies readiness metadata without a request', [
+    entry(1, { call: { to: T }, execution: {} }),
+    entry(2, { tool_progress: { call: 'e1' } }),
+    entry(3, { result: { call: 'e1' } }),
+    said(4, 'e3'),
+  ], 'pending'],
   ['an interrupted call still owes its result', [
     request(1),
     entry(2, { ask: { through: 'e1' } }),
@@ -676,6 +694,25 @@ for (let typed of [false, true]) {
         found.sort(),
         shapes.filter(([, , w]) => w == word).map(([name]) => name).sort(),
         `filters as ${word}`,
+      )
+    }
+    for (
+      let words of [['pending', 'running', 'queued'], ['stopped', 'pending'], [
+        'pending',
+        'not-a-status',
+      ]]
+    ) {
+      let found = (g.read(
+        `.session.status=${words.join(',')} .fields=session.id`,
+      ) as Bundle[]).map((b) => (b.session as { id: string }).id).filter((id) =>
+        id != 'one'
+      )
+      assertEquals(
+        found.sort(),
+        shapes.filter(([, , word]) => words.includes(word)).map(([name]) =>
+          name
+        ).sort(),
+        `membership ${words}`,
       )
     }
     // The two words this package owns. A host composing its own properties onto
