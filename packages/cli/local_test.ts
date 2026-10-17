@@ -83,7 +83,8 @@ test('a graph read exits and leaves owed effects unclaimed', async () => {
   }
 })
 
-test('a CLI comment write exits quietly and leaves owed effects unclaimed', async () => {
+// Exercise the actual command and reopen its store before timing the checks.
+let quietComment = await (async () => {
   let dir = await Deno.makeTempDir({ prefix: 't127020-' })
   let listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = (listener.addr as Deno.NetAddr).port
@@ -149,29 +150,29 @@ test('a CLI comment write exits quietly and leaves owed effects unclaimed', asyn
     } finally {
       clearTimeout(deadline)
     }
-    assert(!timedOut, 'comment write did not exit after answering')
-    assertEquals(result.code, 0, new TextDecoder().decode(result.stderr))
-    assertEquals(new TextDecoder().decode(result.stderr), '')
-    assert(new TextDecoder().decode(result.stdout).includes('scratch comment'))
-
     let after = await compose(read(file), ['graph'])
     try {
       let comments = await after.graph.read('.comment ?doc')
-      assertEquals(comments.length, 1)
-      assertEquals(
-        (comments[0].doc as { body: string }).body,
-        'scratch comment',
-      )
       let [row] = await after.graph.read('.effect')
       let effect = row.effect
-      assert(effect && typeof effect == 'object')
-      assertEquals('state' in effect && effect.state, 'pending')
-      assertEquals('attempts' in effect && effect.attempts, 0)
-      assert(!('lease_owner' in effect) || effect.lease_owner == null)
+      return { timedOut, result, comments, effect }
     } finally {
       await after.close()
     }
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
+})()
+test('a CLI comment write exits quietly and leaves owed effects unclaimed', () => {
+  let { timedOut, result, comments, effect } = quietComment
+  assert(!timedOut, 'comment write did not exit after answering')
+  assertEquals(result.code, 0, new TextDecoder().decode(result.stderr))
+  assertEquals(new TextDecoder().decode(result.stderr), '')
+  assert(new TextDecoder().decode(result.stdout).includes('scratch comment'))
+  assertEquals(comments.length, 1)
+  assertEquals((comments[0].doc as { body: string }).body, 'scratch comment')
+  assert(effect && typeof effect == 'object')
+  assertEquals('state' in effect && effect.state, 'pending')
+  assertEquals('attempts' in effect && effect.attempts, 0)
+  assert(!('lease_owner' in effect) || effect.lease_owner == null)
 })

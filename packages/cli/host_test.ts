@@ -1948,7 +1948,7 @@ test('a draining process stops advertising duties before its graph closes', () =
   assertEquals(drainingProcess.exit, undefined)
 })
 
-test('a graph writer never starts, works or stops its inert effects pool', async () => {
+let inertWriter = await (async () => {
   let loaded = 0
   let host = await composing(
     { db: ':memory:', plugins: ['shop'] },
@@ -1985,6 +1985,9 @@ test('a graph writer never starts, works or stops its inert effects pool', async
   } finally {
     await host.close()
   }
-  assertEquals(loaded, 0)
-  assertEquals(calls, [])
+  return { loaded, calls }
+})()
+test('a graph writer never starts, works or stops its inert effects pool', () => {
+  assertEquals(inertWriter.loaded, 0)
+  assertEquals(inertWriter.calls, [])
 })

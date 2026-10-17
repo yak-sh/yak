@@ -136,7 +136,9 @@ test('session new keeps an agent instrument when its caller speaks for a person'
   }
 })
 
-test('session new returns the reply its session settles on, past its tool calls', async () => {
+// Run the real two-call session once at load. Its revision-gated wait may
+// sleep between committed replies; the assertion checks the settled reply.
+let settledReply = await (async () => {
   let h = await harness()
   let echo = {
     name: 'echo',
@@ -159,12 +161,14 @@ test('session new returns the reply its session settles on, past its tool calls'
       entity: { eid: mint() },
       call: { args: { prompt: 'echo twice' } },
     }, h.g)
-    assertEquals(textOf(reply), 'done')
+    return textOf(reply)
   } finally {
     await runner.stop()
     await h.close()
   }
-})
+})()
+test('session new returns the reply its session settles on, past its tool calls', () =>
+  assertEquals(settledReply, 'done'))
 
 test('session new accepts a graph persona and snapshots its instructions', async () => {
   let h = await harness()
