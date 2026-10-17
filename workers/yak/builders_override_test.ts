@@ -72,7 +72,12 @@ test('hosted provider, model and native input override keeps supplied main outpu
       role: () => Promise.resolve('owner'),
       nameAt: () => Promise.resolve('Ada'),
       app: () =>
-        Promise.resolve({ eid: 'app', slug: 'music', access: 'private' }),
+        Promise.resolve({
+          eid: 'app',
+          space: 'space',
+          slug: 'music',
+          access: 'private',
+        }),
     },
     env: {
       STORE: {

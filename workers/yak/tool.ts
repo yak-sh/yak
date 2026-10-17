@@ -473,11 +473,12 @@ let reached = async (
       let app = selectedApp
         ? (await scope.dir.appAt(selectedApp.eid))?.app
         : await scope.dir.app(space, slug)
+      if (app) selectedApp = app
+      // A stranger learns no target existence from a failed admission.
+      let who = await callerIn(scope, space, write, over)
       if (!app || app.space != space.eid) {
         throw refuse('missing', `no app ${slug} in ${space.slug}`)
       }
-      selectedApp = app
-      let who = await callerIn(scope, space, write, over)
       awake(space, trash ? undefined : app)
       ctx.dir = scope.dir
       if (write) ctx.ahead?.(space, who)

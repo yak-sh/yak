@@ -381,8 +381,14 @@ for (
     'bare=1; Domain; Path=/',
   ]
 ) cookieHeaders.append('set-cookie', set)
+let cookieResponses = [
+  new Response('hi', { headers: cookieHeaders }),
+  new Response('hi', { headers: cookieHeaders }),
+  new Response('hi', { headers: cookieHeaders }),
+  new Response('hi', { headers: cookieHeaders }),
+]
 let cookieEnv = envOf(() => ({
-  fetch: () => Promise.resolve(new Response('hi', { headers: cookieHeaders })),
+  fetch: () => Promise.resolve(cookieResponses.shift()!),
 }))
 let cookieVisit = visit()
 
