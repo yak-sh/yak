@@ -165,8 +165,10 @@ try {
       }
     }
     if (patches.length) {
-      await g.apply(patches)
-      reclassify(sql, patches.map((b) => b.entity.eid))
+      await store.tx(async () => {
+        await g.apply(patches)
+        reclassify(sql, patches.map((b) => b.entity.eid))
+      })
       changed += patches.length
     }
   }
@@ -272,19 +274,23 @@ try {
   if (beforeValues !== afterValues) throw new Error('Value digest mismatch')
   const afterStamps = token(stamps())
   if (beforeStamps !== afterStamps) throw new Error('Provenance stamps changed')
-  for (const p of left) {
-    const count = sql.query(
-      select({
-        cols: [as(fn('count', lit(1)), 'n')],
-        from: table('using'),
-        where: notNull(col(p)),
-      }),
-    )[0].n
-    if (Number(count)) throw new Error(`using.${p} still has ${count} values`)
-  }
-  // Structural contraction changes no component presence: graph applies above
-  // already maintained archetypes. SQLite's AST is the only DDL writer here.
-  for (const p of left) sql.query({ t: 'alter table', table: 'using', drop: p })
+  await store.tx(() => {
+    for (const p of left) {
+      const count = sql.query(
+        select({
+          cols: [as(fn('count', lit(1)), 'n')],
+          from: table('using'),
+          where: notNull(col(p)),
+        }),
+      )[0].n
+      if (Number(count)) throw new Error(`using.${p} still has ${count} values`)
+    }
+    // Structural contraction changes no component presence: graph applies above
+    // already maintained archetypes. SQLite's AST is the only DDL writer here.
+    for (const p of left) {
+      sql.query({ t: 'alter table', table: 'using', drop: p })
+    }
+  })
   console.log(JSON.stringify({
     changed,
     sourceOnly,
