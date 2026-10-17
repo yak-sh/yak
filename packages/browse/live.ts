@@ -1,3 +1,4 @@
+import { writeOwner } from './owner.ts'
 import { hosting, legacyOutboxName, storageKey } from './hosting.ts'
 // The browser half: one graph cache, narrow render signals, one socket,
 // one identity, one camera. Boots are cold and subscription-shaped (T-21491):
@@ -134,7 +135,7 @@ let makeClient = () => {
     ? scopedOutbox({
       endpoint: new URL(hosting().apply, base()).href,
       storage: hosting().storage,
-      owner: authenticatedOwner,
+      owner: () => authenticatedOwner(),
       // Hosted unscoped queues have no trustworthy account provenance. Leave
       // them untouched; the box is single-owner, hosted mounts name accounts.
       legacy: legacyOutboxName()
@@ -2333,13 +2334,10 @@ export let restore = () => {
 // left undelivered, and the refusals it kept, come back first.
 let booted = false
 export let owner = signal<string | undefined>()
-let authenticatedOwner = async () => {
-  let res = await fetch(new URL(hosting().owner, base()).href)
-  if (!res.ok) throw new Error('Could not identify the write owner')
-  let identity = (await res.json()).owner
-  if (typeof identity !== 'string' || !identity) {
-    throw new Error('Could not identify the write owner')
-  }
+let authenticatedOwner = async (initial = false) => {
+  let url = new URL(hosting().owner, base()).href
+  let identity =
+    await (initial ? writeOwner.initial(url) : writeOwner.fresh(url))
   owner.value = identity
   return identity
 }
@@ -2349,7 +2347,7 @@ export let boot = async () => {
   booted = true
   ensureClient()
   if (config.host) {
-    await authenticatedOwner()
+    await authenticatedOwner(true)
   }
   loadRefusals()
   await replayOutbox()

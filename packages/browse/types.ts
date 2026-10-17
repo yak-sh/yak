@@ -1,4 +1,5 @@
-import { apiPath } from './hosting.ts'
+import { apiPath, hosting } from './hosting.ts'
+import { writeOwner } from './owner.ts'
 // The browser's vocabulary: what each component is, learned from the graph it
 // is looking at. A host serves the documents it composed (`/vocab`,
 // @yaks/api) and `learn()` reads the tables below out of them before
@@ -1364,6 +1365,10 @@ export type Snapshot = {
 // A page learns its host's vocabulary here, at the bottom of the module, so
 // every module that imports this one evaluates with the tables full.
 if (globalThis.document && !('Deno' in globalThis)) {
+  // This independent authenticated read need not wait for vocabulary parsing.
+  writeOwner.begin(
+    new URL(hosting().owner, `${location.origin}${hosting().api}`).href,
+  )
   let wire = await (await fetch(apiPath('/vocab'))).json()
   learn(wire.docs, wire.keywords)
 }
