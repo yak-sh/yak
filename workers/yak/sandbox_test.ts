@@ -861,12 +861,39 @@ test('a lone connector call pays for itself and leaves the container', async () 
 // T-37883: one person holds one sandbox at a time on the free tier. A space
 // of hers is a sandbox of its own, so without this her five spaces were
 // every container the deploy runs.
-test('one person holds one sandbox awake on the free tier', async () => {
+//
+// Ada's two spaces, with Bob a member of both, seeded as the file loads so
+// the case times only the holds it checks. It is the case's own: the case
+// deletes a space for good and closes the platform as it ends.
+let BOB = 'b0000000-0000-4000-8000-00000000000b'
+let twoSpaces = await (async () => {
   let box = sandboxes()
-  let { env } = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
-  let ctx = ctxOf(env)
-  await tool('space_new').run(ctx, { slug: 'ada2', title: 'Two' })
-  let other = (await dirOf(env).space('ada2'))!
+  let seed = await seeded({ SANDBOX: box.SANDBOX } as Partial<Env>)
+  let dir = dirOf(seed.env)
+  await tool('space_new').run(ctxOf(seed.env), { slug: 'ada2', title: 'Two' })
+  let other = (await dir.space('ada2'))!
+  await dir.apply({
+    entities: [
+      { entity: { eid: ADA }, email: { address: 'ada@bot.yak.sh' } },
+      {
+        entity: { eid: BOB },
+        person: {},
+        email: { address: 'bob@bot.yak.sh' },
+      },
+      ...[seed.space, other].map((s) => ({
+        entity: { eid: `$bob-${s.slug}` },
+        member: { space: s.eid, person: BOB, role: 'owner' },
+      })),
+    ],
+  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
+  // What the seeding left running ends here, not inside the next case.
+  await seed.settled()
+  return { ...seed, box, other }
+})()
+
+test('one person holds one sandbox awake on the free tier', async () => {
+  await using fixture = twoSpaces
+  let { env, box, space, other } = fixture
   let lone: Ctx = { env, dir: dirOf(env), person: ADA }
   await tool('sandbox_shell').run(lone, { space: 'ada', command: 'ls' })
   let no = await assertRejects(
@@ -883,40 +910,22 @@ test('one person holds one sandbox awake on the free tier', async () => {
   // On the Plus plan, two; and once her first has slept, the second wakes.
   let now = Date.now()
   await awake(env, { ...other, tier: 'plus' }, ADA, now)
-  let space = (await dirOf(env).space('ada'))!
   await asleep(env, space, ADA, now)
   await awake(env, other, ADA, now)
   await assertRejects(() => awake(env, space, ADA, now), Error, 'free tier')
   await awake(env, space, ADA, now + (HELD + 1) * 1000)
 
   // Permanent deletion returns every member's place immediately, including
-  // someone who used the shared sandbox but did not ask for the deletion.
-  let bob = 'b0000000-0000-4000-8000-00000000000b'
-  await lone.dir.apply({
-    entities: [
-      { entity: { eid: ADA }, email: { address: 'ada@bot.yak.sh' } },
-      {
-        entity: { eid: bob },
-        person: {},
-        email: { address: 'bob@bot.yak.sh' },
-      },
-      ...[space, other].map((s) => ({
-        entity: { eid: `$bob-${s.slug}` },
-        member: { space: s.eid, person: bob, role: 'owner' },
-      })),
-    ],
-  }, { 'x-yak-person': ADA, 'x-yak-role': 'owner' })
-  let member = { ...lone, person: bob }
+  // someone who used the shared sandbox but did not ask for the deletion,
+  // and takes every member's container with it. Whether a place is free is
+  // `awake`'s to say; sandbox_shell asking it is proved above.
+  let member = { ...lone, person: BOB }
   await tool('sandbox_shell').run(member, { space: 'ada', command: 'ls' })
   await tool('space_delete').run(lone, { space: 'ada', forever: true })
   assertEquals(await lone.dir.space('ada'), null)
   assertEquals([...box.alive], [])
-  let ran = await tool('sandbox_shell').run(lone, {
-    space: 'ada2',
-    command: 'ls',
-  })
-  assertStringIncludes(ran.text, 'exited 0')
-  await awake(env, other, bob)
+  await awake(env, other, ADA)
+  await awake(env, other, BOB)
 })
 
 test("the month of sandbox time is the account's, and it refuses", async () => {
