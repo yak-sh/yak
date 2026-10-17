@@ -84,16 +84,26 @@ def reap():
 
 threading.Thread(target=reap, daemon=True).start()
 
+# A path that holds no file the guest may read or write: the caller's mistake.
+class PathFault(Exception):
+    pass
+
 # A file operation, run in the guest on its path p. Python starts bare
 # (-I -S) and a failure says the last line of its traceback alone: printing
-# the whole one loads more of Python than the operation does.
+# the whole one loads more of Python than the operation does. A path fault
+# exits 3, so the host can tell it from a failure of ours.
 def run_file(code, path, data=None):
-    script = ('import os, sys\np = sys.argv[1]\ntry:\n    ' + code +
-              '\nexcept Exception as e:\n    sys.exit(f"{type(e).__name__}: {e}")')
+    script = ('import errno, os, sys\np = sys.argv[1]\ntry:\n    ' + code +
+              '\nexcept Exception as e:\n    print(f"{type(e).__name__}: {e}", file=sys.stderr)'
+              '\n    sys.exit(3 if getattr(e, "errno", None) in (errno.ENOENT, errno.EACCES,'
+              ' errno.ENOTDIR, errno.EISDIR, errno.EROFS) else 1)')
     result = subprocess.run(argv(['/usr/bin/python3', '-I', '-S', '-c', script, path]),
                             input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    said = result.stderr.decode(errors='replace').strip()
+    if result.returncode == 3:
+        raise PathFault(said)
     if result.returncode:
-        raise RuntimeError(result.stderr.decode(errors='replace').strip())
+        raise RuntimeError(said)
     return result.stdout
 
 def handle(request):
@@ -170,6 +180,8 @@ class Handler(socketserver.StreamRequestHandler):
     def handle(self):
         try:
             response = {'value': handle(json.loads(self.rfile.readline()))}
+        except PathFault as e:
+            response = {'error': str(e), 'refused': 'path'}
         except Exception as e:
             response = {'error': str(e)}
         self.wfile.write((json.dumps(response) + '\n').encode())

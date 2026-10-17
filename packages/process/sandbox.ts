@@ -4,6 +4,7 @@
 import { resolve } from '@std/path/posix/resolve'
 import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
 import { derivedEid } from '@yaks/graph/identity'
+import { CallError } from '@yaks/tools/errors'
 import type {
   LentMachine,
   Machine,
@@ -135,6 +136,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
         offset += chunk.length
       }
       let result = JSON.parse(new TextDecoder().decode(all))
+      if (result.refused) throw new CallError(result.refused, result.error)
       if (result.error != null) throw new Error(`sandbox: ${result.error}`)
       return result.value as T
     } finally {

@@ -8,6 +8,7 @@ import {
   assertThrows,
 } from '@std/assert'
 import { test } from '@yaks/testing'
+import { CallError } from '@yaks/tools/errors'
 import { machineTools } from '@yaks/harness/machine'
 import { sandboxProvider } from '@yaks/process/machine'
 import { until } from './testing.ts'
@@ -87,8 +88,12 @@ test('sandbox commands and files see only their own workspace and a read-only sy
         `test ! -e '${dir}/private' && test ! -e '${dir}/two' && test ! -e /run/user && test ! -e /home/yaks && test ! -e /etc && test -z "$DBUS_SESSION_BUS_ADDRESS" && ! touch /usr/t66424-private && echo isolated`,
     })
     assertMatch(said, /exited 0\n[\s\S]*isolated$/)
-    await assertRejects(() => first.machine.read(`${dir}/private`))
-    await assertRejects(() => first.machine.write('/usr/t66424-private', 'no'))
+    await assertRejects(() => first.machine.read(`${dir}/private`), CallError)
+    await assertRejects(() => first.machine.read('.'), CallError)
+    await assertRejects(
+      () => first.machine.write('/usr/t66424-private', 'no'),
+      CallError,
+    )
     // Export must dereference symlinks in the guest, not on the host.
     await tools(first.machine).shell.run({
       command:

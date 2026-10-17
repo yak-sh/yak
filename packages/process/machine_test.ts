@@ -4,13 +4,14 @@
 // second.
 
 import { test } from '@yaks/testing'
-import { assert, assertEquals, assertMatch } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import { type Comp, graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { modelDoc } from '@yaks/model'
 import { EXIT, processDoc, processes } from '@yaks/process'
 import { ram } from '@yaks/ram'
 import { sessionDoc, sessionEnv } from '@yaks/session'
+import { CallError } from '@yaks/tools/errors'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { type Opts } from '@yaks/process'
@@ -194,6 +195,18 @@ test('write makes the directory it needs, and read gives the text back', async (
     'wrote src/lib.rs',
   )
   assertEquals(await read.run({ path: `${dir}/src/lib.rs` }), 'fn main() {}')
+})
+
+test("a path that holds no file is refused as the caller's", async () => {
+  let { read, write } = fileTools
+  await write.run({ path: 'plain', content: '' })
+  for (let path of ['.', 'absent', 'plain/below']) {
+    await assertRejects(async () => await read.run({ path }), CallError)
+  }
+  await assertRejects(
+    async () => await write.run({ path: '.', content: '' }),
+    CallError,
+  )
 })
 
 // A lend constructs a new machine; it must not buy another directory scan.

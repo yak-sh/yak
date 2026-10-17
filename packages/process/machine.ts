@@ -18,6 +18,7 @@ import {
   store,
   tail,
 } from '@yaks/process'
+import { CallError } from '@yaks/tools/errors'
 import { tidy } from './tidy.ts'
 import type {
   LentMachine,
@@ -29,6 +30,21 @@ import type {
 
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
+
+// A path that holds no file this machine may read or write is the caller's
+// mistake, answered as a refusal; whatever else the filesystem throws is ours.
+let PATH_FAULTS = [
+  Deno.errors.NotFound,
+  Deno.errors.IsADirectory,
+  Deno.errors.NotADirectory,
+  Deno.errors.PermissionDenied,
+]
+let pathed = <T>(work: Promise<T>): Promise<T> =>
+  work.catch((e) => {
+    throw PATH_FAULTS.some((E) => e instanceof E)
+      ? new CallError('path', e.message)
+      : e
+  })
 
 /**
  * A configured local filesystem as a machine: commands run by bash with the harness's environment,
@@ -89,17 +105,18 @@ export let processMachine = (
       let pid = (await look(eid))?.pid
       if (pid) await processSignal(eid, pid, sig, opts)
     },
-    read: (path) => Deno.readTextFile(cwd ? resolve(cwd, path) : path),
-    write: async (path, content) => {
-      path = cwd ? resolve(cwd, path) : path
-      try {
-        await Deno.writeTextFile(path, content)
-      } catch (e) {
-        if (!(e instanceof Deno.errors.NotFound)) throw e
-        await Deno.mkdir(dirname(path), { recursive: true })
-        await Deno.writeTextFile(path, content)
-      }
-    },
+    read: (path) => pathed(Deno.readTextFile(cwd ? resolve(cwd, path) : path)),
+    write: (path, content) =>
+      pathed((async () => {
+        path = cwd ? resolve(cwd, path) : path
+        try {
+          await Deno.writeTextFile(path, content)
+        } catch (e) {
+          if (!(e instanceof Deno.errors.NotFound)) throw e
+          await Deno.mkdir(dirname(path), { recursive: true })
+          await Deno.writeTextFile(path, content)
+        }
+      })()),
   }
 }
 
