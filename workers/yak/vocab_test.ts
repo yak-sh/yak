@@ -226,9 +226,11 @@ test('a request permits only declared marks through stored references', () => {
   )
 })
 
-// A permit composes the store's words, the named packages' among them.
-test('a manifest with a permit reads beside the packages it names', () => {
-  let doc = appDoc({
+// A permit composes the store's words, the named packages' among them. That
+// composition is read once as the file loads, and a refusal is kept for the
+// test to report rather than failing the file's load.
+let beside = await Promise.resolve().then(() =>
+  appDoc({
     $defs: {
       hero: { properties: {} },
       request: {
@@ -239,7 +241,10 @@ test('a manifest with a permit reads beside the packages it names', () => {
     },
     packages: ['@yaks/ux', '@yaks/game'],
   })
-  assertEquals(doc.packages, ['@yaks/game', '@yaks/ux'])
+).catch((e: Error) => e)
+test('a manifest with a permit reads beside the packages it names', () => {
+  if (beside instanceof Error) throw beside
+  assertEquals(beside.packages, ['@yaks/game', '@yaks/ux'])
 })
 
 test('a manifest is refused in the words that fix it', () => {
