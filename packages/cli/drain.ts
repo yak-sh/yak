@@ -5,8 +5,6 @@
 // minutes says why in the log instead of looking hung.
 
 import type { Effects, Run } from '@yaks/effects'
-import type { Graph } from '@yaks/graph'
-import { human } from '@yaks/id'
 
 /** How often a drain says what it is still waiting on (ms). */
 export let EVERY = 30_000
@@ -45,22 +43,25 @@ export let waiting = (
  * running while it goes. */
 export let drain = async (
   fx: Pick<Effects, 'stop' | 'running'>,
-  g: Pick<Graph, 'get' | 'vocab'>,
   say: (line: string) => void,
   every = EVERY,
 ): Promise<void> => {
   let stopped = fx.stop()
-  let tell = async () => {
+  // Reporting must not query the graph: a busy or blocked read must neither
+  // hide the last blockers nor keep an otherwise finished drain open. Full
+  // targets and run ids remain resolvable after this process has been killed.
+  let tell = () => {
     let runs = fx.running()
-    if (!runs.length) return
-    let id = human(g.vocab)
-    let rows = await g.get(runs.map((r) => r.target))
-    let names = new Map(rows.map((b) => [b.entity.eid, id(b)]))
-    say(waiting(runs, (eid) => names.get(eid) ?? eid, Date.now()))
+    say(
+      runs.length
+        ? waiting(runs, (eid) => eid, Date.now()) +
+          ` [runs: ${runs.map((r) => r.eid).join(', ')}]`
+        : 'winding down — waiting on effects pool pass (no handlers running)',
+    )
   }
-  let timer = setInterval(() => void tell().catch(() => {}), every)
+  let timer = setInterval(tell, every)
   try {
-    await tell().catch(() => {})
+    tell()
     await stopped
   } finally {
     clearInterval(timer)

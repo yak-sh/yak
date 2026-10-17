@@ -796,8 +796,7 @@ let composed = async (
     // Its effects, drained once: begun by the first of `stop` and `close`,
     // and awaited by `close`.
     let draining: Promise<void> | undefined
-    let drained = () =>
-      draining ??= drain(fx, g!, (line) => console.error(line))
+    let drained = () => draining ??= drain(fx, (line) => console.error(line))
     // This process, written in, with the roles it serves. First among the
     // writes, because everything after is attributed to it and `created.by`
     // is a reference: a process attributing writes to an entity nothing
