@@ -82,3 +82,96 @@ test('a graph read exits and leaves owed effects unclaimed', async () => {
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+test('a CLI comment write exits quietly and leaves owed effects unclaimed', async () => {
+  let dir = await Deno.makeTempDir({ prefix: 't127020-' })
+  let listener = Deno.listen({ hostname: '127.0.0.1', port: 0 })
+  let port = (listener.addr as Deno.NetAddr).port
+  listener.close()
+  let file = `${dir}/yak.json`
+  await Deno.writeTextFile(
+    file,
+    JSON.stringify({
+      db: 'yak.db',
+      port,
+      plugins: ['@yaks/kernel', '@yaks/doc', '@yaks/effects', '@yaks/process'],
+    }),
+  )
+  try {
+    let host = await compose(read(file), ['graph'], undefined, {})
+    try {
+      await detached(host.storage).patch([{
+        entity: { eid: 'owed' },
+        doc: { title: 'Scratch target' },
+        effect: {
+          handler: 'slow',
+          target: 'owed',
+          comp: 'effect',
+          kind: 'created',
+          state: 'pending',
+          attempts: 0,
+        },
+      }])
+    } finally {
+      await host.close()
+    }
+
+    let line = new Deno.Command(Deno.execPath(), {
+      args: [
+        'run',
+        '-A',
+        '--config',
+        new URL('../../deno.json', import.meta.url)
+          .pathname,
+        new URL('./yak.ts', import.meta.url).pathname,
+        'comment',
+        'new',
+        '--target',
+        'owed',
+        '--body',
+        'scratch comment',
+        '--config',
+        file,
+        '--json',
+      ],
+      env: { HARNESS_HOME: `${dir}/harness`, TASKS_HOME: `${dir}/tasks` },
+      stdout: 'piped',
+      stderr: 'piped',
+    }).spawn()
+    let timedOut = false
+    let deadline = setTimeout(() => {
+      timedOut = true
+      line.kill('SIGKILL')
+    }, 5000)
+    let result
+    try {
+      result = await line.output()
+    } finally {
+      clearTimeout(deadline)
+    }
+    assert(!timedOut, 'comment write did not exit after answering')
+    assertEquals(result.code, 0, new TextDecoder().decode(result.stderr))
+    assertEquals(new TextDecoder().decode(result.stderr), '')
+    assert(new TextDecoder().decode(result.stdout).includes('scratch comment'))
+
+    let after = await compose(read(file), ['graph'])
+    try {
+      let comments = await after.graph.read('.comment ?doc')
+      assertEquals(comments.length, 1)
+      assertEquals(
+        (comments[0].doc as { body: string }).body,
+        'scratch comment',
+      )
+      let [row] = await after.graph.read('.effect')
+      let effect = row.effect
+      assert(effect && typeof effect == 'object')
+      assertEquals('state' in effect && effect.state, 'pending')
+      assertEquals('attempts' in effect && effect.attempts, 0)
+      assert(!('lease_owner' in effect) || effect.lease_owner == null)
+    } finally {
+      await after.close()
+    }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})

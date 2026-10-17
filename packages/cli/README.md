@@ -532,11 +532,14 @@ independent workers do the duties; its monitor starts one if needed. Config
 so the duties stop, a server takes no new request and a transcript starts no new
 step, and it leaves the pool, claiming no new run. `close()` does the same,
 closes the duty thread, waits for every effect the host started to finish, for
-as long as each takes, and says in the log which ones it is waiting on
-([`drain.ts`](./drain.ts)); then it ends every call its runner is still running
-as `interrupted{code}`, releases leases, records the process exit, and closes
-SQLite. What a run left owed is the next worker's. Plugin timers and loops
-should listen to `host.stopping` or the signal passed to `service`.
+as long as each takes, and after thirty seconds says in the log which ones it is
+waiting on, repeating every thirty seconds ([`drain.ts`](./drain.ts)); then it
+ends every call its runner is still running as `interrupted{code}`, releases
+leases, records the process exit, and closes SQLite. A graph-only CLI writer
+neither starts nor drains an effects pool; it records owed effects for a worker.
+A prompt drain prints nothing. What a run left owed is the next worker's. Plugin
+timers and loops should listen to `host.stopping` or the signal passed to
+`service`.
 
 An interrupt winds a command down (`@yaks/process/wind`, wired in
 [`yak.ts`](./yak.ts)): a SIGTERM, SIGINT or SIGHUP, or Ctrl-C in a terminal app.

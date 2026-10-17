@@ -1,7 +1,7 @@
 // A host's effects, drained: it leaves the pool, claiming nothing more, and
 // waits for every run it started to finish, however long each one takes
 // (@yaks/effects `stop`). While it waits it says which runs it is waiting on,
-// as the wait begins and every half minute after, so a stop that takes
+// only after half a minute and every half minute after, so a stop that takes
 // minutes says why in the log instead of looking hung.
 
 import type { Effects, Run } from '@yaks/effects'
@@ -61,7 +61,6 @@ export let drain = async (
   }
   let timer = setInterval(tell, every)
   try {
-    tell()
     await stopped
   } finally {
     clearInterval(timer)

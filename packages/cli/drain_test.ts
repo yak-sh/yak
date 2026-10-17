@@ -22,6 +22,10 @@ Deno.test('drain reports full targets and effect ids until the pool stops', asyn
     (line) => lines.push(line),
     1,
   )
+  assertEquals(lines, [], 'reporting waits for the first interval')
+  while (!lines.length) {
+    await new Promise((resolve) => setTimeout(resolve, 1))
+  }
   assert(lines[0].includes('session_run session-id'))
   assert(lines[0].includes('[runs: effect-id]'))
   running = false
@@ -53,5 +57,5 @@ Deno.test('a finished pool closes without another asynchronous diagnostic depend
       return []
     },
   }, (line) => lines.push(line))
-  assertEquals(lines.length, 1)
+  assertEquals(lines.length, 0)
 })

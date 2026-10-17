@@ -1947,3 +1947,44 @@ test('a draining process stops advertising duties before its graph closes', () =
   assertEquals(drainingProcess.drainingRoles, ['graph'])
   assertEquals(drainingProcess.exit, undefined)
 })
+
+test('a graph writer never starts, works or stops its inert effects pool', async () => {
+  let loaded = 0
+  let host = await composing(
+    { db: ':memory:', plugins: ['shop'] },
+    ['graph'],
+    only({
+      shop: pooled({
+        effects: () => {
+          loaded++
+          return {}
+        },
+      }),
+    }),
+  )
+  let calls: string[] = []
+  host.fx.startup = () => {
+    calls.push('startup')
+    return Promise.resolve()
+  }
+  host.fx.work = () => {
+    calls.push('work')
+    return Promise.resolve()
+  }
+  host.fx.stop = () => {
+    calls.push('stop')
+    return Promise.resolve()
+  }
+  try {
+    await host.graph.apply([{
+      entity: { eid: 'quiet-writer' },
+      book: { title: 'Quiet' },
+    }])
+    await host.duties(AbortSignal.abort())
+    host.stop()
+  } finally {
+    await host.close()
+  }
+  assertEquals(loaded, 0)
+  assertEquals(calls, [])
+})

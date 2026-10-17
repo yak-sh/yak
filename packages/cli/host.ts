@@ -765,7 +765,7 @@ let composed = async (
     let dutiesHost = serveRoles(g, {
       me: selfEid(),
       roles: [...effecting ? ['effects'] : [], ...duties.map((d) => d.name)],
-      fx,
+      fx: effecting && !opts.readOnly ? fx : undefined,
       services: Object.fromEntries(duties.map((d) => [d.name, d.run])),
       hold: config.lease,
       gone: host.gone,
@@ -836,7 +836,7 @@ let composed = async (
         void retire()
         stopping.abort()
         dutiesHost.stop()
-        if (!opts.readOnly) void drained()
+        if (effecting && !opts.readOnly) void drained()
       },
       close: async (code?: number) => {
         await retire()
@@ -844,7 +844,7 @@ let composed = async (
         dutiesHost.stop()
         await opts.thread?.close().catch(lose)
         await ending
-        if (!opts.readOnly) await drained()
+        if (effecting && !opts.readOnly) await drained()
         await dutiesHost.close()
         let shut = async () => {
           await recorded?.close()
