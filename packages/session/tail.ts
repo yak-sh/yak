@@ -218,7 +218,10 @@ export let logOf = (source: string): Eid => derivedEid(`log ${source}`)
 // of a session that names none yet.
 let owns = async (g: Graph, t: Pick<Tail, 'session' | 'log'>) => {
   if (!t.session) return true
-  let [s] = await g.get([t.session])
+  // Ownership needs one stored reference, not the derived transcript status.
+  let [s] = await g.read(
+    `.entity.eid=${JSON.stringify(t.session)} .fields=session.log`,
+  )
   let first = comp(s, 'session')?.log
   return !first || first == t.log
 }
@@ -259,12 +262,21 @@ export let tail = async (
   let [row] = await g.get([log])
   let held = row && row[TOMBSTONE] == null ? comp(row, 'log') : undefined
   let line = Number(held?.consumed ?? 0)
+  let fields = [
+    'session.operator',
+    'session.source',
+    'spawned.parent',
+    'created.by',
+    'created.via',
+  ]
+    .filter((name) => {
+      let [c, p] = name.split('.')
+      return g.vocab.props(c).includes(p)
+    })
   let [session] = o.session
-    ? await g.get([o.session], [
-      'session',
-      'spawned',
-      'created',
-    ])
+    ? await g.read(
+      `.entity.eid=${JSON.stringify(o.session)} .fields=${fields.join(',')}`,
+    )
     : []
   let operatorStored = comp(session, 'session')?.operator as
     | boolean

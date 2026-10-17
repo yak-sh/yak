@@ -142,9 +142,9 @@ let startedBy = (path: string): string | undefined => {
 // is opened, with the parent where the graph has not met it yet.
 let spawned = async (g: Graph, f: Found & { parent: string }) => {
   let eid = sessionEid(f.id, f.parent)
-  let [s] = await g.get([eid])
+  let [s] = await g.get([eid], ['spawned'])
   if (s?.spawned && s[TOMBSTONE] == null) return eid
-  let parent = (await sessionFor(g, f.parent))?.entity.eid
+  let parent = (await sessionFor(g, f.parent, ['session.id']))?.entity.eid
   let id = startedBy(f.path)
   let call = parent && id ? callOf(parent, id) : undefined
   let [made] = call ? await g.get([call]) : []
@@ -172,7 +172,7 @@ let opened = async (g: Graph, f: Found): Promise<Tail | null> => {
       id: f.id,
     })
   }
-  let s = await sessionFor(g, f.id)
+  let s = await sessionFor(g, f.id, ['session.id'])
   if (s && await managed(g, s.entity.eid)) return null
   return tail(g, f.path, {
     ...(s ? { session: s.entity.eid } : {}),
