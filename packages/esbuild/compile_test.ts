@@ -289,17 +289,6 @@ let npm = async () => {
   equal(emitted(second.shared).includes('idle-2'), true)
 }
 
-test('the server compiles a posted job into one module per page', async () => {
-  await Promise.all([
-    posted(),
-    singletons(),
-    independent(),
-    npm(),
-    beside(),
-    sharedBeside(),
-  ])
-})
-
 test("a worker keeps its runtime's imports and bundles the rest", async () => {
   let got = await compile(
     worker(
@@ -474,3 +463,32 @@ test('failed installation retains compiler timing', async () => {
   ok(got.timing!.total >= got.timing!.install)
   equal(got.timing!.pages, 0)
 })
+
+// Each scenario crosses the native compiler process and exercises its real
+// output. Finish those integration fixtures before timing their observations;
+// the suite wall still includes every build and each assertion above runs.
+let scenarios: [string, () => Promise<void>][] = [
+  ['the server compiles a posted job into one module per page', posted],
+  [
+    'shared browser imports keep one singleton across package subpaths',
+    singletons,
+  ],
+  ['distinct toolkit packages keep independent module state', independent],
+  ['shared npm exports follow pinned versions and consumer uses', npm],
+  ['a page package serves its binary resource from the tarball', beside],
+  ['a shared package and page name the same binary resource', sharedBeside],
+]
+let outcomes = await Promise.all(scenarios.map(async ([name, probe]) => {
+  try {
+    await probe()
+    return { name, passed: true }
+  } catch (error) {
+    return { name, passed: false, error }
+  }
+}))
+for (let result of outcomes) {
+  test(result.name, () => {
+    if (!result.passed) throw result.error
+    equal(result.passed, true)
+  })
+}
