@@ -55,11 +55,16 @@ export let remote = async (
   },
 ) => {
   let { env = Deno.env.get, worker: lent, ...config } = options
-  let { vocab } = await words(options.config)
   let worker = lent ?? new Worker(
     new URL('./backend_worker.ts', import.meta.url).href,
     { type: 'module' },
   )
+  // Load the frontend's vocabulary while the backend imports its module graph.
+  // Neither depends on the other; doing them in sequence delays every startup.
+  let { vocab } = await words(options.config).catch((error) => {
+    if (!lent) worker.terminate()
+    throw error
+  })
   // The backend is served on a port of its own (backend_worker.ts), so a
   // Worker can hold one for its own frontend or one after another for a test
   // process that lends it.
