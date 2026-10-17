@@ -78,10 +78,8 @@ test('a warmed identity gather reads fresh ownership, shape, values and lifecycl
   })
   assertEquals(fresh().product, {
     price: 9,
-    available: null,
+
     maker: 'one',
-    status: null,
-    sku: null,
   })
   assertThrows(
     () =>
@@ -89,18 +87,17 @@ test('a warmed identity gather reads fresh ownership, shape, values and lifecycl
         tx.patch([{ entity: { eid: 'p' }, doc: { title: 'temporary' } }])
         assertEquals(get(driver, vocab, ['p'])[0].doc, {
           title: 'temporary',
-          body: null,
         })
         throw Error('undo')
       }),
     Error,
     'undo',
   )
-  assertEquals(fresh().doc, { title: 'changed', body: null })
+  assertEquals(fresh().doc, { title: 'changed' })
   g.apply([{ entity: { eid: 'p' }, $delete: true }])
   assertEquals(fresh().tombstone, {})
   patch({ doc: { title: 'back' } })
-  assertEquals(fresh().doc, { title: 'back', body: null })
+  assertEquals(fresh().doc, { title: 'back' })
   assertEquals(fresh().product, undefined)
 })
 
@@ -150,9 +147,9 @@ test('joined projections keep reference scopes, bound derived values and request
   }])
   let names = ['doc', 'product', 'named', 'marker']
   let expected = s.get(['p'], names)
-  assertEquals(expected[0].doc, { title: 'bound', body: null })
+  assertEquals(expected[0].doc, { title: 'bound' })
   assertEquals((expected[0].product as { maker: string }).maker, 'one')
-  assertEquals(expected[0].named, { maker: 'two', empty: null })
+  assertEquals(expected[0].named, { maker: 'two' })
   assertEquals(expected[0].marker, undefined)
   assertEquals(s.get(['p', 'missing', 'p'], names), [expected[0], expected[0]])
   assertEquals(s.get(['missing'], names), [])
@@ -164,7 +161,7 @@ test('joined projections keep reference scopes, bound derived values and request
     get(driver, vocab, ['p'], {
       derived: { 'doc.title': { tag: 'text', expr: () => lit('other') } },
     })[0].doc,
-    { title: 'other', body: null },
+    { title: 'other' },
   )
 })
 

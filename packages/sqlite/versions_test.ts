@@ -26,7 +26,7 @@ let localMatch = () => catalog(local)({ all: ['doc'], none: [] })
 let localId = localMatch()![0]
 
 test('a single-owner install keeps rows and removes peer tracking cost', () => {
-  equal(kept, { title: 'Kept', body: null })
+  equal(kept, { title: 'Kept' })
   equal(meta(local).get('table:archetype'), undefined)
   local.query({
     t: 'update',

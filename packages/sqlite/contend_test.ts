@@ -102,7 +102,7 @@ test('a query sees another process’s commit whole or not at all', () => {
     using p = racing(vocab)
     let found = p.read('.doc.title=Hi')
     assertEquals(found.map((b) => [b.entity.eid, b.doc]), [
-      ['x', { title: 'Hi', body: null }],
+      ['x', { title: 'Hi' }],
     ])
   }
 })

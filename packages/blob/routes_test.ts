@@ -390,5 +390,5 @@ test('a door that knows nobody uploads as nobody, not as the caller', async () =
   let sha = await addressOf(text)
   assertEquals((await ask(put(sha, text))).status, 200)
   let [row] = await h.graph.read(`.entity.eid=${sha}`)
-  assertEquals((row.created as { by: string | null }).by, null)
+  assertEquals((row.created as { by?: string }).by, undefined)
 })

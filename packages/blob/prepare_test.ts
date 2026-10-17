@@ -47,8 +47,6 @@ for (let method of ['has', 'put'] as const) {
         }])
         assertEquals(db.get(['post'])[0].post, {
           title: 'concurrent write',
-          body: null,
-          author: null,
         })
         release.resolve()
         if (stale) await assertRejects(async () => await pending, Stale)
@@ -58,7 +56,6 @@ for (let method of ['has', 'put'] as const) {
           assertEquals(db.get(['post'])[0].post, {
             title: 'concurrent write',
             body: address('prepared text'),
-            author: null,
           })
         }
         assertEquals(

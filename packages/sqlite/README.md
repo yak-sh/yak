@@ -84,7 +84,7 @@ try {
     prop: 'author',
   }])
   await g.apply([{ entity: { eid: 'kate' }, $delete: true }])
-  equal((await g.read('.post'))[0].post, { published: true, author: null })
+  equal((await g.read('.post'))[0].post, { published: true })
 } finally {
   sql.close()
 }
@@ -133,7 +133,7 @@ try {
     ])
   )
   store.tx((tx) => tx.patch([{ entity: { eid: 'p1' }, doc: { title: null } }]))
-  equal(store.get(['p1'])[0].doc, { title: null, body: 'First' })
+  equal(store.get(['p1'])[0].doc, { body: 'First' })
   await throws(() =>
     store.tx((tx) => {
       tx.patch([{ entity: { eid: 'p1' }, doc: null }])
@@ -148,7 +148,7 @@ try {
     tx.revive(['p1'])
     tx.patch([{ entity: { eid: 'p1' }, doc: { title: 'Again' } }])
   })
-  equal(store.get(['p1'])[0].doc, { title: 'Again', body: null })
+  equal(store.get(['p1'])[0].doc, { title: 'Again' })
 } finally {
   sql.close()
 }
@@ -210,7 +210,7 @@ try {
     eid: 'a',
     'doc.title': 'A',
   }])
-  equal(store.get(['b'], ['doc'])[0].doc, { title: 'B', body: null })
+  equal(store.get(['b'], ['doc'])[0].doc, { title: 'B' })
   equal(sql.query(store.screen('.doc.title=A')!).length, 1)
 } finally {
   sql.close()
@@ -607,8 +607,9 @@ something it left undone. `add(driver, stmts)` is the pass for statements that
 only add. `forget(driver, print)` makes the next opener run the pass again, for
 a host whose file something that keeps no print may have changed. A reader binds
 `lacking(driver, vocab)`: its `derived` reads a column the file does not have
-yet as null, and its `absent` names the component tables the file does not have
-yet, which read as worn by no entity (@yaks/sql's `absent` option).
+yet as absent properties, and its `absent` names the component tables the file
+does not have yet, which read as worn by no entity (@yaks/sql's `absent`
+option).
 
 ## The storage layout
 

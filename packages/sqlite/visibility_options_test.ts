@@ -77,15 +77,17 @@ for (let [door, read] of Object.entries(reads)) {
     test(`scoped ${door} follows per-read options: ${name}`, () =>
       assertEquals(
         read(opts),
-        door == 'rows' ? allowed ? [{ eid: 'one' }] : [] : {
-          value: allowed ? 'secret' : null,
-        },
+        door == 'rows'
+          ? allowed ? [{ eid: 'one' }] : []
+          : allowed
+          ? { value: 'secret' }
+          : {},
       ))
   }
 }
 test('a scope can change with the same read options', () => {
   owner = 'bob'
-  assertEquals(reads.get({ person: 'alice' }), { value: null })
+  assertEquals(reads.get({ person: 'alice' }), {})
 })
 test('scoped dynamic refresh does not replace authoritative cached values', () =>
   assertEquals((storage.get(['one'], ['public']))[0].public, {

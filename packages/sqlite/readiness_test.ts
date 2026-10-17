@@ -33,7 +33,7 @@ test('a fresh single-owner store uses host schema readiness without inspecting s
   assertEquals(schemaReads(said), [])
   assertEquals(asked, 1)
   s.tx((tx) => tx.patch([{ entity: { eid: 'one' }, doc: { title: 'kept' } }]))
-  assertEquals(s.get(['one'], ['doc'])[0].doc, { title: 'kept', body: null })
+  assertEquals(s.get(['one'], ['doc'])[0].doc, { title: 'kept' })
   assertEquals(asked, 1)
   assertEquals(schemaReads(said), [])
 })
@@ -139,7 +139,7 @@ test('file operations never install or mend external schema edits', () => {
       )
     drop()
     assertEquals(exists(first), false)
-    assertEquals(s.get(['a'], ['doc'])[0].doc, { title: 'A', body: null })
+    assertEquals(s.get(['a'], ['doc'])[0].doc, { title: 'A' })
     assertEquals(exists(first), false)
     s.install()
     assertEquals(exists(first), true)
@@ -147,7 +147,6 @@ test('file operations never install or mend external schema edits', () => {
     let reopened = storage(second, shop, opts)
     assertEquals(reopened.get(['a'], ['doc'])[0].doc, {
       title: 'A',
-      body: null,
     })
     assertEquals(exists(second), false)
     reopened.install()

@@ -180,7 +180,9 @@ export let get = (
         let { '@id': owner, ...value } = row
         let b = byId.get(Number(owner))!
         if ('tombstone' in b) continue
-        b[comp] = value as Comp
+        b[comp] = Object.fromEntries(
+          Object.entries(value).filter(([, v]) => v != null),
+        ) as Comp
       }
     }
   }

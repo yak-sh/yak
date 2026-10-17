@@ -35,8 +35,8 @@ type Store = {
   rows: (query: string) => Record<string, unknown>[]
   tx: <R>(body: (tx: Tx) => R) => R
 }
-let bytes = (b: Bundle): Uint8Array | null =>
-  (b.document as { bytes: Uint8Array | null }).bytes
+let bytes = (b: Bundle): Uint8Array | undefined =>
+  (b.document as { bytes?: Uint8Array }).bytes
 let put = (s: Store, eid: string, value: Uint8Array | null) =>
   s.tx((tx) => tx.patch([{ entity: { eid }, document: { bytes: value } }]))
 let ids = (s: Store, query: string) => s.read(query).map((b) => b.entity.eid)
@@ -77,7 +77,7 @@ export let binaryCases = (make: () => Store): void => {
   put(cleared, 'bytes', Uint8Array.of(0, 255))
   test('a null patch clears previously stored bytes', () => {
     put(cleared, 'bytes', null)
-    assertEquals(bytes(cleared.get(['bytes'])[0]), null)
+    assertEquals(bytes(cleared.get(['bytes'])[0]), undefined)
     assertEquals(ids(cleared, '.document.bytes'), [])
   })
 
@@ -87,7 +87,7 @@ export let binaryCases = (make: () => Store): void => {
   put(empty, 'full', Uint8Array.of(0, 255, 128))
   test('zero bytes remain a BLOB, distinct from a cleared property', () => {
     assertEquals(bytes(empty.get(['empty'])[0]), new Uint8Array())
-    assertEquals(bytes(empty.get(['null'])[0]), null)
+    assertEquals(bytes(empty.get(['null'])[0]), undefined)
     assertEquals(ids(empty, '.document.bytes'), ['empty', 'full'])
     assertEquals(ids(empty, '!document.bytes'), ['empty', 'null'])
   })

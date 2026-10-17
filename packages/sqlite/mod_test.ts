@@ -371,7 +371,7 @@ test('only contention before a write transaction starts is retryable', () => {
       tx.patch([{ entity: { eid: 'kept' }, doc: { title: 'answer' } }])
     })
     assertEquals(ran, true)
-    assertEquals(b.get(['kept'])[0].doc, { title: 'answer', body: null })
+    assertEquals(b.get(['kept'])[0].doc, { title: 'answer' })
     let failure = assertThrows(
       () =>
         b.tx(() => {

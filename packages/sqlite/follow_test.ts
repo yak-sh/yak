@@ -97,7 +97,7 @@ let read = readStore(reader, later, lag)
 
 test('a reader reads a property the file has no column for as never given', () => {
   assertEquals(read.read(parse('.note')).map((b) => b.note), [
-    { text: 'hi', mood: null },
+    { text: 'hi' },
   ])
 })
 

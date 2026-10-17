@@ -37,11 +37,8 @@ test('an object and an array are written and read back as values', () => {
   s.tx((tx) =>
     tx.patch([{ entity: { eid: 'r1' }, recipe: { tags: [], meta: null } }])
   )
-  assertEquals(recipe(s.tx((tx) => tx.get(['r1']))[0]), {
-    ...RECIPE,
-    tags: [],
-    meta: null,
-  })
+  let { meta: _meta, ...rest } = RECIPE
+  assertEquals(recipe(s.tx((tx) => tx.get(['r1']))[0]), { ...rest, tags: [] })
 })
 
 test('a projected boolean reads back as true or false', () => {
@@ -100,4 +97,40 @@ test('a batch reads its JSON values the way the store will', () => {
     [RECIPE.tags, JSON.stringify(RECIPE.any)],
     [['new'], null],
   ])
+})
+
+let sparse = kitchenStore()
+sparse.s.tx((tx) =>
+  tx.patch([
+    {
+      entity: { eid: 'sparse' },
+      recipe: { title: '', meta: { missing: null } },
+    },
+    { entity: { eid: 'cleared' }, recipe: { title: 'old' } },
+    { entity: { eid: 'cleared' }, recipe: { title: null } },
+  ])
+)
+
+test('component reads omit never-set properties but keep values and JSON nulls', () => {
+  let expected = { title: '', meta: { missing: null } }
+  assertEquals(recipe(sparse.s.get(['sparse'])[0]), expected)
+  assertEquals(
+    recipe((sparse.s.read('.recipe .entity.eid=sparse') as Bundle[])[0]),
+    expected,
+  )
+})
+
+test('a cleared component property is absent, not a null value', () => {
+  assertEquals(recipe(sparse.s.get(['cleared'])[0]), {})
+})
+
+test('an explicit projection still answers null for an absent property', () => {
+  assertEquals(
+    sparse.s.rows(
+      '.recipe .entity.eid=sparse .fields=recipe.title,recipe.baked',
+    ),
+    [
+      { eid: 'sparse', 'recipe.title': '', 'recipe.baked': null },
+    ],
+  )
 })

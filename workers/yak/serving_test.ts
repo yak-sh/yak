@@ -1025,7 +1025,7 @@ test('an open app takes a write from nobody, and a public one does not', async (
   assertEquals(wrote.ok, true)
   // Unattributed: nobody signed it, so nothing claims they did.
   let [row] = await stranger.query('.doc&?created')
-  assertEquals((row.created as { by: string | null }).by, null)
+  assertEquals((row.created as { by?: string }).by, undefined)
 
   // The same write on a `public` app is the member guard's no, said in the
   // sentence a page shows its person.

@@ -839,9 +839,9 @@ test('opening an older vocabulary preserves newer empty columns', () => {
     a.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { name: 'Rex' } }]))
     let b = storage(newer, next)
     b.install()
-    assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: null })
+    assertEquals(b.get(['rex'])[0].pet, { name: 'Rex' })
     storage(old, prior).install()
-    assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: null })
+    assertEquals(b.get(['rex'])[0].pet, { name: 'Rex' })
     b.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { sound: 'woof' } }]))
     assertEquals(b.get(['rex'])[0].pet, { name: 'Rex', sound: 'woof' })
   } finally {
@@ -960,7 +960,7 @@ test('explicit installation repairs a column; reading does not', () => {
     assertThrows(() => s.get(['rex']), Error, 'no such column')
     assertEquals(cols(a, 'pet').includes('sound'), false)
     s.install()
-    assertEquals(s.get(['rex'])[0].pet, { name: 'Rex', sound: null })
+    assertEquals(s.get(['rex'])[0].pet, { name: 'Rex' })
   } finally {
     a.close()
     b.close()

@@ -49,7 +49,7 @@ test('archetype gather golden: nulls, tags, refs, derived, stubs, graves, order 
   assertEquals(get(driver, vocab, ids), census(driver, vocab, ids))
   assertEquals(get(driver, vocab, ids, opts), census(driver, vocab, ids, opts))
   assertEquals(get(driver, vocab, []), [])
-  assertEquals(get(driver, vocab, ['a'])[0].doc, { title: null, body: null })
+  assertEquals(get(driver, vocab, ['a'])[0].doc, {})
   assertEquals(get(driver, vocab, ['a'])[0].marker, {})
   assertEquals(get(driver, vocab, ['a'])[0].sample, { present: 'real' })
   assert(get(driver, vocab, ['stub'])[0].entity.archetype)

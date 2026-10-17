@@ -831,13 +831,14 @@ export let memoized = (
       let d = prop.default
       let v = !d ? null : 'now' in d ? LOST : cast(prop, d.value)
       if (v === LOST) return { [HOLE]: true }
-      next[p] = v
+      if (v != null) next[p] = v
     }
     for (let [p, v] of Object.entries(comp)) {
       let prop = props.get(p)
       let value = prop ? cast(prop, v) : LOST
       if (value === LOST) return { [HOLE]: true }
-      next[p] = value
+      if (value == null) delete next[p]
+      else next[p] = value
     }
     return next
   }

@@ -199,7 +199,7 @@ test('a detach reference is nulled when its target dies', () => {
     { maker: null },
   )
   let p = one(g, '.kind=product')
-  assertEquals((p.product as Record<string, unknown>).maker, null)
+  assertEquals((p.product as Record<string, unknown>).maker, undefined)
 })
 
 test('a release reference drops its row, its owner lives', () => {

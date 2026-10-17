@@ -179,7 +179,7 @@ test('clearing a body clears the property, not the store', () => {
   let { g, db, driver } = fixture()
   g.apply([{ entity: { eid: 'p1' }, post: { body: 'a long essay' } }])
   g.apply([{ entity: { eid: 'p1' }, post: { body: null } }])
-  assertEquals(post(db.read('.post')[0]).body, null)
+  assertEquals(post(db.read('.post')[0]).body, undefined)
   // the bytes stay: another row may address them, and they cost one row
   assertEquals(tally(driver, 'blob_text'), 1)
 })

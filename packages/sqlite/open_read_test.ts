@@ -67,8 +67,8 @@ test('a current file can be queried read-only while another connection holds the
   try {
     // Construct the reader under the lock: first use cannot install either.
     let store = storage(db, shop)
-    assertEquals(store.read('.doc.title=A')[0].doc, { title: 'A', body: null })
-    assertEquals(store.get(['one'], ['doc'])[0].doc, { title: 'A', body: null })
+    assertEquals(store.read('.doc.title=A')[0].doc, { title: 'A' })
+    assertEquals(store.get(['one'], ['doc'])[0].doc, { title: 'A' })
     assertEquals(store.rows('.doc .count'), [{ value: '', n: 1 }])
     assertEquals(schema(db), before)
     assertEquals(changes(db), written)
@@ -84,16 +84,16 @@ test('file reads leave external schema edits alone; explicit installation repair
   store.install()
   store.tx((tx) => tx.patch([{ entity: { eid: 'one' }, doc: { title: 'A' } }]))
   // Establish a reader before the external edit, and another after it.
-  assertEquals(store.get(['one'], ['doc'])[0].doc, { title: 'A', body: null })
+  assertEquals(store.get(['one'], ['doc'])[0].doc, { title: 'A' })
   peer.query({ t: 'drop', kind: 'index', name: 'product_sku' })
   let before = schema(db), written = changes(db)
   for (let reader of [store, storage(db, shop)]) {
-    assertEquals(reader.read('.doc.title=A')[0].doc, { title: 'A', body: null })
+    assertEquals(reader.read('.doc.title=A')[0].doc, { title: 'A' })
     assertEquals(objects(db, { name: 'product_sku' }), [])
     assertEquals(schema(db), before)
     assertEquals(changes(db), written)
   }
   store.install()
   assertEquals(objects(db, { name: 'product_sku' }).length, 1)
-  assertEquals(store.get(['one'], ['doc'])[0].doc, { title: 'A', body: null })
+  assertEquals(store.get(['one'], ['doc'])[0].doc, { title: 'A' })
 })

@@ -93,15 +93,12 @@ test('a wake fires in the store that holds it and its rule receives the tick ins
     assertEquals(seen.length, 0)
     await store.tick(at('09:05'))
     assertEquals(seen.length, 1)
-    assertEquals((await wake(p.env, 'fixture-paused')).wake.at, null)
+    assertEquals((await wake(p.env, 'fixture-paused')).wake.at, undefined)
     assertEquals(seen[0].Now.at, iso('09:05'))
     assertEquals(seen[0].fired, { at: iso('09:05') })
     assertEquals(seen[0].wake, {
       at: iso('09:30'),
       every: '30m',
-      while: null,
-      note: null,
-      target: null,
     })
     // The same instant again takes the occurrence it already took, and a
     // patch that is not a firing is not one.
@@ -144,7 +141,7 @@ test('seeded wake rows survive a directory restart without rewinding or resuming
     idFromName: (n) => n,
     get: () => ({ fetch: (req: Request) => store.fetch(req) }),
   } as typeof p.env.STORE
-  assertEquals((await wake(p.env, 'yak-trash')).wake?.at, null)
+  assertEquals((await wake(p.env, 'yak-trash')).wake?.at, undefined)
   assertEquals(
     (await wake(p.env, 'yak-trash')).wake?.note,
     'paused by the owner',
@@ -380,7 +377,7 @@ test('a write arms the object for the wake it just heard, and the alarm fires it
   await ring(p)
   let [fired] = await meta(p.env).query('.fired&?wake&.doc.title~=already')
   assert(fired, 'the overdue wake fired')
-  assertEquals((fired.wake as { at: string | null }).at, null)
+  assertEquals((fired.wake as { at?: string }).at, undefined)
   // And it re-armed for the one still ahead.
   assertEquals(await storage.getAlarm(), soon)
 })
@@ -473,7 +470,7 @@ test("an app's rule on `fired` advances the row its wake was about", async () =>
         wake: { at: string | null }
       }[]
   assertEquals(row.watered.by, 'wake')
-  assertEquals(row.wake.at, null)
+  assertEquals(row.wake.at, undefined)
 })
 
 // An app's own command, called later (T-37605). A `call` is a row in the
@@ -705,7 +702,7 @@ test('a world with nobody in it stops ticking, and a player arriving wakes it', 
   await a.ctx.storage.deleteAlarm()
   await a.store.tick(sec('09:40:30'))
   await a.holds('.tick', 4)
-  assertEquals(await owed(), null)
+  assertEquals(await owed(), undefined)
   assertEquals(await a.ctx.storage.getAlarm(), null)
   assertEquals((await a.store.tick(at('12:00'))).fired, [])
   // Somebody arrives, and the world is owed its next half minute again.

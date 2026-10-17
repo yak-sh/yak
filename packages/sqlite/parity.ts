@@ -11,10 +11,8 @@
 // agreement is what the Storage interface promises: a graph does not care where
 // its bytes are.
 //
-// Adapters differ in one place, smoothed by `plain()`: a database reads back
-// every declared property, `null` for the ones never written; a map holds what
-// it was given. A null property and an absent one mean the same thing in this
-// model, so both sides are compared with the nulls dropped.
+// A cleared property is absent from a whole read; `plain()` also compares
+// adapters that represent a cleared property as null.
 
 import { assertEquals } from '@std/assert'
 import type { Bundle, Graph, Plugin, Storage } from '@yaks/graph'

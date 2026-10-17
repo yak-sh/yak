@@ -194,7 +194,7 @@ await throws(() =>
 equal(store.get(['b1'])[0].book, { title: 'Dune', pages: 412 })
 equal(store.get(['b2']), [])
 store.tx((tx) => tx.patch([{ entity: { eid: 'b1' }, book: { title: null } }]))
-equal(store.get(['b1'])[0].book, { title: null, pages: 412 })
+equal(store.get(['b1'])[0].book, { pages: 412 })
 store.tx((tx) => tx.patch([{ entity: { eid: 'b1' }, book: null }]))
 equal(store.get(['b1']), [{ entity: { eid: 'b1' } }])
 ```

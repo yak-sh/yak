@@ -47,15 +47,17 @@ let value = (v: Vocab, comp: string, prop: string, raw: unknown): unknown => {
     : raw
 }
 
-/** A component row as read, each JSON column parsed back into its value and
- * each boolean column read as `true`/`false`. */
+/** A component row as read: absent SQL columns are omitted, each JSON column
+ * is parsed back into its value, and booleans read as `true`/`false`. A null
+ * patch clears a property; it is not a stored property value. */
 export let decoded = <R extends Record<string, unknown>>(
   v: Vocab,
   comp: string,
   row: R,
 ): R => {
   for (let [k, raw] of Object.entries(row)) {
-    ;(row as Record<string, unknown>)[k] = value(v, comp, k, raw)
+    if (raw == null) delete row[k]
+    else (row as Record<string, unknown>)[k] = value(v, comp, k, raw)
   }
   return row
 }

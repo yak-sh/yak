@@ -684,7 +684,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         continue
       }
       let now = stored(name, comp)
-      if (!holds(was, now)) own()[name] = was ? { ...was, ...now } : now
+      if (!holds(was, now)) {
+        let next = was ? { ...was, ...now } : now
+        for (let p in now) if (now[p] == null) delete next[p]
+        own()[name] = next
+      }
     }
     return held
   }
@@ -692,7 +696,11 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   // Whether a component already holds every value a patch gives it.
   let holds = (was: Comp | undefined, now: Comp): boolean =>
     !!was &&
-    Object.keys(now).every((p) => Object.hasOwn(was, p) && same(was[p], now[p]))
+    Object.keys(now).every((p) =>
+      now[p] == null
+        ? !Object.hasOwn(was, p)
+        : Object.hasOwn(was, p) && same(was[p], now[p])
+    )
 
   // The records themselves. A record is never mutated once stored, so the one a
   // read hands back is safe to keep, and costs no copy; a record cut to the

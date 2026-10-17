@@ -49,7 +49,7 @@ test('a patch touches only the properties it names; null clears one', () => {
   put(s, { entity: { eid: 'p1' }, product: { price: 9 } })
   assertEquals(comp(at(s, 'p1'), 'product'), { price: 9, status: 'live' })
   put(s, { entity: { eid: 'p1' }, product: { status: null } })
-  assertEquals(comp(at(s, 'p1'), 'product'), { price: 9, status: null })
+  assertEquals(comp(at(s, 'p1'), 'product'), { price: 9 })
 })
 
 test('a patch that changes nothing keeps the record it found', () => {

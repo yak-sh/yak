@@ -59,7 +59,7 @@ test('a null property clears it, its siblings untouched', () => {
   write(s, [{ entity: { eid: 'p1' }, product: { price: 12, status: 'live' } }])
   write(s, [{ entity: { eid: 'p1' }, product: { status: null } }])
   let [p] = s.read('.kind=product') as Bundle[]
-  assertEquals(c(p, 'product').status, null)
+  assertEquals(c(p, 'product').status, undefined)
   assertEquals(c(p, 'product').price, 12)
 })
 
