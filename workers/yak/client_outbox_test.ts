@@ -36,10 +36,15 @@ let base = 'https://outbox-client.test/notes/api/'
 test('public apply preserves receipts and retries unknown JSON with the same write identity', async () => {
   let calls: { key: string; body: string }[] = []
   let alarms: (() => void)[] = []
+  let nativeTimer = globalThis.setTimeout
+  let runtimeTick = Promise.withResolvers<void>()
   using _timers = stub(
     globalThis,
     'setTimeout',
-    ((fn: () => void) => {
+    ((fn: () => void, ms?: number, ...args: unknown[]) => {
+      // Only the outbox's retry belongs to this fixture. The shared kernel
+      // may yield an alarm/mover with a zero-delay timer while it runs.
+      if (ms !== 1000) return nativeTimer(fn, ms, ...args)
       alarms.push(fn)
       return 0
     }) as typeof setTimeout,
@@ -57,6 +62,8 @@ test('public apply preserves receipts and retries unknown JSON with the same wri
   let off = client.outbox.onPending(() => changed++)
   try {
     await client.outbox.ready
+    // The kernel can schedule its own zero-delay work while a request fails.
+    setTimeout(() => runtimeTick.resolve(), 0)
     await assertRejects(() => client.apply(payload), Error, 'unsaved')
     let [pending] = client.outbox.pending()
     assertEquals(pending.state, 'pending')
@@ -77,6 +84,7 @@ test('public apply preserves receipts and retries unknown JSON with the same wri
     assert(calls.every((c) => c.key == calls[0].key && c.body == calls[0].body))
     assert(changed >= 2)
     assertEquals(await client.apply(payload), receipt)
+    await runtimeTick.promise
   } finally {
     off()
     client.outbox.close()
