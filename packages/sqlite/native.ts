@@ -224,7 +224,7 @@ export let prepared = (db: Database) => {
         db.exec(sql)
         return []
       }
-      if (cache.size >= 256) {
+      if (cache.size >= 1024) {
         let oldest = cache.keys().next().value!
         cache.get(oldest)!.finalize()
         cache.delete(oldest)

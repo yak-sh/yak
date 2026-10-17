@@ -230,3 +230,27 @@ for (let [where, make] of Object.entries(changers)) {
     }
   })
 }
+
+// A warm graph can cycle through more shapes than the old 256-entry cache.
+// Keep the workload outside the assertion timer; count actual preparations.
+let shapeReuse = (() => {
+  let db = new Database(':memory:')
+  try {
+    let native = db.prepare.bind(db)
+    let count = 0
+    db.prepare = (sql: string) => (count++, native(sql))
+    let run = prepared(db)
+    for (let n = 0; n < 600; n++) run(`select 7 as shape_${n}`)
+    let first = count
+    let answer = 0
+    for (let n = 0; n < 600; n++) {
+      answer += Number(run(`select 7 as shape_${n}`)[0][`shape_${n}`])
+    }
+    return { first, extra: count - first, answer }
+  } finally {
+    db.close()
+  }
+})()
+test('a graph cycling through hundreds of SQL shapes reuses its statements', () => {
+  assertEquals(shapeReuse, { first: 600, extra: 0, answer: 4200 })
+})
