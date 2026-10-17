@@ -18,11 +18,10 @@
 // one. It is idempotent by construction — a freed lock is gone, so the next
 // start-up finds nothing to do.
 
-import type { Bundle, Comp, Eid, ReadTx, Storage } from '@yaks/graph'
+import type { Bundle, Eid, ReadTx, Storage } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { detached } from '@yaks/graph/storage'
-import { TOMBSTONE } from '@yaks/graph/bundle'
-import { CLAIM, SESSION } from './comp.ts'
+import { CLAIM } from './comp.ts'
 
 /**
  * The releases a graph needs: one `claim: null` bundle per lock whose holder
@@ -32,14 +31,11 @@ import { CLAIM, SESSION } from './comp.ts'
 export let staleLeases = (tx: ReadTx): Bundle[] | Promise<Bundle[]> =>
   after(tx.read(`.${CLAIM}.session`), (locked) => {
     if (!locked.length) return []
-    let holder = (b: Bundle) => String((b[CLAIM] as Comp).session)
-    let runs = [...new Set(locked.map(holder))]
-    return after(tx.get(runs), (found) => {
-      let live = new Set<Eid>(
-        found.filter((b) => b[TOMBSTONE] == null && b[SESSION] != null)
-          .map((b) => b.entity.eid),
-      )
-      return locked.filter((b) => !live.has(holder(b)))
+    // Ask whether the holder is a session through the claim's reference. The
+    // answer carries claims, not the holders' transcript-derived properties.
+    return after(tx.read(`.${CLAIM}.session.session`), (held) => {
+      let live = new Set<Eid>(held.map((b) => b.entity.eid))
+      return locked.filter((b) => !live.has(b.entity.eid))
         .map((b): Bundle => ({ entity: { eid: b.entity.eid }, [CLAIM]: null }))
     })
   })

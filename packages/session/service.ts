@@ -309,7 +309,7 @@ export let stale = async function* (
   let before = new Date((o.now ?? Date.now()) - (o.full ?? FULL))
     .toISOString()
   let page = (query: string, after?: Eid, limit = 1) =>
-    `${query} .order=entity.eid .limit=${limit}${
+    `${query} .fields=entity.eid .order=entity.eid .limit=${limit}${
       after ? ` .after=${after}` : ''
     }`
   let after: Eid | undefined
