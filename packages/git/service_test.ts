@@ -190,21 +190,23 @@ test('a worktree the harness manages is left to it', async () => {
   }
 })
 
-test('a pass told to stop takes nothing more back', async () => {
+// The pass runs once as the file loads, and its test reads what it left: a
+// worktree worth taking back takes Git four processes to make.
+let stopped = await (async () => {
   let f = await fixture()
   try {
     let path = await f.cut('landed')
     await f.land(path)
     let stop = AbortSignal.abort()
-    assertEquals(
-      await collectOnHost(f.g, f.common, IDLE, later, processes, stop),
-      {},
-    )
-    assert(await there(path))
+    let kept = await collectOnHost(f.g, f.common, IDLE, later, processes, stop)
+    return { kept, there: await there(path) }
   } finally {
     await f.free()
   }
-})
+})()
+
+test('a pass told to stop takes nothing more back', () =>
+  assertEquals(stopped, { kept: {}, there: true }))
 
 test('the service collects each repository the graph knows', async () => {
   let f = await fixture()
