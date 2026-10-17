@@ -78,13 +78,15 @@ export let catalogue = (driver: Driver): readonly SchemaObject[] =>
  * import { equal } from '@yaks/testing'
  *
  * let made: Stmt = { t: 'create table', name: 'x', ifNot: true, cols: [{ name: 'a' }] }
+ * let drop: Stmt = { t: 'drop', kind: 'table', name: 'x' }
  * erect(db, [made, made])
  * let at = revision(db, 'schema')
  * erect(db, [made])
  * equal(revision(db, 'schema'), at)
- * erect(db, [{ t: 'drop', kind: 'table', name: 'x' }, made])
+ * erect(db, [drop, made])
  * equal(catalogue(db).map((o) => o.name), ['x'])
- * db.close()
+ * erect(db, [drop])
+ * equal(catalogue(db), [])
  * ```
  */
 export let erect = (driver: Driver, stmts: readonly Stmt[]): void => {
