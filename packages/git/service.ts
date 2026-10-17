@@ -34,51 +34,91 @@ export type Options = {
 
 let there = (path: string) => Deno.stat(path).then(() => true, () => false)
 
+let text = (value: unknown): value is string => typeof value == 'string'
+
+/** A session with a home, and the paths it works in: its cwd and its
+ * machine's address, as real paths. */
+type Seat = { session: string; paths: Set<string> }
+
+// Where every session with a home works, read for its home alone. A session's
+// status is derived from its transcript (@yaks/session), dear enough that
+// reading it of every session took a minute, in one statement that held the
+// worker's thread; asked of every session for each idle worktree, it held a
+// worker for hours and let every lease it renews lapse.
+let seats = async (g: Graph): Promise<Seat[]> => {
+  if (!g.vocab.comp('session') || !g.vocab.comp('home')) return []
+  let props = ['cwd', 'machine'].filter((p) => g.vocab.prop('home', p))
+  let rows = await g.rows(
+    `.session&.home .fields=${
+      ['entity.eid', ...props.map((p) => `home.${p}`)].join(',')
+    }`,
+  ) as Record<string, unknown>[]
+  let ids = [...new Set(rows.map((r) => r['home.machine']).filter(text))]
+  let addresses = new Map(
+    (ids.length ? await g.get(ids, ['machine']) : []).map((b) => [
+      b.entity.eid,
+      (b.machine as Comp | undefined)?.address,
+    ]),
+  )
+  let reals = new Map<string, Promise<string>>()
+  let real = (path: string) => {
+    let found = reals.get(path)
+    if (!found) {
+      reals.set(path, found = Deno.realPath(path).catch(() => path))
+    }
+    return found
+  }
+  return Promise.all(rows.map(async (r) => ({
+    session: String(r.eid),
+    paths: new Set(
+      await Promise.all(
+        [r['home.cwd'], addresses.get(String(r['home.machine']))]
+          .filter(text).map(real),
+      ),
+    ),
+  })))
+}
+
+// Whether any of these sessions still holds its checkout: its transcript is
+// not over, or its process still runs. Only they are asked their status.
+let holding = async (g: Graph, sessions: string[]): Promise<boolean> => {
+  if (!sessions.length) return false
+  let comps = ['session', 'process', 'exit'].filter((c) => g.vocab.comp(c))
+  return (await g.get(sessions, comps)).some((b) =>
+    !['settled', 'stopped', 'failed'].includes(
+      String((b.session as Comp | undefined)?.status),
+    ) || Boolean(b.process && !b.exit)
+  )
+}
+
 /** Take back every idle worktree of the repository at `common` that holds
- * nothing, and return the idle ones kept, with why. */
+ * nothing, and return the idle ones kept, with why. A `signal` that aborts
+ * ends the pass before the next worktree. */
 export let collect = async (
   g: Graph,
   common: string,
   idle: number = IDLE,
   now: number = Date.now(),
   processes: () => Promise<Set<string>> = processPaths,
+  signal?: AbortSignal,
 ): Promise<Record<string, Held>> => {
   await reconcile(g, common)
   let kept: Record<string, Held> = {}
   let repository = repositoryEid(common)
-  let live = async () => {
-    let paths = new Set<string>()
-    if (!g.vocab.comp('session') || !g.vocab.comp('home')) return paths
-    let sessions = (await g.read('.session&.home&*')).filter((b) =>
-      !['settled', 'stopped', 'failed'].includes(
-        String((b.session as Comp).status),
-      ) ||
-      Boolean(b.process && !b.exit)
-    )
-    for (let b of sessions) {
-      let cwd = (b.home as Comp).cwd
-      if (typeof cwd == 'string') paths.add(cwd)
-    }
-    let ids = sessions.map((b) => (b.home as Comp).machine)
-      .filter((id): id is string => typeof id == 'string')
-    for (let row of await g.get([...new Set(ids)])) {
-      let path = (row.machine as Comp | undefined)?.address
-      if (typeof path == 'string') paths.add(path)
-    }
-    return new Set(
-      await Promise.all(
-        [...paths].map((path) => Deno.realPath(path).catch(() => path)),
-      ),
-    )
-  }
+  // Read once a pass, at the first worktree it is needed for.
+  let seated: Promise<Seat[]> | undefined
   for (let path of await linked(common)) {
+    if (signal?.aborted) break
     if (await idleFor(path, now) < idle) continue
     let real = await Deno.realPath(path).catch(() => path)
     let [row] = await g.get([worktreeEid(repository, real)])
     let tree = row?.worktree as Comp | undefined
     if (tree?.managed) continue
     if (tree) await discover(g, path).catch(() => {})
-    if (inUse(real, await live()) || inUse(real, await processes())) continue
+    let on = (await (seated ??= seats(g)))
+      .filter((s) => inUse(real, s.paths))
+      .map((s) => s.session)
+    if (await holding(g, on) || inUse(real, await processes())) continue
     let held = await reclaim(path, 'refs/heads/main').catch(() =>
       'failed' as Held
     )
@@ -98,8 +138,12 @@ export let service = async (
   signal: AbortSignal = AbortSignal.abort(),
   processes: () => Promise<Set<string>> = processPaths,
 ): Promise<void> => {
+  // A pass the service is told to stop (its lease taken by another process)
+  // ends between worktrees; a one-shot pass runs whole.
+  let stopping = signal.aborted ? undefined : signal
   for (;;) {
     for (let r of await host.graph.read('.repository')) {
+      if (stopping?.aborted) return
       let common = (r.repository as Comp).common
       if (typeof common != 'string' || !await there(common)) continue
       // One repository failing is reported and the pass goes on to the next;
@@ -110,6 +154,7 @@ export let service = async (
         options.idle,
         Date.now(),
         processes,
+        stopping,
       ).catch(
         (error) => {
           console.warn('@yaks/git worktree collection —', common, error)

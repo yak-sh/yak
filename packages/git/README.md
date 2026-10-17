@@ -560,9 +560,13 @@ available for callers needing only directories.
 Once an hour it runs `collect` on each repository the graph knows that is on
 this machine: every linked worktree Git has left alone for six hours and that is
 clean and has committed work landed on main is reclaimed once no live graph
-session or local process uses it. A `managed` worktree is left to the harness,
-which takes those back when their session ends (@yaks/harness `worktrees.ts`).
-The `idle` and `every` options change the two durations.
+session or local process uses it. A pass reads where every session with a home
+works once, and asks a session's status (derived from its whole transcript) only
+of the sessions on a worktree it would otherwise take back. A `managed` worktree
+is left to the harness, which takes those back when their session ends
+(@yaks/harness `worktrees.ts`). A pass whose lease another process takes ends
+before its next worktree. The `idle` and `every` options change the two
+durations.
 
 `locate(cwd)` reads the canonical checkout root, common Git directory and
 worktree Git directory without writing to the graph. It returns no observation

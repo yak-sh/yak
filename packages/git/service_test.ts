@@ -190,6 +190,22 @@ test('a worktree the harness manages is left to it', async () => {
   }
 })
 
+test('a pass told to stop takes nothing more back', async () => {
+  let f = await fixture()
+  try {
+    let path = await f.cut('landed')
+    await f.land(path)
+    let stop = AbortSignal.abort()
+    assertEquals(
+      await collectOnHost(f.g, f.common, IDLE, later, processes, stop),
+      {},
+    )
+    assert(await there(path))
+  } finally {
+    await f.free()
+  }
+})
+
 test('the service collects each repository the graph knows', async () => {
   let f = await fixture()
   try {
