@@ -9,16 +9,19 @@
 // - workerd: every `*_workerd_test.ts`, against the one kernel
 //   workers/yak/probe-suite.ts starts for the run.
 //
-// `deno task test [--tag=t]... [--all] [--times=dir] [path...]` runs what
-// lies under the paths given, or all of it, its platforms at once. A
-// platform's name is a tag every test on it carries, so `--tag=workerd` runs
-// that platform alone. A file whose tests all passed, with nothing it depends
-// on changed since, is left out unless `--all` is given
-// (packages/testing/deps.ts). `--times` has each platform's runner write what
-// it took to `<dir>/<platform>.json`.
+// `deno task test [--tag=t]... [--all] [path...]` runs what lies under the
+// paths given, or all of it, its platforms at once, and holds what each test
+// took to the budget (./test-budget.ts): a test over 1 ms that
+// bench/test-budget.json does not list fails the run, measured again first.
+// A platform's name is a tag every test on it carries, so `--tag=workerd`
+// runs that platform alone. A file whose tests all passed, with nothing it
+// depends on changed since, is left out unless `--all` is given
+// (packages/testing/deps.ts). `--write`, `--report` and `--from=dir` are the
+// budget's.
 
 import { find, tested } from '@yaks/testing/find'
-import { type Result, runTestCommands, type TestCommand } from './phases.ts'
+import { runTestCommands, type TestCommand } from './phases.ts'
+import { budget, hold, measure, OWN, read, type Suite } from './test-budget.ts'
 import { SHARED } from './test-runtime.ts'
 
 export let ROOTS = ['packages', 'bin', 'workers', 'apps']
@@ -370,7 +373,10 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     Deno.exit(2)
   }
   Deno.env.set(RUN, String(Deno.pid))
-  let flags = Deno.args.filter((a) => a.startsWith('--'))
+  let b = await budget()
+  let from = Deno.args.find((a) => a.startsWith('--from='))?.slice(7)
+  if (from) Deno.exit(await hold(b, await read(from), Deno.args))
+  let flags = Deno.args.filter((a) => a.startsWith('--') && !OWN.test(a))
   let paths = Deno.args.filter((a) => !a.startsWith('--'))
   let tags = flags.filter((a) => a.startsWith('--tag='))
     .flatMap((a) => a.slice(6).split(','))
@@ -401,24 +407,27 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
     }
   }
-  let bulk: TestCommand = {
-    command: Deno.execPath(),
-    args: [
-      'run',
-      '-A',
-      // The kernel's harness loads workers/yak's own wrangler, and Deno
-      // resolves it from there only in this mode (probe-suite.ts).
-      '--node-modules-dir=manual',
-      '--unstable-worker-options',
-      import.meta.filename!,
-      '--bulk',
-      ...flags,
-      ...files,
-    ],
-    env: { DENO_DIR: denoDir(), ...GIT },
+  let suite: Suite = async (more, over = files) => {
+    if (!over.length) return { code: 0 }
+    let bulk: TestCommand = {
+      command: Deno.execPath(),
+      args: [
+        'run',
+        '-A',
+        // The kernel's harness loads workers/yak's own wrangler, and Deno
+        // resolves it from there only in this mode (probe-suite.ts).
+        '--node-modules-dir=manual',
+        '--unstable-worker-options',
+        import.meta.filename!,
+        '--bulk',
+        ...flags,
+        ...more,
+        ...over,
+      ],
+      env: { DENO_DIR: denoDir(), ...GIT },
+    }
+    return await runTestCommands([bulk])
   }
-  let result: Result = files.length
-    ? await runTestCommands([bulk])
-    : { code: 0 }
-  Deno.exit(result.code ?? (result.signal === 'SIGINT' ? 130 : 143))
+  let whole = !paths.length && !tags.length && flags.includes('--all')
+  Deno.exit(await hold(b, await measure(b, suite, whole), Deno.args))
 }

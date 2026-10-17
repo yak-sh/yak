@@ -244,8 +244,9 @@ sets exit code 1; an unknown flag sets exit code 2.
 accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
 all tests in the runtime. `--times` writes what the run took, in milliseconds,
 to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
-planning and loading, each file's load, and each test that ran with its file,
-name and whether it passed.
+planning and loading, each file's load, each test that ran with its file, name
+and whether it passed, and each file the run remembered as passed, with its key
+in the pass record (`forget` from `@yaks/testing/deps` takes one back).
 
 A file whose tests all passed is skipped while its dependencies are unchanged:
 its module dependencies resolved by `deno info`, files named with a literal

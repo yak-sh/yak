@@ -1,9 +1,19 @@
 import { equal, test } from '@yaks/testing'
-import { type Budget, judge, listed, shrunk } from './test-budget.ts'
+import {
+  type Budget,
+  failing,
+  fastest,
+  judge,
+  listed,
+  retracted,
+  shrunk,
+  type Times,
+} from './test-budget.ts'
 import { fenceName, fences } from '../packages/testing/examples.ts'
 
 // A list holding `a_test.ts` › `slow` at 50ms, and a deno run at 1s whose
-// tests in a_test.ts took what `took` says (a negative time fails the test).
+// tests in `file` took what `took` says (a negative time fails the test), the
+// file remembered as passed under its own name.
 let list: Budget = {
   budget: 1,
   leave: 0.5,
@@ -11,19 +21,50 @@ let list: Budget = {
   platforms: { deno: 1000 },
   tests: { 'a_test.ts': { slow: 50, gone: 30 } },
 }
+let deno = (
+  took: Record<string, number>,
+  wall = 1000,
+  file = 'a_test.ts',
+): Times => ({
+  wall,
+  tests: Object.entries(took).map(([name, ms]) => ({
+    file,
+    name,
+    ms: Math.abs(ms),
+    ok: ms >= 0,
+  })),
+  remembered: { [file]: file },
+})
 let ran = (took: Record<string, number>, wall = 1000) =>
-  judge(list, {
-    deno: {
-      wall,
-      tests: Object.entries(took).map(([name, ms]) => ({
-        file: 'a_test.ts',
-        name,
-        ms: Math.abs(ms),
-        ok: ms >= 0,
-      })),
-    },
-  })
+  judge(list, { deno: deno(took, wall) })
 let names = (rows: { key: string }[]) => rows.map((r) => r.key)
+
+test('measured again, a test is held to the fastest time it passed with', () => {
+  let runs = fastest(
+    { deno: deno({ over: 3, still: 2, slow: 120, quick: 0.2 }) },
+    { deno: deno({ over: 0.8, still: 1.5, slow: -1, quick: 0.9 }) },
+  )
+  let j = judge(list, runs)
+  equal([names(j.over), names(j.slower)], [['still'], ['slow']])
+  equal(runs.deno.tests.map((t) => t.ms), [0.8, 1.5, 120, 0.2])
+})
+
+test('a listed test past its record fails only where the records are held', () => {
+  let j = ran({ over: 3, slow: 200, quick: 0.2 })
+  equal(names(failing(j, false)), ['over'])
+  equal(names(failing(j, true)), ['over', 'slow'])
+})
+
+test('a file holding a test the run fails has its pass taken back', () => {
+  let runs = {
+    deno: deno({ over: 3, quick: 0.2 }),
+    browser: deno({ fine: 0.4 }, 1000, 'b_test.ts'),
+  }
+  equal(retracted(runs, failing(judge(list, runs), false)), ['a_test.ts'])
+  let slower = { deno: deno({ slow: 200 }) }
+  equal(retracted(slower, failing(judge(list, slower), false)), [])
+  equal(retracted(slower, failing(judge(list, slower), true)), ['a_test.ts'])
+})
 
 test('a test the list does not name is held to the budget', () => {
   let j = ran({ quick: 0.4, bare: 1, over: 1.2, slow: 60 })

@@ -172,7 +172,7 @@ export let keys = async (
 }
 
 /** Where passed keys are kept, for every checkout on this machine. */
-export let STORE = `${
+export let STORE: string = `${
   Deno.env.get('XDG_CACHE_HOME') ?? `${Deno.env.get('HOME')}/.cache`
 }/yak/tests-passed.json`
 
@@ -189,13 +189,26 @@ export let passed = (store = STORE): Record<string, number> => {
 }
 
 /** Adds keys that passed now to what the store holds. */
-export let remember = (keys: string[], store = STORE) => {
+export let remember = (keys: string[], store = STORE): void => {
   if (!keys.length) return
   let now = Date.now()
-  let all = {
-    ...passed(store),
-    ...Object.fromEntries(keys.map((k) => [k, now])),
-  }
+  save(
+    { ...passed(store), ...Object.fromEntries(keys.map((k) => [k, now])) },
+    store,
+  )
+}
+
+/** Takes keys back out of what the store holds: passes that a caller holding
+ * the run to more than passing (bin/test-budget.ts) does not grant. */
+export let forget = (keys: string[], store = STORE): void => {
+  if (!keys.length) return
+  let all = passed(store)
+  for (let k of keys) delete all[k]
+  save(all, store)
+}
+
+// The store holding `all`, the newest kept, written whole.
+let save = (all: Record<string, number>, store: string) => {
   let kept = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, KEEP)
   Deno.mkdirSync(store.slice(0, store.lastIndexOf('/')), { recursive: true })
   let draft = `${store}.${Deno.pid}`

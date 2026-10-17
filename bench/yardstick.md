@@ -164,11 +164,11 @@ batch/read/ edit samples, environment and grammar hashes; no database blobs are
 committed.
 
 Checks: `deno check`, `deno fmt`, `deno lint` on changed files; focused
-three-case suite and `deno task test:budget bench/yardstick-tree_test.ts` pass
-(budget rerun six passes). Replacing UTF-8 offsets with raw UTF-16 indexes makes
-the Unicode fixture fail, then restoring the emitter passes. A two-file
-end-to-end smoke run exercises parse/spool/load/diffs/reads/fresh-process
-restart with answer checks.
+three-case suite and `deno task test bench/yardstick-tree_test.ts` pass (budget
+rerun six passes). Replacing UTF-8 offsets with raw UTF-16 indexes makes the
+Unicode fixture fail, then restoring the emitter passes. A two-file end-to-end
+smoke run exercises parse/spool/load/diffs/reads/fresh-process restart with
+answer checks.
 
 Measurement engine/package code is pinned to corpus/base commit
 `64debacbd3129ba0bcb08bd5de583bd36d57172b`. Landing rebased the harness onto

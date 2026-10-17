@@ -89,7 +89,6 @@
     "app-grep": "deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg bin/app-grep.ts",
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",
     "test": "deno run -A bench/run.ts command test deno task test:run",
-    "test:budget": "deno run -A bin/test-budget.ts",
     "bench": "deno run -A bench/run.ts run",
     "bench:check": "deno run -A bench/run.ts check",
     "bench:ratchet": "deno run -A bench/run.ts accept",

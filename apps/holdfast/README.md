@@ -166,7 +166,7 @@ From the repository root:
 ```sh
 deno check apps/holdfast/*.ts
 deno lint --config deno.json apps/holdfast
-deno task test:budget apps/holdfast
+deno task test apps/holdfast
 ```
 
 The pure rules tests cover the shared purse, occupied sites, upgrades and sale

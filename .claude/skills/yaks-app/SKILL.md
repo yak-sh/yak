@@ -319,7 +319,7 @@ to regenerate `workers/yak/content.ts` and the connector skills under
 `plugins/yaks.app/`; don't edit those projections by hand. Check with
 `deno task content --check` and
 `deno task test workers/yak/guide_test.ts workers/yak/content_test.ts`, plus
-`deno task test:budget` on the tests you change. Examples and claims must be
+`deno task test` on the tests you change. Examples and claims must be
 checked against the implementing packages and working apps, not just against
 other prose.
 

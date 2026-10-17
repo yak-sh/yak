@@ -12,7 +12,8 @@
 // since (./deps.ts), is left out unless `--all` is given; `--also` names
 // what every file depends on beside its own graph. A test that has not ended
 // within `--timeout` fails, and the run goes on. `--times` writes what each
-// test and each file's load took to `<dir>/<platform>.json`. `--twice` loads
+// test and each file's load took, and the key of each file the run remembered
+// as passed, to `<dir>/<platform>.json`. `--twice` loads
 // every file a second time once all have run, as modules of their own, so a
 // test is also timed warm, the way it runs among the whole suite: for
 // measuring (bin/test-budget.ts), since a test that cannot run twice in one
@@ -108,13 +109,13 @@ for (let pass of twice ? ['', '?again'] : ['']) {
 
 // A file passed when every test it declared ran and passed; a run that
 // picked by tag ran only some.
-if (!tags.length) {
-  let failed = new Set(outcomes.filter((o) => !o.ok).map((o) => o.test.file))
-  remember(
-    [...modules, ...pages].filter((p) => fresh(p) && !failed.has(p))
-      .flatMap((p) => key.get(p) ?? []),
-  )
-}
+let failed = new Set(outcomes.filter((o) => !o.ok).map((o) => o.test.file))
+let remembered = Object.fromEntries(
+  tags.length ? [] : [...modules, ...pages]
+    .filter((p) => fresh(p) && !failed.has(p) && key.has(p))
+    .map((p) => [p, key.get(p)!]),
+)
+remember(Object.values(remembered))
 let wall = performance.now() - started
 summary(outcomes, wall, { left, planned, loading })
 let times = flag('times').at(-1)
@@ -122,7 +123,9 @@ if (times) {
   await Deno.mkdir(times, { recursive: true })
   await Deno.writeTextFile(
     `${times}/${platform || 'tests'}.json`,
-    JSON.stringify(timed(outcomes, { wall, planned, loading, loads })),
+    JSON.stringify(
+      timed(outcomes, { wall, planned, loading, loads, remembered }),
+    ),
   )
 }
 Deno.exit(outcomes.some((o) => !o.ok) ? 1 : 0)

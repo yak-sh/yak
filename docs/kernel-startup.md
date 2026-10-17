@@ -139,9 +139,9 @@ profiles, raw runs, paired ranges and limitations:
 
 ## Behavior verification
 
-- `deno task test:budget` on loader generation/runtime, vocabulary, package
-  tools, graph, reach and tools: 210 cases passed. Agent examples, release and
-  Site workerd follow-up: 18 cases passed, including the real Site entrypoint.
+- `deno task test` on loader generation/runtime, vocabulary, package tools,
+  graph, reach and tools: 210 cases passed. Agent examples, release and Site
+  workerd follow-up: 18 cases passed, including the real Site entrypoint.
 - The emitted-loader test bundles the generated loader as one minified module
   and observes which facet initializers actually run. Making its optional
   imports eager makes the test fail; the lazy fixture was restored.

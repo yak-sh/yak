@@ -172,6 +172,7 @@ test('--times says what each test and each load took', async () => {
 test('waits', () => new Promise((go) => setTimeout(go, 20)))
 test('fails', () => { throw new Error('no') })
 test('later', () => {}, { skip: true })`,
+    'b_test.ts': 'export {}',
   })
   let at = await Deno.makeTempDir({ prefix: 'yaks-testing-times-' })
   try {
@@ -187,6 +188,9 @@ test('later', () => {}, { skip: true })`,
     ok(times.tests[0].ms >= 20 && times.tests[2].ms >= 20)
     let [[file, load]] = Object.entries(times.loads)
     ok(file.endsWith('a_test.ts') && load > 0)
+    // Only the file whose tests all passed is remembered, by its key.
+    let [[passing, key], ...more] = Object.entries(times.remembered)
+    ok(passing.endsWith('b_test.ts') && key && !more.length)
     ok(times.wall >= times.planned + times.loading)
   } finally {
     await Deno.remove(at, { recursive: true })

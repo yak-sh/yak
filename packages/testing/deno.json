@@ -3,6 +3,7 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./deps": "./deps.ts",
     "./find": "./find.ts",
     "./main": "./main.ts"
   },

@@ -125,12 +125,15 @@ export let file = async (
 }
 
 /** What a run took, in milliseconds: the whole of it, its planning and its
- * loading, each file's load and each test that ran. */
+ * loading, each file's load and each test that ran; and each file it
+ * remembered as passed, by its key (./deps.ts), so a caller holding the run
+ * to more than passing can take a pass back. */
 export type Times = {
   wall: number
   planned: number
   loading: number
   loads: Record<string, number>
+  remembered: Record<string, string>
   tests: { file: string; name: string; ms: number; ok: boolean }[]
 }
 

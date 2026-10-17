@@ -46,8 +46,8 @@ assertion.
 - A small example beside the code is often the whole test: a `///` doctest
   line in the module, or a fenced `ts` block in a README or doc comment. Both
   run on the deno platform; a block marked `ts ignore` does not. An example's
-  setup is timed too: keep it small, put costly fixtures in test files, and run
-  `test:budget` on the package so README examples are measured as well.
+  setup is timed and held to the budget like a test: keep it small, and put
+  costly fixtures in test files.
 - A graph over `:memory:` or @yaks/ram is a value, not a boot, so most tests
   run at a pure seam, in memory. When RAM lacks something a test needs,
   @yaks/ram gets it (M-39498).
@@ -106,19 +106,26 @@ stronger.
   @yaks/sqlite plans or @yaks/graph applies is always that: every package that
   reads or writes depends on it, and its own tests can't see them. Run `deno task test` and
   `deno task test --tag=workerd workers/yak` once before landing it.
-- `deno task test:budget` runs the whole suite held to its budget, and the gate
-  runs it: a test case over 1 ms fails unless bench/test-budget.json lists it,
-  a listed one fails past its record (times the list's slack), and so does
-  workerd's wall clock on the gate (the other platforms' walls are said, not
-  held: their tests are each held already). Nothing joins the list: a new or renamed
-  test is held to 1 ms, so run `deno task test:budget <paths>` on what you
-  changed before landing. Getting a kernel test under it pulls you to drop the
-  checks that "only exist across the door". Nearly every one is a decision some
+- Every run is held to the budget (bin/test-budget.ts): a test case over 1 ms
+  fails it unless bench/test-budget.json lists it. A time over the line is
+  measured again first, in fresh runtimes with each file loaded twice, and
+  fails only when it is over every time, so a loaded box doesn't fail it; a
+  run with nothing over pays for no second pass. A file failed this way stays
+  unpassed, so the next run runs it again. The records are the gate's: its
+  whole run (`deno task test --all`) fails a listed test past its record
+  (times the list's slack) and workerd's wall past its own; a whole run
+  elsewhere says them without holding them, and a narrowed one says neither,
+  since another box runs a process-spawning test several times slower. The
+  other platforms' walls are said, not held, since their tests are each held
+  already. Nothing joins the list: a new or renamed test is held to 1 ms from
+  its first run. Getting a kernel test under it pulls you to drop the checks
+  that "only exist across the door". Nearly every one is a decision some
   function makes (who may see or delete what, which version serves): move it
-  there, extracting the function if it's inline, and drop nothing. `--write` takes off what got fast and lowers the
-  records; `--from=<dir>` does it from a gate's kept times (its `suite-timings`
-  artifact). A time over the line is measured again with each file loaded a
-  second time in the same runtime, so a test that can't run twice fails there.
+  there, extracting the function if it's inline, and drop nothing. `--write`
+  takes off what got fast and lowers the records; `--from=<dir> --write` does
+  it from a gate's kept times (its `suite-timings` artifact). The second
+  measuring pass loads each file twice in one runtime, so a test that can't
+  run twice fails there.
 - A red gate's verdict closes its tests step, and `gh run view --log` cuts that
   step short: read the job's whole log, `gh api
   repos/yak-sh/yak/actions/jobs/<job id>/logs`.
