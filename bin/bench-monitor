@@ -3,6 +3,7 @@
 # tracker (bench/monitor.ts). Cron runs it from the main checkout:
 #
 #   23 2 * * *    bin/bench-monitor              every suite, once a day
+#   */30 * * * *  bin/bench-monitor --hourly     user-facing waits
 #   */15 * * * *  bin/bench-monitor --restarted  pages, once after a restart
 #
 # each appending to ~/.tasks-bench.log, beside backup's and tidy's logs.
@@ -13,9 +14,33 @@
 # a measurement taken at low priority measures the box's other work.
 set -u
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
+# Each lane owns its lock and child. A long throughput check cannot postpone
+# a user-facing regression, and cron never stacks another copy of a lane.
+if [ "${1:-}" = "--hourly" ]; then
+  self="$(realpath "$0")"
+  cd "$(dirname "$self")/.." || exit 1
+  for suite in pages page-content person-commands platform-waits worker-health; do
+    "$self" "$suite" &
+  done
+  wait
+  exit
+fi
+if [ "$#" -eq 0 ]; then
+  self="$(realpath "$0")"
+  cd "$(dirname "$self")/.." || exit 1
+  # Each suite shares its scheduled lock with the fast lane, not a queue behind
+  # throughput. Ignore a held lock: that suite is already being measured.
+  for suite in $(deno eval 'import { SUITES } from "./bench/monitor.ts"; console.log(SUITES.join(" "))'); do
+    "$self" "$suite"
+  done
+  exit
+fi
+export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
 # systemctl --user, which `--restarted` asks for the live web unit, needs the
 # user manager's address, which cron does not give.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 cd "$(dirname "$0")/.." || exit 1
-exec timeout -k 30 "${YAK_BENCH_TIMEOUT:-14400}" \
+mkdir -p "$HOME/.cache/yak/bench"
+lane="${1:-daily}"
+exec flock -n "$HOME/.cache/yak/bench/monitor-$lane.lock" timeout -k 30 "${YAK_BENCH_TIMEOUT:-14400}" \
   deno run -A bench/monitor.ts "$@"
