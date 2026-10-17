@@ -1,11 +1,11 @@
 // A sparse transcript must not visit the requests belonging to other owners.
 import { equal, ok, test } from '@yaks/testing'
+import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { as, col, eq, insert, render, select, table, val } from '@yaks/sql'
 import { driver } from '../sqlite/native.ts'
-import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
