@@ -174,3 +174,64 @@ test('a read keeps its answer through a lost socket until the next one', async (
     wire.free()
   }
 })
+
+// The alias keeps its subscription; only a canonical member of that answer
+// may be painted, even when another cached row is offered as its resolution.
+let aliasObserved = (() => {
+  let prior = useRoute(() => {})
+  let alias = 'D-70123', canonical = 'alias-page-row'
+  let sub = routeName(alias, 'doc.title')
+  let off = routeSub(alias, 'doc.title')
+  let retained = routeSub(canonical, 'doc.title')
+  try {
+    landSub({
+      sub,
+      replace: true,
+      changes: [
+        { eid: canonical, name: 'entity', comp: { num: 70123 } },
+        { eid: canonical, name: 'doc', comp: { title: 'First' } },
+      ],
+    })
+    let first = entityRead(alias, 'doc.title', canonical)
+    let foreign = entityRead(alias, 'doc.title', 'another-cached-row')
+    landSub({
+      sub,
+      changes: [
+        { eid: canonical, name: 'doc', comp: { title: 'Updated' } },
+      ],
+    })
+    let updated = entityRead(alias, 'doc.title', canonical)
+    landSub({
+      sub: routeName(canonical, 'doc.title'),
+      replace: true,
+      changes: [
+        { eid: canonical, name: 'entity', comp: { num: 70123 } },
+        { eid: canonical, name: 'doc', comp: { title: 'Updated' } },
+      ],
+    })
+    landSub({ sub, replace: true, changes: [] })
+    let gone = entityRead(alias, 'doc.title', canonical)
+    let retainedRow = entityRead(canonical, 'doc.title').value
+    return {
+      first: [first.ready, first.value?.doc?.title],
+      foreign: foreign.value,
+      updated: updated.value?.doc?.title,
+      gone: [gone.ready, gone.value],
+      retained: !!retainedRow,
+    }
+  } finally {
+    off()
+    retained()
+    useRoute(prior)
+  }
+})()
+
+test('an addressed alias reads canonical members without replacing its subscription', () => {
+  assertEquals(aliasObserved, {
+    first: [true, 'First'],
+    foreign: undefined,
+    updated: 'Updated',
+    gone: [true, undefined],
+    retained: true,
+  })
+})

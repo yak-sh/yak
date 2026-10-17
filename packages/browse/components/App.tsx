@@ -2,7 +2,7 @@ import { InspectPage } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { left, scrolledTo } from '../history.ts'
 import { destinationAt, schemaAt } from '../navigation.ts'
-import { entityPath, searchAt } from '../url.ts'
+import { addressId, entityPath, searchAt } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
 import { config, ent, entityRead, mode, routeSub } from '../live.ts'
@@ -94,10 +94,17 @@ export let Page = ({ at }: { at: string }) => {
   let offered = home ? homeOffer() : undefined
   // The owner's home page holds what its view asks, never the owner's
   // neighborhood, and opening it is not opening the owner.
-  let rootEid = offered ? undefined : t?.eid
+  // Keep the addressed subscription when its answer resolves a human id to
+  // a canonical eid. Its existing membership already proves that identity;
+  // replacing it would throw away readiness and fetch the same row again.
+  let rootEid = offered
+    ? undefined
+    : addressId(decodeURIComponent(url.pathname.slice(1))) ?? t?.eid
   useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
-  let read = rootEid && config.host ? entityRead(rootEid) : undefined
-  let e = t ? ent(t.eid) : undefined
+  let read = rootEid && config.host
+    ? entityRead(rootEid, undefined, t?.eid)
+    : undefined
+  let e = read?.ready ? read.value : t ? ent(t.eid) : undefined
   let tabs = e ? applicable(e) : []
   // A coarse pointer with no explicit view defaults a Canvas to List: its
   // spatial face eagerly renders every pinned card and floods a phone (the

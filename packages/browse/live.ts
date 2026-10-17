@@ -2211,7 +2211,11 @@ let routeLine = (eid: string, fields?: string) =>
     ? `id=${eid}`
     : `id=${eid}&${fields ? `.fields=${fields}` : ROUTE_EDGES}`
 
-export let entityRead = (eid: string, fields?: string) => {
+export let entityRead = (
+  eid: string,
+  fields?: string,
+  canonical = eid,
+) => {
   let sub = routeName(eid, fields)
   let state = subscriptionState(sub)
   return {
@@ -2219,10 +2223,10 @@ export let entityRead = (eid: string, fields?: string) => {
     state,
     ready: state.status == 'ready',
     loaded,
-    value: state.status == 'ready' && !state.eids.has(eid)
+    value: state.status == 'ready' && !state.eids.has(canonical)
       ? undefined
-      : row(eid).value
-      ? ent(eid)
+      : row(canonical).value
+      ? ent(canonical)
       : undefined,
   }
 }
