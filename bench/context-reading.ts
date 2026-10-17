@@ -4,6 +4,7 @@
  * schemas but executes only isolated graph reads. Output contains private context.
  */
 import { agent } from '@yaks/harness'
+import { ownerOracle, ownerWords } from './owner-oracle.ts'
 import { harnessTools } from '../packages/harness/tools.ts'
 import { skillItems, skillTools } from '../packages/harness/skills.ts'
 import { machines } from '../packages/harness/session_machines.ts'
@@ -43,6 +44,8 @@ export type Packet = {
   /** Audited candidate-only frozen graph rows, never auth or grading rows. */
   evidence?: Record<string, Bundle[]>
   skills?: Bundle[]
+  /** Opt-in single-node oracle grown only from per-case audited evidence. */
+  ownerOracle?: boolean
 }
 
 /** Explicit projection: held_out, answers and rubric never enter a request. */
@@ -61,13 +64,19 @@ export function candidate(c: Case, condition: Condition) {
 }
 
 export type Call = {
+  role?: string
   request: unknown
   contextHash: string
   response: Reply | null
   error: string | null
   wallMs: number
 }
-export function recording(model: Model, calls: Call[], native = false): Model {
+export function recording(
+  model: Model,
+  calls: Call[],
+  native = false,
+  role?: string,
+): Model {
   let wrapped: Model = async (req: Request) => {
     if (!native && req.tools.length) {
       throw new Error('Interpretation probe must have no tools')
@@ -86,6 +95,7 @@ export function recording(model: Model, calls: Call[], native = false): Model {
       conversation: req.conversation,
     }))
     let call: Call = {
+      ...(role ? { role } : {}),
       request,
       contextHash:
         (await snapshot(JSON.stringify(request), 'request')).revision,
@@ -282,6 +292,20 @@ export async function run(packet: Packet, options: {
       throw new Error('Frozen instruction revision mismatch: ' + file.source)
     }
   }
+  if (packet.ownerOracle) {
+    if (!options.native) {
+      throw new Error('Owner oracle requires isolated native mode')
+    }
+    for (let c of packet.historical_cases) {
+      if (!packet.evidence?.[c.id]) {
+        throw new Error('Oracle needs audited owner evidence')
+      }
+      ownerWords(
+        packet.evidence[c.id],
+        c.input.original_message.timestamp ?? '',
+      )
+    }
+  }
   // Host-only reads, before any candidate exists. Never lend this CLI to it.
   let config = read(configPath()!)
   // Current native graph vocabulary, without plugin runtime configuration.
@@ -368,6 +392,7 @@ export async function run(packet: Packet, options: {
         )
         let calls: Call[] = []
         let transcript: Bundle[] = []
+        let oracle: Awaited<ReturnType<typeof ownerOracle>> | undefined
         let error: string | null = null
         let session: string | null = null
         let a: ReturnType<typeof agent> | undefined
@@ -409,10 +434,12 @@ export async function run(packet: Packet, options: {
             vault: vaultOf(config.db!),
             person: config.person,
           }, () => undefined)
+          let transport = responses({ ...auth, web: false })
           let model = recording(
-            responses({ ...auth, web: false }),
+            transport,
             calls,
             options.native,
+            packet.ownerOracle ? 'candidate-answer' : undefined,
           )
           let modelId = source.find((b) =>
             (b.model as { name?: string } | undefined)?.name == 'gpt-6.1-sol'
@@ -427,6 +454,15 @@ export async function run(packet: Packet, options: {
               ...skillTools(host.graph, binding),
             ])
             : []
+          if (packet.ownerOracle) {
+            oracle = await ownerOracle({
+              rows: packet.evidence![c.id],
+              cutoff: c.input.original_message.timestamp ?? '',
+              grow: recording(transport, calls, true, 'owner-context-growth'),
+              query: recording(transport, calls, true, 'owner-query-fork'),
+            })
+            nativeTools.push(oracle.tool)
+          }
           a = agent({
             h: { g: host.graph, fx: host.fx, vocab: host.vocab, me: host.me },
             providers: { openai: model },
@@ -440,9 +476,22 @@ export async function run(packet: Packet, options: {
             named: () => [],
             opening: () => Promise.resolve({ files }),
           })
-          session = await a.start(candidate(c, condition), {
-            model: modelId,
-          })
+          let context = condition.contexts?.[c.id] ?? condition.text
+          let consultation = oracle
+            ? '\nYou may consult ask_owner in plain words about the owner and earlier context. ' +
+              'Before your final interpretation, consult it at least once with the original message ' +
+              'and any context or uncertainty you need it to interpret. This is a measured oracle condition, not contact with the live owner.'
+            : ''
+          session = await a.start(
+            candidate(c, {
+              ...condition,
+              text: context + consultation,
+              contexts: undefined,
+            }),
+            {
+              model: modelId,
+            },
+          )
           await a.idle(session)
           transcript = await a.transcript(session)
           if (
@@ -456,6 +505,16 @@ export async function run(packet: Packet, options: {
             )
           ) {
             error = 'Missing or failed model call'
+          }
+          if (oracle && !oracle.evidence.queries.length) {
+            error = 'Required oracle consultation missing'
+          }
+          if (
+            calls.some((call) =>
+              call.response && call.response.model != 'gpt-6.1-sol'
+            )
+          ) {
+            error = 'Returned model differs from required gpt-6.1-sol'
           }
         } catch (e) {
           error = String(e)
@@ -479,6 +538,7 @@ export async function run(packet: Packet, options: {
           suppliedContext: files,
           calls,
           transcript,
+          oracle: oracle?.evidence,
           error,
           totals: totals(calls),
           wallMs: performance.now() - start,
