@@ -53,6 +53,7 @@ import {
 export type State = Hibernation & {
   id: { name?: string }
   storage: DurableStorage & {
+    getAlarm: () => Promise<number | null>
     setAlarm: (at: number) => Promise<void>
     get: <T>(key: string) => Promise<T | undefined>
     put: (key: string, value: unknown) => Promise<void>
@@ -472,7 +473,11 @@ export class Tracker {
   // no storage writes; future wakes and retry backoff do not poll each second.
   #arm = async () => {
     let next = await this.tracker!.next(this.now())
-    if (next != null) await this.ctx.storage.setAlarm(next)
+    if (next == null) return
+    // Intake may owe the same work again. Keep its earlier return instead of
+    // moving grouping a second away on every delivery.
+    let alarm = await this.ctx.storage.getAlarm()
+    if (alarm == null || next < alarm) await this.ctx.storage.setAlarm(next)
   }
   webSocketMessage = async (ws: Wire, data: string | ArrayBuffer) => {
     try {

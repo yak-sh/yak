@@ -149,6 +149,10 @@ Workers Builds: repository root, deploy command `sh bin/build-tracker`, with
 build command empty. The wrapper installs Deno and the pinned npm dependencies.
 Watch `workers/tracker`, `packages` and `bin/build-tracker`.
 
+Intake preserves an already scheduled earlier alarm. Repeated queue deliveries
+must not move grouping's return later; otherwise continuous intake can admit
+captures while indefinitely postponing the effects that group them.
+
 `deploy.ts` hashes the dry-run bundle and skips an unchanged deployment. It sets
 the nonsecret `BUNDLE_HASH` binding and publishes a content-hash canary through
 the Worker's queue. It republishes the same capture every thirty seconds until

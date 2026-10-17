@@ -38,6 +38,7 @@ let reported = async (reset: boolean) => {
       },
       get: () => Promise.resolve(undefined),
       put: async () => {},
+      getAlarm: () => Promise.resolve(null),
       setAlarm: () => Promise.resolve(),
     },
   }, { ERRORS: { send: (rows) => Promise.resolve(void sent.push(rows)) } })
@@ -65,6 +66,7 @@ test('postboot failure does not poison the object and reporting never throws', a
       transactionSync: (body) => body(),
       get: () => Promise.resolve(undefined),
       put: async () => {},
+      getAlarm: () => Promise.resolve(null),
       setAlarm: (at) => {
         alarms.push(at)
         return Promise.resolve()
@@ -200,6 +202,7 @@ test('a trace wake leaves mail activation for an ordinary wake', async () => {
       transactionSync: (body) => body(),
       get: () => Promise.resolve(undefined),
       put: async () => {},
+      getAlarm: () => Promise.resolve(null),
       setAlarm: async () => {},
     },
   }, env)
@@ -309,6 +312,7 @@ test('a platform object tells an admin the bundle it runs, before booting', asyn
       transactionSync: (body) => body(),
       get: () => Promise.resolve(undefined),
       put: async () => {},
+      getAlarm: () => Promise.resolve(null),
       setAlarm: () => Promise.resolve(),
     },
   }, {
