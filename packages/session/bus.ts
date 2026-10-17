@@ -173,6 +173,13 @@ let owed = async (
   return out
 }
 
+// Whether a session's harness reports to the hook door. Both doors below run
+// on every tool call, so they read `hooked` and the session's id, never the
+// session whole: that derives its status and cost from its log, tens of
+// milliseconds of the web's one thread for a long transcript.
+let hooked = async (g: Graph, id: Eid): Promise<boolean> =>
+  !!(await g.get([id], ['hooked']))[0]?.hooked
+
 /** Lines owed to an outside caller, appended to a direct tool reply. A
  * session whose harness reports to the hook door ({@link heard}) hears there
  * instead: its forks and subagents call tools under its id too, and the first
@@ -181,9 +188,12 @@ export let reply = async (g: Graph, call: Bundle): Promise<Bundle[]> => {
   if (!g.vocab.comp('notified')) return []
   let id = who(call)?.via
   if (!id) return []
-  let [session] = await g.get([id])
+  let [session] = await g.read(
+    and(eq('entity.eid', id), fields(`${SESSION}.id`)),
+  )
   if (
-    !session?.session || session.hooked || (await hearing(g, [id])).length
+    !session?.session || await hooked(g, id) ||
+    (await hearing(g, [id])).length
   ) return []
   return (await owed(g, id)).map(({ item, line }) => ({
     entity: {
@@ -213,10 +223,10 @@ export type Hook = {
 export let heard = async (g: Graph, hook: Hook): Promise<object> => {
   if (!g.vocab.comp('notified')) return {}
   let said = typeof hook.session_id == 'string' ? hook.session_id : ''
-  let session = said ? await sessionFor(g, said) : undefined
+  let session = said ? await sessionFor(g, said, [`${SESSION}.id`]) : undefined
   if (!session?.session) return {}
   let id = session.entity.eid
-  if (!session.hooked) await g.apply([{ entity: { eid: id }, hooked: {} }])
+  if (!await hooked(g, id)) await g.apply([{ entity: { eid: id }, hooked: {} }])
   if (hook.agent_id) return {}
   let lines = (await owed(g, id)).map(({ line }) => line)
   return lines.length
