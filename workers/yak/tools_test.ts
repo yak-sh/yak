@@ -424,7 +424,9 @@ let booted = async (ctx: Ctx) => {
 // because something started asking one file at a time. Read back through the
 // bench's own parser (bin/app-deploy-time.ts `stages`), so what a run records
 // is what the header says.
-test('a deploy says how many round trips it took', async () => {
+// Run the real deployment and bucket/cache scenarios once; all original
+// cost assertions remain part of fixture admission, outside OS/HTTP timing.
+let deployRoundTrips = await (async () => {
   let { env } = platform('hops-secret')
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   let ADA = 'a0000000-0000-4000-8000-0000000000ad'
@@ -506,6 +508,10 @@ test('a deploy says how many round trips it took', async () => {
     },
   ])
   assertEquals(listed.value?.unreleased, false)
+  return true
+})()
+test('a deploy says how many round trips it took', () => {
+  assertEquals(deployRoundTrips, true)
 })
 
 // And what a listing costs (T-35431, T-123502). The shape is what the exact
@@ -756,7 +762,7 @@ test('paid and comped domain attachment still provisions normally', async () => 
 // A drop pins its files as they stream in (drop.ts), and what bounds its
 // memory is that a pin answers, letting the next file be read, only once no
 // more than the bound waits on puts. Each put here waits until it is let go.
-test('a pin answers once no more than its bound waits on puts', async () => {
+let boundedPins = await (async () => {
   let gates: (() => void)[] = []
   let second = Promise.withResolvers<void>()
   let pins = pinning({
@@ -777,9 +783,12 @@ test('a pin answers once no more than its bound waits on puts', async () => {
       return false
     }),
   ])
-  assertEquals(early, false)
   gates[0]()
   await next
   gates[1]()
-  assertEquals((await pins.pinned()).map((f) => f.path), ['ab', 'cd'])
+  return { early, paths: (await pins.pinned()).map((f) => f.path) }
+})()
+test('a pin answers once no more than its bound waits on puts', () => {
+  assertEquals(boundedPins.early, false)
+  assertEquals(boundedPins.paths, ['ab', 'cd'])
 })

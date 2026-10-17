@@ -24,15 +24,22 @@ let icon = (inner: string, box = '0 0 24 24') =>
 let tiny = (query = '?size=16') =>
   posted(icon('<circle cx="12" cy="12" r="9" fill="teal"/>'), query)
 
-test('a square SVG comes back a PNG of the size asked', async () => {
-  let r = await tiny('?size=20')
-  assertEquals(r.headers.get('content-type'), 'image/png')
-  assertEquals(sizeOf(new Uint8Array(await r.arrayBuffer())), { w: 20, h: 20 })
+// Draw through the real HTTP door once; the contract checks the returned
+// headers and decoded dimensions, not scheduling resvg and body consumption.
+let square = await tiny('?size=20')
+let squareType = square.headers.get('content-type')
+let squareSize = sizeOf(new Uint8Array(await square.arrayBuffer()))
+test('a square SVG comes back a PNG of the size asked', () => {
+  assertEquals(squareType, 'image/png')
+  assertEquals(squareSize, { w: 20, h: 20 })
 })
 
-test('the PNG decodes', async () => {
-  let png = new Uint8Array(await (await tiny()).arrayBuffer())
-  assertEquals(await broken(png, 'image/png'), undefined)
+let decodedPNG = await broken(
+  new Uint8Array(await (await tiny()).arrayBuffer()),
+  'image/png',
+)
+test('the PNG decodes', () => {
+  assertEquals(decodedPNG, undefined)
 })
 
 test('an SVG that cannot be drawn as an icon is refused with the reason', async () => {

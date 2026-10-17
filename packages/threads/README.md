@@ -85,9 +85,11 @@ effect accounting run there once. Local-only components are available too: this
 is access to that graph, not its server sync tier. There is no optimistic
 replica or raw storage write door.
 
-A connected pair gives another thread access without copying data:
+A connected pair gives another thread access without copying data. The real port
+write/read, refusals and claims are exercised in `thread_test.ts`; this example
+also includes OS port setup and delivery.
 
-```ts
+```ts ignore
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'

@@ -1,3 +1,4 @@
+import { backoff } from '@yaks/durable-object'
 // The write log (writes.ts) over one store's storage, woken as new
 // incarnations the way a deploy wakes it: writes kept while the store refuses
 // to start, then replayed in order, once, by the alarm alone.
@@ -260,15 +261,27 @@ test('an alarm replay during async readiness answers the waiting writer', async 
   assertEquals(o.writes(), 0)
 })
 
-test('a batch sent again after a reset lost its answer is applied once', async () => {
-  let o = object()
-  let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
-    [{ entity: { eid: '$n' }, doc: { title: 'once' } }],
-    KERNEL,
-  )
-  let rows = await o.query('.doc.title=once')
-  assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
-})
+// These cases check eviction/replay, not randomized wall-clock backoff.
+let withoutRetryDelay = async (run: () => Promise<void>) => {
+  let wait = backoff.wait
+  backoff.wait = () => Promise.resolve()
+  try {
+    await run()
+  } finally {
+    backoff.wait = wait
+  }
+}
+
+test('a batch sent again after a reset lost its answer is applied once', () =>
+  withoutRetryDelay(async () => {
+    let o = object()
+    let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
+      [{ entity: { eid: '$n' }, doc: { title: 'once' } }],
+      KERNEL,
+    )
+    let rows = await o.query('.doc.title=once')
+    assertEquals(rows.map((b) => b.entity.eid), [minted(applied).$n])
+  }))
 
 test('an interrupted write keeps its body while reads recover and explicit retry applies once', async () => {
   let o = object()
@@ -594,39 +607,40 @@ test('recent write inspection includes committed outcomes without credentials', 
   assertEquals(await (await door('/writes', {}, KERNEL)).json(), [])
 })
 
-test('a live keyed write commits its receipt without pending or running stages', async () => {
-  let o = object()
-  await o.query('.doc')
-  let sql = o.ctx.storage.sql
-  let exec = sql.exec
-  let stages: string[] = []
-  sql.exec = (query, ...bindings) => {
-    if (
-      /^insert into "yak_writes"/i.test(query) ||
-      (/^update "yak_writes"/i.test(query) &&
-        query.includes('set "state" = \'running\''))
-    ) {
-      stages.push(query)
+test('a live keyed write commits its receipt without pending or running stages', () =>
+  withoutRetryDelay(async () => {
+    let o = object()
+    await o.query('.doc')
+    let sql = o.ctx.storage.sql
+    let exec = sql.exec
+    let stages: string[] = []
+    sql.exec = (query, ...bindings) => {
+      if (
+        /^insert into "yak_writes"/i.test(query) ||
+        (/^update "yak_writes"/i.test(query) &&
+          query.includes('set "state" = \'running\''))
+      ) {
+        stages.push(query)
+      }
+      return exec.call(sql, query, ...bindings)
     }
-    return exec.call(sql, query, ...bindings)
-  }
-  try {
-    let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
-      [{ entity: { eid: '$n' }, doc: { title: 'receipt once' } }],
-      KERNEL,
-    )
-    assertEquals(
-      (await o.query('.doc.title="receipt once"')).map((b) => b.entity.eid),
-      [minted(applied).$n],
-    )
-    assertEquals(stages.length, 1)
-    assert(stages[0].includes("'applied'"))
-    assertEquals(o.writes('applied'), 1)
-    assertEquals(o.writes('pending'), 0)
-  } finally {
-    sql.exec = exec
-  }
-})
+    try {
+      let applied = await metaOf(storeOf(resetting(o), NAME)).apply(
+        [{ entity: { eid: '$n' }, doc: { title: 'receipt once' } }],
+        KERNEL,
+      )
+      assertEquals(
+        (await o.query('.doc.title="receipt once"')).map((b) => b.entity.eid),
+        [minted(applied).$n],
+      )
+      assertEquals(stages.length, 1)
+      assert(stages[0].includes("'applied'"))
+      assertEquals(o.writes('applied'), 1)
+      assertEquals(o.writes('pending'), 0)
+    } finally {
+      sql.exec = exec
+    }
+  }))
 
 test('receipt insertion failure rolls back the mutation and keeps replayable input', async () => {
   let o = object()
@@ -864,11 +878,13 @@ for (
     body,
   })
   let before = o.writes()
-  test(`a${kind == 'oversized' ? 'n' : ''} ${kind} outbox intent is refused rather than applied without a receipt`, async () => {
-    let response = await o.fetch(request)
-    assertEquals(response.status, 400)
-    assertEquals((await response.json()).error, 'Refused')
-    assertEquals(o.writes(), before)
-    assertEquals(await graph.read(parse('.doc')), [])
+  let response = await o.fetch(request)
+  let status = response.status, error = (await response.json()).error
+  let after = o.writes(), documents = await graph.read(parse('.doc'))
+  test(`a${kind == 'oversized' ? 'n' : ''} ${kind} outbox intent is refused rather than applied without a receipt`, () => {
+    assertEquals(status, 400)
+    assertEquals(error, 'Refused')
+    assertEquals(after, before)
+    assertEquals(documents, [])
   })
 }

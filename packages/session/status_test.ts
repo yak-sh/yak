@@ -562,11 +562,12 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
 ]
 
-test('statusOf reads the newest entry', () => {
-  for (let [name, entries, want] of shapes) {
-    assertEquals(statusOf(entries.toReversed()), want, name)
-  }
-})
+for (let [name, entries, want] of shapes) {
+  let reversed = entries.toReversed()
+  test(`statusOf reads the newest entry: ${name}`, () => {
+    assertEquals(statusOf(reversed), want, name)
+  })
+}
 
 // A whole tool-using turn, read as it lands. The runner appends an ask with
 // everything the model said and asked for in one batch, so the prefixes below
