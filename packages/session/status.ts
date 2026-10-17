@@ -894,6 +894,8 @@ export let sessionStatus = {
           ),
         ),
         flag('inflight', inflight),
+        // Read where it is named: materialized, it built a temporary table for
+        // every status read, though most transcripts hold no progress at all.
         as(
           declared('tool_progress')
             ? sub(select({
@@ -909,7 +911,12 @@ export let sessionStatus = {
                   lit(0),
                 ),
               )],
-              from: table('__progress', 'p'),
+              from: table('tool_progress', 'p'),
+              joins: [{
+                ...cross(table('entry', 'pe')),
+                on: eq(col('entity', 'pe'), col('entity', 'p')),
+              }],
+              where: mine('pe'),
             }))
             : lit(null),
           'progress_pending',
@@ -1068,21 +1075,6 @@ export let sessionStatus = {
             // legacy fallback). Inlining avoids a billed temporary-row read;
             // its newest-entry and ask seeks remain bounded.
             { name: ANCHOR, q: anchors, materialized: false },
-            ...declared('tool_progress')
-              ? [{
-                name: '__progress',
-                materialized: true,
-                q: select({
-                  cols: [col('call', 'p')],
-                  from: table('tool_progress', 'p'),
-                  joins: [{
-                    ...cross(table('entry', 'pe')),
-                    on: eq(col('entity', 'pe'), col('entity', 'p')),
-                  }],
-                  where: mine('pe'),
-                }),
-              }]
-              : [],
           ],
           cols: [
             iff(
