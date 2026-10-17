@@ -1165,13 +1165,14 @@ test('DELETE / empties the app store and bears it again', async () => {
 
 // The space, `cookbook` as its home app, `garden` beside it, and a home worker
 // where one is given: an app answering `.get` for no other script is an app
-// with no worker, which is the message the runtime knows one by. `first` is a
-// property of the `home` component the front page wears, written the way
-// `app_set` writes it.
-let router = async (
-  worker?: (req: Request) => Response | Promise<Response>,
-  first?: string[],
-) => {
+// with no worker, which is the message the runtime knows one by. The worker is
+// looked up per request, as the namespace does, so a test can swap it on the
+// space it stood up instead of paying for another. `first` is a property of
+// the `home` component the front page wears, written the way `app_set` writes
+// it.
+type Handler = (req: Request) => Response | Promise<Response>
+
+let router = async (worker?: Handler, first?: string[]) => {
   let scenario = platform()
   let { env, files } = scenario
   let { dir, space, app } = await seeded(env)
@@ -1197,24 +1198,27 @@ let router = async (
   }, ADA_OWNS)
   await declared(env, space, (await dir.app(space, 'garden'))!)
   let script = scriptName(storeName(space, app))
+  let k = {
+    [Symbol.asyncDispose]: () => scenario[Symbol.asyncDispose](),
+    env,
+    dir,
+    space,
+    app,
+    worker,
+    at: (path: string) => apps.fetch(visit(path), env),
+    put: (key: string, body: string) =>
+      files.held.set(key, new TextEncoder().encode(body)),
+  }
   ;(env as { DISPATCH?: unknown }).DISPATCH = {
     get: (name: string) => {
+      let { worker } = k
       if (!worker || name != script) {
         throw new Error('Worker not found: ' + name)
       }
       return { fetch: (r: Request) => Promise.resolve(worker(r)) }
     },
   }
-  return {
-    [Symbol.asyncDispose]: () => scenario[Symbol.asyncDispose](),
-    env,
-    dir,
-    space,
-    app,
-    at: (path: string) => apps.fetch(visit(path), env),
-    put: (key: string, body: string) =>
-      files.held.set(key, new TextEncoder().encode(body)),
-  }
+  return k
 }
 
 // The platform's inline scripts in a served page, and the hash a policy
@@ -1577,17 +1581,15 @@ test('rung 5: everything else is the home worker, else 404', async () => {
     assertEquals(await (await k.at(path)).text(), `ran ${path}`, path)
   }
   // And where the worker passes, its files answer behind it.
-  await using some = await router((req) =>
+  k.worker = (req) =>
     new URL(req.url).pathname == '/menu'
       ? new Response('the menu')
       : new Response('no', { status: 404 })
-  )
-  some.put('ada/cookbook/photo.png', 'not really a png')
-  assertEquals(await (await some.at('/menu')).text(), 'the menu')
-  assertEquals(await (await some.at('/photo.png')).text(), 'not really a png')
-  // No worker and no file is the 404 at the end of the order.
-  await using plain = await router()
-  assertEquals((await plain.at('/nothing.txt')).status, 404)
+  assertEquals(await (await k.at('/menu')).text(), 'the menu')
+  assertEquals(await (await k.at('/photo.png')).text(), 'not really a png')
+  // No worker and no file there is the 404 at the end of the order.
+  k.worker = undefined
+  assertEquals((await k.at('/nothing.txt')).status, 404)
 })
 
 // ---- rung 1½: `router.first` (T-34201) --------------------------------------
@@ -1597,9 +1599,7 @@ test('rung 5: everything else is the home worker, else 404', async () => {
 // like: whatever else happened, the app that owns the path answered.
 let OWNER = { person: ADA, role: 'owner' as const }
 
-let fronted = async (
-  worker: (req: Request) => Response | Promise<Response>,
-) => {
+let fronted = async (worker: Handler) => {
   let k = await router(worker, ['/garden/*'])
   k.put('ada/garden/index.html', '<!doctype html><body>garden</body>')
   return k
