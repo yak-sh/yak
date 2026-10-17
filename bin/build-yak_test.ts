@@ -3,7 +3,15 @@ import { fileURLToPath } from 'node:url'
 import { assertEquals } from '@std/assert'
 
 // Fake executables prove shell exit behavior without opening either deploy door.
-test('build-yak: production precedes staging, and either failure fails Builds', async () => {
+let buildRuns = await (async () => {
+  let observed: {
+    code: number
+    want: string | number
+    calls: string[]
+    expected: string[]
+    guards: string[]
+    expectedGuards: string[]
+  }[] = []
   let dir = await Deno.makeTempDir({
     dir: fileURLToPath(new URL('./', import.meta.url)),
     prefix: 'yak-build-',
@@ -64,23 +72,37 @@ esac
         stdout: 'piped',
         stderr: 'piped',
       }).output()
-      assertEquals(out.code, want)
-      assertEquals((await Deno.readTextFile(log)).trim().split('\n'), [
+      let expected = [
         `run --allow-read --allow-write --allow-run=npm workers/yak/dependencies.ts ${dir}`,
         ...(mode == 'install' || install ? [] : ['task deploy:yak --dry-run']),
         ...(mode == 'install' || install || production
           ? []
           : ['task deploy:yak-staging --dry-run']),
-      ])
-      assertEquals(
-        (await Deno.readTextFile(guards)).trim().split('\n').filter(Boolean),
-        [
-          ...(mode == 'install' || install ? [] : ['yak|production-tag']),
-          ...(mode == 'install' || install || production ? [] : ['|']),
-        ],
-      )
+      ]
+      let expectedGuards = [
+        ...(mode == 'install' || install ? [] : ['yak|production-tag']),
+        ...(mode == 'install' || install || production ? [] : ['|']),
+      ]
+      observed.push({
+        code: out.code,
+        want,
+        calls: (await Deno.readTextFile(log)).trim().split('\n'),
+        expected,
+        guards: (await Deno.readTextFile(guards)).trim().split('\n').filter(
+          Boolean,
+        ),
+        expectedGuards,
+      })
     }
+    return observed
   } finally {
     await Deno.remove(dir, { recursive: true })
+  }
+})()
+test('build-yak: production precedes staging, and either failure fails Builds', () => {
+  for (let run of buildRuns) {
+    assertEquals(run.code, run.want)
+    assertEquals(run.calls, run.expected)
+    assertEquals(run.guards, run.expectedGuards)
   }
 })

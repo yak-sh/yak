@@ -192,7 +192,7 @@ test('public drafts recover a reload without crossing app or person scopes', asy
   }
 })
 
-test('public drafts retry a pending receipt with one identity and keep typing until acceptance', async () => {
+let pendingReceipt = await (async () => {
   let calls: Call[] = [], reports: unknown[] = []
   let started = deferred<void>(), accepted = deferred<Response>()
   using _timers = retryTimers()
@@ -223,29 +223,35 @@ test('public drafts retry a pending receipt with one identity and keep typing un
   try {
     desk.type('compose', 'first')
     await settled(() => reports.length == 1)
-    assertEquals(desk.text('compose'), 'first')
+    let initialText = desk.text('compose')
     await started.promise
     wire.hear([row(eid, 'first', 1)])
     desk.type('compose', 'first, and still typing')
-    assertEquals(stash.length, 1)
-    assertEquals(desk.text('compose'), 'first, and still typing')
-    assert(calls[0].key)
-    assertEquals(calls[1].key, calls[0].key)
-    assertEquals(calls[1].body, calls[0].body)
+    let saved = stash.length, pendingText = desk.text('compose')
     accepted.resolve(json({ bundles: [row(eid, 'first', 1)] }))
     // The receipt must not swallow what was typed while it was pending.
     await settled(() => calls.length == 3)
-    assertEquals(
-      (calls[2].bundles[0].draft as { text: string }).text,
-      'first, and still typing',
-    )
-    assert(calls[2].key != calls[0].key)
-    assertEquals(reports.length, 1)
+    return { initialText, saved, pendingText, calls, reports }
   } finally {
     accepted.resolve(json({ bundles: [row(eid, 'first', 1)] }))
     desk.close()
     closeOutboxes()
   }
+})()
+test('public drafts retry a pending receipt with one identity and keep typing until acceptance', () => {
+  let { initialText, saved, pendingText, calls, reports } = pendingReceipt
+  assertEquals(initialText, 'first')
+  assertEquals(saved, 1)
+  assertEquals(pendingText, 'first, and still typing')
+  assert(calls[0].key)
+  assertEquals(calls[1].key, calls[0].key)
+  assertEquals(calls[1].body, calls[0].body)
+  assertEquals(
+    (calls[2].bundles[0].draft as { text: string }).text,
+    'first, and still typing',
+  )
+  assert(calls[2].key != calls[0].key)
+  assertEquals(reports.length, 1)
 })
 
 // A saved draft is the starting point; only spending it and recovering the
