@@ -16,18 +16,19 @@ import {
   vale,
 } from './terrain.ts'
 
+let rows = themes as Bundle[]
+installThemeDesigns(rows)
+installBuildingDesigns(buildings as Bundle[])
+let v = vale(1), near = v.grow(-8, 8), far = v.grow(8, 8)
+adopt(v, near)
+adopt(v, far)
+let edited = themes.map((row) =>
+  row.theme_design.land == 'birchmere'
+    ? { ...row, theme_design: { ...row.theme_design, wild: 'meadow' } }
+    : row
+) as Bundle[]
+
 test('one land theme keeps another land’s cached terrain', () => {
-  let rows = themes as Bundle[]
-  installThemeDesigns(rows)
-  installBuildingDesigns(buildings as Bundle[])
-  let v = vale(1), near = v.grow(-8, 8), far = v.grow(8, 8)
-  adopt(v, near)
-  adopt(v, far)
-  let edited = themes.map((row) =>
-    row.theme_design.land == 'birchmere'
-      ? { ...row, theme_design: { ...row.theme_design, wild: 'meadow' } }
-      : row
-  ) as Bundle[]
   try {
     let affects = installThemeDesigns(edited)
     assert(affects(-8, 8, usedRegions(near)))

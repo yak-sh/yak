@@ -72,9 +72,12 @@ test('finer resources send more visible, distinct moving motes', () => {
   assert(new Set(outputs[3].emitted.map((e) => e.at.x)).size > 1)
 })
 
+let phoneNodes = Array.from({ length: 25 }, (_, i) => node('legendary', i))
+let phoneOutput = run(phoneNodes, true)
+
 test('phone mote work stays bounded and spent resources go quiet', () => {
-  let nodes = Array.from({ length: 25 }, (_, i) => node('legendary', i))
-  let { scene, emitted, light } = run(nodes, true)
+  let nodes = phoneNodes
+  let { scene, emitted, light } = phoneOutput
   assert(emitted.length <= 60)
   let before = emitted.length
   nodes.forEach((n) => n.spent = true)
