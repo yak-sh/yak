@@ -95,6 +95,30 @@ test('web exits during native work; a ready replacement continues after drain', 
     CLAUDE_CODE_SESSION_ID: '',
     PATH: `${dir}/bin:${Deno.env.get('PATH')}`,
   }
+  // Web recovery owns detached workers too. They deliberately outlive HTTP,
+  // so spawn handles alone cannot clean this probe. Identify only this unique
+  // scratch config's descendants; never signal a graph pid on its own.
+  let owned = async () => {
+    let found: number[] = []
+    for await (let entry of Deno.readDir('/proc')) {
+      if (!/^\d+$/.test(entry.name)) continue
+      try {
+        let values = (await Deno.readTextFile(`/proc/${entry.name}/environ`))
+          .split('\0')
+        if (
+          ['YAK_CONFIG', 'HARNESS_HOME', 'PROCESS_DIR'].every((key) =>
+            values.includes(`${key}=${env[key as keyof typeof env]}`)
+          )
+        ) found.push(Number(entry.name))
+      } catch (error) {
+        if (
+          !(error instanceof Deno.errors.NotFound) &&
+          !(error instanceof Deno.errors.PermissionDenied)
+        ) throw error
+      }
+    }
+    return found
+  }
   let spawn = (...args: string[]) => {
     let run = child(['--config', config, ...args], dir, env)
     children.push(run)
@@ -282,6 +306,23 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
     for (let pid of new Set(pids)) reap(pid)
     await host?.close()
     await server.shutdown()
+    // Stop monitors first (the web handles above), then every detached duty
+    // they launched. Keep the config/database until all owned pids are gone.
+    let signalled = new Set<number>()
+    await wait(async () => {
+      let remaining = await owned()
+      for (let pid of remaining) {
+        if (signalled.has(pid)) continue
+        try {
+          Deno.kill(pid, 'SIGTERM')
+          signalled.add(pid)
+        } catch (error) {
+          if (!(error instanceof Deno.errors.NotFound)) throw error
+        }
+      }
+      return remaining.length == 0
+    }, 'all scratch-owned workers and launchers gone')
+    assertEquals(await owned(), [], 'no detached fallback outlives probe')
     await Deno.remove(dir, { recursive: true })
     for (let pid of new Set([...pids, ...children.map((r) => r.proc.pid)])) {
       await wait(() => {
