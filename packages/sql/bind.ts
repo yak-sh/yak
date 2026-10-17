@@ -2672,7 +2672,7 @@ let lower = (
     limit && limit.n > 0 && Number.isSafeInteger(limit.n) &&
     order?.value == '-entity.num' && numbered && !after && !fields &&
     !vocab.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
-    !ctx.ext.some((e) => e.order) &&
+    !sort?.ranked &&
     !ctx.spine && !ctx.eids && !ctx.correlated &&
     !cs.some((c) => c.kind != 'edges' && claims(ctx, c.kind)) &&
     ctx.ext.filter((e) => e.compile.edges).every((e) =>
@@ -3080,12 +3080,24 @@ let visible = (
 // the ranks can express it — and routes to a property when no extension claims
 // it. (An in-memory matcher would sort these in JavaScript; compiling them into
 // the statement is what this representation adds.)
-type Sort = { row: string; at: (owner: string) => string; desc: boolean }
+type Sort = {
+  row: string
+  at: (owner: string) => string
+  desc: boolean
+  ranked?: boolean
+}
 let sortOf = (ctx: Ctx, value: string): Sort => {
   let desc = value.startsWith('-')
   let field = desc ? value.slice(1) : value
   let rank = ranked(ctx, field)
-  if (rank) return { row: rank, at: (o) => ranked(ctx, field, o)!, desc }
+  if (rank) {
+    return {
+      row: rank,
+      at: (o) => ranked(ctx, field, o)!,
+      desc,
+      ranked: true,
+    }
+  }
   let row = resolveField(ctx, field).expr
   return { row, at: (o) => resolveField(ctx, field, o).expr, desc }
 }

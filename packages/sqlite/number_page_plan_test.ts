@@ -3,7 +3,10 @@ import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { loadVocab } from '@yaks/vocab'
-import { compile, insert, render } from '@yaks/sql'
+import { compile, type Extension, insert, render } from '@yaks/sql'
+import { raw } from '../sql/ast.ts'
+import { search } from '../fts/compile.ts'
+import { semantic } from '../embedding/compile.ts'
 import { parse } from '@yaks/query'
 import { edgeDoc, traverse } from '@yaks/edge'
 import { storage } from './mod.ts'
@@ -60,7 +63,12 @@ let fixture = (n: number, recent: boolean) => {
 }
 let dense = [fixture(100, true), fixture(10_000, true)]
 let sparse = fixture(1000, false)
-let page = (f: ReturnType<typeof fixture>, hidden = false, peers = false) => {
+let page = (
+  f: ReturnType<typeof fixture>,
+  hidden = false,
+  peers = false,
+  hooks: Extension[] = [],
+) => {
   let q = render(
     compile(
       parse(
@@ -69,7 +77,7 @@ let page = (f: ReturnType<typeof fixture>, hidden = false, peers = false) => {
       ),
       vocab,
       {
-        extend: [traverse(vocab)],
+        extend: [traverse(vocab), ...hooks],
         visibility: hidden ? { entity: '!hidden' } : undefined,
       },
     ),
@@ -90,6 +98,20 @@ let observedDense = dense.map((f) => ({ n: f.n, got: page(f) }))
 let observedHidden = page(dense[1], true)
 let observedSparse = page(sparse)
 let observedPeers = page(dense[1], false, true)
+let observedIdleHook = page(dense[1], false, true, [{
+  name: 'idle-ranker',
+  compile: {},
+  order: () => null,
+}])
+let observedRealHooks = page(dense[1], false, true, [
+  search([]),
+  semantic(storage(dense[1].d, vocab).statements, { model: 'test' }),
+])
+let observedClaimedHook = page(dense[1], false, true, [{
+  name: 'custom-num',
+  compile: {},
+  order: (field) => field == 'entity.num' ? raw('0 + 0') : null,
+}])
 
 test('a numbered recent component page costs its prefix, not its history', () => {
   for (let { n, got } of observedDense) {
@@ -118,4 +140,18 @@ test('a numbered page falls back when its recent prefix has too few matches', ()
 test('a numbered page with peer edges keeps its bounded selection', () => {
   equal(observedPeers.ids, observedDense[1].got.ids)
   ok(observedPeers.steps < 6000, `${observedPeers.steps} VM steps`)
+})
+
+test('unclaimed search order hooks keep a physical numbered page bounded', () => {
+  for (let got of [observedIdleHook, observedRealHooks]) {
+    equal(got.ids, observedPeers.ids)
+    ok(got.steps < 6000, `${got.steps} VM steps`)
+  }
+})
+test('an extension claiming number order retains its own ranking', () => {
+  equal(observedClaimedHook.ids, observedPeers.ids)
+  ok(
+    observedClaimedHook.steps > 6000,
+    'claimed order must retain original path',
+  )
 })
