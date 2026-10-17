@@ -54,7 +54,7 @@ export let main = async (args = Deno.args): Promise<number> => {
   rest = rest.filter((a) => a != '--slower' && !a.startsWith('--runs='))
   let recording = name == 'throughput' && rest.includes('--recording')
   let definition
-  let rounds = 3
+  let rounds = 3, floor = FLOOR
   if (name == 'throughput') {
     definition = throughput({
       recording,
@@ -80,9 +80,10 @@ export let main = async (args = Deno.args): Promise<number> => {
     let entry = standalone.find((b) => b.suite().name == name)
     if (!entry) throw new Error(`Unknown suite: ${name}`)
     definition = entry.suite(rest)
+    floor = entry.floor ?? FLOOR
   }
   let current = await run(definition, {
-    ...options(name, action, rounds),
+    ...options(name, action, rounds, floor),
     runs,
     slower,
     coverage: recording ? 'subset' : 'exact',

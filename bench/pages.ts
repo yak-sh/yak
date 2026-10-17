@@ -44,6 +44,9 @@ export let pages = (task = 'T-121470'): Page[] => [{
     ?.textContent.trim()`,
 }]
 
+/** What is timed; a new boundary is a new version, banked afresh. */
+let WORKLOAD = 2
+
 /** How long a page may take before the run fails, and how long a cold load
  * settles (its rows stored, its socket quiet) before the warm one. */
 let PATIENCE = 30_000, SETTLE = 2_000
@@ -220,7 +223,7 @@ export let suite = (args: string[] = []): CollectedSuite => {
   return {
     name: 'pages',
     metric: 'median-of-round-medians',
-    workload: args.length ? JSON.stringify([1, base, task]) : 1,
+    workload: args.length ? JSON.stringify([WORKLOAD, base, task]) : WORKLOAD,
     benches: measured.flatMap((p) =>
       ['cold', 'warm'].map((w) => ({
         name: `${p.name}/${w}`,

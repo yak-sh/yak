@@ -17,11 +17,11 @@ another count) and banks each bench's best median. `bench:check` measures the
 same way and compares each bench's best median, so a check measures what its
 baseline banked; `--runs=1` is a quicker, noisier look. Each bench also banks
 its own slack: twice the spread between those runs' medians, never under 10%
-(`FLOOR` in bench/run.ts, day-to-day drift the runs cannot see) and never over
-95%. A baseline only moves toward faster: a bench that measured slower keeps its
-banked median. Banking a slower one is the owner's call, made with `--slower`.
-Bank on an idle box; a baseline banked under load is loose for every later
-check.
+(`FLOOR` in bench/run.ts, day-to-day drift the runs cannot see; a suite that
+drifts more names its own `floor` in bench/standalone.ts) and never over 95%. A
+baseline only moves toward faster: a bench that measured slower keeps its banked
+median. Banking a slower one is the owner's call, made with `--slower`. Bank on
+an idle box; a baseline banked under load is loose for every later check.
 
 ## The monitor
 
@@ -46,9 +46,11 @@ a blank page on another origin first, so a cold figure times the page and not
 the browser starting its network stack, which a person's running browser never
 pays. A figure is the time from navigation to the frame where the page shows
 what it is for: home's first rows (or the owner's inbox, its threads loaded) or
-the task's title. A page that has not painted in 30 s fails the run. It only
-reads: the browser refuses every request but GET, HEAD and OPTIONS before it
-leaves. `--url=` and `--task=` after `--` point it elsewhere.
+the task's title. A page that has not painted in 30 s fails the run. Its slack
+is never under 25%: a page paints in Chrome beside the box's other work, and its
+warm figures move by about a fifth over a day while the page's own code stays
+the same. It only reads: the browser refuses every request but GET, HEAD and
+OPTIONS before it leaves. `--url=` and `--task=` after `--` point it elsewhere.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The

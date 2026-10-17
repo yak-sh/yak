@@ -20,6 +20,9 @@ let measured = (
 export type Registration = {
   baseline: string
   suite: (args?: string[]) => CollectedSuite
+  /** The least slack its benches bank, where its drift over a day exceeds
+   * the box's usual (`FLOOR` in ./run.ts). */
+  floor?: number
 }
 
 let registration = (
@@ -144,7 +147,10 @@ export let standalone: Registration[] = [
     ),
     'us/value',
   ),
-  { baseline: 'bench/pages.baseline.json', suite: pages },
+  // A page paints in Chrome beside the box's other work, and its warm figures
+  // drift by about a fifth over a day as that work changes, which three runs
+  // a minute apart never see.
+  { baseline: 'bench/pages.baseline.json', suite: pages, floor: .25 },
 ]
 
 /** A bench file remains a convenient entry point for the shared CLI. */
