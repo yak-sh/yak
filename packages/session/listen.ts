@@ -153,6 +153,34 @@ export let over = async (
 
 let eids = (rows: Bundle[]): Eid[] => rows.map((b) => b.entity.eid)
 
+/** The native transcripts among the sessions `clauses` pick, read with
+ * `props`: no `process` running it outside the graph, no outside harness's
+ * `log` read into it, and a `using` entry. The session's own row is asked
+ * first, in a read of its own: in one statement SQLite looks for the `using`
+ * through every candidate's entries whatever the tests beside it say, an
+ * imported transcript's whole log included, on every pass of the bus. */
+export let natives = async (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  clauses: Clause[],
+  props: string[],
+): Promise<Bundle[]> => {
+  let own = eids(
+    await graph.read(and(
+      ...clauses,
+      present(SESSION),
+      ...graph.vocab.comp('process') ? [absent('process')] : [],
+      ...graph.vocab.prop(SESSION, 'log') ? [absent(`${SESSION}.log`)] : [],
+    )),
+  )
+  return own.length
+    ? await graph.read(and(
+      eq('entity.eid', value(own)),
+      present('entries.using'),
+      fields(...props),
+    ))
+    : []
+}
+
 // The transcript statuses of a turn in progress: the model or a tool owes it
 // an answer.
 let WORKING = ['pending', 'running']
@@ -243,19 +271,16 @@ export let heirs = async (
       (await Promise.all(reached.map((p) => family(graph, p, '<-')))).flat(),
     ),
   ]
-  // The native transcripts (a `using` entry, and no `process` running it
-  // outside the graph) wearing a persona homed there, then those at work. The
-  // status is a read of its own: in one statement SQLite reads it off every
-  // session the path finds, outside ones included, before the tests beside it.
-  let native = eids(
-    await graph.read(and(
-      eq(`${SESSION}.persona.persona.home`, value(homes)),
-      ...graph.vocab.comp('process') ? [absent('process')] : [],
-      present('entries.using'),
-      fields(`${SESSION}.persona`),
-    )),
+  // The native transcripts wearing a persona homed there, then those at work.
+  // The status is a read of its own: in one statement SQLite reads it off
+  // every session the path finds, outside ones included, before the tests
+  // beside it.
+  let homed = await natives(
+    graph,
+    [eq(`${SESSION}.persona.persona.home`, value(homes))],
+    [`${SESSION}.persona`],
   )
-  return atWork(graph, native)
+  return atWork(graph, eids(homed))
 }
 
 /** The letters that reached these projects (any, left out), unsaid: every

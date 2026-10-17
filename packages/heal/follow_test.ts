@@ -425,6 +425,43 @@ test('the service retries an unwritable box without another tracker event', asyn
   retry.close()
 })
 
+let flood = await fixture({ provider: undefined })
+let gone = [1, 2, 3].map((n) => identityEid('bug', [`gone ${n}`]))
+await put(
+  flood.tracker,
+  gone.map((eid) => ({
+    entity: { eid },
+    bug: { fault: eid, hits: 1, last: '2026-10-02T00:00:01Z' },
+    doc: { title: 'Gone' },
+    resolved: {},
+  })),
+)
+test('a flood of hits on one bug replays it, not every closed bug', async () => {
+  // Every entity the passes read, which names each bug's work.
+  let read: string[] = []
+  let g = flood.g
+  let graph = Object.create(g, {
+    get: {
+      value: (eids: string[], ...rest: never[]) => (
+        read.push(...eids), g.get(eids, ...rest)
+      ),
+    },
+  })
+  let hits = 7
+  let stop = new AbortController()
+  await service({ ...flood.host, graph }, {
+    ...flood.config,
+    wait: async () => {
+      if (++hits == 12) return stop.abort()
+      await put(flood.tracker, [{ entity: { eid: bug }, bug: { hits } }])
+    },
+  }, stop.signal)
+  let asked = (b: string) => read.filter((eid) => eid == taskEid(b)).length
+  equal(gone.map(asked), [1, 1, 1])
+  ok(asked(bug) > 2)
+  flood.close()
+})
+
 let outage = await fixture({ provider: undefined })
 test('the service resumes when a tracker is available again', async () => {
   let opens = 0, waits = 0, closed = 0

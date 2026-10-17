@@ -24,6 +24,7 @@ import {
   deliver,
   heirs,
   knocked,
+  natives,
   over,
   pending,
 } from './listen.ts'
@@ -116,18 +117,11 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   ]
 }
 
-// The native transcripts among these entities, found in one indexed read: a
-// session with a `using` entry and no `process`, which is not over. An outside
+// The native transcripts among these entities which are not over. An outside
 // session's long log is never loaded to tell.
-let natives = async (g: Graph, ids: Eid[]): Promise<Eid[]> => {
+let hearing = async (g: Graph, ids: Eid[]): Promise<Eid[]> => {
   let found = ids.length
-    ? await g.read(and(
-      eq('entity.eid', list(...ids)),
-      present(SESSION),
-      ...g.vocab.comp('process') ? [absent('process')] : [],
-      present('entries.using'),
-      fields(`${SESSION}.ended`),
-    ))
+    ? await natives(g, [eq('entity.eid', list(...ids))], [`${SESSION}.ended`])
     : []
   let out: Eid[] = []
   for (let s of found) if (!await over(g, s)) out.push(s.entity.eid)
@@ -143,7 +137,7 @@ export type Due = { session: Eid; item: Bundle; line: string }
 export let due = async (g: Graph): Promise<Due[]> => {
   if (!g.vocab.comp('notified')) return []
   let out: Due[] = []
-  for (let id of await natives(g, await candidates(g))) {
+  for (let id of await hearing(g, await candidates(g))) {
     for (let said of await pending(g, id)) out.push({ session: id, ...said })
   }
   return out
@@ -189,7 +183,7 @@ export let reply = async (g: Graph, call: Bundle): Promise<Bundle[]> => {
   if (!id) return []
   let [session] = await g.get([id])
   if (
-    !session?.session || session.hooked || (await natives(g, [id])).length
+    !session?.session || session.hooked || (await hearing(g, [id])).length
   ) return []
   return (await owed(g, id)).map(({ item, line }) => ({
     entity: {

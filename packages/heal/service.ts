@@ -113,9 +113,17 @@ export let service = async (
   ]
   if (!urls.length) return
   let once = signal.aborted
+  let every = options.every ?? 60_000
   let watches = new Map<string, Tracker>()
   let heard = new Set<string>()
   let reconcile = follow(host.graph, options)
+  // Each closed bug's row as its last replay found it. A flood of hits moves
+  // one bug's row many times a second; a pass it wakes replays the open bugs,
+  // which compete for fixers, and the closed ones whose rows moved, never all
+  // of them. The timer's pass replays every bug, for the task marks and gates
+  // that move here or with time.
+  let replayed = new Map<string, string>()
+  let whole = -Infinity
   // A changed answer ends the wait at once; the timer re-checks tasks and gates.
   let nudge = () => {}
   let changed = () => new Promise<void>((wake) => nudge = wake)
@@ -146,6 +154,9 @@ export let service = async (
   try {
     do {
       let moved = changed()
+      let began = Date.now()
+      let all = began - whole >= every
+      let covered = true
       for (let url of urls) {
         if (!once && signal.aborted) return
         try {
@@ -165,6 +176,7 @@ export let service = async (
             throw new Error(watch.refused)
           }
           if (!watch.ready) {
+            covered = false
             // Until the platform's first poll settles, no other tracker's bug
             // takes a fixer slot; a poll always settles, answered or failed.
             if (url == platform && !once && !heard.has(url)) break
@@ -172,21 +184,30 @@ export let service = async (
           }
           for (let bug of watch.value) {
             if (!once && signal.aborted) return
+            let key = `${url} ${bug.entity.eid}`
+            let row = JSON.stringify(bug)
+            let closed = !!(bug.resolved || bug.archived)
+            if (!all && closed && replayed.get(key) == row) continue
             try {
               await reconcile(bug, url, watch.mutate)
+              if (closed) replayed.set(key, row)
+              else replayed.delete(key)
             } catch (error) {
+              replayed.delete(key)
               await report(error)
             }
           }
         } catch (error) {
+          covered = false
           await report(error)
         }
       }
+      if (all && covered) whole = began
       if (signal.aborted) return
       // A flood of hits changes the answer constantly: a second's floor.
       let wait = options.wait ?? sleep
       await Promise.race([
-        wait(options.every ?? 60_000, signal),
+        wait(every, signal),
         moved.then(() => wait(1000, signal)),
       ])
     } while (!signal.aborted)
