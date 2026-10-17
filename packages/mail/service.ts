@@ -7,8 +7,8 @@
 // asks first — the host holds it under a lease, so one process over the graph
 // pulls at a time. An explicit one-pass host pulls once when nobody else is.
 //
-// A config that names no `pull` has nothing to take, and the duty ends at
-// once.
+// A config that names no `pull` has nothing to take, but holds the duty
+// until shutdown, like a configured poll between passes.
 
 import type { Graph } from '@yaks/graph'
 import type { Config } from '@yaks/host'
@@ -55,7 +55,12 @@ export let service = (
   signal: AbortSignal = AbortSignal.abort(),
   make: Open = open,
 ): Promise<void> => {
-  if (!options.pull) return Promise.resolve()
+  if (!options.pull) {
+    if (signal.aborted) return Promise.resolve()
+    return (async () => {
+      while (!signal.aborted) await sleep(EVERY, signal)
+    })()
+  }
   // Already aborted means one pass. A live signal also stops an in-flight
   // edge request, so shutdown and a lost lease do not wait on the network.
   let stop = signal.aborted ? undefined : signal

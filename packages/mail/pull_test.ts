@@ -353,3 +353,15 @@ test('service: stopping ends an in-flight pull', async () => {
 test('service: a config naming no pull has nothing to take', async () => {
   assertEquals(await service({ graph: await club() }, { domain }), undefined)
 })
+
+test('service: a live signal with no pull holds the duty until shutdown', async () => {
+  let stop = new AbortController()
+  let ended = false
+  let running = service({ graph: await club() }, { domain }, stop.signal)
+    .then(() => ended = true)
+  await Promise.resolve()
+  assertEquals(ended, false)
+  stop.abort()
+  await running
+  assertEquals(ended, true)
+})
