@@ -1071,3 +1071,44 @@ for (let async of [false, true]) {
     assertEquals(comp((await one.get(['b1']))[0], 'created').at ?? null, null)
   })
 }
+
+for (let async of [false, true]) {
+  test(`a refused transaction entry retries without repeating normalization (${async ? 'async' : 'sync'})`, async () => {
+    let storage = memory()
+    let entries = 0
+    let normalized = 0
+    let bodies = 0
+    let one = graph({
+      vocab: books,
+      storage: {
+        ...storage,
+        tx: (body) => {
+          if (++entries == 1) {
+            let error = Object.assign(new Error('database is locked'), {
+              retryable: true,
+            })
+            if (async) return Promise.reject(error)
+            throw error
+          }
+          return storage.tx(body)
+        },
+      },
+      plugins: [{
+        name: 'shelf',
+        hooks: {
+          normalize: (b) => (normalized++, b),
+          commit: (b) => (bodies++, b),
+        },
+      }],
+    })
+    using _timer = stub(globalThis, 'setTimeout', (wake, _ms, ...args) => {
+      queueMicrotask(() => {
+        if (typeof wake == 'function') wake(...args)
+      })
+      return 0
+    })
+    let out = await one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
+    assertEquals(at(out, 'b1', 'book').pages, 412)
+    assertEquals([entries, normalized, bodies], [2, 1, 1])
+  })
+}

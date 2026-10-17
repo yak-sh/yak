@@ -118,6 +118,7 @@ import { queries, reader as reading, retained } from './read.ts'
 import { NeedsWrite, rehearsing } from './admission.ts'
 import { referenced } from './tool.ts'
 import { prune } from './prune.ts'
+import { enter } from './enter.ts'
 
 /** Checking options. `overlay` is the host's already admitted, canonical
  * component values, used to check a partial patch's complete proposed value.
@@ -1129,7 +1130,13 @@ export let graph = (opts: Options): Graph => {
       try {
         committed = timed(
           'transaction',
-          () => storage.tx(transacting, { admission: checking }),
+          () =>
+            enter((begun) =>
+              storage.tx((tx) => {
+                begun()
+                return transacting(tx)
+              }, { admission: checking })
+            ),
         )
       } catch (e) {
         return fell(e)
