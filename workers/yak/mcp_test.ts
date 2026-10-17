@@ -40,6 +40,59 @@ test(
     try {
       let person = crypto.randomUUID()
       let agent = connector(k, await signedIn(k, person))
+      for (let auth of ['', await signedIn(k, person)]) {
+        let call = (
+          method: string,
+          params: unknown,
+          headers: Record<string, string> = {},
+        ) =>
+          k.at('yaks.app', '/mcp', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+              ...(auth ? { cookie: auth } : {}),
+              ...headers,
+            },
+            body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+          })
+        let modern = {
+          _meta: {
+            'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+            'io.modelcontextprotocol/clientCapabilities': {},
+            'io.modelcontextprotocol/clientInfo': { name: 'gpt', version: '1' },
+          },
+        }
+        for (
+          let headers of <Record<string, string>[]> [{}, {
+            'MCP-Protocol-Version': '2026-07-28',
+            'Mcp-Method': 'tools/list',
+          }]
+        ) {
+          let res = await call('tools/list', modern, headers)
+          assertEquals(res.status, 200)
+          let text = await res.text()
+          let data = text.split('\n').find((line) => line.startsWith('data:'))
+          assert(
+            JSON.parse(data ? data.slice(5) : text).result.tools.length > 0,
+          )
+        }
+        for (let protocolVersion of ['2025-06-18', '2025-11-25']) {
+          let res = await call('initialize', {
+            protocolVersion,
+            capabilities: {},
+            clientInfo: { name: 'probe', version: '1' },
+          })
+          assertEquals(res.status, 200)
+          assert((await res.json()).result.protocolVersion)
+        }
+        let refused = await call('tools/list', modern, {
+          'MCP-Protocol-Version': '2026-07-28',
+          'Mcp-Method': 'tools/call',
+        })
+        assertEquals(refused.status, 400)
+        assertEquals((await refused.json()).error.code, -32020)
+      }
       // Nobody is answered anything of the person's — and the refusal says
       // so in a sentence, with where signing in happens, like every other
       // door (C-32607 item 1), and carries the challenge a host reads to

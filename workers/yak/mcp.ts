@@ -574,7 +574,7 @@ let stranger = async (
   return mcp(opts)(
     new Request(req.url, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: req.headers,
       body: said,
     }),
   )
@@ -798,7 +798,7 @@ let answered = async (
     await built.handle(
       new Request(req.url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: req.headers,
         body: said,
       }),
     ),
