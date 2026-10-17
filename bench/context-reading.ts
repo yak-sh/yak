@@ -1,8 +1,13 @@
-/** Private, no-tool interpretation measurements. No corpus or rubric lives here.
+/** Private interpretation measurements. No corpus or rubric lives here.
  * Run: deno run -A bench/context-reading.ts run --packet /private/packet.json
- * --out /private/results.json --persona <eid>. Output contains private context.
+ * --out /private/results.json [--native]. Native keeps the full default tool
+ * schemas but executes only isolated graph reads. Output contains private context.
  */
 import { agent } from '@yaks/harness'
+import { harnessTools } from '../packages/harness/tools.ts'
+import { skillItems, skillTools } from '../packages/harness/skills.ts'
+import { machines } from '../packages/harness/session_machines.ts'
+import type { Tool } from '@yaks/session'
 import { compose } from '@yaks/cli/host'
 import { configPath, read } from '../packages/cli/config.ts'
 import { vaultOf } from '../packages/cli/vault.ts'
@@ -35,6 +40,9 @@ export type Packet = {
   /** Private graph export: current persona, contains/reads targets and auth rows. */
   snapshot?: Bundle[]
   files?: Snapshot[]
+  /** Audited candidate-only frozen graph rows, never auth or grading rows. */
+  evidence?: Record<string, Bundle[]>
+  skills?: Bundle[]
 }
 
 /** Explicit projection: held_out, answers and rubric never enter a request. */
@@ -59,9 +67,9 @@ export type Call = {
   error: string | null
   wallMs: number
 }
-export function recording(model: Model, calls: Call[]): Model {
-  return async (req: Request) => {
-    if (req.tools.length) {
+export function recording(model: Model, calls: Call[], native = false): Model {
+  let wrapped: Model = async (req: Request) => {
+    if (!native && req.tools.length) {
       throw new Error('Interpretation probe must have no tools')
     }
     // Transport callbacks and cancellation handles are not model context.
@@ -97,6 +105,54 @@ export function recording(model: Model, calls: Call[]): Model {
       call.wallMs = performance.now() - start
     }
   }
+  return Object.assign(wrapped, {
+    mark: model.mark,
+    anchor: model.anchor,
+    list: model.list,
+    info: model.info,
+  })
+}
+
+/** Keep the native tool offer, but lend only isolated read capabilities.
+ * Non-read schemas remain visible so this is not a no-tools prompt ablation.
+ * No denied handler is ever entered (especially shell, publish and spawning).
+ */
+export function readOnly(tools: Tool[]): Tool[] {
+  const allowed = new Set([
+    'graph_query',
+    'graph_show',
+    'graph_schema',
+    'graph_value_read',
+    'graph_value_search',
+  ])
+  return tools.map((tool) =>
+    allowed.has(tool.name) ? tool : {
+      ...tool,
+      run: () =>
+        Promise.resolve(
+          'Isolated interpretation measurement: actions and external access are disabled.',
+        ),
+      recover: undefined,
+    }
+  )
+}
+
+/** Corpus evidence is inert earlier text, never executable transcript state.
+ * Selection and held-out auditing remain the private packet author's duty.
+ */
+export function evidenceRows(rows: Bundle[], cutoff: string): Bundle[] {
+  return rows.map((row) => {
+    let at = (row.created as { at?: string } | undefined)?.at
+    if (!at || at >= cutoff) {
+      throw new Error('Evidence must strictly precede the original message')
+    }
+    return {
+      entity: { eid: row.entity.eid },
+      ...row.content ? { content: row.content } : {},
+      ...row.doc ? { doc: row.doc } : {},
+      created: { at },
+    }
+  })
 }
 
 /** Unknown/failed usage is not free. Every attempted call is in the total. */
@@ -197,6 +253,7 @@ export async function run(packet: Packet, options: {
   persona?: string
   cwd: string
   opening?: 'graph-only' | 'repo-current'
+  native?: boolean
   save: (result: unknown) => Promise<void>
 }) {
   let began = performance.now()
@@ -227,6 +284,10 @@ export async function run(packet: Packet, options: {
   }
   // Host-only reads, before any candidate exists. Never lend this CLI to it.
   let config = read(configPath()!)
+  // Current native graph vocabulary, without plugin runtime configuration.
+  let composition = options.native
+    ? config.plugins?.map((p) => typeof p == 'string' ? p : p.use) ?? plugins
+    : plugins
   if (options.persona && !packet.snapshot && !packet.files) {
     throw new Error(
       'Explicit persona needs private packet.snapshot rows for the existing owing() resolver, or packet.files frozen snapshots',
@@ -251,10 +312,10 @@ export async function run(packet: Packet, options: {
     },
   )
   let setup = await compose(
-    { db: ':memory:', plugins },
+    { db: ':memory:', plugins: composition },
     ['graph'],
     undefined,
-    {},
+    { process: false },
   )
   let files: Snapshot[]
   try {
@@ -283,95 +344,162 @@ export async function run(packet: Packet, options: {
   } finally {
     await setup.close()
   }
+  // Resolve credentials against host-only metadata, not the candidate graph.
+  let authHost = await compose(
+    { db: ':memory:', plugins: composition },
+    ['graph'],
+    undefined,
+    { process: false },
+  )
+  await authHost.graph.apply(source, { trusted: true })
   let results: unknown[] = []
   let allCalls: Call[] = []
-  for (let c of packet.historical_cases) {
-    for (let condition of packet.conditions ?? [{ id: 'baseline', text: '' }]) {
-      let start = performance.now()
-      let host = await compose(
-        { db: ':memory:', plugins },
-        ['graph'],
-        undefined,
-        {},
-      )
-      let calls: Call[] = []
-      let transcript: Bundle[] = []
-      let error: string | null = null
-      let session: string | null = null
-      let a: ReturnType<typeof agent> | undefined
-      try {
-        await host.graph.apply(source, { trusted: true })
-        let auth = openaiCredential({
-          g: host.graph,
-          vault: vaultOf(config.db!),
-          person: config.person,
-        }, () => undefined)
-        let model = recording(responses({ ...auth, web: false }), calls)
-        let modelId = source.find((b) =>
-          (b.model as { name?: string } | undefined)?.name == 'gpt-6.1-sol'
-        )?.entity.eid
-        if (!modelId) {
-          throw new Error('Snapshot must include gpt-6.1-sol; no downgrade')
-        }
-        a = agent({
-          h: { g: host.graph, fx: host.fx, vocab: host.vocab, me: host.me },
-          providers: { openai: model },
-          provider: 'openai',
-          tools: [],
-          remote: () => Promise.resolve([]),
-          named: () => [],
-          opening: () => Promise.resolve({ files }),
-        })
-        session = await a.start(candidate(c, condition), {
-          model: modelId,
-        })
-        await a.idle(session)
-        transcript = await a.transcript(session)
-        if (
-          !calls.length || calls.some((call) =>
-            call.error ||
-            !call.response?.items.some((i) => i.kind == 'assistant' && i.text)
+  try {
+    for (let c of packet.historical_cases) {
+      for (
+        let condition of packet.conditions ?? [{ id: 'baseline', text: '' }]
+      ) {
+        let start = performance.now()
+        let host = await compose(
+          { db: ':memory:', plugins: composition },
+          ['graph'],
+          undefined,
+          { process: false },
+        )
+        let calls: Call[] = []
+        let transcript: Bundle[] = []
+        let error: string | null = null
+        let session: string | null = null
+        let a: ReturnType<typeof agent> | undefined
+        try {
+          let visible = options.native
+            ? source.filter((b) => b.model || b.provider || b.serves).map((
+              b,
+            ) => ({
+              entity: b.entity,
+              ...b.model ? { model: b.model } : {},
+              ...b.provider
+                ? {
+                  provider: Object.fromEntries(
+                    Object.entries(b.provider as Record<string, unknown>)
+                      .filter((
+                        [key],
+                      ) => !['credential'].includes(key)),
+                  ),
+                }
+                : {},
+              ...b.serves ? { serves: b.serves, edge: b.edge } : {},
+            })) as Bundle[]
+            : source
+          await host.graph.apply(visible, { trusted: true })
+          if (options.native) {
+            if (!packet.evidence?.[c.id]) {
+              throw new Error('Native run needs audited per-case evidence')
+            }
+            await host.graph.apply([
+              ...evidenceRows(
+                packet.evidence[c.id],
+                c.input.original_message.timestamp ?? '',
+              ),
+              ...packet.skills ?? [],
+            ], { trusted: true })
+          }
+          let auth = openaiCredential({
+            g: authHost.graph,
+            vault: vaultOf(config.db!),
+            person: config.person,
+          }, () => undefined)
+          let model = recording(
+            responses({ ...auth, web: false }),
+            calls,
+            options.native,
           )
-        ) {
-          error = 'Missing or failed model call'
+          let modelId = source.find((b) =>
+            (b.model as { name?: string } | undefined)?.name == 'gpt-6.1-sol'
+          )?.entity.eid
+          if (!modelId) {
+            throw new Error('Snapshot must include gpt-6.1-sol; no downgrade')
+          }
+          let binding = machines(host.graph)
+          let nativeTools = options.native
+            ? readOnly([
+              ...harnessTools(host.graph, { machines: binding }),
+              ...skillTools(host.graph, binding),
+            ])
+            : []
+          a = agent({
+            h: { g: host.graph, fx: host.fx, vocab: host.vocab, me: host.me },
+            providers: { openai: model },
+            provider: 'openai',
+            name: 'gpt-6.1-sol',
+            tools: nativeTools,
+            requestItems: options.native
+              ? (_, __, current) => skillItems(host.graph, current, binding)
+              : undefined,
+            remote: () => Promise.resolve([]),
+            named: () => [],
+            opening: () => Promise.resolve({ files }),
+          })
+          session = await a.start(candidate(c, condition), {
+            model: modelId,
+          })
+          await a.idle(session)
+          transcript = await a.transcript(session)
+          if (
+            !calls.some((call) =>
+              call.response?.items.some((item) =>
+                item.kind == 'assistant' && item.text
+              )
+            ) || calls.some((call) =>
+              call.error ||
+              !call.response
+            )
+          ) {
+            error = 'Missing or failed model call'
+          }
+        } catch (e) {
+          error = String(e)
+        } finally {
+          await a?.close()
+          await host.close()
         }
-      } catch (e) {
-        error = String(e)
-      } finally {
-        await a?.close()
-        await host.close()
+        allCalls.push(...calls)
+        results.push({
+          caseId: c.id,
+          requestedModel: 'gpt-6.1-sol',
+          provider: 'openai',
+          opening: packet.files
+            ? 'frozen-packet'
+            : options.opening ?? 'graph-only',
+          condition,
+          mode: options.native
+            ? 'full-native-opening-isolated-read-only'
+            : 'initial-interpretation-no-tools',
+          session,
+          suppliedContext: files,
+          calls,
+          transcript,
+          error,
+          totals: totals(calls),
+          wallMs: performance.now() - start,
+        })
+        await options.save({
+          label: options.native
+            ? 'Current native opening and tool schemas, isolated corpus graph reads; action/external handlers disabled; not whole-production-graph replay'
+            : 'Restricted no-tool historical interpretation; not a full operational baseline',
+          opening: packet.files
+            ? 'frozen-packet'
+            : options.opening ?? 'graph-only',
+          model: 'gpt-6.1-sol',
+          provider: 'openai',
+          results,
+          totals: totals(allCalls),
+          wallMs: performance.now() - began,
+        })
       }
-      allCalls.push(...calls)
-      results.push({
-        caseId: c.id,
-        requestedModel: 'gpt-6.1-sol',
-        provider: 'openai',
-        opening: packet.files
-          ? 'frozen-packet'
-          : options.opening ?? 'graph-only',
-        condition,
-        mode: 'initial-interpretation-no-tools',
-        session,
-        suppliedContext: files,
-        calls,
-        transcript,
-        error,
-        totals: totals(calls),
-        wallMs: performance.now() - start,
-      })
-      await options.save({
-        label:
-          'Restricted no-tool, no-system-preamble historical interpretation; not a full operational baseline or production mechanism test',
-        opening: packet.files
-          ? 'frozen-packet'
-          : options.opening ?? 'graph-only',
-        model: 'gpt-6.1-sol',
-        provider: 'openai',
-        results,
-        totals: totals(allCalls),
-        wallMs: performance.now() - began,
-      })
     }
+  } finally {
+    await authHost.close()
   }
 }
 
@@ -403,6 +531,7 @@ if (import.meta.main) {
   // Refuse overwrite and create private output before spending anything.
   await Deno.writeTextFile(out, '{}\n', { createNew: true, mode: 0o600 })
   await run(packet, {
+    native: args.includes('--native'),
     persona: args.includes('--persona') ? value('persona') : undefined,
     cwd: args.includes('--cwd') ? value('cwd') : Deno.cwd(),
     opening: args.includes('--opening')

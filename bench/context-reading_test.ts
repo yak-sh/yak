@@ -1,5 +1,12 @@
 import { equal, test, throws } from '@yaks/testing'
-import { candidate, recording, score, totals } from './context-reading.ts'
+import {
+  candidate,
+  evidenceRows,
+  readOnly,
+  recording,
+  score,
+  totals,
+} from './context-reading.ts'
 import type { Model, Request } from '@yaks/model'
 
 const c = {
@@ -110,4 +117,82 @@ test('recording retains exact model-facing request and totals all calls', () => 
   equal(totals([...calls, ...calls]).inputTokens, 20)
   equal(totals([...calls, ...calls]).cachedTokens, 8)
   equal(totals([...calls, ...calls]).dollars, 0.2)
+})
+
+test('native recording retains full offered schemas and accepts tool-only replies', async () => {
+  let calls: Parameters<typeof recording>[1] = []
+  let reqWithTools = {
+    ...req,
+    tools: [{
+      name: 'graph_show',
+      description: 'Read',
+      parameters: { type: 'object' },
+    }],
+  }
+  let toolOnly = {
+    ...reply,
+    items: [{
+      kind: 'call' as const,
+      id: 'c',
+      name: 'graph_show',
+      args: JSON.stringify({ ids: ['prior'] }),
+    }],
+  }
+  let model = Object.assign(() => Promise.resolve(toolOnly), {
+    anchor: () => 'synthetic',
+  }) as Model
+  let wrapped = recording(model, calls, true)
+  await wrapped(reqWithTools)
+  equal((calls[0].request as Request).tools, reqWithTools.tools)
+  equal(calls[0].response, toolOnly)
+  equal(wrapped.anchor, model.anchor)
+})
+
+test('sandbox preserves schemas but never invokes action or recovery handlers', async () => {
+  let entered = 0
+  let tools = ['shell', 'graph_apply', 'spawn', 'skill_read', 'graph_show'].map(
+    (name) => ({
+      name,
+      description: name,
+      parameters: { type: 'object' },
+      run: () => {
+        entered++
+        return Promise.resolve('isolated read')
+      },
+      recover: () => {
+        entered++
+        return Promise.resolve('recovered')
+      },
+    }),
+  )
+  let safe = readOnly(tools)
+  for (let i = 0; i < safe.length; i++) {
+    equal(safe[i].name, tools[i].name)
+    equal(safe[i].description, tools[i].description)
+    equal(safe[i].parameters, tools[i].parameters)
+    if (safe[i].name != 'graph_show') {
+      await safe[i].run({})
+      equal(safe[i].recover, undefined)
+    }
+  }
+  equal(entered, 0)
+  await safe[4].run({})
+  equal(entered, 1)
+})
+
+test('evidence strips queues, credentials and transcript semantics and rejects later text', () => {
+  let row = {
+    entity: { eid: 'prior' },
+    content: { body: 'earlier evidence' },
+    created: { at: '2020-01-01T00:00:00Z' },
+    entry: { session: 'production' },
+    secret: { value: 'never lend' },
+  }
+  equal(evidenceRows([row], '2020-01-02T00:00:00Z'), [{
+    entity: row.entity,
+    content: row.content,
+    created: row.created,
+  }])
+  throws(() => evidenceRows([row], '2020-01-01T00:00:00Z'))
+  throws(() => evidenceRows([{ entity: row.entity }], '2020-01-02T00:00:00Z'))
 })
