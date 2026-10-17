@@ -4,14 +4,6 @@
 import { equal, test } from '@yaks/testing'
 import { digest } from './public/client.js'
 
-test("a file's digest is its SHA-256", async () => {
-  // Independent SHA-256 vectors, including both padding shapes. No second asynchronous
-  // hash is needed to check the served algorithm.
-  for (let { n, sha, blob } of vectors) {
-    equal(await digest(blob), sha, `${n} bytes`)
-  }
-})
-
 let vectors = ([
   [0, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'],
   [55, '0c74b286e2c8b409ed0fd89f5a8344aeb274bda5d9bfbe7b8e537cfc6142736d'],
@@ -23,3 +15,9 @@ let vectors = ([
   sha,
   blob: new Blob([new Uint8Array(n).map((_, i) => (i * 31 + n) & 0xff)]),
 }))
+
+for (let { n, sha, blob } of vectors) {
+  test(`a file's digest is its SHA-256: ${n} bytes`, async () => {
+    equal(await digest(blob), sha, `${n} bytes`)
+  })
+}

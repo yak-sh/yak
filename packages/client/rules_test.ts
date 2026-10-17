@@ -89,16 +89,21 @@ test('a write shows its optimistic rule at once, and the server adds its own', a
   c.close()
 })
 
-test('a refused write takes back what its rules added', async () => {
+// The transport refusal completes before checks; retain the optimistic value
+// at the boundary and every component that must disappear after rollback.
+let refused = await (async () => {
   let { c, at, idle, state } = page()
   state.refuse = true
   c.mutate([{ entity: { eid: 'd1' }, doc: { title: 'Dune' } }])
-  assertEquals(at('d1', 'shelf'), { aisle: 'Z' })
+  let optimistic = at('d1', 'shelf')
   await idle()
-  assertEquals(at('d1', 'doc'), undefined)
-  assertEquals(at('d1', 'shelf'), undefined)
-  assertEquals(at('d1', 'Pick'), undefined)
+  let after = ['doc', 'shelf', 'Pick'].map((name) => at('d1', name))
   c.close()
+  return { optimistic, after }
+})()
+test('a refused write takes back what its rules added', () => {
+  assertEquals(refused.optimistic, { aisle: 'Z' })
+  assertEquals(refused.after, [undefined, undefined, undefined])
 })
 
 let guess = page(loadVocab({
