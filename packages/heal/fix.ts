@@ -74,6 +74,8 @@ export type Work = {
   bug: string
   writes?: Bundle[]
   reopen?: boolean
+  /** The tracker still reports this bug open, regardless of local completion. */
+  open?: boolean
   last?: string
 }
 
@@ -119,10 +121,10 @@ export let fixing = (g: Graph, options: Options = {}) => {
   }
 
   let request = async (work: Work): Promise<Bundle[]> => {
-    let { task, bug, reopen, last } = work
+    let { task, bug, reopen, open, last } = work
     if (
       !options.provider || task.cancelled ||
-      (!reopen && task.completed)
+      (!reopen && !open && task.completed)
     ) return []
     let history = await g.read(and(
       eq('fixer.bug', bug),
@@ -131,6 +133,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
       ...(g.vocab.comp('native') ? [want('native')] : []),
       ...(g.vocab.comp('stop') ? [want('stop')] : []),
       want('exit'),
+      want('process'),
     ))
     let latest =
       history.toSorted((a, b) =>
@@ -138,15 +141,29 @@ export let fixing = (g: Graph, options: Options = {}) => {
       )[0]
     let holder = comp(task, 'claim')?.session
     // A normal completed turn is not a completed bug. Keep its context and
-    // take back a released claim, but never override a different worker or an
+    // take back a released or terminal claim, but never a live worker's or an
     // explicit stop. Cooldown is for new starts, not this session's next turn.
+    // A claim is stale only with terminal evidence. Unknown or empty foreign
+    // sessions are held conservatively, including a managed start in flight.
+    if (holder && holder != latest?.entity.eid) {
+      let owner = await one(g, str(holder))
+      let status = str(comp(owner, 'session')?.status)
+      if (!owner) return []
+      if (
+        !owner.exit && (owner.process || !owner.stop &&
+            !comp(owner, 'session')?.ended &&
+            !['settled', 'stopped', 'failed'].includes(status))
+      ) return []
+    }
+    if (history.some((f) => active(f))) return []
     let continuing = !reopen && latest?.native && !latest.exit &&
       !latest.stop &&
       !comp(latest, 'session')?.ended &&
-      comp(latest, 'session')?.status == 'settled' &&
-      (!holder || holder == latest.entity.eid)
-    if (!continuing && ((!reopen && history.length) || task.claim && !reopen)) {
-      return []
+      comp(latest, 'session')?.status == 'settled'
+    if (!continuing && !reopen) {
+      // History is a receipt, not a permanent veto. Terminal native sessions
+      // get a fresh request after cooldown; their stopped transcript stays put.
+      if (!open && (history.length || task.claim)) return []
     }
     if (await blocked(work, continuing ? [] : history)) return []
     let provider = await named(g, options.provider, 'provider')
@@ -186,7 +203,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
       {
         entity: task.entity,
         claim: { session },
-        ...(reopen ? { completed: null } : {}),
+        ...(reopen || open && task.completed ? { completed: null } : {}),
         $was: {
           claim: { session: token(comp(task, 'claim')?.session) },
           completed: { at: token(comp(task, 'completed')?.at) },

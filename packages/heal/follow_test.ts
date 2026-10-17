@@ -620,10 +620,10 @@ await put(reconnected.tracker, [
 let reconnectMembers = await reconnected.tracker.read(
   '.bug.status=open ?doc ?regressed',
 )
-test('the headless tracker reconnect replaces stale query membership', async () => {
+reconnected.reconnect()
+await reconnected.ready()
+test('the headless tracker reconnect replaces stale query membership', () => {
   equal(reconnectMembers.map((row) => row.entity.eid), [replacement])
-  reconnected.reconnect()
-  await reconnected.ready()
   equal(
     reconnected.watch.value.filter((row) => !row.resolved).map((row) =>
       row.entity.eid
@@ -960,10 +960,10 @@ await throws(
 )
 await lost.ready()
 lost.trackerCommits.length = 0
+lost.lose(false)
+await follow(lost.g)(lostBug, url, lost.watch.mutate)
 test('a lost tracker acknowledgement replays without another write', async () => {
   ok((await lost.tracker.get([bug]))[0].archived)
-  lost.lose(false)
-  await follow(lost.g)(lostBug, url, lost.watch.mutate)
   equal(lost.posts(), 2)
   equal(lost.trackerCommits, [])
   lost.watch.close()
@@ -1140,7 +1140,7 @@ test('a stopped native fixer still cools down its regressed bug', async () => {
   f.close()
 })
 for (let ended of [false, true]) {
-  let { f, holder } = await nativeCase(ended)
+  let { f, holder } = await nativeCase(ended, true)
   await put(f.g, [{
     entity: { eid: taskEid(bug) },
     task: {},
@@ -1208,13 +1208,9 @@ test('a resolved tracker bug never continues its settled native fixer', async ()
 })
 for (
   let gate of [
-    'ended',
-    'stop',
-    'completed',
     'cancelled',
     'claimed',
     'cap',
-    'failed',
     'managed',
     'nofix',
   ]
@@ -1224,11 +1220,7 @@ for (
     await put(f.g, [{ entity: { eid: holder }, native: null }])
   }
   if (gate == 'nofix') await put(f.g, [{ entity: { eid: project }, nofix: {} }])
-  if (gate == 'ended') {
-    await put(f.g, [{ entity: { eid: holder }, session: { ended: true } }])
-  }
-  if (gate == 'stop') await put(f.g, [{ entity: { eid: holder }, stop: {} }])
-  if (gate == 'completed' || gate == 'cancelled') {
+  if (gate == 'cancelled') {
     await put(f.g, [{ entity: { eid: taskEid(bug) }, [gate]: {} }])
   }
   if (gate == 'claimed') {
@@ -1243,13 +1235,6 @@ for (
       session: {},
       fixer: { bug: identityEid('bug', ['other-bug']) },
       process: { pid: 1 },
-    }])
-  }
-  if (gate == 'failed') {
-    await put(f.g, [{
-      entity: { eid: crypto.randomUUID() },
-      entry: { session: holder },
-      exception: {},
     }])
   }
   test(`a settled native fixer does not continue past ${gate}`, async () => {
@@ -1284,6 +1269,226 @@ for (let changed of ['claim', 'completed', 'cancelled']) {
     if (changed == 'claim') equal(comp(after, 'claim').session, 'racing-worker')
     else ok(after[changed])
     ok(!(await f.g.get([holder]))[0].exit)
+    f.close()
+  })
+}
+
+// Completion belongs to the tracker: a local completion cannot strand an open
+// bug, even when no newer regression was recorded.
+let completedNative = await settledCase()
+await put(completedNative.f.g, [{
+  entity: { eid: taskEid(bug) },
+  completed: {},
+  claim: { session: completedNative.holder },
+}])
+test('completed-open native work continues atomically without a regression', async () => {
+  let { f, holder } = completedNative
+  let before = await count(f.g, 'entry')
+  await f.replay()
+  equal(await count(f.g, 'entry'), before + 1)
+  equal(await count(f.g, 'fixer'), 1)
+  let [task] = await f.g.get([taskEid(bug)])
+  ok(!task.completed)
+  equal(comp(task, 'claim').session, holder)
+  await f.replay()
+  equal(await count(f.g, 'entry'), before + 1)
+  f.close()
+})
+
+for (let completed of [false, true]) {
+  let { f, holder } = await settledCase()
+  await put(f.g, [
+    {
+      entity: { eid: holder },
+      native: null,
+      session: { ended: true },
+      exit: { code: 0 },
+      created: { at: '2026-01-01T00:00:00Z' },
+    },
+    {
+      entity: { eid: taskEid(bug) },
+      claim: { session: holder },
+      ...(completed ? { completed: {} } : {}),
+    },
+  ])
+  await f.replay()
+  let first = await count(f.g, 'fixer')
+  let [task] = await f.g.get([taskEid(bug)])
+  await f.replay()
+  let replayed = await count(f.g, 'fixer')
+  test(`exited managed history retries ${completed ? 'completed' : 'open'} work once after cooldown`, () => {
+    equal(first, 2)
+    ok(!task.completed)
+    ok(comp(task, 'claim').session != holder)
+    equal(replayed, 2)
+    f.close()
+  })
+}
+
+for (let stale of [false, true]) {
+  let { f, holder } = await settledCase()
+  await put(f.g, [
+    {
+      entity: { eid: 'foreign' },
+      session: {},
+      process: { pid: 1 },
+      ...(stale ? { exit: { code: 0 } } : {}),
+    },
+    {
+      entity: { eid: taskEid(bug) },
+      claim: { session: 'foreign' },
+      completed: {},
+    },
+  ])
+  test(`${stale ? 'stale' : 'live'} foreign claims ${stale ? 'release' : 'hold'} completed-open native work`, async () => {
+    let before = await count(f.g, 'entry')
+    await f.replay()
+    equal(await count(f.g, 'entry'), before + (stale ? 1 : 0))
+    let [task] = await f.g.get([taskEid(bug)])
+    equal(comp(task, 'claim').session, stale ? holder : 'foreign')
+    equal(!!task.completed, !stale)
+    f.close()
+  })
+}
+
+let managedCooling = await settledCase()
+await put(managedCooling.f.g, [
+  { entity: { eid: managedCooling.holder }, native: null, exit: { code: 0 } },
+  {
+    entity: { eid: taskEid(bug) },
+    completed: {},
+    claim: { session: managedCooling.holder },
+  },
+])
+test('exited managed continuation retains cooldown and local completion while held', async () => {
+  let { f } = managedCooling
+  let before = await count(f.g, 'entry')
+  await f.replay()
+  equal(await count(f.g, 'entry'), before)
+  equal(await count(f.g, 'fixer'), 1)
+  ok((await f.g.get([taskEid(bug)]))[0].completed)
+  f.close()
+})
+
+// A managed transcript can already be settled while its process is still
+// running. That foreign worker's claim is not a stale native-turn claim.
+for (let managed of [false, true]) {
+  for (let stale of [false, true]) {
+    let { f, holder } = await settledCase()
+    await put(f.g, [
+      ...(managed
+        ? [{
+          entity: { eid: holder },
+          native: null,
+          exit: { code: 0 },
+          created: { at: '2026-01-01T00:00:00Z' },
+        }]
+        : []),
+      {
+        entity: { eid: 'foreign-managed' },
+        session: {},
+        process: { pid: 1 },
+        ...(stale ? { exit: { code: 0 } } : {}),
+      },
+      {
+        entity: { eid: 'foreign-output' },
+        entry: { session: 'foreign-managed' },
+        output: {},
+      },
+      { entity: { eid: taskEid(bug) }, claim: { session: 'foreign-managed' } },
+    ])
+    test(`${managed ? 'managed retry' : 'native continuation'} ${stale ? 'reclaims exited' : 'preserves live'} foreign managed claims`, async () => {
+      let before = await count(f.g, 'entry')
+      await f.replay()
+      equal(await count(f.g, 'entry'), before + (stale ? 1 : 0))
+      equal(await count(f.g, 'fixer'), managed && stale ? 2 : 1)
+      let [task] = await f.g.get([taskEid(bug)])
+      equal(comp(task, 'claim').session == 'foreign-managed', !stale)
+      f.close()
+    })
+  }
+}
+
+for (let closed of ['resolved', 'archived']) {
+  let { f, holder } = await settledCase()
+  await f.replay()
+  await put(f.g, [{
+    entity: { eid: 'another-settled-turn' },
+    entry: { session: holder },
+    output: {},
+  }])
+  await put(f.tracker, [{ entity: { eid: bug }, [closed]: {} }])
+  test(`tracker ${closed} stops subsequent continuation`, async () => {
+    let before = await count(f.g, 'entry')
+    await f.replay()
+    await f.replay()
+    equal(await count(f.g, 'entry'), before)
+    equal(await count(f.g, 'fixer'), 1)
+    ok(
+      (await f.g.get([taskEid(bug)]))[0][
+        closed == 'resolved' ? 'completed' : 'cancelled'
+      ],
+    )
+    f.close()
+  })
+}
+
+// A terminal transcript is never resumed, but its open bug still needs work.
+for (let terminal of ['ended', 'stop', 'failed']) {
+  for (let recent of [false, true]) {
+    let { f, holder } = await settledCase()
+    await put(f.g, [{
+      entity: { eid: holder },
+      created: {
+        at: recent ? new Date().toISOString() : '2026-01-01T00:00:00Z',
+      },
+      ...(terminal == 'ended' ? { session: { ended: true } } : {}),
+      ...(terminal == 'stop' ? { stop: {} } : {}),
+    }, {
+      entity: { eid: taskEid(bug) },
+      completed: {},
+      claim: { session: holder },
+    }])
+    if (terminal == 'failed') {
+      await put(f.g, [{
+        entity: { eid: 'failed-turn' },
+        entry: { session: holder },
+        exception: {},
+      }])
+    }
+    let before = await count(f.g, 'entry')
+    let [original] = await f.g.get([holder])
+    await f.replay()
+    let after = await count(f.g, 'entry')
+    let [task] = await f.g.get([taskEid(bug)])
+    let [old] = await f.g.get([holder])
+    await f.replay()
+    let fixers = await count(f.g, 'fixer')
+    test(`${terminal} native fixer ${recent ? 'cools down' : 'gets a replacement for its open bug'}`, () => {
+      equal(after, before + (recent ? 0 : 1))
+      equal(fixers, recent ? 1 : 2)
+      equal(comp(task, 'claim').session == holder, recent)
+      equal(!!task.completed, recent)
+      equal(old, original)
+      f.close()
+    })
+  }
+}
+
+for (let source of [url, 'yaks.app']) {
+  let f = await fixture({ cli: 'yak --config /srv/tracker.json' })
+  let [evidence] = await f.tracker.get([bug])
+  let reconcile = follow(f.g, f.config)
+  test(`${source == url ? 'local' : 'platform'} fixer instructions target their authoritative tracker`, async () => {
+    await reconcile(evidence, source, (rows) => put(f.tracker, rows))
+    let [entry] = await rows(f.g, 'entry')
+    let body = String(comp(entry, 'content').body)
+    let command = `env -u YAKS_HOST yak --config /srv/tracker.json bug`
+    let suffix = source == 'yaks.app' ? ' --source yaks.app' : ''
+    ok(body.includes(`${command} resolve ${bug}${suffix} --broke`))
+    ok(body.includes(`${command} show ${bug}${suffix}`))
+    equal(body.includes('--source yaks.app'), source == 'yaks.app')
+    ok(body.includes(source))
     f.close()
   })
 }

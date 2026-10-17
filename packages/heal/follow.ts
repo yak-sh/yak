@@ -107,13 +107,23 @@ export let follow = (
   // What a fixer does last: resolve its bug in the tracker, explained, which
   // completes the task once the follower hears it. A bug is resolved only
   // with its explanation, so the fixer, who knows why, writes it.
-  let last = (bug: string, url: string) =>
-    [
+  let last = (bug: string, url: string) => {
+    // A harness's remote host must not redirect a bare box command. Keep the
+    // configured command/config; only the platform tracker takes a source flag.
+    let cli = `env -u YAKS_HOST ${options.cli ?? 'yak'}`
+    let source = url == 'yaks.app' ? ' --source yaks.app' : ''
+    return [
+      `The authoritative tracker for this task is ${url}. ` +
+      (source
+        ? 'Use its explicit platform source below.'
+        : 'Use the configured box tracker below, not the platform source. ' +
+          'A resolution in another tracker does not complete this bug.'),
       'Once the fix is live, your last step is to resolve the bug with its ' +
       'explanation, which completes this task:',
-      `${options.cli ?? 'yak'} bug resolve ${bug}${
-        /^https?:/.test(url) ? '' : ` --source ${url}`
-      } --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'`,
+      `${cli} bug resolve ${bug}${source} --broke '…' --cause '…' --since <sha> --fix <sha> --recur '…'`,
+      'Read back the resolved state from this same tracker before reporting completion:',
+      `${cli} bug show ${bug}${source}`,
+      'The commands remove inherited YAKS_HOST defensively for a bare yak; an explicit --config already selects its graph.',
       'Write each for the owner in plain words, a sentence or two: what ' +
       'broke and whom it reached, why it broke, and whether it can come ' +
       'back. --since is the full sha of the commit that introduced it, left ' +
@@ -121,6 +131,7 @@ export let follow = (
       'changing because it was a one-off, leave out --fix and say in ' +
       '--recur why it is believed to be one.',
     ].join('\n\n')
+  }
   let reconcile = (
     bug: Bundle,
     url: string,
@@ -174,8 +185,13 @@ export let follow = (
           }])
         }
         if (task.cancelled || bug.resolved) return
-        if (task.completed && !reopen) return
-        return { task, bug: evidence, reopen, last: last(evidence, url) }
+        return {
+          task,
+          bug: evidence,
+          reopen,
+          open: true,
+          last: last(evidence, url),
+        }
       }
       if (bug.resolved || bug.archived) return
       let project = await home()

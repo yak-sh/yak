@@ -53,7 +53,13 @@ process starts inside the follower; the configured provider handles that request
 through the native harness or [spawn](../spawn/README.md). The entry names the
 task and the fixer's last step: once the fix is live, resolve the bug with its
 explanation through `cli`'s `bug resolve`, which the tracker requires of every
-resolution ([tracker](../tracker/README.md#resolving-a-bug)).
+resolution ([tracker](../tracker/README.md#resolving-a-bug)). Its instructions
+name the authoritative tracker and require a `bug show` readback there. Both
+commands remove inherited `YAKS_HOST` defensively for bare `yak`, while
+preserving the configured `cli` and config; an explicit `--config` already
+selects its graph. Only the platform tracker uses `--source yaks.app`; resolving
+the same bug in another tracker does not complete the authoritative tracker's
+work.
 
 Four gates precede the request; a gate refusing it still leaves the task filed:
 
@@ -67,20 +73,24 @@ Four gates precede the request; a gate refusing it still leaves the task filed:
 A native fixer remains active beyond five minutes without a process. A normal
 `settled` turn with its tracker bug still open receives a continuation input in
 the same session, with the configured provider, model and effort. It reclaims a
-released task in the same guarded apply; a claim held by another session is not
-overridden. The continuation observes the cap and `nofix`, but not cooldown,
-which limits new fixer starts. For example, a settled native fixer whose task
-claim was released gets another turn on the next follower pass, not a second
-fixer session. Stopped, failed or explicitly ended sessions are not resumed, and
-completed or cancelled tasks are not continued. Managed fixer history does not
-receive continuation inputs.
+released task in the same guarded apply. A claim held by another session is
+reclaimed only with terminal evidence (`exit`, an explicit stop/end, or a
+terminal transcript status); a live or unknown holder keeps its claim. The
+continuation observes the cap and `nofix`, but not cooldown, which limits new
+fixer starts. Stopped, failed or explicitly ended native sessions are not
+resumed: an open bug receives a replacement after cooldown. A managed fixer that
+exited, or whose bounded start expired without a process, receives a fresh fixer
+request after cooldown rather than input to its old session. Managed history
+alone never prevents a retry.
 
-The follower retries held tasks each pass. A completed task is reconsidered when
-the tracker reopens its bug with a `regressed{at, error}` mark newer than that
-completion. The new fixer request and removal of `completed` land atomically. If
-a gate refuses the request, completion stays until a later pass can start the
-fixer. Ordinary occurrences and old regression marks do not reopen completed
-work. Cancelled tasks remain cancelled.
+The follower retries held tasks each pass while the tracker bug is open, even
+when the local task was completed without a newer regression. The continuation
+or fresh request and removal of `completed` land atomically; if a gate refuses,
+completion stays until a later pass can continue. For example, a settled native
+fixer that completed its task but left the tracker bug open gets another turn in
+the same session on the next pass. A newer tracker regression still requests a
+fresh fixer rather than resuming the previous opening's session. Cancelled tasks
+remain cancelled.
 
 A cancelled task archives its bug. A completed task resolves nothing: a
 resolution needs its explanation, which only the resolver can give, so its bug
