@@ -139,29 +139,29 @@ test('generic entry summaries are metadata variants', () =>
     assertEquals(root.querySelector('.Entry_Meta'), null)
   }))
 
+let messageSpeakers: (string | null | undefined)[] = []
+withDom((root) => {
+  let entry = { session: '00000000-0000-4000-8000-000000000001', seq: 3 }
+  let e = {
+    eid: '00000000-0000-4000-8000-000000000004',
+    entry,
+    content: { body: 'hello' },
+  } as Ent
+  assertEquals(resolve(e, 'Entry.Summary').Render, MessageSummary)
+  render(<MessageSummary e={e} />, root)
+  messageSpeakers.push(
+    root.querySelector('.Entry-user .Entry_Speaker')?.textContent,
+  )
+  render(
+    <MessageSummary e={{ ...e, output: { source: 'ask' } } as Ent} />,
+    root,
+  )
+  messageSpeakers.push(
+    root.querySelector('.Entry-agent .Entry_Speaker')?.textContent,
+  )
+})
 test('message summaries preserve who spoke', () =>
-  withDom((root) => {
-    let entry = { session: '00000000-0000-4000-8000-000000000001', seq: 3 }
-    let e = {
-      eid: '00000000-0000-4000-8000-000000000004',
-      entry,
-      content: { body: 'hello' },
-    } as Ent
-    assertEquals(resolve(e, 'Entry.Summary').Render, MessageSummary)
-    render(<MessageSummary e={e} />, root)
-    assertEquals(
-      root.querySelector('.Entry-user .Entry_Speaker')?.textContent,
-      'person',
-    )
-    render(
-      <MessageSummary e={{ ...e, output: { source: 'ask' } } as Ent} />,
-      root,
-    )
-    assertEquals(
-      root.querySelector('.Entry-agent .Entry_Speaker')?.textContent,
-      'model',
-    )
-  }))
+  assertEquals(messageSpeakers, ['person', 'model']))
 
 // Build both message representations once; the case compares their speakers.
 let proseSpeakers: (string | null | undefined)[] = []
@@ -332,20 +332,22 @@ test('refused and legacy failed results settle and render as failures', () =>
     }
   }))
 
+let userMarkdown: string | null | undefined
+withDom((root) => {
+  render(
+    <EntryBody
+      x={{
+        seq: 1,
+        line: '',
+        row: { kind: 'say', role: 'user', text: '**hello**' },
+      }}
+    />,
+    root,
+  )
+  userMarkdown = root.querySelector('.Entry-user strong')?.textContent
+})
 test('normalized user messages render as entry markdown', () =>
-  withDom((root) => {
-    render(
-      <EntryBody
-        x={{
-          seq: 1,
-          line: '',
-          row: { kind: 'say', role: 'user', text: '**hello**' },
-        }}
-      />,
-      root,
-    )
-    assertEquals(root.querySelector('.Entry-user strong')?.textContent, 'hello')
-  }))
+  assertEquals(userMarkdown, 'hello'))
 
 test('expanded entries offer only specifically rendered faces', () =>
   withDom((root) => {
