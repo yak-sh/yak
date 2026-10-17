@@ -11,7 +11,8 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { stepping } from '../sqlite/testing.ts'
 import { sessionDoc } from './comp.ts'
-import { sessionTools } from './children.ts'
+import { childPlace, sessionTools } from './children.ts'
+import { dispatchStatus } from './admission.ts'
 import { sessionDerived } from './status.ts'
 
 let vocab = loadVocab([kernelDoc, sessionDoc, toolsDoc, modelDoc])
@@ -126,17 +127,13 @@ sqlite.get = (ids, comps) => {
 }
 // Compile each read before measuring the case; a fresh store epoch still makes
 // the test execute the real SQLite read rather than a memoized bundle.
-await wait(sqlite)
+await childPlace(sqlite, 'child')
 store.tx((tx) =>
   tx.patch([{ entity: { eid: 'child' }, session: { id: 'child' } }])
 )
 test('SQLite child wait does not evaluate an unused session summary', async () => {
   summaries = 0
-  assertEquals(JSON.parse(String(await wait(sqlite))), [{
-    session: 'child',
-    status: 'queued',
-    output: '',
-  }])
+  assertEquals(dispatchStatus(await childPlace(sqlite, 'child')), 'queued')
   assertEquals(summaries, 0)
-  assert(pollSteps < 100, `poll used ${pollSteps} VM steps`)
+  assert(pollSteps > 0 && pollSteps < 100, `poll used ${pollSteps} VM steps`)
 })
