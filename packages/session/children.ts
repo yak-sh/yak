@@ -37,6 +37,13 @@ let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 let row = async (g: Graph, eid: Eid) => (await g.get([eid]))[0]
 
+// Waiting needs only the child's place, not its computed transcript status/cost.
+let place = async (g: Graph, eid: Eid) =>
+  (await g.get(
+    [eid],
+    ['dispatch', 'admitted', 'waiting'].filter((name) => g.vocab.comp(name)),
+  ))[0]
+
 let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
   let b = await row(g, id)
   let num = /^T-(\d+)$/i.exec(id)?.[1]
@@ -424,7 +431,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
           } else {
             let results = await Promise.all(ids.map(async (session) => {
               let entries = await transcript(g, session)
-              let state = dispatchStatus(await row(g, session))
+              let state = dispatchStatus(await place(g, session))
               let status = state == 'queued' && statusOf(entries) != 'stopped'
                 ? 'queued'
                 : statusOf(entries)
