@@ -46,11 +46,12 @@ pool. Serve that role beside the box's other worker roles, for example
 For a bug without a task, one apply writes the task, its `about` edge and, when
 the gates allow it, the fixer request. An existing task linked by an `about`
 edge is reused. A replay or another follower reads the task and its claim and
-writes nothing. The request is a `session{operator}` with `fixer{bug}`, an
-`entry{session}` with `content{body}` and `using{provider, model, effort}`, and
-a `claim{session}` on the task. No process starts inside the follower;
-[spawn](../spawn/README.md) handles that request. The entry names the task and
-the fixer's last step: once the fix is live, resolve the bug with its
+writes nothing while its fixer has work outstanding. The request is a
+`session{operator}` with `fixer{bug}`, an `entry{session}` with `content{body}`
+and `using{provider, model, effort}`, and a `claim{session}` on the task. No
+process starts inside the follower; the configured provider handles that request
+through the native harness or [spawn](../spawn/README.md). The entry names the
+task and the fixer's last step: once the fix is live, resolve the bug with its
 explanation through `cli`'s `bug resolve`, which the tracker requires of every
 resolution ([tracker](../tracker/README.md#resolving-a-bug)).
 
@@ -58,9 +59,21 @@ Four gates precede the request; a gate refusing it still leaves the task filed:
 
 - off: no `provider` configured;
 - muted: `nofix` on the task's project or on the home project;
-- at cap: `cap` fixers running: no `exit` yet, and a process or a start under
-  five minutes old;
+- at cap: `cap` fixers running: native transcripts in `pending`, `running` or
+  `queued`, or managed fixers with no `exit` and a process or a start under five
+  minutes old;
 - cooling down: a fixer for the bug started within `cooldown`.
+
+A native fixer remains active beyond five minutes without a process. A normal
+`settled` turn with its tracker bug still open receives a continuation input in
+the same session, with the configured provider, model and effort. It reclaims a
+released task in the same guarded apply; a claim held by another session is not
+overridden. The continuation observes the cap and `nofix`, but not cooldown,
+which limits new fixer starts. For example, a settled native fixer whose task
+claim was released gets another turn on the next follower pass, not a second
+fixer session. Stopped, failed or explicitly ended sessions are not resumed, and
+completed or cancelled tasks are not continued. Managed fixer history does not
+receive continuation inputs.
 
 The follower retries held tasks each pass. A completed task is reconsidered when
 the tracker reopens its bug with a `regressed{at, error}` mark newer than that
@@ -77,10 +90,11 @@ cancels it. Cancelling work after completion still archives its bug. Only open
 bugs file tasks or request fixers. A running fixer that holds a bug's task marks
 the bug `taken{task}` in its tracker, as soon as heal starts it and again on a
 replay that finds no mark for the bug's current opening, so the bug's letter
-thread hears a fixer started. [Tracker](../tracker/README.md) owns these marks:
-resolution allows a later regression to reopen the bug; archival stops its
-notifications. A regression newer than completion stays open even while a fixer
-gate holds the task completed.
+thread hears a fixer started. Terminal native sessions do not mark bugs taken.
+[Tracker](../tracker/README.md) owns these marks: resolution allows a later
+regression to reopen the bug; archival stops its notifications. A regression
+newer than completion stays open even while a fixer gate holds the task
+completed.
 
 The follower writes each mark through the same client's `/apply` door, with
 `optimistic: false` to await tracker admission. Its task and `about` edge are

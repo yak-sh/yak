@@ -29,8 +29,8 @@ export type Options = {
   cli?: string
 }
 
-/** How long a fixer counts as running before its process has appeared: the
- * time a start takes, and no longer, so a start that failed frees its slot. */
+/** How long a managed fixer counts as running before its process has appeared:
+ * the time a start takes, so a start that failed frees its slot. */
 export let STARTING = 5 * 60_000
 
 let uuid = () => crypto.randomUUID() as string
@@ -77,18 +77,32 @@ export type Work = {
   last?: string
 }
 
-// The fixers not yet exited, with what tells a running one from a start that
-// failed.
-let unexited = and(
-  present('fixer'),
-  absent('exit'),
-  want('process'),
-  want('created'),
-)
+/** Whether a fixer still holds a slot.
+ * Native work lives in its transcript, not a process that eventually exits.
+ * Managed requests retain their bounded starting window and process lifetime. */
+export let active = (fixer: Bundle, now = Date.now()): boolean => {
+  if (fixer.exit) return false
+  if (fixer.native) {
+    if (fixer.stop || comp(fixer, 'session')?.ended) return false
+    return ['pending', 'running', 'queued'].includes(
+      str(comp(fixer, 'session')?.status),
+    )
+  }
+  return !!fixer.process || young(fixer, STARTING, now)
+}
 
 /** Decide and write through one graph. Gate refusals still commit `writes`. */
 export let fixing = (g: Graph, options: Options = {}) => {
   let serial = serially()
+  let unexited = and(
+    present('fixer'),
+    absent('exit'),
+    want('process'),
+    want('created'),
+    want('session'),
+    ...(g.vocab.comp('native') ? [want('native')] : []),
+    ...(g.vocab.comp('stop') ? [want('stop')] : []),
+  )
   // The home project, resolved once per decision: the work and its gates ask.
   let homed: Promise<string | undefined> | undefined
   let home = () => homed ??= named(g, options.project, 'project')
@@ -99,7 +113,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
     }
     let now = Date.now()
     let running = (await g.read(unexited))
-      .filter((f) => f.process || young(f, STARTING, now))
+      .filter((f) => active(f, now))
     if (running.length >= (options.cap ?? 2)) return true
     return history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))
   }
@@ -108,25 +122,47 @@ export let fixing = (g: Graph, options: Options = {}) => {
     let { task, bug, reopen, last } = work
     if (
       !options.provider || task.cancelled ||
-      (!reopen && (task.completed || task.claim))
+      (!reopen && task.completed)
     ) return []
-    let history = await g.read(and(eq('fixer.bug', bug), want('created')))
-    if (!reopen && history.length) return []
-    if (await blocked(work, history)) return []
+    let history = await g.read(and(
+      eq('fixer.bug', bug),
+      want('created'),
+      want('session'),
+      ...(g.vocab.comp('native') ? [want('native')] : []),
+      ...(g.vocab.comp('stop') ? [want('stop')] : []),
+      want('exit'),
+    ))
+    let latest =
+      history.toSorted((a, b) =>
+        str(comp(b, 'created')?.at).localeCompare(str(comp(a, 'created')?.at))
+      )[0]
+    let holder = comp(task, 'claim')?.session
+    // A normal completed turn is not a completed bug. Keep its context and
+    // take back a released claim, but never override a different worker or an
+    // explicit stop. Cooldown is for new starts, not this session's next turn.
+    let continuing = !reopen && latest?.native && !latest.exit &&
+      !latest.stop &&
+      !comp(latest, 'session')?.ended &&
+      comp(latest, 'session')?.status == 'settled' &&
+      (!holder || holder == latest.entity.eid)
+    if (!continuing && ((!reopen && history.length) || task.claim && !reopen)) {
+      return []
+    }
+    if (await blocked(work, continuing ? [] : history)) return []
     let provider = await named(g, options.provider, 'provider')
     if (!provider) throw new Error(`not a provider: ${options.provider}`)
     let model = await named(g, options.model, 'model')
     if (options.model && !model) {
       throw new Error(`not a model: ${options.model}`)
     }
-    let session = uuid()
+    let session = continuing ? latest.entity.eid : uuid()
     let title = str(comp(task, 'doc')?.title)
     return [
-      {
+      ...continuing ? [] : [{
         entity: { eid: session },
         session: { operator: false },
         fixer: { bug },
-      },
+      }],
       {
         entity: { eid: uuid() },
         entry: { session },
@@ -134,6 +170,11 @@ export let fixing = (g: Graph, options: Options = {}) => {
           body: [
             [human(g.vocab)(task), title].filter(Boolean).join(' — '),
             last,
+            ...(continuing
+              ? [
+                'Tracker still reports the bug open; continue until it is resolved.',
+              ]
+              : []),
           ].filter(Boolean).join('\n\n'),
         },
         using: {
@@ -149,6 +190,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
         $was: {
           claim: { session: token(comp(task, 'claim')?.session) },
           completed: { at: token(comp(task, 'completed')?.at) },
+          cancelled: { at: token(comp(task, 'cancelled')?.at) },
         },
       },
     ]

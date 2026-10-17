@@ -149,7 +149,12 @@ The local host also serves `--provider claude --model haiku|sonnet|opus` through
 harness alone executes tools and records calls/results. Compose `@yaks/claude`
 to declare its reply metadata. See `packages/claude/README.md` for the CLI/graph
 boundary. New native transcripts carry `native`; outside managed Claude sessions
-(including heal fixers) remain on `@yaks/spawn`.
+remain on `@yaks/spawn`. HTTP fixer requests (for example `openai`) are marked
+`native` before their first turn. The host cuts their own worktree from the
+configured spawn `cwd` under `worktrees`, attaches it through its process
+machine provider, and admits its instruction files and repository persona.
+Existing managed fixers keep their original runner; changing heal config does
+not migrate or stop them.
 
 A session starts without borrowing the CLI's current directory or filesystem.
 Its first machine call requests a sandbox from the host's default provider.

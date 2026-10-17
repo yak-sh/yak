@@ -656,7 +656,10 @@ let composed = async (
           })
         }
         built.machines = machineCapabilities(built, config, path)
-        built.machines.resolveHome = resolveSessionHome(sql, () => built.graph)
+        let resolveHome = built.machines.resolveHome
+        let legacyHome = resolveSessionHome(sql, () => built.graph)
+        built.machines.resolveHome = async (session) =>
+          await legacyHome(session) ?? await resolveHome?.(session)
       },
       search: (built) => {
         part?.('search')

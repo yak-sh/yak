@@ -1,6 +1,8 @@
 // The CLI lends providers explicitly. Only this host chooses local directories,
 // process environments, and how a graph commit reaches a process sandbox.
 import type { Config, Host } from '@yaks/host'
+import { given, used } from '@yaks/host/config'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Machine, MachineProvider } from '@yaks/machine'
 
 let quoted = (word: string) => "'" + word.replaceAll("'", "'\\''") + "'"
@@ -96,6 +98,44 @@ export let machineCapabilities = (
   }
   return {
     defaultProvider: configured.defaultProvider,
+    resolveHome: async (session) => {
+      let [owner] = await host.graph.get([session])
+      if (!owner?.session || !owner.fixer || !owner.native) return
+      let spawn = config.plugins?.find((plug) => used(plug) == '@yaks/spawn')
+      let options = spawn ? given(spawn) : {}
+      if (typeof options.worktrees != 'string' || !options.worktrees) {
+        throw new Error('Native fixer worktrees require @yaks/spawn worktrees')
+      }
+      // A remote default must never be mistaken for the box running Git.
+      let process = Object.entries(configured.providers).find(([, source]) =>
+        source.use == '@yaks/process'
+      )?.[0]
+      if (!process) {
+        throw new Error(
+          'Native fixer worktrees require a configured process provider',
+        )
+      }
+      let { createWorktree } = await import('@yaks/git/host')
+      let tree = await createWorktree(
+        host.graph,
+        typeof options.cwd == 'string' ? options.cwd : Deno.cwd(),
+        {
+          path: `${options.worktrees}/${session}`,
+          branch: `session-${session}`,
+        },
+      )
+      let cwd = String((tree.worktree as { path: string }).path)
+      let machine = derivedEid('native-fixer-machine|' + session)
+      let [existing] = await host.graph.get([machine])
+      if (!existing?.machine) {
+        await host.graph.apply([{
+          entity: { eid: machine },
+          // An attachment is never ours to remove or stop on release.
+          machine: { provider: process, address: cwd, state: 'running' },
+        }])
+      }
+      return { machine, cwd }
+    },
     provider: (name) => {
       if (!Object.hasOwn(configured.providers, name)) {
         return Promise.resolve(undefined)

@@ -17,6 +17,7 @@ import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
 import { sessionDoc } from '@yaks/session'
+import { statusComputed } from '../session/state.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { mailDoc } from '@yaks/mail/vocab'
 import { notifyDoc } from '@yaks/notify/vocab'
@@ -30,6 +31,7 @@ import { type Fake, pair } from '../sync/testing.ts'
 import { group } from '@yaks/tracker'
 import { computed, trackerDoc } from '@yaks/tracker/vocab'
 import { healDoc } from './vocab.ts'
+import { fixing } from './fix.ts'
 import {
   follow,
   type Options,
@@ -55,8 +57,8 @@ let vocab = loadVocab([
   pick(docDoc, 'doc'),
   pick(taskDoc, 'task', 'cancelled'),
   pick(projectDoc, 'project', 'filed'),
-  pick(sessionDoc, 'session', 'entry', 'claim', 'using'),
-  pick(toolsDoc, 'content'),
+  pick(sessionDoc, 'session', 'entry', 'claim', 'using', 'native', 'stop'),
+  pick(toolsDoc, 'content', 'output', 'exception'),
   pick(modelDoc, 'provider', 'model'),
   pick(processDoc, 'process', 'exit'),
   pick(healDoc, 'fixer', 'nofix'),
@@ -111,7 +113,7 @@ let fixture = async (options: Options = {}, unstamped = false) => {
   let broken = false
   let g = graph({
     vocab: schema,
-    storage: ram(schema),
+    storage: ram(schema, { computed: statusComputed }),
     plugins: [{
       name: 'record',
       hooks: {
@@ -1065,3 +1067,223 @@ test("until the platform's first poll settles, no other tracker's bug takes a sl
   equal(await count(held.g, 'task'), 1)
   held.close()
 })
+
+// Native fixers have no per-session process. Their transcript alone keeps a
+// slot after the managed startup window and releases it at a terminal stop.
+let nativeCase = async (ended: boolean, recent = false) => {
+  let f = await fixture({ cap: 1 })
+  let holder = crypto.randomUUID()
+  let created = recent ? new Date().toISOString() : '2026-01-01T00:00:00Z'
+  await put(f.g, [
+    {
+      entity: { eid: holder },
+      session: {},
+      native: {},
+      fixer: { bug },
+      created: { at: created },
+    },
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: holder },
+      content: { body: 'Fix this bug' },
+      using: { provider },
+    },
+    ...(ended
+      ? [{
+        entity: { eid: crypto.randomUUID() },
+        entry: { session: holder },
+        stop: {},
+      }]
+      : []),
+  ])
+  return { f, holder }
+}
+let nativeRunning = await nativeCase(false)
+await put(nativeRunning.f.g, [{
+  entity: { eid: nativeRunning.holder },
+  fixer: { bug: identityEid('bug', ['another-bug']) },
+}])
+test('a native fixer still holds the cap after five minutes without a process', async () => {
+  let { f } = nativeRunning
+  await f.replay()
+  equal(await count(f.g, 'fixer'), 1)
+  ok(!(await f.g.get([taskEid(bug)]))[0].claim)
+  f.close()
+})
+let nativeStopped = await nativeCase(true)
+test('a stopped native transcript releases the fixer cap without an exit', async () => {
+  let { f } = nativeStopped
+  await put(f.g, [{
+    entity: { eid: nativeStopped.holder },
+    fixer: { bug: identityEid('bug', ['another-bug']) },
+  }])
+  await f.replay()
+  equal(await count(f.g, 'fixer'), 2)
+  ok((await f.g.get([taskEid(bug)]))[0].claim)
+  f.close()
+})
+let nativeCooling = await nativeCase(true, true)
+await put(nativeCooling.f.g, [{
+  entity: { eid: taskEid(bug) },
+  task: {},
+  completed: { at: '2026-10-01T00:00:00Z' },
+}])
+await put(nativeCooling.f.tracker, [{
+  entity: { eid: bug },
+  regressed: { at: '2026-10-02T00:00:00Z' },
+}])
+test('a stopped native fixer still cools down its regressed bug', async () => {
+  let { f } = nativeCooling
+  await f.replay()
+  equal(await count(f.g, 'fixer'), 1)
+  ok((await f.g.get([taskEid(bug)]))[0].completed)
+  f.close()
+})
+for (let ended of [false, true]) {
+  let { f, holder } = await nativeCase(ended)
+  await put(f.g, [{
+    entity: { eid: taskEid(bug) },
+    task: {},
+    claim: { session: holder },
+  }])
+  test(`a ${ended ? 'stopped' : 'running'} native holder ${ended ? 'does not mark' : 'marks'} its bug taken`, async () => {
+    await f.replay()
+    equal(!!(await f.tracker.get([bug]))[0].taken, !ended)
+    f.close()
+  })
+}
+
+let settledCase = async () => {
+  let result = await nativeCase(false, true)
+  let { f, holder } = result
+  await put(f.g, [
+    {
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: holder },
+      output: {},
+      content: { body: 'The turn is done, but the bug is not resolved.' },
+    },
+    {
+      entity: { eid: taskEid(bug) },
+      task: {},
+      doc: { title: 'Fix tracker bug' },
+    },
+  ])
+  return result
+}
+let nativeSettled = await settledCase()
+test('a settled native fixer continues the same session and reclaims its released task', async () => {
+  let { f, holder } = nativeSettled
+  let before = await count(f.g, 'entry')
+  await f.replay()
+  equal(await count(f.g, 'fixer'), 1)
+  equal(await count(f.g, 'entry'), before + 1)
+  equal(comp((await f.g.get([taskEid(bug)]))[0], 'claim').session, holder)
+  let last = (await rows(f.g, 'entry')).at(-1)!
+  equal(comp(last, 'entry').session, holder)
+  equal(comp(last, 'using').provider, provider)
+  equal(comp(last, 'using').model, model)
+  ok(
+    String(comp(last, 'content').body).includes(
+      'continue until it is resolved',
+    ),
+  )
+  // Its pending next turn prevents a second continuation on replay.
+  await f.replay()
+  equal(await count(f.g, 'entry'), before + 1)
+  f.close()
+})
+let resolvedSettled = await settledCase()
+await put(resolvedSettled.f.tracker, [{
+  entity: { eid: bug },
+  resolved: { at: '2026-10-02T00:00:10Z' },
+}])
+test('a resolved tracker bug never continues its settled native fixer', async () => {
+  let { f } = resolvedSettled
+  let before = await count(f.g, 'entry')
+  await f.replay()
+  equal(await count(f.g, 'entry'), before)
+  ok((await f.g.get([taskEid(bug)]))[0].completed)
+  f.close()
+})
+for (
+  let gate of [
+    'ended',
+    'stop',
+    'completed',
+    'cancelled',
+    'claimed',
+    'cap',
+    'failed',
+    'managed',
+    'nofix',
+  ]
+) {
+  let { f, holder } = await settledCase()
+  if (gate == 'managed') {
+    await put(f.g, [{ entity: { eid: holder }, native: null }])
+  }
+  if (gate == 'nofix') await put(f.g, [{ entity: { eid: project }, nofix: {} }])
+  if (gate == 'ended') {
+    await put(f.g, [{ entity: { eid: holder }, session: { ended: true } }])
+  }
+  if (gate == 'stop') await put(f.g, [{ entity: { eid: holder }, stop: {} }])
+  if (gate == 'completed' || gate == 'cancelled') {
+    await put(f.g, [{ entity: { eid: taskEid(bug) }, [gate]: {} }])
+  }
+  if (gate == 'claimed') {
+    await put(f.g, [
+      { entity: { eid: 'other-session' }, session: {} },
+      { entity: { eid: taskEid(bug) }, claim: { session: 'other-session' } },
+    ])
+  }
+  if (gate == 'cap') {
+    await put(f.g, [{
+      entity: { eid: 'other-session' },
+      session: {},
+      fixer: { bug: identityEid('bug', ['other-bug']) },
+      process: { pid: 1 },
+    }])
+  }
+  if (gate == 'failed') {
+    await put(f.g, [{
+      entity: { eid: crypto.randomUUID() },
+      entry: { session: holder },
+      exception: {},
+    }])
+  }
+  test(`a settled native fixer does not continue past ${gate}`, async () => {
+    let before = await count(f.g, 'entry')
+    await f.replay()
+    equal(await count(f.g, 'entry'), before)
+    equal(await count(f.g, 'fixer'), gate == 'cap' ? 2 : 1)
+    f.close()
+  })
+}
+
+for (let changed of ['claim', 'completed', 'cancelled']) {
+  let { f, holder } = await settledCase()
+  let [task] = await f.g.get([taskEid(bug)])
+  let { fix } = fixing(f.g, f.config)
+  if (changed == 'claim') {
+    await put(f.g, [{ entity: { eid: 'racing-worker' }, session: {} }])
+  }
+  test(`a native continuation loses a ${changed} race without appending input`, async () => {
+    let before = await count(f.g, 'entry')
+    await throws(() =>
+      fix(async () => {
+        await put(f.g, [{
+          entity: task.entity,
+          [changed]: changed == 'claim' ? { session: 'racing-worker' } : {},
+        }])
+        return { task, bug, last: 'Resolve the bug explained.' }
+      }), changed == 'claim' ? 'claim.session' : `${changed}.at`)
+    equal(await count(f.g, 'entry'), before)
+    equal(await count(f.g, 'fixer'), 1)
+    let [after] = await f.g.get([taskEid(bug)])
+    if (changed == 'claim') equal(comp(after, 'claim').session, 'racing-worker')
+    else ok(after[changed])
+    ok(!(await f.g.get([holder]))[0].exit)
+    f.close()
+  })
+}

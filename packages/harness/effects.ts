@@ -5,6 +5,10 @@
 // harness handles it because the machine is the harness's to lend. What the
 // box opened is let go when the host stops.
 
+import { promptEntry } from '@yaks/context'
+import type { Comp } from '@yaks/graph'
+import { instructionsFor } from './instructions.ts'
+import { owing } from './session_machines.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
 
@@ -42,9 +46,64 @@ export let effects = (
       await binding.release(id)
     }
   }
+  let runner = lend(lent)
   return {
     ...running(host.graph, {
-      ...lend(lent),
+      ...runner,
+      answers: async (using, session) => {
+        if (!await runner.answers?.(using, session)) return false
+        if (!session) return true
+        let [owner] = await host.graph.get([session])
+        // HTTP fixer requests use the native runner, not an outside CLI. An
+        // existing managed run keeps its original owner across config changes.
+        if (
+          !owner?.fixer || owner.process || owner.stop ||
+          (owner.session as Comp)?.ended ||
+          ['stopped', 'failed'].includes(
+            String((owner.session as Comp)?.status),
+          )
+        ) return true
+        if (!owner.native) {
+          await host.graph.apply([{
+            entity: { eid: session },
+            native: {},
+          }], { trusted: true })
+        }
+        await binding.cwd(session)
+        ;[owner] = await host.graph.get([session])
+        let home = owner.home as Comp
+        let previous = await host.graph.read(
+          `.entry.session=${session}&.prompt&*`,
+        )
+        // Preparation is restartable. Admit each immutable source only once.
+        if (!previous.length) {
+          let files = await instructionsFor(host.graph, host.machines, home)
+          files.push(
+            ...await owing(
+              host.graph,
+              home,
+              files,
+              (owner.session as Comp).persona as string | undefined,
+            ),
+          )
+          if (files.length) {
+            await host.graph.apply(
+              files.map((file) =>
+                promptEntry(
+                  session,
+                  undefined,
+                  file.body,
+                  file.source,
+                  'shared',
+                  file.revision,
+                )
+              ),
+              { trusted: true },
+            )
+          }
+        }
+        return true
+      },
       stopping: host.stopping,
       idle: release,
     }),

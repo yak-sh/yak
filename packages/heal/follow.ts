@@ -10,7 +10,7 @@ import { link } from '@yaks/edge'
 import { human } from '@yaks/id'
 import { and, eq, present } from '@yaks/query'
 import { remoteBug } from '@yaks/tracker'
-import { fixing, type Options } from './fix.ts'
+import { active, fixing, type Options } from './fix.ts'
 
 // Only the platform's tracker records failures in people's apps (tagged
 // `source: app`); cancelling the task archives the platform's record alone.
@@ -71,7 +71,10 @@ let take = async (
   let holder = str(comp(task, 'claim')?.session)
   if (!task || !holder || bug.resolved || bug.archived) return
   let [fixer] = await g.get([holder])
-  if (str(comp(fixer, 'fixer')?.bug) != bug.entity.eid || fixer.exit) return
+  if (
+    !fixer || str(comp(fixer, 'fixer')?.bug) != bug.entity.eid || fixer.exit ||
+    fixer.native && !active(fixer)
+  ) return
   let back = moment(comp(bug, 'regressed')?.at)
   if (bug.taken && !(back > moment(comp(bug, 'taken')?.at))) return
   await mark(mutate, [{
