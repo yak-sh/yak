@@ -162,3 +162,25 @@ test('concurrent intake acknowledges records listed by another reader without lo
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+// A record the graph refuses is set aside, kept; the ones behind it still land.
+let poisoned = await Deno.makeTempDir()
+let poison = files(poisoned).append
+await poison(
+  JSON.stringify([{ entity: { eid: 'bad' }, nonesuch: { x: 1 } }]) + '\n',
+)
+await spool(poison)(record('good'))
+let poisonedGraph = fixture()
+let poisonedError = await service({ graph: poisonedGraph }, { spool: poisoned })
+  .then(() => undefined, (error) => String(error))
+test('a refused spool record never holds back the records behind it', async () => {
+  try {
+    equal((await poisonedGraph.read('.error')).length, 1)
+    let kept = await left(poisoned)
+    equal(kept.length, 1)
+    ok(kept[0].endsWith('.refused'))
+    ok(poisonedError)
+  } finally {
+    await Deno.remove(poisoned, { recursive: true })
+  }
+})
