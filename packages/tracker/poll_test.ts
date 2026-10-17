@@ -52,20 +52,21 @@ test('a poll answers every page of the platform tracker, and marks reach it', as
   open.close()
 })
 
-test('a failed poll is reported and leaves the answer not ready', async () => {
-  let failures: unknown[] = []
-  let open = await polled(poll(remote, '.bug', {
-    doors: signed(
-      remote,
-      (() =>
-        Promise.resolve(new Response('', { status: 500 }))) as typeof fetch,
-    ),
-    report: (error) => failures.push(error),
-  }))
-  equal([open.ready, failures.map(String)], [false, [
+// Signing and the failed response are the fixture. Await the subscriber, not
+// a timer, and retain the observed failure after closing its owned poll.
+let failedReports: unknown[] = []
+let failed = await polled(poll(remote, '.bug', {
+  doors: signed(
+    remote,
+    (() => Promise.resolve(new Response('', { status: 500 }))) as typeof fetch,
+  ),
+  report: (error) => failedReports.push(error),
+}))
+failed.close()
+test('a failed poll is reported and leaves the answer not ready', () => {
+  equal([failed.ready, failedReports.map(String)], [false, [
     'Error: Remote tracker refused the read (500)',
   ]])
-  open.close()
 })
 
 test('a poll that hangs settles as failed, and says it timed out', async () => {

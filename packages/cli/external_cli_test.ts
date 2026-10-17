@@ -61,7 +61,7 @@ let child = (dir: string, args: string[], env: Record<string, string>) => {
 // Own the real CLI lifecycle during module loading, like readiness_test.ts.
 // Every assertion and cleanup still runs; timed cases read completed probes
 // rather than measuring OS process scheduling against the 1 ms case budget.
-let fallback = async (role: string) => {
+let fallback = async (roles: string[]) => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-fallback-cli-' })
   let socket = Deno.listen({ hostname: '127.0.0.1', port: 0 })
   let port = socket.addr.port
@@ -90,10 +90,11 @@ let fallback = async (role: string) => {
           '@yaks/kernel',
           '@yaks/process',
           '@yaks/api',
-          ...(role == 'effects' ? ['@yaks/effects'] : [{
+          '@yaks/effects',
+          {
             use: '@yaks/mail',
             with: { pull: { url: at, token: 'probe' } },
-          }]),
+          },
         ],
       }),
     )
@@ -108,10 +109,13 @@ let fallback = async (role: string) => {
     await until(async () => {
       let found = (await rows()).find((row: {
         process?: { pid: number; roles: string[]; cwd: string }
-      }) => row.process?.roles.includes(role) && row.process.cwd == dir)
+      }) =>
+        roles.every((role) => row.process?.roles.includes(role)) &&
+        row.process?.cwd == dir
+      )
       worker = found?.process.pid
       return worker != null
-    }, { timeout: 15000, label: `owned fallback ${role} process` })
+    }, { timeout: 15000, label: `owned fallback ${roles.join(',')} process` })
     assert(worker != null)
     assert(worker != web.proc.pid)
     Deno.kill(worker, 0)
@@ -144,8 +148,11 @@ let fallback = async (role: string) => {
   return true
 }
 
-for (let role of ['effects', '@yaks/mail']) {
-  let survived = await fallback(role)
+// Both roles share one lifecycle: package-role expansion and ordinary effects
+// must survive together in the independent worker, not pay for two CLI boots.
+let roles = ['effects', '@yaks/mail']
+let survived = await fallback(roles)
+for (let role of roles) {
   test(`ordinary serve fallback for ${role} outlives HTTP shutdown`, () =>
     assertEquals(survived, true))
 }
