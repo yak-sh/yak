@@ -33,6 +33,13 @@ for (let kind of ['read', 'mark']) {
   isolated.push(Atomics.wait(watched, 0, 0, 1000))
   await reply
 }
+// Exercise poll's default worker-backed construction too, outside the timed
+// assertion, rather than replacing its signed doors with the in-memory seam.
+let polling = poll({ url, secret: 'test-only' })
+let polled = await new Promise<{ ready: boolean; value: unknown }>((done) => {
+  polling.subscribe((value) => done({ ready: polling.ready, value }))
+})
+polling.close()
 doors.close()
 peer.terminate()
 
@@ -45,6 +52,13 @@ test('the poll thread reads and marks through real signed doors', () => {
     ['/bugs', undefined],
     ['/take', { bug: 'bug', task: 'T-7' }],
   ])
+})
+
+test('a poll uses its signed worker and publishes the complete answer', () => {
+  equal(polled, {
+    ready: true,
+    value: [{ entity: { eid: 'bug' }, bug: { fault: 'one' } }],
+  })
 })
 
 test('signed reads and marks reach the peer while the host loop is blocked', () =>

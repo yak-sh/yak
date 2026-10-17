@@ -92,7 +92,13 @@ let saying = (mark: unknown): Record<string, string> =>
  * ```ts
  * import { poll } from '@yaks/tracker/poll'
  *
- * let open = poll({ url: 'http://127.0.0.1:1' }, '.bug', { report: () => {} })
+ * // Supply doors for an in-memory example; omit them for the signed worker.
+ * let open = poll({ url: 'https://tracker.example' }, '.bug', {
+ *   doors: {
+ *     bugs: async () => ({ ok: true, value: [] }),
+ *     mark: async () => {},
+ *   },
+ * })
  * open.ready // false: no poll has answered
  * open.close()
  * ```
