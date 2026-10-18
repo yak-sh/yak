@@ -1,3 +1,4 @@
+import { scopedTallyCost } from './scoped_tally_fixture.ts'
 import { referenceSelectorCost } from './reference_selector_fixture.ts'
 import { collectionSelectorCost } from './collection_selector_fixture.ts'
 import { blobGatherCost } from './blob_gather_cost_fixture.ts'
@@ -137,6 +138,9 @@ export class PlayCost {
     }
     if (new URL(req.url).searchParams.has('directory-query')) {
       return Response.json(await directoryCost(this.ctx.storage))
+    }
+    if (new URL(req.url).searchParams.has('scoped-tally')) {
+      return Response.json(scopedTallyCost(this.ctx.storage))
     }
     if (new URL(req.url).searchParams.has('query')) {
       return Response.json(

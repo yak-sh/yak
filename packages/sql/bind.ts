@@ -827,8 +827,14 @@ let leading = (ctx: Ctx, comp: string, prop: string): string | undefined => {
 // an indexed column compared with a value.
 let seekable = (ctx: Ctx, hops: Hop[], p: Pred): boolean => {
   let leaf = hops.at(-1)!
+  // An unmasked archetype is a stored, indexed reference too. Seeking it
+  // from the far end avoids screening every edge and its referent. Aspect
+  // policies can mask that column, so keep their existing lookup path.
   let stored = (h: Hop) =>
-    h.comp != 'entity' && !computed(ctx.v, h.comp) &&
+    (h.comp != 'entity' ||
+      h.prop == 'archetype' &&
+        !Object.keys(ctx.visibility?.components ?? {}).length) &&
+    !computed(ctx.v, h.comp) &&
     ctx.v.prop(h.comp, h.prop)?.computed === false &&
     !ctx.derived[`${h.comp}.${h.prop}`]
   return hops.length > 1 && opOf(p) == '' && flat(p.value) != '' &&
@@ -861,7 +867,7 @@ let sought = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let at = (i: number) => `__s${i}`
   let rows = (i: number, where: Cond): Query =>
     select({
-      cols: [col('entity', at(i))],
+      cols: [col(hops[i].comp == 'entity' ? 'id' : 'entity', at(i))],
       from: raw(`${source(ctx, hops[i].comp)} as "${at(i)}"`),
       where,
     })
