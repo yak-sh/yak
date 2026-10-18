@@ -2,8 +2,8 @@
 // sources agree. A memo is disposable: an unreadable memo or a source whose
 // dependencies cannot be proved leaves the ordinary derivation in charge.
 // Every command asks, so a hit is proved the way a version control index
-// proves a clean tree: by each source's stat as it was read, and by its
-// contents only where that stat moved. A memo nothing has read for a day (a
+// proves a clean tree: by each source's stat as it was read, or its
+// directory's stat while it remains absent, and by contents where a stat moved. A memo nothing has read for a day (a
 // deleted worktree's, a probe config's, an older version's) goes at the next
 // miss.
 
@@ -46,11 +46,12 @@ type Record<T> = {
   /** each file's stat as its contents were read, '' where they could still
    * change without moving it */
   stats: string[]
+  absent?: { [path: string]: readonly [directory: string, stat: string] }
   source: string
   value: T
 }
 
-let VERSION = 6
+let VERSION = 7
 let HOUR = 3_600_000
 let DAY = 24 * HOUR
 let FILES = ['deno.json', 'deno.jsonc']
@@ -251,6 +252,38 @@ export let remember = async <T>(
       throw e
     }
   }
+  // A stable directory listing distinguishes a missing leaf from a broken
+  // symlink. Its stat then proves that absence without asking for the leaf.
+  let absent = (
+    files: string[],
+    stats: string[],
+    prior: Record<T>['absent'] = {},
+  ): Record<T>['absent'] => {
+    let directories = new Map<string, Set<string>>()
+    let proved: NonNullable<Record<T>['absent']> = { ...prior }
+    for (let [i, path] of files.entries()) {
+      if (stats[i] != 'absent') continue
+      let parent = path.slice(0, path.lastIndexOf('/')) || '/'
+      let names = directories.get(parent)
+      if (!names) directories.set(parent, names = new Set())
+      names.add(path)
+    }
+    for (let [parent, paths] of directories) {
+      try {
+        let before = stat(parent)
+        if (!before || before == 'absent') continue
+        let names = new Set(Array.from(io.readDirSync(parent), (e) => e.name))
+        if (before != stat(parent)) continue
+        for (let path of paths) {
+          delete proved[path]
+          if (!names.has(path.slice(path.lastIndexOf('/') + 1))) {
+            proved[path] = [parent, before]
+          }
+        }
+      } catch { /* An absence we cannot prove still checks the file. */ }
+    }
+    return proved
+  }
   let fingerprint = (files: Iterable<[string, string | null]>) =>
     digest(Array.from(files, ([path, text]) => framed(path, text)).join(''))
   let snapshot = (files: string[]) =>
@@ -305,15 +338,34 @@ export let remember = async <T>(
       Array.isArray(known.files) && known.files.length > 0 &&
       Array.isArray(known.stats) && known.stats.length == known.files.length
     ) {
-      let stats = known.files.map(stat)
+      let directories = new Map<string, string>()
+      let stale = false
+      let stats = known.files.map((path) => {
+        let witness = known.absent?.[path]
+        if (witness) {
+          let [parent, before] = witness
+          let now = directories.get(parent)
+          if (now === undefined) directories.set(parent, now = stat(parent))
+          if (now && now == before) return 'absent'
+          stale = true
+        }
+        return stat(path)
+      })
       if (stats.every((s, i) => s && s == known.stats[i])) {
+        if (stale) {
+          keep({ ...known, absent: absent(known.files, stats, known.absent) })
+        }
         seen()
         return known.value
       }
       // A stat moved without saying whether its contents did (a checkout, a
       // touch): contents that still agree keep the memo, under the new stats.
       if (known.source == await snapshot(known.files)) {
-        keep({ ...known, stats })
+        keep({
+          ...known,
+          stats,
+          absent: absent(known.files, stats, known.absent),
+        })
         return known.value
       }
     }
@@ -486,6 +538,10 @@ export let remember = async <T>(
           roots: identities,
           files: dependencies,
           stats: dependencies.map((path) => stats.get(path)!),
+          absent: absent(
+            dependencies,
+            dependencies.map((path) => stats.get(path)!),
+          ),
           source: sourceHash,
           value,
         })

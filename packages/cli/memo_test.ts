@@ -48,10 +48,23 @@ let fixture = (
   // A file's stat moves with its contents, and with a touch alone. A file
   // written here, or given a time, carries that time instead.
   let touched = new Map<string, number>()
+  let names = (dir: string) => [
+    ...new Set(
+      [...files.keys()].filter((p) =>
+        p.startsWith(`${dir.replace(/\/$/, '')}/`)
+      )
+        .map((p) => p.slice(dir.replace(/\/$/, '').length + 1).split('/')[0]),
+    ),
+  ]
   let io: MemoFiles = {
     readTextFileSync: (path) => (reads.push(path), read(path)),
     statSync: (path) => {
-      let text = read(path)
+      let entries = names(path)
+      let text = files.has(path)
+        ? read(path)
+        : entries.length
+        ? entries.join(' ')
+        : read(path)
       let at = new Date(
         times.get(path) ?? stamped(text) + (touched.get(path) ?? 0),
       )
@@ -68,9 +81,7 @@ let fixture = (
       files.delete(from)
     },
     removeSync: (path) => void files.delete(path),
-    readDirSync: (dir) =>
-      [...files.keys()].filter((p) => p.startsWith(`${dir}/`))
-        .map((p) => ({ name: p.slice(dir.length + 1) })),
+    readDirSync: (dir) => names(dir).map((name) => ({ name })),
     utimeSync: (path, _, mtime) => void times.set(path, mtime.getTime()),
   }
   let resolve = (name: string) => {
@@ -314,4 +325,86 @@ test('runtime dependencies survive TypeScript type syntax', () => {
       runtime ? ['./value.ts'] : [],
     )
   }
+})
+
+let absence = await primed()
+
+test('an absent optional source appearing invalidates a memo', async () => {
+  let f = copy(absence.f)
+  f.files.set('/source/deno.jsonc', '{}')
+  equal((await f.get()).run, 2)
+})
+
+test('a touched directory keeps a memo whose optional sources remain absent', async () => {
+  let f = copy(absence.f)
+  f.touched.set('/source', 1)
+  equal((await f.get()).run, 1)
+  equal((await f.get()).run, 1)
+})
+
+let recentDirectory = fixture()
+recentDirectory.times.set('/source', Date.now() + 10_000)
+await recentDirectory.get()
+
+test('an absent source is checked while its directory stat is recent', async () => {
+  recentDirectory.files.set('/source/deno.jsonc', '{}')
+  equal((await recentDirectory.get()).run, 2)
+})
+
+let linked = fixture()
+linked.files.set('/source/deno.jsonc', 'symlink')
+let link = '/source/deno.jsonc'
+let target = '/target/config.json'
+let readLink = linked.io.readTextFileSync
+let statLink = linked.io.statSync
+linked.io.readTextFileSync = (path) => readLink(path == link ? target : path)
+linked.io.statSync = (path) => statLink(path == link ? target : path)
+await linked.get()
+
+test('a broken symlink becoming readable invalidates a memo without changing its directory', async () => {
+  linked.files.set(target, '{}')
+  equal((await linked.get()).run, 2)
+})
+
+test('an unreadable witnessed directory leaves derivation in charge', async () => {
+  let f = copy(absence.f)
+  let stat = f.io.statSync
+  f.io.statSync = (path) => {
+    if (path == '/source') throw new Deno.errors.PermissionDenied('denied')
+    return stat(path)
+  }
+  equal((await f.get()).run, 2)
+})
+
+let racing = fixture()
+let list = racing.io.readDirSync
+let raced = false
+racing.io.readDirSync = (path) => {
+  let entries = list(path)
+  if (path == '/source' && !raced) {
+    raced = true
+    racing.files.set('/source/deno.jsonc', '{}')
+  }
+  return entries
+}
+await racing.get()
+
+test('an optional source appearing while absence is witnessed invalidates the memo', async () => {
+  equal((await racing.get()).run, 2)
+})
+
+test('unrelated directory changes refresh absence proofs without deriving again', async () => {
+  let f = copy(absence.f)
+  f.files.set('/source/unrelated.txt', 'new')
+  equal((await f.get()).run, 1)
+  let stat = f.io.statSync
+  let missing: string[] = []
+  f.io.statSync = (path) => {
+    if (path == '/source/deno.jsonc' || path == '/source/deno.lock') {
+      missing.push(path)
+    }
+    return stat(path)
+  }
+  equal((await f.get()).run, 1)
+  equal(missing, [])
 })
