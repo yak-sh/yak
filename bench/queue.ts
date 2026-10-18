@@ -12,8 +12,13 @@ export let enqueue = (q: Queue, suites: string[], now: number) => {
       q.jobs.push({ suite, phase: 'screen', due: now })
     }
   }
-  let priority = (j: Job) => j.phase == 'confirm' && now - j.due >= 3_600_000 ? -1 : j.phase == 'screen' ? 0 : 1
-  q.jobs.sort((a,b) => priority(a) - priority(b) || a.due - b.due)
+  let priority = (j: Job) =>
+    j.phase == 'confirm' && now - j.due >= 3_600_000
+      ? -1
+      : j.phase == 'screen'
+      ? 0
+      : 1
+  q.jobs.sort((a, b) => priority(a) - priority(b) || a.due - b.due)
 }
 /** A check has its original active timeout. Lock contention consumes no job;
  * an interrupted job remains at the head because persistence precedes work. */
@@ -37,7 +42,9 @@ export let drain = async (q: Queue, io: {
       }
     }
     if (outcome.verdict == 'deferred') return
-    if (!(job.phase == 'screen' && outcome.verdict == 'regressed')) await io.settle(job, outcome)
+    if (!(job.phase == 'screen' && outcome.verdict == 'regressed')) {
+      await io.settle(job, outcome)
+    }
     q.jobs.shift()
     if (job.phase == 'screen') {
       q.screened[job.suite] = io.now()

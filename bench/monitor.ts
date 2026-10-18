@@ -404,9 +404,8 @@ let check = async (
   let path = await reference(suite)
   let results = `${home}/.cache/yak/bench/${suite}.${Deno.pid}.results.json`
   await Deno.remove(results).catch(() => {})
-  // Scheduled checks include lock acquisition in their absolute deadline.
-  // timeout owns only this flock and its benchmark children, never a lock holder.
-  // Lock wait consumes the ten-minute check cap, never lengthens it.
+  // Queue admission owns the tick deadline. Its admitted checks use the
+  // unchanged active cap; a busy lock leaves the job owed, not timed out.
   let args = measurement(suite, deadline)
   if (!args) {
     return {
@@ -583,6 +582,11 @@ if (import.meta.main) {
           check: () => Promise.resolve(outcome),
         })
         Object.assign(verdicts, found)
+        let current = await load()
+        if (state.good[job.suite]) {
+          current.good[job.suite] = state.good[job.suite]
+        }
+        await save(current)
       },
     })
     console.log(

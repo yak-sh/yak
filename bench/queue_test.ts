@@ -71,10 +71,51 @@ test('a fresh cron tick cannot starve an older confirmation', () => {
 })
 
 test('new screens lead young confirmations but an hour-old confirmation cannot starve', () => {
- let q:Queue={jobs:[{suite:'a',phase:'confirm',due:0}],screened:{a:0}}
- enqueue(q,['a','b'],1)
- equal(q.jobs.map(j=>j.suite),['b','a'])
- enqueue(q,['a','b','c'],3_600_000)
- equal(q.jobs.map(j=>j.suite),['a','b','c'])
- equal(q.jobs[0].due,0)
+  let q: Queue = {
+    jobs: [{ suite: 'a', phase: 'confirm', due: 0 }],
+    screened: { a: 0 },
+  }
+  enqueue(q, ['a', 'b'], 1)
+  equal(q.jobs.map((j) => j.suite), ['b', 'a'])
+  enqueue(q, ['a', 'b', 'c'], 3_600_000)
+  equal(q.jobs.map((j) => j.suite), ['a', 'b', 'c'])
+  equal(q.jobs[0].due, 0)
+})
+
+test('crash before settlement cannot acknowledge a result that was not saved', async () => {
+  let q: Queue = { jobs: [], screened: {} }
+  enqueue(q, ['a'], 0)
+  let failed = false
+  try {
+    await drain(q, {
+      now: () => 0,
+      deadline: 1,
+      save: () => Promise.resolve(),
+      check: () => Promise.resolve({ verdict: 'inconclusive' }),
+      settle: () => Promise.reject(Error('disk unavailable')),
+    })
+  } catch {
+    failed = true
+  }
+  equal(failed, true)
+  equal(q.jobs.map((j) => j.suite), ['a'])
+  equal(q.screened, {})
+})
+
+test('an admitted job keeps its active allowance while next job carries over', async () => {
+  let q: Queue = { jobs: [], screened: {} }, now = 0, seen: string[] = []
+  enqueue(q, ['a', 'b'], 0)
+  await drain(q, {
+    now: () => now,
+    deadline: 1,
+    save: () => Promise.resolve(),
+    check: (j) => {
+      seen.push(j.suite)
+      now = 600_000
+      return Promise.resolve({ verdict: 'inconclusive' })
+    },
+    settle: () => Promise.resolve(),
+  })
+  equal(seen, ['a'])
+  equal(q.jobs.map((j) => j.suite), ['b'])
 })

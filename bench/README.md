@@ -33,17 +33,26 @@ agent like any other bug. Cron runs it from the main checkout through
 bin/bench-monitor: every suite at 02:23, user-facing suites every 30 minutes
 (`--hourly`), and pages after each web-unit change (`--restarted`, checked every
 15 minutes). The user-facing suites collect serially under the box-wide lock, so
-fixtures never measure one another. Each tick has an absolute 25-minute deadline
-shared by lock wait, screening and confirmation (including paired confirmation);
-a check is capped at ten minutes, including its lock wait. Deadline expiry
-reports every remaining suite as a missed measurement, rather than skipping a
-held lane lock. Thus the half-hour cadence leaves five minutes within the hour
-for dispatch and durable tracker reporting. Missing baselines, crashes, hung
-checks, unavailable confirmations and unpainted content file tracker failures;
-none counts as a pass or a new best.
+fixtures never measure one another. The hourly lane holds a persistent queue in
+`~/.cache/yak/bench/hourly-queue.json`, with one lane lock around loading,
+collecting and saving it. Each tick stops admitting work after 25 minutes; an
+admitted collection keeps its unchanged ten-minute active limit. A busy box lock
+leaves the exact job owed and spends no collection allowance.
 
-Run the scheduled queue with `bin/bench-monitor --hourly`. It does not start
-parallel collectors, extend measurement limits or interrupt another lock holder.
+All screens in a cohort precede their confirmations. An hour-old confirmation
+gets priority over fresh arrivals so repeated screens cannot starve it.
+Completed screens are not duplicated within an hour; unfinished screens and
+confirmations carry to the next tick rather than restarting the queue at pages.
+A crash may repeat the in-flight job, but cannot silently discard it. This is
+bounded carry-over, not a promise that an overloaded box has enough capacity to
+finish all suites within an hour. Raw latency failures remain strict.
+Unconfirmed and inconclusive paired measurements are neither scheduling failures
+nor passes. Missing baselines, crashes and unpainted content remain tracker
+failures.
+
+Run the scheduled queue with `bin/bench-monitor --hourly`. It never starts
+parallel collectors, extends measurement limits or interrupts another lock
+holder.
 
 The monitor keeps its best measurements in `~/.cache/yak/bench/best/`. Each
 confirmed run banks faster figures with zero slack, even when a different figure
