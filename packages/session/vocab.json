@@ -372,6 +372,7 @@
       "properties": {
         "id": {
           "type": "string",
+          "index": true,
           "description": "the runner’s own id for it"
         },
         "actor": {

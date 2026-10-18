@@ -127,7 +127,7 @@ export let sessionFor = async (
     return (await g.read(
       `.${SESSION}.id=${JSON.stringify(said.id)} ${
         fields ? `.fields=${fields.join(',')}` : '*'
-      } .limit=1`,
+      }`,
     ))[0]
   }
   if (!said) return undefined

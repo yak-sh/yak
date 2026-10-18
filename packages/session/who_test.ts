@@ -100,6 +100,8 @@ await collision.apply([
   { entity: { eid: 'same' }, session: { id: 'other' } },
   { entity: { eid: 'selected' }, session: { id: 'same', actor: 'person' } },
   { entity: { eid: 'person' }, person: {} },
+  { entity: { eid: 'first' }, session: { id: 'duplicate' } },
+  { entity: { eid: 'second' }, session: { id: 'duplicate' } },
 ])
 
 test('an explicit session id selects its transcript even when an eid collides', async () => {
@@ -111,4 +113,14 @@ test('an explicit session id selects its transcript even when an eid collides', 
   assertEquals(row?.entity.eid, 'selected')
   assertEquals(row?.session, { id: 'same', actor: 'person' })
   assertEquals(await sessionFor(collision, { id: 'selected' }), undefined)
+})
+
+test('an explicit session id keeps the same first match as an unresolved name', async () => {
+  let named = await sessionFor(collision, 'duplicate', ['session.id'])
+  assertEquals(named?.entity.eid, 'first')
+  assertEquals(
+    (await sessionFor(collision, { id: 'duplicate' }, ['session.id']))?.entity
+      .eid,
+    named?.entity.eid,
+  )
 })
