@@ -807,3 +807,22 @@ and its browser/inspect plugins. Both the watched config's `tracker.spool` and
 the tracker service's `with.spool` name the same spool directory. Browse
 `/?q=.trace` on the tracker for grouped traces and each trace's flamegraph and
 places list.
+
+### Reporting systemd unit failures
+
+`yak unit failure <unit> --config <config>` is an `ExecStopPost` command. It
+reads systemd's `SERVICE_RESULT`, `EXIT_CODE`, `EXIT_STATUS` and `INVOCATION_ID`
+and writes a failed unit to the config's tracker spool without opening its
+graph. Successful stops produce no report. This includes failures that the
+unit's main process cannot report itself, such as a stop timeout or SIGKILL.
+
+Install `yak-unit-failure.conf` as `tracker.conf` in each user unit template's
+drop-in directory (`yak-web@.service.d`, `yak-work@.service.d`,
+`yak-tracker@.service.d`, and `yak-tracker-web@.service.d`). The config must
+name the spool consumed by tracker intake. Reload the user manager after
+installing the drop-ins; use `yak restart` for a ready-first handover.
+
+```sh
+# Inside a systemd service's [Service] section:
+ExecStopPost=%h/.deno/bin/yak unit failure %n --config %h/.yak/yak.json
+```

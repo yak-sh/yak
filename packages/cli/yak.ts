@@ -45,6 +45,7 @@ import { starter } from './init.ts'
 import { listen, wind } from '@yaks/process/wind'
 import * as held from './held.ts'
 import { restorable } from './restore.ts'
+import { unitFailureCommand } from './unit_failure.ts'
 
 /** The platform this command talks to when it opens no graph of its own. */
 export let HOST = 'yaks.app'
@@ -197,6 +198,7 @@ let init = async (args: Record<string, unknown>, c: Ctx): Promise<number> => {
 /** The command's built-in subcommands, which shadow a tool of the same name
  * from either list. */
 export let own: Command[] = [
+  unitFailureCommand,
   helpTool(YAK),
   {
     name: 'work',
