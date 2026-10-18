@@ -13,12 +13,6 @@
           "type": "string",
           "description": "an optional absolute command directory interpreted in the workspace filesystem; absent means workspace.root"
         },
-        "machine": {
-          "type": "string",
-          "ref": "machine",
-          "death": "keep",
-          "description": "Retained until the coordinated workspace migration; use workspace for new callers"
-        },
         "workspace": {
           "type": "string",
           "ref": "workspace",
@@ -72,19 +66,9 @@
           "ref": "persona",
           "description": "the persona to carry, by id or name (default: the checkout's persona)"
         },
-        "work": {
-          "type": "string",
-          "ref": "entity",
-          "description": "the graph task or project whose common persona to admit, independent of the machine checkout"
-        },
-        "machine": {
-          "type": "string",
-          "ref": "machine",
-          "description": "Existing machine to use; otherwise request a sandbox on first file or shell call."
-        },
         "cwd": {
           "type": "string",
-          "description": "Command directory on the named machine."
+          "description": "Command directory in the selected workspace filesystem."
         },
         "workspace": {
           "type": "string",
@@ -145,25 +129,6 @@
       "description": "List the models offered by this harness's OpenAI credential (OPENAI_API_KEY, else the OpenAI connection). The credential itself is never shown.",
       "input": {},
       "readOnly": true
-    },
-    "session_machine_release": {
-      "effect": true,
-      "changed": [
-        "session.ended",
-        "dispatch.state"
-      ],
-      "created": [
-        "completed",
-        "stop",
-        "exit",
-        "content"
-      ],
-      "sweep": ".session&.home&(.session.ended=true | .completed | .session.status=stopped) | .task&.completed&.claim",
-      "description": "Release machines when sessions stop or finish completed work; live shared borrowers keep them.",
-      "removed": [
-        "dispatch"
-      ],
-      "target": ".session&.home | .entry&.entry.session.home | .task&.claim"
     },
     "conversation_projects": {
       "tool": true,

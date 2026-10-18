@@ -17,19 +17,18 @@
 // A name's key entity has an id derived from the name (@yaks/key). Read
 // that key alone first, then check for a live eid only where a key exists.
 // Ordinary references do not gather the entity's computed properties just to
-// resolve its name. UUIDs and content hashes are never looked up as names.
+// resolve its name. A migration can preserve a former UUID or content address
+// as a key, so those addresses are checked too.
 
 import type { Eid, ReadTx } from '@yaks/graph'
 import { after } from '@yaks/fp'
 import { alive } from '@yaks/graph/bundle'
-import { minted } from '@yaks/graph/identity'
 import { ofOf } from '@yaks/key'
 import { aliasEid } from './comp.ts'
 
-/** Whether an id is worth looking up as a name — a `$alias` and an id these
- * packages generate (@yaks/graph `minted`: a UUID, a content hash) are not. */
-export let wordish = (id: string): boolean =>
-  !!id && !id.startsWith('$') && !minted(id)
+/** A batch-local `$alias` is not a stored address. All other addresses may
+ * have a key, including a former identity preserved by a migration. */
+export let wordish = (id: string): boolean => !!id && !id.startsWith('$')
 
 /**
  * Resolves these ids to the eids they name. The returned map holds only the ids

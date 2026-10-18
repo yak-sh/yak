@@ -143,10 +143,6 @@
           "ref": "entity",
           "death": "keep"
         },
-        "path": {
-          "type": "string",
-          "description": "Retained until the coordinated workspace migration; canonical checkout root moves to workspace.root"
-        },
         "gitdir": {
           "type": "string",
           "description": "this worktree's own Git administrative directory"

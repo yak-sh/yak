@@ -62,3 +62,21 @@ for (let async of [false, true]) {
     })
   }
 }
+
+for (let id of ['b08d920e-bc1b-809e-9950-7661c8f20bd1', 'a'.repeat(40)]) {
+  test('a former identity remains addressable: ' + id, async () => {
+    let tx: ReadTx = {
+      read: () => {
+        throw Error('not a query')
+      },
+      get: (ids) =>
+        ids.includes(aliasEid(id))
+          ? [{
+            entity: { eid: aliasEid(id) },
+            key: { of: 'canonical', value: id },
+          }]
+          : [],
+    }
+    equal(await addressed(tx, [id]), new Map([[id, 'canonical']]))
+  })
+}

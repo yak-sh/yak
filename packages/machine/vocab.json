@@ -6,30 +6,6 @@
       "embed": false,
       "description": "an actual computer with a stable identity and an optional connector address; without a reachable address it is inventory, not an execution target",
       "properties": {
-        "provider": {
-          "type": "string",
-          "description": "Retained until the coordinated workspace migration: the configured provider that lends or attaches this machine"
-        },
-        "from": {
-          "type": "string",
-          "ref": "gitobj",
-          "death": "keep",
-          "description": "Retained until the coordinated workspace migration: the commit in the graph this machine starts from; absent for an empty machine"
-        },
-        "image": {
-          "type": "string",
-          "description": "Retained until the coordinated workspace migration: the image a sandbox boots, when its provider boots images"
-        },
-        "state": {
-          "type": "string",
-          "enum": [
-            "requested",
-            "running",
-            "asleep",
-            "released"
-          ],
-          "description": "Retained until the coordinated workspace migration: the provider's last recorded lifecycle state"
-        },
         "address": {
           "type": "string",
           "description": "the connection address selecting a configured computer connector; changing it preserves computer identity"

@@ -70,8 +70,8 @@ the named entity releases its names, through the key's reference rules.
 Names can be used as bundle eids and as reference values. `g.address(names)`
 also resolves them explicitly. A live eid (one with components and no tombstone)
 wins over an alias spelled the same way. Empty identities and tombstones do not
-shadow names. Ids shaped like UUIDs and content hashes are treated as direct ids
-and are never looked up as aliases.
+shadow names. Aliases can also preserve former UUIDs and content hashes after a
+data migration. A live entity at that address still wins over the alias.
 
 A colon in a name carries no namespace meaning; it is ordinary text. Choose a
 naming convention in the application if names from different sources must not
