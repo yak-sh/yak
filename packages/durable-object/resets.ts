@@ -117,10 +117,9 @@ export let killed = (e: unknown): boolean =>
   e instanceof Error && LIMITS.test(e.message)
 
 /**
- * The object's SQLite ran out of memory for a statement that took little: the
- * isolate's memory was held by other work at that moment, and it frees as that
- * work ends. A read that asks again a moment later is answered, so whoever
- * sees these words reports them and sends a safe read again.
+ * The object's SQLite refused a statement for memory. The engine also says
+ * this when a statement's program passes its step limit, which no wait cures,
+ * so it is reported and never sent again.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'

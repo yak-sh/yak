@@ -297,9 +297,7 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
         }
       },
       rebuildable(init) && options.replayable !== false,
-      (e) =>
-        evicted(e) ||
-        (consuming && safe && (opaque(e) || starved(e))),
+      (e) => evicted(e) || (consuming && safe && opaque(e)),
     )
   }
   let send = (

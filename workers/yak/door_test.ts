@@ -215,27 +215,20 @@ test('an opaque body failure does not replay a Store write', async () => {
   assertEquals(attempts, 1)
 })
 
-test('a Store read answered out of memory asks again; a write does not', async () => {
-  let starved = () =>
-    Response.json({ message: 'out of memory: SQLITE_NOMEM' }, { status: 500 })
+test('a Store read answered out of memory is refused once, not asked again', async () => {
   let attempts = 0
   let store = storeOf({
     idFromName: (name) => name,
     get: () => ({
-      fetch: () =>
-        Promise.resolve(++attempts == 1 ? starved() : Response.json([1])),
+      fetch: () => {
+        attempts++
+        return Promise.resolve(Response.json({
+          message: 'out of memory: SQLITE_NOMEM',
+        }, { status: 500 }))
+      },
     }),
   }, 'recipes')
-  assertEquals(await store.consume('/query', (r) => r.json()), [1])
-  assertEquals(attempts, 2)
-  attempts = 0
-  let again = storeOf({
-    idFromName: (name) => name,
-    get: () => ({ fetch: () => (attempts++, Promise.resolve(starved())) }),
-  }, 'recipes')
-  await assertRejects(() =>
-    again.consume('/apply', (r) => r.json(), { method: 'POST', body: '[1]' })
-  )
+  await assertRejects(() => store.consume('/query', (r) => r.json()))
   assertEquals(attempts, 1)
 })
 
