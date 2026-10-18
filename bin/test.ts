@@ -152,6 +152,11 @@ export let observe = async (
   let running = false
   let read = (line: string, done = false) => {
     line = line.replace(ansi, '')
+    let loading = line.match(/^loading (.+)$/)
+    if (loading) {
+      progress.name = `loading ${loading[1]}`
+      running = false
+    }
     let test = line.match(/^(.+?) \.\.\./)
     if (test) {
       progress.name = test[1]
