@@ -175,7 +175,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
    * compacted, for every model (@yaks/session `Deps.compactAt`) */
   compactAt?: number
   /** each step of every transcript, as it lands */
-  each?: (step: Step) => void
+  each?: (step: Step, session?: string) => void | Promise<void>
   opening?: (persona?: Eid) => Promise<Opening>
   /** context an ask carries without storing its bytes in entries */
   context?: Deps['contextItems']

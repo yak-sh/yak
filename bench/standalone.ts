@@ -133,6 +133,10 @@ export let standalone: Registration[] = [
     'selectedPaintAfterRead',
     'remoteClose',
   ]),
+  measured('harness-steps', 'packages/harness/steps_bench.ts', [
+    'no-tools',
+    'tool-step',
+  ]),
   measured('harness-streaming', 'packages/harness/streaming_bench.ts', [
     'apply',
     'transient',

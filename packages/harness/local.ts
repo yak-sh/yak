@@ -78,7 +78,7 @@ export type Opts = ChildLimits & NotHarness & {
    * compacted, for every model (@yaks/session `Deps.compactAt`) */
   compactAt?: number
   /** each step of every transcript, as it lands */
-  each?: (step: Step) => void
+  each?: (step: Step, session?: string) => void | Promise<void>
   /** Override the machine providers explicitly lent by the host. */
   machines?: Harness['machines']
 }

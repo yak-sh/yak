@@ -97,14 +97,36 @@ deno task bench:ratchet client-frame
 ```
 
 The suites are `client-frame`, `client-rules`, `harness-startup`,
-`harness-streaming`, `harness-worker`, `harness-window`, `harness-switch`,
-`graph-activity`, `session-status`, `web-client`, `relay-admission` and `pages`.
-Each writes `bench/<suite>.results.json` and checks
-`bench/<suite>.baseline.json`. A suite without a banked baseline can run; a
-check refuses until its baseline has been explicitly accepted. Take that
+`harness-steps`, `harness-streaming`, `harness-worker`, `harness-window`,
+`harness-switch`, `graph-activity`, `session-status`, `web-client`,
+`relay-admission` and `pages`. Each writes `bench/<suite>.results.json` and
+checks `bench/<suite>.baseline.json`. A suite without a banked baseline can run;
+a check refuses until its baseline has been explicitly accepted. Take that
 measurement on an idle box, then review and commit its baseline. A bank taken
 under load is recorded as such; monitoring immediately ratchets drops when later
 checks are faster. Never replace a faster reference with it.
+
+`harness-steps` measures native session overhead with an instantly answered
+scripted model on an isolated in-memory harness graph. `no-tools` is one
+input-to-final-reply turn in milliseconds; `tool-step` is input-to-final-reply
+wall time divided by 12 completed sequential tool steps, in milliseconds per
+step. The latter includes all 13 model turns, async `session_tool` effect
+dispatch, tool-result persistence and the live step-timing observer (with no
+external reporter), not model/network/tool I/O. Each metric has one discarded
+warmup and three measured rounds with fresh graphs. Fresh-session creation and
+the first ask are timed (there is no seed turn subtracted). Composition,
+count/output verification, effect drain and cleanup are untimed. Every round
+verifies the final reply, exact model/tool/result counts, async calls, progress
+entries, and retained input/results. No managed runs, live database, database
+copy or external model is used.
+
+Run through the ratchet without banking a baseline:
+
+```sh
+deno task bench harness-steps
+# Direct measure, bypassing the ratchet and its box-wide lock:
+deno run -A bench/standalone-worker.ts packages/harness/steps_bench.ts
+```
 
 Arguments after `--` reach the selected suite. For example, compare relay
 admission in a checkout over 200 ticks with:

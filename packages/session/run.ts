@@ -80,7 +80,7 @@ export type Runner = Deps & ChildLimits & {
     session?: Eid,
   ) => boolean | Promise<boolean>
   /** each step, as it lands */
-  each?: (step: Step) => void
+  each?: (step: Step, session?: string) => void | Promise<void>
   /** reconcile borrowed resources after this pass releases its lease */
   idle?: (session: Eid) => Promise<void>
   /** how long a transcript's lease stands between renewals (ms) */
@@ -340,7 +340,7 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
     let owner = await lease(g, `${RUN}/${session}`)
     if (owner && owner.holder != r.holder) break
     let s = await step(g, session, r)
-    r.each?.(s)
+    await r.each?.(s, String(session))
     if (s.did != 'nothing') await r.attempt?.progressed()
     if (ENDED.includes(s.status)) {
       await ended(g, session, r)
@@ -601,12 +601,13 @@ export let running = (g: Graph, r: Runner): Handlers => ({
         ) return
         // The tool runner's claim, not the session's lease, serializes this call.
         // A restarted effect inspects uncertain execution instead of replaying it.
-        await react(g, String(session), {
+        let s = await react(g, String(session), {
           ...r,
           owner: r.holder,
           asyncTools: false,
           runCall: call.entity.eid,
         })
+        await r.each?.(s, String(session))
       },
     }
     : {},

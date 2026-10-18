@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "suite": "harness-steps",
+  "metric": "median-of-round-medians",
+  "workload": 1,
+  "runtime": "Deno/2.9.1 x86_64-unknown-linux-gnu",
+  "cpu": "Intel(R) Core(TM) i7-8700K CPU @ 3.70GHz",
+  "tolerance": 0,
+  "benches": [
+    {
+      "name": "no-tools",
+      "unit": "ms",
+      "better": "lower",
+      "median": 1053.0439820000001,
+      "tolerance": 0
+    },
+    {
+      "name": "tool-step",
+      "unit": "ms",
+      "better": "lower",
+      "median": 92.95235958333342,
+      "tolerance": 0
+    }
+  ]
+}

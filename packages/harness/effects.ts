@@ -16,6 +16,7 @@ import { running } from '@yaks/session'
 import { lend } from './agent.ts'
 import { here } from './local.ts'
 import { hosted } from './store.ts'
+import { stepTimingEach } from './step_timing.ts'
 import { machineDone, machines } from './session_machines.ts'
 
 let word = (options: Record<string, unknown>, name: string) =>
@@ -50,6 +51,7 @@ export let effects = (
   return {
     ...running(host.graph, {
       ...runner,
+      each: stepTimingEach(host, runner.each),
       answers: async (using, session) => {
         if (!await runner.answers?.(using, session)) return false
         if (!session) return true

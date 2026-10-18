@@ -52,6 +52,7 @@ export let SUITES = [
   'graph-activity',
   'relay-admission',
   'harness-startup',
+  'harness-steps',
   'harness-streaming',
   'harness-worker',
   'harness-window',

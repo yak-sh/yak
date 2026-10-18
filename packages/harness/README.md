@@ -71,6 +71,37 @@ works; `previous_response_id` and `store: true` are refused there. This says
 nothing about public OpenAI API continuation support. Prefix stability preserves
 cache eligibility, not a guarantee of a cache hit.
 
+## Native step timing
+
+A **native step timing** is one duration derived from transcript entries and
+journal claim/release timestamps, not from a session's mutable `updated` stamp.
+Model wait runs from an ask's claim to its release. Dispatch runs from a call's
+creation to its execution claim. Tool run is the stored `result.ms`. Preflight
+runs from a final result to the next ask's claim without intervening input.
+Concurrent durations overlap; their sum is not the session's wall-clock age.
+
+Synthetic tool progress acknowledges the provider protocol without owing a model
+request. Actual input and final results owe model requests immediately,
+including while another tool is still running. Submitted progress stays in the
+transcript and provider continuation prefix unchanged.
+
+The host collects timings after native model and tool steps from a bounded
+transcript tail and exact journal marks. Three consecutive same-metric samples
+above the preceding median report a drift through the host's tracker sink, with
+stable session/step/metric identity. Model and tool durations are compared
+separately; variable provider or tool work is not labelled harness overhead.
+Incomplete boundaries are omitted rather than guessed. A settled transcript with
+unfinished claimed work is idle, not model wait or preflight.
+
+The `harness-steps` benchmark uses an instantly answered scripted model over an
+isolated graph to measure the harness's own per-step overhead. Its reference is
+checked by the existing benchmark monitor:
+
+```sh
+deno task bench harness-steps
+deno task bench:check harness-steps
+```
+
 ## Repository skills
 
 A local native session receives repository skill titles and descriptions before
