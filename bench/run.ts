@@ -55,6 +55,9 @@ export let main = async (args = Deno.args): Promise<number> => {
     console.log(`${name}: ${current?.verdict ?? 'no data (bootstrap)'}`)
     return 0
   }
+  // The monitor already owns the box-wide flock before starting its timeout.
+  let locked = rest.includes('--lock-held')
+  rest = rest.filter((a) => a != '--lock-held')
   // The runner's own flags; everything else reaches the suite. A check and an
   // acceptance take three runs, so a check measures what banking measured.
   let slower = rest.includes('--slower')
@@ -103,7 +106,7 @@ export let main = async (args = Deno.args): Promise<number> => {
       (recording
         ? 'bench/apply-recording.results.json'
         : `bench/${name}.results.json`),
-    lock: `/tmp/yaks-bench-${name}.lock`,
+    lock: locked ? undefined : '/tmp/yaks-throughput-bench.lock',
   })
   for (let b of current.benches) console.log(`${b.name}: ${b.median} ${b.unit}`)
   console.log(`${name}: ${current.verdict}; load ${current.load.join(', ')}`)

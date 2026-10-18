@@ -79,10 +79,11 @@ export let MEASURE: Record<string, string[]> = {
   'app-deploy': ['bench/run.ts', 'app-deploy', 'time'],
 }
 
-/** One suite's check: its run, or why it could not run. */
+/** One suite's check: its run, a failure, or a busy benchmark lock. */
 export type Outcome =
   | { verdict: 'passed' | 'measured' | 'regressed'; run: Run }
   | { verdict: 'failed'; error: string }
+  | { verdict: 'deferred' }
 export type Good = { commit: string; at: string }
 export type State = { web?: string; good: Record<string, Good> }
 export type Monitor = {
@@ -150,6 +151,10 @@ export let watch = async (
     }
     let outcome = await safe(1)
     if (outcome.verdict == 'regressed') outcome = await safe()
+    if (outcome.verdict == 'deferred') {
+      out[suite] = 'deferred'
+      continue
+    }
     if (outcome.verdict != 'failed') {
       try {
         await m.bank?.(suite, outcome.run)
@@ -311,8 +316,15 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
   let path = await reference(suite)
   let results = `${home}/.cache/yak/bench/${suite}.${Deno.pid}.results.json`
   await Deno.remove(results).catch(() => {})
-  let child = await new Deno.Command('timeout', {
+  // Acquire before timeout: waiting for another suite is not a failed
+  // measurement. A busy lock defers this check until the next monitor tick.
+  // flock keeps its inode; nobody may unlink the shared lock file.
+  let child = await new Deno.Command('flock', {
     args: [
+      '--nonblock',
+      '--conflict-exit-code=75',
+      '/tmp/yaks-throughput-bench.lock',
+      'timeout',
       '--kill-after=10',
       HOURLY.includes(suite) ? '600' : '10800',
       Deno.execPath(),
@@ -323,6 +335,7 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
       suite,
       `--baseline=${path}`,
       `--output=${results}`,
+      '--lock-held',
       ...runs ? [`--runs=${runs}`] : [],
     ],
     cwd: root,
@@ -330,6 +343,7 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
     stdout: 'inherit',
     stderr: 'piped',
   }).output()
+  if (child.code == 75) return { verdict: 'deferred' }
   let said = new TextDecoder().decode(child.stderr)
   await Deno.stderr.write(child.stderr)
   try {
@@ -351,11 +365,9 @@ if (import.meta.main) {
   let state = await load()
   let hourly = Deno.args.includes('--hourly')
   let suites = named.length ? named : hourly ? HOURLY : SUITES
+  let restartedWeb = restarted ? await web() : undefined
   if (restarted) {
-    let now = await web()
-    if (!now || now == state.web) Deno.exit(0)
-    state.web = now
-    await save(state)
+    if (!restartedWeb || restartedWeb == state.web) Deno.exit(0)
     suites = ['pages', 'page-content']
   }
   let path = configPath()
@@ -396,6 +408,10 @@ if (import.meta.main) {
   // Another run (a restart's, beside the daily one) may have saved since this
   // one loaded: keep what it saw, and add only the suites run here.
   let latest = await load()
+  // A contended restart check is still owed on the next tick.
+  if (restartedWeb && !Object.values(verdicts).includes('deferred')) {
+    latest.web = restartedWeb
+  }
   for (let suite of suites) {
     if (state.good[suite]) latest.good[suite] = state.good[suite]
   }

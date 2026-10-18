@@ -30,10 +30,14 @@ let run = (verdict: Run['verdict'], commit = 'c2'): Run => ({
     : [],
 })
 let outcome = (v: Outcome['verdict']): Outcome =>
-  v == 'failed' ? { verdict: v, error: 'did not paint' } : {
-    verdict: v,
-    run: run(v),
-  }
+  v == 'deferred'
+    ? { verdict: v }
+    : v == 'failed'
+    ? { verdict: v, error: 'did not paint' }
+    : {
+      verdict: v,
+      run: run(v),
+    }
 
 // Each suite's checks in order; what was reported (title line), what each
 // suite came to, and the good commits remembered after.
@@ -119,4 +123,37 @@ test('confirmed measurements bank drops even when another metric regressed', asy
     },
   })
   equal(banked, ['s:regressed'])
+})
+
+test('a busy measurement lock defers without reporting, banking, or marking good', async () => {
+  let state: State = { good: { s: { commit: 'c1', at: 'at-c1' } } }
+  let banked: string[] = [], reports: string[] = []
+  let verdicts = await watch(['s', 't'], state, {
+    check: (suite) =>
+      Promise.resolve(outcome(suite == 's' ? 'deferred' : 'passed')),
+    since: () => Promise.resolve([]),
+    bank: (suite) => {
+      banked.push(suite)
+      return Promise.resolve()
+    },
+    report: (error) => {
+      reports.push(error.message)
+      return Promise.resolve()
+    },
+  })
+  equal(verdicts, { s: 'deferred', t: 'passed' })
+  equal(state.good.s, { commit: 'c1', at: 'at-c1' })
+  equal(state.good.t, { commit: 'c2', at: 'at-c2' })
+  equal(banked, ['t'])
+  equal(reports, [])
+})
+
+test('a deferred confirmation cannot confirm the screening regression', async () => {
+  equal(await monitor({ s: ['regressed', 'deferred'] }), {
+    reports: [],
+    verdicts: { s: 'deferred' },
+    good: { s: 'c1' },
+    asked: [],
+    runs: [1, undefined],
+  })
 })
