@@ -1,3 +1,4 @@
+import { decodedPath } from './request-path.ts'
 import { type Clock, clock, timed } from './timing.ts'
 // The cached half of serving an app's files and blobs: bytes out of R2, and
 // whether the app's rows still name an upload's bytes. This part knows an
@@ -60,7 +61,7 @@ export { mimeOf } from '@yaks/blob'
 
 // A file's key in the blob store: the app's prefix then its path, a directory
 // answering with its index. Decoded, so the key is the name the file was put
-// under; a malformed escape throws, and the router reports it.
+// under. Request paths are checked before a key is constructed.
 export let keyed = (prefix: string, path: string) =>
   `${prefix}${
     decodeURIComponent(path.endsWith('/') ? `${path}index.html` : path)
@@ -506,12 +507,12 @@ let fileFetch = async (req: Request, env: Env, c: Clock): Promise<Response> => {
   let path = url.pathname.replace(/^\/[^/]+/, '') || '/'
   let prefix = req.headers.get(PREFIX)
   if (!prefix || !eid) return missing()
+  // An undecodable path is absent, not a failure of the file service.
+  let at = decodedPath(path)
+  if (at == null) return missing()
   let blobs = r2Objects(env.BLOBS)
   let config = await c.time('config', () => configOf(blobs, prefix))
   let root = rootOf(prefix, config)
-  // Decoded, so a key is the name the file was put under; a malformed escape
-  // throws, and the router reports it.
-  let at = decodeURIComponent(path)
   let key = keyed(root, path)
   // Server source is not a public asset, even when `main` names a nested build
   // output. apps.ts `MANIFEST` already refuses the default `/worker.js` at the

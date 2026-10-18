@@ -1,3 +1,4 @@
+import { decodedPath } from './request-path.ts'
 // Connections on yaks.app (D-38019): what the dashboard's connections page
 // shows and does, the door an outside service sends a person back to after
 // they sign in there, and the door its webhooks arrive at. What a connection
@@ -597,7 +598,8 @@ export let own: Answer = async (
   { env, req, path, space, app, who, refuse },
 ) => {
   if (!path.startsWith(OWN)) return null
-  let integration = decodeURIComponent(path.slice(OWN.length))
+  let integration = decodedPath(path.slice(OWN.length))
+  if (integration == null) return (await import('./pages.ts')).lost(env)
   let here = `https://${space.slug}.${apex(env)}/${app.slug}/api${path}${
     new URL(req.url).search
   }`

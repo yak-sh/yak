@@ -1,3 +1,4 @@
+import { decodedPath } from './request-path.ts'
 // The platform in memory: the kernel's own bindings, stood up under Deno so a
 // test can drive the code that runs in production with nothing stubbed between
 // a request and the rows.
@@ -746,7 +747,8 @@ export let assets = (root: URL) => {
   return {
     fetch: async (req: Request) => {
       let url = new URL(req.url)
-      let path = decodeURIComponent(url.pathname)
+      let path = decodedPath(url.pathname)
+      if (path == null) return new Response(null, { status: 404 })
       let moved = (to: string) =>
         new Response(null, {
           status: 307,

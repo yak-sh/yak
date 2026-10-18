@@ -329,13 +329,12 @@ test('the kernel routes, vouches, serves, and surfaces', async () => {
       }
     }
 
-    // A route that throws — a malformed escape in a file path — answers with
-    // the soft page. Our own decoder fell over, not the app's code, so
-    // nothing about it is written into the app's store (T-33234; where it IS
-    // written is report_test.ts).
-    let broke = await k.at(`${jeff69}.yaks.app`, '/recipes/%E0%A4%A')
-    assertEquals(broke.status, 500)
-    assertMatch(await broke.text(), /Something went wrong/)
+    // Bad escapes name no file and never create a platform exception.
+    for (let path of ['%c0', '%', '%GG', '%E0%A4%A']) {
+      let missing = await k.at(`${jeff69}.yaks.app`, `/recipes/${path}`)
+      assertEquals(missing.status, 404)
+      assertMatch(await missing.text(), /Nothing here yet/)
+    }
     assertEquals(await owner.get('.exception'), [])
 
     // The app's own page failure crosses the tracker queue with its catch

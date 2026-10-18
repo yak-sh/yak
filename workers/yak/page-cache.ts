@@ -1,3 +1,4 @@
+import { decodedPath } from './request-path.ts'
 import { possiblePerson } from './directory-copy.ts'
 // An app's public pages, kept in Cloudflare's cache at the Site entrypoint
 // (T-124419). Every page view used to read the directory twice before a byte
@@ -100,9 +101,11 @@ export let visitor = (url: string): Request | null => {
   let { pathname, searchParams } = new URL(url)
   let at = pathname.indexOf('/', 2)
   if (!pathname.startsWith('/@') || at < 0) return null
+  let host = decodedPath(pathname.slice(2, at))
+  if (host == null) return null
   let mount = searchParams.get('mount')
   return new Request(
-    `https://${decodeURIComponent(pathname.slice(2, at))}${pathname.slice(at)}`,
+    `https://${host}${pathname.slice(at)}`,
     { headers: mount ? { [MOUNT]: mount } : {} },
   )
 }

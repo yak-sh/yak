@@ -13,6 +13,7 @@ import {
   assertMatch,
   assertStringIncludes,
 } from '@std/assert'
+import { fetch as fileFetch } from './files.ts'
 import { test, tick, until } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { misfit } from '@yaks/graph/errors'
@@ -721,10 +722,8 @@ test("the platform's own scripts are never the app's break", async () => {
 // `shaped`). The line is structural instead: the app's code runs at exactly
 // one seam (dispatch.ts `ran`), which files its own breaks, so nothing that
 // escapes to the catch-all was ever the app's. The break staged here is one
-// the kernel documents — a malformed percent-escape in the path, which our own
-// decoder throws on while serving an app's file (files.ts `keyed`) — and it
-// proves what an eviction would: our code fell over, on the app's address,
-// with no app code anywhere near it.
+// file service call while serving a page — and it proves what an eviction would:
+// our code fell over on the app's address, with no app code near it.
 let platformBreak = await (async () => {
   let captured: Bundle[] = [], failing = ''
   let k = await fresh({
@@ -735,6 +734,13 @@ let platformBreak = await (async () => {
       },
     },
   }, (env) => {
+    let files = env.FILES
+    env.FILES = {
+      fetch: (req) => {
+        if (failing == 'files') throw new Error('file service unavailable')
+        return files ? files.fetch(req) : fileFetch(req, env)
+      },
+    }
     let store = env.STORE.get.bind(env.STORE)
     env.STORE.get = (id) => {
       let stub = store(id)
@@ -773,7 +779,7 @@ let platformBreak = await (async () => {
       captured,
       cookie,
       app,
-      fail: (what: '' | 'query' | 'bucket') => {
+      fail: (what: '' | 'query' | 'bucket' | 'files') => {
         failing = what
       },
     }
@@ -788,7 +794,9 @@ test("the platform's own break is ours, not the app's", async () => {
   try {
     let agent = connector(k, cookie)
 
-    let broke = await k.at(`${acme64}.yaks.app`, '/shop/%E0%A4%A')
+    fail('files')
+    let broke = await k.at(`${acme64}.yaks.app`, '/shop/')
+    fail('')
     let requestId = broke.headers.get('x-request-id')
     assert(requestId)
     assertStringIncludes(await broke.text(), `Request ID: ${requestId}`)

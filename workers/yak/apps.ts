@@ -1,3 +1,4 @@
+import { decodedPath } from './request-path.ts'
 import { BINARY } from '@yaks/vocab/wire'
 import { copyOf, publicDirectory, signedDirectory } from './directory-copy.ts'
 // The app-serving part: `<space>.yaks.app/<app>/…` — the deploy seam's first
@@ -39,7 +40,7 @@ import {
   releaseId,
 } from './asset_url.ts'
 import * as files from './files.ts'
-import { inside, keyed, prefixOf, VERSION } from './files.ts'
+import { inside, prefixOf, VERSION } from './files.ts'
 import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
 import {
   type Access,
@@ -839,7 +840,8 @@ let asset = async (
   sandbox?: () => Promise<string>,
 ) => {
   let prefix = prefixOf(space, app)
-  if (inside(keyed(prefix, path).slice(prefix.length))) return nothingHere(env)
+  let decoded = decodedPath(path)
+  if (decoded == null || inside(decoded)) return nothingHere(env)
   let range = req.method == 'GET' ? req.headers.get('range') : null
   let got = await c.time(
     'bytes',
@@ -971,7 +973,8 @@ let versionedAsset = async (
   path: string,
   c: Clock,
 ) => {
-  if (inside(keyed(source, path).slice(source.length))) {
+  let decoded = decodedPath(path)
+  if (decoded == null || inside(decoded)) {
     return json(404, 'no_such_file')
   }
   let range = req.method == 'GET' ? req.headers.get('range') : null
@@ -2216,7 +2219,8 @@ let api = async (
     if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
     // Into the draft as app_files writes: a file the draft already holds as
     // sent is not sent again.
-    let file = keyed('', path.slice('/files/'.length))
+    let file = decodedPath(path.slice('/files/'.length))
+    if (file == null) return nothingHere(env)
     try {
       let sent = await hashed([{
         path: file,
