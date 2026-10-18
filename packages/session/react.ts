@@ -350,7 +350,21 @@ export let project = (
   // after its frozen boundary, then append the unsent updates. Never move or
   // replace a previously submitted running result: the next full-context
   // request must extend the previous request + response byte-for-byte.
-  let logical = [...window]
+  let through = Math.max(
+    0,
+    ...transcript.filter((b) => b.ask).map((b) =>
+      seqOf(byId.get(String(comp(b, ASK)?.through)) ?? b)
+    ),
+  )
+  let finals = new Set(
+    window.flatMap((b) => b.result ? [String(comp(b, RESULT)?.call)] : []),
+  )
+  // A fast tool needs only its final answer. Keep Pending once a previous
+  // request sent it: that immutable prefix cannot be rewritten afterwards.
+  let logical = window.filter((b) =>
+    !b.tool_progress || seqOf(b) <= through ||
+    !finals.has(String(comp(b, 'tool_progress')?.call))
+  )
   for (const ask of ordered(transcript).filter((b) => b.ask)) {
     const reply = logical.filter((b) => {
       if (comp(b, OUTPUT)?.source == ask.entity.eid) return true
@@ -409,7 +423,8 @@ export let project = (
       if (
         opts.resultUpdatesAsUser && b.result &&
         transcript.some((v) =>
-          comp(v, 'tool_progress')?.call == eid && seqOf(v) < seqOf(b)
+          comp(v, 'tool_progress')?.call == eid && seqOf(v) < seqOf(b) &&
+          seqOf(v) <= through
         )
       ) {
         out.push({ kind: 'user', text: `Tool ${id} completed:\n${output}` })

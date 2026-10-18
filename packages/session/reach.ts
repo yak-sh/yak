@@ -63,7 +63,7 @@ type Read = {
 
 let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
   let names = o.bodies
-    ? undefined
+    ? o.comps ? [...o.comps, CONTENT] : undefined
     : o.comps ?? g.vocab.comps.filter((n) => n != CONTENT && n != 'session')
   return {
     g,

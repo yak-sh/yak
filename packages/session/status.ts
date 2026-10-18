@@ -260,7 +260,6 @@ export let sessionStatus = {
         gt(col('seq', 'qi'), col('boundary', 'qa')),
         or(
           wears('result', col('entity', 'qi')),
-          wears('tool_progress', col('entity', 'qi')),
           and(
             wears('content', col('entity', 'qi')),
             ...inputKinds.map((name) => not(wears(name, col('entity', 'qi')))),
@@ -971,7 +970,7 @@ export let sessionStatus = {
           fn(
             'max',
             iff(
-              or(row.input, has('result'), has('tool_progress')),
+              or(row.input, has('result')),
               col('seq', 't'),
               lit(null),
             ),

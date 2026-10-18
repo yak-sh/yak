@@ -119,7 +119,7 @@ export let modelReady = (entries: Bundle[]): boolean => {
   )
   let boundary = through ? seqOf(through) : ask ? seqOf(ask) : 0
   return all.some((b) =>
-    seqOf(b) > boundary && ['input', 'result'].includes(kindOf(b) ?? '')
+    seqOf(b) > boundary && (kindOf(b) == 'input' || !!b.result)
   )
 }
 

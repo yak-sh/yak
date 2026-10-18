@@ -20,8 +20,7 @@ A write has landed, or is landing, and something has to follow from it: a
 value kept consistent, a mail sent, a model asked, a view refreshed. Here that
 something is declared, not hand-rolled. The owner, verbatim (M-39551): "i'm
 expecting basically all behavior to be defined as effects, rules, comps, etc."
-And, finding a whole transcript run as one looping effect (`session_run` still
-is, until D-61816 and T-61786 make each step its own run): "a session is just a
+And, finding a whole transcript run as one looping effect: "a session is just a
 log of data. the rules determine how it changes, including appending tool calls
 or other requests. and the effects handle generically anything in the graph
 that needs doing. there is no "running a session". the session running is the
@@ -125,7 +124,10 @@ What any errand runner that can't lose work lives with:
   `ModelError`'s), which the pool reports only once no try follows, waiting
   at least `retry.after` ms. The handler's fourth argument, `Attempt`, says
   whether this is the `last()` try, and `progressed()` gives a long run that
-  got somewhere its tries back (`session_run` calls it after each reply). The
+  got somewhere its tries back. Native `session_run` effects own one model or
+  context step; each `session_tool` effect owns one tool invocation. Completed
+  requests, context checkpoints and final results owe subsequent steps;
+  synthetic pending progress does not ask the model again. The
   backoff is the pool's, so a handler carries none of its own.
 - **Start-up work is `start: true`.** It's owed once when a process starts
   working the pool, by that process, for the code it has; a CLI command

@@ -243,11 +243,14 @@ tool call, or retry an error. `settle()` runs a transcript until it has nothing
 more to do, under a lease named for it, so two processes never run one
 transcript at once.
 
-That is the runner, and it runs wherever the effects role does, never as a loop
-in the process that asked. `session_run` is an effect this package declares: a
-commit that asks a transcript for a turn (a `using` on an entry, a child
-admitted, a task it holds finishing) owes a run in the same transaction, and any
-process working the `@yaks/effects` pool takes it. `running(g, runner)` is the
+With a durable pool, each `session_run` effect performs one leased step.
+Inputs, completed requests, context checkpoints and final tool results owe
+subsequent steps in the transaction that records them. Each `session_tool`
+effect claims and executes one call independently, so several calls can run
+together. A pending progress record completes the provider protocol but does
+not ask the model again; a final result or new input does.
+
+Any process working the `@yaks/effects` pool takes an owed step. `running(g, runner)` is the
 handler a host registers, lent the models, tools and limits it has; a transcript
 asking for a provider the host was lent nothing for, such as a command line
 `@yaks/spawn` launches, is left to whoever answers it.

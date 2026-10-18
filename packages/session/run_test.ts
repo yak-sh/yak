@@ -823,7 +823,9 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
     await until(async () => statusOf(await transcript(b.g, 's1')) == 'settled')
     assertEquals(asks, 2)
     assertEquals(runs, 1)
-    assertEquals(await kinds(b, 's1'), [
+    let entries = await transcript(b.g, 's1')
+    assertEquals(entries.filter((b) => b.result).length, 1)
+    assertEquals(entries.filter((b) => !b.tool_progress).map(kindOf), [
       'input',
       'ask',
       'call',

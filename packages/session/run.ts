@@ -1,45 +1,12 @@
 import { derivedEid } from '@yaks/graph/identity'
-// The runner: a transcript run until it has nothing more to do, in whichever
-// process claims the run. There is one runner, and it runs wherever the effects
-// role does — a box's `yak serve`, a command's duty thread, a store object on
-// Cloudflare — because it is not a loop in anybody's process. It is the code
-// behind `session_run`, an effect this package declares (./vocab.json): a
-// commit that asks a transcript for a turn writes the run it owes into the
-// graph, and any process working the pool (@yaks/effects) claims it.
-//
-// What asks for a turn is a `using` on an entry: the request @yaks/spawn
-// answers when the provider is a command line, and this answers when it is a
-// provider the host lent a model for ({@link Runner.answers}). A child
-// admitted to run (`admitted`, or legacy `dispatch.state`), a task a transcript holds completing or
-// being cancelled, and a dependency of that task going away owe a run too; a
-// worker coming up sweeps every transcript a restart left owing one.
-//
-// A run is serialized twice. In one process, a trigger for a transcript that
-// is already being run marks the pass to look again instead of starting a
-// second. Across processes, a run holds a lease named for the transcript
-// (@yaks/effects `holding`), renewed while it runs; a run that finds it held
-// leaves the transcript to the holder, which looks again after letting go, so
-// an entry that landed just as it finished is never left unanswered.
-//
-// Children share one bound (`maxChildren`, @yaks/session `ChildLimits`): a
-// spawned transcript waits `queued` until fewer than that many are `active`,
-// and one ending admits the oldest waiting (./admission.ts). Admission is a
-// write to the child's `dispatch`, which owes it a run like any other request.
-//
-// A process leaving (`stopping`) starts no step after it and lets the step in
-// flight finish; what is left is owed, for the next worker's sweep.
-//
-// A model request the provider failed but may yet answer ends the run: the
-// step records it and throws, and the pool runs it again after its backoff, up
-// to `session_run`'s tries (@yaks/effects `Attempt`). A step that gets
-// somewhere gives the run its tries back, so a run going for hours counts the
-// failures in a row, not all it ever met (T-62140).
-//
-// What the runner is lent — the models, the tools, the limits — is the host's
-// ({@link Runner}): nothing here names a machine or a provider.
+// Hosted transcripts advance through independently owed effects: session_run
+// owns one model/context step and session_tool owns one call. Committed inputs,
+// completed requests, context checkpoints and final tool results owe the next
+// step. The session lease covers one step, and the tool runner claims each call.
+// A standalone consumer without a durable pool can explicitly settle a turn.
 
 import type { Event, Handlers } from '@yaks/effects'
-import { held as lease, HOLD, holding } from '@yaks/effects'
+import { enqueue, held as lease, HOLD, holding } from '@yaks/effects'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -303,12 +270,8 @@ let step = async (g: Graph, session: Eid, r: Runner): Promise<Step> => {
   }
 }
 
-// The steps a held transcript takes: until one does nothing, or it ends.
-// Answers the newest seq it saw.
-let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
-  // A terminal transcript owes no model step. Use the already-derived fact
-  // before loading all entry marks; old unresolved calls still keep settled
-  // transcripts runnable and are queried explicitly when that matters.
+// A cancelled task withdraws the work its transcript was doing.
+let prepared = async (g: Graph, session: Eid) => {
   let status = await currentStatus(g, session)
   let held = holds(g)
     ? await g.read(`.task&.claim.session=${session}&.cancelled`)
@@ -321,6 +284,16 @@ let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
     }], { trusted: true })
     status = await currentStatus(g, session)
   }
+  return status
+}
+
+// The steps a held transcript takes: until one does nothing, or it ends.
+// Answers the newest seq it saw.
+let turns = async (g: Graph, session: Eid, r: Runner): Promise<Seen> => {
+  // A terminal transcript owes no model step. Use the already-derived fact
+  // before loading all entry marks; old unresolved calls still keep settled
+  // transcripts runnable and are queried explicitly when that matters.
+  let status = await prepared(g, session)
   let older = status == 'settled' &&
     (await g.read(`.entry.session=${session}&.call&!results&.limit=1`)).length >
       0
@@ -421,23 +394,11 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
       }
     } finally {
       here.delete(session)
-      // The lease is released by held before owing another pass. A ready
-      // replacement may have already swept while we were still draining.
+      // A replacement may have swept before the old worker drained.
       if (r.stopping?.aborted && g.vocab.comp('effect')) {
         let status = await currentStatus(g, session)
         if (['pending', 'running', 'queued'].includes(status)) {
-          await g.apply([{
-            entity: { eid: crypto.randomUUID() },
-            effect: {
-              handler: 'session_run',
-              target: session,
-              kind: 'matched',
-              state: 'pending',
-              attempts: 0,
-              generation: 0,
-              at: new Date().toISOString(),
-            },
-          }], { trusted: true })
+          await enqueue(g, 'session_run', session)
         }
       }
       await r.idle?.(session)
@@ -448,7 +409,7 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
 
 /** Whether a transcript is being run by this process right now. */
 export let runningHere = (g: Graph, session: Eid): boolean =>
-  going(g).has(session)
+  going(g).has(session) || advancing(g).has(session)
 
 /** Whether a native pass still owns work, here or in another process. */
 export let runningAt = async (g: Graph, session: Eid): Promise<boolean> => {
@@ -459,17 +420,78 @@ export let runningAt = async (g: Graph, session: Eid): Promise<boolean> => {
 
 /** The pass this process is running over a transcript, to wait on, if any. */
 export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
-  going(g).get(session)?.done
+  going(g).get(session)?.done ?? advancing(g).get(session)
 
-// The transcripts an event owes a run: the one an entry is in (not a turn the
-// runner itself took, which the run that wrote it carries on from), a
-// transcript itself (admitted, or swept up), or those holding a task that
-// completed or was cancelled, or holding one that contains or requires it. A
-// dependency edge that went away is read as the commit found it.
+// Each owed effect owns one step. Waiting effects retain their durable pool
+// claims; a crash leaves them available to the next worker. The local tail
+// serializes a holder's own steps, since its lease alone permits reentry.
+let steps = new WeakMap<Graph, Map<Eid, Promise<void>>>()
+let advancing = (g: Graph) => {
+  let here = steps.get(g)
+  if (!here) steps.set(g, here = new Map())
+  return here
+}
+
+let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
+  looking(g).get(session)?.()
+  let here = advancing(g)
+  let previous = here.get(session) ?? Promise.resolve()
+  let done = previous.catch(() => {}).then(async () => {
+    if (!await answering(g, session, r)) return
+    await holding(g, `${RUN}/${session}`, {
+      holder: r.holder,
+      hold: r.hold ?? HOLD,
+      gone: r.gone,
+      signal: r.stopping ?? new AbortController().signal,
+      wait: true,
+      poll: 100,
+      report: (error) => r.report?.(error, session, 'lease'),
+    }, async (stopping) => {
+      if (stopping.aborted) return
+      let status = await prepared(g, session)
+      if (ENDED.includes(status)) {
+        await ended(g, session, r)
+        return
+      }
+      if (!await admitted(g, session, r)) return
+      let s = await step(g, session, { ...r, stopping })
+      await r.each?.(s, session)
+      if (ENDED.includes(s.status)) await ended(g, session, r)
+    })
+  }).finally(async () => {
+    if (here.get(session) == done) here.delete(session)
+    if (r.stopping?.aborted) {
+      let status = await currentStatus(g, session)
+      if (['pending', 'running', 'queued'].includes(status)) {
+        await enqueue(g, 'session_run', session)
+      }
+    }
+    await r.idle?.(session)
+  })
+  here.set(session, done)
+  return done
+}
+
+// Each committed input, result, completed request or context checkpoint owes
+// its transcript a step. Admission and sweeps name the transcript directly;
+// a task or dependency change also wakes the transcripts holding that work.
+// A removed dependency is read with the ends it had before the commit.
 let about = async (g: Graph, e: Event): Promise<Eid[]> => {
-  let b = await one(g, e.entity.eid, ['entry', 'ask', 'task', 'edge'])
+  let b = await one(g, e.entity.eid, [
+    'entry',
+    'ask',
+    'task',
+    'edge',
+    'provisional',
+    'attempt',
+  ])
   if (b?.entry) {
-    if (b.ask && !(e.name == 'inference' && e.comp?.receipt)) return []
+    if (
+      b.ask && !(
+        e.name == 'inference' && e.comp?.receipt ||
+        e.name == 'attempt' && comp(b, 'attempt')?.by == null && !b.provisional
+      )
+    ) return []
     return [String(comp(b, 'entry')?.session)]
   }
   if (b && await isSession(g, b.entity.eid)) return [b.entity.eid]
@@ -514,6 +536,11 @@ export let answer = async (
   session: Eid,
   r: Runner,
 ): Promise<void> => {
+  if (g.vocab.comp('effect')) {
+    looking(g).get(session)?.()
+    await enqueue(g, 'session_run', session)
+    return
+  }
   if (runningHere(g, session)) {
     looking(g).get(session)?.()
     return void settle(g, session, r).catch(() => {})
@@ -559,8 +586,8 @@ let release = async (g: Graph, e: Event): Promise<void> => {
 
 /**
  * The code behind `session_run`, for a host's `./effects` facet: every
- * transcript a commit asked for a turn, run here by {@link settle} where this
- * host answers the provider it asks for.
+ * transcript write owes one leased step, where this host answers its provider.
+ * Without a durable pool, a standalone consumer uses {@link settle}.
  *
  * ```ts
  * import { answers, running } from '@yaks/session'
@@ -568,48 +595,54 @@ let release = async (g: Graph, e: Event): Promise<void> => {
  * // export let effects = (host) => running(host.graph, { holder: host.me, … })
  * ```
  */
-export let running = (g: Graph, r: Runner): Handlers => ({
-  ...declared(g, 'session_tool')
-    ? {
-      session_tool: async (e: Event) => {
-        let [call] = await g.get([e.entity.eid])
-        let session = (call?.entry as Comp | undefined)?.session
-        if (!call?.tool_async || !session || !r.asyncTools) return
-        const source = (call.call as Comp | undefined)?.source
-        const [asked] = source ? await g.get([String(source)], ['using']) : []
-        if (
-          r.answers && !await r.answers(asked?.using as Comp | undefined)
-        ) return
-        // The tool runner's claim, not the session's lease, serializes this call.
-        // A restarted effect inspects uncertain execution instead of replaying it.
-        let s = await react(g, String(session), {
-          ...r,
-          owner: r.holder,
-          asyncTools: false,
-          runCall: call.entity.eid,
-        })
-        await r.each?.(s, String(session))
-      },
-    }
-    : {},
-  session_run: async (e, _tx, _write, attempt) => {
-    // Every transcript the event names is answered; a failure in one, a
-    // request to ask again among them, is thrown once the others are.
-    let thrown: unknown
-    for (let session of await about(g, e)) {
-      await answer(g, session, { ...r, attempt }).catch((err) => {
-        thrown ??= err
-      })
-    }
-    if (thrown) throw thrown
-  },
-  ...declared(g, 'session_release')
-    ? { session_release: (e: Event) => release(g, e) }
-    : {},
-  ...declared(g, 'session_wake')
-    ? { session_wake: (e: Event) => woken(g, e) }
-    : {},
-})
+export let running = (g: Graph, runner: Runner): Handlers => {
+  let pooled = !!g.vocab.comp('effect')
+  let r = { ...runner, asyncTools: pooled && !!g.vocab.comp('tool_async') }
+  return {
+    ...declared(g, 'session_tool')
+      ? {
+        session_tool: async (e: Event) => {
+          let [call] = await g.get([e.entity.eid])
+          let session = (call?.entry as Comp | undefined)?.session
+          if (!call?.tool_async || !session || !r.asyncTools) return
+          const source = (call.call as Comp | undefined)?.source
+          const [asked] = source ? await g.get([String(source)], ['using']) : []
+          if (
+            r.answers && !await r.answers(asked?.using as Comp | undefined)
+          ) return
+          // The tool runner's claim, not the session's lease, serializes this call.
+          // A restarted effect inspects uncertain execution instead of replaying it.
+          let s = await react(g, String(session), {
+            ...r,
+            owner: r.holder,
+            asyncTools: false,
+            runCall: call.entity.eid,
+          })
+          await r.each?.(s, String(session))
+        },
+      }
+      : {},
+    session_run: async (e, _tx, _write, attempt) => {
+      // Every transcript the event names is answered; a failure in one, a
+      // request to ask again among them, is thrown once the others are.
+      let thrown: unknown
+      for (let session of await about(g, e)) {
+        await (pooled ? advance : answer)(g, session, { ...r, attempt }).catch(
+          (err) => {
+            thrown ??= err
+          },
+        )
+      }
+      if (thrown) throw thrown
+    },
+    ...declared(g, 'session_release')
+      ? { session_release: (e: Event) => release(g, e) }
+      : {},
+    ...declared(g, 'session_wake')
+      ? { session_wake: (e: Event) => woken(g, e) }
+      : {},
+  }
+}
 
 // A task finished, or a dependency link went away: read as the commit found
 // it, since a deleted edge no longer says which ends it had.

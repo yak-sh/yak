@@ -824,3 +824,8 @@ Effects run after commit and cannot refuse a write. Use
 Without the pool, a crash after commit can lose an effect or observer run. The
 pool coordinates claims and retries; handlers remain responsible for the
 semantics of repeating their external actions.
+
+`enqueue(graph, handler, target)` owes one invocation explicitly, for a resume
+or work left during draining. Ordinary component transitions owe their runs
+through declarations. The handler must be declared and the graph must keep a
+durable effect pool.

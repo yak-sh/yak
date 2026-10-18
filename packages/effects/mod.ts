@@ -86,3 +86,5 @@ export * from './lease.ts'
 export * from './provisional.ts'
 
 export * from './expire.ts'
+
+export { enqueue } from './enqueue.ts'
