@@ -9,11 +9,21 @@ export let workspaceCapabilities = (
   host: Pick<Host, 'graph'>,
   config: Config,
 ): Host['workspaces'] => {
-  if (!config.workspaces) return undefined
-  let configured = config.workspaces
+  // This CLI already has the local computer's OS doors. Availability does not
+  // select a workspace, and remote/unknown placements still never go local.
+  let configured = config.workspaces ?? {
+    connectors: {},
+    receipts: config.db && config.db != ':memory:'
+      ? (config.db.slice(0, config.db.lastIndexOf('/')) || '.') +
+        '/workspace-receipts'
+      : (Deno.env.get('TMPDIR') ?? '/tmp') + '/yak-workspace-receipts-' +
+        Deno.uid(),
+  }
   return {
     connect: async (id) => {
-      let connectors: Record<string, ComputerConnector> = {}
+      let connectors: Record<string, ComputerConnector> = {
+        local: localConnector(),
+      }
       for (let [name, source] of Object.entries(configured.connectors)) {
         if (source.use == '@yaks/machine/local') {
           connectors[name] = localConnector()

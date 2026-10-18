@@ -158,10 +158,6 @@ let nativeFixerProbe = await (async () => {
         with: { cwd: repo, worktrees: dir + '/worktrees' },
       },
     ],
-    workspaces: {
-      connectors: { local: { use: '@yaks/machine/local' } },
-      receipts: dir + '/receipts',
-    },
     machines: {
       // A remote default is not a local attachment. Provisioning must select
       // the explicitly configured process provider, even under another name.
