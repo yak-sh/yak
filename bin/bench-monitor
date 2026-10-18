@@ -24,7 +24,7 @@ if [ "${1:-}" = "--hourly" ]; then
   mkdir -p "$HOME/.cache/yak/bench"
   exec 9>"$HOME/.cache/yak/bench/monitor-hourly.lock"
   flock -n 9 || exit 0
-  for suite in pages page-content person-commands platform-waits worker-health; do
+  for suite in $(deno eval 'import { HOURLY } from "./bench/monitor.ts"; console.log(HOURLY.join(" "))'); do
     "$self" "$suite"
   done
   exit
