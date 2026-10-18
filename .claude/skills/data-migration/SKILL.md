@@ -107,8 +107,15 @@ keeps the newest seven; `bin/backup restore <new dir>` brings the newest back
 will do; otherwise run `bin/backup` before the migration.
 
 The live run belongs to the moment the code that reads the new shape goes
-live: land, then run the migration and `yak restart` back to back. A change
-that drops a column or renames a table is the same, done in that one sitting.
+live. Expansion can precede the handover; contraction waits until every old
+reader and writer has exited. `yak restart` is ready-first: its return says
+replacements are ready and old units were asked to stop, while their in-flight
+steps can still be draining. Capture the old unit names before restarting and
+check that those units have stopped before dropping a column or renaming a
+table. Back-to-back migration and restart commands leave a window where a
+pinned worker still asks for a column that no longer exists. If the replacement
+cannot serve before contraction, stop and drain the affected roles, migrate,
+then start them. A short planned pause preserves the graph's contract.
 
 The script is deleted in the next commit. Its commit is the record, and the
 message says what moved, with counts.
