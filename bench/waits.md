@@ -103,28 +103,57 @@ These suites each have a half-hour monitor entry and no slack. The hourly shell
 dispatch reads `HOURLY` from `monitor.ts`, so adding a suite there also
 schedules it rather than leaving a second hard-coded list behind.
 
+### Remaining local operation families
+
+`operation-remaining` banks 28 additional families as 55 independent figures:
+CLI and MCP design new/decide, effect retry/drop, claim/session check, session
+context/brief/wrap, memory source/around/target/thread/session, hook
+installation, persona sync, search, entity citation verify/check, connection
+need/list, mail send/reply/show/check, visualize anatomy/activity; code sync is
+CLI-only. Preparation and readback are outside the complete production response
+clock. Three samples per collection, three rounds per run and three runs per
+acceptance bank the best run with zero slack. No existing baseline, budget or
+floor rises.
+
+The fixture has 2,000 tasks, a real three-entry transcript, a comment thread, an
+independent tracked two-file checkout, owned persona files and received mail.
+Connection requests create credential-free custom integrations. Mail figures
+measure queued requests and attention marks, not transport delivery. Duties are
+disabled. CLI network permission is loopback-only. Activity captures observe
+queries on the serving host; the native CLI reads that same host over HTTP.
+
+```sh
+deno run -A bench/run.ts operation-remaining accept
+deno run -A bench/run.ts operation-remaining check
+```
+
 ### Registered doors still outside these fixtures
 
-`inventory(config?)` in `operation-commands.ts` enumerates declared tools and
-CLI commands without opening a graph; each collection also verifies its actual
-HTTP tools/list. The starter-plus-SQLite fixture declares 41 tools (38 on HTTP);
-the configured box inventory has 95 CLI doors and 82 declared tools. The
-selected families above do not establish universal coverage. To repeat the
-configured inventory without live writes:
+`inventory(config?)` in `operation-commands.ts` lists declared tools, CLI doors,
+HTTP-eligible declarations and measured operation names without opening a graph.
+The configured box has 96 CLI doors (including `trace`) and 82 declared tools.
+HTTP tools/list is also checked by collection; declaration is not visibility.
 
 ```sh
 deno eval 'import { inventory } from "./bench/operation-commands.ts"; import { read } from "./packages/cli/config.ts"; console.log(JSON.stringify(await inventory(read(Deno.env.get("HOME") + "/.yak/yak.json")), null, 2))'
 ```
 
-Remaining independent registered families include admin commands; builder
-build/choose/supply; citation check/verify; code sync; connection list/need;
-design new/decide; effect retry/drop; mail check/reply/send/show; model list;
-memory around/session/source/target/thread; persona sync; search; session
-cache/check/list/new/peek/send/spawn/stop/wait/listen/brief; vector check;
-visualize activity/anatomy; and land/restart/serve. Many can use isolated
-fixtures; external operations need separate safe boundaries, not a generic
-read/write result. Journal undo and box graph-value tools are not registered
-CLI/HTTP tools in this inventory, so no invented command is counted.
+MCP code sync has no `process.cwd`: its fallback runner omits the process
+provenance that the local CLI runner supplies. File citation verification and
+MCP land have the same boundary constraint. These are not replaced by direct
+handler calls or manufactured provenance. Entity citations require no checkout
+and are measured through both doors.
+
+The following remain explicitly **unbanked**, not inferred from local startup:
+external admin/deploy/payment/auth/OAuth, provider model listing and session
+new/send/spawn, managed session stop/wait/peek/list, provider builder execution,
+builder choose/supply, native vector-index checks, session cache/listener, CLI
+init/trace/land and serve/work/restart lifecycle. Some have safe isolated
+candidates but are not measured here; others require external availability,
+credentials, spending or managed lifecycle ownership. None was executed live.
+Upstream pushes, live service handovers, owner graph mutation and unowned
+signals are outside this fixture. `operation-remaining` participates in the
+shared hourly monitor; its scheduling bound is owned by T-127825.
 
 ## Boundaries and exclusions
 
