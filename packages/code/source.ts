@@ -175,6 +175,7 @@ export let sourceFrames = (
     let { root, common } = await repo()
     return [...new Set([root, ...await rootsOf(common)])]
   }, ROOTS)
+  let repository = repositoryCatalog(options.url)
   let origins = options.origins ?? [new URL(options.url).origin]
   let local = (file: string) => file.startsWith('file:') || file[0] == '/'
   return async (frames, commit) => {
@@ -191,16 +192,16 @@ export let sourceFrames = (
       function: frames[i].function,
       line: frames[i].line,
     }))
-    let repository = options.workspace
+    let identity = options.workspace
       ? repositoryEid(common, options.workspace)
-      : await catalogRepository(options.url, common)
+      : await repository(common)
     // Source classification still works while the catalog is migrating or
     // unavailable. Optional symbol enrichment must not recursively break error
     // ingestion, nor guess a computer from a path shared by several contexts.
-    if (!repository) {
+    if (!identity) {
       return frames.map((f, i) => ({ ...f, app: paths[i] != null }))
     }
-    let resolved = await resolveFrames(catalog, repository, blobs, places)
+    let resolved = await resolveFrames(catalog, identity, blobs, places)
     return frames.map((f, i) => ({ ...f, ...resolved[i] }))
   }
 }
@@ -217,9 +218,12 @@ export let catalogRepository = async (
   send: typeof fetch = fetch,
 ): Promise<string | undefined> => {
   let at = new URL('/query', url)
-  // Read the bounded repository inventory rather than using an old process's
-  // cached common-directory identity index during coordinated schema cutover.
-  at.searchParams.set('q', '.repository')
+  // One common directory can be placed on several computers. Retain every
+  // matching context to reject ambiguity, but never fetch unrelated repositories.
+  at.searchParams.set(
+    'q',
+    `.repository.common=${JSON.stringify(common)} ?repository`,
+  )
   let rows: Bundle[]
   try {
     let response = await send(at, { signal: AbortSignal.timeout(5000) })
@@ -235,4 +239,25 @@ export let catalogRepository = async (
       r.workspace.length > 0
   })
   return placed.length == 1 ? placed[0].entity.eid : undefined
+}
+
+/** Frame attribution shares one repository lookup across concurrent errors.
+ * Recheck placement after a minute, including absent/ambiguous results: optional
+ * enrichment cannot flood the serving graph while an error spool drains. */
+export let repositoryCatalog = (
+  url: string,
+  send: typeof fetch = fetch,
+  now = Date.now,
+) => {
+  let known = new Map<
+    string,
+    { at: number; answer: Promise<string | undefined> }
+  >()
+  return (common: string): Promise<string | undefined> => {
+    let prior = known.get(common)
+    if (prior && now() - prior.at < 60_000) return prior.answer
+    let answer = catalogRepository(url, common, send)
+    known.set(common, { at: now(), answer })
+    return answer
+  }
 }

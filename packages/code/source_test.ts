@@ -242,3 +242,50 @@ test('unavailable catalog cannot recursively fail error ingestion', async () => 
     undefined,
   )
 })
+
+// Many immutable spool records can carry the same frames. Their optional
+// enrichment shares one serving-graph request, then refreshes context later.
+let repositoryAsked: string[] = []
+let repositoryClock = 0
+let repositoryAnswer = Promise.withResolvers<Response>()
+let repositoryLookup = (await import('./source.ts')).repositoryCatalog(
+  'http://catalog.test',
+  ((url: string | URL | Request) => {
+    repositoryAsked.push(String(url))
+    return repositoryAnswer.promise
+  }) as typeof fetch,
+  () => repositoryClock,
+)
+let repositoryBurst = Promise.all(
+  Array.from({ length: 100 }, () => repositoryLookup('/repo/.git')),
+)
+repositoryAnswer.resolve(
+  Response.json([{
+    entity: { eid: 'qualified' },
+    repository: { common: '/repo/.git', workspace: 'one' },
+  }]),
+)
+let repositoryBurstAnswer = await repositoryBurst
+let repositoryLater = await repositoryLookup('/repo/.git')
+test('a burst of error frames shares a narrow repository attribution lookup', () => {
+  equal(repositoryBurstAnswer, Array(100).fill('qualified'))
+  equal(repositoryLater, 'qualified')
+  equal(repositoryAsked.length, 1)
+  let query = new URL(repositoryAsked[0]).searchParams.get('q')!
+  equal(query.includes('.repository.common='), true)
+})
+let refreshCalls = 0, refreshTime = 0
+let refreshLookup = (await import('./source.ts')).repositoryCatalog(
+  'http://catalog.test',
+  (() => {
+    refreshCalls++
+    return Promise.resolve(Response.json([]))
+  }) as typeof fetch,
+  () => refreshTime,
+)
+await refreshLookup('/missing')
+await refreshLookup('/missing')
+refreshTime = 60_000
+await refreshLookup('/missing')
+test('unknown repository placement is bounded but not remembered forever', () =>
+  equal(refreshCalls, 2))
