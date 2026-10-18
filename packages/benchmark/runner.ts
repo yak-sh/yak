@@ -70,7 +70,8 @@ export type Options = {
   host?: () => Host | Promise<Host>
   reporters?: Reporters
   files?: Files
-  /** A box-wide flock, compatible with shell flock. Never unlink this file. */
+  /** A box-wide flock, held for each round and publication, so queued suites
+   * can measure between rounds. Compatible with shell flock; never unlink it. */
   lock?: string
   /** Scoped observations may measure only part of a suite, including new work.
    * Unbanked measurements are reported as measured; acceptance retains the
@@ -94,20 +95,26 @@ export let run = async (
     read: true,
     write: true,
   })
-  console.error(`benchmark: waiting for ${options.lock}`)
-  await lock.lock(true)
-  try {
-    await lock.truncate(0)
-    await lock.write(new TextEncoder().encode(`${Deno.pid}\n`))
-    return await execute(suite, options)
-  } finally {
-    await lock.unlock()
+  let exclusive: Exclusive = async (work) => {
+    await lock.lock(true)
+    try {
+      await lock.truncate(0)
+      await lock.write(new TextEncoder().encode(`${Deno.pid}\n`))
+      return await work()
+    } finally {
+      await lock.unlock()
+    }
   }
+  return await execute(suite, options, exclusive)
 }
+
+type Exclusive = <T>(work: () => Promise<T>) => Promise<T>
+let direct: Exclusive = (work) => work()
 
 let execute = async (
   suite: Suite | CollectedSuite,
   options: Options,
+  exclusive: Exclusive = direct,
 ): Promise<Run> => {
   let rounds = options.rounds ?? 3
   let mode = options.mode ?? 'run'
@@ -158,55 +165,65 @@ let execute = async (
     throw new Error('Expected a positive integer run count')
   }
   let store = options.files ?? files
-  let base: Baseline | undefined
-  if (mode != 'run') {
-    try {
-      base = JSON.parse(await store.read(options.baseline!))
-    } catch (error) {
-      if (mode == 'check' || !(error instanceof Deno.errors.NotFound)) {
-        throw error
+  let readBase = async (): Promise<Baseline | undefined> => {
+    let base: Baseline | undefined
+    if (mode != 'run') {
+      try {
+        base = JSON.parse(await store.read(options.baseline!))
+      } catch (error) {
+        if (mode == 'check' || !(error instanceof Deno.errors.NotFound)) {
+          throw error
+        }
       }
+      if (mode == 'check' || base !== undefined) validate(base!)
     }
-    if (mode == 'check' || base !== undefined) validate(base!)
+    return base
   }
+  await readBase()
   let context = await (options.host ?? host)()
   let runs: Run[] = []
   for (let i = 0; i < repeats; i++) {
-    runs.push(await measure(suite, rounds, context))
+    runs.push(await measure(suite, rounds, context, exclusive))
   }
-  let current = best(runs)
-  current.tolerance = mode == 'accept'
-    ? options.tolerance!
-    : base?.tolerance ?? null
-  if (mode == 'accept') current.verdict = 'accepted'
-  if (base && mode == 'check') {
-    current.regressions = compare(base, current, options.coverage)
-    current.verdict = current.regressions.length
-      ? 'regressed'
-      : covered(base, current)
-      ? 'passed'
-      : 'measured'
-  }
-  // An exact acceptance banks the suite as measured: a baseline banked on
-  // another runtime or workload, or for benches the suite no longer has, is
-  // no reference for it.
-  let previous = !base
-    ? undefined
-    : options.coverage == 'subset'
-    ? base
-    : incomparable(base, current)
-    ? undefined
-    : {
-      ...base,
-      benches: base.benches.filter((b) =>
-        current.benches.some((c) => c.name == b.name)
-      ),
+  // A different acceptance may have banked while our rounds yielded. Read its
+  // baseline under the publication lock before comparing or moving the best.
+  let current = await exclusive(async () => {
+    let base = await readBase()
+    let current = best(runs)
+    current.tolerance = mode == 'accept'
+      ? options.tolerance!
+      : base?.tolerance ?? null
+    if (mode == 'accept') current.verdict = 'accepted'
+    if (base && mode == 'check') {
+      current.regressions = compare(base, current, options.coverage)
+      current.verdict = current.regressions.length
+        ? 'regressed'
+        : covered(base, current)
+        ? 'passed'
+        : 'measured'
     }
-  let accepted = mode == 'accept'
-    ? baseline(runs, options.tolerance!, previous, options.slower)
-    : undefined
-  await store.write(options.output, current)
-  if (accepted) await store.write(options.baseline!, accepted)
+    // An exact acceptance banks the suite as measured: a baseline banked on
+    // another runtime or workload, or for benches the suite no longer has, is
+    // no reference for it.
+    let previous = !base
+      ? undefined
+      : options.coverage == 'subset'
+      ? base
+      : incomparable(base, current)
+      ? undefined
+      : {
+        ...base,
+        benches: base.benches.filter((b) =>
+          current.benches.some((c) => c.name == b.name)
+        ),
+      }
+    let accepted = mode == 'accept'
+      ? baseline(runs, options.tolerance!, previous, options.slower)
+      : undefined
+    await store.write(options.output, current)
+    if (accepted) await store.write(options.baseline!, accepted)
+    return current
+  })
   let report: Awaited<ReturnType<Reporters>> = []
   try {
     report = await (options.reporters ?? reporters)(context)
@@ -236,6 +253,7 @@ let measure = async (
   suite: Suite | CollectedSuite,
   rounds: number,
   context: Host,
+  exclusive: Exclusive,
 ): Promise<Run> => {
   let benches: Result[] = suite.benches.map((b) => ({
     name: b.name,
@@ -248,29 +266,35 @@ let measure = async (
     spans: null,
   }))
   for (let round = 0; round < rounds; round++) {
-    let collected = 'collect' in suite ? await suite.collect(round) : undefined
-    if (collected) {
-      sameNames(
-        suite.benches,
-        Object.keys(collected).map((name) => ({ name, unit: 'collected' })),
-      )
-    }
-    for (let i = 0; i < benches.length; i++) {
-      let b = benches[i]
-      let input = collected
-        ? collected[b.name]
-        : await (suite as Suite).benches[i].sample(round)
-      let raw = samples(input)
-      b.samples.push(...raw.map(({ spans: _spans, ...s }) => ({ ...s, round })))
-      let middle = [...raw].sort((a, b) =>
-        a.value - b.value
-      )[Math.floor(raw.length / 2)]
-      b.rounds.push({
-        index: round,
-        median: median(raw.map((s) => s.value)),
-        spans: middle.spans ?? null,
-      })
-    }
+    await exclusive(async () => {
+      let collected = 'collect' in suite
+        ? await suite.collect(round)
+        : undefined
+      if (collected) {
+        sameNames(
+          suite.benches,
+          Object.keys(collected).map((name) => ({ name, unit: 'collected' })),
+        )
+      }
+      for (let i = 0; i < benches.length; i++) {
+        let b = benches[i]
+        let input = collected
+          ? collected[b.name]
+          : await (suite as Suite).benches[i].sample(round)
+        let raw = samples(input)
+        b.samples.push(
+          ...raw.map(({ spans: _spans, ...s }) => ({ ...s, round })),
+        )
+        let middle = [...raw].sort((a, b) =>
+          a.value - b.value
+        )[Math.floor(raw.length / 2)]
+        b.rounds.push({
+          index: round,
+          median: median(raw.map((s) => s.value)),
+          spans: middle.spans ?? null,
+        })
+      }
+    })
   }
   for (let b of benches) {
     b.median = median(b.rounds.map((r) => r.median))

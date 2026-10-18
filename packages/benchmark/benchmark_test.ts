@@ -2,6 +2,7 @@
  * filesystem and host effects in memory so no throughput work runs as a test. */
 import { equal, match, ok, test, throws } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import {
   baseline,
   type Bench,
@@ -661,4 +662,68 @@ test('zero slack stays strict through noisy repeated banking and later acceptanc
   ok(error instanceof Regressed)
   await run(f.suite, { ...options, mode: 'accept', tolerance: .5 })
   equal(banked(f), { work: [100, 0] })
+})
+
+test('queued suites measure between rounds without losing a faster acceptance', async () => {
+  let tail = Promise.resolve()
+  let waiting = Promise.withResolvers<void>()
+  let requests = 0
+  // The filesystem boundary queues independent handles like blocking flock.
+  using _open = stub(Deno, 'open', () => {
+    let release: (() => void) | undefined
+    return Promise.resolve({
+      async lock() {
+        let before = tail
+        let next = Promise.withResolvers<void>()
+        tail = next.promise
+        release = next.resolve
+        if (++requests == 2) waiting.resolve()
+        await before
+      },
+      unlock() {
+        release!()
+        return Promise.resolve()
+      },
+      truncate: () => Promise.resolve(),
+      write: (bytes: Uint8Array) => Promise.resolve(bytes.length),
+      [Symbol.dispose]() {},
+    } as unknown as Deno.FsFile)
+  })
+  let f = fixture(), order: string[] = []
+  let fast: Promise<Run> | undefined
+  let options = {
+    ...f.options,
+    lock: 'shared',
+    mode: 'accept' as const,
+    tolerance: 0,
+  }
+  let slow = run({
+    ...f.suite,
+    benches: [{
+      name: 'work',
+      unit: 'ms',
+      sample: async (round) => {
+        order.push(`slow${round}`)
+        if (round == 0) {
+          fast = run({
+            ...f.suite,
+            benches: [{
+              name: 'work',
+              unit: 'ms',
+              sample: () => {
+                order.push('fast')
+                return 10
+              },
+            }],
+          }, { ...options, output: 'fast', rounds: 1 })
+          await waiting.promise
+        }
+        return 100
+      },
+    }],
+  }, { ...options, output: 'slow', rounds: 2 })
+  await slow
+  await fast
+  equal(order, ['slow0', 'fast', 'slow1'])
+  equal(JSON.parse(f.saved.get('baseline')!).benches[0].median, 10)
 })

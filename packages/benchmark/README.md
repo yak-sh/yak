@@ -225,8 +225,12 @@ an optional previous baseline to retain unmeasured benches; `compare()` accepts
 the coverage as its third argument.
 
 `lock` optionally names a box-wide flock file, shared across worktrees and
-compatible with shell `flock`. Never unlink it. Measurements run sequentially;
-the lock cannot prevent contention from programs that do not take it.
+compatible with shell `flock`. Never unlink it. Each round holds the lock
+through its fixture cleanup, then releases it so a queued suite can measure.
+Publishing results and banking a baseline also take the lock and reread the
+latest baseline, so an acceptance cannot undo a faster one banked between
+rounds. Measurements run sequentially; the lock cannot prevent contention from
+programs that do not take it.
 
 ## Recorded spans
 
