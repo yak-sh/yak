@@ -67,7 +67,7 @@ import {
 } from '@yaks/process'
 import type { Store } from '@yaks/sqlite'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
-import { add, follow, lacking, printOf } from '@yaks/sqlite/follow'
+import { add, follow, printOf } from '@yaks/sqlite/follow'
 import { filler, SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
 import type { Opened } from '@yaks/sqlite/db'
 import {
@@ -491,14 +491,6 @@ let composed = async (
     // Facet imports may have awaited while another process announced work.
     // Refuse again on the retained connection before domain schema or factories.
     migrations(sql).ready()
-    // A reader reads what the file holds: a property whose column no writer
-    // has added yet reads as null, and a component whose table no writer has
-    // created yet is worn by no entity, rather than failing the read.
-    let behind = opts.readOnly
-      ? lacking(sql, vocab, derived)
-      : { derived: {}, absent: [] }
-    Object.assign(derived, behind.derived)
-
     part?.('host')
     let chosen = plugins.find(([name]) => name == '@yaks/blob')?.[1].store as
       | Backend
@@ -576,7 +568,6 @@ let composed = async (
         host = built
         store = storage(sql, vocab, {
           derived,
-          absent: behind.absent,
           backed,
           extend,
           number: config.numbers

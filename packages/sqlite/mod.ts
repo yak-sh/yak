@@ -391,7 +391,7 @@ export let storage = (
   vocab: Vocab,
   base: Opts = {},
 ): Store => {
-  let opts = options(driver, base)
+  let opts = options(driver, vocab, base)
   let identity = (eids: string[], comps?: string[]) =>
     get(driver, vocab, eids, opts(), comps)
   let report = base.report ?? logged

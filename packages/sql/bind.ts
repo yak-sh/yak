@@ -124,6 +124,8 @@ import { absentDialect } from './absent.ts'
 import type { ArchetypeSet } from './archetype.ts'
 
 export type BindOpts = {
+  /** Declared indices absent from this physical schema snapshot. */
+  missingIndexes?: readonly string[]
   /** Canonical root candidates; references and operands remain unrestricted. */
   eids?: readonly string[]
   /** Permission gates compare canonical eids without human-id addressing. */
@@ -2438,6 +2440,17 @@ export let prepared = (
   scope?: Scope,
   hear?: () => void,
 ): { opts: BindOpts; spine?: string; lower: () => Select } => {
+  if (opts.missingIndexes?.length && d.indexed) {
+    let original = d
+    let missing = new Set(opts.missingIndexes)
+    d = {
+      ...d,
+      indexed: (comp, index) =>
+        missing.has(index)
+          ? original.table(comp)
+          : original.indexed!(comp, index),
+    }
+  }
   d = absentDialect(d, vocab, opts.absent)
   if (opts.visibility) {
     return {
@@ -2478,6 +2491,7 @@ export let prepared = (
     Object.defineProperty(ctx.archetypes, 'held', { get: () => held.held })
   }
   let captured: BindOpts = {
+    ...opts.missingIndexes ? { missingIndexes: opts.missingIndexes } : {},
     derived: ctx.derived,
     backed: ctx.backed,
     extend: ctx.ext,

@@ -957,7 +957,7 @@ test('explicit installation repairs a column; reading does not', () => {
     s.install()
     s.tx((tx) => tx.patch([{ entity: { eid: 'rex' }, pet: { name: 'Rex' } }]))
     b.query({ t: 'alter table', table: 'pet', drop: 'sound' })
-    assertThrows(() => s.get(['rex']), Error, 'no such column')
+    assertEquals(s.get(['rex'])[0].pet, { name: 'Rex' })
     assertEquals(cols(a, 'pet').includes('sound'), false)
     s.install()
     assertEquals(s.get(['rex'])[0].pet, { name: 'Rex' })

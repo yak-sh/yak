@@ -22,6 +22,13 @@ The application supplies the connection. The package owns the schema, reads,
 writes, and transactions; the [graph](../graph/README.md#data-model) owns
 admission, preconditions, plugins, and deletion decisions.
 
+A retained reader follows the physical schema in each read snapshot. If another
+connection drops a declared column, that property reads as never given; if it
+drops an index, queries continue without forcing that index. Read options are
+rebound when the schema changes, including when a missing column returns. Reads
+do not recreate retired columns or indexes. Writes that explicitly name a
+retired property still require code that understands the migration.
+
 ## Usage
 
 ```sh

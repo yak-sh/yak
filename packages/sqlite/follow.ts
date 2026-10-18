@@ -148,9 +148,10 @@ export let lacking = (
   driver: Driver,
   vocab: Vocab,
   derived: Derived = {},
+  physical = false,
 ): { derived: Derived; absent: string[] } => {
   let mark = installed(driver)?.split(' ')[0]
-  if (mark == plan(vocab, derived, !!driver.file).print) {
+  if (!physical && mark == plan(vocab, derived, !!driver.file).print) {
     return { derived: {}, absent: [] }
   }
   let was = standing(driver, vocab)

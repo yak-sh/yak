@@ -17,6 +17,8 @@ let plans = new WeakMap<Vocab, Map<string, Plan | null>>()
 let generated = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$|^[0-9a-f]{40,64}$/i
 
 let inputs = (ast: And, v: Vocab, o: BindOpts): Inputs | undefined => {
+  if (o.missingIndexes?.length) return
+
   if (o.visibility || o.eids) return
   if (o.extend?.some((e) => e.compile.pred || e.compile.and || e.compile.or)) {
     return

@@ -20,7 +20,7 @@ export let storage = (
   vocab: Vocab,
   base: BindOpts = {},
 ): Store => {
-  let opts = options(driver, base)
+  let opts = options(driver, vocab, base)
   let sql = statements(driver)
   let refuse = (): never => {
     throw new Refused('a read-only store cannot write')

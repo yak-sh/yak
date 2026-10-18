@@ -39,7 +39,6 @@ test('the web reader sees commits and closes after a refused query', async () =>
     )
     assertEquals((await reader.get(['two']))[0].doc, {
       title: 'Second',
-      body: null,
     })
     await assertRejects(() => Promise.resolve(reader.read('.unknown')))
   } finally {
