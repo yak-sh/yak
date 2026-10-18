@@ -49,6 +49,7 @@ type Built =
   | 'search'
   | 'reply'
   | 'runner'
+  | 'defer'
 
 /** Storage and runtime capabilities; the assembly owns neither their IO nor lifetime. */
 export type Binding = {
@@ -79,7 +80,12 @@ export type Binding = {
 export type Assembly = {
   words: Words
   /** Bind the loaded facets to the host's capabilities. Services are returned for its scheduler. */
-  bind: (binding: Binding) => { host: Host; services: Duty[] }
+  bind: (binding: Binding) => {
+    host: Host
+    services: Duty[]
+    /** Await after draining admitted work, before closing graph or reporter. */
+    close: () => Promise<void>
+  }
 }
 export type AssemblyOpts = {
   /** Read factories admit no imperative work; loaded before binding. */
@@ -267,6 +273,8 @@ export let assemble = (
   return {
     words,
     bind: (binding) => {
+      let resources = new AsyncDisposableStack()
+      let closing: Promise<void> | undefined
       let observed = binding.observed ?? opts.observed ?? compositionAnatomy(
         plugins.map(([name, , , facets]) => ({ name, facets })),
         roles,
@@ -327,6 +335,7 @@ export let assemble = (
       let toolPart = part
       let host: Host = {
         ...lent,
+        defer: (release) => resources.defer(release),
         config,
         roles,
         vocab,
@@ -637,7 +646,11 @@ export let assemble = (
       })
       // Deferred capabilities run after composition's timing spans have ended.
       toolPart = undefined
-      return { host, services: duties }
+      return {
+        host,
+        services: duties,
+        close: () => closing ??= resources.disposeAsync(),
+      }
     },
   }
 }

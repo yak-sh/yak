@@ -393,6 +393,13 @@ let composed = async (
     config.tracker && !opts.readOnly ? revision() : undefined,
     { command: command(Deno.args), roles: roles.join(',') },
   )
+  let cleanup = async (step: string, release: () => void | Promise<void>) => {
+    try {
+      await release()
+    } catch (error) {
+      await report(error, { tags: { step } })
+    }
+  }
   let opened: Opened | undefined
   let open = async (): Promise<Opened> => {
     let driver = opts.readOnly
@@ -806,6 +813,7 @@ let composed = async (
     // and awaited by `close`.
     let draining: Promise<void> | undefined
     let drained = () => draining ??= drain(fx, (line) => console.error(line))
+    let closing: Promise<void> | undefined
     // This process, written in, with the roles it serves. First among the
     // writes, because everything after is attributed to it and `created.by`
     // is a reference: a process attributing writes to an entity nothing
@@ -844,61 +852,51 @@ let composed = async (
         dutiesHost.stop()
         if (effecting && !opts.readOnly) void drained()
       },
-      close: async (code?: number) => {
-        await retire()
-        stopping.abort()
-        dutiesHost.stop()
-        await opts.thread?.close().catch(lose)
-        await ending
-        if (effecting && !opts.readOnly) await drained()
-        await dutiesHost.close()
-        let shut = async () => {
-          captureControl?.close()
-          await recorded?.close()
-          try {
-            await opts.reader?.close?.()
-          } catch (error) {
-            await report(error, { tags: { step: 'close reader' } })
+      close: (code?: number) =>
+        closing ??= (async () => {
+          await retire()
+          stopping.abort()
+          dutiesHost.stop()
+          await opts.thread?.close().catch(lose)
+          await ending
+          if (effecting && !opts.readOnly) await drained()
+          await dutiesHost.close()
+          await cleanup('dispose plugins', built.close)
+          let shut = async () => {
+            await cleanup('close capture', () => captureControl?.close())
+            await cleanup('close traces', () => recorded?.close())
+            await cleanup('close reader', () => opts.reader?.close?.())
+            await cleanup('close storage', () => sql.close())
+            await report.close()
           }
-          await report.close()
+          // A call whose tool has not returned by now never will in this
+          // process. Ended as interrupted, rather than left claimed for a sweep
+          // to run again in a process nobody asked — a server, a tail, a land in
+          // somebody else's checkout.
+          if (!opts.readOnly) {
+            await calls?.interrupt(
+              `interrupted: this process ended${
+                code == null ? '' : ` with code ${code}`
+              } before the tool returned`,
+            ).catch((e) => report(e, { tags: { step: 'interrupt calls' } }))
+          }
+          if (!self || opts.process === false || opts.readOnly) return shut()
           try {
-            sql.close()
-          } catch { /* already closed */ }
-        }
-        // A call whose tool has not returned by now never will in this
-        // process. Ended as interrupted, rather than left claimed for a sweep
-        // to run again in a process nobody asked — a server, a tail, a land in
-        // somebody else's checkout.
-        if (!opts.readOnly) {
-          await calls?.interrupt(
-            `interrupted: this process ended${
-              code == null ? '' : ` with code ${code}`
-            } before the tool returned`,
-          ).catch((e) => report(e, { tags: { step: 'interrupt calls' } }))
-        }
-        if (!self || opts.process === false || opts.readOnly) return shut()
-        try {
-          await record([...await released(g!, selfEid()), ended(code)])
-        } catch (e) {
-          await report(e, { tags: { step: 'close host' } })
-        }
-        await shut()
-      },
+            await record([...await released(g!, selfEid()), ended(code)])
+          } catch (e) {
+            await report(e, { tags: { step: 'close host' } })
+          }
+          await shut()
+        })(),
     }
   } catch (error) {
     try {
-      captureControl?.close()
-      await recorded?.close()
+      await report(error, { tags: { step: 'compose host' } })
+      await cleanup('close capture', () => captureControl?.close())
+      await cleanup('close traces', () => recorded?.close())
+      await cleanup('close storage', () => opened?.close())
     } finally {
-      try {
-        try {
-          await report(error, { tags: { step: 'compose host' } })
-        } finally {
-          await report.close()
-        }
-      } finally {
-        opened?.close()
-      }
+      await report.close()
     }
     throw error
   }

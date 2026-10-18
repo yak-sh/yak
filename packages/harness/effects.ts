@@ -3,7 +3,7 @@
 // lent this machine, as the harness on its own lends it (./local.ts `here`).
 // @yaks/session declares the effect and knows nothing of a machine; the
 // harness handles it because the machine is the harness's to lend. What the
-// box opened is let go when the host stops.
+// box opened is let go after the host's admitted work drains.
 
 import { promptEntry } from '@yaks/context'
 import { type Comp, derivedEid, Refused } from '@yaks/graph'
@@ -37,9 +37,7 @@ export let effects = (
       ? options.compactAt
       : undefined,
   })
-  host.stopping.addEventListener('abort', () => void lent.release?.(), {
-    once: true,
-  })
+  host.defer(() => lent.release?.())
   let binding = machines(host.graph, host.machines, host.workspaces)
   let release = async (id: string) => {
     let [session] = await host.graph.get([id])

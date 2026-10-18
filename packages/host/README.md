@@ -44,8 +44,11 @@ an import failure is an error.
 `assembly(config, roles, load, opts)` loads those facets and builds their
 vocabulary. Its `words` lets the concrete host prepare storage before
 `bind(binding)` builds the graph, effect bindings, tools, runner and routes. The
-returned services are handed to the host's scheduler. No assembly starts a
-service or owns shutdown.
+returned services are handed to the host's scheduler. `Host.defer(release)`
+registers plugin resource cleanup. The concrete host stops admission through
+`Host.stopping`, drains effects and services, then awaits the binding's
+`close()` before closing its graph or reporter. Cleanup runs once in reverse
+registration order; a failed cleanup still lets the remaining cleanups run.
 
 A host with synchronous transactions can call `prepare(config, roles, load)`
 before opening storage, then `assemble(config, roles, load, prepared, opts)`

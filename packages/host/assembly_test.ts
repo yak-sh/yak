@@ -74,6 +74,42 @@ let config = { plugins: ['library'] }
 // Warm the shared vocabulary independently of the behavior being measured.
 await assembly(config, ['graph'], loading([]))
 
+let disposal = (await assembly(config, ['graph'], loading([]))).bind(binding())
+test('assembly disposal awaits resources once and continues after a failure', async () => {
+  let entered = Promise.withResolvers<void>()
+  let release = Promise.withResolvers<void>()
+  let seen: string[] = []
+  let defect = new Error('cleanup failed')
+  disposal.host.defer(async () => {
+    await disposal.host.graph.apply([
+      { entity: { eid: 'closed' }, book: { title: 'released' } },
+    ])
+    seen.push('released')
+  })
+  disposal.host.defer(async () => {
+    entered.resolve()
+    await release.promise
+    seen.push('failed')
+    throw defect
+  })
+  let closing = disposal.close()
+  await entered.promise
+  equal(disposal.close() === closing, true)
+  equal(seen, [])
+  release.resolve()
+  let caught: unknown
+  try {
+    await closing
+  } catch (error) {
+    caught = error
+  }
+  equal(caught, defect)
+  equal(seen, ['failed', 'released'])
+  equal((await disposal.host.graph.get(['closed']))[0].book, {
+    title: 'released!',
+  })
+})
+
 test('portable assembly imports only the facets of its served roles', async () => {
   let imported: string[] = []
   await assembly(config, ['graph'], loading(imported))

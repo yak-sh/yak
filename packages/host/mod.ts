@@ -197,6 +197,9 @@ export interface Host {
    * Context identifies the failing work; the host owns its sinks and lifetime. */
   report?: (error: unknown, context?: Partial<Context>) => void | Promise<void>
   stopping: AbortSignal
+  /** Release a plugin's resources after admitted work has drained, while the
+   * graph and reporter are still open. The concrete host awaits assembly.close. */
+  defer: (release: () => void | Promise<void>) => void
 }
 
 export type {

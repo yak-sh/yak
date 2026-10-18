@@ -1741,10 +1741,7 @@ export let react = async (
             'Response interrupted: ' + String(e),
           ),
       ],
-      defect ||
-        transportFailure(e) && !retried
-        ? { error: e, phase }
-        : undefined,
+      defect || transportFailure(e) ? { error: e, phase } : undefined,
     )
     // Text streamed before the failure stays, unless recovery took the
     // attempt from this worker.

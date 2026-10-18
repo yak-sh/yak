@@ -75,6 +75,47 @@ let reporting = await (async () => {
   }
 })()
 
+let disposal = await (async () => {
+  let dir = await Deno.makeTempDir(), log = console.error
+  console.error = () => {}
+  try {
+    let spool = `${dir}/spool`
+    let host = await compose(
+      { db: ':memory:', tracker: { spool } },
+      ['graph'],
+    )
+    let released = false
+    host.defer(() => {
+      released = true
+    })
+    host.defer(() => {
+      throw new Error('plugin teardown failed')
+    })
+    let closing = host.close()
+    let same = closing === host.close()
+    await closing
+    let errors = (await Array.fromAsync(files(spool).source()))
+      .flatMap((record) => record.rows).filter((row) => row.error)
+    return { released, same, errors }
+  } finally {
+    console.error = log
+    await Deno.remove(dir, { recursive: true })
+  }
+})()
+
+test('plugin cleanup failures are durable and remaining resources close once', () => {
+  equal(disposal.released, true)
+  equal(disposal.same, true)
+  equal(disposal.errors.length, 1)
+  equal(comp(disposal.errors[0], 'exception').value, 'plugin teardown failed')
+  equal(comp(disposal.errors[0], 'error').tags, {
+    source: 'box',
+    command: 'yak',
+    roles: 'graph',
+    step: 'dispose plugins',
+  })
+})
+
 test('reporter close includes failures reported while it is already draining', () => {
   equal(reporting, true)
 })

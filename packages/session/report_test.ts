@@ -151,6 +151,22 @@ let stalled = new ModelError(
   'stalled',
   'responses: transport stalled (timeout)',
 )
+let retrying = new ModelError('transport', 'HTTP pool is closed', { after: 0 })
+let retryFixture = await fixture('model', false, retrying)
+test('a transport failure reaches the reporter while its effect still owes a retry', async () => {
+  let failure: unknown
+  try {
+    await react(retryFixture.g, session, {
+      ...retryFixture.deps,
+      attempt: { last: () => false, progressed: () => Promise.resolve() },
+    })
+  } catch (error) {
+    failure = error
+  }
+  equal(failure, retrying)
+  equal(retryFixture.reported, [retrying])
+  equal(retryFixture.saved, [])
+})
 let stalledFixture = await fixture('model', false, stalled)
 test('a stalled provider reaches the reporter with its original failure', async () => {
   await react(stalledFixture.g, session, stalledFixture.deps)
