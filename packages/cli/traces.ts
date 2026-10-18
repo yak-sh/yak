@@ -12,7 +12,7 @@ export let traces = (
   graph: object,
   options: {
     process: string
-    getStart?: () => boolean
+    getStart?: (event: Event) => boolean
     reportGetStart?: (stack: string) => void
     sink?: Sink
     take: () => Promise<Capture>
@@ -79,7 +79,7 @@ export let traces = (
   let stop = channel(graph).subscribe((event) => {
     if (
       ['get', 'sql'].includes(event.kind) && event.stage == 'start' &&
-      options.getStart?.()
+      options.getStart?.(event)
     ) {
       let stack = (new Error('armed get start').stack ?? '').slice(0, 8192)
       if (options.reportGetStart) options.reportGetStart(stack)
