@@ -50,7 +50,7 @@ export let transcriptSegments = async (
 }
 /** The query for one segment of a transcript: its session's entries, up to
  * where a fork left it. */
-export let within = (s: Segment) =>
+export let within = (s: Segment): string =>
   '.entry.session=' + s.session +
   (Number.isFinite(s.through) ? '&.entry.seq<=' + s.through : '')
 
