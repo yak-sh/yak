@@ -96,3 +96,26 @@ test('a remounted field types at its restored caret', () => {
     remounted.blur()
   }
 })
+
+// A palette may unmount before the next shortcut arrives. Its old input
+// cannot keep the shortcut from choosing the newly mounted composer.
+test('a detached field no longer owns focus when a shortcut chooses its target', () => {
+  let root = new TElement('div')
+  let keys = interaction(root, () => {})
+  let palette = new TElement('input')
+  root.appendChild(palette)
+  keys.focus(palette)
+  root.removeChild(palette)
+  let composer = new TElement('textarea')
+  root.appendChild(composer)
+  try {
+    equal(keys.active(), null)
+    keys.focus(composer)
+    keys.press({ name: 'char', text: 'hello' })
+    equal(composer.value, 'hello')
+    equal(keys.active(), composer)
+    equal(palette.value, '')
+  } finally {
+    composer.blur()
+  }
+})

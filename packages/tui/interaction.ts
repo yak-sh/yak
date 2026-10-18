@@ -74,16 +74,20 @@ export let interaction = (
       if (href) open(href)
     }
   }
+  let active = () => {
+    let node = doc.activeElement
+    if (node && !root.contains(node)) {
+      node.blur()
+      return null
+    }
+    return node
+  }
   let press = (k: Key): boolean => {
     if (k.name == 'char' && (k.text?.length ?? 0) > 1) {
       for (let text of k.text!) press({ ...k, text })
       return true
     }
-    let node = doc.activeElement
-    if (node && !root.contains(node)) {
-      node.blur()
-      node = null
-    }
+    let node = active()
     let typing = !!node?.matches('input,textarea,select,[contenteditable]')
     if (
       k.name == 'tab' && !typing ||
@@ -156,5 +160,5 @@ export let interaction = (
     }
     return false
   }
-  return { press, focus, activate }
+  return { press, focus, activate, active }
 }

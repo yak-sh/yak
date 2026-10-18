@@ -1,6 +1,6 @@
 /** The terminal door installs its DOM and history before loading Browse's
  * one App; its registry, domain host and writes are the browser app's. */
-import { doc, install, quit, run, Scroll, useKeys } from '@yaks/tui'
+import { install, quit, run, Scroll, useKeys } from '@yaks/tui'
 import { interaction } from '@yaks/tui/interaction'
 import { terminalHistory } from '@yaks/tui/history'
 import { installHistory } from '@yaks/ui/history'
@@ -100,7 +100,7 @@ export let open = async (url: string, opts: {
     useKeys((k) => {
       if (
         k.name == 'char' && !k.ctrl && !k.alt && k.text == 'f' &&
-        !doc.activeElement?.matches('input,textarea,select,[contenteditable]')
+        !keys.active()?.matches('input,textarea,select,[contenteditable]')
       ) {
         let field = screen.root.querySelector('.Shell_Side')?.querySelector(
           'input',
@@ -112,7 +112,7 @@ export let open = async (url: string, opts: {
       }
       if (
         k.name == 'char' && !k.ctrl && !k.alt && k.text == 'i' &&
-        !doc.activeElement?.matches('input,textarea,select,[contenteditable]')
+        !keys.active()?.matches('input,textarea,select,[contenteditable]')
       ) {
         let field = screen.root.querySelector('.Shell_Body')?.querySelector(
           'input,textarea',
