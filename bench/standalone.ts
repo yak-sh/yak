@@ -6,6 +6,7 @@ import { RELAY_ENTITIES } from './names.ts'
 import { contentSuite, suite as pages } from './pages.ts'
 import { suite as platformWaits } from './platform-waits.ts'
 import { suite as workerHealth } from './worker-health.ts'
+import { suite as inboxContent } from './inbox-content.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
 
 let deno = (
@@ -73,6 +74,11 @@ let registration = (
 })
 
 export let standalone: Registration[] = [
+  {
+    baseline: 'bench/inbox-content.baseline.json',
+    suite: inboxContent,
+    floor: 0,
+  },
   measured('person-commands', 'bench/person-commands.ts', [...PERSON_COMMANDS]),
   {
     baseline: 'bench/worker-health.baseline.json',

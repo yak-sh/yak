@@ -26,7 +26,12 @@ import { compEid, packEid, propEid } from '../packages/inspect/schema.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 
 /** A page and the mark that says it has painted, as a page expression. */
-type Page = { name: string; path: string; painted: string; patience?: number }
+export type Page = {
+  name: string
+  path: string
+  painted: string
+  patience?: number
+}
 
 /** The pages measured. The task is a finished one nobody holds, with the
  * owner's words and a few comments, so its page holds still. Home is the
@@ -89,7 +94,7 @@ let devtools = async (
 }
 
 /** A blank page on an origin of its own, for a new browser's first navigation. */
-let primer = () => {
+export let primer = () => {
   let server = Deno.serve(
     { hostname: '127.0.0.1', port: 0, onListen: () => {} },
     () => new Response('<p>', { headers: { 'content-type': 'text/html' } }),
@@ -101,7 +106,7 @@ let primer = () => {
 }
 
 /** Open `page` in a new browser twice, and say how long each took to paint. */
-let open = async (base: string, page: Page, prime: string) => {
+export let open = async (base: string, page: Page, prime: string) => {
   let dir = await Deno.makeTempDir({ dir: '/tmp', prefix: 'cdp-pages-' })
   let chrome = new Deno.Command('google-chrome', {
     args: [

@@ -37,6 +37,7 @@ import { reporter, revision } from '../packages/cli/report.ts'
 export let SUITES = [
   'pages',
   'page-content',
+  'inbox-content',
   'person-commands',
   'platform-waits',
   'worker-health',
@@ -59,6 +60,7 @@ export let SUITES = [
 export let HOURLY = [
   'pages',
   'page-content',
+  'inbox-content',
   'person-commands',
   'platform-waits',
   'worker-health',

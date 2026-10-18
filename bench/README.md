@@ -44,6 +44,16 @@ neither slower observations nor a checkout raise the reference. Normal checks
 never rewrite the committed baseline. Last good commits and the web unit are
 kept in `~/.cache/yak/bench/monitor.json`.
 
+## Inbox content
+
+`inbox-content` runs a private browse host that actually loads the Inbox view.
+It times cold/warm person Inbox, project Inbox and an expanded person thread
+through loaded content, not a heading or Show fallback. See
+[the wait inventory](waits.md#inbox-on-an-isolated-host) for its fixed corpus,
+isolation and timed boundary. `deno task bench inbox-content accept` banks
+best-of-three without slack; `deno task bench inbox-content check` checks the
+same workload. It participates in daily and half-hour unattended monitoring.
+
 ## Pages
 
 `pages` (bench/pages.ts) measures tasks.yak.sh as a person gets it: browse's
