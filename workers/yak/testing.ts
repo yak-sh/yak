@@ -1040,8 +1040,8 @@ export let lasting = (
   let settled = async () => {
     for (let work = pending(); work.length; work = pending()) {
       console.log(
-        'loading PENDING_STORE_WORK',
-        stores.flatMap((ctx) => [...ctx.origins.values()]),
+        'loading PENDING_STORE_WORK ' +
+          JSON.stringify(stores.flatMap((ctx) => [...ctx.origins.values()])),
       )
       await Promise.allSettled(work)
     }
