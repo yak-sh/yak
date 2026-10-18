@@ -77,7 +77,10 @@ export let traces = (
     if (rows) await options.sink(rows as Bundle[])
   }
   let stop = channel(graph).subscribe((event) => {
-    if (event.kind == 'get' && event.stage == 'start' && options.getStart?.()) {
+    if (
+      ['get', 'sql'].includes(event.kind) && event.stage == 'start' &&
+      options.getStart?.()
+    ) {
       let stack = (new Error('armed get start').stack ?? '').slice(0, 8192)
       if (options.reportGetStart) options.reportGetStart(stack)
       else {console.error(
