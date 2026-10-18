@@ -1,3 +1,4 @@
+import { derivedEid } from '@yaks/graph/identity'
 // Queue delivery reaches independent tenant graphs through the same admission
 // and effect handlers used by Durable Objects, without a platform kernel.
 
@@ -93,7 +94,7 @@ test('ordinary and migration word identities and mutable captures are set aside'
   equal(invalidOutcome.rows, [])
 })
 
-let child = 'child:3b21904a-b0fa-479b-8934-4286ae9c0cb1'
+let child = derivedEid('child:3b21904a-b0fa-479b-8934-4286ae9c0cb1')
 let boxed = records()
 boxed[0].during = { session: child }
 let boxedOutcome = await deliver(fixture(), [boxed, boxed])
