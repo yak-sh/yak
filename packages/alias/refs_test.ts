@@ -80,3 +80,15 @@ for (let id of ['b08d920e-bc1b-809e-9950-7661c8f20bd1', 'a'.repeat(40)]) {
     equal(await addressed(tx, [id]), new Map([[id, 'canonical']]))
   })
 }
+
+test('a live UUID cannot be redirected by an alias key', async () => {
+  let id = 'b08d920e-bc1b-809e-9950-7661c8f20bd1'
+  let tx: ReadTx = {
+    read: () => [],
+    get: (ids) =>
+      ids.includes(aliasEid(id))
+        ? [{ entity: { eid: aliasEid(id) }, key: { of: 'other', value: id } }]
+        : [{ entity: { eid: id }, doc: { title: 'live' } }],
+  }
+  equal(await addressed(tx, [id]), new Map())
+})
