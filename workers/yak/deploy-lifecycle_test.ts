@@ -137,7 +137,8 @@ for (let mode of ['network', 'non-ok']) {
     let f = await fixture({ ...scenario.env, STORE } as Env)
     await f.write('one')
     await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
-    await until(() => notices == 1)
+    // Retryable notices can finish several sends before the waiter resumes.
+    await until(() => notices >= 1)
     return (await f.history()).map((v) => [v.version, v.reload])
   })()
   test(`a ${mode} release notice cannot fail a committed deploy`, () => {
