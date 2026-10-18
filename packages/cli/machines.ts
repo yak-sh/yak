@@ -2,7 +2,6 @@
 // process environments, and how a graph commit reaches a process sandbox.
 import type { Config, Host } from '@yaks/host'
 import { given, used } from '@yaks/host/config'
-import { derivedEid } from '@yaks/graph/identity'
 import type { Machine, MachineProvider } from '@yaks/machine'
 
 let quoted = (word: string) => "'" + word.replaceAll("'", "'\\''") + "'"
@@ -106,13 +105,9 @@ export let machineCapabilities = (
       if (typeof options.worktrees != 'string' || !options.worktrees) {
         throw new Error('Native fixer worktrees require @yaks/spawn worktrees')
       }
-      // A remote default must never be mistaken for the box running Git.
-      let process = Object.entries(configured.providers).find(([, source]) =>
-        source.use == '@yaks/process'
-      )?.[0]
-      if (!process) {
+      if (!host.workspaces) {
         throw new Error(
-          'Native fixer worktrees require a configured process provider',
+          'Native fixer workspaces require configured workspace connectors',
         )
       }
       let { createWorktree } = await import('@yaks/git/host')
@@ -125,16 +120,7 @@ export let machineCapabilities = (
         },
       )
       let cwd = String((tree.workspace as { root: string }).root)
-      let machine = derivedEid('native-fixer-machine|' + session)
-      let [existing] = await host.graph.get([machine])
-      if (!existing?.machine) {
-        await host.graph.apply([{
-          entity: { eid: machine },
-          // An attachment is never ours to remove or stop on release.
-          machine: { provider: process, address: cwd, state: 'running' },
-        }])
-      }
-      return { machine, cwd }
+      return { workspace: tree.entity.eid, cwd }
     },
     provider: (name) => {
       if (!Object.hasOwn(configured.providers, name)) {

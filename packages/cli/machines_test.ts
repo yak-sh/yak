@@ -158,6 +158,10 @@ let nativeFixerProbe = await (async () => {
         with: { cwd: repo, worktrees: dir + '/worktrees' },
       },
     ],
+    workspaces: {
+      connectors: { local: { use: '@yaks/machine/local' } },
+      receipts: dir + '/receipts',
+    },
     machines: {
       // A remote default is not a local attachment. Provisioning must select
       // the explicitly configured process provider, even under another name.
@@ -172,7 +176,7 @@ let nativeFixerProbe = await (async () => {
   }, ['graph'])
   try {
     let { machines } = await import('../harness/session_machines.ts')
-    let binding = machines(host.graph, host.machines)
+    let binding = machines(host.graph, host.machines, host.workspaces)
     let [first, second, explicit, regular, managed] = Array.from(
       { length: 5 },
       () => crypto.randomUUID(),
@@ -198,18 +202,17 @@ let nativeFixerProbe = await (async () => {
     )
     let original = await Deno.readTextFile(repo + '/file')
     let [owner] = await host.graph.get([first])
-    let home = owner.home as { machine: string; cwd: string }
-    let [record] = await host.graph.get([home.machine])
-    let machine = record.machine as {
-      provider: string
-      address: string
-      state: string
-    }
+    let home = owner.home as { workspace: string; cwd: string }
+    let [record] = await host.graph.get([home.workspace])
+    let workspace = record.workspace as { machine: string; root: string }
+    let fakeMachines = await host.graph.read('.machine.provider')
     await (await binding.machine(first)).write('file', 'fixer edits\n')
     // Recreate both host capability and binding to rule out process-local reuse.
     let fresh = machineCapabilities(host, host.config, ':memory:')
     let reusedHome = await fresh.resolveHome!(first)
-    let reusedCwd = await machines(host.graph, fresh).cwd(first)
+    let reusedCwd = await machines(host.graph, fresh, host.workspaces).cwd(
+      first,
+    )
     let reusedEdits = await Deno.readTextFile(firstCwd + '/file')
     let branch = await new Deno.Command('git', {
       cwd: firstCwd,
@@ -219,16 +222,17 @@ let nativeFixerProbe = await (async () => {
     let branchName = new TextDecoder().decode(branch.stdout).trim()
     await host.graph.apply([{
       entity: { eid: explicit },
-      home: { machine: home.machine, cwd: firstCwd },
+      home: { workspace: home.workspace, cwd: firstCwd },
     }])
     let explicitCwd = await binding.cwd(explicit)
     let explicitWorktree = await Deno.stat(dir + '/worktrees/' + explicit).then(
       () => true,
       () => false,
     )
-    // A host with only a remote provider must fail, not label a local path as remote.
-    let remoteOnly = machineCapabilities(host, {
+    // A host with no workspace bindings refuses rather than choosing a local path.
+    let remoteOnly = machineCapabilities({ ...host, workspaces: undefined }, {
       ...host.config,
+      workspaces: undefined,
       machines: {
         defaultProvider: 'remote',
         providers: { remote: { use: 'remote' } },
@@ -274,7 +278,8 @@ let nativeFixerProbe = await (async () => {
       untracked,
       original,
       home,
-      machine,
+      workspace,
+      fakeMachines,
       reusedHome,
       reusedCwd,
       reusedEdits,
@@ -303,16 +308,16 @@ test('CLI native fixers get distinct reusable committed worktrees without changi
   equal(probe.committed, 'committed\n')
   equal(probe.untracked, false)
   equal(probe.original, 'uncommitted\n')
-  equal(probe.machine.provider, 'local')
-  equal(probe.machine.address, probe.firstCwd)
-  equal(probe.machine.state, 'running')
+  equal(probe.workspace.root, probe.firstCwd)
+  equal(typeof probe.workspace.machine, 'string')
+  equal(probe.fakeMachines.length, 0)
   equal(probe.reusedHome, probe.home)
   equal(probe.reusedCwd, probe.firstCwd)
   equal(probe.reusedEdits, 'fixer edits\n')
   equal(probe.branchName, 'session-' + probe.first)
   equal(probe.explicitCwd, probe.firstCwd)
   equal(probe.explicitWorktree, false)
-  await throws(probe.remoteHome, 'configured process provider')
+  await throws(probe.remoteHome, 'configured workspace connectors')
   equal(probe.regularInProvider, true)
   equal(probe.regularWorktree, false)
   equal(probe.releasedFile, 'committed\n')

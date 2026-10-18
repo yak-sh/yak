@@ -130,7 +130,7 @@ export let machines = (
     let at = comp(owner, 'home') ?? {}
     if (at.workspace || at.machine) return at
     let translated = await configured?.resolveHome?.(session)
-    if (translated?.machine) {
+    if (translated?.workspace || translated?.machine) {
       await g.apply([{ entity: { eid: session }, home: translated }])
       return { ...at, ...translated }
     }
