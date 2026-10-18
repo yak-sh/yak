@@ -124,7 +124,7 @@ export let machines = (
   }
   let home = async (session: string): Promise<Comp> => {
     let [owner] = await g.read(
-      `.entity.eid=${session}&.session&.fields=home.machine,home.cwd`,
+      `.entity.eid=${session}&.session&.fields=home.machine,home.workspace,home.cwd`,
     )
     if (!owner) throw new Error('not a session: ' + session)
     let at = comp(owner, 'home') ?? {}
@@ -146,7 +146,10 @@ export let machines = (
       }
       let target = await targetFor(g, session, {})
       let machine = await workspaces.connect(target.workspace)
-      let root = comp(await row(g, target.workspace, ['workspace']), 'workspace')?.root
+      let root = comp(
+        await row(g, target.workspace, ['workspace']),
+        'workspace',
+      )?.root
       return {
         machine,
         root: root == null ? undefined : String(root),
@@ -182,10 +185,8 @@ export let machines = (
     })
   }
   let release = async (session: string) => {
-    let [owner] = await g.read(
-      `.entity.eid=${session}&.session&.fields=home.machine,home.workspace,home.cwd`,
-    )
-    if (!owner) throw new Error('not a session: ' + session)
+    let at = comp(await row(g, session, ['home']), 'home')
+    if (at?.workspace || !at?.machine) return
     let id = String(at.machine)
     await serial(g, id, async () => {
       // A fork sharing its parent's machine does not own that machine's end.
@@ -245,7 +246,8 @@ export let machines = (
     prepareChild: async ({ parent, child, args }) => {
       if (
         args.workspace != null ||
-        (args.machine == null && comp(await row(g, parent), 'home')?.workspace)
+        (args.machine == null &&
+          comp(await row(g, parent, ['home']), 'home')?.workspace)
       ) {
         let target = await targetFor(g, parent, {
           ...args.workspace != null ? { workspace: args.workspace } : {},
@@ -335,18 +337,8 @@ export let machines = (
         }
         return scoped
       })
-<<<<<<< HEAD
-      let at = comp(await row(g, session), 'home')!
-      if (at.workspace) {
-        for (let path of selected) {
-          let text = await loan.machine.read(String(loan.root) + '/' + path)
-          yield { path, bytes: new TextEncoder().encode(text) }
-        }
-        return
-      }
-=======
-      let at = comp(await row(g, session, ['home']), 'home')!
->>>>>>> 6852db8d4 (Bound native overhead by the benchmark and remove capability read amplification (T-127526))
+      let at = comp(await row(g, session, ['home']), 'home')
+      if (at?.workspace || !at?.machine) return
       let id = String(at.machine)
       let record = comp(await row(g, id, ['machine']), 'machine')!
       let source = await provider(String(record.provider))
