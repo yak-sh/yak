@@ -215,6 +215,30 @@ test('an opaque body failure does not replay a Store write', async () => {
   assertEquals(attempts, 1)
 })
 
+test('a Store read answered out of memory asks again; a write does not', async () => {
+  let starved = () =>
+    Response.json({ message: 'out of memory: SQLITE_NOMEM' }, { status: 500 })
+  let attempts = 0
+  let store = storeOf({
+    idFromName: (name) => name,
+    get: () => ({
+      fetch: () =>
+        Promise.resolve(++attempts == 1 ? starved() : Response.json([1])),
+    }),
+  }, 'recipes')
+  assertEquals(await store.consume('/query', (r) => r.json()), [1])
+  assertEquals(attempts, 2)
+  attempts = 0
+  let again = storeOf({
+    idFromName: (name) => name,
+    get: () => ({ fetch: () => Promise.resolve(++attempts && starved()) }),
+  }, 'recipes')
+  await assertRejects(() =>
+    again.consume('/apply', (r) => r.json(), { method: 'POST', body: '[1]' })
+  )
+  assertEquals(attempts, 1)
+})
+
 test('the store door strips a visitor administrative claim and carries only its own vouch', async () => {
   for (
     let header of ['x-yak-administrative', 'x-yak-observe', ACCEPTED]

@@ -67,6 +67,7 @@ export {
   type Own,
   replaced,
   retried,
+  starved,
 } from './resets.ts'
 export { profile, type Summary } from './profile.ts'
 export {

@@ -24,6 +24,7 @@ let RESETS = [
 ]
 let LIMITS = /exceeded its (CPU time|memory) limit/
 let LOST = /Network connection lost/
+let STARVED = /\bSQLITE_NOMEM\b/
 let OPAQUE = /^internal error; reference = [a-z0-9]+$/i
 
 let says = (e: unknown, words: string[]) =>
@@ -114,6 +115,21 @@ export let evicted = (e: unknown): boolean =>
  */
 export let killed = (e: unknown): boolean =>
   e instanceof Error && LIMITS.test(e.message)
+
+/**
+ * The object's SQLite ran out of memory for a statement that took little: the
+ * isolate's memory was held by other work at that moment, and it frees as that
+ * work ends. A read that asks again a moment later is answered, so whoever
+ * sees these words reports them and sends a safe read again.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(starved(new Error('out of memory: SQLITE_NOMEM')), true)
+ * assertEquals(starved(new Error('boot failed')), false)
+ * ```
+ */
+export let starved = (e: unknown): boolean =>
+  e instanceof Error && STARVED.test(e.message)
 
 /**
  * The runtime failed inside itself and names no cause, only a reference for

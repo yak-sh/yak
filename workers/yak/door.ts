@@ -14,7 +14,7 @@ import type { Caller } from '@yaks/egress'
 import { hop, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
-import { evicted, killed, opaque, retried } from '@yaks/durable-object'
+import { evicted, killed, opaque, retried, starved } from '@yaks/durable-object'
 
 // A store reports the statements it ran for this fetch, including any store
 // it asked in turn, and how long it waited to start when this fetch woke it.
@@ -239,7 +239,7 @@ export let thrown = async (r: Response): Promise<Response> => {
   let e = typeof said?.message == 'string'
     ? Object.assign(new Error(said.message), { retryable: said.retryable })
     : null
-  if (evicted(e)) throw e
+  if (evicted(e) || starved(e)) throw e
   return r
 }
 
@@ -292,14 +292,14 @@ export let storeOf = (ns: Namespace, name: string, app?: Served): Door => {
         try {
           return read(await thrown(await door(path, init, once)))
         } catch (e) {
-          if (killed(e)) defect(e, { request, store: name })
+          if (killed(e) || starved(e)) defect(e, { request, store: name })
           throw e
         }
       },
       rebuildable(init) && options.replayable !== false,
       (e) =>
         evicted(e) ||
-        (consuming && safe && opaque(e)),
+        (consuming && safe && (opaque(e) || starved(e))),
     )
   }
   let send = (
