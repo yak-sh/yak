@@ -14,7 +14,14 @@ import { columns, objects as catalogue, reclassify, schema } from '@yaks/sqlite'
 import { mem } from '../../packages/sqlite/testing.ts'
 import { Store } from './graph.ts'
 import { loadVocab } from '@yaks/vocab'
-import { documented, passed, respelled, unholed, unworded } from './migrate.ts'
+import {
+  documented,
+  install,
+  passed,
+  respelled,
+  unholed,
+  unworded,
+} from './migrate.ts'
 import { PLATFORM_STORE } from './door.ts'
 import { db, keep, slot } from './testing.ts'
 
@@ -761,4 +768,70 @@ test('a raw index creation failure still refuses an empty store', async () => {
   }
   let now = newer(ctx, PLATFORM_STORE)
   await refused(now, 'index creation failed')
+})
+
+// Rehearse a platform wake after a shipped component left the vocabulary.
+let departed = mem()
+let removedWords = loadVocab({
+  $defs: {
+    lapsed: { component: true, properties: { agent: { type: 'string' } } },
+    kept: { component: true, properties: { name: { type: 'string' } } },
+  },
+})
+let remainingWords = loadVocab({
+  $defs: {
+    kept: { component: true, properties: { name: { type: 'string' } } },
+  },
+})
+install(departed, removedWords)
+departed.query(insert('entity', { eid: 'departed' }))
+departed.query(insert('lapsed', { entity: 1, agent: 'browser' }))
+departed.query(insert('kept', { entity: 1, name: 'survives' }))
+
+let departure = install(departed, remainingWords)
+let repeatedDeparture = install(departed, remainingWords)
+
+test('a removed component takes its stored rows on the next schema installation', () => {
+  equal(departure, [])
+  equal(catalogue(departed, { name: 'lapsed' }), [])
+  equal(scan(departed, 'kept').map((r) => r.name), ['survives'])
+  equal(repeatedDeparture, [])
+})
+
+let wakeDeparture = await (async () => {
+  let ctx = state(), old = newer(ctx, PLATFORM_STORE)
+  await old.query('.person')
+  let d = db(ctx)
+  run(ctx, {
+    t: 'create table',
+    name: 'lapsed',
+    cols: [
+      { name: 'entity', type: 'integer', pk: true },
+      { name: 'agent', type: 'text' },
+    ],
+  })
+  for (let n = 0; n < 3; n++) {
+    let eid = `departed-${n}`
+    run(ctx, insert('entity', { eid }))
+    let id = Number(scan(d, 'entity', by({ eid }), ['id'])[0].id)
+    run(ctx, insert('lapsed', { entity: id, agent: 'browser' }))
+    reclassify(d, [eid])
+  }
+  let ids = scan(d, 'lapsed').map((r) => r.entity)
+  keep(ctx, 'schema', 'before removed aspects')
+  let fresh = newer(ctx, PLATFORM_STORE)
+  await fresh.query('.person')
+  return {
+    remaining: catalogue(d, { name: 'lapsed' }),
+    kinds: ids.map((id) => {
+      let [owner] = scan(d, 'entity', by({ id }))
+      let [kind] = scan(d, 'archetype', by({ entity: owner.archetype }))
+      return String(kind.tables)
+    }),
+  }
+})()
+
+test('a platform wake removes departed aspects and repairs their archetypes', () => {
+  equal(wakeDeparture.remaining, [])
+  for (let kind of wakeDeparture.kinds) assert(!kind.includes('lapsed'))
 })

@@ -362,6 +362,7 @@ let JSONED = { headers: { 'content-type': 'application/json' } }
 import { apex, url } from './host.ts'
 import {
   documented,
+  INSTALL,
   install,
   passed,
   respelled,
@@ -517,7 +518,7 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
     derived,
     searchable,
     get print() {
-      return print ??= printOf(printFor(vocab, derived), [
+      return print ??= printOf(`${INSTALL}:${printFor(vocab, derived)}`, [
         ...blobSchema(),
         ...after(),
       ])
@@ -527,7 +528,7 @@ export let shapeOf = (name: string, declared: string | null): Shape => {
     },
     get stamp() {
       return stamp ??= sha256(
-        [FIT, ...shape.ddl.map((s) => render(s).sql)].join('\n'),
+        [FIT, INSTALL, ...shape.ddl.map((s) => render(s).sql)].join('\n'),
       )
     },
     get key() {

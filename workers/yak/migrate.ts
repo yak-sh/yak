@@ -29,6 +29,7 @@ import {
 } from '@yaks/sql'
 import {
   backfill,
+  componentTables,
   epoch,
   epochAt,
   fit,
@@ -467,6 +468,12 @@ export let install = (
   adopt(d, fields(vocab), derived, { heal: false })
   rekey(statements(d))
   erect(d, vectorSchema())
+  // A removed word takes its stored aspect with it. Discover component
+  // tables structurally, not by name: the object also holds infrastructure,
+  // search shadows and migration work which are not vocabulary.
+  for (let name of componentTables(d, [...vocab.all, 'tombstone'])) {
+    d.query({ t: 'drop', kind: 'table', name })
+  }
   if (vocab.comp('archetype')) {
     backfill(d, false)
   }
@@ -519,6 +526,10 @@ export let raised = (d: Driver, vocab: Vocab): Error[] => {
   }
   return left
 }
+
+// Installation semantics participate in the Store print even when its words
+// did not change (for example, a component removed by an earlier release).
+export let INSTALL = 2
 
 /** One wake's schema pass, for the print a vocabulary renders to and the
  * stamp an older release kept. The stamp decides when the pass (`raise`) runs
