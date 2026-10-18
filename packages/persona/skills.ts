@@ -89,22 +89,28 @@ let inRepo = async (
   if (!['file', 'references'].every((name) => g.vocab.comps.includes(name))) {
     return []
   }
-  let files = (await g.read(and(
-    present('file'),
-    eq('file.repository', repository),
-    fields('entity.eid', 'file.path'),
-  ))).filter((b) =>
-    /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/SKILL\.md$/i.test(
-      text(b, 'file', 'path') ?? '',
-    )
-  )
-  if (!files.length) return []
+  if (!skills.length) return []
   let edges = await g.read(and(
     present('references'),
-    eq('edge.to', list(...files.map((b) => b.entity.eid))),
-    fields('edge.from'),
+    eq('edge.from', list(...skills.map((b) => b.entity.eid))),
+    fields('edge.from', 'edge.to'),
   ))
-  let linked = new Set(edges.map((b) => text(b, 'edge', 'from')))
+  let targets = edges.map((b) => text(b, 'edge', 'to'))
+    .filter((id): id is string => id != undefined)
+  let files = targets.length ? await g.get([...new Set(targets)], ['file']) : []
+  let locations = new Set(
+    files.filter((b) =>
+      text(b, 'file', 'repository') == repository &&
+      /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/SKILL\.md$/i.test(
+        text(b, 'file', 'path') ?? '',
+      )
+    ).map((b) => b.entity.eid),
+  )
+  let linked = new Set(
+    edges.filter((b) => locations.has(text(b, 'edge', 'to') ?? '')).map((b) =>
+      text(b, 'edge', 'from')
+    ),
+  )
   return skills.filter((b) => linked.has(b.entity.eid))
 }
 
