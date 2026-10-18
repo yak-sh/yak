@@ -91,6 +91,9 @@ export let lenses = (
   pending?: { vocab: Vocab; rows: Bundle[]; speaks?: Speaks },
 ): Plugin => {
   let expansion = pending ? compile(pending.rows, pending.speaks) : undefined
+  // The host supplies its retained immutable chain at composition. Re-reading
+  // the same metadata on every ask/view/answer adds billed reads to all pages.
+  let steps = (tx: ReadTx) => pending ? pending.rows : tx.read('._lens')
   if (
     expansion && !expansion.renames.length &&
     !expansion.views.some((v) => pending!.vocab.comp(v.from))
@@ -104,32 +107,29 @@ export let lenses = (
     if (!expansion) return rows
     let lens = expansion
     if (lens.renames.length && !lens.views.length) {
-      return after(tx.get(rows.map((r) => r.entity.eid)), (held) => {
-        let at = new Map(held.map((r) => [r.entity.eid, r]))
-        return rows.map((r) => {
-          let full = at.get(r.entity.eid) ?? r
-          let out = { ...r }
-          for (let { rename: { from, to } } of lens.renames) {
-            let [fc, fp] = from.split('.'), [tc, tp] = to.split('.')
-            let source = full[fc] as Record<string, unknown> | undefined
-            let target = full[tc] as Record<string, unknown> | undefined
-            let value = target && Object.hasOwn(target, tp)
-              ? target[tp]
-              : source?.[fp]
-            if ((fc in r || tc in r) && value != null) {
-              out[tc] = { ...out[tc] as object, [tp]: value }
-            }
-            if (fc in out && out[fc] && typeof out[fc] == 'object') {
-              let comp = { ...out[fc] as Record<string, unknown> }
-              delete comp[fp]
-              if (Object.keys(comp).length) out[fc] = comp
-              else delete out[fc]
-            }
+      return rows.map((r) => {
+        let out = { ...r }
+        for (let { rename: { from, to } } of lens.renames) {
+          let [fc, fp] = from.split('.'), [tc, tp] = to.split('.')
+          let source = r[fc] as Record<string, unknown> | undefined
+          let target = r[tc] as Record<string, unknown> | undefined
+          let value = target && Object.hasOwn(target, tp)
+            ? target[tp]
+            : source?.[fp]
+          if (source && Object.hasOwn(source, fp) && value != null) {
+            out[tc] = { ...out[tc] as object, [tp]: value }
           }
-          return out
-        })
+          if (source && Object.hasOwn(source, fp)) {
+            let comp = { ...out[fc] as Record<string, unknown> }
+            delete comp[fp]
+            if (Object.keys(comp).length) out[fc] = comp
+            else delete out[fc]
+          }
+        }
+        return out
       })
     }
+
     return after(facts(lens, rows, tx), (held) =>
       after(
         each(
@@ -211,8 +211,88 @@ export let lenses = (
           )
         }) && !text.includes('every')
       ) return null
+      let destinations = new Set(
+        lens.renames.map(({ rename }) => rename.to.split('.')[0]),
+      )
+      let selection = false
+      map(original, (clause) => {
+        if (
+          clause.kind == 'pred' && clause.path.length > 1 &&
+          destinations.has(clause.path[0]) && clause.op != '?'
+        ) selection = true
+        return clause
+      })
+      // An optional aspect or whole owner read cannot change membership.
+      // Let storage select finite owners, then expand just their source cells.
+      if (!selection) {
+        let offers = false
+        map(original, (clause) => {
+          if (
+            clause.kind == 'pred' && clause.op == '?' &&
+            destinations.has(clause.path[0])
+          ) offers = true
+          if (
+            clause.kind == 'fields' &&
+            clause.fields.some((f) => destinations.has(f.path[0]))
+          ) offers = true
+          return clause
+        })
+        if (!offers) return null
+        return {
+          original,
+          query: and(
+            map(original, (c) =>
+              [
+                  'fields',
+                  'every',
+                  'count',
+                  'distinct',
+                  'tally',
+                  'order',
+                  'limit',
+                  'after',
+                ].includes(c.kind)
+                ? and()
+                : c),
+            every(),
+          ),
+          vocab,
+          dependencies: [
+            ...lens.sources,
+            ...lens.renames.map((r) => r.rename.to),
+          ],
+          expand: (rows: Bundle[]) => current(rows, tx),
+          answer: (rows: Bundle[]) => rows,
+        }
+      }
+      let selectors = map(
+        original,
+        (c) =>
+          [
+              'fields',
+              'every',
+              'count',
+              'distinct',
+              'tally',
+              'order',
+              'limit',
+              'after',
+            ].includes(c.kind) ||
+            c.kind == 'pred' && destinations.has(c.path[0])
+            ? and()
+            : c,
+      )
+      let sources = map(
+        lens.find((p) => {
+          let [c, f] = p.split('.')
+          return !!pending!.vocab.prop(c, f)
+        }),
+        (c) => c.kind == 'every' ? and() : c,
+      )
       return {
         original,
+        // Retain entity/session ownership predicates on both arms. Only a
+        // genuine destination filter requires finding unconverted sources.
         query: and(
           or(
             map(original, (c) =>
@@ -228,13 +308,7 @@ export let lenses = (
                 ].includes(c.kind)
                 ? and()
                 : c),
-            map(
-              lens.find((p) => {
-                let [c, f] = p.split('.')
-                return !!pending!.vocab.prop(c, f)
-              }),
-              (c) => c.kind == 'every' ? and() : c,
-            ),
+            and(selectors, sources),
           ),
           every(),
         ),
@@ -321,7 +395,7 @@ export let lenses = (
         let vocab = (context?.graph as { vocab?: Vocab } | undefined)?.vocab
         let translate = () =>
           after(
-            tx.read('._lens'),
+            steps(tx),
             (steps) =>
               each(rows, [] as Bundle[], (out, row) => {
                 if (
@@ -400,7 +474,7 @@ export let lenses = (
         if (!checks.length) return rows
         let vocab = (context?.graph as { vocab?: Vocab } | undefined)?.vocab
         return after(
-          tx.read('._lens'),
+          steps(tx),
           (steps) =>
             after(
               each(checks, undefined, (_, check) => {
@@ -441,13 +515,13 @@ export let lenses = (
     ask: ({ opts, tx }, query) =>
       opts.speaks
         ? after(
-          tx.read('._lens'),
+          steps(tx),
           (rows) => compile(rows, opts.speaks).ask(query),
         )
         : query,
     view: ({ opts, tx, vocab }, original) => {
       if (!opts.speaks) return forwardView({ opts, tx, vocab }, original)
-      return after(tx.read('._lens'), (steps) => {
+      return after(steps(tx), (steps) => {
         let lens = compile(steps, opts.speaks)
         if (!lens.views.length) {
           return forwardView({ opts, tx, vocab }, original)
@@ -493,7 +567,7 @@ export let lenses = (
     },
     answer: ({ opts, tx, vocab }, rows) => {
       if (!opts.speaks) return current(rows, tx)
-      return after(tx.read('._lens'), (steps) => {
+      return after(steps(tx), (steps) => {
         let lens = compile(steps, opts.speaks)
         if (!lens.views.length) {
           return after(
