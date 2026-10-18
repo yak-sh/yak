@@ -14,13 +14,13 @@ import type { Graph } from '@yaks/graph'
 import type { Config } from '@yaks/host'
 import { sleep } from '@yaks/effects'
 import type { Options, Pull } from './options.ts'
-import { type Edge, edge, pull } from './pull.ts'
+import { type Edge, edge, LATE, pull, type Report } from './pull.ts'
 import { readings } from './readings.ts'
 
 /** How long a pull waits for the next one, unless the config says. */
 export let EVERY = 10_000
 
-type Host = { graph: Graph; config?: Config }
+type Host = { graph: Graph; config?: Config; report?: Report }
 
 /** Pull from one edge, then again every `pull.every`, until the signal aborts.
  * An already-aborted signal is one pull. */
@@ -32,12 +32,25 @@ let polling = async (
 ): Promise<void> => {
   let at = {
     graph: host.graph,
+    ...(host.report ? { report: host.report } : {}),
     ...(options.domain ? { domain: options.domain } : {}),
     ...(options.triage ? { triage: options.triage } : {}),
     readings: await readings(host.config?.plugins),
   }
+  let began = Date.now()
   for (;;) {
+    // A pass that starts long after the last one means the loop was not
+    // running, whatever held it. It is told when it ends, with how long this
+    // pass took, so the report says where the time went.
+    let gap = Date.now() - began
+    began = Date.now()
     await pull(at, from)
+    if (gap > LATE + (options.pull?.every ?? EVERY)) {
+      void host.report?.(
+        new Error(`@yaks/mail — the pull ran ${gap} ms after its last`),
+        { tags: { step: 'mail stall', pass: `${Date.now() - began} ms` } },
+      )
+    }
     if (signal.aborted) return
     await sleep(options.pull?.every ?? EVERY, signal)
     if (signal.aborted) return

@@ -34,6 +34,17 @@ import type { Arrival, Received } from './inbound.ts'
 import type { Fetch } from './cloudflare.ts'
 import type { Pull } from './options.ts'
 
+/** Where a failure is told: the host's telemetry, else the console. */
+export type Report = (
+  error: unknown,
+  context?: { tags?: Record<string, string> },
+) => unknown
+
+/** How long a letter may wait at the edge before taking it is itself a
+ * failure: a pull runs every few seconds, so a letter this old means the pull
+ * did not run, however it came to be late. */
+export let LATE = 60_000
+
 /** A letter as the edge holds it: the envelope and what it parsed out. */
 export type EdgeMessage = {
   /** the edge's key for it: `msg:<ms>:<Message-ID>` */
@@ -228,9 +239,12 @@ let tray = async <T extends { id: string }>(
   list: () => Promise<T[] | null>,
   record: (item: T) => Promise<unknown>,
   ack: (ids: string[]) => Promise<void>,
+  report: Report = console.error,
 ): Promise<number> => {
   let fail = (what: string, err: unknown) =>
-    console.error(`@yaks/mail — pull could not ${what} —`, err)
+    report(new Error(`@yaks/mail — pull could not ${what}`, { cause: err }), {
+      tags: { step: 'mail pull', tray: name },
+    })
   let done: string[] = []
   try {
     for (let item of await list() ?? []) {
@@ -262,24 +276,45 @@ export type Pulled = { messages: number; requests: number }
  * leaves the request tray for one that has it.
  */
 export let pull = async (
-  at: Arrivals & { graph: Graph },
+  at: Arrivals & { graph: Graph; report?: Report; now?: () => number },
   from: Edge,
 ): Promise<Pulled> => {
-  let { graph } = at
+  let { graph, report = console.error, now = Date.now } = at
   let receive = arrived(at)
-  let messages = await tray('message', from.messages, async (m) => {
-    // An outbound copy has nothing to record; taking it clears the tray.
-    if (m.dir && m.dir != 'in') return
-    let bundles = await receive(...received(m))
-    if (bundles.length) await graph.apply(bundles)
-  }, from.notified)
+  let messages = await tray(
+    'message',
+    from.messages,
+    async (m) => {
+      // An outbound copy has nothing to record; taking it clears the tray.
+      if (m.dir && m.dir != 'in') return
+      let bundles = await receive(...received(m))
+      if (bundles.length) await graph.apply(bundles)
+      let waited = now() - (m.ts ?? (Date.parse(m.received_at ?? '') || now()))
+      if (waited > LATE) {
+        report(
+          new Error(`@yaks/mail — a letter waited ${waited} ms at the edge`),
+          {
+            tags: { step: 'mail stall' },
+          },
+        )
+      }
+    },
+    from.notified,
+    report,
+  )
   let requests = graph.vocab.comp('hook')
-    ? await tray('request', from.requests, async (r) => {
-      let about = graph.vocab.comp('about')
-        ? await hookTo(at, r.path)
-        : undefined
-      await graph.apply(hooked(request(r), about), { trusted: true })
-    }, from.processed)
+    ? await tray(
+      'request',
+      from.requests,
+      async (r) => {
+        let about = graph.vocab.comp('about')
+          ? await hookTo(at, r.path)
+          : undefined
+        await graph.apply(hooked(request(r), about), { trusted: true })
+      },
+      from.processed,
+      report,
+    )
     : 0
   return { messages, requests }
 }

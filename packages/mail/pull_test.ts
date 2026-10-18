@@ -13,6 +13,7 @@ import {
   edge,
   type EdgeMessage,
   type EdgeRequest,
+  LATE,
   messageIdOf,
   pull,
   received,
@@ -364,4 +365,21 @@ test('service: a live signal with no pull holds the duty until shutdown', async 
   stop.abort()
   await running
   assertEquals(ended, true)
+})
+
+test('pull: a letter that waited at the edge is reported, taking it anyway', async () => {
+  let g = await club()
+  let { at, acked } = stub([letter(1)])
+  let told: unknown[] = []
+  let now = () => Date.parse(letter(1).received_at!) + LATE + 1
+  await pull({ graph: g, domain, now, report: (e) => told.push(e) }, at)
+  assertEquals(acked, [letter(1).id])
+  assertEquals(told.length, 1)
+  await pull({
+    graph: g,
+    domain,
+    now: () => letter(1).ts ?? 0,
+    report: (e) => told.push(e),
+  }, at)
+  assertEquals(told.length, 1)
 })
