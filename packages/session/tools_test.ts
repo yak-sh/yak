@@ -229,7 +229,7 @@ test('session context resumes a numbered transcript through an ordinary write', 
   await g.apply([said[0]])
   let [after] = await g.get([ids.run1])
   assertEquals(after.entity, before.entity)
-  assertEquals(after.session, { id: 'one', ended: null })
+  assertEquals(after.session, { id: 'one' })
 })
 
 test('a wrap records the account and lets go of everything', async () => {

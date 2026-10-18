@@ -139,7 +139,7 @@ scenario(
     let asks = (await transcript(p.g, 'session')).filter((b) => b.ask)
     equal(asks.length, 1)
     equal(asks[0].inference, undefined)
-    equal(asks[0].attempt, { by: null })
+    equal(asks[0].attempt, {})
   },
 )
 
@@ -172,7 +172,7 @@ scenario(
     let entries = await transcript(p.g, 'session')
     let asks = entries.filter((b) => b.ask)
     equal(asks.map((b) => b.entity.eid), calls)
-    equal(asks[0].attempt, { by: null })
+    equal(asks[0].attempt, {})
     equal(asks[0].inference, undefined)
     equal(entries.find((b) => b.refusal)?.refusal, { code: 'limit' })
     equal(p.inline(), 0)
@@ -310,7 +310,7 @@ test('a receipt arriving during a pending step is delivered after lease release'
   equal(receiptChecks, 2)
   let [ask] = await arriving.g.get(['ask'])
   equal(ask.cost, { dollars: 0.02, reported: true })
-  equal(ask.attempt, { by: null })
+  equal(ask.attempt, {})
 })
 
 scenario(

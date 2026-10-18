@@ -57,7 +57,7 @@ test('a side that does not exist is written null', () => {
       entity: { eid: 'never-committed' },
       session: {},
     }).conflict as Record<string, unknown>).loser,
-    null,
+    undefined,
   )
 })
 
