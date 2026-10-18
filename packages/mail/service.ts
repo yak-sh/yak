@@ -47,8 +47,14 @@ let polling = async (
     await pull(at, from)
     if (gap > LATE + (options.pull?.every ?? EVERY)) {
       void host.report?.(
-        new Error(`@yaks/mail — the pull ran ${gap} ms after its last`),
-        { tags: { step: 'mail stall', pass: `${Date.now() - began} ms` } },
+        new Error('@yaks/mail — the pull fell behind'),
+        {
+          tags: {
+            step: 'mail stall',
+            gap: `${gap} ms`,
+            pass: `${Date.now() - began} ms`,
+          },
+        },
       )
     }
     if (signal.aborted) return

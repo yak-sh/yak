@@ -302,8 +302,8 @@ export let pull = async (
       let waited = now() - (m.ts ?? (Date.parse(m.received_at ?? '') || now()))
       if (waited > LATE) {
         report(
-          new Error(`@yaks/mail — a letter waited ${waited} ms at the edge`),
-          { tags: { step: 'mail stall', ...took } },
+          new Error('@yaks/mail — a letter waited too long at the edge'),
+          { tags: { step: 'mail stall', waited: `${waited} ms`, ...took } },
         )
       }
     },
