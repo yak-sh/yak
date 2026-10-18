@@ -1,7 +1,7 @@
 // Provisioning history and workspace placement survive deletion of external
 // resource records; lifecycle status is derived rather than written.
 import { equal, test } from '@yaks/testing'
-import { graph, mint } from '@yaks/graph'
+import { type Comp, graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
@@ -21,7 +21,7 @@ await g.apply([
   },
 ])
 
-let requested = (await g.get([sandbox]))[0].sandbox?.status
+let requested = ((await g.get([sandbox]))[0].sandbox as Comp)?.status
 await g.apply([
   { entity: { eid: sandbox }, pending: null, released: {} },
   { entity: { eid: computer }, $delete: true },
@@ -30,6 +30,6 @@ let [row] = await g.get([sandbox])
 
 test('sandbox status follows disposal and keeps original computer history', () => {
   equal(requested, 'requested')
-  equal(row.sandbox?.status, 'released')
+  equal((row.sandbox as Comp)?.status, 'released')
   equal(row.workspace, { machine: computer, root: '/workspace' })
 })
