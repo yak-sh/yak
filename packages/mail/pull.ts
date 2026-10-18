@@ -281,21 +281,29 @@ export let pull = async (
 ): Promise<Pulled> => {
   let { graph, report = console.error, now = Date.now } = at
   let receive = arrived(at)
+  // Where a late letter's time went, per step, so the report says which.
+  let took: Record<string, string> = {}
+  let timed = async <T>(step: string, run: () => Promise<T>): Promise<T> => {
+    let began = now()
+    try {
+      return await run()
+    } finally {
+      took[step] = `${now() - began} ms`
+    }
+  }
   let messages = await tray(
     'message',
-    from.messages,
+    () => timed('list', from.messages),
     async (m) => {
       // An outbound copy has nothing to record; taking it clears the tray.
       if (m.dir && m.dir != 'in') return
-      let bundles = await receive(...received(m))
-      if (bundles.length) await graph.apply(bundles)
+      let bundles = await timed('read', () => receive(...received(m)))
+      if (bundles.length) await timed('write', () => graph.apply(bundles))
       let waited = now() - (m.ts ?? (Date.parse(m.received_at ?? '') || now()))
       if (waited > LATE) {
         report(
           new Error(`@yaks/mail — a letter waited ${waited} ms at the edge`),
-          {
-            tags: { step: 'mail stall' },
-          },
+          { tags: { step: 'mail stall', ...took } },
         )
       }
     },
