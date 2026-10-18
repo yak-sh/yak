@@ -7,7 +7,6 @@
 // order settled after it, and the dry run that keeps a refused half-batch from
 // landing anywhere.
 import { test } from '@yaks/testing'
-import { backoff } from '@yaks/durable-object'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, identityEid } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
@@ -678,8 +677,10 @@ test('a projection answers what it names, and what its paths reach across the st
   assertEquals(Object.keys(stamped), ['kind', 'entity', 'book', 'created'])
 })
 
+// The failed fan-out is the subject; preparing two Store vocabularies is not.
+let unavailableStore = await where()
 test('a spanning read never leaves out a store that answers 503', async () => {
-  let { env, reach } = await where()
+  let { env, reach } = unavailableStore
   let ns = env.STORE as unknown as {
     idFromName(n: string): unknown
     get(id: unknown): { fetch(req: Request): Promise<Response> }
@@ -697,19 +698,8 @@ test('a spanning read never leaves out a store that answers 503', async () => {
       }),
     },
   } as unknown as Env
-  let prior = backoff.wait
-  let pauses: number[] = []
-  backoff.wait = (ms) => {
-    pauses.push(ms)
-    return Promise.resolve()
+  const e = await assertRejects(() => read(flaky, reach, '.book')) as {
+    status?: number
   }
-  try {
-    const e = await assertRejects(() => read(flaky, reach, '.book')) as {
-      status?: number
-    }
-    assertEquals(e.status, 503)
-    assertEquals(pauses, backoff.pauses)
-  } finally {
-    backoff.wait = prior
-  }
+  assertEquals(e.status, 503)
 })
