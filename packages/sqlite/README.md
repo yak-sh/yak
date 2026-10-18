@@ -32,7 +32,11 @@ This Deno example opens an in-memory database. Use a file path for persistence.
 `open(path)` from `@yaks/sqlite/db` returns a driver over the database there,
 with a prepared-statement cache, and a `close()`.
 
-```ts
+The complete example opens and installs its own database. Its checks run in
+[`readme_test.ts`](./readme_test.ts), with private stores prepared before each
+scenario's timed checks.
+
+```ts ignore
 import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
 import { graph } from '@yaks/graph'
@@ -117,7 +121,11 @@ implements the resulting row changes and transaction. Low-level callers can use
 `store.tx(tx => tx.patch(bundles))`, but that bypasses graph validation and
 plugins.
 
-```ts
+The complete example opens and installs its own database. Its checks run in
+[`readme_test.ts`](./readme_test.ts), with private stores prepared before each
+scenario's timed checks.
+
+```ts ignore
 import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
@@ -189,7 +197,11 @@ Use `rows` for aggregate and field-projection results. See
 [@yaks/query](../query/README.md) for operators, lists, ranges, time phrases,
 kind filters, ordering, pagination, and aggregates.
 
-```ts
+The complete example opens and installs its own database. Its checks run in
+[`readme_test.ts`](./readme_test.ts), with private stores prepared before each
+scenario's timed checks.
+
+```ts ignore
 import { open } from '@yaks/sqlite/db'
 import { storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
