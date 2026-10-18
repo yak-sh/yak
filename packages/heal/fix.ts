@@ -6,7 +6,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { addressed } from '@yaks/graph/call'
 import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
-import { absent, and, eq, present, want } from '@yaks/query'
+import { absent, and, eq, fields, present } from '@yaks/query'
 
 /** What config can set. */
 export type Options = {
@@ -96,15 +96,32 @@ export let active = (fixer: Bundle, now = Date.now()): boolean => {
 /** Decide and write through one graph. Gate refusals still commit `writes`. */
 export let fixing = (g: Graph, options: Options = {}) => {
   let serial = serially()
-  let unexited = and(
-    present('fixer'),
-    absent('exit'),
-    want('process'),
-    want('created'),
-    want('session'),
-    ...(g.vocab.comp('native') ? [want('native')] : []),
-    ...(g.vocab.comp('stop') ? [want('stop')] : []),
-  )
+  // Slot checks need lifecycle facts, never the computed transcript cost.
+  let lifecycle = [
+    'session.status',
+    'session.ended',
+    'process.pid',
+    'created.at',
+  ]
+    .filter((path) => {
+      let [c, p] = path.split('.')
+      return g.vocab.prop(c, p)
+    })
+  let marks = ['native', 'stop', 'exit'].filter((n) => g.vocab.comp(n))
+  let reading = async (query: ReturnType<typeof and>) => {
+    let rows = await g.read(and(...query.clauses, fields(...lifecycle)))
+    let marked = new Map((await g.get(rows.map((b) => b.entity.eid), marks))
+      .map((b) => [b.entity.eid, b]))
+    return rows.map((b) => ({
+      ...b,
+      ...Object.fromEntries(
+        marks.filter((n) => marked.get(b.entity.eid)?.[n]).map((
+          n,
+        ) => [n, marked.get(b.entity.eid)![n]]),
+      ),
+    }))
+  }
+  let unexited = and(present('fixer'), absent('exit'))
   // The home project, resolved once per decision: the work and its gates ask.
   let homed: Promise<string | undefined> | undefined
   let home = () => homed ??= named(g, options.project, 'project')
@@ -117,7 +134,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
     if (history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))) {
       return true
     }
-    let running = (await g.read(unexited))
+    let running = (await reading(unexited))
       .filter((f) => active(f, now))
     return running.length >= (options.cap ?? 2)
   }
@@ -128,15 +145,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
       !options.provider || task.cancelled ||
       (!reopen && !open && task.completed)
     ) return []
-    let history = await g.read(and(
-      eq('fixer.bug', bug),
-      want('created'),
-      want('session'),
-      ...(g.vocab.comp('native') ? [want('native')] : []),
-      ...(g.vocab.comp('stop') ? [want('stop')] : []),
-      want('exit'),
-      want('process'),
-    ))
+    let history = await reading(and(eq('fixer.bug', bug)))
     let latest =
       history.toSorted((a, b) =>
         str(comp(b, 'created')?.at).localeCompare(str(comp(a, 'created')?.at))
