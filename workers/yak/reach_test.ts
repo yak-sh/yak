@@ -7,6 +7,7 @@
 // order settled after it, and the dry run that keeps a refused half-batch from
 // landing anywhere.
 import { test } from '@yaks/testing'
+import { backoff } from '@yaks/durable-object'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, identityEid } from '@yaks/graph'
 import { CallError } from '@yaks/tools'
@@ -696,8 +697,19 @@ test('a spanning read never leaves out a store that answers 503', async () => {
       }),
     },
   } as unknown as Env
-  const e = await assertRejects(() => read(flaky, reach, '.book')) as {
-    status?: number
+  let prior = backoff.wait
+  let pauses: number[] = []
+  backoff.wait = (ms) => {
+    pauses.push(ms)
+    return Promise.resolve()
   }
-  assertEquals(e.status, 503)
+  try {
+    const e = await assertRejects(() => read(flaky, reach, '.book')) as {
+      status?: number
+    }
+    assertEquals(e.status, 503)
+    assertEquals(pauses, backoff.pauses)
+  } finally {
+    backoff.wait = prior
+  }
 })
