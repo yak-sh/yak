@@ -1,4 +1,5 @@
 import { driver, type DurableStorage } from '@yaks/durable-object'
+import { population } from '../../packages/sqlite/population.ts'
 import { reader } from '@yaks/sqlite/reader'
 import {
   seedTallies,
@@ -7,6 +8,7 @@ import {
 } from '../../packages/sql/scoped_tally_fixture_test.ts'
 export let scopedTallyCost = (storage: DurableStorage) => {
   let fixture = seedTallies(driver(storage), 2048)
+  population(driver(storage))
   return [
     '.tally=entity.archetype',
     `.edge .edge.from.entity.archetype=${fixture.private} .tally=entity.archetype`,

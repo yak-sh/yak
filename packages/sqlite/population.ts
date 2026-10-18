@@ -25,7 +25,7 @@ import {
   type Stmt,
   table,
 } from '@yaks/sql'
-let installed = (driver: Driver) =>
+export let installed = (driver: Driver) =>
   driver.query({ t: 'pragma', name: 'table_info', arg: POPULATION }).length > 0
 
 export const POPULATION = '_yaks_population'

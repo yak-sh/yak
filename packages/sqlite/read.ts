@@ -1,6 +1,8 @@
 import {
   cardinality,
   classified,
+  installed,
+  POPULATION,
   populationCount,
   populations,
 } from './population.ts'
@@ -117,7 +119,20 @@ export let rows = (
         if (n != undefined) return [{ value: '', n }]
       }
     }
-    return driver.query(compile(parsed, vocab, catalogued(driver, vocab, opts)))
+    let population = parsed.clauses.length == 1 &&
+        parsed.clauses[0].kind == 'tally' &&
+        parsed.clauses[0].path.join('.') == 'entity.archetype' &&
+        installed(driver) && classified(driver)
+      ? POPULATION
+      : undefined
+    return driver.query(compile(
+      parsed,
+      vocab,
+      catalogued(driver, vocab, {
+        ...opts,
+        population,
+      }),
+    ))
       .map((r) => projected(vocab, r))
   }
   // The catalog and entity statement must see the same commit. Otherwise a

@@ -76,6 +76,7 @@ import {
   FALSE,
   type Frag,
   from,
+  gt,
   type Join,
   lit,
   not,
@@ -147,6 +148,8 @@ export type BindOpts = {
   /** Matching against a current snapshot of this database file's archetypes,
    * done while the statement is being compiled. */
   archetypes?: ArchetypeSet
+  /** Exact transaction-consistent stored populations, supplied by the adapter. */
+  population?: string
 }
 
 // The mutable state one call to `bind` threads through: the schema, the
@@ -3066,16 +3069,27 @@ let scopedTally = (
           }
         }
         if (exceptions.length > ARMS) return
-        let publicRows = bound(
-          ast,
-          vocab,
-          { ...plain, archetypes: undefined, extend: [] },
-          {
-            ...base,
-            live: () => base.among('"entity"."archetype"', groups),
-          },
-          [],
-        )
+        let publicRows = opts.population && !plain.derived?.['entity.archetype']
+          ? select({
+            cols: [as(col('eid', 'entity'), 'value'), col('n', '__population')],
+            from: table(opts.population, '__population'),
+            joins: [{ how: 'cross', src: table('entity') }],
+            where: and(
+              eq(col('id', 'entity'), col('archetype', '__population')),
+              gt(col('n', '__population'), lit(0)),
+              cond(base.among('"__population"."archetype"', groups)),
+            ),
+          })
+          : bound(
+            ast,
+            vocab,
+            { ...plain, archetypes: undefined, extend: [] },
+            {
+              ...base,
+              live: () => base.among('"entity"."archetype"', groups),
+            },
+            [],
+          )
         let parts: Query[] = [publicRows, ...exceptions].map((q) => ({
           ...q,
           order: undefined,
