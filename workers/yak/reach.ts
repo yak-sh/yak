@@ -1,3 +1,4 @@
+import { sessionRows } from './session-lens.ts'
 // An entity spans apps (T-32698): the eid a client minted is the same thing
 // in every store, so the recipe an app saved and the loan another app wrote
 // about it are one entity wearing two components, one per app. A read that
@@ -805,7 +806,10 @@ export let vocabAt = async (
   let speaks =
     lensSpoken(new Request('https://store/vocab', { headers })).speaks
   if (!speaks) return doc
-  let docs = compile(lensesIn([lensDocAt(storeName(space, app), doc)]), speaks)
+  let docs = compile([
+    ...sessionRows(),
+    ...lensesIn([lensDocAt(storeName(space, app), doc)]),
+  ], speaks)
     .schema(appVocab(doc).docs)
   let own = new Set(Object.keys(doc.$defs ?? {}))
   return {
