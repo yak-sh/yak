@@ -49,12 +49,15 @@ await overviewGraph.apply([
 overviewGraph.read('.post.published=1')
 overviewGraph.read('.post')
 overviewStore.tx((tx) => tx.doom(['kate']))
-test('README graph selects a published post', () =>
-  equal(overviewGraph.read('.post.published=1').map((b) => b.entity.eid), [
-    'p1',
-  ]))
-test('README graph reads a post reference', () =>
-  equal(overviewGraph.read('.post')[0].post, {
+test('README graph selects a published post', async () =>
+  equal(
+    (await overviewGraph.read('.post.published=1')).map((b) => b.entity.eid),
+    [
+      'p1',
+    ],
+  ))
+test('README graph reads a post reference', async () =>
+  equal((await overviewGraph.read('.post'))[0].post, {
     published: true,
     author: 'kate',
   }))
@@ -80,8 +83,8 @@ await detachedGraph.apply([
 ])
 await detachedGraph.apply([{ entity: { eid: 'kate' }, $delete: true }])
 detachedGraph.read('.post')
-test('README graph reads a post after its author is deleted', () => {
-  equal(detachedGraph.read('.post')[0].post, { published: true })
+test('README graph reads a post after its author is deleted', async () => {
+  equal((await detachedGraph.read('.post'))[0].post, { published: true })
   detached.close()
   overview.close()
 })
