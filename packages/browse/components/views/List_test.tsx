@@ -13,7 +13,7 @@ import { idOf, uuid } from '../../types.ts'
 
 // Enter through the registry, as the app does (Board_test.tsx).
 await import('../Entity.tsx')
-let { BoardList, ListEntry } = await import('./List.tsx')
+let { BoardList, ListEntry, QueryList } = await import('./List.tsx')
 let { mount } = await import('../mount.ts')
 
 // Twelve tasks, newest last; the oldest was edited most recently.
@@ -121,4 +121,38 @@ test('a favorite session opens from its whole entry, without a numbered handle',
   } finally {
     mounted.free()
   }
+})
+
+let feedRead = reader([
+  task(1),
+  ...Array.from(
+    { length: 20 },
+    (_, i): Bundle => ({
+      entity: {
+        eid: `eeeee045-0000-4000-8000-${String(i + 20).padStart(12, '0')}`,
+        num: i + 20,
+      },
+      doc: { body: 'newest comment' },
+      comment: { target: task(1).entity.eid },
+    }),
+  ),
+])
+let feedPrior = config.host
+config.host = 'browser.test'
+cache.value = {}
+let feedWire = host()
+let feedMounted = mount(<QueryList eid='app-browse' query='.doc' />)
+await until(() => feedWire.asked().some((a) => a.subscribe.includes('.limit')))
+let feedAsk = feedWire.asked().find((a) => a.subscribe.includes('.limit'))!
+await act(() =>
+  feedWire.say({ id: feedAsk.id, bundles: feedRead(feedAsk.subscribe) })
+)
+let feedText = feedMounted.root.textContent
+feedMounted.free()
+feedWire.free()
+cache.value = {}
+config.host = feedPrior
+test('home feed excludes comments before taking its first window', () => {
+  assertEquals(feedText?.includes('task 1'), true)
+  assertEquals(feedText?.includes('No results.'), false)
 })

@@ -101,6 +101,22 @@ export let QueryList = (
       if (vocab.prop('entity', 'num')) line += '&.order=-entity.num'
       else if (vocab.prop('created', 'at')) line += '&.order=-created.at'
     }
+    // Apply the feed's existing exclusions before the server takes a window.
+    // Filtering only the returned window can leave an empty home page when
+    // its newest documents are comments, despite older visible content.
+    for (
+      let name of [
+        'card',
+        'camera',
+        'fold',
+        'shelf',
+        'cursor',
+        'client',
+        'comment',
+      ]
+    ) {
+      if (vocab.comp(name)) line += `&!${name}`
+    }
     line += '&.limit=' + Math.min(bound, Math.max(size, limit))
     let peers = ['task.status', 'doc.title'].filter((field) => {
       let [comp, prop] = field.split('.')
