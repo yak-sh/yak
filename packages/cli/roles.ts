@@ -28,3 +28,22 @@ export let dutyRoles = (
       facetsOf(p)?.includes('service') ?? true
     ).map(used).filter((p) => has(p, 'service')),
   ].filter((role) => !mine.includes(role))
+
+/** A configured worker's duties, validated before composition. */
+export let workerRoles = (
+  config: import('./config.ts').Config,
+  duties: string[],
+  only?: string[],
+  process?: string,
+): string[] => {
+  let layout = process
+    ? config.processes?.find((p) => p.unit == process)
+    : undefined
+  if (process && !layout) throw new Error(`No configured process: ${process}`)
+  let roles = only ?? layout?.roles ?? duties
+  roles = roles.filter((role) => !layout?.except?.includes(role))
+  if (roles.some((role) => !duties.includes(role))) {
+    throw new Error('work was asked for a role this config does not serve')
+  }
+  return ['graph', ...roles]
+}

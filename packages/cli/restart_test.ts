@@ -252,3 +252,28 @@ test('restart captures startup evidence before timeout cleanup can unload it', (
   let stop = evidence.calls.findIndex((c) => c.includes('stop'))
   assert(show > 0 && show < stop)
 })
+
+test('restart rolls configured mail even on its first installation', async () => {
+  let f = fixture(['yak-mail@old'])
+  f.options.processes = [
+    { unit: 'yak-work' },
+    { unit: 'yak-mail' },
+    { unit: 'yak-web' },
+  ]
+  await restart(f.options)
+  assertEquals(started(f).map((unit) => unit.split('@')[0]), [
+    'yak-work',
+    'yak-mail',
+    'yak-web',
+  ])
+  assertEquals(stopped(f), [[
+    'yak-work@old.service',
+    'yak-work@older.service',
+    'yak-mail@old.service',
+    'yak-web@old.service',
+  ]])
+  let first = fixture()
+  first.options.processes = [{ unit: 'yak-mail' }]
+  await restart(first.options)
+  assertEquals(started(first).length, 1)
+})

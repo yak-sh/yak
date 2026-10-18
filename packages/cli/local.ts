@@ -57,7 +57,7 @@ import {
 import { readThread } from './read_thread.ts'
 import { thread } from '@yaks/threads'
 import { during, peek } from '@yaks/trace'
-import { dutyRoles, rolesOf } from './roles.ts'
+import { dutyRoles, rolesOf, workerRoles } from './roles.ts'
 import { declarations } from './declarations.ts'
 import { readinessPid } from './runtime.ts'
 import { lifetime } from './lifetime.ts'
@@ -182,6 +182,7 @@ export let work = async (
   ready?: string,
   only?: string[],
   starter?: number,
+  process?: string,
 ): Promise<void> => {
   let config = read(path)
   let lives = await lifetime(dbOf(config), starter)
@@ -192,10 +193,7 @@ export let work = async (
     [],
     (p, name) => said.facets[p].includes(name),
   )
-  if (only?.some((role) => !duties.includes(role))) {
-    throw new Error('work was asked for a role this config does not serve')
-  }
-  let roles = ['graph', ...only ?? duties]
+  let roles = workerRoles(config, duties, only, process)
   let key = JSON.stringify([path, roles])
   let opening = compose(config, roles, facet)
   hosts.set(key, opening)

@@ -13,6 +13,7 @@ export type Role = {
 }
 
 export type RestartOptions = {
+  processes?: import('./config.ts').Config['processes']
   runtimeDir: string
   roles?: Role[]
   systemctl?: string
@@ -93,7 +94,11 @@ export let restart = async (options: RestartOptions): Promise<string> => {
     }
     return result.stdout
   }
-  let roles = options.roles ?? ROLES
+  let roles = options.roles ?? options.processes?.map((p) => ({
+    unit: p.unit,
+    old: [`${p.unit}@*.service`],
+    optional: p.optional,
+  })) ?? ROLES
   // Snapshot every role first: no candidate can be mistaken for an old unit.
   let listed = await call(
     'list-units',

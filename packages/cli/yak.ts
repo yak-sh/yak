@@ -40,7 +40,7 @@ import { appStray, appTools } from './commands.ts'
 import { cli, type Command, type Ctx, helpTool, type Opts } from './run.ts'
 import { listed } from './platform.ts'
 import { closeAccounts, personal } from './accounts.ts'
-import { ownConfig } from './config.ts'
+import { configPath, ownConfig, read } from './config.ts'
 import { starter } from './init.ts'
 import { listen, wind } from '@yaks/process/wind'
 import * as held from './held.ts'
@@ -207,6 +207,10 @@ export let own: Command[] = [
       type: 'object',
       properties: {
         ready: { type: 'string', description: 'Readiness file' },
+        process: {
+          type: 'string',
+          description: 'Configured process unit name',
+        },
         starter: {
           type: 'number',
           description: 'Exit when this requesting process ends',
@@ -229,6 +233,7 @@ export let own: Command[] = [
         ready,
         roles,
         typeof args.starter == 'number' ? args.starter : undefined,
+        typeof args.process == 'string' ? args.process : undefined,
       )
       return 0
     },
@@ -243,7 +248,13 @@ export let own: Command[] = [
       let runtimeDir = Deno.env.get('XDG_RUNTIME_DIR')
       if (!runtimeDir) throw new Usage('yak restart needs $XDG_RUNTIME_DIR')
       let { restart } = await import('./restart.ts')
-      c.out(await restart({ runtimeDir }))
+      let path = configPath(c.config)
+      c.out(
+        await restart({
+          runtimeDir,
+          processes: path ? read(path).processes : undefined,
+        }),
+      )
       return 0
     },
   },

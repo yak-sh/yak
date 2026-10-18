@@ -209,6 +209,15 @@ test('restart CLI queues replacements before old stops with no blocking shutdown
   let dir = await Deno.makeTempDir({ prefix: 'yak-restart-cli-' })
   let run: ReturnType<typeof child> | undefined
   try {
+    await Deno.writeTextFile(
+      `${dir}/yak.json`,
+      JSON.stringify({
+        processes: [
+          { unit: 'yak-work' },
+          { unit: 'yak-web' },
+        ],
+      }),
+    )
     // This PATH contains only the fake. Its absolute shell needs no host tools;
     // neither an accidental lookup nor a missing flag can reach live systemctl.
     await Deno.writeTextFile(

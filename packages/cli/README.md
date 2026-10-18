@@ -501,11 +501,32 @@ its duties before its in-flight work ends. Config `duties: false` disables this
 too, for deliberately inert hosts. Readiness identifies only this invocation's
 validated launcher, never a PID inherited from a different worker's environment.
 
-On the box, `yak-web@` units run `serve --no-duties --share --ready <file>`, and
-independent `yak-work@` units run the pool and plugin services. The independent
-tracker uses `yak-tracker@` workers over its own config and `yak-tracker-web@`
-units for HTTP. **Use `yak restart`**, not raw systemctl restart: for each role
-(the primary workers and web, and each active tracker role) it starts a
+A **process layout** is the config's `processes` list of systemd unit templates.
+`yak work --process <unit>` selects that entry's `roles` (or all duties when
+omitted), minus `except`. An explicit `--roles` selects duties instead, still
+respecting the entry's exclusions. With no `--process`, work serves its given
+roles or all duties. For example:
+
+```json
+{
+  "processes": [
+    { "unit": "yak-work", "except": ["@yaks/mail"] },
+    { "unit": "yak-mail", "roles": ["@yaks/mail"] },
+    { "unit": "yak-web" },
+    { "unit": "yak-tracker", "optional": true },
+    { "unit": "yak-tracker-web", "optional": true }
+  ]
+}
+```
+
+The worker templates run `yak work --process yak-work` and
+`yak work --process yak-mail` over the same config, each with its own
+`--ready %t/<unit>-%i.ready`. Web templates run
+`serve --no-duties --share --ready <file>`. A separate tracker template may use
+its own config. `yak restart --config <path>` rolls exactly that config's
+process layout; entries marked `optional` roll only when active. Without a
+process layout it rolls the primary worker and web and active tracker units.
+**Use `yak restart`**, not raw systemctl restart: for each entry it starts a
 replacement from the unit template and waits for its readiness file, and once
 every replacement is ready it queues the old units' stops without waiting for
 them, then says which units it started, how long each took and which it is

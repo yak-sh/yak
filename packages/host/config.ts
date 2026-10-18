@@ -22,6 +22,15 @@ export type Configured = [string, Options, string[]?, FacetName[]?]
 
 /** A config file: where the graph lives, and what reads and writes it. */
 export type Config = {
+  /** Systemd unit templates rolled by `yak restart`. A worker selects its
+   * entry with `yak work --process <unit>`; omitted roles takes all duties
+   * except those explicitly excluded. Optional entries roll only if active. */
+  processes?: {
+    unit: string
+    roles?: string[]
+    except?: string[]
+    optional?: boolean
+  }[]
   /** Explicit connector bindings for file-and-command workspace targets. */
   workspaces?: {
     connectors: Record<string, import('@yaks/machine').ProviderConfig>
