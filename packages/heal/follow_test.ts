@@ -1545,3 +1545,20 @@ test('completed task held by an untagged settled native session gets one tracker
   equal(untaggedReplayed, 1)
   untagged.f.close()
 })
+
+let alreadyTaken = await fixture({ cap: 1 })
+await alreadyTaken.run()
+let takenTask = (await rows(alreadyTaken.g, 'task'))[0]
+let takenHolder = String(comp(takenTask, 'claim').session)
+let getTaken = alreadyTaken.g.get
+alreadyTaken.g.get = (ids, comps, options) => {
+  if (ids.includes(takenHolder) && comps === undefined) {
+    throw new Error('an already reported opening does not need fixer status')
+  }
+  return getTaken(ids, comps, options)
+}
+test('a replay of a taken opening does not read the holder transcript', async () => {
+  await alreadyTaken.replay()
+  equal(!!(await alreadyTaken.tracker.get([bug]))[0].taken, true)
+  alreadyTaken.close()
+})

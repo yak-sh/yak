@@ -70,13 +70,13 @@ let take = async (
 ) => {
   let holder = str(comp(task, 'claim')?.session)
   if (!task || !holder || bug.resolved || bug.archived) return
+  let back = moment(comp(bug, 'regressed')?.at)
+  if (bug.taken && !(back > moment(comp(bug, 'taken')?.at))) return
   let [fixer] = await g.get([holder])
   if (
     !fixer || str(comp(fixer, 'fixer')?.bug) != bug.entity.eid || fixer.exit ||
     fixer.native && !active(fixer)
   ) return
-  let back = moment(comp(bug, 'regressed')?.at)
-  if (bug.taken && !(back > moment(comp(bug, 'taken')?.at))) return
   await mark(mutate, [{
     entity: { eid: bug.entity.eid },
     taken: { task: task.entity.num ? human(g.vocab)(task) : task.entity.eid },
