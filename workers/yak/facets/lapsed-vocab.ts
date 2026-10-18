@@ -23,9 +23,18 @@ export let docs: VocabDoc[] = [{
         },
         known: owned({
           ...time,
-          description: 'when they disconnected it themselves, which is no bug',
+          description:
+            'when the person knew: the letter telling them how to reconnect ' +
+            'it went, or they disconnected it themselves',
         }),
       },
+    },
+    tell_lapsed: {
+      effect: true,
+      created: ['lapsed'],
+      // A letter that may have left is never sent again.
+      idempotent: false,
+      description: 'write the person how to connect their assistant again',
     },
   },
 }]
