@@ -52,6 +52,7 @@ export let PLATFORM = [
   'access',
   'grant',
   '_package',
+  '_lens',
   '_comp',
   '_prop',
   '_extends',

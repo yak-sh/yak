@@ -160,12 +160,13 @@ test('a failed translation writes none of the batch and strips no caller input',
   ok(error instanceof Refused)
 })
 
+let fastFixture0 = setup()
+fastFixture0.apply([
+  { entity: { eid: 'cake' }, recipe: { yield: 4 }, doc: { title: 'Cake' } },
+  { entity: { eid: 'note' }, doc: { title: 'Note' } },
+])
 test('patch answers use stored aspect membership without copying stored fields', () => {
-  let g = setup()
-  g.apply([
-    { entity: { eid: 'cake' }, recipe: { yield: 4 }, doc: { title: 'Cake' } },
-    { entity: { eid: 'note' }, doc: { title: 'Note' } },
-  ])
+  let g = fastFixture0
   let rows = [
     { entity: { eid: 'cake' }, doc: { title: 'New cake' } },
     { entity: { eid: 'note' }, doc: { title: 'New note' } },
@@ -213,8 +214,9 @@ test('metadata fills once and never silently changes an existing step', async ()
   await throws(() => described(g, [changed]), 'immutable step')
 })
 
+let fastFixture1 = setup()
 test('find and put move seeded rows once through an expanded vocabulary', () => {
-  let g = setup()
+  let g = fastFixture1
   g.apply([{ entity: { eid: 'seed' }, recipe: { title: 'Seed cake' } }])
   let lens = compile(lensesIn([kitchen]))
   let move = () => {
@@ -324,4 +326,37 @@ test('retained lenses serve old callers after the source property is undeclared'
     (g.get([retained[0].entity.eid], ['_lens']) as Bundle[])[0]._lens,
     retained[0]._lens,
   )
+})
+
+// A pending cross-component rename is visible to internal consumers before
+// its bounded mover runs; reading does not rewrite the stored source.
+let pendingStore = ram(kitchenVocab)
+let seedPending = graph({ vocab: kitchenVocab, storage: pendingStore })
+seedPending.apply([
+  { entity: { eid: pkg }, _package: { name: 'kitchen' } },
+  ...lensesIn([kitchen]),
+  { entity: { eid: 'pending-read' }, recipe: { title: 'Cake', yield: 2 } },
+])
+let pendingGraph = graph({
+  vocab: kitchenVocab,
+  storage: pendingStore,
+  plugins: [lenses(undefined, {
+    vocab: kitchenVocab,
+    rows: lensesIn([kitchen]),
+    speaks,
+  })],
+})
+test('a pending property rename expands internal reads without moving stored data', () => {
+  let [row] = pendingGraph.get(['pending-read']) as Bundle[]
+  equal(row.doc, { title: 'Cake' })
+  equal(row.recipe, { yield: 2 })
+  let [stored] = seedPending.get(['pending-read']) as Bundle[]
+  equal(stored.recipe, { title: 'Cake', yield: 2 })
+  equal(stored.doc, undefined)
+})
+test('a pending property rename selects by its destination before movement', () => {
+  let rows = pendingGraph.read('.doc.title=Cake') as Bundle[]
+  equal(rows.map((row) => [row.entity.eid, row.doc]), [['pending-read', {
+    title: 'Cake',
+  }]])
 })

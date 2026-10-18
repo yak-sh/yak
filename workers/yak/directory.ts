@@ -440,6 +440,7 @@ export type Row = {
     script?: string
     source?: string | null
     reload?: Reload | null
+    lenses?: Record<string, number>
   }
   restored?: {
     app: Id
@@ -959,6 +960,7 @@ export let deployOf = (r: Row) => ({
   script: r.deploy!.script ?? '',
   source: r.deploy!.source ?? null,
   reload: r.deploy!.reload ?? null,
+  lenses: r.deploy!.lenses as Record<string, number> | undefined,
 })
 
 /** One file written into an app (drafts.ts `Written`), as a row reads. */
@@ -1372,7 +1374,9 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let eid = idOf(row.hostname.serves)
       let aimed = hostOf(row)
       let at = await self.appAt(eid)
-      if (at) return { space: at.space, app: at.app as App | null, host: aimed }
+      if (at) {
+        return { space: at.space, app: at.app as App | null, host: aimed }
+      }
       let space = await self.at(eid)
       return space ? { space, app: null, host: aimed } : null
     },

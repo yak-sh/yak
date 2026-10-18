@@ -344,6 +344,7 @@ export let record = async (
       ...target ? [] : [{
         entity: { eid },
         deploy: {
+          lenses: app.lenses,
           app: app.eid,
           version,
           files: JSON.stringify(files),

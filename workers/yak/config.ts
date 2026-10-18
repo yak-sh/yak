@@ -104,6 +104,7 @@ export let appConfig: Config = {
         'imported',
         'ask',
         'using',
+        'sending',
         'notice',
         'stop',
         'attempt',

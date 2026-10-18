@@ -88,10 +88,13 @@ let same = (a: Bundle[], b: Bundle[]) =>
   canonical(change(a)) == canonical(change(b))
 export let lenses = (
   report: (error: unknown) => void = (error) => console.error(error),
-  pending?: { vocab: Vocab; rows: Bundle[] },
+  pending?: { vocab: Vocab; rows: Bundle[]; speaks?: Speaks },
 ): Plugin => {
-  let expansion = pending ? compile(pending.rows) : undefined
-  if (expansion && !expansion.views.some((v) => pending!.vocab.comp(v.from))) {
+  let expansion = pending ? compile(pending.rows, pending.speaks) : undefined
+  if (
+    expansion && !expansion.renames.length &&
+    !expansion.views.some((v) => pending!.vocab.comp(v.from))
+  ) {
     expansion = undefined
   }
   let current = (
@@ -100,6 +103,33 @@ export let lenses = (
   ): Bundle[] | Promise<Bundle[]> => {
     if (!expansion) return rows
     let lens = expansion
+    if (lens.renames.length && !lens.views.length) {
+      return after(tx.get(rows.map((r) => r.entity.eid)), (held) => {
+        let at = new Map(held.map((r) => [r.entity.eid, r]))
+        return rows.map((r) => {
+          let full = at.get(r.entity.eid) ?? r
+          let out = { ...r }
+          for (let { rename: { from, to } } of lens.renames) {
+            let [fc, fp] = from.split('.'), [tc, tp] = to.split('.')
+            let source = full[fc] as Record<string, unknown> | undefined
+            let target = full[tc] as Record<string, unknown> | undefined
+            let value = target && Object.hasOwn(target, tp)
+              ? target[tp]
+              : source?.[fp]
+            if ((fc in r || tc in r) && value != null) {
+              out[tc] = { ...out[tc] as object, [tp]: value }
+            }
+            if (fc in out && out[fc] && typeof out[fc] == 'object') {
+              let comp = { ...out[fc] as Record<string, unknown> }
+              delete comp[fp]
+              if (Object.keys(comp).length) out[fc] = comp
+              else delete out[fc]
+            }
+          }
+          return out
+        })
+      })
+    }
     return after(facts(lens, rows, tx), (held) =>
       after(
         each(
@@ -170,6 +200,53 @@ export let lenses = (
     original: import('@yaks/query').Query,
   ): import('@yaks/graph').ReadView | null => {
     if (!expansion || !vocab) return null
+    if (expansion.renames.length && !expansion.views.length) {
+      let lens = expansion
+      let text = JSON.stringify(original)
+      if (
+        !lens.renames.some(({ rename }) => {
+          let from = rename.from.split('.')[0], to = rename.to.split('.')[0]
+          return [from, to].some((c) =>
+            text.includes(`"${c}"`) || text.includes(`"${c}.`)
+          )
+        }) && !text.includes('every')
+      ) return null
+      return {
+        original,
+        query: and(
+          or(
+            map(original, (c) =>
+              [
+                  'fields',
+                  'every',
+                  'count',
+                  'distinct',
+                  'tally',
+                  'order',
+                  'limit',
+                  'after',
+                ].includes(c.kind)
+                ? and()
+                : c),
+            map(
+              lens.find((p) => {
+                let [c, f] = p.split('.')
+                return !!pending!.vocab.prop(c, f)
+              }),
+              (c) => c.kind == 'every' ? and() : c,
+            ),
+          ),
+          every(),
+        ),
+        vocab,
+        dependencies: [
+          ...lens.sources,
+          ...lens.renames.map((r) => r.rename.to),
+        ],
+        expand: (rows: Bundle[]) => current(rows, tx),
+        answer: (rows: Bundle[]) => rows,
+      }
+    }
     let canonical = [
       ...new Set(
         expansion.views.flatMap((v) =>
@@ -247,7 +324,11 @@ export let lenses = (
             tx.read('._lens'),
             (steps) =>
               each(rows, [] as Bundle[], (out, row) => {
-                if (row.$speaks === undefined && !expansion) {
+                if (
+                  row.$speaks === undefined &&
+                  (!expansion ||
+                    expansion.renames.length && !expansion.views.length)
+                ) {
                   return [...out, row]
                 }
                 let speaks = row.$speaks as Speaks
@@ -264,7 +345,8 @@ export let lenses = (
                 let spoken = speaks === undefined
                   ? undefined
                   : compile(steps, speaks)
-                let canonical = !spoken || !spoken.views.length && !!expansion
+                let canonical = !spoken ||
+                  !spoken.views.length && !!expansion?.views.length
                 let lens = canonical && expansion
                   ? expansion
                   : spoken ?? compile(steps)

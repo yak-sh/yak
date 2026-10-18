@@ -33,12 +33,12 @@ an entry that names a model with `using` asks for a turn:
     ])
 
 `using.model` is any model name its selected provider serves, and
-`using.instructions` is what a conversational model is told before the
+`sending.instructions` is what a conversational model is told before the
 transcript. Every entry that asks for a turn carries its own `using`, so each
 turn names its model and its instructions; an entry without one is part of the
 transcript the next turn reads, and asks for nothing.
 
-Two more keep a turn cheap. `using.window` is how many of the transcript's
+Two more keep a turn cheap. `sending.window` is how many of the transcript's
 newest lines the model reads, reaching back to the line that began the turn it
 cuts into; without it every turn reads the whole transcript, so a conversation
 that goes on for weeks costs more with every line. `using.effort` is how hard
@@ -110,7 +110,7 @@ An app can ask `bytedance-seed/seed-audio-1-0` for an audio clip. Its owner
 first calls `store_connection_need` for the app with `integration: 'openrouter'`
 and signs in on the space's connections page. The app never receives the
 OpenRouter key. The entry's text is the sound prompt; this model does not use
-`using.instructions` or typed questions.
+`sending.instructions` or typed questions.
 
     await apply({
       entity: { eid: '$sound' },

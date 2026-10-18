@@ -27,6 +27,7 @@ import { sessionDerived } from '@yaks/session/status'
 import { read } from '@yaks/yaml'
 import { docs as lensDocs } from '@yaks/lens/vocab'
 import { declaredLenses, lensPaths, retainedLenses } from './lenses.ts'
+import { sessionLens } from './session-lens.ts'
 import { configs } from './config.ts'
 import { chosen, facetsOf, given, used } from '@yaks/host/config'
 import {
@@ -779,7 +780,7 @@ export let appWords = (source: unknown = {}): Words => {
   }
   let v = composed(
     pluginsOf(doc),
-    [metaDoc, ...(declaredLenses(doc) ? lensDocs : []), doc],
+    [metaDoc, ...lensDocs, sessionLens, doc],
     appOptions,
   )
   appVocabs.set(key, v)

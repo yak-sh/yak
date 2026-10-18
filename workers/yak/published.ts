@@ -578,7 +578,7 @@ let BUILDERS: Row[] = [{
       ),
       input: {
         type: 'object',
-        description: 'native request fields merged into using.input for a ' +
+        description: 'native request fields merged into sending.input for a ' +
           'shadow variant',
       },
       model: str(

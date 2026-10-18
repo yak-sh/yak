@@ -132,11 +132,11 @@ test('hosted provider, model and native input override keeps supplied main outpu
   assertEquals(((call.call as Comp).args as Comp).using, {
     provider: identityEid('provider', ['workers-ai']),
     model: identityEid('model', ['minimax/music-2.6']),
-    input,
   })
+  assertEquals(((call.call as Comp).args as Comp).sending, { input })
   await g.apply(await builderModelTool.run(call, g), { trusted: true })
-  let [entry] = await g.read('.entry&?using')
-  assertEquals((entry.using as Comp).input, input)
+  let [entry] = await g.read('.entry&?using&?sending')
+  assertEquals((entry.sending as Comp).input, input)
   assertEquals(await g.get([builder, mainId, output]), before)
   assertEquals(
     current(

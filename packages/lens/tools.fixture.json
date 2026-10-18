@@ -89,7 +89,7 @@
         },
         "input": {
           "type": "object",
-          "description": "native request fields merged into using.input for a shadow variant; --input @input.json reads an object"
+          "description": "native request fields merged into sending.input for a shadow variant; --input @input.json reads an object"
         },
         "only": {
           "type": "array",

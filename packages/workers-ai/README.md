@@ -107,7 +107,7 @@ and instrumental flags. MiniMax vocals require `Request.input.lyrics` (authored
 syllables are supported) or explicit `lyrics_optimizer:true`; missing both
 refuses before inference. `Request.input.is_instrumental:true` means no vocals,
 never inferred from the prompt. Native parameters are carried from a
-transcript's `using{input}` to `Request.input`; ElevenLabs accepts explicit
+transcript's `sending{input}` to `Request.input`; ElevenLabs accepts explicit
 `music_length_ms` there. This adapter never invents lyrics or parses duration.
 The model's own id is sent to `binding.run`; this package seeds no model rows or
 allowed-model catalogue.

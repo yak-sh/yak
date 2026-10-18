@@ -1,3 +1,4 @@
+import { sessionPackage } from './session-lens.ts'
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import type { Frame } from '@yaks/api'
@@ -87,7 +88,10 @@ test('an app lens keeps old writes, reads and subscriptions through reload', asy
     [{ entity: row.entity, doc: { title: 'Cake again' } }],
     KERNEL,
   )
-  assertEquals((ws.sent.at(-1)!.bundles![0].recipe as Comp).title, 'Cake again')
+  assertEquals(
+    (ws.sent.at(-1)!.bundles![0].recipe as Comp).title,
+    'Cake again',
+  )
 
   // Rollback puts the old page vocabulary back, while retaining its bridge.
   assert((await declare(old)).ok)
@@ -102,7 +106,10 @@ test('an app lens keeps old writes, reads and subscriptions through reload', asy
     [{ entity: row.entity, recipe: { title: 'Cake third' } }],
     headers,
   )
-  assertEquals((ws.sent.at(-1)!.bundles![0].recipe as Comp).title, 'Cake third')
+  assertEquals(
+    (ws.sent.at(-1)!.bundles![0].recipe as Comp).title,
+    'Cake third',
+  )
 })
 
 test('the app lens mover rehearses, consumes its source, and is idempotent', async () => {
@@ -337,7 +344,11 @@ test('a current pinned page omits the bridge, while a rollback keeps its old ver
       lookups++
       return Promise.resolve([
         { version: 1, files: { 'vocab.json': 'old' } },
-        { version: 2, files: { 'vocab.json': 'next' } },
+        {
+          version: 2,
+          files: { 'vocab.json': 'next' },
+          lenses: latestSpeaks(name, next),
+        },
       ])
     },
   } as unknown as Directory
@@ -366,7 +377,9 @@ test('a current pinned page omits the bridge, while a rollback keeps its old ver
   assertEquals([lookups, reads], [1, 1])
   app.version = 1
   app.lenses = latestSpeaks(name, old, app.lenses)
-  assertEquals(await head(1), { 'x-yak-speaks': JSON.stringify(speaks) })
+  assertEquals(await head(1), {
+    'x-yak-speaks': JSON.stringify({ ...speaks, [sessionPackage]: 0 }),
+  })
   assertEquals(await head(2), {})
 })
 
@@ -429,7 +442,9 @@ test('timestamp steps append in landing order and survive rollback', () => {
     },
   }
   let latest = latestSpeaks(name, second)!
-  assertEquals(Object.values(latest), [20261004102000])
+  assertEquals(Object.values(latest).filter((s) => s !== 20261018010000), [
+    20261004102000,
+  ])
   assertEquals(latestSpeaks(name, first, latest), latest)
   let rollback = retainedLenses(second, old)
   assertEquals(Object.values(versions([lensDocAt(name, rollback)])), [
@@ -475,7 +490,9 @@ test('old apply replies and keyed resends speak the caller vocabulary', async ()
   let body = JSON.stringify([{ entity, recipe: { title: 'Cake' } }])
   let sent = { ...headers, [IDEMPOTENCY]: crypto.randomUUID() }
   let apply = () => door('/apply', { method: 'POST', body }, sent)
-  let first = await (await apply()).json()
+  let response = await apply()
+  let first = await response.json()
+  assert(response.ok, JSON.stringify(first))
   let resent = await (await apply()).json()
   assertEquals(first, resent)
   assertEquals(first.find((r: Bundle) => r.entity.eid == entity.eid).recipe, {

@@ -289,7 +289,8 @@ export let village = (net: Net, deal: Deals) => {
       return {
         entry: { session: eidOf(g.id) },
         content: { body: said(f.sheet.name, words) },
-        using: { model: CHAT, instructions, window: WINDOW, effort: 'low' },
+        using: { model: CHAT, effort: 'low' },
+        sending: { instructions, window: WINDOW },
       }
     },
     /** a villager hears news without answering it: a quest handed in */

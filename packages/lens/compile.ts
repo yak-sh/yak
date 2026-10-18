@@ -32,6 +32,7 @@ export type GraphOp = Rename | ViewOp
 export type Lens = {
   put: (bundles: Bundle[], ctx?: Facts) => Bundle[]
   get: (bundles: Bundle[], ctx?: Facts) => Bundle[]
+  renames: readonly Rename[]
   views: readonly ComponentView[]
   dependencies: readonly string[]
   ask: (query: Query) => Query
@@ -118,6 +119,7 @@ let get = (b: Bundle, pairs: Pair[], held?: Bundle): Bundle => {
 let identity: Lens = {
   put: (b) => b,
   get: (b) => b,
+  renames: [],
   views: [],
   dependencies: [],
   ask: (q) => q,
@@ -175,7 +177,11 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
           fail('a rename must change its path')
         }
         if (selected.has(s)) {
-          pairs.push({ from, to, change: document([{ rename: { from, to } }]) })
+          pairs.push({
+            from,
+            to,
+            change: document([{ rename: { from, to } }]),
+          })
         }
       }
     }
@@ -187,6 +193,9 @@ export let compile = (rows: Bundle[], speaks?: Speaks): Lens => {
   }
   let sources = [...consumed, ...views.map((v) => v.from)]
   let lens: Lens = !pairs.length && !views.length ? identity : {
+    renames: pairs.map(({ from, to }) => ({
+      rename: { from: from.join('.'), to: to.join('.') },
+    })),
     views,
     dependencies: [...new Set(views.flatMap(viewDependencies))],
     sources,

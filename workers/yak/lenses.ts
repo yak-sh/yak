@@ -1,3 +1,4 @@
+import { sessionPackage, sessionStep } from './session-lens.ts'
 // The platform's lens wiring: the page's kept deploy decides what it speaks;
 // the store keeps the newest chain when its code is rolled back.
 import { compile, type GraphOp, lensesIn, versions } from '@yaks/lens'
@@ -24,8 +25,10 @@ export let latestSpeaks = (
   doc: VocabDoc,
   was?: Record<string, number>,
 ): Record<string, number> | undefined => {
-  if (!was && !declaredLenses(doc)) return undefined
-  let next = versions([lensDocAt(name, doc)])
+  let next = {
+    ...versions([lensDocAt(name, doc)]),
+    [sessionPackage]: sessionStep,
+  }
   return Object.fromEntries(
     [...new Set([...Object.keys(was ?? {}), ...Object.keys(next)])].map((
       pkg,
@@ -158,7 +161,6 @@ export let pageSpeaks = async (
   app: App,
   readDoc: (source: string, file: string) => VocabDoc,
 ): Promise<Record<string, string>> => {
-  if (!app.lenses) return {}
   let raw = request.headers.get('x-yak-version') ??
     (new URL(request.url).pathname.endsWith('/ws')
       ? new URL(request.url).searchParams.get('version')
@@ -183,12 +185,15 @@ export let pageSpeaks = async (
       doc = readDoc(new TextDecoder().decode(bytes), file)
     }
     let name = storeName(space, app)
-    speaks = versions([lensDocAt(name, doc)])
+    speaks = {
+      ...versions([lensDocAt(name, doc)]),
+      [sessionPackage]: deploy.lenses?.[sessionPackage] ?? 0,
+    }
     // An old vocabulary with no step still speaks the app's version zero.
     kept.set(key, speaks)
     if (kept.size > 128) kept.delete(kept.keys().next().value!)
   }
-  let latest = app.lenses
+  let latest = { ...app.lenses, [sessionPackage]: sessionStep }
   if (
     Object.keys(latest).length == Object.keys(speaks).length &&
     Object.entries(latest).every(([pkg, version]) => speaks[pkg] === version)

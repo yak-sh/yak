@@ -116,6 +116,10 @@
             "required"
           ],
           "description": "a contract change: pages crossing this release must reload; absent derives the level from files"
+        },
+        "lenses": {
+          "type": "object",
+          "description": "package lens versions spoken by this immutable page deployment; absent on releases made before version capture"
         }
       },
       "description": "one release of an app: the files it shipped, and the worker built from them",

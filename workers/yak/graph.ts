@@ -7,6 +7,12 @@ import {
   signedDirectory,
   Unfenced,
 } from './directory-copy.ts'
+import {
+  sessionLens,
+  sessionMove,
+  sessionPackage,
+  sessionRows,
+} from './session-lens.ts'
 import { statements } from '@yaks/sqlite'
 import { recovering } from './models.ts'
 import { attributed } from './attribution.ts'
@@ -1028,7 +1034,12 @@ export class Store {
       return
     }
     if (!old.length) return
-    scheduleRetired(this.#bind, app, old, (work) => this.#ctx.waitUntil?.(work))
+    scheduleRetired(
+      this.#bind,
+      app,
+      old,
+      (work) => this.#ctx.waitUntil?.(work),
+    )
   }
 
   #maintenance<T>(run: () => T): T {
@@ -1461,12 +1472,19 @@ export class Store {
             ...(vocab.comp('_tx')
               ? [journal(log({ rows: (s) => drive.query(s), derived }), vocab)]
               : []),
-            ...(declaredLenses(declaration)
+            ...(!own || declaredLenses(declaration)
               ? [
                 lenses(
                   (error) =>
                     defect(error, { request: 'lens normalize', store: name }),
-                  { vocab, rows: lensesIn([lensDocAt(name, declaration)]) },
+                  {
+                    vocab,
+                    speaks: !own ? { [sessionPackage]: 0 } : undefined,
+                    rows: [
+                      ...(!own ? sessionRows() : []),
+                      ...lensesIn([lensDocAt(name, declaration)]),
+                    ],
+                  },
                 ),
               ]
               : []),
@@ -1688,7 +1706,7 @@ export class Store {
       subs,
       authenticate: this.#auth,
       read: (request) => this.#callerRead(request),
-      ...(declaredLenses(declaration)
+      ...(!own || declaredLenses(declaration)
         ? {
           write: (request: Request, rows: Bundle[]) =>
             this.#spokenWrites(request, rows),
@@ -3002,6 +3020,20 @@ export class Store {
       }
       this.#put('descriptions', JSON.stringify(this.#vocab.docs))
     }
+    if (!ownStore(this.#get('name') ?? '')) {
+      let doc = sessionLens
+      let rows = sessionRows()
+      let held = new Set(
+        (await this.#graph.read('._lens')).map((r) => r.entity.eid),
+      )
+      rows = rows.filter((r) => !held.has(r.entity.eid))
+      if (rows.length) {
+        await this.#graph.apply([{
+          entity: { eid: packageEid(doc.package!) },
+          _package: { name: doc.package! },
+        }, ...rows], { trusted: true })
+      }
+    }
     if (this.#lensMove) {
       let doc = lensDocAt(this.#name() ?? '', meant(this.#get('vocab')))
       let rows = await describedLenses(this.#graph, [doc])
@@ -3070,7 +3102,11 @@ export class Store {
       : []
 
   #moves = (): Rule[] =>
-    (this.#lensMove ? [...this.#rules, this.#lensMove] : this.#rules)
+    [
+      ...this.#rules,
+      ...(!ownStore(this.#get('name') ?? '') ? [sessionMove()] : []),
+      ...(this.#lensMove ? [this.#lensMove] : []),
+    ]
       .filter((r) =>
         (!r.stores || r.stores.includes(this.#get('name') ?? '')) &&
         !r.core?.some((comp) =>
@@ -4935,7 +4971,9 @@ export class Store {
    */
   async #recovery(request: Request): Promise<Response> {
     if (request.method != 'GET' && this.#get('name') == PLATFORM_STORE) {
-      throw new Refused('The directory cannot be restored through the app door')
+      throw new Refused(
+        'The directory cannot be restored through the app door',
+      )
     }
     let s = this.#ctx.storage
     try {
