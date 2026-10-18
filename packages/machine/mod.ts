@@ -32,3 +32,10 @@ export type Machine = {
 
 export * from './provider.ts'
 export * from './comp.ts'
+
+export type {
+  ComputerConnector,
+  ComputerTransport,
+  Workspace,
+  WorkspaceTarget,
+} from './workspace.ts'

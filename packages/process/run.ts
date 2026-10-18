@@ -712,6 +712,8 @@ export let watch = async (store: Store, o: Opts = {}): Promise<Run[]> => {
   let dir = dirOf(o)
   let runs: Run[] = []
   for (let b of await store.running()) {
+    // Workspace-qualified runs are observed at their original connector.
+    if ((b[PROCESS] as Process)?.workspace) continue
     let eid = b.entity.eid
     let f = files(dir, eid)
     // The pidfile wins: it is where the wrapper wrote its own pid, and it is
@@ -782,6 +784,7 @@ export let gone = async (
 // A running row whose pid is gone. A run this package launched is not one:
 // its wrapper writes the ending, and `watch` records it with the code.
 let dead = async (b: Bundle, o: Asking): Promise<boolean> => {
+  if ((b[PROCESS] as Process)?.workspace) return false
   let eid = b.entity.eid
   let pid = Number((b[PROCESS] as Process)?.pid ?? 0)
   if (eid == o.me || !pid || mtimeOf(files(dirOf(o), eid).started) != null) {

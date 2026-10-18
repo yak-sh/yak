@@ -72,6 +72,8 @@ export type Service = {
 
 /** A tracked process. */
 export type Process = {
+  /** original launch workspace; a local observer must not inspect its pid */
+  workspace?: string | null
   /** the process id on the machine tracking it */
   pid?: number | null
   /** the command line it was launched with — absent on an adopted process */

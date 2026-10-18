@@ -4,10 +4,12 @@
   "exports": {
     ".": "./mod.ts",
     "./cloudflare": "./cloudflare.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./connectors": "./connectors.ts",
+    "./execution": "./execution.ts"
   },
   "license": "Apache-2.0",
-  "description": "Commands and files through a Machine, with providers that lend sandboxes or attach existing machines and a graph record of their lifecycle.",
+  "description": "Computers, explicit connection transports and durable file-and-command workspaces, separate from sandbox provisioning.",
   "publish": {
     "exclude": [
       "**/*_test.ts",

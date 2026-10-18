@@ -1,15 +1,106 @@
 # Machines
 
-Commands and files through a `Machine`, with providers that lend sandboxes or
-attach existing machines. This package owns the `Machine` contract, the provider
-interface and `machine{provider, address, from, image, state}`. It touches no
-runtime, filesystem or graph storage.
+Computers, explicit connection transports and durable file-and-command
+workspaces, separate from sandbox provisioning.
 
-A **machine** is something you can run commands on and keep files on. `Machine`
-is its commands-and-files interface: `start`, `look`, `tail`, `kill`, `read` and
-`write`. A **provider** lends or attaches machines. A **sandbox** is a machine a
-provider lends on demand with its own filesystem. No machine belongs to a host
-by right: even a machine beside the host must be explicitly configured.
+A **machine** is an actual computer, with a stable graph identity and optional
+`machine.address` selecting a configured connector. A **connector** reaches an
+existing computer; it does not create, destroy or allocate one. A **workspace**
+is the filesystem target of file and command operations, not the location of an
+agent. Its root is a default directory, not an access boundary.
+
+## Connect a computer
+
+The `./connectors` export supplies `localConnector`, `sshConnector`,
+`pveConnector` and `computer` for explicit scheme selection. Unconfigured or
+unreachable addresses fail rather than falling back to local execution.
+Connection addresses contain no directory or credential. A machine keeps its
+minted identity when its address changes; `computerIdentity` reads the target's
+OS identity for reconciliation, without deriving graph identity from it.
+
+```ts
+import { equal } from '@yaks/testing'
+import { localConnector } from '@yaks/machine/connectors'
+
+// A configured control runner is replaceable, without changing selection.
+let transport = await localConnector(() => Promise.resolve('connected'))
+  .connect('local://')
+equal(await transport.execute('printf connected'), 'connected')
+```
+
+SSH accepts `ssh://[user@]host[:port]`. It uses batch mode, a connection timeout
+and strict host-key verification. Optional `identity` pins a key and bypasses
+the agent; `knownHosts` selects an explicitly trusted known-host file. It does
+not provision trust or change the remote host's SSH configuration.
+
+PVE addresses are `pve://node/qemu/VMID`, reaching a Linux QEMU guest with its
+guest agent enabled. The Proxmox host and LXC guests require SSH, not the guest
+agent API. `pveRequest({endpoint, token})` makes HTTPS API calls; `token()`
+resolves a vault-backed `user@realm!tokenid=secret` value per call, never from
+the address. Supply a scoped token with the guest-agent execution permission.
+The API executes short control scripts, observes their returned PID, and refuses
+failures or truncated output. The long-running command has a separate durable
+receipt inside the guest. It needs neither an API call nor a live caller for its
+lifetime.
+
+This API example needs a configured HTTPS endpoint and credential resolver:
+
+```ts ignore
+import { pveConnector, pveRequest } from '@yaks/machine/connectors'
+let transport = await pveConnector({
+  request: pveRequest({
+    endpoint: 'https://pve.example:8006',
+    token: async () => await resolveConfiguredCredential(),
+  }),
+}).connect('pve://node/qemu/201')
+```
+
+## Durable execution
+
+`executionWorkspace(graph, transport, {workspace, root, receipts})`, exported at
+`./execution`, binds file and command operations to a concrete target. `root`
+and `receipts` are absolute target paths, and `workspace` is the graph entity
+id. No implicit placement or host-relative directory is accepted.
+
+A call-derived process entity records `process{workspace, command, cwd, pid}`;
+its eid is the handle returned by `start`, `receipt`, `look`, `tail` and `kill`.
+The launch filesystem retains a private receipt, output and exit observation.
+Recreating the connector and workspace recovers them without relaunching the
+command. Concurrent starts of one call serialize at the target; conflicting
+command or cwd arguments are refused. A crash in the ambiguous interval between
+claim and launch leaves a receipt to inspect, not permission to run again. Local
+@yaks/process recovery leaves these workspace-qualified runs alone.
+
+The target needs Linux `/proc`, bash, setsid, flock, base64 and ordinary file
+utilities. The detached supervisor has its own process group. Stop checks both
+its boot id and process birth token before signalling that group, never an
+unrelated reused PID. If the supervisor dies without writing an exit code,
+`look` records an unknown exit, not an invented success. No connector reaps or
+sweeps user receipts; deletion belongs to explicit resource disposal.
+
+```ts
+import { equal } from '@yaks/testing'
+import { graph, mint } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { processDoc } from '@yaks/process'
+import { executionWorkspace } from '@yaks/machine/execution'
+
+let vocab = loadVocab([processDoc])
+let g = graph({ storage: ram(vocab), vocab })
+let workspace = executionWorkspace(g, {
+  execute: () => Promise.resolve(''),
+}, { workspace: mint(), root: '/repo', receipts: '/receipts' })
+// A receipt lookup does not execute anything on the computer.
+equal(await workspace.receipt!(mint()), undefined)
+```
+
+## Compatibility providers
+
+`Machine`, `MachineProvider` and the Cloudflare subpath support callers still
+using provider-managed lifecycle. [Sandbox](../sandbox) declares containers and
+jails separately from computers. Provider lifecycle is not part of a computer
+connector.
 
 ## Use a sandbox
 
@@ -50,11 +141,13 @@ try {
 
 ## Exports
 
-| Export         | Offers                                                                                                                           |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `.`            | `Machine`, `Proc`, `MachineProvider`, `ProviderConfig`, request/reference/file types, `MACHINE`, `MachineRecord`, `MachineState` |
-| `./cloudflare` | `cloudflareProvider`, `CloudflareProvider`, namespace and RPC types, image cwd and time limits                                   |
-| `./vocab`      | `machineDoc`, `docs`, `description`                                                                                              |
+| Export         | Offers                                                                                                                                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`            | `Workspace`, `WorkspaceTarget`, `ComputerConnector`, `ComputerTransport`, `Machine`, `Proc`, `MachineProvider`, `ProviderConfig`, request/reference/file types, `MACHINE`, `MachineRecord`, `MachineState` |
+| `./cloudflare` | `cloudflareProvider`, `CloudflareProvider`, namespace and RPC types, image cwd and time limits                                                                                                             |
+| `./connectors` | `computer`, `localConnector`, `sshConnector`, `pveConnector`, `pveRequest`, `computerIdentity`, control types                                                                                              |
+| `./execution`  | `executionWorkspace`                                                                                                                                                                                       |
+| `./vocab`      | `machineDoc`, `docs`, `description`                                                                                                                                                                        |
 
 ## Machine
 
@@ -179,13 +272,13 @@ equal(destroyed, 1)
 
 ## Workspace records
 
-A **workspace** is a file-and-command target, recorded as
-`workspace{machine, root, sandbox}`. `machine` names the actual computer; `root`
-is its default absolute directory, not an access boundary. Optional `sandbox`
-names an enclosing [sandbox](../sandbox). A sandbox entity itself wears
-`workspace{machine, root}` without a self reference. Missing placement means
-unknown, never the graph server's disk. Resource placement stays fixed so old
-calls remain recoverable after a session changes its default target.
+A workspace is recorded as `workspace{machine, root, sandbox}`. `machine` names
+the actual computer; `root` is its default absolute directory, not an access
+boundary. Optional `sandbox` names an enclosing [sandbox](../sandbox). A sandbox
+entity itself wears `workspace{machine, root}` without a self reference. Missing
+placement means unknown, never the graph server's disk. Resource placement stays
+fixed so old calls remain recoverable after a session changes its default
+target.
 
 Session defaults use `home{workspace, cwd}`; a process can retain its original
 `process.workspace`, and a Git repository can name its filesystem context with

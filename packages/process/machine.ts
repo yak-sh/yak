@@ -63,7 +63,7 @@ export let processMachine = (
   let processFor = (call: string) => derivedEid(`shell process ${call}`)
   let look = async (eid: string): Promise<Proc | null> => {
     let [self] = await g.get([eid])
-    if (!self) return null
+    if (!self || comp(self, PROCESS)?.workspace) return null
     let pid = Number((comp(self, PROCESS) as Process | undefined)?.pid ?? 0)
     let exit = comp(self, EXIT) as Exit | undefined
     return {
@@ -209,7 +209,7 @@ export let processProvider = (
       let rows = await g.read('.process&!exit')
       for (let row of rows) {
         let p = row[PROCESS] as Process
-        if (p.cwd == cwd || p.cwd?.startsWith(cwd + '/')) {
+        if (!p.workspace && (p.cwd == cwd || p.cwd?.startsWith(cwd + '/'))) {
           if (p.pid) {
             await processSignal(row.entity.eid, p.pid, 'SIGKILL', o.processes)
           }

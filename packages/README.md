@@ -319,11 +319,11 @@ grouped approximately by function, **not** by dependency order.
   transcript entries and outstanding calls. The package also provides model
   execution, claims on entities and conflict records for competing claims.
 
-- **[@yaks/machine](./machine)** — Commands and files through a `Machine`, with
-  providers that lend sandboxes or attach existing machines. Owns
-  `machine{provider, address, from, image, state}` and the provider interface,
-  and offers the Cloudflare container provider; opens no graph storage.
-
+- **[@yaks/machine](./machine)** — computers and explicit local, SSH and PVE
+  connectors, with durable workspace file/command execution and process
+  receipts. Owns `machine{address}` and `workspace{machine, root, sandbox}`;
+  provisioning belongs to @yaks/sandbox. Compatibility providers remain during
+  coordinated caller conversion.
 - **[@yaks/sandbox](./sandbox)** — containers and jails distinct from computers:
   `sandbox{provider, address, from, image}` records the request and external
   locator, `released{at, by, via}` confirms disposal. Placement is a workspace
