@@ -71,14 +71,7 @@ works; `previous_response_id` and `store: true` are refused there. This says
 nothing about public OpenAI API continuation support. Prefix stability preserves
 cache eligibility, not a guarantee of a cache hit.
 
-## Native step timing
-
-A **native step timing** is one duration derived from transcript entries and
-journal claim/release timestamps, not from a session's mutable `updated` stamp.
-Model wait runs from an ask's claim to its release. Dispatch runs from a call's
-creation to its execution claim. Tool run is the stored `result.ms`. Preflight
-runs from a final result to the next ask's claim without intervening input.
-Concurrent durations overlap; their sum is not the session's wall-clock age.
+## Native steps
 
 Synthetic tool progress acknowledges the provider protocol and owes one model
 turn so the model can keep working while the call runs. Once that progress is
@@ -87,21 +80,16 @@ final results also owe model requests immediately, including while another tool
 is still running. Submitted progress stays in the transcript and provider
 continuation prefix unchanged.
 
-The host collects timings after native model and tool steps from a bounded
-transcript tail and exact journal marks. Three consecutive same-metric samples
-above the preceding median report a drift through the host's tracker sink. A
-fixed message identifies one bug per metric; measurements are attached as tags.
-Model wait remains measurable but does not generate drift bugs; variable
-provider latency is not harness overhead. Tool durations are compared
-separately. Incomplete boundaries are omitted rather than guessed. A settled
-transcript with unfinished claimed work is idle, not model wait or preflight. A
-native final with unblocked claimed work reports that condition without
-automatically resuming the session or spending another model turn. Explicit
-blockers and unfinished task dependencies are excluded.
+After each native model and tool step the host checks for a native final with
+unblocked claimed work, and reports that condition without automatically
+resuming the session or spending another model turn. Explicit blockers and
+unfinished task dependencies are excluded.
 
 The `harness-steps` benchmark uses an instantly answered scripted model over an
 isolated graph to measure the harness's own per-step overhead. Its reference is
-checked by the existing benchmark monitor:
+checked by the existing benchmark monitor. Live steps are not compared with each
+other: on a shared box their durations follow load and the work in hand, so a
+session's earlier steps are no baseline.
 
 ```sh
 deno task bench harness-steps

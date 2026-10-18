@@ -120,7 +120,7 @@ input-to-final-reply turn in milliseconds; `tool-step` is input-to-final-reply
 wall time divided by 12 completed sequential tool steps, in milliseconds per
 step. The latter includes all model turns (13 result-driven turns and at most
 one pending-progress turn per tool), async `session_tool` effect dispatch,
-tool-result persistence and the live step-timing observer (with no external
+tool-result persistence and the unfinished-work check (with no external
 reporter), not model/network/tool I/O. Each metric has one discarded warmup and
 three measured rounds with fresh graphs. Fresh-session creation and the first
 ask are timed (there is no seed turn subtracted). Composition, count/output

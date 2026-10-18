@@ -9,7 +9,7 @@ import { standaloneMain } from '../../bench/standalone.ts'
 import { seed } from './agent.ts'
 import { runs } from './runs.ts'
 import { harness, working } from './testing.ts'
-import { stepTimingEach } from './step_timing.ts'
+import { unfinishedEach } from './unfinished.ts'
 
 const ROUNDS = 3
 const STEPS = 12
@@ -62,7 +62,7 @@ let round = async (steps: number) => {
     asyncTools: true,
     tools,
     model,
-    each: stepTimingEach({ graph: h.g, storage: h.store } as Host),
+    each: unfinishedEach({ graph: h.g } as Host),
   })
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
