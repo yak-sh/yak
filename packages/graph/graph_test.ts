@@ -1101,11 +1101,12 @@ for (let async of [false, true]) {
         },
       }],
     })
-    using _timer = stub(globalThis, 'setTimeout', (wake, _ms, ...args) => {
-      queueMicrotask(() => {
-        if (typeof wake == 'function') wake(...args)
-      })
-      return 0
+    let inert = globalThis.setTimeout
+    using _timer = stub(globalThis, 'setTimeout', (wake, _ms) => {
+      queueMicrotask(() => wake())
+      let id = inert(() => {}, 0)
+      clearTimeout(id)
+      return id
     })
     let out = await one.apply([{ entity: { eid: 'b1' }, book: { pages: 412 } }])
     assertEquals(at(out, 'b1', 'book').pages, 412)
