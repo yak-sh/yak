@@ -184,7 +184,9 @@ equal(await g.get(['b2']), [])
 transaction:
 
 - An omitted property is unchanged.
-- A property set to `null` is cleared.
+- A property set to `null` is cleared. Component reads omit cleared and
+  never-set properties; an explicit scalar projection answers `null` for an
+  absent property.
 - A component set to `null` is removed.
 - `$delete: true` deletes the entity, subject to the vocabulary's
   [death keyword](../vocab/README.md#routing-and-references). A **tombstone** is
@@ -280,7 +282,7 @@ const proposed = await g.apply([
 equal(proposed[0].book, { pages: null })
 equal((await g.get(['b1'], ['book']))[0].book, { title: 'Dune', pages: 412 })
 await g.apply(proposed)
-equal((await g.get(['b1']))[0].book, { title: 'Dune', pages: null })
+equal((await g.get(['b1']))[0].book, { title: 'Dune' })
 await g.apply([{ entity: { eid: 'b1' }, book: null }])
 equal((await g.get(['b1']))[0].book, undefined)
 await g.apply([{ entity: { eid: 'b1' }, $delete: true }])
@@ -393,7 +395,7 @@ await g.apply([
 ])
 await g.apply([{ entity: { eid: 'b1' }, $delete: true }])
 equal((await g.get(['r1']))[0].tombstone, {})
-equal((await g.get(['l1']))[0].loan, { book: null })
+equal((await g.get(['l1']))[0].loan, {})
 equal((await g.get(['m1']))[0].bookmark, undefined)
 equal((await g.get(['h1']))[0].history, { book: 'b1' })
 ```

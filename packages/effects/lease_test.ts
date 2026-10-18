@@ -57,8 +57,7 @@ test('a holder ending releases its leases in an ordinary batch without replaying
     ...await released(ending, 'p1'),
     { entity: { eid: 'p1' }, subscriber: { email: 'ended@example.com' } },
   ])
-  assertEquals((await held(ending, 'ours'))?.holder, null)
-  assertEquals((await held(ending, 'ours'))?.until, null)
+  assertEquals(await held(ending, 'ours'), { name: 'ours' })
   assertEquals((await held(ending, 'theirs'))?.holder, 'p2')
   assertEquals((await ending.get(['p1']))[0].subscriber, {
     email: 'ended@example.com',
@@ -91,7 +90,7 @@ test('letting go hands it over without waiting, and only the holder may', async 
   await drop(graph, 'sweep', { holder: 'p2' })
   assertEquals((await held(graph, 'sweep'))?.holder, 'p1')
   await drop(graph, 'sweep', { holder: 'p1' })
-  assertEquals((await held(graph, 'sweep'))?.holder, null)
+  assertEquals(await held(graph, 'sweep'), { name: 'sweep' })
   // The row stays — what the duty is outlives who was doing it.
   assertEquals((await held(graph, 'sweep'))?.name, 'sweep')
   assertEquals(
@@ -116,7 +115,7 @@ test('a signal already aborted is one pass, and the duty is handed back', async 
   let passes = 0
   await holding(graph, 'sweep', { holder: 'p1' }, () => void passes++)
   assertEquals(passes, 1)
-  assertEquals((await held(graph, 'sweep'))?.holder, null)
+  assertEquals(await held(graph, 'sweep'), { name: 'sweep' })
 })
 
 test('a line passing through leaves a duty somebody is already doing', async () => {
@@ -142,7 +141,7 @@ test('a process that stays holds the duty until it goes', async () => {
   assertEquals(holder, 'p1')
   stop.abort()
   await running
-  assertEquals((await held(graph, 'clock'))?.holder, null)
+  assertEquals(await held(graph, 'clock'), { name: 'clock' })
 })
 
 test('a second process waits, and takes over when the first lapses', async () => {
@@ -221,7 +220,7 @@ test('a lease lost mid-work stops the work, and the loser waits to take it back'
   assertEquals((await held(graph, 'clock'))?.holder, 'p1')
   stop.abort()
   await running
-  assertEquals((await held(graph, 'clock'))?.holder, null)
+  assertEquals(await held(graph, 'clock'), { name: 'clock' })
 })
 
 test('a take the store fails is asked again, and the duty is not given up', async () => {

@@ -3,7 +3,7 @@
 // ./read.ts — and it honors the rules a graph patch honors everywhere:
 //
 //   omitted properties are untouched    a patch names only what changes
-//   a property set to null is cleared   null is a value, not an absence
+//   a property set to null is cleared   component reads omit the property
 //   a component set to null is dropped  the row goes, the entity stays
 //   a tombstoned entity takes no patch  until `revive` clears its tombstone;
 //                                        it keeps its eid and number
