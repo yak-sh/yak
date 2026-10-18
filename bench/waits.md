@@ -64,11 +64,12 @@ local fixture coverage, not a claim that the live host offers Inbox or that a
 
 `operation-commands` measures separate CLI process and MCP HTTP answers for
 `graph-schema`, `task-new`, `task-update`, `decision-new`, `decision-answer`,
-`comment`, `history`, `board-check`, `project-check`, `claim`, `topic-new`,
+`comment-new`, `history`, `board-check`, `project-check`, `claim`, `topic-new`,
 `topic-find`, `persona-read`, `memory-save`, `memory-recall`, `archetype-check`,
-`storage-check`, `effect-check` and `apply-check`: 38 independent figures. Each
-operation checks populated output or its committed effect; a successful empty
-answer is not a stand-in for a write or a populated list.
+`storage-check` and `effect-check`: 38 independent figures. Claim take and claim
+release have separate figures. Each operation checks populated output or its
+committed effect; a successful empty answer is not a stand-in for a write or a
+populated list.
 
 `operation-scale` measures CLI and MCP task lists, filtered queries, history and
 transcript queries independently over 50,000 tasks and 1,000 two-KiB transcript
@@ -95,9 +96,9 @@ deno task bench hook-waits check
 deno task bench terminal-interactions check
 ```
 
-These suites each have independent half-hour monitor lanes and no slack. The
-hourly shell fan-out reads `HOURLY` from `monitor.ts`, so adding a suite there
-also schedules it rather than leaving a second hard-coded list behind.
+These suites each have a half-hour monitor entry and no slack. The hourly shell
+dispatch reads `HOURLY` from `monitor.ts`, so adding a suite there also
+schedules it rather than leaving a second hard-coded list behind.
 
 ### Registered doors still outside these fixtures
 
