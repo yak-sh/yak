@@ -174,7 +174,7 @@ export let stepTimingReporter = (host: Host) => {
               step: sample.step,
               ms: sample.ms,
               baseline: sample.baseline,
-              request: sample.metric == 'model' || sample.metric == 'preflight'
+              request: sample.metric == 'preflight'
                 ? sample.step
                 : call && component(call, 'call')?.source,
               call: sample.metric == 'tool'
