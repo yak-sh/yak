@@ -397,7 +397,7 @@ test('explicit null is authoritative over another projected owner', () => {
     id: 's2',
     bundles: [{ ...row('a'), doc: { title: 'a', body: null } }],
   })
-  assertEquals(comp(c.ent('a'), 'doc').body, null)
+  assertEquals(comp(c.ent('a'), 'doc').body, undefined)
   p.close()
   assertEquals(c.cache.loaded('a', 'doc', 'body'), true)
   c.close()
@@ -427,7 +427,7 @@ test('opt-in one-shot properties retain paint, not coverage, within the row budg
     coverage: { a: { doc: ['body'] } },
     reset: true,
   })
-  assertEquals(comp(c.ent('a'), 'doc').body, null)
+  assertEquals(comp(c.ent('a'), 'doc').body, undefined)
   again.close()
   list.close()
   assertEquals(c.cache.size(), 1)
@@ -480,7 +480,7 @@ test('a covered omission is a known absence', () => {
     bundles: [{ entity: { eid: 'a' }, doc: {} }],
     coverage: { a: { doc: ['title'] } },
   })
-  assertEquals(comp(c.ent('a'), 'doc').title, null)
+  assertEquals(comp(c.ent('a'), 'doc').title, undefined)
   assertEquals(c.cache.loaded('a', 'doc', 'title'), true)
   c.close()
 })

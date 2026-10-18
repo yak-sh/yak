@@ -134,7 +134,7 @@ test('snapshots replace absent wire fields and preserve local/none on gone', asy
   let { c, frame } = snapshot
   let w = snapshotWatch
   frame('s1', [row('a')])
-  assertEquals(comp(c.ent('a'), 'doc').body, null)
+  assertEquals(comp(c.ent('a'), 'doc').body, undefined)
   assertEquals(comp(c.ent('a'), 'recipe'), {})
   frame('s1', [], ['a'])
   assertEquals(w.value, [])

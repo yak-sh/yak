@@ -153,7 +153,6 @@ test('only an unbylined hero belongs to its browser', async () => {
   await f.apply(guest, mark('guest-request'))
   assertEquals((await f.read('guest-request')).completed, {
     at: '2026-10-02T00:00:00Z',
-    by: null,
     via: guest.via,
   })
   for (

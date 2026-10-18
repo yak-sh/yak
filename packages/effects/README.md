@@ -723,7 +723,7 @@ let refreshed = await holding(g, 'refresh-index', {
   return 'refreshed'
 })
 equal(refreshed, 'refreshed')
-equal((await held(g, 'refresh-index'))?.holder, null)
+equal((await held(g, 'refresh-index'))?.holder, undefined)
 ```
 
 `take` uses preconditions on holder and expiry, and taking your own lease renews

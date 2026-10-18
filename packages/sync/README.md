@@ -454,7 +454,7 @@ await g.apply([{
   draft: { text: 'notes' },
 }])
 await snapshot(g, [{ entity: { eid: 'b1' }, book: { title: 'DUNE' } }])
-equal((await g.get(['b1']))[0].book, { title: 'DUNE', pages: null })
+equal((await g.get(['b1']))[0].book, { title: 'DUNE' })
 await land(g, { id: 'books', gone: ['b1'] })
 equal((await g.get(['b1']))[0].book, undefined)
 equal((await g.get(['b1']))[0].draft, { text: 'notes' })

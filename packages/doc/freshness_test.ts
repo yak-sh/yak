@@ -104,7 +104,7 @@ test('a query body token guards clearing', async () => {
     doc: { body: null },
     $was: cleared.$was,
   }])
-  assertEquals(await body(clearing), null)
+  assertEquals(await body(clearing), undefined)
 })
 
 let concurrent = fresh()

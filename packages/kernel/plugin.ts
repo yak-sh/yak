@@ -17,7 +17,7 @@ import { kernelDoc } from './vocab.ts'
 /// let g = graph({ storage: ram(vocab), vocab, plugins: [kernel()] })
 /// await g.apply([{ entity: { eid: 'w1' }, completed: {} }])
 /// let [work] = await g.get(['w1'])
-/// work ~> { completed: { by: null } }
+/// work ~> { completed: { by: undefined } }
 export let kernel = (): Plugin => ({
   name: '@yaks/kernel',
   vocab: [kernelDoc],

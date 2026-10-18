@@ -110,7 +110,7 @@ test('a change names its transaction, which reads like any entity', () => {
   let tx = (first._change as { tx: string }).tx
   let [{ entity, _tx }] = sync(g.get([tx]))
   let { seq, at, by, via } = _tx as Record<string, unknown>
-  assertEquals([entity.eid, seq, at, by, via], [tx, 1, NOW, 'ada', null])
+  assertEquals([entity.eid, seq, at, by, via], [tx, 1, NOW, 'ada', undefined])
 })
 
 test('a transaction selects its own changes', () => {

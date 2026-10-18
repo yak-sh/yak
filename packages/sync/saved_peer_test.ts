@@ -54,7 +54,7 @@ test('a saved peer snapshot initializes a fresh graph', async () => {
 test('a saved peer snapshot replaces absent saved fields and keeps unsaved peers', async () => {
   await snapshot(replaced, [row(5)])
   let [held] = await replaced.get(['a'])
-  assertEquals(held.position, { x: 5, y: null })
+  assertEquals(held.position, { x: 5 })
   assertEquals(held.cursor, { x: 4 })
 })
 

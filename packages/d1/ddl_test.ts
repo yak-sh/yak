@@ -151,7 +151,7 @@ test('a d1 store refuses what the vocabulary refuses', async () => {
   await s.install()
   await s.tx((tx) => tx.patch([{ entity: { eid: 'r1' }, repo: { seq: 3 } }]))
   let [row] = await s.read('.repo')
-  assertEquals(row.repo, { base: 'main', seq: 3, state: null })
+  assertEquals(row.repo, { base: 'main', seq: 3 })
   await assertRejects(() =>
     s.tx((tx) =>
       tx.patch([{ entity: { eid: 'r1' }, repo: { state: 'flying' } }])

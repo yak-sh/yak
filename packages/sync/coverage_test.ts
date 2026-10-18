@@ -75,7 +75,7 @@ test('land clears what a covered answer no longer carries, and nothing else', as
       coverage: { a: { recipe: true } },
     })
   await covered({ serves: 4 })
-  assertEquals((await g.get(['a']))[0].recipe, { serves: 4, course: null })
+  assertEquals((await g.get(['a']))[0].recipe, { serves: 4 })
   await covered()
   let [a] = await g.get(['a'])
   assertEquals([a.recipe, a.doc], [undefined, { title: 'Dal' }])
