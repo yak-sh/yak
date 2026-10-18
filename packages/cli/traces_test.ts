@@ -181,3 +181,22 @@ test('closing tracing finishes delivery already selected', async () => {
   await ending
   equal(delivered, true)
 })
+
+let startTarget = {}
+let startStacks: string[] = []
+let startLeft = 1
+let startRecorder = traces(startTarget, {
+  process: mint(),
+  take: () => Promise.resolve({ requested: false, rate: 0 }),
+  getStart: () => startLeft-- > 0,
+  reportGetStart: (stack) => startStacks.push(stack),
+})
+let startChannel = channel(startTarget)
+let openGet = startChannel.begin({ kind: 'get', name: 'get' })
+test('armed GET caller capture is delivered before completion and bounded', () => {
+  equal(startStacks.length, 1)
+  equal(startStacks[0].includes('armed get start'), true)
+  equal(startStacks[0].length <= 8192, true)
+})
+openGet?.end()
+await startRecorder.close()

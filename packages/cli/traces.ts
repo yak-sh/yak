@@ -12,6 +12,8 @@ export let traces = (
   graph: object,
   options: {
     process: string
+    getStart?: () => boolean
+    reportGetStart?: (stack: string) => void
     sink?: Sink
     take: () => Promise<Capture>
     origin?: number
@@ -75,6 +77,13 @@ export let traces = (
     if (rows) await options.sink(rows as Bundle[])
   }
   let stop = channel(graph).subscribe((event) => {
+    if (event.kind == 'get' && event.stage == 'start' && options.getStart?.()) {
+      let stack = (new Error('armed get start').stack ?? '').slice(0, 8192)
+      if (options.reportGetStart) options.reportGetStart(stack)
+      else {console.error(
+          JSON.stringify({ diagnostic: 'get-start', pid: Deno.pid, stack }),
+        )}
+    }
     let root = roots.get(event.id) ?? (event.parent && roots.get(event.parent))
     if (!root && ['request', 'apply', 'effect'].includes(event.kind)) {
       root = event.id

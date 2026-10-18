@@ -1,3 +1,4 @@
+import { getStarts } from './get_starts.ts'
 import { workspaceCapabilities } from './workspaces.ts'
 import { resolveSessionHome } from './session_home.ts'
 import { machineCapabilities } from './machines.ts'
@@ -648,6 +649,7 @@ let composed = async (
         if (opts.process !== false) {
           captureControl = config.tracker ? traceControl(path) : undefined
           recorded = traces(g, {
+            getStart: getStarts(path),
             process: selfEid(),
             take: captureControl?.take ??
               (() => Promise.resolve({ requested: false, rate: 0 })),
