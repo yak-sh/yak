@@ -56,13 +56,26 @@ export let inventory = async (
   let said = await declarations(config, true)
   let { TOOLS } = await import('../packages/cli/yak.ts')
   let toolNames = said.tools.map((tool) => tool.name).sort()
+  let { REMAINING_FAMILIES } = await import('./operation-remaining.ts')
+  let measured = new Set(
+    [...OPERATION_FAMILIES, ...REMAINING_FAMILIES].map((f) =>
+      f.replaceAll('-', '_')
+    ),
+  )
+  measured.add('task_list')
+  measured.add('graph_query')
+  measured.add('graph_show')
+  measured.add('graph_apply')
+  let httpTools = said.tools.filter((t) =>
+    !t.surfaces || t.surfaces.includes('mcp')
+  ).map((t) => t.name)
   let controls = said.controls.flatMap(({ value }) =>
     value?.commands?.map((c) => c.name) ?? []
   )
   return {
     tools: toolNames,
     fixture:
-      'starter plus sqlite; CLI-only overrides may be absent from HTTP tools/list',
+      'config declarations; compare HTTP tools/list for actual visibility',
     cli: [
       ...new Set([
         ...TOOLS.map((t) => t.name),
@@ -71,12 +84,14 @@ export let inventory = async (
         ...toolNames,
       ]),
     ].sort(),
-    measuredTools: OPERATION_FAMILIES.map((family) =>
-      family.replaceAll('-', '_')
-    ).sort(),
-    unmeasuredTools: toolNames.filter((name) =>
-      !OPERATION_FAMILIES.some((family) => family.replaceAll('-', '_') == name)
-    ),
+    httpTools,
+    scope:
+      'Measured names identify operations, not every variant of their arguments; code_sync CLI only.',
+    measuredTools: toolNames.filter((name) => measured.has(name)),
+    unmeasuredTools: toolNames.filter((name) => !measured.has(name)),
+    unsupportedDoors: {
+      code_sync: 'MCP runner does not pass process.cwd; CLI measured',
+    },
   }
 }
 
@@ -92,12 +107,15 @@ export let OPERATION_SCALE = ['cli', 'connector'].flatMap((door) =>
 export let SCALE_TASKS = 50_000
 export let SCALE_ENTRIES = 1000
 
-type Operation = {
+export type Operation = {
   family: string
   tool: string
   command: string[]
+  cwd?: string
+  doors?: ('cli' | 'connector')[]
   args: () => Record<string, unknown>
   prepare?: () => Promise<void>
+  after?: () => void
   verify: (text: string, args: Record<string, unknown>) => Promise<void> | void
 }
 let includes = (text: string, mark: string) => {
@@ -109,6 +127,7 @@ let includes = (text: string, mark: string) => {
 async function collect(
   args: string[] = [],
   scale = false,
+  remaining = false,
 ): Promise<Record<string, Samples>> {
   let tasks = scale ? SCALE_TASKS : OPERATION_TASKS
   let n = Number(args[0] ?? 3)
@@ -116,6 +135,11 @@ async function collect(
     throw new Error('positive sample count required')
   }
   let dir = await Deno.makeTempDir({ prefix: 'T-127678-operations-' })
+  let originalCwd = Deno.cwd()
+  if (remaining) {
+    await Deno.mkdir(`${dir}/checkout`)
+    Deno.chdir(`${dir}/checkout`)
+  }
   let configPath = `${dir}/yak.json`
   let env = {
     TASKS_HOME: `${dir}/tasks`,
@@ -123,7 +147,7 @@ async function collect(
     HARNESS_WORKTREE_DIR: `${dir}/worktrees`,
     PROCESS_DIR: `${dir}/process`,
     YAK_RUNTIME_CACHE: `${dir}/runtime`,
-    TASKS_SESSION: '',
+    TASKS_SESSION: remaining ? SESSION : '',
     CLAUDE_SESSION_ID: '',
   }
   let host: Awaited<ReturnType<typeof compose>> | undefined
@@ -135,6 +159,18 @@ async function collect(
     config.db = `${dir}/yak.db`
     config.duties = false
     config.plugins!.push('@yaks/sqlite')
+    if (remaining) {
+      config.plugins!.push(
+        '@yaks/design',
+        '@yaks/connections',
+        '@yaks/notify',
+        { use: '@yaks/mail', with: { sender: { via: 'stash' } } },
+        '@yaks/visualize',
+        '@yaks/fts',
+        '@yaks/code',
+        '@yaks/git',
+      )
+    }
     config.plugins = config.plugins?.map((p) =>
       p == '@yaks/session'
         ? { use: '@yaks/session', with: { transcripts: `${dir}/transcripts` } }
@@ -156,7 +192,10 @@ async function collect(
       },
       {
         entity: { eid: SESSION },
-        session: { id: 'benchmark-operation-session' },
+        session: {
+          id: 'benchmark-operation-session',
+          ...(remaining ? { actor: PERSON } : {}),
+        },
       },
       {
         entity: { eid: PERSONA },
@@ -213,7 +252,17 @@ async function collect(
       let out = await new Deno.Command(Deno.execPath(), {
         args: [
           'run',
-          '-A',
+          ...(remaining
+            ? [
+              '--allow-read',
+              '--allow-write',
+              '--allow-env',
+              '--allow-run',
+              '--allow-ffi',
+              '--allow-sys',
+              '--allow-net=127.0.0.1,localhost',
+            ]
+            : ['-A']),
           '--config',
           `${root}deno.json`,
           `${root}packages/cli/yak.ts`,
@@ -224,7 +273,7 @@ async function collect(
           ...flags,
           '--json',
         ],
-        cwd: root,
+        cwd: operation.cwd ?? root,
         env,
         stdin: 'null',
         stdout: 'piped',
@@ -240,7 +289,12 @@ async function collect(
       { hostname: '127.0.0.1', port: 0, onListen() {} },
       host.handler,
     )
-    let ask = rpc({ url: `http://127.0.0.1:${server.addr.port}/mcp` })
+    config.port = server.addr.port
+    await Deno.writeTextFile(configPath, JSON.stringify(config))
+    let ask = rpc({
+      url: `http://127.0.0.1:${server.addr.port}/mcp`,
+      ...(remaining ? { via: SESSION } : {}),
+    })
     await initialize(ask)
     let listed = await ask('tools/list', {})
     let registered = new Set(
@@ -505,32 +559,62 @@ async function collect(
         },
       ]
     }
+    if (remaining) {
+      let context = {
+        graph,
+        dir,
+        PERSON,
+        PROJECT,
+        TARGET,
+        SESSION,
+        PERSONA,
+        fresh,
+        saved,
+        includes,
+      }
+      operations = [
+        ...await (await import('./operation-local.ts')).localOperations(
+          context,
+        ),
+        ...await (await import('./operation-files.ts')).fileOperations(context),
+        ...await (await import('./operation-services.ts')).serviceOperations(
+          context,
+        ),
+      ]
+    }
+    let filter = args.find((a) => a.startsWith('--family='))?.slice(9)
+    if (filter) operations = operations.filter((o) => o.family == filter)
     for (let operation of operations) {
       if (!registered.has(operation.tool)) {
         throw new Error(`unregistered operation ${operation.tool}`)
       }
-      for (let door of ['cli', 'connector']) {
+      for (let door of operation.doors ?? ['cli', 'connector']) {
         let samples: Sample[] = []
         for (let i = 0; i < n; i++) {
           await operation.prepare?.()
           let input = operation.args()
           let start = performance.now()
           let text: string
-          if (door == 'cli') text = await cli(operation, input)
-          else {
-            let answer = await ask('tools/call', {
-              name: operation.tool,
-              arguments: input,
-            })
-            if (answer.isError) {
-              throw new Error(`${operation.tool}: ${JSON.stringify(answer)}`)
+          let value: number
+          try {
+            if (door == 'cli') text = await cli(operation, input)
+            else {
+              let answer = await ask('tools/call', {
+                name: operation.tool,
+                arguments: input,
+              })
+              if (answer.isError) {
+                throw new Error(`${operation.tool}: ${JSON.stringify(answer)}`)
+              }
+              text = JSON.stringify(answer)
             }
-            text = JSON.stringify(answer)
+            value = performance.now() - start
+            // Checks are outside the clock: the endpoint's complete response is
+            // timed, while read-back proves a saved change rather than an ack.
+            await operation.verify(text, input)
+          } finally {
+            operation.after?.()
           }
-          let value = performance.now() - start
-          // Checks are outside the clock: the endpoint's complete response is
-          // timed, while read-back proves a saved change rather than an ack.
-          await operation.verify(text, input)
           samples.push({
             value,
             source: 'end-to-end',
@@ -550,9 +634,12 @@ async function collect(
   } finally {
     await server?.shutdown()
     await host?.close()
+    if (remaining) Deno.chdir(originalCwd)
     await Deno.remove(dir, { recursive: true })
   }
 }
 export let measure = (args: string[] = []) => collect(args)
+export let measureRemaining = (args: string[] = []) =>
+  collect(args, false, true)
 export let measureScale = (args: string[] = []) => collect(args, true)
 if (import.meta.main) console.log(JSON.stringify(await measure(Deno.args)))
