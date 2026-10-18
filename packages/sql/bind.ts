@@ -1145,6 +1145,25 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
     return or(...branches.map((b) => b.where))
   }
   if (branches.every((b) => !b.joins.length)) {
+    // A pure positive presence OR is sparse even on a classified store.
+    // Driving the ordered entity spine can scan its history after ANALYZE.
+    // Let each arm start at its component's owning keys instead; leave
+    // negative/derived/optional alternatives on their ordinary boolean path.
+    if (
+      !ctx.bounded && !ctx.present && !ctx.candidates &&
+      branches.every(({ x }) => facetOf(ctx, x)?.present)
+    ) {
+      return or(...branches.map(({ x }) => {
+        let comp = facetOf(ctx, x)!.comp
+        return among(
+          raw(ctx.d.ownerKey('entity')),
+          select({
+            cols: [as(raw(ctx.d.ownerKey(comp)), 'id')],
+            from: raw(ctx.d.table(comp)),
+          }),
+        )
+      }))
+    }
     return or(...branches.map((b) => b.where))
   }
   let picks = branches.map(({ branch, where, joins, x }) =>
@@ -2223,7 +2242,7 @@ let indexedRelation = (
       joins: [
         ...ctx.candidates.whole ? [] : [{
           how: 'cross',
-          src: raw(ctx.d.admitted ?? from, [], 'entity'),
+          src: raw(from, [], 'entity'),
           on: raw(`"__candidates"."id" = ${ctx.d.ownerKey('entity')}`),
         } as Join],
         ...(s.joins ?? []).map((j) =>

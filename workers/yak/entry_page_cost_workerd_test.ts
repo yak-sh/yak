@@ -33,3 +33,18 @@ test('one patch reuses identity ids it just resolved', async () => {
   console.log('KNOWN_PATCH_COST', JSON.stringify(report))
   assert(report.total.read <= 10, `known patch reads ${report.total.read}`)
 })
+
+test('a sparse presence page pays for selected owners after ANALYZE', async () => {
+  let r = await fetch(`${workerd().base}/__play_cost/?sparsepresence=1`)
+  assertEquals(r.status, 200, await r.clone().text())
+  let report = await r.json()
+  console.log('SPARSE_PRESENCE_COST', JSON.stringify(report))
+  for (let example of report) {
+    assertEquals(
+      example.rows.map((r: { eid: string }) => r.eid),
+      ['world'],
+    )
+    assert(example.read < 100, `${example.read} billed rows`)
+    assertEquals(example.written, 0)
+  }
+})

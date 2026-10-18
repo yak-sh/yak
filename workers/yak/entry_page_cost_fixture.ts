@@ -117,3 +117,23 @@ export let descriptorGatherCost = (db: DurableStorage, patch = false) => {
     db.sql.exec = exec
   }
 }
+
+export let sparsePresenceCost = async (db: DurableStorage) => {
+  let { presenceVocab, seedPresence } = await import(
+    '../../packages/sqlite/sparse_presence_fixture.ts'
+  )
+  let { reader } = await import('@yaks/sqlite/reader')
+  let hot = seedPresence(driver(db))
+  return [undefined, { entity: '!hidden' }].map((visibility) => {
+    let read = 0, written = 0
+    let d = driver(db, (cost) => {
+      read += cost.rowsRead
+      written += cost.rowsWritten
+    })
+    let rows = reader(d, presenceVocab, { archetypes: hot }).rows(
+      '.den .limit=1 | .chosen',
+      { storageOrder: true, visibility },
+    )
+    return { read, written, rows }
+  })
+}

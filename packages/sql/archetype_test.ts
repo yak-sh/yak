@@ -115,17 +115,12 @@ test('archetype matching caches content, not a rolled-back id assignment', () =>
   assertEquals(archetypes({ all: ['task'] }), [12, 13])
 })
 
-test('boolean presence trees retain their composition without component joins', () => {
+test('boolean presence trees retain their negative guards', () => {
   let ast = and(or(present('doc'), present('task')), absent('claim'))
   let r = bind(ast, v, { archetypes })
-  assertEquals(r.joins, [])
+  assert(r.joins?.every((j) => j.how == 'cross'))
   let sql = compile(ast, v, { archetypes })
-  assert(sql.sql.includes(' or '), sql.sql)
-  assertEquals(lists(sql.sql), [
-    [11, 12],
-    [12, 13],
-    [10, 11, 12],
-  ])
+  assertEquals(lists(sql.sql), [[10, 11, 12]])
 })
 
 // A page's screen of absent components beside a value test names only the

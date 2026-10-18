@@ -20,6 +20,7 @@ export { GitCostStore } from './git_cost_fixture.ts'
 import {
   descriptorGatherCost,
   entryPageCost,
+  sparsePresenceCost,
 } from './entry_page_cost_fixture.ts'
 // Test-only workerd door: real SQL row counters, no account or live app.
 import { directoryCost, queryCost } from './query_cost_fixture.ts'
@@ -132,6 +133,9 @@ export class PlayCost {
           Number(new URL(req.url).searchParams.get('outputs') ?? 10),
         ),
       )
+    }
+    if (new URL(req.url).searchParams.has('sparsepresence')) {
+      return Response.json(await sparsePresenceCost(this.ctx.storage))
     }
     if (new URL(req.url).searchParams.has('entrypage')) {
       return Response.json(entryPageCost(this.ctx.storage))
