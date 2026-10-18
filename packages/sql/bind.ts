@@ -1638,16 +1638,17 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // time the statement runs.
   let wearing = [...narrowed, ...rest.flatMap((c) => implied(ctx, c))]
     .filter((comp) => facetOf(ctx, present(comp)))
-  // Indexed value selections (including OR unions) must retain their own
-  // candidate path rather than enumerating every owner of an eligible shape.
+  // An OR with an indexed value test in an arm must retain its own candidate
+  // path rather than enumerating every owner of an eligible shape.
   let valued = (c: Clause): boolean =>
     c.kind == 'and' || c.kind == 'or'
       ? c.clauses.some(valued)
       : c.kind == 'pred' && !c.not && needs(opOf(c), c.value) &&
         opOf(c) != EXISTS
-  let shape = !siblings.some(valued) &&
-      (!ctx.present || ctx.archetypes?.held) &&
-      all.length + none.length > 1
+  let indexed = siblings.some((c) => c.kind == 'or' && valued(c))
+  let gated = (!ctx.present || ctx.archetypes?.held) &&
+    all.length + none.length > 1
+  let shape = gated && !indexed
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null
   // Presence plus absence selects the still-pending owners, not all the
@@ -1675,11 +1676,19 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     // all its history beside an indexed value lookup. Absence tests and
     // components implied only by one OR arm still need their own condition.
     let required = new Set(wearing)
+    // Beside an indexed value test the shape above is not taken, but the
+    // absences still join into one set: each `!x` alone would carry the whole
+    // catalog again, a statement that grows with archetypes times absences
+    // until the engine refuses its program.
+    let absent = gated && indexed && none.length > 1
+      ? byArchetype(ctx, { all: [], none })
+      : null
     return [
       ...narrow,
+      ...absent ? [absent] : [],
       ...cs.filter((c) => {
         let f = facetOf(ctx, c)
-        return !f?.present || !required.has(f.comp)
+        return !f || (f.present ? !required.has(f.comp) : !absent)
       }).map((c) => conditions.get(c) ?? clause(ctx, c)),
     ]
   }
