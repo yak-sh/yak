@@ -1,7 +1,7 @@
 import { cookieValue } from './lib/token.ts'
 // Anonymous pages retain the hop-free warm path (publicDirectory). Signed
-// access uses signedDirectory: every body is pinned to one committed revision
-// and checked against the independent durable serving authority. Directory
+// access uses signedDirectory: every body is checked against the independent
+// durable serving authority at the revision it was read. Directory
 // mutations revoke that revision before committing, not through cache purge.
 // Cold/fenced copies still wait for the directory; no TTL grants standing.
 import type { Fetcher } from './door.ts'
@@ -197,14 +197,10 @@ export let signedDirectory = (
 ): Fetcher & { signed?: boolean } => {
   if (!copy) return via
   let began = time.now()
-  let pinned: number | undefined
   let unavailable = () =>
     new Response('Serving authority unavailable', { status: 503 })
   let accept = async (revision: number, body: string) => {
-    if (pinned !== undefined && pinned !== revision) return unavailable()
     if (!await copy.valid?.(revision)) return unavailable()
-    if (pinned !== undefined && pinned !== revision) return unavailable()
-    pinned = revision
     return new Response(body, { headers: { [EPOCH]: String(revision) } })
   }
   return {
@@ -246,8 +242,9 @@ export let signedDirectory = (
           // write holds the fence until it commits, and until then no copied
           // or read body may stand as authority. That is a wait, never an
           // answer: reread with backoff until the fence clears, bounded by
-          // FENCE_WAIT. A request that already accepted a revision keeps it
-          // and refuses any other, for its caller to reopen on.
+          // FENCE_WAIT. Each body stands on being current when accepted, so a
+          // write landing between a request's reads fences the next one for
+          // the write's duration and no longer.
           for (let pause = 10; !settled; pause = Math.min(pause * 2, 250)) {
             let answer: Response
             try {
@@ -269,10 +266,7 @@ export let signedDirectory = (
             let body = await answer.text()
             await copy.publish?.(revision, key, body)
             let accepted = await accept(revision, body)
-            if (
-              accepted.ok || pinned !== undefined ||
-              time.now() - from >= FENCE_WAIT
-            ) {
+            if (accepted.ok || time.now() - from >= FENCE_WAIT) {
               done(accepted)
               return
             }

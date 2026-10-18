@@ -90,7 +90,7 @@ let proof = async (name: string, run: () => Promise<() => void>) => {
 }
 
 await proof(
-  'direct answers publish before returning and pin one revision',
+  'direct answers publish before returning, and a write between reads fences only the next one',
   async () => {
     let f = independent(), time = clock()
     let release!: () => void
@@ -126,7 +126,7 @@ await proof(
       equal(body, 'current')
       equal(stored, { revision: 0, body: 'current' })
       equal(f.publications.length, 2)
-      equal(mixed.status, 503)
+      equal(mixed.status, 200)
     }
   },
 )
