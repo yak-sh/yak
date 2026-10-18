@@ -33,6 +33,7 @@ import {
   type Regression,
   type Run,
 } from '@yaks/benchmark'
+import { diagnostic } from './diagnostic.ts'
 import { drain, enqueue, type Queue } from './queue.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
@@ -398,8 +399,7 @@ let check = async (
       await Deno.stderr.write(timed.stderr)
       return {
         verdict: 'failed',
-        error: said.trim().split('\n').slice(-12).join('\n') ||
-          `exit ${timed.code}`,
+        error: diagnostic(said, timed.code),
       }
     }
   }
@@ -447,9 +447,7 @@ let check = async (
       verdict: 'failed',
       error:
         'measurement timed out (including scheduled lock wait); no result accepted' +
-        (said.trim()
-          ? `\n${said.trim().split('\n').slice(-12).join('\n')}`
-          : ''),
+        (said.trim() ? `\n${diagnostic(said, child.code)}` : ''),
     }
   }
   try {
@@ -507,8 +505,7 @@ let check = async (
   } catch { /* no run was written: the check failed before measuring */ }
   return {
     verdict: 'failed',
-    error: said.trim().split('\n').slice(-12).join('\n') ||
-      `exit ${child.code}`,
+    error: diagnostic(said, child.code),
   }
 }
 

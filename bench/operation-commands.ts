@@ -3,6 +3,7 @@
  * or generic graph I/O. SQLite, session state and the HTTP listener are private
  * to this collection; no duties, providers, external connections or live writes.
  */
+import { remainingFixtures } from './operation-fixtures.ts'
 import type { Sample, Samples } from '@yaks/benchmark'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
@@ -578,7 +579,7 @@ async function collect(
         },
       ]
     }
-    if (remaining) {
+    if (remainingFixtures(remaining, controls)) {
       let context = {
         graph,
         dir,
@@ -628,7 +629,12 @@ async function collect(
       for (let door of operation.doors ?? ['cli', 'connector']) {
         let samples: Sample[] = []
         for (let i = 0; i < n; i++) {
-          await operation.prepare?.()
+          let name = `${door}/${operation.family}`
+          try {
+            await operation.prepare?.()
+          } catch (error) {
+            throw new Error(`${name} fixture setup failed`, { cause: error })
+          }
           let input = operation.args()
           let start = performance.now()
           let text: string
@@ -649,6 +655,8 @@ async function collect(
             // Checks are outside the clock: the endpoint's complete response is
             // timed, while read-back proves a saved change rather than an ack.
             await operation.verify(text, input)
+          } catch (error) {
+            throw new Error(`${name} measurement failed`, { cause: error })
           } finally {
             operation.after?.()
           }
