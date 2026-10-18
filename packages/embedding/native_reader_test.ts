@@ -7,7 +7,7 @@ import { open } from '@yaks/sqlite/db'
 import { statements } from '@yaks/sqlite'
 import { SPINE, TOMBSTONE } from '../sqlite/testing.ts'
 import { schema, TABLE } from './ddl.ts'
-import { build, candidates, install } from './native.ts'
+import { candidates, install, prepare } from './native.ts'
 import { nearest } from './near.ts'
 import { pack, unit } from './vector.ts'
 
@@ -30,7 +30,7 @@ db.query(insert(
   ...ids.map((id) => put(id, Float32Array.of(1, id / 300, 0, 0))),
 ))
 install(db)
-build(db)
+prepare(db)
 // One exact, dirty neighbour was never in the codes.
 db.query(insert('entity', { id: 301, eid: 'fresh' }))
 db.query(insert(TABLE, put(301, query)))
@@ -43,13 +43,13 @@ let contents = () =>
   [path, `${path}-wal`].map((p) => Buffer.from(Deno.readFileSync(p).buffer))
 let before = contents()
 
-test('a read-only search uses its index and includes dirty vectors', () => {
+test('a read-only search uses native scans and includes newly written vectors', () => {
   let pool = ok(candidates(read, query, { model, need: 2 }))
   ok(pool.includes(300) && pool.includes(301))
   ok(pool.length < ids.length, `read ${pool.length} candidates`)
 })
 
-test('an indexed reader closes without changing database or WAL bytes', () => {
+test('a native reader closes without changing database or WAL bytes', () => {
   try {
     reader.close()
     // Compare every byte in native code rather than walking typed-array keys.

@@ -1,38 +1,8 @@
-// sqlite-vector's quantized index over the stored vectors: which few hundred
-// are worth scoring exactly. Every vector is kept as 2-bit TurboQuant codes,
-// held in memory per connection; one scan of the codes names the nearest
-// candidates, and ./near.ts scores those by cosine over their full vectors. A
-// scan of the codes is a fraction of a scan of the vectors, and the exact
-// score puts the candidates back in the order the full scan would have. The
-// answer is the exact one wherever the true nearest are among the candidates,
-// which is what {@link pool} is sized for (on the live graph, the top 4, 9 and
-// 21 of 60 queries each matched the exact ranking).
-//
-// Filter, then rank. A query that also filters (`.near=x .task`) passes its
-// screen, and the candidates are the nearest codes the screen admits: the scan
-// runs wider and each candidate is tested against the screen, a primary-key
-// read, until the pool is full or the whole index has been read.
-//
-// Built, not maintained: `vector_quantize` rebuilds the whole index, a few
-// seconds under the write lock, so it is not done per write. The process that
-// runs the sweep builds it ({@link build}, from ./service.ts) once enough
-// vectors have changed. Between builds, every vector written or deleted since
-// is in the dirty set (./ddl.ts), and a search scores those beside the
-// candidates, so a stale build costs a search time, never an answer.
-//
-// Each connection keeps its own copy of the codes: sqlite-vector's metadata
-// and preloaded data live on the connection that loaded them. A connection
-// notices a newer build by its number and loads it again. The quantizer is
-// TurboQuant because its codebook depends only on the dimension and the bit
-// width, never on the data, so a connection initialized before a build reads
-// that build's codes correctly.
-//
-// Loading the extension creates its metadata table, so a database uses the
-// index only once it has been installed explicitly ({@link install}).
-
+// Exact sqlite-vector scans over canonical vectors. Native distance work
+// stays inside the engine; no derived index is rebuilt under the graph lock.
 import {
+  and,
   as,
-  at,
   call,
   col,
   count,
@@ -42,7 +12,7 @@ import {
   fn,
   from,
   lit,
-  op,
+  not,
   type Raw,
   select,
   type Statements,
@@ -63,13 +33,6 @@ export let install = (db: Statements): void => {
   db.facilities.vector()
 }
 
-/** The quantization: 2-bit TurboQuant codes. */
-export let QTYPE = 'TURBO2'
-
-/** How many vectors may change before the sweep's process builds again. Each
- * is scored exactly by every search until then. */
-export let REBUILD = 1024
-
 /** How many candidates a search scores exactly, for the `need` nearest. */
 export let pool = (need: number): number => Math.max(128, 32 * need)
 
@@ -82,7 +45,7 @@ export type Build = {
   rows: number
 }
 
-/** The current build, as any connection reads it. */
+/** Shared generation metadata, as any connection reads it. */
 export let current = (db: Statements): Build => {
   let row = db.query(select({ from: table(BUILD) }))[0] ?? {}
   return {
@@ -96,8 +59,7 @@ export let current = (db: Statements): Build => {
 let tally = (db: Statements, name: string): number =>
   Number(db.query(select({ cols: [as(count(), 'n')], from: table(name) }))[0].n)
 
-/** Whether sqlite-vector was installed on this database: then the dirty set
- * is its index's, cleared only by {@link build}. */
+/** Whether sqlite-vector metadata already exists on this database. */
 let installations = new WeakMap<
   Statements,
   { version: number; installed: boolean }
@@ -116,10 +78,9 @@ export let installed = (db: Statements): boolean => {
   return found
 }
 
-// The one model every stored vector is under, or null while two spaces share
-// the table: an index over both would rank vectors of different lengths.
+// One model means one vector width. Mixed spaces use the ordinary reader.
 // Separate aggregates each seek an edge of the model index. Together SQLite
-// scans every model, even when this build check finds nothing to do.
+// scans every model, even when the answer has not changed.
 let only = (db: Statements): string | null => {
   let edge = (f: string) =>
     sub(select({ cols: [fn(f, col('model'))], from: table(TABLE) }))
@@ -140,7 +101,7 @@ export type State = {
   dirty: number
 }
 
-/** The index's state. */
+/** Vector space and generation metadata for diagnostics. */
 export let state = (db: Statements): State => ({
   installed: installed(db),
   build: current(db),
@@ -148,16 +109,8 @@ export let state = (db: Statements): State => ({
   dirty: tally(db, DIRTY),
 })
 
-/** Whether the index is behind the vectors and wants a build: installed, one
- * model under every vector, and never built, built from another model, or
- * {@link REBUILD} vectors changed since. */
-export let behind = (s: State): boolean =>
-  s.installed && !!s.model &&
-  (!s.build.n || s.build.model != s.model || s.dirty >= REBUILD)
-
-// What one connection has done with the extension: loaded it, initialized
-// the table at a dimension, and loaded a build's codes into memory.
-type Conn = { dim: number; n: number }
+// The shape registered on one connection.
+type Conn = { dim: number }
 let conns = new WeakMap<Statements, Conn>()
 
 // This connection's state, loading the extension the first time, or null
@@ -168,7 +121,7 @@ let conn = (db: Statements): Conn | null => {
   if (had) return had
   if (!db.facilities?.vector || !installed(db)) return null
   install(db)
-  let made = { dim: 0, n: 0 }
+  let made = { dim: 0 }
   conns.set(db, made)
   return made
 }
@@ -185,54 +138,26 @@ let init = (db: Statements, c: Conn, dim: number): boolean => {
     ask(
       db,
       'vector_init',
-      `type=FLOAT32,dimension=${dim},distance=COSINE,qtype=${QTYPE}`,
+      `type=FLOAT32,dimension=${dim},distance=COSINE`,
     )
     c.dim = dim
   }
   return c.dim == dim
 }
 
-/**
- * Build the index again if it is {@link behind}. The codes, the cleared
- * dirty set and the new build number commit together, under the write lock,
- * so no vector is written between the codes being made and the set being
- * cleared. Only the process that runs the sweep calls this; returns whether
- * it built.
- */
-export let build = (db: Statements): boolean => {
+/** Register the vector shape once, before read-only connections use it. */
+export let prepare = (db: Statements, dim?: number): boolean => {
   let c = conn(db)
-  let now = c && state(db)
-  if (!c || !now || !behind(now)) return false
-  let [row] = db.query(select({
-    cols: [as(fn('length', col('vec')), 'bytes')],
-    from: table(TABLE),
-    limit: lit(1),
-  }))
-  let dim = Number(row.bytes) / 4
-  if (!init(db, c, dim)) return false
-  try {
-    db.atomic(() => {
-      let rows = Number(ask(db, 'vector_quantize', `qtype=${QTYPE}`))
-      db.query({ t: 'delete', from: DIRTY })
-      db.query({
-        t: 'update',
-        table: BUILD,
-        set: {
-          n: op('+', col('n'), lit(1)),
-          model: val(now.model),
-          dim: lit(dim),
-          rows: lit(rows),
-        },
-      })
-    })
-  } catch (e) {
-    // What this connection had loaded may be ahead of the table now.
-    c.n = 0
-    throw e
+  if (!c || c.dim) return false
+  if (dim == null) {
+    let [row] = db.query(select({
+      cols: [as(fn('length', col('vec')), 'bytes')],
+      from: table(TABLE),
+      limit: lit(1),
+    }))
+    dim = Number(row?.bytes ?? 0) / 4
   }
-  // A connection that had loaded codes has them reloaded by the build.
-  if (c.n) c.n = current(db).n
-  return true
+  return !!dim && init(db, c, dim)
 }
 
 /** Whether a candidate is one the screen admits: a primary-key read of its
@@ -245,7 +170,7 @@ export let admitted = (within: Raw, owner: Expr): Expr =>
   }))
 
 /** How many entities a screen may admit and still be read whole: its vectors
- * cost less to score than to find among every code in the index. */
+ * cost less to score directly than to scan the whole corpus. */
 export let FEW = 5000
 
 // Whether the screen admits at most FEW entities, counting no further.
@@ -264,13 +189,8 @@ let few = (db: Statements, within: Raw): boolean =>
     }))[0].n,
   ) <= FEW
 
-/**
- * The owners worth scoring exactly for the `need` nearest to `query`: the
- * index's nearest {@link pool} among what `within` admits, and every vector
- * written since the build. Null where every vector `within` admits is to be
- * scored: the index cannot say (not installed, not built, built from another
- * model or dimension), or the screen admits {@link FEW} enough to read whole.
- */
+/** Exact native candidates, screened before the result is limited. Small
+ * screens use the ordinary vector reader to avoid scanning the whole corpus. */
 export let candidates = (
   db: Statements,
   query: Float32Array,
@@ -278,44 +198,24 @@ export let candidates = (
 ): number[] | null => {
   let c = conn(db)
   if (!c || (opts.within && few(db, opts.within))) return null
-  let now = current(db)
-  if (!now.n || now.model != opts.model || now.dim != query.length) return null
-  if (!init(db, c, now.dim)) return null
-  if (c.n != now.n) {
-    ask(db, 'vector_quantize_preload')
-    c.n = now.n
-  }
-  let size = pool(opts.need)
+  if (only(db) != opts.model || !init(db, c, query.length)) return null
   let v = (name: string) => col(name, 'v')
-  let scan = (k: number) =>
-    db.query(select({
-      cols: [as(v('id'), 'owner')],
-      from: call('vector_quantize_scan', [
-        lit(TABLE),
-        lit('vec'),
-        val(pack(query)),
-        val(k),
-      ], 'v'),
-      where: opts.within ? admitted(opts.within, v('id')) : undefined,
-      limit: val(size),
-    })).map((r) => Number(r.owner))
-  // Unscreened, the nearest `size` codes are the pool. Screened, the scan
-  // reads further, and again further by how thinly the screen admitted, until
-  // the pool is full or nothing is left unread.
-  let k = opts.within ? size * 32 : size
-  let owners = scan(k)
-  while (owners.length < size && k < now.rows) {
-    k = Math.min(
-      now.rows,
-      Math.ceil(k * size / Math.max(owners.length, 1) * 1.5),
-    )
-    owners = scan(k)
-  }
-  let d = at(DIRTY)
-  let fresh = db.query(select({
-    cols: [as(d('owner'), 'owner')],
-    from: table(DIRTY),
-    where: opts.within ? admitted(opts.within, d('owner')) : undefined,
+  return db.query(select({
+    cols: [as(v('id'), 'owner')],
+    from: call('vector_full_scan', [
+      lit(TABLE),
+      lit('vec'),
+      val(pack(query)),
+    ], 'v'),
+    where: and(
+      not(exists(select({
+        cols: [lit(1)],
+        from: table('tombstone', 't'),
+        where: eq(col('entity', 't'), v('id')),
+      }))),
+      ...opts.within ? [admitted(opts.within, v('id'))] : [],
+    ),
+    order: [v('distance'), v('id')],
+    limit: val(pool(opts.need)),
   })).map((r) => Number(r.owner))
-  return [...new Set([...owners, ...fresh])]
 }

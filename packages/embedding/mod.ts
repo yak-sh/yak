@@ -19,7 +19,7 @@
  * - {@link fields} reads the embedded properties off a
  *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema;
  * - {@link schema} returns the statements for the table the vectors live in,
- *   and for the record of the quantized index built from them, which
+ *   and for the generation of the vectors held in memory, which
  *   {@link build} makes again once enough of them changed;
  * - {@link sweep} embeds what changed and drops what left, off the write path,
  *   reading what moved from a queue the database's own triggers keep
@@ -100,10 +100,9 @@ export * from './owed.ts'
 export * from './near.ts'
 export { absorb, HELD, RESCORE } from './held.ts'
 export {
-  behind,
   type Build,
-  build,
   install as installNative,
+  prepare,
   type State,
   state,
 } from './native.ts'

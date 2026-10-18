@@ -162,7 +162,6 @@ Options:
 | `floor`      | Minimum similarity for `.near`, default 0                                             |
 | `after`      | How long an empty queue waits before the next look, in milliseconds, default 3000     |
 | `batch`      | Queued entities one sweep takes, default 64                                           |
-| `stale`      | Age threshold in minutes used by `vector_check`, default 30                           |
 
 The `batch` option bounds one sweep; it does not mean a graph transaction.
 
@@ -270,11 +269,11 @@ other embedder failure stops the pass, the caller receives the error, and the
 work stays queued.
 
 `drain(db, fields, embedder, { batch?, signal? })` sweeps pass after pass until
-nothing is owed, building the index or folding the pass into the vectors held in
-memory after each (below), and returns `{ fresh, refused }`: the service's loop
-is a drain and a wait, and a host with nothing standing between requests (a
-Durable Object sleeps) drains once a write commits. An aborted `signal` stops it
-after the pass it is in.
+nothing is owed, registering the native scan or folding the pass into the
+vectors held in memory after each (below), and returns `{ fresh, refused }`: the
+service's loop is a drain and a wait, and a host with nothing standing between
+requests (a Durable Object sleeps) drains once a write commits. An aborted
+`signal` stops it after the pass it is in.
 
 `sources()`, `put()`, `watch()`, `moves()`, `owe()`, `due()` and `paid()` expose
 the individual operations. Embedding can run asynchronously; source reads,
@@ -339,48 +338,36 @@ results before reusing the same extension for another query.
 
 ## The ranking
 
-`nearest()` ranks by cosine similarity over the stored vectors, among the
-entities a screen admits, and excludes tombstoned entities immediately. Where
-the index below is built, it names the candidates and only those vectors are
-read. A screen that admits at most 5000 entities is always read whole: its
-vectors cost less to score than to find among every code. Where the database is
-this process's alone, the vectors are held in memory as int8 (below), and only
-the best hundred the scan finds are read. Everywhere else every vector the
-screen admits is read. Whatever narrows the candidates, the answer is ranked by
-the exact cosine of the stored vectors.
+`nearest()` ranks by cosine similarity over current stored vectors, among the
+entities a screen admits, excluding tombstones immediately. A screen admitting
+at most 5000 entities reads its vectors directly. Broader local SQLite searches
+use sqlite-vector's exact native scan; an exclusive database can hold int8
+vectors in memory (below). Candidates are rescored from their current float
+vectors before the final cut.
 
 Supply `semantic(db, space, { rank })` with a `Rank` implementation to use
 another ranking; it receives the same screen.
 
-## The index
+## Native scans
 
-On a local SQLite connection, sqlite-vector keeps every vector as 2-bit
-TurboQuant codes, held in memory per connection. A search scans the codes for
-its nearest candidates (at least 128, 32 per neighbour asked for), among what
-the screen admits, and scores those exactly beside every vector written or
-deleted since the build. The answer is the exact ranking wherever the true
-nearest are among the candidates. A screen is applied to each candidate before
-the pool is cut, reading further into the codes until the pool is full.
+The native `vector_full_scan` reads canonical float vectors. The screen and
+exclusion of deleted entities apply before candidates are limited. Writes are
+visible immediately, including those made by another connection. There is no
+quantized index or rebuild on the write path.
 
-`build(db)` quantizes the whole table in one transaction under the write lock,
-clears the dirty set and numbers the build. It builds only when the index is
-`behind(state(db))`: never built, built from another model, or 1024 vectors
-changed since. The plugin's service calls it after every sweep pass, so the one
-process holding the sweep is the one that builds; every other connection sees
-the new build number and loads the codes again. While two models' vectors share
-the table during a re-embed, no index is built and every vector is read.
+A read-only probe of 202,852 stored 384-dimensional vectors took 513–585 ms for
+a warm broad top-eight search and 592 ms with a task filter. Cold calls under
+concurrent migration and database load took up to 13.4 s. A full index rebuild
+held the live worker for 27.9 s. Exact scans trade broad-search latency for
+predictable writes and exact ranking. Narrow screens keep the direct vector
+reader.
 
-The tables are `embedding_build` (one row: the build number, 0 before the first,
-and the model, dimension and count it was built from) and `embedding_dirty` (one
-row per entity whose vector changed since), kept by insert, update and delete
-triggers on `embedding` in the same statement as the vector change.
-
-To enable the index on an existing file, back it up first, then call
-`installNative(db)` once on writable statements with `facilities.vector`. The
-storage adapter resolves and loads the native library. Loading sqlite-vector
-creates its `_sqliteai_vector` metadata table, so searches never install it on a
-database that lacks that table. The platform binaries are in the root import
-map; other SQL drivers read every vector.
+`installNative(db)` loads the storage adapter's vector facility once on a
+writable database. `prepare(db)` registers its vector shape before read-only
+connections use it; the embedding service does this before storing a new batch.
+While models of different widths share a table, the ordinary vector reader
+scores only the requested model. Other SQL engines use the same reader or the
+exclusive store's held vectors.
 
 ## Held in memory
 
@@ -446,17 +433,17 @@ component owner columns, and `tombstone` table. The vector data can be rebuilt
 from the selected text: after deleting its tables, recreate them with `schema()`
 before running another sweep.
 
-`vector_check` fails when the index has been behind for longer than the `stale`
-threshold, which means no process is running the sweep. On a file other
-processes may have open, it warns where every search reads every vector:
-sqlite-vector not installed, or two models sharing the table.
+`vector_check` reports missing embedding configuration and hosts with no vector
+table. On a shared file it warns when the native facility is not installed or
+models share the table, so searches must use the ordinary reader. Old vectors do
+not owe an index rebuild.
 
 ## Exports
 
 The root exports field selection, `Embedder`, `hashEmbedder`, `remote`,
 `workersAi`, `batched`, vector math/packing helpers, the schema, sweep
-operations, the index (`installNative`, `build`, `state`, `behind`), the vectors
-held in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`, `meaning`,
+operations, native scans (`installNative`, `prepare`, `state`), the vectors held
+in memory (`absorb`, `HELD`, `RESCORE`), `vectorOf`, `nearest`, `meaning`,
 `semantic` and supporting types such as `Rank`. The `Statements` capability it
 runs on is `@yaks/sql`'s.
 

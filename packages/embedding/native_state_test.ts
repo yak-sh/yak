@@ -1,5 +1,5 @@
-// An idle sweep asks whether the index needs rebuilding after every batch.
-// Finding the corpus's model must seek its index, not read every stored vector.
+// Native scans require a single model. Checking that model must seek the
+// model index rather than reading every stored vector.
 import '../sqlite/sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { assert, assertEquals } from '@std/assert'

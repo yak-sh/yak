@@ -18,10 +18,7 @@
 // what it reads and writes are a batch's rows, and the wait between is the
 // model's.
 //
-// The same process builds the quantized index (./native.ts): after each pass
-// it builds again once enough vectors have changed. A build is a write of its
-// own, a few seconds under the write lock, which is why one process makes it
-// and every other only reads it.
+// Native search scans canonical vectors; no index maintenance holds a write.
 //
 // The config, and the provider and model rows it names, are read on every
 // pass (./options.ts). A server whose key or provider has not arrived starts
@@ -38,7 +35,7 @@ import { type Derived, type Statements, statements } from '@yaks/sql'
 import { resolved } from './fields.ts'
 import { type Options, ready } from './options.ts'
 import { drain } from './sweep.ts'
-import { build } from './native.ts'
+import { prepare } from './native.ts'
 
 /** How long an empty queue waits before the loop looks again, by default. */
 export let AFTER = 3_000
@@ -82,8 +79,8 @@ export let service = async (
           told.add(now.waiting!)
           console.warn('@yaks/embedding —', now.waiting)
         }
-        // The vectors already stored are still searched, through an index.
-        build(db)
+        // Native scans still search the vectors already stored.
+        prepare(db)
       }
     } catch (error) {
       // A pass the host ended mid-way wrote nothing it had not settled: its

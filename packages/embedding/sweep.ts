@@ -39,7 +39,7 @@ import { allowed, type Field } from './fields.ts'
 import { TABLE } from './ddl.ts'
 import { due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
-import { build } from './native.ts'
+import { prepare } from './native.ts'
 import { absorb } from './held.ts'
 
 /** How many queued entities one sweep takes by default. */
@@ -338,6 +338,8 @@ export let sweep = async (
   })
   let got = await embedAll(embedder, todo.map(({ s }) => s.text))
   let refused: Swept['refused'] = []
+  let shape = got.find((v) => v instanceof Float32Array)
+  if (shape instanceof Float32Array) prepare(db, shape.length)
   todo.forEach(({ d, s }, i) => {
     let v = got[i]
     if (v instanceof Refused) {
@@ -362,9 +364,8 @@ export let sweep = async (
 export type Drained = { fresh: number; refused: Swept['refused'] }
 
 /**
- * Sweep pass after pass until nothing is owed, and stop, building the index
- * after each pass where there is one (./native.ts `build`), or folding what
- * the pass wrote into the vectors this process holds (./held.ts `absorb`). A
+ * Sweep pass after pass until nothing is owed, and stop, folding each pass into
+ * the vectors this process holds (./held.ts `absorb`). A
  * host with nothing standing between requests (a Durable Object sleeps) runs
  * this when a write asks; the service (./service.ts) runs it, then waits. An
  * aborted `signal` stops it after the pass it is in. An embedder that cannot
@@ -381,7 +382,7 @@ export let drain = async (
     let swept = await sweep(db, fields, embedder, opts.batch)
     done.fresh += swept.fresh
     done.refused.push(...swept.refused)
-    build(db)
+    prepare(db)
     absorb(db)
     if (!swept.left || opts.signal?.aborted) return done
   }

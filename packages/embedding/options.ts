@@ -90,9 +90,6 @@ export type Options = {
   /** how long an empty queue waits before the service looks again, in
    * milliseconds (default 3000) — how soon a new text is embedded */
   after?: number
-  /** how long the index may stay behind the vectors before that means nobody
-   * is building it, in minutes (default 30) — the check reads it (./tools.ts) */
-  stale?: number
 }
 
 /** Where the rows a config names are read: the graph's `get`, which leaves

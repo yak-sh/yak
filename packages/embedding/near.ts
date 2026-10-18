@@ -1,14 +1,6 @@
-// The search itself: a vector in, the nearest entities out.
-//
-// The ranking is exact cosine over the stored vectors, and what it reads is
-// the cheapest of three. Where sqlite-vector is installed and its index built
-// (./native.ts), the index names the few hundred candidates worth scoring,
-// plus every vector written since its build, and only those are read. Where
-// this process is the only one with the database open (a Durable Object's),
-// the vectors are held in its memory as int8 (./held.ts), and only the
-// hundred its scan finds best are read. Everywhere else every vector is read.
-// An approximate ranker can replace this through Rank without changing the
-// query extension.
+// Cosine ranking over canonical vectors. The native engine selects exact
+// candidates for shared files; exclusive stores can hold int8 copies. Every
+// candidate is scored from its current float vector before the final cut.
 //
 // A {@link Screen} is the other half of "nearest": nearest among what. The
 // eight nearest entities of any kind are the wrong eight for `.near=X&.memory`

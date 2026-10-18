@@ -2,7 +2,7 @@
 // reading them all: one copy per statement capability, loaded the first time a search asks
 // for it, for a database only this process has open (a Durable Object's, or
 // one in memory; @yaks/sql `Statements.ownership` says which). Shared storage
-// other processes write is ranked by the quantized index (./native.ts) or read row by row
+// other processes write is ranked by native exact scans (./native.ts).
 // instead.
 //
 // The copy is int8. Each vector is held as one signed byte per coordinate, its
@@ -19,7 +19,7 @@
 // what one loaded afresh would.
 //
 // The table stays the truth, and the copy is the table as of one build. It is
-// kept current the way the quantized index is: the triggers on the table note
+// kept current by triggers on the table, which note
 // every vector written or deleted, by anyone, in the same statement as the
 // write (./ddl.ts, the dirty set), and a search codes what the set names from
 // its rows beside the copy. After each sweep pass, the process that ran it
@@ -58,7 +58,7 @@ import {
   val,
 } from '@yaks/sql'
 import { BUILD, DIRTY, TABLE } from './ddl.ts'
-import { admitted, current, installed } from './native.ts'
+import { admitted, current } from './native.ts'
 import type { Near } from './near.ts'
 import { cosine, floats } from './vector.ts'
 
@@ -274,10 +274,10 @@ let dirty = (db: Statements, model: string): Map<number, Uint8Array | null> =>
     ]),
   )
 
-// Where this process is the only one with the database open and no quantized
-// index reads the dirty set, the set is the copies' alone: cleared, with a new
+// Where this process alone owns the database, the set is the copies' alone:
+// cleared, with a new
 // build numbered so every other copy of it loads again.
-let owned = (db: Statements) => db.ownership == 'exclusive' && !installed(db)
+let owned = (db: Statements) => db.ownership == 'exclusive'
 let advance = (db: Statements): void => {
   db.query({ t: 'update', table: BUILD, set: { n: op('+', col('n'), lit(1)) } })
   db.query({ t: 'delete', from: DIRTY })
