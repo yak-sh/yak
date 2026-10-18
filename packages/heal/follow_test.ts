@@ -1562,3 +1562,29 @@ test('a replay of a taken opening does not read the holder transcript', async ()
   equal(!!(await alreadyTaken.tracker.get([bug]))[0].taken, true)
   alreadyTaken.close()
 })
+
+let guardGuardCooled = await fixture({ cap: 1, cooldown: 1e12 })
+let guardGuardCooledHolder = crypto.randomUUID()
+await put(guardGuardCooled.g, [{
+  entity: { eid: guardGuardCooledHolder },
+  fixer: { bug },
+  created: { at: new Date().toISOString() },
+}])
+let readGuardCooled = guardGuardCooled.g.read
+guardGuardCooled.g.read = (query, options) => {
+  if (
+    typeof query == 'object' &&
+    JSON.stringify(query).includes('"path":["fixer"]') &&
+    JSON.stringify(query).includes('"path":["exit"]')
+  ) {
+    throw new Error('cooldown does not need a global fixer capacity read')
+  }
+  return readGuardCooled(query, options)
+}
+test('cooldown refuses a new fixer before reading global capacity', async () => {
+  await guardGuardCooled.run()
+  guardGuardCooled.g.read = readGuardCooled
+  equal((await rows(guardGuardCooled.g, 'fixer')).length, 1)
+  equal(guardGuardCooled.errors, [])
+  guardGuardCooled.close()
+})

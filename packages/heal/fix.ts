@@ -114,10 +114,12 @@ export let fixing = (g: Graph, options: Options = {}) => {
       if (p && comp(await one(g, p), 'nofix')) return true
     }
     let now = Date.now()
+    if (history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))) {
+      return true
+    }
     let running = (await g.read(unexited))
       .filter((f) => active(f, now))
-    if (running.length >= (options.cap ?? 2)) return true
-    return history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))
+    return running.length >= (options.cap ?? 2)
   }
 
   let request = async (work: Work): Promise<Bundle[]> => {
