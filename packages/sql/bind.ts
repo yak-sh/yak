@@ -167,6 +167,7 @@ type Ctx = {
   tables: Set<string>
   /** the first disjunction's entity ids, and the condition that tests them */
   candidates?: Frag & { test: Cond; whole?: boolean }
+  shapeCandidates?: boolean
   /** A mandatory finite root identity, known before presence is planned. */
   bounded?: boolean
   screens?: Map<Extension, Screen>
@@ -906,9 +907,20 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   let root = hops[0]
   chained(ctx.v, hops)
   if (!reachable(ctx, hops)) return unworn(op, p.value, hops.at(-1)!.prop)
-  ctx.tables.add(root.comp)
+  let scalarRoot = ctx.shapeCandidates && ctx.present &&
+    root.comp != 'entity' && !hops.at(-1)!.prop
+  if (!scalarRoot) ctx.tables.add(root.comp)
   if (seekable(ctx, hops, p)) return sought(ctx, hops, p)
-  let target = chain(ctx, hops, refKey(ctx, root.comp, root.prop))
+  // A reference-presence path needs one value, not a LEFT JOIN over that
+  // component's history when SQLite still has singleton statistics.
+  let start = scalarRoot
+    ? `(select "__root"."${field(root.prop)}" from ${
+      source(ctx, root.comp)
+    } as "__root" where "__root"."entity" = ${
+      ctx.d.ownerKey('entity')
+    } limit 1)`
+    : refKey(ctx, root.comp, root.prop)
+  let target = chain(ctx, hops, start)
   let leaf = hops[hops.length - 1]
   // A presence test on the leaf: does the entity the path reached have this
   // component?
@@ -1624,13 +1636,29 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // time the statement runs.
   let wearing = [...narrowed, ...rest.flatMap((c) => implied(ctx, c))]
     .filter((comp) => facetOf(ctx, present(comp)))
-  // Resolve indexed selections before choosing how to check their facets.
-  // A disjunction can provide candidates even when no component is required.
-  let conditions = new Map(rest.map((c) => [c, clause(ctx, c)]))
   let shape = (!ctx.present || ctx.archetypes?.held) &&
       all.length + none.length > 1
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null
+  // Presence plus absence selects the still-pending owners, not all the
+  // historical rows of the presence component. Retain the ordinary visible
+  // entity join after selecting those physical keys.
+  if (
+    shape && ctx.present && none.length && !ctx.bounded && !ctx.spine &&
+    !ctx.candidates && ctx.d.archetypeSource
+  ) {
+    let held = render(shape)
+    ctx.shapeCandidates = true
+    ctx.candidates = {
+      sql: `select "entity"."id" from ${
+        ctx.d.archetypeSource(ctx.v)
+      } where ${held.sql}`,
+      params: held.params,
+      test: shape,
+    }
+  }
+  // A disjunction can provide candidates even when no component is required.
+  let conditions = new Map(rest.map((c) => [c, clause(ctx, c)]))
   if (!shape) {
     // A mandatory value predicate already selects owners wearing its
     // component. Reading that component's whole owning set again can scan
@@ -2179,7 +2207,12 @@ let indexedRelation = (
           src: raw(ctx.d.admitted ?? from, [], 'entity'),
           on: raw(`"__candidates"."id" = ${ctx.d.ownerKey('entity')}`),
         } as Join],
-        ...s.joins ?? [],
+        ...(s.joins ?? []).map((j) =>
+          ctx.shapeCandidates && ctx.present &&
+            j.src.t == 'raw' && j.src.sql == joining(ctx, ctx.present)
+            ? { ...j, how: 'cross' as const }
+            : j
+        ),
       ],
     }
   }
@@ -3281,6 +3314,7 @@ let visible = (
       visibility.components?.[comp]
         ? `${source(comp)} as ${quoted(comp)}`
         : base.owned?.(comp) ?? base.table(comp),
+    archetypeSource: masked ? undefined : base.archetypeSource,
     archetype: masked
       ? (owner) =>
         owner == null
