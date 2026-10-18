@@ -74,8 +74,37 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
   }
 }
 
+// Select identities separately, then gather the components actually present.
+// Projecting every optional component forces a scalar read for each declared
+// component, even though an entry carries only a handful of them.
+let selected = async (r: Read, q: string): Promise<Bundle[]> => {
+  let ids = (await r.g.rows(q)).map((b) => String(b.eid))
+  if (!ids.length) return []
+  let names = r.names
+  if (names && r.g.vocab.comp('archetype')) {
+    let owners = await r.g.get(ids, [])
+    let keys = [...new Set(owners.map((b) => b.entity.archetype))]
+    if (!keys.includes(undefined)) {
+      let shapes = await r.g.get(keys as Eid[], ['archetype'])
+      let tables = shapes.map((b) => comp(b, 'archetype')?.tables)
+      if (
+        tables.length == keys.length &&
+        tables.every((t) => typeof t == 'string')
+      ) {
+        let present = new Set(
+          tables.flatMap((t) => JSON.parse(String(t)) as string[]),
+        )
+        names = names.filter((n) => present.has(n))
+      }
+    }
+  }
+  let rows = new Map((await r.g.get(ids, names)).map((b) => [b.entity.eid, b]))
+  return ids.flatMap((id) => rows.get(id) ?? [])
+}
+
 // Older rows of the whole chain, `n` at a time, newest first.
-let pages = ({ g, segs, fields }: Read) => {
+let pages = (r: Read) => {
+  let { segs } = r
   let i = segs.length - 1, after = ''
   return {
     get done() {
@@ -85,9 +114,9 @@ let pages = ({ g, segs, fields }: Read) => {
       let got: Bundle[] = []
       while (i >= 0 && got.length < n) {
         let want = n - got.length
-        let rows = await g.read(
-          `${within(segs[i])}&.order=-entry.seq&.limit=${want}${after}` +
-            `&${fields}`,
+        let rows = await selected(
+          r,
+          `${within(segs[i])}&.order=-entry.seq&.limit=${want}${after}`,
         )
         got.push(...rows)
         if (rows.length < want) {
@@ -103,9 +132,9 @@ let pages = ({ g, segs, fields }: Read) => {
     until: async (at: number): Promise<Bundle[]> => {
       let got: Bundle[] = []
       while (i >= 0) {
-        let rows = await g.read(
-          `${within(segs[i])}&.entry.seq>=${at}&.order=-entry.seq${after}` +
-            `&${fields}`,
+        let rows = await selected(
+          r,
+          `${within(segs[i])}&.entry.seq>=${at}&.order=-entry.seq${after}`,
         )
         got.push(...rows)
         if (rows.length) after = `&.after=${rows.at(-1)!.entity.eid}`
@@ -124,8 +153,9 @@ let newest = (r: Read, qualifier: string): Promise<Bundle | undefined> => {
   if (seen) return seen
   let found = (async () => {
     for (let s of r.segs.toReversed()) {
-      let [row] = await r.g.read(
-        `${within(s)}${qualifier}&.order=-entry.seq&.limit=1&${r.fields}`,
+      let [row] = await selected(
+        r,
+        `${within(s)}${qualifier}&.order=-entry.seq&.limit=1`,
       )
       if (row) return row
     }
@@ -135,7 +165,7 @@ let newest = (r: Read, qualifier: string): Promise<Bundle | undefined> => {
 }
 let every = async (r: Read, qualifier: string): Promise<Bundle[]> =>
   (await Promise.all(
-    r.segs.map((s) => r.g.read(`${within(s)}${qualifier}&${r.fields}`)),
+    r.segs.map((s) => selected(r, `${within(s)}${qualifier}`)),
   )).flat()
 
 // The named entries that are lines of this transcript: an entry another

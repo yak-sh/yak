@@ -172,7 +172,7 @@ let endedFile = (path: string, consumed: number, cutoff: number): boolean => {
 let asking = async (call: Bundle, graph: Graph): Promise<string> => {
   let said = str(argsOf(call).session)
   let session = said
-    ? (await sessionFor(graph, said))?.entity.eid
+    ? (await sessionFor(graph, said, ['session.id']))?.entity.eid
     : str(who(call)?.via || who(call)?.by)
   if (!session) {
     throw new Refused(
@@ -252,7 +252,7 @@ export let runs = (
     let args = argsOf(call)
     let id = idIn(args)
     if (!id) return [briefed(await asking(call, graph), args.text)]
-    let s = await sessionFor(graph, id)
+    let s = await sessionFor(graph, id, ['session.id'])
     // A transcript nobody has created yet is created here, carrying its own
     // name, the way `session_context` reifies one. Never on the word the
     // caller typed: `--session S-37703` is a human id, not an eid, and taking
@@ -287,7 +287,11 @@ export let runs = (
     }
     let id = idIn(args)
     if (!id) return []
-    let found = await sessionFor(graph, id)
+    let found = await sessionFor(graph, id, [
+      'session.id',
+      'session.operator',
+      'session.persona',
+    ])
     let actor = str(args.actor)
     let eid = found?.entity.eid ?? '$session'
     // A session wearing no persona wears the one its checkout carries, which
@@ -334,7 +338,9 @@ export let runs = (
   session_wrap: async (call, graph): Promise<Bundle[]> => {
     let args = argsOf(call)
     let id = idIn(args)
-    let s = id ? await sessionFor(graph, id) : undefined
+    let s = id
+      ? await sessionFor(graph, id, ['session.id', 'process.pid'])
+      : undefined
     if (!s) return []
     let eid = s.entity.eid
     let held = await graph.read(`.${CLAIM}.session=${JSON.stringify(eid)}`)
