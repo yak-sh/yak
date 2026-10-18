@@ -186,6 +186,17 @@ in flight finish for a grace of seconds and then stops anyway, and each unit's
 cut off a run or an external action; it isn't guaranteed lossless. Recorded
 work left owed is the next worker's.
 
+## Profiling a box worker
+
+A busy worker is still doing the owner's work. Read its CPU and elapsed time
+with `ps -o pid,pcpu,cputime,etimes`; take a CPU profile from a probe worker
+you started yourself, not by signalling the live one. Deno's inspector is
+enabled with `--inspect=<host>:<port>` at process start. Unlike Node, Deno has
+no SIGUSR1 inspector switch: SIGUSR1's default action terminates it (exit 138).
+An extra effects-only worker may join the live pool when explicitly authorized;
+otherwise give the probe its own config and graph (`end-to-end-checks`). Keep
+its inspector local, and stop only that probe when the capture ends.
+
 ## Debugging after a write
 
 `platform-visualize` traces what ran after a write. The runs themselves:
