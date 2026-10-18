@@ -48,6 +48,58 @@ test('instruction admission snapshots machine files in stable ancestor order', a
     await assertRejects(() =>
       instructionFiles(processMachine(h.g, processes), dir + '/absent')
     )
+
+    let project = crypto.randomUUID()
+    let persona = crypto.randomUUID()
+    let task = crypto.randomUUID()
+    await Deno.mkdir(dir + '/orphan')
+    await Deno.symlink('.tasks/AGENTS.md', dir + '/orphan/AGENTS.md')
+    await h.g.apply([
+      { entity: { eid: project }, project: {} },
+      {
+        entity: { eid: persona },
+        persona: { home: project },
+        doc: { title: 'Common', body: 'Keep the owner’s inputs.' },
+      },
+      {
+        entity: { eid: '$includes' },
+        edge: { from: project, to: persona },
+        contains: {},
+      },
+      { entity: { eid: task }, task: {}, filed: { project } },
+    ])
+    let binding = await attached(h, dir + '/orphan')
+    let home = { machine: binding.machine, cwd: dir + '/orphan' }
+    await assertRejects(
+      () => instructionsFor(h.g, binding.machines, home),
+      Error,
+      'Instruction projection is missing',
+    )
+    let admittedFiles = await instructionsFor(
+      h.g,
+      binding.machines,
+      home,
+      undefined,
+      { work: task },
+    )
+    assertEquals(admittedFiles.length, 1)
+    assertEquals(
+      admittedFiles[0].body,
+      voice(h.g.vocab)(
+        (await wear(h.g.storage, h.g.vocab)(persona))!,
+      ),
+    )
+    let session = await begin(h.g, 'Fix this task.', {
+      files: admittedFiles,
+      home,
+      work: task,
+      using: {},
+    })
+    assertEquals((await h.g.get([session]))[0].filed, { project })
+    let entries = await h.g.read(`.entry.session=${session}&.prompt&*`)
+    assertEquals(entries.map((e) => (e.content as Comp).body), [
+      admittedFiles[0].body,
+    ])
   } finally {
     await Deno.remove(dir, { recursive: true })
     await h.close()

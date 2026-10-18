@@ -27,7 +27,7 @@ import { begin, seed, through } from './agent.ts'
 import { defaultUsing, selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
-import { homeAt, owing } from './session_machines.ts'
+import { homeAt } from './session_machines.ts'
 import { conversations } from './conversations.ts'
 import { instructionsFor } from './instructions.ts'
 import { sessionHome } from '@yaks/machine/targets'
@@ -128,6 +128,7 @@ export let runs = (host?: Host): Runs => ({
     await graph.apply(seed({ provider, model }), { trusted: true })
     let effort = word(args, 'effort')
     let persona = word(args, 'persona')
+    let work = word(args, 'work')
     let home = args.workspace
       ? {
         workspace: String(args.workspace),
@@ -139,10 +140,12 @@ export let runs = (host?: Host): Runs => ({
       host?.machines,
       home,
       host?.workspaces,
+      { persona, work },
     )
     let s = await begin(graph, prompt || undefined, {
       home,
-      files: [...files, ...await owing(graph, home, files, persona)],
+      files,
+      work,
       ...persona ? { persona } : {},
       by: caller(call),
       via: who(call)?.via,

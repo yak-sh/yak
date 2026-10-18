@@ -5,7 +5,8 @@ import { targetFor, type Workspaces } from '@yaks/machine/targets'
 import type { Comp, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
 import type { Machine } from '@yaks/machine'
-import type { Machines } from './session_machines.ts'
+import { type Machines, owing } from './session_machines.ts'
+import type { As } from '@yaks/persona'
 
 let quoted = (text: string) => "'" + text.replaceAll("'", "'\\''") + "'"
 
@@ -14,11 +15,12 @@ export let instructionFiles = async (
   machine: Machine,
   cwd: string,
   home?: string,
+  missing?: string[],
 ): Promise<Snapshot[]> => {
   let id = await machine.start(
     `set -e; cd -- ${
       quoted(cwd)
-    }; directory=$(pwd -P); while :; do path="$directory/AGENTS.md"; if [ -e "$path" ]; then [ -f "$path" ] && [ -r "$path" ]; printf '%s\\n' "$path"; fi; [ "$directory" = / ] && break; directory=$(dirname -- "$directory"); done`,
+    }; directory=$(pwd -P); while :; do path="$directory/AGENTS.md"; if [ -L "$path" ] && [ ! -e "$path" ]; then printf '!%s\\n' "$path"; elif [ -e "$path" ]; then [ -f "$path" ] && [ -r "$path" ]; printf '%s\\n' "$path"; fi; [ "$directory" = / ] && break; directory=$(dirname -- "$directory"); done`,
     cwd,
   )
   for (;;) {
@@ -27,7 +29,7 @@ export let instructionFiles = async (
     if (process.exit) {
       if (process.exit.code != 0) {
         throw new Error(
-          'Instruction files are unavailable: ' +
+          `Instruction discovery exited ${process.exit.code}: ` +
             (await machine.tail(id, 40)).join('\n'),
         )
       }
@@ -57,11 +59,38 @@ export let instructionFiles = async (
       await new Promise((go) => setTimeout(go, machine.poll ?? 100))
     }
   }
+  let lost = paths.filter((p) => p.startsWith('!')).map((p) => p.slice(1))
+  if (lost.length && !missing) throw unavailable(lost)
+  missing?.push(...lost)
   let files: Snapshot[] = []
-  for (let source of paths) {
+  for (let source of paths.filter((p) => !p.startsWith('!'))) {
     files.push(await snapshot(await machine.read(source), source))
   }
   return files
+}
+
+let unavailable = (paths: string[]) =>
+  new Refused(
+    'Instruction projection is missing: ' + paths.join(', ') +
+      '. Supply --persona or --work with the graph task or project.',
+  )
+
+let admitted = async (
+  g: Graph,
+  machine: Machine | undefined,
+  home: Comp,
+  context: As,
+): Promise<Snapshot[]> => {
+  let missing: string[] = []
+  let files = machine && home.cwd
+    ? await instructionFiles(machine, String(home.cwd), undefined, missing)
+    : []
+  let graph = await owing(g, home, files, context)
+  if (
+    missing.length && !graph.length &&
+    !(await owing(g, home, [], context)).length
+  ) throw unavailable(missing)
+  return [...files, ...graph]
 }
 
 /** Opening a graph-only session does not acquire any machine. An explicit
@@ -71,6 +100,7 @@ export let instructionsFor = async (
   configured: Machines | undefined,
   home: Comp,
   workspaces?: Workspaces,
+  context: As = {},
 ): Promise<Snapshot[]> => {
   if (home.workspace) {
     if (!workspaces) {
@@ -78,12 +108,14 @@ export let instructionsFor = async (
     }
     let target = await targetFor(g, undefined, home)
     home.cwd ??= target.cwd
-    return instructionFiles(
+    return admitted(
+      g,
       await workspaces.connect(target.workspace),
-      target.cwd,
+      home,
+      context,
     )
   }
-  if (!home.machine) return []
+  if (!home.machine) return admitted(g, undefined, home, context)
   let id = String(home.machine)
   let [row] = await g.get([id])
   let record = row?.machine as Comp | undefined
@@ -110,7 +142,6 @@ export let instructionsFor = async (
     await g.apply([{ entity: { eid: id }, machine: { state: 'running' } }])
   }
   let cwd = home.cwd == null ? loan.cwd : String(home.cwd)
-  if (!cwd) return []
   home.cwd ??= cwd
-  return instructionFiles(loan.machine, cwd)
+  return admitted(g, loan.machine, home, context)
 }

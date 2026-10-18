@@ -194,6 +194,31 @@ test('session new accepts a graph persona and snapshots its instructions', async
         )
       ),
     )
+    let project = crypto.randomUUID()
+    let task = crypto.randomUUID()
+    await h.g.apply([
+      { entity: { eid: project }, project: {} },
+      { entity: { eid: persona }, persona: { home: project } },
+      {
+        entity: { eid: '$includes' },
+        edge: { from: project, to: persona },
+        contains: {},
+      },
+      { entity: { eid: task }, task: {}, filed: { project } },
+    ])
+    let [working] = await runs().session_new!({
+      entity: { eid: crypto.randomUUID() },
+      call: { args: { tui: true, work: task } },
+    }, h.g)
+    assertEquals(working.filed, { project })
+    assertEquals(working.home, {})
+    let instructions = await transcript(h.g, working.entity.eid)
+    assert(instructions.some((e) =>
+      e.prompt &&
+      String((e.content as Record<string, unknown>)?.body).includes(
+        'Guide this work.',
+      )
+    ))
   } finally {
     await h.close()
   }

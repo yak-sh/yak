@@ -21,7 +21,7 @@ import { streamingEnabled } from './streaming.ts'
 import { imageContext, registered } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
-import { homeAt, machines, owing } from './session_machines.ts'
+import { homeAt, machines } from './session_machines.ts'
 import { instructionsFor } from './instructions.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
@@ -195,10 +195,11 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
         opts.machines ?? h.machines,
         home,
         opts.workspaces ?? h.workspaces,
+        { persona },
       )
       return {
         home,
-        files: [...files, ...await owing(h.g, home, files, persona)],
+        files,
       }
     },
     context: (window, entries) =>

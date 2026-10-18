@@ -72,6 +72,11 @@
           "ref": "persona",
           "description": "the persona to carry, by id or name (default: the checkout's persona)"
         },
+        "work": {
+          "type": "string",
+          "ref": "entity",
+          "description": "the graph task or project whose common persona to admit, independent of the machine checkout"
+        },
         "machine": {
           "type": "string",
           "ref": "machine",

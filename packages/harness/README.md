@@ -193,8 +193,17 @@ Its first machine call requests a sandbox from the host's default provider.
 `--machine <machine-id>` names an existing machine record; `--cwd <directory>`
 sets the command directory on that machine. Its ancestor AGENTS.md files are
 admitted through Machine as immutable instruction snapshots, before the first
-message. See [Session machines](#session-machines) for provisioning, delegation
-and release.
+message. `--work <task-or-project>` admits that work's common graph persona and
+files the session under its project, even in an unregistered checkout whose
+AGENTS.md projection is missing. `--persona` chooses a persona explicitly. A
+dangling instruction projection without graph context refuses opening:
+
+```sh ignore
+yak session new 'Fix the task' --work T-123 --machine <machine-id>
+```
+
+See [Session machines](#session-machines) for provisioning, delegation and
+release.
 
 Frontend drafts are local to the terminal's machine. `HARNESS_DRAFT_DIR`
 relocates them; [Draft recovery](#draft-recovery) describes their lifetime.

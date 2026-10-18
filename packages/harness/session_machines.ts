@@ -9,7 +9,7 @@ import type { Machine, MachineFile, MachineRef } from '@yaks/machine'
 import { targetFor, type Workspaces } from '@yaks/machine/targets'
 import { type ChildLimits, runningAt } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
-import { owed } from '@yaks/persona'
+import { type As, owed } from '@yaks/persona'
 import { isAbsolute, relative, resolve } from '@std/path/posix'
 
 export type Machines = NonNullable<import('@yaks/host').Host['machines']>
@@ -40,12 +40,15 @@ export let owing = async (
   g: Graph,
   home: Comp,
   files: Snapshot[],
-  persona?: string,
+  context: As = {},
 ): Promise<Snapshot[]> => {
-  if (!home.cwd && !persona) return []
-  let owes = await owed(g, String(home.cwd ?? ''), files.map((f) => f.body), {
-    persona,
-  })
+  if (!home.cwd && !context.persona && !context.work) return []
+  let owes = await owed(
+    g,
+    String(home.cwd ?? ''),
+    files.map((f) => f.body),
+    context,
+  )
   return owes ? [await snapshot(owes.text, owes.source)] : []
 }
 

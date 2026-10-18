@@ -60,6 +60,7 @@ import {
   usingOf,
 } from '@yaks/session'
 import { outputView, promptEntry, type Snapshot } from '@yaks/context'
+import { lineage } from '@yaks/project'
 import { render } from '@yaks/text'
 import {
   defaultUsing,
@@ -289,10 +290,15 @@ export let begin = async (
     by?: Eid
     via?: Eid
     project?: Eid
+    work?: Eid
     title?: string
   },
 ): Promise<Eid> => {
   let operator = await humanCaller(g, { by: o.by, via: o.via })
+  let project = o.project ??
+    (o.work
+      ? (await lineage(g, o.work)).find((b) => b.project)?.entity.eid
+      : undefined)
   let session = crypto.randomUUID() as Eid
   let context = (o.files ?? []).map((f, i) => ({
     ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
@@ -308,7 +314,7 @@ export let begin = async (
       },
       native: {},
       ...o.home ? { home: o.home } : {},
-      ...o.project ? { filed: { project: o.project } } : {},
+      ...project ? { filed: { project } } : {},
       ...o.title ? { doc: { title: o.title } } : {},
       ...prompt ? {} : { using: o.using },
       $actor: through(session, o.by),

@@ -8,7 +8,6 @@
 import { promptEntry } from '@yaks/context'
 import { type Comp, derivedEid, Refused } from '@yaks/graph'
 import { instructionsFor } from './instructions.ts'
-import { owing } from './session_machines.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
 
@@ -86,19 +85,21 @@ export let effects = (
           )
           // Preparation is restartable. Admit each immutable source only once.
           if (!previous.length) {
+            let work = await host.graph.read(
+              `.claim.session=${session}&.task&.limit=1&*`,
+            )
             let files = await instructionsFor(
               host.graph,
               host.machines,
               home,
               host.workspaces,
-            )
-            files.push(
-              ...await owing(
-                host.graph,
-                home,
-                files,
-                (owner.session as Comp).persona as string | undefined,
-              ),
+              {
+                persona: (owner.session as Comp).persona as string | undefined,
+                work: work[0]?.entity.eid ??
+                  (owner.filed as Comp | undefined)?.project as
+                    | string
+                    | undefined,
+              },
             )
             if (files.length) {
               await host.graph.apply(
