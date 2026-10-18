@@ -197,6 +197,7 @@ export type Pitr = {
 export let state = (name = '', prepared = true) => {
   let live: Wire[] = []
   let pending = new Set<Promise<unknown>>()
+  let origins = new Map<Promise<unknown>, string>()
   let pitr: Pitr = { restore: '', aborts: 0, marks: [] }
   let bookmark = (name: string) => {
     pitr.marks.push(name)
@@ -204,9 +205,17 @@ export let state = (name = '', prepared = true) => {
   }
   return {
     pending,
+    origins,
     waitUntil: (work: Promise<unknown>) => {
       pending.add(work)
-      work.then(() => pending.delete(work), () => pending.delete(work))
+      origins.set(work, new Error().stack ?? '')
+      work.then(() => {
+        pending.delete(work)
+        origins.delete(work)
+      }, () => {
+        pending.delete(work)
+        origins.delete(work)
+      })
     },
     storage: Object.assign(prepared ? durable(name) : raw(), kvStorage(), {
       getCurrentBookmark: () => bookmark(`at-${pitr.marks.length}`),
@@ -1030,6 +1039,10 @@ export let lasting = (
   // Until nothing is left running, including work that work started.
   let settled = async () => {
     for (let work = pending(); work.length; work = pending()) {
+      console.log(
+        'loading PENDING_STORE_WORK',
+        stores.flatMap((ctx) => [...ctx.origins.values()]),
+      )
       await Promise.allSettled(work)
     }
   }
