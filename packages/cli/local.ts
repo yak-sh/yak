@@ -91,14 +91,6 @@ let open = async (
   // A web's reads are ready before it is: a server that just took over a port
   // answers its first read as fast as its next.
   let withReader = async (host: Served): Promise<Served> => {
-    let close = host.close
-    host.close = async (code) => {
-      try {
-        await close(code)
-      } finally {
-        await reader?.close()
-      }
-    }
     try {
       await reader?.ready()
     } catch (error) {

@@ -237,8 +237,10 @@ export type ComposeOpts = {
   readOnly?: boolean
   /** the thread running the duties this host hands off */
   thread?: Thread
-  /** the graph read door a web role uses while its own graph handles writes */
-  reader?: Pick<Graph, 'read' | 'rows' | 'get'>
+  /** The web read door; this host closes an owned reader before telemetry. */
+  reader?: Pick<Graph, 'read' | 'rows' | 'get'> & {
+    close?: () => void | Promise<void>
+  }
   /** a reader beside a host records no process of its own */
   process?: boolean
 }
@@ -853,6 +855,11 @@ let composed = async (
         let shut = async () => {
           captureControl?.close()
           await recorded?.close()
+          try {
+            await opts.reader?.close?.()
+          } catch (error) {
+            await report(error, { tags: { step: 'close reader' } })
+          }
           await report.close()
           try {
             sql.close()

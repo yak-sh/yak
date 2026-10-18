@@ -88,7 +88,7 @@ export let reporter = (
     return delivery
   }, {
     close: async () => {
-      await Promise.all(pending)
+      while (pending.size) await Promise.all(pending)
     },
   })
 }
