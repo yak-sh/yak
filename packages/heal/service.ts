@@ -117,11 +117,10 @@ export let service = async (
   let watches = new Map<string, Tracker>()
   let heard = new Set<string>()
   let reconcile = follow(host.graph, options)
-  // Each closed bug's row as its last replay found it. A flood of hits moves
-  // one bug's row many times a second; a pass it wakes replays the open bugs,
-  // which compete for fixers, and the closed ones whose rows moved, never all
-  // of them. The timer's pass replays every bug, for the task marks and gates
-  // that move here or with time.
+  // A changed tracker answer only replays the rows that moved. Local task
+  // and lifecycle changes, and time-based gates, are retried by the bounded
+  // periodic pass. Replaying every open bug for each new hit made cap checks
+  // spend the whole worker on the same fixer transcripts.
   let replayed = new Map<string, string>()
   let whole = -Infinity
   // A changed answer ends the wait at once; the timer re-checks tasks and gates.
@@ -186,12 +185,10 @@ export let service = async (
             if (!once && signal.aborted) return
             let key = `${url} ${bug.entity.eid}`
             let row = JSON.stringify(bug)
-            let closed = !!(bug.resolved || bug.archived)
-            if (!all && closed && replayed.get(key) == row) continue
+            if (!all && replayed.get(key) == row) continue
             try {
               await reconcile(bug, url, watch.mutate)
-              if (closed) replayed.set(key, row)
-              else replayed.delete(key)
+              replayed.set(key, row)
             } catch (error) {
               replayed.delete(key)
               await report(error)

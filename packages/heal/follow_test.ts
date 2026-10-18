@@ -434,11 +434,11 @@ let flood = await fixture({ provider: undefined })
 let gone = [1, 2, 3].map((n) => identityEid('bug', [`gone ${n}`]))
 await put(
   flood.tracker,
-  gone.map((eid) => ({
+  gone.map((eid, i) => ({
     entity: { eid },
     bug: { fault: eid, hits: 1, last: '2026-10-02T00:00:01Z' },
     doc: { title: 'Gone' },
-    resolved: {},
+    ...i == 0 ? {} : { resolved: {} },
   })),
 )
 // Every entity the passes read, which names each bug's work.
@@ -466,8 +466,8 @@ await service({ ...flood.host, graph: watchedFlood }, {
 let asked = (b: string) => floodRead.filter((eid) => eid == taskEid(b)).length
 // The completed replay is the fixture; timed checks inspect its observations.
 flood.close()
-test('a flood of hits on one bug replays it, not every closed bug', () => {
-  equal(gone.map(asked), [1, 1, 1])
+test('a flood of hits replays the changed bug, not unchanged open or closed bugs', () => {
+  equal(gone.map(asked), [2, 1, 1])
   ok(asked(bug) > 2)
 })
 
