@@ -3,7 +3,8 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./vocab": "./vocab.ts"
+    "./vocab": "./vocab.ts",
+    "./docker": "./docker.ts"
   },
   "license": "Apache-2.0",
   "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",

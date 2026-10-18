@@ -43,4 +43,48 @@ release a sandbox.
 | `.`       | `sandboxDoc`                        |
 | `./vocab` | `sandboxDoc`, `docs`, `description` |
 
-These declarations do not provision, wake or dispose external resources.
+## Docker Sandboxes
+
+A **sandbox provider** creates and disposes containers on an explicitly selected
+computer. A **sandbox connection** offers workspace verbs for the existing
+filesystem; connecting never recreates a missing sandbox. The provider takes a
+preallocated sandbox eid, before any external action.
+
+The `./docker` adapter runs `sbx` through a computer transport. Its local mode
+uses Docker Sandboxes on that computer, not the graph server. No host directory
+is bind-mounted. `sbx exec` wakes existing writable storage. A durable host
+receipt and sandbox ownership marker prevent retries from creating another
+resource or disposing a foreign resource. Keep the host receipt directory for as
+long as sandbox ids can be retried, including after disposal.
+
+This example needs a configured SSH computer running authenticated `sbx`:
+
+```ts ignore
+import { dockerSandboxes } from '@yaks/sandbox/docker'
+import { sshConnector } from '@yaks/machine/connectors'
+
+let transport = await sshConnector().connect('ssh://coder@container-host')
+let provider = dockerSandboxes(graph, {
+  transport,
+  state: '/home/coder/.local/state/yak-sandboxes',
+})
+let ref = { id: sandboxEid }
+let { workspace } = await provider.request!(ref)
+await workspace.write('hello.txt', 'hello')
+let reconnected = await provider.connect(ref)
+console.log(await reconnected.workspace.read('hello.txt'))
+await provider.dispose(ref)
+```
+
+The default root is `/workspace`; the adapter creates it and assigns its owner
+to the shell template's default user. Templates need bash, base64, realpath,
+setsid, flock and Linux `/proc`. Host control needs bash and flock. Commands
+passed to `sbx` have stdin detached from the control script so an sbx invocation
+cannot consume later lifecycle instructions. `from` requires an idempotent
+`prepare` callback; without one it is refused before provisioning. Initial
+provenance is not a backup. Disposal destroys writable storage and stops its
+processes; it is never triggered by a session home change.
+
+Exports accept relative names only and resolve inside the sandbox root. The
+adapter does not provide idle eviction, permissions, host installation or a
+local Docker fallback.
