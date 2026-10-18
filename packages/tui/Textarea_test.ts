@@ -188,7 +188,8 @@ test('soft rows scroll to the cursor and use allocated width, not terminal width
     5,
   )
   try {
-    await ui.send('abcdefghijklmnop')
+    // The subject is soft-row scrolling, not sixteen independent key edits.
+    await ui.send('\x1b[200~abcdefghijklmnop\x1b[201~')
     assertEquals(ui.text().split('\n').slice(0, 2), ['  ghijklside', '  mnop'])
     await ui.send('\x1b[A\x1b[A')
     assertEquals(ui.text().split('\n').slice(0, 2), [
