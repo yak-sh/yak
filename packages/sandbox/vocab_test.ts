@@ -21,13 +21,15 @@ await g.apply([
   },
 ])
 
-test('sandbox status follows disposal and keeps original computer history', async () => {
-  equal((await g.get([sandbox]))[0].sandbox?.status, 'requested')
-  await g.apply([
-    { entity: { eid: sandbox }, pending: null, released: {} },
-    { entity: { eid: computer }, $delete: true },
-  ])
-  let [row] = await g.get([sandbox])
+let requested = (await g.get([sandbox]))[0].sandbox?.status
+await g.apply([
+  { entity: { eid: sandbox }, pending: null, released: {} },
+  { entity: { eid: computer }, $delete: true },
+])
+let [row] = await g.get([sandbox])
+
+test('sandbox status follows disposal and keeps original computer history', () => {
+  equal(requested, 'requested')
   equal(row.sandbox?.status, 'released')
   equal(row.workspace, { machine: computer, root: '/workspace' })
 })

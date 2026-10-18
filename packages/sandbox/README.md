@@ -15,10 +15,18 @@ belong to [machine](../machine).
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { sandboxDoc } from '@yaks/sandbox'
+import { kernelDoc } from '@yaks/kernel'
 
-let vocab = loadVocab([sandboxDoc])
-equal(vocab.comp('sandbox')?.status?.pending, 'requested')
-equal(vocab.comp('sandbox')?.status?.released, 'released')
+let vocab = loadVocab([kernelDoc, sandboxDoc])
+equal(
+  vocab.comp('sandbox')?.ladder?.rungs.find((r) => r.comp == 'pending')?.status,
+  'requested',
+)
+equal(
+  vocab.comp('sandbox')?.ladder?.rungs.find((r) => r.comp == 'released')
+    ?.status,
+  'released',
+)
 ```
 
 `pending{}` means provisioning is requested, `failed{reason}` records a failure,
