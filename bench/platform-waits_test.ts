@@ -10,9 +10,9 @@ test('platform wait registration needs no probe or hand arguments', () => {
   throws(() => suite(['a-deployed-account']))
 })
 
-test('platform HTML waits consume content, not just successful headers', async () => {
-  let sent = false
-  let body = new ReadableStream({
+let sent = false
+let streamed = new Response(
+  new ReadableStream({
     start(controller) {
       controller.enqueue(new TextEncoder().encode('<h1>'))
       queueMicrotask(() => {
@@ -21,11 +21,11 @@ test('platform HTML waits consume content, not just successful headers', async (
         controller.close()
       })
     },
-  })
-  equal(
-    await content(new Response(body), 'The saved app'),
-    '<h1>The saved app</h1>',
-  )
+  }),
+)
+let consumed = content(streamed, 'The saved app')
+test('platform HTML waits consume content, not just successful headers', async () => {
+  equal(await consumed, '<h1>The saved app</h1>')
   equal(sent, true)
 })
 
