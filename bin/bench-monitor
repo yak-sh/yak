@@ -14,21 +14,13 @@
 # a measurement taken at low priority measures the box's other work.
 set -u
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
-# Each lane owns its lock and child. A long throughput check cannot postpone
-# the fast lane: a busy box-wide lock defers its check without queueing.
-# Cron never stacks another copy of a lane.
+# The hourly scheduler owns one bounded queue. It must not sit behind a lane
+# lock or silently skip a tick: box-lock wait consumes its absolute deadline,
+# and every suite still gets a result or a missed-measurement tracker report.
 if [ "${1:-}" = "--hourly" ]; then
-  self="$(realpath "$0")"
-  cd "$(dirname "$self")/.." || exit 1
-  # The wait suites share the box: measuring them together makes their own
-  # fixture work look like a regression. All suites share the box-wide lock.
-  mkdir -p "$HOME/.cache/yak/bench"
-  exec 9>"$HOME/.cache/yak/bench/monitor-hourly.lock"
-  flock -n 9 || exit 0
-  for suite in $(deno eval 'import { HOURLY } from "./bench/monitor.ts"; console.log(HOURLY.join(" "))'); do
-    "$self" "$suite"
-  done
-  exit
+  cd "$(dirname "$0")/.." || exit 1
+  export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  exec deno run -A bench/monitor.ts --hourly
 fi
 if [ "$#" -eq 0 ]; then
   self="$(realpath "$0")"

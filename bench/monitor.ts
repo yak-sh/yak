@@ -5,7 +5,7 @@
  * Each suite is screened against its banked baseline with one run
  * (`deno task bench:check <suite> --runs=1`). A regression counts only when a
  * check taken as the baseline was banked confirms it: each bench's best median
- * of three runs, so one slow run on a busy box reports nothing. A confirmed
+ * of three runs, so one slow run alone is not called a regression. A confirmed
  * one is reported with every
  * figure over its limit, the run's load, and the commits since the suite's
  * last good run; a suite that cannot run (no baseline, a crash, a page that
@@ -14,7 +14,9 @@
  * slow again after its bug was resolved reopens it.
  *
  * The box runs this from cron: every suite once a day, and `--hourly`
- * every 30 minutes for user-facing waits; `--restarted` every 15 minutes
+ * every 30 minutes for user-facing waits. Its serialized queue, lock wait,
+ * screening and confirmation share an absolute 25-minute deadline. Unmeasured
+ * suites report failures, never silently defer past the next tick; `--restarted` every 15 minutes
  * measures pages only when the live web unit has
  * changed since it last looked, that is once after each `yak restart`.
  *
@@ -41,6 +43,7 @@ export let SUITES = [
   'person-commands',
   'hook-waits',
   'operation-commands',
+  'operation-remaining',
   'terminal-interactions',
   'operation-scale',
   'platform-waits',
@@ -69,6 +72,7 @@ export let HOURLY = [
   'person-commands',
   'hook-waits',
   'operation-commands',
+  'operation-remaining',
   'terminal-interactions',
   'operation-scale',
   'platform-waits',
@@ -90,8 +94,9 @@ export type Outcome =
 export type Good = { commit: string; at: string }
 export type State = { web?: string; good: Record<string, Good> }
 export type Monitor = {
-  /** One check of a suite, over `runs` runs, else as its baseline was banked. */
-  check: (suite: string, runs?: number) => Promise<Outcome>
+  /** One check of a suite, over `runs` runs, else as its baseline was banked.
+   * A scheduled deadline includes both lock wait and collection. */
+  check: (suite: string, runs?: number, deadline?: number) => Promise<Outcome>
   report: (
     error: Error,
     suite: string,
@@ -139,12 +144,33 @@ export let watch = async (
   suites: string[],
   state: State,
   m: Monitor,
+  schedule?: { deadline: number; now: () => number },
 ): Promise<Record<string, Outcome['verdict']>> => {
   let out: Record<string, Outcome['verdict']> = {}
   for (let suite of suites) {
     let safe = async (runs?: number): Promise<Outcome> => {
       try {
-        return await m.check(suite, runs)
+        if (schedule && schedule.now() >= schedule.deadline) {
+          return {
+            verdict: 'failed',
+            error: 'scheduling deadline missed before measurement',
+          }
+        }
+        let result = await m.check(suite, runs, schedule?.deadline)
+        if (
+          schedule &&
+          ((schedule.now() >= schedule.deadline &&
+            result.verdict != 'failed') ||
+            (result.verdict == 'deferred' || result.verdict == 'unconfirmed' ||
+              result.verdict == 'inconclusive'))
+        ) {
+          return {
+            verdict: 'failed',
+            error:
+              'scheduling deadline missed: measurement or confirmation unavailable',
+          }
+        }
+        return result
       } catch (error) {
         return {
           verdict: 'failed',
@@ -298,9 +324,50 @@ let web = async (): Promise<string | undefined> => {
   return new TextDecoder().decode(stdout).trim().split(/\s+/)[0] || undefined
 }
 
+/** A half-hour tick has 25 minutes for the entire queue, not 25 minutes per
+ * suite. The remaining five minutes are for reporting/cron dispatch overhead;
+ * a change just after a tick is measured or explicitly failed within 55 minutes.
+ * No timing reference or benchmark limit is relaxed by this scheduling budget. */
+export let WINDOW = 25 * 60_000
+
+/** Command prefix at the process seam. Scheduled lock wait and collection share
+ * one timeout, at most the existing check cap. Its ten-second kill grace is
+ * inside the absolute deadline. One process group owns this invocation's flock
+ * and collection only; it cannot signal the process holding a busy lock. */
+export let measurement = (
+  suite: string,
+  deadline?: number,
+  now = Date.now(),
+): string[] | undefined => {
+  let lock = '/tmp/yaks-throughput-bench.lock'
+  let check = [
+    'timeout',
+    '--kill-after=10',
+    HOURLY.includes(suite) ? '600' : '10800',
+  ]
+  if (deadline === undefined) {
+    return ['flock', '--nonblock', '--conflict-exit-code=75', lock, ...check]
+  }
+  let remaining = deadline - now - 10_000
+  if (remaining <= 0) return undefined
+  return [
+    'timeout',
+    '--kill-after=10',
+    `${
+      Math.min(remaining, HOURLY.includes(suite) ? 600_000 : 10_800_000) / 1000
+    }s`,
+    'flock',
+    lock,
+  ]
+}
+
 /** `deno task bench:check <suite>` in this checkout, read back from the run
  * it writes. */
-let check = async (suite: string, runs?: number): Promise<Outcome> => {
+let check = async (
+  suite: string,
+  runs?: number,
+  deadline?: number,
+): Promise<Outcome> => {
   if (MEASURE[suite]) {
     let timed = await new Deno.Command(Deno.execPath(), {
       args: ['run', '-A', ...MEASURE[suite]],
@@ -322,17 +389,19 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
   let path = await reference(suite)
   let results = `${home}/.cache/yak/bench/${suite}.${Deno.pid}.results.json`
   await Deno.remove(results).catch(() => {})
-  // Acquire before timeout: waiting for another suite is not a failed
-  // measurement. A busy lock defers this check until the next monitor tick.
-  // flock keeps its inode; nobody may unlink the shared lock file.
-  let child = await new Deno.Command('flock', {
+  // Scheduled checks include lock acquisition in their absolute deadline.
+  // timeout owns only this flock and its benchmark children, never a lock holder.
+  // Lock wait consumes the ten-minute check cap, never lengthens it.
+  let args = measurement(suite, deadline)
+  if (!args) {
+    return {
+      verdict: 'failed',
+      error: 'scheduling deadline missed before lock acquisition',
+    }
+  }
+  let child = await new Deno.Command(args[0], {
     args: [
-      '--nonblock',
-      '--conflict-exit-code=75',
-      '/tmp/yaks-throughput-bench.lock',
-      'timeout',
-      '--kill-after=10',
-      HOURLY.includes(suite) ? '600' : '10800',
+      ...args.slice(1),
       Deno.execPath(),
       'run',
       '-A',
@@ -349,9 +418,24 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
     stdout: 'inherit',
     stderr: 'piped',
   }).output()
-  if (child.code == 75) return { verdict: 'deferred' }
+  if (child.code == 75) {
+    return deadline === undefined ? { verdict: 'deferred' } : {
+      verdict: 'failed',
+      error: 'scheduling deadline missed waiting for benchmark lock',
+    }
+  }
   let said = new TextDecoder().decode(child.stderr)
   await Deno.stderr.write(child.stderr)
+  if (child.code == 124 || child.code == 137) {
+    return {
+      verdict: 'failed',
+      error:
+        'measurement timed out (including scheduled lock wait); no result accepted' +
+        (said.trim()
+          ? `\n${said.trim().split('\n').slice(-12).join('\n')}`
+          : ''),
+    }
+  }
   try {
     let run: Run = JSON.parse(await Deno.readTextFile(results))
     if (child.success || run.verdict == 'regressed') {
@@ -360,14 +444,16 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
         ['platform-waits', 'inbox-content'].includes(suite)
       ) {
         let evidence = results.replace('.results.json', '.paired.json')
-        let paired = await new Deno.Command('flock', {
+        let prefix = measurement(suite, deadline)
+        if (!prefix) {
+          return {
+            verdict: 'failed',
+            error: 'scheduling deadline missed before paired confirmation',
+          }
+        }
+        let paired = await new Deno.Command(prefix[0], {
           args: [
-            '--nonblock',
-            '--conflict-exit-code=75',
-            '/tmp/yaks-throughput-bench.lock',
-            'timeout',
-            '--kill-after=10',
-            '600',
+            ...prefix.slice(1),
             Deno.execPath(),
             'run',
             '-A',
@@ -410,6 +496,7 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
 }
 
 if (import.meta.main) {
+  let started = Date.now()
   let restarted = Deno.args.includes('--restarted')
   let named = Deno.args.filter((a) => !a.startsWith('--'))
   let state = await load()
@@ -453,7 +540,7 @@ if (import.meta.main) {
         ? [...lines.slice(0, 40), `… ${lines.length - 40} more`]
         : lines
     },
-  })
+  }, hourly ? { deadline: started + WINDOW, now: Date.now } : undefined)
   await send.close()
   // Another run (a restart's, beside the daily one) may have saved since this
   // one loaded: keep what it saw, and add only the suites run here.

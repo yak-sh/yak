@@ -32,10 +32,18 @@ a page that never paints) is reported as a failure. @yaks/heal sends both to an
 agent like any other bug. Cron runs it from the main checkout through
 bin/bench-monitor: every suite at 02:23, user-facing suites every 30 minutes
 (`--hourly`), and pages after each web-unit change (`--restarted`, checked every
-15 minutes). The user-facing lane runs suites independently; a slow throughput
-check cannot queue in front of it. Each user-facing check has ten minutes to
-screen and ten to confirm. Missing baselines, crashes, hung checks and unpainted
-content all file tracker bugs.
+15 minutes). The user-facing suites collect serially under the box-wide lock, so
+fixtures never measure one another. Each tick has an absolute 25-minute deadline
+shared by lock wait, screening and confirmation (including paired confirmation);
+a check is capped at ten minutes, including its lock wait. Deadline expiry
+reports every remaining suite as a missed measurement, rather than skipping a
+held lane lock. Thus the half-hour cadence leaves five minutes within the hour
+for dispatch and durable tracker reporting. Missing baselines, crashes, hung
+checks, unavailable confirmations and unpainted content file tracker failures;
+none counts as a pass or a new best.
+
+Run the scheduled queue with `bin/bench-monitor --hourly`. It does not start
+parallel collectors, extend measurement limits or interrupt another lock holder.
 
 The monitor keeps its best measurements in `~/.cache/yak/bench/best/`. Each
 confirmed run banks faster figures with zero slack, even when a different figure

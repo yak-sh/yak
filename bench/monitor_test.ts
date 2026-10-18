@@ -1,8 +1,15 @@
 /** What the bench monitor reports, and what it remembers as good, for each
  * sequence of checks a suite can give it. */
 import type { Run } from '@yaks/benchmark'
-import { equal, test } from '@yaks/testing'
-import { type Outcome, type State, watch } from './monitor.ts'
+import { clock, equal, ok, test } from '@yaks/testing'
+import {
+  HOURLY,
+  measurement,
+  type Outcome,
+  type State,
+  watch,
+  WINDOW,
+} from './monitor.ts'
 
 let run = (verdict: Run['verdict'], commit = 'c2'): Run => ({
   version: 1,
@@ -180,5 +187,162 @@ for (let verdict of ['unconfirmed', 'inconclusive'] as const) {
     equal(state.good.s, { commit: 'old', at: 'then' })
     equal(banked, false)
     equal(reported, false)
+  })
+}
+
+// Model the process boundary, not wall time: flock consumes the same absolute
+// allowance as collection, and timeout's kill grace is charged before returning.
+let scheduled = async (busy: boolean, duration: number, suites = HOURLY) => {
+  let time = clock(30 * 60_000) // a change immediately after the preceding tick
+  let start = time.now(), deadline = start + WINDOW
+  let reports: { suite: string; kind: string; at: number; message: string }[] =
+    []
+  let calls: { suite: string; runs?: number; at: number }[] = []
+  let banked: string[] = []
+  let state: State = { good: {} }
+  let verdicts = await watch(suites, state, {
+    check: async (suite, runs, end) => {
+      equal(end, deadline) // confirmation and every queued suite share it
+      let args = measurement(suite, end, time.now())
+      if (!args) return { verdict: 'failed', error: 'deadline reached' }
+      calls.push({ suite, runs, at: time.now() })
+      // Emulate the timeout/flock process seam, including a stubborn child.
+      equal(args[0], 'timeout')
+      equal(args[3], 'flock')
+      let remaining = Number(args[2].slice(0, -1)) * 1000
+      let work = busy ? Infinity : duration
+      await time.advance(Math.min(work, remaining + 10_000))
+      if (busy || duration > 600_000 || work >= remaining) {
+        return {
+          verdict: 'failed',
+          error: 'measurement or lock wait timed out',
+        }
+      }
+      return outcome('regressed')
+    },
+    bank: (suite) => {
+      banked.push(suite)
+      return Promise.resolve()
+    },
+    since: () => Promise.resolve([]),
+    report: async (error, suite, kind) => {
+      // Include reporting overhead rather than pretending it is free.
+      await time.advance(1000)
+      reports.push({ suite, kind, at: time.now(), message: error.message })
+    },
+  }, { deadline, now: time.now })
+  return {
+    start,
+    deadline,
+    reports,
+    calls,
+    banked,
+    state,
+    verdicts,
+    elapsed: time.now(),
+  }
+}
+
+test('worst-case hourly collection reports every queued suite within the hour', async () => {
+  let result = await scheduled(false, 599_000)
+  equal(result.reports.map((r) => r.suite), HOURLY)
+  equal(result.reports[0].kind, 'regressed')
+  equal(result.calls.map((c) => [c.suite, c.runs]), [
+    [HOURLY[0], 1],
+    [HOURLY[0], undefined],
+    [HOURLY[1], 1],
+  ])
+  equal(result.banked, [HOURLY[0]])
+  ok(result.reports.slice(1).every((r) => r.kind == 'failed'))
+  ok(Object.values(result.verdicts).every((v) => v != 'deferred'))
+  ok(result.elapsed < 60 * 60_000)
+  equal(result.state.good, {})
+})
+
+test('a box lock held beyond the deadline reports all suites, never a silent deferral', async () => {
+  let result = await scheduled(true, 0)
+  equal(result.calls.length, 3)
+  equal(result.reports.map((r) => r.suite), HOURLY)
+  ok(result.reports.every((r) => r.kind == 'failed'))
+  ok(result.reports.every((r) => r.message.includes('could not be measured')))
+  equal(result.banked, [])
+  equal(result.state.good, {})
+  ok(result.elapsed < 60 * 60_000)
+})
+
+test('checks hitting their existing ten-minute cap cannot hold up later reports', async () => {
+  let result = await scheduled(false, Infinity)
+  equal(result.reports.map((r) => r.suite), HOURLY)
+  ok(result.reports.every((r) => r.kind == 'failed'))
+  equal(result.banked, [])
+  ok(result.elapsed < 60 * 60_000)
+})
+
+test('scheduled busy confirmations are failures, not confirmed regressions or good runs', async () => {
+  let reports: string[] = [], calls = 0, banked = 0
+  let state: State = { good: {} }, time = clock()
+  equal(
+    await watch(['s'], state, {
+      check: () =>
+        Promise.resolve(outcome(++calls == 1 ? 'regressed' : 'deferred')),
+      since: () => Promise.resolve([]),
+      bank: () => {
+        banked++
+        return Promise.resolve()
+      },
+      report: (error, _suite, kind) => {
+        reports.push(kind + ': ' + error.message)
+        return Promise.resolve()
+      },
+    }, { deadline: WINDOW, now: time.now }),
+    { s: 'failed' },
+  )
+  equal(calls, 2)
+  equal(banked, 0)
+  equal(state.good, {})
+  equal(reports.length, 1)
+  ok(reports[0].includes('confirmation unavailable'))
+})
+
+test('fast scheduled suites still screen and confirm without changing measurement limits', async () => {
+  let result = await scheduled(false, 1000, [HOURLY[0]])
+  equal(result.calls.length, 2)
+  equal(result.banked, [HOURLY[0]])
+  ok(result.reports.every((r) => r.kind == 'regressed'))
+  equal(measurement('pages', 10_000, 0), undefined)
+  // Lock wait and collection are inside one process-group timeout. The cap
+  // cannot exceed the existing collection limit, or the remaining deadline.
+  equal(measurement('pages', WINDOW, 0), [
+    'timeout',
+    '--kill-after=10',
+    '600s',
+    'flock',
+    '/tmp/yaks-throughput-bench.lock',
+  ])
+  equal(measurement('pages', 70_000, 0)?.[2], '60s')
+})
+
+for (let verdict of ['unconfirmed', 'inconclusive'] as const) {
+  test(`scheduled paired ${verdict} reports unavailable confirmation without banking`, async () => {
+    let reports: string[] = [], banked = false
+    let state: State = { good: {} }
+    equal(
+      await watch(['s'], state, {
+        check: () => Promise.resolve({ verdict }),
+        since: () => Promise.resolve([]),
+        bank: () => {
+          banked = true
+          return Promise.resolve()
+        },
+        report: (_error, suite) => {
+          reports.push(suite)
+          return Promise.resolve()
+        },
+      }, { deadline: WINDOW, now: () => 0 }),
+      { s: 'failed' },
+    )
+    equal(reports, ['s'])
+    equal(banked, false)
+    equal(state.good, {})
   })
 }
