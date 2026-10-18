@@ -455,6 +455,7 @@ export let install = (
   d: Driver,
   vocab: Vocab,
   derived: Derived = {},
+  own = false,
 ): Error[] => {
   // Retired first: a component may take a name an index held.
   for (let stmt of retired(d, vocab)) d.query(stmt)
@@ -468,10 +469,13 @@ export let install = (
   adopt(d, fields(vocab), derived, { heal: false })
   rekey(statements(d))
   erect(d, vectorSchema())
-  // A removed word takes its stored aspect with it. Discover component
+  // Only the platform owns the complete vocabulary of its own stores. An
+  // app declaration can shrink without contracting its data (old releases,
+  // restored vocab keys): only its explicit contract door may remove rows.
+  // A removed platform word takes its stored aspect with it. Discover component
   // tables structurally, not by name: the object also holds infrastructure,
   // search shadows and migration work which are not vocabulary.
-  for (let name of componentTables(d, [...vocab.all, 'tombstone'])) {
+  for (let name of own ? componentTables(d, [...vocab.all, 'tombstone']) : []) {
     d.query({ t: 'drop', kind: 'table', name })
   }
   if (vocab.comp('archetype')) {
@@ -516,11 +520,11 @@ export let lifecycleColumns = (d: Driver, vocab: Vocab) => {
  * its search watched. Only changed definitions are installed: unrelated words
  * must not discard search indexes or audit every entity on the request that
  * discovers them. What it had to leave undone comes back. */
-export let raised = (d: Driver, vocab: Vocab): Error[] => {
+export let raised = (d: Driver, vocab: Vocab, own = false): Error[] => {
   lifecycleColumns(d, vocab)
   erect(d, blobSchema())
   if (vocab.comp('_tx')) erect(d, journalDdl())
-  let left = install(d, vocab, blobRead(vocab))
+  let left = install(d, vocab, blobRead(vocab), own)
   if (!left.length) {
     watchEmbedding(statements(d), texts(vocab, blobRead(vocab)))
   }
@@ -529,7 +533,7 @@ export let raised = (d: Driver, vocab: Vocab): Error[] => {
 
 // Installation semantics participate in the Store print even when its words
 // did not change (for example, a component removed by an earlier release).
-export let INSTALL = 2
+export let INSTALL = 3
 
 /** One wake's schema pass, for the print a vocabulary renders to and the
  * stamp an older release kept. The stamp decides when the pass (`raise`) runs
@@ -541,7 +545,12 @@ export let INSTALL = 2
  * clean. */
 export let passed = (
   d: Driver,
-  { vocab, print, stamp }: { vocab: Vocab; print: string; stamp: string },
+  { vocab, print, stamp, own = false }: {
+    vocab: Vocab
+    print: string
+    stamp: string
+    own?: boolean
+  },
   held: string | null,
   raise = raised,
 ): { left: Error[]; stamp: string | null } => {
@@ -550,7 +559,7 @@ export let passed = (
   if (held && held != stamp) forget(d, print)
   follow(d, print, () => {
     if (held == stamp) return
-    left = raise(d, vocab)
+    left = raise(d, vocab, own)
     if (left.length) return false
     ran = true
   })

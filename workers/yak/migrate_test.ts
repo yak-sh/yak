@@ -788,8 +788,8 @@ departed.query(insert('entity', { eid: 'departed' }))
 departed.query(insert('lapsed', { entity: 1, agent: 'browser' }))
 departed.query(insert('kept', { entity: 1, name: 'survives' }))
 
-let departure = install(departed, remainingWords)
-let repeatedDeparture = install(departed, remainingWords)
+let departure = install(departed, remainingWords, {}, true)
+let repeatedDeparture = install(departed, remainingWords, {}, true)
 
 test('a removed component takes its stored rows on the next schema installation', () => {
   equal(departure, [])
@@ -834,4 +834,48 @@ let wakeDeparture = await (async () => {
 test('a platform wake removes departed aspects and repairs their archetypes', () => {
   equal(wakeDeparture.remaining, [])
   for (let kind of wakeDeparture.kinds) assert(!kind.includes('lapsed'))
+})
+
+// A pre-print/older writer can leave the declaration smaller than the physical
+// store. Neither an ordinary install nor its wake may infer a contract.
+let appOmission = mem()
+install(appOmission, removedWords)
+appOmission.query(insert('entity', { eid: 'app-data' }))
+appOmission.query(insert('lapsed', { entity: 1, agent: 'precious' }))
+let omission = install(appOmission, remainingWords)
+let omissionRows = scan(appOmission, 'lapsed')
+let restored = install(appOmission, removedWords)
+let restoredRows = scan(appOmission, 'lapsed')
+
+test('app schema installation preserves omitted components and restores their rows on rollback', () => {
+  equal(omission, [])
+  equal(restored, [])
+  equal(omissionRows, [{ entity: 1, agent: 'precious' }])
+  equal(restoredRows, omissionRows)
+})
+
+let oldAppWake = await (async () => {
+  let ctx = state(), app = newer(ctx, 'safety/old-writer')
+  await app.query('.task', APP)
+  let d = db(ctx)
+  run(ctx, {
+    t: 'create table',
+    name: 'precious',
+    cols: [
+      { name: 'entity', type: 'integer', pk: true },
+      { name: 'value', type: 'text' },
+    ],
+  })
+  run(ctx, insert('entity', { eid: 'precious-owner' }))
+  let id = Number(scan(d, 'entity', by({ eid: 'precious-owner' }))[0].id)
+  run(ctx, insert('precious', { entity: id, value: 'retained' }))
+  // Simulate an older release writing a reduced vocabulary directly.
+  keep(ctx, 'vocab', '{}')
+  keep(ctx, 'schema', 'older writer')
+  await newer(ctx, 'safety/old-writer').query('.task', APP)
+  return scan(d, 'precious').map((r) => r.value)
+})()
+
+test('an app wake preserves data absent from an older release vocabulary key', () => {
+  equal(oldAppWake, ['retained'])
 })
