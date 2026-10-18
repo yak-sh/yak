@@ -149,7 +149,11 @@ export let stepTimingReporter = (host: Host) => {
         }
       }
     }
+    // One bug per metric, never one per sample: the numbers ride in the tags,
+    // so the tracker groups every sample of a metric into a single bug. Model
+    // time is the provider's, not ours, so it is measured but not reported.
     for (let sample of stepDrift(stepTimings(entries, marks, inputs))) {
+      if (sample.metric == 'model') continue
       let key = `${session}|${sample.step}|${sample.metric}`
       if (seen.has(key)) continue
       let row = entries.find((b) => b.entity.eid == sample.step)!
@@ -160,7 +164,7 @@ export let stepTimingReporter = (host: Host) => {
       try {
         await host.report?.(
           new Error(
-            `Native ${sample.metric} timing drift: ${sample.ms}ms > ${sample.baseline}ms prior median`,
+            `Native ${sample.metric} timing drifted above its prior median`,
           ),
           {
             eid: derivedEid(`step-timing|${key}`),
