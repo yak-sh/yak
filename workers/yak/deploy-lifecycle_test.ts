@@ -118,6 +118,7 @@ test('deploy reload marks survive recording, and pointer notices follow the comm
 
 for (let mode of ['network', 'non-ok']) {
   let history = await (async () => {
+    console.log('DEPLOY_FIXTURE', mode, 'start')
     await using scenario = platform('reload-secret')
     let store = scenario.env.STORE as unknown as Namespace
     let notices = 0
@@ -135,10 +136,12 @@ for (let mode of ['network', 'non-ok']) {
       }),
     }
     let f = await fixture({ ...scenario.env, STORE } as Env)
+    console.log('DEPLOY_FIXTURE', mode, 'fixture')
     await f.write('one')
     await call(f.ctx, 'app_deploy', { ...f.args, reload: 'required' })
     // Retryable notices can finish several sends before the waiter resumes.
     await until(() => notices >= 1)
+    console.log('DEPLOY_FIXTURE', mode, 'noticed', notices)
     return (await f.history()).map((v) => [v.version, v.reload])
   })()
   test(`a ${mode} release notice cannot fail a committed deploy`, () => {
@@ -160,6 +163,7 @@ test('even a throwing release-notice reporter cannot fail the release', async ()
 
 // Capture every intermediate update before later releases move its pointer.
 let crossed = await (async () => {
+  console.log('DEPLOY_FIXTURE crossed start')
   await using scenario = platform('reload-secret')
   let f = await fixture(scenario.env)
   // The source accepted this vocabulary before the platform reserved cost.
@@ -315,6 +319,7 @@ test('updates carry every crossed required source mark but exclude the installed
 // Each module load owns its two kept releases. Only pointer changes, reports
 // and the next release belong to the rollback case's measured work.
 let rollback = await (async () => {
+  console.log('DEPLOY_FIXTURE rollback start')
   let scenario = platform('rollback-secret')
   let f = await fixture(scenario.env)
   await f.write('one')
@@ -477,6 +482,7 @@ test('worker errors after rollback and an in-flight pointer move name the routed
 })
 
 let legacyRollback = await (async () => {
+  console.log('DEPLOY_FIXTURE legacy start')
   await using scenario = platform('rollback-legacy')
   let f = await fixture(scenario.env)
   await f.write('one')
