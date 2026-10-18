@@ -19,28 +19,29 @@ let fixture = (send: (id: number, init?: RequestInit) => Promise<Response>) => {
   return { http, clients, seen }
 }
 
+// Warm the pooled connection before measuring the reset/recovery operation.
+let bodies: unknown[] = [], calls = 0
+let reset = fixture((id, init) => {
+  bodies.push(init?.body)
+  if (calls++ == 1) {
+    return Promise.reject(new TypeError('http2 error: stream reset'))
+  }
+  return Promise.resolve(new Response(String(id)))
+})
+await (await reset.http.fetch('https://provider.test')).text()
 test('a reset pooled connection retries the same body on a fresh connection', async () => {
-  let bodies: unknown[] = [], calls = 0
-  let f = fixture((id, init) => {
-    bodies.push(init?.body)
-    if (calls++ == 1) {
-      return Promise.reject(new TypeError('http2 error: stream reset'))
-    }
-    return Promise.resolve(new Response(String(id)))
-  })
-  equal(await (await f.http.fetch('https://provider.test')).text(), '0')
   equal(
-    await (await f.http.fetch('https://provider.test', {
+    await (await reset.http.fetch('https://provider.test', {
       method: 'POST',
       body: '{"model":"test"}',
     })).text(),
     '1',
   )
-  equal(f.seen, [0, 0, 1])
+  equal(reset.seen, [0, 0, 1])
   equal(bodies, [undefined, '{"model":"test"}', '{"model":"test"}'])
-  equal(f.clients.map((c) => c.closed), [1, 0])
-  f.http.close()
-  equal(f.clients.map((c) => c.closed), [1, 1])
+  equal(reset.clients.map((c) => c.closed), [1, 0])
+  reset.http.close()
+  equal(reset.clients.map((c) => c.closed), [1, 1])
 })
 
 test('retiring a reset pool lets concurrent response streams finish', async () => {
