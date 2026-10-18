@@ -2125,6 +2125,9 @@ await react(pendingSession, ids.s, {
   asyncTools: true,
   mint,
 })
+// A new user turn may ask while the independently-owned tool is pending.
+await appendEntry(pendingSession, ids.s, 'Continue while the tool runs.')
+
 await react(pendingSession, ids.s, {
   model: pendingModel.model,
   tools: [echo],
