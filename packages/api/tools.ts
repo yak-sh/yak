@@ -126,8 +126,8 @@ export let runs = (host: Serving): Runs => ({
         void server.shutdown()
         timer = setTimeout(() => {
           cut = true
-          active.cancel()
           console.error('serve drain —', JSON.stringify(active.open()))
+          active.cancel()
           done()
         }, grace)
       }
@@ -150,13 +150,15 @@ export let runs = (host: Serving): Runs => ({
       void server.shutdown()
       clearTimeout(timer)
       active.cancel()
+      let phase = 'request cleanup'
       let waiting = setTimeout(() =>
         console.error(
-          'serve drain — waiting for listener',
+          `serve drain — waiting for ${phase}`,
           JSON.stringify(active.open()),
         ), 5000)
       try {
         await active.drain()
+        phase = 'listener'
         await server.finished
       } finally {
         clearTimeout(waiting)
