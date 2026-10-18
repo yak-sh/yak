@@ -879,3 +879,35 @@ let oldAppWake = await (async () => {
 test('an app wake preserves data absent from an older release vocabulary key', () => {
   equal(oldAppWake, ['retained'])
 })
+
+let deployedOmission = await (async () => {
+  let ctx = state(), app = newer(ctx, 'safety/declarations')
+  let full = {
+    $defs: {
+      precious: { component: true, properties: { value: { type: 'string' } } },
+    },
+  }
+  let deploy = (doc: unknown) =>
+    app.door('/vocab', {
+      method: 'POST',
+      body: JSON.stringify(doc),
+    }, APP)
+  assertEquals((await deploy(full)).status, 200)
+  assertEquals(
+    (await app.apply([{
+      entity: { eid: ONE },
+      precious: { value: 'owner data' },
+    }], APP)).status,
+    200,
+  )
+  assertEquals((await deploy({ $defs: {} })).status, 200)
+  let omitted = await app.query('.precious', APP)
+  assertEquals((await deploy(full)).status, 200)
+  let rolled = await app.query('.precious', APP)
+  return { omitted, rolled }
+})()
+
+test('an app deploy omitting a populated component and a rollback preserve its data', () => {
+  equal(deployedOmission.omitted[0].precious, { value: 'owner data' })
+  equal(deployedOmission.rolled[0].precious, { value: 'owner data' })
+})
