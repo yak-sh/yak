@@ -94,3 +94,21 @@ test('session resolution can project identity without reading transcript history
     assertEquals(speaking(row!), { by: 'p1', via: 's1' })
   }
 })
+
+let collision = graph({ storage: ram(vocab), vocab })
+await collision.apply([
+  { entity: { eid: 'same' }, session: { id: 'other' } },
+  { entity: { eid: 'selected' }, session: { id: 'same', actor: 'person' } },
+  { entity: { eid: 'person' }, person: {} },
+])
+
+test('an explicit session id selects its transcript even when an eid collides', async () => {
+  assertEquals((await sessionFor(collision, 'same'))?.entity.eid, 'same')
+  let row = await sessionFor(collision, { id: 'same' }, [
+    'session.id',
+    'session.actor',
+  ])
+  assertEquals(row?.entity.eid, 'selected')
+  assertEquals(row?.session, { id: 'same', actor: 'person' })
+  assertEquals(await sessionFor(collision, { id: 'selected' }), undefined)
+})

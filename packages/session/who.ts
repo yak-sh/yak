@@ -113,14 +113,23 @@ export let runners = (
 /**
  * The transcript an id names: the entity it addresses, else the one carrying it
  * as its runner's own id. Nothing is minted here — resolution only reads, and a
- * tool that wants a transcript created does that itself. `fields` selects only
+ * tool that wants a transcript created does that itself. `{ id }` selects only
+ * the runner's own session id, without trying entity addresses. `fields` selects only
  * the properties the caller reads, avoiding derived transcript history.
  */
 export let sessionFor = async (
   g: Pick<Graph, 'address' | 'get' | 'read'>,
-  said: string,
+  said: string | { id: string },
   fields?: string[],
 ): Promise<Bundle | undefined> => {
+  if (typeof said != 'string') {
+    if (!said.id) return undefined
+    return (await g.read(
+      `.${SESSION}.id=${JSON.stringify(said.id)} ${
+        fields ? `.fields=${fields.join(',')}` : '*'
+      } .limit=1`,
+    ))[0]
+  }
   if (!said) return undefined
   let [eid] = await addressed(g, [said])
   let get = async (id: Eid): Promise<Bundle | undefined> =>

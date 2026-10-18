@@ -254,31 +254,32 @@ let helpFor = (t: Command, opts: Opts): string =>
     ),
   )
 
-let block = (
+type Line = { text: string; title: string }
+let lines = (
   noun: string,
   said: Listed[],
-  wide: number,
-  omit: readonly string[] = [],
-): string[] => [
+  omit: readonly string[],
+): Line[] =>
+  said.map((t) => ({
+    text: lineIn(noun, t, omit),
+    title: titleOf(t),
+  }))
+
+let block = (noun: string, said: Line[], wide: number): string[] => [
   ...(noun ? ['', noun] : []),
-  ...said.map((t) =>
-    `  ${lineIn(noun, t, omit).padEnd(wide)}  ${titleOf(t)}`.trimEnd()
+  ...said.map(({ text, title }) =>
+    `  ${text.padEnd(wide)}  ${title}`.trimEnd()
   ),
 ]
 
-// How wide the one column is across every block: the longest line it holds,
-// capped.
-let column = (
-  groups: [string, Listed[]][],
-  omit: readonly string[] = [],
-): number =>
+// Measure the same lines that are printed, without sketching their arguments
+// again: a help page renders every tool's schema only once.
+let column = (groups: [string, Line[]][]): number =>
   Math.min(
     WIDE,
     Math.max(
       0,
-      ...groups.flatMap(([noun, said]) =>
-        said.map((t) => lineIn(noun, t, omit).length)
-      ),
+      ...groups.flatMap(([, said]) => said.map((l) => l.text.length)),
     ),
   )
 
@@ -287,12 +288,13 @@ export let usage = (
   tools: readonly Listed[],
   opts: Opts = {},
 ): string => {
-  let groups = nouns(tools)
-  let omit = opts.globalFlags ?? []
-  let wide = column(groups, omit)
+  let groups: [string, Line[]][] = nouns(tools).map((
+    [noun, said],
+  ) => [noun, lines(noun, said, opts.globalFlags ?? [])])
+  let wide = column(groups)
   return [
     ...(opts.about ? [opts.about, ''] : []),
-    ...groups.flatMap(([noun, said]) => block(noun, said, wide, omit)),
+    ...groups.flatMap(([noun, said]) => block(noun, said, wide)),
     ...(opts.notes ? ['', opts.notes] : []),
   ].join('\n')
 }
@@ -307,7 +309,8 @@ export let nounUsage = (
 ): string | undefined => {
   let said = nouns(tools).find(([noun]) => noun && noun == word)
   if (!said) return undefined
-  return block(said[0], said[1], column([said], reserved), reserved).slice(1)
+  let group: [string, Line[]] = [said[0], lines(said[0], said[1], reserved)]
+  return block(group[0], group[1], column([group])).slice(1)
     .join('\n')
 }
 

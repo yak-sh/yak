@@ -1,6 +1,5 @@
 // A long-lived command pins its source tree. Deno's resolver is fixed when a
 // process starts, so deferred imports must never read a checkout that can land.
-import { fileURLToPath } from 'node:url'
 import { wind } from '@yaks/process/wind'
 
 let ROOT = new URL('../../', import.meta.url)
@@ -290,6 +289,7 @@ export let tethered = (argv: string[]): string[] => [
  * immutable. Independent workers reuse the sources with their own lifetime. */
 export let runtime = async (argv: string[]): Promise<number | undefined> => {
   if (!ROOT.href.startsWith('file:')) return
+  let { fileURLToPath } = await import('node:url')
   let root = fileURLToPath(ROOT).replace(/\/$/, '')
   let here = ROOT.href.replace(/\/$/, '')
   let privateTree = runtimeRoot()
