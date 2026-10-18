@@ -7,16 +7,23 @@
     "home": {
       "component": true,
       "type": "object",
-      "description": "The machine a session uses, with an optional command directory.",
+      "description": "a session's default file-and-command target, not its permissions or the location of the agent; no home means no implicit local filesystem",
       "properties": {
         "cwd": {
           "type": "string",
-          "description": "Optional command directory on the machine."
+          "description": "an optional absolute command directory interpreted in the workspace filesystem; absent means workspace.root"
         },
         "machine": {
           "type": "string",
           "ref": "machine",
-          "death": "keep"
+          "death": "keep",
+          "description": "Retained until the coordinated workspace migration; use workspace for new callers"
+        },
+        "workspace": {
+          "type": "string",
+          "ref": "workspace",
+          "death": "keep",
+          "description": "the default workspace for subsequent calls; changing it leaves files and processes untouched"
         }
       }
     },

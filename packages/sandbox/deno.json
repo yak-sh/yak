@@ -1,0 +1,16 @@
+{
+  "name": "@yaks/sandbox",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

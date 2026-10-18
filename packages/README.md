@@ -324,6 +324,10 @@ grouped approximately by function, **not** by dependency order.
   `machine{provider, address, from, image, state}` and the provider interface,
   and offers the Cloudflare container provider; opens no graph storage.
 
+- **[@yaks/sandbox](./sandbox)** — containers and jails distinct from computers:
+  `sandbox{provider, address, from, image}` records the request and external
+  locator, `released{at, by, via}` confirms disposal. Placement is a workspace
+  from @yaks/machine.
 - **[@yaks/process](./process)** — a running program as an entity, so whatever
   needs one points at it instead of keeping a pid: `process{pid, command, cwd}`
   for the one that is running, `service{command, cwd, restart, attempts}` for

@@ -4,21 +4,21 @@
       "component": true,
       "type": "object",
       "embed": false,
-      "description": "commands and files a provider lends as a sandbox or attaches by address; no machine belongs to a host by right",
+      "description": "an actual computer with a stable identity and an optional connector address; without a reachable address it is inventory, not an execution target",
       "properties": {
         "provider": {
           "type": "string",
-          "description": "the configured provider that lends or attaches this machine"
+          "description": "Retained until the coordinated workspace migration: the configured provider that lends or attaches this machine"
         },
         "from": {
           "type": "string",
           "ref": "gitobj",
           "death": "keep",
-          "description": "the commit in the graph this machine starts from; absent for an empty machine"
+          "description": "Retained until the coordinated workspace migration: the commit in the graph this machine starts from; absent for an empty machine"
         },
         "image": {
           "type": "string",
-          "description": "the image a sandbox boots, when its provider boots images"
+          "description": "Retained until the coordinated workspace migration: the image a sandbox boots, when its provider boots images"
         },
         "state": {
           "type": "string",
@@ -28,11 +28,35 @@
             "asleep",
             "released"
           ],
-          "description": "the provider's last recorded lifecycle state"
+          "description": "Retained until the coordinated workspace migration: the provider's last recorded lifecycle state"
         },
         "address": {
           "type": "string",
-          "description": "An existing machine address the configured provider attaches, not a sandbox it owns."
+          "description": "the connection address selecting a configured computer connector; changing it preserves computer identity"
+        }
+      }
+    },
+    "workspace": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "a file-and-command target on a computer or in a sandbox; its root is a default directory, not an access boundary. Missing placement is unknown, never this host",
+      "properties": {
+        "machine": {
+          "type": "string",
+          "ref": "machine",
+          "death": "keep",
+          "description": "the computer whose filesystem or sandbox contains this target; absent only when a backend cannot disclose placement"
+        },
+        "root": {
+          "type": "string",
+          "description": "the default absolute directory in this filesystem; placement and root remain fixed for the resource lifetime"
+        },
+        "sandbox": {
+          "type": "string",
+          "ref": "sandbox",
+          "death": "keep",
+          "description": "the enclosing sandbox whose filesystem interprets paths; on a sandbox workspace the sandbox is the entity itself, not a self reference"
         }
       }
     }

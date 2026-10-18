@@ -5,12 +5,14 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "before": ["process"],
+      "before": [
+        "process"
+      ],
       "description": "a program that should be running. It is stored on the same entity its `process` component lands on: the service records what is wanted, the process records what is actually running, and a `stop` component beside it means the program is no longer wanted",
       "properties": {
         "command": {
           "type": "string",
-          "description": "the command line to run, argv joined by spaces — the supervisor's own copy, kept here rather than read back off the running process, because restarting needs the command that was asked for and not what the kernel reports"
+          "description": "the command line to run, argv joined by spaces \u2014 the supervisor's own copy, kept here rather than read back off the running process, because restarting needs the command that was asked for and not what the kernel reports"
         },
         "cwd": {
           "type": "string",
@@ -18,12 +20,16 @@
         },
         "restart": {
           "type": "string",
-          "enum": ["never", "on-failure", "always"],
+          "enum": [
+            "never",
+            "on-failure",
+            "always"
+          ],
           "description": "what to do when it exits, using systemd's three values; absent means never, so a service that does not set it runs once and stays down"
         },
         "attempts": {
           "type": "integer",
-          "description": "how many times the supervisor has restarted it after an exit — the backoff grows with this number, and a run that outlives the longest backoff resets the count"
+          "description": "how many times the supervisor has restarted it after an exit \u2014 the backoff grows with this number, and a run that outlives the longest backoff resets the count"
         }
       }
     },
@@ -31,11 +37,11 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a program running on this machine, tracked by pid — whether or not this package started it",
+      "description": "a program observed on its launch workspace; its entity id, not a pid alone, is the durable process handle",
       "properties": {
         "pid": {
           "type": "integer",
-          "description": "the process id on the machine tracking it — the only durable handle an adopted process has"
+          "description": "the process id on the machine tracking it \u2014 the only durable handle an adopted process has"
         },
         "command": {
           "type": "string",
@@ -47,8 +53,16 @@
         },
         "roles": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "the roles it serves, where it opened a graph: graph, web, effects, or a plugin's service by its name; absent for a program that opened none"
+        },
+        "workspace": {
+          "type": "string",
+          "ref": "workspace",
+          "death": "keep",
+          "description": "the original launch workspace, retained for wait, stop and output recovery; absent placement is unknown, never local"
         }
       }
     },
@@ -74,7 +88,7 @@
     "exit": {
       "component": true,
       "type": "object",
-      "description": "the process has ended — never rewritten, and deleted only by the transaction that records the next attempt on a supervised entity",
+      "description": "the process has ended \u2014 never rewritten, and deleted only by the transaction that records the next attempt on a supervised entity",
       "properties": {
         "code": {
           "type": "integer",

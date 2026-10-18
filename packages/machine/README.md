@@ -177,6 +177,22 @@ await provider.release({ id: 'build-example' })
 equal(destroyed, 1)
 ```
 
+## Workspace records
+
+A **workspace** is a file-and-command target, recorded as
+`workspace{machine, root, sandbox}`. `machine` names the actual computer; `root`
+is its default absolute directory, not an access boundary. Optional `sandbox`
+names an enclosing [sandbox](../sandbox). A sandbox entity itself wears
+`workspace{machine, root}` without a self reference. Missing placement means
+unknown, never the graph server's disk. Resource placement stays fixed so old
+calls remain recoverable after a session changes its default target.
+
+Session defaults use `home{workspace, cwd}`; a process can retain its original
+`process.workspace`, and a Git repository can name its filesystem context with
+`repository.workspace`. The lifecycle properties on `machine`, `home.machine`
+and `worktree.path` remain available during coordinated conversion of callers
+and stored data. Workspace execution and provisioning are separate contracts.
+
 ## Graph record
 
 `machine{provider, address, from, image, state}` is the provider's last recorded

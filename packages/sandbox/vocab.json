@@ -1,0 +1,63 @@
+{
+  "$defs": {
+    "sandbox": {
+      "component": true,
+      "type": "object",
+      "embed": false,
+      "description": "an actual or requested container or jail on the computer recorded in its workspace; placement is never inferred from the graph host",
+      "status": {
+        "released": "released",
+        "failed": "failed",
+        "pending": "requested",
+        "default": "ready"
+      },
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "the configured sandbox implementation, not an LLM provider entity"
+        },
+        "address": {
+          "type": "string",
+          "description": "the external sandbox resource locator, not a computer address"
+        },
+        "from": {
+          "type": "string",
+          "ref": "gitobj",
+          "death": "keep",
+          "description": "the initial Git commit; provenance does not reconstruct subsequent edits"
+        },
+        "image": {
+          "type": "string",
+          "description": "the requested image when the backend supports images"
+        }
+      }
+    },
+    "released": {
+      "component": true,
+      "type": "object",
+      "description": "confirmed disposal of a sandbox; written only after external disposal succeeds, never on a home switch",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when disposal was confirmed"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "who requested disposal",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "the session through which disposal was requested",
+          "stamped": true
+        }
+      }
+    }
+  }
+}
