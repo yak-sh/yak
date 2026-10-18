@@ -16,6 +16,7 @@ import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { journalDoc } from '@yaks/journal/vocab'
 import { comp, shop as shopVocab, shopGraph } from './testing.ts'
 import { type Frame, type Sink, subscriptions } from './subs.ts'
+import { Refused } from '@yaks/graph'
 
 let ADA = derivedEid('fixture:ada')
 
@@ -1391,3 +1392,116 @@ for (let [what, change, sent] of underfilled) {
     assertEquals([reads, e.take().map(sent)], [[], [[change.entity.eid]]])
   })
 }
+
+let acquiring = (revision?: () => number) => {
+  let g = shop(), read = g.read.bind(g)
+  g.apply([
+    { entity: { eid: 'slow' }, book: { price: 10 } },
+    { entity: { eid: 'fast' }, book: { price: 20 } },
+  ])
+  let gate = Promise.withResolvers<void>(), held = true
+  g.read = (q, opts) => {
+    let rows = read(q, opts)
+    if (!held || typeof q != 'string' || !q.includes('slow')) return rows
+    held = false
+    return gate.promise.then(() => rows)
+  }
+  return { g, subs: subscriptions(g, { revision }), gate }
+}
+
+let concurrent = acquiring()
+let slowEar = ear(), fastEar = ear()
+let slowOpen = concurrent.subs.open(slowEar.to, 'slow', '.entity.eid=slow&*')
+let fastOpen = concurrent.subs.open(fastEar.to, 'fast', '.entity.eid=fast&*')
+let independent = fastEar.take()
+concurrent.gate.resolve()
+await slowOpen
+await fastOpen
+
+test('an independent initial subscription does not wait for a held read', () => {
+  equal(independent.map(ids), [['fast']])
+})
+
+let racing = acquiring(), raceEar = ear()
+let raceOpen = racing.subs.open(raceEar.to, 'slow', '.entity.eid=slow&*')
+racing.g.apply([{ entity: { eid: 'slow' }, book: { price: 30 } }])
+let premature = raceEar.take()
+racing.gate.resolve()
+await raceOpen
+await racing.subs.snapshot('.book')
+let raceFrames = raceEar.take()
+
+test('a commit during initialization follows the initial snapshot', () => {
+  equal(premature, [])
+  equal(
+    raceFrames.map((f) => f.bundles?.[0] && comp(f.bundles[0], 'book').price),
+    [10, 30],
+  )
+})
+
+let replacing = acquiring(), replacement = ear()
+let replaced = replacing.subs.open(replacement.to, 'same', '.entity.eid=slow&*')
+let replacingOpen = replacing.subs.open(
+  replacement.to,
+  'same',
+  '.entity.eid=fast&*',
+)
+let earlyReplacement = replacement.take()
+replacing.gate.resolve()
+await replaced
+await replacingOpen
+let replacedFrames = replacement.take()
+
+test('a replacement snapshot follows the initial answer under the same id', () => {
+  equal(earlyReplacement, [])
+  equal(replacedFrames.map(ids), [['slow'], ['fast']])
+})
+
+let dropping = acquiring(), dropped = ear()
+let dropOpen = dropping.subs.open(dropped.to, 'slow', '.entity.eid=slow&*')
+let dropDone = dropping.subs.drop(dropped.to)
+dropping.gate.resolve()
+await dropOpen
+await dropDone
+dropped.take()
+dropping.g.apply([{ entity: { eid: 'slow' }, book: { price: 40 } }])
+let afterDrop = dropped.take()
+
+test('disconnect during initialization leaves no subscription behind', () => {
+  equal(afterDrop, [])
+})
+
+let broken = acquiring(), afterFailure = ear()
+broken.g.read = () => Promise.reject(new Refused('held read refused'))
+let failedOpen = broken.subs.open(afterFailure.to, 'failed', '.book')
+await failedOpen
+broken.g.read = () => []
+await broken.subs.open(afterFailure.to, 'next', '.book')
+let recovered = afterFailure.take()
+
+test('a failed initialization releases the mutation and acquisition barriers', () => {
+  equal(recovered.map((f) => [f.id, !!f.refused]), [['failed', true], [
+    'next',
+    false,
+  ]])
+})
+
+let stableRevision = acquiring(() => 1), stableFast = ear(), stableSlow = ear()
+let stableHeld = stableRevision.subs.open(
+  stableSlow.to,
+  'slow',
+  '.entity.eid=slow&*',
+)
+let stableReady = stableRevision.subs.open(
+  stableFast.to,
+  'fast',
+  '.entity.eid=fast&*',
+)
+let stableAnswer = stableFast.take()
+stableRevision.gate.resolve()
+await stableHeld
+await stableReady
+
+test('a stable revision permits independent initial subscriptions', () => {
+  equal(stableAnswer.map(ids), [['fast']])
+})

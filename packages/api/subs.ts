@@ -582,6 +582,8 @@ export let subscriptions = (graph: Graph, opts: {
       unseen: reads.unseen || policy.unseen,
     }
   }
+  let opening = new Set<Promise<void>>()
+  let initial = new Map<Sink, Map<string, Promise<void>>>()
   let pendingWork: Promise<void> | undefined
   let observers = new Set<(bundles: Bundle[]) => void | Promise<unknown>>()
   let observed: Bundle[] = []
@@ -611,7 +613,13 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   let ordered = <T>(fn: () => T | Promise<T>): T | Promise<T> => {
-    let out = pendingWork ? pendingWork.then(fn) : fn()
+    let ready = opening.size ? Promise.all([...opening]) : undefined
+    let prior = pendingWork
+    let out = prior
+      ? prior.then(() => ready).then(fn)
+      : ready
+      ? ready.then(fn)
+      : fn()
     if (isPromise(out)) {
       let done = out.then(() => {}, () => {})
       pendingWork = done
@@ -2273,9 +2281,29 @@ export let subscriptions = (graph: Graph, opts: {
     enqueue,
     open: (sink, id, query, readOpts) => {
       flushPeers()
-      return ordered(() =>
-        after(check(), () => open(sink, id, query, readOpts))
-      )
+      // Initial reads can proceed together. Mutations still wait for every
+      // initial answer, so a commit cannot overtake a snapshot it will update.
+      let start = () => after(check(), () => open(sink, id, query, readOpts))
+      let previous = initial.get(sink)?.get(id)
+      let changed = opts.revision && !Object.is(opts.revision(), revision)
+      let out = pendingWork || changed
+        ? ordered(start)
+        : previous
+        ? previous.then(start)
+        : start()
+      if (isPromise(out)) {
+        let done = out.then(() => {}, () => {})
+        let mine = initial.get(sink) ?? new Map<string, Promise<void>>()
+        initial.set(sink, mine)
+        mine.set(id, done)
+        opening.add(done)
+        done.then(() => {
+          opening.delete(done)
+          if (mine.get(id) === done) mine.delete(id)
+          if (!mine.size) initial.delete(sink)
+        })
+      }
+      return out
     },
     restore: (openings, deferStatic = false) => {
       flushPeers()
