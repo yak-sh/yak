@@ -12,7 +12,8 @@ import { owed } from '@yaks/persona'
 import { isAbsolute, relative, resolve } from '@std/path/posix'
 
 export type Machines = NonNullable<import('@yaks/host').Host['machines']>
-let row = async (g: Graph, eid: string) => (await g.get([eid]))[0]
+let row = async (g: Graph, eid: string, comps: string[]) =>
+  (await g.get([eid], comps))[0]
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
@@ -29,7 +30,7 @@ export let sessionCwd = async (
   session: string,
   fallback?: string,
 ): Promise<string | undefined> => {
-  let home = comp(await row(g, session), 'home')
+  let home = comp(await row(g, session, ['home']), 'home')
   return home?.cwd == null ? fallback : String(home.cwd)
 }
 
@@ -103,7 +104,7 @@ export let machines = (
       throw new Error(message)
     }
     let id = own(session)
-    let existing = await row(g, id)
+    let existing = await row(g, id, ['machine'])
     if (!existing?.machine) {
       await g.apply([{
         entity: { eid: id },
@@ -122,8 +123,10 @@ export let machines = (
     return id
   }
   let home = async (session: string): Promise<Comp> => {
-    let owner = await row(g, session)
-    if (!owner?.session) throw new Error('not a session: ' + session)
+    let [owner] = await g.read(
+      `.entity.eid=${session}&.session&.fields=home.machine,home.cwd`,
+    )
+    if (!owner) throw new Error('not a session: ' + session)
     let at = comp(owner, 'home') ?? {}
     if (at.workspace || at.machine) return at
     let translated = await configured?.resolveHome?.(session)
@@ -143,7 +146,7 @@ export let machines = (
       }
       let target = await targetFor(g, session, {})
       let machine = await workspaces.connect(target.workspace)
-      let root = comp(await row(g, target.workspace), 'workspace')?.root
+      let root = comp(await row(g, target.workspace, ['workspace']), 'workspace')?.root
       return {
         machine,
         root: root == null ? undefined : String(root),
@@ -152,7 +155,7 @@ export let machines = (
     }
     let id = String(at.machine)
     return serial(g, id, async () => {
-      let record = comp(await row(g, id), 'machine')
+      let record = comp(await row(g, id, ['machine']), 'machine')
       if (!record) throw new Error('not a machine entity: ' + id)
       let source = await provider(String(record.provider))
       let ref = refOf(id, record)
@@ -179,8 +182,10 @@ export let machines = (
     })
   }
   let release = async (session: string) => {
-    let at = comp(await row(g, session), 'home')
-    if (at?.workspace || !at?.machine) return
+    let [owner] = await g.read(
+      `.entity.eid=${session}&.session&.fields=home.machine,home.workspace,home.cwd`,
+    )
+    if (!owner) throw new Error('not a session: ' + session)
     let id = String(at.machine)
     await serial(g, id, async () => {
       // A fork sharing its parent's machine does not own that machine's end.
@@ -189,7 +194,7 @@ export let machines = (
       for (let other of others) {
         if (other.entity.eid != session && !await machineDone(g, other)) return
       }
-      let record = comp(await row(g, id), 'machine')
+      let record = comp(await row(g, id, ['machine']), 'machine')
       if (!record || record.state == 'released') return
       let source = await provider(String(record.provider))
       await source.release(refOf(id, record))
@@ -201,7 +206,7 @@ export let machines = (
       let at = await serial(g, parent, () => home(parent))
       if (at.workspace) return {}
       let record = at.machine
-        ? comp(await row(g, String(at.machine)), 'machine')
+        ? comp(await row(g, String(at.machine), ['machine']), 'machine')
         : undefined
       return {
         machine: {
@@ -255,11 +260,11 @@ export let machines = (
       }
       let inherited = args.machine == null
         ? await serial(g, parent, () => home(parent))
-        : comp(await row(g, parent), 'home') ?? {}
+        : comp(await row(g, parent, ['home']), 'home') ?? {}
       let at: Comp = { ...inherited }
       if (args.machine != null) {
         if (typeof args.machine == 'string') {
-          if (!(await row(g, args.machine))?.machine) {
+          if (!(await row(g, args.machine, ['machine']))?.machine) {
             throw new CallError(
               'machine',
               'not a machine entity: ' + args.machine,
@@ -330,6 +335,7 @@ export let machines = (
         }
         return scoped
       })
+<<<<<<< HEAD
       let at = comp(await row(g, session), 'home')!
       if (at.workspace) {
         for (let path of selected) {
@@ -338,8 +344,11 @@ export let machines = (
         }
         return
       }
+=======
+      let at = comp(await row(g, session, ['home']), 'home')!
+>>>>>>> 6852db8d4 (Bound native overhead by the benchmark and remove capability read amplification (T-127526))
       let id = String(at.machine)
-      let record = comp(await row(g, id), 'machine')!
+      let record = comp(await row(g, id, ['machine']), 'machine')!
       let source = await provider(String(record.provider))
       yield* source.export(
         refOf(id, record),

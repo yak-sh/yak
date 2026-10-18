@@ -61,23 +61,25 @@ let files = async (
   }
   let [root, ...titles] = await machine.tail(id, 100000)
   if (!root) return { skills: [] }
-  let skills: Bundle[] = []
-  for (let title of titles.sort()) {
-    if (!/^[a-z0-9][a-z0-9_-]*$/i.test(title)) continue
-    let path = `${root}/.claude/skills/${title}/SKILL.md`
-    let source = await machine.read(path)
-    let parsed: ReturnType<typeof parseSkill>
-    try {
-      parsed = parseSkill(source, title)
-    } catch (error) {
-      if (!(error instanceof Refused)) throw error
-      throw new Refused(`Cannot load ${path}: ${String(error)}`)
-    }
-    skills.push({
-      entity: { eid: derivedEid(`view:skill:${session}:${title}`) },
-      ...parsed,
-    })
-  }
+  let skills: Bundle[] = await Promise.all(
+    titles.sort().filter((title) => /^[a-z0-9][a-z0-9_-]*$/i.test(title)).map(
+      async (title) => {
+        let path = `${root}/.claude/skills/${title}/SKILL.md`
+        let source = await machine.read(path)
+        let parsed: ReturnType<typeof parseSkill>
+        try {
+          parsed = parseSkill(source, title)
+        } catch (error) {
+          if (!(error instanceof Refused)) throw error
+          throw new Refused(`Cannot load ${path}: ${String(error)}`)
+        }
+        return {
+          entity: { eid: derivedEid(`view:skill:${session}:${title}`) },
+          ...parsed,
+        }
+      },
+    ),
+  )
   return { root, skills }
 }
 

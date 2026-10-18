@@ -1,15 +1,16 @@
 /** Native step overhead with an instantly answered scripted model and no I/O.
  * Fixture composition, verification and cleanup are outside the timed boundary. */
 import type { Samples } from '@yaks/benchmark'
-import { type Comp, mint } from '@yaks/graph'
+import type { Comp } from '@yaks/graph'
 import type { Model } from '@yaks/model'
 import type { Host } from '@yaks/host'
 import { textOf, transcript } from '@yaks/session'
 import { standaloneMain } from '../../bench/standalone.ts'
 import { seed } from './agent.ts'
-import { runs } from './runs.ts'
+import { agent } from './agent.ts'
 import { harness, working } from './testing.ts'
 import { unfinishedEach } from './unfinished.ts'
+import { overheadEach } from './overhead.ts'
 
 const ROUNDS = 3
 const STEPS = 12
@@ -58,22 +59,24 @@ let round = async (steps: number) => {
     run: () => `echoed ${++calls}!`,
   }]
   await h.g.apply(seed({ model: 'scripted', tools }), { trusted: true })
+  const a = agent({ h, name: 'scripted', tools, model })
   const runner = working(h, {
     asyncTools: true,
     tools,
     model,
-    each: unfinishedEach({ graph: h.g } as Host),
+    each: overheadEach(
+      { graph: h.g, storage: h.store } as Host,
+      unfinishedEach({ graph: h.g } as Host),
+    ),
   })
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     const start = performance.now()
     const entries = await Promise.race([
       (async () => {
-        const [settled] = await runs().session_new!({
-          entity: { eid: mint() },
-          call: { args: { prompt: PROMPT, model: 'scripted' } },
-        }, h.g)
-        return await transcript(h.g, String((settled.entry as Comp).session))
+        const session = await a.start(PROMPT)
+        await a.idle(session)
+        return await transcript(h.g, session)
       })(),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
@@ -130,7 +133,7 @@ let round = async (steps: number) => {
     try {
       await runner.stop()
     } finally {
-      await h.close()
+      await a.close()
     }
   }
 }

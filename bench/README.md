@@ -117,11 +117,13 @@ The suites are `client-frame`, `client-rules`, `harness-startup`,
 `harness-steps`, `harness-streaming`, `harness-worker`, `harness-window`,
 `harness-switch`, `graph-activity`, `session-status`, `web-client`,
 `relay-admission` and `pages`. Each writes `bench/<suite>.results.json` and
-checks `bench/<suite>.baseline.json`. A suite without a banked baseline can run;
-a check refuses until its baseline has been explicitly accepted. Take that
-measurement on an idle box, then review and commit its baseline. A bank taken
-under load is recorded as such; monitoring immediately ratchets drops when later
-checks are faster. Never replace a faster reference with it.
+checks `bench/<suite>.baseline.json` (`harness-steps` shares its reference at
+`packages/harness/steps.baseline.json` with the live overhead observer). A suite
+without a banked baseline can run; a check refuses until its baseline has been
+explicitly accepted. Take that measurement on an idle box, then review and
+commit its baseline. A bank taken under load is recorded as such; monitoring
+immediately ratchets drops when later checks are faster. Never replace a faster
+reference with it.
 
 `harness-steps` measures native session overhead with an instantly answered
 scripted model on an isolated in-memory harness graph. `no-tools` is one
@@ -129,14 +131,16 @@ input-to-final-reply turn in milliseconds; `tool-step` is input-to-final-reply
 wall time divided by 12 completed sequential tool steps, in milliseconds per
 step. The latter includes all model turns (13 result-driven turns and at most
 one pending-progress turn per tool), async `session_tool` effect dispatch,
-tool-result persistence and the unfinished-work check (with no external
-reporter), not model/network/tool I/O. Each metric has one discarded warmup and
-three measured rounds with fresh graphs. Fresh-session creation and the first
-ask are timed (there is no seed turn subtracted). Composition, count/output
-verification, effect drain and cleanup are untimed. Every round verifies the
-final reply, exact model/tool/result counts, async calls, progress entries, and
-retained input/results. No managed runs, live database, database copy or
-external model is used.
+tool-result persistence, fixed-reference overhead observation and the
+unfinished-work check (with no external reporter), not model/network/tool I/O.
+Each metric has one discarded warmup and three measured rounds with fresh
+graphs. Runner completion is awaited directly; the CLI revision-polling wait is
+not timed. Fresh-session creation and the first ask are timed (there is no seed
+turn subtracted). Composition, count/output verification, effect drain and
+cleanup are untimed. Every round verifies the final reply, exact
+model/tool/result counts, async calls, progress entries, and retained
+input/results. No managed runs, live database, database copy or external model
+is used.
 
 Run through the ratchet without banking a baseline:
 

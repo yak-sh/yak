@@ -17,6 +17,7 @@ export let main = async (args = Deno.args): Promise<number> => {
     rest = args.slice(2)
     action = 'run'
   }
+  let registeredBaseline: string | undefined
   let reference = rest.find((a) => a.startsWith('--baseline='))?.slice(
     '--baseline='.length,
   )
@@ -49,7 +50,9 @@ export let main = async (args = Deno.args): Promise<number> => {
     // Deploys use their recorded observations; acceptance still has no slack.
     let current = await suite.run({
       ...options(name, action, 1, 0),
-      ...(reference ? { baseline: reference } : {}),
+      ...(reference || registeredBaseline
+        ? { baseline: reference ?? registeredBaseline }
+        : {}),
       ...(output ? { output } : {}),
     })
     console.log(`${name}: ${current?.verdict ?? 'no data (bootstrap)'}`)
@@ -94,12 +97,15 @@ export let main = async (args = Deno.args): Promise<number> => {
     let entry = standalone.find((b) => b.suite().name == name)
     if (!entry) throw new Error(`Unknown suite: ${name}`)
     definition = entry.suite(rest)
+    registeredBaseline = entry.baseline
     floor = entry.floor ?? FLOOR
   }
   let current = await run(definition, {
     ...options(name, action, rounds, floor),
     runs,
-    ...(reference ? { baseline: reference } : {}),
+    ...(reference || registeredBaseline
+      ? { baseline: reference ?? registeredBaseline }
+      : {}),
     slower,
     coverage: recording ? 'subset' : 'exact',
     output: output ??

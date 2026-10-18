@@ -432,3 +432,29 @@ for (let { outcome, f } of pendingMachines) {
     equal(await machineDone(f.g, session), true)
   })
 }
+
+let scopedHome = fixture()
+await scopedHome.g.apply([
+  {
+    entity: { eid: 'home-machine' },
+    machine: { provider: 'fake', state: 'running' },
+  },
+  {
+    entity: { eid: 'parent' },
+    home: { machine: 'home-machine', cwd: '/fresh' },
+  },
+])
+test('capability lookups do not hydrate the session status or unrelated components', async () => {
+  let get = scopedHome.g.get
+  let reads: (string[] | undefined)[] = []
+  let g = {
+    ...scopedHome.g,
+    get: (...args: Parameters<typeof get>) => {
+      reads.push(args[1])
+      return get(...args)
+    },
+  }
+  equal(await sessionCwd(g, 'parent'), '/fresh')
+  equal(await machines(g, scopedHome.configured).cwd('parent'), '/fresh')
+  equal(reads, [['home'], ['machine'], ['home']])
+})

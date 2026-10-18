@@ -86,10 +86,20 @@ resuming the session or spending another model turn. Explicit blockers and
 unfinished task dependencies are excluded.
 
 The `harness-steps` benchmark uses an instantly answered scripted model over an
-isolated graph to measure the harness's own per-step overhead. Its reference is
-checked by the existing benchmark monitor. Live steps are not compared with each
-other: on a shared box their durations follow load and the work in hand, so a
-session's earlier steps are no baseline.
+isolated graph, with the overhead observer enabled. **Native overhead** is
+measured in three phases: dispatch is call creation to execution claim; tool
+overhead is execution claim to result minus the tool's own `result.ms`;
+preflight is final result to next model claim, excluding remaining provider wait
+and intervening owner input. Neither inference latency nor command runtime
+produces an overhead alert.
+
+Each phase uses the committed `steps.baseline.json` `tool-step` reference with
+zero slack. A whole benchmark step conservatively bounds each constituent phase.
+A session's own median never changes that fixed limit. Only samples for the
+current step are considered; one fixed-message report per metric per worker
+reaches the tracker, with numbers in tags. Missing journal marks are omitted,
+not guessed. Bounded scalar transcript reads keep observation independent of
+transcript age.
 
 ```sh
 deno task bench harness-steps

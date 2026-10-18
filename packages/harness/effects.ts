@@ -17,6 +17,7 @@ import { lend } from './agent.ts'
 import { here } from './local.ts'
 import { hosted } from './store.ts'
 import { unfinishedEach } from './unfinished.ts'
+import { overheadEach } from './overhead.ts'
 import { machineDone, machines } from './session_machines.ts'
 
 let word = (options: Record<string, unknown>, name: string) =>
@@ -51,7 +52,7 @@ export let effects = (
   return {
     ...running(host.graph, {
       ...runner,
-      each: unfinishedEach(host, runner.each),
+      each: overheadEach(host, unfinishedEach(host, runner.each)),
       answers: async (using, session) => {
         if (!await runner.answers?.(using, session)) return false
         if (!session) return true

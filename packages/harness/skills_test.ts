@@ -2,7 +2,12 @@
 // and a transcript without a machine discovers descriptions without leasing one.
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { type Bundle, type Comp, derivedEid } from '@yaks/graph'
+import { type Bundle, type Comp, derivedEid, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { docs } from './vocab.ts'
+import { machineDoc } from '@yaks/machine/vocab'
+import { docs as sessionDocs } from '@yaks/session/vocab'
 import { processProvider } from '@yaks/process/machine'
 import { skillItems, type SkillMachines, skillTools } from './skills.ts'
 import { harness, processes, scratchRepo } from './testing.ts'
@@ -301,4 +306,76 @@ test('skill discovery ignores links and reports malformed authored metadata', as
     await at.free()
     await other.free()
   }
+})
+
+// Hold each read until all files have been requested, without wall-clock waits.
+let parallelVocab = loadVocab([...docs, machineDoc, ...sessionDocs])
+let parallelHome = {
+  g: graph({ storage: ram(parallelVocab), vocab: parallelVocab }),
+}
+await parallelHome.g.apply([
+  {
+    entity: { eid: 'parallel-machine' },
+    machine: { provider: 'process', state: 'running' },
+  },
+  {
+    entity: { eid: 'parallel-session' },
+    session: {},
+    home: { machine: 'parallel-machine' },
+  },
+])
+let parallelTitles = ['last', 'first', 'middle']
+let source = (title: string, revision: string) =>
+  `---\nname: ${title}\ndescription: ${revision} ${title}\n---\nInstructions\n`
+test('independent skill files read concurrently and refresh each catalogue in title order', async () => {
+  let revision = 'initial'
+  let titles = [...parallelTitles]
+  let started: string[] = []
+  let pending: (() => void)[] = []
+  let machines: SkillMachines = {
+    cwd: () => Promise.resolve('/repo'),
+    machine: () =>
+      Promise.resolve({
+        start: () => Promise.resolve('listing'),
+        look: () => Promise.resolve({ exit: { code: 0 } }),
+        tail: () => Promise.resolve(['/repo', ...titles]),
+        kill: () => Promise.resolve(),
+        write: () => Promise.resolve(),
+        read: (path) => {
+          let title = path.split('/').at(-2)!
+          started.push(title)
+          return new Promise<string>((resolve) => {
+            pending.push(() => resolve(source(title, revision)))
+            if (pending.length == titles.length) {
+              for (let finish of pending.splice(0).reverse()) finish()
+            }
+          })
+        },
+      }),
+  }
+  let read = async () => {
+    let items = await skillItems(parallelHome.g, {
+      session: 'parallel-session',
+      tools: [{
+        name: 'skill_read',
+        description: 'Load a skill',
+        parameters: { type: 'object' },
+        run: () => '',
+      }],
+    }, machines)
+    return items.map((item) => 'text' in item ? item.text : '').join('\n')
+  }
+  let first = await read()
+  assertEquals(started, ['first', 'last', 'middle'])
+  assert(first.indexOf('initial first') < first.indexOf('initial last'))
+  assert(first.indexOf('initial last') < first.indexOf('initial middle'))
+  revision = 'edited'
+  titles = ['new', 'first']
+  started = []
+  let next = await read()
+  assertEquals(started, ['first', 'new'])
+  assert(next.includes('edited first'))
+  assert(next.includes('edited new'))
+  assert(!next.includes('initial'))
+  assert(!next.includes('middle'))
 })
