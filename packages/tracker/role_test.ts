@@ -75,6 +75,7 @@ test('box role groups and enriches a spool occurrence through its configured cat
           '@yaks/tools',
           '@yaks/api',
           '@yaks/process',
+          '@yaks/machine',
           '@yaks/effects',
           '@yaks/mail',
           '@yaks/wake',
