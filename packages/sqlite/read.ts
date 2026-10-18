@@ -96,9 +96,22 @@ export let rows = (
       shape && (!opts.archetypes || opts.archetypes({}) != undefined) &&
       classified(driver)
     ) {
-      if (shape.tally) {
-        let buckets = populations(driver)
-        if (buckets) return buckets.map(({ value, n }) => ({ value, n }))
+      if (shape.tally || opts.visibility?.entity) {
+        let buckets = populations(driver)?.filter((b) =>
+          shape.visible(b.tables)
+        )
+        if (buckets) {
+          return shape.tally
+            ? buckets.map(({ value, n }) => ({ value, n }))
+            : [{
+              value: '',
+              n: buckets.reduce((n, b) =>
+                n + (!shape.comp || shape.comp == 'entity' ||
+                    b.tables.includes(shape.comp)
+                  ? b.n
+                  : 0), 0),
+            }]
+        }
       } else {
         let n = populationCount(driver, shape.comp)
         if (n != undefined) return [{ value: '', n }]

@@ -1,7 +1,7 @@
 // Exact entity populations by archetype. One migration reads existing owners;
 // afterwards entity triggers move only the old and new buckets, in the same
 // transaction as the entity. Ordinary component property writes do no work.
-import type { And } from '@yaks/query/core'
+import { type And, bare, parse } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import {
   and,
@@ -251,16 +251,46 @@ export let populationCount = (
   return Number(row?.n ?? 0)
 }
 
-/** Only these unscoped shapes are answered by populations. Shared by lazy
- * activation and reads so filtered/user-scoped counts never activate upkeep. */
+/** A presence-only entity policy selects whole buckets. Value-based policies
+ * and component-specific visibility still need the ordinary scoped query. */
+let visible = (vocab: Vocab, opts: BindOpts) => {
+  if (Object.keys(opts.visibility?.components ?? {}).length) return
+  let policy = opts.visibility?.entity
+  let clauses = typeof policy == 'string'
+    ? parse(policy).clauses
+    : policy?.clauses ?? []
+  let all: string[] = [], none: string[] = []
+  for (let c of clauses) {
+    if (
+      c.kind != 'pred' || !bare(c) || c.op == '?' || c.not || c.where ||
+      opts.extend?.some((e) => e.compile[c.kind]) ||
+      c.path[0] == 'entity' || !vocab.comp(c.path[0]) ||
+      vocab.comp(c.path[0])?.computed ||
+      derivedOf(vocab, opts.derived)[c.path[0]] || opts.backed?.[c.path[0]]
+    ) return
+    let into = c.op == '!' ? all : none
+    into.push(c.path[0])
+  }
+  return (tables: string[]) =>
+    all.every((c) => tables.includes(c)) &&
+    none.every((c) => !tables.includes(c))
+}
+
+/** Only plain aggregates whose policy selects whole buckets use populations.
+ * Shared by lazy activation and reads; value-scoped counts stay on SQL. */
 export let cardinality = (
   parsed: And,
   vocab: Vocab,
   opts: BindOpts = {},
-): { tally: boolean; comp?: string } | undefined => {
+): {
+  tally: boolean
+  comp?: string
+  visible: (tables: string[]) => boolean
+} | undefined => {
   let cs = parsed.clauses
+  let accepts = visible(vocab, opts)
   if (
-    !vocab.comp('archetype') || opts.visibility || opts.eids ||
+    !vocab.comp('archetype') || !accepts || opts.eids ||
     opts.absent?.length ||
     opts.extend?.some((e) => cs.some((c) => e.compile[c.kind]))
   ) return
@@ -278,5 +308,5 @@ export let cardinality = (
     !(tally || plain) || comp && (!vocab.comp(comp) || opts.backed?.[comp] ||
         vocab.comp(comp)?.computed || derivedOf(vocab, opts.derived)[comp])
   ) return
-  return { tally, comp }
+  return { tally, comp, visible: accepts }
 }

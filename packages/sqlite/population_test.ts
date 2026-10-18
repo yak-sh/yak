@@ -176,3 +176,49 @@ test('explicit eager populations are maintained before a first count', () => {
   )
   assertEquals(eagerCount, [{ value: '', n: 1 }])
 })
+
+// The API hides mutation receipts through an entity-presence policy. Counts
+// must keep that policy without abandoning the maintained bucket metadata.
+let scoped = fixture()
+scoped.g.apply([
+  { entity: { eid: 'shown' }, note: { text: 'public' } },
+  { entity: { eid: 'hidden' }, note: { text: 'private' }, mark: {} },
+])
+let visibility = { entity: '!mark', components: {} }
+let bucketReads = 0, ownerReads = 0
+let observedDriver = {
+  ...scoped.d,
+  query: (s: Parameters<typeof scoped.d.query>[0]) => {
+    if (s.t == 'select' && !Array.isArray(s.from) && s.from?.t == 'table') {
+      if (s.from.name == POPULATION) bucketReads++
+      if (s.from.name == 'entity' && s.limit == undefined) ownerReads++
+    }
+    return scoped.d.query(s)
+  },
+}
+let scopedStore = storage(observedDriver, vocab)
+let scopedCount = scopedStore.rows('.note&.count', { visibility })
+let scopedTally = scopedStore.rows('.tally=entity.archetype', { visibility })
+let policyReads = { bucketReads, ownerReads }
+let scopedTruth = scoped.store.rows('.note.text=public&.count')
+let scopedSet = scoped.store.read('.note.text=public')[0].entity.archetype
+let hiddenSet = scoped.store.read('.note.text=private')[0].entity.archetype
+let valueScoped = scopedStore.rows('.note&.count', {
+  visibility: { entity: '.note.text=private' },
+})
+let componentScoped = scopedStore.rows('.note&.count', {
+  visibility: { components: { note: '.note.text=private' } },
+})
+test('presence visibility counts only admitted buckets without scanning owners', () => {
+  assertEquals(scopedCount, scopedTruth)
+  assertEquals(scopedTally.filter((r) => r.value == scopedSet), [{
+    value: scopedSet,
+    n: 1,
+  }])
+  assertEquals(scopedTally.some((r) => r.value == hiddenSet), false)
+  assertEquals(policyReads, { bucketReads: 2, ownerReads: 0 })
+})
+test('value and component visibility retain ordinary scoped cardinalities', () => {
+  assertEquals(valueScoped, [{ value: '', n: 1 }])
+  assertEquals(componentScoped, [{ value: '', n: 1 }])
+})
