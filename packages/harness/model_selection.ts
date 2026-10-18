@@ -44,7 +44,7 @@ export const selectedUsing = async (
       '&.order=-entry.seq&.limit=1&.fields=using.model,using.provider,using.effort',
   )
   if (rows.length) return rows[0].using as Comp
-  const [owner] = await g.get([session])
+  const [owner] = await g.get([session], ['using', 'fork'])
   if (owner?.using) return owner.using as Comp
   const from = (owner?.fork as Comp | undefined)?.from
   if (!from) return undefined

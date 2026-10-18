@@ -278,7 +278,7 @@ async (using: Comp | undefined, session?: Eid): Promise<boolean> => {
     let named = row?.provider as Comp | undefined
     if (!named) return false
     if (named.transport == 'process') {
-      let [owner] = session ? await g.get([session]) : []
+      let [owner] = session ? await g.get([session], ['native']) : []
       if (!owner?.native) return false
     }
     if (override) return named.transport != 'process'

@@ -89,7 +89,7 @@ export let skillItems = async (
   machines: SkillMachines,
 ): Promise<Item[]> => {
   if (!current.tools.some((tool) => tool.name == 'skill_read')) return []
-  let [owner] = await g.get([current.session])
+  let [owner] = await g.get([current.session], ['home'])
   let home = comp(owner?.home)
   let [record] = home.machine
     ? await g.get([String(home.machine)], ['machine'])

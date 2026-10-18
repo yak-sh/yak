@@ -55,11 +55,16 @@ export let effects = (
       answers: async (using, session) => {
         if (!await runner.answers?.(using, session)) return false
         if (!session) return true
+        let [fixer] = await host.graph.get([session], [
+          'fixer',
+          'process',
+          'stop',
+        ])
+        if (!fixer?.fixer || fixer.process || fixer.stop) return true
         let [owner] = await host.graph.get([session])
         // HTTP fixer requests use the native runner, not an outside CLI. An
         // existing managed run keeps its original owner across config changes.
         if (
-          !owner?.fixer || owner.process || owner.stop ||
           (owner.session as Comp)?.ended ||
           ['stopped', 'failed'].includes(
             String((owner.session as Comp)?.status),

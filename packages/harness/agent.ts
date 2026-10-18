@@ -544,7 +544,11 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   // it answers outstanding.
   let quiet = async (session: Eid) => {
     if (passing(h.g, session)) return false
-    let [self] = await h.g.get([session])
+    let [self] = await h.g.get([session], [
+      'dispatch',
+      'waiting',
+      'admitted',
+    ])
     if (dispatchStatus(self) == 'queued') return false
     let status = await currentStatus(h.g, session)
     if (status != 'pending' && status != 'running') return true
