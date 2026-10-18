@@ -1,5 +1,6 @@
 // Durable command receipts live on the launch filesystem, not in a connector
 // object's memory. Reconnecting observes that receipt and never relaunches it.
+import { CallError } from '@yaks/tools/errors'
 import type { Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Proc } from './mod.ts'
@@ -191,12 +192,25 @@ fi`)
         } -- -"$pid"; fi`,
       )
     },
-    read: async (path) =>
-      decode(
-        await transport.execute(
-          `set -eu; base64 < ${quote(fileAt(root, path))}`,
-        ),
-      ),
+    read: async (path) => {
+      // Missing/unreadable user paths are an invocation result, not a broken
+      // computer connector. Keep the control script successful in that case.
+      let answer = await transport.execute(
+        `file=${
+          quote(fileAt(root, path))
+        }; if test -f "$file" && test -r "$file"; then printf 'ok\n'; base64 < "$file"; else printf 'path\n'; fi`,
+      )
+      if (answer.startsWith('path\n')) {
+        throw new CallError(
+          'path',
+          'File is not a readable regular file: ' + path,
+        )
+      }
+      if (!answer.startsWith('ok\n')) {
+        throw new Error('Invalid workspace file response')
+      }
+      return decode(answer.slice(3))
+    },
     write: async (path, content) => {
       let file = fileAt(root, path),
         parent = file.slice(0, file.lastIndexOf('/')) || '/'

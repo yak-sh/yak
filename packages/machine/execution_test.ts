@@ -77,3 +77,49 @@ test('local process observers leave workspace-qualified runs to their connector'
   equal(over, false)
   equal(touched, 0)
 })
+
+let missingRead = executionWorkspace(g, {
+  execute: () => Promise.resolve('path\n'),
+}, target)
+test('a missing user file is a path refusal rather than a connector failure', async () => {
+  let error = await throws(() => missingRead.read('absent'))
+  equal((error as Error).name, 'CallError')
+})
+
+// Exercise the actual control-script boundary: a user's failed command must
+// produce a durable exit receipt, never reject the computer control request.
+let localFailures = await (async () => {
+  let { localConnector } = await import('./connectors.ts')
+  let { machineTools } = await import('./tools.ts')
+  let dir = await Deno.makeTempDir({ prefix: 'workspace-user-failures-' })
+  let workspace = mint()
+  await g.apply([{ entity: { eid: workspace }, workspace: { root: dir } }])
+  let m = executionWorkspace(g, await localConnector().connect('local://'), {
+    workspace,
+    root: dir,
+    receipts: dir + '/receipts',
+  })
+  let shell = machineTools(m).find((t) => t.name == 'shell')!
+  try {
+    let result = await shell.run({
+      command: dir + '/not-a-command',
+      timeout: 2000,
+    })
+    let pathFault: unknown
+    try {
+      await m.read('not-a-file')
+    } catch (e) {
+      pathFault = e
+    }
+    return { result, pathFault }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})()
+test('user command exit 127 is returned as a shell result at the local connector boundary', () => {
+  equal(localFailures.result.includes('exited 127'), true)
+  equal(localFailures.result.includes('not-a-command'), true)
+})
+test('missing user paths are refusals through the actual local control script', () => {
+  equal((localFailures.pathFault as Error).name, 'CallError')
+})
