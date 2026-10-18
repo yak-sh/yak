@@ -218,3 +218,22 @@ test('a test closes what it opened, last first, before its time is taken', async
   equal(stuck.ok, false)
   equal(String(stuck.errors[0]), 'Error: would not close')
 })
+
+let releasedBody = () => new Uint8Array(32)
+let releasedOutcome = await one({
+  name: 'fixture owner',
+  body: releasedBody,
+  tags: ['memory'],
+  skip: false,
+  file: 'fixture_test.ts',
+}, 100)
+test('a completed outcome keeps report metadata without retaining the fixture body', () => {
+  equal(releasedOutcome.ok, true)
+  equal(releasedOutcome.test, {
+    name: 'fixture owner',
+    tags: ['memory'],
+    skip: false,
+    file: 'fixture_test.ts',
+  })
+  equal(Object.hasOwn(releasedOutcome.test, 'body'), false)
+})

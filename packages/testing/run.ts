@@ -5,7 +5,7 @@ import { closing, type Test } from './suite.ts'
 
 /** How one test went. */
 export type Outcome = {
-  test: Test
+  test: Omit<Test, 'body'>
   ok: boolean
   skipped: boolean
   ms: number
@@ -48,7 +48,10 @@ globalThis.addEventListener?.('error', (e) => {
 
 /** Runs one test, failing it once `timeout` passes without an end. */
 export let one = async (test: Test, timeout: number): Promise<Outcome> => {
-  if (test.skip) return { test, ok: true, skipped: true, ms: 0, errors: [] }
+  let { body, ...reported } = test
+  if (test.skip) {
+    return { test: reported, ok: true, skipped: true, ms: 0, errors: [] }
+  }
   let timer: ReturnType<typeof later> | undefined
   let errors: unknown[] = []
   // The deadline is set before the clock starts: a test's time is its own,
@@ -62,14 +65,20 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
   )
   let start = now()
   try {
-    await Promise.race([closing(test.body), late])
+    await Promise.race([closing(body), late])
   } catch (error) {
     errors.push(error)
   } finally {
     cancel(timer)
   }
   errors.push(...stray.splice(0))
-  return { test, ok: !errors.length, skipped: false, ms: now() - start, errors }
+  return {
+    test: reported,
+    ok: !errors.length,
+    skipped: false,
+    ms: now() - start,
+    errors,
+  }
 }
 
 /// at('a_test.ts') -> './a_test.ts'

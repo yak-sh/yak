@@ -94,7 +94,8 @@ let run = async (path: string, load: () => Promise<unknown>) => {
   let loaded = performance.now() - begun
   loading += loaded
   loads[path] = loaded
-  let tests = collected.slice(at).filter(chosen)
+  // Executed bodies own fixtures; retain only report metadata after the file.
+  let tests = collected.splice(at).filter(chosen)
   outcomes.push(...await file(path, tests, timeout, loaded))
 }
 // Pages first: Deno's dynamic import costs more the larger the graph already
