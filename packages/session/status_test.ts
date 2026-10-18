@@ -90,14 +90,14 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
 
   [
-    'progress permits a model turn without completing the call',
+    'progress keeps work running without owing a speculative model turn',
     asyncTurn(),
-    'pending',
+    'running',
   ],
-  ['prose before progress is still ready', [
+  ['prose beside progress does not owe another turn', [
     ...asyncTurn(),
     said(5, 'e2'),
-  ], 'pending'],
+  ], 'running'],
   [
     'assistant final while a progressed older call is pending',
     asyncReply(),
@@ -170,11 +170,11 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(6, { ask: { to: M, through: 'e4' }, attempt: { by: null } }),
     said(7, 'e6'),
   ], 'pending'],
-  ['unseen progress is not lost between the context boundary and ask record', [
+  ['unseen progress alone does not owe another request', [
     ...asyncTurn(),
     entry(5, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
     said(6, 'e5'),
-  ], 'pending'],
+  ], 'running'],
   ['an unanswered synchronous call still blocks beside async progress', [
     ...asyncTurn(),
     entry(5, { call: { to: T, id: 'c2', source: 'e2' } }),
@@ -995,7 +995,7 @@ test('progress is projected as a result but only final results close calls', () 
   let entries = asyncTurn()
   assertEquals(kindOf(entries.at(-1)!), 'result')
   assertEquals(openCalls(entries).map((b) => b.entity.eid), ['e3'])
-  assertEquals(modelReady(entries), true)
+  assertEquals(modelReady(entries), false)
   assertEquals(modelReady(asyncReply()), false)
   let finished = [...asyncReply(), entry(7, { result: { call: 'e3' } })]
   assertEquals(openCalls(finished), [])

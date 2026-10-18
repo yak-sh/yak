@@ -109,7 +109,7 @@ export let openCalls = (entries: Bundle[]): Bundle[] =>
   callsIn(ordered(entries))
 
 /** Whether input or a tool answer has arrived beyond the newest request's
- * context boundary. Progress is a model-facing answer, not a final result.
+ * context boundary. Progress answers the wire protocol but does not owe another model turn.
  * This says the model owes work, independently of tools still running. */
 export let modelReady = (entries: Bundle[]): boolean => {
   let all = ordered(entries).filter((b) => !b.notice)
@@ -119,7 +119,8 @@ export let modelReady = (entries: Bundle[]): boolean => {
   )
   let boundary = through ? seqOf(through) : ask ? seqOf(ask) : 0
   return all.some((b) =>
-    seqOf(b) > boundary && ['input', 'result'].includes(kindOf(b) ?? '')
+    seqOf(b) > boundary && !b.tool_progress &&
+    ['input', 'result'].includes(kindOf(b) ?? '')
   )
 }
 
