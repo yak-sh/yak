@@ -67,8 +67,8 @@
 // when it carries a `client_secret` it was never issued (`plain`), which is
 // what ChatGPT sends and what used to read to a person as an expired
 // connection. What closes a connector is the person closing it, and when an
-// assistant comes back with a sign-in that is gone anyway, its person is told
-// how to connect it again (lapsed.ts).
+// assistant comes back with a sign-in that is gone anyway, that is a bug
+// reported to the tracker (lapsed.ts).
 //
 // The first person ever to sign in owns the meta space: while `yak` has no
 // members at all, this writes `member(yak, person, owner)` (directory.ts
@@ -889,7 +889,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
     }
     let agent = field('agent')
     if ((await disconnect(grants(env), person, agent)).length) {
-      // They closed it themselves, so a refused refresh is no news to them.
+      // They closed it themselves, so a refused refresh is no bug.
       background(
         closed(meta(env), person, agent).then(
           () => {},
@@ -1396,9 +1396,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let res = await new OAuthProvider<Env>(opts(env))
     .fetch(sent, env, context() as never)
   if (read && res.status == 400) {
-    // A refresh refused for a sign-in its person no longer holds tells them
-    // how to connect that assistant again (lapsed.ts). Never in the way of
-    // the answer.
+    // A refresh refused for a sign-in its person no longer holds is reported
+    // (lapsed.ts). Never in the way of the answer.
     let refused = res.clone()
     background(
       Promise.resolve()
