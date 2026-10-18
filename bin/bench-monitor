@@ -39,5 +39,5 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 cd "$(dirname "$0")/.." || exit 1
 mkdir -p "$HOME/.cache/yak/bench"
 lane="${1:-daily}"
-exec flock -n "$HOME/.cache/yak/bench/monitor-$lane.lock" timeout -k 30 "${YAK_BENCH_TIMEOUT:-14400}" \
+exec flock --close -n "$HOME/.cache/yak/bench/monitor-$lane.lock" timeout -k 30 "${YAK_BENCH_TIMEOUT:-14400}" \
   deno run -A bench/monitor.ts "$@"

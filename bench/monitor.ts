@@ -339,7 +339,8 @@ export let WINDOW = 25 * 60_000
 /** Command prefix at the process seam. Scheduled lock wait and collection share
  * one timeout, at most the existing check cap. Its ten-second kill grace is
  * inside the absolute deadline. One process group owns this invocation's flock
- * and collection only; it cannot signal the process holding a busy lock. */
+ * and collection only; it cannot signal the process holding a busy lock. The
+ * flock parent keeps the descriptor; detached collectors cannot inherit it. */
 export let measurement = (
   suite: string,
   deadline?: number,
@@ -352,7 +353,14 @@ export let measurement = (
     HOURLY.includes(suite) ? '600' : '10800',
   ]
   if (deadline === undefined) {
-    return ['flock', '--nonblock', '--conflict-exit-code=75', lock, ...check]
+    return [
+      'flock',
+      '--close',
+      '--nonblock',
+      '--conflict-exit-code=75',
+      lock,
+      ...check,
+    ]
   }
   let remaining = deadline - now - 10_000
   if (remaining <= 0) return undefined
@@ -363,6 +371,7 @@ export let measurement = (
       Math.min(remaining, HOURLY.includes(suite) ? 600_000 : 10_800_000) / 1000
     }s`,
     'flock',
+    '--close',
     lock,
   ]
 }

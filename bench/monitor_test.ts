@@ -344,6 +344,7 @@ test('fast scheduled suites still screen and confirm without changing measuremen
     '--kill-after=10',
     '600s',
     'flock',
+    '--close',
     '/tmp/yaks-throughput-bench.lock',
   ])
   equal(measurement('pages', 70_000, 0)?.[2], '60s')
