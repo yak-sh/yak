@@ -175,7 +175,9 @@ test('soft input wraps and resizes without changing submitted text', () => {
   assertEquals(wrapping.sent, ['hello world'])
 })
 
-test('soft rows scroll to the cursor and use allocated width, not terminal width', async () => {
+// Keep both ends of the same scrolling session, including its constrained
+// parent width, before releasing the terminal for the other fixtures.
+let scrolling = await (async () => {
   let ui = await mount(
     () =>
       h(
@@ -190,15 +192,16 @@ test('soft rows scroll to the cursor and use allocated width, not terminal width
   try {
     // The subject is soft-row scrolling, not sixteen independent key edits.
     await ui.send('\x1b[200~abcdefghijklmnop\x1b[201~')
-    assertEquals(ui.text().split('\n').slice(0, 2), ['  ghijklside', '  mnop'])
+    let bottom = ui.text().split('\n').slice(0, 2)
     await ui.send('\x1b[A\x1b[A')
-    assertEquals(ui.text().split('\n').slice(0, 2), [
-      '> abcdefside',
-      '  ghijkl',
-    ])
+    return { bottom, top: ui.text().split('\n').slice(0, 2) }
   } finally {
     ui.free()
   }
+})()
+test('soft rows scroll to the cursor and use allocated width, not terminal width', () => {
+  assertEquals(scrolling.bottom, ['  ghijklside', '  mnop'])
+  assertEquals(scrolling.top, ['> abcdefside', '  ghijkl'])
 })
 
 test('a one-column input hides its gutter and keeps the cursor visible', async () => {

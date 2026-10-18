@@ -426,7 +426,9 @@ test('partial ranges load neighbors without mistaking a page boundary for the en
   }
 })
 
-test('an unchanged page answer does not re-request the same anchor', async () => {
+// Exercise the host's unchanged and expanded page answers in an isolated
+// terminal session, retaining both request counts before releasing the DOM.
+let pageAnswers = await (async () => {
   let data = items(20), visible = signal(data.slice(0, 10))
   let requests: unknown[] = []
   let ui = await mount(
@@ -448,13 +450,17 @@ test('an unchanged page answer does not re-request the same anchor', async () =>
   try {
     await ui.resize(41, 5)
     await ui.resize(40, 5)
-    assertEquals(requests.length, 1)
+    let unchanged = requests.length
     visible.value = data.slice(0, 12)
     await ui.resize(41, 5)
-    assertEquals(requests.length, 2)
+    return { unchanged, expanded: requests.length }
   } finally {
     ui.free()
   }
+})()
+test('an unchanged page answer does not re-request the same anchor', () => {
+  assertEquals(pageAnswers.unchanged, 1)
+  assertEquals(pageAnswers.expanded, 2)
 })
 
 test('scroll estimates retain heights after text-cache eviction and page replacement', () => {
