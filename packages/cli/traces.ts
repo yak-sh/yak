@@ -81,7 +81,15 @@ export let traces = (
       ['get', 'sql'].includes(event.kind) && event.stage == 'start' &&
       options.getStart?.(event)
     ) {
-      let stack = (new Error('armed get start').stack ?? '').slice(0, 8192)
+      let errors = Error as ErrorConstructor & { stackTraceLimit?: number }
+      let before = errors.stackTraceLimit
+      let stack: string
+      try {
+        errors.stackTraceLimit = 48
+        stack = (new Error('armed get start').stack ?? '').slice(0, 8192)
+      } finally {
+        errors.stackTraceLimit = before
+      }
       if (options.reportGetStart) options.reportGetStart(stack)
       else {console.error(
           JSON.stringify({ diagnostic: 'get-start', pid: Deno.pid, stack }),
