@@ -35,16 +35,20 @@ session or asking a model a question needs no machine. The host's current
 directory is not the session's home, and starting from a checkout does not lend
 that checkout to the session.
 
-It carries its chosen persona from the graph (M-36709). Before each ask, an
-exact tool offer containing `skill_read` gets skill titles and descriptions:
-from the graph before a machine is running, and from the machine's files once
-it is running. When a description matches its work, it calls `skill_read`, and
-only that call loads the body. Machine-file catalogues include edits, additions
-and deletions without importing them into the graph. Ordinary file reads are
-not automatically model instructions; recorded prompt snapshots keep their
-original content. An explicitly named machine admits its ancestor AGENTS.md
-files at session opening (packages/harness/instructions.ts), through Machine
-commands and reads, never the host's disk.
+Its persona comes from graph context: `--work <task-or-project>` admits the
+work's common persona and records its project; `--persona <id-or-name>` selects
+an explicit persona. A checkout can supply its projected instructions too.
+Before each ask, an exact tool offer containing `skill_read` receives graph
+skill titles and descriptions, scoped to the session's project repository when
+known. `skill_read` loads the selected graph instructions. Neither discovery
+nor loading scans files or provisions a machine. The persona skill mirror
+synchronizes repository skill files separately (`{skills: true}`).
+
+Ordinary file reads are not automatically model instructions; recorded prompt
+snapshots keep their original content. An explicitly named machine admits its
+ancestor AGENTS.md files at session opening (packages/harness/instructions.ts),
+through Machine commands and reads. Missing instruction projections need graph
+context from `--work` or `--persona`, rather than a silent empty persona.
 
 Think of it as a colleague working in the next room whose every word is
 written on the wall. You don't sit with it: you read the wall, slip it a note,
@@ -76,8 +80,13 @@ and `-` from stdin (packages/cli/args.ts `inflate`). Run the command in the
 background because it returns only when the session settles:
 
 ```sh
-yak session new --prompt @<scratchpad>/brief.md --provider openai --model <model-name> --effort high
+yak session new --work T-<n> --prompt @<scratchpad>/brief.md \
+  --provider openai --model <model-name> --effort high
 ```
+
+`--work` names the task or project whose context the session needs, independently
+of where its commands run. Use `--persona` when selecting a particular persona.
+Putting a task id in the prompt alone does not establish that context.
 
 Without a machine, a provider may give it an empty filesystem. Code work needs
 a machine prepared from a commit in the graph, or an explicitly attached
@@ -93,7 +102,9 @@ configured machine explicitly, rather than letting where you happen to start
 the CLI choose it:
 
 ```sh
-yak session new --prompt @<scratchpad>/brief.md --machine <machine-id> --cwd <directory-on-that-machine> --provider openai --model <model-name> --effort high
+yak session new --work T-<n> --prompt @<scratchpad>/brief.md \
+  --machine <machine-id> --cwd <directory-on-that-machine> \
+  --provider openai --model <model-name> --effort high
 ```
 
 `--machine` names a machine record, not a path. `--cwd` is on that machine, not

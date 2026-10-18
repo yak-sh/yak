@@ -56,9 +56,11 @@ under it that would serve the agent better.
   long coding job carrying all of it hits its turn limit (M-33551).
 - **A fresh agent** starts from the persona alone and needs the whole brief.
 - **A native session** (`yak session new`, our own harness, on a GPT model)
-  takes the whole brief plus what `native-sessions` adds. Its catalogue matches
-  skill descriptions to the work and `skill_read` loads a body, so the skills
-  find their own way in: a pasted body is a copy that goes stale, and naming
+  takes the whole brief plus what `native-sessions` adds. Pass `--work T-…`
+  (or a project id) so its common persona and repository skill scope come from
+  graph context. Its graph catalogue matches skill descriptions to the work
+  and `skill_read` loads a body, so the skills find their own way in: a pasted
+  body is a copy that goes stale, and naming
   SKILL.md files points it at what you guessed it needs rather than what the
   work turns out to need.
 - **None of them**, for the knowing and the recording (M-33551). Read the code,
