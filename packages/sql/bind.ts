@@ -2940,6 +2940,173 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   return made
 }
 
+let scopedTally = (
+  ast: And,
+  vocab: Vocab,
+  opts: BindOpts,
+  base: Dialect,
+  scoped: Dialect,
+  reads: string[],
+  visibility: NonNullable<BindOpts['visibility']>,
+  ctes: Map<string, Cte>,
+  screening: boolean,
+): Select | undefined => {
+  // A complete archetype tally groups the covering spine index before it
+  // screens private owners. Presence-only policy arms are constant for one
+  // shape; property arms read only the sparse component that owns them.
+  let plain = { ...opts, visibility: undefined }
+  let tally = ast.clauses.length == 1 && ast.clauses[0].kind == 'tally' &&
+    ast.clauses[0].path.join('.') == 'entity.archetype'
+  if (
+    tally && !reads.length && !opts.eids && !opts.absent?.length &&
+    !opts.backed?.entity && !screening &&
+    !Object.keys(visibility.components ?? {}).length &&
+    !opts.extend?.some((e) =>
+      ['tally', 'pred', 'and', 'or'].some((k) =>
+        e.compile[k as keyof typeof e.compile]
+      )
+    ) && base.name == 'sqlite' && opts.archetypes
+  ) {
+    let policy = typeof visibility.entity == 'string'
+      ? parse(visibility.entity)
+      : visibility.entity
+    let valid = (c: Clause): boolean => {
+      if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(valid)
+      if (c.kind != 'pred' || c.not || c.where || c.path[0] == 'kind') {
+        return false
+      }
+      let hops = vocab.aim(c.path.join('.'), bare(c)), h = hops[0]
+      if (hops.length != 1 || h.comp == 'entity' || computed(vocab, h.comp)) {
+        return false
+      }
+      if (!h.prop) return [EXISTS, '~', '!', ''].includes(opOf(c))
+      return opOf(c) == '' && c.value?.kind == 'scalar' && c.value.raw != '' &&
+        vocab.prop(h.comp, h.prop)?.category == 'ref' &&
+        !plain.derived?.[h.comp] && !plain.backed?.[h.comp] &&
+        !vocab.prop(h.comp, h.prop)?.computed &&
+        !plain.derived?.[`${h.comp}.${h.prop}`]
+    }
+    if (!policy || valid(policy)) {
+      let catalog = opts.archetypes
+      let ids = catalog({})
+      if (ids) {
+        let held = new Map<string, Set<number>>()
+        let needed = new Set(['tombstone'])
+        let visit = (c: Clause): void => {
+          if (c.kind == 'and' || c.kind == 'or') c.clauses.forEach(visit)
+          else if (c.kind == 'pred') {
+            needed.add(vocab.aim(c.path.join('.'), bare(c))[0].comp)
+          }
+        }
+        if (policy) visit(policy)
+        for (let name of needed) {
+          let subset = catalog({ all: [name] })
+          if (!subset) return
+          held.set(name, new Set(subset))
+        }
+        let wearing = (name: string, id: number) => held.get(name)!.has(id)
+        let reduced = (c: Clause, id: number): Clause => {
+          if (c.kind == 'and' || c.kind == 'or') {
+            let children = c.clauses.map((x) => reduced(x, id))
+            let decisive = children.some((x) =>
+              x.kind == (c.kind == 'and' ? 'or' : 'and') && !x.clauses.length
+            )
+            return decisive
+              ? { kind: c.kind == 'and' ? 'or' : 'and', clauses: [] }
+              : {
+                kind: c.kind,
+                clauses: children.filter((x) =>
+                  !(x.kind == (c.kind == 'and' ? 'and' : 'or') &&
+                    !x.clauses.length)
+                ),
+              }
+          }
+          let p = c as Pred, h = vocab.aim(p.path.join('.'), bare(p))[0]
+          if (!h.prop) {
+            return {
+              kind: wearing(h.comp, id) == (opOf(p) == EXISTS || opOf(p) == '~')
+                ? 'and'
+                : 'or',
+              clauses: [],
+            }
+          }
+          return wearing(h.comp, id) ? p : { kind: 'or', clauses: [] }
+        }
+        let groups: number[] = [], exceptions: Select[] = []
+        for (let id of ids) {
+          if (wearing('tombstone', id)) continue
+          let residual = policy
+            ? reduced(policy, id)
+            : { kind: 'and' as const, clauses: [] }
+          if (residual.kind == 'or' && !residual.clauses.length) continue
+          if (residual.kind == 'and' && !residual.clauses.length) {
+            groups.push(id)
+          } else {
+            let q: And = {
+              kind: 'and',
+              clauses: [residual, {
+                kind: 'tally',
+                path: ['entity', 'archetype'],
+              }],
+            }
+            let read = bound(
+              q,
+              vocab,
+              { ...plain, archetypes: undefined, extend: [] },
+              base,
+              [],
+            )
+            exceptions.push({
+              ...read,
+              where: and(
+                read.where ?? TRUE,
+                eq(raw('"entity"."archetype"'), val(id)),
+              ),
+            })
+          }
+        }
+        if (exceptions.length > ARMS) return
+        let publicRows = bound(
+          ast,
+          vocab,
+          { ...plain, archetypes: undefined, extend: [] },
+          {
+            ...base,
+            live: () => base.among('"entity"."archetype"', groups),
+          },
+          [],
+        )
+        let parts: Query[] = [publicRows, ...exceptions].map((q) => ({
+          ...q,
+          order: undefined,
+        }))
+        while (parts.length > ARMS) {
+          parts = cut(parts, ARMS).map((parts) =>
+            select({ from: from({ t: 'compound', op: 'union all', parts }) })
+          )
+        }
+        return select({
+          with: [...ctes.values(), {
+            name: '__tally_groups',
+            materialized: true,
+            q: { t: 'compound', op: 'union all', parts },
+          }],
+          cols: [raw('"value"'), raw('"n"')],
+          from: table('__tally_groups'),
+          where: exists(
+            select({
+              cols: [lit(1)],
+              from: raw(`${scoped.source!('entity')} as "__shape"`),
+              where: eq(raw('"__shape"."eid"'), raw('"value"')),
+            }),
+          ),
+          order: [raw('"value"')],
+        })
+      }
+    }
+  }
+}
+
 let visible = (
   ast: And,
   vocab: Vocab,
@@ -3114,6 +3281,18 @@ let visible = (
         : base.col(comp, prop, v),
     refEq: refEqAt(entity),
   }
+  let tally = scopedTally(
+    ast,
+    vocab,
+    opts,
+    base,
+    scoped,
+    reads,
+    visibility,
+    ctes,
+    screening,
+  )
+  if (tally) return tally
   let catalog = opts.archetypes
   let archetypes: ArchetypeSet | undefined = catalog
     ? Object.assign(

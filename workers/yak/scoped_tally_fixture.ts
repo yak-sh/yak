@@ -8,6 +8,7 @@ import {
 export let scopedTallyCost = (storage: DurableStorage) => {
   let fixture = seedTallies(driver(storage), 2048)
   return [
+    '.tally=entity.archetype',
     `.edge .edge.from.entity.archetype=${fixture.private} .tally=entity.archetype`,
     `.edge .edge.to.entity.archetype=${fixture.private} .tally=entity.archetype`,
   ].map((query) => {

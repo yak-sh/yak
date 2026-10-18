@@ -75,6 +75,12 @@ export let seedTallies = (d: Driver, size = 256) => {
       cols: [col(prop)],
     })
   }
+  d.query({
+    t: 'create index',
+    name: 'draft_by',
+    on: 'draft',
+    cols: [col('by')],
+  })
   let sets = new Map<string, number>(),
     cache = new Archetypes(),
     ids = new Map<string, number>()
