@@ -2195,6 +2195,78 @@ for (
     equal((await get(f.store, '/query?q=.recipe', v)).status, 503)
   })
 }
+// The kernel read revision 10; commit a directory write before the store
+// checks it, and another while the store is rereading authorization.
+let racedAuthority = async (revoked = false) => {
+  let ctx = state()
+  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy: 10 })
+  let revision = 10, reads = 0, written = false
+  let copy = {
+    valid: (v: number) => {
+      let current = v == revision
+      // Commit immediately after the reread is accepted, before #learn's
+      // next check, so even its refreshed snapshot has to be read again.
+      if (current && v == 11 && !written) {
+        written = true
+        revision++
+      }
+      return Promise.resolve(current)
+    },
+    publish: () => Promise.resolve(true),
+    begin: () => Promise.resolve(++revision),
+    finish: () => Promise.resolve(true),
+    put: () => Promise.resolve(false),
+    get: () => Promise.resolve(null),
+  }
+  let store = new Store(
+    ctx,
+    {
+      SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
+      STORE: {
+        idFromName: (name: string) => name,
+        get: () => ({
+          fetch: () => {
+            reads++
+            let epoch = revision
+            let rows: Bundle[] = [{
+              entity: { eid: APP },
+              app: { space: 'space', access: 'private' },
+            }]
+            if (!revoked || epoch == 11) {
+              rows.push({
+                entity: { eid: 'seat' },
+                member: { space: 'space', person: ADA, role: 'owner' },
+              })
+            }
+            let answer = new Response(JSON.stringify(rows), {
+              headers: { 'x-yak-directory-revision': String(epoch) },
+            })
+            return Promise.resolve(answer)
+          },
+        }),
+      },
+    },
+    undefined,
+    undefined,
+    fixtureLoad,
+  )
+  await store.door
+  revision++
+  return { store, reads: () => reads }
+}
+for (let revoked of [false, true]) {
+  let f = await racedAuthority(revoked)
+  let answer = await get(f.store, '/query?q=.entity.eid=missing', {
+    ...owner,
+    access: 'private',
+    policy: 10,
+  })
+  test(`Store rechecks a mid-request directory write${revoked ? ' without restoring a revoked role' : ''}`, () => {
+    equal(answer.status, revoked ? 403 : 200)
+    ok(f.reads() >= 2)
+  })
+}
+
 let acceptedAuthority = await authorityFixture(10)
 // Learn the private metadata and owner before timing the authorized read.
 let currentOwner = { ...owner, access: 'private', policy: 10 }

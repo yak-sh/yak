@@ -1,6 +1,7 @@
 import {
   copyOf,
   EPOCH,
+  FENCE_WAIT,
   fenced,
   mend,
   signedDirectory,
@@ -1777,10 +1778,25 @@ export class Store {
     let revision = this.#policy(req)
     let copy = this.#bind.SERVING_COPY && copyOf(this.#bind as Env)
     if (this.#appMetadata(req) && copy) {
-      if (revision == null || !await copy.valid?.(revision)) {
+      if (revision == null) {
         throw Object.assign(new Refused('Serving authorization unavailable'), {
           status: 503,
         })
+      }
+      let began = Date.now()
+      while (
+        !await copy.valid?.(revision) ||
+        revision < Number(this.#get('policy') ?? 0)
+      ) {
+        if (!this.#bind.STORE || Date.now() - began >= FENCE_WAIT) {
+          throw Object.assign(
+            new Refused('Serving authorization unavailable'),
+            {
+              status: 503,
+            },
+          )
+        }
+        revision = await this.#recheck(req)
       }
     }
     // Reject outside #atomic: that helper treats a failure as a broken schema.
@@ -1797,6 +1813,54 @@ export class Store {
     } else if (this.#appMetadata(req) && this.#get('policy') != null) {
       this.#remember(req)
     }
+  }
+
+  // Reread metadata and standing in one directory snapshot. A write between
+  // the kernel's read and this store's check invalidates the snapshot, not the
+  // request. Never carry its old role into the newly accepted revision.
+  async #recheck(req: Request): Promise<number> {
+    let app = req.headers.get('x-yak-app') ?? this.#get('app')
+    let person = req.headers.get('x-yak-person')
+    let q = `.entity.eid=${app}&?app`
+    if (person) {
+      q +=
+        `|.member.person=${person}&?member|.grant.app=${app}&.grant.person=${person}&?grant`
+    }
+    let answer = await this.#directoryTransport().fetch(
+      new Request(`http://directory/query?q=${encodeURIComponent(q)}`),
+    )
+    let raw = answer.headers.get(EPOCH)
+    if (!answer.ok || raw == null || !/^\d+$/.test(raw)) {
+      throw Object.assign(new Refused('Serving authorization unavailable'), {
+        status: 503,
+      })
+    }
+    let rows: Bundle[] = await answer.json()
+    let definition = rows.find((r) => r.entity.eid == app)?.app as
+      | Comp
+      | undefined
+    if (!definition || definition.trashed) throw new Refused('app unavailable')
+    let space = typeof definition.space == 'string'
+      ? definition.space
+      : (definition.space as { eid?: string } | undefined)?.eid
+    let member = rows.find((r) => {
+      let m = r.member as Comp | undefined
+      let held = typeof m?.space == 'string'
+        ? m.space
+        : (m?.space as { eid?: string } | undefined)?.eid
+      return held == space && !!m
+    })?.member as Comp | undefined
+    let grant = rows.find((r) => r.grant)?.grant as Comp | undefined
+    let role = member?.role ?? grant?.access
+    req.headers.set('x-yak-app', app!)
+    req.headers.set('x-yak-access', mode(definition.access))
+    req.headers.set('x-yak-policy', raw)
+    req.headers.delete('x-yak-role')
+    if (person) this.#vouched.set(person, { ...vouchOf(req), level: null })
+    if (person && (role == 'owner' || role == 'editor' || role == 'viewer')) {
+      req.headers.set('x-yak-role', String(role))
+    }
+    return Number(raw)
   }
 
   #appMetadata(req: Request): boolean {
@@ -2027,8 +2091,8 @@ export class Store {
   // person: two requests can be in flight at once, and a `Vouch` held in one
   // field would be whichever of them spoke last. `#told` is what has already
   // been written down for them, so a session's second write costs no rows.
-  // A fresh transport per operation: signedDirectory pins one revision, never
-  // an isolate-wide promise or roster. Its authority is outside the directory.
+  // A fresh transport per operation, never an isolate-wide promise or roster.
+  // Every read stands on the independent directory authority.
   #directoryTransport() {
     let ns = this.#bind.STORE
     if (!ns) throw new Refused('directory unavailable')
@@ -2061,6 +2125,25 @@ export class Store {
     let run = async () => {
       let ns = this.#bind.STORE, app = this.#get('app')
       if (!ns || !app) return false
+      if (this.#bind.SERVING_COPY) {
+        let req = new Request('http://store', {
+          headers: {
+            'x-yak-app': app,
+            ...(person ? { 'x-yak-person': person } : {}),
+          },
+        })
+        await this.#recheck(req)
+        await this.#learn(req)
+        let v = vouchOf(req)
+        if (!reads(mode(req.headers.get('x-yak-access')), v.level)) return false
+        if (person) {
+          this.#vouched.set(person, {
+            ...v,
+            via: instrumentActor(actor)?.via ?? null,
+          })
+        }
+        return true
+      }
       let via = this.#directoryTransport()
       let revision: string | null = null
       let ask = async (q: string): Promise<Bundle[]> => {
@@ -2443,21 +2526,26 @@ export class Store {
                   let access = held
                     ? mode(held.app.access)
                     : await local.modeOf(appId)
+                  if (held) {
+                    let req = new Request('http://store', {
+                      headers: {
+                        'x-yak-app': appId,
+                        'x-yak-access': held.app.access,
+                        ...(held.app.policy == null
+                          ? {}
+                          : { 'x-yak-policy': String(held.app.policy) }),
+                        ...(person && person != appId
+                          ? { 'x-yak-person': person }
+                          : {}),
+                        ...(role ? { 'x-yak-role': role } : {}),
+                      },
+                    })
+                    await this.#learn(req)
+                    access = mode(req.headers.get('x-yak-access'))
+                    if (person != appId) role = vouchOf(req).level
+                  }
                   if (!reads(access, role)) {
                     throw new Denied(person, appId, 'viewer', 'read')
-                  }
-                  if (held) {
-                    await this.#learn(
-                      new Request('http://store', {
-                        headers: {
-                          'x-yak-app': appId,
-                          'x-yak-access': held.app.access,
-                          ...(held.app.policy == null
-                            ? {}
-                            : { 'x-yak-policy': String(held.app.policy) }),
-                        },
-                      }),
-                    )
                   }
                   if (person) {
                     this.#vouched.set(person, {
@@ -3414,6 +3502,8 @@ export class Store {
   }
 
   async #fetch(request: Request): Promise<Response> {
+    // Authorization may refresh the kernel's headers after a directory write.
+    request = new Request(request)
     // The request that wakes this object waits for it to start, and says how
     // long beside its answer (`x-yak-wake`, timing.ts). The runtime's clock
     // moves only across I/O, so that is the waiting, never the compute. The
