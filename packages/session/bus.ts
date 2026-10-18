@@ -12,7 +12,6 @@ import {
   and,
   type Clause,
   eq,
-  every,
   fields,
   list,
   present,
@@ -20,7 +19,6 @@ import {
 import { CLAIM, SESSION } from './comp.ts'
 import {
   arrived,
-  commented,
   deliver,
   heirs,
   knocked,
@@ -35,8 +33,18 @@ let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 // Find pending items first. Most sessions have no bus work, so a timer never
 // needs to scan their transcripts.
 let candidates = async (g: Graph): Promise<Eid[]> => {
+  let route = fields(...[
+    'comment.target',
+    'knock.target',
+    'deliver.to',
+    'mail.reply_to',
+    'mail.target',
+  ].filter((p) => {
+    let [c, key] = p.split('.')
+    return g.vocab.prop(c, key)
+  }))
   let unsaid = (...clauses: Clause[]) =>
-    and(...clauses, absent('notified'), every())
+    and(...clauses, absent('notified'), route)
   let queries = [
     ...g.vocab.comp('comment')
       ? [
@@ -72,18 +80,19 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       g.read(
         unsaid(present('mail'), present('mail.reply_to.created.via.session')),
       ),
-      g.read(and(...arrived().clauses, every())),
+      g.read(and(...arrived().clauses, route)),
     ])
     : [[], []]
-  let comments = g.vocab.comp('comment') && g.vocab.prop('filed', 'project')
-    ? await g.read(and(...commented().clauses, every()))
-    : []
   let projects = g.vocab.comp('knock') && g.vocab.comp('project')
-    ? await g.read(and(...knocked().clauses, every()))
+    ? await g.read(and(...knocked().clauses, route))
     : []
   let items = (await Promise.all(queries.map((q) => g.read(q)))).flat()
+  let comments = g.vocab.prop('filed', 'project')
+    ? items.filter((b) => b.comment)
+    : []
   let answered = await g.get(
     replies.map((b) => String(comp(b, 'mail').reply_to)),
+    ['created'],
   )
   let targets = [
     ...new Set(
