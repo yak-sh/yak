@@ -30,6 +30,8 @@ import {
   RETRIES,
   sendingBefore,
   seqOf,
+  statusOf,
+  type TranscriptStatus,
   usingBefore,
 } from './state.ts'
 import { type Segment, transcriptSegments, within } from './window.ts'
@@ -108,11 +110,21 @@ let every = async (r: Read, qualifier: string): Promise<Bundle[]> =>
     r.segs.map((s) => r.g.read(`${within(s)}${qualifier}&${r.fields}`)),
   )).flat()
 
+// The named entries that are lines of this transcript: an entry another
+// transcript holds, or one a fork left behind, is not among its entries.
 let fetch = async (r: Read, eids: Iterable<Eid>): Promise<Bundle[]> => {
   let ids = [...new Set(eids)]
-  return ids.length
-    ? (await r.g.get(ids, r.names)).filter((b) => !b.tombstone)
-    : []
+  if (!ids.length) return []
+  let found = await r.g.get(
+    ids,
+    r.names?.includes(ENTRY) ? r.names : [ENTRY, ...r.names ?? []],
+  )
+  return found.filter((b) => {
+    let at = comp(b, ENTRY)
+    return r.segs.some((s) =>
+      s.session == at?.session && Number(at.seq) <= s.through
+    )
+  })
 }
 
 // The entries `aspectBefore` (./state.ts) reads to say what `name` is in force:
@@ -143,12 +155,52 @@ let aspect = async (
   ]
 }
 
+// What `statusOf` reads of an entry.
+const STATUS = [
+  ENTRY,
+  ASK,
+  CALL,
+  RESULT,
+  PROGRESS,
+  OUTPUT,
+  USING,
+  SENDING,
+  'attempt',
+  'execution',
+  'interrupted',
+  'failed',
+  'provisional',
+  'notice',
+  'stop',
+  'exception',
+  'refusal',
+]
+
+/** What a transcript is doing, read off the entries a status looks at: the
+ * same answer as `session.status`, without computing it. */
+export let entryStatus = async (
+  g: Graph,
+  session: Eid,
+): Promise<TranscriptStatus> =>
+  statusOf(
+    await reach(g, session, {
+      comps: STATUS.filter((name) => g.vocab.comp(name)),
+    }),
+  )
+
 /** The model selection in force on a transcript, as the whole of it would say. */
 export let usingOf = async (
   g: Graph,
   session: Eid,
 ): Promise<Comp | undefined> =>
   usingBefore(await aspect(await chain(g, session, {}), USING))
+
+/** The newest entry of a transcript, prose and all. */
+export let newestOf = async (
+  g: Graph,
+  session: Eid,
+): Promise<Bundle | undefined> =>
+  newest(await chain(g, session, { bodies: true }), '')
 
 /** Whether a transcript holds an ask. */
 export let hasAsk = async (g: Graph, session: Eid): Promise<boolean> =>

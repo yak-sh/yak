@@ -12,14 +12,8 @@ import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
 import { done, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
-import {
-  live,
-  newestAsk,
-  openCalls,
-  statusOf,
-  textOf,
-  usingBefore,
-} from './state.ts'
+import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
+import { live, newestAsk, textOf, usingBefore } from './state.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */
@@ -434,15 +428,13 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
             }
           } else {
             let results = await Promise.all(ids.map(async (session) => {
-              let entries = await transcript(g, session)
               let state = dispatchStatus(await childPlace(g, session))
-              let status = state == 'queued' && statusOf(entries) != 'stopped'
-                ? 'queued'
-                : statusOf(entries)
+              let now = await entryStatus(g, session)
+              let last = await newestOf(g, session)
               return {
                 session,
-                status,
-                output: entries.length ? textOf(entries.at(-1)!) : '',
+                status: state == 'queued' && now != 'stopped' ? 'queued' : now,
+                output: last ? textOf(last) : '',
               }
             }))
             if (
@@ -474,15 +466,13 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
   let [tail] = await g.read(
     '.entry.session=' + child + '&.order=-entry.seq&.limit=1&*',
   )
-  let entries: Bundle[] | undefined
-  if (!tail) entries = await transcript(g, child)
   let tasks = g.vocab.comps.includes('task')
     ? await g.read(`.task .claim.session=${child} *`)
     : []
   let task = tasks.find((b) => b.task)
   let ready = task &&
     await done(g, task.entity.eid)
-  let last = tail ?? entries?.at(-1)
+  let last = tail ?? await newestOf(g, child)
   if (!last) return
   // A parent's own completion is already known to it. Fall back to the
   // ordinary child receipt identity: a new child response must still arrive,
@@ -500,13 +490,12 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     )
   let eid = receipt(last)
   if (await row(g, eid)) return
-  entries ??= await transcript(g, child)
-  let status = statusOf(entries)
+  let status = await entryStatus(g, child)
   // A new receipt still requires the full transcript's terminal outcome.
   if (!['settled', 'failed', 'stopped'].includes(status)) return
   // The model may have finished while the fast-path reads were awaiting.
   // Use the same terminal snapshot for the receipt identity and its text.
-  last = entries.at(-1)!
+  last = (await newestOf(g, child))!
   eid = receipt(last)
   if (await row(g, eid)) return
   let message = announceTask
@@ -520,13 +509,12 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
       (ready ? '; task ' + taskStatus(g.vocab, task!) : '') + '\nResult:\n'
     : ''
   let parent = String(link.parent)
-  let prefix = await transcript(g, parent)
   // A stop is an explicit end, not a request to wake on the next delivery.
-  if (statusOf(prefix) == 'stopped') return
-  let open = openCalls(prefix).some((b) => b.entity.eid == link.call)
+  if (await entryStatus(g, parent) == 'stopped') return
+  let open = (await openOf(g, parent)).some((b) => b.entity.eid == link.call)
   // The parent's `using` in force rides on the receipt: it is the request for
   // the turn the receipt calls for (./run.ts).
-  let using = usingBefore(prefix)
+  let using = await usingOf(g, parent)
   await g.apply([{
     entity: { eid },
     entry: {

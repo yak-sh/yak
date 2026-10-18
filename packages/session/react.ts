@@ -1,7 +1,7 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { Unsupported } from '@yaks/match'
 import { compactAsk } from './compact_ask.ts'
-import { reach } from './reach.ts'
+import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
 import { CallError } from '@yaks/tools/errors'
@@ -307,27 +307,6 @@ export let transcript = async (
   ]
 }
 
-// What `statusOf` reads of an entry.
-let STATUS = [
-  ENTRY,
-  ASK,
-  CALL,
-  RESULT,
-  'tool_progress',
-  OUTPUT,
-  USING,
-  'sending',
-  'attempt',
-  'execution',
-  'interrupted',
-  'failed',
-  'provisional',
-  'notice',
-  'stop',
-  EXCEPTION,
-  REFUSAL,
-]
-
 export let currentStatus = async (
   g: Graph,
   session: Eid,
@@ -351,11 +330,7 @@ export let currentStatus = async (
   } catch (error) {
     if (!(error instanceof Unsupported)) throw error
   }
-  return statusOf(
-    await reach(g, session, {
-      comps: STATUS.filter((name) => g.vocab.comp(name)),
-    }),
-  )
+  return entryStatus(g, session)
 }
 
 // A model turn reads the newest of a transcript and what it names (./reach.ts).
