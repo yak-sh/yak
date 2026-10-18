@@ -164,13 +164,12 @@ and are measured through both doors.
 The following remain explicitly **unbanked**, not inferred from local startup:
 external admin/deploy/payment/auth/OAuth, provider model listing and session
 new/send/spawn, managed session stop/wait/peek/list, provider builder execution,
-builder choose/supply, native vector-index checks, session cache/listener, CLI
-init/trace/land and serve/work/restart lifecycle. Some have safe isolated
-candidates but are not measured here; others require external availability,
-credentials, spending or managed lifecycle ownership. None was executed live.
-Upstream pushes, live service handovers, owner graph mutation and unowned
-signals are outside this fixture. `operation-remaining` participates in the
-shared hourly monitor; its scheduling bound is owned by T-127825.
+native vector-index checks and serve/work/restart lifecycle. Some have safe
+isolated candidates but are not measured here; others require external
+availability, credentials, spending or managed lifecycle ownership. None was
+executed live. Upstream pushes, live service handovers, owner graph mutation and
+unowned signals are outside this fixture. `operation-remaining` participates in
+the shared hourly monitor; its scheduling bound is owned by T-127825.
 
 ## Boundaries and exclusions
 
