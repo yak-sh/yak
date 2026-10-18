@@ -85,12 +85,18 @@ let paint = (face: Face, codes: number[]) => {
   return next
 }
 
-let visible = (text: string) =>
-  [...text].filter((x) =>
-    x == '\n' || x == '\t' || (x >= ' ' && x < '\x7f') || x > '\x9f'
-  ).join('')
+// deno-lint-ignore no-control-regex -- these are precisely the unsafe terminal controls.
+const controls = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/g
+
+// Drop only the control ranges; splitting every Unicode character into an
+// array made ordinary tool output pay for a terminal parser on every paint.
+let visible = (text: string) => text.replace(controls, '')
 
 export let ansiRuns = (text: string): AnsiRun[] => {
+  if (!text.includes('\x1b')) {
+    let plain = visible(text)
+    return plain ? [{ text: plain, face: {} }] : []
+  }
   let out: AnsiRun[] = [], face: Face = {}, at = 0
   let push = (end: number) => {
     let text = visible(textAt(at, end))

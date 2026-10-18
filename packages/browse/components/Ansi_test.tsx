@@ -34,3 +34,17 @@ test('ANSI output becomes escaped HTML spans', () => {
     free()
   }
 })
+
+// Plain output must keep the same control-byte boundary as coloured output.
+// Every byte plus astral text catches a fast path accidentally passing C0/C1
+// controls through, or discarding tabs/newlines and Unicode.
+let controls = Array.from({ length: 256 }, (_, i) => String.fromCharCode(i))
+  .filter((c) => c != '\x1b').join('') + ' 🙂🦙漢字'
+let clean = [...controls].filter((c) =>
+  c == '\n' || c == '\t' || (c >= ' ' && c < '\x7f') || c > '\x9f'
+).join('')
+test('plain ANSI output strips controls while preserving Unicode and whitespace', () => {
+  assertEquals(ansiRuns(controls), [{ text: clean, face: {} }])
+  assertEquals(ansiRuns(''), [])
+  assertEquals(ansiRuns('\x00\x01\x7f\x80'), [])
+})
