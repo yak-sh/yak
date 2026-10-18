@@ -185,6 +185,64 @@ await proof(
     let answer = observing(transport.fetch(query('page')))
     await time.advance(25)
     await flush()
+    return () => ok(answer.pending(), 'a fenced copy must not answer')
+  },
+)
+
+await proof(
+  'a fence held by a directory write is waited out, never refused',
+  async () => {
+    let f = independent(), time = clock()
+    f.core().begin()
+    let epochs = [0, 0, 1]
+    let transport = signedDirectory(
+      {
+        fetch: () =>
+          Promise.resolve(
+            new Response('page', {
+              headers: { [EPOCH]: String(epochs.shift()) },
+            }),
+          ),
+      },
+      f.door,
+      time,
+    )
+    let answer = observing(transport.fetch(query('page')))
+    await time.advance(0)
+    await flush()
+    let fenced = answer.pending()
+    await time.advance(10)
+    await flush()
+    let still = answer.pending()
+    await time.advance(20)
+    await flush()
+    return () => {
+      ok(fenced && still, 'the write had not committed yet')
+      equal(answer.answer().status, 200)
+    }
+  },
+)
+
+await proof(
+  'a fence that never clears is refused after the bounded wait',
+  async () => {
+    let f = independent(), time = clock()
+    f.core().begin()
+    let transport = signedDirectory(
+      {
+        fetch: () =>
+          Promise.resolve(
+            new Response('page', { headers: { [EPOCH]: '0' } }),
+          ),
+      },
+      f.door,
+      time,
+    )
+    let answer = observing(transport.fetch(query('page')))
+    for (let n = 0; n < 80; n++) {
+      await time.advance(250)
+      await flush()
+    }
     return () => equal(answer.answer().status, 503)
   },
 )

@@ -1168,6 +1168,11 @@ export let written = async (
     await Promise.all(parts.map((p) => sent(env, p, true, headers)))
   }
   let outs = await Promise.all(parts.map((p) => sent(env, p, check, headers)))
+    // After the rehearsal, a refusal from one part may follow another's
+    // commit: the caller must not send the whole batch again.
+    .catch((e) => {
+      throw parts.length > 1 && !check ? Object.assign(e, { partial: true }) : e
+    })
   let applied = outs.flat()
   // Where a `$alias` actually landed. A store may put a bundle somewhere other
   // than the id this door minted for it: one carrying a name somebody already

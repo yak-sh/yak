@@ -58,6 +58,8 @@ export let fenced = async <T>(
 }
 
 export let EPOCH = 'x-yak-directory-revision'
+/** How long a signed read waits for a directory write to release its fence. */
+export let FENCE_WAIT = 15_000
 let timer: DirectoryCopyTimer = {
   now: Date.now,
   after: (ms, done) => {
@@ -195,25 +197,34 @@ export let signedDirectory = (
         let fallback = async () => {
           try {
             let answer = await copy.read?.(key)
-            // A miss cannot turn a healthy but slow first read into a 503.
-            if (answer) done(await accept(answer.revision, answer.body))
+            // A miss cannot turn a healthy but slow first read into a 503, and
+            // a fenced copy is no answer: the directory read keeps waiting.
+            if (!answer) return false
+            let accepted = await accept(answer.revision, answer.body)
+            if (accepted.ok) done(accepted)
+            return accepted.ok
           } catch { /* Wait for the directory on a cold or fenced miss. */ }
+          return false
         }
         let cancel = time.after(Math.max(0, began + 25 - time.now()), () => {
           void fallback()
         })
         let headers = new Headers(req.headers)
         headers.set(EPOCH, '1')
+        let from = time.now()
         void (async () => {
-          // Nothing has escaped before the first accepted answer. A concurrent
-          // directory write may overtake that first read; reread it a bounded
-          // number of times, never resetting an established request revision.
-          for (let attempt = 0; attempt < 3; attempt++) {
+          // Nothing has escaped before the first accepted answer. A directory
+          // write holds the fence until it commits, and until then no copied
+          // or read body may stand as authority. That is a wait, never an
+          // answer: reread with backoff until the fence clears, bounded by
+          // FENCE_WAIT. A request that already accepted a revision keeps it
+          // and refuses any other, for its caller to reopen on.
+          for (let pause = 10; !settled; pause = Math.min(pause * 2, 250)) {
             let answer: Response
             try {
               answer = await via.fetch(new Request(req, { headers }))
             } catch {
-              await fallback()
+              if (!await fallback()) done(unavailable())
               return
             }
             if (!answer.ok) {
@@ -229,10 +240,14 @@ export let signedDirectory = (
             let body = await answer.text()
             await copy.publish?.(revision, key, body)
             let accepted = await accept(revision, body)
-            if (accepted.ok || pinned !== undefined || attempt == 2) {
+            if (
+              accepted.ok || pinned !== undefined ||
+              time.now() - from >= FENCE_WAIT
+            ) {
               done(accepted)
               return
             }
+            await new Promise<void>((resume) => time.after(pause, resume))
           }
         })().catch(() => done(unavailable()))
       })

@@ -2,7 +2,7 @@
 // crosses the real signed transport and independent ServingCopy; SQL and Store
 // integration live in directory-signed and graph tests, not this decision test.
 import { clock, equal, ok, test, throws } from '@yaks/testing'
-import { answered, running } from './agent.ts'
+import { answered, renewing, running } from './agent.ts'
 import {
   type App,
   appStore,
@@ -354,4 +354,32 @@ test('tool scope: narrowed session cannot reacquire a foreign held identity', as
     reacquire(confined.ctx, confined.space, confined.app, false)
   )
   equal(confined.forwarded.length, 0)
+})
+
+test('tool scope: a call a directory write superseded is asked again from a fresh reach', async () => {
+  let f = fixture(), views = 0
+  let reach = [{ n: 0 }] as never[]
+  let again = () => Promise.resolve([{ n: ++views }] as never[])
+  let fresh = renewing(f.ctx, reach, again)
+  let seen: unknown[] = []
+  let out = await fresh(() => {
+    seen.push(structuredClone(reach))
+    if (seen.length == 1) {
+      throw Object.assign(Error('stale'), { status: 503 })
+    }
+    return Promise.resolve('done')
+  })
+  equal(out, 'done')
+  equal(seen, [[{ n: 0 }], [{ n: 1 }]])
+  let partial = () =>
+    fresh(() =>
+      Promise.reject(
+        Object.assign(Error('half'), { status: 503, partial: true }),
+      )
+    )
+  await throws(partial)
+  let refused = () =>
+    fresh(() => Promise.reject(Object.assign(Error('no'), { status: 403 })))
+  await throws(refused)
+  equal(views, 1)
 })

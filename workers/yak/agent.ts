@@ -67,7 +67,8 @@ import { ceiling, serve, unseenBlock } from './unseen.ts'
 import { appVocab, packagesOf, platformApart, wordOf } from './vocab.ts'
 import { bare, joined, lined } from './wire.ts'
 import { apex, type Host, hosted } from './host.ts'
-import { refuse } from './tool.ts'
+import { refuse, unavailable } from './tool.ts'
+import { inReach } from './declared.ts'
 
 // One JSON Schema property as Zod. The tool table declares plain shapes — a
 // string, a number, a flag, a list, an object — and the MCP SDK takes Zod, so
@@ -400,7 +401,11 @@ let unreduced = (value: Reduced): Row[] =>
 // The one read `graph_show` makes, and the only reason this Graph carries a
 // storage at all: these eids, whole, out of every store that holds a piece of
 // one (reach.ts `composed`).
-let held = (ctx: Ctx, reach: Reach[]): Storage => {
+let held = (
+  ctx: Ctx,
+  reach: Reach[],
+  fresh: <T>(run: () => Promise<T>) => Promise<T> = (run) => run(),
+): Storage => {
   let self: Storage
   // The reach's answer to a line, and whether the line asked for a reduction.
   // A tree is the graph's own read (a reference looked up by title, a tool's
@@ -423,21 +428,23 @@ let held = (ctx: Ctx, reach: Reach[]): Storage => {
     return { answer, reduced: !!aggregate(parse(one)) }
   }
   let rows = async (q: Query): Promise<Row[]> => {
-    let { answer, reduced } = await asked(q)
+    let { answer, reduced } = await fresh(() => asked(q))
     return reduced ? unreduced(answer as Reduced) : answer as Row[]
   }
   // A reduction has no members to list, so a read of one lists none, as a
   // store's own read of it does.
   let bundles = async (q: Query): Promise<Bundle[]> => {
-    let { answer, reduced } = await asked(q)
+    let { answer, reduced } = await fresh(() => asked(q))
     return reduced ? [] : answer as Bundle[]
   }
   let tx: Tx = {
     read: bundles,
     get: (eids, comps) =>
-      composed(ctx.env, reach, eids, {
-        want: comps ? new Set(comps) : null,
-      }) as unknown as Promise<Bundle[]>,
+      fresh(() =>
+        composed(ctx.env, reach, eids, {
+          want: comps ? new Set(comps) : null,
+        })
+      ) as unknown as Promise<Bundle[]>,
     patch: nope('transaction'),
     remove: nope('transaction'),
     revive: nope('transaction'),
@@ -621,6 +628,29 @@ export let searching =
   }
 
 /**
+ * A Store refuses a call whose directory revision a later directory write
+ * superseded, before it does anything with it, so the caller is asked again
+ * from a fresh view of its reach: standing is read anew, never carried over.
+ * A batch that may have committed in some of its stores is not asked again.
+ */
+export let renewing =
+  (ctx: Ctx, reach: Reach[], again = () => inReach(ctx)) =>
+  async <T>(run: () => Promise<T>): Promise<T> => {
+    for (let attempt = 0;; attempt++) {
+      try {
+        return await run()
+      } catch (e) {
+        if (
+          !ctx.reopen || attempt >= 2 || !unavailable(e) ||
+          (e as { partial?: boolean }).partial
+        ) throw e
+        ctx.dir = ctx.reopen()
+        reach.splice(0, reach.length, ...await again())
+      }
+    }
+  }
+
+/**
  * The caller's reach as one graph: every app they can read, asked together and
  * answered as one bundle per entity, with the platform's tools on it — and
  * beside it how a property of this graph reads and writes ({@link reading}),
@@ -635,14 +665,17 @@ export let reaching = async (
   reach: Reach[],
 ): Promise<{ graph: Graph; prop: ReturnType<typeof reading> }> => {
   let { vocab, clashes } = await spoken(ctx, reach)
-  let storage = held(ctx, reach)
+  let fresh = renewing(ctx, reach)
+  let storage = held(ctx, reach, fresh)
   // The post room is a person's own mailbox work (letters.ts), and it is
   // listed for everybody: a caller who has not signed in has no letters to
   // list, and hears that as the sign-in challenge rather than as a tool that
   // is not there. One roster, one order, whoever is asking (`platform`,
   // T-34541).
   let plugins = [platform(ctx), post(ctx)]
-  let writing = async (bundles: Bundle[], opts?: ApplyOpts) => {
+  let writing = (bundles: Bundle[], opts?: ApplyOpts) =>
+    fresh(() => writes(bundles, opts))
+  let writes = async (bundles: Bundle[], opts?: ApplyOpts) => {
     let asked = (Array.isArray(bundles) ? bundles : [bundles]) as Bundle[]
     let { batch, where } = await aimed(ctx, asked)
     // The same `Reach` the fan-out is holding, where it holds one: reach.ts
