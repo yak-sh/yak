@@ -295,6 +295,8 @@ fi`)
     if ((tree.worktree as Comp).gitdir == common) {
       throw Error('Primary checkout cannot be reclaimed')
     }
+    // Dirty work is always kept, independent of process visibility.
+    if ((await at(path, ['status', '--porcelain'])).trim()) return 'dirty'
     // Same-user processes outside the graph keep their cwd and open files.
     // An unreadable live process refuses collection rather than proving absence.
     let used = await exec(`
@@ -304,7 +306,7 @@ for proc in /proc/[0-9]*; do
   test "$(stat -c %u "$proc" 2>/dev/null || :)" = "$uid" || continue
   for file in "$proc/cwd" "$proc"/fd/*; do
     test -L "$file" || continue
-    link=$(readlink "$file") || { test ! -e "$proc" && continue; exit 1; }
+    link=$(readlink "$file") || { test ! -e "$proc" && continue; printf referenced; exit 0; }
     case "$link" in ${quote(path)}|${
       quote(path)
     }/*) printf referenced; exit 0;; esac
@@ -374,14 +376,19 @@ export let retained = async (g: Graph, workspace: string): Promise<boolean> => {
       if (sameContext(h.workspace) && inTree(h.cwd)) return true
     }
   }
-  for (let id of ids) {
+  let held = new Set(ids)
+  if (g.vocab.prop('home', 'workspace')) {
     if (
-      g.vocab.prop('home', 'workspace') &&
-      (await g.read('.home.workspace=' + id)).length
+      (await g.read('.home')).some((b) =>
+        held.has(String((b.home as Comp).workspace))
+      )
     ) return true
+  }
+  if (g.vocab.prop('process', 'workspace')) {
     if (
-      g.vocab.prop('process', 'workspace') &&
-      (await g.read('.process.workspace=' + id + ' !exit')).length
+      (await g.read('.process !exit')).some((b) =>
+        held.has(String((b.process as Comp).workspace))
+      )
     ) return true
   }
   return false
