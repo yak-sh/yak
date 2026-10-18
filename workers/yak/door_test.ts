@@ -231,7 +231,7 @@ test('a Store read answered out of memory asks again; a write does not', async (
   attempts = 0
   let again = storeOf({
     idFromName: (name) => name,
-    get: () => ({ fetch: () => Promise.resolve(++attempts && starved()) }),
+    get: () => ({ fetch: () => (attempts++, Promise.resolve(starved())) }),
   }, 'recipes')
   await assertRejects(() =>
     again.consume('/apply', (r) => r.json(), { method: 'POST', body: '[1]' })
