@@ -261,16 +261,18 @@ export let read = (path: string): Config => {
       ? new URL(config.db, base).pathname
       : config.db,
     plugins: (config.plugins ?? []).map((plug) => resolved(plug, base)),
-    ...config.machines
+    ...config.sandboxes
       ? {
-        machines: {
-          ...config.machines,
+        sandboxes: {
+          ...config.sandboxes,
           providers: Object.fromEntries(
-            Object.entries(config.machines.providers).map((
+            Object.entries(config.sandboxes.providers ?? {}).map((
               [name, provider],
             ) => [
               name,
-              { ...provider, use: near(provider.use, base) },
+              'use' in provider
+                ? { ...provider, use: near(provider.use, base) }
+                : provider,
             ]),
           ),
         },

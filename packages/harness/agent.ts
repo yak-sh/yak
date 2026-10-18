@@ -177,7 +177,7 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   compactAt?: number
   /** each step of every transcript, as it lands */
   each?: (step: Step, session?: string) => void | Promise<void>
-  opening?: (persona?: Eid) => Promise<Opening>
+  opening?: (persona?: Eid, session?: Eid) => Promise<Opening>
   /** context an ask carries without storing its bytes in entries */
   context?: Deps['contextItems']
   /** Dynamic context independent of source-bound image items. */
@@ -287,6 +287,7 @@ export let begin = async (
   prompt: string | undefined,
   o: Opening & {
     using: Comp
+    eid?: Eid
     by?: Eid
     via?: Eid
     project?: Eid
@@ -299,7 +300,7 @@ export let begin = async (
     (o.work
       ? (await lineage(g, o.work)).find((b) => b.project)?.entity.eid
       : undefined)
-  let session = crypto.randomUUID() as Eid
+  let session = o.eid ?? crypto.randomUUID() as Eid
   let context = (o.files ?? []).map((f, i) => ({
     ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
     $actor: through(session),
@@ -605,8 +606,10 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
           ? {}
           : await defaultUsing(h.g, provider)
         if (!using.model && chosen.model) using.model = String(chosen.model)
+        let eid = crypto.randomUUID()
         return begin(h.g, prompt, {
-          ...await opts.opening?.(o.persona),
+          eid,
+          ...await opts.opening?.(o.persona, eid),
           ...o.persona ? { persona: o.persona } : {},
           by: o.by,
           using: {

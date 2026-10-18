@@ -1,41 +1,29 @@
-// Sessions name machines in the graph; only configured providers know how to
-// reach them. A record precedes provisioning, so another worker can resume an
-// interrupted request without inventing a second sandbox.
-import { Refused } from '@yaks/graph/errors'
+// Session homes are convenience defaults over durable workspace identities.
+// Sandbox intentions are recorded before provisioning; changing a default never
+// disposes a resource or changes the target of a previously launched process.
 import { CallError } from '@yaks/tools/errors'
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import type { Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import type { Machine, MachineFile, MachineRef } from '@yaks/machine'
+import type { Machine } from '@yaks/machine'
 import { targetFor, type Workspaces } from '@yaks/machine/targets'
-import { type ChildLimits, runningAt } from '@yaks/session'
+import type { ChildLimits } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
 import { type As, owed } from '@yaks/persona'
 import { isAbsolute, relative, resolve } from '@std/path/posix'
+import type { Host } from '@yaks/host'
 
-export type Machines = NonNullable<import('@yaks/host').Host['machines']>
-let row = async (g: Graph, eid: string, comps: string[]) =>
-  (await g.get([eid], comps))[0]
-let comp = (b: Bundle | undefined, name: string) =>
-  b?.[name] as Comp | undefined
-
-/** An explicit home is data, never a path on the host's own filesystem. */
-export let homeAt = (machine?: string, cwd?: string): Comp => ({
-  ...machine ? { machine } : {},
+export let homeAt = (workspace?: string, cwd?: string): Comp => ({
+  ...workspace ? { workspace } : {},
   ...cwd ? { cwd } : {},
 })
-
-/** The stored command directory. A provider's default is obtained through the
- * binding's `cwd`, not by assuming that the host and session share a disk. */
 export let sessionCwd = async (
   g: Graph,
   session: string,
   fallback?: string,
 ): Promise<string | undefined> => {
-  let home = comp(await row(g, session, ['home']), 'home')
+  let home = (await g.get([session], ['home']))[0]?.home as Comp | undefined
   return home?.cwd == null ? fallback : String(home.cwd)
 }
-
-/** The persona owed beside instruction files already read from the machine. */
 export let owing = async (
   g: Graph,
   home: Comp,
@@ -51,340 +39,192 @@ export let owing = async (
   )
   return owes ? [await snapshot(owes.text, owes.source)] : []
 }
-
-let own = (session: string) => derivedEid('session-machine|' + session)
-let queues = new WeakMap<Graph, Map<string, Promise<unknown>>>()
-let serial = <T>(g: Graph, key: string, go: () => Promise<T>): Promise<T> => {
-  let queue = queues.get(g)
-  if (!queue) queues.set(g, queue = new Map())
-  let next = (queue.get(key) ?? Promise.resolve()).catch(() => {}).then(go)
-  queue.set(key, next)
-  return next.finally(() => {
-    if (queue!.get(key) == next) queue!.delete(key)
-  })
-}
-let refOf = (id: string, record: Comp): MachineRef => ({
-  id,
-  ...record.address != null ? { address: String(record.address) } : {},
-})
-let string = (value: unknown, name: string): string | undefined => {
-  if (value == null) return
-  if (typeof value != 'string' || !value) {
-    throw new CallError('argument', name + ' must be a nonempty string')
-  }
-  return value
-}
-
-/** Bind a graph to its host's configured providers. Nothing is provisioned
- * until a caller asks for `machine` or `cwd`; children only record intentions. */
+export type WorkspaceFile = { path: string; bytes: Uint8Array }
 export let machines = (
   g: Graph,
-  configured?: Machines,
+  sandboxes?: Host['sandboxes'],
+  resolveHome?: Host['resolveHome'],
   workspaces?: Workspaces,
 ): SessionMachines => {
-  let provider = async (name: string, supplied = false) => {
-    let found = await configured?.provider(name)
-    if (!found) {
-      let message = 'Machine provider is not configured: ' + name
-      if (supplied) throw new CallError('provider', message)
-      throw new Error(message)
-    }
-    return found
-  }
-  let defaults = async () => {
-    let name = configured?.defaultProvider
-    if (!name) throw new Error('This host lends no default machine provider')
-    await provider(name)
-    return name
-  }
-  let requested = async (
-    session: string,
-    request: Record<string, unknown> = {},
-  ): Promise<string> => {
-    let name = string(request.provider, 'machine.provider') ?? await defaults()
-    if (!(await provider(name, request.provider != null)).request) {
-      let message = 'Machine provider cannot request a sandbox: ' + name
-      if (request.provider != null) throw new CallError('provider', message)
-      throw new Error(message)
-    }
-    let id = own(session)
-    let existing = await row(g, id, ['machine'])
-    if (!existing?.machine) {
-      await g.apply([{
-        entity: { eid: id },
-        machine: {
-          provider: name,
-          ...request.from != null
-            ? { from: string(request.from, 'machine.from') }
-            : {},
-          ...request.image != null
-            ? { image: string(request.image, 'machine.image') }
-            : {},
-          state: 'requested',
-        },
-      }])
-    }
-    return id
-  }
-  let home = async (session: string): Promise<Comp> => {
-    let [owner] = await g.read(
-      `.entity.eid=${session}&.session&.fields=home.machine,home.workspace,home.cwd`,
-    )
-    if (!owner) throw new Error('not a session: ' + session)
-    let at = comp(owner, 'home') ?? {}
-    if (at.workspace || at.machine) return at
-    let translated = await configured?.resolveHome?.(session)
-    if (translated?.workspace || translated?.machine) {
-      await g.apply([{ entity: { eid: session }, home: translated }])
-      return { ...at, ...translated }
-    }
-    let id = await requested(session)
-    await g.apply([{ entity: { eid: session }, home: { machine: id } }])
-    return { ...at, machine: id }
-  }
-  let lent = async (session: string, explicit?: Comp) => {
-    let at = explicit ?? await serial(g, session, () => home(session))
-    if (at.workspace) {
-      if (!workspaces) {
-        throw new Refused('This host lends no workspace execution binding')
+  let home = async (session: string, supplied?: Comp): Promise<Comp> => {
+    let owner = (await g.get([session], ['session', 'home']))[0]
+    let at = supplied ?? owner?.home as Comp | undefined ?? {}
+    if (at.workspace) return at
+    let prepared = owner ? await resolveHome?.(session) : undefined
+    if (prepared?.workspace) at = { ...at, ...prepared }
+    else {
+      if (!sandboxes) {
+        throw new Error('This host lends no default sandbox provider')
       }
-      let target = await targetFor(g, session, {})
-      let machine = await workspaces.connect(target.workspace)
-      let root = comp(
-        await row(g, target.workspace, ['workspace']),
-        'workspace',
-      )?.root
-      return {
-        machine,
-        root: root == null ? undefined : String(root),
-        cwd: target.cwd,
+      at = {
+        ...at,
+        workspace: await sandboxes.request(
+          derivedEid('session-sandbox|' + session),
+        ),
       }
     }
-    let id = String(at.machine)
-    return serial(g, id, async () => {
-      let record = comp(await row(g, id, ['machine']), 'machine')
-      if (!record) throw new Error('not a machine entity: ' + id)
-      let source = await provider(String(record.provider))
-      let ref = refOf(id, record)
-      let loan = record.state == 'requested' || record.state == 'released'
-        ? ref.address != null
-          ? await source.attach?.({ ...ref, address: ref.address })
-          : await source.request?.({
-            id,
-            ...record.from != null ? { from: String(record.from) } : {},
-            ...record.image != null ? { image: String(record.image) } : {},
-          })
-        : await source.wake(ref)
-      if (!loan) throw new Error('Provider cannot lend machine: ' + id)
-      let patches: Bundle[] = []
-      if (record.state != 'running') {
-        patches.push({ entity: { eid: id }, machine: { state: 'running' } })
-      }
-      let directory = await sessionCwd(g, session)
-      if (!directory && loan.cwd) {
-        patches.push({ entity: { eid: session }, home: { cwd: loan.cwd } })
-      }
-      if (patches.length) await g.apply(patches)
-      return { ...loan, root: loan.cwd, cwd: directory ?? loan.cwd }
-    })
+    if (owner) await g.apply([{ entity: { eid: session }, home: at }])
+    return at
   }
-  let release = async (session: string) => {
-    let at = comp(await row(g, session, ['home']), 'home')
-    if (at?.workspace || !at?.machine) return
-    let id = String(at.machine)
-    await serial(g, id, async () => {
-      // A fork sharing its parent's machine does not own that machine's end.
-      // Even an owned machine may still be lent to another live session.
-      let others = await g.read(`.home.machine=${id} .session *`)
-      for (let other of others) {
-        if (other.entity.eid != session && !await machineDone(g, other)) return
-      }
-      let record = comp(await row(g, id, ['machine']), 'machine')
-      if (!record || record.state == 'released') return
-      let source = await provider(String(record.provider))
-      await source.release(refOf(id, record))
-      await g.apply([{ entity: { eid: id }, machine: { state: 'released' } }])
-    })
+  let lent = async (session: string, supplied?: Comp) => {
+    let at = await home(session, supplied)
+    if (!workspaces) {
+      throw new Error('This host lends no workspace execution binding')
+    }
+    let target = await targetFor(g, undefined, at)
+    let record = (await g.get([target.workspace], ['workspace']))[0]
+      ?.workspace as Comp
+    return {
+      machine: await workspaces.connect(target.workspace),
+      root: String(record.root),
+      cwd: target.cwd,
+    }
   }
   let limits: ChildLimits = {
-    taskDefaults: async (parent) => {
-      let at = await serial(g, parent, () => home(parent))
-      if (at.workspace) return {}
-      let record = at.machine
-        ? comp(await row(g, String(at.machine), ['machine']), 'machine')
-        : undefined
-      return {
-        machine: {
-          provider: await defaults(),
-          ...record?.from != null ? { from: record.from } : {},
-        },
-      }
-    },
+    taskDefaults: () => Promise.resolve({ sandbox: {} }),
     childProperties: {
       workspace: {
         type: 'string',
         description: 'Existing workspace; a default target, not permissions.',
       },
-      machine: {
+      sandbox: {
+        type: 'object',
         description:
-          'Existing machine entity id, or a new sandbox request. Omit to share the parent machine.',
-        oneOf: [{ type: 'string' }, {
-          type: 'object',
-          properties: {
-            provider: { type: 'string' },
-            from: {
-              type: 'string',
-              description: 'Commit entity in the graph.',
-            },
-            image: { type: 'string' },
-          },
-          additionalProperties: false,
-        }],
+          'Request a separate sandbox. Omit to share the parent workspace.',
+        properties: {
+          provider: { type: 'string' },
+          from: { type: 'string' },
+          image: { type: 'string' },
+        },
+        additionalProperties: false,
       },
       cwd: {
         type: 'string',
         description:
-          'Command directory on the machine. Relative paths resolve from the parent command directory.',
+          'Command directory in the target filesystem; relative to the parent directory.',
       },
     },
     prepareChild: async ({ parent, child, args }) => {
-      if (
-        args.workspace != null ||
-        (args.machine == null &&
-          comp(await row(g, parent, ['home']), 'home')?.workspace)
-      ) {
-        let target = await targetFor(g, parent, {
-          ...args.workspace != null ? { workspace: args.workspace } : {},
-          ...args.cwd != null ? { cwd: args.cwd } : {},
-        })
-        return {
-          home: {
-            workspace: target.workspace,
-            cwd: args.cwd != null || args.workspace == null ? target.cwd : null,
-          },
-        } as Omit<Bundle, 'entity'>
-      }
-      let inherited = args.machine == null
-        ? await serial(g, parent, () => home(parent))
-        : comp(await row(g, parent, ['home']), 'home') ?? {}
-      let at: Comp = { ...inherited }
       if (args.machine != null) {
-        if (typeof args.machine == 'string') {
-          if (!(await row(g, args.machine, ['machine']))?.machine) {
-            throw new CallError(
-              'machine',
-              'not a machine entity: ' + args.machine,
-            )
-          }
-          at = { machine: args.machine }
-        } else if (
-          typeof args.machine == 'object' && !Array.isArray(args.machine)
-        ) {
-          at = {
-            machine: await requested(
-              child,
-              args.machine as Record<string, unknown>,
-            ),
-          }
-        } else {throw new CallError(
-            'machine',
-            'machine must be an entity id or sandbox request',
-          )}
+        throw new CallError(
+          'workspace',
+          'Use workspace or sandbox, not machine',
+        )
       }
+      if (args.workspace != null && args.sandbox != null) {
+        throw new CallError(
+          'workspace',
+          'Select workspace or sandbox, not both',
+        )
+      }
+      let inherited = await home(parent)
+      let at: Comp
+      if (args.sandbox != null) {
+        if (typeof args.sandbox != 'object' || Array.isArray(args.sandbox)) {
+          throw new CallError('sandbox', 'sandbox must be a request object')
+        }
+        if (!sandboxes) {
+          throw new Error('This host lends no default sandbox provider')
+        }
+        at = {
+          workspace: await sandboxes.request(
+            derivedEid('session-sandbox|' + child),
+            args.sandbox as {
+              provider?: string
+              from?: string
+              image?: string
+            },
+          ),
+        }
+      } else if (args.workspace != null) {
+        if (typeof args.workspace != 'string') {
+          throw new CallError('workspace', 'workspace must be an entity id')
+        }
+        at = { workspace: args.workspace }
+        await targetFor(g, undefined, at)
+      } else at = { ...inherited }
       if (args.cwd != null) {
-        let cwd = string(args.cwd, 'cwd')!
-        let base = inherited.cwd == null ? undefined : String(inherited.cwd)
-        if (!cwd.startsWith('/') && !base?.startsWith('/')) {
+        if (
+          typeof args.cwd != 'string' || !args.cwd || args.cwd.includes('\0')
+        ) throw new CallError('cwd', 'cwd must be a nonempty path')
+        let base = inherited.cwd as string | undefined
+        if (!isAbsolute(args.cwd) && !base) {
           throw new CallError(
             'cwd',
             'Relative cwd requires a parent command directory',
           )
         }
-        at.cwd = cwd.startsWith('/') ? resolve(cwd) : resolve(base!, cwd)
+        at.cwd = resolve(base ?? '/', args.cwd)
       }
-      return { home: at } as Omit<Bundle, 'entity'>
+      return { home: at }
     },
   }
   return {
-    machine: async (session: string, explicit?: Comp): Promise<Machine> =>
-      (await lent(session, explicit)).machine,
-    cwd: async (session: string): Promise<string | undefined> =>
-      (await lent(session)).cwd,
+    home,
     homeAt,
-    release,
-    files: async function* (
-      session: string,
-      paths: string[],
-    ): AsyncIterable<MachineFile> {
+    limits,
+    machine: async (session, supplied) =>
+      (await lent(session, supplied)).machine,
+    cwd: async (session) => (await lent(session)).cwd,
+    // Resource disposal is explicit, never a consequence of transcript state.
+    release: async () => {},
+    files: async function* (session, paths) {
       let loan = await lent(session)
-      let selected = paths.map((path) => {
-        let target = isAbsolute(path)
-          ? resolve(path)
-          : loan.cwd
-          ? resolve(loan.cwd, path)
-          : path
-        if (!loan.root) {
-          if (isAbsolute(target) || target.split('/').includes('..')) {
-            throw new CallError(
-              'path',
-              'Machine file export needs a provider root',
-            )
-          }
-          return target
-        }
+      for (let path of paths) {
+        let target = resolve(loan.cwd, path)
         let scoped = relative(loan.root, target)
-        if (scoped == '..' || scoped.startsWith('../') || isAbsolute(scoped)) {
+        if (
+          !scoped || scoped == '..' || scoped.startsWith('../') ||
+          isAbsolute(scoped)
+        ) {
           throw new CallError(
             'path',
-            'Machine file is outside its export root: ' + path,
+            'Workspace file is outside its export root: ' + path,
           )
         }
-        return scoped
-      })
-      let at = comp(await row(g, session, ['home']), 'home')
-      if (at?.workspace || !at?.machine) return
-      let id = String(at.machine)
-      let record = comp(await row(g, id, ['machine']), 'machine')!
-      let source = await provider(String(record.provider))
-      yield* source.export(
-        refOf(id, record),
-        selected,
-      )
+        let quote = (path: string) => "'" + path.replaceAll("'", "'\\''") + "'"
+        // Resolve links on the target before reading, not on the graph host.
+        let id = await loan.machine.start(
+          `set -eu; root=$(cd -- ${
+            quote(loan.root)
+          } && pwd -P); file=$(realpath -e -- ${
+            quote(target)
+          }); case "$file" in "$root"/*) ;; *) exit 1;; esac; test -f "$file"; base64 -- "$file"`,
+          loan.cwd,
+        )
+        for (;;) {
+          let proc = await loan.machine.look(id)
+          if (!proc) throw new Error('Workspace export lost its process')
+          if (proc.exit) {
+            if (proc.exit.code != 0) {
+              throw new Error(
+                'Workspace export failed: ' +
+                  (await loan.machine.tail(id, 40)).join('\n'),
+              )
+            }
+            break
+          }
+          await new Promise((done) =>
+            setTimeout(done, loan.machine.poll ?? 100)
+          )
+        }
+        let binary = atob(
+          (await loan.machine.tail(id, Number.MAX_SAFE_INTEGER)).join(''),
+        )
+        yield {
+          path: scoped,
+          bytes: Uint8Array.from(binary, (c) => c.charCodeAt(0)),
+        }
+      }
     },
-    limits,
   }
 }
 export type SessionMachines = {
-  machine: (session: string, explicit?: Comp) => Promise<Machine>
+  home: (session: string, supplied?: Comp) => Promise<Comp>
+  machine: (session: string, supplied?: Comp) => Promise<Machine>
   cwd: (session: string) => Promise<string | undefined>
   homeAt: typeof homeAt
   release: (session: string) => Promise<void>
-  files: (session: string, paths: string[]) => AsyncIterable<MachineFile>
+  files: (session: string, paths: string[]) => AsyncIterable<WorkspaceFile>
   limits: ChildLimits
-}
-
-/** Settling a turn is not permission to destroy its edits. A completed task
- * can release its machine once its session has stopped asking for work. */
-export let machineDone = async (
-  g: Graph,
-  session: Bundle,
-): Promise<boolean> => {
-  let record = comp(session, 'session')
-  if (!record || (session.process && !session.exit)) return false
-  if (await runningAt(g, session.entity.eid)) return false
-  // Tool effects outlive the transcript lease, even after a stop/completion.
-  if (
-    ['tool_async', 'call', 'result'].every((c) => g.vocab.comp(c)) &&
-    (await g.read(
-      `.entry.session=${session.entity.eid}&.call&.tool_async&!results&.limit=1`,
-    )).length
-  ) return false
-  if (session.completed || record.ended || record.status == 'stopped') {
-    return true
-  }
-  if (!['settled', 'failed'].includes(String(record.status))) return false
-  if (!g.vocab.comps.includes('task')) return false
-  let tasks = await g.read(`.task&.claim.session=${session.entity.eid}&*`)
-  return tasks.length > 0 &&
-    tasks.every((task) => task.completed || task.cancelled)
 }

@@ -7,7 +7,7 @@ import { targetFor, type Workspaces } from '@yaks/machine/targets'
 import type { Comp, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
 import type { Machine } from '@yaks/machine'
-import { type Machines, owing } from './session_machines.ts'
+import { owing } from './session_machines.ts'
 import type { As } from '@yaks/persona'
 
 let quoted = (text: string) => "'" + text.replaceAll("'", "'\\''") + "'"
@@ -96,15 +96,16 @@ let admitted = async (
 }
 
 /** Opening a graph-only session does not acquire any machine. An explicit
- * machine may be woken or requested because instruction admission reads files. */
+ * ready workspace may be connected because instruction admission reads files. */
 export let instructionsFor = async (
   g: Graph,
-  configured: Machines | undefined,
   home: Comp,
   workspaces?: Workspaces,
   context: As = {},
 ): Promise<Snapshot[]> => {
   if (home.workspace) {
+    let [row] = await g.get([String(home.workspace)])
+    if (row?.pending) return admitted(g, undefined, home, context)
     if (!workspaces) {
       throw new Refused('This host lends no workspace execution binding')
     }
@@ -117,35 +118,7 @@ export let instructionsFor = async (
       context,
     )
   }
-  if (!home.machine) return admitted(g, undefined, home, context)
-  let id = String(home.machine)
-  let [row] = await g.get([id])
-  let record = row?.machine as Comp | undefined
-  if (!record) throw new Error('not a machine entity: ' + id)
-  let provider = await configured?.provider(String(record.provider))
-  if (!provider) {
-    throw new Error('Machine provider is not configured: ' + record.provider)
-  }
-  let ref = {
-    id,
-    ...record.address != null ? { address: String(record.address) } : {},
-  }
-  let loan = record.state == 'requested' || record.state == 'released'
-    ? ref.address != null
-      ? await provider.attach?.({ ...ref, address: ref.address })
-      : await provider.request?.({
-        id,
-        ...record.from != null ? { from: String(record.from) } : {},
-        ...record.image != null ? { image: String(record.image) } : {},
-      })
-    : await provider.wake(ref)
-  if (!loan) throw new Error('Provider cannot lend machine: ' + id)
-  if (record.state != 'running') {
-    await g.apply([{ entity: { eid: id }, machine: { state: 'running' } }])
-  }
-  let cwd = home.cwd == null ? loan.cwd : String(home.cwd)
-  home.cwd ??= cwd
-  return admitted(g, loan.machine, home, context)
+  return admitted(g, undefined, home, context)
 }
 
 /** Historical owner words ride beside the latest input, not in instructions. */

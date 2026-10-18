@@ -114,45 +114,21 @@ handler, tool runner and duties become available as composition builds each one.
 Factories retain the host reference and use those parts only after their factory
 returns.
 
-## Machine providers
+## Workspaces and sandboxes
 
-`Host.machines` is an optional capability: configured
-[machine providers](../machine/README.md#providers), keyed by the durable
-`machine.provider`, and a `defaultProvider` that requests sandboxes.
-`provider(name)` loads one configured provider on first acquisition and shares
-it across later calls; unknown names return `undefined`. A plugin can ask for
-commands and files without learning where its host lives. An existing machine is
-explicitly attached by its provider's address; no host filesystem belongs to
-plugins by right.
+`Host.workspaces.connect(id)` opens an existing file-and-command workspace at
+its recorded placement. It never chooses the graph server's directory.
+`Host.sandboxes.request(id, request?)` records a sandbox intention before
+provisioning; it requires an explicitly configured adapter or default provider.
+Sandbox effects provision that intention. Missing configuration refuses rather
+than creating a local directory. `Host.resolveHome(session)` may prepare a
+configured native fixer's worktree independently of sandbox provisioning.
 
-```ts
-import { equal } from '@yaks/testing'
-import type { Host } from '@yaks/host'
-
-let releases: string[] = []
-let machines: NonNullable<Host['machines']> = {
-  defaultProvider: 'remote',
-  provider: (name) =>
-    Promise.resolve(
-      name == 'remote'
-        ? {
-          wake: () => Promise.reject(new Error('not provisioned')),
-          release: (ref) => {
-            releases.push(ref.id)
-            return Promise.resolve()
-          },
-          export: async function* () {},
-        }
-        : undefined,
-    ),
-}
-await (await machines.provider('remote'))!.release({ id: 'job' })
-equal(releases, ['job'])
-```
-
-Concrete hosts may supply `resolveHome` at their compatibility door to translate
-stored homes into machine homes. Plugins only consume the returned machine
-reference and command directory.
+A session's `home{workspace, cwd}` is a default target, not a permission grant.
+Changing it, stopping a session or closing a host does not dispose its
+workspace. Only explicit sandbox disposal destroys a resource. See
+[@yaks/machine](../machine/README.md) for execution and
+[@yaks/sandbox](../sandbox/README.md) for lifecycle and adapter configuration.
 
 ## Mail senders
 

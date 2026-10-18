@@ -7,7 +7,6 @@ export type Proc = { pid?: number; exit?: { code: number | null } }
 /** Compatibility name for the shared Workspace interface. */
 export type Machine = import('./workspace.ts').Workspace
 
-export * from './provider.ts'
 export * from './comp.ts'
 
 export type {

@@ -34,15 +34,16 @@ export { graphTools, harnessTools } from './tools.ts'
 
 // A Harness must be passed under `h`, never spread into the options. Explicit
 // exclusions also catch spreads, which TypeScript's excess-property check skips.
-type NotHarness = { [K in Exclude<keyof Harness, 'machines'>]?: never }
+type NotHarness = {
+  [K in Exclude<keyof Harness, 'sandboxes' | 'workspaces'>]?: never
+}
 
 /** How the harness is started here: what it stores in, what serves it, and
  * what the agent may do. */
 export type Opts = ChildLimits & NotHarness & {
-  /** Optional command directory on the explicitly named machine. */
+  /** Optional command directory on the explicitly named workspace. */
   cwd?: string
   /** Explicit existing machine entity; otherwise shell/files request a sandbox. */
-  machine?: string
   /** the graph to run over */
   h: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
@@ -80,8 +81,8 @@ export type Opts = ChildLimits & NotHarness & {
   compactAt?: number
   /** each step of every transcript, as it lands */
   each?: (step: Step, session?: string) => void | Promise<void>
-  /** Override the machine providers explicitly lent by the host. */
-  machines?: Harness['machines']
+  /** Override the workspace and sandbox bindings explicitly lent by the host. */
+  sandboxes?: Harness['sandboxes']
   workspaces?: Harness['workspaces']
   workspace?: string
 }
@@ -120,7 +121,7 @@ export type Here = {
 }
 
 /** What this machine lends an agent over `h`: the models behind its
- * credentials and sign-ins, the machine providers, the MCP
+ * credentials and sign-ins, the workspace and sandbox bindings, the MCP
  * servers, the pictures, the instruction files where a session opens, and
  * where a defect is written. */
 export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
@@ -130,7 +131,8 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     diagnostics().report(error, where)
   let binding = machines(
     h.g,
-    opts.machines ?? h.machines,
+    opts.sandboxes ?? h.sandboxes,
+    h.resolveHome,
     opts.workspaces ?? h.workspaces,
   )
   let auth = authorize(h)
@@ -186,13 +188,13 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     named: () =>
       named ??= graphTools(h.g, { tools: h.hostTools?.(), reply: h.reply }),
     streaming: streamingEnabled(opts, env),
-    opening: async (persona) => {
-      let home = opts.workspace
+    opening: async (persona, session) => {
+      let explicit = opts.workspace
         ? { workspace: opts.workspace, ...opts.cwd ? { cwd: opts.cwd } : {} }
-        : homeAt(opts.machine, opts.cwd)
+        : homeAt(undefined, opts.cwd)
+      let home = await binding.home(session!, explicit)
       let files = await instructionsFor(
         h.g,
-        opts.machines ?? h.machines,
         home,
         opts.workspaces ?? h.workspaces,
         { persona },

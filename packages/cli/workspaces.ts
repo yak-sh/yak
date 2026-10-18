@@ -4,6 +4,8 @@ import type { Config, Host } from '@yaks/host'
 import { localConnector, sshConnector } from '@yaks/machine/connectors'
 import { workspaces } from '@yaks/machine/workspaces'
 import type { ComputerConnector } from '@yaks/machine'
+import { resolveOptions } from '@yaks/sandbox/configuration'
+import { sandboxConnect } from '@yaks/sandbox/lifecycle'
 
 export let workspaceCapabilities = (
   host: Pick<Host, 'graph'>,
@@ -42,6 +44,12 @@ export let workspaceCapabilities = (
       return await workspaces(host.graph, {
         connectors,
         receipts: configured.receipts,
+        sandbox: async (id) =>
+          (await sandboxConnect(
+            host.graph,
+            (await resolveOptions(host, config.sandboxes)).providers,
+            id,
+          )).workspace,
       }).connect(id)
     },
   }

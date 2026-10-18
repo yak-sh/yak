@@ -1,14 +1,3 @@
-// The provider's durable record, separate from the Machine it answers.
-
-/** The component name. */
+// An actual computer, reached through an explicitly configured connector.
 export let MACHINE = 'machine'
-/** A provider's recorded machine state. */
-export type MachineState = 'requested' | 'running' | 'asleep' | 'released'
-/** What the graph records about a machine. */
-export type MachineRecord = {
-  provider?: string
-  address?: string
-  from?: string
-  image?: string
-  state?: MachineState
-}
+export type MachineRecord = { address?: string }

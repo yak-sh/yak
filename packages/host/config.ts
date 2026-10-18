@@ -33,13 +33,12 @@ export type Config = {
   }[]
   /** Explicit connector bindings for file-and-command workspace targets. */
   workspaces?: {
-    connectors: Record<string, import('@yaks/machine').ProviderConfig>
+    connectors: Record<string, { use: string; with?: Record<string, unknown> }>
     receipts: string
   }
-  /** Configured machine providers, keyed by the durable machine.provider. */
-  machines?: {
-    defaultProvider: string
-    providers: Record<string, import('@yaks/machine').ProviderConfig>
+  /** Sandbox adapters, separate from computer connection transports. */
+  sandboxes?: import('@yaks/sandbox/configuration').Configuration & {
+    defaultProvider?: string
   }
   /** the SQLite file, or `:memory:` for a graph that lasts as long as the
    * process. Required — a host never guesses a database. */

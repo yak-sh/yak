@@ -14,11 +14,11 @@ let fixture = async () => {
   let h = { g, close: () => {} }
   await h.g.apply([{
     entity: { eid: 'unavailable-machine' },
-    machine: { provider: 'missing', state: 'running' },
+    workspace: { machine: 'unavailable-computer', root: '/unavailable' },
   }, {
     entity: { eid: 'session' },
     session: {},
-    home: { machine: 'unavailable-machine' },
+    home: { workspace: 'unavailable-machine' },
   }, {
     entity: { eid: 'checking' },
     skill: {},

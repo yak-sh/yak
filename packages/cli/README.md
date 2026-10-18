@@ -250,42 +250,40 @@ plugins({}, options) // [mailbox({ domain: 'books.example' })]
 Object.keys(runs({}, options)) // the tools it runs, by name
 ```
 
-### Machine providers
+### Workspace execution and sandbox defaults
 
-The CLI lends providers through `Host.machines.provider(name)`. The first
-acquisition loads that provider; concurrent and later acquisitions share it.
-Opening a graph loads no machine implementation. A config can choose providers
-without making plugins know where commands run:
+The CLI connects existing workspaces through `workspaces.connectors`; a missing
+placement never selects the CLI's own directory. `sandboxes.providers`
+configures sandbox adapters separately, and `sandboxes.defaultProvider` selects
+the adapter for an omitted session workspace. No configured default means
+refusal, not a process-directory sandbox.
 
 ```json
 {
-  "machines": {
-    "defaultProvider": "process",
+  "db": "./graph.db",
+  "plugins": [
+    "@yaks/kernel",
+    "@yaks/machine",
+    "@yaks/sandbox",
+    "@yaks/harness"
+  ],
+  "sandboxes": {
+    "defaultProvider": "coder",
     "providers": {
-      "process": {
-        "use": "@yaks/process",
-        "with": { "dir": "/srv/yak/machines", "poll": 100 }
+      "coder": {
+        "use": "@yaks/sandbox/docker",
+        "machine": "sandbox-computer",
+        "with": { "state": "/var/lib/yak/sandboxes" }
       }
     }
   }
 }
 ```
 
-Absent that setting, the CLI lends the process provider, keeping sandbox
-directories beside a file-backed graph (under the test's temporary directory for
-a graph in memory). Its `poll` is how often, in ms, a command it runs is looked
-at (default 100). It is directory separation, not security or resource
-isolation. A provider module other than `@yaks/process` exports
-`provider(host, options)` and answers the
-[MachineProvider](../machine/README.md#providers) contract. Provisioning happens
-only when a session needs commands or files. Graph commits are prepared from
-objects in the host's binary artifact store, not from an ambient checkout.
-
-Machine vocabulary and its Git object references are host words, like invocation
-records: a config need not separately list their vocabulary plugins. Existing
-machines are explicit `machine{provider, address}` records. The CLI's legacy
-home translation lives at its SQLite boundary; the harness sees only machine
-homes.
+The named computer must already be recorded with a configured connection
+address. An omitted workspace records a sandbox intention; the sandbox effect
+provisions it. See [sandbox configuration](../sandbox/README.md) and
+[workspace tools](../machine/README.md#workspace-tools-and-session-defaults).
 
 ### A tool that acts on the machine
 

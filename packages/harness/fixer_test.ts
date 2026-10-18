@@ -2,11 +2,10 @@
 import { equal, ok, test, throws } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
-import { processProvider } from '@yaks/process/machine'
 import { effects } from './effects.ts'
-import { at } from './testing.ts'
+import { at, attachedWorkspace } from './testing.ts'
 
-let fixture = async (workspace = false) => {
+let fixture = async () => {
   let directory = await Deno.makeTempDir({ prefix: 'native-fixer-' })
   await Deno.writeTextFile(
     directory + '/AGENTS.md',
@@ -21,31 +20,15 @@ let fixture = async (workspace = false) => {
     ['graph'],
     undefined,
   )
-  let provider = processProvider(host.graph, { dir: directory + '/machines' })
+  let attached = await attachedWorkspace({ g: host.graph }, directory)
+  host.workspaces = attached.workspaces
   let homes = 0
-  host.machines = {
-    defaultProvider: 'process',
-    provider: (name) =>
-      Promise.resolve(name == 'process' ? provider : undefined),
-    resolveHome: async () => {
-      homes++
-      if (workspace) {
-        await host.graph.apply([
-          { entity: { eid: 'computer' }, machine: { address: 'local://' } },
-          {
-            entity: { eid: 'checkout' },
-            workspace: { machine: 'computer', root: directory },
-          },
-        ])
-        return { workspace: 'checkout', cwd: directory }
-      }
-      await host.graph.apply([{
-        entity: { eid: 'fixer-machine' },
-        machine: { provider: 'process', address: directory, state: 'running' },
-      }])
-      return { machine: 'fixer-machine', cwd: directory }
-    },
+  host.resolveHome = async () => {
+    homes++
+    return { workspace: attached.workspace, cwd: directory }
   }
+
+
   return {
     host,
     directory,
@@ -156,11 +139,11 @@ test('a managed Claude fixer is left with its original runner and no native home
 let workspaceFixers = await (async () => {
   let results = []
   for (let available of [true, false, 'connector']) {
-    let f = await fixture(true)
+    let f = await fixture()
     if (!available) f.host.workspaces = undefined
     if (available == 'connector') {
-      let resolve = f.host.machines!.resolveHome!
-      f.host.machines!.resolveHome = async (session) => {
+      let resolve = f.host.resolveHome!
+      f.host.resolveHome = async (session) => {
         let home = await resolve(session)
         await f.host.graph.apply([{
           entity: { eid: 'computer' },

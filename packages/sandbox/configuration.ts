@@ -17,7 +17,10 @@ type Descriptor = {
 export type Configuration = {
   providers?: Record<string, SandboxBinding | Descriptor>
 }
-export type ConfigurationHost = { graph: Graph }
+export type ConfigurationHost = {
+  graph: Graph
+  config?: { sandboxes?: Configuration }
+}
 
 /** Adapter modules export sandboxProvider(host, options, placement). Built-in
  * Docker/PVE bindings use only their machine row's configured local/SSH address.
@@ -27,7 +30,11 @@ export let resolveOptions = async (
   options: Configuration = {},
 ): Promise<SandboxOptions> => {
   let providers: SandboxOptions['providers'] = {}
-  for (let [name, entry] of Object.entries(options.providers ?? {})) {
+  for (
+    let [name, entry] of Object.entries(
+      options.providers ?? host.config?.sandboxes?.providers ?? {},
+    )
+  ) {
     if ('provider' in entry) {
       providers[name] = entry
       continue

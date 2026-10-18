@@ -1,7 +1,7 @@
 import { getStarts } from './get_starts.ts'
 import { workspaceCapabilities } from './workspaces.ts'
-import { resolveSessionHome } from './session_home.ts'
-import { machineCapabilities } from './machines.ts'
+import { resolveHome } from './machines.ts'
+import { sandboxCapabilities } from './sandboxes.ts'
 /**
  * The graph a config file names, opened by a process for the roles it serves.
  *
@@ -668,11 +668,8 @@ let composed = async (
           })
         }
         built.workspaces = workspaceCapabilities(built, config)
-        built.machines = machineCapabilities(built, config, path)
-        let resolveHome = built.machines.resolveHome
-        let legacyHome = resolveSessionHome(sql, () => built.graph)
-        built.machines.resolveHome = async (session) =>
-          await legacyHome(session) ?? await resolveHome?.(session)
+        built.sandboxes = sandboxCapabilities(built, config)
+        built.resolveHome = resolveHome(built, config)
       },
       search: (built) => {
         part?.('search')

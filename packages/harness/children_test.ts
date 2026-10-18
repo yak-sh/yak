@@ -1,5 +1,4 @@
 import { derivedEid } from '@yaks/graph/identity'
-import { processProvider } from '@yaks/process/machine'
 // SQLite/runner integration tests; the fast-tier runner does not collect
 // packages. Deferred fake replies exercise concurrency without network calls.
 import { test } from '@yaks/testing'
@@ -15,7 +14,7 @@ import {
 } from '@yaks/session'
 import { seed } from './agent.ts'
 import { type Local, local } from './local.ts'
-import { harness, processes, repo } from './testing.ts'
+import { attachedWorkspace, harness, repo } from './testing.ts'
 
 let reply = (text: string): Reply => ({
   id: 'r',
@@ -64,27 +63,10 @@ for (let kind of ['fork', 'spawn']) {
     }
     let h = await harness()
     h.g.apply([{ entity: { eid: '$other' }, model: { name: 'alternate' } }])
-    let machine = crypto.randomUUID()
-    await h.g.apply([{
-      entity: { eid: machine },
-      machine: { provider: 'process', address: directory, state: 'running' },
-    }])
     let a = local({
       h,
       model,
-      machine,
-      machines: {
-        defaultProvider: 'process',
-        provider: (name) =>
-          Promise.resolve(
-            name == 'process'
-              ? (processProvider(h.g, {
-                dir: directory + '/machines',
-                processes,
-              }))
-              : undefined,
-          ),
-      },
+      ...await attachedWorkspace(h, directory),
       cwd: directory,
       tools: sessionTools(h.g),
     })

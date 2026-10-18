@@ -410,20 +410,7 @@ test('task mode paints claimed work and subagent, then its delivered result with
   let a = local({
     h: await harness(),
     cwd: r.repo,
-    machines: {
-      defaultProvider: 'process',
-      provider: (name) =>
-        Promise.resolve(
-          name == 'process'
-            ? ({
-              request: () => Promise.reject(new Error('test never provisions')),
-              wake: () => Promise.reject(new Error('test never wakes')),
-              release: async () => {},
-              export: async function* () {},
-            })
-            : undefined,
-        ),
-    },
+
     tools: [],
     model: (req) => {
       if (

@@ -13,7 +13,7 @@
  * agent()         the seed rows, the runner lent (@yaks/session), and the
  *                 operations a caller needs                   (./agent.ts)
  * local()         agent() here, over a graph a config composed: the shell, a
- *                 machine providers, MCP servers, the terminal
+ *                 workspace and sandbox bindings, MCP servers, the terminal
  *                                                        (@yaks/harness/local)
  * tools           its verbs, as `yak` tools                      (./runs.ts)
  * effects         `session_run`, lent providers, where a `yak` host

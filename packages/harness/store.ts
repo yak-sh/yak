@@ -31,8 +31,9 @@ export type Harness = {
   gone: (holder: Eid) => Promise<boolean>
   /** where this graph's secrets are kept — its sign-ins among them */
   vault: Vault
-  /** Explicitly lent machine providers; no host disk is assumed. */
-  machines?: Host['machines']
+  /** Explicitly lent workspace and sandbox bindings; no host disk is assumed. */
+  sandboxes?: Host['sandboxes']
+  resolveHome?: Host['resolveHome']
   workspaces?: Host['workspaces']
   /** Binary artifacts shared with the host's blob door. */
   artifacts: Blobs
@@ -67,7 +68,8 @@ export let hosted = (
     gone: host.gone,
     vault: host.vault,
     artifacts: host.artifacts,
-    machines: host.machines,
+    sandboxes: host.sandboxes,
+    resolveHome: host.resolveHome,
     workspaces: host.workspaces,
     reply: host.reply,
     report: host.report,

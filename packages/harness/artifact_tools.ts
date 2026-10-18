@@ -10,7 +10,7 @@ import {
   mediaTypeOf,
   sizeOf,
 } from '@yaks/blob'
-import type { MachineFile } from '@yaks/machine'
+import type { WorkspaceFile } from './session_machines.ts'
 
 const MAX = 20 * 1024 * 1024
 const VISION = ['image/png', 'image/jpeg', 'image/webp']
@@ -56,7 +56,7 @@ export let artifactTools = (
   opts: {
     artifacts?: Blobs
     machines?: {
-      files(session: string, paths: string[]): AsyncIterable<MachineFile>
+      files(session: string, paths: string[]): AsyncIterable<WorkspaceFile>
     }
   } = {},
 ): Tool[] => [
@@ -77,7 +77,7 @@ export let artifactTools = (
         throw new ToolError('artifact', 'No artifact store here')
       }
       if (!opts.machines) {
-        throw new ToolError('artifact', 'No machine provider here')
+        throw new ToolError('artifact', 'No workspace export binding here')
       }
       let bytes: Uint8Array | undefined
       try {

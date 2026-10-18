@@ -10,7 +10,8 @@
     "./pve": "./pve.ts",
     "./effects": "./effects.ts",
     "./tools": "./tools.ts",
-    "./lifecycle": "./lifecycle.ts"
+    "./lifecycle": "./lifecycle.ts",
+    "./configuration": "./configuration.ts"
   },
   "license": "Apache-2.0",
   "description": "Containers and jails recorded separately from computers, with provisioning intentions and confirmed disposal in the graph.",

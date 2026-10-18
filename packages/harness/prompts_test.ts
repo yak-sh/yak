@@ -3,12 +3,12 @@ import type { Comp } from '@yaks/graph'
 import { assertEquals, assertRejects } from '@std/assert'
 import { promptEntry, snapshot } from '@yaks/context'
 import { instructionFiles, instructionsFor } from './instructions.ts'
-import { processMachine, processProvider } from '@yaks/process/machine'
+
 import type { Harness } from './store.ts'
 import { input } from '../openai/responses.ts'
 import { voice, wear } from '@yaks/persona'
 import { begin } from './agent.ts'
-import { harness, processes } from './testing.ts'
+import { attachedWorkspace, harness } from './testing.ts'
 import { local } from './local.ts'
 import { inheritedInstructions } from './legacy_instructions.ts'
 
@@ -21,8 +21,10 @@ test('instruction admission snapshots machine files in stable ancestor order', a
     await Deno.writeTextFile(dir + '/home/.agents/AGENTS.md', 'global')
     await Deno.writeTextFile(dir + '/repo/AGENTS.md', 'repo')
     await Deno.writeTextFile(dir + '/repo/sub/AGENTS.md', 'nested')
+    let attached = await attachedWorkspace(h, dir)
+    let machine = await attached.workspaces.connect(attached.workspace)
     let files = await instructionFiles(
-      processMachine(h.g, processes),
+      machine,
       dir + '/repo/sub',
       dir + '/home',
     )
@@ -40,13 +42,13 @@ test('instruction admission snapshots machine files in stable ancestor order', a
     assertEquals(files[1].revision.length, 64)
     assertEquals(
       (await instructionFiles(
-        processMachine(h.g, processes),
+        machine,
         dir + '/repo/sub',
       )).length,
       2,
     )
     await assertRejects(() =>
-      instructionFiles(processMachine(h.g, processes), dir + '/absent')
+      instructionFiles(machine, dir + '/absent')
     )
 
     let project = crypto.randomUUID()
@@ -68,19 +70,15 @@ test('instruction admission snapshots machine files in stable ancestor order', a
       },
       { entity: { eid: task }, task: {}, filed: { project } },
     ])
-    let binding = await attached(h, dir + '/orphan')
-    let home = { machine: binding.machine, cwd: dir + '/orphan' }
+    let binding = await attachedWorkspace(h, dir + '/orphan')
+    let home = { workspace: binding.workspace, cwd: dir + '/orphan' }
     await assertRejects(
-      () => instructionsFor(h.g, binding.machines, home),
+      () => instructionsFor(h.g, home, binding.workspaces),
       Error,
       'Instruction projection is missing',
     )
     let admittedFiles = await instructionsFor(
-      h.g,
-      binding.machines,
-      home,
-      undefined,
-      { work: task },
+      h.g, home, binding.workspaces, { work: task },
     )
     assertEquals(admittedFiles.length, 1)
     assertEquals(
@@ -107,29 +105,13 @@ test('instruction admission snapshots machine files in stable ancestor order', a
 })
 
 let attached = async (h: Harness, dir: string) => {
-  let machine = crypto.randomUUID()
-  await h.g.apply([{
-    entity: { eid: machine },
-    machine: { provider: 'process', address: dir, state: 'running' },
-  }])
-  return {
-    machine,
-    machines: {
-      defaultProvider: 'process',
-      provider: (name: string) =>
-        Promise.resolve(
-          name == 'process'
-            ? (processProvider(h.g, { dir: dir + '/machines', processes }))
-            : undefined,
-        ),
-    },
-  }
+  return await attachedWorkspace(h, dir)
 }
 
 test('graph-only instruction admission never acquires a default machine', async () => {
   let h = await harness()
   try {
-    assertEquals(await instructionsFor(h.g, undefined, {}), [])
+    assertEquals(await instructionsFor(h.g, {}), [])
   } finally {
     await h.close()
   }

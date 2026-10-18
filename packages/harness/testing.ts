@@ -57,6 +57,7 @@ export let PLUGINS: string[] = [
   '@yaks/git',
   '@yaks/persona',
   '@yaks/harness',
+  '@yaks/sandbox',
 ]
 
 /** A config naming the graph at `db` (`:memory:` by default) made of
@@ -90,7 +91,22 @@ export let harness = async (
       serves: { name: 'gpt-6-astra' },
     },
   ], { trusted: true })
-  return { ...hosted(host, () => host.close()), sql: host.storage.statements }
+  let h = { ...hosted(host, () => host.close()), sql: host.storage.statements }
+  // Tests of model turns need a durable default intention, not a local provider.
+  h.sandboxes = {
+    request: async (id) => {
+      if (!(await g.get([id]))[0]) {
+        await g.apply([{
+          entity: { eid: id },
+          workspace: {},
+          sandbox: { provider: 'fixture' },
+          pending: {},
+        }])
+      }
+      return id
+    },
+  }
+  return h
 }
 
 /** The runner over `h`, lent `deps`, working its pool as an agent does;
@@ -197,3 +213,27 @@ export let repo = (): string => {
 /** A harness view on a fake terminal, dressed as the harness is. */
 export let mount = (App: ComponentType, columns?: number, rows?: number) =>
   tui(App, columns, rows, dress)
+
+/** An explicit local workspace fixture; never an implicit production default. */
+export let attachedWorkspace = async (h: Pick<Harness, 'g'>, root: string) => {
+  let { executionWorkspace } = await import('@yaks/machine/execution')
+  let { localConnector } = await import('@yaks/machine/connectors')
+  let workspace = crypto.randomUUID()
+  await h.g.apply([{ entity: { eid: workspace }, workspace: { root } }])
+  let transport = await localConnector().connect('local://')
+  return {
+    workspace,
+    workspaces: {
+      connect: async (id: string) => {
+        let row = (await h.g.get([id]))[0]
+          ?.workspace as import('@yaks/graph').Comp
+        if (!row?.root) throw new Error('Fixture workspace has no root')
+        return executionWorkspace(h.g, transport, {
+          workspace: id,
+          root: String(row.root),
+          receipts: (Deno.env.get('TMPDIR') ?? '/tmp') + '/fixture-receipts',
+        })
+      },
+    },
+  }
+}

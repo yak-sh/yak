@@ -1,6 +1,5 @@
 // The portable contract a host lends every plugin. Concrete hosts own drivers,
 // directories and resource lifetime; plugins see the graph and capabilities.
-import type { MachineProvider } from '@yaks/machine'
 import type { Bundle, Eid, Graph, NamedTool, Storage } from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
@@ -80,15 +79,17 @@ export interface Host {
   senders?: Readonly<Record<string, Sender>>
   /** Explicit workspace execution bindings; never an implicit local default. */
   workspaces?: import('@yaks/machine/targets').Workspaces
-  /** Providers this host explicitly lends; the default supplies sandboxes. */
-  machines?: {
-    /** Load one configured provider when commands or files need it. */
-    provider: (name: string) => Promise<MachineProvider | undefined>
-    defaultProvider: string
-    resolveHome?: (
-      session: string,
-    ) => Promise<import('@yaks/graph').Comp | undefined>
+  /** Default sandbox intentions; provisioning is the sandbox effect's work. */
+  sandboxes?: {
+    request: (
+      id: string,
+      request?: { provider?: string; from?: string; image?: string },
+    ) => Promise<string>
   }
+  /** Host preparation for an explicitly configured workspace (native fixers). */
+  resolveHome?: (
+    session: string,
+  ) => Promise<import('@yaks/graph').Comp | undefined>
   /** every property the store reads through an expression rather than as
    * stored, keyed `comp.prop` — a @yaks/blob body resolves its address to its
    * text — so a plugin reading SQL directly reads what the store reads */

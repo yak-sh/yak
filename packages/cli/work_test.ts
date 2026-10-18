@@ -18,7 +18,8 @@ let reap = (pid: number) => {
 }
 let root = new URL('../../deno.json', import.meta.url).pathname
 let cli = new URL('./yak.ts', import.meta.url).pathname
-let box = new URL('../process/machine.ts', import.meta.url).href
+let box = new URL('../machine/execution.ts', import.meta.url).href
+let connectors = new URL('../machine/connectors.ts', import.meta.url).href
 let machine = new URL('../harness/machine.ts', import.meta.url).href
 
 // Every child is owned here, including the detached shell's process group.
@@ -159,8 +160,9 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
       `
       import { running } from '@yaks/session'
       import { toolEid } from '@yaks/tools'
-      import { machineTools } from '${machine}'
-      import { processMachine } from '${box}'
+      import { workspaceTools } from '${machine}'
+      import { executionWorkspace } from '${box}'
+      import { localConnector } from '${connectors}'
       export let effects = (host, opts) => {
         let model = async req => {
           let res = await fetch(opts.url, {
@@ -173,13 +175,15 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
         host.stopping.addEventListener('abort', () => {
           Deno.writeTextFileSync(opts.dir + '/stopped-' + Deno.pid, 'stopping')
         }, { once: true })
+        let bindings = { connect: async id => executionWorkspace(host.graph,
+          await localConnector().connect('local://'), {
+            workspace: id, root: opts.dir, receipts: opts.dir + '/receipts',
+          }) }
         return running(host.graph, {
           holder: host.me, model, stopping: host.stopping,
-          tools: machineTools(processMachine(host.graph), { cwd: () => opts.dir }),
+          tools: workspaceTools(host.graph, bindings),
           toolSnapshot: async () => {
-            let tools = machineTools(processMachine(host.graph), {
-              cwd: () => opts.dir,
-            })
+            let tools = workspaceTools(host.graph, bindings)
             await host.graph.apply(tools.map(t => ({
               entity: { eid: toolEid(t.name) }, tool: { name: t.name },
             })), { trusted: true })
@@ -201,6 +205,8 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
           '@yaks/session',
           '@yaks/tools',
           '@yaks/process',
+          '@yaks/machine',
+          { use: '@yaks/harness', facets: ['vocab'] },
           '@yaks/effects',
           '@yaks/api',
           {
@@ -231,7 +237,12 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
     await host.graph.apply([
       { entity: { eid: provider }, provider: { name: 'fake' } },
       { entity: { eid: model }, model: { name: 'fake' } },
-      { entity: { eid: session }, session: { id: session } },
+      { entity: { eid: 'probe-workspace' }, workspace: { root: dir } },
+      {
+        entity: { eid: session },
+        session: { id: session },
+        home: { workspace: 'probe-workspace' },
+      },
       {
         entity: { eid: crypto.randomUUID() },
         entry: { session },

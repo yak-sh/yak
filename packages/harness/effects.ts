@@ -17,7 +17,7 @@ import { here } from './local.ts'
 import { hosted } from './store.ts'
 import { unfinishedEach } from './unfinished.ts'
 import { overheadEach } from './overhead.ts'
-import { machineDone, machines } from './session_machines.ts'
+import { machines } from './session_machines.ts'
 
 let word = (options: Record<string, unknown>, name: string) =>
   typeof options[name] == 'string' ? options[name] : undefined
@@ -38,13 +38,7 @@ export let effects = (
       : undefined,
   })
   host.defer(() => lent.release?.())
-  let binding = machines(host.graph, host.machines, host.workspaces)
-  let release = async (id: string) => {
-    let [session] = await host.graph.get([id])
-    if (session && await machineDone(host.graph, session)) {
-      await binding.release(id)
-    }
-  }
+  let binding = machines(host.graph, host.sandboxes, host.resolveHome, host.workspaces)
   let runner = lend(lent)
   return {
     ...running(host.graph, {
@@ -88,7 +82,6 @@ export let effects = (
             )
             let files = await instructionsFor(
               host.graph,
-              host.machines,
               home,
               host.workspaces,
               {
@@ -134,22 +127,6 @@ export let effects = (
         return true
       },
       stopping: host.stopping,
-      idle: release,
     }),
-    session_machine_release: async (event: import('@yaks/graph').Bundle) => {
-      let [subject] = await host.graph.get([event.entity.eid])
-      let candidates = subject?.session ? [subject] : []
-      let entry = subject?.entry as import('@yaks/graph').Comp | undefined
-      if (entry?.session) {
-        candidates.push(...await host.graph.get([String(entry.session)]))
-      }
-      let claim = subject?.claim as import('@yaks/graph').Comp | undefined
-      if (subject?.completed && claim?.session) {
-        candidates.push(...await host.graph.get([String(claim.session)]))
-      }
-      for (let session of candidates) {
-        await release(session.entity.eid)
-      }
-    },
   }
 }

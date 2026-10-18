@@ -5,8 +5,7 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
-    "./wind": "./wind.ts",
-    "./machine": "./machine.ts"
+    "./wind": "./wind.ts"
   },
   "license": "Apache-2.0",
   "description": "Starts, adopts and supervises operating-system processes, recording each one as a graph entity with its pid and exit code.",

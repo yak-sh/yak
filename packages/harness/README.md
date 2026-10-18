@@ -4,8 +4,8 @@ An agent runner over a graph, with provider-backed machine tools and a terminal
 interface. It is a `yak` plugin: its verbs are tools the `yak` command runs, and
 its terminal app is how `yak --tui` draws a session. The runner composes
 `@yaks/session` for model execution over graph-backed task and transcript
-storage. A host lends the graph, models, files and machine providers; the runner
-does not assume that a session's commands run beside the graph.
+storage. A host lends the graph, models, files and workspace bindings; the
+runner does not assume that a session's commands run beside the graph.
 
 - `agent()` lends a graph the session runner (@yaks/session `running`), works
   the runs its commits owe, and exposes session methods. Whatever touches a
@@ -16,7 +16,7 @@ does not assume that a session's commands run beside the graph.
   provider-backed machine tools, images, MCP and the OpenRouter sign-in
   (`here()`), and adds the terminal's entry rendering.
 - `@yaks/harness/effects` handles `session_run` where a `yak` host lists the
-  harness: the same runner and configured machine providers, wherever that
+  harness: the same runner and configured workspace bindings, wherever that
   host's effects are worked.
 - `hosted()` is a graph a `yak` config composed (@yaks/cli `compose`), as the
   runner and its tools use it. The harness opens no graph of its own: which
@@ -183,10 +183,10 @@ to declare its reply metadata. See `packages/claude/README.md` for the CLI/graph
 boundary. New native transcripts carry `native`; outside managed Claude sessions
 remain on `@yaks/spawn`. HTTP fixer requests (for example `openai`) are marked
 `native` before their first turn. The host cuts their own worktree from the
-configured spawn `cwd` under `worktrees`, attaches it through its process
-machine provider, and admits its instruction files and repository persona.
-Existing managed fixers keep their original runner; changing heal config does
-not migrate or stop them.
+configured spawn `cwd` under `worktrees`, attaches it through its workspace
+binding, and admits its instruction files and repository persona. Existing
+managed fixers keep their original runner; changing heal config does not migrate
+or stop them.
 
 A session starts without borrowing the CLI's current directory or filesystem.
 Its first machine call requests a sandbox from the host's default provider.
@@ -508,63 +508,30 @@ persisted twice. Completed tasks still follow the existing open-task filtering.
 
 <a id="subagent-git-homes"></a>
 
-### Session machines
+### Session workspaces
 
-Sessions carry `home{machine, cwd}`. The machine reference names a
-[record owned by `@yaks/machine`](../machine/README.md#graph-record). `cwd` is
-an optional command directory on that machine, not a path on the graph host.
-`session_machines.ts` binds those records to the providers its host lends.
+A session carries `home{workspace, cwd}`, a default target for file-and-command
+tools, not the session's location or permissions. `machine{address}` records an
+actual computer; directories and sandboxes are separate workspace records.
 
-A session without a machine gets a sandbox from the default provider on its
-first shell or file call. Recording a session or asking a model a question
-provisions nothing. A stable machine id and `state: 'requested'` precede the
-external request. Successful provisioning records `running`; another worker can
-wake the same machine without a live handle. A released machine is requested or
-explicitly attached again if the session resumes. A provider must make repeated
-lifecycle calls safe.
+An explicit workspace admits its instruction files at opening. An omitted
+workspace records a sandbox intention using the host's configured default
+adapter. Provisioning is the sandbox effect's work, not a local directory
+provider. Missing configuration refuses rather than borrowing the host's disk. A
+pending sandbox has no files to admit.
 
-`spawn` and `fork` accept `machine: <machine-id>` for an existing record, or
-`machine: {provider?, from?, image?}` for a new sandbox request. `from` names a
-commit in the graph, not the parent's working directory or dirty files. The
-child records its home before any machine is provisioned. `cwd` can override the
-command directory; a relative override resolves from the parent's stored command
-directory. A new machine otherwise uses its provider's default command
-directory.
+Prompt children and forks share the parent's workspace unless given `workspace`
+or a separate `sandbox: {provider?, from?, image?}` request. Task children
+request a separate sandbox by default. An explicit `workspace` selects existing
+files; `from` is provenance for initial sandbox creation, not a backup of later
+edits.
 
-Ordinary prompt children and forks share the parent's machine unless given a
-machine explicitly. Sharing is recorded even when the parent's own machine is
-still only a request. A task child defaults to a separate sandbox from its
-parent machine's recorded `from` commit, or an empty sandbox when no commit is
-recorded. Committing files inside a machine does not by itself change that
-provenance in the graph.
+Changing `home.workspace` neither moves files nor stops commands. Each process
+keeps its original launch workspace for recovery. Stopping a session or
+finishing a task does not dispose its workspace. Sandbox disposal is explicit.
 
-For example, a delegation tool can request a separate machine from a graph
-commit:
-
-```json
-{ "task": "T-123", "machine": { "provider": "process", "from": "<commit-id>" } }
-```
-
-A host can also attach an existing machine through a record whose `address` its
-provider understands. Naming an existing machine is explicit: substrate work can
-use a host machine, while ordinary work requests a sandbox. No session inherits
-that access merely because its graph host runs there.
-
-Machine tools resolve shell commands and relative file paths from the session's
-command directory, falling back to the provider's default. Binary artifact
-imports use the provider's `export` operation and stay under its export root.
-The process provider gives each sandbox a directory; this is not a security
-boundary or a CPU limit. Providers decide isolation and resource limits, not the
-session runner.
-
-Terminal session completion or stopping releases its machine through the
-provider. Ordinary settled turns keep the machine because more input may follow.
-A shared machine stays lent while another unfinished session uses it. Release
-succeeds before the record becomes `released`; a failed release remains
-retryable. Releasing an attached machine detaches it without deleting its files.
-The harness neither sweeps host worktrees nor monitors a host disk.
-
-<a id="prompt-context-pilot"></a>
+See [workspace tools](../machine/README.md#workspace-tools-and-session-defaults)
+and [sandbox lifecycle](../sandbox/README.md).
 
 ### Input times
 

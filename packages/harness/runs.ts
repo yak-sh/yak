@@ -27,7 +27,7 @@ import { begin, seed, through } from './agent.ts'
 import { defaultUsing, selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
-import { homeAt } from './session_machines.ts'
+import { homeAt, machines } from './session_machines.ts'
 import { conversations } from './conversations.ts'
 import { instructionsFor } from './instructions.ts'
 import { sessionHome } from '@yaks/machine/targets'
@@ -129,20 +129,29 @@ export let runs = (host?: Host): Runs => ({
     let effort = word(args, 'effort')
     let persona = word(args, 'persona')
     let work = word(args, 'work')
-    let home = args.workspace
+    let explicit = args.workspace
       ? {
         workspace: String(args.workspace),
         ...args.cwd ? { cwd: String(args.cwd) } : {},
       }
-      : homeAt(word(args, 'machine'), word(args, 'cwd'))
+      : homeAt(undefined, word(args, 'cwd'))
+    let id = crypto.randomUUID()
+    let home = await machines(
+      graph,
+      host?.sandboxes,
+      host?.resolveHome,
+      host?.workspaces,
+    ).home(id, explicit)
+    let id = crypto.randomUUID()
+    let home = await machines(graph, host?.sandboxes, host?.resolveHome, host?.workspaces).home(id, explicit)
     let files = await instructionsFor(
       graph,
-      host?.machines,
       home,
       host?.workspaces,
       { persona, work },
     )
     let s = await begin(graph, prompt || undefined, {
+      eid: id,
       home,
       files,
       work,

@@ -71,6 +71,7 @@ export let executionWorkspace = (
       `set -eu\nd=${quote(location(id))}\n${identity}
 if test -f "$d/exit"; then printf 'exit '; cat "$d/exit"
 elif owned; then printf 'running %s' "$pid"
+elif test -f "$d/exit"; then printf 'exit '; cat "$d/exit"
 elif test -f "$d/launched"; then printf 'lost'
 else printf 'pending'; fi`,
     )
