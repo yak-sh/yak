@@ -4,8 +4,8 @@
 // A wake written as a cadence alone — `{ every: '@daily' }`, with no `at` — is
 // a schedule nobody would call wrong, and it would never fire: `due` tests
 // whether `at` has passed, and a property that is absent never has. So
-// `normalize` gives such a wake its first instant. It runs before the
-// transaction and reads nothing, which is what `normalize` is for.
+// `beforeWrite` gives a new cadence its first instant inside the transaction,
+// leaving an existing schedule (including a paused one) unchanged.
 //
 // The check is `precondition`'s: a `while` condition is a query, and a query
 // that does not parse, or names a word the graph does not speak, is refused
@@ -17,6 +17,7 @@
 // follows. An effect observing a new or moved wake can set the application's
 // timer or alarm.
 
+import { after } from '@yaks/fp'
 import type { Bundle } from '@yaks/graph/bundle'
 import { type Hook, hook, type Plugin } from '@yaks/graph/plugin'
 import { type Clock, wakeOf } from './due.ts'
@@ -31,21 +32,33 @@ export type Opts = Clock & {
 }
 
 /**
- * The `normalize` hook: a wake that gives a cadence but no first instant is
- * given one, so that `{ every: '@daily' }` on its own is a schedule starting
- * tomorrow rather than a row that never fires. Exported separately for a graph
- * that wants the behaviour without the vocabulary.
+ * The `beforeWrite` hook: a new cadence without a first instant gets one.
+ * An existing recurrence without `at` is paused; omission in a patch or a
+ * replayed read must leave it paused. Likewise, cadence edits retain an
+ * existing instant. Exported for graphs that load the vocabulary separately.
  */
-export let starting = (opts: Opts = {}): Hook => (bundles: Bundle[]) =>
-  bundles.map((b: Bundle): Bundle => {
-    let w = wakeOf(b)
-    if (!w?.every || w.at !== undefined) return b
-    let now = (opts.now ?? Date.now)()
-    let at = recur(w.every, now, now, opts.tz)
-    return at == null
-      ? b
-      : { ...b, [WAKE]: { ...w, at: new Date(at).toISOString() } }
-  })
+export let starting = (opts: Opts = {}): Hook => (bundles, tx) =>
+  after(
+    tx.get(
+      bundles.filter((b) => {
+        let w = wakeOf(b)
+        return w?.every && w.at === undefined
+      }).map((b) => b.entity.eid),
+    ),
+    (held) => {
+      let prior = new Map(held.map((b) => [b.entity.eid, wakeOf(b)]))
+      return bundles.map((b: Bundle): Bundle => {
+        let w = wakeOf(b)
+        let was = prior.get(b.entity.eid)
+        if (!w?.every || w.at !== undefined || was?.every || was?.at) return b
+        let now = (opts.now ?? Date.now)()
+        let at = recur(w.every, now, now, opts.tz)
+        return at == null
+          ? b
+          : { ...b, [WAKE]: { ...w, at: new Date(at).toISOString() } }
+      })
+    },
+  )
 
 /**
  * The wake plugin: the `wake` and `fired` components, and the two hooks
@@ -68,8 +81,14 @@ export let wakes = (opts: Opts = {}): Plugin => ({
   name: '@yaks/wake',
   admission: () => true,
   vocab: [wakeDoc],
+  beforeWrite: (bundles) =>
+    bundles.some((b) => {
+        let w = wakeOf(b)
+        return w?.every && w.at === undefined
+      })
+      ? hook([WAKE], starting(opts))
+      : undefined,
   hooks: {
-    normalize: hook([WAKE], starting(opts)),
     precondition: hook([WAKE], conditions),
   },
 })

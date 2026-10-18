@@ -112,6 +112,56 @@ test('an explicitly cleared at keeps a recurring wake paused', () => {
   assertEquals(soonest(s, T0), null)
 })
 
+// Each replay owns its store; setup is not part of the write being checked.
+let replayPaused = (() => {
+  let s = store()
+  let g = woken(s)
+  g.apply([{ entity: { eid: 'replay' }, wake: { every: '@daily' } }])
+  g.apply([{ entity: { eid: 'replay' }, wake: { at: null } }])
+  return { s, g, row: (s.read('.wake') as Bundle[])[0] }
+})()
+test('a paused cadence survives repeated stored reads and partial edits', () => {
+  let { s, g, row } = replayPaused
+  assertEquals(Object.hasOwn(wakeOf(row)!, 'at'), false)
+  g.apply([row])
+  g.apply(s.read('.wake') as Bundle[])
+  g.apply([{
+    entity: row.entity,
+    wake: { every: '@daily', note: 'still paused' },
+  }])
+  assertEquals(soonest(s, T0), null)
+})
+
+let cadenceAdded = (() => {
+  let s = store()
+  let g = woken(s)
+  g.apply([{
+    entity: { eid: 'existing' },
+    wake: { note: 'not scheduled yet' },
+  }])
+  return { s, g }
+})()
+test('adding a first cadence to an existing wake schedules it', () => {
+  let { s, g } = cadenceAdded
+  g.apply([{ entity: { eid: 'existing' }, wake: { every: '@daily' } }])
+  assertEquals(soonest(s, T0), Date.parse('2026-01-02T00:00:00.000Z'))
+})
+
+let cadenceEdit = (() => {
+  let s = store()
+  let g = woken(s)
+  g.apply([{
+    entity: { eid: 'scheduled' },
+    wake: { every: '@daily', at: iso(T0 + HOUR) },
+  }])
+  return { s, g }
+})()
+test('editing a cadence preserves its existing instant', () => {
+  let { s, g } = cadenceEdit
+  g.apply([{ entity: { eid: 'scheduled' }, wake: { every: '2h' } }])
+  assertEquals(soonest(s, T0), T0 + HOUR)
+})
+
 test('soonest is the next instant a host should come back for', () => {
   let { s } = seeded()
   assertEquals(soonest(s, T0), T0 + HOUR)

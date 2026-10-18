@@ -239,7 +239,9 @@ wakes.
 - `soonest(storage, now)` returns the earliest future instant.
 - `cadence(graph, wake, now)` returns the cadence of the first `while` condition
   that holds, or `null`.
-- `starting(options)` returns the normalization hook used by `wakes()`.
+- `starting(options)` returns the transaction-aware `beforeWrite` hook used by
+  `wakes()`. It supplies the first instant when a cadence is first added, but
+  preserves an existing instant or a paused recurrence when `at` is omitted.
 - `wakeDoc`, also available from `@yaks/wake/vocab`, declares the components.
 
 ## Compatibility
