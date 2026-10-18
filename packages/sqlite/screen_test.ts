@@ -51,9 +51,10 @@ let seeded = (archetypes: number) => {
   return { db, d }
 }
 
-let ask = (archetypes: number, line: string) => {
+let ask = (archetypes: number, line: string, warm = true) => {
   let { db, d } = seeded(archetypes)
-  catalog(d)({ all: ['a'] }) // an earlier statement has read the catalog
+  // An earlier statement has read the catalog.
+  if (warm) catalog(d)({ all: ['a'] })
   let q = render(compile(parse(line), vocab, {
     archetypes: catalog(d),
     visibility: { entity: '!draft' },
@@ -74,4 +75,11 @@ test('a screen beside an indexed OR selects the unscreened rows', () => {
 test('a screened OR statement stays small however many shapes the catalog holds', () => {
   let { steps } = ask(200, line(SCREENED))
   ok(steps < 1500, `${steps} steps`)
+})
+
+test('a first statement, before the catalog is read, does not grow with it either', () => {
+  equal(
+    ask(200, line(SCREENED), false).steps,
+    ask(8, line(SCREENED), false).steps,
+  )
 })
