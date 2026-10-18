@@ -58,7 +58,7 @@ test('repeated retained rows preserve graph values and references', async () => 
     rows.map((r) => [r.entity?.eid, r.product, r.doc]),
     [3].map((n) => [
       eid(n),
-      { sku: `sku-${n}`, maker, price: n + 1, available: true, status: null },
+      { sku: `sku-${n}`, maker, price: n + 1, available: true },
       { title: 'Repeated', body: 'Retained body' },
     ]),
   )

@@ -207,8 +207,8 @@ test('feedback reaches the platform, in the words it was said in', async () => {
     let [, noApp] = await meta(k).query(
       `.report&.created.by=${them.person}&?doc`,
     ) as unknown as { report: { app: unknown; version: unknown } }[]
-    assertEquals(noApp.report.app, null)
-    assertEquals(noApp.report.version, null)
+    assertEquals(noApp.report.app, undefined)
+    assertEquals(noApp.report.version, undefined)
 
     // A few an hour is plenty. The fourth is a pause, not a no: it says the
     // ones already sent are kept, and where to write if it cannot wait.
@@ -518,16 +518,15 @@ test('the answers four builders had to guess at', async () => {
     assertEquals((await rows('.dayline.written>=2026-04-01')).length, 1)
     assertEquals((await rows('.dayline.written>=2026-05-01')).length, 0)
 
-    // A property nobody wrote is present and null, not absent, so `in` is the
-    // wrong test for "was this written" and the value is the right one.
+    // A property nobody wrote is absent, both by value and by membership.
     assertEquals(
       [one.dayline!.mood, one.dayline!.pages, one.dayline!.aloud],
-      [null, null, null],
+      [undefined, undefined, undefined],
     )
-    assert('mood' in one.dayline!, 'an unwritten property is present, and null')
+    assert(!('mood' in one.dayline!), 'an unwritten property is absent')
     assertEquals(one.doc, undefined) // not named by the filter
     // And the platform's own properties are no exception: a doc nobody titled
-    // answers null, the same as any property nobody wrote.
+    // is absent, the same as any property nobody wrote.
     await agent.tool('graph_apply', {
       app: 'diary',
       entities: [{
@@ -537,8 +536,8 @@ test('the answers four builders had to guess at', async () => {
       }],
     })
     let [untitled] = await rows('.dayline.mood=grey&?doc')
-    assertEquals(untitled.doc!.title, null)
-    assertEquals(untitled.dayline!.written, null)
+    assertEquals(untitled.doc!.title, undefined)
+    assertEquals(untitled.dayline!.written, undefined)
 
     // A property that holds an eid is filtered by the eid, like any value —
     // `id=` addresses the row itself, which is a different question.

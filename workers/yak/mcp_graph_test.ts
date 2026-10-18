@@ -1030,7 +1030,7 @@ test('a word the space already has is used where it lives', async () => {
     // under, and nothing about it moved.
     assertEquals(
       (await rows(`id=${piranesi}`, 'reading-list'))[0].book!.pages,
-      null,
+      undefined,
     )
   } finally {
     await k.stop()

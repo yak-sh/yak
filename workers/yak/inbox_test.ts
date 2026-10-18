@@ -84,7 +84,7 @@ test('a letter lands in the app its address named', async () => {
     // cannot put words in a member's mouth.
     let [byline] = await client(k, `${jeff24}.yaks.app`, 'recipes', them.cookie)
       .get('.mail&.created') as unknown as { created: { by: unknown } }[]
-    assertEquals(byline.created.by, null)
+    assertEquals(byline.created.by, undefined)
 
     // The other app in the space has its own address and its own store: the
     // letter above is nowhere in it.
@@ -101,9 +101,9 @@ test('a letter lands in the app its address named', async () => {
     let [tomatoes] = await garden.get('.mail&?doc') as unknown as Row[]
     assertEquals(tomatoes.doc.title, 'Tomatoes are in')
     // No `Authentication-Results` at all: nobody checked, which is not the
-    // same as a check that failed, so the property is left unwritten — null on
+    // same as a check that failed, so the property is left unwritten — absent on
     // the row, where a failed check is false.
-    assertEquals(tomatoes.mail.verified, null)
+    assertEquals(tomatoes.mail.verified, undefined)
 
     // The space's own name is its front page's address — the app it made its
     // front page, since being the first app claims nothing (apps.ts).

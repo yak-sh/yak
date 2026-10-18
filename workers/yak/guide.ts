@@ -474,7 +474,15 @@ let COVERS: Record<string, string[]> = {
   files: ['artifact', 'image', 'attachment'],
   components: ['doc', 'task', 'filed', 'project', 'comment', 'favorite', 'web'],
   wakes: ['wake', 'fired'],
-  models: ['session', 'entry', 'using', 'questions', 'answer', 'model'],
+  models: [
+    'session',
+    'entry',
+    'using',
+    'sending',
+    'questions',
+    'answer',
+    'model',
+  ],
   voice: ['rtc', 'sfu'],
 }
 

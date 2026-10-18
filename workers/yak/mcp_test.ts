@@ -1056,11 +1056,11 @@ test(
         await agent.tool('graph_query', { q: '.note' }),
       ) as {
         entity: { eid: string }
-        note: { text: string | null; body: string | null }
+        note: { text?: string; body?: string }
       }[]
       assertEquals(notes.map((n) => n.note), [
-        { text: 'wrote it', body: null },
-        { text: null, body: 'said it' },
+        { text: 'wrote it' },
+        { body: 'said it' },
       ])
       // Once the old name holds nothing, the next deploy drops it: the rename
       // is finished and the store answers one word (T-38052).

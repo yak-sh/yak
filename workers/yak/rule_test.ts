@@ -84,7 +84,7 @@ test(
       assertEquals(watered[0].entity.eid, 'fern')
       assertEquals((watered[0].watered as { by: string }).by, 'wake')
       // A one-shot is spent, and the firing is on the row that asked for it.
-      assertEquals((watered[0].wake as { at: string | null }).at, null)
+      assertEquals((watered[0].wake as { at?: string }).at, undefined)
       assert(
         (watered[0].fired as { at: string }).at,
         'the wake says when it went',

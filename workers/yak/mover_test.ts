@@ -192,7 +192,7 @@ test('builder take rehearsal preserves a store, then conversion moves with no ca
   s.wake({ ...takeRule, live: 'apps' })
   await s.alarm()
   let [take] = await s.query('.entity.eid=take&*')
-  assertEquals(take.doc, { title: null, body: 'keep this design' })
+  assertEquals(take.doc, { body: 'keep this design' })
   assertEquals((take.built as Comp).inputs, inputKey(binding))
   assertEquals(
     (await s.query('.built.current=true')).map((r) => r.entity.eid),
@@ -352,7 +352,7 @@ test('dispatch conversion creates missing marks without changing empty envelopes
     assertEquals(!!row.waiting, state == 'waiting')
     let dispatch = row.dispatch as Comp
     assertEquals([dispatch.state, dispatch.args, dispatch.order], [
-      null,
+      undefined,
       '',
       0,
     ])
@@ -997,10 +997,27 @@ await proof(
   'a platform move skips a component declared by the app',
   async (equal) => {
     let s = await store(1, rule({ core: ['was'] }))
-    equal(await s.rehearse(), [])
+    equal(await s.rehearse(), [{
+      mark: 'yak/store/session-sending/2',
+      batches: 0,
+      moved: 0,
+      rows: 0,
+      unspoken: 'using.input',
+    }])
     await s.alarm()
     equal(await count(s, '.was'), 1)
     equal(await count(s, '.now'), 0)
-    equal(await s.moves(), [])
+    equal(
+      (await s.moves()).map(({ mark, moved, unspoken }) => ({
+        mark,
+        moved,
+        unspoken,
+      })),
+      [{
+        mark: 'yak/store/session-sending/2',
+        moved: 0,
+        unspoken: 'using.input',
+      }],
+    )
   },
 )

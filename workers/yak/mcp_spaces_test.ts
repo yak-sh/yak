@@ -895,7 +895,7 @@ test('the front page says which paths it answers first', async () => {
     // The rows in this space carrying the component.
     let stored = async () =>
       (await graph.query(`.app.space=${them.eids[route51]}&.home`))
-        .map((r) => (r.home as { first: string | null }).first)
+        .map((r) => (r.home as { first?: string }).first)
 
     // The globs are properties of the word that says which app is home, so an
     // app that is not the front page has nowhere to put them.
@@ -930,7 +930,7 @@ test('the front page says which paths it answers first', async () => {
       await agent.tool('app_set', { ...at, first: [] }),
       'it answers no path before the app that owns it',
     )
-    assertEquals(await stored(), [null])
+    assertEquals(await stored(), [undefined])
 
     // The platform's own paths are nobody's, and a refusal names the glob and
     // the rule. Nothing in the batch lands — not even the globs beside it.
@@ -949,7 +949,7 @@ test('the front page says which paths it answers first', async () => {
         )).message,
         why,
       )
-      assertEquals(await stored(), [null], `${glob} was written anyway`)
+      assertEquals(await stored(), [undefined], `${glob} was written anyway`)
     }
 
     // At most one per space, which the vocabulary cannot say and the
@@ -962,7 +962,7 @@ test('the front page says which paths it answers first', async () => {
       app: 'recipes',
       home: true,
     })
-    assertEquals(await stored(), [null])
+    assertEquals(await stored(), [undefined])
     assertEquals(
       (await graph.query(`.app.space=${them.eids[route51]}&.home`))
         .map((r) => (r.app as { slug: string }).slug),

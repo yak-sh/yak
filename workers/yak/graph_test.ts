@@ -1923,9 +1923,13 @@ test('app schema reads and writes leave old journal tables untouched across boot
   assertEquals((schema.doc as Comp).title, 'recipe')
   let props = await query(`._prop.comp=${schema.entity.eid}`)
   assert(props.some((b) => (b._prop as Comp).name == 'serves'))
-  // Its schema pages are the vocabulary's, derived when read: the deploy
-  // wrote none of them into the store.
-  for (let rows of ['_package', '_comp', '_prop', '_vocab']) {
+  // App schema pages are derived when read; only the core session package's
+  // version manifest is retained for its sending migration.
+  assertEquals(
+    drive.query(select({ from: table('_package') })).map((row) => row.name),
+    ['@yaks/session'],
+  )
+  for (let rows of ['_comp', '_prop', '_vocab']) {
     assertEquals(drive.query(select({ from: table(rows) })), [])
   }
   for (let serves of [2, 7]) {
