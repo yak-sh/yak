@@ -1114,16 +1114,18 @@ test('a native fixer still holds the cap after five minutes without a process', 
   f.close()
 })
 let nativeStopped = await nativeCase(true)
-test('a stopped native transcript releases the fixer cap without an exit', async () => {
-  let { f } = nativeStopped
-  await put(f.g, [{
-    entity: { eid: nativeStopped.holder },
-    fixer: { bug: identityEid('bug', ['another-bug']) },
-  }])
-  await f.replay()
-  equal(await count(f.g, 'fixer'), 2)
-  ok((await f.g.get([taskEid(bug)]))[0].claim)
-  f.close()
+let { f: stoppedFixture } = nativeStopped
+await put(stoppedFixture.g, [{
+  entity: { eid: nativeStopped.holder },
+  fixer: { bug: identityEid('bug', ['another-bug']) },
+}])
+await stoppedFixture.replay()
+let stoppedCount = await count(stoppedFixture.g, 'fixer')
+let [stoppedTask] = await stoppedFixture.g.get([taskEid(bug)])
+test('a stopped native transcript releases the fixer cap without an exit', () => {
+  equal(stoppedCount, 2)
+  ok(stoppedTask.claim)
+  stoppedFixture.close()
 })
 let nativeCooling = await nativeCase(true, true)
 await put(nativeCooling.f.g, [{
@@ -1175,26 +1177,35 @@ let settledCase = async () => {
   return result
 }
 let nativeSettled = await settledCase()
-test('a settled native fixer continues the same session and reclaims its released task', async () => {
-  let { f, holder } = nativeSettled
-  let before = await count(f.g, 'entry')
-  await f.replay()
-  equal(await count(f.g, 'fixer'), 1)
-  equal(await count(f.g, 'entry'), before + 1)
-  equal(comp((await f.g.get([taskEid(bug)]))[0], 'claim').session, holder)
-  let last = (await rows(f.g, 'entry')).at(-1)!
-  equal(comp(last, 'entry').session, holder)
-  equal(comp(last, 'using').provider, provider)
-  equal(comp(last, 'using').model, model)
-  ok(
-    String(comp(last, 'content').body).includes(
-      'continue until it is resolved',
-    ),
-  )
-  // Its pending next turn prevents a second continuation on replay.
-  await f.replay()
-  equal(await count(f.g, 'entry'), before + 1)
-  f.close()
+let continuedScenario = await (async () => {
+  try {
+    let { f, holder } = nativeSettled
+    let before = await count(f.g, 'entry')
+    await f.replay()
+    equal(await count(f.g, 'fixer'), 1)
+    equal(await count(f.g, 'entry'), before + 1)
+    equal(comp((await f.g.get([taskEid(bug)]))[0], 'claim').session, holder)
+    let last = (await rows(f.g, 'entry')).at(-1)!
+    equal(comp(last, 'entry').session, holder)
+    equal(comp(last, 'using').provider, provider)
+    equal(comp(last, 'using').model, model)
+    ok(
+      String(comp(last, 'content').body).includes(
+        'continue until it is resolved',
+      ),
+    )
+    // Its pending next turn prevents a second continuation on replay.
+    await f.replay()
+    equal(await count(f.g, 'entry'), before + 1)
+    f.close()
+
+    return undefined
+  } catch (error) {
+    return error
+  }
+})()
+test('a settled native fixer continues the same session and reclaims its released task', () => {
+  if (continuedScenario) throw continuedScenario
 })
 let resolvedSettled = await settledCase()
 await put(resolvedSettled.f.tracker, [{
@@ -1284,20 +1295,28 @@ await put(completedNative.f.g, [{
   completed: {},
   claim: { session: completedNative.holder },
 }])
-test('completed-open native work continues atomically without a regression', async () => {
-  let { f, holder } = completedNative
-  let before = await count(f.g, 'entry')
-  await f.replay()
-  equal(await count(f.g, 'entry'), before + 1)
-  equal(await count(f.g, 'fixer'), 1)
-  let [task] = await f.g.get([taskEid(bug)])
-  ok(!task.completed)
-  equal(comp(task, 'claim').session, holder)
-  await f.replay()
-  equal(await count(f.g, 'entry'), before + 1)
-  f.close()
-})
+let completedScenario = await (async () => {
+  try {
+    let { f, holder } = completedNative
+    let before = await count(f.g, 'entry')
+    await f.replay()
+    equal(await count(f.g, 'entry'), before + 1)
+    equal(await count(f.g, 'fixer'), 1)
+    let [task] = await f.g.get([taskEid(bug)])
+    ok(!task.completed)
+    equal(comp(task, 'claim').session, holder)
+    await f.replay()
+    equal(await count(f.g, 'entry'), before + 1)
+    f.close()
 
+    return undefined
+  } catch (error) {
+    return error
+  }
+})()
+test('completed-open native work continues atomically without a regression', () => {
+  if (completedScenario) throw completedScenario
+})
 for (let completed of [false, true]) {
   let { f, holder } = await settledCase()
   await put(f.g, [
