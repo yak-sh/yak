@@ -114,14 +114,11 @@ read-only loader accepts `{skill: '<title>'}` and returns the exact instructions
 plus the supporting-file base path through the attributed graph runner. It does
 not execute scripts or start a fork from metadata.
 
-A session without a running machine discovers the graph's repository skills
-without provisioning a machine. Once it has a running machine, the catalogue and
-loader read that machine's files through `Machine`. They follow
-`home{machine, cwd}` and the nearest ancestor with a `.git` or `.claude`
-directory. Edits, additions and deletions are visible without importing them
-into the graph; shared-machine forks see the same files. `skill_read` can be the
-first file call that provisions a session's machine. User-only skills are not
-model-discovered or loaded.
+Catalogue and instructions come from graph skills through @yaks/persona. Reading
+skills never provisions a machine or scans a checkout. Graph edits appear on
+the next request; repository files are synchronized separately by the persona
+skill mirror (`{skills: true}`). Supporting-file paths are repository-relative.
+User-only skills are not model-discovered or loaded.
 
 Explicit tool registries and transcript allowlists remain exact: they do not
 gain a loader implicitly. Source-bound images remain beside their transcript

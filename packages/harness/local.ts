@@ -177,7 +177,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
           artifacts: h.artifacts,
           reply: h.reply,
         }),
-        ...skillTools(h.g, binding, h.reply),
+        ...skillTools(h.g, h.reply),
       ],
     remote: mcp.snapshot,
     // The host's other tools, its plugins' own among them, adapted the first
@@ -203,7 +203,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     },
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),
-    requestItems: (_, __, current) => skillItems(h.g, current, binding),
+    requestItems: (_, __, current) => skillItems(h.g, current),
     report,
     release: async () => {
       http.close()

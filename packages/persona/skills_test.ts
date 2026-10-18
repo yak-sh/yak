@@ -17,8 +17,10 @@ import { loadVocab } from '@yaks/vocab'
 import { personaDoc } from './comp.ts'
 import { parseSkill } from './skill-text.ts'
 import {
+  graphSkill,
   loadSkill,
   repoSkills,
+  skillCatalog,
   skillFiles,
   skillLocation,
   skillsAt,
@@ -104,6 +106,28 @@ let fixture = async (
     await Deno.remove(root, { recursive: true })
   }
 }
+
+let graphOnly = world()
+await graphOnly.apply([
+  ...skill('graph-one', 'same'),
+  ...skill('graph-two', 'same', elsewhere),
+  ...skill('graph-missing', 'missing'),
+  { entity: { eid: 'graph-missing' }, content: null },
+])
+
+test('graph skill discovery returns scoped metadata without instruction bodies', async () => {
+  let rows = await skillCatalog(graphOnly, repo)
+  assertEquals(rows.map((b) => b.entity.eid), ['graph-one'])
+  assertEquals(rows[0].doc, { title: 'same', body: 'About same' })
+  assertEquals(rows[0].content, undefined)
+})
+
+test('graph skill loading selects the requested repository among matching titles', async () => {
+  assertEquals(
+    (await graphSkill(graphOnly, 'same', elsewhere)).entity.eid,
+    'graph-two',
+  )
+})
 
 test('graph skills are complete, sorted and repository-scoped', async () => {
   let g = world()

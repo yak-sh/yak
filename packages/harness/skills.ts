@@ -1,105 +1,45 @@
-import { derivedEid } from '@yaks/graph/identity'
-// Repository instructions are discovered by description and loaded on demand.
-// A session with a machine reads that machine's files; a session without one
-// discovers graph skills without asking a provider to provision anything.
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+// Native skill discovery and instruction loading read the graph. Repository
+// files are mirrors, never a model-request dependency or a machine lease.
+import type { Comp, Eid, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Item } from '@yaks/model'
-import type { Machine } from '@yaks/machine'
 import type { Reply } from '@yaks/tools'
 import type { Tool } from '@yaks/session'
-import { parseSkill, repoSkills } from '@yaks/persona/skills'
+import { graphSkill, skillCatalog, skillLocation } from '@yaks/persona/skills'
 import { graphTools } from './tools.ts'
-
-export type SkillMachines = {
-  machine(session: Eid): Promise<Machine>
-  cwd(session: Eid): Promise<string | undefined>
-}
+import { lineage } from '@yaks/project'
 
 let comp = (value: unknown): Comp =>
   value && typeof value == 'object' && !Array.isArray(value)
     ? value as Comp
     : {}
 
-// Machine intentionally has only commands and files. Discovery goes through
-// that door too, not a git process or filesystem borrowed from the host.
-let listing = `p="$PWD"
-while :; do
-  if [ -e "$p/.git" ] || [ -d "$p/.claude" ]; then
-    printf '%s\\n' "$p"
-    if [ -d "$p/.claude/skills" ] && [ ! -L "$p/.claude" ] && [ ! -L "$p/.claude/skills" ]; then
-      for dir in "$p"/.claude/skills/*; do
-        [ -d "$dir" ] && [ ! -L "$dir" ] && [ -f "$dir/SKILL.md" ] && [ ! -L "$dir/SKILL.md" ] || continue
-        printf '%s\\n' "\${dir##*/}"
-      done
-    fi
-    break
-  fi
-  [ "$p" != / ] || break
-  p="\${p%/*}"
-  [ -n "$p" ] || p=/
-done`
-
-let files = async (
-  machines: SkillMachines,
+// Work and persona affiliations scope graph skills without touching a machine.
+let repository = async (
+  g: Graph,
   session: Eid,
-): Promise<{ root?: string; skills: Bundle[] }> => {
-  let machine = await machines.machine(session)
-  let cwd = await machines.cwd(session)
-  let id = await machine.start(listing, cwd, undefined, session)
-  for (;;) {
-    let process = await machine.look(id)
-    if (!process) throw new Refused('Skill discovery process is unavailable')
-    if (process.exit) {
-      if (process.exit.code != 0) {
-        throw new Refused('Skill files are unavailable')
-      }
-      break
-    }
-    await new Promise((go) => setTimeout(go, machine.poll ?? 100))
+): Promise<string | undefined> => {
+  let [owner] = await g.get([session], ['dispatch', 'session', 'filed'])
+  let work = comp(owner?.dispatch).task
+  let line = await lineage(g, typeof work == 'string' ? work : session)
+  let persona = comp(owner?.session).persona
+  if (!line.length && typeof persona == 'string') {
+    let [worn] = await g.get([persona], ['persona'])
+    let home = comp(worn?.persona).home
+    if (typeof home == 'string') line = await lineage(g, home)
   }
-  let [root, ...titles] = await machine.tail(id, 100000)
-  if (!root) return { skills: [] }
-  let skills: Bundle[] = await Promise.all(
-    titles.sort().filter((title) => /^[a-z0-9][a-z0-9_-]*$/i.test(title)).map(
-      async (title) => {
-        let path = `${root}/.claude/skills/${title}/SKILL.md`
-        let source = await machine.read(path)
-        let parsed: ReturnType<typeof parseSkill>
-        try {
-          parsed = parseSkill(source, title)
-        } catch (error) {
-          if (!(error instanceof Refused)) throw error
-          throw new Refused(`Cannot load ${path}: ${String(error)}`)
-        }
-        return {
-          entity: { eid: derivedEid(`view:skill:${session}:${title}`) },
-          ...parsed,
-        }
-      },
-    ),
-  )
-  return { root, skills }
+  return line.map((b) => comp(b.repo).repository)
+    .find((id): id is string => typeof id == 'string')
 }
 
-/** Descriptions refresh from the session's files after tool selection, without
- * provisioning a machine just to ask a model a question. */
+/** Discover graph skill descriptions after resolving the exact tool offer. */
 export let skillItems = async (
   g: Graph,
   current: { session: Eid; tools: readonly Tool[] },
-  machines: SkillMachines,
 ): Promise<Item[]> => {
   if (!current.tools.some((tool) => tool.name == 'skill_read')) return []
-  let [owner] = await g.get([current.session], ['home'])
-  let home = comp(owner?.home)
-  let [record] = home.machine
-    ? await g.get([String(home.machine)], ['machine'])
-    : []
-  let state = comp(record?.machine).state
-  let skills = home.workspace || state == 'running' || state == 'asleep'
-    ? (await files(machines, current.session)).skills
-    : await repoSkills(g)
+  let skills = await skillCatalog(g, await repository(g, current.session))
   skills = skills.filter((skill) => comp(skill.skill).invoke != 'user')
   if (!skills.length) return []
   let catalogue = skills.map((skill) => {
@@ -115,10 +55,9 @@ export let skillItems = async (
   }]
 }
 
-/** Adapt the machine-file loader through the graph runner for attribution. */
+/** Adapt the graph loader through the graph runner for attribution. */
 export let skillTools = (
   g: Graph,
-  machines: SkillMachines,
   reply?: Reply,
 ): Tool[] =>
   graphTools(g, {
@@ -127,7 +66,7 @@ export let skillTools = (
       name: 'skill_read',
       description:
         'Load repository skill instructions by exact title after its description ' +
-        'matches the work. Reads the session machine without importing or ' +
+        'matches the work. Reads the graph without provisioning a machine or ' +
         'executing instructions; returns the supporting-file base path too.',
       inputSchema: {
         type: 'object',
@@ -144,18 +83,22 @@ export let skillTools = (
       run: async (call) => {
         let session = who(call)?.by
         if (!session) throw new Refused('skill_read needs a session')
-        let { root, skills } = await files(machines, session)
         let title = String(argsOf(call).skill)
-        let skill = skills.find((skill) => comp(skill.doc).title == title)
-        if (!skill) throw new Refused(`No skill named ${title}`)
+        let skill = await graphSkill(g, title, await repository(g, session))
         if (comp(skill.skill).invoke == 'user') {
           throw new Refused('This skill permits user invocation only')
         }
-        let base = `${root}/.claude/skills/${title}`
+        let location = await skillLocation(g, skill)
+        let path = comp(location?.file).path
+        let base = typeof path == 'string'
+          ? path.slice(0, -'/SKILL.md'.length)
+          : undefined
         return [{
           entity: { eid: '$skill-location' },
           content: {
-            body: `Skill ${title}; supporting files: ${base}\nMetadata: ` +
+            body: `Skill ${title}` +
+              (base ? `; supporting files: ${base}` : '') +
+              '\nMetadata: ' +
               JSON.stringify(comp(skill.skill)),
           },
           output: { source: call.entity.eid },

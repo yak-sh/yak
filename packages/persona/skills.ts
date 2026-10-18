@@ -4,7 +4,7 @@ import { derivedEid } from '@yaks/graph/identity'
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { and, eq, every, present } from '@yaks/query'
+import { and, eq, every, fields, list, present } from '@yaks/query'
 import { locate } from '@yaks/git/host'
 import { SKILL } from './comp.ts'
 import { parseSkill, renderSkill } from './skill-text.ts'
@@ -78,6 +78,80 @@ export let skillLocation = async (
     throw new Refused(`Skill ${eid} references more than one SKILL.md`)
   }
   return locations[0]
+}
+
+let inRepo = async (
+  g: Graph,
+  skills: Bundle[],
+  repository?: string,
+): Promise<Bundle[]> => {
+  if (repository == undefined) return skills
+  if (!['file', 'references'].every((name) => g.vocab.comps.includes(name))) {
+    return []
+  }
+  let files = (await g.read(and(
+    present('file'),
+    eq('file.repository', repository),
+    fields('entity.eid', 'file.path'),
+  ))).filter((b) =>
+    /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/SKILL\.md$/i.test(
+      text(b, 'file', 'path') ?? '',
+    )
+  )
+  if (!files.length) return []
+  let edges = await g.read(and(
+    present('references'),
+    eq('edge.to', list(...files.map((b) => b.entity.eid))),
+    fields('edge.from'),
+  ))
+  let linked = new Set(edges.map((b) => text(b, 'edge', 'from')))
+  return skills.filter((b) => linked.has(b.entity.eid))
+}
+
+/** Discover descriptions without reading instruction bodies. */
+export let skillCatalog = async (
+  g: Graph,
+  repository?: string,
+): Promise<Bundle[]> => {
+  if (!g.vocab.comps.includes(SKILL)) return []
+  return sorted(
+    await inRepo(
+      g,
+      (await g.read(and(
+        present(SKILL),
+        present('doc.title'),
+        present('doc.body'),
+        present('content.body'),
+        fields('entity.eid', 'doc.title', 'doc.body', 'skill.invoke'),
+      ))).filter((b) =>
+        folder(text(b, 'doc', 'title') ?? '') &&
+        !!text(b, 'doc', 'body')?.trim()
+      ),
+      repository,
+    ),
+  )
+}
+
+/** Exact graph instructions, optionally limited to one repository. */
+export let graphSkill = async (
+  g: Graph,
+  title: string,
+  repository?: string,
+): Promise<Bundle> => {
+  let found = await inRepo(
+    g,
+    (await g.read(and(
+      present(SKILL),
+      eq('doc.title', title),
+      every(),
+    ))).filter(shaped),
+    repository,
+  )
+  if (!found.length) throw new Refused(`No skill named ${title}`)
+  if (found.length > 1) {
+    throw new Refused(`Skill ${title} belongs to more than one repository`)
+  }
+  return found[0]
 }
 
 /** Complete graph skills. Unlinked skills are visible without a repository,
@@ -251,6 +325,7 @@ export let loadSkill = async (
   title: string,
   cwd?: string,
 ): Promise<Bundle> => {
+  if (cwd == undefined) return graphSkill(g, title)
   let found = (await skillsAt(g, cwd)).filter((b) =>
     text(b, 'doc', 'title') == title
   )
