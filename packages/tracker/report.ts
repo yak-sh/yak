@@ -124,28 +124,53 @@ let below = (): string => {
   return ''
 }
 
+// What an Error was wrapped around, down its `cause` chain: each link's stack
+// (which opens with its name and message), else the value itself. A wrapper
+// says what it was doing; the chain says why it failed.
+let causes = (error: Error): string => {
+  let out: string[] = []
+  let seen = new Set<unknown>([error])
+  for (let c = error.cause; c != null && !seen.has(c) && out.length < 5;) {
+    seen.add(c)
+    out.push(
+      c instanceof Error ? c.stack || `${c.name}: ${c.message}` : json1(c),
+    )
+    c = c instanceof Error ? c.cause : undefined
+  }
+  return out.join('\nCaused by: ')
+}
+
+let json1 = (v: unknown): string =>
+  typeof v == 'object' && v ? json(v) : String(v)
+
 /** What a thrown value says it is. An Error says so itself. Any other object
  * (a refusal's `{error, message}`, a plain `{code, …}`) says its own name and
  * message, or its JSON, never `[object Object]`; it carries no stack, so the
  * stack is where it was reported from. A string or number is its message.
  *
  * ```ts
- * import { equal } from '@yaks/testing'
+ * import { equal, ok } from '@yaks/testing'
  * import { described } from '@yaks/tracker/report'
  *
  * equal(described({ error: 'Refused', message: 'no' })?.type, 'Refused')
  * equal(described({ id: 7 })?.value, '{"id":7}')
  * equal(described('broken'), undefined)
+ * let wrapped = new Error('could not take', { cause: new Error('refused') })
+ * ok(described(wrapped)?.cause?.startsWith('Error: refused'))
  * ```
  */
 export let described = (
   error: unknown,
-): { type: string; value: string; stack?: string } | undefined => {
+):
+  | { type: string; value: string; stack?: string; cause?: string }
+  | undefined => {
   if (error instanceof Error) {
+    let cause = causes(error)
     return {
       type: error.name,
       value: error.message,
       ...error.stack ? { stack: error.stack } : {},
+      ...cause ? { cause } : {},
     }
   }
   if (!error || typeof error != 'object') return undefined

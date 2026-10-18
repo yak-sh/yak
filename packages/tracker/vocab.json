@@ -163,6 +163,11 @@
           "stamped": true,
           "description": "The stack trace, as the runtime reported it."
         },
+        "cause": {
+          "type": "string",
+          "stamped": true,
+          "description": "What the error was wrapped around: each `cause` down its chain, its name and message, then its stack."
+        },
         "frames": {
           "type": "array",
           "stamped": true,
