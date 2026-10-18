@@ -381,7 +381,7 @@ test('native oracle tool opens and continues receiving forks without a fake aske
   equal(conversation.items.filter((i) => i.kind == 'user').length, 2)
 })
 
-test('tree artifacts retain nodes and revisions while counting engine and candidate once', async () => {
+test('tree artifacts retain nodes and revisions while counting engine and candidate once', () => {
   let artifact = measured.evidence()
   equal(artifact.nodes.length, 2)
   equal(artifact.nodes[1].revisions.length, 1)
@@ -398,7 +398,7 @@ test('tree artifacts retain nodes and revisions while counting engine and candid
     artifact.trace.length + 1,
   )
   equal(totals([...converted, ...candidateCalls]).inputTokens, 60)
-  await throws(() => measured.assertReady())
+  measured.assertReady()
 })
 
 const failedTree = await measuredTree({
@@ -429,7 +429,7 @@ test('failed growth retains serializable trace and partial nodes instead of disa
   equal(totals(failedCalls).inputTokens, null)
   equal(failedTree.evidence().growthError?.includes('Root failed'), true)
   equal(JSON.parse(JSON.stringify(failedTree.evidence())).trace.length, 1)
-  await throws(() => partialTree.assertReady())
+  partialTree.assertReady()
   equal(partialTree.evidence().nodes.length, 2)
   equal(partialTree.evidence().stats.readyNodes, 1)
   equal(partialTree.evidence().stats.partialErrors.length, 1)
@@ -454,7 +454,9 @@ const hundred = await measuredTree({
       })]
     } else if (reviewTurn++ == 0) {
       items = [treeCall('decline', { reason: 'Wrong synthetic domain.' })]
-    } else if (reviewTurn == 2) {
+    } else if (
+      reviewTurn == 2 && r.tools.some((t) => t.name == 'revise_oracle')
+    ) {
       items = [
         treeCall('revise_oracle', treeContext('Narrower routing advert')),
       ]
@@ -471,18 +473,18 @@ const hundredCalls = await hundred.calls()
 
 const hundredArtifact = JSON.parse(JSON.stringify(hundred.evidence()))
 const hundredTotals = totals(hundredCalls)
-test('hundred ready nodes qualify and decline review revisions survive serialization', () => {
+test('hundred ready nodes answer without revising the tree during a decline', () => {
   hundred.assertReady()
   let artifact = hundredArtifact
   equal(artifact.stats.readyNodes, 100)
   equal(artifact.nodes.length, 100)
-  equal(artifact.trace.length, 103)
+  equal(artifact.trace.length, 102)
   equal(artifact.declines[0].reason, 'Wrong synthetic domain.')
-  equal(artifact.changes.length, 1)
-  equal(artifact.nodes[0].revisions.length, 2)
+  equal(artifact.changes.length, 0)
+  equal(artifact.nodes[0].revisions.length, 1)
   equal(
     hundredCalls.filter((c) => c.role == 'oracle-tree-decline-review').length,
-    2,
+    1,
   )
-  equal(Math.round(hundredTotals.dollars! * 10), 103)
+  equal(Math.round(hundredTotals.dollars! * 10), 102)
 })

@@ -60,6 +60,8 @@ export type OracleLimits = {
   requestTokens?: number
   evidencePageTokens?: number
   calls?: number
+  /** Aggregate routing/answer calls per external question, including descendants. */
+  queryCalls?: number
   turns?: number
   depth?: number
 }
@@ -202,6 +204,7 @@ export async function growOracleTree(options: {
     requestTokens: 16000,
     evidencePageTokens: 3500,
     calls: 10000,
+    queryCalls: 6,
     turns: 24,
     depth: 12,
     ...options.limits,
@@ -441,9 +444,13 @@ export async function growOracleTree(options: {
   async function grow(node: OracleNode, depth: number): Promise<OracleNode[]> {
     if (depth > limits.depth) throw new Error('Tree depth budget exhausted')
     let conversation = crypto.randomUUID()
+    let words = JSON.stringify(node.evidence.map((id) => evidence.get(id)!))
+    let initial = count(words) <= limits.evidencePageTokens
+      ? { evidence: JSON.parse(words) }
+      : evidenceTool('list_evidence', {}, node)
     let items: Item[] = [{ kind: 'instruction', text: context(node, true) }, {
       kind: 'user',
-      text: JSON.stringify(evidenceTool('list_evidence', {}, node)),
+      text: JSON.stringify(initial),
     }]
     for (let turn = 0; turn < limits.turns; turn++) {
       let reply = await invoke(node.id, 'growth', {
@@ -588,13 +595,17 @@ export async function growOracleTree(options: {
       from?: string
       message: string
       conversation?: string
+      /** Explicit offline structural work, never inferred from question text. */
+      maintenance?: boolean
     },
     queryDepth = 0,
+    budget = { remaining: limits.queryCalls, path: [] as string[] },
   ) {
     let node = nodes.get(input.to ?? root.id)
     if (!node || !node.revisions.length) {
       throw new Error('Unknown or ungrown oracle')
     }
+    if (budget.path.includes(node.id)) throw new Error('Oracle routing cycle')
     let from = input.from ?? 'caller'
     if (
       from != 'caller' && from != node.parent && !node.children.includes(from)
@@ -611,7 +622,14 @@ export async function growOracleTree(options: {
         to: node.id,
         from,
         revision: node.revisions.at(-1)!.revision,
-        items: [{ kind: 'instruction', text: context(node) }],
+        items: [{
+          kind: 'instruction',
+          text: context(node) +
+            (input.maintenance
+              ? '\nThis is explicit offline structural work; revise or branch only when useful. '
+              : '') +
+            '\nAnswer from retained context. Route only to the most relevant child when necessary, not every child. Do not bounce the question back to its sender. Do not browse the whole evidence catalog to rediscover your own context. Structural work is offline; do not change the tree while answering ordinary questions.',
+        }],
         turns: 0,
         declined: false,
         finished: false,
@@ -623,13 +641,25 @@ export async function growOracleTree(options: {
     }
     c.items.push({ kind: 'user', text: text(input.message, 'message') })
     c.finished = false
+    budget.path.push(node.id)
     try {
       for (let turn = 0; turn < limits.turns; turn++) {
         let tools = [decline]
         if (node.tools.includes('read_evidence')) tools.push(list, read)
         if (node.tools.includes('query_oracle')) tools.push(queryTool)
-        if (node.tools.includes('revise_oracle')) tools.push(revise)
-        if (node.tools.includes('branch_oracle')) tools.push(branch)
+        if (input.maintenance && node.tools.includes('revise_oracle')) {
+          tools.push(revise)
+        }
+        if (input.maintenance && node.tools.includes('branch_oracle')) {
+          tools.push(branch)
+        }
+        // Reserve one answer call for each waiting ancestor. A child cannot
+        // consume its parent's final synthesis, even through cycles or fanout.
+        if (budget.remaining <= queryDepth + 1) tools = []
+        if (budget.remaining <= 0) {
+          throw new Error('Question call budget exhausted')
+        }
+        budget.remaining--
         let reply = await invoke(
           node.id,
           c.declined ? 'decline-review' : 'routing-answer',
@@ -653,6 +683,9 @@ export async function growOracleTree(options: {
             node: node.id,
           }
         }
+        if (!tools.length) {
+          throw new Error('Oracle did not answer within question call budget')
+        }
         for (let call of calls) {
           let result: unknown
           try {
@@ -673,14 +706,25 @@ export async function growOracleTree(options: {
             } else if (call.name == 'revise_oracle') {
               result = revision(args, node, c.id)
             } else if (call.name == 'query_oracle') {
-              result = await query({
-                to: text(args.to, 'to'),
-                from: node.id,
-                message: text(args.message, 'message'),
-                conversation: typeof args.conversation == 'string'
-                  ? args.conversation
-                  : undefined,
-              }, queryDepth + 1)
+              if (args.to == from) {
+                throw new Error('Do not route back to sender')
+              }
+              if (budget.remaining <= queryDepth + 1) {
+                throw new Error('Reserved ancestor answer calls')
+              }
+              result = await query(
+                {
+                  to: text(args.to, 'to'),
+                  from: node.id,
+                  maintenance: input.maintenance,
+                  message: text(args.message, 'message'),
+                  conversation: typeof args.conversation == 'string'
+                    ? args.conversation
+                    : undefined,
+                },
+                queryDepth + 1,
+                budget,
+              )
             } else if (call.name == 'branch_oracle') {
               if (node.children.length >= limits.maxChildren) {
                 throw new Error('Child budget exhausted')
@@ -708,6 +752,7 @@ export async function growOracleTree(options: {
       }
       throw new Error('Query turn budget exhausted')
     } finally {
+      budget.path.pop()
       // The fork transcript is retained even when a model or budget fails.
     }
   }
@@ -726,13 +771,18 @@ export async function growOracleTree(options: {
     }, { kind: 'user', text: input.message }]
     let message = input.message
     let conversation: string | undefined
+    let budget = { remaining: limits.queryCalls, path: [] as string[] }
     for (let turn = 0; turn < (input.maxTurns ?? 6); turn++) {
-      let result = await query({
-        to: receiver,
-        from: input.from,
-        message,
-        conversation,
-      })
+      let result = await query(
+        {
+          to: receiver,
+          from: input.from,
+          message,
+          conversation,
+        },
+        0,
+        budget,
+      )
       conversation = result.conversation
       items.push({ kind: 'user', text: JSON.stringify(result) })
       let reply = await invoke(asker?.id ?? 'caller', 'asker', {
@@ -779,6 +829,11 @@ export async function growOracleTree(options: {
     declines,
     changes,
     query,
+    /** One original question, including all caller follow-ups. */
+    question: () => {
+      let budget = { remaining: limits.queryCalls, path: [] as string[] }
+      return (input: Parameters<typeof query>[0]) => query(input, 0, budget)
+    },
     converse,
     evidence: frozen([...evidence.values()]),
     stats: () => ({
@@ -787,6 +842,8 @@ export async function growOracleTree(options: {
       targetNodes: limits.targetNodes,
       shortfall: Math.max(0, limits.targetNodes - nodes.size),
       calls: trace.length,
+      growthCalls: trace.filter((c) => c.role == 'growth').length,
+      answerCalls: trace.filter((c) => c.role != 'growth').length,
       declines: declines.length,
       advertisementChanges: changes.length,
       growthWallMs,

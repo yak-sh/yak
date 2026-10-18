@@ -130,6 +130,7 @@ const declineNode = declined.nodes.get(declined.root)!.children[0]
 const offDomain = await declined.query({
   to: declineNode,
   message: 'Where is the person?',
+  maintenance: true,
 })
 test('declining is a tool result followed by review and a retained advertisement revision', () => {
   equal(offDomain.declined, true)
@@ -267,6 +268,7 @@ const structural = await growOracleTree({
 })
 const adjustment = await structural.query({
   message: 'Please clarify your routing structure.',
+  maintenance: true,
 })
 test('a parent adjusts its child by opening the same conversational query channel', () => {
   equal(adjustment.answer, 'The child updated its advertisement.')
@@ -305,4 +307,101 @@ test('resuming retained nodes preserves revisions without charging growth again'
     tree.nodes.get(tree.root)!.revisions,
   )
   equal(resumedAnswer.answer, 'The seam is blue.')
+})
+
+// All recursive calls share one question budget; breadth/depth must not multiply it.
+const bounded = await growOracleTree({
+  rows,
+  cutoff,
+  limits: { maxNodes: 2 },
+  model: fake((r) => {
+    if (r.tools.some((t) => t.name == 'publish_oracle')) return growth(r)
+    if (!r.tools.length) {
+      return [{
+        kind: 'assistant',
+        text: 'The seam is blue; other details are unknown.',
+      }]
+    }
+    let instruction = r.items[0]
+    let own = JSON.parse(
+      instruction.kind == 'instruction'
+        ? instruction.text.split('\n')[1]
+        : '{}',
+    )
+    if (own.children.length) {
+      return [
+        call('query_oracle', {
+          to: own.children[0].id,
+          message: 'What is blue?',
+        }),
+      ]
+    }
+    // A child trying to bounce to its parent must get a tool error, not recurse.
+    if (!r.items.some((i) => i.kind == 'result')) {
+      return [call('query_oracle', { to: own.parent, message: 'Tell me more' })]
+    }
+    return [call('list_evidence', {})]
+  }),
+})
+const boundedBefore = bounded.trace.length
+const boundedAnswer = await bounded.query({ message: 'What is blue?' })
+const boundedCalls = bounded.trace.slice(boundedBefore)
+test('a looping question answers within six calls without growth or structural writes', () => {
+  equal(boundedAnswer.answer.includes('blue'), true)
+  equal(boundedCalls.length, 6)
+  equal(boundedCalls.every((c) => c.role != 'growth'), true)
+  equal(
+    boundedCalls.some((c) =>
+      c.request.tools.some((t) =>
+        ['revise_oracle', 'branch_oracle'].includes(t.name)
+      )
+    ),
+    false,
+  )
+  equal(bounded.nodes.size, 2)
+  equal(
+    boundedCalls.some((c) =>
+      c.request.items.some((i) =>
+        i.kind == 'result' && String(i.output).includes('sender')
+      )
+    ),
+    true,
+  )
+})
+const resumedBounded = await growOracleTree({
+  rows,
+  cutoff,
+  model,
+  limits: { maxNodes: 2 },
+  resume: { root: bounded.root, nodes: [...bounded.nodes.values()] },
+})
+await resumedBounded.query({ message: 'What is blue?' })
+const resumedInitialCalls = [...resumedBounded.trace]
+test('a retained tree serves a question with no construction calls', () => {
+  equal(resumedInitialCalls.length, 1)
+  equal(resumedInitialCalls[0].role, 'routing-answer')
+})
+
+const sharedQuestion = resumedBounded.question()
+await sharedQuestion({ message: 'First question' })
+await sharedQuestion({ message: 'Follow-up' })
+const followupStats = resumedBounded.stats()
+test('caller follow-ups consume the same question budget', () => {
+  equal(resumedBounded.stats().growthCalls, 0)
+  equal(followupStats.answerCalls, 3)
+})
+
+await sharedQuestion({ message: 'Third follow-up' })
+await sharedQuestion({ message: 'Fourth follow-up' })
+await sharedQuestion({ message: 'Fifth follow-up' })
+await sharedQuestion({ message: 'Sixth follow-up' })
+let exhausted = false
+try {
+  await sharedQuestion({ message: 'Seventh follow-up' })
+} catch (e) {
+  exhausted = String(e).includes('Question call budget exhausted')
+}
+test('follow-ups cannot reset an exhausted question budget', () => {
+  equal(exhausted, true)
+  equal(resumedBounded.trace.length, 7) // one earlier query plus six shared calls
 })

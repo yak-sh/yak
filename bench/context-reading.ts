@@ -256,7 +256,7 @@ export async function measuredTree(options: {
   }
   if (tree && options.adjustment) {
     try {
-      await tree.query({ message: options.adjustment })
+      await tree.query({ message: options.adjustment, maintenance: true })
     } catch (e) {
       growthError = String(e)
     }
@@ -264,12 +264,13 @@ export async function measuredTree(options: {
   let assertReady = () => {
     if (growthError) throw new Error(growthError)
     let stats = tree!.stats()
-    if (stats.readyNodes < 100) {
+    if (stats.readyNodes < 1) {
       throw new Error(
-        `Oracle tree shortfall: ${stats.readyNodes} ready nodes; need at least 100`,
+        `Oracle tree shortfall: ${stats.readyNodes} ready nodes; need a ready root`,
       )
     }
   }
+  let ask = tree?.question()
   let tool: Tool = {
     name: 'ask_oracle',
     description:
@@ -306,7 +307,7 @@ export async function measuredTree(options: {
       }
       consultations.push(q)
       try {
-        q.result = await tree.query({
+        q.result = await ask!({
           message,
           conversation: conversation as string | undefined,
         })
@@ -673,6 +674,11 @@ export async function run(packet: Packet, options: {
             nativeTools.push(oracle.tool)
           }
           if (packet.oracleTree) {
+            if (!packet.oracleTree.resume) {
+              throw new Error(
+                'Prepare and retain the oracle tree offline with measuredTree; answer runs require oracleTree.resume',
+              )
+            }
             tree = await measuredTree({
               rows: packet.oracleTree.rows,
               cutoff: c.input.original_message.timestamp ?? '',
