@@ -6,7 +6,7 @@
 // box opened is let go when the host stops.
 
 import { promptEntry } from '@yaks/context'
-import type { Comp } from '@yaks/graph'
+import { type Comp, derivedEid, Refused } from '@yaks/graph'
 import { instructionsFor } from './instructions.ts'
 import { owing } from './session_machines.ts'
 import type { Handlers } from '@yaks/effects'
@@ -77,38 +77,60 @@ export let effects = (
             native: {},
           }], { trusted: true })
         }
-        await binding.cwd(session)
-        ;[owner] = await host.graph.get([session])
-        let home = owner.home as Comp
-        let previous = await host.graph.read(
-          `.entry.session=${session}&.prompt&*`,
-        )
-        // Preparation is restartable. Admit each immutable source only once.
-        if (!previous.length) {
-          let files = await instructionsFor(host.graph, host.machines, home)
-          files.push(
-            ...await owing(
-              host.graph,
-              home,
-              files,
-              (owner.session as Comp).persona as string | undefined,
-            ),
+        try {
+          await binding.cwd(session)
+          ;[owner] = await host.graph.get([session])
+          let home = owner.home as Comp
+          let previous = await host.graph.read(
+            `.entry.session=${session}&.prompt&*`,
           )
-          if (files.length) {
-            await host.graph.apply(
-              files.map((file) =>
-                promptEntry(
-                  session,
-                  undefined,
-                  file.body,
-                  file.source,
-                  'shared',
-                  file.revision,
-                )
-              ),
-              { trusted: true },
+          // Preparation is restartable. Admit each immutable source only once.
+          if (!previous.length) {
+            let files = await instructionsFor(
+              host.graph,
+              host.machines,
+              home,
+              host.workspaces,
             )
+            files.push(
+              ...await owing(
+                host.graph,
+                home,
+                files,
+                (owner.session as Comp).persona as string | undefined,
+              ),
+            )
+            if (files.length) {
+              await host.graph.apply(
+                files.map((file) =>
+                  promptEntry(
+                    session,
+                    undefined,
+                    file.body,
+                    file.source,
+                    'shared',
+                    file.revision,
+                  )
+                ),
+                { trusted: true },
+              )
+            }
           }
+        } catch (error) {
+          // Configuration cannot improve by repeating the same preparation.
+          // Keep a terminal answer in the transcript, also seen after restart.
+          if (!(error instanceof Refused)) throw error
+          let [last] = await host.graph.read(
+            `.entry.session=${session}&.order=-entry.seq&.limit=1`,
+          )
+          await host.graph.apply([{
+            entity: {
+              eid: derivedEid(`${session}:binding-refusal:${last.entity.eid}`),
+            },
+            entry: { session },
+            refusal: { code: 'context' },
+            content: { body: error.message },
+          }], { trusted: true })
         }
         return true
       },

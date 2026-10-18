@@ -6,7 +6,7 @@ import { processProvider } from '@yaks/process/machine'
 import { effects } from './effects.ts'
 import { at } from './testing.ts'
 
-let fixture = async () => {
+let fixture = async (workspace = false) => {
   let directory = await Deno.makeTempDir({ prefix: 'native-fixer-' })
   await Deno.writeTextFile(
     directory + '/AGENTS.md',
@@ -29,6 +29,16 @@ let fixture = async () => {
       Promise.resolve(name == 'process' ? provider : undefined),
     resolveHome: async () => {
       homes++
+      if (workspace) {
+        await host.graph.apply([
+          { entity: { eid: 'computer' }, machine: { address: 'local://' } },
+          {
+            entity: { eid: 'checkout' },
+            workspace: { machine: 'computer', root: directory },
+          },
+        ])
+        return { workspace: 'checkout', cwd: directory }
+      }
       await host.graph.apply([{
         entity: { eid: 'fixer-machine' },
         machine: { provider: 'process', address: directory, state: 'running' },
@@ -141,4 +151,94 @@ test('a managed Claude fixer is left with its original runner and no native home
   equal(managed.session.native, undefined)
   equal(managed.session.home, undefined)
   equal(managed.homes, 0)
+})
+
+let workspaceFixers = await (async () => {
+  let results = []
+  for (let available of [true, false, 'connector']) {
+    let f = await fixture(true)
+    if (!available) f.host.workspaces = undefined
+    if (available == 'connector') {
+      let resolve = f.host.machines!.resolveHome!
+      f.host.machines!.resolveHome = async (session) => {
+        let home = await resolve(session)
+        await f.host.graph.apply([{
+          entity: { eid: 'computer' },
+          machine: { address: 'unknown://remote' },
+        }])
+        return home
+      }
+    }
+    let handlers = effects(f.host)
+    try {
+      await f.host.graph.apply([
+        {
+          entity: { eid: identityEid('provider', ['openai']) },
+          provider: { name: 'openai' },
+        },
+        {
+          entity: { eid: 'fixer' },
+          session: {},
+          fixer: { bug: '55555555-5555-4555-8555-555555555555' },
+        },
+        {
+          entity: { eid: 'input' },
+          entry: { session: 'fixer' },
+          using: { provider: identityEid('provider', ['openai']) },
+          content: { body: 'Fix the bug.' },
+        },
+      ], { trusted: true })
+      for (let i = 0; i < 2; i++) {
+        if (i) handlers = effects(f.host) // worker restart
+        let run = () =>
+          handlers.session_run(
+            { entity: { eid: 'input' } } as never,
+            f.host.graph,
+            {} as never,
+            {} as never,
+          )
+        if (available === true) await throws(run, 'Choose a model')
+        else await run()
+      }
+      results.push({
+        available,
+        session: (await f.host.graph.get(['fixer']))[0],
+        prompts: await f.host.graph.read('.entry.session=fixer&.prompt&*'),
+        refusals: await f.host.graph.read('.entry.session=fixer&.refusal&*'),
+      })
+    } finally {
+      await f.close()
+    }
+  }
+  return results
+})()
+
+test('workspace fixer admits instructions through the host binding once', () => {
+  let result = workspaceFixers[0]
+  equal((result.session.home as Comp).workspace, 'checkout')
+  equal(result.prompts.length, 1)
+  equal((result.prompts[0].content as Comp).body, 'Preserve the task claim.\n')
+  equal(result.refusals.length, 0)
+})
+
+test('unavailable workspace binding ends the fixer once across worker restart', () => {
+  let result = workspaceFixers[1]
+  equal((result.session.session as Comp).status, 'failed')
+  equal(result.prompts.length, 0)
+  equal(result.refusals.length, 1)
+  equal(
+    (result.refusals[0].content as Comp).body,
+    'This host lends no workspace execution binding',
+  )
+})
+
+test('unconfigured computer connector refuses the fixer once without going local', () => {
+  let result = workspaceFixers[2]
+  equal((result.session.session as Comp).status, 'failed')
+  equal(result.prompts.length, 0)
+  equal(result.refusals.length, 1)
+  equal(
+    (result.refusals[0].content as Comp).body,
+    'Computer connector is not configured: unknown',
+  )
 })

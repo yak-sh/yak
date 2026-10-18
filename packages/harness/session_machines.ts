@@ -1,6 +1,7 @@
 // Sessions name machines in the graph; only configured providers know how to
 // reach them. A record precedes provisioning, so another worker can resume an
 // interrupted request without inventing a second sandbox.
+import { Refused } from '@yaks/graph/errors'
 import { CallError } from '@yaks/tools/errors'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -142,7 +143,7 @@ export let machines = (
     let at = explicit ?? await serial(g, session, () => home(session))
     if (at.workspace) {
       if (!workspaces) {
-        throw new Error('This host lends no workspace execution binding')
+        throw new Refused('This host lends no workspace execution binding')
       }
       let target = await targetFor(g, session, {})
       let machine = await workspaces.connect(target.workspace)

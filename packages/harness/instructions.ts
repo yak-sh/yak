@@ -1,3 +1,4 @@
+import { Refused } from '@yaks/graph/errors'
 import { targetFor, type Workspaces } from '@yaks/machine/targets'
 // Instruction admission reads only the explicitly named machine. The files
 // become immutable prompt snapshots; later machine edits do not rewrite them.
@@ -73,7 +74,7 @@ export let instructionsFor = async (
 ): Promise<Snapshot[]> => {
   if (home.workspace) {
     if (!workspaces) {
-      throw new Error('This host lends no workspace execution binding')
+      throw new Refused('This host lends no workspace execution binding')
     }
     let target = await targetFor(g, undefined, home)
     home.cwd ??= target.cwd

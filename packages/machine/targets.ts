@@ -1,6 +1,6 @@
 // Resolve file-and-command targets once. A session default is only a convenience;
 // process recovery always follows its original workspace.
-import type { Bundle, Comp, Graph } from '@yaks/graph'
+import { type Bundle, type Comp, type Graph, Refused } from '@yaks/graph'
 import { token } from '@yaks/graph/guard'
 import type { Workspace } from './workspace.ts'
 
@@ -21,15 +21,15 @@ export let targetFor = async (
     : undefined
   let workspace = args.workspace ?? home?.workspace
   if (typeof workspace != 'string' || !workspace) {
-    throw new Error('Select a workspace explicitly or set session home')
+    throw new Refused('Select a workspace explicitly or set session home')
   }
   let row = (await g.get([workspace], ['workspace']))[0]
   let record = component(row?.workspace)
-  if (!record) throw new Error('Not a workspace: ' + workspace)
+  if (!record) throw new Refused('Not a workspace: ' + workspace)
   let cwd = args.cwd ?? (args.workspace == null ? home?.cwd : undefined) ??
     record.root
   if (typeof cwd != 'string' || !cwd.startsWith('/') || cwd.includes('\0')) {
-    throw new Error('Workspace cwd must be an absolute path')
+    throw new Refused('Workspace cwd must be an absolute path')
   }
   return { workspace, cwd }
 }

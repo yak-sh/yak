@@ -1,5 +1,6 @@
 // Explicit computer transports. Scripts cross only the configured connection;
 // connector failures never fall back to the graph server's filesystem.
+import { Refused } from '@yaks/graph/errors'
 import type { ComputerConnector, ComputerTransport } from './workspace.ts'
 import { quote } from './workspace.ts'
 
@@ -197,11 +198,11 @@ export let computer = async (
   address: string | undefined,
   configured: Record<string, ComputerConnector>,
 ): Promise<ComputerTransport> => {
-  if (!address) throw new Error('Computer placement/address is unknown')
+  if (!address) throw new Refused('Computer placement/address is unknown')
   let scheme = address.slice(0, address.indexOf(':'))
   let connector = configured[scheme]
   if (!connector) {
-    throw new Error('Computer connector is not configured: ' + scheme)
+    throw new Refused('Computer connector is not configured: ' + scheme)
   }
   return await connector.connect(address)
 }
