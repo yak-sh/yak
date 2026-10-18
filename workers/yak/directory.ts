@@ -1,4 +1,4 @@
-import { EPOCH } from './directory-copy.ts'
+import { EPOCH, MEND } from './directory-copy.ts'
 // The directory part (D-32318 §The meta-space): spaces, apps, and members
 // are entities in the meta-space's store — the Store object named
 // yak/platform, a graph on the platform's own vocabulary (vocab.ts
@@ -737,7 +737,9 @@ export let fetch = (
   if (req.method == 'GET' && req.headers.get(EPOCH) == '1') {
     let q = new URL(req.url).searchParams.get('q') ?? ''
     return storeOf(env.STORE, PLATFORM_STORE)(
-      `/query?q=${encodeURIComponent(q)}`,
+      `/query?q=${encodeURIComponent(q)}${
+        req.headers.has(MEND) ? '&mend=1' : ''
+      }`,
     )
   }
   return over(metaStore(env))(req)

@@ -2,6 +2,7 @@ import {
   copyOf,
   EPOCH,
   fenced,
+  mend,
   signedDirectory,
   Unfenced,
 } from './directory-copy.ts'
@@ -4439,10 +4440,13 @@ export class Store {
   #asked = served(async (request) => {
     // Capture before any yield: a read begun before a mutation cannot fill the
     // copy at the newer revision, even if its response arrives afterwards.
-    let revision =
-      this.#get('name') == PLATFORM_STORE && this.#bind.SERVING_COPY
-        ? this.#get('directory-revision') ?? '0'
-        : null
+    let copy = this.#get('name') == PLATFORM_STORE && this.#bind.SERVING_COPY
+      ? copyOf(this.#bind as Env)
+      : undefined
+    if (copy && new URL(request.url).searchParams.get('mend') == '1') {
+      await mend(copy, this.#committed)
+    }
+    let revision = copy ? this.#get('directory-revision') ?? '0' : null
     let answer = await this.#directoryAsked(request)
     if (revision == null) return answer
     let headers = new Headers(answer.headers)

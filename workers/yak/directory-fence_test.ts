@@ -35,6 +35,7 @@ let fixture = async (rules: Rule[] = []) => {
       await beforeBegin()
       return offered(revision)
     },
+    revision: () => Promise.resolve(core.revision),
     finish: async (revision) => {
       await beforeFinish(revision)
       finishes.push(revision)
@@ -57,9 +58,9 @@ let fixture = async (rules: Rule[] = []) => {
   } as Partial<Env>
   store = new Store(ctx, env, rules)
   let at = metaOf(doorOf((req) => store.fetch(req), PLATFORM_STORE))
-  let read = () =>
+  let read = (mend = false) =>
     store.fetch(
-      new Request('http://store/query?q=.app', {
+      new Request(`http://store/query?q=.app${mend ? '&mend=1' : ''}`, {
         headers: { 'x-store': PLATFORM_STORE, [EPOCH]: '1', ...KERNEL },
       }),
     )
@@ -318,6 +319,40 @@ await proof(
       equal(blocked, true)
       equal(epoch, String(f.initial + 1))
       equal(filled, true)
+    }
+  },
+)
+
+await proof(
+  'a write whose begin is lost lowers its fence as it fails',
+  async () => {
+    let f = await fixture()
+    f.onBegin(() => Promise.reject(new Error('begin answer lost')))
+    let error = await refusal(() => f.at.apply(patch, KERNEL))
+    let blocked = unavailable(f), valid = f.core().valid(f.initial)
+    return () => {
+      ok(error.includes('begin answer lost'), error)
+      equal([blocked, valid, f.saved().blocked], [true, true, false])
+    }
+  },
+)
+
+await proof(
+  'a fence whose write is gone is lowered by a read that finds it',
+  async () => {
+    let f = await fixture()
+    f.core().begin()
+    let held = f.core().valid(f.initial)
+    await (await f.read()).body?.cancel()
+    let still = f.saved().blocked
+    let mended = await f.read(true)
+    let epoch = Number(mended.headers.get(EPOCH))
+    await mended.body?.cancel()
+    return () => {
+      equal([held, still], [false, true])
+      equal(f.saved().blocked, false)
+      ok(f.core().valid(epoch))
+      equal(epoch, f.initial)
     }
   },
 )

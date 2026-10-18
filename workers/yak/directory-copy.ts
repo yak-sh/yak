@@ -17,6 +17,8 @@ export type ServingCopyDoor = {
   valid?(revision: number): Promise<boolean>
   publish?(revision: number, key: string, body: string): Promise<boolean>
   begin(): Promise<number>
+  /** The newest fence raised, committed or not. */
+  revision?(): Promise<number>
   finish(revision: number): Promise<boolean>
   /** A failed mutation ends its fence at the directory's committed revision. */
   settle?(revision: number, committed: number): Promise<boolean>
@@ -43,28 +45,48 @@ export class Unfenced extends Error {
 // concurrent write already committed under. Its commit refuses it, and it
 // takes a fresh fence; only a write that keeps losing the race fails.
 //
-// A write that fails settles its fence (`committed` reads the directory's
-// committed revision), so signed serving resumes at once with the last
-// committed directory instead of waiting for another write to succeed.
+// A write that dies leaves its fence up with nobody to lower it: the write
+// failed at `begin` itself (the copy raised the fence, the answer was lost),
+// or its isolate went with a deploy between `begin` and `finish`. `mend`
+// lowers a fence no write of this isolate holds, at the revision the
+// directory has committed. A write that fails mends as it leaves, and a signed
+// read still fenced after its first look asks the directory to mend (MEND), so
+// a fence is up for as long as a write holds it and never longer.
+let open = 0
+export let mend = async (copy: ServingCopyDoor, committed: () => number) => {
+  let revision = await copy.revision?.()
+  if (revision != null && open == 0) await copy.settle?.(revision, committed())
+}
+
 export let fenced = async <T>(
   copy: ServingCopyDoor,
   write: (revision: number) => T | Promise<T>,
   committed: () => number,
   tries = 4,
 ): Promise<T> => {
-  let revision = await copy.begin()
+  open++
+  let failed = true
   try {
-    let out = await write(revision)
-    await copy.finish(revision)
-    return out
-  } catch (e) {
-    await copy.settle?.(revision, committed()).catch(() => {})
-    if (!(e instanceof Unfenced) || tries <= 1) throw e
-    return fenced(copy, write, committed, tries - 1)
+    for (;; tries--) {
+      let revision = await copy.begin()
+      try {
+        let out = await write(revision)
+        await copy.finish(revision)
+        failed = false
+        return out
+      } catch (e) {
+        if (!(e instanceof Unfenced) || tries <= 1) throw e
+      }
+    }
+  } finally {
+    open--
+    if (failed) await mend(copy, committed).catch(() => {})
   }
 }
 
 export let EPOCH = 'x-yak-directory-revision'
+/** A signed read still fenced asks the directory to mend an orphaned fence. */
+export let MEND = 'x-yak-mend'
 /** How long a signed read waits for a directory write to release its fence. */
 export let FENCE_WAIT = 15_000
 let timer: DirectoryCopyTimer = {
@@ -254,6 +276,7 @@ export let signedDirectory = (
               done(accepted)
               return
             }
+            headers.set(MEND, '1')
             await new Promise<void>((resume) => time.after(pause, resume))
           }
         })().catch(() => done(unavailable()))
