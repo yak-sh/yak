@@ -194,6 +194,22 @@ export async function measure(
       cwd: root,
       prompt: 'benchmark prompt',
     })
+    // Real HTTP server; the production MCP handler prepares, authenticates,
+    // executes and serializes each response. No fake tool implementation.
+    if (!host.handler) throw new Error('web host has no handler')
+    server = Deno.serve(
+      { hostname: '127.0.0.1', port: 0, onListen() {} },
+      host.handler,
+    )
+    let url = `http://127.0.0.1:${server.addr.port}`
+    // Composition starts the browser bundle in the background. Finish that
+    // fixture work before timing commands, so its compiler cannot compete
+    // with CLI startup or the connector on this same host.
+    let asset = await fetch(`${url}/web/app.js`)
+    if (!asset.ok) throw new Error(`fixture asset: ${asset.status}`)
+    if (!(await asset.arrayBuffer()).byteLength) {
+      throw new Error('fixture asset is empty')
+    }
     // First: preserve today's cost before the independent hook fix changes it.
     await timed('hook/UserPromptSubmit', async () => {
       let out = await cli(['session', 'context', '--hook', '-'], hook)
@@ -239,14 +255,6 @@ export async function measure(
           .includes(body) == false
       ) throw new Error('CLI write not committed')
     })
-    // Real HTTP server; the production MCP handler prepares, authenticates,
-    // executes and serializes each response. No fake tool implementation.
-    if (!host.handler) throw new Error('web host has no handler')
-    server = Deno.serve(
-      { hostname: '127.0.0.1', port: 0, onListen() {} },
-      host.handler,
-    )
-    let url = `http://127.0.0.1:${server.addr.port}`
     let ask = rpc({ url: `${url}/mcp` })
     await initialize(ask)
     await timed('connector/graph-query', async () => {
