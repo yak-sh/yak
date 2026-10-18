@@ -163,6 +163,7 @@ test('wait resolves while child completion waits behind the parent tool', async 
     // after the real result (or its completion update) has arrived.
     let result = req.items.findLast((i) =>
       i.kind == 'result' && i.id == 'spawn' &&
+        i.output != 'Pending.' &&
         !i.output.startsWith('Status: in_progress.') ||
       i.kind == 'user' && i.text.startsWith('Tool spawn completed:\n')
     )
