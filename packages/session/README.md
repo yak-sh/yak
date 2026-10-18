@@ -678,3 +678,13 @@ Nothing starts a session for a held reply; it waits for one. A managed spawn in
 the project's checkout, with the thread as its brief and the project's common
 persona, is where that will plug in (./listen.ts), once sessions may be started
 again (T-95308) and its provider, model and spend are chosen.
+
+### Earlier words on prompt submission
+
+`yak session context --hook -` prints prompt timing from the local transcript
+and asks the configured server's `/session/earlier` door for
+[earlier words](../memory/README.md#earlier-words-beside-a-prompt). The request
+has a 650 ms deadline; an absent or busy server adds no earlier words and never
+opens a graph in the hook process. The server uses the configured `person` and
+their document title for explicitly attributed comment quotations. Without a
+configured person it returns nothing. Session-start context is independent.

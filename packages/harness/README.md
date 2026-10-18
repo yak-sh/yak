@@ -1271,3 +1271,11 @@ reports the exhausted failure through its reporter with phase `model-metadata`
 provider's retry budget is not a terminal session failure. Previously a listing
 429 became a terminal `ModelError`, which the session treated as a provider
 refusal and did **not** send to the defect reporter.
+
+### Earlier words on a turn
+
+A local runner adds
+[earlier words](../memory/README.md#earlier-words-beside-a-prompt) beside the
+latest person-authored input through its turn-context preparation. It uses the
+host's configured person and meaning index. An agent-authored input receives no
+person history. Stored inputs and admitted instruction snapshots stay unchanged.

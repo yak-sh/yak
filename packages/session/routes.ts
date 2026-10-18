@@ -9,15 +9,50 @@
 // 400. Anything else that goes wrong is thrown to the host, which reports it;
 // the harness treats a failed hook as nothing to add and carries on.
 
+import { earlier } from '@yaks/memory/earlier'
+import type { Meaning } from '@yaks/host'
 import type { Graph } from '@yaks/graph'
-import type { Route } from '@yaks/api'
+import type { Authenticate, Route } from '@yaks/api'
 import { heard, type Hook } from './bus.ts'
 
 /** Where the harness posts its hook events. */
 export let PATH = '/session/hook'
 
 /** `POST /session/hook`: one hook event in, the context it adds out. */
-export let routes = (host: { graph: Graph }): Route[] => [{
+export let routes = (
+  host: {
+    graph: Graph
+    config?: { person?: string }
+    meaning?: Meaning
+    who?: Authenticate
+  },
+): Route[] => [{
+  method: 'POST',
+  path: '/session/earlier',
+  handle: async (request) => {
+    // This door carries private historical words; apply the host's identity
+    // boundary just as the graph read door does. Browser cross-origin posts
+    // are not prompt hooks.
+    if (request.headers.has('origin')) return new Response('', { status: 403 })
+    await host.who?.(request)
+    let input = await request.json().catch(() => null)
+    if (typeof input?.words != 'string' || typeof input?.before != 'string') {
+      return new Response('', { status: 400 })
+    }
+    let said = host.config?.person
+    let person = said
+      ? (await host.graph.address([said])).get(said) ?? said
+      : undefined
+    return new Response(
+      await earlier(host.graph, {
+        person,
+        words: input.words,
+        before: input.before,
+        meaning: host.meaning,
+      }),
+    )
+  },
+}, {
   method: 'POST',
   path: PATH,
   handle: async (request) => {

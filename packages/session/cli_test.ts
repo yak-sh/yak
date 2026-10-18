@@ -20,10 +20,10 @@ let context = {
 } as unknown as Ctx
 let run = tools.session_context
 
-test('local prompt context reads its transcript without opening a graph', () => {
+test('local prompt context reads its transcript without opening a graph', async () => {
   said.length = 0
   equal(
-    run({
+    await run({
       hook: JSON.stringify({
         hook_event_name: 'UserPromptSubmit',
         transcript_path: path,
@@ -37,27 +37,27 @@ test('local prompt context reads its transcript without opening a graph', () => 
     true,
   )
 })
-test('empty and malformed context hooks finish without graph work', () => {
+test('empty and malformed context hooks finish without graph work', async () => {
   for (let hook of ['{}', 'broken', '{"hook_event_name":"UserPromptSubmit"}']) {
     said.length = 0
-    equal(run({ hook }, context), 0)
+    equal(await run({ hook }, context), 0)
     equal(said, [])
   }
 })
-test('session start and explicit session context delegate to the graph', () => {
+test('session start and explicit session context delegate to the graph', async () => {
   equal(
-    run(
+    await run(
       { hook: '{"session_id":"a","hook_event_name":"SessionStart"}' },
       context,
     ),
     undefined,
   )
-  equal(run({ session: 'a', hook: 'broken' }, context), undefined)
+  equal(await run({ session: 'a', hook: 'broken' }, context), undefined)
 })
 
-test('structured context delegates to the ordinary tool runner', () => {
+test('structured context delegates to the ordinary tool runner', async () => {
   equal(
-    run({ hook: '{"hook_event_name":"UserPromptSubmit"}' }, {
+    await run({ hook: '{"hook_event_name":"UserPromptSubmit"}' }, {
       ...context,
       json: true,
     }),

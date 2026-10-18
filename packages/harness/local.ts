@@ -22,7 +22,7 @@ import { imageContext, registered } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
 import { homeAt, machines } from './session_machines.ts'
-import { instructionsFor } from './instructions.ts'
+import { earlierInput, instructionsFor } from './instructions.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
@@ -204,7 +204,10 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     },
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),
-    requestItems: (_, __, current) => skillItems(h.g, current),
+    requestItems: async (_, entries, current) => [
+      ...await skillItems(h.g, current),
+      ...await earlierInput(h.g, entries, h.person, h.meaning),
+    ],
     report,
     release: async () => {
       http.close()

@@ -1,4 +1,6 @@
 import { Refused } from '@yaks/graph/errors'
+import { kindOf } from '@yaks/session'
+import { earlier } from '@yaks/memory/earlier'
 import { targetFor, type Workspaces } from '@yaks/machine/targets'
 // Instruction admission reads only the explicitly named machine. The files
 // become immutable prompt snapshots; later machine edits do not rewrite them.
@@ -144,4 +146,25 @@ export let instructionsFor = async (
   let cwd = home.cwd == null ? loan.cwd : String(home.cwd)
   home.cwd ??= cwd
   return admitted(g, loan.machine, home, context)
+}
+
+/** Historical owner words ride beside the latest input, not in instructions. */
+export async function earlierInput(
+  g: Graph,
+  entries: import('@yaks/graph').Bundle[],
+  person?: string,
+  meaning?: import('@yaks/host').Meaning,
+) {
+  let latest = entries.findLast((b) =>
+    kindOf(b) == 'input' && !b.prompt && !b.notice && !b.meta && !b.reasoning &&
+    !b.checkpoint && !b.cancel
+  )
+  if (!latest || !person || (latest.created as Comp)?.by != person) return []
+  let body = await earlier(g, {
+    person,
+    words: String((latest.content as Comp).body ?? ''),
+    before: String((latest.created as Comp)?.at ?? ''),
+    meaning,
+  })
+  return body ? [{ kind: 'user' as const, text: body }] : []
 }

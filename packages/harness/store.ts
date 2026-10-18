@@ -18,6 +18,7 @@ import type { Reply } from '@yaks/tools'
  * working it. */
 export type Harness = {
   /** The configured person whose default provider accounts serve native sessions. */
+  meaning?: Host['meaning']
   person?: Eid
   store: Storage
   g: Graph
@@ -57,6 +58,7 @@ export let hosted = (
 ): Harness => {
   return {
     person: host.config.person,
+    meaning: host.meaning,
     store: host.storage,
     g: host.graph,
     fx: host.fx,

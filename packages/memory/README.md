@@ -245,3 +245,37 @@ configured graph and, for search queries, the appropriate search extensions.
 ## License
 
 Apache-2.0
+
+## Earlier words beside a prompt
+
+`@yaks/memory/earlier` offers `earlier(graph, options)`: a bounded read of
+strictly earlier person-authored transcript inputs and comments explicitly
+attributing a verbatim quotation to that person. It returns at most three whole
+quotations, each with its source id and date. Agent prose outside a quotation is
+not returned. Duplicate quotations are shown once; quotations over 2,400
+characters are omitted rather than silently shortened.
+
+```ts
+import { ownWords } from '@yaks/memory/earlier'
+import { equal } from '@yaks/testing'
+const words = ownWords(
+  {
+    entity: { eid: 'source' },
+    comment: { target: 'discussion' },
+    doc: { body: 'Ada, 2026-01-01, verbatim: "keep files immutable"' },
+    created: { at: '2026-01-02T00:00:00Z' },
+  },
+  'ada',
+  'Ada',
+)
+equal(words[0].words, 'keep files immutable')
+```
+
+The caller supplies the person's id, the prompt words and its cutoff instant.
+Full-text search supplies lexical candidates when meaning search has no
+candidates; the optional host `meaning` function supplies semantic candidates.
+The selector verifies authorship and cutoff again after reading the candidates.
+No model composes an answer, no recall event is written, and no historical
+quotation becomes an instruction. The similarity floor is calibrated for
+Granite's 30M English embedding space; other embedding spaces need their own
+measurement.
