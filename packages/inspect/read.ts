@@ -299,11 +299,15 @@ export let brief = (v: string): string =>
 export let relation = (b: Bundle, relations: string[]): string | undefined =>
   comps(b).map(([name]) => name).find((n) => relations.includes(n))
 
-// One formatter for every count: toLocaleString builds a new one each call.
-let grouped = new Intl.NumberFormat('en-US')
+// Counts need only decimal grouping. Keep Intl's rounding and non-finite
+// behavior for other numbers without paying its constructor during module load.
+let grouped: Intl.NumberFormat | undefined
 
 /** A number, grouped for reading: 12345 reads 12,345. */
-export let count = (n: number): string => grouped.format(n)
+export let count = (n: number): string =>
+  Number.isSafeInteger(n) && !Object.is(n, -0)
+    ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    : (grouped ??= new Intl.NumberFormat('en-US')).format(n)
 
 /**
  * A property's type as it reads, off its `_prop` row.
