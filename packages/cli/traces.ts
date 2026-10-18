@@ -26,13 +26,30 @@ export let traces = (
   let roots = new Map<string, string>()
   let trees = new Map<string, {
     events: Map<string, Event>
-    capture: Promise<Capture>
+    capture: Promise<Capture | undefined>
   }>()
   let pending = new Set<Promise<void>>()
-  let complete = async (events: Event[], capture: Promise<Capture>) => {
+  // Selection can be waiting on another process's capture-control lock. It
+  // has delivered nothing yet and must not hold a closing server open.
+  let selections = new Set<() => void>()
+  let select = (): Promise<Capture | undefined> => {
+    let choice = Promise.withResolvers<Capture | undefined>()
+    let cancel = () => choice.resolve(undefined)
+    selections.add(cancel)
+    void options.take().then(
+      (value) => choice.resolve(value),
+      () => choice.resolve({ requested: false, rate: 0 }),
+    ).finally(() => selections.delete(cancel))
+    return choice.promise
+  }
+  let complete = async (
+    events: Event[],
+    capture: Promise<Capture | undefined>,
+  ) => {
     let root = events[0]
     if (!root) return
     let armed = await capture
+    if (!armed) return
     let rowsRead = root.counts?.rowsRead ?? 0
     let rowsWritten = root.counts?.rowsWritten ?? 0
     let selected = selectRequest({
@@ -64,10 +81,7 @@ export let traces = (
       if (event.stage != 'start') return
       trees.set(root, {
         events: new Map(),
-        capture: options.take().catch(() => ({
-          requested: false,
-          rate: 0,
-        })),
+        capture: select(),
       })
     }
     if (!root) return
@@ -90,6 +104,10 @@ export let traces = (
   return {
     close: async () => {
       stop()
+      // A selection already resolved has priority over cancellation.
+      await Promise.resolve()
+      selections.forEach((cancel) => cancel())
+      selections.clear()
       trees.clear()
       roots.clear()
       await Promise.all(pending)

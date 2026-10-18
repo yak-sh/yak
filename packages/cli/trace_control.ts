@@ -118,10 +118,12 @@ export let traceControl = (db: string, pid = Deno.pid, every = 250) => {
     if (closed) throw new Error('trace control is closed')
     if (memory) return change()
     return await serial(path, async () => {
+      if (closed) throw new Error('trace control is closed')
       await Deno.mkdir(directory, { recursive: true })
       let file = await Deno.open(`${path}.lock`, { create: true, write: true })
       try {
         await file.lock(true)
+        if (closed) throw new Error('trace control is closed')
         changing = true
         state = read()
         let before = JSON.stringify(state)

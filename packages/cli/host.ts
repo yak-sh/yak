@@ -856,8 +856,8 @@ let composed = async (
         if (effecting && !opts.readOnly) await drained()
         await dutiesHost.close()
         let shut = async () => {
-          await recorded?.close()
           captureControl?.close()
+          await recorded?.close()
           await report.close()
           try {
             sql.close()
@@ -885,11 +885,8 @@ let composed = async (
     }
   } catch (error) {
     try {
-      try {
-        await recorded?.close()
-      } finally {
-        captureControl?.close()
-      }
+      captureControl?.close()
+      await recorded?.close()
     } finally {
       try {
         try {

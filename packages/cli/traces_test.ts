@@ -99,7 +99,7 @@ test('nested applies are one request tree, and concurrent roots stay separate', 
   ])
 })
 
-test('unselected work performs no graph operations or delivery for tracing', async () => {
+let unselectedWork = await (async () => {
   let vocab = loadVocab({
     $defs: {
       note: {
@@ -110,12 +110,12 @@ test('unselected work performs no graph operations or delivery for tracing', asy
     },
   })
   let g = graph({ vocab, storage: ram(vocab) })
-  let sends = 0
+  let state = { sends: 0 }
   let recorder = traces(g, {
     process: mint(),
     take: () => Promise.resolve({ requested: false, rate: 0 }),
     sink: () => {
-      sends++
+      state.sends++
     },
   })
   let events: string[] = []
@@ -123,9 +123,61 @@ test('unselected work performs no graph operations or delivery for tracing', asy
     if (e.stage == 'start') events.push(e.kind)
   }, { history: false })
   await g.apply([{ entity: { eid: mint() }, note: { title: 'one' } }])
+  return { recorder, state, events, stop }
+})()
+
+test('unselected work performs no graph operations or delivery for tracing', async () => {
+  let { recorder, state, events, stop } = unselectedWork
   await recorder.close()
   stop()
-  equal(sends, 0)
+  equal(state.sends, 0)
   equal(events.filter((kind) => kind == 'apply').length, 1)
   equal(events.filter((kind) => kind == 'query' || kind == 'get').length, 0)
+})
+
+test('closing tracing abandons unselected work waiting on capture control', async () => {
+  let target = {}
+  let selection = Promise.withResolvers<{ requested: boolean; rate: number }>()
+  let sent = 0
+  let recorder = traces(target, {
+    process: mint(),
+    take: () => selection.promise,
+    sink: () => {
+      sent++
+    },
+  })
+  request(target, 'waiting for capture control', 2)
+  await recorder.close()
+  equal(sent, 0)
+  // A lock becoming available after shutdown cannot deliver a late trace.
+  selection.resolve({ requested: true, rate: 0 })
+  await Promise.resolve()
+  equal(sent, 0)
+})
+
+test('closing tracing finishes delivery already selected', async () => {
+  let target = {}
+  let delivering = Promise.withResolvers<void>()
+  let accepted = Promise.withResolvers<void>()
+  let delivered = false
+  let recorder = traces(target, {
+    process: mint(),
+    take: () => Promise.resolve({ requested: true, rate: 0 }),
+    sink: async () => {
+      accepted.resolve()
+      await delivering.promise
+      delivered = true
+    },
+  })
+  request(target, 'selected before shutdown', 2)
+  await accepted.promise
+  let closed = false
+  let ending = recorder.close().then(() => {
+    closed = true
+  })
+  await Promise.resolve()
+  equal(closed, false)
+  delivering.resolve()
+  await ending
+  equal(delivered, true)
 })
