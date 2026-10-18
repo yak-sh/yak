@@ -53,7 +53,13 @@ export type Reach = {
 }
 
 // One reading: the chain of segments and what of each entry it brings.
-type Read = { g: Graph; segs: Segment[]; names?: string[]; fields: string }
+type Read = {
+  g: Graph
+  segs: Segment[]
+  names?: string[]
+  fields: string
+  found: Map<string, Promise<Bundle | undefined>>
+}
 
 let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
   let names = o.bodies
@@ -64,6 +70,7 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
     segs: await transcriptSegments(g, session),
     names,
     fields: names ? names.map((n) => '?' + n).join('&') : '*',
+    found: new Map(),
   }
 }
 
@@ -90,20 +97,41 @@ let pages = ({ g, segs, fields }: Read) => {
       }
       return got
     },
+    // Every row from `at` up that is still unread, a query for each segment
+    // it spans: a segment is read whole when the one before it still holds
+    // seqs at or above `at`, since the seqs of a segment all pass those before.
+    until: async (at: number): Promise<Bundle[]> => {
+      let got: Bundle[] = []
+      while (i >= 0) {
+        let rows = await g.read(
+          `${within(segs[i])}&.entry.seq>=${at}&.order=-entry.seq${after}` +
+            `&${fields}`,
+        )
+        got.push(...rows)
+        if (rows.length) after = `&.after=${rows.at(-1)!.entity.eid}`
+        if (i == 0 || segs[i - 1].through < at) break
+        i--
+        after = ''
+      }
+      return got
+    },
   }
 }
 
 // The newest entry a qualifier selects, and every one of them.
-let newest = async (
-  r: Read,
-  qualifier: string,
-): Promise<Bundle | undefined> => {
-  for (let s of r.segs.toReversed()) {
-    let [row] = await r.g.read(
-      `${within(s)}${qualifier}&.order=-entry.seq&.limit=1&${r.fields}`,
-    )
-    if (row) return row
-  }
+let newest = (r: Read, qualifier: string): Promise<Bundle | undefined> => {
+  let seen = r.found.get(qualifier)
+  if (seen) return seen
+  let found = (async () => {
+    for (let s of r.segs.toReversed()) {
+      let [row] = await r.g.read(
+        `${within(s)}${qualifier}&.order=-entry.seq&.limit=1&${r.fields}`,
+      )
+      if (row) return row
+    }
+  })()
+  r.found.set(qualifier, found)
+  return found
 }
 let every = async (r: Read, qualifier: string): Promise<Bundle[]> =>
   (await Promise.all(
@@ -176,17 +204,23 @@ const STATUS = [
   'refusal',
 ]
 
-/** What a transcript is doing, read off the entries a status looks at: the
- * same answer as `session.status`, without computing it. */
+/** What a transcript is doing, read off the entries a status looks at. The
+ * adapter's derived `session.status` is this rule too, but it computes it over
+ * every entry each time it is asked, so the cost of asking grows with the
+ * transcript; this reads the newest part. A stop the caller observed from
+ * outside (`session.ended`) is the only thing besides entries that ends one. */
 export let entryStatus = async (
   g: Graph,
   session: Eid,
-): Promise<TranscriptStatus> =>
-  statusOf(
+): Promise<TranscriptStatus> => {
+  let [row] = await g.rows(`.entity.eid=${session}&.fields=session.ended`)
+  return statusOf(
     await reach(g, session, {
       comps: STATUS.filter((name) => g.vocab.comp(name)),
     }),
+    row?.['session.ended'] === true,
   )
+}
 
 /** The model selection in force on a transcript, as the whole of it would say. */
 export let usingOf = async (
@@ -214,7 +248,7 @@ let named = async (r: Read, turn: boolean): Promise<Bundle[]> => {
   let parts = [
     ...turn && has('checkpoint') ? ['.checkpoint'] : [],
     ...turn && has('prompt') ? ['.prompt'] : [],
-    ...has('provisional') ? [`.${ASK} .provisional`] : [],
+    ...turn && has('provisional') ? [`.${ASK} .provisional`] : [],
     ...has(CALL) && has(RESULT) ? [`.${CALL} !${RESULT}s`] : [],
   ]
   return parts.length ? await every(r, `&(${parts.join('|')})`) : []
@@ -318,15 +352,23 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<Bundle[]> => {
     rows.unshift(...(await page.next(size)).reverse())
     let at = await floor(n, !!o.turn)
     if (page.done || at != null && seqOf(rows[0]) <= at) break
+    // What the rows settle is a seq: read down to it at once, not by halves.
+    if (at != null && at > -Infinity) {
+      rows.unshift(...(await page.until(at)).reverse())
+      let again = await floor(n, !!o.turn)
+      if (page.done || again != null && seqOf(rows[0]) <= again) break
+    }
     size *= 2
   }
   // Older entries the rows name: what a model selection is in force, the call
   // a result answers, the ask a reply or call came from, and what the open
   // calls have reported.
-  held.push(
-    ...await aspect(r, USING, rows),
-    ...await aspect(r, SENDING, rows),
-  )
+  if (o.turn) {
+    held.push(
+      ...await aspect(r, USING, rows),
+      ...await aspect(r, SENDING, rows),
+    )
+  }
   let open = held.filter((b) => b.call).map((b) => b.entity.eid)
   if (open.length && g.vocab.comp(PROGRESS)) {
     held.push(

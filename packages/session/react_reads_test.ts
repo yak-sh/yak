@@ -317,64 +317,50 @@ for (let legacy of [false, true]) {
   })
 }
 
-test('status-only completion asks the existing derived fact without loading historical entries', async () => {
-  let d = mem(), s = storage(d, vocab, { derived: sessionDerived(vocab) })
-  let g = graph({ vocab, storage: s, plugins: [sessions()] })
-  let m = identityEid('model', ['fake'])
-  g.apply([{ entity: { eid: m }, model: { name: 'fake' } }, {
-    entity: { eid: 's' },
-    session: {},
-  }])
-  g.apply(
-    Array.from(
-      { length: 20 },
-      (_, n) => ({
-        entity: { eid: `old-${n}` },
-        entry: { session: 's' },
-        content: { body: 'Old prose' },
-        stop: {},
-      }),
-    ),
-  )
-  g.apply([{
-    entity: { eid: 'new' },
-    entry: { session: 's' },
-    content: { body: 'New request' },
-    using: { model: m },
-  }])
-  let read = g.read.bind(g), historyReads = 0
-  g.read = (q, o) => {
-    if (typeof q == 'string' && q.includes('.entry.session=')) historyReads++
-    return read(q, o)
-  }
-  assertEquals(await currentStatus(g, 's'), 'pending')
-  assertEquals(historyReads, 0)
-})
+// `n` finished turns of `session`: an input, the ask it opened, its output.
+let oldTurns = (m: string, session: string, n: number) =>
+  Array.from({ length: n }, (_, i): Bundle[] => {
+    let n = 1 + i * 3
+    return [{
+      entity: { eid: `in${n}` },
+      entry: { session, seq: n },
+      content: { body: 'go' },
+      using: { model: m },
+    }, {
+      entity: { eid: `ask${n}` },
+      entry: { session, seq: n + 1 },
+      ask: { to: m, through: `in${n}` },
+      attempt: {},
+    }, {
+      entity: { eid: `out${n}` },
+      entry: { session, seq: n + 2 },
+      content: { body: 'ok' },
+      output: { source: `ask${n}` },
+    }]
+  }).flat()
 
-test('a terminal runner checks the derived verdict before loading entry history', async () => {
+test('a terminal runner reads a bounded part of the entry history', async () => {
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   let g = graph({ vocab, storage: s, plugins: [sessions()] })
-  await g.apply([{ entity: { eid: 'terminal' }, session: {} }, {
-    entity: { eid: 'holder' },
-  }])
-  await g.apply(
-    Array.from(
-      { length: 20 },
-      (_, i): Bundle => ({
-        entity: { eid: `terminal-${i}` },
-        entry: { session: 'terminal' },
-        content: { body: 'old' },
+  await g.apply([{ entity: { eid: 'holder' } }])
+  await s.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'terminal' }, session: {} },
+      { entity: { eid: 'fake' }, model: { name: 'fake' } },
+      ...oldTurns('fake', 'terminal', 45),
+      {
+        entity: { eid: 'end' },
+        entry: { session: 'terminal', seq: 500 },
+        content: { body: 'done' },
         stop: {},
-      }),
-    ),
+      },
+    ])
   )
   let reads = 0, read = g.read.bind(g)
-  g.read = (q, o) => {
-    if (
-      typeof q == 'string' && q.startsWith('.entry.session=terminal') &&
-      !q.includes('.limit=') && !q.includes('.ask&.provisional')
-    ) reads++
-    return read(q, o)
+  g.read = async (q, o) => {
+    let found = await read(q, o)
+    reads += found.length
+    return found
   }
   await settle(g, 'terminal', {
     holder: 'holder',
@@ -383,7 +369,7 @@ test('a terminal runner checks the derived verdict before loading entry history'
     },
     tools: [],
   })
-  assertEquals(reads, 0)
+  assert(reads < 100, `read ${reads} rows`)
 })
 
 for (let fork of [false, true]) {
@@ -395,25 +381,7 @@ for (let fork of [false, true]) {
       let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
       let g = graph({ vocab, storage: s, plugins: [sessions()] })
       let m = identityEid('model', ['fake'])
-      let turns = Array.from({ length: 45 }, (_, i): Bundle[] => {
-        let n = 1 + i * 3
-        return [{
-          entity: { eid: `in${n}` },
-          entry: { session: 'parent', seq: n },
-          content: { body: 'go' },
-          using: { model: m },
-        }, {
-          entity: { eid: `ask${n}` },
-          entry: { session: 'parent', seq: n + 1 },
-          ask: { to: m, through: `in${n}` },
-          attempt: {},
-        }, {
-          entity: { eid: `out${n}` },
-          entry: { session: 'parent', seq: n + 2 },
-          content: { body: 'ok' },
-          output: { source: `ask${n}` },
-        }]
-      }).flat()
+      let turns = oldTurns(m, 'parent', 45)
       let owner = fork ? 'child' : 'parent'
       await s.tx((tx) =>
         tx.patch([

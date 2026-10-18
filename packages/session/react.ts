@@ -1,5 +1,4 @@
 import { derivedEid } from '@yaks/graph/identity'
-import { Unsupported } from '@yaks/match'
 import { compactAsk } from './compact_ask.ts'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
@@ -307,31 +306,10 @@ export let transcript = async (
   ]
 }
 
-export let currentStatus = async (
+export let currentStatus = (
   g: Graph,
   session: Eid,
-): Promise<TranscriptStatus> => {
-  // A status-only caller can ask the adapter's existing derived fact. A fork
-  // is read through its parent's entries, a queued transcript is queued by
-  // where it waits and not by what it says, and a replica/RAM adapter with no
-  // computed answer keeps the entry-based path.
-  let fields = 'session.status' + (g.vocab.comp(FORK) ? ',fork.from' : '')
-  try {
-    let [row] = await g.rows(`.entity.eid=${session}&.fields=${fields}`)
-    let status = row?.['session.status']
-    if (
-      !row?.['fork.from'] &&
-      ['empty', 'pending', 'running', 'settled', 'stopped', 'failed'].includes(
-        String(status),
-      )
-    ) {
-      return status as TranscriptStatus
-    }
-  } catch (error) {
-    if (!(error instanceof Unsupported)) throw error
-  }
-  return entryStatus(g, session)
-}
+): Promise<TranscriptStatus> => entryStatus(g, session)
 
 // A model turn reads the newest of a transcript and what it names (./reach.ts).
 // Its prose comes with every entry when the host reads entries of its own, and

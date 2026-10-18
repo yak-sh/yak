@@ -186,8 +186,8 @@ for (let forked of [false, true]) {
       )
       let status = view(await reach(g, session))
       assertEquals(
-        [status.status, status.open, status.using, status.sending],
-        [whole.status, whole.open, whole.using, whole.sending],
+        [status.status, status.open, status.using],
+        [whole.status, whole.open, whole.using],
       )
       assertEquals(await usingOf(g, session), whole.using)
       assertEquals(

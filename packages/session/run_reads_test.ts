@@ -17,6 +17,7 @@ let vocab = loadVocab([
     'using',
     'fork',
     'claim',
+    'stop',
     'session_release',
   ]),
   pick(processDoc, ['process', 'exit']),
@@ -33,6 +34,7 @@ seed.apply([
   { entity: { eid: 'managed' }, session: {}, process: { pid: 123 } },
   { entity: { eid: 'managed-work' }, claim: { session: 'managed' } },
   { entity: { eid: 'stopped' }, session: {} },
+  { entity: { eid: 'stop' }, entry: { session: 'stopped' }, stop: {} },
   { entity: { eid: 'stopped-work' }, claim: { session: 'stopped' } },
 ], { trusted: true })
 let get = base.get
