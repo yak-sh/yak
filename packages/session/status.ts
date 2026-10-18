@@ -939,28 +939,35 @@ export let sessionStatus = {
         // every status read, though most transcripts hold no progress at all.
         as(
           declared('tool_progress')
-            ? sub(select({
-              cols: [fn(
-                'max',
-                iff(
-                  not(exists(select({
-                    cols: [lit(1)],
-                    from: table(RESULT, 'r'),
-                    where: eq(col('call', 'r'), col('call', 'p')),
-                  }))),
-                  lit(1),
-                  lit(0),
-                ),
-              )],
-              // Keep the complete owner history, but seek it before probing
-              // progress. Starting at progress visits every transcript's work.
-              from: table('entry', 'pe'),
-              joins: [{
-                ...cross(table('tool_progress', 'p')),
-                on: eq(col('entity', 'pe'), col('entity', 'p')),
-              }],
-              where: mine('pe'),
-            }))
+            ? iff(
+              exists(select({
+                cols: [lit(1)],
+                from: table('tool_progress'),
+              })),
+              sub(select({
+                cols: [fn(
+                  'max',
+                  iff(
+                    not(exists(select({
+                      cols: [lit(1)],
+                      from: table(RESULT, 'r'),
+                      where: eq(col('call', 'r'), col('call', 'p')),
+                    }))),
+                    lit(1),
+                    lit(0),
+                  ),
+                )],
+                // Keep the complete owner history, but seek it before probing
+                // progress. Starting at progress visits every transcript's work.
+                from: table('entry', 'pe'),
+                joins: [{
+                  ...cross(table('tool_progress', 'p')),
+                  on: eq(col('entity', 'pe'), col('entity', 'p')),
+                }],
+                where: mine('pe'),
+              })),
+              lit(null),
+            )
             : lit(null),
           'progress_pending',
         ),
