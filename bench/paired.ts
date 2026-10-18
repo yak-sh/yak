@@ -99,7 +99,10 @@ export let collect = async (
 ): Promise<
   Pair & Evidence & { reference: string; revision: string; driverHash: string }
 > => {
-  if (!['platform-waits', 'inbox-content'].includes(suite)) {
+  if (
+    !['platform-waits', 'inbox-content', 'hook-waits', 'operation-commands']
+      .includes(suite)
+  ) {
     throw Error('No isolated paired fixture')
   }
   let text = new TextDecoder()
@@ -165,7 +168,8 @@ export let collect = async (
     let observations: Record<string, Samples>[][] = [[], [], []]
     let measure = async (at: number, slot: number) => {
       let dir = roots[at]
-      let probe = `${suite}-probe.ts`
+      let direct = ['hook-waits', 'operation-commands'].includes(suite)
+      let probe = direct ? 'standalone-worker.ts' : `${suite}-probe.ts`
       let rounds: Record<string, Samples>[] = []
       for (let i = 0; i < 1; i++) {
         let output = text.decode(
@@ -175,16 +179,20 @@ export let collect = async (
             '--config',
             `${dir}/deno.json`,
             `${dir}/bench/${probe}`,
+            ...direct ? [`bench/${suite}.ts`] : [],
           ]),
         )
-        let prefix = suite == 'platform-waits'
-          ? 'PLATFORM_WAITS_RESULT='
-          : 'INBOX_CONTENT_RESULT='
-        let line = output.split('\n').findLast((line) =>
-          line.startsWith(prefix)
-        )
-        if (!line) throw Error('Paired collector returned no measurements')
-        rounds.push(JSON.parse(line.slice(prefix.length)))
+        if (direct) rounds.push(JSON.parse(output))
+        else {
+          let prefix = suite == 'platform-waits'
+            ? 'PLATFORM_WAITS_RESULT='
+            : 'INBOX_CONTENT_RESULT='
+          let line = output.split('\n').findLast((line) =>
+            line.startsWith(prefix)
+          )
+          if (!line) throw Error('Paired collector returned no measurements')
+          rounds.push(JSON.parse(line.slice(prefix.length)))
+        }
       }
       observations[slot].push(...rounds)
     }

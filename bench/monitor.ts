@@ -457,7 +457,8 @@ let check = async (
     if (child.success || run.verdict == 'regressed') {
       if (
         run.verdict == 'regressed' && !runs &&
-        ['platform-waits', 'inbox-content'].includes(suite)
+        ['platform-waits', 'inbox-content', 'hook-waits', 'operation-commands']
+          .includes(suite)
       ) {
         let evidence = results.replace('.results.json', '.paired.json')
         let prefix = measurement(suite, deadline)
