@@ -128,23 +128,6 @@ let identifier = (oauth: Pick<Clients, 'lookupClient'>) => {
   }
 }
 
-/**
- * The listed agent a client's grants stand for, read off what it registered:
- * the entry `agentsOf` would fold its grants into, or nothing for a service
- * or a client that is gone. A grant returns to one of its client's callbacks,
- * and a brand's are all on its own host, so the first one names it.
- */
-export let agentOf = async (
-  oauth: Pick<Clients, 'lookupClient'>,
-  clientId: string,
-): Promise<Omit<Agent, 'connectedAt'> | undefined> => {
-  let client = await oauth.lookupClient(clientId)
-  if (!client) return
-  return await identifier({ lookupClient: () => Promise.resolve(client) })(
-    { clientId, redirectUri: client.redirectUris[0] },
-  )
-}
-
 export let agentsOf = async (
   oauth: Clients,
   person: string,

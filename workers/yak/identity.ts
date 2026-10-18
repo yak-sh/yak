@@ -66,9 +66,7 @@
 // token lives a year (`opts`), and a public client's refresh is taken even
 // when it carries a `client_secret` it was never issued (`plain`), which is
 // what ChatGPT sends and what used to read to a person as an expired
-// connection. What closes a connector is the person closing it, and when an
-// assistant comes back with a sign-in that is gone anyway, its person is told
-// how to connect it again (lapsed.ts).
+// connection. What closes a connector is the person closing it.
 //
 // The first person ever to sign in owns the meta space: while `yak` has no
 // members at all, this writes `member(yak, person, owner)` (directory.ts
@@ -88,7 +86,6 @@ import {
 } from '@cloudflare/workers-oauth-provider'
 import { cookieValue, opened, seal, verify } from './lib/token.ts'
 import { agentsOf, disconnect, replace, servicesOf } from './connected.ts'
-import { closed, reconnected, refusedRefresh } from './lapsed.ts'
 import {
   consented as handoffConsented,
   consenting as handoffConsenting,
@@ -888,15 +885,7 @@ let ours = async (req: Request, env: Env): Promise<Response> => {
       return redirect(login, undefined, 303)
     }
     let agent = field('agent')
-    if ((await disconnect(grants(env), person, agent)).length) {
-      // They closed it themselves, so a refused refresh is no news to them.
-      background(
-        closed(meta(env), person, agent).then(
-          () => {},
-          (e) => caught(e, { request: 'POST /oauth/agents/disconnect' }),
-        ),
-      )
-    }
+    await disconnect(grants(env), person, agent)
     let to = new URL(back, req.url)
     to.searchParams.set('disconnected', '1')
     return redirect(to.href, undefined, 303)
@@ -1238,14 +1227,9 @@ let opts = (env: Env): OAuthProviderOptions<Env> => ({
   refreshTokenTTL: undefined,
   // A re-authorization replaces the person's older grant for that client only
   // now, when the client holds the new grant (connected.ts `replace`).
-  // And connecting an assistant again ends its lapse (lapsed.ts).
   tokenExchangeCallback: async (o) => {
     if (o.grantType == 'authorization_code') {
       await replace(api(env), o.userId, o.grantId)
-      background(
-        reconnected(grants(env), meta(env), o.userId, o.clientId)
-          .catch((e) => caught(e, { request: 'POST /oauth/token' })),
-      )
     }
   },
   scopesSupported: [OAUTH.scope],
@@ -1390,30 +1374,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
     return Response.json({ sub: who.person, email }, { headers })
   }
   let sent = await plain(req, env)
-  let read = path == OAUTH.token && req.method == 'POST'
-    ? await presented(sent)
-    : null
   let res = await new OAuthProvider<Env>(opts(env))
     .fetch(sent, env, context() as never)
-  if (read && res.status == 400) {
-    // A refresh refused for a sign-in its person no longer holds tells them
-    // how to connect that assistant again (lapsed.ts). Never in the way of
-    // the answer.
-    let refused = res.clone()
-    background(
-      Promise.resolve()
-        .then(() =>
-          refusedRefresh(
-            grants(env),
-            meta(env),
-            read.form,
-            read.named[0],
-            refused,
-          )
-        )
-        .catch((e) => caught(e, { request: 'POST /oauth/token' })),
-    )
-  }
   // The provider owns all its metadata; add only the account-discovery door
   // it does not offer a configuration field for.
   if (

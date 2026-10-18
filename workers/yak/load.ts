@@ -65,7 +65,6 @@ import * as vocab61 from './facets/app-vocab.ts'
 import * as vocab62 from './facets/attribution-vocab.ts'
 import * as vocab63 from './facets/directory-vocab.ts'
 import * as vocab64 from './facets/git-vocab.ts'
-import * as vocab65 from './facets/lapsed-vocab.ts'
 import * as vocab66 from './facets/meter-vocab.ts'
 import * as vocab67 from './facets/models-vocab.ts'
 import * as vocab68 from './facets/trash-vocab.ts'
@@ -135,7 +134,6 @@ export let vocabFacets: Record<string, VocabFacet> = {
   'yak/attribution': vocab62,
   'yak/directory': vocab63,
   'yak/git': vocab64,
-  'yak/lapsed': vocab65,
   'yak/meter': vocab66,
   'yak/models': vocab67,
   'yak/trash': vocab68,
@@ -170,7 +168,6 @@ let facets: Record<string, () => Promise<unknown>> = {
   'yak/git/graph': () => import('./facets/git-graph.ts'),
   'yak/git/effects': () => import('./facets/git-effects.ts'),
   'yak/kills/graph': () => import('./facets/kills-graph.ts'),
-  'yak/lapsed/effects': () => import('./facets/lapsed-effects.ts'),
   'yak/meter/graph': () => import('./facets/meter-graph.ts'),
   'yak/models/effects': () => import('./facets/models-effects.ts'),
   'yak/pages/graph': () => import('./facets/pages-graph.ts'),
