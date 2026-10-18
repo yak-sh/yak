@@ -35,11 +35,6 @@ export let retire = (db: Statements) => {
       db.query(select({
         cols: [fn('vector_quantize_cleanup', lit(TABLE), lit('vec'))],
       }))
-      db.query({
-        t: 'update',
-        table: BUILD,
-        set: { rows: lit(0) },
-      })
       let memory = db.query(select({
         cols: [
           as(fn('vector_quantize_memory', lit(TABLE), lit('vec')), 'bytes'),
@@ -47,6 +42,12 @@ export let retire = (db: Statements) => {
       }))[0]?.bytes
       if (Number(memory) > 0) throw Error('Native vector codes remain')
     }
+    // Old CLI readers reject this generation before consulting retired codes.
+    db.query({
+      t: 'update',
+      table: BUILD,
+      set: { n: lit(0), model: lit(null), dim: lit(0), rows: lit(0) },
+    })
     if (db.ownership == 'shared') {
       for (let stmt of untrack()) db.query(stmt)
     }
