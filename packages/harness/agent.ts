@@ -38,17 +38,17 @@ import {
   type ChildLimits,
   children,
   CONTENT,
+  currentStatus,
   type Deps,
   ENTRY,
   humanCaller,
   live,
-  openCalls,
+  openOf,
   passing,
   providerResolver,
   type Runner,
   running,
   sessionViews,
-  statusOf,
   type Step,
   taskEntry,
   type Tool,
@@ -57,7 +57,7 @@ import {
   transcriptUsage,
   type TranscriptWindow,
   transcriptWindow,
-  usingBefore,
+  usingOf,
 } from '@yaks/session'
 import { outputView, promptEntry, type Snapshot } from '@yaks/context'
 import { render } from '@yaks/text'
@@ -423,13 +423,17 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       // all of its calls have final results; a later catalogue refresh must
       // not redirect an in-progress call to a newly configured MCP server.
       if (phase === 'ask' && offered.size) {
-        const entries = await transcript(h.g, session)
+        const calls = await openOf(h.g, session)
+        const asks = await h.g.get(
+          calls.flatMap((b) => {
+            const source = (b.call as Comp)?.source
+            return source == null ? [] : [String(source)]
+          }),
+          ['ask'],
+        )
         const outstanding = new Set(
-          openCalls(entries).flatMap((call) => {
-            const ask = entries.find((b) =>
-              b.entity.eid == (call.call as Comp)?.source
-            )
-            const through = (ask?.ask as Comp | undefined)?.through
+          asks.flatMap((ask) => {
+            const through = (ask.ask as Comp | undefined)?.through
             return through == null ? [] : [String(through)]
           }),
         )
@@ -531,7 +535,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   // The request in force on a transcript: what a line said to it asks a turn
   // with, since a turn is asked for by a `using` on an entry.
   let asking = async (session: Eid) => {
-    let using = usingBefore(await transcript(h.g, session)) ??
+    let using = await usingOf(h.g, session) ??
       await selectedUsing(h.g, session)
     return using ? { using } : {}
   }
@@ -542,7 +546,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     if (passing(h.g, session)) return false
     let [self] = await h.g.get([session])
     if (dispatchStatus(self) == 'queued') return false
-    let status = statusOf(await transcript(h.g, session))
+    let status = await currentStatus(h.g, session)
     if (status != 'pending' && status != 'running') return true
     return !await answering(h.g, session, r)
   }

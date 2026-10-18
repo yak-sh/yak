@@ -57,14 +57,9 @@ import {
 import { type ChildLimits, deliverChild } from './children.ts'
 import { CLAIM } from './comp.ts'
 import { STOP_ENTRY } from './native.ts'
-import {
-  currentStatus,
-  type Deps,
-  react,
-  statusEntries,
-  type Step,
-} from './react.ts'
-import { seqOf, type TranscriptStatus, usingBefore } from './state.ts'
+import { currentStatus, type Deps, react, type Step } from './react.ts'
+import { hasAsk, usingOf } from './reach.ts'
+import { seqOf, type TranscriptStatus } from './state.ts'
 import { cleanEnd, requested, unlinked, waits, wake } from './wake.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
@@ -503,25 +498,11 @@ export let answering = async (
   session: Eid,
   r: Runner,
 ): Promise<boolean> => {
-  let asked = await g.read(`.entry.session=${session}&.using&?ask&?entry`)
-  if (!asked.length) {
-    let [self] = await g.read(
-      `.entity.eid=${session}&.session&.fields=entity.eid` +
-        (g.vocab.comp('fork') ? ',fork.from' : ''),
-    )
-    // An imported transcript can have thousands of asks and no provider
-    // selection. Only a fork can inherit that selection from another session.
-    if (self && !self.fork) {
-      let asks = await g.read(
-        `.entry.session=${session}&.ask&.fields=entity.eid&.limit=1`,
-      )
-      return asks.length > 0 &&
-        (r.answers ? await r.answers(undefined, session) : true)
-    }
-  }
-  let entries = asked.length ? asked : await statusEntries(g, session)
-  if (!entries.some((b) => b.using || b.ask)) return false
-  return r.answers ? await r.answers(usingBefore(entries), session) : true
+  let using = await usingOf(g, session)
+  // An imported transcript can have thousands of asks and no provider
+  // selection, so an ask is looked for alone.
+  if (!using && !await hasAsk(g, session)) return false
+  return r.answers ? await r.answers(using, session) : true
 }
 
 /** Answer a transcript's request for a turn here, where this host answers the

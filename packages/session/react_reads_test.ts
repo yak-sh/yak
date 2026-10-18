@@ -385,3 +385,64 @@ test('a terminal runner checks the derived verdict before loading entry history'
   })
   assertEquals(reads, 0)
 })
+
+for (let fork of [false, true]) {
+  test(
+    `the status of a ${
+      fork ? 'forked' : 'queued'
+    } transcript reads a bounded part of it`,
+    async () => {
+      let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+      let g = graph({ vocab, storage: s, plugins: [sessions()] })
+      let m = identityEid('model', ['fake'])
+      let turns = Array.from({ length: 45 }, (_, i): Bundle[] => {
+        let n = 1 + i * 3
+        return [{
+          entity: { eid: `in${n}` },
+          entry: { session: 'parent', seq: n },
+          content: { body: 'go' },
+          using: { model: m },
+        }, {
+          entity: { eid: `ask${n}` },
+          entry: { session: 'parent', seq: n + 1 },
+          ask: { to: m, through: `in${n}` },
+          attempt: {},
+        }, {
+          entity: { eid: `out${n}` },
+          entry: { session: 'parent', seq: n + 2 },
+          content: { body: 'ok' },
+          output: { source: `ask${n}` },
+        }]
+      }).flat()
+      let owner = fork ? 'child' : 'parent'
+      await s.tx((tx) =>
+        tx.patch([
+          { entity: { eid: m }, model: { name: 'fake' } },
+          { entity: { eid: 'parent' }, session: {} },
+          ...turns,
+          fork
+            ? {
+              entity: { eid: 'child' },
+              session: {},
+              fork: { from: 'out130' },
+            }
+            : { entity: { eid: 'parent' }, dispatch: { state: 'queued' } },
+          {
+            entity: { eid: 'now' },
+            entry: { session: owner, seq: 500 },
+            content: { body: 'now' },
+            using: { model: m },
+          },
+        ])
+      )
+      let rows = 0, read = g.read.bind(g)
+      g.read = async (q, o) => {
+        let got = await read(q, o)
+        rows += got.length
+        return got
+      }
+      assertEquals(await currentStatus(g, owner), 'pending')
+      assert(rows < 100, `read ${rows} rows of a 135 line transcript`)
+    },
+  )
+}

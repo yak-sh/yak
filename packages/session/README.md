@@ -406,7 +406,16 @@ action. The session then continues.
 
 <a id="bounded-transcript-reads"></a>
 
-`transcript()` loads the full fork-aware history used for a model request.
+`transcript()` loads the full fork-aware history. A status, a runner step and a
+tool snapshot read less: `reach()` returns the newest entries down to the oldest
+one their decisions look at (the latest ask and the line it was sent through,
+the turns a retry counts, the last stop, the newest checkpoint and what follows
+it, the lines of a finite `sending.window`) and the older entries those name. It
+answers `statusOf`, `openCalls`, `usingBefore`, `sendingBefore` and a model
+turn's context as `transcript()` would, so a step costs the same on a short
+transcript and a long one. A transcript with neither checkpoint nor window is
+its own context, and reaching it reads it all. `usingOf()` and `openOf()` ask
+for the model selection in force and the calls no result answers alone.
 `transcriptWindow()` reads a bounded page for user interfaces:
 
 ```ts

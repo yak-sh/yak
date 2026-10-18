@@ -4,7 +4,9 @@
 // protocol-complete suffix.
 
 import type { Bundle, Comp } from '@yaks/graph'
-import { seqOf } from './state.ts'
+import { ANSWER, QUESTIONS } from '@yaks/model'
+import { USING } from './native.ts'
+import { kindOf, newestAsk, seqOf } from './state.ts'
 
 let callOf = (b: Bundle): string | undefined => {
   let call = ((b.result ?? b.tool_progress) as Comp | undefined)?.call
@@ -128,4 +130,50 @@ export let ceiling = (text: string): number | undefined => {
   ].map((re) => re.exec(text)).find(Boolean)
   let value = match && Number((match[2] ?? match[1]).replaceAll(',', ''))
   return value && Number.isSafeInteger(value) && value > 0 ? value : undefined
+}
+
+/**
+ * The lines of a transcript a turn reads: what a model is sent (inputs,
+ * replies, calls and their results), without the record kept beside them
+ * (asks, errors), and without the typed questions other turns asked or the
+ * answers they got. Those are rows for whoever asked (a page acts on them),
+ * not lines of the conversation, so a wake that asks every few minutes never
+ * crowds out what was said. `asking` is the entry whose questions this turn
+ * asks: it reads that one.
+ */
+export let lines = (entries: Bundle[], asking?: Bundle): Bundle[] =>
+  entries.filter((b) =>
+    b == asking ||
+    !(b.notice && b.output && !b.checkpoint) &&
+      !(QUESTIONS in b || ANSWER in b) &&
+      ['input', 'output', 'call', 'result'].includes(kindOf(b) ?? '')
+  )
+
+/** The newest `n` lines of a transcript, reaching back to the input that
+ * began the turn they cut into, so no call or result is sent without its
+ * pair: what a turn sends when its `sending.window` is `n`. All of them when
+ * `n` is not a count. */
+export let recent = (entries: Bundle[], n?: unknown): Bundle[] => {
+  let size = Math.floor(Number(n))
+  if (!(size >= 1)) return entries
+  let from = Math.max(0, entries.length - size)
+  while (from > 0 && kindOf(entries[from]) != 'input') from--
+  return suffix(entries, from)
+}
+
+/** The entry whose typed questions a turn asks: the newest since the
+ * transcript's last ask that asks for anything, questions or a model, when it
+ * carries questions. So a retry after an error asks them again, and neither a
+ * later turn nor a later line choosing a model of its own does: the questions
+ * were that model's. */
+export let askingOf = (entries: Bundle[]): Bundle | undefined => {
+  let last = newestAsk(entries)
+  let since = last ? seqOf(last) : 0
+  let asking = entries.filter((b) =>
+    (QUESTIONS in b || USING in b || 'sending' in b) && seqOf(b) > since
+  ).at(-1)
+  let asked = asking && (asking[QUESTIONS] as Comp | undefined)?.asked
+  return asked && typeof asked == 'object' && !Array.isArray(asked)
+    ? asking
+    : undefined
 }

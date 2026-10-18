@@ -90,5 +90,6 @@ export { appendEntry } from './append.ts'
 export * from './timing.ts'
 
 export * from './window.ts'
+export * from './reach.ts'
 
 export * from './cache.ts'

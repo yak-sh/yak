@@ -1,6 +1,7 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { Unsupported } from '@yaks/match'
 import { compactAsk } from './compact_ask.ts'
+import { reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
 import { CallError } from '@yaks/tools/errors'
@@ -87,19 +88,22 @@ import {
   usingBefore,
 } from './state.ts'
 import {
+  askingOf,
   ceiling,
   CONTEXT,
   context,
   GAP,
   history,
   limit,
+  lines,
   prefix,
+  recent,
   retained,
   SHARE,
-  suffix,
   tokens,
   tooLong,
 } from './compact.ts'
+export { lines, recent } from './compact.ts'
 import {
   admitted,
   changes,
@@ -281,90 +285,57 @@ export let offered = (
 
 /** A transcript's entries: a fork's prefix from its parent up to the anchor,
  * then its own, in order. */
-export let transcript = (g: Graph, session: Eid): Promise<Bundle[]> =>
-  readTranscript(g, session)
-
-let readTranscript = async (
+export let transcript = async (
   g: Graph,
   session: Eid,
-  components?: string[],
 ): Promise<Bundle[]> => {
   let [self] = await g.read(
     `.entity.eid=${session}&.session&.fields=entity.eid` +
       (g.vocab.comp(FORK) ? ',fork.from' : ''),
   )
   if (!self) throw new UnknownSession(session)
-  let own = await g.read(
-    `.${ENTRY}.session=${session}&` +
-      (components ? components.map((c) => '?' + c).join('&') : '*'),
-  )
+  let own = await g.read(`.${ENTRY}.session=${session}&*`)
   let from = comp(self, FORK)?.from
   if (!from) return ordered(own)
   let [anchor] = await g.get([String(from)], [ENTRY])
   let parent = anchor && comp(anchor, ENTRY)
   if (!parent) return ordered(own)
-  let inherited = await readTranscript(g, String(parent.session), components)
+  let inherited = await transcript(g, String(parent.session))
   return [
     ...inherited.filter((b) => seqOf(b) <= seqOf(anchor)),
     ...ordered(own),
   ]
 }
 
-// Re-read every membership/kind fact, including legacy rows and mutable fork
-// ancestors. Only content presence comes from the immutable archetype; no prose.
-let contentKinds = async (
-  g: Graph,
-  entries: Bundle[],
-): Promise<Bundle[] | undefined> => {
-  let shapes = [...new Set(entries.map((b) => b.entity.archetype))]
-  if (shapes.includes(undefined)) return undefined
-  let types = await g.get(shapes as Eid[], ['archetype'])
-  let byId = new Map(
-    types.map((b) => [b.entity.eid, comp(b, 'archetype')?.tables]),
-  )
-  for (let b of entries) {
-    let tables = byId.get(b.entity.archetype!)
-    if (typeof tables != 'string') return undefined
-    if ((JSON.parse(tables) as string[]).includes(CONTENT)) b.content = {}
-  }
-  return entries
-}
-
-export let statusEntries = async (
-  g: Graph,
-  session: Eid,
-): Promise<Bundle[]> => {
-  if (!g.vocab.comp('archetype')) return transcript(g, session)
-  let components = [
-    ENTRY,
-    ASK,
-    CALL,
-    RESULT,
-    'tool_progress',
-    OUTPUT,
-    USING,
-    'sending',
-    'attempt',
-    'execution',
-    'interrupted',
-    'failed',
-    'provisional',
-    'notice',
-    'stop',
-    EXCEPTION,
-    REFUSAL,
-  ].filter((name) => g.vocab.comp(name))
-  return await contentKinds(g, await readTranscript(g, session, components)) ??
-    await transcript(g, session)
-}
+// What `statusOf` reads of an entry.
+let STATUS = [
+  ENTRY,
+  ASK,
+  CALL,
+  RESULT,
+  'tool_progress',
+  OUTPUT,
+  USING,
+  'sending',
+  'attempt',
+  'execution',
+  'interrupted',
+  'failed',
+  'provisional',
+  'notice',
+  'stop',
+  EXCEPTION,
+  REFUSAL,
+]
 
 export let currentStatus = async (
   g: Graph,
   session: Eid,
 ): Promise<TranscriptStatus> => {
-  // A status-only caller can ask the adapter's existing derived fact. Forks
-  // still need their inherited logical transcript, and a replica/RAM adapter
-  // with no computed answer keeps the entry-based path.
+  // A status-only caller can ask the adapter's existing derived fact. A fork
+  // is read through its parent's entries, a queued transcript is queued by
+  // where it waits and not by what it says, and a replica/RAM adapter with no
+  // computed answer keeps the entry-based path.
   let fields = 'session.status' + (g.vocab.comp(FORK) ? ',fork.from' : '')
   try {
     let [row] = await g.rows(`.entity.eid=${session}&.fields=${fields}`)
@@ -380,41 +351,23 @@ export let currentStatus = async (
   } catch (error) {
     if (!(error instanceof Unsupported)) throw error
   }
-  return statusOf(await statusEntries(g, session))
+  return statusOf(
+    await reach(g, session, {
+      comps: STATUS.filter((name) => g.vocab.comp(name)),
+    }),
+  )
 }
 
-// A bounded model turn needs all kind/reference facts for pairing and choosing
-// instructions, but only the selected lines' prose. Unbounded turns, tools,
-// recovery and context callbacks keep the exact full transcript interface.
+// A model turn reads the newest of a transcript and what it names (./reach.ts).
+// Its prose comes with every entry when the host reads entries of its own, and
+// is loaded for the lines the turn sends alone otherwise.
 let turnEntries = async (
   g: Graph,
   session: Eid,
   deps: Deps,
 ): Promise<{ entries: Bundle[]; bodies: boolean }> => {
-  let full = async () => ({
-    entries: await transcript(g, session),
-    bodies: true,
-  })
-  if (
-    !g.vocab.comp('archetype') || deps.contextItems || deps.requestItems ||
-    deps.compactModel
-  ) return full()
-  let components = g.vocab.comps.filter((name) =>
-    name != CONTENT && name != 'session'
-  )
-  let entries = await contentKinds(
-    g,
-    await readTranscript(g, session, components),
-  )
-  if (
-    !entries || openCalls(entries).length ||
-    entries.some((b) =>
-      attemptState(b) == 'inflight' || b.checkpoint || b.prompt ||
-      b.task_context
-    ) ||
-    !(Math.floor(Number(sendingBefore(entries)?.window)) >= 1)
-  ) return full()
-  return { entries, bodies: false }
+  let bodies = !!(deps.contextItems || deps.requestItems || deps.compactModel)
+  return { entries: await reach(g, session, { turn: true, bodies }), bodies }
 }
 
 /** The model's view of a window of the transcript: inputs as user turns, what
@@ -512,52 +465,6 @@ export let project = (
     out.push(...opts.media?.get(b.entity.eid) ?? [])
   }
   return out
-}
-
-/**
- * The lines of a transcript a turn reads: what a model is sent (inputs,
- * replies, calls and their results), without the record kept beside them
- * (asks, errors), and without the typed questions other turns asked or the
- * answers they got. Those are rows for whoever asked (a page acts on them),
- * not lines of the conversation, so a wake that asks every few minutes never
- * crowds out what was said. `asking` is the entry whose questions this turn
- * asks: it reads that one.
- */
-export let lines = (entries: Bundle[], asking?: Bundle): Bundle[] =>
-  entries.filter((b) =>
-    b == asking ||
-    !(b.notice && b.output && !b.checkpoint) &&
-      !(QUESTIONS in b || ANSWER in b) &&
-      ['input', 'output', 'call', 'result'].includes(kindOf(b) ?? '')
-  )
-
-/** The newest `n` lines of a transcript, reaching back to the input that
- * began the turn they cut into, so no call or result is sent without its
- * pair: what a turn sends when its `sending.window` is `n`. All of them when
- * `n` is not a count. */
-export let recent = (entries: Bundle[], n?: unknown): Bundle[] => {
-  let size = Math.floor(Number(n))
-  if (!(size >= 1)) return entries
-  let from = Math.max(0, entries.length - size)
-  while (from > 0 && kindOf(entries[from]) != 'input') from--
-  return suffix(entries, from)
-}
-
-/** The entry whose typed questions a turn asks: the newest since the
- * transcript's last ask that asks for anything, questions or a model, when it
- * carries questions. So a retry after an error asks them again, and neither a
- * later turn nor a later line choosing a model of its own does: the questions
- * were that model's. */
-let askingOf = (entries: Bundle[]): Bundle | undefined => {
-  let last = newestAsk(entries)
-  let since = last ? seqOf(last) : 0
-  let asking = entries.filter((b) =>
-    (QUESTIONS in b || USING in b || 'sending' in b) && seqOf(b) > since
-  ).at(-1)
-  let asked = asking && comp(asking, QUESTIONS)?.asked
-  return asked && typeof asked == 'object' && !Array.isArray(asked)
-    ? asking
-    : undefined
 }
 
 // A model failure may pass: the provider marked it `retry` (overloaded, rate

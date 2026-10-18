@@ -1,5 +1,6 @@
 /** Bounded, fork-aware transcript queries. This does not change model history. */
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { UnknownSession } from './unknown.ts'
 
 export type TranscriptWindow = {
   /** Entry identity, not a global entity number. Absent means the newest page. */
@@ -20,7 +21,7 @@ export type TranscriptPage = {
 export type TranscriptPlan = Omit<TranscriptPage, 'entries'> & {
   queries: string[]
 }
-type Segment = { session: Eid; through: number }
+export type Segment = { session: Eid; through: number }
 type Position = { entity: { eid: Eid }; entry: Comp }
 
 /** A fork contributes a bounded prefix of each ancestor, followed by local rows. */
@@ -35,13 +36,11 @@ export let transcriptSegments = async (
       `.entity.eid=${session}&.session&.fields=entity.eid` +
         (g.vocab.comp('fork') ? ',fork.from' : ''),
     )
-    if (!row) throw new Error('Unknown transcript: ' + session)
+    if (!row) throw new UnknownSession(session)
     segments.unshift({ session, through })
     let from = (row.fork as Comp | undefined)?.from
     if (!from) break
-    let [anchor] = await g.read(
-      '.entity.eid=' + from + '&.fields=entry.session,entry.seq',
-    )
+    let [anchor] = await g.get([String(from)], ['entry'])
     if (!anchor?.entry) break
     let entry = anchor.entry as Comp
     session = String(entry.session)
@@ -49,7 +48,9 @@ export let transcriptSegments = async (
   }
   return segments
 }
-let base = (s: Segment) =>
+/** The query for one segment of a transcript: its session's entries, up to
+ * where a fork left it. */
+export let within = (s: Segment) =>
   '.entry.session=' + s.session +
   (Number.isFinite(s.through) ? '&.entry.seq<=' + s.through : '')
 
@@ -90,7 +91,8 @@ export let transcriptPlan = async (
         ? '&.entry.seq' + (direction == 'before' ? '<' : '>=') + anchor.seq
         : ''
       let rows = await g.read(
-        base(segments[i]) + bound + '&.fields=entry.session,entry.seq&.order=' +
+        within(segments[i]) + bound +
+          '&.fields=entry.session,entry.seq&.order=' +
           order + 'entry.seq&.limit=' + (n - found.length),
       )
       found.push(...rows as Position[])
@@ -134,14 +136,14 @@ export let transcriptPlan = async (
     if (!own.length) continue
     let low = Number(own[0].entry.seq), high = Number(own.at(-1)!.entry.seq)
     queries.push(
-      base(s) + '&.entry.seq>=' + low + '&.entry.seq<=' + high +
+      within(s) + '&.entry.seq>=' + low + '&.entry.seq<=' + high +
         '&.order=entry.seq&.limit=' + size + '&*',
     )
   }
   // Count metadata, not bodies. Fork segments are disjoint logical ranges.
   const counts = await Promise.all(
     segments.map(async (s) =>
-      Number((await g.rows(base(s) + '&.count'))[0]?.n ?? 0)
+      Number((await g.rows(within(s) + '&.count'))[0]?.n ?? 0)
     ),
   )
   let offset = 0
@@ -152,7 +154,7 @@ export let transcriptPlan = async (
       if (segment.session == first.entry.session) {
         offset += Number(
           (await g.rows(
-            base(segment) + '&.entry.seq<' + first.entry.seq + '&.count',
+            within(segment) + '&.entry.seq<' + first.entry.seq + '&.count',
           ))[0]?.n ?? 0,
         )
         break
@@ -191,7 +193,7 @@ export let transcriptUsage = async (
 ): Promise<Bundle[]> => {
   for (let segment of (await transcriptSegments(g, session)).reverse()) {
     let rows = await g.read(
-      base(segment) +
+      within(segment) +
         '&.ask&.usage&.fields=ask.to,ask.through,usage.input_tokens,usage.output_tokens,usage.total_tokens,usage.cached_tokens,usage.reasoning_tokens&.order=-entry.seq&.limit=1',
     )
     if (rows.length) return rows
