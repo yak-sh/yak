@@ -923,6 +923,37 @@ export let sessionStatus = {
       'seq',
       'entity',
     ]
+    // Keep these historical predicates out of the turn aggregate: earlier
+    // verdicts need neither. Presence includes resolved progress (the former
+    // MAX is non-null); only the running branch needs unresolved progress.
+    let progress = (unresolved: boolean): Expr =>
+      declared('tool_progress')
+        ? iff(
+          exists(select({ cols: [lit(1)], from: table('tool_progress') })),
+          sub(select({
+            cols: [lit(1)],
+            from: table('entry', 'pe'),
+            joins: [{
+              ...cross(table('tool_progress', 'p')),
+              on: eq(col('entity', 'pe'), col('entity', 'p')),
+            }],
+            where: and(
+              mine('pe'),
+              ...unresolved
+                ? [not(exists(select({
+                  cols: [lit(1)],
+                  from: table(RESULT, 'r'),
+                  where: eq(col('call', 'r'), col('call', 'p')),
+                })))]
+                : [],
+            ),
+            // EXISTS discards ordering. A scalar LIMIT keeps newest-first seeks.
+            order: [desc(col('seq', 'pe'))],
+            limit: lit(1),
+          })),
+          lit(null),
+        )
+        : lit(null)
     let facts = select({
       cols: [
         flag('open', open),
@@ -936,42 +967,6 @@ export let sessionStatus = {
           ),
         ),
         flag('inflight', inflight),
-        // Read where it is named: materialized, it built a temporary table for
-        // every status read, though most transcripts hold no progress at all.
-        as(
-          declared('tool_progress')
-            ? iff(
-              exists(select({
-                cols: [lit(1)],
-                from: table('tool_progress'),
-              })),
-              sub(select({
-                cols: [fn(
-                  'max',
-                  iff(
-                    not(exists(select({
-                      cols: [lit(1)],
-                      from: table(RESULT, 'r'),
-                      where: eq(col('call', 'r'), col('call', 'p')),
-                    }))),
-                    lit(1),
-                    lit(0),
-                  ),
-                )],
-                // Keep the complete owner history, but seek it before probing
-                // progress. Starting at progress visits every transcript's work.
-                from: table('entry', 'pe'),
-                joins: [{
-                  ...cross(table('tool_progress', 'p')),
-                  on: eq(col('entity', 'pe'), col('entity', 'p')),
-                }],
-                where: mine('pe'),
-              })),
-              lit(null),
-            )
-            : lit(null),
-          'progress_pending',
-        ),
         as(
           fn(
             'max',
@@ -1072,11 +1067,11 @@ export let sessionStatus = {
             f('ready_seq'),
             fn('coalesce', f('n_boundary_seq'), f('a_seq'), lit(0)),
           ),
-          notNull(f('progress_pending')),
+          notNull(progress(false)),
         ),
         lit('pending'),
       ],
-      [f('progress_pending'), lit('running')],
+      [notNull(progress(true)), lit('running')],
       [
         and(
           n('ask'),
