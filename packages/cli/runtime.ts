@@ -287,6 +287,14 @@ export let tethered = (argv: string[]): string[] => [
 /** Run a persistent CLI command from immutable sources, forwarding its terminal
  * and interrupts and waiting for the child to drain. JSR releases are already
  * immutable. Independent workers reuse the sources with their own lifetime. */
+/** A worker's inspector is local and opt-in at launch, never a live signal. */
+export let inspector = (port: string): string => {
+  if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
+    throw new Error('YAK_WORK_INSPECT must be a local port (1..65535)')
+  }
+  return `--inspect=127.0.0.1:${Number(port)}`
+}
+
 export let runtime = async (argv: string[]): Promise<number | undefined> => {
   if (!ROOT.href.startsWith('file:')) return
   let { fileURLToPath } = await import('node:url')
@@ -327,6 +335,9 @@ export let runtime = async (argv: string[]): Promise<number | undefined> => {
       Deno.execPath(),
       'run',
       '-A',
+      ...Deno.env.get('YAK_WORK_INSPECT') && argv.includes('work')
+        ? [inspector(Deno.env.get('YAK_WORK_INSPECT')!)]
+        : [],
       '--config',
       `${dir}/deno.json`,
       `${dir}/packages/cli/yak.ts`,

@@ -159,3 +159,17 @@ test('a pinned child owns its parent, ignores a stranger, ends without either', 
     { code: null, owner: 'self' },
     { code: 137, owner: 'self' },
   ]))
+
+test('worker inspector launch binds only a local numeric port', async () => {
+  let { inspector } = await import('./runtime.ts')
+  equal(inspector('19285'), '--inspect=127.0.0.1:19285')
+  for (let value of ['0', '65536', '0.0.0.0:9229', '9229 --allow-all']) {
+    let error = false
+    try {
+      inspector(value)
+    } catch {
+      error = true
+    }
+    equal(error, true)
+  }
+})
