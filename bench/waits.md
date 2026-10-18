@@ -127,6 +127,23 @@ deno run -A bench/run.ts operation-remaining accept
 deno run -A bench/run.ts operation-remaining check
 ```
 
+### Local controls and retained builders
+
+`operation-controls` measures eight additional safe families (11 figures): CLI
+and MCP retained-output choice, existing-artifact supply and builder planning;
+CLI populated cache report, listener delivery, trace arming, init and land.
+Builder planning writes calls with duties disabled; it does not run a model.
+Supply reuses an existing artifact, and choice checks exclusive selection. Init
+verifies the created person through a fresh CLI read. Land creates an
+independent primary checkout and branch with no upstream or remote, then
+verifies the exact base SHA and contents. Trace arming verifies its private
+sidecar; it is not operation-capture latency. Listener delivery verifies the
+pending item is marked. The suite has its own zero-slack measured baseline.
+
+```sh
+deno run -A bench/run.ts operation-controls check
+```
+
 ### Registered doors still outside these fixtures
 
 `inventory(config?)` in `operation-commands.ts` lists declared tools, CLI doors,

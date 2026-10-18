@@ -57,15 +57,17 @@ export let inventory = async (
   let { TOOLS } = await import('../packages/cli/yak.ts')
   let toolNames = said.tools.map((tool) => tool.name).sort()
   let { REMAINING_FAMILIES } = await import('./operation-remaining.ts')
+  let { CONTROL_FAMILIES } = await import('./operation-controls.ts')
   let measured = new Set(
-    [...OPERATION_FAMILIES, ...REMAINING_FAMILIES].map((f) =>
-      f.replaceAll('-', '_')
-    ),
+    [...OPERATION_FAMILIES, ...REMAINING_FAMILIES, ...CONTROL_FAMILIES].map((
+      f,
+    ) => f.replaceAll('-', '_')),
   )
   measured.add('task_list')
   measured.add('graph_query')
   measured.add('graph_show')
   measured.add('graph_apply')
+  measured.add('builder_build')
   let httpTools = said.tools.filter((t) =>
     !t.surfaces || t.surfaces.includes('mcp')
   ).map((t) => t.name)
@@ -111,7 +113,9 @@ export type Operation = {
   family: string
   tool: string
   command: string[]
-  cwd?: string
+  cwd?: string | (() => string)
+  config?: () => string
+  registered?: boolean
   doors?: ('cli' | 'connector')[]
   args: () => Record<string, unknown>
   prepare?: () => Promise<void>
@@ -128,6 +132,7 @@ async function collect(
   args: string[] = [],
   scale = false,
   remaining = false,
+  controls = false,
 ): Promise<Record<string, Samples>> {
   let tasks = scale ? SCALE_TASKS : OPERATION_TASKS
   let n = Number(args[0] ?? 3)
@@ -176,6 +181,14 @@ async function collect(
         ? { use: '@yaks/session', with: { transcripts: `${dir}/transcripts` } }
         : p
     )
+    if (controls) {
+      config.plugins!.push(
+        '@yaks/builders',
+        '@yaks/blob',
+        '@yaks/model',
+        '@yaks/key',
+      )
+    }
     await Deno.writeTextFile(configPath, JSON.stringify(config))
     host = await compose(read(configPath), ['graph', 'web'])
     let graph = host.graph
@@ -267,20 +280,26 @@ async function collect(
           `${root}deno.json`,
           `${root}packages/cli/yak.ts`,
           '--config',
-          configPath,
+          operation.config?.() ?? configPath,
           '--no-duties',
           ...operation.command,
           ...flags,
           '--json',
         ],
-        cwd: operation.cwd ?? root,
+        cwd: typeof operation.cwd == 'function'
+          ? operation.cwd()
+          : operation.cwd ?? root,
         env,
         stdin: 'null',
         stdout: 'piped',
         stderr: 'piped',
       }).output()
       if (!out.success) {
-        throw new Error(`${operation.tool}: ${decode.decode(out.stderr)}`)
+        throw new Error(
+          `${operation.tool}: ${decode.decode(out.stderr)} ${
+            decode.decode(out.stdout)
+          }`,
+        )
       }
       return decode.decode(out.stdout)
     }
@@ -582,10 +601,28 @@ async function collect(
         ),
       ]
     }
+    if (controls) {
+      operations = await (await import('./operation-controls.ts'))
+        .controlOperations({
+          graph,
+          dir,
+          PERSON,
+          PROJECT,
+          TARGET,
+          SESSION,
+          PERSONA,
+          fresh,
+          saved,
+          includes,
+        })
+    }
     let filter = args.find((a) => a.startsWith('--family='))?.slice(9)
     if (filter) operations = operations.filter((o) => o.family == filter)
     for (let operation of operations) {
-      if (!registered.has(operation.tool)) {
+      if (
+        operation.registered !== false && !registered.has(operation.tool) &&
+        !(operation.doors?.length == 1 && operation.doors[0] == 'cli')
+      ) {
         throw new Error(`unregistered operation ${operation.tool}`)
       }
       for (let door of operation.doors ?? ['cli', 'connector']) {
@@ -641,5 +678,7 @@ async function collect(
 export let measure = (args: string[] = []) => collect(args)
 export let measureRemaining = (args: string[] = []) =>
   collect(args, false, true)
+export let measureControls = (args: string[] = []) =>
+  collect(args, false, true, true)
 export let measureScale = (args: string[] = []) => collect(args, true)
 if (import.meta.main) console.log(JSON.stringify(await measure(Deno.args)))

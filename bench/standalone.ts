@@ -12,6 +12,7 @@ import { HOOK_WAITS } from './hook-waits.ts'
 import { OPERATION_COMMANDS } from './operation-commands.ts'
 import { TERMINAL_INTERACTIONS } from './terminal-interactions.ts'
 import { OPERATION_SCALE } from './operation-scale.ts'
+import { CONTROL_NAMES } from './operation-controls.ts'
 import { OPERATION_REMAINING } from './operation-remaining.ts'
 
 let deno = (
@@ -100,6 +101,7 @@ export let standalone: Registration[] = [
     'bench/operation-remaining.ts',
     OPERATION_REMAINING,
   ),
+  measured('operation-controls', 'bench/operation-controls.ts', CONTROL_NAMES),
   measured('operation-scale', 'bench/operation-scale.ts', OPERATION_SCALE),
   measured('person-commands', 'bench/person-commands.ts', [...PERSON_COMMANDS]),
   {
