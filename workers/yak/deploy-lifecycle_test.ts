@@ -142,7 +142,11 @@ for (let mode of ['network', 'non-ok']) {
     // Retryable notices can finish several sends before the waiter resumes.
     await until(() => notices >= 1)
     console.log('loading DEPLOY_FIXTURE', mode, 'noticed', notices)
-    return (await f.history()).map((v) => [v.version, v.reload])
+    let result = (await f.history()).map((v) => [v.version, v.reload])
+    console.log('loading DEPLOY_FIXTURE', mode, 'history read')
+    await scenario.settled()
+    console.log('loading DEPLOY_FIXTURE', mode, 'settled')
+    return result
   })()
   test(`a ${mode} release notice cannot fail a committed deploy`, () => {
     assertEquals(history, [[1, 'required']])
