@@ -27,6 +27,7 @@
 // from the two.
 
 import { after } from '@yaks/fp'
+import { and, eq, fields, limit, list, or, present } from '@yaks/query'
 import type { Actor, Bundle, Comp, Eid, Graph, Tx } from '@yaks/graph'
 import { addressed } from '@yaks/graph/call'
 import { identityEid } from '@yaks/graph/identity'
@@ -37,7 +38,7 @@ import { SESSION } from './comp.ts'
  * agent or automation. An agent may speak for an identity, so both the author
  * and the instrument matter. A transcript's own stamp is not its parent. */
 export let humanCaller = async (
-  g: Pick<Graph, 'get'>,
+  g: Pick<Graph, 'read' | 'vocab'>,
   actor: Actor | null,
   self?: Eid,
 ): Promise<boolean> => {
@@ -46,10 +47,17 @@ export let humanCaller = async (
       [actor?.by, actor?.via].filter((id): id is Eid => !!id && id != self),
     ),
   ]
-  let callers = ids.length
-    ? await g.get(ids, ['session', 'effect', 'builder'])
-    : []
-  return !callers.some((b) => b.session || b.effect || b.builder)
+  let kinds = ['session', 'effect', 'builder'].filter((name) =>
+    g.vocab.comp(name)
+  )
+  if (!ids.length || !kinds.length) return true
+  let callers = await g.read(and(
+    eq('entity.eid', list(...ids)),
+    or(...kinds.map((name) => present(name))),
+    fields('entity.eid'),
+    limit(1),
+  ))
+  return !callers.length
 }
 
 // A uuid, whatever its version.

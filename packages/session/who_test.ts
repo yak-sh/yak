@@ -39,6 +39,33 @@ let runs = (() => {
   return g
 })()
 
+let presenceStorage = ram(vocab, {
+  computed: {
+    'session.status': () => {
+      throw new Error('unneeded status')
+    },
+  },
+})
+let presence = graph({ storage: presenceStorage, vocab })
+await presence.apply([
+  { entity: { eid: 'empty-session' }, session: {} },
+  { entity: { eid: 'null-session' }, session: { id: null } },
+  { entity: { eid: 'human' }, person: {} },
+], { trusted: true })
+
+for (let id of ['empty-session', 'null-session']) {
+  test(`caller presence does not summarize ${id}`, async () => {
+    assertEquals(await humanCaller(presence, { via: id }), false)
+    assertEquals(await humanCaller(presence, { via: id }, id), true)
+  })
+}
+test('a human caller tolerates undeclared automation components', async () => {
+  assertEquals(
+    await humanCaller(presence, { by: 'human', via: 'missing' }),
+    true,
+  )
+})
+
 let found = async (said: string) => (await sessionFor(runs, said))?.entity.eid
 
 test('a run is reached by its eid, its human id, or its own name', async () => {
