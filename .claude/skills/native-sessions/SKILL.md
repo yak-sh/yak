@@ -27,13 +27,13 @@ waits; the runner works the transcript wherever the effects role is served
 as an entry, so the graph is the record of everything it did, and killing the
 CLI that started it stops nothing.
 
-Its commands and files belong to a machine, not to the process serving its
-graph. `home{machine, cwd}` names that machine and an optional command directory
-(packages/harness/session_machines.ts). With no machine named, its first shell
-or file call requests a sandbox from the host's default provider. Starting a
-session or asking a model a question needs no machine. The host's current
-directory is not the session's home, and starting from a checkout does not lend
-that checkout to the session.
+Commands and files target workspaces, not a session's location. A session's
+`home{workspace, cwd}` is a convenience default, not permissions. A workspace
+records a directory on a real computer or sandbox; `machine{address}` records
+only the real computer. With no workspace, the first file or command call records a sandbox intention
+through the host's explicitly configured adapter. Missing configuration refuses
+rather than creating a process directory. The host's current directory is never
+silently lent to a session (packages/harness/session_machines.ts).
 
 Its persona comes from graph context: `--work <task-or-project>` admits the
 work's common persona and records its project; `--persona <id-or-name>` selects
@@ -84,54 +84,18 @@ yak session new --work T-<n> --prompt @<scratchpad>/brief.md \
   --provider openai --model <model-name> --effort high
 ```
 
-`--work` names the task or project whose context the session needs, independently
-of where its commands run. Use `--persona` when selecting a particular persona.
-Putting a task id in the prompt alone does not establish that context.
-
-Without a machine, a provider may give it an empty filesystem. Code work needs
-a machine prepared from a commit in the graph, or an explicitly attached
-machine that already carries the code. `machine{provider, address, from, image,
-state}` is @yaks/machine's record: `from` is a graph commit, not a host path;
-`address` is an existing-machine address its provider understands. See
-packages/machine/README.md and packages/harness/README.md, "Session machines".
-The graph's commit-receiving landing door is T-66426; a commit made inside a
-machine is not automatically a commit the graph holds.
-
-For substrate work that really needs the existing box or checkout, name its
-configured machine explicitly, rather than letting where you happen to start
-the CLI choose it:
+Code work names an existing workspace or uses an explicitly configured sandbox
+adapter. A sandbox's `from` is initial provenance, not a backup of later edits.
+See packages/machine/README.md for execution and packages/sandbox/README.md for
+provisioning. A missing or pending placement is not the graph host's disk.
 
 ```sh
-yak session new --work T-<n> --prompt @<scratchpad>/brief.md \
-  --machine <machine-id> --cwd <directory-on-that-machine> \
-  --provider openai --model <model-name> --effort high
+yak session new --prompt @<scratchpad>/brief.md --workspace <workspace-id> --cwd <directory-in-that-filesystem> --provider openai --model <model-name> --effort high
 ```
 
-`--machine` names a machine record, not a path. `--cwd` is on that machine, not
-on the graph host. The provider's default directory is used when none is
-recorded. A machine is no more the graph host's by right than any other machine
-(D-66416).
-
-A worktree on the box becomes such a machine by recording the process provider
-attached at its directory; the result's `entity.eid` is the `--machine`:
-
-```sh
-echo '[{"entity":{"eid":"$m"},"machine":{"provider":"process","address":"<worktree>","state":"running"}}]' | yak graph apply --bundles - --json
-```
-
-Without `--machine`, a session on the box gets an empty directory under
-~/.yak/machines, whatever directory the CLI was started in, and a brief that
-names a worktree path doesn't change that.
-
-The process provider (T-66421, packages/process/machine.ts) gives sandboxes their
-own directories and can attach an existing directory. It is not a security
-boundary and supplies no CPU or memory limit: bash and rooted paths can reach
-that filesystem. Provider isolation, resource limits and a remote machine's
-narrowed graph grant are separate capabilities in D-66416, not promises made by
-the native harness. Check what the configured provider lends before treating a
-machine as an isolated environment. A provider that cannot prepare the graph
-commit or boot an image refuses it rather than silently starting something
-else.
+`--workspace` names a workspace record, not a path. An explicit workspace admits
+its ancestor instruction files through its own commands and reads. A model-only opening requires no workspace. The first file or command call
+requires a configured default sandbox adapter and records its pending intention.
 
 Without model flags, selection comes from the provider's `using` row
 (packages/harness/model_selection.ts). `yak model list` is the configured
@@ -153,20 +117,17 @@ bodies or name their files. What it can't find anywhere is two things:
   a check, not a gate the owner must waive.
 - **How its children land**, when it may delegate. The harness gives it
   `spawn`, `fork` and `wait` tools (packages/harness/README.md, "Forks and
-  subagents"). `spawn({task})` records a separate machine request from the
-  parent machine's recorded `from` commit, or an empty machine if none is
-  recorded. `spawn({prompt})` and `fork` share the parent's machine unless
-  given `machine`. A caller can name an existing machine id or request one
-  with `machine: {provider?, from?, image?}`. Children writing code side by side
-  want machines of their own (M-3715); the brief carries how their commits
-  reach the graph and land. Dirty files and unreceived commits on the parent's
-  machine are not the task child's base.
+  subagents"). `spawn({task})` requests a separate sandbox intention.
+  Prompt children and forks share the parent's workspace unless given `workspace`
+  or `sandbox: {provider?, from?, image?}`. Children writing side by side usually
+  want separate sandboxes (M-3715); the brief carries how their commits reach the
+  graph and land. Dirty files are not initial sandbox provenance.
 
 ## While it runs
 
 - **Its S-id.** The CLI prints only the final reply. `yak session list` lists
   sessions, each with its status; once it claims the task, `yak graph show
-  T-<n>` names it too. `yak graph show S-<n>` shows its home, machine reference,
+  T-<n>` names it too. `yak graph show S-<n>` shows its home workspace,
   dispatch and parent. Its command directory may not be recorded until a
   provider lends the machine.
 - **Watching**: `yak session peek S-<n>` shows its newest entries and status.
@@ -194,8 +155,7 @@ bodies or name their files. What it can't find anywhere is two things:
 - **Stopping**: `yak session stop S-<n>` stops native sessions as well as
   managed spawns. A native session reads `stopped` and admits no more model
   turns or tool calls; a step already in flight can finish recording its
-  answer without reopening the transcript. Its machine is released after
-  that step finishes. New input (`yak session send`) resumes it.
+  answer without reopening the transcript. No workspace is disposed when that step finishes. New input (`yak session send`) resumes it.
 - **Restarting**: `yak restart` is the agent's restart door. It waits for a new
   independent `yak-work@` worker and a new `yak-web@` web to be ready, then
   queues the old units' stops; it doesn't sit in a shell waiting for shutdown.
@@ -208,12 +168,10 @@ bodies or name their files. What it can't find anywhere is two things:
   shutdown sooner; either may cut off a step or an external action, so it
   isn't lossless. An interrupted step is reported to the session
   (packages/session/react.ts).
-- **Afterwards**, ordinary settled turns keep their machine because the
-  session can receive more input. Terminal completion or stopping asks the
-  provider to release it; shared machines remain lent while another unfinished
-  session uses them. A released machine can be requested or attached again on
-  resumed work. Detaching an explicitly attached machine does not destroy its
-  files. Provider lifecycle calls are retryable, with their state in the graph;
-  there is no harness worktree sweep or host-disk maintenance service.
+- **Afterwards**, files and commands remain at their original workspace.
+  Changing a session's default or stopping its transcript does not move files,
+  stop processes or dispose resources. Process recovery follows
+  `process.workspace`, never the caller's current default. Sandbox disposal is
+  explicit; a released sandbox is not silently replaced on resume.
 
 When this skill is wrong or missing something, fix it in the same change.

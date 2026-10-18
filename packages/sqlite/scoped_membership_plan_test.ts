@@ -1,5 +1,5 @@
 import './sqlitepath.ts'
-// Selective session and machine reads must not build global visible component
+// Selective session and workspace reads must not build global visible component
 // owning sets, even when statistics still describe the small initial graph.
 import { Database } from '@db/sqlite'
 import { equal, ok, test } from '@yaks/testing'
@@ -43,7 +43,7 @@ let vocab = loadVocab({
     home: {
       component: true,
       type: 'object',
-      properties: { machine: { type: 'string', ref: 'entity' } },
+      properties: { workspace: { type: 'string', ref: 'entity' } },
     },
     task: { component: true, type: 'object' },
     session: { component: true, type: 'object' },
@@ -66,7 +66,9 @@ let seed = (start: number, count: number, owner: number) => {
   d.query(
     insert('claim', ...rows.map((entity) => ({ entity, session: owner }))),
   )
-  d.query(insert('home', ...rows.map((entity) => ({ entity, machine: owner }))))
+  d.query(
+    insert('home', ...rows.map((entity) => ({ entity, workspace: owner }))),
+  )
   for (let comp of ['task', 'session']) {
     d.query(insert(comp, ...rows.map((entity) => ({ entity }))))
   }
@@ -90,13 +92,13 @@ for (let scoped of [false, true]) {
         scoped ? ['e4'] : ['e5'],
       ],
       [
-        'machine tasks',
+        'workspace tasks',
         '.task&.claim.session=target&*',
         scoped ? ['e3', 'e4'] : ['e3', 'e4', 'e5'],
       ],
       [
-        'machine borrowers',
-        '.home.machine=target&.session&*',
+        'workspace borrowers',
+        '.home.workspace=target&.session&*',
         scoped ? ['e3', 'e4'] : ['e3', 'e4', 'e5'],
       ],
     ] as const

@@ -26,7 +26,7 @@ export let workspacePolicy = (): Plugin => ({
         for (let property of ['root', 'machine', 'sandbox']) {
           if (
             property == 'root' && before.root == null &&
-            held.get(b.entity.eid)?.pending
+            held.get(b.entity.eid)?.pending && held.get(b.entity.eid)?.sandbox
           ) continue
           if ((before[property] ?? null) !== (after?.[property] ?? null)) {
             throw new Error('Workspace placement is immutable: ' + property)

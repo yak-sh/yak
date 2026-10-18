@@ -281,8 +281,9 @@ refusal, not a process-directory sandbox.
 ```
 
 The named computer must already be recorded with a configured connection
-address. An omitted workspace records a sandbox intention; the sandbox effect
-provisions it. See [sandbox configuration](../sandbox/README.md) and
+address. An omitted workspace requests a sandbox intention on the first file or
+command call; the sandbox effect provisions it. See
+[sandbox configuration](../sandbox/README.md) and
 [workspace tools](../machine/README.md#workspace-tools-and-session-defaults).
 
 ### A tool that acts on the machine

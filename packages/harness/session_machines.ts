@@ -81,7 +81,15 @@ export let machines = (
     }
   }
   let limits: ChildLimits = {
-    taskDefaults: () => Promise.resolve({ sandbox: {} }),
+    taskDefaults: async (parent) => {
+      let at = (await g.get([parent], ['home']))[0]?.home as Comp | undefined
+      let source = at?.workspace
+        ? (await g.get([String(at.workspace)], ['sandbox']))[0]?.sandbox as
+          | Comp
+          | undefined
+        : undefined
+      return { sandbox: { ...source?.from ? { from: source.from } : {} } }
+    },
     childProperties: {
       workspace: {
         type: 'string',
@@ -117,7 +125,9 @@ export let machines = (
           'Select workspace or sandbox, not both',
         )
       }
-      let inherited = await home(parent)
+      let inherited = args.workspace != null || args.sandbox != null
+        ? (await g.get([parent], ['home']))[0]?.home as Comp | undefined ?? {}
+        : await home(parent)
       let at: Comp
       if (args.sandbox != null) {
         if (typeof args.sandbox != 'object' || Array.isArray(args.sandbox)) {
@@ -189,7 +199,7 @@ export let machines = (
             quote(loan.root)
           } && pwd -P); file=$(realpath -e -- ${
             quote(target)
-          }); case "$file" in "$root"/*) ;; *) exit 1;; esac; test -f "$file"; base64 -- "$file"`,
+          }); if [ "$root" != / ]; then case "$file" in "$root"/*) ;; *) exit 1;; esac; fi; test -f "$file"; base64 -- "$file"`,
           loan.cwd,
         )
         for (;;) {

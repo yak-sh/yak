@@ -189,21 +189,13 @@ managed fixers keep their original runner; changing heal config does not migrate
 or stop them.
 
 A session starts without borrowing the CLI's current directory or filesystem.
-Its first machine call requests a sandbox from the host's default provider.
-`--machine <machine-id>` names an existing machine record; `--cwd <directory>`
-sets the command directory on that machine. Its ancestor AGENTS.md files are
-admitted through Machine as immutable instruction snapshots, before the first
-message. `--work <task-or-project>` admits that work's common graph persona and
-files the session under its project, even in an unregistered checkout whose
-AGENTS.md projection is missing. `--persona` chooses a persona explicitly. A
-dangling instruction projection without graph context refuses opening:
-
-```sh ignore
-yak session new 'Fix the task' --work T-123 --machine <machine-id>
-```
-
-See [Session machines](#session-machines) for provisioning, delegation and
-release.
+A model-only opening needs no workspace. Its first file or command call records
+an intention through the configured default sandbox binding; no adapter means a
+refusal. `--workspace <workspace-id>` names a file-and-command target; `--cwd`
+selects its command directory. `--work <task-or-project>` admits that work's
+common graph persona and files the session under its project; `--persona`
+chooses a persona explicitly. A missing instruction projection without graph
+context refuses opening. See [Session workspaces](#session-workspaces).
 
 Frontend drafts are local to the terminal's machine. `HARNESS_DRAFT_DIR`
 relocates them; [Draft recovery](#draft-recovery) describes their lifetime.
@@ -515,10 +507,10 @@ tools, not the session's location or permissions. `machine{address}` records an
 actual computer; directories and sandboxes are separate workspace records.
 
 An explicit workspace admits its instruction files at opening. An omitted
-workspace records a sandbox intention using the host's configured default
-adapter. Provisioning is the sandbox effect's work, not a local directory
-provider. Missing configuration refuses rather than borrowing the host's disk. A
-pending sandbox has no files to admit.
+workspace requests a sandbox intention on the first file or command call using
+the host's configured default adapter. Provisioning is the sandbox effect's
+work, not a local directory provider. Missing configuration refuses rather than
+borrowing the host's disk. A pending sandbox has no files to admit.
 
 Prompt children and forks share the parent's workspace unless given `workspace`
 or a separate `sandbox: {provider?, from?, image?}` request. Task children

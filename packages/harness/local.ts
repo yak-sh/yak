@@ -188,11 +188,10 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     named: () =>
       named ??= graphTools(h.g, { tools: h.hostTools?.(), reply: h.reply }),
     streaming: streamingEnabled(opts, env),
-    opening: async (persona, session) => {
-      let explicit = opts.workspace
+    opening: async (persona) => {
+      let home = opts.workspace
         ? { workspace: opts.workspace, ...opts.cwd ? { cwd: opts.cwd } : {} }
         : homeAt(undefined, opts.cwd)
-      let home = await binding.home(session!, explicit)
       let files = await instructionsFor(
         h.g,
         home,
