@@ -327,6 +327,9 @@ export type Opts = BindOpts & {
    * as it opens (./follow.ts). `install()` always validates, regardless of
    * this check. */
   schemaReady?: () => boolean
+  /** Additive installation of a deliberately partial vocabulary. Existing
+   * indexes owned by declarations this installer does not carry stay intact. */
+  partial?: boolean
   /** Give new spines a human-readable number. Opt-IN: left out, an entity is
    * its eid and nothing else, which is what a store whose entities nobody ever
    * types the number of wants. Identity, and reporting which entities were
@@ -837,7 +840,9 @@ export let storage = (
         unit(driver, () => {
           if (matches()) return
           // Retired first: a component may take a name an index held.
-          for (let stmt of retired(driver, vocab)) driver.query(stmt)
+          for (let stmt of base.partial ? [] : retired(driver, vocab)) {
+            driver.query(stmt)
+          }
           let tables = retabled(driver, vocab, base.derived)
           erect(driver, tables)
           let after = (comp: string) =>
