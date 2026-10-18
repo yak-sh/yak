@@ -181,3 +181,90 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
     Deno.removeSync(worktrees, { recursive: true })
   }
 })
+
+let legacyRouting = await (async () => {
+  let h = await harness()
+  let first = crypto.randomUUID(),
+    second = crypto.randomUUID(),
+    s = crypto.randomUUID(),
+    c = crypto.randomUUID()
+  await h.g.apply([
+    {
+      entity: { eid: first },
+      machine: { provider: 'legacy', address: '/old', state: 'running' },
+    },
+    {
+      entity: { eid: second },
+      machine: { provider: 'legacy', address: '/next', state: 'running' },
+    },
+    {
+      entity: { eid: s },
+      session: {},
+      home: { machine: first, cwd: '/old/sub' },
+    },
+    { entity: { eid: c }, call: { args: { command: 'false', timeout: 0 } } },
+  ])
+  let read: unknown[] = [], starts: unknown[] = []
+  let binding = machines(h.g, {
+    defaultProvider: 'legacy',
+    provider: () =>
+      Promise.resolve({
+        wake: (ref) =>
+          Promise.resolve({
+            cwd: ref.address,
+            machine: {
+              start: (_command, cwd) => {
+                starts.push([ref.id, cwd])
+                return Promise.resolve('legacy-process')
+              },
+              receipt: () => Promise.resolve('legacy-process'),
+              look: () => Promise.resolve({ exit: { code: 1 } }),
+              tail: () => Promise.resolve([]),
+              kill: () => Promise.resolve(),
+              read: (path) => {
+                read.push([ref.id, path])
+                return Promise.resolve('kept')
+              },
+              write: () => Promise.resolve(),
+            },
+          }),
+        release: () => Promise.resolve(),
+        export: async function* () {},
+      }),
+  })
+  let tools = harnessTools(h.g, {
+    machines: binding,
+    workspaces: {
+      connect: () => {
+        throw new Error('must not select modern target')
+      },
+    },
+  })
+  let ctx = { session: s, call: { entity: { eid: c } }, entries: [] }
+  let shell = tools.find((t) => t.name == 'shell')!
+  let result = await shell.run({ command: 'false', timeout: 0 }, ctx)
+  let recorded = (await h.g.get([c]))[0].call as {
+    args: Record<string, unknown>
+  }
+  await h.g.apply([{
+    entity: { eid: s },
+    home: { machine: second, cwd: '/next' },
+  }])
+  let recovered = await shell.recover!(recorded.args, ctx)
+  let text = await tools.find((t) => t.name == 'read')!.run({ path: 'file' }, {
+    ...ctx,
+    call: { entity: { eid: crypto.randomUUID() } },
+  })
+  await h.close()
+  return { first, read, starts, result, recovered, text, recorded }
+})()
+test('legacy homes retain their own filesystem while modern workspace tools are available', () => {
+  let p = legacyRouting
+  assertEquals(p.result, 'process legacy-process exited 1')
+  assertEquals(p.recovered, p.result)
+  assertEquals(p.starts, [[p.first, '/old/sub']])
+  assertEquals(p.recorded.args.machine, p.first)
+  assertEquals(p.recorded.args.cwd, '/old/sub')
+  assertEquals(p.text, 'kept')
+  assertEquals(p.read.map((r) => (r as string[])[1]), ['/next/file'])
+})

@@ -138,8 +138,8 @@ export let machines = (
     await g.apply([{ entity: { eid: session }, home: { machine: id } }])
     return { ...at, machine: id }
   }
-  let lent = async (session: string) => {
-    let at = await serial(g, session, () => home(session))
+  let lent = async (session: string, explicit?: Comp) => {
+    let at = explicit ?? await serial(g, session, () => home(session))
     if (at.workspace) {
       if (!workspaces) {
         throw new Error('This host lends no workspace execution binding')
@@ -302,8 +302,8 @@ export let machines = (
     },
   }
   return {
-    machine: async (session: string): Promise<Machine> =>
-      (await lent(session)).machine,
+    machine: async (session: string, explicit?: Comp): Promise<Machine> =>
+      (await lent(session, explicit)).machine,
     cwd: async (session: string): Promise<string | undefined> =>
       (await lent(session)).cwd,
     homeAt,
@@ -351,7 +351,7 @@ export let machines = (
   }
 }
 export type SessionMachines = {
-  machine: (session: string) => Promise<Machine>
+  machine: (session: string, explicit?: Comp) => Promise<Machine>
   cwd: (session: string) => Promise<string | undefined>
   homeAt: typeof homeAt
   release: (session: string) => Promise<void>

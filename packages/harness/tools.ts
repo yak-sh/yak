@@ -1,3 +1,4 @@
+import { token } from '@yaks/graph/guard'
 import { derivedEid, mint } from '@yaks/graph/identity'
 import { toolName } from '@yaks/graph/call'
 import type { Reply } from '@yaks/tools'
@@ -29,7 +30,7 @@ import { type Blobs, valueTools } from '@yaks/blob'
 // for a server.
 
 import { machines, type SessionMachines } from './session_machines.ts'
-import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
+import type { Comp, Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { core, type Depth, inputSchemaOf } from '@yaks/mcp/tools'
 import { machineTools, workspaceTools } from '@yaks/machine/tools'
 import { sessionHome, type Workspaces } from '@yaks/machine/targets'
@@ -124,12 +125,74 @@ export let harnessTools = (
 ): Tool[] => {
   let binding = opts.machines ?? machines(g)
   let selected = opts.workspaces
-  let machine = selected ? workspaceTools(g, selected) : machineTools((ctx) => {
-    if (!ctx) {
-      throw new ToolError('workspace', 'A workspace call needs a session')
-    }
-    return binding.machine(ctx.session)
-  }, { cwd: (ctx) => ctx ? binding.cwd(ctx.session) : undefined })
+  let legacy = (at?: Comp) =>
+    machineTools((ctx) => {
+      if (!ctx) {
+        throw new ToolError('workspace', 'A workspace call needs a session')
+      }
+      return binding.machine(ctx.session, at)
+    }, {
+      cwd: (ctx) =>
+        at?.cwd == null
+          ? ctx ? binding.cwd(ctx.session) : undefined
+          : String(at.cwd),
+    })
+  let modern = selected ? workspaceTools(g, selected) : undefined
+  let machine = legacy().map((tool) => ({
+    ...modern?.find((t) => t.name == tool.name) ?? tool,
+    run: async (
+      args: Record<string, unknown>,
+      ctx?: import('@yaks/session').ToolContext,
+    ) => {
+      let row = ctx
+        ? (await g.get([ctx.call.entity.eid], ['call']))[0]
+        : undefined
+      let prior = (row?.call as Comp | undefined)?.args as
+        | Record<string, unknown>
+        | undefined
+      let input = prior?.machine ? prior : args
+      let home = ctx
+        ? (await g.get([ctx.session], ['home']))[0]?.home as Comp | undefined
+        : undefined
+      let old = !input.workspace &&
+        (input.machine || !home?.workspace && home?.machine)
+      if (!old && modern) {
+        return modern.find((t) => t.name == tool.name)!.run(args, ctx)
+      }
+      let at = old
+        ? {
+          machine: input.machine ?? home?.machine,
+          cwd: input.cwd ?? home?.cwd,
+        }
+        : undefined
+      if (at && ctx && row) {
+        await g.apply([{
+          entity: ctx.call.entity,
+          call: { args: { ...input, ...at } },
+          $was: { call: { args: token(prior ?? null) } },
+        }])
+      }
+      return legacy(at).find((t) => t.name == tool.name)!.run(input, ctx)
+    },
+    ...tool.recover
+      ? {
+        recover: (
+          args: Record<string, unknown>,
+          ctx: import('@yaks/session').ToolContext,
+        ) => {
+          if (args.machine) {
+            return legacy({ machine: args.machine, cwd: args.cwd }).find((t) =>
+              t.name == tool.name
+            )!.recover!(args, ctx)
+          }
+          return (modern?.find((t) => t.name == tool.name) ?? tool).recover!(
+            args,
+            ctx,
+          )
+        },
+      }
+      : {},
+  }))
   let session = sessionTools(g, { ...binding.limits, ...opts })
   let processWait = machine.find((t) => t.name == 'wait')!
   let childWait = session.find((t) => t.name == 'wait')!
