@@ -633,6 +633,8 @@ test('the headless tracker reconnect replaces stale query membership', () => {
     ),
     [replacement],
   )
+})
+test('a reconnect retains the resolved bug beside replacement membership', () => {
   ok(reconnected.watch.value.find((row) => row.entity.eid == bug)?.resolved)
   reconnected.watch.close()
   reconnected.close()
@@ -786,8 +788,12 @@ await put(trackerCycle.tracker, [{
 await group(trackerCycle.tracker, 'tracker-cycle-occurrence')
 test('a regression reopens work closed by a tracker resolution', async () => {
   await trackerCycle.replay()
-  await trackerCycle.replay()
   ok(!(await trackerCycle.g.get([taskEid(bug)]))[0].completed)
+  equal(await count(trackerCycle.g, 'task'), 1)
+  equal(await count(trackerCycle.g, 'fixer'), 2)
+})
+test('replaying a reopened regression does not file another fixer', async () => {
+  await trackerCycle.replay()
   equal(await count(trackerCycle.g, 'task'), 1)
   equal(await count(trackerCycle.g, 'fixer'), 2)
   trackerCycle.close()
