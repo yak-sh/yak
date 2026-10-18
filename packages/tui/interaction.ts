@@ -37,6 +37,7 @@ export let interaction = (
   press: (k: Key) => boolean
   focus: (node?: TElement) => void
   activate: (node: TElement) => void
+  active: () => TElement | null
 } => {
   let selected: TElement | undefined
   let controls = () =>
