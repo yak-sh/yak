@@ -66,7 +66,10 @@
 // A worker winds down by leaving: the moment its signal aborts it claims
 // nothing more, and what it started runs to its end, however long that is,
 // still under its claim. What its runs commit meanwhile is written down for
-// whichever worker comes next.
+// whichever worker comes next. A run failing after its worker left is handed
+// back with the tries it has left rather than retried in place: the leaving
+// process may run older code than the store it reads, and the next worker
+// does not.
 //
 // A worker that stays up holds a presence lease while it works, one per
 // process, so a process that only passes through — a command line — can tell
@@ -173,7 +176,9 @@ export type Attempt = {
    * should give the next failure its full tries back. */
   progressed: () => Promise<void>
   /** Retry a local completion without replaying the handler's external work.
-   * Uses this run's remaining tries and backoff without releasing the run. */
+   * Uses this run's remaining tries and backoff without releasing the run,
+   * until the worker leaves: a failure after that is thrown, and the run goes
+   * back to the pool with the tries it has left. */
   retry?: <T>(body: () => Promise<T>) => Promise<T>
 }
 
@@ -488,7 +493,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         try {
           return await body()
         } catch (err) {
-          if (attempt.last()) throw err
+          if (attempt.last() || !member) throw err
           ctx.report(err, {
             handler: String(row.handler),
             slot: s,

@@ -610,8 +610,16 @@ test('what a process that ended left claimed is run at once, not waited out', as
   assertEquals(await orphaned(['w1']), ['created p1'])
 })
 
+// A local completion is retried in place, its reply kept, until it succeeds,
+// its tries run out, or its worker leaves: that hands the run back to the pool
+// with the tries it has left, for a worker that may run newer code.
 test('local completion retry retains reply, respects backoff and bounds', async () => {
-  for (let recover of [true, false]) {
+  let cases = {
+    recovers: [2, undefined, undefined],
+    fails: [2, 'failed', 2],
+    leaves: [1, 'pending', 1],
+  }
+  for (let [how, want] of Object.entries(cases)) {
     let a = proc(store(), { backoff: () => 0 })
     let external = 0, saves = 0
     a.fx.handle({
@@ -620,7 +628,8 @@ test('local completion retry retains reply, respects backoff and bounds', async 
         assert(attempt?.retry)
         await attempt.retry(() => {
           saves++
-          if (!recover || saves == 1) {
+          if (how == 'leaves') void a.fx.stop()
+          if (how != 'recovers' || saves == 1) {
             return Promise.reject(new Error('storage unavailable'))
           }
           assertEquals(receipt, 1)
@@ -631,13 +640,8 @@ test('local completion retry retains reply, respects backoff and bounds', async 
     await a.g.apply([post('p1')])
     await a.fx.work(a.g)
     await a.fx.idle()
-    assertEquals(external, 1)
-    assertEquals(saves, 2)
-    assertEquals(
-      (await run(a.g, 'post_note'))?.state,
-      recover ? undefined : 'failed',
-    )
-    if (!recover) assertEquals((await run(a.g, 'post_note')).attempts, 2)
+    let row = await run(a.g, 'post_note')
+    assertEquals([external, saves, row?.state, row?.attempts], [1, ...want])
     await a.fx.stop()
   }
 })
