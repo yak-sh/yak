@@ -627,3 +627,45 @@ for (let agent of [false, true]) {
     }
   }
 }
+
+let routedVocab = loadVocab([
+  kernelDoc,
+  processDoc,
+  docDoc,
+  mailDoc,
+  notifyDoc,
+  personaDoc,
+  projectDoc,
+  taskDoc,
+  sessionDoc,
+  toolsDoc,
+  {
+    $defs: {
+      costly: {
+        component: true,
+        type: 'object',
+        properties: {
+          value: { type: 'string' },
+        },
+      },
+    },
+  },
+])
+let routedStorage = ram(routedVocab, {
+  computed: {
+    'costly.value': () => {
+      throw Error('candidate projected unrelated comment data')
+    },
+  },
+})
+routedStorage.tx((tx) =>
+  tx.patch([
+    { entity: { eid: 'creator' }, session: { id: 'creator' } },
+    { entity: { eid: 'target' }, created: { via: 'creator' } },
+    { entity: { eid: 'unsaid' }, comment: { target: 'target' }, costly: {} },
+  ])
+)
+let routed = graph({ storage: routedStorage, vocab: routedVocab })
+test('bus routing reads candidate destinations without projecting unrelated data', async () => {
+  assertEquals(await due(routed), [])
+})
