@@ -650,13 +650,28 @@ data is refreshed, rather than on each keystroke. The asynchronous frontend data
 adapter and its performance limits are documented in
 [Frontend implementation](FRONTEND.md).
 
+### Provider HTTP connections
+
+The native host lends its HTTP providers a shared connection pool. A transport
+failure before response headers retires that pool and retries a replayable
+request once on a fresh pool. Requests already streaming from the retired pool
+can finish; the pool closes when their bodies finish or are cancelled. HTTP
+refusals, caller cancellation and streaming uploads are not replayed. A response
+body failure retires the pool for the next request without replaying output.
+This is transport resilience, not a remedy for an overloaded event loop.
+
 ### Defect diagnostics
 
 Unexpected failures at the executable boundary (including global errors and
 unhandled rejections), runner steps, effects and frontend
 projections/submissions reach the host's reporter. The tracker keeps their
 stack, recursive cause chain, timestamp, process ID, phase and session when
-known. Expected tool refusals use `refusal{code}`. A transcript's
+known. Exhausted provider transport failures and provider stalls reach the
+reporter even when their messages contain network or timeout wording; internal
+retry attempts do not create reports. Reports include process CPU user/system
+milliseconds and CPU percentage over the stated sample interval. These are
+process-wide counters, not a main-thread profile or a socket queue measurement.
+Expected tool refusals use `refusal{code}`. A transcript's
 `exception{type, value}` keeps what happened in the conversation and does not
 create another defect report.
 
