@@ -18,7 +18,7 @@ possible entity, query, account or third-party service.
 | UserPromptSubmit hook                                 | `person-commands`                                                                            | Actual hook response over a one-MiB transcript, including process startup                            |
 | Box connector graph read/write                        | `person-commands`                                                                            | Actual MCP HTTP request through serialized answer / saved write                                      |
 | Terminal startup and query navigation                 | `person-commands`                                                                            | CLI startup to terminal content; query keypress to returned content                                  |
-| Platform management page                              | `platform-waits:management/html`                                                             | Production kernel HTTP through complete HTML (secondary pages assert shell only)                     |
+| Platform management page                              | `platform-waits:management/html`                                                             | Original HTML response workloads, plus populated HTML and content paint for all ten management views |
 | Platform app page                                     | `platform-waits:app/html`, `app/paint-cold`, `app/paint-warm`                                | Complete HTML and Chrome content paint over the isolated kernel                                      |
 | Platform connector app/file list and graph read/write | `platform-waits:connector/*`                                                                 | Real connector HTTP request through populated answer / saved write                                   |
 | Managed worker pressure                               | `worker-health:workers/cpu`                                                                  | CPU of all active worker cgroups, including threads and children                                     |
@@ -143,3 +143,58 @@ without changing source baselines or allowing any slack.
 The registered-door gaps above, external provider latency and remote Cloudflare
 timings remain outside these isolated fixture measurements. Platform management
 coverage is described by its own suite; CLI results do not stand in for it.
+
+## Platform management and submissions
+
+`platform-waits` runs the production kernel, directory, connector and page
+renderers over local Durable Object, R2, mail and vault bindings. All ten
+management views (`/manage`, `/manage/people`, `/manage/connect`,
+`/manage/connections`, `/manage/new`, `/manage/visits`, `/manage/selling`,
+`/manage/settings`, `/manage/billing`, `/manage/trash`) have populated HTML
+measurements and cold/warm Chrome content-paint measurements. Paint waits for
+visible fixture content: app cards, a saved name field, a sealed connection, a
+trashed app, a customer portal button, a connected agent, a pending invitation,
+upload controls, a visitor chart and a connected seller. A shell, empty list,
+refusal or sign-in page does not meet these predicates. The six original HTML
+measurements and their records remain separate.
+
+Submission waits include the complete response and saved-state readback:
+
+| Door                                 | Operations banked                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `POST /manage/settings`              | Save name; rename a space                                                                          |
+| `POST /manage/trash`                 | Restore a genuinely trashed app                                                                    |
+| `POST /manage/people`                | Resend a pending invitation through another local mail delivery                                    |
+| `POST /manage/connections`           | Add key, replace key, disconnect, attach to an app, open/close sharing, begin service OAuth        |
+| `POST /deploy` on the space hostname | Multipart new app and existing app update through deployed marker content                          |
+| `POST /manage/selling`               | Start onboarding through a stored local account and hosted redirect; disconnect a connected seller |
+| `POST /manage/billing`               | Checkout and portal through exact locally returned hosted URLs and stored customer                 |
+| `POST /oauth/agents/disconnect`      | Remove the selected agent while retaining another agent's grant                                    |
+
+Preparation and resets run outside each timed submission. Each HTTP operation
+has seven samples per collection. Chrome owns one profile per collection; `cold`
+is the first navigation to that view, not a claim that the kernel or Cloudflare
+cache is cold. Three collections make a round-median run; acceptance banks the
+best of three runs with zero slack. Existing records can only fall. The
+unchanged suite workload key identifies the retained app/connector/original HTML
+fixture; added metric names identify the separate populated fixture.
+
+Global fetch permits loopback and only exact authenticated local Stripe
+responses and an explicitly named local analytics response. Every other external
+request fails collection, including a caught attempt. Dummy credentials and a
+private D1 vault are created for this process; no account keys, deployed writes
+or payments are used. Stripe redirects and service OAuth authorization URLs are
+inspected, never followed. Analytics answers are local fixture data. These
+numbers are local kernel/form/render waits, **not Cloudflare, Stripe or OAuth
+provider latency**.
+
+The streaming builder at `/api/build`, service OAuth completion, hosted
+checkout, login/mail-code forms and destructive account/space confirmation pages
+are outside these management operation families. Provider generation and
+external payment completion are not replaced by a fast local response. The daily
+and half-hour monitor include `platform-waits` through shared `HOURLY`; a
+confirmed regression or bounded collection failure files a tracker bug. A long
+throughput lane cannot delay it.
+
+Chrome intercepts absolute platform stylesheet and fixture icon URLs and
+rewrites them to the isolated kernel; every other browser origin is denied.

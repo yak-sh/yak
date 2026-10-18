@@ -35,3 +35,31 @@ test('an error or unrelated page cannot bank a fast platform wait', async () => 
   )
   await assertRejects(() => content(new Response('Sign in'), 'The app'))
 })
+
+// Build requests before timing: these cases test admission, not URL parsing.
+import { bindings, external } from './platform-forms.ts'
+let paymentRequest = (
+  path: string,
+  key = String(bindings.STRIPE_KEY),
+  method = 'POST',
+) =>
+  new Request(`https://api.stripe.com${path}`, {
+    method,
+    headers: { authorization: `Bearer ${key}` },
+  })
+let admitted = paymentRequest('/v1/checkout/sessions')
+let rejected = [
+  paymentRequest('/v1/checkout/sessions', 'sk_live_not_allowed'),
+  paymentRequest('/v1/checkout/sessions', undefined, 'GET'),
+  paymentRequest('/v1/charges'),
+  paymentRequest('/v1/checkout/sessions?redirect=1'),
+  new Request('https://other.invalid/v1/checkout/sessions', { method: 'POST' }),
+]
+test('platform local checkout fixture answers its admitted request', () => {
+  equal(external(admitted)?.status, 200)
+})
+for (let [i, req] of rejected.entries()) {
+  test(`platform payment fixture refuses unlisted request ${i}`, () => {
+    equal(external(req), undefined)
+  })
+}

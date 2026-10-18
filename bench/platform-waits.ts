@@ -2,6 +2,7 @@
  * directory, connector and app doors with local Durable Object/R2 bindings.
  * These are response-complete waits, not browser paint or Cloudflare latency. */
 import type { CollectedSuite, Samples } from '@yaks/benchmark'
+import { FORMS } from './platform-forms.ts'
 
 export let NAMES = [
   'management/html',
@@ -10,6 +11,36 @@ export let NAMES = [
   'management/trash-html',
   'management/billing-html',
   'management/connect-html',
+  ...['people', 'new', 'visits', 'selling'].map((view) =>
+    `management/${view}-html`
+  ),
+  ...[
+    'apps',
+    'settings',
+    'connections',
+    'trash',
+    'billing',
+    'connect',
+    'people',
+    'new',
+    'visits',
+    'selling',
+  ].flatMap((view) =>
+    ['cold', 'warm'].map((mode) => `management/${view}/paint-${mode}`)
+  ),
+  ...[
+    'apps',
+    'settings',
+    'connections',
+    'trash',
+    'billing',
+    'connect',
+    'people',
+    'new',
+    'visits',
+    'selling',
+  ].map((view) => `management/${view}-populated-html`),
+  ...FORMS,
   'app/html',
   'app/paint-cold',
   'app/paint-warm',

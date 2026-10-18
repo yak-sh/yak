@@ -18,7 +18,7 @@
       "name": "management/settings-html",
       "unit": "ms",
       "better": "lower",
-      "median": 2.805921000000126,
+      "median": 2.684320000000298,
       "tolerance": 0
     },
     {
@@ -47,6 +47,370 @@
       "unit": "ms",
       "better": "lower",
       "median": 2.2202940000001945,
+      "tolerance": 0
+    },
+    {
+      "name": "management/people-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 3.4466640000009647,
+      "tolerance": 0
+    },
+    {
+      "name": "management/new-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.4924059999993915,
+      "tolerance": 0
+    },
+    {
+      "name": "management/visits-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.797344000000521,
+      "tolerance": 0
+    },
+    {
+      "name": "management/selling-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.2884699999995064,
+      "tolerance": 0
+    },
+    {
+      "name": "management/apps/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 120.40000009536743,
+      "tolerance": 0
+    },
+    {
+      "name": "management/apps/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 100.2999997138977,
+      "tolerance": 0
+    },
+    {
+      "name": "management/settings/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 85.89999961853027,
+      "tolerance": 0
+    },
+    {
+      "name": "management/settings/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 103.40000009536743,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connections/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 111.09999990463257,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connections/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 89.10000038146973,
+      "tolerance": 0
+    },
+    {
+      "name": "management/trash/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 66,
+      "tolerance": 0
+    },
+    {
+      "name": "management/trash/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 70.19999980926514,
+      "tolerance": 0
+    },
+    {
+      "name": "management/billing/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 58.09999990463257,
+      "tolerance": 0
+    },
+    {
+      "name": "management/billing/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 64.80000019073486,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connect/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 68.90000009536743,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connect/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 77.2000002861023,
+      "tolerance": 0
+    },
+    {
+      "name": "management/people/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 86.40000009536743,
+      "tolerance": 0
+    },
+    {
+      "name": "management/people/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 91.30000019073486,
+      "tolerance": 0
+    },
+    {
+      "name": "management/new/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 124.7000002861023,
+      "tolerance": 0
+    },
+    {
+      "name": "management/new/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 128.5,
+      "tolerance": 0
+    },
+    {
+      "name": "management/visits/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 95.59999990463257,
+      "tolerance": 0
+    },
+    {
+      "name": "management/visits/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 94.40000009536743,
+      "tolerance": 0
+    },
+    {
+      "name": "management/selling/paint-cold",
+      "unit": "ms",
+      "better": "lower",
+      "median": 83.30000019073486,
+      "tolerance": 0
+    },
+    {
+      "name": "management/selling/paint-warm",
+      "unit": "ms",
+      "better": "lower",
+      "median": 62.69999980926514,
+      "tolerance": 0
+    },
+    {
+      "name": "management/apps-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 3.640660000000935,
+      "tolerance": 0
+    },
+    {
+      "name": "management/settings-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.3799309999994875,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connections-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 12.026651000000129,
+      "tolerance": 0
+    },
+    {
+      "name": "management/trash-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.440480999997817,
+      "tolerance": 0
+    },
+    {
+      "name": "management/billing-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.305279000000155,
+      "tolerance": 0
+    },
+    {
+      "name": "management/connect-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.42770500000006,
+      "tolerance": 0
+    },
+    {
+      "name": "management/people-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 3.4466640000009647,
+      "tolerance": 0
+    },
+    {
+      "name": "management/new-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.4924059999993915,
+      "tolerance": 0
+    },
+    {
+      "name": "management/visits-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.797344000000521,
+      "tolerance": 0
+    },
+    {
+      "name": "management/selling-populated-html",
+      "unit": "ms",
+      "better": "lower",
+      "median": 2.2884699999995064,
+      "tolerance": 0
+    },
+    {
+      "name": "form/settings-name",
+      "unit": "ms",
+      "better": "lower",
+      "median": 22.355505999999878,
+      "tolerance": 0
+    },
+    {
+      "name": "form/settings-space",
+      "unit": "ms",
+      "better": "lower",
+      "median": 22.10533800000121,
+      "tolerance": 0
+    },
+    {
+      "name": "form/restore",
+      "unit": "ms",
+      "better": "lower",
+      "median": 26.78795100000025,
+      "tolerance": 0
+    },
+    {
+      "name": "form/people-resend",
+      "unit": "ms",
+      "better": "lower",
+      "median": 23.95154899999943,
+      "tolerance": 0
+    },
+    {
+      "name": "form/connections-add",
+      "unit": "ms",
+      "better": "lower",
+      "median": 46.38865600000281,
+      "tolerance": 0
+    },
+    {
+      "name": "form/connections-signin",
+      "unit": "ms",
+      "better": "lower",
+      "median": 14.889141999999993,
+      "tolerance": 0
+    },
+    {
+      "name": "form/connections-key",
+      "unit": "ms",
+      "better": "lower",
+      "median": 62.866109999999026,
+      "tolerance": 0
+    },
+    {
+      "name": "form/connections-disconnect",
+      "unit": "ms",
+      "better": "lower",
+      "median": 45.71999800000049,
+      "tolerance": 0
+    },
+    {
+      "name": "form/connections-attach",
+      "unit": "ms",
+      "better": "lower",
+      "median": 61.02566499999739,
+      "tolerance": 0
+    },
+    {
+      "name": "form/connections-open",
+      "unit": "ms",
+      "better": "lower",
+      "median": 43.76890999999887,
+      "tolerance": 0
+    },
+    {
+      "name": "form/connections-close",
+      "unit": "ms",
+      "better": "lower",
+      "median": 49.94516699999804,
+      "tolerance": 0
+    },
+    {
+      "name": "form/selling-start",
+      "unit": "ms",
+      "better": "lower",
+      "median": 18.871674999998504,
+      "tolerance": 0
+    },
+    {
+      "name": "form/app-new-upload",
+      "unit": "ms",
+      "better": "lower",
+      "median": 100.43347100000028,
+      "tolerance": 0
+    },
+    {
+      "name": "form/app-update-upload",
+      "unit": "ms",
+      "better": "lower",
+      "median": 70.27506299999732,
+      "tolerance": 0
+    },
+    {
+      "name": "form/selling-stop",
+      "unit": "ms",
+      "better": "lower",
+      "median": 19.709913999999117,
+      "tolerance": 0
+    },
+    {
+      "name": "form/billing-checkout",
+      "unit": "ms",
+      "better": "lower",
+      "median": 14.852607999997417,
+      "tolerance": 0
+    },
+    {
+      "name": "form/billing-portal",
+      "unit": "ms",
+      "better": "lower",
+      "median": 1.4584429999995336,
+      "tolerance": 0
+    },
+    {
+      "name": "form/agent-disconnect",
+      "unit": "ms",
+      "better": "lower",
+      "median": 15.582077999999456,
       "tolerance": 0
     },
     {
