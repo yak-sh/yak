@@ -77,3 +77,43 @@ test('settled native work is reported but unfinished dependencies are left waiti
   equal(waiting.some((l) => String(l).startsWith('Native')), false)
   equal(open.some((q) => String(q).includes('!blocked')), true)
 })
+
+// A quiet fixer remains heal's work between tracker reconciliation passes.
+const healReports: string[] = []
+let healOwns = true
+let mutedHeal = false
+const healHost = {
+  config: { plugins: [{ use: '@yaks/heal', with: { provider: 'openai' } }] },
+  graph: {
+    get: () =>
+      Promise.resolve([{ entity: { eid: 's' }, fixer: { bug: 'bug' } }]),
+    read: (q: string) =>
+      Promise.resolve(
+        q.includes('.native')
+          ? [{ entity: { eid: 's' } }]
+          : q.includes('.claim.session')
+          ? [{ entity: { eid: 'task' }, doc: { title: 'Unfinished' } }]
+          : q.includes('.nofix')
+          ? mutedHeal ? [{ entity: { eid: 'project' } }] : []
+          : q.includes('.about')
+          ? healOwns ? [{ entity: { eid: 'ownership' } }] : []
+          : [],
+      ),
+  },
+  report: (error: unknown) => {
+    healReports.push((error as Error).message)
+  },
+} as unknown as Host
+await unfinishedNativeFinal(healHost, 's', settled('heal-owned'))
+const whileOwned = healReports.length
+healOwns = false
+await unfinishedNativeFinal(healHost, 's', settled('unowned'))
+const withoutOwnership = healReports.length
+healOwns = true
+mutedHeal = true
+await unfinishedNativeFinal(healHost, 's', settled('muted'))
+test('a heal-owned fixer waits for its follower, while unowned or muted work reports', () => {
+  equal(whileOwned, 0)
+  equal(withoutOwnership, 1)
+  equal(healReports.length, 2)
+})

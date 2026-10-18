@@ -44,7 +44,29 @@ export let unfinishedNativeFinal = async (
   let tasks = await host.graph.read(
     `.task&.claim.session=${session}&!completed&!cancelled&!blocked&.fields=entity.eid,doc.title`,
   )
+  // Heal's follower owns continuation of an open fixer, including the quiet
+  // interval between its final answer and the next tracker reconciliation.
+  // A fixer mark alone is history; disabled heal must not suppress reports.
+  const heal = host.config?.plugins?.find((plugin) =>
+    typeof plugin == 'object' && plugin.use == '@yaks/heal'
+  )
+  const enabled = typeof heal == 'object' && !!heal.with?.provider
+  const [fixer] = enabled
+    ? await host.graph.get([session], ['fixer', 'stop', 'exit'])
+    : []
+  const bug = (fixer?.fixer as Comp | undefined)?.bug
   for (let task of tasks) {
+    if (bug && !fixer?.stop && !fixer?.exit) {
+      const [muted] = await host.graph.read(
+        `.entity.eid=${task.entity.eid}&.filed.project.nofix&.fields=entity.eid`,
+      )
+      const [owned] = await host.graph.read(
+        `.about&.edge.from=${task.entity.eid}&.edge.to=${
+          String(bug)
+        }&.fields=entity.eid&.limit=1`,
+      )
+      if (!muted && (owned || task.entity.eid == bug)) continue
+    }
     let waiting = await host.graph.read(
       `(.requires|.contains)&.edge.from=${task.entity.eid}&.edge.to.task&!edge.to.completed&!edge.to.cancelled&.fields=entity.eid&.limit=1`,
     )
