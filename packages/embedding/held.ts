@@ -3,7 +3,6 @@
 // for it, for a database only this process has open (a Durable Object's, or
 // one in memory; @yaks/sql `Statements.ownership` says which). Shared storage
 // other processes write is ranked by native exact scans (./native.ts).
-// instead.
 //
 // The copy is int8. Each vector is held as one signed byte per coordinate, its
 // coordinates over its own largest in 127 steps, and one float that scales

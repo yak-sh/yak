@@ -19,8 +19,7 @@
  * - {@link fields} reads the embedded properties off a
  *   {@link https://jsr.io/@yaks/vocab | @yaks/vocab} schema;
  * - {@link schema} returns the statements for the table the vectors live in,
- *   and for the generation of the vectors held in memory, which
- *   {@link build} makes again once enough of them changed;
+ *   its update queue, and the generation of vectors held in memory;
  * - {@link sweep} embeds what changed and drops what left, off the write path,
  *   reading what moved from a queue the database's own triggers keep
  *   ({@link watch});
