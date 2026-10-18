@@ -174,9 +174,20 @@ let probe = async (pinned: boolean, rejected = false) => {
       if (run.ended()) {
         throw new Error(`probe exited: ${text((await run.output).stderr)}`)
       }
-      return await exists(ready) && await exists(`${dir}/worker.json`)
+      if (!await exists(ready)) return false
+      // The service may create this file before writeTextFile has finished.
+      // Readiness and a complete observation are both required by the probe.
+      let observation = await read(`${dir}/worker.json`)
+      if (!observation) return false
+      try {
+        worker = JSON.parse(observation) as Worker
+        return true
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error
+        return false
+      }
     }, `${pinned ? 'pinned CLI' : 'direct work'} ready`)
-    worker = JSON.parse(await read(`${dir}/worker.json`)) as Worker
+    if (!worker) throw new Error('ready worker observation is missing')
     let advertised = Number((await read(ready)).trim())
     equal(
       advertised,

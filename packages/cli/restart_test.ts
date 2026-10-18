@@ -131,16 +131,16 @@ test('restart starts unique replacements and stops nothing on a bare box', async
   assert(!first.includes('stopping'), first)
 })
 
-test('restart bounds readiness to two minutes and stops only its replacement', async () => {
-  let f = fixture()
-  f.options.ready = () => Promise.resolve(false)
-  await assertRejects(
-    () => restart(f.options),
-    Error,
-    'Timed out after 120000ms',
-  )
-  assertEquals(f.elapsed(), PATIENCE)
-  assertEquals(stopped(f), [started(f)])
+// Complete the fake-clock polling before timing the deadline contract. Its
+// 1200 promise turns measure the runner's scheduling, not elapsed wall time.
+let timeout = fixture()
+timeout.options.ready = () => Promise.resolve(false)
+let timeoutError = await assertRejects(() => restart(timeout.options), Error)
+
+test('restart bounds readiness to two minutes and stops only its replacement', () => {
+  assertMatch(timeoutError.message, /Timed out after 120000ms/)
+  assertEquals(timeout.elapsed(), PATIENCE)
+  assertEquals(stopped(timeout), [started(timeout)])
 })
 
 test('restart rejects readiness that arrives after its deadline', async () => {
@@ -211,12 +211,14 @@ test('restart rolls optional roles only where they run', async () => {
   ])
 })
 
-test('a replacement that never readies leaves the old units and earlier replacements running', async () => {
-  let f = fixture(['yak-tracker@old'])
-  f.options.ready = (path) => Promise.resolve(!path.includes('yak-web-'))
-  await assertRejects(() => restart(f.options), Error, 'Timed out')
-  let [work, tracker, web] = started(f)
-  assertEquals(stopped(f), [[web]])
+let unready = fixture(['yak-tracker@old'])
+unready.options.ready = (path) => Promise.resolve(!path.includes('yak-web-'))
+let unreadyError = await assertRejects(() => restart(unready.options), Error)
+
+test('a replacement that never readies leaves the old units and earlier replacements running', () => {
+  assertMatch(unreadyError.message, /Timed out/)
+  let [work, tracker, web] = started(unready)
+  assertEquals(stopped(unready), [[web]])
   assert(work && tracker)
 })
 
@@ -229,22 +231,24 @@ test('restart lets a running replacement take more than 15 seconds to ready', as
   assert(!f.calls.some((c) => c[0] == 'show'))
 })
 
-test('restart captures startup evidence before timeout cleanup can unload it', async () => {
-  let f = fixture()
-  let run = f.options.run!
-  f.options.run = async (command, args) => {
-    let result = await run(command, args)
-    return args.includes('show')
-      ? {
-        ...result,
-        stdout: 'ActiveState=active\nSubState=running\nMainPID=42\nJob=\n',
-      }
-      : result
-  }
-  f.options.ready = () => Promise.resolve(false)
-  let error = await assertRejects(() => restart(f.options), Error, 'MainPID=42')
-  assertMatch(error.message, /ActiveState=active/)
-  let show = f.calls.findIndex((c) => c[0] == 'show')
-  let stop = f.calls.findIndex((c) => c.includes('stop'))
+let evidence = fixture()
+let evidenceRun = evidence.options.run!
+evidence.options.run = async (command, args) => {
+  let result = await evidenceRun(command, args)
+  return args.includes('show')
+    ? {
+      ...result,
+      stdout: 'ActiveState=active\nSubState=running\nMainPID=42\nJob=\n',
+    }
+    : result
+}
+evidence.options.ready = () => Promise.resolve(false)
+let evidenceError = await assertRejects(() => restart(evidence.options), Error)
+
+test('restart captures startup evidence before timeout cleanup can unload it', () => {
+  assertMatch(evidenceError.message, /MainPID=42/)
+  assertMatch(evidenceError.message, /ActiveState=active/)
+  let show = evidence.calls.findIndex((c) => c[0] == 'show')
+  let stop = evidence.calls.findIndex((c) => c.includes('stop'))
   assert(show > 0 && show < stop)
 })
