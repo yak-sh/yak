@@ -824,8 +824,8 @@ let wakeDeparture = await (async () => {
   return {
     remaining: catalogue(d, { name: 'lapsed' }),
     kinds: ids.map((id) => {
-      let [owner] = scan(d, 'entity', by({ id }))
-      let [kind] = scan(d, 'archetype', by({ entity: owner.archetype }))
+      let [owner] = scan(d, 'entity', by({ id: Number(id) }))
+      let [kind] = scan(d, 'archetype', by({ entity: Number(owner.archetype) }))
       return String(kind.tables)
     }),
   }
