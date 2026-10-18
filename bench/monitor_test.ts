@@ -246,8 +246,9 @@ let scheduled = async (busy: boolean, duration: number, suites = HOURLY) => {
   }
 }
 
-test('worst-case hourly collection reports every queued suite within the hour', async () => {
-  let result = await scheduled(false, 599_000)
+let worstHourly = await scheduled(false, 599_000)
+test('worst-case hourly collection reports every queued suite within the hour', () => {
+  let result = worstHourly
   equal(result.reports.map((r) => r.suite), HOURLY)
   equal(result.calls.map((c) => [c.suite, c.runs]), HOURLY.map((s) => [s, 1]))
   equal(result.banked, [])
@@ -286,7 +287,12 @@ test('slow predecessors leave hook screening and confirmation a turn in the same
       let args = measurement(suite, deadline, time.now())
       if (!args) return { verdict: 'failed', error: 'no time left' }
       let available = Number(args[2].slice(0, -1)) * 1000
-      let work = suite == 'hook-waits' ? (runs ? 25_000 : 75_000) : 599_000
+      // The fast fixture must fit the same fair share as the lane grows.
+      // Real collection overruns remain failures; the deadline is not widened.
+      let share = WINDOW / suites.length
+      let work = suite == 'hook-waits'
+        ? (runs ? share / 6 : share / 2)
+        : 599_000
       await time.advance(Math.min(work, available + 10_000))
       return work >= available
         ? { verdict: 'failed', error: 'timed out' }

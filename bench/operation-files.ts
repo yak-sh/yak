@@ -46,11 +46,17 @@ export let fileOperations = async (
     '/** Operation exported module. */\nexport let operationValue = 42\n',
   )
   await new Deno.Command('git', { args: ['add', '.'], cwd: path }).output()
-  let repo = identities(graph.vocab).repository({ common: `${path}/.git` }, {
-    entity: { eid: '' },
-  })
+  let workspace = crypto.randomUUID()
+  let repo = identities(graph.vocab).repository({
+    workspace,
+    common: `${path}/.git`,
+  }, { entity: { eid: '' } })
   await graph.apply([
-    { entity: { eid: repo }, repository: { common: `${path}/.git` } },
+    { entity: { eid: workspace }, workspace: { root: path } },
+    {
+      entity: { eid: repo },
+      repository: { workspace, common: `${path}/.git` },
+    },
     {
       entity: { eid: tree },
       worktree: { repository: repo, path, gitdir: `${path}/.git` },

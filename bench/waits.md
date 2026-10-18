@@ -155,21 +155,68 @@ HTTP tools/list is also checked by collection; declaration is not visibility.
 deno eval 'import { inventory } from "./bench/operation-commands.ts"; import { read } from "./packages/cli/config.ts"; console.log(JSON.stringify(await inventory(read(Deno.env.get("HOME") + "/.yak/yak.json")), null, 2))'
 ```
 
-MCP code sync has no `process.cwd`: its fallback runner omits the process
-provenance that the local CLI runner supplies. File citation verification and
-MCP land have the same boundary constraint. These are not replaced by direct
-handler calls or manufactured provenance. Entity citations require no checkout
-and are measured through both doors.
+## Isolated lifecycle and diagnostic acceptance
 
-The following remain explicitly **unbanked**, not inferred from local startup:
-external admin/deploy/payment/auth/OAuth, provider model listing and session
-new/send/spawn, managed session stop/wait/peek/list, provider builder execution,
-native vector-index checks and serve/work/restart lifecycle. Some have safe
-isolated candidates but are not measured here; others require external
-availability, credentials, spending or managed lifecycle ownership. None was
-executed live. Upstream pushes, live service handovers, owner graph mutation and
-unowned signals are outside this fixture. `operation-remaining` participates in
-the shared hourly monitor; its scheduling bound is owned by T-127825.
+`operation-sessions` banks twelve independent production-door figures: CLI
+list/new/peek/send/spawn/stop/wait and HTTP MCP list/peek/spawn/stop/wait. A
+private SQLite graph and a deterministic local model complete real native turns
+through the production effects runner. Transcript readback proves replies, spawn
+claims and stopped/idle transitions. Stop starts with a held active turn; wait
+races actual local completion. New/send are declared CLI-only, not imaginary
+HTTP doors. These are local lifecycle waits, not remote generation latency.
+
+`operation-lifecycle` banks serve readiness, work readiness, ready-first restart
+and maximum HTTP request gap. Real production CLI processes run under uniquely
+owned systemd templates against private graphs/runtime directories. Restart uses
+production `restart()` with only those templates as explicit roles. Populated
+HTTP requests continue throughout handover and any failed request fails
+collection. Runtime limits bound orphan lifetime after collector failure; normal
+cleanup stops only the owned units and removes their templates and fixture
+directories.
+
+`operation-diagnostics` banks CLI model-list local catalogue handling plus
+CLI/HTTP session-home saved workspace changes and CLI/HTTP vector-check over a
+built native index containing 2,001 offline hash vectors. Model listing crosses
+the actual CLI parser/runner and owned loopback HTTP catalogue; the only
+external URL is redirected before transport. Dummy local authentication never
+represents real credentials or OpenAI latency. Vector-check verifies the
+populated native index, not an empty or waiting check.
+
+`operation-checkout` banks CLI file-citation verify/check and three separate
+HTTP cwd-refusal figures. Successful file verification reads the owned
+checkout's commit and saves its revision. MCP code-sync, land and file-citation
+verification lack `process.cwd` in the production fallback runner. Their refusal
+figures measure that real boundary; **successful MCP completion remains
+unavailable**. No handler is called directly and no process provenance is
+manufactured. Entity citations and private CLI land remain covered by their
+existing suites.
+
+All four suites bank best-of-three runs, three round medians per run, three
+samples per round, with tolerance zero. All are registered in `SUITES` and
+`HOURLY`, under the existing persistent scheduler's absolute 25-minute deadline,
+including lock wait and confirmation. The installed cron invokes that lane every
+30 minutes; missed collection reports failure rather than blanket success.
+Existing baseline, budget and floor records are not raised or reaccepted.
+
+### Explicit dependencies, not successful local coverage
+
+- The seventeen external admin doors require the appropriate administrator
+  account and service availability; no admin credential or live mutation is
+  used.
+- Real OpenAI catalogue authentication, provider generation and remote session
+  completion require an independently authorized provider run. The local model
+  and catalogue fixtures prove local handling only.
+- Managed process-transport session spawn/stop/wait require exclusively owned
+  managed runs; native fixture sessions do not stand in for those runs. No
+  existing managed run is reaped. MCP conversation start/send are separate
+  variants, not the CLI-only session new/send declarations.
+- OAuth completion, SMTP delivery, upstream pushes, deployment/payment and
+  provider builder execution depend on external credentials/services/authorized
+  spending. Local planning, stash mail and retained artifacts do not prove them.
+- Successful MCP code-sync/land/file-citation verification depend on a genuine
+  checkout-bound runner capability. Current production HTTP doors refuse them.
+- Live owner-service handover and live owner-graph mutation are deliberately not
+  executed; private lifecycle readiness is measured instead.
 
 ## Boundaries and exclusions
 

@@ -69,6 +69,21 @@ export let inventory = async (
   measured.add('graph_show')
   measured.add('graph_apply')
   measured.add('builder_build')
+  for (
+    let name of [
+      'model_list',
+      'vector_check',
+      'serve',
+      'session_list',
+      'session_new',
+      'session_peek',
+      'session_send',
+      'session_spawn',
+      'session_stop',
+      'session_wait',
+      'session_home',
+    ]
+  ) measured.add(name)
   let httpTools = said.tools.filter((t) =>
     !t.surfaces || t.surfaces.includes('mcp')
   ).map((t) => t.name)
@@ -89,11 +104,16 @@ export let inventory = async (
     ].sort(),
     httpTools,
     scope:
-      'Measured names identify operations, not every variant of their arguments; code_sync CLI only.',
+      'Measured names identify operations, not every variant of their arguments; code_sync/land/file-cites MCP success unavailable; separate cwd-refusal metrics do not claim completion.',
     measuredTools: toolNames.filter((name) => measured.has(name)),
     unmeasuredTools: toolNames.filter((name) => !measured.has(name)),
     unsupportedDoors: {
-      code_sync: 'MCP runner does not pass process.cwd; CLI measured',
+      code_sync:
+        'MCP process.cwd unavailable; refusal banked, successful CLI measured',
+      land:
+        'MCP process.cwd unavailable; refusal banked, private CLI land measured',
+      file_cites_verify:
+        'MCP process.cwd unavailable; refusal banked, CLI file citation measured',
     },
   }
 }
@@ -116,6 +136,7 @@ export type Operation = {
   command: string[]
   cwd?: string | (() => string)
   config?: () => string
+  expectedError?: boolean
   registered?: boolean
   doors?: ('cli' | 'connector')[]
   args: () => Record<string, unknown>
@@ -134,6 +155,7 @@ async function collect(
   scale = false,
   remaining = false,
   controls = false,
+  checkout = false,
 ): Promise<Record<string, Samples>> {
   let tasks = scale ? SCALE_TASKS : OPERATION_TASKS
   let n = Number(args[0] ?? 3)
@@ -617,6 +639,21 @@ async function collect(
           includes,
         })
     }
+    if (checkout) {
+      operations = await (await import('./operation-checkout.ts'))
+        .checkoutOperations({
+          graph,
+          dir,
+          PERSON,
+          PROJECT,
+          TARGET,
+          SESSION,
+          PERSONA,
+          fresh,
+          saved,
+          includes,
+        })
+    }
     let filter = args.find((a) => a.startsWith('--family='))?.slice(9)
     if (filter) operations = operations.filter((o) => o.family == filter)
     for (let operation of operations) {
@@ -646,7 +683,9 @@ async function collect(
                 name: operation.tool,
                 arguments: input,
               })
-              if (answer.isError) {
+              if (
+                Boolean(answer.isError) !== Boolean(operation.expectedError)
+              ) {
                 throw new Error(`${operation.tool}: ${JSON.stringify(answer)}`)
               }
               text = JSON.stringify(answer)
@@ -688,5 +727,7 @@ export let measureRemaining = (args: string[] = []) =>
   collect(args, false, true)
 export let measureControls = (args: string[] = []) =>
   collect(args, false, true, true)
+export let measureCheckout = (args: string[] = []) =>
+  collect(args, false, true, false, true)
 export let measureScale = (args: string[] = []) => collect(args, true)
 if (import.meta.main) console.log(JSON.stringify(await measure(Deno.args)))

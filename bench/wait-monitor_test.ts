@@ -3,6 +3,10 @@ import { equal, test } from '@yaks/testing'
 import { HOURLY, SUITES, watch } from './monitor.ts'
 let families = [
   'operation-commands',
+  'operation-checkout',
+  'operation-diagnostics',
+  'operation-lifecycle',
+  'operation-sessions',
   'operation-scale',
   'hook-waits',
   'terminal-interactions',
