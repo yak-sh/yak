@@ -34,15 +34,20 @@ export let receive = async <T>(
 // headers arrive. Keep our own reader so shutdown can cancel a locked body.
 let streamed = (
   response: Response,
-  signal: AbortSignal,
+  signal: AbortSignal | undefined,
+  ended: () => void,
   keep: (done: Promise<unknown>) => void,
 ) => {
-  if (!response.body) return response
+  if (!response.body) {
+    ended()
+    return response
+  }
   let reader = response.body.getReader()
   let closed = false
   let end = () => {
     closed = true
-    signal.removeEventListener('abort', abort)
+    signal?.removeEventListener('abort', abort)
+    ended()
   }
   let abort = () => {
     if (closed) return
@@ -54,8 +59,8 @@ let streamed = (
   let body = new ReadableStream<Uint8Array>({
     start: (controller) => {
       output = controller
-      signal.addEventListener('abort', abort, { once: true })
-      if (signal.aborted) abort()
+      signal?.addEventListener('abort', abort, { once: true })
+      if (signal?.aborted) abort()
     },
     pull: async () => {
       try {
@@ -83,6 +88,7 @@ let streamed = (
 export let requests = (handler: Handler) => {
   let reads = new AbortController()
   let pending = new Set<Promise<unknown>>()
+  let open = new Map<Request, string>()
   let failures: unknown[] = []
   let keep = (done: Promise<unknown>) => {
     pending.add(done)
@@ -92,14 +98,29 @@ export let requests = (handler: Handler) => {
     })
   }
   return {
+    open: () =>
+      [...open].map(([request, phase]) => ({
+        method: request.method,
+        path: new URL(request.url).pathname,
+        phase,
+      })),
     handle: (request: Request) => {
+      open.set(request, 'handler')
+      let ended = () => {
+        open.delete(request)
+      }
+      let response = (answer: Response, signal?: AbortSignal) => {
+        open.set(request, 'response body')
+        return streamed(answer, signal, ended, keep)
+      }
       if (reading(request)) {
         let scoped = new Request(request, {
           signal: AbortSignal.any([request.signal, reads.signal]),
         })
         return receive(scoped, () => handler(scoped)).then(
-          (response) => streamed(response, scoped.signal, keep),
+          (answer) => response(answer, scoped.signal),
           (error) => {
+            ended()
             if (error instanceof Cancelled) {
               return new Response(null, { status: 499 })
             }
@@ -109,7 +130,10 @@ export let requests = (handler: Handler) => {
       }
       let done = Promise.resolve().then(() => handler(request))
       keep(done)
-      return done
+      return done.then((answer) => response(answer), (error) => {
+        ended()
+        throw error
+      })
     },
     cancel: () => reads.abort(),
     drain: async () => {

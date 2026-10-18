@@ -854,35 +854,60 @@ let composed = async (
       },
       close: (code?: number) =>
         closing ??= (async () => {
-          await retire()
+          let wait = async <T>(name: string, work: () => T | Promise<T>) => {
+            let timer = setTimeout(
+              () => console.error(`host drain — ${name}`),
+              5000,
+            )
+            try {
+              return await work()
+            } finally {
+              clearTimeout(timer)
+            }
+          }
+          await wait('retire', retire)
           stopping.abort()
           dutiesHost.stop()
-          await opts.thread?.close().catch(lose)
-          await ending
-          if (effecting && !opts.readOnly) await drained()
-          await dutiesHost.close()
-          await cleanup('dispose plugins', built.close)
+          await wait('duty thread', () => opts.thread?.close().catch(lose))
+          await wait('thread ending', () => ending)
+          if (effecting && !opts.readOnly) await wait('effects', drained)
+          await wait('duties', () => dutiesHost.close())
+          await wait('plugins', () => cleanup('dispose plugins', built.close))
           let shut = async () => {
-            await cleanup('close capture', () => captureControl?.close())
-            await cleanup('close traces', () => recorded?.close())
-            await cleanup('close reader', () => opts.reader?.close?.())
-            await cleanup('close storage', () => sql.close())
-            await report.close()
+            await wait('capture', () =>
+              cleanup('close capture', () => captureControl?.close()))
+            await wait('traces', () =>
+              cleanup('close traces', () =>
+                recorded?.close()))
+            await wait('reader', () =>
+              cleanup('close reader', () =>
+                opts.reader?.close?.()))
+            await wait('storage', () =>
+              cleanup('close storage', () =>
+                sql.close()))
+            await wait('reports', () =>
+              report.close())
           }
           // A call whose tool has not returned by now never will in this
           // process. Ended as interrupted, rather than left claimed for a sweep
           // to run again in a process nobody asked — a server, a tail, a land in
           // somebody else's checkout.
           if (!opts.readOnly) {
-            await calls?.interrupt(
-              `interrupted: this process ended${
-                code == null ? '' : ` with code ${code}`
-              } before the tool returned`,
-            ).catch((e) => report(e, { tags: { step: 'interrupt calls' } }))
+            await wait('interrupt calls', () =>
+              calls?.interrupt(
+                `interrupted: this process ended${
+                  code == null ? '' : ` with code ${code}`
+                } before the tool returned`,
+              ).catch((e) =>
+                report(e, { tags: { step: 'interrupt calls' } })
+              ))
           }
-          if (!self || opts.process === false || opts.readOnly) return shut()
+          if (!self || opts.process === false || opts.readOnly) {
+            return shut()
+          }
           try {
-            await record([...await released(g!, selfEid()), ended(code)])
+            await wait('process ending', async () =>
+              record([...await released(g!, selfEid()), ended(code)]))
           } catch (e) {
             await report(e, { tags: { step: 'close host' } })
           }
