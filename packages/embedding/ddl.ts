@@ -15,8 +15,8 @@ import {
 /** The vector table's name. */
 export let TABLE = 'embedding'
 
-/** The exclusive cache generation, with legacy native build metadata retained
- * until the one-time quantization cleanup has run. */
+/** The exclusive cache generation. Legacy native metadata stays readable by
+ * older CLI processes; new searches ignore it. */
 export let BUILD = 'embedding_build'
 
 /** Vectors changed since the exclusive reader refreshed its cache. */
@@ -134,14 +134,3 @@ let tracked = (): Stmt[] => [{
   ifNot: true,
   cols: [{ name: 'owner', type: 'integer', pk: true }],
 }, ...triggers]
-
-/** Retire shared-store change tracking after every old reader has stopped. */
-export let untrack = (): Stmt[] => [
-  ...triggers.map(({ name }): Stmt => ({
-    t: 'drop',
-    kind: 'trigger',
-    name,
-    ifExists: true,
-  })),
-  { t: 'drop', kind: 'table', name: DIRTY, ifExists: true },
-]
