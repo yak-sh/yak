@@ -199,10 +199,13 @@ let scheduled = async (busy: boolean, duration: number, suites = HOURLY) => {
     []
   let calls: { suite: string; runs?: number; at: number }[] = []
   let banked: string[] = []
+  let deadlines = new Map<string, number>()
   let state: State = { good: {} }
   let verdicts = await watch(suites, state, {
     check: async (suite, runs, end) => {
-      equal(end, deadline) // confirmation and every queued suite share it
+      ok(end! <= deadline)
+      if (deadlines.has(suite)) equal(end, deadlines.get(suite))
+      deadlines.set(suite, end!)
       let args = measurement(suite, end, time.now())
       if (!args) return { verdict: 'failed', error: 'deadline reached' }
       calls.push({ suite, runs, at: time.now() })
@@ -246,14 +249,9 @@ let scheduled = async (busy: boolean, duration: number, suites = HOURLY) => {
 test('worst-case hourly collection reports every queued suite within the hour', async () => {
   let result = await scheduled(false, 599_000)
   equal(result.reports.map((r) => r.suite), HOURLY)
-  equal(result.reports[0].kind, 'regressed')
-  equal(result.calls.map((c) => [c.suite, c.runs]), [
-    [HOURLY[0], 1],
-    [HOURLY[0], undefined],
-    [HOURLY[1], 1],
-  ])
-  equal(result.banked, [HOURLY[0]])
-  ok(result.reports.slice(1).every((r) => r.kind == 'failed'))
+  equal(result.calls.map((c) => [c.suite, c.runs]), HOURLY.map((s) => [s, 1]))
+  equal(result.banked, [])
+  ok(result.reports.every((r) => r.kind == 'failed'))
   ok(Object.values(result.verdicts).every((v) => v != 'deferred'))
   ok(result.elapsed < 60 * 60_000)
   equal(result.state.good, {})
@@ -261,7 +259,7 @@ test('worst-case hourly collection reports every queued suite within the hour', 
 
 test('a box lock held beyond the deadline reports all suites, never a silent deferral', async () => {
   let result = await scheduled(true, 0)
-  equal(result.calls.length, 3)
+  equal(result.calls.length, HOURLY.length)
   equal(result.reports.map((r) => r.suite), HOURLY)
   ok(result.reports.every((r) => r.kind == 'failed'))
   ok(result.reports.every((r) => r.message.includes('could not be measured')))
@@ -276,6 +274,35 @@ test('checks hitting their existing ten-minute cap cannot hold up later reports'
   ok(result.reports.every((r) => r.kind == 'failed'))
   equal(result.banked, [])
   ok(result.elapsed < 60 * 60_000)
+})
+
+test('slow predecessors leave hook screening and confirmation a turn in the same tick', async () => {
+  let time = clock(), state: State = { good: {} }
+  let calls: string[] = [], reports: string[] = []
+  let suites = HOURLY
+  let verdicts = await watch(suites, state, {
+    check: async (suite, runs, deadline) => {
+      calls.push(suite)
+      let args = measurement(suite, deadline, time.now())
+      if (!args) return { verdict: 'failed', error: 'no time left' }
+      let available = Number(args[2].slice(0, -1)) * 1000
+      let work = suite == 'hook-waits' ? (runs ? 25_000 : 75_000) : 599_000
+      await time.advance(Math.min(work, available + 10_000))
+      return work >= available
+        ? { verdict: 'failed', error: 'timed out' }
+        : outcome(suite == 'hook-waits' && !runs ? 'passed' : 'regressed')
+    },
+    since: () => Promise.resolve([]),
+    report: (_error, suite) => {
+      reports.push(suite)
+      return Promise.resolve()
+    },
+  }, { deadline: WINDOW, now: time.now })
+  equal(verdicts['hook-waits'], 'passed')
+  equal(calls.filter((s) => s == 'hook-waits').length, 2)
+  equal(reports, suites.filter((s) => s != 'hook-waits'))
+  equal(state.good['hook-waits'].commit, 'c2')
+  ok(time.now() <= WINDOW)
 })
 
 test('scheduled busy confirmations are failures, not confirmed regressions or good runs', async () => {

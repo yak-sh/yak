@@ -15,7 +15,9 @@
  *
  * The box runs this from cron: every suite once a day, and `--hourly`
  * every 30 minutes for user-facing waits. Its serialized queue, lock wait,
- * screening and confirmation share an absolute 25-minute deadline. Unmeasured
+ * screening and confirmation share an absolute 25-minute deadline. Each suite
+ * gets an equal share of the remaining time, including its confirmation, so
+ * slow predecessors cannot spend the whole tick. Unused time flows forward. Unmeasured
  * suites report failures, never silently defer past the next tick; `--restarted` every 15 minutes
  * measures pages only when the live web unit has
  * changed since it last looked, that is once after each `yak restart`.
@@ -107,8 +109,8 @@ export type Monitor = {
   bank?: (suite: string, run: Run) => Promise<void>
 }
 
-let figure = (n: number, unit: string) =>
-  `${n.toLocaleString('en-US', { maximumFractionDigits: 1 })} ${unit}`
+let numbers = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 })
+let figure = (n: number, unit: string) => `${numbers.format(n)} ${unit}`
 let over = (r: Regression) =>
   `${r.name} ${figure(r.current, r.unit)}, over its limit of ${
     figure(r.limit, r.unit)
@@ -147,19 +149,23 @@ export let watch = async (
   schedule?: { deadline: number; now: () => number },
 ): Promise<Record<string, Outcome['verdict']>> => {
   let out: Record<string, Outcome['verdict']> = {}
-  for (let suite of suites) {
+  for (let [index, suite] of suites.entries()) {
+    let now = schedule?.now() ?? 0
+    let deadline = schedule
+      ? now + Math.max(0, schedule.deadline - now) / (suites.length - index)
+      : undefined
     let safe = async (runs?: number): Promise<Outcome> => {
       try {
-        if (schedule && schedule.now() >= schedule.deadline) {
+        if (schedule && schedule.now() >= deadline!) {
           return {
             verdict: 'failed',
             error: 'scheduling deadline missed before measurement',
           }
         }
-        let result = await m.check(suite, runs, schedule?.deadline)
+        let result = await m.check(suite, runs, deadline)
         if (
           schedule &&
-          ((schedule.now() >= schedule.deadline &&
+          ((schedule.now() >= deadline! &&
             result.verdict != 'failed') ||
             (result.verdict == 'deferred' || result.verdict == 'unconfirmed' ||
               result.verdict == 'inconclusive'))
