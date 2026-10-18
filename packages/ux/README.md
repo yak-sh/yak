@@ -487,12 +487,18 @@ Object.defineProperty(globalThis, 'document', {
 })
 let root = document.querySelector('main')!
 let input = document.querySelector('input')!
-// Linkedom has no selection API; browsers provide this method.
-input.setSelectionRange = (start) =>
-  Object.defineProperty(input, 'selectionStart', {
-    value: start,
-    configurable: true,
-  })
+// Linkedom has no selection API; supply it for managed and bound inputs.
+let inputs = document.defaultView.HTMLInputElement.prototype
+let selection = Object.getOwnPropertyDescriptor(inputs, 'setSelectionRange')
+Object.defineProperty(inputs, 'setSelectionRange', {
+  configurable: true,
+  value(this: HTMLInputElement, start: number) {
+    Object.defineProperty(this, 'selectionStart', {
+      value: start,
+      configurable: true,
+    })
+  },
+})
 let off = () => {}
 try {
   render(h(c.Field, { id: 'managed', initial: 'pe' }), root)
@@ -510,6 +516,8 @@ try {
   c.dispose()
   front.close()
   draftFront.close()
+  if (selection) Object.defineProperty(inputs, 'setSelectionRange', selection)
+  else Reflect.deleteProperty(inputs, 'setSelectionRange')
   if (prior) Object.defineProperty(globalThis, 'document', prior)
   else Reflect.deleteProperty(globalThis, 'document')
 }
