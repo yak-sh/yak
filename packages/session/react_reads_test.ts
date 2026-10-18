@@ -339,70 +339,68 @@ let oldTurns = (m: string, session: string, n: number) =>
     }]
   }).flat()
 
-test('a terminal runner reads a bounded part of the entry history', async () => {
+{
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   let g = graph({ vocab, storage: s, plugins: [sessions()] })
   await g.apply([{ entity: { eid: 'holder' } }])
-  await s.tx((tx) =>
-    tx.patch([
-      { entity: { eid: 'terminal' }, session: {} },
-      { entity: { eid: 'fake' }, model: { name: 'fake' } },
-      ...oldTurns('fake', 'terminal', 45),
-      {
-        entity: { eid: 'end' },
-        entry: { session: 'terminal', seq: 500 },
-        content: { body: 'done' },
-        stop: {},
-      },
-    ])
-  )
-  let reads = 0, read = g.read.bind(g)
-  g.read = async (q, o) => {
-    let found = await read(q, o)
-    reads += found.length
-    return found
-  }
-  await settle(g, 'terminal', {
-    holder: 'holder',
-    model: () => {
-      throw new Error('terminal model asked')
+  await g.apply([
+    { entity: { eid: 'terminal' }, session: {} },
+    { entity: { eid: 'fake' }, model: { name: 'fake' } },
+    ...oldTurns('fake', 'terminal', 45),
+    {
+      entity: { eid: 'end' },
+      entry: { session: 'terminal', seq: 500 },
+      content: { body: 'done' },
+      stop: {},
     },
-    tools: [],
+  ])
+  test('a terminal runner reads a bounded part of the entry history', async () => {
+    let reads = 0, read = g.read.bind(g)
+    g.read = async (q, o) => {
+      let found = await read(q, o)
+      reads += found.length
+      return found
+    }
+    await settle(g, 'terminal', {
+      holder: 'holder',
+      model: () => {
+        throw new Error('terminal model asked')
+      },
+      tools: [],
+    })
+    assert(reads < 100, `read ${reads} rows`)
   })
-  assert(reads < 100, `read ${reads} rows`)
-})
+}
 
 for (let fork of [false, true]) {
+  let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
+  let g = graph({ vocab, storage: s, plugins: [sessions()] })
+  let m = identityEid('model', ['fake'])
+  let turns = oldTurns(m, 'parent', 45)
+  let owner = fork ? 'child' : 'parent'
+  await g.apply([
+    { entity: { eid: m }, model: { name: 'fake' } },
+    { entity: { eid: 'parent' }, session: {} },
+    ...turns,
+    fork
+      ? {
+        entity: { eid: 'child' },
+        session: {},
+        fork: { from: 'out130' },
+      }
+      : { entity: { eid: 'parent' }, dispatch: { state: 'queued' } },
+    {
+      entity: { eid: 'now' },
+      entry: { session: owner, seq: 500 },
+      content: { body: 'now' },
+      using: { model: m },
+    },
+  ])
   test(
     `the status of a ${
       fork ? 'forked' : 'queued'
     } transcript reads a bounded part of it`,
     async () => {
-      let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
-      let g = graph({ vocab, storage: s, plugins: [sessions()] })
-      let m = identityEid('model', ['fake'])
-      let turns = oldTurns(m, 'parent', 45)
-      let owner = fork ? 'child' : 'parent'
-      await s.tx((tx) =>
-        tx.patch([
-          { entity: { eid: m }, model: { name: 'fake' } },
-          { entity: { eid: 'parent' }, session: {} },
-          ...turns,
-          fork
-            ? {
-              entity: { eid: 'child' },
-              session: {},
-              fork: { from: 'out130' },
-            }
-            : { entity: { eid: 'parent' }, dispatch: { state: 'queued' } },
-          {
-            entity: { eid: 'now' },
-            entry: { session: owner, seq: 500 },
-            content: { body: 'now' },
-            using: { model: m },
-          },
-        ])
-      )
       let rows = 0, read = g.read.bind(g)
       g.read = async (q, o) => {
         let got = await read(q, o)

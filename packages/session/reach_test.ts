@@ -172,10 +172,10 @@ let view = (entries: Bundle[]) => {
 
 for (let forked of [false, true]) {
   for (let seed = 1; seed <= 4; seed++) {
+    let g = await world(script(seed, 80, forked))
+    let session = forked ? 'child' : 's'
+    let whole = view(await transcript(g, session))
     test(`a turn reads what the whole transcript would say (seed ${seed}, fork: ${forked})`, async () => {
-      let g = await world(script(seed, 80, forked))
-      let session = forked ? 'child' : 's'
-      let whole = view(await transcript(g, session))
       let got = view(await reach(g, session, { turn: true }))
       for (let k of Object.keys(whole) as (keyof typeof whole)[]) {
         assertEquals(got[k], whole[k], k)
@@ -250,10 +250,10 @@ let long = (bound: 'window' | 'checkpoint'): Bundle[] => {
 }
 
 for (let bound of ['window', 'checkpoint'] as const) {
+  let g = await world(long(bound))
+  let whole = view(await transcript(g, 's'))
+  let rows = counting(g)
   test(`a status and a model turn read a bounded part of a long transcript (${bound})`, async () => {
-    let g = await world(long(bound))
-    let rows = counting(g)
-    let whole = view(await transcript(g, 's'))
     let before = rows()
     let turn = await reach(g, 's', { turn: true })
     assertEquals(view(turn), whole)
