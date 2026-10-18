@@ -8,6 +8,10 @@ import { suite as platformWaits } from './platform-waits.ts'
 import { suite as workerHealth } from './worker-health.ts'
 import { suite as inboxContent } from './inbox-content.ts'
 import { PERSON_COMMANDS } from './person-commands.ts'
+import { HOOK_WAITS } from './hook-waits.ts'
+import { OPERATION_COMMANDS } from './operation-commands.ts'
+import { TERMINAL_INTERACTIONS } from './terminal-interactions.ts'
+import { OPERATION_SCALE } from './operation-scale.ts'
 
 let deno = (
   name: string,
@@ -79,6 +83,18 @@ export let standalone: Registration[] = [
     suite: inboxContent,
     floor: 0,
   },
+  measured('hook-waits', 'bench/hook-waits.ts', HOOK_WAITS),
+  measured(
+    'operation-commands',
+    'bench/operation-commands.ts',
+    OPERATION_COMMANDS,
+  ),
+  measured(
+    'terminal-interactions',
+    'bench/terminal-interactions.ts',
+    TERMINAL_INTERACTIONS,
+  ),
+  measured('operation-scale', 'bench/operation-scale.ts', OPERATION_SCALE),
   measured('person-commands', 'bench/person-commands.ts', [...PERSON_COMMANDS]),
   {
     baseline: 'bench/worker-health.baseline.json',
