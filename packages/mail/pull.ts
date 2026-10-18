@@ -283,7 +283,7 @@ export let pull = async (
   let receive = arrived(at)
   // Where a late letter's time went, per step, so the report says which.
   let took: Record<string, string> = {}
-  let timed = async <T>(step: string, run: () => Promise<T>): Promise<T> => {
+  let timed = async <T>(step: string, run: () => T | Promise<T>): Promise<T> => {
     let began = now()
     try {
       return await run()
