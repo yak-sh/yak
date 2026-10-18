@@ -1,0 +1,356 @@
+// File-and-command verbs over workspace targets; timeout never disposes a command.
+import type { Bundle } from '@yaks/graph'
+
+/** Structural tool interface, independent of a transcript runner. */
+export type ToolContext = {
+  session: string
+  call: Bundle
+  entries: Bundle[]
+  signal?: AbortSignal
+}
+export type Tool = {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+  run: (
+    args: Record<string, unknown>,
+    ctx?: ToolContext,
+  ) => Promise<string> | string
+  recover?: (
+    args: Record<string, unknown>,
+    ctx: ToolContext,
+  ) => Promise<string | undefined> | string | undefined
+}
+import type { Comp, Graph } from '@yaks/graph'
+import { token } from '@yaks/graph/guard'
+import { processWorkspace, targetFor, type Workspaces } from './targets.ts'
+
+import type { Machine, Proc } from './mod.ts'
+
+/** How the machine tools behave, all optional. */
+export type MachineOpts = {
+  /** how long `shell` waits for its command before answering the process id
+   * instead (ms, default 5000); a `timeout` argument overrides it per call */
+  budget?: number
+  /** how long `stop` gives SIGTERM before SIGKILL (ms, default 2000) */
+  grace?: number
+  /** how many lines of output an answer carries (default 40) */
+  lines?: number
+  /** where every command starts, and what a relative file path is read from */
+  cwd?: (ctx?: ToolContext) => string | undefined | Promise<string | undefined>
+}
+
+// How long `shell` waits for its command unless told otherwise (ms).
+let BUDGET = 5000
+
+let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
+
+/** Whether a path names its own root.
+ *
+ * ```ts
+ * import { assert } from '@std/assert'
+ * assert(rooted('/etc/hosts') && rooted('C:\\tmp') && !rooted('src/lib.rs'))
+ * ```
+ */
+export let rooted = (path: string): boolean => /^(\/|[A-Za-z]:[\\/])/.test(path)
+
+let under = (dir: string | undefined, path: string) =>
+  dir == null || rooted(path) ? path : `${dir.replace(/\/+$/, '')}/${path}`
+
+let code = (c: number | null) =>
+  c == null ? 'exited, code unknown' : `exited ${c}`
+
+let pid = (p: Proc) => p.pid ? ` (pid ${p.pid})` : ''
+
+let str = (description: string) => ({ type: 'string', description })
+let os = (description: string) => ({
+  ...str(description),
+  pattern: '^[^\\u0000]*$',
+})
+
+/** A machine tool without its machine: what a door lists before it has one
+ * to run it on. */
+export type MachineTool = Omit<Tool, 'run'>
+
+/** The machine tools' declarations: `shell`, `wait`, `stop`, `read` and
+ * `write`. */
+export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
+  name: 'shell',
+  description:
+    'Run a shell command. A command still running when the timeout passes ' +
+    'keeps running as a process: the result gives its id, and wait or stop ' +
+    'accepts that id.',
+  parameters: {
+    type: 'object',
+    properties: {
+      command: os('the command line, run by bash'),
+      timeout: {
+        type: 'number',
+        description: `milliseconds to wait for it (default ${
+          o.budget ?? BUDGET
+        })`,
+      },
+    },
+    required: ['command'],
+  },
+}, {
+  name: 'wait',
+  description:
+    'Wait for a process to exit. Returns its exit code and the last lines ' +
+    'of its output, or reports that it is still running when the timeout ' +
+    'passes.',
+  parameters: {
+    type: 'object',
+    properties: {
+      process: str('the process id'),
+      timeout: {
+        type: 'number',
+        description: 'milliseconds to wait (default 60000)',
+      },
+    },
+    required: ['process'],
+  },
+}, {
+  name: 'stop',
+  description:
+    'Stop a process: SIGTERM, then SIGKILL if it is still running after ' +
+    'the grace period. Returns its exit code.',
+  parameters: {
+    type: 'object',
+    properties: {
+      process: str('the process id'),
+      grace: {
+        type: 'number',
+        description: 'milliseconds between the two signals (default 2000)',
+      },
+    },
+    required: ['process'],
+  },
+}, {
+  name: 'read',
+  description: 'Read a text file.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: os('the file, from the working directory unless rooted'),
+    },
+    required: ['path'],
+  },
+}, {
+  name: 'write',
+  description:
+    'Write a text file, replacing whatever the path held and making its ' +
+    'directory if there is none.',
+  parameters: {
+    type: 'object',
+    properties: {
+      path: os('the file, from the working directory unless rooted'),
+      content: str('the whole text of the file'),
+    },
+    required: ['path', 'content'],
+  },
+}]
+
+/**
+ * The machine tools over a machine.
+ *
+ * A command that finishes within its timeout answers its code and output; one
+ * that does not answers its process id, still running, for `wait` and `stop`
+ * to name.
+ */
+export let machineTools = (
+  source: Machine | ((ctx?: ToolContext) => Promise<Machine>),
+  o: MachineOpts = {},
+): Tool[] => {
+  if (typeof source == 'function') {
+    return machineDeclared(o).map((declaration) => ({
+      ...declaration,
+      run: async (args, ctx) => {
+        let tool = machineTools(await source(ctx), o).find((t) =>
+          t.name == declaration.name
+        )!
+        return tool.run(args, ctx)
+      },
+      ...declaration.name == 'shell'
+        ? {
+          recover: async (args, ctx) =>
+            machineTools(await source(ctx), o)
+              .find((t) => t.name == 'shell')!.recover!(args, ctx),
+        }
+        : {},
+    }))
+  }
+  let m = source
+  let poll = m.poll ?? 100
+  let lines = o.lines ?? 40
+  let here = async (ctx?: ToolContext) => await o.cwd?.(ctx)
+
+  // The process once it has ended or `ms` has passed, whichever is first;
+  // null for an id the machine does not know.
+  let settle = async (id: string, ms: number) => {
+    for (let end = Date.now() + ms;;) {
+      let p = await m.look(id)
+      if (!p || p.exit || Date.now() >= end) return p
+      await sleep(Math.max(0, Math.min(poll, end - Date.now())))
+    }
+  }
+
+  let told = async (id: string, head: string) =>
+    [head, ...await m.tail(id, lines)].join('\n')
+
+  let shellResult = (id: string, p: Proc | null, ms?: number) =>
+    told(
+      id,
+      p?.exit
+        ? `process ${id} ${code(p.exit.code)}`
+        : !p?.pid
+        ? `process ${id} start unconfirmed — inspect before retrying`
+        : `process ${id} still running${pid(p)}${
+          ms == null ? '' : ` after ${ms}ms`
+        } — wait or stop it by that id`,
+    )
+
+  let runs: Record<string, Tool['run']> = {
+    shell: async (args, ctx) => {
+      let ms = Number(args.timeout ?? o.budget ?? BUDGET)
+      // The timeout covers the whole call, the start included; a child that
+      // outlived it is reported as running even if it exits a moment later.
+      let end = Date.now() + ms
+      let id = await m.start(
+        String(args.command ?? ''),
+        await here(ctx),
+        ctx?.call.entity.eid,
+        ctx?.session,
+      )
+      let p = await settle(id, end - Date.now()) ?? {}
+      return shellResult(id, p, ms)
+    },
+    wait: async (args) => {
+      let id = String(args.process ?? '')
+      let ms = Number(args.timeout ?? 60_000)
+      let p = await settle(id, ms)
+      if (!p) return `no such process: ${id}`
+      return told(
+        id,
+        p.exit
+          ? `process ${id} ${code(p.exit.code)}`
+          : `process ${id} still running${pid(p)} after ${ms}ms`,
+      )
+    },
+    stop: async (args) => {
+      let id = String(args.process ?? '')
+      let p = await m.look(id)
+      if (!p) return `no such process: ${id}`
+      if (p.exit) return `process ${id} ${code(p.exit.code)} already`
+      let grace = Number(args.grace ?? o.grace ?? 2000)
+      await m.kill(id, 'SIGTERM')
+      p = await settle(id, grace)
+      if (!p?.exit) {
+        await m.kill(id, 'SIGKILL')
+        p = await settle(id, grace)
+      }
+      return p?.exit
+        ? `process ${id} ${code(p.exit.code)}`
+        : `process ${id} signalled, no exit recorded yet`
+    },
+    read: async (args, ctx) =>
+      await m.read(under(await here(ctx), String(args.path ?? ''))),
+    write: async (args, ctx) => {
+      let path = String(args.path ?? '')
+      await m.write(under(await here(ctx), path), String(args.content ?? ''))
+      return `wrote ${path}`
+    },
+  }
+  let recover = async (_args: Record<string, unknown>, ctx?: ToolContext) => {
+    let call = ctx?.call.entity.eid
+    let id = call && await m.receipt?.(call)
+    return id
+      ? await shellResult(id, await m.look(id))
+      : 'Shell execution has no process receipt; inspect before retrying.'
+  }
+  return machineDeclared(o).map((d) => ({
+    ...d,
+    run: runs[d.name],
+    ...d.name == 'shell' ? { recover } : {},
+  }))
+}
+
+/** Bind tools to graph targets. Each call persists its concrete target before
+ * touching a filesystem. Recovery refuses an invocation without that target. */
+export let workspaceTools = (
+  g: Graph,
+  workspaces: Workspaces,
+  o: MachineOpts = {},
+): Tool[] =>
+  machineDeclared(o).map((declaration) => {
+    let process = ['wait', 'stop'].includes(declaration.name)
+    let parameters = declaration.parameters as Record<string, unknown>
+    let properties = parameters.properties as Record<string, unknown>
+    return {
+      ...declaration,
+      parameters: {
+        ...parameters,
+        properties: {
+          ...properties,
+          ...!process
+            ? {
+              workspace: str('Explicit workspace; otherwise the session home'),
+              cwd: os(
+                'Absolute command directory; otherwise the selected workspace default',
+              ),
+            }
+            : {},
+        },
+      },
+      run: async (args, ctx) => {
+        // A durable call may already have been targeted by an interrupted worker.
+        let recorded = ctx
+          ? (await g.get([ctx.call.entity.eid], ['call']))[0]
+          : undefined
+        let prior = (recorded?.call as Comp | undefined)?.args as
+          | Record<string, unknown>
+          | undefined
+        let input = prior?.workspace ? prior : args
+        let target = process
+          ? {
+            workspace: await processWorkspace(g, String(input.process)),
+            cwd: undefined,
+          }
+          : await targetFor(g, ctx?.session, input)
+        if (ctx && recorded) {
+          await g.apply([{
+            entity: ctx.call.entity,
+            call: { args: { ...input, ...target } },
+            $was: { call: { args: token(prior ?? null) } },
+          }])
+        }
+        let tools = machineTools(await workspaces.connect(target.workspace), {
+          ...o,
+          cwd: () => target.cwd,
+        })
+        return await tools.find((t) => t.name == declaration.name)!.run(
+          input,
+          ctx,
+        )
+      },
+      ...declaration.name == 'shell'
+        ? {
+          recover: async (args: Record<string, unknown>, ctx: ToolContext) => {
+            if (
+              typeof args.workspace != 'string' || typeof args.cwd != 'string'
+            ) {
+              return 'Shell execution has no recorded workspace target; inspect before retrying.'
+            }
+            let tools = machineTools(await workspaces.connect(args.workspace), {
+              ...o,
+              cwd: () => String(args.cwd),
+            })
+            return await tools.find((t) => t.name == 'shell')!.recover!(
+              args,
+              ctx,
+            )
+          },
+        }
+        : {},
+    }
+  })

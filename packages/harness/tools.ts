@@ -31,7 +31,8 @@ import { type Blobs, valueTools } from '@yaks/blob'
 import { machines, type SessionMachines } from './session_machines.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
 import { core, type Depth, inputSchemaOf } from '@yaks/mcp/tools'
-import { machineTools } from './machine.ts'
+import { machineTools, workspaceTools } from '@yaks/machine/tools'
+import { sessionHome, type Workspaces } from '@yaks/machine/targets'
 import {
   type ChildLimits,
   sessionTools,
@@ -114,6 +115,7 @@ export let harnessTools = (
       artifacts?: Blobs
       /** the root a task child's checkout is cut under */
       machines?: SessionMachines
+      workspaces?: Workspaces
       /** what a direct graph tool call is owed beside its answer (the
        * harness's `reply`) */
       reply?: Reply
@@ -121,8 +123,11 @@ export let harnessTools = (
     & ChildLimits = {},
 ): Tool[] => {
   let binding = opts.machines ?? machines(g)
-  let machine = machineTools((ctx) => {
-    if (!ctx) throw new ToolError('machine', 'A machine call needs a session')
+  let selected = opts.workspaces
+  let machine = selected ? workspaceTools(g, selected) : machineTools((ctx) => {
+    if (!ctx) {
+      throw new ToolError('workspace', 'A workspace call needs a session')
+    }
     return binding.machine(ctx.session)
   }, { cwd: (ctx) => ctx ? binding.cwd(ctx.session) : undefined })
   let session = sessionTools(g, { ...binding.limits, ...opts })
@@ -162,8 +167,33 @@ export let harnessTools = (
   return [
     ...machine.map((t) => t.name == 'wait' ? wait : t),
     ...session.filter((t) => t.name != 'wait'),
+    {
+      name: 'session_home',
+      description:
+        'Set a session default workspace without moving files or stopping commands. Omitting cwd clears the previous directory.',
+      parameters: {
+        type: 'object',
+        properties: {
+          session: { type: 'string' },
+          workspace: { type: 'string' },
+          cwd: { type: 'string' },
+        },
+        required: ['session', 'workspace'],
+      },
+      run: async (args) => {
+        await sessionHome(
+          g,
+          String(args.session),
+          String(args.workspace),
+          args.cwd == null ? undefined : String(args.cwd),
+        )
+        return 'Session home updated'
+      },
+    },
     ...artifactTools(g, opts),
-    ...graphTools(g, { depth: opts.depth, reply: opts.reply }),
+    ...graphTools(g, { depth: opts.depth, reply: opts.reply }).filter((t) =>
+      t.name != 'session_home'
+    ),
     ...valueTools(async (entity) =>
       (await g.read('.entity.eid=' + JSON.stringify(entity)))[0]
     ),

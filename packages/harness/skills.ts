@@ -95,7 +95,7 @@ export let skillItems = async (
     ? await g.get([String(home.machine)], ['machine'])
     : []
   let state = comp(record?.machine).state
-  let skills = state == 'running' || state == 'asleep'
+  let skills = home.workspace || state == 'running' || state == 'asleep'
     ? (await files(machines, current.session)).skills
     : await repoSkills(g)
   skills = skills.filter((skill) => comp(skill.skill).invoke != 'user')

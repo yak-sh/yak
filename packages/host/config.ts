@@ -22,6 +22,11 @@ export type Configured = [string, Options, string[]?, FacetName[]?]
 
 /** A config file: where the graph lives, and what reads and writes it. */
 export type Config = {
+  /** Explicit connector bindings for file-and-command workspace targets. */
+  workspaces?: {
+    connectors: Record<string, import('@yaks/machine').ProviderConfig>
+    receipts: string
+  }
   /** Configured machine providers, keyed by the durable machine.provider. */
   machines?: {
     defaultProvider: string

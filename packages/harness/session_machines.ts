@@ -5,6 +5,7 @@ import { CallError } from '@yaks/tools/errors'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import type { Machine, MachineFile, MachineRef } from '@yaks/machine'
+import { targetFor, type Workspaces } from '@yaks/machine/targets'
 import { type ChildLimits, runningAt } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
 import { owed } from '@yaks/persona'
@@ -71,7 +72,11 @@ let string = (value: unknown, name: string): string | undefined => {
 
 /** Bind a graph to its host's configured providers. Nothing is provisioned
  * until a caller asks for `machine` or `cwd`; children only record intentions. */
-export let machines = (g: Graph, configured?: Machines): SessionMachines => {
+export let machines = (
+  g: Graph,
+  configured?: Machines,
+  workspaces?: Workspaces,
+): SessionMachines => {
   let provider = async (name: string, supplied = false) => {
     let found = await configured?.provider(name)
     if (!found) {
@@ -120,7 +125,7 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
     let owner = await row(g, session)
     if (!owner?.session) throw new Error('not a session: ' + session)
     let at = comp(owner, 'home') ?? {}
-    if (at.machine) return at
+    if (at.workspace || at.machine) return at
     let translated = await configured?.resolveHome?.(session)
     if (translated?.machine) {
       await g.apply([{ entity: { eid: session }, home: translated }])
@@ -132,6 +137,19 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
   }
   let lent = async (session: string) => {
     let at = await serial(g, session, () => home(session))
+    if (at.workspace) {
+      if (!workspaces) {
+        throw new Error('This host lends no workspace execution binding')
+      }
+      let target = await targetFor(g, session, {})
+      let machine = await workspaces.connect(target.workspace)
+      let root = comp(await row(g, target.workspace), 'workspace')?.root
+      return {
+        machine,
+        root: root == null ? undefined : String(root),
+        cwd: target.cwd,
+      }
+    }
     let id = String(at.machine)
     return serial(g, id, async () => {
       let record = comp(await row(g, id), 'machine')
@@ -162,7 +180,7 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
   }
   let release = async (session: string) => {
     let at = comp(await row(g, session), 'home')
-    if (!at?.machine) return
+    if (at?.workspace || !at?.machine) return
     let id = String(at.machine)
     await serial(g, id, async () => {
       // A fork sharing its parent's machine does not own that machine's end.
@@ -181,6 +199,7 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
   let limits: ChildLimits = {
     taskDefaults: async (parent) => {
       let at = await serial(g, parent, () => home(parent))
+      if (at.workspace) return {}
       let record = at.machine
         ? comp(await row(g, String(at.machine)), 'machine')
         : undefined
@@ -192,6 +211,10 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
       }
     },
     childProperties: {
+      workspace: {
+        type: 'string',
+        description: 'Existing workspace; a default target, not permissions.',
+      },
       machine: {
         description:
           'Existing machine entity id, or a new sandbox request. Omit to share the parent machine.',
@@ -215,6 +238,21 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
       },
     },
     prepareChild: async ({ parent, child, args }) => {
+      if (
+        args.workspace != null ||
+        (args.machine == null && comp(await row(g, parent), 'home')?.workspace)
+      ) {
+        let target = await targetFor(g, parent, {
+          ...args.workspace != null ? { workspace: args.workspace } : {},
+          ...args.cwd != null ? { cwd: args.cwd } : {},
+        })
+        return {
+          home: {
+            workspace: target.workspace,
+            cwd: args.cwd != null || args.workspace == null ? target.cwd : null,
+          },
+        } as Omit<Bundle, 'entity'>
+      }
       let inherited = args.machine == null
         ? await serial(g, parent, () => home(parent))
         : comp(await row(g, parent), 'home') ?? {}
@@ -293,6 +331,13 @@ export let machines = (g: Graph, configured?: Machines): SessionMachines => {
         return scoped
       })
       let at = comp(await row(g, session), 'home')!
+      if (at.workspace) {
+        for (let path of selected) {
+          let text = await loan.machine.read(String(loan.root) + '/' + path)
+          yield { path, bytes: new TextEncoder().encode(text) }
+        }
+        return
+      }
       let id = String(at.machine)
       let record = comp(await row(g, id), 'machine')!
       let source = await provider(String(record.provider))

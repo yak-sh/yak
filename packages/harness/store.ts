@@ -32,6 +32,7 @@ export type Harness = {
   vault: Vault
   /** Explicitly lent machine providers; no host disk is assumed. */
   machines?: Host['machines']
+  workspaces?: Host['workspaces']
   /** Binary artifacts shared with the host's blob door. */
   artifacts: Blobs
   /** what a tool call the agent makes directly is owed beside its answer,
@@ -65,6 +66,7 @@ export let hosted = (
     vault: host.vault,
     artifacts: host.artifacts,
     machines: host.machines,
+    workspaces: host.workspaces,
     reply: host.reply,
     report: host.report,
     hostTools: () => host.tools,

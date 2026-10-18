@@ -82,6 +82,8 @@ export type Opts = ChildLimits & NotHarness & {
   each?: (step: Step, session?: string) => void | Promise<void>
   /** Override the machine providers explicitly lent by the host. */
   machines?: Harness['machines']
+  workspaces?: Harness['workspaces']
+  workspace?: string
 }
 
 const refuse = (message: string): never => {
@@ -126,7 +128,11 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
   let detach = h.report ? diagnostics().attach(h.report) : () => {}
   let report = (error: unknown, where: FailureContext) =>
     diagnostics().report(error, where)
-  let binding = machines(h.g, opts.machines ?? h.machines)
+  let binding = machines(
+    h.g,
+    opts.machines ?? h.machines,
+    opts.workspaces ?? h.workspaces,
+  )
   let auth = authorize(h)
   let openaiAuth = openaiCredential(h, env, auth.signin)
   let http = pooledHttp()
@@ -167,6 +173,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
         ...harnessTools(h.g, {
           ...opts,
           machines: binding,
+          workspaces: opts.workspaces ?? h.workspaces,
           artifacts: h.artifacts,
           reply: h.reply,
         }),
@@ -180,8 +187,15 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       named ??= graphTools(h.g, { tools: h.hostTools?.(), reply: h.reply }),
     streaming: streamingEnabled(opts, env),
     opening: async (persona) => {
-      let home = homeAt(opts.machine, opts.cwd)
-      let files = await instructionsFor(h.g, opts.machines ?? h.machines, home)
+      let home = opts.workspace
+        ? { workspace: opts.workspace, ...opts.cwd ? { cwd: opts.cwd } : {} }
+        : homeAt(opts.machine, opts.cwd)
+      let files = await instructionsFor(
+        h.g,
+        opts.machines ?? h.machines,
+        home,
+        opts.workspaces ?? h.workspaces,
+      )
       return {
         home,
         files: [...files, ...await owing(h.g, home, files, persona)],

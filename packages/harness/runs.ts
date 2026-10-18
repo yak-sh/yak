@@ -30,6 +30,7 @@ import { hosted } from './store.ts'
 import { homeAt, owing } from './session_machines.ts'
 import { conversations } from './conversations.ts'
 import { instructionsFor } from './instructions.ts'
+import { sessionHome } from '@yaks/machine/targets'
 
 type Args = Record<string, unknown>
 let word = (args: Args, name: string): string | undefined => {
@@ -102,6 +103,15 @@ export let windows = async (
 /** The functions behind the tools the harness declares (./vocab.json). */
 export let runs = (host?: Host): Runs => ({
   ...conversations(host),
+  session_home: async (call, graph) => {
+    let args = argsOf(call)
+    return await sessionHome(
+      graph,
+      String(args.session),
+      String(args.workspace),
+      word(args, 'cwd'),
+    )
+  },
   session_list: (_, graph) => graph.read(parse('.session&*')),
   session_new: async (call, graph) => {
     let args = argsOf(call)
@@ -118,8 +128,18 @@ export let runs = (host?: Host): Runs => ({
     await graph.apply(seed({ provider, model }), { trusted: true })
     let effort = word(args, 'effort')
     let persona = word(args, 'persona')
-    let home = homeAt(word(args, 'machine'), word(args, 'cwd'))
-    let files = await instructionsFor(graph, host?.machines, home)
+    let home = args.workspace
+      ? {
+        workspace: String(args.workspace),
+        ...args.cwd ? { cwd: String(args.cwd) } : {},
+      }
+      : homeAt(word(args, 'machine'), word(args, 'cwd'))
+    let files = await instructionsFor(
+      graph,
+      host?.machines,
+      home,
+      host?.workspaces,
+    )
     let s = await begin(graph, prompt || undefined, {
       home,
       files: [...files, ...await owing(graph, home, files, persona)],

@@ -6,7 +6,11 @@
     "./cloudflare": "./cloudflare.ts",
     "./vocab": "./vocab.ts",
     "./connectors": "./connectors.ts",
-    "./execution": "./execution.ts"
+    "./execution": "./execution.ts",
+    "./tools": "./tools.ts",
+    "./targets": "./targets.ts",
+    "./workspaces": "./workspaces.ts",
+    "./graph": "./graph.ts"
   },
   "license": "Apache-2.0",
   "description": "Computers, explicit connection transports and durable file-and-command workspaces, separate from sandbox provisioning.",

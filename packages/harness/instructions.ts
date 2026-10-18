@@ -1,3 +1,4 @@
+import { targetFor, type Workspaces } from '@yaks/machine/targets'
 // Instruction admission reads only the explicitly named machine. The files
 // become immutable prompt snapshots; later machine edits do not rewrite them.
 import type { Comp, Graph } from '@yaks/graph'
@@ -68,7 +69,19 @@ export let instructionsFor = async (
   g: Graph,
   configured: Machines | undefined,
   home: Comp,
+  workspaces?: Workspaces,
 ): Promise<Snapshot[]> => {
+  if (home.workspace) {
+    if (!workspaces) {
+      throw new Error('This host lends no workspace execution binding')
+    }
+    let target = await targetFor(g, undefined, home)
+    home.cwd ??= target.cwd
+    return instructionFiles(
+      await workspaces.connect(target.workspace),
+      target.cwd,
+    )
+  }
   if (!home.machine) return []
   let id = String(home.machine)
   let [row] = await g.get([id])

@@ -78,6 +78,8 @@ export interface Host {
   /** Named mail senders this host lends, selected by @yaks/mail's
    * `sender: {via}`. The host owns credentials, metering and lifetime. */
   senders?: Readonly<Record<string, Sender>>
+  /** Explicit workspace execution bindings; never an implicit local default. */
+  workspaces?: import('@yaks/machine/targets').Workspaces
   /** Providers this host explicitly lends; the default supplies sandboxes. */
   machines?: {
     /** Load one configured provider when commands or files need it. */

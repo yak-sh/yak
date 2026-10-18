@@ -1,3 +1,4 @@
+import { workspaceCapabilities } from './workspaces.ts'
 import { resolveSessionHome } from './session_home.ts'
 import { machineCapabilities } from './machines.ts'
 /**
@@ -664,6 +665,7 @@ let composed = async (
               : undefined,
           })
         }
+        built.workspaces = workspaceCapabilities(built, config)
         built.machines = machineCapabilities(built, config, path)
         let resolveHome = built.machines.resolveHome
         let legacyHome = resolveSessionHome(sql, () => built.graph)

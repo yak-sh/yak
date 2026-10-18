@@ -80,6 +80,11 @@
         "cwd": {
           "type": "string",
           "description": "Command directory on the named machine."
+        },
+        "workspace": {
+          "type": "string",
+          "ref": "workspace",
+          "description": "Explicit default workspace."
         }
       },
       "positional": [
@@ -291,6 +296,38 @@
         }
       },
       "required": []
+    },
+    "session_home": {
+      "tool": true,
+      "description": "Change a session default workspace without moving files, commands or permissions. Omitting cwd clears the previous directory.",
+      "noun": "session",
+      "verb": "home",
+      "applied": true,
+      "input": {
+        "session": {
+          "type": "string",
+          "ref": "session",
+          "optional": false
+        },
+        "workspace": {
+          "type": "string",
+          "ref": "workspace",
+          "optional": false
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Absolute command directory in the workspace filesystem.",
+          "optional": true
+        }
+      },
+      "required": [
+        "session",
+        "workspace"
+      ],
+      "positional": [
+        "session",
+        "workspace"
+      ]
     }
   }
 }

@@ -40,7 +40,7 @@ export let effects = (
   host.stopping.addEventListener('abort', () => void lent.release?.(), {
     once: true,
   })
-  let binding = machines(host.graph, host.machines)
+  let binding = machines(host.graph, host.machines, host.workspaces)
   let release = async (id: string) => {
     let [session] = await host.graph.get([id])
     if (session && await machineDone(host.graph, session)) {

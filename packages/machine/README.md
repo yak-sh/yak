@@ -328,3 +328,66 @@ Sessions, provisioning effects, grants and default-provider selection belong to
 the host and [harness](../harness). Git objects belong to [Git](../git), and
 byte storage belongs to [blobs](../blob). This package neither opens a database
 nor assumes where the host, graph or machine lives.
+
+## Workspace tools and session defaults
+
+`@yaks/machine/tools` supplies `workspaceTools(graph, workspaces)`: `shell`,
+`read` and `write` accept an explicit `workspace` and absolute `cwd`, or use
+`home{workspace, cwd}`. An explicit workspace uses its own root unless the call
+also supplies cwd. Relative file paths use that directory; absolute paths remain
+absolute. A default is not a permission boundary.
+
+Each invocation records its resolved workspace and cwd in `call.args` before
+executing. Shell recovery uses that record. `wait` and `stop` follow the process
+entity's `process.workspace`, even after its session selects another home.
+Missing or unreachable targets refuse rather than execute on the graph server.
+
+`@yaks/machine/targets` exports `sessionHome(graph, session, workspace, cwd?)`.
+It validates the target and performs a guarded home write; omitting cwd clears
+the old cwd. The harness offers this as `session_home`. A direct graph write can
+set the same home. The machine graph facet validates home targets and absolute
+directories for both doors, and refuses changes to workspace placement.
+
+`@yaks/machine/workspaces` supplies `workspaces(graph, bindings)`, connecting
+workspace records through explicitly configured connectors. A sandbox connector
+is supplied by its host; this package neither provisions nor disposes resources.
+
+```ts
+import { equal } from '@yaks/testing'
+import { graph, mint } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
+import { workspaces } from '@yaks/machine/workspaces'
+
+let vocab = loadVocab([machineDoc])
+let g = graph({ storage: ram(vocab), vocab })
+let id = mint()
+await g.apply([{ entity: { eid: id }, workspace: { root: '/repo' } }])
+// Unknown computer placement is not a request to execute locally.
+let refused = false
+try {
+  await workspaces(g, { connectors: {}, receipts: '/receipts' }).connect(id)
+} catch {
+  refused = true
+}
+equal(refused, true)
+```
+
+A CLI host enables connectors explicitly in its config:
+
+```json
+{
+  "workspaces": {
+    "connectors": {
+      "local": { "use": "@yaks/machine/local" },
+      "ssh": { "use": "@yaks/machine/ssh" }
+    },
+    "receipts": "/var/lib/yak/receipts"
+  }
+}
+```
+
+The receipts directory is interpreted on the target computer. Other connector
+modules export `connector(options)`. The host supplies credentials through its
+configured bindings, not through resource addresses.
