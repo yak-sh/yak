@@ -19,10 +19,14 @@ export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/
 if [ "${1:-}" = "--hourly" ]; then
   self="$(realpath "$0")"
   cd "$(dirname "$self")/.." || exit 1
+  # The wait suites share the box: measuring them together makes their own
+  # fixture work look like a regression. Throughput keeps its own lane.
+  mkdir -p "$HOME/.cache/yak/bench"
+  exec 9>"$HOME/.cache/yak/bench/monitor-hourly.lock"
+  flock -n 9 || exit 0
   for suite in pages page-content person-commands platform-waits worker-health; do
-    "$self" "$suite" &
+    "$self" "$suite"
   done
-  wait
   exit
 fi
 if [ "$#" -eq 0 ]; then
