@@ -51,35 +51,44 @@ let seeded = (archetypes: number) => {
   return { db, d }
 }
 
-let ask = (archetypes: number, line: string, warm = true) => {
-  let { db, d } = seeded(archetypes)
+let ask = ({ db, d }: ReturnType<typeof seeded>, line: string, warm = true) => {
   // An earlier statement has read the catalog.
   if (warm) catalog(d)({ all: ['a'] })
   let q = render(compile(parse(line), vocab, {
     archetypes: catalog(d),
     visibility: { entity: '!draft' },
   }))
+  // EXPLAIN is the measured statement's program, not a timed graph operation.
+  let steps = db.prepare('explain ' + q.sql).all(...q.params).length
+  let rows = db.prepare(q.sql)
   return {
-    eids: db.prepare(q.sql).all(...q.params).map((r) => String(r.eid)).sort(),
-    steps: db.prepare('explain ' + q.sql).all(...q.params).length,
+    eids: () => rows.all(...q.params).map((r) => String(r.eid)).sort(),
+    steps,
   }
 }
 
 let line = (screened: string[]) =>
   `(.a | .b .b.p=x)&${screened.map((c) => `!${c}`).join('&')}`
 
+// Seeding and preparing statements are fixtures, not the bounded SQL work.
+let small = ask(seeded(8), line(SCREENED))
+let large = ask(seeded(200), line(SCREENED))
+let coldSmall = ask(seeded(8), line(SCREENED), false)
+let coldLarge = ask(seeded(200), line(SCREENED), false)
+
 test('a screen beside an indexed OR selects the unscreened rows', () => {
-  equal(ask(8, line(SCREENED)).eids, ['plain-a', 'valued-b'])
+  equal(small.eids(), ['plain-a', 'valued-b'])
 })
 
 test('a screened OR statement stays small however many shapes the catalog holds', () => {
-  let { steps } = ask(200, line(SCREENED))
+  let { steps } = large
   ok(steps < 1500, `${steps} steps`)
+  equal(steps, small.steps)
 })
 
 test('a first statement, before the catalog is read, does not grow with it either', () => {
   equal(
-    ask(200, line(SCREENED), false).steps,
-    ask(8, line(SCREENED), false).steps,
+    coldLarge.steps,
+    coldSmall.steps,
   )
 })
