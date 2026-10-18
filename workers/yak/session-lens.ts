@@ -32,6 +32,7 @@ export let sessionBridge = () => compile(sessionRows(), { [sessionPackage]: 0 })
 
 export let sessionMove = (): import('./mover.ts').Rule => ({
   mark: 'yak/store/session-sending/1' as import('./mover.ts').Mark,
+  live: 'apps',
   find: sessionBridge().find(),
   move: (row: import('@yaks/graph').Bundle) => {
     let patch = sessionBridge().put([row])[0]
