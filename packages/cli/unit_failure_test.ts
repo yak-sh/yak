@@ -51,3 +51,63 @@ test('successful and non-systemd exits do not report', async () => {
   })
   equal(calls, 0)
 })
+
+test('unit output is invocation-scoped, bounded and stripped of terminal escapes', async () => {
+  let { unitOutput } = await import('./unit_failure.ts')
+  let calls: string[][] = []
+  let text = await unitOutput({
+    unit: 'probe.service',
+    invocation: 'a'.repeat(32),
+  }, (command, args) => {
+    calls.push([command, ...args])
+    return Promise.resolve({
+      code: 0,
+      stdout: '\x1b[31m' + 'x'.repeat(9000) + '\x1b[0m',
+    })
+  })
+  equal(text, 'x'.repeat(8192))
+  equal(calls[0].includes('_SYSTEMD_INVOCATION_ID=' + 'a'.repeat(32)), true)
+  equal(calls[0].includes('_SYSTEMD_USER_UNIT=probe.service'), true)
+})
+
+test('unit output falls back for an unreadable journal and tolerates missing access', async () => {
+  let { unitOutput } = await import('./unit_failure.ts')
+  let calls: string[] = []
+  let exit = { unit: 'probe.service', invocation: 'a'.repeat(32) }
+  equal(
+    await unitOutput(exit, (command) => {
+      calls.push(command)
+      return Promise.resolve({
+        code: 0,
+        stdout: command == 'sudo' ? 'startup failed\n' : '',
+      })
+    }),
+    'startup failed',
+  )
+  equal(calls, ['journalctl', 'sudo'])
+  equal(
+    await unitOutput(exit, () => {
+      throw new Error('no journal')
+    }),
+    '',
+  )
+  equal(
+    await unitOutput({ unit: 'probe.service' }, () => {
+      throw new Error('not called')
+    }),
+    '',
+  )
+})
+
+test('unit failure report carries output without changing the error identity', async () => {
+  let exit = { unit: 'probe.service', result: 'exit-code' }
+  let seen = false
+  await reportUnit(exit, (error, tags) => {
+    equal(error.name, 'SystemdUnitFailure')
+    equal(error.message, unitFailure(exit)?.message)
+    equal(tags.stderr, 'Failed to start inspector: Address already in use')
+    seen = true
+    return Promise.resolve()
+  }, () => Promise.resolve('Failed to start inspector: Address already in use'))
+  equal(seen, true)
+})

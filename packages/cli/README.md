@@ -829,3 +829,18 @@ installing the drop-ins; use `yak restart` for a ready-first handover.
 # Inside a systemd service's [Service] section:
 ExecStopPost=%h/.deno/bin/yak unit failure %n --config %h/.yak/yak.json
 ```
+
+### Worker inspection and unit failures
+
+`YAK_WORK_INSPECT=0 yak work --config /path/to/yak.json` starts a loopback
+inspector on an automatically assigned port, printed by Deno. A fixed port
+(`YAK_WORK_INSPECT=9237`) is for a single worker only: overlapping workers
+during a ready-first handover cannot share it. Set profiling configuration only
+on the worker being inspected, and remove it after profiling.
+
+`yak unit failure <unit> --config /path/to/yak.json` is the ExecStopPost door.
+It includes the last 40 journal lines (at most 8192 characters) from the failed
+invocation as the `stderr` report tag. These units merge stdout and stderr in
+the journal, so this includes both. If the user's journal has no output, it
+tries `sudo -n journalctl` with the same unit, invocation and uid filters;
+unavailable journal access never suppresses the exit metadata report.

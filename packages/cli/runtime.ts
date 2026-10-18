@@ -289,8 +289,8 @@ export let tethered = (argv: string[]): string[] => [
  * immutable. Independent workers reuse the sources with their own lifetime. */
 /** A worker's inspector is local and opt-in at launch, never a live signal. */
 export let inspector = (port: string): string => {
-  if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535) {
-    throw new Error('YAK_WORK_INSPECT must be a local port (1..65535)')
+  if (!/^\d+$/.test(port) || Number(port) < 0 || Number(port) > 65535) {
+    throw new Error('YAK_WORK_INSPECT must be a local port (0..65535)')
   }
   return `--inspect=127.0.0.1:${Number(port)}`
 }
