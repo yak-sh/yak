@@ -759,8 +759,9 @@ when the server stops. Port and hostname come from tool arguments, then
 configuration, then `PORT` (8787) and `HOSTNAME` (`127.0.0.1`). It reports the
 bound address on stderr while the call remains running. Stopping, it takes no
 new connection, closes its sockets and lets the requests in flight finish for
-`grace` seconds (`GRACE`, 10), then returns whether or not they did, so a
-request that never ends cannot hold the process. `share` lets a second server
+`grace` seconds (`GRACE`, 10). After that it cancels `GET`, `HEAD` and
+`OPTIONS` reads and waits for admitted writes before returning. A read that
+never ends cannot hold the process. `share` lets a second server
 started the same way listen on the port at once (SO_REUSEPORT; Deno needs
 `--unstable-net`, which this repository's deno.json turns on), and `ready` names
 a file it writes its pid to once listening: a replacement answers before the

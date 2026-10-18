@@ -96,9 +96,11 @@ test('serve answers with the host handler until the host stops', async () => {
 test('a stop cuts what is still in flight once its grace is up', async () => {
   let port = free()
   let asking = Promise.withResolvers<void>()
+  let cancelled = false
   let { host, stopping } = fake(port, (request) => {
     if (!request.url.endsWith('/hang')) return new Response('ok')
     asking.resolve()
+    request.signal.addEventListener('abort', () => cancelled = true)
     return new Promise<Response>(() => {})
   })
   let stopped = false
@@ -115,6 +117,8 @@ test('a stop cuts what is still in flight once its grace is up', async () => {
     await until(() => stopped, { label: 'serve to stop over a hung request' })
     let body = (await call).content as { body: string }
     assert(body.body.includes('cutting what was open'), body.body)
+    assertEquals(cancelled, true)
+    await hung
   } finally {
     client.abort()
     await hung

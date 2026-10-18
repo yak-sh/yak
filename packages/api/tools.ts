@@ -24,12 +24,10 @@
 // until it stops, which is why the address is reported on stderr as soon as
 // the port is bound; and a server is never run again by a sweep. Stopped by a
 // signal, it stops taking requests and closes its sockets, lets the requests
-// in flight finish for a grace of seconds, and returns either way, so the
-// process ending cuts whatever is still open (@yaks/process/wind): a request
-// that never ends, such as a long wait, cannot hold a stop. Closed before it
-// could, its call is ended as interrupted (@yaks/cli host.ts `close`); killed
-// outright, the next server to start closes for its process (host.ts `bury`),
-// and ends it the same way.
+// in flight finish for a grace of seconds, then cancels reads and waits for
+// admitted writes before returning. The reader then closes after the request
+// owners finish, preserving edits. A killed process leaves its call claimed;
+// the next server closes that process and interrupts the call (host.ts `bury`).
 //
 // A restart is invisible when the replacement answers before this one stops
 // taking requests. `share` lets two servers listen on one port at once, and
@@ -38,6 +36,7 @@
 // Sharing is asked for, never assumed: a second server started by mistake on a
 // taken port is refused rather than quietly handed half its requests.
 
+import { requests } from './requests.ts'
 import type { Bundle } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
@@ -96,6 +95,7 @@ export let runs = (host: Serving): Runs => ({
     await host.bury?.()
     let at = ''
     let began = Date.now()
+    let active = requests(handler)
     let server
     try {
       server = denoListen({
@@ -109,7 +109,7 @@ export let runs = (host: Serving): Runs => ({
           // result is a long way off.
           console.error(`serve — ${at} · ${host.config.db ?? 'no db'}`)
         },
-      }, handler)
+      }, active.handle)
     } catch (error) {
       if (error instanceof Error && error.name == 'AddrInUse') {
         throw new CallError('address', `${hostname}:${port} is already in use`)
@@ -117,8 +117,8 @@ export let runs = (host: Serving): Runs => ({
       throw error
     }
     // Stopping: no new connection, every socket closed, and the requests in
-    // flight let finish until the grace is up, then left to the process
-    // ending to cut.
+    // flight let finish until the grace is up. Reads are then cancelled;
+    // admitted writes finish before the listener and graph close.
     let cut = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let graced = new Promise<void>((done) => {
@@ -126,6 +126,7 @@ export let runs = (host: Serving): Runs => ({
         void server.shutdown()
         timer = setTimeout(() => {
           cut = true
+          active.cancel()
           done()
         }, grace)
       }
@@ -147,6 +148,9 @@ export let runs = (host: Serving): Runs => ({
       // since a shutdown settles only once every request has.
       void server.shutdown()
       clearTimeout(timer)
+      active.cancel()
+      await active.drain()
+      await server.finished
       await unready?.()
     }
     return [{

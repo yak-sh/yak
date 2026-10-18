@@ -17,6 +17,7 @@ import { status } from '@yaks/graph/errors'
 import { during, link, parent, peek, unlink } from '@yaks/trace'
 import { fault, json, refusal } from './refuse.ts'
 import type { Handler } from './route.ts'
+import { receive } from './requests.ts'
 
 /** Where a request that broke goes: its `request` bundle, and the error when
  * one was thrown. Whatever it does, it must not throw; one that does is said
@@ -176,7 +177,7 @@ export let served =
       let err: unknown
       let answer: Response
       try {
-        answer = await handle(request)
+        answer = await receive(request, () => handle(request))
       } catch (e) {
         err = e
         answer = json(refusal(e), status(e))
