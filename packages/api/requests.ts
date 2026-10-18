@@ -30,31 +30,93 @@ export let receive = async <T>(
   }
 }
 
+// The response belongs to its request until its body ends, not just until
+// headers arrive. Keep our own reader so shutdown can cancel a locked body.
+let streamed = (
+  response: Response,
+  signal: AbortSignal,
+  keep: (done: Promise<unknown>) => void,
+) => {
+  if (!response.body) return response
+  let reader = response.body.getReader()
+  let closed = false
+  let end = () => {
+    closed = true
+    signal.removeEventListener('abort', abort)
+  }
+  let abort = () => {
+    if (closed) return
+    end()
+    output.close()
+    keep(reader.cancel())
+  }
+  let output!: ReadableStreamDefaultController<Uint8Array>
+  let body = new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      output = controller
+      signal.addEventListener('abort', abort, { once: true })
+      if (signal.aborted) abort()
+    },
+    pull: async () => {
+      try {
+        let next = await reader.read()
+        if (closed) return
+        if (next.done) {
+          end()
+          output.close()
+        } else output.enqueue(next.value)
+      } catch (error) {
+        if (closed) return
+        end()
+        output.error(error)
+      }
+    },
+    cancel: (reason) => {
+      end()
+      return reader.cancel(reason)
+    },
+  })
+  return new Response(body, response)
+}
+
 /** The work a listener admits: grace may cut reads, never an admitted write. */
 export let requests = (handler: Handler) => {
   let reads = new AbortController()
-  let writes = new Set<Promise<Response>>()
+  let pending = new Set<Promise<unknown>>()
+  let failures: unknown[] = []
+  let keep = (done: Promise<unknown>) => {
+    pending.add(done)
+    void done.then(() => pending.delete(done), (error) => {
+      pending.delete(done)
+      failures.push(error)
+    })
+  }
   return {
     handle: (request: Request) => {
       if (reading(request)) {
         let scoped = new Request(request, {
           signal: AbortSignal.any([request.signal, reads.signal]),
         })
-        return receive(scoped, () => handler(scoped)).catch((error) => {
-          if (error instanceof Cancelled) {
-            return new Response(null, { status: 499 })
-          }
-          throw error
-        })
+        return receive(scoped, () => handler(scoped)).then(
+          (response) => streamed(response, scoped.signal, keep),
+          (error) => {
+            if (error instanceof Cancelled) {
+              return new Response(null, { status: 499 })
+            }
+            throw error
+          },
+        )
       }
       let done = Promise.resolve().then(() => handler(request))
-      writes.add(done)
-      void done.then(() => writes.delete(done), () => writes.delete(done))
+      keep(done)
       return done
     },
     cancel: () => reads.abort(),
     drain: async () => {
-      await Promise.allSettled(writes)
+      while (pending.size) await Promise.allSettled(pending)
+      if (failures.length) {
+        throw new AggregateError(failures, 'request drain failed')
+      }
     },
   }
 }

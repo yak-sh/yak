@@ -80,3 +80,23 @@ test('shutdown waits for an admitted write even after its client disconnects', a
   equal(write.saved(), 'precious draft')
   equal(write.errors, [])
 })
+
+test('shutdown surfaces an unexpected response cancellation failure', async () => {
+  let error = new Error('stream cleanup failed')
+  let active = requests(() =>
+    new Response(
+      new ReadableStream({
+        cancel: () => Promise.reject(error),
+      }),
+    )
+  )
+  await active.handle(new Request('http://test/events'))
+  active.cancel()
+  let failed: unknown
+  try {
+    await active.drain()
+  } catch (caught) {
+    failed = caught
+  }
+  equal(failed instanceof AggregateError && failed.errors, [error])
+})

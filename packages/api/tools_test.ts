@@ -269,3 +269,65 @@ test('a slow queued runner cannot block listening or stopping', async () => {
     await call
   }
 })
+
+test('shutdown ends open network reads and drains an admitted draft', async () => {
+  let port = free(), saved = ''
+  let admitted = Promise.withResolvers<void>()
+  let commit = Promise.withResolvers<void>()
+  let cancelled = Promise.withResolvers<void>()
+  let { host, stopping } = fake(port, async (request) => {
+    let path = new URL(request.url).pathname
+    if (path == '/') return new Response('ready')
+    if (path == '/socket') return Deno.upgradeWebSocket(request).response
+    if (path == '/events') {
+      return new Response(
+        new ReadableStream({
+          start: (controller) =>
+            controller.enqueue(new TextEncoder().encode('ready')),
+          cancel: () => cancelled.resolve(),
+        }),
+      )
+    }
+    let draft = await request.text()
+    admitted.resolve()
+    await commit.promise
+    saved = draft
+    return new Response('saved')
+  })
+  let serving = runs(host).serve(asked({ grace: 0 }), graph) as Promise<
+    Bundle[]
+  >
+  await said(`http://127.0.0.1:${port}`)
+  let socket = new WebSocket(`ws://127.0.0.1:${port}/socket`)
+  let opened = Promise.withResolvers<void>()
+  socket.onopen = () => opened.resolve()
+  socket.onerror = () => {}
+  let closed = Promise.withResolvers<void>()
+  socket.onclose = () => closed.resolve()
+  let body: ReadableStreamDefaultReader<Uint8Array> | undefined
+  try {
+    await opened.promise
+    body = (await fetch(`http://127.0.0.1:${port}/events`)).body!.getReader()
+    assertEquals(new TextDecoder().decode((await body.read()).value), 'ready')
+    let write = fetch(`http://127.0.0.1:${port}/draft`, {
+      method: 'POST',
+      body: 'precious draft',
+    })
+    await admitted.promise
+    stopping.abort()
+    await cancelled.promise
+    assertEquals(saved, '')
+    commit.resolve()
+    assertEquals(await (await write).text(), 'saved')
+    await serving
+    assertEquals(saved, 'precious draft')
+    assertEquals((await body.read()).done, true)
+    await closed.promise
+  } finally {
+    commit.resolve()
+    stopping.abort()
+    socket.close()
+    await body?.cancel()
+    await serving
+  }
+})

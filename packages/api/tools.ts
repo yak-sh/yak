@@ -55,8 +55,8 @@ export let PORT = 8787
  * says so. */
 export let HOSTNAME = '127.0.0.1'
 
-/** How long a stopping server lets requests already in flight finish before
- * it returns anyway, in seconds, when the call names no `grace`. */
+/** Seconds a stopping server lets reads finish before cancelling them.
+ * Admitted writes drain even after this grace expires. */
 export let GRACE = 10
 
 /** What this tool needs from the host that composed it: the request handler to
