@@ -83,6 +83,7 @@ let outcomes: Outcome[] = []
 let run = async (path: string, load: () => Promise<unknown>) => {
   let at = collected.length
   let begun = performance.now()
+  console.log(`loading ${path}`)
   from(path)
   try {
     await load()
