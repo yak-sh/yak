@@ -1,17 +1,16 @@
-// Bubblewrap machines with one aggregate systemd user scope per sandbox.
+// Bubblewrap sandboxes with one aggregate systemd user scope per sandbox.
 // Only workspace is writable and visible to commands; durable control files
 // stay outside that mount. The supervisor outlives the host that requested it.
 import { resolve } from '@std/path/posix/resolve'
 import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
 import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
+import type { Proc, Workspace } from '@yaks/machine'
 import type {
-  LentMachine,
-  Machine,
-  MachineProvider,
-  MachineRef,
-  Proc,
-} from '@yaks/machine'
+  SandboxConnection,
+  SandboxProvider,
+  SandboxRef,
+} from './provider.ts'
 import { sandboxRunner } from './sandbox-runner.ts'
 
 /** Limits for the whole sandbox, including its supervisor and all commands.
@@ -32,7 +31,7 @@ export type SandboxProviderOpts = {
   limits: SandboxLimits
   network?: boolean
   env?: (session?: string) => Record<string, string>
-  prepare?: (from: string, machine: Machine, cwd: string) => Promise<void>
+  prepare?: (from: string, workspace: Workspace, cwd: string) => Promise<void>
   birth?: number
 }
 
@@ -66,15 +65,15 @@ let checkLimits = (limits: SandboxLimits) => {
   }
 }
 
-/** Local isolated machines; every command in a sandbox shares its limits.
- * Reconstruct this provider with the same data to wake machines or recover
+/** Local isolated sandboxes; every command in a sandbox shares its limits.
+ * Reconstruct this provider with the same data to connect sandboxes or recover
  * command receipts. Release stops the whole scope before deleting its files. */
-export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
+export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
   if (Deno.build.os != 'linux') throw new Error('sandbox: Linux is required')
   checkLimits(o.limits)
   o = { ...o, limits: { ...o.limits } }
   let root = resolve(o.dir)
-  let location = (ref: MachineRef) => {
+  let location = (ref: SandboxRef) => {
     if (ref.address != null) {
       throw new Error('sandbox: cannot attach an address')
     }
@@ -105,7 +104,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
     }
   }
   let rpc = async <T>(
-    ref: MachineRef,
+    ref: SandboxRef,
     request: Record<string, unknown>,
   ): Promise<T> => {
     let { socket } = location(ref)
@@ -146,7 +145,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
       } catch { /* timed out */ }
     }
   }
-  let stop = async (ref: MachineRef) => {
+  let stop = async (ref: SandboxRef) => {
     let { unit } = location(ref)
     let state = await systemctl([
       'show',
@@ -176,7 +175,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
   }
   // A filesystem lock, not a module Map: request/wake/release by independent
   // host processes must never start two supervisors for the same machine.
-  let locked = async <T>(ref: MachineRef, fn: () => Promise<T>): Promise<T> => {
+  let locked = async <T>(ref: SandboxRef, fn: () => Promise<T>): Promise<T> => {
     await Deno.mkdir(root, { recursive: true, mode: 0o700 })
     // flock runs in its own process: Deno's POSIX record locks are shared
     // by a process and would not serialize concurrent calls in one host.
@@ -205,7 +204,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
       await lock.status
     }
   }
-  let configuration = async (ref: MachineRef) => {
+  let configuration = async (ref: SandboxRef) => {
     let { control } = location(ref)
     let config = JSON.parse(await Deno.readTextFile(`${control}/config.json`))
     if (
@@ -218,7 +217,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
     }
     return config
   }
-  let ensure = async (ref: MachineRef) => {
+  let ensure = async (ref: SandboxRef) => {
     let { control, socket, unit } = location(ref)
     try {
       await rpc<Hello>(ref, { op: 'hello' })
@@ -295,10 +294,10 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
     )
   }
   let guestPath = (path: string) => resolve('/workspace', path)
-  let lend = (ref: MachineRef): LentMachine => {
+  let lend = (ref: SandboxRef): SandboxConnection => {
     let commandId = (call: string) =>
       derivedEid(`sandbox ${ref.id} call ${call}`)
-    let machine: Machine = {
+    let workspace: Workspace = {
       poll: 25,
       start: async (command, cwd, call, session) => {
         let id = call ? commandId(call) : crypto.randomUUID()
@@ -340,7 +339,7 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
           bytes: encodeBase64(new TextEncoder().encode(content)),
         }),
     }
-    return { machine, cwd: '/workspace' }
+    return { workspace, root: '/workspace' }
   }
   return {
     request: async (request) => {
@@ -352,6 +351,9 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
         throw new Error('sandbox: a commit needs a prepare function')
       }
       return await locked(request, async () => {
+        if (await exists(`${root}/.${request.id}.released`)) {
+          throw new Error('sandbox: sandbox was disposed; request a new id')
+        }
         if (!await exists(dir)) {
           let staging = await Deno.makeTempDir({
             dir: root,
@@ -426,16 +428,19 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
         let lent = lend(request)
         if (!await exists(`${control}/ready`)) {
           if (request.from != null) {
-            await o.prepare!(request.from, lent.machine, lent.cwd!)
+            await o.prepare!(request.from, lent.workspace, lent.root!)
           }
           await Deno.writeTextFile(`${control}/ready`, '', { mode: 0o600 })
         }
         return lent
       })
     },
-    wake: async (ref) => {
+    connect: async (ref) => {
       location(ref)
       return await locked(ref, async () => {
+        if (await exists(`${root}/.${ref.id}.released`)) {
+          throw new Error('sandbox: sandbox was disposed')
+        }
         await configuration(ref)
         if (!await exists(`${location(ref).control}/ready`)) {
           throw new Error('sandbox: preparation incomplete; retry request')
@@ -444,9 +449,14 @@ export let sandboxProvider = (o: SandboxProviderOpts): MachineProvider => {
         return lend(ref)
       })
     },
-    release: async (ref) => {
+    dispose: async (ref) => {
       let { dir } = location(ref)
       await locked(ref, async () => {
+        // Keep the tombstone outside the destroyed directory. A crash during
+        // stop/remove may be retried, but can never reprovision this identity.
+        await Deno.writeTextFile(`${root}/.${ref.id}.released`, '', {
+          mode: 0o600,
+        })
         await stop(ref)
         if (await exists(dir)) await Deno.remove(dir, { recursive: true })
       })

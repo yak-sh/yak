@@ -10,8 +10,8 @@ import {
 import { test } from '@yaks/testing'
 import { CallError } from '@yaks/tools/errors'
 import { machineTools } from '@yaks/harness/machine'
-import { sandboxProvider } from '@yaks/process/machine'
-import { until } from './testing.ts'
+import { sandboxProvider } from './bubblewrap.ts'
+import { until } from '../process/testing.ts'
 
 let limits = { cpuQuota: 50, memoryMax: 256 * 1024 * 1024, tasksMax: 64 }
 let make = async () => {
@@ -22,7 +22,7 @@ let make = async () => {
   let tools = (
     machine: Awaited<
       ReturnType<NonNullable<typeof provider.request>>
-    >['machine'],
+    >['workspace'],
   ) => {
     let all = machineTools(machine, { grace: 500 })
     return {
@@ -32,8 +32,8 @@ let make = async () => {
     }
   }
   let cleanup = async () => {
-    await provider.release(ref)
-    await provider.release({ id: 'two' })
+    await provider.dispose(ref)
+    await provider.dispose({ id: 'two' })
     await Deno.remove(dir, { recursive: true })
   }
   return { dir, options, provider, ref, tools, cleanup }
@@ -56,14 +56,14 @@ test('sandbox commands and files see only their own workspace and a read-only sy
     await Deno.writeTextFile(`${dir}/private`, 'host-secret')
     let first = await provider.request!(ref)
     let second = await provider.request!({ id: 'two' })
-    assertEquals(first.cwd, '/workspace')
-    await first.machine.write('src/file', 'first')
-    await second.machine.write('src/file', 'second')
-    assertEquals(await first.machine.read('src/file'), 'first')
-    assertEquals(await second.machine.read('src/file'), 'second')
+    assertEquals(first.root, '/workspace')
+    await first.workspace.write('src/file', 'first')
+    await second.workspace.write('src/file', 'second')
+    assertEquals(await first.workspace.read('src/file'), 'first')
+    assertEquals(await second.workspace.read('src/file'), 'second')
     for (let cwd of [undefined, 'src']) {
       assertMatch(
-        await tools(first.machine).shell.run({
+        await tools(first.workspace).shell.run({
           command: 'git rev-parse --show-toplevel',
           cwd,
         }),
@@ -71,31 +71,31 @@ test('sandbox commands and files see only their own workspace and a read-only sy
       )
     }
     assertMatch(
-      await tools(first.machine).shell.run({
+      await tools(first.workspace).shell.run({
         command:
           'git init -q && cd src && test "$(git rev-parse --show-toplevel)" = /workspace && echo own',
       }),
       /exited 0\nown$/,
     )
     assertMatch(
-      await tools(first.machine).shell.run({
+      await tools(first.workspace).shell.run({
         command: 'cat src/file; echo; printf "%s" "$HOME"',
       }),
       /exited 0\nfirst\n\/workspace$/,
     )
-    let said = await tools(first.machine).shell.run({
+    let said = await tools(first.workspace).shell.run({
       command:
         `test ! -e '${dir}/private' && test ! -e '${dir}/two' && test ! -e /run/user && test ! -e /home/yaks && test ! -e /etc && test -z "$DBUS_SESSION_BUS_ADDRESS" && ! touch /usr/t66424-private && echo isolated`,
     })
     assertMatch(said, /exited 0\n[\s\S]*isolated$/)
-    await assertRejects(() => first.machine.read(`${dir}/private`), CallError)
-    await assertRejects(() => first.machine.read('.'), CallError)
+    await assertRejects(() => first.workspace.read(`${dir}/private`), CallError)
+    await assertRejects(() => first.workspace.read('.'), CallError)
     await assertRejects(
-      () => first.machine.write('/usr/t66424-private', 'no'),
+      () => first.workspace.write('/usr/t66424-private', 'no'),
       CallError,
     )
     // Export must dereference symlinks in the guest, not on the host.
-    await tools(first.machine).shell.run({
+    await tools(first.workspace).shell.run({
       command:
         `ln -s '${dir}/private' escape; ln -s /usr/bin/bash system-link; printf '\\000\\377\\177' > binary`,
     })
@@ -118,7 +118,7 @@ test('sandbox commands and files see only their own workspace and a read-only sy
         /* refused */
       }
     })
-    let network = await tools(first.machine).shell.run({
+    let network = await tools(first.workspace).shell.run({
       command: 'exec 3<>/dev/tcp/1.1.1.1/80',
     })
     assertMatch(network, /exited 1/)
@@ -133,8 +133,8 @@ test('sandbox scope enforces aggregate CPU, memory and task limits for every com
     let first = await provider.request!(ref)
     // Find the actual scope from a running command's host PID. Bubblewrap
     // shares no cgroup fs with the guest; read its host cgroup from here.
-    let id = await first.machine.start('sleep 30')
-    let proc = await first.machine.look(id)
+    let id = await first.workspace.start('sleep 30')
+    let proc = await first.workspace.look(id)
     assert(proc?.pid)
     let path = (await Deno.readTextFile(`/proc/${proc.pid}/cgroup`)).trim()
       .slice(3)
@@ -154,22 +154,22 @@ test('sandbox scope enforces aggregate CPU, memory and task limits for every com
       (await Deno.readTextFile(`${base}/pids.max`)).trim(),
       String(limits.tasksMax),
     )
-    let second = await first.machine.start('sleep 30')
-    let pid = (await first.machine.look(second))?.pid
+    let second = await first.workspace.start('sleep 30')
+    let pid = (await first.workspace.look(second))?.pid
     assert(pid)
     assertEquals(
       (await Deno.readTextFile(`/proc/${pid}/cgroup`)).trim().slice(3),
       path,
     )
     // Reopening does not reset a sandbox's limits or lose its running commands.
-    let reopened = await sandboxProvider(options).wake(ref)
-    assertEquals((await reopened.machine.look(id))?.exit, undefined)
-    await tools(reopened.machine).stop.run({ process: id })
-    await tools(reopened.machine).stop.run({ process: second })
+    let reopened = await sandboxProvider(options).connect(ref)
+    assertEquals((await reopened.workspace.look(id))?.exit, undefined)
+    await tools(reopened.workspace).stop.run({ process: id })
+    await tools(reopened.workspace).stop.run({ process: second })
     await assertRejects(
       () =>
         sandboxProvider({ ...options, limits: { ...limits, cpuQuota: 100 } })
-          .wake(ref),
+          .connect(ref),
       Error,
       'different provider limits',
     )
@@ -183,10 +183,10 @@ test('sandbox commands outlive a requesting host and recover durable calls witho
   let call = crypto.randomUUID()
   try {
     let program = `import { sandboxProvider } from ${
-      JSON.stringify(new URL('./sandbox.ts', import.meta.url).href)
+      JSON.stringify(new URL('./bubblewrap.ts', import.meta.url).href)
     };
 let p = sandboxProvider(${JSON.stringify(options)});
-let {machine} = await p.request(${JSON.stringify(ref)});
+let {workspace: machine} = await p.request(${JSON.stringify(ref)});
 console.log(await machine.start('echo once >> started; sleep 30', undefined, ${
       JSON.stringify(call)
     }));`
@@ -197,29 +197,29 @@ console.log(await machine.start('echo once >> started; sleep 30', undefined, ${
     }).output()
     assertEquals(child.code, 0, new TextDecoder().decode(child.stderr))
     let id = new TextDecoder().decode(child.stdout).trim()
-    let recovered = await sandboxProvider(options).wake(ref)
-    assertEquals(await recovered.machine.receipt!(call), id)
+    let recovered = await sandboxProvider(options).connect(ref)
+    assertEquals(await recovered.workspace.receipt!(call), id)
     assertEquals(
-      await recovered.machine.start('echo twice >> started', undefined, call),
+      await recovered.workspace.start('echo twice >> started', undefined, call),
       id,
     )
     await until(
-      async () => (await recovered.machine.read('started')).trim() == 'once',
+      async () => (await recovered.workspace.read('started')).trim() == 'once',
       'command started',
     )
-    assertEquals((await recovered.machine.look(id))?.exit, undefined)
+    assertEquals((await recovered.workspace.look(id))?.exit, undefined)
     assertMatch(
-      await tools(recovered.machine).stop.run({ process: id }),
+      await tools(recovered.workspace).stop.run({ process: id }),
       /exited \d+/,
     )
-    assertEquals(await recovered.machine.read('started'), 'once\n')
-    assertEquals(await recovered.machine.receipt!('missing'), undefined)
-    assertEquals(await recovered.machine.look('missing'), null)
-    let done = await recovered.machine.start(
+    assertEquals(await recovered.workspace.read('started'), 'once\n')
+    assertEquals(await recovered.workspace.receipt!('missing'), undefined)
+    assertEquals(await recovered.workspace.look('missing'), null)
+    let done = await recovered.workspace.start(
       'printf "out\\n"; printf "err\\n" >&2; exit 7',
     )
     assertMatch(
-      await tools(recovered.machine).wait.run({ process: done }),
+      await tools(recovered.workspace).wait.run({ process: done }),
       /exited 7\nout\nerr$/,
     )
   } finally {
@@ -232,41 +232,42 @@ test('release kills descendants, preserves other sandboxes, and wakes a stopped 
   try {
     let first = await provider.request!(ref)
     let second = await provider.request!({ id: 'two' })
-    await first.machine.write('kept', 'yes')
-    let one = await first.machine.start(
+    await first.workspace.write('kept', 'yes')
+    let one = await first.workspace.start(
       'trap "" TERM; echo ready; sleep 30 & wait',
     )
-    let two = await second.machine.start('sleep 30')
-    let pid = (await first.machine.look(one))?.pid
+    let two = await second.workspace.start('sleep 30')
+    let pid = (await first.workspace.look(one))?.pid
     assert(pid)
     let path = (await Deno.readTextFile(`/proc/${pid}/cgroup`)).trim().slice(3)
     let unit = path.split('/').at(-1)!
     // A scope stop must end the namespace even if its command ignores TERM.
     // Wait for the trap so this also covers shutdown after namespace setup.
     await until(
-      async () => (await first.machine.tail(one, 1))[0] == 'ready',
+      async () => (await first.workspace.tail(one, 1))[0] == 'ready',
       'command ignores TERM',
     )
     let result = await new Deno.Command('/usr/bin/systemctl', {
       args: ['--user', 'stop', unit],
     }).output()
     assertEquals(result.code, 0)
-    let reopened = await sandboxProvider(options).wake(ref)
-    assertEquals(await reopened.machine.read('kept'), 'yes')
-    assertEquals((await reopened.machine.look(one))?.exit, { code: null })
-    let again = await reopened.machine.start('sleep 30 & wait')
-    let againPid = (await reopened.machine.look(again))?.pid
+    let reopened = await sandboxProvider(options).connect(ref)
+    assertEquals(await reopened.workspace.read('kept'), 'yes')
+    assertEquals((await reopened.workspace.look(one))?.exit, { code: null })
+    let again = await reopened.workspace.start('sleep 30 & wait')
+    let againPid = (await reopened.workspace.look(again))?.pid
     assert(againPid)
     let againPath = (await Deno.readTextFile(`/proc/${againPid}/cgroup`)).trim()
       .slice(3)
-    await provider.release(ref)
-    await provider.release(ref)
+    await provider.dispose(ref)
+    await provider.dispose(ref)
     await assertRejects(() =>
       Deno.readTextFile(`/sys/fs/cgroup${againPath}/cgroup.procs`)
     )
-    await assertRejects(() => provider.wake(ref), Deno.errors.NotFound)
-    assertEquals((await second.machine.look(two))?.exit, undefined)
-    await tools(second.machine).stop.run({ process: two })
+    await assertRejects(() => provider.connect(ref), Error, 'disposed')
+    await assertRejects(() => provider.request!(ref), Error, 'disposed')
+    assertEquals((await second.workspace.look(two))?.exit, undefined)
+    await tools(second.workspace).stop.run({ process: two })
   } finally {
     await cleanup()
   }
@@ -290,18 +291,21 @@ test('sandbox commit preparation retries safely and rejects unsupported or incom
       'interrupted',
     )
     await assertRejects(
-      () => provider.wake(ref),
+      () => provider.connect(ref),
       Error,
       'preparation incomplete',
     )
-    let { machine } = await provider.request!({ ...ref, from: 'commit' })
+    let { workspace: machine } = await provider.request!({
+      ...ref,
+      from: 'commit',
+    })
     assertEquals(await machine.read('from'), 'commit')
     await provider.request!({ ...ref, from: 'commit' })
     assertEquals(calls, 2)
     await assertRejects(() => provider.request!({ ...ref, from: 'other' }))
     await assertRejects(() => provider.request!({ ...ref, image: 'ubuntu' }))
     await assertRejects(() => provider.request!({ id: '../escape' }))
-    await assertRejects(() => provider.wake({ ...ref, address: '/tmp' }))
+    await assertRejects(() => provider.connect({ ...ref, address: '/tmp' }))
     assertThrows(() =>
       sandboxProvider({ ...options, limits: { ...limits, cpuQuota: 0 } })
     )
@@ -327,27 +331,27 @@ test('concurrent providers reuse one sandbox and one durable command; release de
       sandboxProvider(options).request!(ref),
     ])
     let [one, two] = await Promise.all([
-      a.machine.start(
+      a.workspace.start(
         'echo once >> started; trap "" TERM; sleep 30 & wait',
         undefined,
         'same-call',
       ),
-      b.machine.start('echo twice >> started', undefined, 'same-call'),
+      b.workspace.start('echo twice >> started', undefined, 'same-call'),
     ])
     assertEquals(one, two)
     await until(async () => {
       try {
-        return (await b.machine.read('started')).trim() == 'once'
+        return (await b.workspace.read('started')).trim() == 'once'
       } catch {
         return false
       }
     }, 'one launch')
-    let pid = (await a.machine.look(one))?.pid
+    let pid = (await a.workspace.look(one))?.pid
     assert(pid)
     let cgroup = (await Deno.readTextFile(`/proc/${pid}/cgroup`)).trim().slice(
       3,
     )
-    await provider.release(ref)
+    await provider.dispose(ref)
     await assertRejects(() => Deno.stat(`/sys/fs/cgroup${cgroup}`))
   } finally {
     await cleanup()

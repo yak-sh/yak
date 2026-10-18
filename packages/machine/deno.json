@@ -3,7 +3,6 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
-    "./cloudflare": "./cloudflare.ts",
     "./vocab": "./vocab.ts",
     "./connectors": "./connectors.ts",
     "./execution": "./execution.ts",

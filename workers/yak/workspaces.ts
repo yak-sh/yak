@@ -3,7 +3,7 @@
 // version; migration therefore uses only the SDK RPCs that version already
 // serves. The coordinator keeps the copy receipts and complete erase census.
 import { DurableObject } from 'cloudflare:workers'
-import { cloudflareProvider } from '@yaks/machine/cloudflare'
+import { cloudflareProvider } from '@yaks/sandbox/cloudflare'
 import { afterCompiles, copies } from './sandbox-copies.ts'
 import { retried } from '@yaks/durable-object'
 import type { Env } from './env.ts'
@@ -39,14 +39,17 @@ export class WorkspaceStore extends DurableObject<Env> {
     this.#storage = ctx.storage
     this.#bucket = env.BLOBS
     this.#prefix = `workspaces/${ctx.id.toString()}/`
-    let provider = cloudflareProvider(env.SANDBOX!, { retry: retried })
+    let provider = cloudflareProvider(env.SANDBOX!, {
+      legacyRecreation: true,
+      retry: retried,
+    })
     this.#copies = copies(
       ctx.storage,
       async () => {
         let ref = { id: (await ctx.storage.get<string>('source'))! }
         if (!await provider.active(ref)) return { processes: [] }
         let processes = await provider.processes(ref)
-        let machine = (await provider.wake(ref)).machine
+        let machine = (await provider.connect(ref)).workspace
         let waiting = processes.map((p) => ({
           status: p.status,
           waitForExit: async (timeout: number) => {

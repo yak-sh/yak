@@ -69,9 +69,7 @@ flock -x 9
 name=${quote(nameOf(ref))}
 sbx ls -q </dev/null > "$d/list"
 exists() { grep -Fxq -- "$name" "$d/list"; }
-owned() { test "$(sbx exec "$name" printenv YAK_SANDBOX_ID </dev/null)" = ${
-      quote(ref.id)
-    }; }
+owned() { test -s "$d/token" && test "$(sbx exec "$name" printenv YAK_SANDBOX_TOKEN </dev/null)" = "$(cat "$d/token")"; }
 ${body}`)
   let present =
     `test -f "$d/claimed" || { echo 'Sandbox is not owned by this provider' >&2; exit 1; }
@@ -88,7 +86,7 @@ owned || { echo 'Sandbox ownership changed' >&2; exit 1; }`
     )
     let transport: ComputerTransport = {
       execute: (script) =>
-        options.transport.execute(inside(nameOf(ref), script)),
+        control(ref, `${present}\n${inside(nameOf(ref), script)}`),
     }
     let workspace = executionWorkspace(g, transport, {
       workspace: ref.id,
@@ -115,10 +113,11 @@ if test -f "$d/claimed"; then
 else
   if exists; then echo 'Sandbox name already exists without ownership' >&2; exit 1; fi
   printf '%s' ${quote(spec)} > "$d/spec"
+  cat /proc/sys/kernel/random/uuid > "$d/token"
   touch "$d/claimed"
-  sbx create --name "$name" --no-progress --env ${
-          quote('YAK_SANDBOX_ID=' + request.id)
-        }${image ? ' --template ' + quote(image) : ''} shell </dev/null
+  sbx create --name "$name" --no-progress --env ${'"YAK_SANDBOX_TOKEN=$(cat "$d/token")"'}${
+          image ? ' --template ' + quote(image) : ''
+        } shell </dev/null
 fi`,
       )
       // The shell template's default user need not own /. Create only the
@@ -162,15 +161,29 @@ touch "$d/released"`,
       await control(ref, present)
       for (let path of paths) {
         exportPath(path)
-        // realpath is evaluated inside the sandbox, and symlinks outside root
-        // are refused even though the computer itself is never read here.
-        let data = await options.transport.execute(inside(
-          nameOf(ref),
-          `set -eu
-root=$(realpath -- ${quote(root)})
-file=$(realpath -- ${quote(root + '/' + path)})
-case "$file" in "$root"/*) base64 < "$file";; *) echo 'Export escapes sandbox root' >&2; exit 1;; esac`,
-        ))
+        // Open relative components by directory descriptor, rejecting symlinks
+        // and special files even if a sandbox process races the export.
+        let script = `import os, stat, base64
+fd = os.open(${
+          JSON.stringify(root)
+        }, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+ for part in ${JSON.stringify(path.split('/'))}:
+  next = os.open(part, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
+  os.close(fd)
+  fd = next
+ if not stat.S_ISREG(os.fstat(fd).st_mode): raise ValueError('Export is not a regular file')
+ with os.fdopen(fd, 'rb') as file:
+  fd = -1
+  print(base64.b64encode(file.read()).decode())
+finally:
+ if fd >= 0: os.close(fd)`
+        let data = await control(
+          ref,
+          `${present}\n${
+            inside(nameOf(ref), 'python3 -I -c ' + quote(script))
+          }`,
+        )
         yield {
           path,
           bytes: Uint8Array.from(

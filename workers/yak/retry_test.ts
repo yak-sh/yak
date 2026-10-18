@@ -12,7 +12,7 @@ import {
   type Box,
   cloudflareProvider,
   type Sandboxes,
-} from '@yaks/machine/cloudflare'
+} from '@yaks/sandbox/cloudflare'
 import { backoff, retried } from '@yaks/durable-object'
 import { listen, rostered, told } from './stream.ts'
 
@@ -269,9 +269,12 @@ for (let { method, args, result } of methods) {
               } as unknown as Box
             },
           }
-          let provider = cloudflareProvider(ns, { retry: retried })
+          let provider = cloudflareProvider(ns, {
+            legacyRecreation: true,
+            retry: retried,
+          })
           let ref = { id: named(space, who.person!) }
-          let { machine } = await provider.wake(ref)
+          let { workspace: machine } = await provider.connect(ref)
           assertEquals(gets, 0, 'take the stub per invocation, not per box')
           let call = () =>
             method == 'exec'
@@ -281,7 +284,7 @@ for (let { method, args, result } of methods) {
               : method == 'readFile'
               ? machine.read('/app/a')
               : method == 'destroy'
-              ? provider.release(ref)
+              ? provider.dispose(ref)
               : provider.request!(ref)
           if (fails(errors)) {
             assertEquals(await assertRejects(call), errors.at(-1))

@@ -235,9 +235,3 @@ export let processProvider = (
     },
   }
 }
-
-export {
-  type SandboxLimits,
-  sandboxProvider,
-  type SandboxProviderOpts,
-} from './sandbox.ts'

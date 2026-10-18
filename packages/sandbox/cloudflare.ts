@@ -1,12 +1,8 @@
-// Cloudflare containers as providers of machines. The namespace supplies the
+// Cloudflare containers as sandbox providers. The namespace supplies the
 // deployed image; the host supplies invocation environment and RPC retry policy.
 // Grants, accounts and billing are not container concerns.
-import type {
-  Machine,
-  MachineProvider,
-  MachineRef,
-  MachineRequest,
-} from './mod.ts'
+import type { Workspace } from '@yaks/machine'
+import type { SandboxProvider, SandboxRef, SandboxRequest } from './provider.ts'
 
 /** How a command runs in the container: where, for how long at most, and with
  * what beside the container's own environment. */
@@ -59,19 +55,37 @@ export let TIMEOUT = 240_000
 export let NAP = 300
 export let SLEEP = `${NAP / 60}m`
 
+/** Stored outside the container. locked serializes lifecycle calls across
+ * hosts; save is durable before it resolves. Disposal receipts must be kept. */
+export type CloudflareLifecycle = {
+  locked<T>(
+    id: string,
+    act: (receipt: {
+      state?: 'provisioning' | 'ready' | 'disposing' | 'released'
+      save(
+        state: 'provisioning' | 'ready' | 'disposing' | 'released',
+      ): Promise<void>
+    }) => Promise<T>,
+  ): Promise<T>
+}
+
 export type CloudflareOptions = {
+  /** Mandatory for durable sandbox lifecycle. Hosted archive migration opts
+   * into legacy recreation explicitly instead of inventing lifecycle facts. */
+  lifecycle?: CloudflareLifecycle
+  legacyRecreation?: boolean
   env?: () => Promise<Record<string, string>>
   retry?: <T>(send: () => T | Promise<T>) => Promise<T>
   sleepError?: (error: unknown) => void
 }
 
 /** Cloudflare's synchronous exec is also used to expand artifact globs. */
-export type CloudflareProvider = MachineProvider & {
-  exec(ref: MachineRef, command: string): ReturnType<Box['exec']>
-  archive(ref: MachineRef): Promise<WorkspaceArchive>
-  restore(ref: MachineRef, body: ReadableStream<Uint8Array>): Promise<void>
-  active(ref: MachineRef): Promise<boolean>
-  processes(ref: MachineRef): Promise<BoxProcess[]>
+export type CloudflareProvider = SandboxProvider & {
+  exec(ref: SandboxRef, command: string): ReturnType<Box['exec']>
+  archive(ref: SandboxRef): Promise<WorkspaceArchive>
+  restore(ref: SandboxRef, body: ReadableStream<Uint8Array>): Promise<void>
+  active(ref: SandboxRef): Promise<boolean>
+  processes(ref: SandboxRef): Promise<BoxProcess[]>
 }
 
 /** Process data detached from the SDK's process-control methods. */
@@ -226,21 +240,43 @@ with tarfile.open(${JSON.stringify(path)}) as archive:
 }
 
 /** A provider bound to one deployed container namespace. Stable request ids
- * are the namespace names, so wake, export and release need no live handle.
+ * are the namespace names, so connect, export and dispose need no live handle.
  * `from`, `image` and addresses are refused: this namespace boots its deployed
- * image, not a graph commit or an existing machine. */
+ * image, not a graph commit or an existing sandbox. */
 export let cloudflareProvider = (
   ns: Sandboxes,
   options: CloudflareOptions = {},
 ): CloudflareProvider => {
   let retry = options.retry ??
     (async <T>(send: () => T | Promise<T>) => await send())
-  let boxOf = (ref: MachineRef, invocation = true): Box => {
+  let boxOf = (ref: SandboxRef, invocation = true, internal = false): Box => {
     if (ref.address != null) {
-      throw new Error('cloudflare: cannot attach an existing machine')
+      throw new Error('cloudflare: cannot attach an existing sandbox')
     }
     let call = <T>(send: (box: Box) => T | Promise<T>) =>
-      retry(() => send(ns.get(ns.idFromName(ref.id))))
+      retry(async () => {
+        if (options.legacyRecreation || internal) {
+          return await send(ns.get(ns.idFromName(ref.id)))
+        }
+        if (!options.lifecycle) {
+          throw new Error('cloudflare: durable lifecycle storage is required')
+        }
+        return await options.lifecycle.locked(ref.id, async ({ state }) => {
+          if (state != 'ready') {
+            throw new Error('cloudflare: sandbox is not ready or was disposed')
+          }
+          let box = ns.get(ns.idFromName(ref.id))
+          let { status } = await box.getState()
+          if (status != 'running' && status != 'healthy') {
+            throw new Error(
+              'cloudflare: sandbox storage is unavailable; refusing recreation',
+            )
+          }
+          // Hold the lifecycle lock through RPC completion: disposal cannot
+          // race a stale workspace handle into recreating destroyed storage.
+          return await send(box)
+        })
+      })
     let dressed = async <T extends Run>(opts?: T) => ({
       ...opts,
       ...(invocation
@@ -265,29 +301,95 @@ export let cloudflareProvider = (
       setSleepAfter: (after) => call((box) => box.setSleepAfter?.(after)),
     }
   }
-  let wake = (ref: MachineRef) =>
-    Promise.resolve({
-      machine: machineOf(boxOf(ref)),
-      cwd: CWD,
-    })
+  let lifecycle = <T>(
+    ref: SandboxRef,
+    act: (
+      receipt: Parameters<Parameters<CloudflareLifecycle['locked']>[1]>[0],
+    ) => Promise<T>,
+  ) => {
+    // Validate addresses even when no lifecycle store is configured.
+    boxOf(ref)
+    if (!options.lifecycle) {
+      throw new Error('cloudflare: durable lifecycle storage is required')
+    }
+    return options.lifecycle.locked(ref.id, act)
+  }
+  let connection = (ref: SandboxRef) => ({
+    workspace: workspaceOf(boxOf(ref)),
+    root: CWD,
+  })
   return {
-    request: (request: MachineRequest) => {
+    request: async (request: SandboxRequest) => {
       if (request.from != null || request.image != null) {
         throw new Error(
           "cloudflare: uses the namespace's deployed image; from and image are unsupported",
         )
       }
-      let box = boxOf(request)
-      // Configuration is a best-effort backstop. The SDK default still sleeps
-      // a container if this RPC fails; the host reports the failure.
-      Promise.resolve(box.setSleepAfter?.(SLEEP)).catch((e) =>
-        options.sleepError?.(e)
-      )
-      return Promise.resolve({ machine: machineOf(box), cwd: CWD })
+      let prepare = async () => {
+        let box = boxOf(request, true, true)
+        // mkdir is idempotent and starts the namespace's deployed image.
+        if (!options.legacyRecreation) await box.mkdir(CWD, { recursive: true })
+        await Promise.resolve(box.setSleepAfter?.(SLEEP)).catch((e) =>
+          options.sleepError?.(e)
+        )
+        return connection(request)
+      }
+      if (options.legacyRecreation) return await prepare()
+      return await lifecycle(request, async (receipt) => {
+        if (receipt.state == 'released' || receipt.state == 'disposing') {
+          throw new Error('cloudflare: sandbox was disposed; request a new id')
+        }
+        if (receipt.state == 'ready') {
+          let { status } = await boxOf(request, true, true).getState()
+          if (status != 'running' && status != 'healthy') {
+            throw new Error(
+              'cloudflare: sandbox storage is unavailable; refusing recreation',
+            )
+          }
+          return connection(request)
+        }
+        if (receipt.state == 'provisioning') {
+          // An interrupted first request may have created writable storage.
+          // A stopped/missing instance cannot prove that storage survived.
+          let { status } = await boxOf(request, true, true).getState()
+          if (status != 'running' && status != 'healthy') {
+            throw new Error(
+              'cloudflare: interrupted provisioning; refusing recreation',
+            )
+          }
+        }
+        await receipt.save('provisioning')
+        let lent = await prepare()
+        await receipt.save('ready')
+        return lent
+      })
     },
-    wake,
-    release: async (ref) => {
-      await boxOf(ref).destroy()
+    connect: async (ref) => {
+      if (options.legacyRecreation) return connection(ref)
+      return await lifecycle(ref, async ({ state }) => {
+        if (state != 'ready') {
+          throw new Error('cloudflare: sandbox is not ready or was disposed')
+        }
+        let { status } = await boxOf(ref, true, true).getState()
+        if (status != 'running' && status != 'healthy') {
+          throw new Error(
+            'cloudflare: sandbox storage is unavailable; refusing recreation',
+          )
+        }
+        return connection(ref)
+      })
+    },
+    dispose: async (ref) => {
+      if (options.legacyRecreation) {
+        await boxOf(ref, true, true).destroy()
+        return
+      }
+      await lifecycle(ref, async (receipt) => {
+        if (receipt.state == 'released') return
+        await receipt.save('disposing')
+        await boxOf(ref, true, true).destroy()
+        await receipt.save('released')
+      })
     },
     exec: (ref, command) => boxOf(ref).exec(command, { cwd: CWD }),
     archive: (ref) => archive(boxOf(ref, false)),
@@ -332,7 +434,7 @@ let RUNNING = new Set(['starting', 'running'])
 let lines = (said: string) => said ? said.replace(/\n$/, '').split('\n') : []
 
 /**
- * A container as the machine @yaks/harness's machine tools run on
+ * A container as the workspace @yaks/harness's machine tools run on
  * (`machineTools`). Every command is a background process of the container's
  * own, bounded by {@link TIMEOUT} and kept after it exits so a later `wait`
  * still finds its code; the container's destruction clears them all.
@@ -342,7 +444,7 @@ let lines = (said: string) => said ? said.replace(/\n$/, '').split('\n') : []
  * compiler's errors are. A kill is the container's one kill: it takes no
  * signal, so SIGTERM and SIGKILL are the same call.
  */
-let machineOf = (box: Box): Machine => ({
+let workspaceOf = (box: Box): Workspace => ({
   // Every look is a call into the container, so it looks twice a second.
   poll: 500,
   start: async (command, cwd) =>

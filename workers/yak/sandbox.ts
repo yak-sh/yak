@@ -1,7 +1,7 @@
 // The builder's workbench (T-34264): a container it can run commands in, so
 // the things a browser cannot compile get compiled somewhere and the artifact
 // is shipped into the app as ordinary files. It is the machine this host lends
-// @yaks/harness's machine tools through @yaks/machine/cloudflare, as a box lends its
+// @yaks/harness's machine tools through @yaks/sandbox/cloudflare, as a box lends its
 // own through @yaks/process.
 //
 // Owner, 2026-09-05: "and can we also give the agent some sandbox tools so
@@ -69,8 +69,8 @@ import {
   NAP,
   type Sandboxes,
   TIMEOUT,
-} from '@yaks/machine/cloudflare'
-export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/machine/cloudflare'
+} from '@yaks/sandbox/cloudflare'
+export { CWD, NAP, SLEEP, TIMEOUT } from '@yaks/sandbox/cloudflare'
 import { granted, Refused } from '@yaks/egress'
 import { sentinel } from '@yaks/secrets'
 import type { Space, Tier } from './directory.ts'
@@ -400,6 +400,28 @@ exec deno run --quiet --no-config --reload --allow-net --allow-env --allow-read 
 
 /** The host lends its configured provider after checking the build's budget.
  * Billing starts at first need; grants are supplied only to command invocations. */
+// The hosted harness still consumes LentMachine. Keep that translation at the
+// consumer; Cloudflare itself owns only sandbox lifecycle and Workspace.
+let legacyProvider = (...args: Parameters<typeof cloudflareProvider>) => {
+  let provider = cloudflareProvider(args[0], {
+    ...args[1],
+    legacyRecreation: true,
+  })
+  let lent = async (connection: ReturnType<typeof provider.connect>) => {
+    let { workspace, root } = await connection
+    return { machine: workspace, cwd: root }
+  }
+  return {
+    ...provider,
+    request: (ref: Parameters<NonNullable<typeof provider.request>>[0]) =>
+      lent(provider.request!(ref)),
+    wake: (ref: Parameters<typeof provider.connect>[0]) =>
+      lent(provider.connect(ref)),
+    release: (ref: Parameters<typeof provider.dispose>[0]) =>
+      provider.dispose(ref),
+  }
+}
+
 export let workbench = async (
   env: Bound,
   space: Space,
@@ -419,7 +441,7 @@ export let workbench = async (
   spend.since ??= now()
   let ref = { id: named(space, person) }
   let source = { id: shared(space) }
-  let provider = cloudflareProvider(ns, {
+  let provider = legacyProvider(ns, {
     retry: retried,
     env: () => spend.signing ??= signed(env, idOf(ns, ref.id), space, person),
     sleepError: (e) =>
@@ -428,7 +450,7 @@ export let workbench = async (
   // Snapshot only the workspace into a clean container, never its processes,
   // system files or environment. The source records completed copies so a
   // retry or another command cannot overwrite the person's later work.
-  let old = cloudflareProvider(ns, { retry: retried })
+  let old = legacyProvider(ns, { retry: retried })
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
   spend.copying ??= retried(() => workspace.fork(source.id, ref.id)).then(
@@ -491,7 +513,10 @@ export let destroyed = async (
 ) => {
   if (!env.SANDBOX) return false
   try {
-    await cloudflareProvider(env.SANDBOX, { retry: retried }).release({
+    await cloudflareProvider(env.SANDBOX, {
+      legacyRecreation: true,
+      retry: retried,
+    }).dispose({
       id: named(space, person),
     })
   } catch (e) {
@@ -512,13 +537,16 @@ export let destroyedAll = async (
 ) => {
   let ns = env.SANDBOX
   if (!ns) return false
-  let provider = cloudflareProvider(ns, { retry: retried })
+  let provider = cloudflareProvider(ns, {
+    legacyRecreation: true,
+    retry: retried,
+  })
   let source = { id: shared(space) }
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
   let copies = await retried(() => workspace.retire())
   for (let ref of [...copies.map((id) => ({ id })), source]) {
-    await provider.release(ref)
+    await provider.dispose(ref)
     await bared(env, space, idOf(ns, ref.id))
   }
   await retried(() => workspace.destroy())

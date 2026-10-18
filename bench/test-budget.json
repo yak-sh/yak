@@ -2998,10 +2998,10 @@
       "output stays until its caller cleans the finished run": 20.8,
       "watch picks up an unfinished row and stamps the one already gone": 45.1
     },
-    "packages/process/sandbox-pressure_test.ts": {
+    "packages/sandbox/bubblewrap-pressure_test.ts": {
       "sandbox controllers throttle CPU, refuse extra tasks and contain memory exhaustion": 581.4
     },
-    "packages/process/sandbox_test.ts": {
+    "packages/sandbox/bubblewrap_test.ts": {
       "concurrent providers reuse one sandbox and one durable command; release defeats ignored TERM": 152.3,
       "release kills descendants, preserves other sandboxes, and wakes a stopped scope with its files": 338.2,
       "sandbox commands and files see only their own workspace and a read-only system": 554.6,

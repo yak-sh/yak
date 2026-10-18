@@ -2,8 +2,8 @@
 // The pressure is contained in one disposable scope and always reaped.
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { test } from '@yaks/testing'
-import { sandboxProvider } from '@yaks/process/machine'
-import { until } from './testing.ts'
+import { sandboxProvider } from './bubblewrap.ts'
+import { until } from '../process/testing.ts'
 
 let limits = { cpuQuota: 50, memoryMax: 48 * 1024 * 1024, tasksMax: 32 }
 
@@ -13,7 +13,7 @@ test('sandbox controllers throttle CPU, refuse extra tasks and contain memory ex
   let provider = sandboxProvider(options)
   let ref = { id: 'load' }
   try {
-    let { machine } = await provider.request!(ref)
+    let { workspace: machine } = await provider.request!(ref)
     let burn = await machine.start('while :; do :; done')
     let pid = (await machine.look(burn))?.pid
     assert(pid)
@@ -85,12 +85,12 @@ PY`)
       10000,
     )
     await assertRejects(() => machine.read('survives'))
-    let restored = await sandboxProvider(options).wake(ref)
-    assertEquals(await restored.machine.read('survives'), 'workspace')
-    assertEquals(await restored.machine.receipt!('oom'), oom)
-    assertEquals((await restored.machine.look(oom))?.exit, { code: null })
+    let restored = await sandboxProvider(options).connect(ref)
+    assertEquals(await restored.workspace.read('survives'), 'workspace')
+    assertEquals(await restored.workspace.receipt!('oom'), oom)
+    assertEquals((await restored.workspace.look(oom))?.exit, { code: null })
   } finally {
-    await provider.release(ref)
+    await provider.dispose(ref)
     await Deno.remove(dir, { recursive: true })
   }
 })

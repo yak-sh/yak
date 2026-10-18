@@ -12,7 +12,7 @@ import {
   spending,
   workbench,
 } from './sandbox.ts'
-import { cloudflareProvider } from '@yaks/machine/cloudflare'
+import { cloudflareProvider } from '@yaks/sandbox/cloudflare'
 
 let space = { eid: 'isolation', slug: 'isolation' } as Space
 let secret = 'sandbox isolation probe'
@@ -69,10 +69,10 @@ let memberIsolation = await (async () => {
   let box = containers()
   let env = { SANDBOX: box.SANDBOX, OAUTH_KV: oauth, SESSION_SECRET: secret }
   let [theirs, mine] = [named(space, 'editor'), named(space, 'owner')]
-  let provider = cloudflareProvider(box.SANDBOX)
-  let editor = await provider.wake({ id: theirs })
-  let leftover = await editor.machine.start('leftover-process')
-  let owner = await provider.wake({ id: mine })
+  let provider = cloudflareProvider(box.SANDBOX, { legacyRecreation: true })
+  let editor = await provider.connect({ id: theirs })
+  let leftover = await editor.workspace.start('leftover-process')
+  let owner = await provider.connect({ id: mine })
   await book.wear(mine, owned)
   return { box, env, theirs, mine, editor, leftover, owner }
 })()
@@ -88,11 +88,11 @@ test('a member cannot read another member’s grant through leftover sandbox cod
     space: space.slug,
   })
   equal(await lent(env, theirs), [])
-  equal(await owner.machine.look(leftover), null)
+  equal(await owner.workspace.look(leftover), null)
 
   // A build ending must leave another member's running work alone.
   await destroyed(env, space, 'owner')
-  equal((await editor.machine.look(leftover))?.exit, undefined)
+  equal((await editor.workspace.look(leftover))?.exit, undefined)
 })
 
 test('a personal sandbox keeps its files and process across calls and a space rename', async () => {
@@ -120,11 +120,11 @@ let legacyFixture = async () => {
     OAUTH_KV: kv(),
     SESSION_SECRET: secret,
   }
-  let old = cloudflareProvider(box.SANDBOX)
+  let old = cloudflareProvider(box.SANDBOX, { legacyRecreation: true })
   let ref = { id: shared(space) }
-  let sharedBox = await old.wake(ref)
-  await sharedBox.machine.write('/workspace/artifact', 'compiled')
-  let process = await sharedBox.machine.start('leftover-process')
+  let sharedBox = await old.connect(ref)
+  await sharedBox.workspace.write('/workspace/artifact', 'compiled')
+  let process = await sharedBox.workspace.start('leftover-process')
   return { box, env, old, ref, process }
 }
 let legacyIsolation = await legacyFixture()

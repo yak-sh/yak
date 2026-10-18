@@ -24,7 +24,7 @@ export class Sandbox extends DurableObject<Env> {
   }
 
   // Workers RPC discovers prototype methods, not functions assigned later on
-  // an instance. These are precisely the binding's interface (machine/cloudflare.ts),
+  // an instance. These are precisely the binding's interface (sandbox/cloudflare.ts),
   // plus the runtime fetch and alarm callbacks. Run with the SDK as receiver.
   async getState() {
     return (await this.#ready).getState()

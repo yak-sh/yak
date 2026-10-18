@@ -18,7 +18,7 @@ import type { Dispatch, Fetcher, Namespace } from './door.ts'
 import type { Meta } from './meta.ts'
 import type { Purgers, Purges } from './purge.ts'
 import type { Limiter } from './rate.ts'
-import type { Sandboxes } from '@yaks/machine/cloudflare'
+import type { Sandboxes } from '@yaks/sandbox/cloudflare'
 import type { Workspaces } from './workspaces.ts'
 import type { Inference } from '@yaks/model'
 

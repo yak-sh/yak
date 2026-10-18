@@ -25,7 +25,7 @@ test('Cloudflare refuses unsupported provenance, images and existing addresses w
   }
   let refused = false
   try {
-    await provider.wake({ id: 'a', address: 'remote' })
+    await provider.connect({ id: 'a', address: 'remote' })
   } catch {
     refused = true
   }
@@ -93,6 +93,7 @@ let transfers = (
     get: () => box,
   }, {
     env,
+    legacyRecreation: true,
     retry: async (send) => {
       try {
         return await send()
@@ -194,7 +195,7 @@ test('Cloudflare observes active containers and returns detached process data', 
   let provider = cloudflareProvider({
     idFromName: (name) => name,
     get: () => box,
-  })
+  }, { legacyRecreation: true })
   equal(await provider.active({ id: 'source' }), true)
   state = 'stopped'
   equal(await provider.active({ id: 'source' }), false)
@@ -202,4 +203,65 @@ test('Cloudflare observes active containers and returns detached process data', 
     { id: 'compile', status: 'running', pid: 7 },
     { id: 'finished', status: 'completed', exitCode: 0 },
   ])
+})
+
+// Test storage implements the same durable callback seam without container I/O.
+test('Cloudflare lifecycle refuses missing storage and never recreates disposed or lost storage', async () => {
+  let state: 'provisioning' | 'ready' | 'disposing' | 'released' | undefined
+  let status = 'healthy'
+  let creates = 0
+  let destroys = 0
+  let box = {
+    mkdir: () => {
+      creates++
+      return Promise.resolve()
+    },
+    getState: () => Promise.resolve({ status }),
+    destroy: () => {
+      destroys++
+      return Promise.resolve()
+    },
+  } as unknown as Box
+  let ns = { idFromName: (id: string) => id, get: () => box }
+  let provider = cloudflareProvider(ns, {
+    lifecycle: {
+      locked: async (_id, act) =>
+        await act({
+          state,
+          save: (next) => {
+            state = next
+            return Promise.resolve()
+          },
+        }),
+    },
+  })
+  let ref = { id: 'durable' }
+  await throws(() => cloudflareProvider(ns).request!(ref), 'lifecycle storage')
+  await throws(() => provider.connect(ref), 'not ready')
+  await provider.request!(ref)
+  let stale = await provider.connect(ref)
+  equal((await provider.connect(ref)).root, '/workspace')
+  await provider.request!(ref)
+  equal(creates, 1)
+  status = 'stopped'
+  await throws(() => provider.connect(ref), 'refusing recreation')
+  await throws(() => provider.request!(ref), 'refusing recreation')
+  equal(creates, 1)
+  await provider.dispose(ref)
+  await provider.dispose(ref)
+  equal(destroys, 1)
+  await throws(() => stale.workspace.read('file'), 'disposed')
+  await throws(() => stale.workspace.start('echo recreate'), 'disposed')
+  await throws(() => provider.exec(ref, 'true'), 'disposed')
+  await throws(() => provider.archive(ref), 'disposed')
+  await throws(() => provider.processes(ref), 'disposed')
+  await throws(() => provider.active(ref), 'disposed')
+  await throws(async () => {
+    for await (
+      let _ of provider.export(ref, ['file'])
+    ) { /* must refuse before yielding */ }
+  }, 'disposed')
+  await throws(() => provider.request!(ref), 'disposed')
+  await throws(() => provider.connect(ref), 'disposed')
+  equal(creates, 1)
 })
