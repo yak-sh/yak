@@ -398,3 +398,28 @@ yak bug show <global-bug-eid> --source yaks.app
 yak bug resolve <global-bug-eid> --source yaks.app --broke '…' --cause '…' --fix <sha> --recur '…'
 yak bug archive <box-bug-id>
 ```
+
+### File spool recovery
+
+A **record** is the immutable bundle array in a complete newline-terminated
+JSONL segment. An incomplete segment remains untouched and does not block later
+complete records. Intake visits complete records in filename order. A temporary
+failure, such as a locked database, leaves that record retryable and does not
+block later records in the pass. A graph refusal renames its segment to
+`.refused`: its bytes are preserved, but automatic intake no longer offers it.
+Repairing a refused record requires inspecting the refusal and its references;
+renaming it back without repair repeats the refusal.
+
+With remote delivery configured, successful local admission renames `.jsonl` to
+`.local.jsonl`. This is the durable local receipt: retries do not re-admit a
+record even if local retention has removed its occurrence. Remote delivery may
+remove the segment only after that receipt and a successful remote response. A
+remote failure keeps the receipt and does not block local intake. Immutable
+occurrence ids make remote redelivery idempotent if acknowledgement fails. Each
+pass reports failures after visiting the remaining records; it is not a backlog
+size limit. A live stop finishes the record in hand and leaves the rest.
+
+For a bounded recovery check, copy at most the selected complete segments into
+an isolated spool and use a scratch graph and transport. Do not rename, delete,
+or manually replay the live backlog to infer unattended health. Prove the live
+path with a fresh reporter occurrence and read back its remote bug receipt.

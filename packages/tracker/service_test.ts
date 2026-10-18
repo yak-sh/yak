@@ -93,7 +93,7 @@ test('remote refusal keeps durable local receipts across restart and retention',
     admitted: [true, true],
     grouped: 2,
     retained: 0,
-    calls: 2,
+    calls: 4,
     sent: ['first', 'second'],
     left: 0,
     hits: 2,
@@ -171,4 +171,45 @@ test('a locally refused record is never sent or acknowledged', async () => {
   )
   equal(calls, 0)
   equal(spool.admitted(), [false])
+})
+
+// A lock can clear on the next pass; it must neither quarantine the oldest
+// record nor delay the later record's local receipt and remote delivery.
+let locked = await (async () => {
+  let g = fixture(), spool = memory(), unavailable = true
+  spool.append('locked')
+  spool.append('behind-lock')
+  let sent: string[] = []
+  let options = {
+    source: spool.source,
+    remote,
+    report: () => {},
+    fetch: ((_url, init) => {
+      sent.push(JSON.parse(String(init?.body))[0].entity.eid)
+      return Promise.resolve(new Response(null))
+    }) as typeof fetch,
+  }
+  let graph = {
+    ...g,
+    apply: (...args: Parameters<typeof g.apply>) => {
+      if (unavailable && args[0].some((row) => row.entity.eid == 'locked')) {
+        throw Error('database is locked')
+      }
+      return g.apply(...args)
+    },
+  }
+  await service({ graph }, options).catch(() => {})
+  let first = spool.admitted()
+  let later = (await g.get(['behind-lock'])).length
+  unavailable = false
+  await service({ graph }, options)
+  return { first, later, sent, left: spool.held.size }
+})()
+test('a locked oldest record stays retryable while later records reach remote', () => {
+  equal(locked, {
+    first: [false, true],
+    later: 1,
+    sent: ['locked', 'behind-lock'],
+    left: 0,
+  })
 })
