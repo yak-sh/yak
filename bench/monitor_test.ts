@@ -30,7 +30,7 @@ let run = (verdict: Run['verdict'], commit = 'c2'): Run => ({
     : [],
 })
 let outcome = (v: Outcome['verdict']): Outcome =>
-  v == 'deferred'
+  v == 'deferred' || v == 'unconfirmed' || v == 'inconclusive'
     ? { verdict: v }
     : v == 'failed'
     ? { verdict: v, error: 'did not paint' }
@@ -157,3 +157,28 @@ test('a deferred confirmation cannot confirm the screening regression', async ()
     runs: [1, undefined],
   })
 })
+
+for (let verdict of ['unconfirmed', 'inconclusive'] as const) {
+  test(`paired ${verdict} is neither a budget pass nor a new best`, async () => {
+    let state: State = { good: { s: { commit: 'old', at: 'then' } } }
+    let banked = false, reported = false
+    equal(
+      await watch(['s'], state, {
+        check: () => Promise.resolve({ verdict }),
+        since: () => Promise.resolve([]),
+        bank: () => {
+          banked = true
+          return Promise.resolve()
+        },
+        report: () => {
+          reported = true
+          return Promise.resolve()
+        },
+      }),
+      { s: verdict },
+    )
+    equal(state.good.s, { commit: 'old', at: 'then' })
+    equal(banked, false)
+    equal(reported, false)
+  })
+}

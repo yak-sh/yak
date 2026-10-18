@@ -84,6 +84,8 @@ export type Outcome =
   | { verdict: 'passed' | 'measured' | 'regressed'; run: Run }
   | { verdict: 'failed'; error: string }
   | { verdict: 'deferred' }
+  | { verdict: 'unconfirmed' }
+  | { verdict: 'inconclusive' }
 export type Good = { commit: string; at: string }
 export type State = { web?: string; good: Record<string, Good> }
 export type Monitor = {
@@ -151,8 +153,11 @@ export let watch = async (
     }
     let outcome = await safe(1)
     if (outcome.verdict == 'regressed') outcome = await safe()
-    if (outcome.verdict == 'deferred') {
-      out[suite] = 'deferred'
+    if (
+      outcome.verdict == 'deferred' || outcome.verdict == 'unconfirmed' ||
+      outcome.verdict == 'inconclusive'
+    ) {
+      out[suite] = outcome.verdict
       continue
     }
     if (outcome.verdict != 'failed') {
@@ -349,6 +354,50 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
   try {
     let run: Run = JSON.parse(await Deno.readTextFile(results))
     if (child.success || run.verdict == 'regressed') {
+      if (
+        run.verdict == 'regressed' && !runs &&
+        ['platform-waits', 'inbox-content'].includes(suite)
+      ) {
+        let evidence = results.replace('.results.json', '.paired.json')
+        let paired = await new Deno.Command('flock', {
+          args: [
+            '--nonblock',
+            '--conflict-exit-code=75',
+            '/tmp/yaks-throughput-bench.lock',
+            'timeout',
+            '--kill-after=10',
+            '600',
+            Deno.execPath(),
+            'run',
+            '-A',
+            'bench/paired.ts',
+            suite,
+            evidence,
+          ],
+          cwd: root,
+          env,
+          stdout: 'inherit',
+          stderr: 'inherit',
+        }).output()
+        if (paired.code == 75) return { verdict: 'deferred' }
+        if (!paired.success) {
+          return {
+            verdict: 'failed',
+            error: 'Paired measurement failed; raw result retained at ' +
+              results,
+          }
+        }
+        let comparison = JSON.parse(await Deno.readTextFile(evidence))
+        console.log(
+          `${suite}: paired ${comparison.verdict}; raw evidence ${evidence}`,
+        )
+        if (
+          comparison.verdict == 'unconfirmed' ||
+          comparison.verdict == 'inconclusive'
+        ) {
+          return { verdict: comparison.verdict }
+        }
+      }
       return { verdict: run.verdict as 'passed', run }
     }
   } catch { /* no run was written: the check failed before measuring */ }
