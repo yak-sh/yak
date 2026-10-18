@@ -1118,7 +1118,7 @@ test('mouse clicks preserve mode while selecting sessions and new session', asyn
     assertEquals(mode(), 'INSERT')
     assertEquals(
       (f.client.ent(derivedEid('harness-frontend|view'))?.frontend as Comp)
-        ?.selected,
+        ?.selected ?? null,
       null,
     )
     assertEquals(

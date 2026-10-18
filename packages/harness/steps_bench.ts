@@ -21,10 +21,10 @@ let check = (holds: boolean, message: string) => {
 
 let round = async (steps: number) => {
   const h = await harness(':memory:')
-  let asks = 0, calls = 0, issued = 0
+  let asks = 0, calls = 0, issued = 0, pendingTurns = 0
   const model: Model = (request) => {
     asks++
-    check(asks <= steps + 1, 'script exceeded its finite model-call limit')
+    check(asks <= 2 * steps + 1, 'script exceeded its finite model-call limit')
     // Pending. remains a protocol result; the final answer can be a later
     // user update rather than a replacement result.
     const final = (text: string) =>
@@ -36,8 +36,14 @@ let round = async (steps: number) => {
     let completed = 0
     while (completed < steps && final(`echoed ${completed + 1}!`)) completed++
     let items: Awaited<ReturnType<Model>>['items']
-    check(completed == issued, 'model ran without a completed tool result')
-    if (issued < steps) {
+    if (completed < issued) {
+      pendingTurns++
+      check(
+        pendingTurns <= issued,
+        'the same progress owed repeated model turns',
+      )
+      items = [{ kind: 'assistant', text: 'Continue when the tool finishes.' }]
+    } else if (issued < steps) {
       issued++
       items = [{ kind: 'call', id: `call-${issued}`, name: 'echo', args: '{}' }]
     } else {
@@ -89,7 +95,7 @@ let round = async (steps: number) => {
       }; asks=${asks}, calls=${calls}`,
     )
     check(
-      asks == steps + 1 && calls == steps &&
+      asks == steps + pendingTurns + 1 && calls == steps &&
         issued == steps,
       'wrong model/tool step count',
     )
@@ -111,6 +117,7 @@ let round = async (steps: number) => {
       value: elapsed / (steps || 1),
       counts: {
         modelCalls: asks,
+        pendingTurns,
         toolSteps: calls,
         results: results.length,
         asyncCalls: asyncCalls.length,

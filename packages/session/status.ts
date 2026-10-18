@@ -976,7 +976,7 @@ export let sessionStatus = {
           fn(
             'max',
             iff(
-              or(row.input, has('result')),
+              or(row.input, has('result'), has('tool_progress')),
               col('seq', 't'),
               lit(null),
             ),

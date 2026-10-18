@@ -80,21 +80,24 @@ creation to its execution claim. Tool run is the stored `result.ms`. Preflight
 runs from a final result to the next ask's claim without intervening input.
 Concurrent durations overlap; their sum is not the session's wall-clock age.
 
-Synthetic tool progress acknowledges the provider protocol without owing a model
-request. Actual input and final results owe model requests immediately,
-including while another tool is still running. Submitted progress stays in the
-transcript and provider continuation prefix unchanged.
+Synthetic tool progress acknowledges the provider protocol and owes one model
+turn so the model can keep working while the call runs. Once that progress is
+consumed, the transcript waits without repeating the turn. Actual input and
+final results also owe model requests immediately, including while another tool
+is still running. Submitted progress stays in the transcript and provider
+continuation prefix unchanged.
 
 The host collects timings after native model and tool steps from a bounded
 transcript tail and exact journal marks. Three consecutive same-metric samples
-above the preceding median report a drift through the host's tracker sink, with
-stable session/step/metric identity. Model and tool durations are compared
-separately; variable provider or tool work is not labelled harness overhead.
-Incomplete boundaries are omitted rather than guessed. A settled transcript with
-unfinished claimed work is idle, not model wait or preflight. A native final
-with unblocked claimed work reports that condition without automatically
-resuming the session or spending another model turn. Explicit blockers and
-unfinished task dependencies are excluded.
+above the preceding median report a drift through the host's tracker sink. A
+fixed message identifies one bug per metric; measurements are attached as tags.
+Model wait remains measurable but does not generate drift bugs; variable
+provider latency is not harness overhead. Tool durations are compared
+separately. Incomplete boundaries are omitted rather than guessed. A settled
+transcript with unfinished claimed work is idle, not model wait or preflight. A
+native final with unblocked claimed work reports that condition without
+automatically resuming the session or spending another model turn. Explicit
+blockers and unfinished task dependencies are excluded.
 
 The `harness-steps` benchmark uses an instantly answered scripted model over an
 isolated graph to measure the harness's own per-step overhead. Its reference is

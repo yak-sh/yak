@@ -118,15 +118,16 @@ checks are faster. Never replace a faster reference with it.
 scripted model on an isolated in-memory harness graph. `no-tools` is one
 input-to-final-reply turn in milliseconds; `tool-step` is input-to-final-reply
 wall time divided by 12 completed sequential tool steps, in milliseconds per
-step. The latter includes all 13 model turns, async `session_tool` effect
-dispatch, tool-result persistence and the live step-timing observer (with no
-external reporter), not model/network/tool I/O. Each metric has one discarded
-warmup and three measured rounds with fresh graphs. Fresh-session creation and
-the first ask are timed (there is no seed turn subtracted). Composition,
-count/output verification, effect drain and cleanup are untimed. Every round
-verifies the final reply, exact model/tool/result counts, async calls, progress
-entries, and retained input/results. No managed runs, live database, database
-copy or external model is used.
+step. The latter includes all model turns (13 result-driven turns and at most
+one pending-progress turn per tool), async `session_tool` effect dispatch,
+tool-result persistence and the live step-timing observer (with no external
+reporter), not model/network/tool I/O. Each metric has one discarded warmup and
+three measured rounds with fresh graphs. Fresh-session creation and the first
+ask are timed (there is no seed turn subtracted). Composition, count/output
+verification, effect drain and cleanup are untimed. Every round verifies the
+final reply, exact model/tool/result counts, async calls, progress entries, and
+retained input/results. No managed runs, live database, database copy or
+external model is used.
 
 Run through the ratchet without banking a baseline:
 

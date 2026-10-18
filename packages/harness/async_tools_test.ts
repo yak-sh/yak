@@ -101,7 +101,10 @@ await observed(
     let a = agent(opts)
     try {
       let s = await a.start('start two tools')
-      await until(() => started.includes('slow') && started.includes('fast'))
+      await until(() =>
+        started.includes('slow') && started.includes('fast') &&
+        requests.length >= 2
+      )
       let progress = await a.transcript(s)
       let calls = progress.filter((b) => b.call)
       equal(calls.length, 2)
@@ -109,9 +112,13 @@ await observed(
       equal(progress.filter((b) => b.tool_progress).length, 2)
       equal(progress.filter((b) => b.result).length, 0)
 
-      // Progress is a wire acknowledgement, not useful new work for a model.
-      // Steering still gets a turn immediately while both calls are held.
-      equal(requests.length, 1)
+      // A runner pass while both calls are held must yield, not ask the model
+      // again or wait on the tools. This assertion has no elapsed-time threshold.
+      await until(async () =>
+        (await a.transcript(s)).some((b) =>
+          body(b) == 'I can continue while tools run.'
+        )
+      )
       let count = requests.length
       for (let i = 0; i < 3; i++) {
         equal((await react(h.g, s, lend(opts))).did, 'nothing')
@@ -201,9 +208,7 @@ await observed(
     let a = agent(opts)
     try {
       let s = await a.start('hold a model ask while a tool completes')
-      await until(() => runs == 1)
-      await a.send(s, 'steer while the tool runs')
-      await until(() => requests.length == 2)
+      await until(() => runs == 1 && requests.length == 2)
       tool.resolve('FINAL_DURING_ASK')
       await until(async () => (await a.transcript(s)).some((b) => b.result))
       let held = await a.transcript(s)
@@ -266,7 +271,7 @@ await observed(
     try {
       let s = await a.start('start then stop')
       await until(async () =>
-        runs == 1 && (await a.transcript(s)).some((b) => b.tool_progress)
+        runs == 1 && (await a.transcript(s)).some((b) => body(b) == 'working')
       )
       await stoppedHost.g.apply([{
         entity: { eid: 'async-test-stop' },
