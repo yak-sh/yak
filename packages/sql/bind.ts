@@ -222,7 +222,7 @@ let byArchetype = (
 // whole entity table probing the component per row — and a Durable Object's
 // SQLite has none. `where` narrows to the rows holding a property.
 let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
-  if (ctx.correlated && !ctx.owner) {
+  if ((ctx.correlated || ctx.present) && !ctx.owner) {
     ctx.tables.add(comp)
     return cond({
       sql: `${ctx.d.ownerKey(comp)} is not null${
@@ -231,9 +231,9 @@ let owned = (ctx: Ctx, comp: string, where?: string): Cond => {
       params: [],
     })
   }
-  // Known outer identities are already the driving set. Probe this component
-  // by each owner's key instead of building its entire owning set first.
-  return ctx.correlated || ctx.bounded
+  // A presence spine or known outer identities already supply the owners.
+  // Probe each owner's key instead of building its entire owning set first.
+  return ctx.correlated || ctx.bounded || ctx.present
     ? cond({
       sql: `exists (select 1 from ${ctx.d.table(comp)} where ${
         ctx.d.ownerKey(comp)
