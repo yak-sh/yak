@@ -42,6 +42,8 @@ export type Options = {
   /** A space's stream notification; the unseen reply owns its notified mark. */
   notify?: (bugs: Bundle[]) => void | Promise<void>
   retain?: number
+  /** A box with remote standing suppresses historical follow-up catch-up. */
+  remote?: import('./remote.ts').Remote
 }
 
 let openedAt = (row: Bundle) =>
@@ -234,13 +236,16 @@ export let effects = (
 ): Handlers => {
   let enrich = options.enrich ??
     enrichFrames(options.code ? sourceFrames(options.code) : undefined)
+  let followSince = options.since ??
+    (options.remote ? new Date().toISOString() : undefined)
   let url = options.url ??
     (host.config?.port ? `http://127.0.0.1:${host.config.port}` : undefined)
   return {
     error_group: (e) => group(host.graph, e.entity.eid),
     error_frames: (e) => reframe(host.graph, e.entity.eid, enrich),
     bug_notify: (e) => notify(host.graph, e.entity.eid, { ...options, url }),
-    bug_follow: (e) => follow(host.graph, e.entity.eid, { ...options, url }),
+    bug_follow: (e) =>
+      follow(host.graph, e.entity.eid, { ...options, since: followSince, url }),
     error_trim: async (e) => {
       let [row] = await host.graph.get([e.entity.eid])
       let bug = str(comp(row, 'error').bug)

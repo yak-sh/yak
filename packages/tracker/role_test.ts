@@ -4,6 +4,7 @@
 import { equal, ok, test, until } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc/vocab'
@@ -51,7 +52,14 @@ test('box role groups and enriches a spool occurrence through its configured cat
       'fixture',
     )
     let commit = await git('rev-parse', 'HEAD')
-    let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, gitDoc, codeDoc], [
+    let vocab = loadVocab([
+      kernelDoc,
+      docDoc,
+      edgeDoc,
+      gitDoc,
+      codeDoc,
+      machineDoc,
+    ], [
       kernelKeywords,
       edgeKeywords,
     ])

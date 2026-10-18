@@ -8,6 +8,8 @@ import { sleep } from '@yaks/effects'
 import { files } from './file.ts'
 import { caught, type Context, spool } from './report.ts'
 import { delivery, type Remote } from './remote.ts'
+import { reconcile } from './reconcile.ts'
+import { syncNotice, type Timer, watching } from './sync_health.ts'
 
 export type Options = {
   source?: Source
@@ -16,6 +18,10 @@ export type Options = {
   report?: (error: unknown, context?: Partial<Context>) => void
   remote?: Remote
   fetch?: typeof fetch
+  timer?: Timer
+  /** Independent local notice path; never forwarded into the failing outbox. */
+  notice?: (error: Error) => Promise<void>
+  reconcileEvery?: number
 }
 
 let errors = (record: Record) =>
@@ -50,11 +56,28 @@ export let service = async (
   }
   let forward = async () => {
     if (!send) return
+    let pending: Record[] = [], bundles = 0
+    let flush = async () => {
+      if (!pending.length) return
+      let batch = pending
+      pending = []
+      bundles = 0
+      // The signed intake admits up to 100 bundles. A spool receipt is not
+      // acknowledged until every bundle in this batch reached that door.
+      await send(batch.flatMap(errors))
+      for (let record of batch) await record.ack()
+    }
+    let failures: unknown[] = []
+    let attempt = async () => {
+      try {
+        await flush()
+      } catch (error) {
+        failures.push(error)
+      }
+    }
     await each(source, stop, async (record) => {
       let rows = errors(record)
       if (!rows.some((row) => row.error)) return
-      // The local loop owns admission. Bare reference spines do not count as
-      // receipts; never remove a record before all its bundles are admitted.
       let admitted = record.admitted ?? (record.admit ? false : undefined)
       if (admitted === undefined) {
         let known = new Set(
@@ -65,11 +88,33 @@ export let service = async (
         admitted = record.rows.every((row) => known.has(row.entity.eid))
       }
       if (!admitted) return
-      await send(rows)
-      await record.ack()
-    })
+      if (rows.length > 100) {
+        throw Error('Tracker record exceeds remote intake bound')
+      }
+      if (bundles + rows.length > 100) await attempt()
+      pending.push(record)
+      bundles += rows.length
+      if (bundles == 100) await attempt()
+    }).catch((error) => failures.push(error))
+    await attempt()
+    if (failures.length == 1) throw failures[0]
+    if (failures.length) {
+      throw new AggregateError(failures, 'Tracker delivery batches failed')
+    }
   }
-  let run = async (pass: () => Promise<void>, remote = false) => {
+  let health = (direction: string) =>
+    watching(
+      options.notice ?? syncNotice(host.graph, direction),
+      direction,
+      options.timer,
+    )
+  let outward = health('delivery'), inward = health('standing')
+
+  let run = async (
+    pass: () => Promise<void>,
+    remote = false,
+    every = options.every ?? 1000,
+  ) => {
     do {
       try {
         await pass()
@@ -89,18 +134,39 @@ export let service = async (
         if (signal.aborted) throw error
       }
       if (signal.aborted) return
-      await sleep(options.every ?? 1000, signal)
+      await sleep(every, signal)
     } while (!signal.aborted)
   }
   if (signal.aborted) {
     await run(() => intake(host.graph, local))
-    await run(forward, true)
+    await run(() => outward(forward), true)
+    if (options.remote) {
+      await run(
+        () =>
+          inward(() =>
+            reconcile(host.graph, options.remote!, options.fetch, stop)
+          ),
+        true,
+      )
+    }
   } else {
     // Neither remote refusal nor a minute of connection retries can delay a
     // later local record. The retained immutable eids make both loops replayable.
     let results = await Promise.allSettled([
       run(() => intake(host.graph, local, stop)),
-      ...send ? [run(forward, true)] : [],
+      ...send
+        ? [
+          run(() => outward(forward), true),
+          run(
+            () =>
+              inward(() =>
+                reconcile(host.graph, options.remote!, options.fetch, stop)
+              ),
+            true,
+            options.reconcileEvery ?? 30_000,
+          ),
+        ]
+        : [],
     ])
     for (let result of results) {
       if (result.status == 'rejected') throw result.reason

@@ -58,23 +58,34 @@ let refused = (eid: string, missing: string[]) =>
 
 /** The precondition: each bug a batch resolves is explained, counting what
  * its mark already holds. */
-export let explaining: Hook = hook(['resolved'], (bundles, tx) => {
-  let writes = bundles.filter((b) => b.resolved)
-  if (!writes.length) return bundles
-  return after(tx.get(writes.map((b) => b.entity.eid)), (rows) => {
-    let held = new Map<string, Bundle>(rows.map((b) => [b.entity.eid, b]))
-    for (let b of writes) {
-      let was = held.get(b.entity.eid)
-      if (!b.bug && !was?.bug) continue
-      let missing = unexplained({
-        ...was?.resolved as Comp | undefined,
-        ...b.resolved as Comp,
-      })
-      if (missing.length) throw refused(b.entity.eid, missing)
-    }
-    return bundles
-  })
-})
+export let explaining: Hook = hook(
+  ['resolved'],
+  (bundles, tx, _error, context) => {
+    let writes = bundles.filter((b) => b.resolved)
+    if (!writes.length) return bundles
+    return after(tx.get(writes.map((b) => b.entity.eid)), (rows) => {
+      let held = new Map<string, Bundle>(rows.map((b) => [b.entity.eid, b]))
+      for (let b of writes) {
+        // Historical accepted marks can predate explanations. Only trusted
+        // writers pass admission with a stamped at; new resolutions still
+        // require the explanation and acquire their stamp after this hook.
+        if (
+          context?.trusted && comp(b, 'resolved').at &&
+          !comp(b, 'resolved').cause &&
+          !comp(b, 'resolved').recur
+        ) continue
+        let was = held.get(b.entity.eid)
+        if (!b.bug && !was?.bug) continue
+        let missing = unexplained({
+          ...was?.resolved as Comp | undefined,
+          ...b.resolved as Comp,
+        })
+        if (missing.length) throw refused(b.entity.eid, missing)
+      }
+      return bundles
+    })
+  },
+)
 
 /// let fixed = { entity: { eid: 'b' }, bug: {}, doc: { title: 'TypeError: no row' }, resolved: { cause: 'a race', fix: 'f'.repeat(40), recur: 'no: the lock holds' } }
 /// explained(fixed) -> [['What broke', 'TypeError: no row'], ['Why', 'a race'], ['Fixed in', 'fffffff'], ['Can it come back', 'no: the lock holds']]

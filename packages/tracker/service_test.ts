@@ -45,12 +45,18 @@ let refusal = await (async () => {
   let g = fixture(), spool = memory(), calls = 0
   spool.append('first')
   spool.append('second')
-  let down = (() => {
+  let down = ((_url: unknown, init?: RequestInit) => {
+    if (init?.method != 'POST') return Promise.resolve(Response.json([]))
     calls++
     return Promise.resolve(new Response(null, { status: 503 }))
   }) as typeof fetch
   let refused = () =>
-    service({ graph: g }, { source: spool.source, remote, fetch: down })
+    service({ graph: g }, {
+      source: spool.source,
+      remote,
+      fetch: down,
+      notice: async () => {},
+    })
       .then(() => false, () => true)
   let hits = async () => comp((await g.read('.bug *'))[0], 'bug').hits
   let first = await refused()
@@ -69,8 +75,12 @@ let refusal = await (async () => {
   await service({ graph: g }, {
     source: spool.source,
     remote,
+    notice: async () => {},
     fetch: ((_url, init) => {
-      sent.push(JSON.parse(String(init?.body))[0].entity.eid)
+      if (init?.method != 'POST') return Promise.resolve(Response.json([]))
+      sent.push(
+        ...JSON.parse(String(init?.body)).map((row: Bundle) => row.entity.eid),
+      )
       return Promise.resolve(new Response(null))
     }) as typeof fetch,
   })
@@ -93,7 +103,7 @@ test('remote refusal keeps durable local receipts across restart and retention',
     admitted: [true, true],
     grouped: 2,
     retained: 0,
-    calls: 4,
+    calls: 2,
     sent: ['first', 'second'],
     left: 0,
     hits: 2,
@@ -120,9 +130,11 @@ let held = await (async () => {
   let running = service({ graph }, {
     source: spool.source,
     remote,
+    notice: async () => {},
     every: 0,
     report: () => reports++,
-    fetch: (async () => {
+    fetch: (async (_url, init) => {
+      if (init?.method != 'POST') return Response.json([])
       sending = true
       await sendable
       return new Response(null)
@@ -162,8 +174,10 @@ test('a locally refused record is never sent or acknowledged', async () => {
     }, {
       source: spool.source,
       remote,
+      notice: async () => {},
       report: () => {},
-      fetch: (() => {
+      fetch: ((_url, init) => {
+        if (init?.method != 'POST') return Promise.resolve(Response.json([]))
         calls++
         return Promise.resolve(new Response(null))
       }) as typeof fetch,
@@ -183,9 +197,13 @@ let locked = await (async () => {
   let options = {
     source: spool.source,
     remote,
+    notice: async () => {},
     report: () => {},
     fetch: ((_url, init) => {
-      sent.push(JSON.parse(String(init?.body))[0].entity.eid)
+      if (init?.method != 'POST') return Promise.resolve(Response.json([]))
+      sent.push(
+        ...JSON.parse(String(init?.body)).map((row: Bundle) => row.entity.eid),
+      )
       return Promise.resolve(new Response(null))
     }) as typeof fetch,
   }
@@ -212,4 +230,23 @@ test('a locked oldest record stays retryable while later records reach remote', 
     sent: ['locked', 'behind-lock'],
     left: 0,
   })
+})
+
+let batched = await (async () => {
+  let g = fixture(), spool = memory(), sizes: number[] = []
+  for (let n = 0; n < 205; n++) spool.append(`batch-${n}`)
+  await service({ graph: g }, {
+    source: spool.source,
+    remote,
+    notice: async () => {},
+    fetch: ((_url, init) => {
+      if (init?.method != 'POST') return Promise.resolve(Response.json([]))
+      sizes.push(JSON.parse(String(init.body)).length)
+      return Promise.resolve(new Response(null))
+    }) as typeof fetch,
+  })
+  return { sizes, left: spool.held.size }
+})()
+test('a flood leaves in bounded intake batches rather than one connection per occurrence', () => {
+  equal(batched, { sizes: [100, 100, 5], left: 0 })
 })

@@ -264,12 +264,24 @@ configured, local admission atomically renames an error segment to
 restarts and local occurrence retention without recounting. Remote delivery
 reads only admitted error records and their request companions through the
 Worker's signed platform intake; acknowledgement removes the segment only after
-success. Each loop retries on its own clock, so even a stalled remote connection
-cannot delay local admission. Sources supplied by a host must support
-independent replayable scans; file sources supply `admitted` and `admit`
-receipts. A failed delivery leaves its original record for retry and never adds
-a delivery error to the same outbox. Immutable global eids make interrupted and
-repeated delivery safe.
+success. Delivery combines admitted records into batches of at most 100 bundles,
+so a flood does not open one TLS connection per occurrence. Each loop retries on
+its own clock, so even a stalled remote connection cannot delay local admission.
+Sources supplied by a host must support independent replayable scans; file
+sources supply `admitted` and `admit` receipts. A failed delivery leaves its
+original record for retry and never adds a delivery error to the same outbox. A
+failed delivery or standing pass, or one still running after a minute, admits a
+sync failure directly to the local tracker. Its independent mail duty notifies
+the configured recipient without using the failing remote outbox. Repeated
+failures remain one notice until a pass succeeds. Immutable global eids make
+interrupted and repeated delivery safe.
+
+A **standing pass** reads remote bug marks every thirty seconds and reconciles
+matching box groups by global eid or their fault and app. The Worker owns
+resolved, archived, taken, regressed and deployed marks; the box retains its own
+occurrences and counters. Remote-only bugs are not imported, and newer local
+evidence is not closed by an older remote snapshot. A guarded patch leaves a
+group changed concurrently for the next pass.
 
 The heal service opens the platform `./poll` watch in its work host. Its signed
 reads and marks run on a dedicated worker event loop, not alongside the host's
@@ -387,9 +399,9 @@ store it marks. A box mark reaches the configured Worker under the bug's global
 eid before returning the local patch. Missing credentials, unavailable transport
 or a refused remote mark refuse the command without marking the box copy.
 Without a remote configuration, box marks remain local. A `yaks.app` mark
-requires remote configuration and marks only the Worker; its acknowledgement
-does not import the bug into the box graph. Retrying a mark is safe, including
-when the box copy is already marked.
+requires remote configuration and marks the Worker; the standing pass brings its
+marks to a matching box group without importing remote-only bugs. Retrying a
+mark is safe, including when the box copy is already marked.
 
 ```sh
 yak bug list --source yaks.app --limit 20
