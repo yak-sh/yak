@@ -226,6 +226,13 @@ test('query screening excludes refusals from all alternatives and counts', async
   )
 })
 
+test('a saved aspect cannot be a lens step, while a stamp can', () => {
+  let words = ['_lens']
+  assertEquals(asking('.recipe', words), '.recipe')
+  assert(asking('.created', words).includes('!_lens'))
+  assert(asking('.recipe|.created', words).includes('!_lens'))
+})
+
 test('what is not a row listing passes through as it came', () => {
   assertEquals(listing('{"count":3}', '.count'), '{"count":3}')
   assertEquals(listing('not json at all', '.doc'), 'not json at all')

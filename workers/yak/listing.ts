@@ -119,7 +119,11 @@ export let asking = (
   // A row of storage holds nothing but its own storage component, so a line
   // that asks for some other component never reaches one: probing each costs
   // a lookup per candidate row for nothing.
-  let spared = holds(parse(ask)) ? STORAGE : []
+  let clause = parse(ask)
+  let spared = holds(clause) ? [...STORAGE] : []
+  // A lens step is immutable metadata, never an aspect on an app's saved row.
+  // Stamp-only questions can still reach it, so those retain the screen.
+  if (holds(clause, [...STORAGE, ...STAMPS, ...PLATFORM])) spared.push('_lens')
   let screen = words.filter((k) =>
     !spared.includes(k) && !names(line, k) &&
     !(k == 'person' && aspect) &&
@@ -132,14 +136,14 @@ export let asking = (
 // (`.a`, `.a=1`) does; an absent one (`!a`), an optional one (`?a`), a negated
 // one and a bare word do not; and an `or` holds one only if each alternative
 // does.
-let holds = (c: Clause): boolean =>
+let holds = (c: Clause, ignore: string[] = []): boolean =>
   c.kind == 'pred'
-    ? c.op != '?' && c.op != '!=' && !c.not &&
+    ? !ignore.includes(c.path[0]) && c.op != '?' && c.op != '!=' && !c.not &&
       !(c.op == '=' && c.value?.kind == 'scalar' && c.value.raw == '')
     : c.kind == 'and'
-    ? c.clauses.some(holds)
+    ? c.clauses.some((c) => holds(c, ignore))
     : c.kind == 'or'
-    ? c.clauses.every(holds)
+    ? c.clauses.every((c) => holds(c, ignore))
     : false
 
 // The rule itself, over rows: what this filter line's answer carries. A
