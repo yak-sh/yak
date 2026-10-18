@@ -455,7 +455,13 @@ let check = async (
     if (child.success || run.verdict == 'regressed') {
       if (
         run.verdict == 'regressed' && !runs &&
-        ['platform-waits', 'inbox-content', 'hook-waits', 'operation-commands']
+        [
+          'platform-waits',
+          'inbox-content',
+          'hook-waits',
+          'operation-commands',
+          'operation-scale',
+        ]
           .includes(suite)
       ) {
         let evidence = results.replace('.results.json', '.paired.json')

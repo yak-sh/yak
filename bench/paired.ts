@@ -100,7 +100,13 @@ export let collect = async (
   Pair & Evidence & { reference: string; revision: string; driverHash: string }
 > => {
   if (
-    !['platform-waits', 'inbox-content', 'hook-waits', 'operation-commands']
+    ![
+      'platform-waits',
+      'inbox-content',
+      'hook-waits',
+      'operation-commands',
+      'operation-scale',
+    ]
       .includes(suite)
   ) {
     throw Error('No isolated paired fixture')
@@ -168,7 +174,8 @@ export let collect = async (
     let observations: Record<string, Samples>[][] = [[], [], []]
     let measure = async (at: number, slot: number) => {
       let dir = roots[at]
-      let direct = ['hook-waits', 'operation-commands'].includes(suite)
+      let direct = ['hook-waits', 'operation-commands', 'operation-scale']
+        .includes(suite)
       let probe = direct ? 'standalone-worker.ts' : `${suite}-probe.ts`
       let rounds: Record<string, Samples>[] = []
       for (let i = 0; i < 1; i++) {
