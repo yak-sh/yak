@@ -32,8 +32,12 @@ export let normalize = (text: string): string =>
     .replace(/\d{4}-\d{2}-\d{2}t[\d:.]+z?/g, '#') // iso timestamps
     .replace(/\/[^\s:]+/g, '#') // absolute paths
     .replace(/:\d+(:\d+)?/g, '#') // :line:col
+    .replace(/\b0x[0-9a-f]+\b/g, '#') // explicit hex numbers
     .replace(/\b[0-9a-f]{6,}\b/g, '#') // hex blobs, short hashes
-    .replace(/(?<![a-z0-9])\d+\b/g, '#') // numbers, and a suffix like tx_947
+    .replace(
+      /(?<![a-z0-9])[+-]?(?:\d+(?:\.\d+)?|\.\d+)(?:e[+-]?\d+)?/g,
+      '#',
+    ) // whole numeric values, including decimals and duration suffixes
     .replace(/#+/g, '#')
     .replace(/\s+/g, ' ')
     .trim()

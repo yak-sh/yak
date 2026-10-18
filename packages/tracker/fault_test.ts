@@ -6,6 +6,21 @@ import { title } from './model.ts'
 
 let failures = [
   [
+    'Native dispatch timing drift: 895ms > 259.5ms prior median',
+    'Native dispatch timing drift: 1200ms > 300.25ms prior median',
+    'native dispatch timing drift: #ms > #ms prior median',
+  ],
+  [
+    'a letter waited 250687 ms at the edge',
+    'a letter waited 318904 ms at the edge',
+    'a letter waited # ms at the edge',
+  ],
+  [
+    'sample -1.25e+3ns, 0xdeadbeef, 550e8400-e29b-41d4-a716-446655440000',
+    'sample +2.5e-2ns, 0xcafebabe, 850e8400-e29b-41d4-a716-446655440111',
+    'sample #ns, #, #',
+  ],
+  [
     'no space owns subscription sub_1UJMxrRMiIEYfSxgXadXUHqB',
     'no space owns subscription sub_2VK0zMnPJagWaYV',
     'no space owns subscription sub_#',
@@ -51,17 +66,18 @@ test('normalization keeps failure meaning, object types, kinds and sites distinc
       'reference = s9gqbk7i3cdgmgq8ovlkm2e',
     ]
   ) equal(normalize(message), message.toLowerCase())
-  let key = faultKey('request', failures[0][0], 'at own (/a.ts:1:2)')
+  let provider = failures.find(([a]) => a.startsWith('no space'))!
+  let key = faultKey('request', provider[0], 'at own (/a.ts:1:2)')
   for (
     let other of [
       faultKey('request', failures[1][0], 'at own (/a.ts:1:2)'),
       faultKey(
         'request',
-        failures[0][0].replace('sub_', 'cus_'),
+        provider[0].replace('sub_', 'cus_'),
         'at own (/a.ts:1:2)',
       ),
-      faultKey('call', failures[0][0], 'at own (/a.ts:1:2)'),
-      faultKey('request', failures[0][0], 'at lookup (/a.ts:1:2)'),
+      faultKey('call', provider[0], 'at own (/a.ts:1:2)'),
+      faultKey('request', provider[0], 'at lookup (/a.ts:1:2)'),
     ]
   ) ok(key != other)
 })
