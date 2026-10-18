@@ -3,9 +3,15 @@ import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { lenses } from '@yaks/lens'
+import { loadVocab } from '@yaks/vocab'
 import { appVocab } from './vocab.ts'
-import { sessionMove, sessionPackage, sessionRows } from './session-lens.ts'
-let vocab = appVocab()
+import {
+  sessionMove,
+  sessionPackage,
+  sessionRows,
+  sessionSource,
+} from './session-lens.ts'
+let vocab = loadVocab([...appVocab().docs, sessionSource])
 let storage = ram(vocab)
 let bare = graph({ vocab, storage })
 bare.apply([{

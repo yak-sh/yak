@@ -10,12 +10,6 @@ export let sessionPackage = packageEid('@yaks/session')
 export let sessionLens: VocabDoc = {
   package: '@yaks/session',
   $defs: {
-    using: {
-      component: true,
-      type: 'object',
-      extends: true,
-      properties: session.$defs.sending.properties,
-    },
     session_sending: {
       lens: true,
       live: false,
@@ -26,13 +20,25 @@ export let sessionLens: VocabDoc = {
     },
   },
 }
+export let sessionSource: VocabDoc = {
+  $defs: {
+    using: {
+      component: true,
+      type: 'object',
+      extends: true,
+      properties: session.$defs.sending.properties,
+    },
+  },
+}
 export let sessionRows = () => lensesIn([sessionLens])
 export let sessionVersions = () => versions([sessionLens])
 export let sessionBridge = () => compile(sessionRows(), { [sessionPackage]: 0 })
 
 export let sessionMove = (): import('./mover.ts').Rule => ({
-  mark: 'yak/store/session-sending/1' as import('./mover.ts').Mark,
+  mark: 'yak/store/session-sending/2' as import('./mover.ts').Mark,
   live: 'apps',
+  source: sessionSource,
+  drop: ['input', 'instructions', 'window', 'tools'].map((p) => `using.${p}`),
   find: sessionBridge().find(),
   move: (row: import('@yaks/graph').Bundle) => {
     let patch = sessionBridge().put([row])[0]

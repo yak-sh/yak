@@ -299,6 +299,7 @@ export let respelled = (text: string): string | null => {
  * move. Code without the name is code from before it could read that shape. */
 export let BOUNDARIES = [
   'yak/store/session-sending/1',
+  'yak/store/session-sending/2',
   'yak/store/exception/1',
   'yak/store/git-repositories/1',
   'yak/store/git-commit/1',
