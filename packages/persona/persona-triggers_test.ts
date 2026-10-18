@@ -96,7 +96,8 @@ test('created contains and reads links rewrite persona files through the effects
       { entity: { eid: 'repo' }, repository: { common: `${root}/.git` } },
       {
         entity: { eid: 'checkout' },
-        worktree: { repository: 'repo', path: root, gitdir: `${root}/.git` },
+        worktree: { repository: 'repo', gitdir: `${root}/.git` },
+        workspace: { root },
       },
       {
         entity: { eid: 'persona' },
@@ -205,7 +206,8 @@ let checkout = [
   { entity: { eid: 'repo' }, repository: { common: '/code/.git' } },
   {
     entity: { eid: 'tree' },
-    worktree: { repository: 'repo', path: '/code', gitdir: '/code/.git' },
+    worktree: { repository: 'repo', gitdir: '/code/.git' },
+    workspace: { root: '/code' },
   },
   {
     entity: { eid: 'persona' },

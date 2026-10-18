@@ -124,7 +124,7 @@ export let machineCapabilities = (
           branch: `session-${session}`,
         },
       )
-      let cwd = String((tree.worktree as { path: string }).path)
+      let cwd = String((tree.workspace as { root: string }).root)
       let machine = derivedEid('native-fixer-machine|' + session)
       let [existing] = await host.graph.get([machine])
       if (!existing?.machine) {

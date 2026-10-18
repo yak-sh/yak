@@ -229,7 +229,7 @@ let SessionDot = ({ e }: { e: Bundle }): JSX.Element => {
 let running = (io: Io, e: Bundle): ComponentChildren[] => {
   let model = str(e, 'using', 'model')
   let branch = str(e, 'worktree', 'branch')
-  let path = str(e, 'worktree', 'path')
+  let path = str(e, 'workspace', 'root')
   return [
     h(SessionDot, { e }),
     model ? [' · asks ', mention(io, model)] : null,

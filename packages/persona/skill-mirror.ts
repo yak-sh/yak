@@ -6,7 +6,7 @@ import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { and, eq, every, present } from '@yaks/query'
 import { land, LandError, type Run, run } from '@yaks/git/land'
-import { repositoryEid } from '@yaks/git/host'
+import { localFilesystem, repositoryEid } from '@yaks/git/host'
 import {
   type Agreed,
   type Binding,
@@ -73,7 +73,7 @@ export let skillRoots = async (g: Graph): Promise<string[]> => {
       trees.filter((b) =>
         str(b, 'worktree', 'gitdir') ==
           common.get(str(b, 'worktree', 'repository'))
-      ).map((b) => str(b, 'worktree', 'path')).filter(Boolean),
+      ).map((b) => str(b, 'workspace', 'root')).filter(Boolean),
     ),
   ].sort()
 }
@@ -127,7 +127,10 @@ let syncRepository = async (
       write: true,
     })
     await lock.lock(true)
-    let repository = repositoryEid(common)
+    let repository = repositoryEid(
+      common,
+      (await localFilesystem(g)).entity.eid,
+    )
     let files = await g.read(and(
       present('file'),
       eq('file.repository', repository),

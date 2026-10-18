@@ -72,6 +72,7 @@ import {
   store,
   watch,
 } from '@yaks/process'
+import { retained } from '@yaks/git/workspace'
 import { createWorktree, discover, reclaim } from '@yaks/git/host'
 import { owed } from '@yaks/persona'
 import { promptEntry, snapshot } from '@yaks/context'
@@ -303,7 +304,7 @@ let cut = async (g: Graph, session: string, o: Opts): Promise<string> => {
     path: checkoutOf(session, o.worktrees!),
     branch: `session-${session}`,
   })
-  return String(comp(tree, 'worktree')?.path)
+  return String(comp(tree, 'workspace')?.root)
 }
 
 // A file's text, or nothing where there is none: a link that dangles is no
@@ -605,8 +606,10 @@ let taken = async (g: Graph, path: string): Promise<void> => {
   } catch {
     return
   }
-  await discover(g, path).catch(() => {})
-  await reclaim(path)
+  let tree = await discover(g, path)
+  if (comp(tree, 'worktree')?.managed && !await retained(g, tree.entity.eid)) {
+    await reclaim(path)
+  }
 }
 
 /**

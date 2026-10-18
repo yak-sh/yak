@@ -1,6 +1,8 @@
 // Commit-pinned resolution against a code sync's records, served over the same
 // HTTP query door as the fleet. Newer and dirty files must not change the answer.
 
+import { machineDoc } from '@yaks/machine/vocab'
+import { localFilesystem } from '@yaks/git/host'
 import { equal, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
@@ -91,7 +93,14 @@ test('frames resolve only cataloged exports of the exact failing commit', async 
       'old',
     )
     let old = await git('rev-parse', 'HEAD')
-    let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, gitDoc, codeDoc], [
+    let vocab = loadVocab([
+      machineDoc,
+      kernelDoc,
+      docDoc,
+      edgeDoc,
+      gitDoc,
+      codeDoc,
+    ], [
       kernelKeywords,
       edgeKeywords,
     ])
@@ -106,7 +115,11 @@ test('frames resolve only cataloged exports of the exact failing commit', async 
     )
     let send: typeof fetch = (url, init) => ask(g, new Request(url, init))
     let resolver = sourceFrames(
-      { cwd: dir, url: 'http://catalog.test' },
+      {
+        cwd: dir,
+        url: 'http://catalog.test',
+        workspace: (await localFilesystem(g)).entity.eid,
+      },
       catalogAt('http://catalog.test', send),
     )
     let frames = [
@@ -153,7 +166,11 @@ test('frames resolve only cataloged exports of the exact failing commit', async 
     equal((await resolver(frames, 'HEAD'))[1].module, undefined)
     equal((await resolver(frames, 'a'.repeat(40)))[1].module, undefined)
     equal(
-      (await sourceFrames({ cwd: dir, url: 'http://catalog.test' }, {
+      (await sourceFrames({
+        cwd: dir,
+        url: 'http://catalog.test',
+        workspace: (await localFilesystem(g)).entity.eid,
+      }, {
         get: () => Promise.resolve([]),
       })(frames, newer))[1].module,
       undefined,

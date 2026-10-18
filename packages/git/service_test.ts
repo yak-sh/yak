@@ -3,7 +3,13 @@
 // long enough, and nothing else does.
 import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
-import { createWorktree, discover, inUse, processPaths } from './host.ts'
+import {
+  createWorktree,
+  discover,
+  inUse,
+  localFilesystem,
+  processPaths,
+} from './host.ts'
 import {
   collect as collectOnHost,
   IDLE,
@@ -41,36 +47,38 @@ let seeded = template(async (dir) => {
 let fixture = async (number = false) => {
   let dir = await seeded()
   let repo = dir + '/repo'
+  let g = graphed({
+    number,
+    docs: [{
+      $defs: {
+        session: {
+          component: true,
+          type: 'object',
+          properties: { status: { type: 'string' } },
+        },
+        home: {
+          component: true,
+          type: 'object',
+          properties: {
+            workspace: { type: 'string', ref: 'workspace' },
+            cwd: { type: 'string' },
+          },
+        },
+        process: { component: true, type: 'object' },
+        exit: { component: true, type: 'object' },
+      },
+    }],
+  }).g
+  await localFilesystem(g)
   return {
     repo,
     common: repo + '/.git',
-    g: graphed({
-      number,
-      docs: [{
-        $defs: {
-          session: {
-            component: true,
-            type: 'object',
-            properties: { status: { type: 'string' } },
-          },
-          home: {
-            component: true,
-            type: 'object',
-            properties: { machine: { type: 'string', ref: 'machine' } },
-          },
-          machine: {
-            component: true,
-            type: 'object',
-            properties: { address: { type: 'string' } },
-          },
-          process: { component: true, type: 'object' },
-          exit: { component: true, type: 'object' },
-        },
-      }],
-    }).g,
+    g,
     cut: async (name: string) => {
       let path = dir + '/' + name
       await git(repo, 'worktree', 'add', '-q', '-b', name, path)
+      let tree = await discover(g, path)
+      await g.apply([{ entity: tree.entity, worktree: { managed: true } }])
       return path
     },
     land: async (path: string) => {
@@ -122,10 +130,10 @@ test('an idle checkout stays while a graph session or local process uses it', as
     let occupied = await f.cut('occupied')
     await f.land(occupied)
     let tree = await discover(f.g, busy)
-    await f.g.apply([{ entity: tree.entity, machine: { address: busy } }, {
+    await f.g.apply([{
       entity: { eid: 'session' },
       session: { status: 'running' },
-      home: { machine: tree.entity.eid },
+      home: { workspace: tree.entity.eid },
     }])
     child = new Deno.Command('cat', {
       cwd: occupied,
@@ -141,6 +149,7 @@ test('an idle checkout stays while a graph session or local process uses it', as
     await f.g.apply([{
       entity: { eid: 'session' },
       session: { status: 'settled' },
+      home: null,
     }])
     assertEquals(await collect(f.g, f.common, IDLE, later), {})
     assertEquals(await there(busy), false)
@@ -161,15 +170,15 @@ test('a settled transcript keeps its checkout until its process exits', async ()
     let path = await f.cut('draining')
     await f.land(path)
     let tree = await discover(f.g, path)
-    await f.g.apply([{ entity: tree.entity, machine: { address: path } }, {
+    await f.g.apply([{
       entity: { eid: 'draining' },
       session: { status: 'settled' },
-      home: { machine: tree.entity.eid },
+      home: { workspace: tree.entity.eid },
       process: {},
     }])
     await collect(f.g, f.common, IDLE, later)
     assert(await there(path))
-    await f.g.apply([{ entity: { eid: 'draining' }, exit: {} }])
+    await f.g.apply([{ entity: { eid: 'draining' }, exit: {}, home: null }])
     await collect(f.g, f.common, IDLE, later)
     assertEquals(await there(path), false)
   } finally {
@@ -182,7 +191,7 @@ test('a worktree the harness manages is left to it', async () => {
   try {
     let path = await f.cut('managed')
     let tree = await discover(f.g, path)
-    await f.g.apply([{ entity: tree.entity, worktree: { managed: true } }])
+    await f.g.apply([{ entity: tree.entity, worktree: { managed: false } }])
     assertEquals(await collect(f.g, f.common, IDLE, later), {})
     assert(await there(path))
   } finally {
@@ -226,11 +235,12 @@ test('collection retires externally removed observations and preserves managed r
   try {
     let gone = await f.cut('gone')
     let tree = await discover(f.g, gone)
+    await f.g.apply([{ entity: tree.entity, worktree: { managed: false } }])
     let saved = await createWorktree(f.g, f.repo, {
       path: f.repo + '/../managed',
       branch: 'managed',
     })
-    let managed = String((saved.worktree as { path: string }).path)
+    let managed = String((saved.workspace as { root: string }).root)
     assert(typeof tree.entity.num == 'number')
     assert(typeof saved.entity.num == 'number')
     await git(f.repo, 'worktree', 'remove', gone)

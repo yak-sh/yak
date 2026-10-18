@@ -24,9 +24,9 @@ import {
   skillsAt,
 } from './skills.ts'
 
-let repo = repositoryEid('/repo/.git')
-let elsewhere = repositoryEid('/elsewhere/.git')
-let another = repositoryEid('/another/.git')
+let repo = repositoryEid('/repo/.git', 'test-filesystem')
+let elsewhere = repositoryEid('/elsewhere/.git', 'test-filesystem')
+let another = repositoryEid('/another/.git', 'test-filesystem')
 
 let vocab = loadVocab([docDoc, edgeDoc, gitDoc, personaDoc, {
   $defs: {

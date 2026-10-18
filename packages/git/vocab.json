@@ -109,12 +109,11 @@
     "repository": {
       "component": true,
       "type": "object",
-      "description": "A local Git object database, identified by its canonical common Git directory.",
+      "description": "A Git object database identified by its stable filesystem workspace and canonical common directory.",
       "properties": {
         "common": {
           "type": "string",
-          "identity": true,
-          "description": "canonical absolute common Git directory; the entity id is derived from it"
+          "description": "canonical absolute common Git directory in the repository filesystem"
         },
         "origin": {
           "type": "string",
@@ -127,7 +126,11 @@
           "death": "keep",
           "description": "the stable filesystem context: its sandbox or the canonical root workspace of its computer, not a convenience directory"
         }
-      }
+      },
+      "identity": [
+        "workspace",
+        "common"
+      ]
     },
     "worktree": {
       "component": true,

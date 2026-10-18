@@ -21,6 +21,8 @@ Entry points:
 
 - `@yaks/git`: object builders and storage, refs, packfiles, smart HTTP, and the
   commit plugin.
+- `@yaks/git/workspace`: explicit filesystem transport discovery, creation and
+  reclamation.
 - `@yaks/git/host`: local checkout discovery, and creating, taking back and
   re-creating worktrees, using the `git` subprocess.
 - `@yaks/git/service`: while a process is up, takes back the idle worktrees that
@@ -477,15 +479,19 @@ without the Git object components.
 Git is authoritative here; the graph holds an observation of it that can be
 refreshed at any time without changing anything.
 
-- `repository{common}` identifies a local object database by its canonical
-  common Git directory. Independent clones are different repositories.
-- `worktree{repository,path,gitdir,head,branch,managed}` is a checkout. Its
-  entity id is derived from the repository plus the canonical checkout root
-  path, so the branch and head can change without changing its identity, and
-  paths that differ only by a symlink resolve to the same entity. Moving a
-  checkout gives it a new identity; this deliberately avoids depending on Git's
-  linked-worktree administrative directory names, which Git may reuse. These
-  identities are local to one machine, not portable between clones.
+- `repository{workspace,common,origin}` identifies an object database by its
+  stable filesystem workspace and canonical common Git directory. The workspace
+  is the sandbox itself or the computer’s canonical root workspace, never a
+  linked checkout or a convenience directory. Independent clones are different
+  repositories.
+- `worktree{repository,gitdir,head,branch,managed}` with
+  `workspace{machine,root,sandbox}` is a checkout. Its entity id is derived from
+  the repository plus the canonical checkout root path, so the branch and head
+  can change without changing its identity, and paths that differ only by a
+  symlink resolve to the same entity. Moving a checkout gives it a new identity;
+  this deliberately avoids depending on Git's linked-worktree administrative
+  directory names, which Git may reuse. These identities are local to one
+  machine, not portable between clones.
 - The existing `ref{app,name,commit}` component is reused: `app` may name the
   repository entity, and `refEid(repository, fullName)` stays stable as the
   branch moves. Observing a repository on this machine adds `oid` (the raw
@@ -556,17 +562,12 @@ Collection retains every checkout if the helper or manager fails, including an
 installed helper that still returns only a cwd. `processCwds()` remains
 available for callers needing only directories.
 
-`@yaks/git/service` is the caller for every worktree nobody else takes back.
-Once an hour it runs `collect` on each repository the graph knows that is on
-this machine: every linked worktree Git has left alone for six hours and that is
-clean and has committed work landed on main is reclaimed once no live graph
-session or local process uses it. A pass reads where every session with a home
-works once, and asks a session's status (derived from its whole transcript) only
-of the sessions on a worktree it would otherwise take back. A `managed` worktree
-is left to the harness, which takes those back when their session ends
-(@yaks/harness `worktrees.ts`). A pass whose lease another process takes ends
-before its next worktree. The `idle` and `every` options change the two
-durations.
+`@yaks/git/service` collects explicitly managed checkouts in the local
+filesystem only. Unmanaged observations, foreign filesystem contexts and unknown
+placement never authorize removal. It checks idle time, dirty files, unlanded
+commits, session homes, launch workspaces and local process paths. A home change
+alone does not remove files. Managed observations remain available to `restore`.
+The `idle` and `every` options set the idle threshold and pass interval.
 
 `locate(cwd)` reads the canonical checkout root, common Git directory and
 worktree Git directory without writing to the graph. It returns no observation
@@ -576,7 +577,7 @@ unmanaged checkouts in that repository, keeping their entities and other
 components. Managed rows retain the history `restore` needs. The service
 reconciles each repository before collecting its idle worktrees.
 
-Identity and locking assume one filesystem and one shared graph, used by
+Host-local locking assumes one filesystem and one shared graph, used by
 cooperating processes on that machine. A checkout moved on disk, or changed by
 Git outside this package, is noticed the next time discovery runs; the service
 reconciles missing unmanaged checkouts on each pass.
@@ -592,3 +593,32 @@ the 16 commits read most recently (`keep`), and callers asking at once share one
 read; a read Git refused is asked again. `rootsOf(common)` lists the
 repository's primary and linked checkout roots without pruning or changing Git
 state.
+
+### Explicit workspace Git
+
+`@yaks/git/workspace` provides `workspaceGit(g, workspace, transport)`. A
+**filesystem context** is the sandbox interpreting the paths, or the canonical
+root workspace of a computer. Two directory defaults in that context share
+repository identity; identical paths on two computers or sandboxes do not. The
+caller connects the selected filesystem with its configured connector or sandbox
+adapter. Missing placement and connector failures never select the host
+filesystem. `discover` and `create` run Git, realpath and advisory locks through
+that transport and write checkout observations with `workspace.root`.
+
+This example needs a connected transport, so it does not run as a doctest:
+
+```ts ignore
+import { workspaceGit } from '@yaks/git/workspace'
+
+let git = await workspaceGit(graph, selectedWorkspace, transport)
+let checkout = await git.discover()
+let own = await git.create({ path: '/repo-task', branch: 'task' })
+// Explicit disposal refuses unmanaged checkouts and keeps live references.
+let kept = await git.reclaim(own.entity.eid)
+```
+
+`reclaim` keeps dirty and unlanded checkouts, homes referring to the checkout or
+its descendants, and processes whose launch workspace remains there. It never
+treats a sandbox disposal or a home switch as a Git cleanup request. Callers
+must also establish that the target has no untracked external users; connectors
+do not make graph references a complete process inventory.

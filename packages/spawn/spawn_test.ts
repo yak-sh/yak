@@ -1,3 +1,4 @@
+import { machineDoc } from '@yaks/machine/vocab'
 // A real child, because a spawn that only ever launched a fake one would
 // prove nothing: the two escapes, the pidfile, the detached log and the
 // ending are the thing under test. The provider is a shell script, so the
@@ -202,6 +203,7 @@ test('a run works in a checkout of its own, taken back when it ends', async () =
       processDoc,
       edgeDoc,
       checkoutDoc,
+      machineDoc,
       spawnDoc,
     ],
     [edgeKeywords],

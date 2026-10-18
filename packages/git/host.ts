@@ -12,13 +12,15 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import { refEid } from './refs.ts'
+import { localFilesystem } from './placement.ts'
+export { filesystemEid, localFilesystem } from './placement.ts'
 
 export { checkoutDoc } from './checkout_vocab.ts'
 
 /** The entity id of a repository: its declared identity, the canonical common
  * Git directory. */
-export let repositoryEid = (common: string): string =>
-  identityEid('repository', [common])
+export let repositoryEid = (common: string, workspace: string): string =>
+  identityEid('repository', [workspace, common])
 /** The entity id of a checkout, derived from its repository and its canonical
  * root path. */
 export let worktreeEid = (repository: string, path: string): string =>
@@ -76,7 +78,7 @@ let locked = async <T>(
     let dir = common + '/yaks-locks'
     await Deno.mkdir(dir, { recursive: true })
     let file = await Deno.open(
-      dir + '/' + worktreeEid(repositoryEid(common), path),
+      dir + '/' + derivedEid('worktree lock|' + common + '|' + path),
       { create: true, write: true },
     )
     try {
@@ -131,12 +133,18 @@ export let locate = async (cwd: string): Promise<
 /** Retire missing unmanaged checkout observations, keeping the entity and its
  * other components. Managed rows retain the history required by restore. */
 export let reconcile = async (g: Graph, common: string): Promise<void> => {
-  let repository = repositoryEid(common)
-  for (let tree of await g.read('.worktree.repository=' + repository)) {
+  let filesystem = await localFilesystem(g)
+  let repository = repositoryEid(common, filesystem.entity.eid)
+  for (
+    let tree of await g.read(
+      '.worktree.repository=' + repository + ' ?workspace',
+    )
+  ) {
     let w = tree.worktree as Comp
-    if (w.managed || typeof w.path != 'string') continue
+    let path = (tree.workspace as Comp | undefined)?.root
+    if (w.managed || typeof path != 'string') continue
     try {
-      await Deno.stat(w.path)
+      await Deno.stat(path)
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error
       await g.apply([{
@@ -169,11 +177,12 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
   ])
   if (!dirs) throw new Error('not a checkout: ' + cwd)
   let { path, common, gitdir } = dirs
-  let repository = repositoryEid(common)
+  let filesystem = await localFilesystem(g)
+  let repository = repositoryEid(common, filesystem.entity.eid)
   let eid = worktreeEid(repository, path)
   let bundles: Bundle[] = [{
     entity: { eid: repository },
-    repository: { common },
+    repository: { common, workspace: filesystem.entity.eid },
   }]
   let found = new Set<string>()
   for (let line of refs!.split('\n').filter(Boolean)) {
@@ -220,12 +229,15 @@ export let discover = async (g: Graph, cwd: string): Promise<Bundle> => {
     entity: { eid },
     worktree: {
       repository,
-      path,
       gitdir,
       head: head ?? null,
       branch: branch ? refEid(repository, branch) : null,
       managed: Boolean((old?.worktree as Comp | undefined)?.managed),
     },
+  }
+  tree.workspace = {
+    machine: (filesystem.workspace as Comp).machine,
+    root: path,
   }
   bundles.push(tree)
   // Write only the rows whose values actually changed, so that discovering an
@@ -741,15 +753,26 @@ export let reclaim = async (
 /** The path this worktree is checked out at, creating it again if it was
  * removed — same path, same branch, at the commit its row recorded — so work
  * taken back by `reclaim` comes back where it stood. Nothing new has to be
- * recorded for that: `worktree{path, head, branch}` already holds it, as long
+ * recorded for that: `workspace{root}` and `worktree{head, branch}` already holds it, as long
  * as `discover` brought it up to date before the files went. */
 export let restore = async (g: Graph, tree: Bundle): Promise<string> => {
   let w = tree.worktree as Comp | undefined
-  if (!w?.path) throw new Error('worktree ' + tree.entity.eid + ' has no path')
-  let path = String(w.path)
-  let common =
-    ((await row(g, String(w.repository)))?.repository as Comp | undefined)
-      ?.common
+  let place = tree.workspace as Comp | undefined
+  if (!w || typeof place?.root != 'string') {
+    throw new Error('worktree has no workspace root')
+  }
+  let local = (await localFilesystem(g)).workspace as Comp
+  if (place.machine != local.machine || place.sandbox) {
+    throw new Error('Worktree is not on the explicitly local filesystem')
+  }
+  let path = place.root
+  let repo = (await row(g, String(w.repository)))?.repository as
+    | Comp
+    | undefined
+  if (repo?.workspace != (await localFilesystem(g)).entity.eid) {
+    throw new Error('Repository is not on the local filesystem')
+  }
+  let common = repo.common
   let head = w.head
   if (typeof common != 'string') {
     if (await Deno.stat(path).then(() => true, () => false)) return path

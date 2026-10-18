@@ -7,6 +7,7 @@
 // includes has no business loading a to-do list to find out. A composed server
 // loads the packages that own them; this declares the same two components.
 
+import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import {
   type Bundle,
@@ -71,14 +72,13 @@ let doc: VocabDoc = {
     repository: {
       component: true,
       type: 'object',
-      properties: { common: { type: 'string' } },
+      properties: { common: { type: 'string' }, workspace: { type: 'string' } },
     },
     worktree: {
       component: true,
       type: 'object',
       properties: {
         repository: { type: 'string' },
-        path: { type: 'string' },
         gitdir: { type: 'string' },
       },
     },
@@ -94,7 +94,7 @@ let doc: VocabDoc = {
 
 /** A vocabulary with the persona components, both relations, and ids. */
 export let said: Vocab = loadVocab(
-  [edgeDoc, docDoc, personaDoc, doc],
+  [machineDoc, edgeDoc, docDoc, personaDoc, doc],
   [edgeKeywords, idKeywords],
 )
 
@@ -103,11 +103,14 @@ let { contains: _carries, ...rest } = doc.$defs ?? {}
 /** The same vocabulary without `contains` — a server that did not compose
  * @yaks/task. */
 export let thin: Vocab = loadVocab(
-  [edgeDoc, docDoc, personaDoc, { $defs: rest }],
+  [machineDoc, edgeDoc, docDoc, personaDoc, { $defs: rest }],
   [edgeKeywords, idKeywords],
 )
 
-let pooled = loadVocab([...said.docs, effectDoc], [edgeKeywords, idKeywords])
+let pooled = loadVocab([...said.docs, effectDoc], [
+  edgeKeywords,
+  idKeywords,
+])
 
 /** {@link said} keeping the effects pool's rows: a graph that writes down a
  * run for every effect it declares, the runs owed to `handler`, a way to clear
@@ -160,7 +163,8 @@ export let memory = (eid: string, title: string, body: string): Bundle =>
 /** A checkout of r1 at `path`, whose own Git directory is `gitdir`. */
 export let checkout = (eid: string, path: string, gitdir: string): Bundle => ({
   entity: { eid },
-  worktree: { repository: 'r1', path, gitdir },
+  worktree: { repository: 'r1', gitdir },
+  workspace: { root: path },
 })
 
 /** A project whose repository r1 has its main worktree at `root` and a linked

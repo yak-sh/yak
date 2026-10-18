@@ -4,6 +4,7 @@
 // service's. Managed checkout observations remain restore history.
 
 import type { Comp, Graph } from '@yaks/graph'
+import { retained } from './workspace.ts'
 import { sleep } from '@yaks/effects'
 import {
   discover,
@@ -11,6 +12,7 @@ import {
   idleFor,
   inUse,
   linked,
+  localFilesystem,
   processPaths,
   reclaim,
   reconcile,
@@ -47,36 +49,25 @@ type Seat = { session: string; paths: Set<string> }
 // worker for hours and let every lease it renews lapse.
 let seats = async (g: Graph): Promise<Seat[]> => {
   if (!g.vocab.comp('session') || !g.vocab.comp('home')) return []
-  let props = ['cwd', 'machine'].filter((p) => g.vocab.prop('home', p))
+  if (!g.vocab.prop('home', 'workspace')) return []
   let rows = await g.rows(
-    `.session&.home .fields=${
-      ['entity.eid', ...props.map((p) => `home.${p}`)].join(',')
-    }`,
+    '.session .home .fields=entity.eid,home.workspace,home.cwd',
   ) as Record<string, unknown>[]
-  let ids = [...new Set(rows.map((r) => r['home.machine']).filter(text))]
-  let addresses = new Map(
-    (ids.length ? await g.get(ids, ['machine']) : []).map((b) => [
-      b.entity.eid,
-      (b.machine as Comp | undefined)?.address,
-    ]),
+  let ids = [...new Set(rows.map((r) => r['home.workspace']).filter(text))]
+  let places = new Map(
+    (ids.length ? await g.get(ids, ['workspace']) : []).map((
+      b,
+    ) => [b.entity.eid, b.workspace as Comp | undefined]),
   )
-  let reals = new Map<string, Promise<string>>()
-  let real = (path: string) => {
-    let found = reals.get(path)
-    if (!found) {
-      reals.set(path, found = Deno.realPath(path).catch(() => path))
-    }
-    return found
-  }
-  return Promise.all(rows.map(async (r) => ({
-    session: String(r.eid),
-    paths: new Set(
-      await Promise.all(
-        [r['home.cwd'], addresses.get(String(r['home.machine']))]
-          .filter(text).map(real),
-      ),
-    ),
-  })))
+  let local = (await localFilesystem(g)).workspace as Comp
+  return rows.flatMap((r) => {
+    let place = places.get(String(r['home.workspace']))
+    if (!place || place.machine != local.machine || place.sandbox) return []
+    return [{
+      session: String(r.eid),
+      paths: new Set([place.root, r['home.cwd']].filter(text)),
+    }]
+  })
 }
 
 // Whether any of these sessions still holds its checkout: its transcript is
@@ -104,7 +95,8 @@ export let collect = async (
 ): Promise<Record<string, Held>> => {
   await reconcile(g, common)
   let kept: Record<string, Held> = {}
-  let repository = repositoryEid(common)
+  let filesystem = await localFilesystem(g)
+  let repository = repositoryEid(common, filesystem.entity.eid)
   // Read once a pass, at the first worktree it is needed for.
   let seated: Promise<Seat[]> | undefined
   for (let path of await linked(common)) {
@@ -113,8 +105,9 @@ export let collect = async (
     let real = await Deno.realPath(path).catch(() => path)
     let [row] = await g.get([worktreeEid(repository, real)])
     let tree = row?.worktree as Comp | undefined
-    if (tree?.managed) continue
+    if (!tree?.managed) continue
     if (tree) await discover(g, path).catch(() => {})
+    if (await retained(g, row.entity.eid)) continue
     let on = (await (seated ??= seats(g)))
       .filter((s) => inUse(real, s.paths))
       .map((s) => s.session)
@@ -142,7 +135,12 @@ export let service = async (
   // ends between worktrees; a one-shot pass runs whole.
   let stopping = signal.aborted ? undefined : signal
   for (;;) {
-    for (let r of await host.graph.read('.repository')) {
+    let filesystem = await localFilesystem(host.graph)
+    for (
+      let r of await host.graph.read(
+        '.repository.workspace=' + filesystem.entity.eid,
+      )
+    ) {
       if (stopping?.aborted) return
       let common = (r.repository as Comp).common
       if (typeof common != 'string' || !await there(common)) continue

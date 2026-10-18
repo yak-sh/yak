@@ -28,7 +28,7 @@
 // and writes no files. An archived project keeps what it last had.
 
 import { type Binding, memo, present as exists } from '@yaks/mirror'
-import { and, eq, type Input, list, present } from '@yaks/query'
+import { and, eq, every, type Input, list, present } from '@yaks/query'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { DOC, TITLE } from '@yaks/doc'
 import { human } from '@yaks/id'
@@ -71,9 +71,12 @@ let checkouts = async (g: Graph): Promise<Map<Eid, string>> => {
   }
   if (!common.size) return out
   let mains = (await g.storage.read(
-    and(eq('worktree.gitdir', value([...new Set(common.values())]))),
+    and(eq('worktree.gitdir', value([...new Set(common.values())])), every()),
   ))
-    .map((b) => comp(b, 'worktree'))
+    .map((b): Comp => ({
+      ...comp(b, 'worktree'),
+      path: comp(b, 'workspace').root,
+    }))
     .filter((w) => w.path && w.gitdir == common.get(str(w.repository)))
     .sort((a, b) => str(a.path).localeCompare(str(b.path)))
   for (let p of projects) {

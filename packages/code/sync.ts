@@ -17,6 +17,7 @@
 // Import links are cleared the same way, with @yaks/edge's `unlink`.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { localFilesystem } from '@yaks/git/host'
 import { identities } from '@yaks/graph/identity'
 import { signed } from '@yaks/graph/provenance'
 import type { Actor } from '@yaks/graph'
@@ -140,7 +141,8 @@ export let codeMirror = async (
     if (!d) throw new Error(`this graph declares no identity for ${name}`)
     return d(c, { entity: { eid: '' }, [name]: c })
   }
-  let repository = ids('repository', { common })
+  let workspace = (await localFilesystem(g)).entity.eid
+  let repository = ids('repository', { workspace, common })
   let apply = async (bundles: Bundle[]) => {
     for (let i = 0; i < bundles.length; i += BATCH) {
       await g.apply(signed(bundles.slice(i, i + BATCH), opts.actor ?? null), {
@@ -148,7 +150,10 @@ export let codeMirror = async (
       })
     }
   }
-  await apply([{ entity: { eid: repository }, repository: { common } }])
+  await apply([{
+    entity: { eid: repository },
+    repository: { workspace, common },
+  }])
 
   // Regular files only: a symlink's blob is the path it points at, and a
   // submodule is somebody else's tree.

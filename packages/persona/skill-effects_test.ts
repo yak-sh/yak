@@ -5,7 +5,7 @@ import { held, take, until as stopped } from '@yaks/effects'
 import { effectDoc } from '@yaks/effects/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { dirname, join, resolve } from 'node:path'
-import { repositoryEid } from '@yaks/git/host'
+import { localFilesystem, repositoryEid } from '@yaks/git/host'
 import { run } from '@yaks/git/land'
 import { repoSkills } from './skills.ts'
 import { skillEffects, type SkillRuntime } from './skill-effects.ts'
@@ -511,12 +511,15 @@ test('skill effects hold separate watcher and per-pass graph leases', async () =
   )
   release.resolve()
   await until(async () =>
-    (await held(graph, '@yaks/persona/skill_files'))?.holder === null
+    (await held(graph, '@yaks/persona/skill_files'))?.holder === undefined
   )
   assertEquals((await held(graph, '@yaks/persona/skill_watch'))?.holder, host)
   stop.abort()
   await watcher
-  assertEquals((await held(graph, '@yaks/persona/skill_watch'))?.holder, null)
+  assertEquals(
+    (await held(graph, '@yaks/persona/skill_watch'))?.holder,
+    undefined,
+  )
 })
 
 test('skill effects leave a contended singleton watcher to its current holder', async () => {
@@ -590,7 +593,10 @@ test('skill per-pass lease release errors reject the awaited effect and retry', 
   fail = false
   await invoke(fx)
   assertEquals(calls, 2)
-  assertEquals((await held(graph, '@yaks/persona/skill_files'))?.holder, null)
+  assertEquals(
+    (await held(graph, '@yaks/persona/skill_files'))?.holder,
+    undefined,
+  )
 })
 
 test('skill effects real temp Git and RAM graph preserve import/export agreement', async () => {
@@ -614,7 +620,10 @@ test('skill effects real temp Git and RAM graph preserve import/export agreement
     await git('add', '.')
     await git('commit', '-m', 'Initial')
     let graph = world()
-    let repository = repositoryEid(join(root, '.git'))
+    let repository = repositoryEid(
+      join(root, '.git'),
+      (await localFilesystem(graph)).entity.eid,
+    )
     await graph.apply([{
       entity: { eid: repository },
       repository: { common: join(root, '.git') },

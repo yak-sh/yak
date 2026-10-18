@@ -9,7 +9,12 @@ import { type Catalog, resolveFrames } from './frames.ts'
 
 export type Location = { file: string; function?: string; line?: number }
 export type Sources = { roots: string[]; origins?: string[] }
-export type SourceOptions = { cwd: string; url: string; origins?: string[] }
+export type SourceOptions = {
+  cwd: string
+  url: string
+  origins?: string[]
+  workspace?: string
+}
 /** Frames thrown at a commit, each told whether it is the application's and,
  * where the catalog matches that commit, its module and symbol. */
 export type Resolver = <T extends Location>(
@@ -188,10 +193,31 @@ export let sourceFrames = (
     }))
     let resolved = await resolveFrames(
       catalog,
-      repositoryEid(common),
+      options.workspace
+        ? repositoryEid(common, options.workspace)
+        : await repositoryAt(options.url, common),
       blobs,
       places,
     )
     return frames.map((f, i) => ({ ...f, ...resolved[i] }))
   }
+}
+
+// The catalog is authoritative for its filesystem context. Missing or ambiguous
+// placement cannot make a path on this computer identify a remote repository.
+let repositoryAt = async (url: string, common: string): Promise<string> => {
+  let at = new URL('/query', url)
+  at.searchParams.set('q', '.repository.common=' + JSON.stringify(common))
+  let response = await fetch(at, { signal: AbortSignal.timeout(5000) })
+  if (!response.ok) throw Error('code catalog: repository lookup failed')
+  let rows = await response.json() as Bundle[]
+  if (
+    rows.length != 1 ||
+    !(rows[0].repository as Record<string, unknown>)?.workspace
+  ) {
+    throw Error(
+      'code catalog: repository filesystem context is missing or ambiguous',
+    )
+  }
+  return rows[0].entity.eid
 }

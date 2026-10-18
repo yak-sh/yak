@@ -9,7 +9,8 @@
     "./tools": "./tools.ts",
     "./vocab": "./vocab.ts",
     "./service": "./service.ts",
-    "./source": "./source.ts"
+    "./source": "./source.ts",
+    "./workspace": "./workspace.ts"
   },
   "license": "Apache-2.0",
   "description": "Builds Git trees and commits from a file manifest, stores the objects as graph entities, and serves clones over Git's read-only smart HTTP protocol.",

@@ -13,6 +13,7 @@ import { type Graph, graph, type Plugin } from '@yaks/graph'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
 import { gitDoc } from './comp.ts'
 import { type Index, index } from './index.ts'
 
@@ -28,7 +29,13 @@ let entity: VocabDoc = {
 }
 
 /** This package's components, loaded the way a store would load them. */
-export let vocab: Vocab = loadVocab([entity, edgeDoc, keyDoc, gitDoc], [
+export let vocab: Vocab = loadVocab([
+  entity,
+  edgeDoc,
+  keyDoc,
+  gitDoc,
+  machineDoc,
+], [
   edgeKeywords,
   keyKeywords,
 ])
@@ -73,7 +80,7 @@ export let fixture = (
   git: Index
 } => {
   let v = more.docs?.length
-    ? loadVocab([entity, edgeDoc, keyDoc, gitDoc, ...more.docs], [
+    ? loadVocab([entity, edgeDoc, keyDoc, gitDoc, machineDoc, ...more.docs], [
       edgeKeywords,
       keyKeywords,
     ])

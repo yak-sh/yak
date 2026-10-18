@@ -3,7 +3,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { and, eq, every, present } from '@yaks/query'
 import { type Comp, derivedEid, type Graph, identityEid } from '@yaks/graph'
 import { run } from '@yaks/git/land'
-import { repositoryEid } from '@yaks/git/host'
+import { localFilesystem, repositoryEid } from '@yaks/git/host'
 import { syncSkills } from './skill-mirror.ts'
 import { repoSkills, skillFiles, skillLocation } from './skills.ts'
 import { world } from './testing.ts'
@@ -35,11 +35,12 @@ let seeded = template(async (dir) => {
 let setup = async () => {
   let dir = await seeded()
   let root = `${dir}/main`
-  let repository = repositoryEid(`${root}/.git`)
   let g = world()
+  let workspace = (await localFilesystem(g)).entity.eid
+  let repository = repositoryEid(`${root}/.git`, workspace)
   await g.apply([{
     entity: { eid: repository },
-    repository: { common: `${root}/.git` },
+    repository: { workspace, common: `${root}/.git` },
   }])
   let memory = `${dir}/agreement.json`
   return { dir, root, repository, g, memory }

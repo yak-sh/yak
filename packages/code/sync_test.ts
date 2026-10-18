@@ -1,3 +1,4 @@
+import { machineDoc } from '@yaks/machine/vocab'
 // A codebase in a scratch Git repository, read into an in-memory graph and read
 // again as it changes. It runs git and `deno doc` as subprocesses.
 
@@ -25,9 +26,12 @@ let entity = {
 }
 
 let fixture = () => {
-  let vocab = loadVocab([entity, edgeDoc, gitDoc, docDoc, codeDoc], [
-    edgeKeywords,
-  ])
+  let vocab = loadVocab(
+    [machineDoc, entity, edgeDoc, gitDoc, docDoc, codeDoc],
+    [
+      edgeKeywords,
+    ],
+  )
   return graph({ storage: ram(vocab), vocab, plugins: [edges(vocab)] })
 }
 

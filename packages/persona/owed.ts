@@ -141,8 +141,12 @@ export let carried = async (
   if (!needs.every((c) => g.vocab.comp(c))) return
   let dirs = upward(path)
   if (!dirs.length) return
-  let known = await g.storage.read(and(eq('worktree.path', value(dirs))))
-  let at = (b: Bundle) => str(comp(b, 'worktree').path)
+  let known = await g.get(
+    (await g.storage.read(
+      and(present('worktree'), eq('workspace.root', value(dirs))),
+    )).map((b) => b.entity.eid),
+  )
+  let at = (b: Bundle) => str(comp(b, 'workspace').root)
   let nearest = dirs.find((d) => known.some((b) => at(b) == d))
   let repos = known.filter((b) => at(b) == nearest)
     .map((b) => str(comp(b, 'worktree').repository)).filter(Boolean)
