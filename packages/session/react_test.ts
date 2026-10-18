@@ -1366,7 +1366,7 @@ test('as `session_run`, the steps run themselves until the transcript settles', 
     model,
     tools: [echo],
     mint,
-    each: (s) => steps.push(s.did),
+    each: (s) => void steps.push(s.did),
   }))
   await seed(g) // the input entry owes the run
   await fx.idle()
