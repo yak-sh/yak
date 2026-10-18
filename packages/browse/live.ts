@@ -149,7 +149,19 @@ let makeClient = () => {
       await outbox?.assertOwner()
       let bundles = await request.clone().json() as Bundle[]
       let changes = changesOf(bundles)
-      let response = await route({ apply: changes, request }, uuid())
+      // A write the page cannot even form is a bug, not an outage: console.error
+      // reaches the page tracker, and the outbox keeps the write to retry.
+      let response = await Promise.resolve(
+        route({ apply: changes, request }, uuid()),
+      ).catch((error) => {
+        if (
+          !(error instanceof TypeError &&
+            /fetch|network|load/i.test(error.message))
+        ) {
+          console.error(`live client — write not sent: ${error}`, error)
+        }
+        throw error
+      })
       if (!(response instanceof Response)) {
         throw new Error('write returned no response')
       }
@@ -1561,10 +1573,20 @@ export let useSocket = (fn: typeof socketFor): typeof socketFor => {
 // rows replace this side's, and a row the host does not have leaves.
 // The write seam: a test counts deliveries without a host. Returns the prior
 // route so the test can restore it.
+// The body is sent as text: `new Request(url, request)` carries a body over as
+// a stream, and Safari refuses to upload a ReadableStream.
 let defaultRoute = (frame: unknown, _id?: string): void | Promise<Response> => {
   let request = (frame as { request?: Request }).request
   if (request) {
-    return fetch(new Request(new URL(hosting().apply, base()), request))
+    return request.clone().text().then((body) =>
+      fetch(
+        new Request(new URL(hosting().apply, base()), {
+          method: request.method,
+          headers: request.headers,
+          body,
+        }),
+      )
+    )
   }
 }
 let route: (frame: unknown, id?: string) => unknown = defaultRoute
