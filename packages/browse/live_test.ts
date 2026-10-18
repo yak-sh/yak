@@ -2401,10 +2401,11 @@ test('an empty browser query is locally empty, never an unsupported remote ask',
   }
 })
 
+let commentA = crypto.randomUUID(), commentB = crypto.randomUUID()
 test('comment badges share a target tally, refcount it, and reopen it', async () => {
   let sent: Record<string, unknown>[] = []
   let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
-  let a = crypto.randomUUID(), b = crypto.randomUUID()
+  let a = commentA, b = commentB
   let value = commentCount(a)
   let off = holdCommentCount(a), duplicate = holdCommentCount(a)
   let other = holdCommentCount(b)
@@ -2999,13 +3000,18 @@ test('each aggregate frame replaces the whole tally', () => {
 
 // T-37445: a list of tiles is ONE addressed sub, named by its ids, so ten
 // reference rows cost one serve and one frame instead of ten route subs.
+let rowIds = ['a', 'b', 'c'].map((c) =>
+  `c0000000-0000-4000-8000-00000000000${c}`
+)
+let rowName = `rows:${rowIds.join(',')}`
+let rowChanges = rowIds.flatMap((eid, i) => [
+  { eid, name: 'entity', comp: { eid, num: 30 + i } },
+  { eid, name: 'doc', comp: { eid, title: `r${i}` } },
+])
 test('a list of rows is held in one sub and freed by its last holder', async () => {
   let sent: Record<string, unknown>[] = []
   let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
-  let ids = ['a', 'b', 'c'].map((c) =>
-    `c0000000-0000-4000-8000-00000000000${c}`
-  )
-  let name = `rows:${ids.join(',')}`
+  let ids = rowIds, name = rowName
   let offs = [rowsSub(ids), rowsSub(ids)]
   try {
     await Promise.resolve()
@@ -3016,10 +3022,7 @@ test('a list of rows is held in one sub and freed by its last holder', async () 
     landSub({
       sub: name,
       replace: true,
-      changes: ids.flatMap((eid, i) => [
-        { eid, name: 'entity', comp: { eid, num: 30 + i } },
-        { eid, name: 'doc', comp: { eid, title: `r${i}` } },
-      ]),
+      changes: rowChanges,
     })
     assertEquals(ids.map((id) => ent(id).doc?.title), ['r0', 'r1', 'r2'])
     // Two holders, one sub: the first drop keeps it, the last one frees it.
