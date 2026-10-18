@@ -145,6 +145,11 @@ let probe = async (pinned: boolean, rejected = false) => {
         ],
       }),
     )
+    // Work serves an existing graph (T-128174); prepare the fixture before
+    // either the direct or pinned invocation captures its file identity.
+    let { compose, read: config } = await import('./host.ts')
+    let fixture = await compose(config(data), ['graph'])
+    await fixture.close()
     await Deno.writeTextFile(
       `${dir}/direct.ts`,
       `import { work, stop, close } from ${JSON.stringify(local)}

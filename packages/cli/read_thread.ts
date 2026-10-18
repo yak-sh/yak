@@ -38,13 +38,11 @@ export let readThread = (
   }>()
   let closed = false
   let ending: Promise<void> | undefined
-  let finish: (() => void) | undefined
   let fail = (error: Error) => {
     worker?.terminate()
     worker = undefined
     for (let p of pending.values()) p.reject(error)
     pending.clear()
-    finish?.()
   }
   let start = () => {
     if (worker) return worker
@@ -93,24 +91,17 @@ export let readThread = (
     get: (eids, comps) =>
       ask({ op: 'get', eids, comps }).then((value) => value as Bundle[]),
     ready: () => ask({ op: 'get', eids: [] }).then(() => {}),
-    close: () =>
-      ending ??= (async () => {
+    // The HTTP server has already given in-flight requests their grace. A
+    // read-only worker owns no writes to drain, and may be executing synchronous
+    // SQL: it cannot receive a close message until that query returns. End it
+    // here rather than extending the server's grace without a bound.
+    close: () => {
+      if (!ending) {
         closed = true
-        if (!worker) return
-        let w = worker
-        let done = Promise.withResolvers<void>()
-        finish = done.resolve
-        let receive = w.onmessage
-        w.onmessage = (event: MessageEvent<Heard>) => {
-          if ('closed' in event.data) done.resolve()
-          else receive?.call(w, event)
-        }
-        w.postMessage({ close: true } satisfies Said)
-        try {
-          await done.promise
-        } finally {
-          fail(new Error('the reader closed'))
-        }
-      })(),
+        fail(new Error('the reader closed'))
+        ending = Promise.resolve()
+      }
+      return ending
+    },
   }
 }

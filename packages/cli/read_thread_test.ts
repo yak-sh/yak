@@ -114,3 +114,37 @@ test('web reader forwards observed query and refusal trees into the waiting requ
     await Deno.remove(dir, { recursive: true })
   }
 })
+
+// A worker stuck in synchronous SQL cannot service the close message. No
+// writes live in this worker, so closing must terminate it without a reply.
+test('closing a busy web reader terminates it and rejects its waiting reads', async () => {
+  let Original = globalThis.Worker
+  let terminated = 0
+  class Busy {
+    onmessage = null
+    onerror = null
+    postMessage() {}
+    terminate() {
+      terminated++
+    }
+  }
+  globalThis.Worker = Busy as unknown as typeof Worker
+  try {
+    let reader = readThread('unused.json')
+    let waiting = assertRejects(() => Promise.resolve(reader.read('.doc')))
+    let closed = false
+    let closing = reader.close().then(() => {
+      closed = true
+    })
+    await Promise.resolve()
+    assertEquals(terminated, 1)
+    assertEquals(closed, true)
+    await waiting
+    await closing
+    await reader.close()
+    assertEquals(terminated, 1)
+    await assertRejects(() => Promise.resolve(reader.read('.doc')))
+  } finally {
+    globalThis.Worker = Original
+  }
+})
