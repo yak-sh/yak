@@ -579,3 +579,13 @@ test('maximum height bounds wrapped previews and emits overflow only when needed
     'short',
   ])
 })
+
+for (let direction of ['row', 'col']) {
+  test(`a native field in a ${direction} paints its value after an edit`, () => {
+    let input = el('input', { class: 'Field', value: 'before' })
+    let tree = el('root', {}, el('div', { [direction]: '1' }, input))
+    assertEquals(seen(tree, 20, 1), ['before'])
+    input.value = 'after'
+    assertEquals(seen(tree, 20, 1), ['after'])
+  })
+}

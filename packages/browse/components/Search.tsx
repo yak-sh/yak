@@ -1,13 +1,14 @@
 import { entityPath, searchPath } from '../url.ts'
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural } from '../types.ts'
 import { ent, searchOpen } from '../live.ts'
-import { follow } from './nav.tsx'
+import { follow, navigate } from './nav.tsx'
 import { Loading, Palette as Frame } from '@yaks/ui'
 import { Icon } from './icons.tsx'
 import { fields } from './fields.tsx'
 import { Entity } from './Entity.tsx'
-import { hits as queryHits } from './hits.ts'
+import { InspectPage } from './inspect.tsx'
+import { aggregate, hits as queryHits } from './hits.ts'
 
 // `/` in normal mode opens the palette (the App shell owns the hotkey
 // and the mount, so any root can search; the `open` callback decides
@@ -59,7 +60,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
   let box = useRef<HTMLInputElement>(null)
   let seq = useRef(0)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (searchOpen.value) box.current?.focus()
   }, [searchOpen.value])
 
@@ -131,6 +132,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
         return
       }
       if (ordered[sel]) pick(ordered[sel])
+      else if (q.trim() && !waiting && !err) {
+        navigate(searchPath(q))
+        close()
+      }
       return
     }
     let down = e.key == 'ArrowDown' || (e.ctrlKey && e.key == 'n') ||
@@ -196,6 +201,8 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
               tab
             </Snip>
           )
+          : answered == q && aggregate(q)
+          ? <InspectPage query={q} />
           : answered == q && !ordered.length && <Snip>No results.</Snip>}
         {
           /* Each registry tile is its own real entity anchor. The result shell

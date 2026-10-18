@@ -602,7 +602,9 @@ let layout = (
     0,
     w - (o.indent ?? 0) - (framed ? 2 : 0) - (bar ? 1 : 0),
   )
-  let lines = el.localName == 'table'
+  let lines = el.matches('input,textarea,select')
+    ? [inline(el, st, c)]
+    : el.localName == 'table'
     ? table(
       el,
       contentWidth,

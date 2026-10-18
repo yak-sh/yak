@@ -71,3 +71,28 @@ test('fake DOM sends capture before target and bubble and supports listener remo
   equal(seen, ['capture', 'bubble'])
   ok(root.querySelector('button') == child)
 })
+
+test('a remounted field types at its restored caret', () => {
+  let root = new TElement('div')
+  let keys = interaction(root, () => {})
+  let field = new TElement('input')
+  field.value = 'left right'
+  root.appendChild(field)
+  keys.focus(field)
+  field.setSelectionRange(5, 5)
+  root.removeChild(field)
+  let remounted = new TElement('input')
+  remounted.value = field.value
+  remounted.setSelectionRange(field.selectionStart, field.selectionEnd)
+  root.appendChild(remounted)
+  remounted.focus()
+  try {
+    equal(remounted.attr('data-caret'), '5')
+    keys.press({ name: 'char', text: 'new ' })
+    equal(remounted.value, 'left new right')
+    equal(remounted.selectionStart, 9)
+    equal(remounted.attr('data-caret'), '9')
+  } finally {
+    remounted.blur()
+  }
+})

@@ -95,15 +95,20 @@ export class TElement extends TNode {
   }
   focus() {
     doc.activeElement = this
+    if (this.matches('input,textarea')) {
+      this.setAttribute('data-caret', this.selectionStart)
+    }
     this.dispatchEvent(new Event('focus'))
   }
   blur() {
     if (doc.activeElement == this) doc.activeElement = null
+    this.removeAttribute('data-caret')
     this.dispatchEvent(new Event('blur'))
   }
   setSelectionRange(start: number, end: number) {
     this.selectionStart = start
     this.selectionEnd = end
+    if (doc.activeElement == this) this.setAttribute('data-caret', start)
   }
   /** Optional viewport layout owned by a virtual list, not DOM children. */
   viewport?: (

@@ -331,8 +331,12 @@ export let completion = (front: Front, opts: Opts): Controller => {
       if (!now(p.id)) set(p.id, p.initial ?? '')
     }, [p.id])
     useLayoutEffect(() => {
-      if (p.focus) box.current?.focus?.() // a terminal's element has none
-    }, [])
+      let el = box.current
+      if (!el) return
+      let caret = now(p.id)?.caret ?? el.value.length
+      el.setSelectionRange(caret, caret)
+      if (p.focus) el.focus()
+    }, [p.id])
     let r = live(p.id).value
     let text = r?.text ?? p.initial ?? ''
     return h(

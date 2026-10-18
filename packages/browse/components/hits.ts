@@ -33,6 +33,17 @@ export let rows = async (
 export let people = (limit: number, signal?: AbortSignal): Promise<Bundle[]> =>
   vocab.comp('person') ? rows('.person', limit, signal) : Promise.resolve([])
 
+/** Whether a query answers values rather than navigable entity rows. */
+export let aggregate = (q: string): boolean => {
+  try {
+    return parse(q).clauses.some((c) =>
+      ['count', 'tally', 'distinct'].includes(c.kind)
+    )
+  } catch {
+    return false
+  }
+}
+
 /** The same search, each row as the palette ranks and shows it. */
 export let hits = async (
   q: string,
@@ -48,6 +59,9 @@ export let hits = async (
   }
   visit(parse(q))
   let line = kinds.has('text') && !kinds.has('order') ? `${q} .order=search` : q
+  // Aggregate answers are values, not entities a picker can navigate to.
+  // The addressed query page renders them; the palette still offers that link.
+  if (['count', 'tally', 'distinct'].some((kind) => kinds.has(kind))) return []
   let found = await rows(line, limit, signal)
   // Keep the actual bundles: every picker draws the hit through the registry,
   // not from a private title-only search shape.

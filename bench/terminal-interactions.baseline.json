@@ -11,7 +11,7 @@
       "name": "tui/comment-keystroke-paint",
       "unit": "ms",
       "better": "lower",
-      "median": 22.755467999999837,
+      "median": 17.193013000000064,
       "tolerance": 0
     },
     {
@@ -25,7 +25,14 @@
       "name": "tui/comment-submit",
       "unit": "ms",
       "better": "lower",
-      "median": 35.46230999999989,
+      "median": 35.38247499999943,
+      "tolerance": 0
+    },
+    {
+      "name": "tui/query-to-answer",
+      "unit": "ms",
+      "better": "lower",
+      "median": 287.9614359999996,
       "tolerance": 0
     }
   ]

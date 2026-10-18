@@ -83,11 +83,14 @@ subagent HTTP hook leaves that work pending. UserPromptSubmit remains measured
 by `person-commands`. There is no installed Stop or PreCompact hook to time.
 
 `terminal-interactions` measures real PTY comment typing to paint, typing to
-durable draft and Enter to committed comment. Inspector title/body/component
-edits are browser-only: the terminal explicitly paints those controls read-only.
-These figures do not pretend to bank an unsupported terminal mutation. Query
-palette editing/paint/submission remains an explicit gap: the probe found blank
-field paint, an aggregate-preview array assumption and unstable repeated focus.
+saved draft, and Enter to a saved and painted comment. Its query measurement
+opens the palette afresh for each sample, literally types `.task .count` in two
+parts with visible text checks, waits for the aggregate preview, then submits to
+the addressed query page and its populated `2,000` answer. The repeated samples
+navigate back and reopen in the same terminal process. Setup, palette opening
+and back navigation are outside the query timing; typing through the populated
+answer is inside it. The fixture owns its SQLite graph, HTTP server, tmux socket
+and terminal history; no input reaches the live graph.
 
 ```sh
 deno task bench operation-commands accept

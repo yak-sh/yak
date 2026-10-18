@@ -60,3 +60,19 @@ for (
     }
   })
 }
+
+test('an aggregate query has no navigable picker hits', async () => {
+  let prior = globalThis.fetch
+  let host = config.host
+  config.host = 'search.test'
+  globalThis.fetch = (input) => {
+    let q = new URL(String(input), 'http://search.test').searchParams.get('q')!
+    return Promise.resolve(Response.json(g.read(q)))
+  }
+  try {
+    assertEquals(await hits('.task .count'), [])
+  } finally {
+    globalThis.fetch = prior
+    config.host = host
+  }
+})

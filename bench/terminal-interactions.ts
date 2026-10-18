@@ -13,6 +13,7 @@ export let TERMINAL_INTERACTIONS = [
   'tui/comment-keystroke-paint',
   'tui/comment-draft-save',
   'tui/comment-submit',
+  'tui/query-to-answer',
 ]
 let root = new URL('../', import.meta.url).pathname
 let PERSON = '1d55ab2c-76da-4b66-9c37-e871a427f200'
@@ -179,6 +180,40 @@ export async function measure(
       `${launch} 2>${quote(dir + '/terminal.log')}`,
     )
     started = true
+    await paint('comment…')
+    // Each sample reopens the actual palette and types into its freshly
+    // mounted input. Neither a target title nor the query heading is an answer.
+    await timed('tui/query-to-answer', async () => {
+      let state = JSON.parse(await Deno.readTextFile(env.TASKS_TUI_STATE))
+      if (state.entries[state.at].path == '/?q=.task%20.count') {
+        await keys('h')
+        await paint('comment…')
+      }
+      await keys('/')
+      await paint('Type words or a query')
+      return async () => {
+        await type('.task ')
+        await paint('.task ')
+        await type('.count')
+        await paint('.task .count')
+        await paint('2,000') // aggregate preview, not an entity tile
+        await keys('Enter')
+        await until('addressed populated query answer', async () => {
+          // History is written by the other process; a read can meet its
+          // truncate/write boundary, which is not a completed navigation.
+          let text = await Deno.readTextFile(env.TASKS_TUI_STATE)
+          let state
+          try {
+            state = JSON.parse(text)
+          } catch {
+            return false
+          }
+          return state.entries[state.at].path == '/?q=.task%20.count' &&
+            /^│[^│]*│2,000\s*$/m.test(await capture())
+        })
+      }
+    })
+    await keys('h')
     await paint('comment…')
     await keys('i')
     // Keystroke timing ends on usable input paint. Submission resets between
