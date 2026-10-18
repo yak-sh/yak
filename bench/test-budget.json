@@ -3222,6 +3222,8 @@
       "a worker reclaims claims left by already ended transcripts": 27.6,
       "an input landing while its transcript is being run elsewhere is answered after": 30.3,
       "children past the bound wait queued, and each ending admits the next": 83.2,
+      "duplicate transcript wakes leave pool room for another transcript": 138.7,
+      "duplicate wakes waiting on another worker leave pool room": 157.9,
       "failures in a row wait longer each time, and the last one stands": 123.1,
       "graceful stop after ask persistence drains the admitted dispatch": 21.1,
       "graceful stop during preparation admits no ask and leaves the input owed": 14.5,
