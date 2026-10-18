@@ -26,7 +26,7 @@ let exception = {
 let storageError = new Error('database is full')
 
 let fixture = async (
-  phase: 'model' | 'compaction' | 'forced',
+  phase: 'model' | 'compaction' | 'forced' | 'context',
   fails: boolean,
   error: Error = original,
 ) => {
@@ -67,10 +67,24 @@ let fixture = async (
     mint: () => `entry-${++n}`,
     report: (error, from, at) => {
       equal(from, session)
-      equal(at, phase == 'model' ? 'model' : 'compaction')
+      equal(
+        at,
+        phase == 'context'
+          ? 'context'
+          : phase == 'model'
+          ? 'model'
+          : 'compaction',
+      )
       reported.push(error)
     },
-    ...(phase != 'model'
+    ...(phase == 'context'
+      ? {
+        requestItems: () => {
+          throw error
+        },
+      }
+      : {}),
+    ...(phase == 'compaction' || phase == 'forced'
       ? {
         compactAt: phase == 'compaction' ? 0.1 : 0.9,
         compactModel: {
@@ -89,7 +103,7 @@ let fixture = async (
   return { g, deps, saved, reported }
 }
 
-for (let phase of ['model', 'compaction', 'forced'] as const) {
+for (let phase of ['model', 'compaction', 'forced', 'context'] as const) {
   for (let fails of [false, true]) {
     // Fixture composition is shared setup, outside the timed behavior.
     let { g, deps, saved, reported } = await fixture(phase, fails)
@@ -107,6 +121,12 @@ for (let phase of ['model', 'compaction', 'forced'] as const) {
       if (!fails) {
         equal(saved[0].exception as Comp, exception)
         equal((await g.read('.exception')).length, 1)
+        if (phase == 'context') {
+          equal(((await g.get([session]))[0].session as Comp).status, 'failed')
+          let again = await react(g, session, deps)
+          equal(again.did, 'nothing')
+          equal(reported, [original])
+        }
       }
     })
   }

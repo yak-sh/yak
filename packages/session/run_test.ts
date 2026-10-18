@@ -7,7 +7,7 @@
 // Processes here are graphs over one in-memory SQLite store, which computes a
 // transcript's status the way a box's does.
 
-import { assert, assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals } from '@std/assert'
 import {
   type Bundle,
   type Comp,
@@ -258,17 +258,6 @@ for (let hook of ['contextItems', 'requestItems'] as const) {
     assertEquals(asked.length, 1)
   })
 }
-
-test('unexpected context errors remain failures of the run', async () => {
-  let { model, asked } = fake()
-  let p = proc(store(), 'w1', model, {
-    requestItems: () => Promise.reject(new Error('Context defect')),
-  })
-  await p.g.apply(ask('s1'))
-  await assertRejects(() => settle(p.g, 's1', p.r), Error, 'Context defect')
-  assertEquals(await kinds(p, 's1'), ['input'])
-  assertEquals(asked.length, 0)
-})
 
 test('a request one process writes is answered by a process working the pool', async () => {
   let s = store()

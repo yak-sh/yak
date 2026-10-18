@@ -1328,8 +1328,16 @@ export let react = async (
     // A host refusing to prepare context cannot be fixed by asking again.
     // Record it before returning, so the pool and restart sweep see an ended
     // transcript and the runner delivers it and releases its child place.
-    if (!(error instanceof Refused)) throw error
-    return append([line({ [REFUSAL]: { code: 'context' } }, error.message)])
+    if (error instanceof Refused) {
+      return append([line({ [REFUSAL]: { code: 'context' } }, error.message)])
+    }
+    // A defect preparing an ask is an answer too, not an input left pending
+    // after the effect exhausts its retries. Keep the original error for the
+    // tracker even if writing this terminal entry fails.
+    return append(
+      [line({ [EXCEPTION]: exceptionOf(error) }, String(error))],
+      { error, phase: 'context' },
+    )
   }
   let req: Request = {
     signal: deps.signal,
