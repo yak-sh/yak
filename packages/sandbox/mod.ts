@@ -3,3 +3,5 @@
 export { sandboxDoc } from './vocab.ts'
 
 export * from './provider.ts'
+
+export * from './lifecycle.ts'

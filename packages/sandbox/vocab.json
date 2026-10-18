@@ -58,6 +58,59 @@
           "stamped": true
         }
       }
+    },
+    "sandbox_provision": {
+      "effect": true,
+      "created": [
+        "pending"
+      ],
+      "target": ".sandbox",
+      "sweep": ".sandbox&.pending&!released&!failed",
+      "description": "provision a recorded sandbox intention using its preallocated durable resource id"
+    },
+    "sandbox_new": {
+      "tool": true,
+      "description": "Record a sandbox intention before external provisioning.",
+      "input": {
+        "provider": {
+          "type": "string"
+        },
+        "machine": {
+          "type": "string",
+          "ref": "machine"
+        },
+        "from": {
+          "type": "string",
+          "ref": "gitobj"
+        },
+        "image": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "noun": "sandbox",
+      "verb": "new",
+      "applied": true,
+      "idempotent": true
+    },
+    "sandbox_dispose": {
+      "tool": true,
+      "description": "Explicitly dispose a sandbox and record released only after provider confirmation.",
+      "input": {
+        "sandbox": {
+          "type": "string",
+          "ref": "sandbox"
+        }
+      },
+      "required": [
+        "sandbox"
+      ],
+      "noun": "sandbox",
+      "verb": "dispose",
+      "applied": true,
+      "idempotent": true
     }
   }
 }
