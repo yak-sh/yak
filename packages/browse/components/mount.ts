@@ -12,7 +12,21 @@ import { parseHTML } from 'linkedom'
 import { Ux } from '@yaks/ux'
 import { ux } from './registry.ts'
 
-let { document } = parseHTML('<html><body></body></html>')
+// Linkedom shares element prototypes across documents but omits the browser's
+// selection API. Completion fields restore their caret in a layout effect,
+// including in tests that install a document of their own.
+let { document, window } = parseHTML('<html><body></body></html>')
+for (
+  let prototype of [
+    window.HTMLInputElement.prototype,
+    window.HTMLTextAreaElement.prototype,
+  ]
+) {
+  prototype.setSelectionRange = function (start: number, end: number) {
+    this.selectionStart = start
+    this.selectionEnd = end
+  }
+}
 export let mount = (node: ComponentChild) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {
