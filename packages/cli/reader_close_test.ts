@@ -1,6 +1,7 @@
 // Reader teardown finishes before telemetry drains, including close failures.
 import { equal, test } from '@yaks/testing'
 import { files } from '@yaks/tracker/file'
+import { comp } from '../tracker/model.ts'
 import { compose } from './host.ts'
 import { reporter } from './report.ts'
 
@@ -37,8 +38,8 @@ let closing = await (async () => {
 
 test('an unexpected reader teardown failure is durable before host close returns', () => {
   equal(closing.length, 1)
-  equal(closing[0].exception?.value, 'reader teardown failed')
-  equal(closing[0].error?.tags, {
+  equal(comp(closing[0], 'exception').value, 'reader teardown failed')
+  equal(comp(closing[0], 'error').tags, {
     source: 'box',
     command: 'yak',
     roles: 'graph',
