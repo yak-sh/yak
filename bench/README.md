@@ -341,3 +341,35 @@ residual and create-scaling investigation.
 [Workerd socket microtasks](workerd-microtasks.md) records a standalone
 hibernation probe. These are separate from the fixed ratchet composition and
 from the test suite.
+
+### Paired confirmation on a shared box
+
+A **paired confirmation** runs the same current benchmark driver against the
+product revision where its baseline was banked and the current product revision.
+The monitor uses it after an absolute regression in `platform-waits` or
+`inbox-content`. It holds the box-wide lock across three interleaved
+reference/current/reference rounds. Each probe owns its seeded graph; no live
+database is copied. Historical product code includes its historical probe
+adapter, so an incompatible adapter fails the comparison with a diagnostic.
+
+Raw milliseconds, baseline limits and the absolute regression remain in the
+saved results. The paired result is separate evidence, never adjusted
+milliseconds. It records the two revisions, current driver hash, actual host CPU
+and all round observations. Disjoint current/reference ranges show a measured
+revision difference conditional on the bracket, not proof of code causality:
+contention concentrated in the current windows can still mislead it. Reference
+ranges and their central observations must overlap. Drift in any metric makes
+the whole comparison inconclusive, including otherwise separated metrics.
+
+An overlapping current range is _unconfirmed_, not equivalent and not a budget
+pass. An unconfirmed or inconclusive comparison neither banks a best nor marks a
+last-good run. Adapter failures remain reported with their diagnostics. The next
+scheduled measurement retries. Live `pages` and `page-content` cannot use this
+comparison: their changing graph and backend are not an isolated fixture.
+
+To inspect one directly while holding the shared measurement lock:
+
+```sh
+flock /tmp/yaks-throughput-bench.lock deno run -A bench/paired.ts \
+  platform-waits /tmp/platform-paired.json
+```

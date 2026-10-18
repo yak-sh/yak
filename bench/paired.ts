@@ -1,6 +1,6 @@
 /** Contemporaneous code comparisons for isolated fixtures. Raw wall time and its
- * absolute ratchet remain untouched: this evidence distinguishes code changes
- * from a busy host, and can never bank a new best or declare a budget passed. */
+ * absolute ratchet remain untouched: this evidence measures revision differences
+ * beside a contemporaneous reference, and can never bank a new best or declare a budget passed. */
 import { host, median, type Run, type Samples } from '@yaks/benchmark'
 
 export type Pair = { before: Run; current: Run; after: Run }
@@ -249,7 +249,20 @@ if (import.meta.main) {
   if (!output) {
     throw Error('usage: paired.ts SUITE OUTPUT (caller holds benchmark lock)')
   }
-  let evidence = await collect(suite, new URL('../', import.meta.url).pathname)
+  let evidence
+  try {
+    evidence = await collect(suite, new URL('../', import.meta.url).pathname)
+  } catch (error) {
+    let diagnostic = error instanceof Error
+      ? error.stack ?? error.message
+      : String(error)
+    await Deno.writeTextFile(
+      output,
+      JSON.stringify({ verdict: 'inconclusive', error: diagnostic }, null, 2) +
+        '\n',
+    )
+    throw error
+  }
   await Deno.writeTextFile(output, JSON.stringify(evidence, null, 2) + '\n')
   console.log(
     `${suite}: paired ${evidence.verdict}; no absolute budget was passed or banked`,

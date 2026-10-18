@@ -110,23 +110,25 @@ test('overlapping outliers do not hide reference drift', () => {
 test('bracket orders reference/current/reference and closes on a failed adapter', async () => {
   let seen: string[] = []
   equal(
-    await bracket(async (v) => {
+    await bracket((v) => {
       seen.push(v)
-      return v
-    }, async () => {
+      return Promise.resolve(v)
+    }, () => {
       seen.push('closed')
+      return Promise.resolve()
     }),
     { before: 'reference', current: 'current', after: 'reference' },
   )
   equal(seen, ['reference', 'current', 'reference', 'closed'])
   seen = []
   await throws(() =>
-    bracket(async (v) => {
+    bracket((v) => {
       seen.push(v)
       if (v == 'current') throw Error('missing API')
-      return v
-    }, async () => {
+      return Promise.resolve(v)
+    }, () => {
       seen.push('closed')
+      return Promise.resolve()
     }), 'missing API')
   equal(seen, ['reference', 'current', 'closed'])
 })
