@@ -33,6 +33,7 @@ import {
   type Regression,
   type Run,
 } from '@yaks/benchmark'
+import { drain, enqueue, type Queue } from './queue.ts'
 import { configPath, read } from '../packages/cli/config.ts'
 import { reporter, revision } from '../packages/cli/report.ts'
 
@@ -167,8 +168,7 @@ export let watch = async (
           schedule &&
           ((schedule.now() >= deadline! &&
             result.verdict != 'failed') ||
-            (result.verdict == 'deferred' || result.verdict == 'unconfirmed' ||
-              result.verdict == 'inconclusive'))
+            result.verdict == 'deferred')
         ) {
           return {
             verdict: 'failed',
@@ -526,7 +526,7 @@ if (import.meta.main) {
   let send = reporter(path ? read(path) : {}, undefined, revision(), {
     command: 'bench',
   })
-  let verdicts = await watch(suites, state, {
+  let monitor: Monitor = {
     check,
     bank: async (suite, run) => {
       let path = await reference(suite)
@@ -555,7 +555,40 @@ if (import.meta.main) {
         ? [...lines.slice(0, 40), `… ${lines.length - 40} more`]
         : lines
     },
-  }, hourly ? { deadline: started + WINDOW, now: Date.now } : undefined)
+  }
+  let verdicts: Record<string, Outcome['verdict']> = {}
+  if (hourly) {
+    let queuePath = `${home}/.cache/yak/bench/hourly-queue.json`
+    let queue: Queue = { jobs: [], screened: {} }
+    try {
+      queue = JSON.parse(await Deno.readTextFile(queuePath))
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error
+    }
+    enqueue(queue, suites, Date.now())
+    let persist = async () => {
+      let temporary = queuePath + '.' + Deno.pid + '.tmp'
+      await Deno.mkdir(`${home}/.cache/yak/bench`, { recursive: true })
+      await Deno.writeTextFile(temporary, JSON.stringify(queue, null, 2) + '\n')
+      await Deno.rename(temporary, queuePath)
+    }
+    await drain(queue, {
+      now: Date.now,
+      deadline: started + WINDOW,
+      save: persist,
+      check: (job) => check(job.suite, job.phase == 'screen' ? 1 : undefined),
+      settle: async (job, outcome) => {
+        let found = await watch([job.suite], state, {
+          ...monitor,
+          check: () => Promise.resolve(outcome),
+        })
+        Object.assign(verdicts, found)
+      },
+    })
+    console.log(
+      `hourly queue: ${queue.jobs.length} pending; unfinished work carries to the next tick`,
+    )
+  } else verdicts = await watch(suites, state, monitor)
   await send.close()
   // Another run (a restart's, beside the daily one) may have saved since this
   // one loaded: keep what it saw, and add only the suites run here.

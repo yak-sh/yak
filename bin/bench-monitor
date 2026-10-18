@@ -20,7 +20,9 @@ export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/
 if [ "${1:-}" = "--hourly" ]; then
   cd "$(dirname "$0")/.." || exit 1
   export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-  exec deno run -A bench/monitor.ts --hourly
+  mkdir -p "$HOME/.cache/yak/bench"
+  # A duplicate tick leaves the durable queue to its current owner.
+  exec flock -n "$HOME/.cache/yak/bench/monitor-hourly.lock" deno run -A bench/monitor.ts --hourly
 fi
 if [ "$#" -eq 0 ]; then
   self="$(realpath "$0")"

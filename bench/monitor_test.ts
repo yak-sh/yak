@@ -351,7 +351,7 @@ test('fast scheduled suites still screen and confirm without changing measuremen
 })
 
 for (let verdict of ['unconfirmed', 'inconclusive'] as const) {
-  test(`scheduled paired ${verdict} reports unavailable confirmation without banking`, async () => {
+  test(`scheduled paired ${verdict} retains measurement uncertainty without a false scheduling failure`, async () => {
     let reports: string[] = [], banked = false
     let state: State = { good: {} }
     equal(
@@ -367,9 +367,9 @@ for (let verdict of ['unconfirmed', 'inconclusive'] as const) {
           return Promise.resolve()
         },
       }, { deadline: WINDOW, now: () => 0 }),
-      { s: 'failed' },
+      { s: verdict },
     )
-    equal(reports, ['s'])
+    equal(reports, [])
     equal(banked, false)
     equal(state.good, {})
   })
