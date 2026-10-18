@@ -190,3 +190,46 @@ test('pending tool results are system frames, never the owner speaking', () => {
     text: 'Pending.',
   })
 })
+
+// Raw disclosure must see the full snapshot, not the abbreviated displayed row.
+test('raw transcript lines stay complete and serialize as ordinary values', () => {
+  let source: EntryRow = {
+    eid: 'raw',
+    seq: 4,
+    comps: { content: { body: 'complete body' }, output: { source: 'ask' } },
+  }
+  let log = graphLog([source])
+  let expected = { eid: 'raw', seq: 4, ...source.comps }
+  assertEquals(JSON.parse(log.entries[0].line), expected)
+  assertEquals(
+    JSON.parse(JSON.stringify(log.entries))[0].line,
+    JSON.stringify(expected),
+  )
+  let changed = graphLog([{
+    ...source,
+    comps: { content: { body: 'changed' } },
+  }])
+  assertEquals(JSON.parse(changed.entries[0].line).content.body, 'changed')
+  assertEquals(JSON.parse(log.entries[0].line), expected)
+})
+
+test('painting a transcript does not serialize undisclosed raw payloads', () => {
+  let reads = 0
+  let source: EntryRow = {
+    eid: 'raw-lazy',
+    seq: 1,
+    comps: {
+      content: { body: 'shown' },
+      payload: {
+        toJSON: () => {
+          reads++
+          return { full: 'raw' }
+        },
+      },
+    },
+  }
+  let log = graphLog([source])
+  assertEquals(reads, 0)
+  assertEquals(JSON.parse(log.entries[0].line).payload, { full: 'raw' })
+  assertEquals(reads, 1)
+})

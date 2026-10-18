@@ -174,11 +174,15 @@ export let graphLog = (
         ? { call: text(source.comps.result.call) }
         : {}),
       seq: source.seq,
-      line: JSON.stringify({
-        eid: source.eid,
-        seq: source.seq,
-        ...source.comps,
-      }),
+      // Raw source is only read on disclosure (eid-backed rows use EntryLens).
+      // Keep it exact without serializing every transcript payload on paint.
+      get line() {
+        return JSON.stringify({
+          eid: source.eid,
+          seq: source.seq,
+          ...source.comps,
+        })
+      },
       ...(row ? { row } : {}),
     }
   })
