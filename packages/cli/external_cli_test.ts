@@ -1,4 +1,4 @@
-// Ordinary serve leaves its fallback pool alive; restart queues a handover
+// Ordinary serve owns its fallback pool; restart queues a handover
 // through the CLI without waiting for the old worker's shutdown.
 
 import { assert, assertEquals } from '@std/assert'
@@ -121,7 +121,10 @@ let fallback = async (roles: string[]) => {
     Deno.kill(worker, 0)
     web.kill('SIGTERM')
     await web.exit(143)
-    Deno.kill(worker, 0)
+    await until(() => absent(worker!), {
+      timeout: 10000,
+      label: 'fallback exits with starter',
+    })
     let freed = Deno.listen({ hostname: '127.0.0.1', port })
     freed.close()
   } finally {
@@ -153,9 +156,54 @@ let fallback = async (roles: string[]) => {
 let roles = ['effects', '@yaks/mail']
 let survived = await fallback(roles)
 for (let role of roles) {
-  test(`ordinary serve fallback for ${role} outlives HTTP shutdown`, () =>
+  test(`ordinary serve fallback for ${role} exits after HTTP shutdown`, () =>
     assertEquals(survived, true))
 }
+
+// Explicit managed workers have no starter, but an unlinked SQLite handle is
+// never a reason to keep a pool alive. Keep the launcher handle until it exits.
+let removedGraph = await (async () => {
+  let dir = await Deno.makeTempDir({ prefix: 'yak-removed-graph-' })
+  let run: ReturnType<typeof child> | undefined
+  try {
+    await Deno.writeTextFile(
+      `${dir}/yak.json`,
+      JSON.stringify({
+        db: 'yak.db',
+        plugins: ['@yaks/kernel', '@yaks/process', '@yaks/effects'],
+      }),
+    )
+    let host = await compose(read(`${dir}/yak.json`), ['graph'], undefined, {
+      process: false,
+    })
+    await host.close()
+    run = child(dir, [
+      '--config',
+      `${dir}/yak.json`,
+      'work',
+      '--ready',
+      `${dir}/ready`,
+    ], {})
+    await until(async () => {
+      try {
+        return (await Deno.readTextFile(`${dir}/ready`)).trim() ==
+          String(run!.proc.pid)
+      } catch (error) {
+        if (error instanceof Deno.errors.NotFound) return false
+        throw error
+      }
+    }, { timeout: 15000, label: 'worker ready before graph removal' })
+    await Deno.remove(`${dir}/yak.db`)
+    await run.exit()
+    assert(absent(run.proc.pid))
+    return true
+  } finally {
+    await run?.stop()
+    await Deno.remove(dir, { recursive: true })
+  }
+})()
+test('independent worker exits when its graph is removed', () =>
+  assertEquals(removedGraph, true))
 
 test('restart CLI queues replacements before old stops with no blocking shutdown', async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-restart-cli-' })

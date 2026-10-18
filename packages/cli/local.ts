@@ -60,6 +60,7 @@ import { during, peek } from '@yaks/trace'
 import { dutyRoles, rolesOf } from './roles.ts'
 import { declarations } from './declarations.ts'
 import { readinessPid } from './runtime.ts'
+import { lifetime } from './lifetime.ts'
 export { rolesOf } from './roles.ts'
 
 /** The duty roles of a config's graph that a process serving `mine` does not
@@ -188,8 +189,10 @@ export let work = async (
   path: string,
   ready?: string,
   only?: string[],
+  starter?: number,
 ): Promise<void> => {
   let config = read(path)
+  let lives = await lifetime(dbOf(config), starter)
   let said = await declarations(config)
   let duties = dutyRoles(
     config,
@@ -207,6 +210,14 @@ export let work = async (
   let host = await opening
   await host.bury()
   let { reconcile } = await import('@yaks/tools')
+  let timer = setInterval(() => {
+    void lives().then((live) => {
+      if (!live) host.stop()
+    }, (error) => {
+      console.error(error)
+      host.stop()
+    })
+  }, 1000)
   let running = Promise.all([host.duties(), reconcile(host.runner)])
   try {
     if (ready) {
@@ -219,6 +230,7 @@ export let work = async (
     }
     await running
   } finally {
+    clearInterval(timer)
     if (ready) {
       await Deno.remove(ready).catch((error) => {
         if (!(error instanceof Deno.errors.NotFound)) throw error

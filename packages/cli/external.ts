@@ -1,6 +1,6 @@
 // `serve` owns HTTP, not duties. Fill uncovered duty roles with an independent
 // invocation of this checkout's CLI; singleton services still take the host's
-// leases, and effects remain a pool. A successful worker outlives the web host.
+// leases, and effects remain a pool. A fallback worker drains when its requesting web host ends.
 
 import type { Bundle, Graph } from '@yaks/graph'
 import {
@@ -84,7 +84,7 @@ export let coverage = (
 export type Monitor = {
   /** The initial inspection and recovery attempt, not the monitor's lifetime. */
   checked: Promise<void>
-  /** Stop observations and unfinished launches; successful workers stay up. */
+  /** Stop observations and unfinished launches; successful workers watch the starter. */
   close: () => Promise<void>
 }
 
@@ -275,6 +275,8 @@ let start = async (
         '--config',
         resolve(path),
         'work',
+        '--starter',
+        String(Deno.pid),
         '--roles',
         `@${selected}`,
         '--ready',

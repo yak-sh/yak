@@ -207,6 +207,10 @@ export let own: Command[] = [
       type: 'object',
       properties: {
         ready: { type: 'string', description: 'Readiness file' },
+        starter: {
+          type: 'number',
+          description: 'Exit when this requesting process ends',
+        },
         roles: {
           type: 'string',
           description: 'Only these comma-separated duties',
@@ -220,7 +224,12 @@ export let own: Command[] = [
       let roles = typeof args.roles == 'string'
         ? args.roles.split(',')
         : undefined
-      await (await local()).work(path, ready, roles)
+      await (await local()).work(
+        path,
+        ready,
+        roles,
+        typeof args.starter == 'number' ? args.starter : undefined,
+      )
       return 0
     },
   },
