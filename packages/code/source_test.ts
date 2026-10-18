@@ -16,7 +16,13 @@ import { codeDoc } from './vocab.ts'
 import { codeMirror } from './sync.ts'
 import { sync } from '@yaks/mirror'
 import { ask } from '@yaks/api'
-import { catalogAt, remembered, sourceFrames, sourcePath } from './source.ts'
+import {
+  catalogAt,
+  catalogRepository,
+  remembered,
+  sourceFrames,
+  sourcePath,
+} from './source.ts'
 
 let sources = {
   roots: ['/srv/app', '/srv/tree'],
@@ -183,4 +189,56 @@ test('frames resolve only cataloged exports of the exact failing commit', async 
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
+})
+
+// A catalog in cutover may retain old observations beside qualified ones.
+let lookup = (rows: unknown, status = 200) =>
+  catalogRepository(
+    'http://catalog.test',
+    '/repo/.git',
+    (_url, _init) =>
+      Promise.resolve(new Response(JSON.stringify(rows), { status })),
+  )
+test('catalog attribution ignores unplaced history and requires one filesystem', async () => {
+  equal(
+    await lookup([{
+      entity: { eid: 'old' },
+      repository: { common: '/repo/.git' },
+    }]),
+    undefined,
+  )
+  equal(
+    await lookup([
+      { entity: { eid: 'old' }, repository: { common: '/repo/.git' } },
+      {
+        entity: { eid: 'new' },
+        repository: { common: '/repo/.git', workspace: 'one' },
+      },
+    ]),
+    'new',
+  )
+  equal(
+    await lookup([
+      {
+        entity: { eid: 'one' },
+        repository: { common: '/repo/.git', workspace: 'one' },
+      },
+      {
+        entity: { eid: 'two' },
+        repository: { common: '/repo/.git', workspace: 'two' },
+      },
+    ]),
+    undefined,
+  )
+})
+test('unavailable catalog cannot recursively fail error ingestion', async () => {
+  equal(await lookup([], 500), undefined)
+  equal(
+    await catalogRepository(
+      'http://catalog.test',
+      '/repo/.git',
+      () => Promise.reject(Error('offline')),
+    ),
+    undefined,
+  )
 })

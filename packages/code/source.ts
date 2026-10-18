@@ -191,33 +191,48 @@ export let sourceFrames = (
       function: frames[i].function,
       line: frames[i].line,
     }))
-    let resolved = await resolveFrames(
-      catalog,
-      options.workspace
-        ? repositoryEid(common, options.workspace)
-        : await repositoryAt(options.url, common),
-      blobs,
-      places,
-    )
+    let repository = options.workspace
+      ? repositoryEid(common, options.workspace)
+      : await catalogRepository(options.url, common)
+    // Source classification still works while the catalog is migrating or
+    // unavailable. Optional symbol enrichment must not recursively break error
+    // ingestion, nor guess a computer from a path shared by several contexts.
+    if (!repository) {
+      return frames.map((f, i) => ({ ...f, app: paths[i] != null }))
+    }
+    let resolved = await resolveFrames(catalog, repository, blobs, places)
     return frames.map((f, i) => ({ ...f, ...resolved[i] }))
   }
 }
 
-// The catalog is authoritative for its filesystem context. Missing or ambiguous
-// placement cannot make a path on this computer identify a remote repository.
-let repositoryAt = async (url: string, common: string): Promise<string> => {
+// The catalog is authoritative for its filesystem context. Historical rows
+// without placement cannot identify a computer. A missing/ambiguous catalog
+// means no symbol enrichment, not an error in the error-ingestion pipeline.
+/** The uniquely placed repository at the catalog, or no attribution while
+ * placement is unknown, ambiguous or the catalog is unavailable. Unqualified
+ * historical observations do not hide a qualified repository. */
+export let catalogRepository = async (
+  url: string,
+  common: string,
+  send: typeof fetch = fetch,
+): Promise<string | undefined> => {
   let at = new URL('/query', url)
-  at.searchParams.set('q', '.repository.common=' + JSON.stringify(common))
-  let response = await fetch(at, { signal: AbortSignal.timeout(5000) })
-  if (!response.ok) throw Error('code catalog: repository lookup failed')
-  let rows = await response.json() as Bundle[]
-  if (
-    rows.length != 1 ||
-    !(rows[0].repository as Record<string, unknown>)?.workspace
-  ) {
-    throw Error(
-      'code catalog: repository filesystem context is missing or ambiguous',
-    )
+  // Read the bounded repository inventory rather than using an old process's
+  // cached common-directory identity index during coordinated schema cutover.
+  at.searchParams.set('q', '.repository')
+  let rows: Bundle[]
+  try {
+    let response = await send(at, { signal: AbortSignal.timeout(5000) })
+    if (!response.ok) return
+    rows = await response.json()
+    if (!Array.isArray(rows)) return
+  } catch {
+    return
   }
-  return rows[0].entity.eid
+  let placed = rows.filter((b) => {
+    let r = b.repository as Record<string, unknown> | undefined
+    return r?.common == common && typeof r.workspace == 'string' &&
+      r.workspace.length > 0
+  })
+  return placed.length == 1 ? placed[0].entity.eid : undefined
 }
