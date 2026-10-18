@@ -676,3 +676,28 @@ test('a projection answers what it names, and what its paths reach across the st
   let [stamped] = await asked('.book&.fields=book.pages,created.at')
   assertEquals(Object.keys(stamped), ['kind', 'entity', 'book', 'created'])
 })
+
+test('a spanning read never leaves out a store that answers 503', async () => {
+  let { env, reach } = await where()
+  let ns = env.STORE as unknown as {
+    idFromName(n: string): unknown
+    get(id: unknown): { fetch(req: Request): Promise<Response> }
+  }
+  let down = storeName(nora, reading)
+  let flaky = {
+    ...env,
+    STORE: {
+      idFromName: (n: string) => ({ n, id: ns.idFromName(n) }),
+      get: (id: { n: string; id: unknown }) => ({
+        fetch: (req: Request) =>
+          id.n == down
+            ? Promise.resolve(new Response('stale', { status: 503 }))
+            : ns.get(id.id).fetch(req),
+      }),
+    },
+  } as unknown as Env
+  const e = await assertRejects(() => read(flaky, reach, '.book')) as {
+    status?: number
+  }
+  assertEquals(e.status, 503)
+})

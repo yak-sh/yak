@@ -70,7 +70,7 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { refuse, rejected } from './tool.ts'
+import { refuse, rejected, unavailable } from './tool.ts'
 import { caught } from './defects.ts'
 import { said as told } from './writes.ts'
 import { answered } from './meta.ts'
@@ -327,11 +327,18 @@ let asked = async (
         bundles: (Array.isArray(out) ? out : []) as Bundle[],
       }
     } catch (e) {
-      // A store left out of the merge is a quieter answer, never a silent one.
+      // A store left out of the merge is a quieter answer, never a silent one;
+      // one answering 503 is not left out at all (below).
       caught(e, { request: 'reach', space: r.space.slug, app: r.app.slug })
       return { at: at(r), why: e }
     }
   }))
+  // A store that answers 503 is not a store with nothing to say: the caller
+  // is told, and the reach's owner asks again (agent.ts `renewing`).
+  let down = tried.find((t) => 'why' in t && unavailable(t.why)) as
+    | { why: unknown }
+    | undefined
+  if (down) throw down.why
   let heard = tried.filter((t) => 'bundles' in t) as Heard[]
   if (!heard.length && tried.length) {
     throw (tried[0] as { why: unknown }).why
