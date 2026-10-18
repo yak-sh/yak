@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#f6f3e9">
+    <title>yaks.app — software with room for you</title>
+    <link rel="icon" href="./icon.svg">
+    <link rel="stylesheet" href="./style.css">
+    <script type="module" src="./main.js"></script>
+  </head>
+  <body>
+    <div
+      class="preview-note">A home page experiment. The live yaks.app home page hasn’t changed.</div>
+    <header><a class="brand" href="https://yaks.app/" aria-label="yaks.app home"><img src="./icon.svg" alt="" width="37" height="37">yaks<span>.app</span></a><nav aria-label="Main"><a href="#play">Try it</a><a href="#examples">Explore</a><a class="nav-start" href="https://yaks.app/connect">Connect your agent <span aria-hidden="true">↗</span></a></nav></header>
+    <main>
+      <section class="hero">
+        <div
+          class="eyebrow"><span class="seed"></span> Build, host and share web apps</div>
+        <h1>Software that<br>can <em>change its mind.</em></h1>
+        <p
+          class="intro">Make an app with your agent. Then keep making it yours.<br class="desktop"> A different view. A better way to work. Your own little corner of the web.</p>
+        <a class="primary"
+          href="#play">See what that feels like <span aria-hidden="true">↓</span></a>
+        <div class="margin-note"
+          aria-hidden="true">not another screenshot.<svg viewBox="0 0 100 65"><path d="M5 6Q87 4 70 55M59 44L70 57 81 43"/></svg></div>
+      </section>
+      <section id="play" class="workbench" aria-labelledby="play-title">
+        <div class="bench-heading">
+          <div><span class="eyebrow">A little working example</span><h2 id="play-title">Don’t learn the software.<br>Let it learn your way.</h2></div>
+          <p>This is the real <a href="https://yourname.yaks.app/recipes/" target="_blank" rel="noopener">demo recipe box ↗</a>.<br>Pick a direction. Watch the same data take a new shape.</p>
+        </div>
+        <div class="studio">
+          <svg class="threads" aria-hidden="true" viewBox="0 0 1200 600"
+            preserveAspectRatio="none">
+            <path d="M305 220 C420 220 330 95 550 95 S850 45 1125 100" />
+            <path d="M305 335 C430 335 330 510 590 510 S950 580 1120 465" />
+          </svg>
+          <aside class="agent" aria-label="Guided agent demonstration">
+            <div
+              class="agent-title"><span class="agent-mark" aria-hidden="true">✳</span><div>Your agent<small>Same conversation. More possibilities.</small></div></div>
+            <p
+              class="bubble">Let’s try a few ways to shape this demo app. What would you like to change?</p>
+            <div class="directions" role="group"
+              aria-label="Choose a demo request">
+              <button data-action="cards"
+                aria-pressed="true"><span>01</span> Give the recipes room to breathe <b aria-hidden="true">↗</b></button>
+              <button data-action="categories"
+                aria-pressed="false"><span>02</span> Organize it by category <b aria-hidden="true">↗</b></button>
+              <button data-action="ingredients"
+                aria-pressed="false"><span>03</span> Work with what’s inside <b aria-hidden="true">↗</b></button>
+            </div>
+            <div class="agent-reply"
+              aria-live="polite"><span class="reply-dot"></span><p id="reply">Reading the demo app’s recipe cards…</p></div>
+            <details
+              class="how"><summary>What’s happening here?</summary><p>A guided demonstration, not a live AI chat. The recipe data is read from the live yourname app. These buttons reshape this page and read that data; they don’t change the original app. In your own conversation, your agent can change the app’s code and saved data too.</p><a href="https://yaks.app/docs/tools">How agents work with apps ↗</a></details>
+          </aside>
+          <div class="app-shell">
+            <div
+              class="window-bar"><div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div><a href="https://yourname.yaks.app/recipes/" target="_blank" rel="noopener">yourname.yaks.app/recipes <span>↗</span></a><span class="live-tag" id="connection">Connecting</span></div>
+            <div class="app-content">
+              <div
+                class="app-top"><div><span class="eyebrow">Good things, kept together</span><h3>The recipe box<span class="hand-star" aria-hidden="true">✳</span></h3></div><button id="reset" title="Return to the card view">Start over ↺</button></div>
+              <div
+                class="app-toolbar"><span id="view-label">A place for every recipe</span><span id="recipe-count">Reading live data…</span></div>
+              <div id="app-view" aria-live="polite" aria-busy="true">
+                <p class="loading">Opening the recipe box…</p>
+              </div>
+              <div
+                class="app-bottom"><span><span class="seed"></span> Real recipes. Same data, different possibilities.</span><a href="https://yourname.yaks.app/recipes/" target="_blank" rel="noopener">Open the original ↗</a></div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="bench-caption"><span>① Your words</span><span class="caption-line"></span><span>② Your app, reshaped</span><span class="caption-line"></span><span>③ Still yours</span></div>
+      </section>
+      <section class="explanation">
+        <p class="eyebrow">An app isn’t the end of the conversation.</p>
+        <h2>“Could it also…?”<br><em>Yes. Keep going.</em></h2>
+        <div class="three">
+          <article><span>01 / Make it</span><h3>Start where you are.</h3><p>Ask your agent to turn what you’re working on into an app. It already has the context. You don’t need to start over.</p></article>
+          <article><span>02 / Shape it</span><h3>Change the way it works.</h3><p>Not just the colours. Add a view, a field, a whole new way to use it. Your agent can work on the app itself.</p></article>
+          <article><span>03 / Use it together</span><h3>The data comes along.</h3><p>Open it on your phone. Share a link. Ask your agent to find, add or change things inside it, from the conversation you’re already having.</p></article>
+        </div>
+      </section>
+      <section id="examples" class="examples">
+        <div>
+          <p class="eyebrow">Real apps. Doors you can open.</p>
+          <h2>A few possibilities.<br>Not a prescription.</h2>
+          <p>Your app starts with your life, not our examples.<br>These are just a few things the platform can hold.</p>
+        </div>
+        <div
+          class="example-links"><a href="https://yourname.yaks.app/recipes/"><span>01</span> A recipe box <b>↗</b></a><a href="https://yourname.yaks.app/garden/"><span>02</span> A garden journal <b>↗</b></a><a href="https://yourname.yaks.app/bookclub/"><span>03</span> A book club <b>↗</b></a><a href="https://yourname.yaks.app/trip/"><span>04</span> A trip planner <b>↗</b></a><a href="https://yourname.yaks.app/guestbook/"><span>05</span> A guest book <b>↗</b></a><a href="https://yourname.yaks.app/chores/"><span>06</span> A chores board <b>↗</b></a></div>
+      </section>
+      <section
+        class="closing"><span class="agent-mark" aria-hidden="true">✳</span><h2>What have you been<br>meaning to make?</h2><p>Bring the conversation you’re already having.<br>Give it a place on the web.</p><a class="primary" href="https://yaks.app/connect">Connect your agent <span>↗</span></a><a class="quiet" href="https://yaks.app/pricing">See plans & pricing</a></section>
+    </main>
+    <footer><a class="brand" href="https://yaks.app/">yaks<span>.app</span></a><p>A small home on a very big web.</p><div><a href="https://yaks.app/docs">Docs</a><a href="https://yaks.app/privacy">Privacy</a><a href="https://yaks.app/terms">Terms</a></div></footer>
+  </body>
+</html>
