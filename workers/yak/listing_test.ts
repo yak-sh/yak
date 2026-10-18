@@ -229,8 +229,8 @@ test('query screening excludes refusals from all alternatives and counts', async
 test('a saved aspect cannot be a lens step, while a stamp can', () => {
   let words = ['_lens']
   assertEquals(asking('.recipe', words), '.recipe')
-  assert(asking('.created', words).includes('!_lens'))
-  assert(asking('.recipe|.created', words).includes('!_lens'))
+  assertEquals(asking('.created', words).includes('!_lens'), true)
+  assertEquals(asking('.recipe|.created', words).includes('!_lens'), true)
 })
 
 test('what is not a row listing passes through as it came', () => {
