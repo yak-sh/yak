@@ -467,6 +467,11 @@ let failing = (
   ...e.response && g.vocab.comp(RESPONSE) ? { [RESPONSE]: e.response } : {},
 })
 
+// Exhausted transport/stall failures are operational incidents even when their
+// text says 'network' or 'timeout'. Intermediate attempts still retry quietly.
+let transportFailure = (e: unknown): e is ModelError =>
+  e instanceof ModelError && ['transport', 'stalled'].includes(e.code)
+
 // The error a step throws for the pool to ask again: one that says so.
 let again = (e: ModelError) =>
   e.retry ? e : new ModelError(e.code, e.message, {}, e.response)
@@ -703,7 +708,10 @@ export let react = async (
     } finally {
       if (failure && !superseded) {
         let exception = exceptionOf(failure.error)
-        if (actionable(String(exception.value))) {
+        if (
+          transportFailure(failure.error) ||
+          actionable(String(exception.value))
+        ) {
           deps.report?.(failure.error, session, failure.phase)
         }
       }
@@ -1474,7 +1482,9 @@ export let react = async (
             )
             : line({ [EXCEPTION]: exceptionOf(e) }, String(e)),
         ],
-        e instanceof ModelError ? undefined : { error: e, phase: 'compaction' },
+        e instanceof ModelError && !transportFailure(e)
+          ? undefined
+          : { error: e, phase: 'compaction' },
       )
     }
   }
@@ -1730,7 +1740,10 @@ export let react = async (
             'Response interrupted: ' + String(e),
           ),
       ],
-      defect ? { error: e, phase } : undefined,
+      defect ||
+        transportFailure(e) && !retried
+        ? { error: e, phase }
+        : undefined,
     )
     // Text streamed before the failure stays, unless recovery took the
     // attempt from this worker.

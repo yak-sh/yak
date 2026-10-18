@@ -27,6 +27,7 @@ import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
 import { skillItems, skillTools } from './skills.ts'
+import { pooledHttp } from './http.ts'
 
 export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools } from './tools.ts'
@@ -128,9 +129,11 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
   let binding = machines(h.g, opts.machines ?? h.machines)
   let auth = authorize(h)
   let openaiAuth = openaiCredential(h, env, auth.signin)
+  let http = pooledHttp()
   let model = opts.model ??
     responses({
       ...openaiAuth,
+      fetch: http.fetch,
       redact: true,
       images: configuredImages(h.artifacts, opts.images),
       web: opts.web ?? env('HARNESS_WEB') != '0',
@@ -148,6 +151,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
       openai: model,
       claude: claude(),
       openrouter: openrouter({
+        fetch: http.fetch,
         media: { store: artifactStore(h.artifacts) },
         key: async () =>
           (h.person
@@ -188,6 +192,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     requestItems: (_, __, current) => skillItems(h.g, current, binding),
     report,
     release: async () => {
+      http.close()
       await auth.close()
       await diagnostics().drain()
       detach()

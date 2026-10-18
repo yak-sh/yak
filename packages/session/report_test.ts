@@ -28,6 +28,7 @@ let storageError = new Error('database is full')
 let fixture = async (
   phase: 'model' | 'compaction' | 'forced',
   fails: boolean,
+  error: Error = original,
 ) => {
   let g = transcriptGraph(vocab)
   await g.apply([
@@ -60,7 +61,7 @@ let fixture = async (
       Promise.reject(
         phase == 'forced'
           ? new ModelError('context_length_exceeded', 'too long')
-          : original,
+          : error,
       ),
     tools: [],
     mint: () => `entry-${++n}`,
@@ -74,7 +75,7 @@ let fixture = async (
         compactAt: phase == 'compaction' ? 0.1 : 0.9,
         compactModel: {
           name: 'report-test',
-          model: () => Promise.reject(original),
+          model: () => Promise.reject(error),
         },
       }
       : {}),
@@ -110,3 +111,28 @@ for (let phase of ['model', 'compaction', 'forced'] as const) {
     })
   }
 }
+
+for (let phase of ['model', 'compaction'] as const) {
+  let error = new ModelError(
+    'transport',
+    'responses: transport failed — TypeError: network http2 reset',
+    { after: 0 },
+  )
+  let { g, deps, reported, saved } = await fixture(phase, false, error)
+  test(`${phase} exhausted transport reaches the reporter despite transient message text`, async () => {
+    await react(g, session, deps)
+    equal(reported, [error])
+    // Transport failures retain their interrupted/retry history, not an exception.
+    equal(saved.length, 0)
+  })
+}
+
+let stalled = new ModelError(
+  'stalled',
+  'responses: transport stalled (timeout)',
+)
+let stalledFixture = await fixture('model', false, stalled)
+test('a stalled provider reaches the reporter with its original failure', async () => {
+  await react(stalledFixture.g, session, stalledFixture.deps)
+  equal(stalledFixture.reported, [stalled])
+})

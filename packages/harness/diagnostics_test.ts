@@ -24,6 +24,17 @@ test('a defect reaches its reporter once with stack and cause kept and secrets r
   assertEquals(said.error.message, 'savepoint failed [redacted]')
   assertEquals(said.context.during?.session, 'selected')
   assertEquals(said.context.tags?.phase, 'projection')
+  for (
+    let key of [
+      'pid',
+      'cpu_sample_ms',
+      'cpu_percent',
+      'cpu_user_ms',
+      'cpu_system_ms',
+    ]
+  ) {
+    assert(Number.isFinite(said.context.tags?.[key]))
+  }
   detach()
 })
 

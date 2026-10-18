@@ -3,6 +3,7 @@
  * delivery fails, stderr keeps the failure. There is no second journal.
  */
 import type { Host } from '@yaks/host'
+import { cpuUsage } from 'node:process'
 
 export type FailureContext = { phase: string; session?: string }
 export let describeFailure = (error: unknown): string => {
@@ -32,7 +33,23 @@ export let createDiagnostics = (opts: {
     return text.replace(/\bBearer\s+[^\s"']+/gi, 'Bearer [redacted]')
       .replace(/\bsk-[a-zA-Z0-9_-]{12,}/g, '[redacted]')
   }
+  // CPU counters cost no subprocess or graph read. This process-wide sample
+  // is not a main-thread profile; its interval and pid let the tracker correlate
+  // transport stalls with a busy worker (including event-loop starvation).
+  let sampled = performance.now(), cpu = cpuUsage()
   let report = (error: unknown, context: FailureContext) => {
+    let now = performance.now(), used = cpuUsage()
+    let span = Math.max(0.001, now - sampled)
+    let state = {
+      cpu_sample_ms: Math.round(span),
+      cpu_percent: Math.round(
+        (used.user - cpu.user + used.system - cpu.system) / span / 10,
+      ),
+      cpu_user_ms: Math.round(used.user / 1000),
+      cpu_system_ms: Math.round(used.system / 1000),
+    }
+    sampled = now
+    cpu = used
     if (
       error !== null && (typeof error == 'object' || typeof error == 'function')
     ) {
@@ -46,6 +63,7 @@ export let createDiagnostics = (opts: {
       at: new Date().toISOString(),
       pid: Deno.pid,
       ...context,
+      ...state,
       body,
     }
     let save = sinks.at(-1)
@@ -60,7 +78,7 @@ export let createDiagnostics = (opts: {
       save(thrown, {
         eid: id,
         at: record.at,
-        tags: { phase: context.phase, pid: record.pid },
+        tags: { phase: context.phase, pid: record.pid, ...state },
         ...(context.session ? { during: { session: context.session } } : {}),
       })
     ).then(() => {}, (failure) => {
