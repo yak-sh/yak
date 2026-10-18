@@ -9,7 +9,7 @@
       "tool": true,
       "noun": "vector",
       "verb": "check",
-      "title": "Check the vector index",
+      "title": "Check stored vectors",
       "description": "Check embedding configuration and the vector search engine. Reports missing embedding configuration, a missing vector table, an unavailable native scan on shared storage, or mixed model spaces requiring the ordinary vector reader. Takes no arguments and changes no records.",
       "input": {},
       "readOnly": true

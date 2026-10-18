@@ -1,7 +1,17 @@
 // One-time removal of obsolete native vector codes after every pre-cutover
 // worker and web has stopped. Canonical embeddings remain untouched.
-import { as, count, fn, lit, select, type Statements, table } from '@yaks/sql'
+import {
+  as,
+  count,
+  fn,
+  lit,
+  select,
+  type Statements,
+  statements,
+  table,
+} from '@yaks/sql'
 import { BUILD, TABLE } from '@yaks/embedding'
+import { untrack } from '../packages/embedding/ddl.ts'
 import { install, prepare } from '../packages/embedding/native.ts'
 
 let size = (db: Statements) =>
@@ -14,27 +24,35 @@ let size = (db: Statements) =>
 
 export let retire = (db: Statements) => {
   let [old] = db.query(select({ from: table(BUILD) }))
-  let before = size(db)
-  if (!Number(old?.rows)) return { before, after: before, removed: false }
-  install(db)
-  prepare(db)
+  let removed = !!Number(old?.rows)
+  if (removed) {
+    install(db)
+    prepare(db)
+  }
   return db.atomic(() => {
     let before = size(db)
-    db.query(select({
-      cols: [fn('vector_quantize_cleanup', lit(TABLE), lit('vec'))],
-    }))
-    db.query({
-      t: 'update',
-      table: BUILD,
-      set: { rows: lit(0) },
-    })
-    let memory = db.query(select({
-      cols: [as(fn('vector_quantize_memory', lit(TABLE), lit('vec')), 'bytes')],
-    }))[0]?.bytes
-    if (Number(memory) > 0) throw Error('Native vector codes remain')
+    if (removed) {
+      db.query(select({
+        cols: [fn('vector_quantize_cleanup', lit(TABLE), lit('vec'))],
+      }))
+      db.query({
+        t: 'update',
+        table: BUILD,
+        set: { rows: lit(0) },
+      })
+      let memory = db.query(select({
+        cols: [
+          as(fn('vector_quantize_memory', lit(TABLE), lit('vec')), 'bytes'),
+        ],
+      }))[0]?.bytes
+      if (Number(memory) > 0) throw Error('Native vector codes remain')
+    }
+    if (db.ownership == 'shared') {
+      for (let stmt of untrack()) db.query(stmt)
+    }
     let after = size(db)
     if (after != before) throw Error('Canonical vector count changed')
-    return { before, after, removed: true }
+    return { before, after, removed }
   })
 }
 
@@ -45,7 +63,7 @@ if (import.meta.main) {
     process: false,
   })
   try {
-    console.log(JSON.stringify(retire(host.storage.statements!)))
+    console.log(JSON.stringify(retire(statements(host.storage))))
   } finally {
     await host.close()
   }

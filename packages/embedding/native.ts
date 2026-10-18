@@ -106,7 +106,7 @@ export let state = (db: Statements): State => ({
   installed: installed(db),
   build: current(db),
   model: only(db),
-  dirty: tally(db, DIRTY),
+  dirty: db.ownership == 'exclusive' ? tally(db, DIRTY) : 0,
 })
 
 // The shape registered on one connection.

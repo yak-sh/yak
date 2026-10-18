@@ -24,17 +24,18 @@ import type { Derived, Extension, Raw } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
 import { type Statements, statements } from '@yaks/sql'
-import { schema } from './ddl.ts'
+import { schema as tables } from './ddl.ts'
 import { resolved } from './fields.ts'
 import { chosen, type Options, ready, spaceOf } from './options.ts'
 import { type Hit, meaning as search, type MeaningOpts } from './search.ts'
 import { type Host, neighbours } from './neighbours.ts'
 
-/** The vector table and its dirty flag, which a writing host adds with the
+/** The vector tables, which a writing host adds with the
  * rest of its composed schema. It contributes no rule to `apply()`: nothing a
  * client writes is a vector, and what keeps the vectors in step with the text
  * is the sweep (`./service`), off the write path. */
-export { schema }
+export let schema = (host?: { storage: { statements?: Statements } }) =>
+  tables(host ? statements(host.storage).ownership : undefined)
 
 /** Binding the index does not create or migrate its tables. */
 export let plugins = (): Plugin[] => []
