@@ -227,8 +227,8 @@ test('adopting a pid that is already gone stamps the ending, code unknown', asyn
   assertEquals(await run.done, null)
   let row = (await g.read(`.${PROCESS}&*`))[0]
   assertEquals(comp(row, PROCESS)?.pid, run.pid)
-  assertEquals(comp(row, PROCESS)?.command, null)
-  assertEquals(comp(row, EXIT)?.code, null)
+  assertEquals(comp(row, PROCESS), { pid: run.pid })
+  assertEquals(comp(row, EXIT), {})
 })
 
 test('watch picks up an unfinished row and stamps the one already gone', async () => {
@@ -238,7 +238,7 @@ test('watch picks up an unfinished row and stamps the one already gone', async (
   let runs = await watch(store(g), { dir: dir(), poll: 1 })
   assertEquals(runs.map((r) => r.eid), ['p1'])
   assertEquals(await runs[0].done, null)
-  assertEquals(comp((await g.read(`.${PROCESS}&*`))[0], EXIT)?.code, null)
+  assertEquals(comp((await g.read(`.${PROCESS}&*`))[0], EXIT), {})
   // Stamped, so the next boot's reconcile has nothing left to pick up.
   assertEquals(await watch(store(g), { dir: dir(), poll: 5 }), [])
 })

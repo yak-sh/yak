@@ -699,8 +699,9 @@ export let adopt = async (
 /**
  * The start-up pass: pick every process that has not exited back up. One that
  * is still alive is watched again; one that is already gone has its exit
- * recorded now — with the code its wrapper wrote when we launched it, and
- * `null` when nothing observed the exit.
+ * recorded now — with the code its wrapper wrote when we launched it. When
+ * nothing observed the code, the exit component has no code property and the
+ * returned run’s `done` resolves to `null`.
  *
  * ```ts
  * import { store, watch } from '@yaks/process'
