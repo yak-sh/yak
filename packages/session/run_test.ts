@@ -19,7 +19,7 @@ import {
 } from '@yaks/graph'
 import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
-import { effectDoc, effects, LEASE, leaseEid } from '@yaks/effects'
+import { effectDoc, effects, enqueue, LEASE, leaseEid } from '@yaks/effects'
 import { loadVocab, pick, type VocabDoc } from '@yaks/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -114,9 +114,11 @@ let proc = (
   model: Model,
   more: Partial<Runner> = {},
   now?: () => number,
+  max?: number,
 ) => {
   let fx = effects(vocab, {
     owner: holder,
+    max,
     write: (b) => g.apply(b, { trusted: true }),
     ...now ? { now } : {},
   })
@@ -801,7 +803,6 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
     // Sweeps project identities through rows(); wait until the replacement
     // has seen the transcript while the old lease is held.
     await until(() => swept)
-    await b.fx.idle()
     await settle(b.g, 's1', b.r) // already tried: old still holds it
     stop.abort()
     open()
@@ -829,6 +830,68 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
     await first
     await second
     await a.fx.idle()
+    await b.fx.idle()
+  }
+})
+
+test('duplicate transcript wakes leave pool room for another transcript', async () => {
+  let gate = Promise.withResolvers<void>()
+  let asked: string[] = []
+  let model: Model = async (req) => {
+    let text = JSON.stringify(req.items)
+    asked.push(text)
+    if (text.includes('hold first')) await gate.promise
+    return { id: 'done', model: req.model, items: done }
+  }
+  let p = proc(store(), 'w1', model, {}, undefined, 2)
+  let stop = new AbortController()
+  let working = p.fx.work(p.g, stop.signal)
+  try {
+    await p.g.apply(ask('s1', 'hold first'))
+    await until(() => asked.length == 1)
+    for (let i = 0; i < 8; i++) await enqueue(p.g, 'session_run', 's1')
+    await p.g.apply(ask('s2', 'answer second'))
+    await until(async () => statusOf(await transcript(p.g, 's2')) == 'settled')
+    assertEquals(statusOf(await transcript(p.g, 's1')), 'running')
+    await p.g.apply([{
+      entity: { eid: 'later-input' },
+      entry: { session: 's1' },
+      content: { body: 'one more answer' },
+      using: { provider: P, model: M },
+    }])
+    gate.resolve()
+    await until(async () => statusOf(await transcript(p.g, 's1')) == 'settled')
+    assertEquals(asked.length, 3)
+  } finally {
+    gate.resolve()
+    stop.abort()
+    await working
+    await p.fx.idle()
+  }
+})
+
+test('duplicate wakes waiting on another worker leave pool room', async () => {
+  let gate = Promise.withResolvers<void>()
+  let first = fake(gate.promise), second = fake()
+  let shared = store()
+  let a = proc(shared, 'w1', first.model)
+  let b = proc(shared, 'w2', second.model, {}, undefined, 2)
+  await a.g.apply(ask('s1'))
+  let active = settle(a.g, 's1', a.r)
+  await until(() => first.asked.length == 1)
+  let stop = new AbortController()
+  let working = b.fx.work(b.g, stop.signal)
+  try {
+    for (let i = 0; i < 8; i++) await enqueue(b.g, 'session_run', 's1')
+    await b.g.apply(ask('s2'))
+    await until(async () => statusOf(await transcript(b.g, 's2')) == 'settled')
+    assertEquals(first.asked.length, 1)
+    assertEquals(second.asked.length, 1)
+  } finally {
+    gate.resolve()
+    stop.abort()
+    await active
+    await working
     await b.fx.idle()
   }
 })

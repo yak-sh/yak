@@ -420,12 +420,14 @@ export let runningAt = async (g: Graph, session: Eid): Promise<boolean> => {
 
 /** The pass this process is running over a transcript, to wait on, if any. */
 export let passing = (g: Graph, session: Eid): Promise<void> | undefined =>
-  going(g).get(session)?.done ?? advancing(g).get(session)
+  going(g).get(session)?.done ?? advancing(g).get(session)?.done
 
 // Each owed effect owns one step. Waiting effects retain their durable pool
-// claims; a crash leaves them available to the next worker. The local tail
-// serializes a holder's own steps, since its lease alone permits reentry.
-let steps = new WeakMap<Graph, Map<Eid, Promise<void>>>()
+// claim; a crash leaves it available to the next worker. Duplicate wakes join
+// that obligation without holding pool slots, including while this worker
+// waits on another worker's session lease. One durable followup preserves them.
+type Advance = { done: Promise<void>; again: boolean }
+let steps = new WeakMap<Graph, Map<Eid, Advance>>()
 let advancing = (g: Graph) => {
   let here = steps.get(g)
   if (!here) steps.set(g, here = new Map())
@@ -435,8 +437,14 @@ let advancing = (g: Graph) => {
 let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
   looking(g).get(session)?.()
   let here = advancing(g)
-  let previous = here.get(session) ?? Promise.resolve()
-  let done = previous.catch(() => {}).then(async () => {
+  let previous = here.get(session)
+  if (previous) {
+    previous.again = true
+    return Promise.resolve()
+  }
+  let pass: Advance = { done: Promise.resolve(), again: false }
+  here.set(session, pass)
+  let done = Promise.resolve().then(async () => {
     if (!await answering(g, session, r)) return
     await holding(g, `${RUN}/${session}`, {
       holder: r.holder,
@@ -459,8 +467,8 @@ let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
       if (ENDED.includes(s.status)) await ended(g, session, r)
     })
   }).finally(async () => {
-    if (here.get(session) == done) here.delete(session)
-    if (r.stopping?.aborted) {
+    if (here.get(session) == pass) here.delete(session)
+    if (pass.again || r.stopping?.aborted) {
       let status = await currentStatus(g, session)
       if (['pending', 'running', 'queued'].includes(status)) {
         await enqueue(g, 'session_run', session)
@@ -468,7 +476,7 @@ let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
     }
     await r.idle?.(session)
   })
-  here.set(session, done)
+  pass.done = done
   return done
 }
 
