@@ -2329,8 +2329,8 @@ let SANDBOX: Row[] = machineDeclared().map((t) => {
       let said = await bench(
         ctx,
         space,
-        async ({ machine }) =>
-          await machineTools(machine, { cwd: () => CWD })
+        async ({ workspace }) =>
+          await machineTools(workspace, { cwd: () => CWD })
             .find((m) => m.name == t.name)!
             .run(args),
       )

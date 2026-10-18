@@ -52,7 +52,7 @@ export let exercise = async (ns: Sandboxes, workspaces: Workspaces) => {
     spend,
     () => 0,
   )
-  await host.machine.write('/workspace/held', 'held')
+  await host.workspace.write('/workspace/held', 'held')
   let spent = await released(
     { SANDBOX: ns, WORKSPACES: workspaces },
     space,
@@ -61,7 +61,9 @@ export let exercise = async (ns: Sandboxes, workspaces: Workspaces) => {
   )
   let removed = false
   try {
-    await (await host.provider.wake(host.ref)).machine.read('/workspace/held')
+    await (await host.provider.connect(host.ref)).workspace.read(
+      '/workspace/held',
+    )
   } catch {
     removed = true
   }

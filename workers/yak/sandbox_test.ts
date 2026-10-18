@@ -359,7 +359,7 @@ test('a lend returns a usable machine while the CLI warms', async () => {
   let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
   let spend = spending()
   let lent = await workbench(env, space, ADA, spend)
-  let warm = await lent.machine.look('proc-1')
+  let warm = await lent.workspace.look('proc-1')
   assert(warm)
   assertEquals(warm.exit, undefined)
   assert(box.files.has('/usr/local/bin/yak'))
@@ -367,7 +367,7 @@ test('a lend returns a usable machine while the CLI warms', async () => {
     (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
     'ready',
   )
-  assertEquals((await lent.machine.look('proc-1'))?.exit, undefined)
+  assertEquals((await lent.workspace.look('proc-1'))?.exit, undefined)
   await workbench(env, space, ADA, spend)
   assertEquals(
     box.ran.filter((cmd) => cmd == 'yak --help >/dev/null').length,
@@ -393,7 +393,7 @@ for (let failure of ['rpc', 'exit']) {
       (await lent.provider.exec(lent.ref, 'echo ready')).stdout,
       'ready',
     )
-    await lent.provider.release(lent.ref)
+    await lent.provider.dispose(lent.ref)
     assertEquals([...box.alive], [])
   })
 }
@@ -600,7 +600,7 @@ let placeholderEnv = {
   OAUTH_KV: kv(),
   SESSION_SECRET: SECRET,
 }
-let { machine: placeholderMachine } = await workbench(
+let { workspace: placeholderMachine } = await workbench(
   placeholderEnv,
   { eid: 'ada', slug: 'ada' } as Space,
   ADA,

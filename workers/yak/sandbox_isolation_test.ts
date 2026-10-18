@@ -99,8 +99,8 @@ test('a personal sandbox keeps its files and process across calls and a space re
   let box = containers()
   let env = { SANDBOX: box.SANDBOX, WORKSPACES: workspaces(box.SANDBOX) }
   let first = await workbench(env, space, 'owner', spending())
-  await first.machine.write('/workspace/artifact', 'compiled')
-  let process = await first.machine.start('leftover-process')
+  await first.workspace.write('/workspace/artifact', 'compiled')
+  let process = await first.workspace.start('leftover-process')
   await workbench(env, space, 'editor', spending())
   let next = await workbench(
     env,
@@ -108,8 +108,8 @@ test('a personal sandbox keeps its files and process across calls and a space re
     'owner',
     spending(),
   )
-  equal(await next.machine.read('/workspace/artifact'), 'compiled')
-  equal((await next.machine.look(process))?.exit, undefined)
+  equal(await next.workspace.read('/workspace/artifact'), 'compiled')
+  equal((await next.workspace.look(process))?.exit, undefined)
 })
 
 let legacyFixture = async () => {
@@ -135,24 +135,24 @@ let continuedOwner = await workbench(
   'owner',
   spending(),
 )
-await continuedOwner.machine.start('owner-command')
+await continuedOwner.workspace.start('owner-command')
 
 test('a legacy compile and workspace survive without giving its leftover code fresh credentials', async () => {
   let { env, old, ref, process } = legacyIsolation
   let owner = await workbench(env, space, 'owner', spending())
-  await owner.machine.start('owner-command')
-  equal(await owner.machine.read('/workspace/artifact'), 'compiled')
-  equal((await owner.machine.look(process))?.exit, undefined)
+  await owner.workspace.start('owner-command')
+  equal(await owner.workspace.read('/workspace/artifact'), 'compiled')
+  equal((await owner.workspace.look(process))?.exit, undefined)
   equal((await old.exec(ref, 'read-owner-environment')).stdout, 'absent')
 })
 
 test('a migrated personal workspace keeps later edits and destroys every sandbox', async () => {
   let { box, env, ref } = continuedLegacy, owner = continuedOwner
-  await owner.machine.write('/workspace/artifact', 'new work')
+  await owner.workspace.write('/workspace/artifact', 'new work')
   let next = await workbench(env, space, 'owner', spending())
-  equal(await next.machine.read('/workspace/artifact'), 'new work')
+  equal(await next.workspace.read('/workspace/artifact'), 'new work')
   box.calls.length = 0
-  equal(await next.machine.look('unknown-process'), null)
+  equal(await next.workspace.look('unknown-process'), null)
   equal(box.calls.includes(ref.id), false)
   await workbench(env, space, 'former-member', spending())
   await destroyedAll(env, space)

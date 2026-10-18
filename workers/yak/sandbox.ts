@@ -1,8 +1,8 @@
 // The builder's workbench (T-34264): a container it can run commands in, so
 // the things a browser cannot compile get compiled somewhere and the artifact
-// is shipped into the app as ordinary files. It is the machine this host lends
-// @yaks/harness's machine tools through @yaks/sandbox/cloudflare, as a box lends its
-// own through @yaks/process.
+// is shipped into the app as ordinary files. It is the sandbox workspace this host lends
+// file-and-command tools through @yaks/sandbox/cloudflare; computers and sandbox
+// provisioning are separate from that Workspace interface.
 //
 // Owner, 2026-09-05: "and can we also give the agent some sandbox tools so
 // they could compile rust, etc. if they needed to?"
@@ -400,28 +400,6 @@ exec deno run --quiet --no-config --reload --allow-net --allow-env --allow-read 
 
 /** The host lends its configured provider after checking the build's budget.
  * Billing starts at first need; grants are supplied only to command invocations. */
-// The hosted harness still consumes LentMachine. Keep that translation at the
-// consumer; Cloudflare itself owns only sandbox lifecycle and Workspace.
-let legacyProvider = (...args: Parameters<typeof cloudflareProvider>) => {
-  let provider = cloudflareProvider(args[0], {
-    ...args[1],
-    legacyRecreation: true,
-  })
-  let lent = async (connection: ReturnType<typeof provider.connect>) => {
-    let { workspace, root } = await connection
-    return { machine: workspace, cwd: root }
-  }
-  return {
-    ...provider,
-    request: (ref: Parameters<NonNullable<typeof provider.request>>[0]) =>
-      lent(provider.request!(ref)),
-    wake: (ref: Parameters<typeof provider.connect>[0]) =>
-      lent(provider.connect(ref)),
-    release: (ref: Parameters<typeof provider.dispose>[0]) =>
-      provider.dispose(ref),
-  }
-}
-
 export let workbench = async (
   env: Bound,
   space: Space,
@@ -441,7 +419,8 @@ export let workbench = async (
   spend.since ??= now()
   let ref = { id: named(space, person) }
   let source = { id: shared(space) }
-  let provider = legacyProvider(ns, {
+  let provider = cloudflareProvider(ns, {
+    legacyRecreation: true,
     retry: retried,
     env: () => spend.signing ??= signed(env, idOf(ns, ref.id), space, person),
     sleepError: (e) =>
@@ -450,7 +429,10 @@ export let workbench = async (
   // Snapshot only the workspace into a clean container, never its processes,
   // system files or environment. The source records completed copies so a
   // retry or another command cannot overwrite the person's later work.
-  let old = legacyProvider(ns, { retry: retried })
+  let old = cloudflareProvider(ns, {
+    legacyRecreation: true,
+    retry: retried,
+  })
   if (!env.WORKSPACES) throw new Error('no sandbox workspace coordinator')
   let workspace = env.WORKSPACES.get(env.WORKSPACES.idFromName(source.id))
   spend.copying ??= retried(() => workspace.fork(source.id, ref.id)).then(
@@ -463,29 +445,29 @@ export let workbench = async (
     throw error
   })
   spend.legacy = await spend.copying
-  let lent = await (first ? provider.request!(ref) : provider.wake(ref))
+  let lent = await (first ? provider.request!(ref) : provider.connect(ref))
   spend.preparing ??= (async () => {
-    await lent.machine.write('/usr/local/bin/yak', LAUNCHER)
+    await lent.workspace.write('/usr/local/bin/yak', LAUNCHER)
     let result = await provider.exec(ref, 'chmod +x /usr/local/bin/yak')
     if (result.exitCode) throw new Error(`yak launcher: ${result.stderr}`)
     // The container owns the warm-up after this RPC returns. The launcher
     // coordinates concurrent yak calls; ordinary commands need not wait.
     try {
-      await lent.machine.start('yak --help >/dev/null')
+      await lent.workspace.start('yak --help >/dev/null')
     } catch (e) {
       caught(e, { request: 'sandbox warm', space: space.slug })
     }
   })()
   await spend.preparing
   if (!spend.legacy?.length) return { ...lent, provider, ref }
-  let legacy = (await old.wake(source)).machine
+  let legacy = (await old.connect(source)).workspace
   let processes = new Set(spend.legacy)
-  let machine = lent.machine
-  let of = (id: string) => processes.has(id) ? legacy : machine
+  let target = lent.workspace
+  let of = (id: string) => processes.has(id) ? legacy : target
   return {
     ...lent,
-    machine: {
-      ...machine,
+    workspace: {
+      ...target,
       look: (id: string) => of(id).look(id),
       tail: (id: string, n: number) => of(id).tail(id, n),
       kill: (id: string, signal: 'SIGTERM' | 'SIGKILL') =>
