@@ -1636,7 +1636,15 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // time the statement runs.
   let wearing = [...narrowed, ...rest.flatMap((c) => implied(ctx, c))]
     .filter((comp) => facetOf(ctx, present(comp)))
-  let shape = (!ctx.present || ctx.archetypes?.held) &&
+  // Indexed value selections (including OR unions) must retain their own
+  // candidate path rather than enumerating every owner of an eligible shape.
+  let valued = (c: Clause): boolean =>
+    c.kind == 'and' || c.kind == 'or'
+      ? c.clauses.some(valued)
+      : c.kind == 'pred' && !c.not && needs(opOf(c), c.value) &&
+        opOf(c) != EXISTS
+  let shape = !siblings.some(valued) &&
+      (!ctx.present || ctx.archetypes?.held) &&
       all.length + none.length > 1
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null
