@@ -359,3 +359,71 @@ let unhomedReply = await pending(withoutProject, 'unhomed').then(
 test('a native session without a project hears its addressed reply without transcript status', () => {
   equal(unhomedReply(), ['direct-unhomed'])
 })
+
+test('a waiting listener skips unchanged revisions and hears the next commit', async () => {
+  let rows: Bundle[] = [], revision = 1, reads = 0, waits = 0
+  let { graph: g } = stub(() => (reads++, rows))
+  let before = 0
+  let stop = new AbortController()
+  let lines: string[] = []
+  let source = {
+    ...g,
+    storage: { revision: () => revision },
+  } as unknown as Graph
+  await listen(source, null, 'me', {
+    out: (line) => lines.push(line),
+    once: true,
+    stop: stop.signal,
+    every: () => {
+      waits++
+      if (waits == 1) before = reads
+      if (waits == 3) {
+        equal(reads, before)
+        rows = [{
+          entity: { eid: 'news' },
+          comment: { target: 't' },
+          doc: { body: 'arrived' },
+        }]
+        revision++
+      }
+      if (waits > 3) stop.abort()
+      return Promise.resolve()
+    },
+  })
+  equal([waits, lines.length, reads > before], [3, 1, true])
+})
+
+test('a listener does not miss a commit during its read', async () => {
+  let revision = 1,
+    waits = 0,
+    stop = new AbortController(),
+    lines: string[] = []
+  let rows: Bundle[] = []
+  let { graph: g } = stub(() => {
+    if (!rows.length) {
+      revision++
+      rows = [{
+        entity: { eid: 'during' },
+        comment: { target: 't' },
+        doc: { body: 'during read' },
+      }]
+      return []
+    }
+    return rows
+  })
+  await listen(
+    { ...g, storage: { revision: () => revision } } as unknown as Graph,
+    null,
+    'me',
+    {
+      out: (line) => lines.push(line),
+      once: true,
+      stop: stop.signal,
+      every: () => {
+        if (++waits > 1) stop.abort()
+        return Promise.resolve()
+      },
+    },
+  )
+  equal(lines.length, 1)
+})

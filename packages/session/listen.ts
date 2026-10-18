@@ -422,10 +422,14 @@ export type Ear = {
 
 let pause = (every: Ear['every'], stop?: AbortSignal) =>
   typeof every == 'function' ? every() : new Promise<void>((done) => {
-    let timer = setTimeout(done, every)
-    stop?.addEventListener('abort', () => (clearTimeout(timer), done()), {
-      once: true,
-    })
+    let finish = () => {
+      clearTimeout(timer)
+      stop?.removeEventListener('abort', finish)
+      done()
+    }
+    let timer = setTimeout(finish, every)
+    stop?.addEventListener('abort', finish, { once: true })
+    if (stop?.aborted) finish()
   })
 
 /** Select what this listener hears. Addressed items do not wait for a turn;
@@ -555,7 +559,9 @@ export let hear = async (
 /** Say everything addressed to the session as it arrives, until `stop`
  * aborts, or until the first read that says anything when `once`. */
 export let listen = async (
-  graph: Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>,
+  graph:
+    & Pick<Graph, 'vocab' | 'read' | 'get' | 'apply'>
+    & Partial<Pick<Graph, 'storage'>>,
   actor: Actor | null,
   session: Eid,
   ear: Ear,
@@ -566,10 +572,18 @@ export let listen = async (
         'declares — compose that plugin',
     )
   }
+  let first = true, prior: unknown
   while (!ear.stop?.aborted) {
-    let lines = 0
-    await hear(graph, actor, session, (line) => (lines++, ear.out(line)))
-    if (ear.once && lines) return
+    // Sample before reading: a commit during hear must be read next beat.
+    // SQLite revisions include other processes' commits; watch does not.
+    let revision = graph.storage?.revision?.()
+    if (first || revision === undefined || revision !== prior) {
+      first = false
+      prior = revision
+      let lines = 0
+      await hear(graph, actor, session, (line) => (lines++, ear.out(line)))
+      if (ear.once && lines) return
+    }
     await pause(ear.every, ear.stop)
   }
 }
