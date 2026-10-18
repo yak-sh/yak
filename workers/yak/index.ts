@@ -261,6 +261,9 @@ class PublicDirectoryStore extends DurableObject<Env> {
   finish(revision: number) {
     return this.#copy.finish(revision)
   }
+  settle(revision: number, committed: number) {
+    return this.#copy.settle(revision, committed)
+  }
   put(revision: number, key: string, body: string) {
     return this.#copy.put(revision, key, body)
   }

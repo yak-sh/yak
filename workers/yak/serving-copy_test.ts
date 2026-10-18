@@ -276,3 +276,18 @@ test('serving copy: equal publication has no persistent warm cost', () => {
   }
   equal(f.stats(), before)
 })
+
+test('serving copy: settle finishes a committed fence, rewinds a rolled-back one, spares a newer one', () => {
+  let { copy, restart } = fixture({ revision: 4, blocked: false, answers: [] })
+  let n = copy.begin()
+  ok(copy.settle(n, n))
+  ok(copy.valid(n))
+  let m = copy.begin()
+  ok(copy.settle(m, n))
+  ok(copy.valid(n) && !copy.valid(m))
+  let k = copy.begin()
+  copy.begin()
+  equal(copy.settle(k, n), false)
+  equal(copy.valid(n), false)
+  equal(restart().valid(k + 1), false)
+})

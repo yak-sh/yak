@@ -80,6 +80,24 @@ export class ServingCopy {
   }
 
   /**
+   * A mutation that raised this fence has ended and the directory says which
+   * revision it holds committed. The mutation's own revision committed (its
+   * finish was lost): finish it. Otherwise it rolled back and changed
+   * nothing, so the committed revision still stands: serve at it again. A
+   * newer fence is never touched, and nothing here is a lease: bodies were
+   * cleared by begin and refill from the directory.
+   */
+  settle(revision: number, committed: number): boolean {
+    if (revision !== this.#revision) return false
+    if (!this.#blocked) return true
+    if (committed >= revision) return this.finish(revision)
+    this.#persist(committed, false, this.#answers)
+    this.#revision = committed
+    this.#blocked = false
+    return true
+  }
+
+  /**
    * Accept only a current, unblocked fill. Replacement refreshes insertion order;
    * eviction removes the oldest fill, never registers a cold key.
    */

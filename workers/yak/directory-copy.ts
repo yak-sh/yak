@@ -18,6 +18,8 @@ export type ServingCopyDoor = {
   publish?(revision: number, key: string, body: string): Promise<boolean>
   begin(): Promise<number>
   finish(revision: number): Promise<boolean>
+  /** A failed mutation ends its fence at the directory's committed revision. */
+  settle?(revision: number, committed: number): Promise<boolean>
   put(revision: number, key: string, body: string): Promise<boolean>
   get(key: string): Promise<string | null>
 }
@@ -40,20 +42,25 @@ export class Unfenced extends Error {
 // any order, so a write can come back holding a revision older than one a
 // concurrent write already committed under. Its commit refuses it, and it
 // takes a fresh fence; only a write that keeps losing the race fails.
+//
+// A write that fails settles its fence (`committed` reads the directory's
+// committed revision), so signed serving resumes at once with the last
+// committed directory instead of waiting for another write to succeed.
 export let fenced = async <T>(
   copy: ServingCopyDoor,
   write: (revision: number) => T | Promise<T>,
+  committed: () => number,
   tries = 4,
 ): Promise<T> => {
   let revision = await copy.begin()
   try {
     let out = await write(revision)
-    // A failed write leaves the copy fenced; never resurrect it on rollback.
     await copy.finish(revision)
     return out
   } catch (e) {
+    await copy.settle?.(revision, committed()).catch(() => {})
     if (!(e instanceof Unfenced) || tries <= 1) throw e
-    return fenced(copy, write, tries - 1)
+    return fenced(copy, write, committed, tries - 1)
   }
 }
 

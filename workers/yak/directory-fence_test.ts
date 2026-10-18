@@ -40,6 +40,8 @@ let fixture = async (rules: Rule[] = []) => {
       finishes.push(revision)
       return core.finish(revision)
     },
+    settle: (revision, committed) =>
+      Promise.resolve(core.settle(revision, committed)),
     put: (...args) => Promise.resolve().then(() => core.put(...args)),
     get: (key) => Promise.resolve().then(() => core.get(key)),
   }
@@ -221,7 +223,7 @@ await proof('deployment selection also clears the copy', async () => {
 })
 
 await proof(
-  'a refused batch stays blocked across copy and Store restart until a successful write',
+  'a refused batch settles its fence and serving resumes at the committed revision',
   async () => {
     let f = await fixture()
     let error = await refusal(() =>
@@ -231,34 +233,25 @@ await proof(
       ], KERNEL)
     )
     let finished = [...f.finishes], persisted = f.saved().blocked
-    let blocked = unavailable(f)
+    let blocked = !f.core().valid(f.initial)
     f.restart()
-    let restarted = unavailable(f)
-    let staleFill = f.core().put(f.initial, '.app', f.body)
+    let restarted = !f.core().valid(f.initial)
     let rows = await f.at.query('.entity.eid=app&.app')
+    let answer = await f.read()
+    let epoch = Number(answer.headers.get(EPOCH))
+    let filled = f.core().put(epoch, '.app', await answer.text())
     await f.at.apply(
       [{ entity: { eid: 'app' }, doc: { title: 'Recovered' } }],
       KERNEL,
     )
-    let current = await f.read()
-    let filled = f.core().put(
-      Number(current.headers.get(EPOCH)),
-      '.app',
-      await current.text(),
-    )
     return () => {
       ok(error.includes('unknown component'), error)
       equal(finished, [])
-      equal([persisted, blocked, restarted, staleFill], [
-        true,
-        true,
-        true,
-        false,
-      ])
-      equal((rows[0].app as { access: string }).access, 'public')
-      equal(f.finishes, [f.initial + 2])
+      equal([persisted, blocked, restarted], [false, false, false])
+      equal(epoch, f.initial)
       equal(filled, true)
-      equal(f.saved().blocked, false)
+      equal((rows[0].app as { access: string }).access, 'public')
+      equal(f.committed().epoch, String(f.initial + 1))
     }
   },
 )

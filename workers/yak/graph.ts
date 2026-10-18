@@ -1575,7 +1575,7 @@ export class Store {
             this.#copyWrite.run(
               revision,
               () => trusted(opts, () => apply(bundles, opts)),
-            ))
+            ), this.#committed)
         }
         g.admit = (bundles, opts) =>
           this.#copyWrite.run(
@@ -1746,6 +1746,13 @@ export class Store {
     let v = row ? String(row.v) : null
     this.#kv.set(k, v)
     return v
+  }
+
+  /** The revision the directory holds committed, read past a rolled-back
+   * write's memory of it. */
+  #committed = () => {
+    this.#kv.delete('directory-revision')
+    return Number(this.#get('directory-revision') ?? 0)
   }
 
   #put(k: Word, v: string) {
@@ -3132,7 +3139,7 @@ export class Store {
                 this.#put(rule.mark, JSON.stringify(s))
                 return s
               }))
-          s = copy ? await fenced(copy, moved) : moved()
+          s = copy ? await fenced(copy, moved, this.#committed) : moved()
         } catch (e) {
           this.#kv.clear()
           this.#halted.add(rule.mark)
