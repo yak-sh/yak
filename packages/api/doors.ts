@@ -21,6 +21,7 @@ import { readBody, receiveBody } from './body.ts'
 import { fault, json, refusal } from './refuse.ts'
 import { published } from './publish.ts'
 import { received } from './receipts.ts'
+import { admit } from './requests.ts'
 import { BINARY, decode, stringify, unpack } from '@yaks/vocab/wire'
 
 /** Context the application gives each incoming write before authentication
@@ -148,7 +149,18 @@ export let pour = (
   let bytes = new TextEncoder()
   // Awaited, so a slow reader slows the import down rather than piling the
   // whole response up behind itself.
-  let say = (v: unknown) => writer.write(bytes.encode(`${stringify(v)}\n`))
+  let disconnected = false
+  let say = async (v: unknown) => {
+    if (disconnected) return
+    let line = bytes.encode(`${stringify(v)}\n`)
+    try {
+      await writer.write(line)
+    } catch {
+      // This identity stream has no transform that can fail: only its reader
+      // can cancel it. Losing the reply must not abandon received writes.
+      disconnected = true
+    }
+  }
 
   let run = async () => {
     let held: Bundle[] = []
@@ -206,7 +218,17 @@ export let pour = (
       return during(span, run)
     })
     : run()
-  flowing.catch(() => {}).finally(() => writer.close().catch(() => {}))
+  let finished = admit(
+    request,
+    flowing.catch(async (error) => {
+      await writer.abort(error).catch(() => {})
+      throw error
+    }).finally(async () => {
+      if (!disconnected) await writer.close().catch(() => {})
+    }),
+  )
+  // Standalone calls have no listener to observe completion.
+  void finished.catch(() => {})
   return new Response(out.readable, {
     headers: { 'content-type': 'application/x-ndjson' },
   })

@@ -5,6 +5,15 @@ import type { Handler } from './route.ts'
 
 class Cancelled extends Refused {}
 
+let owners = new WeakMap<Request, (work: Promise<unknown>) => void>()
+
+/** A response producer can outlive its headers and its connection. Keep its
+ * admitted work owned by the listener until it finishes. */
+export let admit = <T>(request: Request, work: Promise<T>): Promise<T> => {
+  owners.get(request)?.(work)
+  return work
+}
+
 export let reading = (request: Request) =>
   ['GET', 'HEAD', 'OPTIONS'].includes(request.method)
 
@@ -89,6 +98,7 @@ export let requests = (handler: Handler) => {
   let reads = new AbortController()
   let pending = new Set<Promise<unknown>>()
   let open = new Map<Request, string>()
+  let producers = new Map<Promise<unknown>, Request>()
   let failures: unknown[] = []
   let keep = (done: Promise<unknown>) => {
     pending.add(done)
@@ -99,12 +109,26 @@ export let requests = (handler: Handler) => {
   }
   return {
     open: () =>
-      [...open].map(([request, phase]) => ({
+      [
+        ...open,
+        ...[...producers.values()].map((request): [Request, string] => [
+          request,
+          'producer',
+        ]),
+      ].map(([request, phase]) => ({
         method: request.method,
         path: new URL(request.url).pathname,
         phase,
       })),
     handle: (request: Request) => {
+      owners.set(request, (work) => {
+        producers.set(work, request)
+        keep(work)
+        void work.then(
+          () => producers.delete(work),
+          () => producers.delete(work),
+        )
+      })
       open.set(request, 'handler')
       let ended = () => {
         open.delete(request)

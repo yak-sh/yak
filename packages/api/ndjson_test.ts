@@ -9,6 +9,7 @@ import { stub } from '@std/testing/mock'
 import type { Bundle } from '@yaks/graph/bundle'
 import { derivedEid } from '@yaks/graph/identity'
 import { CHUNK } from './doors.ts'
+import { requests } from './requests.ts'
 import { api } from './route.ts'
 import { comp, req, shopGraph } from './testing.ts'
 
@@ -223,4 +224,35 @@ test('an alias resolves within its own chunk and nowhere else', async () => {
   assert(no.message.includes('$zoe'), no.message)
   assertEquals(no.line, CHUNK + 1)
   assertEquals(no.committed, CHUNK)
+})
+
+test('a disconnected streaming import remains owned until its received draft lands', async () => {
+  let graph = shopGraph()
+  let started = Promise.withResolvers<void>()
+  let commit = Promise.withResolvers<void>()
+  let apply = graph.apply
+  graph.apply = async (bundles, opts) => {
+    started.resolve()
+    await commit.promise
+    return apply(bundles, opts)
+  }
+  let active = requests(api({ graph }))
+  let response = await active.handle(
+    ndjson('/apply', load(CHUNK + 1).join('\n')),
+  )
+  await started.promise
+  await response.body!.cancel()
+  active.cancel()
+  let drained = false
+  let ending = active.drain().then(() => drained = true)
+  try {
+    await Promise.resolve()
+    assertEquals(drained, false)
+  } finally {
+    commit.resolve()
+    await ending
+  }
+  assertEquals((await graph.get([`b${CHUNK + 1}`], ['book']))[0].book, {
+    price: CHUNK + 1,
+  })
 })
