@@ -86,15 +86,33 @@ export async function earlier(g: Graph, options: {
   let tokens = [
     ...new Set(words.toLowerCase().match(/[\p{L}\p{N}_-]{4,}/gu) ?? []),
   ].filter((w) => !stop.has(w)).slice(0, 24)
-  let text = tokens.map((w) => JSON.stringify(w)).join('|')
-  let lexical = text
-    ? await g.read(
-      `(${text}) (${within}) * .order=search .limit=24`,
-    )
-    : []
   let hits = meaning
     ? await meaning(words, { within, limit: 24 }).catch(() => [])
     : []
+  // A semantic answer needs no second whole-corpus lexical search. The
+  // fallback ranks one term at a time, avoiding a 24-way OR whose repeated
+  // policy joins held the serving thread for 55 seconds on the live corpus.
+  let lexical: Bundle[] = []
+  if (!hits.length) {
+    let candidates = new Map<string, Bundle>()
+    for (let word of tokens) {
+      for (
+        let row of await g.read(
+          `${JSON.stringify(word)} (${within}) * .order=search .limit=24`,
+        )
+      ) {
+        candidates.set(row.entity.eid, row)
+      }
+    }
+    let relevance = (b: Bundle) => {
+      let text = ownWords(b, person!, name!).map((q) => q.words).join(' ')
+        .toLowerCase()
+      return tokens.filter((w) => text.includes(w)).length
+    }
+    lexical = [...candidates.values()].sort((a, b) =>
+      relevance(b) - relevance(a)
+    )
+  }
   // Granite 30M: unrelated corpus pairs reached .642; the attachment
   // paraphrase reached .669 and inspect's two earlier asks .664/.677.
   let ids = hits.filter((h) => h.similarity >= .65).map((h) => h.entity)

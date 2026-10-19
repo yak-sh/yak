@@ -97,3 +97,41 @@ test('a quote in agent prose is not a person-authored input', () => {
     [],
   )
 })
+
+let lexicalReads = 0
+let semanticAnswer = await earlier({
+  ...g,
+  read: () => {
+    lexicalReads++
+    throw Error('semantic answer must not scan lexical corpus')
+  },
+} as Graph, {
+  person: 'person',
+  name: 'Ada',
+  words: 'immutable attachments',
+  before: '2026-02-01T00:00:00Z',
+  meaning: () =>
+    Promise.resolve([{ entity: 'input', similarity: .9, excerpt: '' }]),
+})
+test('semantic recall does not duplicate its work with a lexical corpus scan', () => {
+  equal(lexicalReads, 0)
+  equal(semanticAnswer.includes('immutable files'), true)
+})
+let termQueries: string[] = []
+let fallbackAnswer = await earlier({
+  ...g,
+  read: (q: unknown) => {
+    termQueries.push(String(q))
+    return Promise.resolve([input])
+  },
+} as Graph, {
+  person: 'person',
+  name: 'Ada',
+  words: 'immutable attachments files',
+  before: '2026-02-01T00:00:00Z',
+})
+test('lexical fallback searches bounded individual terms and deduplicates their quotes', () => {
+  equal(termQueries.length, 3)
+  equal(termQueries.every((q) => !q.includes('"|"')), true)
+  equal(fallbackAnswer.split('input ·').length, 2)
+})
