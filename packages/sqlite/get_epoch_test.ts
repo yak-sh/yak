@@ -2,6 +2,8 @@
 // mutation ends that proof, including writes to other owners in the same tx.
 import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
+import { apiDoc } from '@yaks/api/vocab'
+import { receipts } from '../api/receipts.ts'
 import { loadVocab } from '@yaks/vocab'
 import { sessionDoc } from '@yaks/session'
 import { sessionDerived } from '../session/status.ts'
@@ -9,7 +11,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
-import { fn, lit } from '@yaks/sql'
+import { as, eidOf, fn, lit, select } from '@yaks/sql'
 import { storage } from './mod.ts'
 import { open } from './db.ts'
 
@@ -19,19 +21,26 @@ let vocab = loadVocab([
   modelDoc,
   toolsDoc,
   archetypeDoc,
+  apiDoc,
   {
     $defs: {
       doc: { component: true, properties: { title: { type: 'string' } } },
+      record: {
+        component: true,
+        computed: true,
+        properties: { title: { type: 'string' } },
+      },
     },
   },
 ], [kernelKeywords])
-let fixture = (path = ':memory:', overrides = {}) => {
+let fixture = (path = ':memory:', overrides = {}, options = {}) => {
   let d = open(path)
   let s = storage(d, vocab, {
     derived: { ...sessionDerived(vocab), ...overrides },
+    ...options,
   })
   s.install()
-  let g = graph({ storage: s, vocab, plugins: [archetypes()] })
+  let g = graph({ storage: s, vocab, plugins: [archetypes(), receipts()] })
   let query = d.query, n = 0
   d.query = (stmt) => {
     if (stmt.t == 'select' || stmt.t == 'raw') n++
@@ -169,7 +178,7 @@ let text = {
 let d = open(':memory:')
 let store = storage(d, vocab, { derived: sessionDerived(vocab, text) })
 store.install()
-let g = graph({ storage: store, vocab, plugins: [archetypes()] })
+let g = graph({ storage: store, vocab, plugins: [archetypes(), receipts()] })
 await g.apply([
   { entity: { eid: 'owner' }, session: {} },
   {
@@ -222,4 +231,101 @@ test('a whole answer over the existing byte bound remains a whole fresh read', (
   equal((oversized[0].doc as { title: string }).title.length, 16384)
   equal(status(oversized), 'settled')
   ok(fallthrough > 0)
+})
+
+let masks = fixture()
+await seed(masks)
+let masked: Bundle[][] = [], fresh: Bundle[][] = []
+let policies: Record<string, string>[] = [
+  { entry: '!entry' },
+  { output: '!output' },
+  {},
+]
+for (let components of policies) {
+  let visibility = { entity: '!apply_receipt', components }
+  for (let n = 0; n < 3; n++) {
+    masked.push(await masks.g.get(['owner'], undefined, { visibility }))
+    fresh.push(masks.s.get(['owner'], undefined, {
+      visibility,
+      derived: sessionDerived(vocab),
+    }))
+  }
+}
+let denied = await masks.g.get(['owner'], undefined, {
+  visibility: { entity: '!session' },
+})
+let relative = { visibility: { components: { entry: '.entry.seq<today' } } }
+for (let n = 0; n < 3; n++) await masks.g.get(['owner'], undefined, relative)
+let r = masks.reads()
+await masks.g.get(['owner'], undefined, relative)
+let relativeReads = masks.reads() - r
+masks.d.close()
+test('completed scoped views preserve all masks and root authorization', () => {
+  equal(masked, fresh)
+  equal(denied, [])
+  ok(relativeReads > 0)
+})
+
+let visibility = { components: { entry: '!entry' } }
+let base = fixture(':memory:', {}, { visibility })
+await seed(base)
+for (let n = 0; n < 3; n++) base.s.get(['owner'])
+let baseStates = [status(base.s.get(['owner']))]
+visibility.components.entry = '.entry'
+baseStates.push(status(base.s.get(['owner'])))
+visibility.components.entry = '!entry'
+baseStates.push(status(base.s.get(['owner'])))
+base.d.close()
+test('constructor visibility is part of each completed get key', () => {
+  equal(baseStates, ['empty', 'settled', 'empty'])
+})
+
+let tag = '1234567890abcdef1234567890abcdef'
+let virtual = fixture(':memory:', {}, {
+  backed: {
+    record: {
+      tag,
+      rows: select({
+        cols: [as(lit(7), 'entity'), as(fn('random'), 'title')],
+      }),
+    },
+  },
+})
+await seed(virtual)
+let backed = virtual.s.read('.record')[0].entity.eid
+let absent = ['owner', eidOf(backed.slice(8), 8)]
+for (let n = 0; n < 3; n++) await virtual.g.get(absent)
+let b = virtual.reads()
+let absentRows = await virtual.g.get(absent)
+let backedReads = virtual.reads() - b
+for (let n = 0; n < 3; n++) await virtual.g.get(['owner'])
+b = virtual.reads()
+await virtual.g.get(['owner'])
+let ordinaryReads = virtual.reads() - b
+virtual.d.close()
+test('an absent backed identity cannot borrow a stable neighboring answer', () => {
+  equal(absentRows.map((b) => b.entity.eid), ['owner'])
+  ok(backedReads > 0)
+  equal(ordinaryReads, 0)
+})
+
+let changed = fixture()
+await seed(changed)
+for (let n = 0; n < 3; n++) await changed.g.get(['owner'])
+let override = {
+  derived: {
+    'session.status': { tag: 'text' as const, expr: () => lit('override') },
+  },
+}
+let overrides: string[] = []
+for (let n = 0; n < 3; n++) {
+  overrides.push(status(changed.s.get(['owner'], ['session'], override)))
+}
+let from = changed.reads()
+changed.s.get(['owner'], ['session'], override)
+let overrideReads = changed.reads() - from
+changed.d.close()
+test('per-call providers bypass the store fixed-provider answer', () => {
+  equal(overrides, ['override', 'override', 'override'])
+  ok(overrideReads > 0)
 })

@@ -50,6 +50,7 @@ import {
   col,
   type Driver,
   erect,
+  idOf,
   literals,
   oneOf,
   type Raw,
@@ -362,6 +363,17 @@ const UNREAD = new Set([
   'unordered',
 ])
 
+// The effective read options are data; order of object keys is immaterial,
+// while arrays, query clauses, paths and literal token strings keep order.
+let keyed = (value: unknown) =>
+  JSON.stringify(
+    value,
+    (_key, v) =>
+      v && typeof v == 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]]))
+        : v,
+  )
+
 // The ledgers of the units open on each driver, outermost first (`tracked`).
 type Writing = { ledger: Ledger; complete: boolean }
 let ledgers = new WeakMap<Driver, Writing[]>()
@@ -453,25 +465,70 @@ export let storage = (
       )
     },
   })
+  let known = (o: Opts) =>
+    Object.keys(o).every((k) => UNREAD.has(k) || k == 'visibility')
+  let virtual = (eids: string[], o: Opts) =>
+    Object.values(o.backed ?? {}).some((b) =>
+      b.tag && eids.some((eid) => idOf(b.tag!, eid) != null)
+    )
+  let reused = (
+    eids: string[],
+    comps: string[] | undefined,
+    o: Opts,
+    run: () => Bundle[],
+  ) => {
+    if (!policies(o) || virtual(eids, o)) return run()
+    // Registries are fixed per store. A per-call replacement is unknown and
+    // bypasses reuse; the remaining effective inputs belong in the key.
+    let { derived: _d, backed: _b, extend: _e, archetypes: _a, ...inputs } = o
+    return memo.view(keyed(['get', eids, comps, inputs]), run, comps)
+  }
+  let kept = (
+    fetch: (eids: string[], comps?: string[]) => Bundle[],
+    eids: string[],
+    comps?: string[],
+    refresh = true,
+  ) => {
+    let o = opts()
+    let run = () =>
+      o.visibility || virtual(eids, o)
+        ? fetch(eids, comps)
+        : memo.get(fetch, eids, comps, refresh)
+    return refresh ? reused(eids, comps, o, run) : run()
+  }
+  let cached = (eids: string[], comps?: string[], refresh = true) =>
+    kept(identity, eids, comps, refresh)
+  let viewed = (
+    eids: string[],
+    comps: string[] | undefined,
+    o: Opts,
+    fetch = cached,
+  ) => {
+    let effective = { ...opts(), ...o }
+    let eligible = known(o)
+    if (!effective.visibility && !Object.keys(o).length) {
+      return fetch(eids, comps)
+    }
+    let run = () =>
+      get(
+        driver,
+        vocab,
+        eids,
+        effective,
+        comps,
+        [],
+        eligible && !base.visibility && !virtual(eids, effective)
+          ? reading(effective, fetch)
+          : undefined,
+      )
+    return eligible ? reused(eids, comps, effective, run) : run()
+  }
   let fetched = (o: Opts = {}, fetch = cached) =>
     Object.keys(o).every((k) =>
         k != 'now' && (UNREAD.has(k) || k == 'visibility')
       )
-      ? o.visibility
-        ? (eids: string[], comps?: string[]) =>
-          get(
-            driver,
-            vocab,
-            eids,
-            { ...opts(), ...o },
-            comps,
-            [],
-            reading(o, fetch),
-          )
-        : fetch
+      ? (eids: string[], comps?: string[]) => viewed(eids, comps, o, fetch)
       : undefined
-  let cached = (eids: string[], comps?: string[], refresh = true) =>
-    memo.get(identity, eids, comps, refresh)
   let tested = (query: And, exactIds = false): Filter | undefined => {
     if (!basis(vocab, query, base.derived) || !local(vocab, query)) {
       return undefined
@@ -718,7 +775,7 @@ export let storage = (
       let rest = eids.filter((eid) => !moving.has(eid))
       let at = new Map(
         [
-          ...memo.get(
+          ...kept(
             (ids, names) => get(driver, vocab, ids, opts(), names, pending),
             moved,
             comps,
@@ -991,20 +1048,7 @@ export let storage = (
       ensure()
       return unit(
         driver,
-        () =>
-          o?.visibility
-            ? get(
-              driver,
-              vocab,
-              eids,
-              { ...opts(), ...o },
-              comps,
-              [],
-              Object.keys(o).every((k) => UNREAD.has(k) || k == 'visibility')
-                ? reading(o)
-                : undefined,
-            )
-            : memo.get(identity, eids, comps),
+        () => viewed(eids, comps, o ?? {}),
         'read',
       )
     },
@@ -1013,7 +1057,7 @@ export let storage = (
       return unit(driver, (): R => {
         let cached = (t: Tx): Tx => ({
           ...t,
-          get: (eids, comps) => memo.get(t.get, eids, comps),
+          get: (eids, comps) => kept(t.get, eids, comps),
         })
         if (!classified) return body(cached(tx))
         let { tx: t, settle, close } = tracked()

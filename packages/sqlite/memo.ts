@@ -89,6 +89,9 @@ export type Memo = {
     comps?: string[],
     refresh?: boolean,
   ) => Bundle[]
+  /** A completed get with SQL-state-only policies. Its caller keys every
+   * effective read input and keeps authorization/masks inside `run`. */
+  view: (key: string, run: () => Bundle[], comps?: string[]) => Bundle[]
   /** Run a write that changes the entities `eids` names, given what it
    * returned: they are let go, and kept out until its transaction ends. A
    * write that may make entities it does not name (`mints`) lets go of every
@@ -949,7 +952,7 @@ export let memoized = (
   }
   // A stable relation can change when another entity is patched. Such
   // components refresh on every miss; only this global revision can reuse the
-  // whole answer. Dynamic providers and scoped refreshes keep their old path.
+  // completed answer. Unproven providers remain uncached.
   let related = Object.entries(providers).filter(([, d]) =>
     !storedOnly(d, vocab)
   )
@@ -958,7 +961,14 @@ export let memoized = (
   )
   let safe = (rows: Bundle[], comps?: string[]) => {
     let names = new Set(rows.flatMap((b) => Object.keys(b)))
-    if ([...names].some((n) => vocab.comp(n)?.computed)) return false
+    if (
+      [...names].some((n) =>
+        vocab.comp(n)?.computed || vocab.props(n).some((p) => {
+          let ref = vocab.prop(n, p)?.ref
+          return ref && vocab.comp(ref)?.computed
+        })
+      )
+    ) return false
     let reads = related.filter(([p, d]) =>
       names.has(p.split('.')[0]) && (!!comps || d.whole !== false)
     )
@@ -1047,6 +1057,33 @@ export let memoized = (
     trim()
     return out
   }
+  let viewed = (key: string, run: () => Bundle[], comps?: string[]) => {
+    sync()
+    if (
+      !reusable.size ||
+      comps && !comps.some((n) => reusable.has(n))
+    ) return run()
+    let limit = ANSWER - key.length * 2
+    if (limit <= 0) return run()
+    let epoch = revision(driver, 'data')
+    let held = k.answers.get(key)
+    if (held?.epoch == epoch) {
+      k.answers.delete(key)
+      k.answers.set(key, held)
+      return copied(held.rows) as Bundle[]
+    }
+    if (held) k.answers.delete(key)
+    let rows = run()
+    if (!safe(rows, comps) || epoch != revision(driver, 'data')) return rows
+    if (!held && !k.asked.delete(key)) {
+      k.asked.add(key)
+      if (k.asked.size > ASKED) k.asked.delete(k.asked.values().next().value!)
+      return rows
+    }
+    let kept = packed(rows, limit)
+    if (kept) remember(key, { tables: [], epoch, rows: kept })
+    return rows
+  }
   let stored = new Set(['tombstone', ...tables(vocab)])
   return {
     presence: (eid, tables) => {
@@ -1107,32 +1144,9 @@ export let memoized = (
     },
     get: (get, eids, comps, refresh = true) => {
       sync()
-      if (
-        !refresh || !reusable.size ||
-        comps && !comps.some((n) => reusable.has(n))
-      ) return getting(get, eids, comps, refresh)
-      let key = JSON.stringify(['get', eids, comps])
-      let limit = ANSWER - key.length * 2
-      if (limit <= 0) return getting(get, eids, comps, refresh)
-      let epoch = revision(driver, 'data')
-      let held = k.answers.get(key)
-      if (held?.epoch == epoch) {
-        k.answers.delete(key)
-        k.answers.set(key, held)
-        return copied(held.rows) as Bundle[]
-      }
-      if (held) k.answers.delete(key)
-      let rows = getting(get, eids, comps, refresh)
-      if (!safe(rows, comps) || epoch != revision(driver, 'data')) return rows
-      if (!held && !k.asked.delete(key)) {
-        k.asked.add(key)
-        if (k.asked.size > ASKED) k.asked.delete(k.asked.values().next().value!)
-        return rows
-      }
-      let kept = packed(rows, limit)
-      if (kept) remember(key, { tables: [], epoch, rows: kept })
-      return rows
+      return getting(get, eids, comps, refresh)
     },
+    view: viewed,
     writes,
     removes: (eids, at, body) => {
       sync()
