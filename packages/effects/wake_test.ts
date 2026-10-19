@@ -74,9 +74,12 @@ let committed = async (h: ReturnType<typeof fixture>, deferred: boolean) => {
       equal(h.count(), 0)
       for (let run of observers) await run()
     }
-    equal(cleared, 1, 'the commit must interrupt the polling nap')
+    let interrupted = cleared
+    // Fail before awaiting a handler when the wake is broken: the fake clock
+    // deliberately never releases the worker's polling nap.
+    equal(interrupted, 1, 'the commit must interrupt the polling nap')
     await h.ran.promise
-    equal(h.count(), 1)
+    return { interrupted, count: h.count() }
   } finally {
     stop.abort()
     await loop
@@ -89,8 +92,10 @@ for (let deferred of [false, true]) {
   await committed(warm, deferred)
   let h = fixture()
   await h.fx.work(h.g, undefined, 0)
-  test(`a committed effect wakes the sleeping local worker (deferred observers: ${deferred})`, () =>
-    committed(h, deferred))
+  let outcome = await committed(h, deferred)
+  test(`a committed effect wakes the sleeping local worker (deferred observers: ${deferred})`, () => {
+    equal(outcome, { interrupted: 1, count: 1 })
+  })
 }
 let refused = fixture(true)
 await refused.fx.work(refused.g, undefined, 0)
