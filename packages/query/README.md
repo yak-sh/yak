@@ -313,6 +313,11 @@ recognizes entity numbers and human ids; other nonempty `.after` values become
 eids. An aggregate uses every match and ignores `.order`, `.limit`, and
 `.after`, which shape entity lists.
 
+A component with no properties is a **marker**. A direct marker selection such
+as `.fields=doc.title,native` carries `native{}` where present, while keeping
+`doc` narrowed to `title`. Raw row readers receive `1` or `0` for marker
+presence. A component with properties still needs a property selection.
+
 ```ts
 import {
   after,

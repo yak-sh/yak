@@ -38,6 +38,7 @@ let v = loadVocab([{
     effect: { component: true, properties: { handler: str } },
     using: { component: true, properties: { effort: str } },
     proposed: { component: true, properties: {} },
+    ghost: { component: true, computed: true, properties: {} },
     comment: {
       component: true,
       properties: { target: { ...str, ref: 'entity' } },
@@ -199,6 +200,7 @@ let has: [string, string, string, string | undefined, Source<Cand[]>?][] = [
   ],
   ['descending', '.order=-pri', '.order=-task.priority', 'task'],
   ['a tally reads a property', '.tally=pin.', '.tally=pin.x', 'pin'],
+  ['fields include stored markers', '.fields=pro', '.fields=proposed', 'comp'],
   [
     'fields, one part at a time',
     '.fields=pin.x,pin.h',
@@ -243,6 +245,7 @@ test('complete: nothing to offer is an empty list', () => {
   assertEquals(complete(v, '').cands, [])
   assertEquals(complete(v, '"quoted').cands, [])
   assertEquals(complete(v, '.nothing.').cands, [])
+  assertEquals(complete(v, '.fields=gh').cands, [])
 })
 
 let texts = (text: string) => Object.keys(offered(text))

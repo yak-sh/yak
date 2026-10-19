@@ -623,6 +623,12 @@ let columnOf = (path: string[], directive: string): Hop => {
 let fieldOf = (path: string[], wake: boolean): Field => {
   let hops = vocab.aim(path.join('.'))
   let [first, ...at] = hops
+  if (
+    hops.length == 1 && !first.prop && !vocab.props(first.comp).length &&
+    !vocab.comp(first.comp)?.computed
+  ) {
+    return { ...first, wake }
+  }
   let through = (h: Hop, i: number) =>
     !!h.prop &&
     (i == hops.length - 1 || vocab.prop(h.comp, h.prop)?.category == 'ref')

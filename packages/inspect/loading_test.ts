@@ -94,7 +94,7 @@ let sessionTile = (comps: Record<string, unknown>, first: Bundle[] = []) =>
     },
   }))
 let nativeTile = sessionTile({ native: {} })
-let managedTile = sessionTile({}, [{
+let managedTile = sessionTile({ process: { pid: 42 } }, [{
   entity: { eid: 'input' },
   using: { provider: 'codex' },
 }])
@@ -106,6 +106,11 @@ let importedTile = sessionTile({ session: { log: 'log', status: 'stopped' } }, [
   },
 ])
 let unknownTile = sessionTile({})
+let apiTile = sessionTile({}, [{
+  entity: { eid: 'api-ask' },
+  ask: {},
+  using: { provider: 'openai' },
+}])
 
 test('session tiles distinguish the native loop, managed provider and imported transcript', () => {
   equal(nativeTile.querySelector('.Tile_Kind')?.textContent?.trim(), 'native')
@@ -120,6 +125,10 @@ test('session tiles distinguish the native loop, managed provider and imported t
   equal(
     unknownTile.querySelector('.Tile_Kind')?.textContent?.trim(),
     'unknown harness',
+  )
+  equal(
+    apiTile.querySelector('.Tile_Kind')?.textContent?.trim(),
+    'unknown harness · openai',
   )
   equal(unknownTile.querySelector('.Tile_Title')?.textContent, 'run')
   equal(

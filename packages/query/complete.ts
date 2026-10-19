@@ -307,14 +307,19 @@ let slot = (at: At, hop: Hop, pre: string): Found => {
 }
 
 // A property path as a directive's value (`.tally=task.status`,
-// `.fields=pin.x`), the properties first, since a component alone is no value
-// there.
-let field = (at: At, typed: string): Cand[] => {
+// `.fields=pin.x`), with stored markers offered only for projection.
+let field = (at: At, typed: string, markers = false): Cand[] => {
   let segs = typed.split('.')
   let pre = segs.pop()!
   let lead = segs.map((s) => s + '.').join('')
   let n = names(at, lead, segs, pre, true)
-  return sorted([...n.props, ...n.comps.filter((c) => c.text.endsWith('.'))])
+  return sorted([
+    ...n.props,
+    ...n.comps.filter((c) =>
+      c.text.endsWith('.') ||
+      markers && !segs.length && !at.v.comp(c.text)?.computed
+    ),
+  ])
 }
 
 // A directive's value: a ranking or a property to order by, the property an
@@ -332,7 +337,7 @@ let directed = (at: At, name: string, value: string): Found | undefined => {
   if (name == 'tally' || name == 'distinct') return field(at, value)
   if (name == 'fields') {
     let cut = value.lastIndexOf(',') + 1
-    return field(at, value.slice(cut))
+    return field(at, value.slice(cut), true)
       .map((c) => ({ ...c, text: value.slice(0, cut) + c.text }))
   }
   if (name == 'near' || name == 'refs' || name == 'after') {

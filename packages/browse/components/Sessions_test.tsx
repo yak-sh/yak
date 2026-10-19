@@ -1,7 +1,9 @@
 import { test } from '@yaks/testing'
 import { faked, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
-import type { Bundle, Comp } from '@yaks/graph'
+import { type Bundle, type Comp, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { vocab } from '../types.ts'
 import { cache, config } from '../live.ts'
 import { host, reader } from '../host_testing.ts'
 import { allSessionsPath, allSessionsQuery } from '../tray_query.ts'
@@ -37,6 +39,7 @@ let sessions: Bundle[] = Array.from({ length: 15 }, (_, i) => ({
 
 // Seed and paint the fixture before timing its filtering acts.
 let summary = await summaries()
+let origin = await origins()
 let prior = config.host
 config.host = 'browser.test'
 cache.value = {}
@@ -55,11 +58,21 @@ let titles = () =>
   [...mounted.root.querySelectorAll('.Tile_Title')].map((e) => e.textContent)
 await until(() => titles().length == 10)
 
+test('Sessions keeps projected runner identity and membership after a cold reopen', () => {
+  assertEquals(origin.first, origin.reopened)
+  assertEquals(origin.first, [
+    ['Native', 'native'],
+    ['Managed', 'managed'],
+    ['Imported', 'imported'],
+    ['API history', 'unknown harness'],
+  ])
+})
+
 test('All sessions reuses the paged list and accepts words and query filters, newest first', async () => {
   try {
     assertEquals(summary.subs, [
-      'active just now',
-      'active just now',
+      'settled · active just now',
+      'pending · active just now',
     ])
     assertEquals(summary.dots, [
       'Dot Dot-half Dot-active',
@@ -267,6 +280,66 @@ async function summaries() {
     drop()
     wire.free()
     cache.value = {}
+    config.host = prior
+  }
+}
+
+async function origins() {
+  let prior = config.host
+  config.host = 'browser.test'
+  let names = ['Native', 'Managed', 'Imported', 'API history']
+  let store = ram(vocab, {
+    computed: { 'session.status': () => 'settled' },
+  })
+  store.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'openai' }, doc: { title: 'OpenAI' } },
+      ...names.map((title, i) => ({
+        entity: { eid: `origin-${i}` },
+        doc: { title },
+        session: { id: `origin-${i}`, ...i == 2 ? { log: 'log' } : {} },
+        created: { at: new Date(2026, 0, 4 - i).toISOString() },
+        ...i == 0 ? { native: {} } : i == 1 ? { process: { pid: 42 } } : {},
+      })),
+      {
+        entity: { eid: 'http-ask' },
+        entry: { session: 'origin-3', seq: 1 },
+        ask: {},
+        using: { provider: 'openai' },
+      },
+    ])
+  )
+  let g = graph({ vocab, storage: store })
+  let drop = await contribute([facet])
+  let draw = async () => {
+    cache.value = {}
+    let wire = host(({ subscribe }) => {
+      let bundles = g.read(subscribe)
+      if (!Array.isArray(bundles)) throw Error('expected synchronous fixture')
+      return { bundles }
+    })
+    let mounted = mount(<QueryList eid='origins' query={allSessionsQuery} />)
+    try {
+      await until(() =>
+        mounted.root.querySelectorAll('.Tile').length == 4 &&
+        mounted.root.querySelector('.Tile_Kind')?.textContent?.trim() ==
+          'native'
+      )
+      return [...mounted.root.querySelectorAll('.Tile')].map((tile) => [
+        tile.querySelector('.Tile_Title')?.textContent,
+        tile.querySelector('.Tile_Kind')?.textContent?.trim()
+          .replace(' · OpenAI', ''),
+      ])
+    } finally {
+      mounted.free()
+      wire.free()
+      cache.value = {}
+    }
+  }
+  try {
+    return { first: await draw(), reopened: await draw() }
+  } finally {
+    drop()
     config.host = prior
   }
 }

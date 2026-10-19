@@ -52,6 +52,8 @@ export let sessionFields = [
   'doc.title',
   'session.source',
   'session.operator',
+  'session.log',
+  'native',
 ]
 
 // The Sessions destination (navigation.ts): a view of the store, not a saved
@@ -68,7 +70,7 @@ export let sessionQueries = (vocab: import('@yaks/vocab').Vocab) => {
   let offered = (fields: string[]) =>
     fields.filter((field) => {
       let [comp, prop] = field.split('.')
-      return vocab.prop(comp, prop)
+      return prop ? vocab.prop(comp, prop) : vocab.comp(comp)
     })
   let fields = offered(dotFields.map((f) => `${f.comp}.${f.prop}`))
   let project = fields.length ? `&.fields=${fields.join(',')}` : ''

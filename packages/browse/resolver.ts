@@ -93,7 +93,9 @@ export let memoryResolver = (store: Store): MemoryResolver => {
   // re-fire compares against to tell a move (x/y/w/h) from a mute z-bump.
   let sig = (eid: string, fields: Field[]): string => {
     let r = store.read(eid)
-    return JSON.stringify(fields.map((f) => r?.[f.comp]?.[f.prop] ?? null))
+    return JSON.stringify(
+      fields.map((f) => f.prop ? r?.[f.comp]?.[f.prop] ?? null : !!r?.[f.comp]),
+    )
   }
   let seed = (s: QuerySet, ids: Iterable<string>) => {
     if (!s.wake.length) return

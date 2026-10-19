@@ -335,6 +335,39 @@ test('a projection sends what it names, and says what that covers', () => {
   }])
 })
 
+let markerProjection = (() => {
+  let g = graph({ vocab: jobs, storage: ram(jobs) })
+  g.apply([{ entity: { eid: 'job' }, job: {} }])
+  let subs = subscriptions(g), sink = ear()
+  let query = '.job .fields=completed'
+  subs.open(sink.to, 'markers', query)
+  let absent = sink.take()
+  g.apply([{ entity: { eid: 'job' }, completed: {} }])
+  let added = sink.take()
+  subs.drop(sink.to)
+  subs.open(sink.to, 'markers', query)
+  let reopened = sink.take()
+  g.apply([{ entity: { eid: 'job' }, completed: null }])
+  let removed = sink.take()
+  subs.drop(sink.to)
+  return { absent, added, reopened, removed }
+})()
+
+test('projected markers update and survive reopening without changing membership', () => {
+  let { absent, added, reopened, removed } = markerProjection
+  assertEquals([absent, added, reopened, removed].map((fs) => fs.map(ids)), [
+    [['job']],
+    [['job']],
+    [['job']],
+    [['job']],
+  ])
+  assertEquals(absent[0].bundles?.[0].completed, undefined)
+  assertEquals(added[0].bundles?.[0].completed, {})
+  assertEquals(reopened[0].bundles?.[0].completed, {})
+  assertEquals(removed[0].bundles?.[0].completed, undefined)
+  assertEquals(absent[0].coverage, { job: { completed: [] } })
+})
+
 test('a projection carries what its paths reach, and follows it', () => {
   let graph = shop()
   graph.apply([

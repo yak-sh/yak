@@ -230,10 +230,18 @@ let compiled = (
 // it reaches (`.fields=review.book.doc.title`), found among the rest the way a
 // path predicate finds it.
 type Field = { read: (b: Bundle, among: Index) => unknown; tag: Tag }
-let field = (ctx: Ctx, path: string): Field => {
+let field = (ctx: Ctx, path: string, markers = false): Field => {
   let hops = ctx.v.aim(path)
   let leaf = hops[hops.length - 1]
-  if (!leaf.prop) throw whole(ctx.v, leaf.comp, BY)
+  if (!leaf.prop) {
+    if (
+      !markers || hops.length != 1 || ctx.v.props(leaf.comp).length ||
+      ctx.v.comp(leaf.comp)?.computed
+    ) {
+      throw whole(ctx.v, leaf.comp, BY)
+    }
+    return { read: (b) => b[leaf.comp] ? 1 : 0, tag: 'number' }
+  }
   chained(ctx.v, hops)
   let read = reader(ctx.v, leaf.comp, leaf.prop, ctx.computed)
   if (!read) throw new Unsupported('a computed property here', path, BY)
@@ -460,7 +468,7 @@ export let rows = (
     if (!agg) {
       let fields = (find<Fields>(cs, 'fields')?.fields ?? []).map((f) => {
         let at = f.path.join('.')
-        return [at, said(field(ctx, at))] as const
+        return [at, said(field(ctx, at, true))] as const
       })
       return (bs: Source) => {
         let among = indexed(bs)

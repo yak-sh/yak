@@ -7,7 +7,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type PropSchema } from '@yaks/vocab'
 import type { Bundle } from './bundle.ts'
 import { graph } from './graph.ts'
-import { named } from './projection.ts'
+import { named, projection } from './projection.ts'
 import { books } from './testing.ts'
 
 let comp = (properties: Record<string, PropSchema> = {}) => ({
@@ -64,6 +64,40 @@ let shelf = () => {
 let at = (eid: string, comps: Record<string, unknown> = {}) => ({
   entity: { eid },
   ...comps,
+})
+
+let markers = loadVocab({
+  $defs: {
+    doc: comp({ title: { type: 'string' }, body: { type: 'string' } }),
+    native: comp(),
+  },
+})
+let marked = graph({ storage: ram(markers), vocab: markers })
+marked.apply([
+  at('a', { doc: { title: 'A', body: 'large body' }, native: {} }),
+  at('b', { doc: { title: 'B', body: 'large body' } }),
+])
+let markerQuery = '.doc ?doc .fields=doc.title,native .order=doc.title'
+let markerRead = marked.read(markerQuery)
+let markerCut = projection(markers, markerQuery)!
+
+test('property projections retain requested empty markers without widening other components', () => {
+  assertEquals(markerRead, [
+    at('a', { doc: { title: 'A' }, native: {} }),
+    at('b', { doc: { title: 'B' } }),
+  ])
+  assertEquals(
+    markerCut.cut(at('a', {
+      doc: { title: 'A', body: 'not requested' },
+      native: {},
+    })),
+    at('a', { doc: { title: 'A' }, native: {} }),
+  )
+  assertEquals(
+    markerCut.cut(at('b', { doc: { title: 'B' } })),
+    at('b', { doc: { title: 'B' } }),
+  )
+  assertEquals(markerCut.own, { doc: ['title'], native: [] })
 })
 
 test('a projection answers what it names, and what its paths reach', () => {

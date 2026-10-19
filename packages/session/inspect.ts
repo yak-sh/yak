@@ -305,7 +305,7 @@ export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
   useNamed(io, [provider])
   let origin = e.native
     ? 'native'
-    : request || e.process
+    : e.process
     ? 'managed'
     : comp(e, SESSION).log
     ? 'imported'

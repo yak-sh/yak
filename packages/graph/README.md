@@ -408,10 +408,11 @@ has no value: `true` covers the whole bundle, `{book: true}` the whole
 component, and `{book: ['title']}` only its title (`Coverage`).
 
 Each bundle carries the components the query names (`*` requests all). A
-`.fields` projection returns only the named properties. Each entity reached
-through a reference comes back as a separate bundle. `projection(vocab, query)`
-plans that read; `project(g, plan)` separates selected and reached bundles and
-reports coverage.
+`.fields` projection returns only the named properties and explicitly selected
+[markers](../query/README.md#directives). Each entity reached through a
+reference comes back as a separate bundle. `projection(vocab, query)` plans that
+read; `project(g, plan)` separates selected and reached bundles and reports
+coverage.
 
 ```ts
 import { graph, project, projection } from '@yaks/graph'

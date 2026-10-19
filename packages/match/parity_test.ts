@@ -198,6 +198,40 @@ test('a projection answers the same rows on both sides', () => {
   }, { eid: 'r3', 'review.book.doc.title': 'Cooking on a Barge' }])
 })
 
+let markerVocab = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      properties: {
+        title: { type: 'string' },
+        body: { type: 'string' },
+      },
+    },
+    native: { component: true, properties: {} },
+  },
+})
+let markerBundles = [
+  { entity: { eid: 'a' }, doc: { title: 'A', body: 'large' }, native: {} },
+  { entity: { eid: 'b' }, doc: { title: 'B', body: 'large' } },
+]
+let markerSql = loaded(markerVocab, markerBundles)
+let markerQuery = '.doc ?doc .fields=doc.title,native .order=doc.title'
+let markerRows = rows(markerQuery, markerVocab)(markerBundles)
+let markerAnswer = markerSql.rows(markerQuery)
+
+test('SQL and RAM project marker presence without widening property selections', () => {
+  let expected = [
+    { eid: 'a', 'doc.title': 'A', native: 1 },
+    { eid: 'b', 'doc.title': 'B', native: 0 },
+  ]
+  assertEquals(markerRows, expected)
+  assertEquals(markerAnswer, expected)
+  assertThrows(() => rows('.doc .fields=doc', markerVocab), Unsupported)
+  assertThrows(() => markerSql.rows('.doc .fields=doc'), Unsupported)
+  assertThrows(() => rows('.doc .order=native', markerVocab), Unsupported)
+  assertThrows(() => markerSql.rows('.doc .order=native'), Unsupported)
+})
+
 test('a query neither side can answer is declined by both', () => {
   let s = sql()
   for (

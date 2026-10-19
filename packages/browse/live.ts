@@ -467,7 +467,8 @@ let predLine = (p: Pred): string | undefined => {
       : p.fields.length
       ? `.fields=${
         p.fields.map((f) =>
-          [f, ...f.at ?? []].map((h) => `${h.comp}.${h.prop}`).join('.') +
+          [f, ...f.at ?? []].map((h) => h.prop ? `${h.comp}.${h.prop}` : h.comp)
+            .join('.') +
           (f.wake ? '' : '~')
         ).join(',')
       }`
@@ -574,7 +575,9 @@ let resetServerSets = () => {
 // resolver's own `sig`, over the cache these sets read.
 let wakeSig = (eid: string, fields: Field[]): string => {
   let r = paint.peek()[eid]
-  return JSON.stringify(fields.map((f) => r?.[f.comp]?.[f.prop] ?? null))
+  return JSON.stringify(
+    fields.map((f) => f.prop ? r?.[f.comp]?.[f.prop] ?? null : !!r?.[f.comp]),
+  )
 }
 let seedWake = (s: ServerSet, ids: Iterable<string>) => {
   if (!s.wake.length) return

@@ -1966,10 +1966,32 @@ let screenFor = (
 // beside it: one key names one entity, so an aggregate groups by the key and
 // reads each group's eid once, rather than every row's.
 type Field = { expr: string; tag: Tag; key?: string }
-let resolveField = (ctx: Ctx, pathStr: string, owner?: string): Field => {
+let resolveField = (
+  ctx: Ctx,
+  pathStr: string,
+  owner?: string,
+  markers = false,
+): Field => {
   let hops = ctx.v.aim(pathStr)
   let [root, leaf] = [hops[0], hops[hops.length - 1]]
-  if (!leaf.prop) throw whole(ctx.v, leaf.comp)
+  if (!leaf.prop) {
+    if (
+      !markers || hops.length != 1 || ctx.v.props(leaf.comp).length ||
+      computed(ctx.v, leaf.comp)
+    ) {
+      throw whole(ctx.v, leaf.comp)
+    }
+    return {
+      expr: worn(ctx, leaf.comp)
+        ? inline(owned({
+          ...ctx,
+          correlated: true,
+          owner: owner ?? ctx.owner ?? ctx.d.ownerKey('entity'),
+        }, leaf.comp))
+        : '0',
+      tag: 'number',
+    }
+  }
   chained(ctx.v, hops)
   let tag = tagAt(ctx.v, ctx.derived, leaf.comp, leaf.prop)
   opaque(tag, 'ordering or projecting by it', `${leaf.comp}.${leaf.prop}`)
@@ -2829,7 +2851,7 @@ let lower = (
   let fields = find<Fields>(cs, 'fields')
   let cols = [ctx.d.membership]
   for (let f of fields?.fields ?? []) {
-    let { expr } = resolveField(ctx, f.path.join('.'))
+    let { expr } = resolveField(ctx, f.path.join('.'), undefined, true)
     cols.push(`${expr} as "${f.path.join('.')}"`)
   }
   // SQLite computes a result column before its sorter cuts the window, so a

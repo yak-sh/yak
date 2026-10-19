@@ -83,6 +83,10 @@ let spelled = (hops: Hop[]) => hops.map((h) => `${h.comp}.${h.prop}`).join('.')
 // identity; an absent value is left out.
 let put = (b: Bundle, s: Hop, value: unknown) => {
   if (value == null || s.prop == 'eid') return
+  if (!s.prop) {
+    if (value) b[s.comp] = {}
+    return
+  }
   if (s.comp == 'entity') b.entity = { ...b.entity, [s.prop]: value }
   else ((b[s.comp] ??= {}) as Comp)[s.prop] = value
 }
@@ -90,7 +94,7 @@ let put = (b: Bundle, s: Hop, value: unknown) => {
 let cover = (into: Record<string, string[]>, s: Hop) => {
   if (s.comp == 'entity') return
   let props = into[s.comp] ??= []
-  if (!props.includes(s.prop)) props.push(s.prop)
+  if (s.prop && !props.includes(s.prop)) props.push(s.prop)
 }
 
 /**
@@ -167,7 +171,13 @@ export let projection = (vocab: Vocab, query: Query): Projection | null => {
       let out: Bundle = { entity: { eid: b.entity.eid } }
       for (let { steps: [s] } of paths) {
         let from = s.comp == 'entity' ? b.entity : b[s.comp]
-        put(out, s, (from as Record<string, unknown> | null)?.[s.prop])
+        put(
+          out,
+          s,
+          s.prop
+            ? (from as Record<string, unknown> | null)?.[s.prop]
+            : from != null,
+        )
       }
       return out
     },
