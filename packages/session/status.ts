@@ -493,7 +493,7 @@ export let sessionStatus = {
     // Older consumed imports classified a cancellation as a passive notice.
     // Interpret that format here without rewriting the owner's transcripts:
     // whether the entry `alias` holds the prose such an import recorded.
-    let cancellation = (id: Expr) =>
+    let cancellation = (alias: string) =>
       ['notice', 'content', 'imported'].every(declared)
         ? exists(select({
           cols: [lit(1)],
@@ -505,7 +505,7 @@ export let sessionStatus = {
             ),
           ],
           where: and(
-            eq(col('entity', 'text'), id),
+            eq(col('entity', 'text'), col('entity', alias)),
             among(text(col('body', 'text')), claudeStops.map(lit)),
           ),
         }))
@@ -542,17 +542,14 @@ export let sessionStatus = {
     ]
     let shaped = (comp: string) =>
       gt(fn('instr', col('tables', 'shape'), lit(JSON.stringify(comp))), lit(0))
-    let probed = (id: Expr) => (comp: string) =>
+    let probed = (alias: string) => (comp: string) =>
       exists(select({
         cols: [lit(1)],
         from: table(comp, 'm'),
-        where: eq(col('entity', 'm'), id),
+        where: eq(col('entity', 'm'), col('entity', alias)),
       }))
     let shapes = typed ? archetype('e') : []
-    let e = marks(
-      typed ? shaped : probed(col('entity', 'e')),
-      cancellation(col('entity', 'e')),
-    )
+    let e = marks(typed ? shaped : probed('e'), cancellation('e'))
     // The newest entry a passive notice does not hide, whether it is a stop,
     // and, when it is a refusal, the request it refused.
     let latest = select({
@@ -689,38 +686,13 @@ export let sessionStatus = {
       ),
       limit: lit(1),
     }
-    // A tiny statistics sample can turn a boundary join into an entry scan.
-    // Keep its two values together: one keyed read, even when both are used.
-    let headed = select({
-      cols: [
-        star('a'),
-        as(
-          sub(select({
-            cols: [
-              fn(
-                'json_array',
-                col('entity', 'point_entry'),
-                col('seq', 'point_entry'),
-              ),
-            ],
-            from: table('entry', 'point_entry'),
-            where: eq(col('entity', 'point_entry'), col('through', 'a')),
-          })),
-          'boundary',
-        ),
-      ],
-      from: from(ask, 'a'),
-      limit: lit(-1),
-    })
-    let bound = (i: number) =>
-      fn('json_extract', col('boundary', 'a'), lit(`$[${i}]`))
     let anchors = select({
       cols: [
         as(col('entity', 'l'), 'newest'),
         as(col('seq', 'l'), 'newest_seq'),
         as(col('entity', 'a'), 'asked'),
         as(col('seq', 'a'), 'asked_seq'),
-        as(bound(1), 'boundary_seq'),
+        as(col('seq', 'boundary'), 'boundary_seq'),
         // The ask's boundary also acknowledges input admitted while that
         // request was in flight; a stop there is part of the turn.
         as(
@@ -728,13 +700,13 @@ export let sessionStatus = {
             'coalesce',
             op(
               '+',
-              bound(1),
+              col('seq', 'boundary'),
               iff(
                 or(
-                  probed(bound(0))('stop'),
+                  probed('boundary')('stop'),
                   iff(
-                    probed(bound(0))('notice'),
-                    cancellation(bound(0)),
+                    probed('boundary')('notice'),
+                    cancellation('boundary'),
                     lit(false),
                   ),
                 ),
@@ -757,7 +729,13 @@ export let sessionStatus = {
         as(col('refused_source', 'l'), 'refused_source'),
       ],
       from: table(LATEST, 'l'),
-      joins: [left(from(headed, 'a'), lit(true))],
+      joins: [
+        left(from(ask, 'a'), lit(true)),
+        left(
+          table('entry', 'boundary'),
+          eq(col('entity', 'boundary'), col('through', 'a')),
+        ),
+      ],
     })
     let anchor = at('anchor')
     let start = fn(
@@ -775,6 +753,33 @@ export let sessionStatus = {
         anchor('newest_seq'),
       ),
     )
+    // The turn: its entries from its start through the newest, or the newest
+    // alone in a transcript written before entries were sequenced. The
+    // anchors are read once, so the turn's rows hang off them as a left join
+    // rather than a union of two reads. Each row reads every component it
+    // wears in one pass: through the archetype, else a join per component.
+    let span = select({
+      cols: [
+        as(fn('coalesce', col('entity', 'i'), anchor('newest')), 'entity'),
+        col('seq', 'i'),
+        star('anchor'),
+      ],
+      from: table(ANCHOR, 'anchor'),
+      joins: [
+        left(
+          table('entry', 'i'),
+          and(
+            mine('i'),
+            notNull(anchor('newest_seq')),
+            ge(col('seq', 'i'), start),
+          ),
+        ),
+      ],
+      where: or(isNull(anchor('newest_seq')), notNull(col('entity', 'i'))),
+    })
+    let joins: Join[] = typed ? archetype('span') : []
+    let wears = typed ? shaped : (comp: string) => notNull(col('entity', comp))
+    // Each component the rule reads, where the entry wears it: its id.
     let comps = [
       'stop',
       'notice',
@@ -794,103 +799,6 @@ export let sessionStatus = {
       'attempt',
       'execution',
     ]
-    // The turn: its entries from its start through the newest, or the newest
-    // alone in a transcript written before entries were sequenced. The
-    // anchors are read once, so the turn's rows hang off them as a left join
-    // rather than a union of two reads. Each row reads every component it
-    // wears in one pass: through the archetype, else a join per component.
-    // Classify only shapes in this turn, once. A scalar owner catalog inside
-    // the entry predicate would run again for every entry in the turn.
-    let framed = (id: Expr) => op('||', op('||', lit(','), id), lit(','))
-    let ownedShapes = select({
-      distinct: true,
-      cols: [col('archetype', 'member')],
-      from: table('entry', 'owned'),
-      joins: [{
-        ...cross(table('entity', 'member')),
-        on: eq(col('id', 'member'), col('entity', 'owned')),
-      }],
-      where: and(mine('owned'), ge(col('seq', 'owned'), start)),
-    })
-    let plainOutputs = select({
-      cols: [
-        fn(
-          'group_concat',
-          framed(col('entity', 'shape')),
-          lit(''),
-        ),
-      ],
-      from: from(ownedShapes, 'owned'),
-      joins: [{
-        ...cross(table('archetype', 'shape')),
-        on: eq(col('entity', 'shape'), col('archetype', 'owned')),
-      }],
-      where: and(
-        shaped('output'),
-        ...comps.filter((c) => c != 'content' && c != 'output')
-          .map((c) => not(shaped(c))),
-      ),
-    })
-    // There is at most one anchor. Aggregate its catalog with it so the
-    // entry join consumes that value rather than reevaluating the catalog.
-    let prepared = select({
-      cols: [
-        star('anchor'),
-        as(
-          fn(
-            'max',
-            iff(
-              and(isNull(anchor('asked')), notNull(anchor('newest_seq'))),
-              fn('coalesce', sub(plainOutputs), lit('')),
-              lit(''),
-            ),
-          ),
-          'plain',
-        ),
-      ],
-      from: table(ANCHOR, 'anchor'),
-    })
-    let contributing = or(
-      eq(anchor('plain'), lit('')),
-      notNull(anchor('asked')),
-      eq(col('entity', 'i'), anchor('newest')),
-      eq(col('entity', 'i'), anchor('asked')),
-      eq(
-        fn(
-          'instr',
-          anchor('plain'),
-          framed(sub(select({
-            cols: [col('archetype', 'member')],
-            from: table('entity', 'member'),
-            where: eq(col('id', 'member'), col('entity', 'i')),
-          }))),
-        ),
-        lit(0),
-      ),
-    )
-    let span = select({
-      cols: [
-        as(fn('coalesce', col('entity', 'i'), anchor('newest')), 'entity'),
-        col('seq', 'i'),
-        star('anchor'),
-      ],
-      from: typed ? from(prepared, 'anchor') : table(ANCHOR, 'anchor'),
-      joins: [
-        left(
-          table('entry', 'i'),
-          and(
-            mine('i'),
-            notNull(anchor('newest_seq')),
-            ge(col('seq', 'i'), start),
-            ...typed ? [contributing] : [],
-          ),
-        ),
-      ],
-      where: or(isNull(anchor('newest_seq')), notNull(col('entity', 'i'))),
-    })
-    let joins: Join[] = typed ? archetype('span') : []
-    let wears = typed ? shaped : (comp: string) => notNull(col('entity', comp))
-    // Each component the rule reads, where the entry wears it: its id.
     if (!typed) {
       joins.push(
         ...comps.filter(declared).map((comp) =>
@@ -932,11 +840,7 @@ export let sessionStatus = {
         ),
         as(
           declared('notice')
-            ? iff(
-              wears('notice'),
-              cancellation(col('entity', 'span')),
-              lit(false),
-            )
+            ? iff(wears('notice'), cancellation('span'), lit(false))
             : lit(false),
           'cancelled',
         ),
@@ -1153,10 +1057,7 @@ export let sessionStatus = {
         eq(col('entity', 'b'), col('n_refused_source', 'f')),
       ),
     }))
-    let probe = marks(
-      probed(col('entity', 'e')),
-      cancellation(col('entity', 'e')),
-    )
+    let probe = marks(probed('e'), cancellation('e'))
     let retries = sub(select({
       cols: [fn('sum', col('interrupted', 'r'))],
       from: from(
