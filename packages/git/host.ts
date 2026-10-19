@@ -11,7 +11,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
-import { and, eq, fields, present } from '@yaks/query'
+import { and, distinct, eq, fields, list, present } from '@yaks/query'
 import { refEid } from './refs.ts'
 import { localFilesystem } from './placement.ts'
 export { filesystemEid, localFilesystem } from './placement.ts'
@@ -148,9 +148,25 @@ export let locate = async (cwd: string): Promise<
  * managed restore records do not stand in for a checkout that Git can open. */
 export let primary = async (g: Graph): Promise<string[]> => {
   let filesystem = await localFilesystem(g)
+  let refs = await g.rows(and(
+    present('worktree'),
+    eq('worktree.repository.repository.workspace', filesystem.entity.eid),
+    distinct('worktree.repository'),
+  ))
+  let ids = refs.map((r) => r.value).filter((id): id is string =>
+    typeof id == 'string'
+  )
+  let repos = ids.length ? await g.get(ids, ['repository']) : []
+  let dirs = repos.flatMap((b) => {
+    let common = (b.repository as Comp | undefined)?.common
+    return typeof common == 'string' ? [common] : []
+  })
+  if (!dirs.length) return []
   let rows = await g.read(and(
     present('worktree'),
     eq('worktree.repository.repository.workspace', filesystem.entity.eid),
+    eq('worktree.repository', list(...ids)),
+    eq('worktree.gitdir', list(...dirs)),
     fields(
       'worktree.repository',
       'worktree.gitdir',
