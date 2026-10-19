@@ -1,3 +1,4 @@
+/// <reference lib="deno.ns" />
 // Request owners end before their reader closes; admitted writes keep going.
 import { equal, test } from '@yaks/testing'
 import { served } from './request.ts'
@@ -99,4 +100,28 @@ test('shutdown surfaces an unexpected response cancellation failure', async () =
     failed = caught
   }
   equal(failed instanceof AggregateError && failed.errors, [error])
+})
+
+// A runtime upgrade is opaque, not an ordinary HTTP response body. Its identity
+// is how Deno associates the returned response with the upgraded socket.
+let upgraded = {
+  status: 101,
+  body: new ReadableStream<Uint8Array>(),
+} as Response
+let upgradeIncoming = new Request('http://test/ws', {
+  headers: { upgrade: 'websocket' },
+})
+let upgradeSeen: Request | undefined
+let upgradeRequests = requests((request) => {
+  upgradeSeen = request
+  return upgraded
+})
+let upgradeAnswer = await upgradeRequests.handle(upgradeIncoming)
+let upgradeHeld = upgradeRequests.open()
+upgradeRequests.cancel()
+await upgradeRequests.drain()
+test('an upgraded socket response is handed back intact rather than streamed', () => {
+  equal(upgradeSeen, upgradeIncoming)
+  equal(upgradeAnswer, upgraded)
+  equal(upgradeHeld, [])
 })

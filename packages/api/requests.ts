@@ -47,7 +47,9 @@ let streamed = (
   ended: () => void,
   keep: (done: Promise<unknown>) => void,
 ) => {
-  if (!response.body) {
+  // A 101 is the runtime's opaque upgrade response. Reconstructing it as a
+  // streamed Response loses its socket ownership and corrupts the handshake.
+  if (response.status == 101 || !response.body) {
     ended()
     return response
   }
@@ -136,6 +138,17 @@ export let requests = (handler: Handler) => {
       let response = (answer: Response, signal?: AbortSignal) => {
         open.set(request, 'response body')
         return streamed(answer, signal, ended, keep)
+      }
+      // Runtime upgrades are tied to the incoming Request's internal socket.
+      // A standards-level clone does not carry that ownership in Deno.
+      if ((request.headers.get('upgrade') ?? '').toLowerCase() == 'websocket') {
+        return Promise.resolve(handler(request)).then((answer) => {
+          ended()
+          return answer
+        }, (error) => {
+          ended()
+          throw error
+        })
       }
       if (reading(request)) {
         let scoped = new Request(request, {
