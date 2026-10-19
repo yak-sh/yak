@@ -9,7 +9,7 @@ import { QueryPage } from './Query.ts'
 import { CompPage } from './Comp.ts'
 import { PackagePage } from './Package.ts'
 import { TaskPage } from '../task/inspect.ts'
-import { Conversation, SessionPage } from '../session/inspect.ts'
+import { Conversation, SessionPage, SessionTile } from '../session/inspect.ts'
 import { BeliefPage, TopicPage } from '../memory/inspect.ts'
 
 let vocab = loadVocab([{
@@ -80,6 +80,53 @@ let refreshQuery = page(
     text: '.task',
   }),
 )
+
+let sessionTile = (comps: Record<string, unknown>, first: Bundle[] = []) =>
+  page(h(SessionTile, {
+    ...props(io(), {
+      entity: { eid: 'run' },
+      session: { status: 'empty' },
+      ...comps,
+    }),
+    got: {
+      first: { rows: first, ready: true },
+      last: { rows: [], ready: true },
+    },
+  }))
+let nativeTile = sessionTile({ native: {} })
+let managedTile = sessionTile({}, [{
+  entity: { eid: 'input' },
+  using: { provider: 'codex' },
+}])
+let importedTile = sessionTile({ session: { log: 'log', status: 'stopped' } }, [
+  {
+    entity: { eid: 'imported-input' },
+    using: { provider: 'claude' },
+    imported: {},
+  },
+])
+let unknownTile = sessionTile({})
+
+test('session tiles distinguish the native loop, managed provider and imported transcript', () => {
+  equal(nativeTile.querySelector('.Tile_Kind')?.textContent?.trim(), 'native')
+  equal(
+    managedTile.querySelector('.Tile_Kind')?.textContent?.trim(),
+    'managed · codex',
+  )
+  equal(
+    importedTile.querySelector('.Tile_Kind')?.textContent?.trim(),
+    'imported',
+  )
+  equal(
+    unknownTile.querySelector('.Tile_Kind')?.textContent?.trim(),
+    'unknown harness',
+  )
+  equal(unknownTile.querySelector('.Tile_Title')?.textContent, 'run')
+  equal(
+    unknownTile.querySelector('.Tile_Sub')?.textContent,
+    'empty · no transcript recorded',
+  )
+})
 
 test('inspector query answers distinguish pending rows and empty aggregates from answered emptiness', () => {
   ok(pendingRows.querySelector('[role="status"]'))

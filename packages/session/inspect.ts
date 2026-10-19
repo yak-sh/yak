@@ -300,6 +300,16 @@ export let SessionPage = ({ e, io }: Props): JSX.Element => {
  * Reads are bounded and projected; naming a row never loads a transcript. */
 export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
   let eid = e.entity.eid
+  let request = rows(got.first).find((b) => b.using && !b.imported)
+  let provider = str(request, 'using', 'provider')
+  useNamed(io, [provider])
+  let origin = e.native
+    ? 'native'
+    : request || e.process
+    ? 'managed'
+    : comp(e, SESSION).log
+    ? 'imported'
+    : 'unknown harness'
   let work = str(rows(got.work)[0], 'edge', 'to') || str(e, SESSION, 'source')
   let named = io.ask(
     work ? { work: `.entity.eid=${work}&.fields=doc.title` } : {},
@@ -316,22 +326,30 @@ export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
   let brief = str(e, 'brief', 'text')
   let title = str(task, 'doc', 'title') || str(e, 'doc', 'title') ||
     cut((first || brief).trim().replace(/\s+/g, ' '), 180) ||
-    (comp(e, SESSION).operator ? 'Personal conversation' : 'Session')
+    (comp(e, SESSION).operator ? 'Personal conversation' : io.id(e))
   let at = str(rows(got.last)[0], 'created', 'at')
   let ready = Object.values(got).every((a) => a.ready)
   return h(
     ui.Tile,
     { href: io.link(eid) },
-    h(ui.Tile.Kind, {}, h(SessionDot, { e }), ' session'),
+    h(
+      ui.Tile.Kind,
+      {},
+      h(SessionDot, { e }),
+      ' ',
+      origin,
+      provider ? ` · ${io.name(provider)}` : '',
+    ),
     h(ui.Tile.Title, {}, title),
     h(
       ui.Tile.Sub,
       {},
       [
+        str(e, SESSION, 'status'),
         at
           ? `active ${io.when(at)}`
           : ready
-          ? 'no turns yet'
+          ? 'no transcript recorded'
           : 'loading activity…',
       ]
         .filter(Boolean).join(' · '),
@@ -350,7 +368,7 @@ let sessionTile: View = {
       claim: `.claim.session=${eid}&.fields=doc.title&.limit=1`,
       work: `.worked&.edge.from=${eid}&.fields=edge.to&.limit=1`,
       first:
-        `.entry.session=${eid}&.order=entry.seq&.limit=12&?content&?output&?notice&?prompt&?call&?result&?reasoning&?stop&?exception&?refusal&?ask&?interrupted`,
+        `.entry.session=${eid}&.order=entry.seq&.limit=12&?content&?output&?notice&?prompt&?call&?result&?reasoning&?stop&?exception&?refusal&?ask&?interrupted&?using&?imported`,
       last:
         `.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq,created.at`,
     }
