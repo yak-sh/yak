@@ -94,3 +94,37 @@ await privateHost.close()
 test('a private memory host without a tracker leaves its graph channel idle', () => {
   equal(privateActive, false)
 })
+
+let declarationsRead = 0
+let lazyHost = await compose(
+  { db: ':memory:', plugins: ['lazy'] },
+  ['graph'],
+  ((_: string, facet: string) =>
+    Promise.resolve(
+      facet == 'vocab'
+        ? {
+          docs: [{
+            $defs: {
+              lazy_read: {
+                tool: true,
+                description: 'A lazy read',
+                get input() {
+                  declarationsRead++
+                  return { type: 'object', properties: {} }
+                },
+              },
+            },
+          }],
+        }
+        : null,
+    )) as import('@yaks/host').Load,
+)
+let readsAtOpen = declarationsRead
+let offered = lazyHost.tools.some((tool) => tool.name == 'lazy_read')
+let readsAfterOffer = declarationsRead
+await lazyHost.close()
+test('opening a graph does not validate tools nobody offered or ran', () => {
+  equal(readsAtOpen, 0)
+  equal(offered, true)
+  ok(readsAfterOffer > readsAtOpen)
+})

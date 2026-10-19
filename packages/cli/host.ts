@@ -112,7 +112,7 @@ import { spool } from '@yaks/tracker/report'
 import { CallError } from '@yaks/tools/errors'
 import { persist } from '@yaks/tools/persist'
 import { files } from '@yaks/tracker/file'
-import { type Traces, traces } from './traces.ts'
+import type { Traces } from './traces.ts'
 import { traceControl } from './trace_control.ts'
 
 // One carrier per runtime, not per composed graph. Multiple CLI hosts can
@@ -433,6 +433,9 @@ let composed = async (
     // looks. Only those: a secret code reads at the moment it is used (`reveal`)
     // is fetched then, and a command does not wait on 1Password for it.
     part?.('vault')
+    let trace = opts.process !== false && (config.tracker || path != ':memory:')
+      ? await import('./traces.ts')
+      : undefined
     let vault = vaultOf(path)
     await warm(vault, (config.plugins ?? []).flatMap((p) => bound(given(p))))
     let secretDeclarations = (config.plugins ?? []).flatMap((p) =>
@@ -660,7 +663,7 @@ let composed = async (
         // build and discard a complete tree for every startup/catalogue write.
         if (opts.process !== false && (config.tracker || path != ':memory:')) {
           captureControl = config.tracker ? traceControl(path) : undefined
-          recorded = traces(g, {
+          recorded = trace!.traces(g, {
             getStart: getStarts(path),
             process: selfEid(),
             take: captureControl?.take ??
@@ -723,7 +726,9 @@ let composed = async (
     })
     host = built.host
     g = host.graph
-    let calls = host.runner
+    // A shutdown may need the runner, but opening a graph does not. Keep its
+    // tool declarations lazy until a caller actually asks for them.
+    let calls = () => host.runner
     let fx = host.fx
     let effecting = roles.includes('effects')
     // Whoever works the effects also works off the schema work a pass owed
@@ -824,8 +829,7 @@ let composed = async (
     if (self && opts.process !== false && !opts.readOnly) {
       await record([started({ roles: [...roles] })])
     }
-    return {
-      ...host,
+    let lifecycle = {
       storage: store!,
       graph: g,
       fx,
@@ -894,7 +898,7 @@ let composed = async (
           // somebody else's checkout.
           if (!opts.readOnly) {
             await wait('interrupt calls', () =>
-              calls?.interrupt(
+              calls().interrupt(
                 `interrupted: this process ended${
                   code == null ? '' : ` with code ${code}`
                 } before the tool returned`,
@@ -914,6 +918,8 @@ let composed = async (
           await shut()
         })(),
     }
+    // Spreading Host would invoke its lazy tools/runner getters here.
+    return Object.create(host, Object.getOwnPropertyDescriptors(lifecycle))
   } catch (error) {
     try {
       await report(error, { tags: { step: 'compose host' } })
@@ -927,4 +933,8 @@ let composed = async (
   }
 }
 
-export { type Reader, reader } from './reader.ts'
+export type { Reader } from './reader.ts'
+export let reader = async (
+  ...args: Parameters<typeof import('./reader.ts').reader>
+): Promise<import('./reader.ts').Reader> =>
+  (await import('./reader.ts')).reader(...args)

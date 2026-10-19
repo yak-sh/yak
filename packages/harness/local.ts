@@ -2,11 +2,11 @@
 // graph and machines, never a host checkout. Credentials, MCP and diagnostics
 // remain host integrations; shell and file work is routed through providers.
 
-import { responses } from '@yaks/openai'
 import { artifactStore } from '@yaks/blob'
 import { type Model, prefixCacheMark } from '@yaks/model'
 import { claudeDoc } from '@yaks/claude/vocab'
 import { openrouterDoc } from '@yaks/openrouter/vocab'
+import { openaiDoc } from '@yaks/openai/vocab'
 import { type Bundle } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
 import { watchMigrations } from '@yaks/sqlite/migration'
@@ -14,7 +14,7 @@ import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
 import { authorize } from './mcp_authorize.ts'
-import { openaiCredential } from './openai_auth.ts'
+import type { OpenAIAuth } from './openai_auth.ts'
 import type { MCPAuthAction, MCPAuthReply } from './mcp_auth.ts'
 import { mcpTools } from './mcp.ts'
 import { streamingEnabled } from './streaming.ts'
@@ -137,16 +137,40 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     opts.workspaces ?? h.workspaces,
   )
   let auth = authorize(h)
-  let openaiAuth = openaiCredential(h, env, auth.signin)
+  let credential: Promise<OpenAIAuth> | undefined
+  let credentials = () =>
+    credential ??= import('./openai_auth.ts').then(
+      ({ openaiCredential }) => openaiCredential(h, env, auth.signin),
+    )
+  let openaiAuth: OpenAIAuth = {
+    credential: async () => (await credentials()).credential(),
+    refresh: async (stale) => (await credentials()).refresh(stale),
+  }
   let http = pooledHttp()
+  let images = opts.model
+    ? undefined
+    : configuredImages(h.artifacts, opts.images)
   let model = opts.model ??
-    responses({
-      ...openaiAuth,
-      fetch: http.fetch,
-      redact: true,
-      images: configuredImages(h.artifacts, opts.images),
-      web: opts.web ?? env('HARNESS_WEB') != '0',
-    })
+    deferredModel(
+      () =>
+        import('@yaks/openai').then(({ responses }) =>
+          responses({
+            ...openaiAuth,
+            fetch: http.fetch,
+            redact: true,
+            images,
+            web: opts.web ?? env('HARNESS_WEB') != '0',
+          })
+        ),
+      {
+        vocab: openaiDoc,
+        mark: (reply, cache) => ({
+          openai: { response_id: reply.id, ...prefixCacheMark(reply, cache) },
+        }),
+        anchor: () => undefined,
+        recover: true,
+      },
+    )
   const mcp = mcpTools(h, auth.signin, auth.mcp)
   h.fx.created('mcp_server', mcp.refresh).changed('mcp_server', mcp.refresh)
     .removed('mcp_server', mcp.refresh)
