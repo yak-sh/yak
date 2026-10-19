@@ -1612,6 +1612,19 @@ let owners = (
   }
 }
 
+// A stored reference presence test needs only its owner's key. Its root
+// lookup and every following hop remain scoped inside the compiled condition.
+let keyTest = (ctx: Ctx, c: Clause): boolean => {
+  if (c.kind != 'pred' || c.not || c.where || c.path.length < 3) return false
+  let hops = aimed(ctx, c)
+  return !!hops && !hops.at(-1)!.prop && hops[0].comp != 'entity' &&
+    ['', EXISTS].includes(opOf(c)) &&
+    hops.slice(0, -1).every((h) =>
+      !computed(ctx.v, h.comp) && !ctx.v.prop(h.comp, h.prop)?.computed &&
+      !ctx.derived[`${h.comp}.${h.prop}`]
+    )
+}
+
 let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
@@ -1717,6 +1730,19 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   }
   // A disjunction can provide candidates even when no component is required.
   let conditions = new Map(rest.map((c) => [c, clause(ctx, c)]))
+  // These reference tests read only a candidate's own key. Filter it before
+  // the scoped spine checks visibility, retaining that outer intersection.
+  if (
+    ctx.shapeCandidates && ctx.candidates && !claims(ctx, 'pred') &&
+    rest.every((c) => c.kind != 'or')
+  ) {
+    for (let c of rest.filter((c) => keyTest(ctx, c))) {
+      let test = render(conditions.get(c)!)
+      ctx.candidates.sql += ` and (${test.sql})`
+      ctx.candidates.params.push(...test.params)
+      conditions.delete(c)
+    }
+  }
   if (!shape) {
     // A mandatory value predicate already selects owners wearing its
     // component. Reading that component's whole owning set again can scan

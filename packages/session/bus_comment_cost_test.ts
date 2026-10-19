@@ -155,7 +155,7 @@ test('comment routing screens each candidate owner once', () => {
     'news2',
     'news3',
   ])
-  ok(screenedVm < 250_000, `${screenedVm} VM steps with owner visibility`)
+  ok(screenedVm < 150_000, `${screenedVm} VM steps with owner visibility`)
 })
 let scopes: [string, Visibility, number][] = [
   ['hidden owner', { entity: '.entity.eid!=news0' }, 3],
@@ -174,6 +174,19 @@ for (let [name, visibility, count] of scopes) {
     equal(selected.items.length, count)
   })
 }
+let alternatives = await g.read(
+  '.comment !notified (!created.via.session | .entity.eid=agent-comment) ' +
+    '.fields=entity.eid',
+)
+test('an alternative reference filter keeps the other branch', () => {
+  equal(alternatives.map((b) => b.entity.eid), [
+    'news0',
+    'news1',
+    'news2',
+    'news3',
+    'agent-comment',
+  ])
+})
 await g.apply([{ entity: { eid: 'person' }, session: {} }], { trusted: true })
 let changed = await due(g)
 test('a new bus pass rereads whether an author is a session', () => {

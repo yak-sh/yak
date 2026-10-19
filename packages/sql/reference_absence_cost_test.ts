@@ -7,7 +7,7 @@ import { loadVocab } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { archetypeSet, compile, insert } from './mod.ts'
+import { archetypeSet, col, compile, insert } from './mod.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -18,6 +18,8 @@ let vocab = loadVocab({
     },
     session: { component: true, properties: {} },
     hidden: { component: true, properties: {} },
+    selected: { component: true, properties: {} },
+    notified: { component: true, properties: {} },
   },
 })
 let db = new Database(':memory:'), sql = driver(db)
@@ -28,7 +30,20 @@ for (let n = 0; n < 1024; n++) {
   ids.set(cache.intern(tables).eid, n + 100)
 }
 ids.set(cache.intern(['session']).eid, 2000)
-for (let name of ['entity', 'doc', 'session', 'hidden', 'tombstone']) {
+ids.set(cache.intern(['doc', 'selected']).eid, 2001)
+ids.set(cache.intern(['selected']).eid, 2002)
+ids.set(cache.intern(['doc', 'selected', 'tombstone']).eid, 2003)
+for (
+  let name of [
+    'entity',
+    'doc',
+    'session',
+    'hidden',
+    'tombstone',
+    'selected',
+    'notified',
+  ]
+) {
   sql.query({
     t: 'create table',
     name,
@@ -46,17 +61,35 @@ for (let name of ['entity', 'doc', 'session', 'hidden', 'tombstone']) {
     ],
   })
 }
-for (let id = 1; id <= 6; id++) {
+sql.query({
+  t: 'create index',
+  name: 'entity_archetype_num',
+  on: 'entity',
+  cols: [col('archetype'), col('num')],
+})
+for (let id = 1; id <= 8; id++) {
   sql.query(insert('entity', {
     id,
     eid: `r${id}`,
     num: id,
-    archetype: id == 1 ? 2000 : 100,
+    archetype: id == 1
+      ? 2000
+      : id == 7
+      ? 2002
+      : id == 8
+      ? 2003
+      : id >= 3
+      ? 2001
+      : 100,
   }))
 }
 sql.query(insert('session', { entity: 1 }))
 sql.query(insert('hidden', { entity: 6 }))
-for (let [entity, via] of [[3, 1], [4, 2], [5, null], [6, 99]]) {
+sql.query(insert('tombstone', { entity: 8 }))
+for (let entity of [3, 4, 5, 6, 7, 8]) {
+  sql.query(insert('selected', { entity }))
+}
+for (let [entity, via] of [[3, 1], [4, 2], [5, null], [6, 99], [8, 2]]) {
   sql.query(insert('doc', { entity, via }))
 }
 let status = Deno.dlopen(sqlitePath, {
@@ -83,6 +116,25 @@ for (let [name, visibility, expected] of scopes) {
       equal(stmt.all(...q.params).map((r) => r.eid), [...expected])
       let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
       ok(steps < 500, `${steps} VM steps`)
+    } finally {
+      stmt.finalize()
+    }
+  })
+}
+
+for (let [name, visibility, expected] of scopes) {
+  let q = compile(
+    parse('.selected !notified !doc.via.session .fields=entity.eid'),
+    vocab,
+    {
+      archetypes: Object.assign(archetypeSet(cache, ids), { held: true }),
+      visibility,
+    },
+  )
+  test(`selected reference absence preserves ${name}, missing roots and graves`, () => {
+    let stmt = db.prepare(q.sql)
+    try {
+      equal(stmt.all(...q.params).map((r) => r.eid), [...expected, 'r7'])
     } finally {
       stmt.finalize()
     }
