@@ -1,4 +1,4 @@
-import { InspectPage } from './inspect.tsx'
+import { InspectPage, PagePart } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { left, scrolledTo } from '../history.ts'
 import { configAt, destinationAt, schemaAt } from '../navigation.ts'
@@ -230,11 +230,14 @@ export let Page = ({ at }: { at: string }) => {
           ? <SearchPage query={search} />
           : place
           ? (
-            <QueryList
-              eid={filter!}
-              query={place.query}
-              edges={place.key != 'sessions'}
-            />
+            <>
+              {place.key == 'sessions' && <PagePart view='Sessions.Controls' />}
+              <QueryList
+                eid={filter!}
+                query={place.query}
+                edges={place.key != 'sessions'}
+              />
+            </>
           )
           : read?.state.status == 'failed'
           ? <SubscriptionFailure read={read} />

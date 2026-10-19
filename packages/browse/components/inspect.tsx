@@ -185,26 +185,37 @@ export let inspectViews: Entry[] = adaptViews([
 // Query and map pages are chosen by the same registry as entity pages. The
 // temporary bundle identifies the page; its query is caller context, not data
 // written into the server graph.
-export let InspectPage = (
-  { query, map }: { query?: string; map?: boolean },
+export let PagePart = (
+  { view, eid = `browse-page:${view}`, ...ctx }: {
+    view: string
+    eid?: string
+    query?: string
+  },
 ) => {
-  let b = { entity: { eid: map ? 'browse-map' : `browse-query:${query}` } }
-  let entry = resolve(registry, b, map ? 'Inspect.Map' : 'Inspect.Query', vocab)
-
-  return entry && 'Render' in entry
+  let entry = resolve(registry, { entity: { eid } }, view, vocab)
+  return entry?.view == view && 'Render' in entry
     ? h(entry.Render, {
       e: {
-        eid: map ? 'browse-map' : `browse-query:${query}`,
-        entity: { eid: map ? 'browse-map' : `browse-query:${query}` },
+        eid,
+        entity: { eid },
         num: 0,
         kind: 'entity',
         refs: [],
         kids: [],
       } as import('../types.ts').Ent,
-      query,
+      ...ctx,
     })
     : null
 }
+
+export let InspectPage = (
+  { query, map }: { query?: string; map?: boolean },
+) =>
+  h(PagePart, {
+    view: map ? 'Inspect.Map' : 'Inspect.Query',
+    eid: map ? 'browse-map' : `browse-query:${query}`,
+    query,
+  })
 
 /** What a package's `./views` facet offers the app: its renderers, its
  * inspector views, the pages it lists in the sidebar, the owner's home page,

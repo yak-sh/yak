@@ -25,6 +25,16 @@ deno add jsr:@yaks/heal
 
 `fixer.bug` is written by the host only.
 
+The Sessions page offers an **Automatic fixers** switch when heal is configured.
+It edits `nofix{}` on the configured home project, so every browser sees the
+same choice and a restart keeps it. Off pauses new fixer starts and automatic
+follow-up turns; existing sessions continue and manual sessions remain
+available. Turning it on lets pending tracker bugs start again on the next
+follower pass, under the usual cap and cooldown. Individual project mutes stay
+in place. A configured `project` and `provider` are needed to enable the switch.
+The read-only `/heal/control` door exposes that project's eid and whether a
+provider is configured; it exposes no credentials.
+
 ## What happens
 
 The `@yaks/heal/service` **follower** follows bugs in the configured tracker

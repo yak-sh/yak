@@ -4,16 +4,22 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./service": "./service.ts"
+    "./service": "./service.ts",
+    "./routes": "./routes.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "Follows tracker bugs to file tasks and request fixers.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "preact": "npm:preact@^10.29.1",
+    "preact/hooks": "npm:preact@^10.29.1/hooks",
+    "preact/jsx-runtime": "npm:preact@^10.29.1/jsx-runtime"
   },
   "publish": {
     "exclude": [
-      "**/*_test.ts"
+      "**/*_test.ts",
+      "**/*_test.tsx"
     ]
   }
 }

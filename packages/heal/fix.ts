@@ -51,6 +51,10 @@ let named = async (g: Graph, id: string | undefined, wears: string) => {
   return (await g.read(and(eq(`${wears}.name`, id))))[0]?.entity.eid
 }
 
+/** The configured home project, resolved by the same door as fixer gates. */
+export let home = (g: Graph, options: Options) =>
+  named(g, options.project, 'project')
+
 // Whether `b` was created less than `span` ms before `now`: a span of 0 holds
 // nothing, even an entity created in the same millisecond.
 let young = (b: Bundle, span: number, now: number) =>
@@ -265,7 +269,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
     let together: Promise<void> | undefined
     let running: Promise<Bundle[]> | undefined
     let pass: Pass = {
-      home: () => homed ??= named(g, options.project, 'project'),
+      home: () => homed ??= home(g, options),
       muted: (project) => {
         if (!mutes.has(project)) {
           mutes.set(

@@ -1681,3 +1681,28 @@ test('a whole pass reads every bug it follows at once', () => {
   equal(few, { reads, writes: [], tasks: 5, fixers: 2, taken: 2, closed: 2 })
   equal(many, { reads, writes: [], tasks: 17, fixers: 2, taken: 2, closed: 8 })
 })
+
+// The Sessions switch uses this same graph mark; pending work survives off/on.
+let switched = await (async () => {
+  let f = await fixture({ cooldown: 0 })
+  await put(f.g, [{ entity: { eid: project }, nofix: {} }])
+  await f.run()
+  let paused = {
+    tasks: await count(f.g, 'task'),
+    fixers: await count(f.g, 'fixer'),
+    entries: await count(f.g, 'entry'),
+  }
+  await put(f.g, [{ entity: { eid: project }, nofix: null }])
+  await f.replay()
+  let resumed = {
+    tasks: await count(f.g, 'task'),
+    fixers: await count(f.g, 'fixer'),
+    entries: await count(f.g, 'entry'),
+  }
+  f.close()
+  return { paused, resumed }
+})()
+test('unmuting the home project resumes pending bugs without duplicating work', () => {
+  equal(switched.paused, { tasks: 1, fixers: 0, entries: 0 })
+  equal(switched.resumed, { tasks: 1, fixers: 1, entries: 1 })
+})
