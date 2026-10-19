@@ -132,14 +132,27 @@ export function catalog(driver: Driver): ArchetypeSet {
   let loaded = false
   let current: ArchetypeSet | undefined
   let cache = cacheFor(driver)
-  return Object.assign((predicate: Parameters<ArchetypeSet>[0]) => {
+  let choose = (predicate: Parameters<ArchetypeSet>[0]) => {
     if (!loaded) {
       current = snapshot(driver)
       loaded = true
     }
     return current?.(predicate)
-  }, {
-    held: !!cache.descriptors &&
-      cache.descriptorVersion == revision(driver, 'descriptors'),
-  })
+  }
+  return Object.defineProperty(choose, 'held', {
+    get: () => {
+      if (!cache.descriptors) return false
+      let version = revision(driver, 'descriptors')
+      if (cache.descriptorVersion == version) return true
+      if (
+        cache.tableVersion === undefined ||
+        cache.schemaVersion != revision(driver, 'schema') ||
+        cache.tableVersion != tableVersion(driver, 'archetype')
+      ) return false
+      // Only descriptor freshness is proven. snapshot() still checks whether
+      // any owner lacks classification before handing this set to a plan.
+      cache.descriptorVersion = version
+      return true
+    },
+  }) as ArchetypeSet
 }

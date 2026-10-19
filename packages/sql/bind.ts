@@ -170,6 +170,7 @@ type Ctx = {
   /** the first disjunction's entity ids, and the condition that tests them */
   candidates?: Frag & { test: Cond; whole?: boolean }
   shapeCandidates?: boolean
+  numberedShapePage?: boolean
   /** A mandatory finite root identity, known before presence is planned. */
   bounded?: boolean
   screens?: Map<Extension, Screen>
@@ -2232,6 +2233,26 @@ let indexedRelation = (
   root ??= ctx.present && !ctx.candidates ? { comp: ctx.present } : undefined
   if (!root) {
     if (!ctx.candidates || ctx.spine || from != ctx.d.spine) return s
+    // Shape membership already selects physical entity owners. Keep their
+    // numbered index as the ordering spine: a self-join would make SQLite
+    // sort every historical match before cutting the page. Visibility stays
+    // a keyed test against the original scoped spine, including graves.
+    if (
+      ctx.shapeCandidates && ctx.d.archetypeSource && ctx.numberedShapePage &&
+      (ctx.d.admitted ?? ctx.d.spine) == '"entity"'
+    ) {
+      return {
+        ...s,
+        from: raw(ctx.d.archetypeSource!(ctx.v)),
+        where: and(
+          s.where ?? TRUE,
+          raw(
+            `exists (select 1 from (select "entity"."id" from ${ctx.d.spine}) as "__shape_visible" where "__shape_visible"."id" = "entity"."id")`,
+          ),
+          ...ctx.present ? [probed(ctx, ctx.present)] : [],
+        ),
+      }
+    }
     return {
       ...s,
       // A planned presence spine elided its own predicate while binding.
@@ -2653,6 +2674,18 @@ let lower = (
       break
     }
   }
+  // Resolve once so registered rankers can decline ordinary number order
+  // without disabling it, while a ranker claiming it retains its own path.
+  let earlyOrder = find<Order>(cs, 'order')
+  let numberedSort = earlyOrder?.value == '-entity.num'
+    ? sortOf(ctx, earlyOrder.value)
+    : undefined
+  ctx.numberedShapePage = !!ctx.v.prop('entity', 'num') &&
+    find<Order>(cs, 'order')?.value == '-entity.num' &&
+    (find<Limit>(cs, 'limit')?.n ?? 0) > 0 &&
+    !find<Fields>(cs, 'fields') && !find<After>(cs, 'after') &&
+    !ctx.v.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
+    !numberedSort?.ranked
   let where = and(
     ...conjuncts(ctx, filters),
     ...ctx.eids
@@ -2727,7 +2760,7 @@ let lower = (
   // ordering by a property no filter mentions is what pulls its table in, and a
   // join list taken any earlier would not have it.
   let order = find<Order>(cs, 'order')
-  let sort = order ? sortOf(ctx, order.value) : null
+  let sort = numberedSort ?? (order ? sortOf(ctx, order.value) : null)
   let limit = find<Limit>(cs, 'limit')
   let after = find<After>(cs, 'after')
   // Whether this store numbers its entities: @yaks/id's document declares the
@@ -2762,7 +2795,9 @@ let lower = (
   // store that mints none would be ordering by the same NULL in every row,
   // which is to say by whatever the planner chose.
   let down = !physical && (sort || limit || after) ? ' desc' : ''
-  if (numbered) ordered.push(`"entity"."num"${down}`)
+  if (numbered && !ordered.includes(`"entity"."num"${down}`)) {
+    ordered.push(`"entity"."num"${down}`)
+  }
   let owner = ctx.d.ownerKey('entity')
   ordered.push(`${owner}${down}`)
   let windowed = after
