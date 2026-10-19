@@ -37,6 +37,8 @@ let fixture = (n: number, mode: string) => {
   old.$defs!.effect.index = [['handler', 'state']]
   delete old.$defs!.effect.properties!.lease_owner.index
   storage(sql, loadVocab(old)).install()
+  // Unrelated entities must never replace the selected eligible work.
+  sql.query(insert('entity', { id: 0, eid: 'bare' }))
   for (let first = 1; first <= n; first += 256) {
     let ids = Array.from(
       { length: Math.min(256, n - first + 1) },

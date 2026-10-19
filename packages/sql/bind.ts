@@ -3064,7 +3064,6 @@ let lower = (
       {
         ...ctx,
         candidates: { ...bounded, test: TRUE },
-        correlated: true,
       },
       reads,
       scope,
