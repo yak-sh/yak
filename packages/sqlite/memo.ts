@@ -68,6 +68,7 @@ import {
 import { tablesOf } from '@yaks/sql/query'
 import { type Filter, filter } from '@yaks/match'
 import { tables } from './layout.ts'
+import { type Answer as Packed, copied, packed } from './answer.ts'
 import type { Known, Spine } from './write.ts'
 
 type Get = (eids: string[], comps?: string[]) => Bundle[]
@@ -120,7 +121,7 @@ export type Memo = {
 
 type Answer = {
   tables: [string, number][]
-  rows: Row[]
+  rows: Packed
   /** whether an entity is one the query selects, where memory can tell */
   test?: Filter
   /** An identity set depends on predicate truth, not selected values. */
@@ -267,6 +268,47 @@ export let local = (vocab: Vocab, q: And): boolean => {
     }
   }
   return visit(q)
+}
+
+// A necessary owner test can rule a write out even when the exact predicate
+// follows references. Every referent table remains a strict dependency: a
+// write there can change a selected owner's answer without touching it.
+export let rooted = (
+  vocab: Vocab,
+  query: And,
+): { test: Filter; strict: string[] } | undefined => {
+  let strict = new Set<string>()
+  let path = (segs: string[], facet = false) => {
+    let hops = vocab.aim(segs.join('.'), facet)
+    for (let h of hops.slice(1)) strict.add(h.comp)
+    return hops.length <= 1
+  }
+  let visit = (c: Clause): Clause => {
+    if (c.kind == 'and' || c.kind == 'or') {
+      return { ...c, clauses: c.clauses.map(visit) }
+    }
+    if (c.kind == 'pred') {
+      return path(c.path, bare(c)) ? c : { kind: 'every' }
+    }
+    if (c.kind == 'fields') {
+      c.fields.forEach((f) => path(f.path))
+      return { kind: 'every' }
+    }
+    if (c.kind == 'order') {
+      path(c.value.replace(/^-/, '').split('.'))
+      return { kind: 'every' }
+    }
+    if (['every', 'count', 'limit'].includes(c.kind)) return c
+    throw new Error('not an owner-local proof')
+  }
+  try {
+    return {
+      test: filter({ ...query, clauses: query.clauses.map(visit) }, vocab),
+      strict: [...strict],
+    }
+  } catch {
+    return undefined
+  }
 }
 
 // The blob table a content-addressed property's text is read from.
@@ -847,7 +889,7 @@ export let memoized = (
   // What an answer is kept across writes by, for a query `local` allows.
   let tested = (q: And): Filter | undefined => {
     try {
-      return local(vocab, q) ? filter(q, vocab) : undefined
+      return rooted(vocab, q)?.test
     } catch {
       return undefined
     }
@@ -913,7 +955,7 @@ export let memoized = (
       if (held && held.tables.every(([t, n]) => current(t) == n)) {
         k.answers.delete(key)
         k.answers.set(key, held)
-        return structuredClone(held.rows)
+        return copied(held.rows)
       }
       if (held) k.answers.delete(key)
       // Most of what a write asks is asked once: the dependents of the entity
@@ -930,17 +972,22 @@ export let memoized = (
       let at = tables.map((t): [string, number] => [t, current(t)])
       let rows = run()
       if (at.some(([t, n]) => current(t) != n)) return rows
-      let size = JSON.stringify(
-        rows,
-        (_k, v) => typeof v == 'bigint' ? String(v) : v,
-      ).length * 2
-      if (size > ANSWER) return rows
+      let kept = packed(rows, ANSWER)
+      if (!kept) return rows
       k.answers.set(key, {
         tables: at,
-        rows: structuredClone(rows),
+        rows: kept,
         test: typeof query == 'function' ? query : query && tested(query),
-        membership,
-        strict,
+        membership: membership &&
+          (typeof query == 'function' || !!query && local(vocab, query)),
+        strict: [
+          ...new Set([
+            ...strict ?? [],
+            ...typeof query == 'function' || !query
+              ? []
+              : rooted(vocab, query)?.strict ?? [],
+          ]),
+        ],
       })
       if (c.depth) c.answered.push([k.answers, key])
       if (k.answers.size > ANSWERS) {

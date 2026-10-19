@@ -109,7 +109,7 @@ import { build, forgo, reshape, type Sizes } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
-import { basis, local, memoized } from './memo.ts'
+import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
 
 export {
@@ -575,13 +575,15 @@ export let storage = (
     }
     if (o.visibility) {
       let policy = o.visibility.entity
+      let proof = basis(vocab, query, base.derived) && rooted(vocab, query)
       // Aspect policies can change what a predicate reads. A whole-entity
       // policy instead composes with an ordinary local membership test.
       if (
         !Object.keys(o.visibility.components ?? {}).length &&
-        local(vocab, query) && (!policy || local(vocab, ast(policy)))
+        (local(vocab, query) || !!proof) &&
+        (!policy || local(vocab, ast(policy)))
       ) {
-        let ordinary = tested(query)
+        let ordinary = tested(query) ?? (proof ? proof.test : undefined)
         if (ordinary && !fixed(query)) ordinary = undefined
         let allowed = policy && tested(ast(policy), true)
         standing = ordinary && (!policy || allowed)
@@ -590,7 +592,13 @@ export let storage = (
         // A reference's target can become hidden without its source changing.
         // Local source predicates cannot prove that policy change irrelevant.
         if (!simple(query)) {
-          strict = policies(o, !!tables && !tables.includes('entity'))
+          let scope = policies(o, !!tables && !tables.includes('entity'))
+          strict = scope && [
+            ...new Set([
+              ...scope,
+              ...proof ? proof.strict : [],
+            ]),
+          ]
         }
       } else standing = undefined
     }
@@ -612,7 +620,7 @@ export let storage = (
             ...direct ? { archetypes: () => undefined } : {},
           }),
         standing,
-        identities(query),
+        identities(query) && local(vocab, query),
         strict,
       ), 'read')
   }
