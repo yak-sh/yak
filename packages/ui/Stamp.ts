@@ -22,10 +22,19 @@ let SIZES: [Intl.RelativeTimeFormatUnit, number][] = [
   ['hour', 3_600],
   ['minute', 60],
 ]
-// Made the first time a moment is said: building it loads the locale's
-// relative-time data, which costs every program importing @yaks/ui milliseconds
-// whether or not it ever says one.
-let rtf: Intl.RelativeTimeFormat | undefined
+// The interface has always spoken English. Keep that small fixed vocabulary
+// local rather than loading ICU's locale data on the first painted timestamp.
+let words = (value: number, unit: string): string => {
+  if (unit == 'day' && Math.abs(value) == 1) {
+    return value < 0 ? 'yesterday' : 'tomorrow'
+  }
+  if (['year', 'month', 'week'].includes(unit) && Math.abs(value) == 1) {
+    return `${value < 0 ? 'last' : 'next'} ${unit}`
+  }
+  let digits = String(Math.abs(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  let noun = unit + (Math.abs(value) == 1 ? '' : 's')
+  return value < 0 ? `${digits} ${noun} ago` : `in ${digits} ${noun}`
+}
 
 /**
  * How long ago (or ahead) `iso` is from `now`, in words.
@@ -46,8 +55,7 @@ export let relative = (
   let s = (now - Date.parse(iso)) / 1000
   for (let [unit, size] of SIZES) {
     if (Math.abs(s) >= size) {
-      rtf ??= new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-      return rtf.format(Math.round(-s / size), unit)
+      return words(Math.round(-s / size), unit)
     }
   }
   return 'just now'
