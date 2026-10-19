@@ -18,10 +18,10 @@ import { bury, raised, SPINE, text as prose } from '../sqlite/testing.ts'
 import { loadVocab } from '@yaks/vocab'
 import { fields, searched } from './fields.ts'
 import { drain, sources, sweep } from './sweep.ts'
-import { left, watch } from './owed.ts'
+import { due, left, watch } from './owed.ts'
 import { vectorOf } from './near.ts'
 import { schema, TABLE } from './ddl.ts'
-import { type Embedder, hashEmbedder, Refused } from './embedder.ts'
+import { type Embedder, hash, hashEmbedder, Refused } from './embedder.ts'
 import { remote } from './remote.ts'
 import { embedder, mem, shelf, shop } from './testing.ts'
 
@@ -283,4 +283,60 @@ test('an entity wearing an embed: false component gets no vector', async () => {
     scan(db, TABLE, undefined, ['owner']).map((r) => r.owner),
     [1],
   )
+})
+
+// Hosts can carry their start/no-start probe into the first drain pass.
+let carriedFields = [{ comp: 'book', prop: 'title' }]
+let prefetchedDb = shelf()
+await drain(prefetchedDb, carriedFields, embedder)
+change(prefetchedDb, 'book', 1, { title: val('Carried') })
+let prefetched = due(prefetchedDb, 64)
+let queueReads = 0
+let measuredQueue = {
+  ...prefetchedDb,
+  query: (s: Stmt) => {
+    if (
+      s.t == 'select' && !Array.isArray(s.from) && s.from?.t == 'table' &&
+      s.from.name == 'embedding_owed'
+    ) queueReads++
+    return prefetchedDb.query(s)
+  },
+}
+
+let carriedDone = await drain(measuredQueue, carriedFields, embedder, {
+  queued: prefetched,
+})
+test('a drain consumes the batch that already proved work was owed', () => {
+  assertEquals(carriedDone.fresh, 1)
+  // The final aggregate is needed; a second selection of the same owners is not.
+  assertEquals(queueReads, 1)
+})
+
+let racingDb = shelf()
+await drain(racingDb, carriedFields, embedder)
+change(racingDb, 'book', 1, { title: val('Before the model') })
+let racingBatch = due(racingDb, 64)
+let latestHash = hash(embedder.model, 'After the model')
+
+let racingCalls = 0
+let racing = {
+  model: embedder.model,
+  embed: (value: string) => {
+    if (++racingCalls == 1) {
+      change(racingDb, 'book', 1, { title: val('After the model') })
+    }
+    return embedder.embed(value)
+  },
+}
+let raced = await sweep(racingDb, carriedFields, racing, 64, racingBatch)
+let resumed = await sweep(racingDb, carriedFields, embedder)
+let resumedHash = scan(racingDb, TABLE, by({ owner: 1 }), ['hash'])[0].hash
+
+test('a carried queue generation cannot settle a newer write', () => {
+  assertEquals([raced.fresh, racingCalls, raced.left], [1, 1, 1])
+})
+
+test('the pass after a carried generation embeds the newer text', () => {
+  assertEquals([resumed.fresh, resumed.left], [1, 0])
+  assertEquals(resumedHash, latestHash)
 })

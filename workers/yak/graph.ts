@@ -174,6 +174,7 @@ import {
 } from '@yaks/fts'
 import { admitSchema } from '@yaks/graph/schema'
 import {
+  BATCH as EMBED_BATCH,
   drain,
   due as unembedded,
   type Field as Text,
@@ -3432,11 +3433,17 @@ export class Store {
     if (this.#dormant) return
     let model = embedder(this.#bind)
     if (this.#refused || !this.#texts || !this.#get('schema') || !model) return
-    if (!this.#owes()) return
     if (this.#vectorWork) {
-      this.#vectorAgain = true
+      if (this.#owes()) this.#vectorAgain = true
       return
     }
+    // Keep the batch that proves work is owed; the sweep need not read it
+    // again. Queue generations still protect writes made while the model runs.
+    let queued: ReturnType<typeof unembedded> | undefined = unembedded(
+      this.#texts.statements,
+      EMBED_BATCH,
+    )
+    if (!queued.length) return
     let name = this.#name()
     this.#vectorWork = (async () => {
       do {
@@ -3444,7 +3451,9 @@ export class Store {
         let { statements: db, fields } = this.#texts
         let done = await drain(db, fields, model, {
           signal: AbortSignal.timeout(Store.EMBED),
+          queued,
         })
+        queued = undefined
         if (this.#dormant) return
         // A text the model will not take is the text's, not the store's: it
         // has no vector, and ranks by its words alone.

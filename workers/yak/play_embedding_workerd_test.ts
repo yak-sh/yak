@@ -21,6 +21,6 @@ test('chat commits check owed text once before their embedding pass', async () =
   let queued = r.sourceShapes.chatting.filter((s) =>
     s.sql.includes('from "embedding_owed"')
   )
-  assertEquals(queued.reduce((n, s) => n + s.cost.read, 0), 4)
+  assertEquals(queued.reduce((n, s) => n + s.cost.read, 0), 2)
   assert(r.components.embedding.written > 0)
 })

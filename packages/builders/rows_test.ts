@@ -15,6 +15,8 @@ import { plugins } from './graph.ts'
 import { watches } from './effects.ts'
 import { reconcile } from './build.ts'
 import { code } from './code.ts'
+import { changing } from './change.ts'
+import type { And } from '@yaks/query'
 
 let changes = (sql: Driver): number =>
   Number(
@@ -128,4 +130,34 @@ test('matching input changes reconcile inside transactionSync', () => {
   equal([read('.call&!execution').length, said()], [2, ['second']])
   g.apply([{ entity: { eid: 'source' }, $delete: true }])
   equal(read('.build&.build.stale=true').length, 2)
+})
+
+let sourceQueries: And[] = []
+let sourceTx = {
+  read: (q: And) => {
+    sourceQueries.push(q)
+    return []
+  },
+} as unknown as Parameters<ReturnType<typeof changing>>[1]
+let sourceHook = changing(workshop())
+
+test('an unrelated batch probes each dependency source without reading an arbitrary owner', () => {
+  sourceQueries = []
+  let writes = [
+    { entity: { eid: 'one' }, doc: { title: 'One' } },
+    { entity: { eid: 'two' }, doc: { title: 'Two' } },
+    { entity: { eid: 'one' }, doc: { body: 'Again' } },
+  ]
+  equal(sourceHook(writes, sourceTx), writes)
+  equal(
+    sourceQueries.flatMap((q) =>
+      q.clauses.map((c) =>
+        c.kind == 'pred' && c.path.join('.') == 'builder_dep.source' &&
+          c.value?.kind == 'scalar'
+          ? c.value.raw
+          : null
+      )
+    ),
+    ['entity:one', 'component:*', 'component:doc', 'entity:two'],
+  )
 })

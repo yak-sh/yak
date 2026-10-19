@@ -37,7 +37,7 @@ import {
 import { type Embedder, hash, Refused } from './embedder.ts'
 import { allowed, type Field } from './fields.ts'
 import { TABLE } from './ddl.ts'
-import { due, left, owe, paid, watch } from './owed.ts'
+import { type Due, due, left, owe, paid, watch } from './owed.ts'
 import { pack, unit } from './vector.ts'
 import { prepare } from './native.ts'
 import { absorb } from './held.ts'
@@ -324,10 +324,13 @@ export let sweep = async (
   fields: Field[],
   embedder: Embedder,
   limit = BATCH,
+  queued?: Due[],
 ): Promise<Swept> => {
   let { model } = embedder
-  watch(db, fields)
-  let owed = due(db, limit)
+  // A host may have just read the first batch to decide whether to start.
+  // Trigger changes can queue more text, so only reuse it while they stood.
+  let moved = watch(db, fields)
+  let owed = !moved && queued ? queued : due(db, limit)
   if (!owed.length && remodel(db, fields, model)) owed = due(db, limit)
   let by = new Map(
     sources(db, fields, owed.map((d) => d.owner)).map((s) => [s.owner, s]),
@@ -375,11 +378,18 @@ export let drain = async (
   db: Statements,
   fields: Field[],
   embedder: Embedder,
-  opts: { batch?: number; signal?: AbortSignal } = {},
+  opts: {
+    batch?: number
+    signal?: AbortSignal
+    /** The first batch already read by the host, with its queue generations. */
+    queued?: Due[]
+  } = {},
 ): Promise<Drained> => {
   let done: Drained = { fresh: 0, refused: [] }
+  let queued = opts.queued
   for (;;) {
-    let swept = await sweep(db, fields, embedder, opts.batch)
+    let swept = await sweep(db, fields, embedder, opts.batch, queued)
+    queued = undefined
     done.fresh += swept.fresh
     done.refused.push(...swept.refused)
     prepare(db)
