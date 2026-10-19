@@ -59,6 +59,7 @@ type Read = {
   names?: string[]
   fields: string
   found: Map<string, Promise<Bundle | undefined>>
+  shapes: Map<string, string[]>
 }
 
 let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
@@ -71,6 +72,7 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
     names,
     fields: names ? names.map((n) => '?' + n).join('&') : '*',
     found: new Map(),
+    shapes: new Map(),
   }
 }
 
@@ -78,22 +80,30 @@ let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
 // Projecting every optional component forces a scalar read for each declared
 // component, even though an entry carries only a handful of them.
 let selected = async (r: Read, q: string): Promise<Bundle[]> => {
-  let ids = (await r.g.rows(q)).map((b) => String(b.eid))
+  let owners = await r.g.rows(
+    q +
+      (r.g.vocab.comp('archetype')
+        ? '&.fields=entity.eid,entity.archetype'
+        : '&.fields=entity.eid'),
+  )
+  let ids = owners.map((b) => String(b['entity.eid']))
   if (!ids.length) return []
   let names = r.names
   if (names && r.g.vocab.comp('archetype')) {
-    let owners = await r.g.get(ids, [])
-    let keys = [...new Set(owners.map((b) => b.entity.archetype))]
+    let keys = [...new Set(owners.map((b) => b['entity.archetype']))]
     if (!keys.includes(undefined)) {
-      let shapes = await r.g.get(keys as Eid[], ['archetype'])
-      let tables = shapes.map((b) => comp(b, 'archetype')?.tables)
-      if (
-        tables.length == keys.length &&
-        tables.every((t) => typeof t == 'string')
-      ) {
-        let present = new Set(
-          tables.flatMap((t) => JSON.parse(String(t)) as string[]),
-        )
+      let missing = keys.filter((key) => !r.shapes.has(String(key)))
+      let shapes = missing.length
+        ? await r.g.get(missing as Eid[], ['archetype'])
+        : []
+      for (let b of shapes) {
+        let text = comp(b, 'archetype')?.tables
+        if (typeof text == 'string') {
+          r.shapes.set(b.entity.eid, JSON.parse(text))
+        }
+      }
+      if (keys.every((key) => r.shapes.has(String(key)))) {
+        let present = new Set(keys.flatMap((key) => r.shapes.get(String(key))!))
         names = names.filter((n) => present.has(n))
       }
     }
