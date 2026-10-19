@@ -55,7 +55,9 @@ export let machines = (
     if (prepared?.workspace) at = { ...at, ...prepared }
     else {
       if (!sandboxes) {
-        throw new Error('This host lends no default sandbox provider')
+        throw new Refused(
+          'This host lends no default sandbox provider; select a workspace or a configured sandbox provider',
+        )
       }
       at = {
         ...at,
@@ -135,7 +137,9 @@ export let machines = (
           throw new CallError('sandbox', 'sandbox must be a request object')
         }
         if (!sandboxes) {
-          throw new Error('This host lends no default sandbox provider')
+          throw new Refused(
+            'This host lends no default sandbox provider; select a workspace or a configured sandbox provider',
+          )
         }
         at = {
           workspace: await sandboxes.request(
