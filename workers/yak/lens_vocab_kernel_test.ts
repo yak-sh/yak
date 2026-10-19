@@ -91,6 +91,20 @@ test('kept pages load their vocabulary and compose old reads and writes through 
       book: { pages: 13 },
     })
     equal((await query(1, '.recipe.title~=again&.book'))[0].book.pages, 13)
+    equal(
+      (await query(2, '.recipe.heading~=again&.book'))[0].recipe.heading,
+      'Cake again',
+    )
+    await page(2, 'apply', {
+      entity,
+      recipe: { heading: 'Cake from kept page' },
+      book: { pages: 14 },
+    })
+    for (let [version, field] of [[1, 'title'], [2, 'heading']] as const) {
+      let rows = await query(version, `.recipe.${field}~=kept&.book`)
+      equal(rows[0].recipe[field], 'Cake from kept page')
+      equal(rows[0].book.pages, 14)
+    }
   } finally {
     await agent.tool('app_delete', { ...at, forever: true })
     await agent.tool('app_delete', { space: slug, app: 'shelf', forever: true })
