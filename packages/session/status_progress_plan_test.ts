@@ -101,7 +101,9 @@ for (let size of [100, 1000]) {
         let scan = counters.symbols.sqlite3_stmt_status(st.unsafeHandle, 1, 1)
         equal(
           rows[0]['session.status'],
-          kind == 'inflight' ? 'running' : 'pending',
+          // Progress keeps the tool running; only its final result makes a
+          // new model step pending (independent-step semantics, T-128676).
+          kind == 'resolved' ? 'pending' : 'running',
         )
         equal(scan, 0)
         ok(
