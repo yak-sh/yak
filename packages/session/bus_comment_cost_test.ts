@@ -140,7 +140,25 @@ test('several recipients share one pass over unread agent history', () => {
   equal(readComments, got.length)
   ok(vm < 160_000, `${vm} VM steps beside unread agent history`)
 })
+let screened = graph({
+  vocab: v,
+  storage: store,
+  plugins: [{ name: 'screen', scope: () => ({ entity: '!doc' }) }],
+})
+await comments(screened)
+let started = steps(), screenedItems = await comments(screened)
+let screenedVm = steps() - started
+test('comment routing screens each candidate owner once', () => {
+  equal(screenedItems.items.map((b) => b.entity.eid), [
+    'news0',
+    'news1',
+    'news2',
+    'news3',
+  ])
+  ok(screenedVm < 250_000, `${screenedVm} VM steps with owner visibility`)
+})
 let scopes: [string, Visibility, number][] = [
+  ['hidden owner', { entity: '.entity.eid!=news0' }, 3],
   ['hidden author', { entity: '.entity.eid!=agent' }, 4],
   ['hidden session', { components: { session: '.entity.eid!=agent' } }, 4005],
   ['hidden stamp', { components: { created: '!comment' } }, 4005],

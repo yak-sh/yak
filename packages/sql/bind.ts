@@ -920,11 +920,9 @@ let path = (ctx: Ctx, hops: Hop[], p: Pred): Cond => {
   // A reference-presence path needs one value, not a LEFT JOIN over that
   // component's history when SQLite still has singleton statistics.
   let start = scalarRoot
-    ? `(select "__root"."${field(root.prop)}" from ${
-      source(ctx, root.comp)
-    } as "__root" where "__root"."entity" = ${
-      ctx.d.ownerKey('entity')
-    } limit 1)`
+    ? `(select ${refKey(ctx, root.comp, root.prop)} from ${
+      joining(ctx, root.comp)
+    } where ${ctx.d.ownerKey(root.comp)} = ${ctx.d.ownerKey('entity')} limit 1)`
     : refKey(ctx, root.comp, root.prop)
   let target = chain(ctx, hops, start)
   let leaf = hops[hops.length - 1]
@@ -2256,13 +2254,18 @@ let indexedRelation = (
         ),
       }
     }
+    let drives = (j: Join) =>
+      ctx.shapeCandidates && ctx.present &&
+      j.src.t == 'raw' && j.src.sql == joining(ctx, ctx.present)
     return {
       ...s,
       // A planned presence spine elided its own predicate while binding.
-      // When candidates replace it, check that component by each owner's key.
+      // A forced cross join already checks it; otherwise probe the owner's key.
       where: and(
         s.where ? holding(s.where, ctx.candidates.test) : TRUE,
-        ...ctx.present ? [probed(ctx, ctx.present)] : [],
+        ...ctx.present && !(s.joins ?? []).some(drives)
+          ? [probed(ctx, ctx.present)]
+          : [],
       ),
       from: raw(
         `(${ctx.candidates.sql}) as "${
@@ -2277,10 +2280,7 @@ let indexedRelation = (
           on: raw(`"__candidates"."id" = ${ctx.d.ownerKey('entity')}`),
         } as Join],
         ...(s.joins ?? []).map((j) =>
-          ctx.shapeCandidates && ctx.present &&
-            j.src.t == 'raw' && j.src.sql == joining(ctx, ctx.present)
-            ? { ...j, how: 'cross' as const }
-            : j
+          drives(j) ? { ...j, how: 'cross' as const } : j
         ),
       ],
     }
