@@ -7,7 +7,18 @@ import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
 import { initialize, rpc } from '../packages/cli/rpc.ts'
 import { install, state } from '../packages/embedding/native.ts'
-import { statements } from '@yaks/sql'
+import {
+  as,
+  col,
+  count,
+  eq,
+  fn,
+  select,
+  statements,
+  table,
+  val,
+} from '@yaks/sql'
+import { TABLE } from '../packages/embedding/ddl.ts'
 import { service } from '../packages/embedding/service.ts'
 
 export let DIAGNOSTIC_NAMES = [
@@ -97,9 +108,18 @@ export let measure = async (
       batch: 4096,
     })
     let index = state(statements(host.storage))
-    if (!index.installed || !index.model || index.build.rows < 2000) {
+    let [vectors] = statements(host.storage).query(select({
+      cols: [as(count(), 'rows')],
+      from: table(TABLE),
+      where: eq(fn('length', col('vec')), val(64 * 4)),
+    }))
+    if (
+      !index.installed || index.model != 'hash-64' ||
+      Number(vectors.rows) < 2000
+    ) {
       throw new Error(
-        'native vector fixture not populated/built: ' + JSON.stringify(index),
+        'native vector fixture not populated: ' +
+          JSON.stringify({ ...index, rows: vectors.rows }),
       )
     }
     if (!host.handler) throw new Error('missing HTTP handler')
@@ -214,7 +234,7 @@ export let measure = async (
             (saved?.home as { workspace?: string })?.workspace !== workspace
           ) throw new Error('home not persisted')
         } else {
-          includes(text, 'the vector index is being built')
+          includes(text, 'vector search reads the current canonical vectors')
           if (
             text.includes('"level"') ||
             text.includes('no vector table') ||
