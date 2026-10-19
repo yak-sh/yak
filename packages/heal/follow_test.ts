@@ -1588,3 +1588,27 @@ test('cooldown refuses a new fixer before reading global capacity', async () => 
   equal(guardGuardCooled.errors, [])
   guardGuardCooled.close()
 })
+
+// A managed fixer's slot never needs the status of its transcript. Keep that
+// projection unavailable while ordinary reads and writes remain real.
+let managedStatus = await fixture({ cap: 1 })
+await put(managedStatus.g, [{
+  entity: { eid: 'managed-status-holder' },
+  fixer: { bug: 'some-other-fault' },
+  session: {},
+  process: { pid: 42 },
+}])
+let managedStatusRead = managedStatus.g.read.bind(managedStatus.g)
+managedStatus.g.read = (query, options) => {
+  let q = JSON.stringify(query)
+  if (q.includes('status') && q.includes('session')) {
+    throw new Error('managed fixer inspected transcript status')
+  }
+  return managedStatusRead(query, options)
+}
+test('a managed fixer fills capacity without deriving any transcript status', async () => {
+  await managedStatus.replay()
+  equal(await count(managedStatus.g, 'fixer'), 1)
+  equal(await count(managedStatus.g, 'task'), 1)
+  managedStatus.close()
+})

@@ -6,7 +6,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { addressed } from '@yaks/graph/call'
 import { token } from '@yaks/graph/sha256'
 import { human } from '@yaks/id'
-import { absent, and, eq, fields, present } from '@yaks/query'
+import { absent, and, eq, fields, list, present } from '@yaks/query'
 
 /** What config can set. */
 export type Options = {
@@ -98,7 +98,6 @@ export let fixing = (g: Graph, options: Options = {}) => {
   let serial = serially()
   // Slot checks need lifecycle facts, never the computed transcript cost.
   let lifecycle = [
-    'session.status',
     'session.ended',
     'process.pid',
     'created.at',
@@ -112,7 +111,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
     let rows = await g.read(and(...query.clauses, fields(...lifecycle)))
     let marked = new Map((await g.get(rows.map((b) => b.entity.eid), marks))
       .map((b) => [b.entity.eid, b]))
-    return rows.map((b) => ({
+    let found = rows.map((b) => ({
       ...b,
       ...Object.fromEntries(
         marks.filter((n) => marked.get(b.entity.eid)?.[n]).map((
@@ -120,6 +119,25 @@ export let fixing = (g: Graph, options: Options = {}) => {
         ) => [n, marked.get(b.entity.eid)![n]]),
       ),
     }))
+    // Managed slots depend on process/start time, not transcript status.
+    // Terminal native marks decide without inspecting their entries either.
+    let native = found.filter((b) =>
+      b.native && !b.exit && !b.stop && !comp(b, 'session')?.ended
+    )
+    if (!native.length) return found
+    let statuses = await g.read(and(
+      eq('entity.eid', list(...native.map((b) => b.entity.eid))),
+      fields('session.status'),
+    ))
+    let byId = new Map(statuses.map((b) => [b.entity.eid, comp(b, 'session')]))
+    return found.map((b) =>
+      byId.has(b.entity.eid)
+        ? {
+          ...b,
+          session: { ...comp(b, 'session'), ...byId.get(b.entity.eid) },
+        }
+        : b
+    )
   }
   let unexited = and(present('fixer'), absent('exit'))
   // The home project, resolved once per decision: the work and its gates ask.
