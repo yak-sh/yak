@@ -420,6 +420,49 @@ test("a component's entities run by a pressed heading, a page at a time", async 
   assertEquals(last(), '.task&.after=t49&.limit=50')
 })
 
+let queryPage = (text: string, rows = [T1, T2]) => {
+  using t = host((line) => line.endsWith('&.count') ? { count: 120 } : { rows })
+  using p = mount(t.draw(h(t.Door, {
+    e: { entity: { eid: 'query' } },
+    view: 'Inspect.Query',
+    ctx: { query: text },
+  })))
+  return {
+    asked: t.asked,
+    rows: p.root.querySelectorAll('.Table_Body .Table_Row').length,
+    pager: p.root.querySelector('.Pager')?.textContent,
+    text: p.root.textContent,
+  }
+}
+let ownedQueries = ['.task&.limit=20', '.task&.order=doc.title'].map((
+  text,
+) => ({ text, page: queryPage(text) }))
+let unboundedQuery = queryPage(
+  '.task',
+  Array.from({ length: 50 }, (_, i) => ({
+    entity: { eid: `query-row-${i}` },
+    doc: { title: `Row ${i}` },
+    task: { status: 'open', owner: P1, seen: 'yesterday' },
+  })),
+)
+for (let { text, page } of ownedQueries) {
+  test(`a query's own window paints its rows without asking for an unused count (${text})`, () => {
+    assertEquals(page.asked.filter((line) => line.endsWith('&.count')), [])
+    assert(page.asked.includes(text + '&*'))
+    assertEquals(page.rows, 2)
+    assertEquals(page.pager, undefined)
+    assert(page.text?.includes('Fix the map'))
+    assert(page.text?.includes('Draw the map'))
+  })
+}
+
+test('a query without its own window keeps the count used by its pager', () => {
+  assert(unboundedQuery.asked.includes('.task&.count'))
+  assert(unboundedQuery.asked.includes('.task&.limit=50&*'))
+  assertEquals(unboundedQuery.rows, 50)
+  assert(unboundedQuery.pager?.includes('1–50 of 120'))
+})
+
 test('a query that counts shows the count through its view registration', () => {
   using t = host({ '.task&.count': { count: 12403 } })
   using p = mount(

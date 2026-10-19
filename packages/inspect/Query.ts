@@ -114,10 +114,12 @@ let Tallied = ({ io, id, tally }: {
 let Answered = ({ io, text, ast }: { io: Io; text: string; ast: Query }) => {
   let id = key('query', text)
   let own = windowOf(ast).limit != null || !!orderOf(ast)
-  let got = io.ask({
-    rows: whole(own ? text : paged(io, id, text)),
-    total: { query: conjoin(text, '.count'), once: true },
-  })
+  let got = io.ask(
+    own ? { rows: whole(text) } : {
+      rows: whole(paged(io, id, text)),
+      total: { query: conjoin(text, '.count'), once: true },
+    },
+  )
   let all = rows(got.rows)
   useSets(io, all)
   let cols = shared(all)
