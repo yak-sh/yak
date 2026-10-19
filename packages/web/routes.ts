@@ -23,6 +23,7 @@ import { addressId, prefixOf } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
+import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
 import { type Config, located, subpath, used } from '@yaks/cli/config'
 import type { Registry } from '@yaks/render'
@@ -97,7 +98,8 @@ let names = async (graph: Graph, path: string): Promise<boolean> => {
 export type Options = { home?: { title: string; query: string }; app?: string }
 
 export let routes = (host: Hosting, options: Options = {}): Route[] => {
-  let page = kept('/', 'text/html; charset=utf-8', text('./index.html'))
+  let cached = kept('/', 'text/html; charset=utf-8', text('./index.html'))
+  let page = async (request: Request) => preload(await cached(request))
   let app = () => application(host.config?.plugins ?? [], options.app)
   let named = async (request: Request) => {
     if (await names(host.graph, new URL(request.url).pathname)) {
