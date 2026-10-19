@@ -12,6 +12,7 @@ import {
 } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { ram } from '@yaks/ram'
+import { Archetypes } from '@yaks/archetype'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
@@ -325,34 +326,53 @@ for (let completed of [false, true]) {
 // request rather than classifying it as an anonymous interrupted call.
 let recoveryVocab = loadVocab([...vocab.docs, archetypeDoc], [kernelKeywords])
 let recoveryStorage = ram(recoveryVocab, { computed: attemptComputed })
+let recoveryRows: Bundle[] = [
+  { entity: { eid: 'private-session' }, session: {} },
+  {
+    entity: { eid: 'private-input' },
+    entry: { session: 'private-session', seq: 1 },
+    content: { body: 'ask' },
+    using: { model: M },
+  },
+  {
+    entity: { eid: 'private-ask' },
+    entry: { session: 'private-session', seq: 2 },
+    ask: { to: M, through: 'private-input' },
+    attempt: { by: 'worker' },
+    inference: { executor: 'paid', request: 'frozen', receipt: 'completed' },
+    submitted: { at: '2026-10-01T00:00:00Z' },
+  },
+]
+// Raw fixture writes include the same immutable shape descriptors the graph
+// maintains in production. Missing pointers would trigger a whole-body fallback
+// and hide whether the runner's selected-component gather kept private pins.
+let recoveryShapes = new Archetypes()
 await recoveryStorage.tx((tx) =>
-  tx.patch([
-    { entity: { eid: 'private-session' }, session: {} },
-    {
-      entity: { eid: 'private-input' },
-      entry: { session: 'private-session', seq: 1 },
-      content: { body: 'ask' },
-      using: { model: M },
-    },
-    {
-      entity: { eid: 'private-ask' },
-      entry: { session: 'private-session', seq: 2 },
-      ask: { to: M, through: 'private-input' },
-      attempt: { by: 'worker' },
-      inference: { executor: 'paid', request: 'frozen', receipt: 'completed' },
-      submitted: { at: '2026-10-01T00:00:00Z' },
-    },
-  ])
+  tx.patch(recoveryRows.flatMap((row) => {
+    let shape = recoveryShapes.intern(
+      Object.keys(row).filter((n) => n != 'entity'),
+    )
+    return [
+      {
+        entity: { eid: shape.eid },
+        archetype: { tables: JSON.stringify(shape.tables) },
+      },
+      { ...row, entity: { ...row.entity, archetype: shape.eid } },
+    ]
+  }))
 )
 let privateAsk = graph({
   storage: recoveryStorage,
   vocab: recoveryVocab,
   plugins: [sessions()],
 })
-let privateReached =
-  (await reach(privateAsk, 'private-session', { turn: true }))
-    .find((b) => b.entity.eid == 'private-ask')!
+let privateEntries = await reach(privateAsk, 'private-session', { turn: true })
+let privateReached = privateEntries.find((b) => b.entity.eid == 'private-ask')!
 test('a runner reads server-only executor pins when gathering the newest ask', () => {
+  assertEquals(
+    privateEntries.find((b) => b.entity.eid == 'private-input')?.content,
+    {},
+  )
   assertEquals(privateReached.inference, {
     executor: 'paid',
     request: 'frozen',
