@@ -196,13 +196,15 @@ accepted.frame('s2', [])
 accepted.c.mutate([write('new')])
 await acceptedStarted.promise
 
-test('an accepted write stays in its matching watch until the socket answers', async () => {
+let acceptedBeforeAnswer = readIds(acceptedMatching.value)
+acceptedAnswer.resolve(acceptedResponse)
+await accepted.c.wire!.idle()
+
+test('an accepted write stays in its matching watch until the socket answers', () => {
   let { c, frame } = accepted
   let matching = acceptedMatching
   let unrelated = acceptedUnrelated
-  assertEquals(readIds(matching.value), ['new'])
-  acceptedAnswer.resolve(acceptedResponse)
-  await c.wire!.idle()
+  assertEquals(acceptedBeforeAnswer, ['new'])
   assertEquals(readIds(matching.value), ['new'])
   assertEquals(unrelated.value, [])
   frame('s1', [row('new')])
@@ -422,14 +424,19 @@ test('storage enumeration and reactive refresh do not touch LRU', async () => {
   c.close()
 })
 
+let renderAnswer = Promise.withResolvers<Response>()
+let { c: renderClient, frame: renderFrame } = fixture({
+  retention: 0,
+  fetch: () => renderAnswer.promise,
+})
+let renderWatch = renderClient.watch('.doc')
+renderFrame('s1', [row('a')])
+renderWatch.subscribe(() => {
+  if (comp(renderWatch.value[0], 'doc').title === 'edited') renderWatch.close()
+})
 test('a render can close its watch during an optimistic write without evicting it', async () => {
-  let answer = Promise.withResolvers<Response>()
-  let { c, frame } = fixture({ retention: 0, fetch: () => answer.promise })
-  let w = c.watch('.doc')
-  frame('s1', [row('a')])
-  w.subscribe(() => {
-    if (comp(w.value[0], 'doc').title === 'edited') w.close()
-  })
+  let c = renderClient
+  let answer = renderAnswer
   c.mutate([{ entity: { eid: 'a' }, doc: { title: 'edited' } }])
   assertEquals(comp(c.ent('a'), 'doc').title, 'edited')
   answer.resolve(Response.json([]))
@@ -441,13 +448,18 @@ test('a render can close its watch during an optimistic write without evicting i
 // A frame that lands before validation is what an addressed boot paints from
 // (the fleet seeds its entity, then validates): the disk floor still hydrates
 // behind it, and never over it.
-test('same epoch validation never overwrites an already newer RAM row', async () => {
+let validatedEpoch = await (async () => {
   let vault = wireStash()
   await vault.load('one', 10)
   await vault.save('one', [saved('a'), saved('b')], 10)
   let { c, frame } = fixture({ wireVault: vault })
   c.watch('.doc')
   frame('s1', [{ entity: { eid: 'a' }, doc: { title: 'newer than disk' } }])
+  return c
+})()
+
+test('same epoch validation never overwrites an already newer RAM row', async () => {
+  let c = validatedEpoch
   await c.setEpoch('one')
   assertEquals(comp(c.ent('a'), 'doc').title, 'newer than disk')
   assertEquals(comp(c.ent('b'), 'doc').title, 'b')
@@ -465,14 +477,17 @@ test('close cancels an outstanding disk restore', async () => {
   assertEquals(c.watches.size(), 0)
 })
 
+let epochRead = Promise.withResolvers<Saved[]>()
+let epochLoads = 0
+let epochVault: WireVault = {
+  ...wireStash(),
+  load: () =>
+    ++epochLoads === 1 ? epochRead.promise : Promise.resolve([saved('b')]),
+}
+let { c: epochClient } = fixture({ epoch: 'one', wireVault: epochVault })
 test('a newer epoch supersedes an outstanding older hydration', async () => {
-  let read = Promise.withResolvers<Saved[]>()
-  let loads = 0
-  let vault: WireVault = {
-    ...wireStash(),
-    load: () => ++loads === 1 ? read.promise : Promise.resolve([saved('b')]),
-  }
-  let { c } = fixture({ epoch: 'one', wireVault: vault })
+  let c = epochClient
+  let read = epochRead
   let next = c.setEpoch('two')
   read.resolve([saved('a')])
   await Promise.all([c.ready, next])

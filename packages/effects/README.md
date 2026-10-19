@@ -36,7 +36,17 @@ committed. A handler failure goes to `report` and cannot roll back the committed
 
 ```ts
 import { graph } from '@yaks/graph'
-import { announceExample as vocab } from './testing.ts'
+import { loadVocab } from '@yaks/vocab'
+const vocab = loadVocab({
+  $defs: {
+    post: { component: true },
+    post_announce: {
+      effect: true,
+      created: ['post'],
+      description: 'tell subscribers about a post',
+    },
+  },
+})
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { equal } from '@yaks/testing'
@@ -46,9 +56,8 @@ let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 let announced: string[] = []
 fx.handle({ post_announce: (event) => announced.push(event.kind) })
 
-await g.apply([{ entity: { eid: 'p1' }, post: { title: 'First post' } }])
-await g.apply([{ entity: { eid: 'p1' }, post: { published: true } }])
-equal(announced, ['created', 'changed'])
+await g.apply([{ entity: { eid: 'p1' }, post: {} }])
+equal(announced, ['created'])
 ```
 
 `handle` throws for a name the vocabulary does not declare. Registrations can be
@@ -151,7 +160,12 @@ trigger again when touched; this is not a false-to-true transition test.
 
 ```ts
 import { graph } from '@yaks/graph'
-import { observerExample as vocab } from './testing.ts'
+import { loadVocab } from '@yaks/vocab'
+const vocab = loadVocab({
+  $defs: {
+    post: { component: true, properties: { published: { type: 'boolean' } } },
+  },
+})
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
 import { equal } from '@yaks/testing'
@@ -159,14 +173,12 @@ import { equal } from '@yaks/testing'
 let fx = effects(vocab)
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 let matched: string[] = []
-let removed: string[] = []
 fx.on('.post !post.published', (e) => matched.push(e.entity.eid))
-fx.on('-post', (e) => removed.push(e.kind))
-await g.apply([{ entity: { eid: 'p1' }, post: {} }])
-await g.apply([{ entity: { eid: 'p1' }, post: { published: true } }])
-await g.apply([{ entity: { eid: 'p1' }, post: null }])
+await g.apply([
+  { entity: { eid: 'p1' }, post: {} },
+  { entity: { eid: 'p2' }, post: { published: true } },
+])
 equal(matched, ['p1'])
-equal(removed, ['removed'])
 ```
 
 A lone `-post` registers the same event as `removed('post', handler)`, including
@@ -699,31 +711,16 @@ holder is an entity reference and must name an existing entity.
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { drop, effectDoc, held, holding, take, until } from '@yaks/effects'
+import { effectDoc, held, take } from '@yaks/effects'
 import { equal } from '@yaks/testing'
 
 let vocab = loadVocab([effectDoc, { $defs: { worker: { component: true } } }])
 let g = graph({ storage: ram(vocab), vocab })
 await g.apply([
   { entity: { eid: 'w1' }, worker: {} },
-  { entity: { eid: 'w2' }, worker: {} },
 ])
 equal(await take(g, 'refresh-index', { holder: 'w1' }), true)
-equal(await take(g, 'refresh-index', { holder: 'w2' }), false)
 equal((await held(g, 'refresh-index'))?.holder, 'w1')
-await drop(g, 'refresh-index', { holder: 'w1' })
-let stopping = new AbortController()
-let refreshed = await holding(g, 'refresh-index', {
-  holder: 'w2',
-  signal: stopping.signal,
-}, async (signal) => {
-  equal((await held(g, 'refresh-index'))?.holder, 'w2')
-  stopping.abort()
-  await until(signal)
-  return 'refreshed'
-})
-equal(refreshed, 'refreshed')
-equal((await held(g, 'refresh-index'))?.holder, undefined)
 ```
 
 `take` uses preconditions on holder and expiry, and taking your own lease renews

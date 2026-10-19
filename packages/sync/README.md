@@ -565,7 +565,7 @@ write has not committed locally.
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
-import { marks, post, sync } from '@yaks/sync'
+import { marks, post } from '@yaks/sync'
 import { equal } from '@yaks/testing'
 
 const vocab = loadVocab({
@@ -590,9 +590,6 @@ equal(
   true,
 )
 equal((await g.get(['b1']))[0].book, { title: 'Dune' })
-const link = sync(g, { url: 'https://books.example', fetch })
-equal(await link.submit(answer), answer)
-link.close()
 ```
 
 ## Limits

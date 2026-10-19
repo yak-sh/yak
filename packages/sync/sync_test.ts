@@ -33,18 +33,26 @@ test('a local apply lands on the server, minus what is local-tier', async () => 
   c.wire.close()
 })
 
-test("the server's number and stamps land back on the client", async () => {
-  let srv = server()
-  // Two entities the client knows nothing about: a number the client guessed
-  // for the recipe would be one of theirs.
-  srv.graph.apply([{ entity: { eid: 'x1' } }, { entity: { eid: 'x2' } }])
-  let c = client(srv)
+// Capture the HTTP integrations at module load; cases check both the
+// optimistic image and the authoritative answer without timing server boot.
+let numberedServer = server()
+// Two entities the client knows nothing about: a number the client guessed
+// for the recipe would be one of theirs.
+numberedServer.graph.apply([{ entity: { eid: 'x1' } }, {
+  entity: { eid: 'x2' },
+}])
+let numberedClient = client(numberedServer)
 
-  c.graph.apply([dal()])
-  assertEquals(at(c.graph, 'r1')?.entity.num, undefined) // none until told
-  assertEquals(comp(at(c.graph, 'r1'), 'created').by, undefined)
+numberedClient.graph.apply([dal()])
+let optimisticNumber = at(numberedClient.graph, 'r1')?.entity.num
+let optimisticWriter = comp(at(numberedClient.graph, 'r1'), 'created').by
+await numberedClient.wire.idle()
 
-  await c.idle()
+test("the server's number and stamps land back on the client", () => {
+  let srv = numberedServer
+  let c = numberedClient
+  assertEquals(optimisticNumber, undefined) // none until told
+  assertEquals(optimisticWriter, undefined)
   let held = at(c.graph, 'r1')
   assertEquals(held?.entity.num, at(srv.graph, 'r1')?.entity.num)
   assertEquals(held?.entity.num, 3)
@@ -187,10 +195,11 @@ let refusedNewEntity = (() => {
   return c
 })()
 
-test('a refused write on an entity the server never had leaves it bare', async () => {
+refusedNewEntity.graph.apply([dal()])
+await refusedNewEntity.wire.idle()
+
+test('a refused write on an entity the server never had leaves it bare', () => {
   let c = refusedNewEntity
-  c.graph.apply([dal()])
-  await c.idle()
   assertEquals(comp(at(c.graph, 'r1'), 'recipe'), {})
   assertEquals(comp(at(c.graph, 'r1'), 'doc'), {})
   assertEquals((c.graph.read('.recipe.course=dinner&*') as Bundle[]).length, 0)
@@ -235,15 +244,19 @@ let stored = (() => {
   return g.storage.read('*') as Bundle[]
 })()
 
-test("an accepted delete lands from the server's answer", async () => {
-  let srv = server()
-  srv.graph.storage.tx((tx) => tx.patch(stored))
-  let c = client(srv)
-  c.graph.storage.tx((tx) => tx.patch(stored))
+let deletedServer = server()
+deletedServer.graph.storage.tx((tx) => tx.patch(stored))
+let deletedClient = client(deletedServer)
+deletedClient.graph.storage.tx((tx) => tx.patch(stored))
 
-  c.graph.apply([{ entity: { eid: 'r1' }, $delete: true }])
-  assertEquals(comp(at(c.graph, 'r1'), 'recipe').serves, 4) // one round trip
-  await c.idle()
+deletedClient.graph.apply([{ entity: { eid: 'r1' }, $delete: true }])
+let optimisticDeleted = comp(at(deletedClient.graph, 'r1'), 'recipe').serves
+await deletedClient.wire.idle()
+
+test("an accepted delete lands from the server's answer", () => {
+  let srv = deletedServer
+  let c = deletedClient
+  assertEquals(optimisticDeleted, 4) // one round trip
   assertEquals(comp(at(c.graph, 'r1'), 'recipe'), {})
   assertEquals(comp(at(srv.graph, 'r1'), 'recipe'), {})
   assertEquals(c.trouble, [])
@@ -520,4 +533,13 @@ test('a clear is sent at once, and what it cleared never follows', async () => {
   a.pass(1000)
   assertEquals([said(), await heard()], [sent, {}])
   done()
+})
+
+// Explicit submission of an already selected answer is also a public write seam.
+let submitted = client(server())
+let submittedAnswer = await submitted.wire.submit([dal()])
+test('submit returns the authoritative selected bundles', () => {
+  assertEquals(submittedAnswer[0].entity.eid, 'r1')
+  assertEquals(comp(submittedAnswer[0], 'recipe').serves, 4)
+  submitted.wire.close()
 })
