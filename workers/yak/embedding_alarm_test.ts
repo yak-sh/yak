@@ -38,6 +38,9 @@ test('an embedding failure honors the store retry interval across reboot', async
       }),
     )
   assertEquals((await post('/vocab', {})).status, 200)
+  // Schema setup can leave an earlier continuation alarm. Delivering that
+  // alarm is outside this fixture: isolate the failed write's retry below.
+  await ctx.storage.deleteAlarm()
   let began = Date.now()
   // A text the model is owed: an app's store holds none until it writes one.
   let note = [{ entity: { eid: 'note' }, doc: { title: 'A note' } }]
