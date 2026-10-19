@@ -732,7 +732,7 @@
       "additionalProperties": false
     },
     "effect": {
-      "description": "An effect declaration: what a commit owes, by name. `created`, `changed` and `removed` list the components (and, for `changed`, `comp.prop` for one property) whose appearance, patch or removal owes a run; `match` is a query that owes one wherever a batch made it hold. The code that runs it is registered under the same name by a plugin's `./effects` (@yaks/effects). `sweep` selects the entities still owed a run when a worker starts, and declaring it promises running twice is safe.",
+      "description": "An effect declaration: what a commit owes, by name. `created`, `changed` and `removed` list the components (and, for `changed`, `comp.prop` for one property) whose appearance, patch or removal owes a run; `match` is a query that owes one wherever a batch made it hold. The code that runs it is registered under the same name by a plugin's `./effects` (@yaks/effects).",
       "type": "object",
       "properties": {
         "effect": {
@@ -774,6 +774,8 @@
           "minLength": 1
         },
         "sweep": {
+          "deprecated": true,
+          "description": "Accepted for saved vocabularies; workers consume recorded effect runs.",
           "type": "string",
           "minLength": 1
         },

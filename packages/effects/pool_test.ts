@@ -21,7 +21,7 @@ import { parse } from '@yaks/query'
 import { memory } from '../graph/testing.ts'
 import { test, tick, until } from '@yaks/testing'
 import { effects, type Handler, type Opts } from './registry.ts'
-import { leaseEid } from './lease.ts'
+import { leaseEid, released } from './lease.ts'
 import { MAX, POOL, working } from './pool.ts'
 import { pooledBlog } from './testing.ts'
 
@@ -577,7 +577,7 @@ test("a run's write owes a generation on, and the chain stops at depth", async (
 })
 
 // What a process that died left behind: its presence and a claim, both still
-// standing for an hour. `dead` is what the next process knows of it.
+// standing for an hour. An observed exit releases its recorded claims.
 let orphaned = async (dead: string[]) => {
   let s = store()
   let bare = graph({ storage: s, vocab: pooledBlog })
@@ -601,7 +601,10 @@ let orphaned = async (dead: string[]) => {
       lease_expiry: hour,
     },
   }], { trusted: true })
-  let next = proc(s, { owner: 'w2', gone: (w) => dead.includes(w) })
+  for (let owner of dead) {
+    await bare.apply(await released(bare, owner), { trusted: true })
+  }
+  let next = proc(s, { owner: 'w2' })
   next.fx.handle(every(next.note))
   await next.fx.work(next.g)
   await next.fx.idle()

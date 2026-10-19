@@ -525,11 +525,14 @@ let composed = async (
     let host: Host
     let g: Graph | undefined
     let record = (bundles: Bundle[]) =>
-      persist(() => g!.apply(bundles), (error) =>
-        report(error, {
-          during: { process: selfEid() },
-          tags: { step: 'process write' },
-        }))
+      persist(
+        () => g!.apply(bundles, { trusted: true }),
+        (error) =>
+          report(error, {
+            during: { process: selfEid() },
+            tags: { step: 'process write' },
+          }),
+      )
     let doing: Host['duties'] | undefined
     let stopping = new AbortController()
     let self = writer(vocab)
