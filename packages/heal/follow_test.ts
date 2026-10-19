@@ -466,9 +466,9 @@ await service({ ...flood.host, graph: watchedFlood }, {
 let asked = (b: string) => floodRead.filter((eid) => eid == taskEid(b)).length
 // The completed replay is the fixture; timed checks inspect its observations.
 flood.close()
-test('a flood of hits replays the changed bug, not unchanged open or closed bugs', () => {
+test('occurrence-only tracker hits do not replay unchanged open or closed work', () => {
   equal(gone.map(asked), [2, 1, 1])
-  ok(asked(bug) > 2)
+  equal(asked(bug), 2)
 })
 
 let outage = await fixture({ provider: undefined })

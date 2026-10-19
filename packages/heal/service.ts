@@ -184,7 +184,17 @@ export let service = async (
           for (let bug of watch.value) {
             if (!once && signal.aborted) return
             let key = `${url} ${bug.entity.eid}`
-            let row = JSON.stringify(bug)
+            // Occurrence counts and last-seen timestamps change on every hit;
+            // they do not change the work or a fixer gate. A regression, mark
+            // or changed evidence does, and the periodic pass retries gates.
+            let row = JSON.stringify([
+              (bug.bug as Record<string, unknown>).fault,
+              bug.doc,
+              bug.regressed,
+              bug.resolved,
+              bug.archived,
+              bug.taken,
+            ])
             if (!all && replayed.get(key) == row) continue
             try {
               await reconcile(bug, url, watch.mutate)
