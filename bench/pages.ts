@@ -24,6 +24,7 @@
 import type { CollectedSuite } from '@yaks/benchmark'
 import { compEid, packEid, propEid } from '../packages/inspect/schema.ts'
 import { configPath, read } from '../packages/cli/config.ts'
+import { failedPage, requestTrail } from './page_diagnostics.ts'
 
 /** A page and the mark that says it has painted, as a page expression. */
 export type Page = {
@@ -139,15 +140,17 @@ export let open = async (base: string, page: Page, prime: string) => {
       `http://${new URL(root).host}/json/new?about:blank`,
       { method: 'PUT' },
     )).json()
+    let trail = requestTrail()
     let tab: Awaited<ReturnType<typeof devtools>> = await devtools(
       target.webSocketDebuggerUrl,
       (method, params) => {
         if (method != 'Fetch.requestPaused') return
         let { requestId, request } = params as {
           requestId: string
-          request: { method: string }
+          request: { method: string; url?: string }
         }
         let reads = ['GET', 'HEAD', 'OPTIONS'].includes(request.method)
+        trail.seen(request, reads)
         tab.send(
           reads ? 'Fetch.continueRequest' : 'Fetch.failRequest',
           reads ? { requestId } : { requestId, errorReason: 'BlockedByClient' },
@@ -172,6 +175,7 @@ export let open = async (base: string, page: Page, prime: string) => {
     // Navigate, then the value of `expression` once it holds, or a failure
     // saying what never did.
     let visit = async (url: string, expression: string, what: string) => {
+      trail.reset()
       await tab.send('Page.navigate', { url })
       let patience = page.patience ?? PATIENCE
       let until = Date.now() + patience
@@ -184,11 +188,16 @@ export let open = async (base: string, page: Page, prime: string) => {
         await sleep(50)
       }
       let diagnostic = await tab.send('Runtime.evaluate', {
-        expression: 'document.body.innerText.slice(0, 2200)',
+        expression: failedPage,
         returnByValue: true,
       })
       throw new Error(
-        `${what} within ${patience / 1000} s: ${JSON.stringify(diagnostic)}`,
+        `${what} within ${patience / 1000} s: ${
+          JSON.stringify({
+            page: diagnostic,
+            attempted: trail.snapshot(),
+          })
+        }`,
       )
     }
     let paint = async () => {
