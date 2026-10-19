@@ -663,7 +663,7 @@ test('Session explains loading, ready-empty, rows, and read failure', async () =
     await Promise.resolve()
     assertEquals(state(mounted), 'No entries yet')
 
-    // A person's input and the model's answer, as @yaks/session writes them.
+    // An input and the model's answer, as @yaks/session writes them.
     let line = (
       eid: string,
       seq: number,
@@ -688,7 +688,7 @@ test('Session explains loading, ready-empty, rows, and read failure', async () =
     let log = mounted.root.querySelector('.Session_Log')!
     assertEquals(
       log.querySelector('.Entry-user .Entry_Speaker')?.textContent,
-      'person',
+      'input',
     )
     assertEquals(
       log.querySelector('.Entry-agent .Entry_Speaker')?.textContent,

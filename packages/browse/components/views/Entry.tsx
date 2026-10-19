@@ -81,7 +81,21 @@ let more = (show: (() => void) | undefined, text: string, open = false) =>
 let body = (e: Ent) => e.content?.body ?? ''
 // Who a prose entry is from: a model's output wears `output` (@yaks/tools).
 let said = (e: Ent) => e.output ? 'agent' : 'user'
-let speaker = (role: 'agent' | 'user') => role == 'agent' ? 'model' : 'person'
+let speaker = (role: 'agent' | 'user') => role == 'agent' ? 'model' : 'input'
+let source = (e: Ent) => {
+  if (e.call) return 'tool call'
+  if (e.result) return 'tool result'
+  if (e.prompt) return 'instructions'
+  if (e.notice) return 'context'
+  if (e.checkpoint) return 'checkpoint'
+  if (e.output) return e.reasoning ? 'reasoning' : 'model'
+  let session = e.entry?.session ? ent(e.entry.session) : undefined
+  return session?.session?.operator
+    ? 'person'
+    : session?.oracle_dialogue
+    ? 'caller'
+    : 'input'
+}
 let failed = (e: Ent) =>
   (e.exit?.code != null && e.exit.code != 0) || !!e.refusal || !!e.error ||
   !!e.exception ||
@@ -344,8 +358,14 @@ export let MessageSummary = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
   return (
     <Frame mod={said(e)}>
-      <Speaker>{speaker(said(e))}</Speaker>
-      <Markdown text={body(e)} repo={repo} />
+      <Speaker>{source(e)}</Speaker>
+      {e.call || e.result
+        ? (
+          <Code>
+            <Ansi text={body(e)} />
+          </Code>
+        )
+        : <Markdown text={body(e)} repo={repo} />}
     </Frame>
   )
 }
@@ -373,7 +393,7 @@ let FoldedMessage = ({ e, label }: { e: Ent; label: string }) => {
 }
 
 export let PromptSummary = ({ e }: { e: Ent }) => (
-  <FoldedMessage e={e} label='persona' />
+  <FoldedMessage e={e} label='instructions' />
 )
 
 export let CheckpointSummary = ({ e }: { e: Ent }) => (
@@ -411,8 +431,14 @@ export let MessageFull = ({ e }: { e: Ent }) => {
   let repo = useRepoUrl(e)
   return (
     <Frame mod={said(e)}>
-      <Speaker>{speaker(said(e))}</Speaker>
-      <Markdown text={body(e)} repo={repo} />
+      <Speaker>{source(e)}</Speaker>
+      {e.call || e.result
+        ? (
+          <Code>
+            <Ansi text={body(e)} />
+          </Code>
+        )
+        : <Markdown text={body(e)} repo={repo} />}
     </Frame>
   )
 }

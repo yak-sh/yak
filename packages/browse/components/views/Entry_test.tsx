@@ -161,7 +161,7 @@ withDom((root) => {
   )
 })
 test('message summaries preserve who spoke', () =>
-  assertEquals(messageSpeakers, ['person', 'model']))
+  assertEquals(messageSpeakers, ['input', 'model']))
 
 // Build both message representations once; the case compares their speakers.
 let proseSpeakers: (string | null | undefined)[] = []
@@ -186,10 +186,10 @@ withDom((root) => {
     proseSpeakers.push(root.querySelector('.Entry_Speaker')?.textContent)
   }
 })
-test('full and normalized prose identify people and model output', () =>
-  assertEquals(proseSpeakers, ['person', 'model', 'person', 'model']))
+test('full and normalized prose identify input and model output', () =>
+  assertEquals(proseSpeakers, ['input', 'model', 'input', 'model']))
 
-test('session prompts are collapsed persona entries', () =>
+test('session prompts are collapsed instruction entries', () =>
   withDom((root) => {
     let e: Ent = {
       eid: 'prompt',
@@ -208,7 +208,7 @@ test('session prompts are collapsed persona entries', () =>
     assertEquals(root.querySelector('.Prompt_Body'), null)
     assertEquals(
       details.querySelector('.Prompt_Gist')?.textContent,
-      'persona · 2 lines',
+      'instructions · 2 lines',
     )
   }))
 
@@ -412,3 +412,24 @@ test('pending entries resolve as system news in every prose view', () => {
     Array.from({ length: 3 }, () => ['pending', 'Pending.', null, null]),
   )
 })
+
+let metadataSpeakers: (string | null | undefined)[] = []
+withDom((root) => {
+  for (
+    let meta of [
+      { call: { to: 'read-evidence', args: { id: 'evidence' } } },
+      { prompt: { scope: 'local' } },
+      { notice: {} },
+    ]
+  ) {
+    let e = {
+      eid: 'metadata',
+      content: { body: '{"data":"kept"}' },
+      ...meta,
+    } as Ent
+    render(<MessageSummary e={e} />, root)
+    metadataSpeakers.push(root.querySelector('.Entry_Speaker')?.textContent)
+  }
+})
+test('structured call and context entries are never presented as a person speaking', () =>
+  assertEquals(metadataSpeakers, ['tool call', 'instructions', 'context']))
