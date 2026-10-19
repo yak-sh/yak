@@ -269,7 +269,12 @@ export let usingOf = async (
   g: Graph,
   session: Eid,
 ): Promise<Comp | undefined> =>
-  usingBefore(await aspect(await chain(g, session, {}), USING))
+  usingBefore(
+    await aspect(
+      await chain(g, session, { comps: [ENTRY, USING, ASK] }),
+      USING,
+    ),
+  )
 
 /** The newest entry of a transcript, prose and all. */
 export let newestOf = async (

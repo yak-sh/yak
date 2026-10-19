@@ -386,3 +386,41 @@ test('a runner reads server-only executor pins when gathering the newest ask', (
   })
   assertEquals(privateReached.submitted, { at: '2026-10-01T00:00:00Z' })
 })
+
+// A selection read is not an execution read. Unrelated request authority can
+// be unavailable without changing which model an earlier choice selected.
+let selectionOnly = await world([
+  { entity: { eid: 's' }, session: {} },
+  {
+    entity: { eid: 'choice' },
+    entry: { session: 's', seq: 1 },
+    using: { model: M, effort: 'high' },
+  },
+  {
+    entity: { eid: 'late' },
+    entry: { session: 's', seq: 2 },
+    using: { model: M, effort: 'low' },
+  },
+  {
+    entity: { eid: 'served' },
+    entry: { session: 's', seq: 3 },
+    ask: { through: 'choice' },
+    using: { model: M, effort: 'high' },
+  },
+])
+let selectionGet = selectionOnly.get.bind(selectionOnly)
+selectionOnly.get = (ids, comps, options) => {
+  if (comps?.includes('execution')) {
+    throw new Error('model choice read execution authority')
+  }
+  return selectionGet(ids, comps, options)
+}
+let selectedModel = await usingOf(selectionOnly, 's').then(
+  (value) => () => value,
+  (error) => () => {
+    throw error
+  },
+)
+test('a late request keeps the newer selected model without reading execution authority', () => {
+  assertEquals(selectedModel(), { model: M, effort: 'low' })
+})
