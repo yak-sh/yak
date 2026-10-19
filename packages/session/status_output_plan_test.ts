@@ -21,7 +21,7 @@ let vocab = loadVocab([
   effectDoc,
   archetypeDoc,
 ], [kernelKeywords])
-for (let size of [100, 1000]) {
+for (let [size, every] of [[1, 0], [100, 0], [1000, 0], [1000, 20]]) {
   let { driver: d, steps } = stepping()
   let s = storage(d, vocab, { derived: sessionDerived(vocab) })
   s.install()
@@ -36,6 +36,12 @@ for (let size of [100, 1000]) {
   shape(10002, ['content', 'entry'])
   shape(10003, ['content', 'entry', 'imported', 'output'])
   shape(10004, ['ask', 'attempt', 'entry'])
+  shape(10005, ['content', 'entry', 'imported', 'output', 'using'])
+  if (size == 1) {
+    for (let i = 0; i < 1000; i++) {
+      shape(100000 + i, ['entry', `extra-${i}`])
+    }
+  }
   d.query(
     insert(
       'entity',
@@ -43,6 +49,7 @@ for (let size of [100, 1000]) {
       { id: 2, eid: 'other', archetype: 10001 },
       { id: 3, eid: 'input', archetype: 10002 },
       { id: 4, eid: 'other-ask', archetype: 10004 },
+      { id: 5, eid: 'model' },
     ),
   )
   d.query(
@@ -58,14 +65,18 @@ for (let size of [100, 1000]) {
   d.query(insert('content', { entity: 3, body: 'input' }))
   d.query(insert('ask', { entity: 4, through: 4 }))
   d.query(insert('attempt', { entity: 4 }))
+  d.query(insert('model', { entity: 5, name: 'fake' }))
   for (let start = 0; start < size; start += 100) {
-    let ids = Array.from({ length: 100 }, (_, i) => 10 + start + i)
+    let ids = Array.from(
+      { length: Math.min(100, size - start) },
+      (_, i) => 10 + start + i,
+    )
     d.query(insert(
       'entity',
       ...ids.map((id) => ({
         id,
         eid: `entry-${id}`,
-        archetype: 10003,
+        archetype: every && id % every == 0 ? 10005 : 10003,
       })),
     ))
     d.query(insert(
@@ -77,6 +88,12 @@ for (let size of [100, 1000]) {
       })),
     ))
     d.query(insert('output', ...ids.map((entity) => ({ entity, source: 1 }))))
+    let selected = ids.filter((id) => every && id % every == 0)
+    if (selected.length) {
+      d.query(
+        insert('using', ...selected.map((entity) => ({ entity, model: 5 }))),
+      )
+    }
     d.query(
       insert('content', ...ids.map((entity) => ({ entity, body: 'prose' }))),
     )
@@ -97,9 +114,12 @@ for (let size of [100, 1000]) {
   let masked = s.get(['owner'], ['session'], {
     visibility: { components: { output: '!output' } },
   })
-  test(`status aggregates ordinary imported output within its row budget (${size})`, () => {
+  test(`status aggregates ${every ? 'mixed' : 'ordinary'} imported output within its row budget (${size})`, () => {
     match(rows, [{ session: { status: 'settled' } }])
-    match(masked, [{ session: { status: 'running' } }])
-    ok(vm < size * 200 + 10000, `${vm} VM steps for ${size} outputs`)
+    match(masked, [{ session: { status: every ? 'pending' : 'running' } }])
+    ok(
+      vm < (size == 1 ? 2500 : size * (every ? 140 : 100) + 10000),
+      `${vm} VM steps for ${size} outputs`,
+    )
   })
 }
