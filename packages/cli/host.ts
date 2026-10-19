@@ -55,6 +55,7 @@ import { sandboxCapabilities } from './sandboxes.ts'
 
 import { UNNUMBERED } from './init.ts'
 import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { Stale } from '@yaks/graph/errors'
 import type { Vocab } from '@yaks/vocab'
 import {
   ended,
@@ -533,6 +534,15 @@ let composed = async (
             tags: { step: 'process write' },
           }),
       )
+    let finish = async (holder: Eid, end: Bundle) => {
+      for (;;) {
+        try {
+          return await record([...await released(g!, holder), end])
+        } catch (error) {
+          if (!(error instanceof Stale)) throw error
+        }
+      }
+    }
     let doing: Host['duties'] | undefined
     let stopping = new AbortController()
     let self = writer(vocab)
@@ -557,10 +567,7 @@ let composed = async (
           // A thread that failed before it wrote itself in holds nothing.
           if (!self || !g || !(await g.get([holder])).length) return
           if (!opts.readOnly) await host.runner.interrupt(why, holder)
-          await record([
-            ...await released(g, holder),
-            { entity: { eid: holder }, [EXIT]: {} },
-          ])
+          await finish(holder, { entity: { eid: holder }, [EXIT]: {} })
         },
         bury: async () => {
           if (!self || !g) return []
@@ -926,7 +933,7 @@ let composed = async (
           }
           try {
             await wait('process ending', async () =>
-              record([...await released(g!, selfEid()), ended(code)]))
+              finish(selfEid(), ended(code)))
           } catch (e) {
             await report(e, { tags: { step: 'close host' } })
           }
