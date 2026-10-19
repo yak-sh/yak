@@ -29,6 +29,9 @@ export type Visibility = {
 /** Options passed with a read, such as a fixed `now` for relative time
  * expressions. */
 export type ReadOpts = {
+  /** The caller stopped waiting. Read executors may cancel their own work;
+   * this never cancels an admitted write. */
+  signal?: AbortSignal
   /** Restrict root candidates to canonical eids, before shaping the answer.
    * Referenced entities and query operands keep their ordinary semantics. */
   eids?: readonly Eid[]

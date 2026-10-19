@@ -1,5 +1,5 @@
-// A web host's graph reads run in one worker over the same file. The graph's
-// read interface stays the query door; only the thread executing it changes.
+// A web host reads through a bounded pool of read-only workers. Cancelling a
+// read ends its worker, including synchronous SQL, without touching writers.
 import { parse } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
 import { type Context, context, type Event, forward } from '@yaks/trace'
@@ -8,7 +8,7 @@ export type Reader = Pick<Graph, 'read' | 'rows' | 'get'>
 
 type Call =
   | { op: 'read' | 'rows'; query: Query; opts?: ReadOpts }
-  | { op: 'get'; eids: Eid[]; comps?: string[] }
+  | { op: 'get'; eids: Eid[]; comps?: string[]; opts?: ReadOpts }
 
 export type Said =
   | { start: string }
@@ -24,64 +24,107 @@ export type Heard =
   )
   | { closed: true }
 
-/** A web host's reader: the graph's reads, run in a worker started on the
- * first of them, or by `ready`, which settles once the worker can answer, so a
- * server that waits on it answers its first read as fast as its next. */
+/** Independent reads share at most two workers, started only when needed.
+ * Each worker owns one read at a time, so an abandoned read can be terminated
+ * without rejecting another caller or waiting for synchronous SQL to return. */
 export let readThread = (
   config: string,
 ): Reader & { ready: () => Promise<void>; close: () => Promise<void> } => {
-  let worker: Worker | undefined
-  let next = 0
-  let pending = new Map<number, {
+  type Job = {
+    id: number
+    call: Call
     resolve: (value: unknown) => void
-    reject: (error: Error) => void
+    reject: (error: unknown) => void
     trace?: Context
-  }>()
+    off: () => void
+  }
+  type Lane = { worker: Worker; job?: Job }
+  let lanes = new Set<Lane>()
+  let waiting: Job[] = []
+  let next = 0
   let closed = false
-  let ending: Promise<void> | undefined
-  let fail = (error: Error) => {
-    worker?.terminate()
-    worker = undefined
-    for (let p of pending.values()) p.reject(error)
-    pending.clear()
+  let stop = (lane: Lane) => {
+    lane.worker.terminate()
+    lanes.delete(lane)
+  }
+  let finish = (lane: Lane, answer: Heard) => {
+    if ('closed' in answer || lane.job?.id != answer.id) return
+    let job = lane.job
+    lane.job = undefined
+    job.off()
+    if (job.trace && answer.spans) {
+      forward(job.trace, answer.spans, answer.origin)
+    }
+    if ('error' in answer) {
+      let error = Object.assign(
+        new Error(answer.error.message),
+        answer.error.details,
+      )
+      error.name = answer.error.name
+      job.reject(error)
+    } else job.resolve(answer.value)
+    drain()
   }
   let start = () => {
-    if (worker) return worker
-    let w = new Worker(new URL('./read_worker.ts', import.meta.url), {
+    let worker = new Worker(new URL('./read_worker.ts', import.meta.url), {
       type: 'module',
     })
-    worker = w
-    w.onmessage = ({ data }: MessageEvent<Heard>) => {
-      if ('closed' in data) return
-      let p = pending.get(data.id)
-      if (!p) return
-      pending.delete(data.id)
-      if (p.trace && data.spans) forward(p.trace, data.spans, data.origin)
-      if ('error' in data) {
-        let error = Object.assign(
-          new Error(data.error.message),
-          data.error.details,
-        )
-        error.name = data.error.name
-        p.reject(error)
-      } else p.resolve(data.value)
-    }
-    w.onerror = (event) => {
+    let lane: Lane = { worker }
+    lanes.add(lane)
+    worker.onmessage = ({ data }: MessageEvent<Heard>) => finish(lane, data)
+    worker.onerror = (event) => {
       event.preventDefault()
-      fail(
+      let job = lane.job
+      stop(lane)
+      job?.off()
+      job?.reject(
         event.error instanceof Error ? event.error : new Error(event.message),
       )
+      drain()
     }
-    w.postMessage({ start: config } satisfies Said)
-    return w
+    worker.postMessage({ start: config } satisfies Said)
+    return lane
+  }
+  let drain = () => {
+    while (waiting.length && !closed) {
+      let lane = [...lanes].find((l) => !l.job)
+      if (!lane && lanes.size < 2) lane = start()
+      if (!lane) return
+      let job = waiting.shift()!
+      lane.job = job
+      lane.worker.postMessage({
+        ...job.call,
+        id: job.id,
+        observed: !!job.trace,
+      })
+    }
   }
   let ask = (call: Call): Promise<unknown> => {
     if (closed) return Promise.reject(new Error('the reader is closed'))
+    let { signal, ...opts } = call.opts ?? {}
+    if (signal?.aborted) return Promise.reject(signal.reason)
     return new Promise((resolve, reject) => {
-      let id = ++next
-      let trace = context()
-      pending.set(id, { resolve, reject, trace })
-      start().postMessage({ ...call, id, observed: !!trace })
+      let cancel = () => {
+        waiting = waiting.filter((j) => j !== job)
+        let lane = [...lanes].find((l) => l.job === job)
+        if (lane) stop(lane)
+        job.off()
+        reject(signal!.reason)
+        // A navigation drops several old watches in one turn. Let those
+        // cancellations finish before starting a replacement worker.
+        queueMicrotask(drain)
+      }
+      let job: Job = {
+        id: ++next,
+        call: { ...call, opts },
+        resolve,
+        reject,
+        trace: context(),
+        off: () => signal?.removeEventListener('abort', cancel),
+      }
+      signal?.addEventListener('abort', cancel, { once: true })
+      waiting.push(job)
+      drain()
     })
   }
   return {
@@ -89,22 +132,22 @@ export let readThread = (
       ask({ op: 'read', query, opts }).then((value) => value as Bundle[]),
     rows: (query, opts) =>
       ask({ op: 'rows', query, opts }).then((value) => value as Row[]),
-    get: (eids, comps) =>
-      ask({ op: 'get', eids, comps }).then((value) => value as Bundle[]),
-    // Compile and gather one bounded read before the listener takes traffic.
-    // An empty get confirms composition but skips the query path entirely.
+    get: (eids, comps, opts) =>
+      ask({ op: 'get', eids, comps, opts }).then((value) => value as Bundle[]),
     ready: () => ask({ op: 'read', query: parse('.limit=1') }).then(() => {}),
-    // The HTTP server has already given in-flight requests their grace. A
-    // read-only worker owns no writes to drain, and may be executing synchronous
-    // SQL: it cannot receive a close message until that query returns. End it
-    // here rather than extending the server's grace without a bound.
     close: () => {
-      if (!ending) {
-        closed = true
-        fail(new Error('the reader closed'))
-        ending = Promise.resolve()
+      closed = true
+      let jobs = [
+        ...waiting,
+        ...[...lanes].flatMap((l) => l.job ? [l.job] : []),
+      ]
+      waiting = []
+      for (let lane of lanes) stop(lane)
+      for (let job of jobs) {
+        job.off()
+        job.reject(new Error('the reader closed'))
       }
-      return ending
+      return Promise.resolve()
     },
   }
 }

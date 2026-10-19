@@ -44,7 +44,7 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
       let graph = (await host).graph
       let query = () =>
         data.op == 'get'
-          ? graph.get(data.eids, data.comps)
+          ? graph.get(data.eids, data.comps, data.opts)
           : data.op == 'read'
           ? graph.read(data.query, data.opts)
           : graph.rows(data.query, data.opts)

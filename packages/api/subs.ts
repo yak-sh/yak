@@ -193,6 +193,9 @@ export type Subs = {
 }
 
 type Sub = {
+  loading?: boolean
+  dirty?: boolean
+  abort?: AbortController
   id: string
   sink: Sink
   /** the raw feed of committed transactions, rather than a query */
@@ -439,7 +442,8 @@ export let subscriptions = (graph: Graph, opts: {
 } = {}): Subs => {
   let revision = opts.revision?.()
   let held = new Map<Sink, Map<string, Sub>>()
-  let all = () => [...held.values()].flatMap((m) => [...m.values()])
+  let all = () =>
+    [...held.values()].flatMap((m) => [...m.values()].filter((s) => !s.loading))
   let durableNet = net<Sub>(graph.vocab)
   let peerNet = net<Sub>(graph.vocab)
   // Keep storage rows only while a peer value makes their entity relevant.
@@ -688,7 +692,10 @@ export let subscriptions = (graph: Graph, opts: {
   // its id: the network lets go of it too, unless it is the last keeping a
   // shared answer, which it keeps current while the answer stays kept.
   let forget = (sub: Sub | undefined, keep = true) => {
-    if (!sub?.routed) return
+    if (!sub) return
+    sub.abort?.abort()
+    sub.abort = undefined
+    if (!sub.routed) return
     let share = sub.shared
     share?.users.delete(sub)
     if (share && !share.users.size) {
@@ -710,6 +717,7 @@ export let subscriptions = (graph: Graph, opts: {
   // graph cannot answer would otherwise throw on every commit for the life of
   // the socket.
   let cut = (sub: Sub, err: unknown) => {
+    if (held.get(sub.sink)?.get(sub.id) !== sub) return
     held.get(sub.sink)?.delete(sub.id)
     forget(sub, false)
     fault(err, 'subscription')
@@ -722,7 +730,10 @@ export let subscriptions = (graph: Graph, opts: {
     readOpts?: ReadOpts,
     raw = false,
   ): Sub['send'] => {
+    let owner = () => held.get(sink)?.get(id)
+    let sub: Sub | undefined
     let sendPublished: Sink = (frame) => {
+      if (sub && owner() !== sub) return
       let out: Frame = { ...frame }
       for (let key of ['bundles', 'peers', 'relay'] as const) {
         if (frame[key]) out[key] = published(graph.vocab, frame[key])
@@ -867,8 +878,8 @@ export let subscriptions = (graph: Graph, opts: {
       )
     }
     return (frame) => {
+      sub ??= owner()
       let fail = (err: unknown) => {
-        let sub = held.get(sink)?.get(id)
         if (sub) cut(sub, err)
       }
       try {
@@ -888,6 +899,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   let attempt = (sub: Sub, fn: () => void | Promise<void>) => {
+    if (!sub.kept && held.get(sub.sink)?.get(sub.id) !== sub) return
     try {
       let out = fn()
       return isPromise(out) ? out.catch((err) => cut(sub, err)) : out
@@ -914,18 +926,24 @@ export let subscriptions = (graph: Graph, opts: {
     sub.members.has(f.entity) &&
     sub.fields.get(f.entity)?.has(f.component + '.' + f.property)
 
+  let reading = (sub: Sub) => ({ ...sub.opts, signal: sub.abort?.signal })
+
   // What a subscription's query answers now. A projection whose paths reach
   // other entities is read as its rows (@yaks/graph `project`), which tell the
   // entities it selects from the ones they reach; any other query is the
   // graph's read, the same answer `/query` gives.
   let ask = (sub: Sub, q: string): Answer =>
     sub.view
-      ? viewed(sub.view, sub.opts)
+      ? viewed(sub.view, reading(sub))
       : sub.plan?.reaches.length
-      ? project(graph, sub.plan, { ...sub.opts, durable: true, native: true })
+      ? project(graph, sub.plan, {
+        ...reading(sub),
+        durable: true,
+        native: true,
+      })
       : after(
         graph.read(queryOf(sub, q), {
-          ...sub.opts,
+          ...reading(sub),
           durable: true,
           native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
         }),
@@ -1005,6 +1023,38 @@ export let subscriptions = (graph: Graph, opts: {
       return leaf && graph.vocab.prop(leaf.comp, leaf.prop)?.scalar
     })
 
+  let parallel = <T>(items: T[], run: (item: T) => void | Promise<void>) => {
+    let work = items.map(run).filter(isPromise)
+    if (work.length) return Promise.all(work).then(() => {})
+  }
+
+  // Only completed answers are shared: pending work still belongs to the
+  // opening that may cancel it.
+  let cache = <T>(
+    map: Map<string, T | Promise<T>> | undefined,
+    key: string,
+    value: T | Promise<T>,
+  ) => {
+    if (!map) return
+    if (isPromise(value)) value.then((v) => map.set(key, v), () => {})
+    else map.set(key, value)
+  }
+
+  // A slow opening owns only its own read. A commit that crossed that read
+  // owes a fresh snapshot; a replaced or closed opening owes no answer.
+  let initial = <T>(
+    sub: Sub,
+    value: T,
+    use: (value: T) => void | Promise<void>,
+  ): void | Promise<void> => {
+    if (held.get(sub.sink)?.get(sub.id) !== sub) return
+    if (sub.dirty) {
+      return open(sub.sink, sub.id, sub.raw ? true : sub.query, sub.opts)
+    }
+    sub.loading = false
+    return use(value)
+  }
+
   let open = (
     sink: Sink,
     id: string,
@@ -1014,13 +1064,18 @@ export let subscriptions = (graph: Graph, opts: {
     answers?: Map<string, Reduced | Promise<Reduced>>,
     deferStatic = false,
     reset = false,
-  ) => {
+  ): void | Promise<void> => {
     flush()
     let mine = held.get(sink) ?? new Map<string, Sub>()
     held.set(sink, mine)
     let line = query === true ? '' : query
+    let options = readOpts
+    let abort = new AbortController()
+    readOpts = { ...readOpts, signal: abort.signal }
     let visibility = graph.scope(readOpts).visibility
     let sub: Sub = {
+      abort,
+      loading: query !== true,
       policy: visibility?.entity === undefined ? undefined : interest(
         typeof visibility.entity == 'string'
           ? parse(visibility.entity)
@@ -1032,7 +1087,7 @@ export let subscriptions = (graph: Graph, opts: {
       sink,
       raw: query === true,
       query: line,
-      opts: readOpts,
+      opts: options,
       send: delivery(sink, id, readOpts, query === true),
       members: new Set(),
       fields: new Map(),
@@ -1041,6 +1096,9 @@ export let subscriptions = (graph: Graph, opts: {
       cut: whole,
       riders: new Set(),
     }
+    let deliver = sub.send
+    sub.send = (frame) =>
+      held.get(sink)?.get(id) === sub ? deliver(frame) : undefined
     forget(mine.get(id))
     mine.set(id, sub)
     // a raw feed carries whole transactions, not a membership set
@@ -1064,23 +1122,26 @@ export let subscriptions = (graph: Graph, opts: {
           sub.cut = sub.plan?.cut ?? only(sub.want)
           sub.policyRefs = references(sub)
           // The view already speaks the caller's words.
-          sub.send = delivery(sink, id, { ...readOpts, native: true })
+          let deliver = delivery(sink, id, { ...readOpts, native: true })
+          sub.send = (frame) =>
+            held.get(sink)?.get(id) === sub ? deliver(frame) : undefined
           if (sub.agg) return tell(sub, true, answers)
           let key = JSON.stringify([line, readOpts])
           let loaded = rows?.get(key)
           if (!loaded) {
             loaded = viewed(view, readOpts)
-            rows?.set(key, loaded)
+            cache(rows, key, loaded)
           }
-          return after(loaded, (answer) => {
-            for (let b of answer.found) sub.members.add(b.entity.eid)
-            rememberFields(sub, answer.found)
-            return sub.send({
-              id,
-              ...framed(sub, answer.found, answer, true),
-              ...reset ? { reset: true } : {},
-            })
-          })
+          return after(loaded, (answer) =>
+            initial(sub, answer, (answer) => {
+              for (let b of answer.found) sub.members.add(b.entity.eid)
+              rememberFields(sub, answer.found)
+              return sub.send({
+                id,
+                ...framed(sub, answer.found, answer, true),
+                ...reset ? { reset: true } : {},
+              })
+            }))
         }
         return after(
           graph.rewrites(readOpts) ? graph.ask(line, readOpts) : line,
@@ -1108,6 +1169,7 @@ export let subscriptions = (graph: Graph, opts: {
                 .every((c) => syncOf(graph.vocab, c) != 'peers')
             ) {
               sub.deferred = true
+              sub.loading = false
               return
             }
             if (sub.agg) return tell(sub, true, answers)
@@ -1123,36 +1185,39 @@ export let subscriptions = (graph: Graph, opts: {
               : rows?.get(key)
             if (!loaded) {
               loaded = sub.peer ? after(read(sub), answered) : ask(sub, line)
-              rows?.set(key, loaded)
+              cache(rows, key, loaded)
             }
-            return after(loaded, (answer) => {
-              let bundles = answer.found
-              for (let b of bundles) sub.members.add(b.entity.eid)
-              // A query over a computed component is never routed: the entities it
-              // selects move without a bundle that names them (./interest.ts). Nor
-              // is a projection that reaches: what it reaches moves without the
-              // entities it selects moving.
-              if (
-                held.get(sink)?.get(id) === sub && routable(sub)
-              ) {
-                sub.routed = network(sub).add(sub, ast, sub.members)
-                if (sub.routed) join(sub, ast, bundles)
-              }
-              rememberFields(sub, bundles)
-              const snapshots = live.snapshots().filter((f) => visible(sub, f))
-              // The relayed values other connections already hold for this set, so
-              // a subscriber that arrives late still sees the cursors that were
-              // there before it.
-              let now = peers.snapshot(sink, (eid) => sub.members.has(eid))
-              return sub.send({
-                id,
-                ...framed(sub, bundles, answer, true),
-                ...reset ? { reset: true } : {},
-                transientReset: bundles.map((b) => b.entity.eid),
-                ...snapshots.length ? { transient: snapshots } : {},
-                ...now.length ? { relay: now } : {},
-              })
-            })
+            return after(loaded, (answer) =>
+              initial(sub, answer, (answer) => {
+                let bundles = answer.found
+                for (let b of bundles) sub.members.add(b.entity.eid)
+                // A query over a computed component is never routed: the entities it
+                // selects move without a bundle that names them (./interest.ts). Nor
+                // is a projection that reaches: what it reaches moves without the
+                // entities it selects moving.
+                if (
+                  held.get(sink)?.get(id) === sub && routable(sub)
+                ) {
+                  sub.routed = network(sub).add(sub, ast, sub.members)
+                  if (sub.routed) join(sub, ast, bundles)
+                }
+                rememberFields(sub, bundles)
+                const snapshots = live.snapshots().filter((f) =>
+                  visible(sub, f)
+                )
+                // The relayed values other connections already hold for this set, so
+                // a subscriber that arrives late still sees the cursors that were
+                // there before it.
+                let now = peers.snapshot(sink, (eid) => sub.members.has(eid))
+                return sub.send({
+                  id,
+                  ...framed(sub, bundles, answer, true),
+                  ...reset ? { reset: true } : {},
+                  transientReset: bundles.map((b) => b.entity.eid),
+                  ...snapshots.length ? { transient: snapshots } : {},
+                  ...now.length ? { relay: now } : {},
+                })
+              }))
           },
         )
       })
@@ -1166,13 +1231,13 @@ export let subscriptions = (graph: Graph, opts: {
     sub: Sub,
     first = false,
     answers?: Map<string, Reduced | Promise<Reduced>>,
-  ) => {
+  ): void | Promise<void> => {
     let key = sub.opts ? JSON.stringify([sub.query, sub.opts]) : sub.query
     let value = answers?.get(key)
     if (!value) {
       value = sub.view
         ? after(
-          viewValues(sub.view, sub.opts),
+          viewValues(sub.view, reading(sub)),
           (bundles) =>
             reduced(
               sub.agg!,
@@ -1187,22 +1252,26 @@ export let subscriptions = (graph: Graph, opts: {
                 matchRows(queryOf(sub), graph.vocab, sub.opts)(bundles),
             )
             : graph.rows(queryOf(sub), {
-              ...sub.opts,
+              ...reading(sub),
               durable: true,
               native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
             }),
           (rows) => reduced(sub.agg!, rows),
         )
-      answers?.set(key, value)
+      cache(answers, key, value)
     }
-    return after(value, (value) => {
+    let send = (value: Reduced) => {
       let answer = JSON.stringify(value)
       if (!first && answer == sub.answer) {
         return
       }
       sub.answer = answer
       return sub.send({ id: sub.id, ...value })
-    })
+    }
+    return after(
+      value,
+      (value) => first ? initial(sub, value, send) : send(value),
+    )
   }
 
   // What a commit did to one routed subscription, sent cut to what the query
@@ -1256,7 +1325,7 @@ export let subscriptions = (graph: Graph, opts: {
       ? sub.query + '&.entity.eid=' + [...scope].join(',')
       : sub.query
     let loaded = sub.view
-      ? viewed(sub.view, sub.opts)
+      ? viewed(sub.view, reading(sub))
       : sub.peer
       ? after(read(sub, scope, prepared), answered)
       : load(sub, query)
@@ -1421,7 +1490,7 @@ export let subscriptions = (graph: Graph, opts: {
                     let reset = s.deferred
                     if (s.agg) return tell(s)
                     let loaded = s.view
-                      ? viewed(s.view, s.opts)
+                      ? viewed(s.view, reading(s))
                       : s.peer
                       ? after(read(s), answered)
                       : load(s, s.query)
@@ -1532,6 +1601,15 @@ export let subscriptions = (graph: Graph, opts: {
   // commit that arrives meanwhile: when their turn comes they are one pass.
   let waiting: { txs: Bundle[][]; done: Promise<void> } | undefined
   let commit = (applied: Bundle[]): void | Promise<void> => {
+    for (let mine of held.values()) {
+      for (let sub of mine.values()) {
+        if (
+          sub.loading && (!sub.reads || policyMoved(sub, applied) ||
+            applied.some((b) => notices(sub, b)) ||
+            opts.invalidate?.(sub.query, applied))
+        ) sub.dirty = true
+      }
+    }
     flushPeers()
     if (waiting) {
       waiting.txs.push(applied)
@@ -1681,7 +1759,7 @@ export let subscriptions = (graph: Graph, opts: {
     if (!sub.durable) {
       return targets.length
         ? after(
-          graph.get(targets, undefined, { ...sub.opts, native: true }),
+          graph.get(targets, undefined, { ...reading(sub), native: true }),
           (roots) => roots.map(stored),
         )
         : []
@@ -1689,14 +1767,14 @@ export let subscriptions = (graph: Graph, opts: {
     let read = () =>
       after(
         graph.read(sub.durable!, {
-          ...sub.opts,
+          ...reading(sub),
           durable: true,
           native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
         }),
         (rows) => {
           return targets.length
             ? after(
-              graph.get(targets, undefined, { ...sub.opts, native: true }),
+              graph.get(targets, undefined, { ...reading(sub), native: true }),
               (roots) => [...rows, ...roots].map(stored),
             )
             : rows.map(stored)
@@ -1705,7 +1783,11 @@ export let subscriptions = (graph: Graph, opts: {
     if (sub.opts?.now != null || moving(sub.durable)) return read()
     let key = JSON.stringify([sub.durable, sub.opts ?? null])
     let found = durableCandidates.get(key)
-    if (found) return found.rows
+    if (
+      found && (!isPromise(found.rows) ||
+        found.sub.abort === sub.abort)
+    ) return found.rows
+    if (found) return read()
     let held: { sub: Sub; rows: Bundle[] | Promise<Bundle[]> } = {
       sub: {
         ...sub,
@@ -1763,7 +1845,7 @@ export let subscriptions = (graph: Graph, opts: {
         (rows) =>
           targets.length
             ? after(
-              graph.get(targets, undefined, { ...sub.opts, native: true }),
+              graph.get(targets, undefined, { ...reading(sub), native: true }),
               (roots) => [...rows, ...roots].map(stored),
             )
             : rows,
@@ -1808,17 +1890,17 @@ export let subscriptions = (graph: Graph, opts: {
   ) =>
     after(
       gathered(sub, scope, scoped),
-      (rows) => graph.answer(rows, { ...sub.opts, native: true }),
+      (rows) => graph.answer(rows, { ...reading(sub), native: true }),
     )
   let read = (
     sub: Sub,
     scope?: Set<Eid>,
     prepared?: Bundle[] | Promise<Bundle[]>,
   ): Bundle[] | Promise<Bundle[]> => {
-    if (sub.view) return after(viewed(sub.view, sub.opts), flat)
+    if (sub.view) return after(viewed(sub.view, reading(sub)), flat)
     if (!sub.peer) {
       return graph.read(queryOf(sub), {
-        ...sub.opts,
+        ...reading(sub),
         durable: true,
         native: !!sub.ast || graph.rewrites(sub.opts) || sub.opts?.native,
       })
@@ -1826,7 +1908,7 @@ export let subscriptions = (graph: Graph, opts: {
     return after(
       after(
         prepared ?? gathered(sub, scope),
-        (rows) => graph.answer(rows, { ...sub.opts, native: true }),
+        (rows) => graph.answer(rows, { ...reading(sub), native: true }),
       ),
       (bundles) => {
         let chosen = matcher(queryOf(sub), graph.vocab, sub.opts)(bundles)
@@ -1946,6 +2028,11 @@ export let subscriptions = (graph: Graph, opts: {
     casted = false,
   ): void | Promise<void> => {
     if (!bundles.length) return
+    for (let mine of held.values()) {
+      for (let sub of mine.values()) {
+        if (sub.loading && (!sub.reads || sub.peer)) sub.dirty = true
+      }
+    }
     if (!casted) {
       return after(recoverMembership(bundles), () => {
         cast(bundles, except)
@@ -2229,6 +2316,10 @@ export let subscriptions = (graph: Graph, opts: {
     if (!opts.revision) return
     let next = opts.revision()
     if (Object.is(next, revision)) return
+    revision = next
+    for (let mine of held.values()) {
+      for (let sub of mine.values()) if (sub.loading) sub.dirty = true
+    }
     for (let share of shared.values()) unshare(share)
     peerRows.clear()
     backlinks.clear()
@@ -2236,14 +2327,17 @@ export let subscriptions = (graph: Graph, opts: {
     let rows = new Map<string, Answer>()
     let answers = new Map<string, Reduced | Promise<Reduced>>()
     return after(
-      over(
+      parallel(
         all().filter((s) => !s.raw),
         (s) => open(s.sink, s.id, s.query, s.opts, rows, answers, false, true),
       ),
-      () => {
-        revision = next
-      },
+      () => {},
     )
+  }
+
+  let checking = () => {
+    let out = check()
+    if (isPromise(out)) out.catch((err) => fault(err, 'subscription revision'))
   }
 
   return {
@@ -2259,65 +2353,48 @@ export let subscriptions = (graph: Graph, opts: {
     },
     snapshot: (query, readOpts) => {
       flushPeers()
-      return ordered(() =>
-        after(
-          check(),
-          () =>
-            after(
-              answering(query, readOpts),
-              (out) => Array.isArray(out) ? published(graph.vocab, out) : out,
-            ),
-        )
+      checking()
+      return after(
+        answering(query, readOpts),
+        (out) => Array.isArray(out) ? published(graph.vocab, out) : out,
       )
     },
     enqueue,
     open: (sink, id, query, readOpts) => {
       flushPeers()
-      return ordered(() =>
-        after(check(), () => open(sink, id, query, readOpts))
-      )
+      checking()
+      return open(sink, id, query, readOpts)
     },
     restore: (openings, deferStatic = false) => {
       flushPeers()
-      return ordered(() =>
-        after(check(), () => {
-          let rows = new Map<string, Answer>()
-          let answers = new Map<string, Reduced | Promise<Reduced>>()
-          return after(
-            over(
-              openings,
-              ({ sink, id, query, opts }) =>
-                open(sink, id, query, opts, rows, answers, deferStatic),
-            ),
-            () => {},
-          )
-        })
+      checking()
+      let rows = new Map<string, Answer>()
+      let answers = new Map<string, Reduced | Promise<Reduced>>()
+      return parallel(
+        openings,
+        ({ sink, id, query, opts }) =>
+          open(sink, id, query, opts, rows, answers, deferStatic),
       )
     },
     resume: () =>
-      after(
-        ordered(() =>
-          over(
-            all().filter((s) => s.deferred),
-            (s) => open(s.sink, s.id, s.query, s.opts),
-          )
-        ),
-        () => {},
+      parallel(
+        all().filter((s) => s.deferred),
+        (s) => open(s.sink, s.id, s.query, s.opts),
       ),
     close: (sink, id) => {
       flushPeers()
-      return ordered(() => {
-        pending.get(sink)?.delete(id)
-        forget(held.get(sink)?.get(id))
-        held.get(sink)?.delete(id)
-      })
+      pending.get(sink)?.delete(id)
+      let sub = held.get(sink)?.get(id)
+      held.get(sink)?.delete(id)
+      forget(sub)
     },
     drop: (sink) => {
       flushPeers()
+      pending.delete(sink)
+      let mine = held.get(sink)
+      held.delete(sink)
+      for (let sub of mine?.values() ?? []) forget(sub)
       return ordered(() => {
-        pending.delete(sink)
-        for (let sub of held.get(sink)?.values() ?? []) forget(sub)
-        held.delete(sink)
         // Connection-lifetime values leave with their writer. Timed values
         // remain available for another writer until their own expiry.
         return after(saves.drop(sink), () => {

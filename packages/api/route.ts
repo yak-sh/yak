@@ -126,7 +126,9 @@ export let api = (opts: Options): Handler => {
       if (request.method == 'GET' && url.searchParams.get('live') == '1') {
         let q = url.searchParams.get('q')
         if (q == null) throw new Refused('/query needs a query: ?q=…')
-        return json(await subs.snapshot(q, readOpts))
+        return json(
+          await subs.snapshot(q, { ...readOpts, signal: request.signal }),
+        )
       }
       return await ask(graph, request, opts.activity ?? graph, readOpts)
     }

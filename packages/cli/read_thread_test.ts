@@ -199,3 +199,67 @@ test('reader readiness waits for a bounded read and propagates its refusal', asy
     globalThis.Worker = Original
   }
 })
+
+// A synchronous query occupies its worker until it returns or its owner aborts.
+// Independent reads and the latest remaining click keep their own progress.
+test('independent reads bypass slow SQL and abandoned clicks release every lane', async () => {
+  let Original = globalThis.Worker
+  let workers: Reader[] = []
+  class Reader {
+    onmessage: ((event: { data: unknown }) => void) | null = null
+    onerror = null
+    jobs: { id: number; query?: string; opts?: object }[] = []
+    ended = false
+    constructor() {
+      workers.push(this)
+    }
+    postMessage(data: { id?: number; query?: string; opts?: object }) {
+      if (data.id) this.jobs.push({ ...data, id: data.id })
+    }
+    terminate() {
+      this.ended = true
+    }
+    answer() {
+      let job = this.jobs.at(-1)!
+      this.onmessage?.({ data: { id: job.id, value: [] } })
+    }
+  }
+  globalThis.Worker = Reader as unknown as typeof Worker
+  let reader = readThread('unused.json')
+  try {
+    let slow = reader.read('.slow')
+    let fast = reader.read('.fast')
+    assertEquals(workers.length, 2)
+    workers[1].answer()
+    assertEquals(await fast, [])
+    workers[0].answer()
+    await slow
+    let pending: Promise<unknown>[] = []
+    let aborts = Array.from({ length: 4 }, () => new AbortController())
+    for (let abort of aborts) {
+      pending.push(assertRejects(
+        () =>
+          Promise.resolve(
+            reader.read('.abandoned', { signal: abort.signal }),
+          ),
+        DOMException,
+        'aborted',
+      ))
+    }
+    // Only the two admitted reads were posted; the others wait outside workers.
+    assertEquals(workers.filter((w) => !w.ended).length, 2)
+    for (let abort of aborts) abort.abort()
+    await Promise.all(pending)
+    let latest = reader.read('.latest')
+    let alive = workers.filter((w) => !w.ended)
+    assertEquals(alive.length, 1)
+    assertEquals(workers.length, 3)
+    assertEquals(alive[0].jobs.at(-1)?.query, '.latest')
+    assertEquals(alive[0].jobs.at(-1)?.opts, {})
+    alive[0].answer()
+    assertEquals(await latest, [])
+  } finally {
+    await reader.close()
+    globalThis.Worker = Original
+  }
+})

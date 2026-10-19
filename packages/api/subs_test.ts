@@ -654,7 +654,7 @@ test('commits made while a pass reads are one pass after it', async () => {
     g.apply([{ entity: { eid }, book: { price } }])
   }
   hold.resolve()
-  await subs.snapshot('.book')
+  await subs.commit([])
   assertEquals(reads.filter((q) => q.startsWith(window)).length, 2)
   assertEquals(e.take().map(ids).at(-1), ['b2', 'b3'])
 })

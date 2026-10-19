@@ -330,11 +330,22 @@ export let ask = async (
   // again to answer.
   let ast = parse(q)
   let cause = peek(activity) ? parent(activity, request) : undefined
-  let options = cause ? { ...opts, parent: cause } : opts
+  let options = {
+    ...opts,
+    signal: request.signal,
+    ...(cause && { parent: cause }),
+  }
   let op = aggregate(ast)
-  return op
-    ? json(reduced(op, await graph.rows(ast, options)))
-    : listed(published(graph.vocab, await graph.read(ast, options)))
+  try {
+    return op
+      ? json(reduced(op, await graph.rows(ast, options)))
+      : listed(published(graph.vocab, await graph.read(ast, options)))
+  } catch (error) {
+    if (request.signal.aborted && error === request.signal.reason) {
+      throw new Refused('query was interrupted')
+    }
+    throw error
+  }
 }
 
 // How much of a listed answer is said per piece of the stream.
