@@ -110,6 +110,51 @@ for (let async of [false, true]) {
     })
   })
 
+  test(`projected gather: named misses and widening retain coverage (${async})`, async () => {
+    let { base, storage } = fixture(async)
+    await base.tx((tx) =>
+      tx.patch(['b', 'c'].map((eid) => ({
+        entity: { eid },
+        book: { pages: 4 },
+        doc: { title: 'Before' },
+      })))
+    )
+    await storage.tx(async (tx) => {
+      let reads: [string[], string[] | undefined][] = []
+      let watched: Tx = {
+        ...tx,
+        get: (es, names) => {
+          reads.push([es, names])
+          return tx.get(es, names)
+        },
+      }
+      let snap = await gather(watched, books, [])
+      let held = holding(watched, books, snap)
+      let [before] = await held.get(['b'], ['book', 'created'])
+      assertEquals(before.doc, undefined)
+      assertEquals(await held.get(['absent'], ['book']), [])
+      assertEquals(await held.get(['absent']), [])
+      await held.get(['c'], ['book'])
+      let [wider] = await held.get(['b'], ['doc', 'book', 'created'])
+      assertEquals(wider === before, true)
+      assertEquals(comp(wider, 'doc').title, 'Before')
+      assertEquals(comp(wider, 'book').pages, 4)
+      assertEquals(wider.created, undefined)
+      await held.get(['b'], ['book', 'doc', 'created'])
+      assertEquals(reads, [
+        [['b'], ['book', 'created']],
+        [['absent'], ['book']],
+        [['c'], ['book']],
+        [['b'], ['doc']],
+      ])
+      // A write still completes every partial entry before it can consult
+      // rules or lifecycle policy, including retained references.
+      await held.patch([{ entity: { eid: 'other' }, doc: { title: 'Other' } }])
+      assertEquals(reads.at(-1), [['b', 'c'], undefined])
+      assertEquals(comp((await held.get(['c']))[0], 'doc').title, 'Before')
+    })
+  })
+
   test(`projected gather: ordered stamps, guards and late rollback (${async})`, async () => {
     let { base, storage } = fixture(async)
     let g = graph({ storage, vocab: books })

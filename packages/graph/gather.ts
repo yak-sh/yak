@@ -343,22 +343,38 @@ export let holding = (tx: Tx, vocab: Vocab, snap: Snap): Tx => {
             if (held && dead(held)) snap.got.set(eid, { entity: held.entity })
           }
         })),
-    // What the gather read answers any ask it covers: an entity it read whole,
-    // or one it read the named components of. Anything else is read whole, and
-    // kept.
+    // What the gather read answers any ask it covers. Named misses widen
+    // only the requested owners and components; whole reads still complete
+    // the snapshot before returning bundles a phase may retain.
     get: (eids, names) => {
       let mine = () => eids.flatMap((e) => snap.got.get(e) ?? [])
       let read = (e: Eid) =>
         snap.got.has(e) &&
         (!snap.only?.has(e) || !!names?.every((n) => snap.only!.get(e)!.has(n)))
       if (eids.every(read)) return mine()
-      if (eids.some((e) => snap.only?.has(e))) {
+      if (!names && eids.some((e) => snap.only?.has(e))) {
         return after(complete(tx, snap), () => holds.get(eids))
       }
-      let miss = eids.filter((e) => !snap.got.has(e))
-      return after(tx.get(miss), (found) => {
-        for (let e of miss) snap.got.set(e, null)
-        for (let b of found) snap.got.set(b.entity.eid, b)
+      let miss = [...new Set(eids.filter((e) => !read(e)))]
+      let needed = names?.filter((n) =>
+        miss.some((e) => !snap.only?.get(e)?.has(n))
+      )
+      return after(tx.get(miss, needed), (found) => {
+        let rows = new Map(found.map((b) => [b.entity.eid, b]))
+        for (let e of miss) {
+          let b = rows.get(e)
+          let held = snap.got.get(e)
+          let selected = snap.only?.get(e)
+          if (b && held && selected) {
+            for (let [name, comp] of comps(b)) {
+              if (!selected.has(name)) held[name] = comp
+            }
+          } else snap.got.set(e, b ?? null)
+          if (b && names) {
+            snap.only ??= new Map()
+            snap.only.set(e, new Set([...(selected ?? []), ...names]))
+          } else snap.only?.delete(e)
+        }
         return mine()
       })
     },
