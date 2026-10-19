@@ -4,7 +4,7 @@ import { derivedEid } from '@yaks/graph/identity'
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
-import { and, eq, every, fields, list, present } from '@yaks/query'
+import { and, contains, eq, every, fields, list, present } from '@yaks/query'
 import { locate } from '@yaks/git/host'
 import { SKILL } from './comp.ts'
 import { parseSkill, renderSkill } from './skill-text.ts'
@@ -229,7 +229,8 @@ export let skillFiles = async (
     present('file'),
     present('content'),
     eq('file.repository', repository),
-    every(),
+    contains('file.path', '.claude/skills/'),
+    fields('file.path', 'content.body'),
   ))
   supports.sort((a, b) =>
     (text(a, 'file', 'path') ?? '').localeCompare(text(b, 'file', 'path') ?? '')

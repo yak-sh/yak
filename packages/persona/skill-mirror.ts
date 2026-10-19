@@ -4,7 +4,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { and, eq, every, present } from '@yaks/query'
+import { and, contains, eq, every, fields, list, present } from '@yaks/query'
 import { land, LandError, type Run, run } from '@yaks/git/land'
 import { localFilesystem, repositoryEid } from '@yaks/git/host'
 import {
@@ -134,10 +134,17 @@ let syncRepository = async (
     let files = await g.read(and(
       present('file'),
       eq('file.repository', repository),
-      every(),
+      contains('file.path', '.claude/skills/'),
+      fields('file.path', 'file.repository', 'content.body'),
     ))
     let skills = await repoSkills(g, repository)
-    let edges = await g.read(and(present('references'), every()))
+    let edges = skills.length
+      ? await g.read(and(
+        present('references'),
+        eq('edge.from', list(...skills.map((b) => b.entity.eid))),
+        fields('edge.from', 'edge.to'),
+      ))
+      : []
     let locations = new Map<string, Bundle>()
     for (let skill of skills) {
       let location = await skillLocation(g, skill)

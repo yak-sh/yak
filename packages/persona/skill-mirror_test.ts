@@ -51,6 +51,27 @@ let files = async (g: Graph, repository: string) =>
 test('skill mirror imports documents and tracked support without canonical oscillation', async () => {
   let { dir, root, repository, g, memory } = await setup()
   try {
+    let unrelated = identityEid('file', ['src/large.ts', repository])
+    await g.apply([{
+      entity: { eid: unrelated },
+      file: { path: 'src/large.ts', repository },
+      content: { body: 'Unrelated repository content' },
+    }, {
+      entity: { eid: 'other-reference' },
+      edge: { from: repository, to: unrelated },
+      references: {},
+    }])
+    let read = g.read
+    let extras: string[] = []
+    g.read = async (...args) => {
+      let rows = await read(...args)
+      extras.push(
+        ...rows.filter((b) =>
+          [unrelated, 'other-reference'].includes(b.entity.eid)
+        ).map((b) => b.entity.eid),
+      )
+      return rows
+    }
     let first = await syncSkills(g, root, memory)
     assertEquals(first.failed, [])
     assertEquals(first.read.length, 2)
@@ -60,7 +81,8 @@ test('skill mirror imports documents and tracked support without canonical oscil
       skills[0].entity.eid !=
         identityEid('file', ['.claude/skills/sample/SKILL.md', repository]),
     )
-    assertEquals((await files(g, repository)).length, 2)
+    assertEquals((await files(g, repository)).length, 3)
+    extras = []
     let second = await syncSkills(g, root, memory)
     assertEquals(second, {
       read: [],
@@ -68,6 +90,10 @@ test('skill mirror imports documents and tracked support without canonical oscil
       removed: [],
       conflicts: [],
       failed: [],
+    })
+    assertEquals(extras, [])
+    assertEquals((await g.get([unrelated], ['content']))[0].content, {
+      body: 'Unrelated repository content',
     })
     assertEquals(await git(root, 'status', '--porcelain'), '')
   } finally {
