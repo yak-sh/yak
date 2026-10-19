@@ -2283,27 +2283,29 @@ equal(
     .status,
   200,
 )
-test('Store authority permits a current owner to read', async () => {
+let acceptedAuthorityAnswer = await (async () => {
   let before = acceptedAuthority.checks()
-  equal(
-    (await get(
-      acceptedAuthority.store,
-      '/query?q=.entity.eid=missing',
-      currentOwner,
-    ))
-      .status,
-    200,
-  )
-  equal(acceptedAuthority.checks() - before, 1)
+  let status = (await get(
+    acceptedAuthority.store,
+    '/query?q=.entity.eid=missing',
+    currentOwner,
+  )).status
+  return { status, checks: acceptedAuthority.checks() - before }
+})()
+test('Store authority permits a current owner to read', () => {
+  equal(acceptedAuthorityAnswer, { status: 200, checks: 1 })
 })
 let repeatedAuthority = await authorityFixture(10)
-test('Store authority checks equal requests each time', async () => {
+let repeatedAuthorityAnswers = await (async () => {
   let f = repeatedAuthority
   let current = { app: APP, access: 'private', policy: 10 }
-  equal((await get(f.store, '/query?q=.recipe', current)).status, 401)
+  let first = (await get(f.store, '/query?q=.recipe', current)).status
   let before = f.checks()
-  equal((await get(f.store, '/query?q=.recipe', current)).status, 401)
-  equal(f.checks() - before, 1)
+  let second = (await get(f.store, '/query?q=.recipe', current)).status
+  return { first, second, checks: f.checks() - before }
+})()
+test('Store authority checks equal requests each time', () => {
+  equal(repeatedAuthorityAnswers, { first: 401, second: 401, checks: 1 })
 })
 let revokedAuthority = await authorityFixture(10)
 test('Store authority rejects independently revoked current standing', async () => {
@@ -2350,7 +2352,7 @@ let reorderedPolicy = await (async () => {
   await store.door
   return { store, checking, release }
 })()
-test('a delayed successful authority response cannot lower a newer Store floor', async () => {
+let reorderedPolicyAnswers = await (async () => {
   let f = reorderedPolicy
   let old = get(f.store, '/query?q=.recipe', {
     ...owner,
@@ -2358,22 +2360,20 @@ test('a delayed successful authority response cannot lower a newer Store floor',
     policy: 10,
   })
   await f.checking
-  equal(
-    (await get(f.store, '/query?q=.recipe', {
-      app: APP,
-      access: 'private',
-      policy: 11,
-    })).status,
-    401,
-  )
+  let newer = (await get(f.store, '/query?q=.recipe', {
+    app: APP,
+    access: 'private',
+    policy: 11,
+  })).status
   f.release(true)
-  equal((await old).status, 503)
-  equal(
-    (await get(f.store, '/query?q=.recipe', {
-      app: APP,
-      access: 'private',
-      policy: 11,
-    })).status,
-    401,
-  )
+  let delayed = (await old).status
+  let retained = (await get(f.store, '/query?q=.recipe', {
+    app: APP,
+    access: 'private',
+    policy: 11,
+  })).status
+  return { newer, delayed, retained }
+})()
+test('a delayed successful authority response cannot lower a newer Store floor', () => {
+  equal(reorderedPolicyAnswers, { newer: 401, delayed: 503, retained: 401 })
 })
