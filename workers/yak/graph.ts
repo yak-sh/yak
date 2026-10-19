@@ -12,6 +12,7 @@ import {
   sessionMove,
   sessionPackage,
   sessionRows,
+  sessionStep,
 } from './session-lens.ts'
 import { statements } from '@yaks/sqlite'
 import { recovering } from './models.ts'
@@ -2579,14 +2580,41 @@ export class Store {
                     role,
                     ...(actor?.via ? { via: actor.via } : {}),
                   }
+                  // The kept command template is the writer's vocabulary, not
+                  // the current host's. Only old declarative apply commands need
+                  // the session bridge; worker replies and current templates
+                  // already write the current shape.
+                  let template = declared[tool.name!].apply
+                  let legacyTemplate =
+                    (Array.isArray(template) ? template : [template])
+                      .some((row) => {
+                        let using = (row as Bundle | undefined)?.using as
+                          | Comp
+                          | undefined
+                        return !(row as Bundle | undefined)?.sending &&
+                          ['input', 'instructions', 'window', 'tools']
+                            .some((prop) => using?.[prop] !== undefined)
+                      })
+                  let releasedSession = held?.app.lenses?.[sessionPackage]
+                  let sessionVersion = template === undefined
+                    ? sessionStep
+                    : releasedSession ?? (legacyTemplate ? 0 : sessionStep)
                   let acts = {
                     query: (line: string) =>
                       Promise.resolve(g.read(line, { person })),
                     apply: async ({ entities }: { entities: Bundle[] }) => {
-                      let made = await g.apply(signed(entities, {
-                        ...(person ? { by: person } : {}),
-                        ...(actor?.via ? { via: actor.via } : {}),
-                      }))
+                      let made = await g.apply(signed(
+                        sessionVersion < sessionStep
+                          ? entities.map((row) => ({
+                            ...row,
+                            $speaks: { [sessionPackage]: sessionVersion },
+                          }))
+                          : entities,
+                        {
+                          ...(person ? { by: person } : {}),
+                          ...(actor?.via ? { via: actor.via } : {}),
+                        },
+                      ))
                       return {
                         entities: [...new Set(made.map((b) => b.entity.eid))],
                         aliases: minted(made),
@@ -4238,9 +4266,12 @@ export class Store {
       return Response.json(
         speaks
           ? compile(
-            lensesIn([
-              lensDocAt(this.#name() ?? '', meant(this.#get('vocab'))),
-            ]),
+            [
+              ...sessionRows(),
+              ...lensesIn([
+                lensDocAt(this.#name() ?? '', meant(this.#get('vocab'))),
+              ]),
+            ],
             speaks,
           ).schema(this.#vocab.docs)
           : this.#vocab.docs,

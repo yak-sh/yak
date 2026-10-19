@@ -67,6 +67,7 @@ export let productionGap = async (
   outputs = 0,
   cold = false,
   unsequenced = false,
+  currentTemplate = false,
 ) => {
   let person = crypto.randomUUID(), app = crypto.randomUUID()
   let live: ReturnType<typeof wire>[] = []
@@ -95,7 +96,21 @@ export let productionGap = async (
     if (!r.ok) throw new Error(`${path}: ${r.status} ${await r.text()}`)
     await r.body?.cancel()
   }
-  let keptWords = { ...words, $defs: { ...words.$defs, think: oldThink } }
+  let thinkTemplate = currentTemplate
+    ? {
+      ...oldThink,
+      apply: {
+        ...oldThink.apply,
+        using: { model: oldThink.apply.using.model },
+        sending: {
+          window: oldThink.apply.using.window,
+          instructions: oldThink.apply.using.instructions,
+          tools: [],
+        },
+      },
+    }
+    : oldThink
+  let keptWords = { ...words, $defs: { ...words.$defs, think: thinkTemplate } }
   await post('/vocab', keptWords)
   let g = (await store.door).graph
   // Vale still holds the schema pages its deploys wrote before they were
@@ -169,6 +184,7 @@ export let productionGap = async (
       'wake',
       'content',
       'using',
+      'sending',
       'questions',
       'notice',
     ]),
@@ -352,6 +368,9 @@ export let productionGap = async (
     return {
       answers,
       failures,
+      ...(currentTemplate
+        ? { selections: await actual.read('.entry&.sending ?using') }
+        : {}),
       before,
       history,
       outputs,

@@ -192,6 +192,7 @@ export class PlayCost {
           Number(q.get('outputs') ?? 0),
           q.has('cold'),
           q.has('unsequenced'),
+          q.has('current-template'),
         ),
       )
     }

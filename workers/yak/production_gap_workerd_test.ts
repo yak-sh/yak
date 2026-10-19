@@ -51,8 +51,10 @@ test(
     assertEquals(r.status, 200, await r.clone().text())
     let report = await r.json()
     console.log('RETAINED_LONG_ALARM', JSON.stringify(report))
-    assertEquals(report.answers, 8)
+    // Retained command declarations must still write through the session lens,
+    // including after the cold alarm restores its command runner.
     assertEquals(report.failures, [])
+    assertEquals(report.answers, 8)
     assert(
       report.total.read < 800000,
       `retained alarm rereads historical transcripts: ${report.total.read}`,
@@ -60,3 +62,24 @@ test(
   },
   { tags: ['long'] },
 )
+
+test('current Vale command templates keep sending separate from model choice', async () => {
+  let k = workerd()
+  let r = await fetch(
+    `${k.base}/__play_cost/?production=1&history=100&villagers=6&turns=32&cold=1&current-template=1`,
+  )
+  assertEquals(r.status, 200, await r.clone().text())
+  let report = await r.json()
+  assertEquals(report.failures, [])
+  assertEquals(report.answers, 8)
+  assertEquals(report.selections.length, 8)
+  for (let row of report.selections) {
+    assertEquals(row.sending, {
+      window: 16,
+      instructions:
+        'You are one of the people of Mossvale. Decide where to go and how you feel.',
+      tools: [],
+    })
+    assertEquals(Object.keys(row.using), ['model'])
+  }
+})
