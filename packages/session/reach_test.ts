@@ -424,3 +424,59 @@ let selectedModel = await usingOf(selectionOnly, 's').then(
 test('a late request keeps the newer selected model without reading execution authority', () => {
   assertEquals(selectedModel(), { model: M, effort: 'low' })
 })
+
+// Recent inputs break a retry streak even when prose bodies are not loaded.
+// Their immutable content presence is enough to bound a status read.
+let retryRows: Bundle[] = [
+  { entity: { eid: 'retry-session' }, session: {} },
+  ...Array.from({ length: 1024 }, (_, i): Bundle => ({
+    entity: { eid: 'retry-input-' + i },
+    entry: { session: 'retry-session', seq: i + 1 },
+    content: { body: 'input' },
+    using: { model: M },
+  })),
+  {
+    entity: { eid: 'retry-ask' },
+    entry: { session: 'retry-session', seq: 1025 },
+    ask: { to: M, through: 'retry-input-1023' },
+    interrupted: { code: 'transport' },
+  },
+]
+let retryStorage = ram(recoveryVocab, { computed: attemptComputed })
+let retryShapes = new Archetypes()
+await retryStorage.tx((tx) =>
+  tx.patch(retryRows.flatMap((row) => {
+    let shape = retryShapes.intern(
+      Object.keys(row).filter((n) => n != 'entity'),
+    )
+    return [
+      {
+        entity: { eid: shape.eid },
+        archetype: { tables: JSON.stringify(shape.tables) },
+      },
+      { ...row, entity: { ...row.entity, archetype: shape.eid } },
+    ]
+  }))
+)
+let retryGraph = graph({
+  storage: retryStorage,
+  vocab: recoveryVocab,
+  plugins: [sessions()],
+})
+let retryLoaded = 0, retryGet = retryGraph.get.bind(retryGraph)
+retryGraph.get = async (...args) => {
+  let rows = await retryGet(...args)
+  retryLoaded += rows.length
+  return rows
+}
+let retryReached = await reach(retryGraph, 'retry-session')
+let retryStatus = statusOf(await transcript(retryGraph, 'retry-session'))
+test('recent inputs bound an interrupted request without loading old prose', () => {
+  assertEquals(statusOf(retryReached), 'pending')
+  assertEquals(statusOf(retryReached), retryStatus)
+  assertEquals(retryLoaded < 100, true)
+  assertEquals(
+    retryReached.find((b) => b.entity.eid == 'retry-input-1023')?.content,
+    {},
+  )
+})

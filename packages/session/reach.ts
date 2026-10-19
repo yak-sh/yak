@@ -368,7 +368,10 @@ let floor = async (n: Needs, turn: boolean): Promise<number | undefined> => {
   return Math.min(...seqs)
 }
 
-let read = async (g: Graph, session: Eid, o: Reach): Promise<Bundle[]> => {
+let read = async (g: Graph, session: Eid, o: Reach): Promise<{
+  entries: Bundle[]
+  shapes: Map<string, string[]>
+}> => {
   let r = await chain(g, session, o)
   let held = await named(r, !!o.turn)
   let rows: Bundle[] = []
@@ -403,18 +406,24 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<Bundle[]> => {
       if (through != null) held.push(...await fetch(r, [String(through)]))
     }
   }
-  n.noAsk = !await newest(
-    { ...r, names: [ENTRY], fields: '?entry' },
-    `&.${ASK}`,
-  )
   let page = pages(r), size = FIRST
   while (true) {
-    rows.unshift(...(await page.next(size)).reverse())
+    let next = await page.next(size)
+    if (!o.bodies) next = await withContent(g, next, r.shapes) ?? next
+    rows.unshift(...next.reverse())
+    if (n.noAsk == null && !rows.some((b) => kindOf(b) == 'ask')) {
+      n.noAsk = !await newest(
+        { ...r, names: [ENTRY], fields: '?entry' },
+        `&.${ASK}`,
+      )
+    }
     let at = await floor(n, !!o.turn)
     if (page.done || at != null && seqOf(rows[0]) <= at) break
     // What the rows settle is a seq: read down to it at once, not by halves.
     if (at != null && at > -Infinity) {
-      rows.unshift(...(await page.until(at)).reverse())
+      let older = await page.until(at)
+      if (!o.bodies) older = await withContent(g, older, r.shapes) ?? older
+      rows.unshift(...older.reverse())
       let again = await floor(n, !!o.turn)
       if (page.done || again != null && seqOf(rows[0]) <= again) break
     }
@@ -455,11 +464,12 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<Bundle[]> => {
     ...await fetch(r, missing((b) => comp(b, OUTPUT)?.source)),
   )
   let seen = new Set<Eid>()
-  return ordered([...rows, ...held].filter((b) => {
+  let entries = ordered([...rows, ...held].filter((b) => {
     if (seen.has(b.entity.eid)) return false
     seen.add(b.entity.eid)
     return true
   }))
+  return { entries, shapes: r.shapes }
 }
 
 // Re-read every membership/kind fact, including legacy rows and mutable fork
@@ -467,17 +477,20 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<Bundle[]> => {
 let withContent = async (
   g: Graph,
   entries: Bundle[],
+  known = new Map<string, string[]>(),
 ): Promise<Bundle[] | undefined> => {
   let shapes = [...new Set(entries.map((b) => b.entity.archetype))]
   if (shapes.includes(undefined)) return undefined
-  let types = await g.get(shapes as Eid[], ['archetype'])
-  let byId = new Map(
-    types.map((b) => [b.entity.eid, comp(b, 'archetype')?.tables]),
-  )
+  let missing = shapes.filter((id) => !known.has(id!))
+  let types = missing.length ? await g.get(missing as Eid[], ['archetype']) : []
+  for (let b of types) {
+    let text = comp(b, 'archetype')?.tables
+    if (typeof text == 'string') known.set(b.entity.eid, JSON.parse(text))
+  }
   for (let b of entries) {
-    let tables = byId.get(b.entity.archetype!)
-    if (typeof tables != 'string') return undefined
-    if ((JSON.parse(tables) as string[]).includes(CONTENT)) b.content = {}
+    let tables = known.get(b.entity.archetype!)
+    if (!tables) return undefined
+    if (tables.includes(CONTENT)) b.content = {}
   }
   return entries
 }
@@ -494,8 +507,8 @@ export let reach = async (
   // Without prose, a line is an input by the `content` its archetype holds.
   // A graph that keeps no archetypes, or a row without one, is read whole.
   if (!o.bodies && !g.vocab.comp('archetype')) o = { ...o, bodies: true }
-  let entries = await read(g, session, o)
+  let { entries, shapes } = await read(g, session, o)
   if (o.bodies) return entries
-  return await withContent(g, entries) ??
+  return await withContent(g, entries, shapes) ??
     await reach(g, session, { ...o, bodies: true })
 }
