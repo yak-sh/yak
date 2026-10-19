@@ -4,10 +4,9 @@ import { equal, ok, test } from '@yaks/testing'
 import { type Access, type Bundle, type Comp, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { DAY, EXPIRE, expire, expireDaily } from './expire.ts'
+import { DAY, expiration, EXPIRE, expire, expireDaily } from './expire.ts'
 import { effectDoc } from './pool.ts'
 import { leaseEid } from './lease.ts'
-import { effects } from './registry.ts'
 
 let vocab = loadVocab([{
   ...effectDoc,
@@ -147,11 +146,10 @@ test('a failed daily sweep leaves a short recoverable hold, not a day-long succe
   ok((await g.get(['retry']))[0].tombstone)
 })
 
-test('a worker that stays up runs generic expiration without a registered component handler', async () => {
+let serviceExpiry = await (async () => {
   let storage = ram(vocab)
   let stop = new AbortController()
-  let fx = effects(vocab, { owner: 'worker', now: () => now })
-  let g = graph({ vocab, storage, plugins: [fx] })
+  let g = graph({ vocab, storage })
   await g.apply([{ entity: { eid: 'worker' }, item: {} }, run('old')], {
     trusted: true,
   })
@@ -163,7 +161,19 @@ test('a worker that stays up runs generic expiration without a registered compon
       return out
     },
   }
-  await fx.work(door, stop.signal)
+  return { g, door, stop }
+})()
+
+test('a worker that stays up runs generic expiration without a registered component handler', async () => {
+  let { g, door, stop } = serviceExpiry
+  await expiration(door, {
+    owner: 'worker',
+    now: () => now,
+    signal: stop.signal,
+    report: (error) => {
+      throw error
+    },
+  })
   ok((await g.get(['old']))[0].tombstone)
 })
 

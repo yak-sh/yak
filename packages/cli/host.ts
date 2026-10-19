@@ -80,7 +80,7 @@ import {
   schema as textSchema,
   search,
 } from '@yaks/fts'
-import { effects, released } from '@yaks/effects'
+import { effects, expiration, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { command, reporter, revision } from './report.ts'
 import {
@@ -751,6 +751,18 @@ let composed = async (
               void report(error, {
                 during: { process: selfEid() },
                 tags: { step: 'schema', work },
+              }),
+          }),
+      }, {
+        name: '@yaks/effects',
+        run: (signal: AbortSignal) =>
+          expiration(host.graph, {
+            owner: selfEid(),
+            signal,
+            report: (error) =>
+              void report(error, {
+                during: { process: selfEid() },
+                tags: { step: 'expiration' },
               }),
           }),
       }]

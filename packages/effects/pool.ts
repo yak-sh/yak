@@ -105,7 +105,6 @@ import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
-import { DAY, expireDaily } from './expire.ts'
 import { finishedRun } from './cleanup.ts'
 
 export { effectDoc } from './docs.ts'
@@ -820,7 +819,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let present = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(LEASE) &&
       ctx.slots().every((s) => !s.effect || disabled.has(s.id) || !!s.run)
     let until = 0
-    let expires = 0
     try {
       while (!signal.aborted) {
         // A traversal the last pass left unfinished goes on at once; the
@@ -835,10 +833,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           more = (await pass(g, budget)).more
           budget = page
           await renew(g)
-          if (!opts.singleOwner && clock() >= expires) {
-            await expireDaily(g, { owner: me, now: clock, signal })
-            expires = clock() + (g.vocab.comp(LEASE) ? HOLD : DAY)
-          }
         } catch (err) {
           if (signal.aborted) break
           ctx.report(err, {

@@ -11,7 +11,7 @@ import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 
 /** The daily expiration duty shared by every effects worker. */
 export let EXPIRE = '@yaks/effects/expire'
-/** A day in milliseconds; the first pass is owed as soon as a worker joins. */
+/** A day in milliseconds between successful expiration passes. */
 export let DAY = 86_400_000
 
 /** Remove matching component rows in bounded transactions. The returned count
@@ -126,5 +126,25 @@ export let expireDaily = async (
   if (error) throw error
   if (!opts.signal?.aborted && !lost.signal.aborted) {
     await take(g, EXPIRE, { holder: opts.owner, now, hold: DAY })
+  }
+}
+
+/** Expiration's upkeep duty, independent of the pool's work selection. */
+export let expiration = async (
+  g: Access,
+  opts: {
+    owner: string
+    signal: AbortSignal
+    now?: () => number
+    report: (error: unknown) => void
+  },
+): Promise<void> => {
+  while (!opts.signal.aborted) {
+    try {
+      await expireDaily(g, opts)
+    } catch (error) {
+      opts.report(error)
+    }
+    await sleep(g.vocab.comp(LEASE) ? HOLD : DAY, opts.signal)
   }
 }
