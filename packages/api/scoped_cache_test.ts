@@ -5,6 +5,8 @@ import { personal } from '@yaks/member'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { type Frame, subscriptions } from './subs.ts'
+import { client } from '../client/client.ts'
+import { pair } from '../sync/testing.ts'
 
 let vocab = loadVocab({
   $defs: {
@@ -67,7 +69,7 @@ let fixture = (only?: string, references = false) => {
 }
 let reused = fixture()
 let windowed = (() => {
-  let { g, subs, ear, reads } = fixture(), alice = ear(), bob = ear()
+  let { g, subs, ear, reads } = fixture('bob'), alice = ear(), bob = ear()
   let query = '.book&?preference&.order=book.price&.limit=10'
   subs.open(alice.sink, 'window', query, { person: 'alice' })
   subs.open(bob.sink, 'window', query, { person: 'bob' })
@@ -144,10 +146,11 @@ test('a retained scoped answer removes public rows made private by the server', 
   equal(next.take()[0].bundles?.map((b) => b.entity.eid), ['bob'])
 })
 let changed = fixture('alice')
+let changedFirst = changed.ear(), changedNext = changed.ear()
+changed.subs.open(changedFirst.sink, 'books', '.book&*', { person: 'bob' })
+changedFirst.take()
 test('routed scoped answers mask foreign aspects before updating the cache', () => {
-  let { g, subs, ear, reads } = changed, first = ear(), next = ear()
-  subs.open(first.sink, 'books', '.book&*', { person: 'bob' })
-  first.take()
+  let { g, subs, reads } = changed, first = changedFirst, next = changedNext
   g.apply([{
     entity: { eid: 'alice' },
     preference: { color: 'hidden-update' },
@@ -175,27 +178,57 @@ test('foreign personal aspects cannot enter routed query membership', () => {
   equal(next.take()[0].bundles, [])
 })
 
-let linked = fixture('alice', true)
-test('an active scoped answer masks a reference when its target becomes private', () => {
-  let { g, subs, ear } = linked, first = ear()
-  subs.open(first.sink, 'link', '.entity.eid=alice&*', { person: 'bob' })
-  equal((first.take()[0].bundles?.[0].link as { to: string }).to, 'target')
-  g.apply([{
-    entity: { eid: 'target' },
-    draft: { by: 'alice', text: 'private' },
-  }], { trusted: true })
-  equal(first.take()[0]?.bundles?.[0].link, { to: null })
+let linked = fixture('alice', true), linkedEar = linked.ear()
+let socket = pair().client
+let browser = client(vocab, [], {
+  url: 'http://box.test',
+  vault: false,
+  wireVault: false,
+  connect: () => socket,
+  timer: () => {},
+  report: (error) => {
+    throw error
+  },
+})
+await browser.ready
+let watched = browser.watch('.entity.eid=alice&*', { evaluate: 'server' })
+let deliver = (frame: Frame) =>
+  socket.emit('message', JSON.stringify({ ...frame, id: 's1' }))
+linked.subs.open(linkedEar.sink, 'link', '.entity.eid=alice&*', {
+  person: 'bob',
+})
+deliver(linkedEar.take()[0])
+let publicLink = watched.value[0].link
+linked.g.apply([{
+  entity: { eid: 'target' },
+  draft: { by: 'alice', text: 'private' },
+}], { trusted: true })
+test('an active scoped answer masks a reference when its target becomes private', async () => {
+  equal((publicLink as { to: string }).to, 'target')
+  let frame = linkedEar.take()[0]
+  // Stored-query frames carry whole rows, not patches. Omitting a covered
+  // property must clear its former public value in the real client as well.
+  equal(frame.bundles?.[0].link, {})
+  equal(frame.coverage, undefined)
+  deliver(frame)
+  equal(watched.value[0].link, {})
+  equal((await browser.graph.get(['alice']))[0].link, {})
+  browser.close()
 })
 let closedLink = fixture('alice', true)
+let closedFirst = closedLink.ear(), closedNext = closedLink.ear()
+closedLink.subs.open(closedFirst.sink, 'link', '.link.to=target&*', {
+  person: 'bob',
+})
+let closedAnswer = closedFirst.take()
+closedLink.subs.drop(closedFirst.sink)
+closedLink.g.apply([{
+  entity: { eid: 'target' },
+  draft: { by: 'alice', text: 'private' },
+}], { trusted: true })
 test('a retained reference query loses membership when its target becomes private', () => {
-  let { g, subs, ear } = closedLink, first = ear(), next = ear()
-  subs.open(first.sink, 'link', '.link.to=target&*', { person: 'bob' })
-  equal(first.take()[0].bundles?.map((b) => b.entity.eid), ['alice'])
-  subs.drop(first.sink)
-  g.apply([{
-    entity: { eid: 'target' },
-    draft: { by: 'alice', text: 'private' },
-  }], { trusted: true })
+  let { subs } = closedLink, next = closedNext
+  equal(closedAnswer[0].bundles?.map((b) => b.entity.eid), ['alice'])
   subs.open(next.sink, 'link', '.link.to=target&*', { person: 'bob' })
   equal(next.take()[0].bundles, [])
 })
