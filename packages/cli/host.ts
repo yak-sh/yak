@@ -919,7 +919,10 @@ let composed = async (
         })(),
     }
     // Spreading Host would invoke its lazy tools/runner getters here.
-    return Object.create(host, Object.getOwnPropertyDescriptors(lifecycle))
+    return Object.defineProperties({}, {
+      ...Object.getOwnPropertyDescriptors(host),
+      ...Object.getOwnPropertyDescriptors(lifecycle),
+    }) as Served
   } catch (error) {
     try {
       await report(error, { tags: { step: 'compose host' } })
