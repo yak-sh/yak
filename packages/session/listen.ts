@@ -483,7 +483,7 @@ export let pending = async (
     : []
   let native = !process?.process &&
     (await graph.read(
-        `.entry.session=${session}&.using&.fields=entity.eid&.limit=1`,
+        `.entity.eid=${session}&.entries.using&.fields=entity.eid&.limit=1`,
       )).length > 0
   let addressed: Bundle[] = []
   for (let q of addressedTo(vocab, session, !native)) {
