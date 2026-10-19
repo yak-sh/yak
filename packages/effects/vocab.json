@@ -87,7 +87,7 @@
         "attempts": {
           "type": "number",
           "stamped": true,
-          "description": "how many times the handler has been started"
+          "description": "how many attempts the handler has spent; waiting through defer does not spend an attempt"
         },
         "at": {
           "type": "string",
@@ -109,7 +109,7 @@
           "type": "string",
           "format": "date-time",
           "stamped": true,
-          "description": "when the next attempt falls due; set means a failure that reported and is waiting out its backoff, absent means a run nobody has started or one in progress"
+          "description": "when the run next becomes eligible after failure backoff or deferred readiness; absent means a run nobody has started or one in progress"
         },
         "lease_owner": {
           "type": "string",
