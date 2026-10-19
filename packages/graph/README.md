@@ -234,6 +234,22 @@ selects entities that have that component, and `.book.pages>400` filters on a
 property. See [@yaks/query](../query/README.md) for the syntax and which parts
 each adapter supports. An empty query does not mean "dump the database".
 
+`read(query, { unordered: true })` accepts any matching entities up to the
+query's limit. This lets storage stop at indexed candidates without sorting a
+backlog. An explicit `.order` or `.after` keeps its sequence.
+
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab({ $defs: { book: { component: true } } })
+let g = graph({ storage: ram(vocab), vocab })
+await g.apply([{ entity: { eid: 'b1' }, book: {} }])
+equal((await g.read('.book .limit=1', { unordered: true })).length, 1)
+```
+
 `apply(bundles, { check: true })` runs the write phases and rolls back instead
 of committing; it returns the proposed patches, runs audit hooks, and skips
 effects. Trusted server code may correct metadata with

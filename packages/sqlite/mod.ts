@@ -359,6 +359,7 @@ const UNREAD = new Set([
   'speaks',
   'now',
   'storageOrder',
+  'unordered',
 ])
 
 // The ledgers of the units open on each driver, outermost first (`tracked`).
@@ -595,7 +596,13 @@ export let storage = (
     }
     return unit(driver, () =>
       memo.answer(
-        JSON.stringify([query, !!o.storageOrder, direct, o.visibility]),
+        JSON.stringify([
+          query,
+          !!o.storageOrder,
+          !!o.unordered,
+          direct,
+          o.visibility,
+        ]),
         owing || unread ? undefined : tables,
         () =>
           rows(driver, vocab, query, {

@@ -52,6 +52,8 @@ export type ReadOpts = {
   /** Page in physical insertion order, ignoring imported entity numbers. Only
    * unordered windows use it; a missing eid cursor answers an empty page. */
   storageOrder?: boolean
+  /** Accept any matching rows when no order or cursor is requested. */
+  unordered?: boolean
   durable?: boolean
   /** A graph-local runtime activity parent; storage adapters need not use it. */
   parent?: string

@@ -12,6 +12,8 @@ import { test } from '@yaks/testing'
 import { answers, parity, rig } from '../sqlite/parity.ts'
 import { shop, store } from '../sqlite/testing.ts'
 import { ram } from './mod.ts'
+import { assert, assertEquals } from '@std/assert'
+import { parse } from '@yaks/query'
 
 let mine = () => rig(ram(shop, { number: true }))
 
@@ -20,3 +22,36 @@ test('a ram graph and a sqlite graph agree, batch for batch', () => {
 })
 
 test('a ram graph selects what each query means', () => answers(mine()))
+
+for (
+  let [name, s] of [['RAM', ram(shop, { number: true })], [
+    'SQL',
+    store(),
+  ]] as const
+) {
+  s.tx((tx) =>
+    tx.patch([
+      { entity: { eid: 'first' }, product: { price: 20 } },
+      { entity: { eid: 'second' }, product: { price: 10 } },
+      { entity: { eid: 'third' }, product: { price: 30 } },
+    ])
+  )
+  let q = parse('.product.price>=20 .limit=1')
+  test(`${name}: unordered reads retain filters, limits and separate cached defaults`, () => {
+    let any = s.rows(q, { unordered: true })
+    assertEquals(any.length, 1)
+    assert(['first', 'third'].includes(String(any[0].eid)))
+    assertEquals(s.rows(q), [{ eid: 'third' }])
+  })
+  for (
+    let query of [
+      '.product .order=product.price .limit=1',
+      '.product .after=second .limit=1',
+    ]
+  ) {
+    let q = parse(query)
+    let expected = s.rows(q)
+    test(`${name}: unordered leaves requested sequences intact: ${query}`, () =>
+      assertEquals(s.rows(q, { unordered: true }), expected))
+  }
+}

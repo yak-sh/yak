@@ -96,6 +96,7 @@ import {
 } from './ast.ts'
 import { inline, render } from './render.ts'
 import { type Arm, ARMS, arms, cut } from './compound.ts'
+import { alternatives } from './alternatives.ts'
 import {
   type Dialect,
   field,
@@ -147,6 +148,8 @@ export type BindOpts = {
   now?: number
   /** Unordered windows use physical owner order, not entity numbers. */
   storageOrder?: boolean
+  /** Accept any matching rows when no order or cursor is requested. */
+  unordered?: boolean
   /** Matching against a current snapshot of this database file's archetypes,
    * done while the statement is being compiled. */
   archetypes?: ArchetypeSet
@@ -166,6 +169,9 @@ type Ctx = {
   ext: Extension[]
   now: number
   storageOrder?: boolean
+  /** Accept any matching rows when no order or cursor is requested. */
+  unordered?: boolean
+  points?: Set<string>
   tables: Set<string>
   /** the first disjunction's entity ids, and the condition that tests them */
   candidates?: Frag & { test: Cond; whole?: boolean }
@@ -846,6 +852,45 @@ let leading = (ctx: Ctx, comp: string, prop: string): string | undefined => {
   return index && indexName(ctx.v, comp, index.props)
 }
 
+// A compound seek consumes equalities before its first range. Indexes with
+// the same leading property can therefore ask very different amounts of work.
+let indexFor = (ctx: Ctx, comp: string, prop: string, cs: Clause[]) => {
+  let predicates = flattened(cs).filter((c): c is Pred =>
+    c.kind == 'pred' && !c.not && !c.where && c.path.length == 2 &&
+    c.path[0] == comp && !ctx.derived[c.path.join('.')]
+  )
+  let order = find<Order>(cs, 'order')?.value.replace(/^-/, '')
+  let score = (props: string[]) => {
+    let eq = 0
+    for (let p of props) {
+      if (
+        !predicates.some((c) =>
+          c.path[1] == p && opOf(c) == '' &&
+          (ctx.points?.has(c.path.join('.')) || literals(c.value)?.length &&
+              tagAt(ctx.v, ctx.derived, comp, p) != 'time')
+        )
+      ) break
+      eq++
+    }
+    let next = props[eq]
+    let range = predicates.some((c) =>
+      c.path[1] == next &&
+      (['<', '<=', '>', '>='].includes(opOf(c)) ||
+        c.value?.kind == 'range' || opOf(c) == '' &&
+          (blank(c.value) ||
+            tagAt(ctx.v, ctx.derived, comp, next) == 'time'))
+    )
+    return eq * 4 + Number(range) * 2 +
+      Number(order == `${comp}.${next}`)
+  }
+  let choices = ctx.v.indexes(comp)
+    .filter((i) => i.props[0] == prop && !i.present)
+    .sort((a, b) => score(b.props) - score(a.props))
+  let index = choices[0]
+  return index &&
+    { name: indexName(ctx.v, comp, index.props), n: score(index.props) }
+}
+
 // Whether a path's equality can be read from its far end, one index seek per
 // hop: every hop a stored reference into the entity table, and the leaf a
 // stored reference compared with eids (every stored reference is indexed) or
@@ -1150,10 +1195,33 @@ let inRefs = (ctx: Ctx, groups: Arm[][], value: string): Cond => {
 // is what forced this shape. Each group is still one indexed `in`, so the cut
 // costs nothing that the scan it replaced did not.
 let union = (ctx: Ctx, alts: Clause[]): Cond => {
-  let branches = alts.map((x) => {
-    let branch = { ...ctx, tables: new Set<string>(), candidates: undefined }
-    let where = clause(branch, x)
-    return { branch, where, joins: joinsOf(branch), x }
+  let branches = alts.flatMap((x) => {
+    // NULL and empty text are distinct index points. Their boolean OR after
+    // a compound equality prefix otherwise reads the whole prefix in SQLite.
+    let empty = flattened([x]).find((c): c is Pred =>
+      c.kind == 'pred' && !c.not && !c.where && c.path.length == 2 &&
+      opOf(c) == '' && blank(c.value) && c.path[0] != 'entity' &&
+      ctx.v.prop(c.path[0], c.path[1])?.affinity == 'text' &&
+      !ctx.derived[c.path.join('.')]
+    )
+    let column = empty && ctx.d.col(empty.path[0], empty.path[1], ctx.v)
+    return (column ? ['null', 'empty'] : [null]).map((point) => {
+      let branch = { ...ctx, tables: new Set<string>(), candidates: undefined }
+      if (point) {
+        branch.d = {
+          ...ctx.d,
+          eq: (c, v, tag, affinity) =>
+            c == column && blank(v)
+              ? {
+                sql: `${c} ${point == 'null' ? 'is null' : "= ''"}`,
+                params: [],
+              }
+              : ctx.d.eq(c, v, tag, affinity),
+        }
+      }
+      let where = clause(branch, x)
+      return { branch, where, joins: joinsOf(branch), x }
+    })
   })
   if (ctx.correlated) {
     for (let { branch } of branches) {
@@ -1787,7 +1855,8 @@ let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
   let scope = cs.filter((c): c is Pred =>
     c.kind == 'pred' && !c.not && !c.where && !claims(ctx, 'pred') &&
     (c.path.join('.') == 'entity.eid' && c.op == '=' && c.value != null ||
-      c.path.length == 1 && c.op == '!')
+      c.path.length == 1 && c.op == '!' ||
+      c.path.length == 2 && needs(opOf(c), c.value))
   )
   return scope.length
     ? cs.map((c) =>
@@ -2190,7 +2259,9 @@ let indexedRelation = (
       }
     }
   }
-  let root: { comp: string; index?: string; pred?: Pred } | undefined
+  let root:
+    | { comp: string; index?: string; pred?: Pred; n?: number }
+    | undefined
   if (!ctx.spine && !claims(ctx, 'pred') && ctx.d.indexed) {
     let scalar = flattened(clauses).some((c) =>
       c.kind == 'pred' && !c.not &&
@@ -2233,16 +2304,21 @@ let indexedRelation = (
         ctx.derived[`${comp}.${prop}`] || !needs(opOf(c), c.value) ||
         opOf(c) == EXISTS || opOf(c) == '~'
       ) continue
-      let index = leading(ctx, comp, prop)
+      let choice = indexFor(ctx, comp, prop, clauses)
+      let index = choice?.name
       if (
         !index || !ctx.d.scoped &&
           (ctx.d.table(comp) != `"${comp}"` ||
             source(ctx, comp) != `"${comp}"`)
       ) continue
-      root = { comp, index, pred: hops ? undefined : c }
-      break
+      if ((choice?.n ?? 0) > (root?.n ?? -1)) {
+        root = { comp, index, pred: hops ? undefined : c, n: choice?.n }
+      }
     }
   }
+  // A direct mandatory predicate also bounds every OR arm. Starting at its
+  // whole prefix again would discard the narrower candidates just selected.
+  if (ctx.candidates && root?.pred?.path.length == 2) root = undefined
   // A presence table is the fallback, after a bounded indexed predicate.
   // Otherwise `.using .entry.session=X` walks every request in the graph
   // instead of seeking X's entries and checking their using component.
@@ -2597,6 +2673,7 @@ export let prepared = (
     ext: spine ? [] : opts.extend ?? [],
     now: opts.now ?? Date.now(),
     storageOrder: opts.storageOrder,
+    unordered: opts.unordered,
     tables: new Set(),
     shared: new Map(),
     identities: new WeakMap(),
@@ -2623,6 +2700,7 @@ export let prepared = (
     extend: ctx.ext,
     now: ctx.now,
     storageOrder: ctx.storageOrder,
+    unordered: ctx.unordered,
     exactIds: ctx.exactIds,
     references: ctx.references,
     archetypes: ctx.archetypes,
@@ -2656,6 +2734,93 @@ export let prepared = (
   }
 }
 
+// Any N rows can come from at most N rows of each complete alternative. Keep
+// the cap inside those indexed seeks; a UNION of whole histories defeats an
+// outer LIMIT even when the caller does not ask for an order.
+let limited = (ast: And, ctx: Ctx): Frag | undefined => {
+  let limit = find<Limit>(ast.clauses, 'limit')
+  if (
+    !ctx.unordered || !limit || limit.n <= 0 || ctx.spine || ctx.correlated ||
+    ctx.owner || ctx.visibility || ctx.eids || ctx.ext.length ||
+    ast.clauses.some((c) =>
+      ['order', 'after', 'count', 'tally', 'distinct'].includes(c.kind)
+    )
+  ) return
+  let arms = alternatives(ast.clauses.filter((c) => !directive(c)))
+  if (!arms) return
+  if (
+    arms.length == 1 &&
+    !arms[0].some((c) =>
+      opOf(c) == '' && blank(c.value) && !ctx.points?.has(c.path.join('.')) &&
+      ctx.v.prop(c.path[0], c.path[1])?.affinity == 'text'
+    )
+  ) return
+  let choices = arms.flatMap((cs) => {
+    if (
+      cs.some((c) =>
+        c.path.length != 2 || c.path[0] != 'entity' &&
+          (!ctx.v.prop(c.path[0], c.path[1]) ||
+            computed(ctx.v, c.path[0]) ||
+            ctx.v.prop(c.path[0], c.path[1])?.computed ||
+            ctx.derived[c.path.join('.')])
+      )
+    ) return []
+    let empty = cs.filter((c) =>
+      opOf(c) == '' && blank(c.value) &&
+      !ctx.points?.has(c.path.join('.')) &&
+      ctx.v.prop(c.path[0], c.path[1])?.affinity == 'text'
+    )
+    if (empty.length > 6) return []
+    let modes = empty.reduce<Map<string, boolean>[]>(
+      (sets, c) =>
+        sets.flatMap((s) =>
+          [true, false].map((nil) =>
+            new Map([...s, [ctx.d.col(c.path[0], c.path[1], ctx.v)!, nil]])
+          )
+        ),
+      [new Map()],
+    )
+    return modes.map((mode) => ({ cs, empty, mode }))
+  })
+  // An unsupported arm must never disappear from the answer.
+  if (
+    !choices.length || choices.length > 64 ||
+    arms.some((a) => !choices.some((c) => c.cs == a))
+  ) return
+  let parts: Query[] = choices.map(({ cs, empty, mode }) => {
+    let branch: Ctx = {
+      ...ctx,
+      d: {
+        ...ctx.d,
+        eq: (c, v, tag, affinity) =>
+          mode.has(c) && blank(v)
+            ? { sql: `${c} ${mode.get(c) ? 'is null' : "= ''"}`, params: [] }
+            : ctx.d.eq(c, v, tag, affinity),
+      },
+      tables: new Set(),
+      candidates: undefined,
+      points: new Set(empty.map((c) => c.path.join('.'))),
+    }
+    let q = lower({ kind: 'and', clauses: [...cs, limit] }, branch, [])
+    return select({
+      from: from({ ...q, cols: [raw(`${ctx.d.ownerKey('entity')} as id`)] }),
+    })
+  })
+  while (parts.length > ARMS) {
+    parts = cut(parts, ARMS).map((parts) =>
+      select({ from: from({ t: 'compound', op: 'union all', parts }) })
+    )
+  }
+  let q: Query = parts.length == 1
+    ? parts[0]
+    : { t: 'compound', op: 'union all', parts }
+  return render(select({
+    distinct: true,
+    from: from(q),
+    limit: val(limit.n),
+  }))
+}
+
 let lower = (
   ast: And,
   ctx: Ctx,
@@ -2679,6 +2844,11 @@ let lower = (
       }
       : s
   let cs = ast.clauses
+  let bounded = limited(ast, ctx)
+  if (bounded) {
+    ctx.candidates = { ...bounded, test: TRUE }
+    ctx.correlated = true
+  }
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {
       throw new Unsupported(`.${c.kind}`, 'query extension is unavailable')
@@ -2833,8 +3003,10 @@ let lower = (
   // Whether this store numbers its entities: @yaks/id's document declares the
   // property, so a vocabulary that loaded it has numbers and one that did not
   // has none (the spine table holds the column either way).
+  let unordered = ctx.unordered && !sort && !after
   let physical = ctx.storageOrder && !sort && !!(limit || after)
-  let numbered = !physical && !ctx.spine && !!ctx.v.prop('entity', 'num')
+  let numbered = !unordered && !physical && !ctx.spine &&
+    !!ctx.v.prop('entity', 'num')
   // The cursor names its anchor by that entity's number, so a store which
   // mints none has nothing for it to name: `num < n` over a column of NULLs
   // answers with an empty page instead of saying so.
@@ -2866,7 +3038,7 @@ let lower = (
     ordered.push(`"entity"."num"${down}`)
   }
   let owner = ctx.d.ownerKey('entity')
-  ordered.push(`${owner}${down}`)
+  if (!unordered) ordered.push(`${owner}${down}`)
   let windowed = after
     ? and(where, cond(keyset(ctx, sort, after, numbered, physical)))
     : where

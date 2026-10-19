@@ -76,6 +76,8 @@ export type MatchOpts = {
   now?: number
   /** Unordered windows use insertion order rather than entity numbers. */
   storageOrder?: boolean
+  /** Accept any matching rows when no order or cursor is requested. */
+  unordered?: boolean
   /** `comp.prop` → the value for one bundle, for a property the vocabulary
    * declares but never stores. The in-memory equivalent of @yaks/sql's
    * `derived` hook: an unregistered computed property is refused, as it is
@@ -144,6 +146,7 @@ type Kind = 'select' | 'filter' | 'rows'
 type Kept = {
   at?: number
   physical?: boolean
+  unordered?: boolean
   exact?: boolean
   eids?: string
   made: unknown
@@ -174,6 +177,7 @@ let once = <T>(
   let hit = forms[kind]
   if (
     hit && hit.physical === opts.storageOrder && hit.exact === opts.exactIds &&
+    hit.unordered === opts.unordered &&
     hit.eids === JSON.stringify(opts.eids) &&
     (hit.at === undefined || hit.at === opts.now)
   ) {
@@ -190,12 +194,14 @@ let once = <T>(
     computed: opts.computed ?? {},
     exactIds: opts.exactIds,
     storageOrder: opts.storageOrder,
+    unordered: opts.unordered,
     eids: opts.eids,
   }
   let made = make(ctx)
   forms[kind] = {
     at: timed ? opts.now ?? NaN : undefined,
     physical: opts.storageOrder,
+    unordered: opts.unordered,
     exact: opts.exactIds,
     eids: JSON.stringify(opts.eids),
     made,
@@ -285,7 +291,9 @@ let sorter = (
   among: Index,
 ) => ((a: Bundle, b: Bundle) => number) | null => {
   let order = find<Order>(cs, 'order')
-  if (!order && !windowed) return () => null
+  if (!order && (!windowed || ctx.unordered && !find<After>(cs, 'after'))) {
+    return () => null
+  }
   let desc = order?.value.startsWith('-') ?? false
   let read = order && field(ctx, desc ? order.value.slice(1) : order.value).read
   return (among) => {
@@ -375,6 +383,7 @@ let selection = (ctx: Ctx, q: And): Select => {
     let out: Bundle[] = []
     for (let b of candidates(needs, among)) {
       if (live(b) && test(b, among)) out.push(b)
+      if (!sort && limit && out.length >= limit.n) break
     }
     if (sort) out.sort(sort)
     if (after && sort) {

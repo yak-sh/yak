@@ -53,6 +53,8 @@ export type Ctx = {
   now: number
   computed: Computed
   storageOrder?: boolean
+  /** Accept any matching rows when no order or cursor is requested. */
+  unordered?: boolean
   exactIds?: boolean
   eids?: readonly string[]
 }
