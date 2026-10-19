@@ -132,155 +132,155 @@ let count = () =>
       ],
     ),
   )
-let counts = count()
-say('before', counts)
-let protectedTables = [
-  'entry',
-  'session',
-  'log',
-  'content',
-  'attachment',
-  'ask',
-  'output',
-  'call',
-  'created',
-]
-let protectedEnds = Object.fromEntries(
-  protectedTables.filter((t) => existing.has(t)).map(
-    (t) => [
-      t,
-      db.query(
-        select({
-          cols: [as(fn('max', col('entity')), 'last')],
-          from: table(t),
-        }),
-      )[0].last,
-    ],
-  ),
-)
-let fingerprint = (t: string, key: string, end: number) => {
-  let hash = createHash('sha256'), n = 0, after = 0
-  for (;;) {
-    let page = db.query(
-      select({
-        from: table(t),
-        where: and(gt(col(key), lit(after)), le(col(key), lit(end))),
-        order: [col(key)],
-        limit: lit(250),
-      }),
-    )
-    if (!page.length) break
-    for (let row of page) {
-      for (let [key, value] of Object.entries(row)) {
-        hash.update(key)
-        hash.update(':')
-        if (value instanceof Uint8Array) {
-          hash.update('bytes:')
-          hash.update(value)
-        } else hash.update(JSON.stringify(value))
-        hash.update(';')
-      }
-      hash.update('\n')
-    }
-    n += page.length
-    after = Number(page.at(-1)![key])
-  }
-  return { hash: hash.digest('hex'), n }
-}
-let fingerprints = () =>
-  Object.fromEntries(
-    Object.entries(protectedEnds).map((
-      [t, end],
-    ) => [t, fingerprint(t, 'entity', Number(end))]),
-  )
-let baseline = fingerprints()
-say('protected-before', baseline)
-let journalEnds = Object.fromEntries(
-  ['journal_tx', 'journal_change'].map(
-    (t) => [
-      t,
-      db.query(
-        select({ cols: [as(fn('max', col('id')), 'last')], from: table(t) }),
-      )[0].last,
-    ],
-  ),
-)
-let journalPrefix = () =>
-  Object.fromEntries(
-    Object.entries(journalEnds).map((
-      [t, end],
-    ) => [t, fingerprint(t, 'id', Number(end))]),
-  )
-let history = journalPrefix()
-say('history-before', history)
-let redirects = new Map<string, string>()
-let canonical = (eid: string): string =>
-  redirects.has(eid) ? canonical(redirects.get(eid)!) : eid
-// Move an identity in place where possible: numeric foreign keys and the entire
-// journal still identify the same object. Existing canonical observations merge
-// only after every stored reference has been rewired in this transaction.
-let rename = async (old: string, target: string) => {
-  if (old === target) return
-  target = canonical(target)
-  let oldId = number(old), targetId = number(target)
-  assert(oldId, 'Missing source ' + old)
-  if (!targetId) update('entity', { eid: target }, 'id', oldId)
-  else {
-    let [a, b] = await g.get([old, target])
-    assert(
-      !a.session && !b.session,
-      'Cannot merge sessions as filesystem observations',
-    )
-    let patch: Bundle = { entity: { eid: target } }
-    for (let [name, value] of Object.entries(a)) {
-      if (
-        ['entity', '$was', '$actor', 'created', 'updated'].includes(name) ||
-        name.startsWith('$') || !value
-      ) continue
-      let other = comp(b, name)
-      let merged = { ...value as Comp, ...other }
-      patch[name] = merged
-    }
-    await g.apply([patch], { trusted: true, stamp: false })
-    for (let [name, prop] of vocab.refProps()) {
-      if (
-        !db.query({ t: 'pragma', name: 'table_info', arg: name }).some((r) =>
-          r.name === prop
-        )
-      ) continue
-      update(name, { [prop]: targetId }, prop, oldId)
-    }
-    // The old numbered entity becomes an address, not a second repository/file.
-    let clear: Bundle = { entity: { eid: old }, tombstone: {} }
-    for (let name of Object.keys(a)) {
-      if (
-        !name.startsWith('$') &&
-        !['entity', 'created', 'updated'].includes(name)
-      ) clear[name] = null
-    }
-    let provenance = db.query(
-      select({ from: table('created'), where: by('entity', oldId) }),
-    )[0]
-    await g.apply([clear], { trusted: true, stamp: false })
-    if (provenance) {
-      db.query({
-        t: 'insert',
-        into: 'created',
-        or: 'ignore',
-        cols: Object.keys(provenance),
-        rows: [
-          Object.values(provenance).map((v) =>
-            lit(v as string | number | null)
-          ),
-        ],
-      })
-      reclassify(db, [old])
-    }
-  }
-  redirects.set(old, target)
-}
-
 await store.tx(async () => {
+  let counts = count()
+  say('before', counts)
+  let protectedTables = [
+    'entry',
+    'session',
+    'log',
+    'content',
+    'attachment',
+    'ask',
+    'output',
+    'call',
+    'created',
+  ]
+  let protectedEnds = Object.fromEntries(
+    protectedTables.filter((t) => existing.has(t)).map(
+      (t) => [
+        t,
+        db.query(
+          select({
+            cols: [as(fn('max', col('entity')), 'last')],
+            from: table(t),
+          }),
+        )[0].last,
+      ],
+    ),
+  )
+  let fingerprint = (t: string, key: string, end: number) => {
+    let hash = createHash('sha256'), n = 0, after = 0
+    for (;;) {
+      let page = db.query(
+        select({
+          from: table(t),
+          where: and(gt(col(key), lit(after)), le(col(key), lit(end))),
+          order: [col(key)],
+          limit: lit(250),
+        }),
+      )
+      if (!page.length) break
+      for (let row of page) {
+        for (let [key, value] of Object.entries(row)) {
+          hash.update(key)
+          hash.update(':')
+          if (value instanceof Uint8Array) {
+            hash.update('bytes:')
+            hash.update(value)
+          } else hash.update(JSON.stringify(value))
+          hash.update(';')
+        }
+        hash.update('\n')
+      }
+      n += page.length
+      after = Number(page.at(-1)![key])
+    }
+    return { hash: hash.digest('hex'), n }
+  }
+  let fingerprints = () =>
+    Object.fromEntries(
+      Object.entries(protectedEnds).map((
+        [t, end],
+      ) => [t, fingerprint(t, 'entity', Number(end))]),
+    )
+  let baseline = fingerprints()
+  say('protected-before', baseline)
+  let journalEnds = Object.fromEntries(
+    ['journal_tx', 'journal_change'].map(
+      (t) => [
+        t,
+        db.query(
+          select({ cols: [as(fn('max', col('id')), 'last')], from: table(t) }),
+        )[0].last,
+      ],
+    ),
+  )
+  let journalPrefix = () =>
+    Object.fromEntries(
+      Object.entries(journalEnds).map((
+        [t, end],
+      ) => [t, fingerprint(t, 'id', Number(end))]),
+    )
+  let history = journalPrefix()
+  say('history-before', history)
+  let redirects = new Map<string, string>()
+  let canonical = (eid: string): string =>
+    redirects.has(eid) ? canonical(redirects.get(eid)!) : eid
+  // Move an identity in place where possible: numeric foreign keys and the entire
+  // journal still identify the same object. Existing canonical observations merge
+  // only after every stored reference has been rewired in this transaction.
+  let rename = async (old: string, target: string) => {
+    if (old === target) return
+    target = canonical(target)
+    let oldId = number(old), targetId = number(target)
+    assert(oldId, 'Missing source ' + old)
+    if (!targetId) update('entity', { eid: target }, 'id', oldId)
+    else {
+      let [a, b] = await g.get([old, target])
+      assert(
+        !a.session && !b.session,
+        'Cannot merge sessions as filesystem observations',
+      )
+      let patch: Bundle = { entity: { eid: target } }
+      for (let [name, value] of Object.entries(a)) {
+        if (
+          ['entity', '$was', '$actor', 'created', 'updated'].includes(name) ||
+          name.startsWith('$') || !value
+        ) continue
+        let other = comp(b, name)
+        let merged = { ...value as Comp, ...other }
+        patch[name] = merged
+      }
+      await g.apply([patch], { trusted: true, stamp: false })
+      for (let [name, prop] of vocab.refProps()) {
+        if (
+          !db.query({ t: 'pragma', name: 'table_info', arg: name }).some((r) =>
+            r.name === prop
+          )
+        ) continue
+        update(name, { [prop]: targetId }, prop, oldId)
+      }
+      // The old numbered entity becomes an address, not a second repository/file.
+      let clear: Bundle = { entity: { eid: old }, tombstone: {} }
+      for (let name of Object.keys(a)) {
+        if (
+          !name.startsWith('$') &&
+          !['entity', 'created', 'updated'].includes(name)
+        ) clear[name] = null
+      }
+      let provenance = db.query(
+        select({ from: table('created'), where: by('entity', oldId) }),
+      )[0]
+      await g.apply([clear], { trusted: true, stamp: false })
+      if (provenance) {
+        db.query({
+          t: 'insert',
+          into: 'created',
+          or: 'ignore',
+          cols: Object.keys(provenance),
+          rows: [
+            Object.values(provenance).map((v) =>
+              lit(v as string | number | null)
+            ),
+          ],
+        })
+        reclassify(db, [old])
+      }
+    }
+    redirects.set(old, target)
+  }
+
   let local = await g.read('.machine.address=local://')
   assert(local.length === 1, 'Exactly one explicit local computer required')
   let computer = local[0].entity.eid
