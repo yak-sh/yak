@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "oracle_tree": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The root oracle."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          },
+          "description": "Frozen verbatim evidence: id, at and words."
+        }
+      },
+      "description": "One evidence-grown oracle tree.",
+      "kind": true
+    },
+    "oracle": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "tree": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The tree this oracle belongs to."
+        },
+        "domain": {
+          "type": "string"
+        },
+        "advert": {
+          "type": "object"
+        },
+        "self": {
+          "type": "string"
+        },
+        "shared": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "key": {
+          "type": "string",
+          "description": "Stable engine node identity within the tree."
+        }
+      },
+      "description": "An oracle and its immutable context revisions.",
+      "kind": true
+    },
+    "oracle_child": {
+      "component": true,
+      "type": "object",
+      "properties": {},
+      "description": "The child oracle points to its parent.",
+      "edge": true
+    },
+    "oracle_dialogue": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "tree": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The tree queried."
+        },
+        "from": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The asking oracle session."
+        },
+        "to": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "The receiving oracle session."
+        },
+        "revision": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "integer"
+        },
+        "declined": {
+          "type": "boolean"
+        },
+        "finished": {
+          "type": "boolean"
+        }
+      },
+      "description": "A query conversation between oracle sessions."
+    }
+  }
+}

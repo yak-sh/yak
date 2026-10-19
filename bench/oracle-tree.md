@@ -2,8 +2,8 @@
 
 An **oracle tree** is retained evidence-grown nodes, each with a parent-assigned
 domain, its own routing advertisement, its own context and context shared with
-its children. `oracle-tree.ts` owns growth and conversations;
-`context-reading.ts` exposes the tree to a measured historical caller.
+its children. `@yaks/oracle` owns growth and conversations; `context-reading.ts`
+exposes the tree to a measured historical caller.
 
 ## Prepare separately from answering
 
@@ -26,9 +26,11 @@ deno run -A bench/context-reading.ts --packet /private/retained-packet.json \
   --out /private/answers.json --native
 ```
 
-The packet's `oracleTree` contains `rows`, `limits` and
-`resume: { root, nodes }`. `rows` and every revision's evidence IDs must agree.
-`run` refuses a packet without `resume` rather than rebuilding for each case.
+The packet's `oracleTree` contains `rows`, `limits` and `tree`, the graph entity
+id of the retained tree. `rows` and every revision's evidence IDs must agree.
+`run` refuses a packet without `tree` rather than rebuilding for each case.
+`measuredTree({ graph, tree, prepare: true, ... })` prepares offline; subsequent
+runs load the tree and frozen evidence from that graph.
 
 ## Answer with a bounded conversation
 

@@ -7,13 +7,15 @@ import { agent } from '@yaks/harness'
 import { ownerOracle, ownerWords } from './owner-oracle.ts'
 import {
   conservativeTokens,
+  graphTree,
   growOracleTree,
   type OracleCall,
   type OracleLimits,
-} from './oracle-tree.ts'
+} from '@yaks/oracle'
 import { harnessTools } from '../packages/harness/tools.ts'
 import { skillItems, skillTools } from '../packages/harness/skills.ts'
 import { machines } from '../packages/harness/session_machines.ts'
+import type { Graph } from '@yaks/graph'
 import type { Tool } from '@yaks/session'
 import { compose } from '@yaks/cli/host'
 import { configPath, read } from '../packages/cli/config.ts'
@@ -56,7 +58,7 @@ export type Packet = {
   oracleTree?: {
     rows: Bundle[]
     limits: OracleLimits
-    resume?: Parameters<typeof growOracleTree>[0]['resume']
+    tree: string
     adjustment?: string
   }
 }
@@ -221,7 +223,10 @@ export async function measuredTree(options: {
   cutoff: string
   model: Model
   limits: OracleLimits
-  resume?: Parameters<typeof growOracleTree>[0]['resume']
+  graph: Graph
+  tree: string
+  title?: string
+  prepare?: boolean
   adjustment?: string
 }) {
   let trace: OracleCall[] = []
@@ -241,7 +246,9 @@ export async function measuredTree(options: {
   }
   try {
     // The injected model is recorded by the engine, with its exact per-call role.
-    tree = await growOracleTree({
+    tree = await graphTree(options.graph, {
+      title: options.title ?? 'Oracle tree',
+      retained: !options.prepare,
       ...options,
       rows: evidenceRows(options.rows, options.cutoff),
       limits,
@@ -326,12 +333,10 @@ export async function measuredTree(options: {
     evidence: () => ({
       root: tree?.root ?? trace[0]?.node ?? null,
       // A root failure has no published revisions; retain its requests/errors.
-      nodes: tree ? [...tree.nodes.values()] : [],
+      tree: options.tree,
       trace: tree?.trace ?? trace,
-      conversations: tree ? [...tree.conversations.values()] : [],
       declines: tree?.declines ?? [],
       changes: tree?.changes ?? [],
-      evidence: tree?.evidence ?? [],
       stats: tree?.stats() ??
         { readyNodes: 0, calls: trace.length, partialErrors: [growthError] },
       limits,
@@ -429,6 +434,7 @@ export function score(points: Point[], grades: Grade[], failed = false) {
 
 const plugins = [
   '@yaks/kernel',
+  '@yaks/oracle',
   '@yaks/id',
   '@yaks/key',
   '@yaks/alias',
@@ -536,6 +542,7 @@ export async function run(packet: Packet, options: {
     ].map((c) => exported('.' + c + ' *')),
   )).flat()
   // CLI rows include read-side actor/stamp metadata: seed only stored components.
+
   source = [...new Map(source.map((b) => [b.entity.eid, b])).values()].map(
     (b) => {
       let { $actor: _actor, $was: _was, ...row } = b
@@ -583,6 +590,9 @@ export async function run(packet: Packet, options: {
     { process: false },
   )
   await authHost.graph.apply(source, { trusted: true })
+  let oracleHost = packet.oracleTree
+    ? await compose(config, ['graph'], undefined, { process: false })
+    : undefined
   let results: unknown[] = []
   let allCalls: Call[] = []
   try {
@@ -674,17 +684,16 @@ export async function run(packet: Packet, options: {
             nativeTools.push(oracle.tool)
           }
           if (packet.oracleTree) {
-            if (!packet.oracleTree.resume) {
-              throw new Error(
-                'Prepare and retain the oracle tree offline with measuredTree; answer runs require oracleTree.resume',
-              )
+            if (!packet.oracleTree.tree) {
+              throw new Error('Answer runs require a retained graph tree')
             }
             tree = await measuredTree({
               rows: packet.oracleTree.rows,
               cutoff: c.input.original_message.timestamp ?? '',
               model: transport,
               limits: packet.oracleTree.limits,
-              resume: packet.oracleTree.resume,
+              graph: oracleHost!.graph,
+              tree: packet.oracleTree.tree,
               adjustment: packet.oracleTree.adjustment,
             })
             tree.assertReady()
@@ -801,6 +810,7 @@ export async function run(packet: Packet, options: {
       }
     }
   } finally {
+    await oracleHost?.close()
     await authHost.close()
   }
 }

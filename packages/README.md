@@ -939,3 +939,6 @@ package:
 
 Run `deno publish --dry-run` in a package to check it before landing — it
 reports missing docs, slow types, and metadata gaps.
+
+- [@yaks/oracle](oracle/README.md) — evidence-grown oracle trees and
+  graph-backed conversations.

@@ -1,7 +1,7 @@
 import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
 import type { Item, Model, Request } from '@yaks/model'
-import { growOracleTree } from './oracle-tree.ts'
+import { growOracleTree } from '@yaks/oracle'
 
 const cutoff = '2026-10-01T00:00:00Z'
 const rows: Bundle[] = [{

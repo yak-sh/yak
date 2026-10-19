@@ -1,10 +1,10 @@
-/** Experimental evidence-grown oracle tree. No graph reads or held-out labels.
+/** Evidence-grown oracle tree. No held-out labels enter model requests.
  * A query opens a receiving fork; its handle continues that conversation.
  * The caller records provider billing and owns the historical evidence audit.
  */
 import type { Bundle } from '@yaks/graph'
 import type { Item, Model, Reply, Request, Tool } from '@yaks/model'
-import { ownerWords } from './owner-oracle.ts'
+import { ownerWords } from './evidence.ts'
 
 export type Capability =
   | 'read_evidence'
