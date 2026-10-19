@@ -1190,6 +1190,54 @@ test('a thread its process ended holds nothing, though the pid it ran in lives o
     assertEquals(await run(host.me), true)
     await host.duties(AbortSignal.abort(), ['effects'])
     assertEquals(ran, ['b1'])
+    let ending = crypto.randomUUID(), rival = crypto.randomUUID()
+    await host.graph.apply([ending, rival].map((eid) => ({
+      entity: { eid },
+      process: { pid: Deno.pid },
+    })))
+    await detached(host.storage).patch([{
+      entity: { eid: 'r2' },
+      effect: {
+        handler: 'book_seen',
+        target: 'b1',
+        state: 'pending',
+        attempts: 1,
+        lease_owner: ending,
+        lease_token: 'old',
+        lease_expiry: hour,
+      },
+    }])
+    let apply = host.graph.apply.bind(host.graph)
+    let transferred = false
+    host.graph.apply = async (bundles, options) => {
+      if (
+        !transferred &&
+        bundles.some((b) => b.entity.eid == ending && b.exit != null)
+      ) {
+        transferred = true
+        await apply([{
+          entity: { eid: 'r2' },
+          effect: { lease_owner: rival, lease_token: 'new' },
+        }], { trusted: true })
+      }
+      return apply(bundles, options)
+    }
+    try {
+      await host.end(ending, 'interrupted: handover during ending')
+    } finally {
+      host.graph.apply = apply
+    }
+    let [over, transferredRun] = await host.graph.get([ending, 'r2'])
+    assertEquals(over.exit, {})
+    assertEquals(transferredRun.effect, {
+      handler: 'book_seen',
+      target: 'b1',
+      state: 'pending',
+      attempts: 1,
+      lease_owner: rival,
+      lease_token: 'new',
+      lease_expiry: hour,
+    })
   } finally {
     await host.close()
   }
