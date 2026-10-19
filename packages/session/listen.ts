@@ -99,17 +99,20 @@ export let addressedTo = (
   vocab: Vocab,
   session: Eid,
   claimedComments = true,
+  createdComments = true,
 ): And[] => {
   let has = (name: string) => !!vocab.comp(name)
   let unsaid = (...clauses: Clause[]) => and(...clauses, absent(NOTIFIED))
   return [
     ...has('comment')
       ? [
-        unsaid(
-          present('comment'),
-          eq('comment.target.created.via', session),
-          absent('created.via.session'),
-        ),
+        ...createdComments
+          ? [unsaid(
+            present('comment'),
+            eq('comment.target.created.via', session),
+            absent('created.via.session'),
+          )]
+          : [],
         ...claimedComments
           ? [unsaid(
             present('comment'),
@@ -486,7 +489,29 @@ export let pending = async (
         `.entity.eid=${session}&.entries.using&.fields=entity.eid&.limit=1`,
       )).length > 0
   let addressed: Bundle[] = []
-  for (let q of addressedTo(vocab, session, !native)) {
+  // Restrict to unsaid human comments before inspecting the creator of each
+  // target. A correlated target join scanned already-delivered history.
+  if (vocab.comp('comment')) {
+    let comments = await graph.read(and(
+      present('comment'),
+      absent(NOTIFIED),
+      absent('created.via.session'),
+      fields('comment.target'),
+    ))
+    let targets = [
+      ...new Set(comments.map((b) => str(comp(b, 'comment').target))),
+    ]
+    let made = new Set(
+      (targets.length ? await graph.get(targets, ['created']) : [])
+        .filter((b) => comp(b, 'created').via == session).map((b) =>
+          b.entity.eid
+        ),
+    )
+    let ids = comments.filter((b) => made.has(str(comp(b, 'comment').target)))
+      .map((b) => b.entity.eid)
+    if (ids.length) addressed.push(...await graph.get(ids))
+  }
+  for (let q of addressedTo(vocab, session, !native, false)) {
     addressed.push(...await graph.read(and(...q.clauses, every())))
   }
   // A session with no project can hear only its addressed items. Deriving

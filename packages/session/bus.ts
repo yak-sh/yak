@@ -52,15 +52,6 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       ),
     )
   let queries = [
-    ...g.vocab.comp('comment')
-      ? [
-        unsaid(
-          'comment',
-          present('comment.target.created.via.session'),
-          absent('created.via.session'),
-        ),
-      ]
-      : [],
     ...g.vocab.comp('knock')
       ? [
         unsaid(
@@ -92,7 +83,43 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   let projects = g.vocab.comp('knock') && g.vocab.comp('project')
     ? await g.read(and(...knocked().clauses, route('knock.target')))
     : []
-  let items = (await Promise.all(queries.map((q) => g.read(q)))).flat()
+  // First select unsaid human comments, then inspect only their targets.
+  // Following target.created.via.session inside the global comment scan made
+  // SQLite repeat the target chain over every historical comment each tick.
+  let comments0 = g.vocab.comp('comment')
+    ? await g.read(unsaid('comment', absent('created.via.session')))
+    : []
+  let commentTargets = [
+    ...new Set(comments0.map((b) => String(comp(b, 'comment').target))),
+  ]
+  let created = commentTargets.length
+    ? await g.get(commentTargets, ['created'])
+    : []
+  let creators = [
+    ...new Set(created.flatMap((b) => {
+      let id = comp(b, 'created').via
+      return typeof id == 'string' ? [id] : []
+    })),
+  ]
+  let sessions = new Set(
+    creators.length
+      ? (await g.read(and(
+        eq('entity.eid', list(...creators)),
+        present('session'),
+        fields('entity.eid'),
+      ))).map((b) => b.entity.eid)
+      : [],
+  )
+  let addressed = new Set(
+    created.filter((b) => sessions.has(String(comp(b, 'created').via)))
+      .map((b) => b.entity.eid),
+  )
+  let items = [
+    ...comments0.filter((b) =>
+      addressed.has(String(comp(b, 'comment').target))
+    ),
+    ...(await Promise.all(queries.map((q) => g.read(q)))).flat(),
+  ]
   let comments = g.vocab.prop('filed', 'project')
     ? items.filter((b) => b.comment)
     : []

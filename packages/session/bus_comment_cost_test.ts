@@ -1,0 +1,81 @@
+// Delivered comment history must not make a bus pass scan its target joins.
+import { equal, ok, test } from '@yaks/testing'
+import { type Bundle, graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { sessionDoc } from '@yaks/session'
+import { sessionDerived } from './status.ts'
+import { toolsDoc } from '@yaks/tools/vocab'
+import { docDoc } from '@yaks/doc'
+import { mailDoc } from '@yaks/mail/vocab'
+import { notifyDoc } from '@yaks/notify/vocab'
+import { personaDoc } from '@yaks/persona/vocab'
+import { projectDoc } from '@yaks/project/vocab'
+import { taskDoc } from '@yaks/task/vocab'
+import { processDoc } from '@yaks/process/vocab'
+import { archetypeDoc } from '@yaks/archetype/vocab'
+import { stepping } from '../sqlite/testing.ts'
+import { storage } from '@yaks/sqlite'
+import { archetypes } from '../archetype/plugin.ts'
+import { sessions } from './plugin.ts'
+import { due } from './bus.ts'
+let v = loadVocab([
+  kernelDoc,
+  sessionDoc,
+  toolsDoc,
+  docDoc,
+  mailDoc,
+  notifyDoc,
+  personaDoc,
+  projectDoc,
+  taskDoc,
+  processDoc,
+  archetypeDoc,
+], [kernelKeywords])
+for (let count of [100, 1000]) {
+  let { driver: d, steps } = stepping()
+  let store = storage(d, v, { derived: sessionDerived(v) })
+  let g = graph({
+    vocab: v,
+    storage: store,
+    plugins: [sessions(), archetypes()],
+  })
+  await g.apply([{ entity: { eid: 'human' }, doc: { title: 'Human' } }, {
+    entity: { eid: 'native' },
+    session: {},
+  }, {
+    entity: { eid: 'target' },
+    task: {},
+    $actor: { by: 'native', via: 'native' },
+  }, { entity: { eid: 'pick' }, entry: { session: 'native' }, using: {} }], {
+    trusted: true,
+  })
+  let comments: Bundle[] = Array.from(
+    { length: count },
+    (_, i) => ({
+      entity: { eid: 'comment' + i },
+      comment: { target: 'target' },
+      notified: {},
+      doc: { body: 'seen' },
+      $actor: { by: 'human', via: 'human' },
+    }),
+  )
+  await g.apply(comments, { trusted: true })
+  await g.apply([{
+    entity: { eid: 'unread' },
+    comment: { target: 'target' },
+    doc: { body: 'news' },
+    $actor: { by: 'human', via: 'human' },
+  }], { trusted: true })
+  await due(g)
+  let at = steps()
+  let got = await due(g)
+  let vm = steps() - at
+  test(`a bus pass seeks unread comments beside ${count} delivered comments`, () => {
+    equal(got.map((x) => [x.session, x.item.entity.eid]), [[
+      'native',
+      'unread',
+    ]])
+    ok(vm < 3000, `${vm} VM steps beside ${count} delivered comments`)
+  })
+}
