@@ -186,11 +186,12 @@ export let machineTools = (
   let here = async (ctx?: ToolContext) => await o.cwd?.(ctx)
 
   // The process once it has ended or `ms` has passed, whichever is first;
-  // null for an id the machine does not know.
-  let settle = async (id: string, ms: number) => {
+  // null for an id the machine does not know. Shutdown ends only this wait,
+  // not the independently owned command; its receipt remains recoverable.
+  let settle = async (id: string, ms: number, signal?: AbortSignal) => {
     for (let end = Date.now() + ms;;) {
       let p = await m.look(id)
-      if (!p || p.exit || Date.now() >= end) return p
+      if (!p || p.exit || signal?.aborted || Date.now() >= end) return p
       await sleep(Math.max(0, Math.min(poll, end - Date.now())))
     }
   }
@@ -222,19 +223,21 @@ export let machineTools = (
         ctx?.call.entity.eid,
         ctx?.session,
       )
-      let p = await settle(id, end - Date.now()) ?? {}
-      return shellResult(id, p, ms)
+      let p = await settle(id, end - Date.now(), ctx?.signal) ?? {}
+      return shellResult(id, p, ctx?.signal?.aborted ? undefined : ms)
     },
-    wait: async (args) => {
+    wait: async (args, ctx) => {
       let id = String(args.process ?? '')
       let ms = Number(args.timeout ?? 60_000)
-      let p = await settle(id, ms)
+      let p = await settle(id, ms, ctx?.signal)
       if (!p) return `no such process: ${id}`
       return told(
         id,
         p.exit
           ? `process ${id} ${code(p.exit.code)}`
-          : `process ${id} still running${pid(p)} after ${ms}ms`,
+          : `process ${id} still running${pid(p)}${
+            ctx?.signal?.aborted ? '' : ` after ${ms}ms`
+          }`,
       )
     },
     stop: async (args) => {

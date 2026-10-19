@@ -74,7 +74,7 @@ test('web exits during native work; a ready replacement continues after drain', 
               command: `echo $$ > '${dir}/shell.pid'; echo started > ` +
                 `'${dir}/shell.started'; read line < '${dir}/shell.gate'; ` +
                 `echo finished > '${dir}/shell.finished'`,
-              timeout: 30000,
+              timeout: 2_000_000,
             }),
           }],
         }
@@ -282,11 +282,11 @@ os.execvp(args[0], [arg.replace('$$', '$') for arg in args])
       () => exists(`${dir}/stopped-${workerPid}`),
       'old drain began',
     )
-    assert(!old.ended(), 'old work exited before its admitted shell completed')
+    await old.exit(5000)
+    Deno.kill(pids[0], 0)
     assert(!await exists(`${dir}/shell.finished`))
     // No input, nudge, or manual effect is written after the original prompt.
     await Deno.writeTextFile(`${dir}/shell.gate`, 'finish\n')
-    await old.exit()
     await wait(
       async () =>
         (await transcript(host!.graph, session)).some((row) =>
