@@ -60,8 +60,6 @@ test('legacy rehearsal replaces JSON with measured entities and is resumable', a
     op: 'request',
     name: 'http',
     at: legacy.at,
-    ms: null,
-    spans: null,
   })
   equal(root.rows_read, { n: 20 })
   equal(root.rows_written, { n: 2 })
