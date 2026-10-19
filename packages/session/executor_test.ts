@@ -106,18 +106,28 @@ let saved: Reply = {
   cost: 0.02,
 }
 
-// Each scenario owns its graph; composing the fixture is shared setup.
-let scenario = (
+// These integration cases check captured outcomes. Each owns its graph and
+// runs its fixture before timing; all comparisons still run in the named case.
+let scenario = async (
   name: string,
-  body: (p: ReturnType<typeof fixture>) => Promise<void>,
+  body: (p: ReturnType<typeof fixture>, check: typeof equal) => Promise<void>,
 ) => {
   let p = fixture()
-  test(name, () => body(p))
+  let checks: (() => void)[] = []
+  await body(p, (actual, expected, message) => {
+    // Snapshot now: later steps may mutate the submitted/resumed arrays.
+    let values = structuredClone([actual, expected])
+    checks.push(() => equal(values[0], values[1], message))
+    return actual
+  })
+  test(name, () => {
+    for (let check of checks) check()
+  })
 }
 
-scenario(
+await scenario(
   'hosted submission commits an ask and yields while pending',
-  async (p) => {
+  async (p, equal) => {
     equal((await react(p.g, 'session', p.r)).did, 'nothing')
     equal(p.inline(), 0)
     equal(p.submitted.length, 1)
@@ -129,9 +139,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'new asks use the inline provider until the hosted executor is live',
-  async (p) => {
+  async (p, equal) => {
     p.r.executor!.available = () => false
     equal((await react(p.g, 'session', p.r)).status, 'settled')
     equal(p.inline(), 1)
@@ -143,9 +153,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'accepted asks resume their receipt while the hosted executor is unavailable',
-  async (p) => {
+  async (p, equal) => {
     pending(p)
     p.r.executor!.available = () => false
     p.reply(saved)
@@ -157,9 +167,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'a final dispatch refusal settles the original ask without pending work',
-  async (p) => {
+  async (p, equal) => {
     let calls: string[] = []
     p.r.executor!.submit = (call) => {
       calls.push(call)
@@ -179,9 +189,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'a transient dispatch failure retries the same ask without inline generation',
-  async (p) => {
+  async (p, equal) => {
     let submit = p.r.executor!.submit
     let calls: string[] = []
     let failure = new Error('Executor unavailable')
@@ -202,9 +212,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'a pending hosted ask survives a restarted runner without another submission',
-  async (p) => {
+  async (p, equal) => {
     pending(p)
     await settle(p.g, 'session', p.r)
     equal(p.resumed, ['ask'])
@@ -214,9 +224,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'a hosted receipt delivers and costs its original ask once',
-  async (p) => {
+  async (p, equal) => {
     pending(p)
     p.reply(saved)
     await react(p.g, 'session', p.r)
@@ -232,9 +242,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'an ask lost before dispatch freezes its original context on the same id',
-  async (p) => {
+  async (p, equal) => {
     pending(p, false)
     await p.g.apply([{
       entity: { eid: 'later' },
@@ -248,9 +258,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'a terminal hosted outcome never becomes an automatic new ask',
-  async (p) => {
+  async (p, equal) => {
     pending(p)
     p.r.executor!.resume = () =>
       Promise.reject(new ModelError('inference_interrupted'))
@@ -263,9 +273,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'an unavailable hosted executor leaves accepted work pending',
-  async (p) => {
+  async (p, equal) => {
     pending(p)
     delete p.r.executor
     equal((await react(p.g, 'session', p.r)).did, 'nothing')
@@ -274,9 +284,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'a receipt read failure keeps its original ask available to retry',
-  async (p) => {
+  async (p, equal) => {
     pending(p)
     let failure = new Error('Receipt store unavailable')
     p.r.executor!.resume = () => Promise.reject(failure)
@@ -305,17 +315,17 @@ arriving.r.executor!.resume = async () => {
   }])
   return undefined
 }
-test('a receipt arriving during a pending step is delivered after lease release', async () => {
-  await settle(arriving.g, 'session', arriving.r)
+await settle(arriving.g, 'session', arriving.r)
+let [arrivedAsk] = await arriving.g.get(['ask'])
+test('a receipt arriving during a pending step is delivered after lease release', () => {
   equal(receiptChecks, 2)
-  let [ask] = await arriving.g.get(['ask'])
-  equal(ask.cost, { dollars: 0.02, reported: true })
-  equal(ask.attempt, {})
+  equal(arrivedAsk.cost, { dollars: 0.02, reported: true })
+  equal(arrivedAsk.attempt, {})
 })
 
-scenario(
+await scenario(
   'hosted tool replies retain their stable identity across a later selection',
-  async (p) => {
+  async (p, equal) => {
     pending(p)
     let called = 0
     let old = {
@@ -351,9 +361,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'tool execution uses its source ask offer after a later selection',
-  async (p) => {
+  async (p, equal) => {
     let called = 0
     let old = {
       name: 'old',
@@ -393,9 +403,9 @@ scenario(
   },
 )
 
-scenario(
+await scenario(
   'enabling hosted execution leaves older inline asks interrupted',
-  async (p) => {
+  async (p, equal) => {
     pending(p, false)
     p.r.executor!.name = 'hosted'
     await react(p.g, 'session', p.r)

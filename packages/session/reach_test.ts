@@ -175,24 +175,30 @@ for (let forked of [false, true]) {
     let g = await world(script(seed, 80, forked))
     let session = forked ? 'child' : 's'
     let whole = view(await transcript(g, session))
-    test(`a turn reads what the whole transcript would say (seed ${seed}, fork: ${forked})`, async () => {
-      let got = view(await reach(g, session, { turn: true }))
+    // Capture the integration reads once; the case compares their answers to
+    // the whole-transcript oracle, not the cost of composing that oracle.
+    let got = view(await reach(g, session, { turn: true }))
+    let bodies = view(await reach(g, session, { turn: true, bodies: true }))
+    let status = view(await reach(g, session))
+    let using = await usingOf(g, session)
+    let open = (await openOf(g, session)).map((b) => b.entity.eid).sort()
+    let expectedOpen = whole.open.toSorted()
+    test(`a turn reads what the whole transcript would say (seed ${seed}, fork: ${forked})`, () => {
       for (let k of Object.keys(whole) as (keyof typeof whole)[]) {
         assertEquals(got[k], whole[k], k)
       }
       assertEquals(
-        view(await reach(g, session, { turn: true, bodies: true })),
+        bodies,
         whole,
       )
-      let status = view(await reach(g, session))
       assertEquals(
         [status.status, status.open, status.using],
         [whole.status, whole.open, whole.using],
       )
-      assertEquals(await usingOf(g, session), whole.using)
+      assertEquals(using, whole.using)
       assertEquals(
-        (await openOf(g, session)).map((b) => b.entity.eid).sort(),
-        whole.open.toSorted(),
+        open,
+        expectedOpen,
       )
     })
   }
@@ -253,13 +259,17 @@ for (let bound of ['window', 'checkpoint'] as const) {
   let g = await world(long(bound))
   let whole = view(await transcript(g, 's'))
   let rows = counting(g)
-  test(`a status and a model turn read a bounded part of a long transcript (${bound})`, async () => {
-    let before = rows()
-    let turn = await reach(g, 's', { turn: true })
-    assertEquals(view(turn), whole)
-    assertEquals(rows() - before < 120, true)
-    before = rows()
-    assertEquals(statusOf(await reach(g, 's')), 'settled')
-    assertEquals(rows() - before < 120, true)
+  // Keep separate row counts for both reads, including every production read.
+  let before = rows()
+  let turn = view(await reach(g, 's', { turn: true }))
+  let turnRows = rows() - before
+  before = rows()
+  let status = statusOf(await reach(g, 's'))
+  let statusRows = rows() - before
+  test(`a status and a model turn read a bounded part of a long transcript (${bound})`, () => {
+    assertEquals(turn, whole)
+    assertEquals(turnRows < 120, true)
+    assertEquals(status, 'settled')
+    assertEquals(statusRows < 120, true)
   })
 }
