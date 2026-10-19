@@ -69,6 +69,7 @@ export let rollouts = (dir: string, depth = 0): Found[] => {
   } catch {
     return []
   }
+  let names = new Set(files.map((f) => f.name))
   return files.flatMap((f) => {
     let path = `${dir}/${f.name}`
     if (f.isDirectory && depth < 3 && /^\d+$/.test(f.name)) {
@@ -80,7 +81,7 @@ export let rollouts = (dir: string, depth = 0): Found[] => {
     if (!f.isFile || !id) return []
     if (
       f.name.endsWith('.zst') &&
-      files.some((p) => p.name == f.name.slice(0, -4))
+      names.has(f.name.slice(0, -4))
     ) return []
     return [{ id, path, runner: 'codex' as const }]
   })
