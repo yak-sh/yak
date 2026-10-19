@@ -39,6 +39,7 @@ let node = (eid: string, domain: string): Bundle => ({
   oracle: {
     tree: 'tree',
     domain,
+    self: 'Exact context.\n\n<keep these words> & spacing.',
     advert: {
       title: `${domain} oracle`,
       description: `Ask about ${domain}`,
@@ -218,5 +219,12 @@ test('oracle tree renders disconnected nodes and cycles once', () => {
   equal(
     branches([root, first, last], [], 'root').map((b) => b.node.entity.eid),
     ['root', 'first', 'last'],
+  )
+})
+
+test('oracle view exposes its exact retained self context as text', () => {
+  equal(
+    nodePage.querySelector('[data-section="self-context"] .Value')?.textContent,
+    'Exact context.\n\n<keep these words> & spacing.',
   )
 })

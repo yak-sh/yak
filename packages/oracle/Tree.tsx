@@ -2,7 +2,16 @@
 // Oracle pages read their tree and conversations through the host's live asks.
 // Nodes and sessions always pass through the shared entity renderer.
 import type { Answer, Bundle, Io, Props } from '@yaks/inspect'
-import { Body, Head, Loading, Pairs, Rows, Section, Tile } from '@yaks/ui'
+import {
+  Body,
+  Head,
+  Loading,
+  Pairs,
+  Rows,
+  Section,
+  Tile,
+  Value,
+} from '@yaks/ui'
 
 let comp = (e: Bundle, name: string): Record<string, unknown> => {
   let value = e[name]
@@ -164,6 +173,16 @@ export let Node = ({ e, got, io }: Props) => {
         </Pairs.Value>
       </Pairs>
       <Body>{field(advert(e), 'description')}</Body>
+      <Section data-section='self-context'>
+        <Section.Title>Self context</Section.Title>
+        {text(oracle.self)
+          ? (
+            <Body>
+              <Value mod='text'>{text(oracle.self)}</Value>
+            </Body>
+          )
+          : <Section.Sub>No retained self context.</Section.Sub>}
+      </Section>
       <Section data-section='parent'>
         <Section.Title>Parent</Section.Title>
         <State answer={got.parents} empty='Root or unattached node.' />
