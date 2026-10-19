@@ -25,6 +25,7 @@ import { sessions } from './plugin.ts'
 import { service } from './service.ts'
 import { preparedStore } from '../sqlite/testing.ts'
 import { parse } from '@yaks/query'
+import { runs } from './tools.ts'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -134,6 +135,49 @@ test('SQLite finds the same addressed comment and knock', async () => {
     (await g.get(['note', 'knock'])).map((b) => !!b.notified),
     [false, true],
   )
+})
+
+for (let [name, storage] of [['RAM', memory], ['SQLite', lite]] as const) {
+  let stopped = await scene(async () => {
+    let g = await fresh(storage())
+    await g.apply([
+      { entity: { eid: 'halt' }, entry: { session: 'native' }, stop: {} },
+      ...[1, 2, 3, 4].map((i): Bundle => ({
+        entity: { eid: `late-${i}` },
+        entry: { session: 'native' },
+        output: { source: 'start' },
+        content: { body: 'An already admitted step finished.' },
+      })),
+    ], { trusted: true })
+    let before = await feed(g)
+    let queued = !(await g.get(['knock']))[0].notified
+    await g.apply([{
+      entity: { eid: 'resume' },
+      entry: { session: 'native' },
+      content: { body: 'Continue.' },
+      using: {},
+    }], { trusted: true })
+    return { before, queued, after: await feed(g) }
+  })
+  test(`${name} leaves bus messages queued after a stop until explicit input`, () => {
+    assertEquals(stopped(), { before: 0, queued: true, after: 1 })
+  })
+}
+
+let nativeWrap = await scene(async () => {
+  let g = await fresh()
+  await g.apply([{ entity: { eid: 'native' }, session: { id: null } }])
+  let patch = await runs({ vocab }).session_wrap!({
+    entity: { eid: 'wrap-call' },
+    call: { args: { session: 'native' } },
+  }, g)
+  await g.apply(patch)
+  return await g.get(['native', 'page'])
+})
+test('wrapping a native transcript without a runner id ends it and releases work', () => {
+  let [session, page] = nativeWrap()
+  assertEquals(session.session, { ended: true, status: 'stopped' })
+  assertEquals(page.claim, undefined)
 })
 
 test('an outside caller receives what was addressed to its session once', async () => {

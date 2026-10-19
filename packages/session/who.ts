@@ -149,7 +149,9 @@ export let sessionFor = async (
       )
       : await g.get([id]))[0]
   let row = await get(eid)
-  if (row?.[SESSION] && row[TOMBSTONE] == null) return row
+  // A projected query already required session presence; its selected
+  // properties may all be absent on a native transcript.
+  if (row && (fields || row[SESSION]) && row[TOMBSTONE] == null) return row
   let run = (await runners(g, [said])).get(said)
   return run ? await get(run) : undefined
 }

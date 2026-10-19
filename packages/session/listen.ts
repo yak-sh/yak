@@ -83,7 +83,6 @@ import {
 import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
-import { statusOf } from './state.ts'
 
 let NOTIFIED = 'notified'
 
@@ -124,21 +123,21 @@ let addressedTo = (
   ]
 }
 
-// A session's newest entries, enough to read whether it is over.
-let newest = (
-  graph: Pick<Graph, 'read'>,
-  session: Eid,
-): Bundle[] | Promise<Bundle[]> =>
-  graph.read(`.entry.session=${session}&.order=-entry.seq&.limit=3&*`)
-
 /** Whether a session is over: its harness ended it, or its transcript
  * stopped or failed. One between turns is not. */
 export let over = async (
   graph: Pick<Graph, 'read'>,
   s: Bundle,
-): Promise<boolean> =>
-  comp(s, SESSION).ended == true ||
-  ['stopped', 'failed'].includes(statusOf(await newest(graph, s.entity.eid)))
+): Promise<boolean> => {
+  if (comp(s, SESSION).ended == true) return true
+  // Late results can follow a stop without reopening it. The graph's status
+  // reads that boundary; a tail of entries can hide it.
+  let [row] = await graph.read(and(
+    eq('entity.eid', s.entity.eid),
+    fields(`${SESSION}.status`),
+  ))
+  return ['stopped', 'failed'].includes(String(comp(row, SESSION).status))
+}
 
 let eids = (rows: Bundle[]): Eid[] => rows.map((b) => b.entity.eid)
 
