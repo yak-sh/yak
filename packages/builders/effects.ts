@@ -47,6 +47,10 @@ let settle = async (
     ) {
       if (o.vocab.comp(WAKE)) {
         await write([{
+          entity: builder.entity,
+          builder: { floor: comp(builder, 'builder')!.floor },
+          $was: { builder: { floor: token(comp(builder, 'builder')!.floor) } },
+        }, {
           entity: { eid: derivedEid(`builder floor ${eid}`) },
           wake: { at: comp(builder, 'builder')!.floor, target: eid },
         }])
