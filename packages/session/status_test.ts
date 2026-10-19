@@ -6,6 +6,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Graph } from '@yaks/graph'
 import { graph, identityEid } from '@yaks/graph'
 import { col, eq, render, select, table, val } from '@yaks/sql'
+import { and as all, eq as qeq, fields, list } from '@yaks/query'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { driver } from '../sqlite/native.ts'
@@ -689,6 +690,56 @@ for (let typed of [false, true]) {
   }])
   g.apply(shapes.flatMap(([name, entries]) => apart(name, entries)), {
     trusted: true,
+  })
+  let terminal = shapes.map(([name, , word]) => {
+    let found = g.read(all(
+      qeq('entity.eid', `${name}/${S}`),
+      qeq('session.status', list('stopped', 'failed')),
+      fields('entity.eid'),
+    )) as Bundle[]
+    return [name, found.length > 0, ['stopped', 'failed'].includes(word)]
+  })
+  let masked = shapes.filter(([, , word]) =>
+    ['stopped', 'failed'].includes(word)
+  ).slice(0, 4).flatMap(([name]) =>
+    ['stop', 'exception', 'interrupted', 'session'].map((comp) => {
+      let id = `${name}/${S}`
+      let opts = { visibility: { components: { [comp]: `!${comp}` } } }
+      let [row] = g.read(
+        all(
+          qeq('entity.eid', id),
+          fields('session.status'),
+        ),
+        opts,
+      ) as Bundle[]
+      let matched = g.read(
+        all(
+          qeq('entity.eid', id),
+          qeq('session.status', list('stopped', 'failed')),
+          fields('entity.eid'),
+        ),
+        opts,
+      ) as Bundle[]
+      let status = (row?.session as { status?: string })?.status ?? ''
+      return [
+        name,
+        comp,
+        matched.length > 0,
+        ['stopped', 'failed'].includes(status),
+      ]
+    })
+  )
+  test(`terminal predicates follow component masks (archetypes: ${typed})`, () => {
+    assertEquals(
+      masked.map(([name, comp, got]) => [name, comp, got]),
+      masked.map(([name, comp, , want]) => [name, comp, want]),
+    )
+  })
+  test(`terminal predicates match every transcript shape (archetypes: ${typed})`, () => {
+    assertEquals(
+      terminal.map(([name, got]) => [name, got]),
+      terminal.map(([name, , want]) => [name, want]),
+    )
   })
   test(`the SQL view answers the same word as the rule (archetypes: ${typed})`, () => {
     let want = Object.fromEntries(shapes.map(([name, , w]) => [name, w]))

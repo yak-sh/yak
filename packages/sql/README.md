@@ -400,6 +400,12 @@ computed property or overrides a stored property's read. `expr(owner)` receives
 the expression naming the entity's integer id. `tag` controls comparisons;
 `values` supplies enum members and `deps` adds component joins.
 
+`select(values)` optionally supplies the exact owner set for equality.
+`test(owner, values)` supplies the same predicate for one owner, used by bounded
+and correlated reads. Both receive typed literal operands and may return
+`undefined` to retain `expr`; projection and other operators always use `expr`.
+Their table reads follow the caller's entity and component visibility.
+
 ```ts
 import { compile, type Derived, lit, worn } from '@yaks/sql'
 import { parse } from '@yaks/query'

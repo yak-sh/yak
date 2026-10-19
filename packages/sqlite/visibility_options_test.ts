@@ -2,7 +2,7 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { type Bundle, graph, type ReadOpts } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
-import { among, col, eq, select, sub, table } from '@yaks/sql'
+import { among, and, col, eq, exists, select, sub, table } from '@yaks/sql'
 import { preparedStore } from './testing.ts'
 
 let vocab = loadVocab({
@@ -20,6 +20,15 @@ let vocab = loadVocab({
 let derived = {
   'public.value': {
     tag: 'text' as const,
+    test: (owner: ReturnType<typeof col>, values: ReturnType<typeof col>[]) =>
+      exists(select({
+        cols: [col('entity', 'p')],
+        from: table('private', 'p'),
+        where: and(
+          eq(col('entity', 'p'), owner),
+          among(col('text', 'p'), values),
+        ),
+      })),
     select: (values: ReturnType<typeof col>[]) =>
       select({
         cols: [col('entity', 'p')],
@@ -61,6 +70,8 @@ let reads = {
   get: (opts: ReadOpts) =>
     (g.get(['one'], ['public'], opts) as Bundle[])[0].public,
   rows: (opts: ReadOpts) => g.rows('.public.value=secret', opts),
+  point: (opts: ReadOpts) =>
+    g.rows('.entity.eid=one .public.value=secret', opts),
 }
 let callers: [string, ReadOpts, boolean][] = [
   ['owner', { person: 'alice' }, true],
@@ -77,7 +88,7 @@ for (let [door, read] of Object.entries(reads)) {
     test(`scoped ${door} follows per-read options: ${name}`, () =>
       assertEquals(
         read(opts),
-        door == 'rows'
+        ['rows', 'point'].includes(door)
           ? allowed ? [{ eid: 'one' }] : []
           : allowed
           ? { value: 'secret' }

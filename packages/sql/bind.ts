@@ -680,13 +680,12 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
     }
   }
   // A selector is an exact owner set, not a read expression. Bounded and
-  // correlated probes retain the keyed expression rather than building a
-  // global candidate set for a single owner.
+  // correlated probes use an owner predicate or retain the keyed expression;
+  // they never build a global candidate set for one owner.
   let selected = ctx.derived[`${hop.comp}.${hop.prop}`]
-  let operands = op == '' && !ctx.bounded && !ctx.correlated && !ctx.owner
-    ? literals(p.value)
-    : undefined
-  if (selected?.select && operands?.length) {
+  let point = !!(ctx.bounded || ctx.correlated || ctx.owner)
+  let operands = op == '' ? literals(p.value) : undefined
+  if ((point ? selected?.test : selected?.select) && operands?.length) {
     // Use the same typed equality lowering as the scalar expression.
     // Unsupported equality operands decline instead of changing their meaning.
     let typed = operands.map((operand) => {
@@ -699,14 +698,18 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
         ? val(lowered.params[0])
         : undefined
     })
-    let set = typed.every((v): v is Cond => v != null)
-      ? selected.select(typed)
-      : undefined
-    if (set) {
-      let hit = among(raw(ctx.d.ownerKey('entity')), set)
-      return selected.worn === false || hop.comp == 'entity'
-        ? hit
-        : and(owned(ctx, hop.comp), hit)
+    if (typed.every((v): v is Cond => v != null)) {
+      let set = point ? undefined : selected.select?.(typed)
+      let hit = point
+        ? selected.test?.(raw(ctx.d.ownerKey(hop.comp)), typed)
+        : set
+        ? among(raw(ctx.d.ownerKey('entity')), set)
+        : undefined
+      if (hit) {
+        return selected.worn === false || hop.comp == 'entity'
+          ? hit
+          : and(owned(ctx, hop.comp), hit)
+      }
     }
   }
   let read = readProp(ctx, hop.comp, hop.prop, ctx.d.ownerKey(hop.comp))
@@ -3078,6 +3081,14 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
       {
         ...prop,
         expr: (owner: Cond) => sources(prop.expr(owner), source),
+        ...prop.test
+          ? {
+            test: (owner: Cond, values: Cond[]) => {
+              let test = prop.test!(owner, values)
+              return test && sources(test, source)
+            },
+          }
+          : {},
         ...prop.select
           ? {
             select: (values: Cond[]) => {
@@ -3483,6 +3494,17 @@ let visible = (
           path,
           {
             ...prop,
+            ...prop.test
+              ? {
+                test: (owner: Cond, values: Cond[]) => {
+                  let test = prop.test!(owner, values)
+                  return test && sources(test, (name, alias) =>
+                    vocab.comp(name)
+                      ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
+                      : table(name, alias))
+                },
+              }
+              : {},
             ...prop.select
               ? {
                 select: (values: Cond[]) => {

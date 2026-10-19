@@ -132,11 +132,11 @@ export let over = async (
   if (comp(s, SESSION).ended == true) return true
   // Late results can follow a stop without reopening it. The graph's status
   // reads that boundary; a tail of entries can hide it.
-  let [row] = await graph.read(and(
+  return (await graph.read(and(
     eq('entity.eid', s.entity.eid),
-    fields(`${SESSION}.status`),
-  ))
-  return ['stopped', 'failed'].includes(String(comp(row, SESSION).status))
+    eq(`${SESSION}.status`, list('stopped', 'failed')),
+    fields('entity.eid'),
+  ))).length > 0
 }
 
 let eids = (rows: Bundle[]): Eid[] => rows.map((b) => b.entity.eid)

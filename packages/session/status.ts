@@ -464,6 +464,7 @@ export let sessionStatus = {
     dispatch = dispatchStatus,
     declared: (name: string) => boolean = () => true,
     text: (stored: Expr) => Expr = (stored) => stored,
+    terminal = false,
   ): Expr => {
     // Each fact about an entry is said once (`marks`), and each fact about
     // the transcript is said once, as a common table expression the next
@@ -1069,61 +1070,67 @@ export let sessionStatus = {
       lit('pending'),
       lit('running'),
     )
-    let verdict = when([
+    // Once these branches decline, only nonterminal answers remain. A test
+    // for stopped/failed needs none of the historical progress census below.
+    let verdict = when(
       [
-        or(n('stop'), and(notNull(f('stop_seq')), not(after(f('stop_seq'))))),
-        lit('stopped'),
+        [
+          or(n('stop'), and(notNull(f('stop_seq')), not(after(f('stop_seq'))))),
+          lit('stopped'),
+        ],
+        [f('abandoned'), lit('running')],
+        [n('exception'), lit('failed')],
+        [
+          and(n('interrupted'), n('failed'), not(n('ask')), not(n('call'))),
+          lit('failed'),
+        ],
+        [f('inflight'), lit('running')],
+        [eq(dispatch.expr(owner), lit('queued')), lit('queued')],
+        [n('refusal'), iff(after(refused), lit('pending'), lit('failed'))],
+        [
+          and(a('interrupted'), a('failed'), not(after(col('a_seq', 'f')))),
+          lit('failed'),
+        ],
+        [and(a('interrupted'), after(col('a_seq', 'f'))), lit('pending')],
+        [and(a('interrupted'), a('provisional')), lit('pending')],
+        [
+          a('interrupted'),
+          iff(ge(retries, lit(RETRIES)), lit('failed'), lit('pending')),
+        ],
       ],
-      [f('abandoned'), lit('running')],
-      [n('exception'), lit('failed')],
-      [
-        and(n('interrupted'), n('failed'), not(n('ask')), not(n('call'))),
-        lit('failed'),
-      ],
-      [f('inflight'), lit('running')],
-      [eq(dispatch.expr(owner), lit('queued')), lit('queued')],
-      [n('refusal'), iff(after(refused), lit('pending'), lit('failed'))],
-      [
-        and(a('interrupted'), a('failed'), not(after(col('a_seq', 'f')))),
-        lit('failed'),
-      ],
-      [and(a('interrupted'), after(col('a_seq', 'f'))), lit('pending')],
-      [and(a('interrupted'), a('provisional')), lit('pending')],
-      [
-        a('interrupted'),
-        iff(ge(retries, lit(RETRIES)), lit('failed'), lit('pending')),
-      ],
-      [f('open'), lit('running')],
-      [
-        and(
-          gt(
-            f('ready_seq'),
-            fn('coalesce', f('n_boundary_seq'), f('a_seq'), lit(0)),
+      terminal ? lit('') : when([
+        [f('open'), lit('running')],
+        [
+          and(
+            gt(
+              f('ready_seq'),
+              fn('coalesce', f('n_boundary_seq'), f('a_seq'), lit(0)),
+            ),
+            notNull(progress(false)),
           ),
-          notNull(progress(false)),
-        ),
-        lit('pending'),
-      ],
-      [notNull(progress(true)), lit('running')],
-      [
-        and(
-          n('ask'),
-          n('attempt'),
-          isNull(col('n_attempt_by', 'f')),
-          not(n('interrupted')),
-        ),
-        lit('settled'),
-      ],
-      [or(n('ask'), n('call')), lit('running')],
-      [
-        n('output'),
-        iff(
-          after(col('n_boundary_seq', 'f')),
           lit('pending'),
+        ],
+        [notNull(progress(true)), lit('running')],
+        [
+          and(
+            n('ask'),
+            n('attempt'),
+            isNull(col('n_attempt_by', 'f')),
+            not(n('interrupted')),
+          ),
           lit('settled'),
-        ),
-      ],
-    ], owed)
+        ],
+        [or(n('ask'), n('call')), lit('running')],
+        [
+          n('output'),
+          iff(
+            after(col('n_boundary_seq', 'f')),
+            lit('pending'),
+            lit('settled'),
+          ),
+        ],
+      ], owed),
+    )
     // Keep the expression below workerd's depth limit, including the runner's
     // enclosing union. FROM subqueries and common table expressions don't add
     // to expression height.
@@ -1192,6 +1199,24 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
     ...states,
     'session.status': {
       ...sessionStatus,
+      test: (owner, values) => {
+        if (
+          !values.every((v) =>
+            (v.t == 'val' || v.t == 'lit') &&
+            ['stopped', 'failed'].includes(String(v.v))
+          )
+        ) return undefined
+        return among(
+          sessionStatus.expr(
+            owner,
+            dispatch,
+            (name) => !!vocab.comp(name),
+            text,
+            true,
+          ),
+          values,
+        )
+      },
       select: (values) =>
         sessionStatus.select(
           values,

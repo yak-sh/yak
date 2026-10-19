@@ -8,9 +8,11 @@ import { storage } from './mod.ts'
 import { mem } from './testing.ts'
 import {
   among,
+  and,
   col,
   type Derived,
   eq,
+  exists,
   select,
   sub,
   table,
@@ -32,6 +34,15 @@ let registry = (optimized: boolean): Derived =>
       })),
     ...optimized
       ? {
+        test: (owner, values) =>
+          exists(select({
+            cols: [col('entity', 'value')],
+            from: table(comp, 'value'),
+            where: and(
+              eq(col('entity', 'value'), owner),
+              among(col(prop, 'value'), values),
+            ),
+          })),
         select: (values) => {
           calls++
           return select({
@@ -73,6 +84,13 @@ for (
     '.entry.seq=bad,2',
     '.entry.seq>1',
     '.session.ended=true|.entry.seq=2',
+    '.entity.eid=yes .session.ended=true',
+    '.entity.eid=absent .session.ended=true',
+    '.entity.eid=two .entry.seq=2',
+    '.entity.eid=two .entry.seq=bad,2',
+    '.entity.eid=two .entry.seq>1',
+    '.entry.session.session.ended=true',
+    '.session .entries.entry.seq=2',
   ]
 ) {
   test(`derived owner selection preserves ${predicate}`, async () => {

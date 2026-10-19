@@ -65,6 +65,9 @@ export type DerivedProp = {
   // Undefined declines this optimization; projection and other operators keep
   // using expr. The binder retains the owning-component presence guard.
   select?: (values: Expr[]) => Select | undefined
+  // Exact equality for one owner. Bounded and correlated reads use this
+  // instead of a global selector; undefined falls back to expr.
+  test?: (owner: Expr, values: Expr[]) => Expr | undefined
   // Reads a value that is being replaced, without looking up the owner row.
   // Full-text-search triggers have to read the old and new values, and by then
   // the owner row may already have changed or been deleted, so an expression
