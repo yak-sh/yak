@@ -312,6 +312,12 @@ commit cannot lose the recorded run. `work(g)` claims due runs and continues
 until none can start; `work(g, signal)` with a live signal keeps working until
 the signal aborts.
 
+The first pass and every later pass use the same indexed selection of recorded
+runs. A worker joining or replacing another worker resumes this queue; it does
+not scan application entities to discover targets. The write that creates work
+records its run in the same transaction, and unfinished runs remain available
+after a process stops.
+
 A run is the pool's bookkeeping rather than anyone's data, so `effect` is
 declared `journal: false` ([@yaks/vocab](../vocab/README.md#the-format)): a
 [journal](../journal/README.md) records nothing of a run, from the commit that
@@ -353,13 +359,13 @@ equal(fx.running(), [])
 
 A worker joining the pool claims runs its own commits owe and starts them after
 commit. `defer: true` leaves those runs for `work`; `max` limits simultaneous
-handlers (`MAX`, 64, unless told), so a backlog such as a start-up sweep's
-thousands starts a slot at a time, and a run ending while every slot is taken
-wakes the worker to fill it. Other processes' runs are picked up on the next
-pass, normally at most a second away. `wake` starts that pass sooner. `nudge`
-notifies the host once after a commit owes declared work, whether claimed here
-or left pending. A host can keep its `work` promise alive through handler
-completion and wake another worker to drain the remaining runs.
+handlers (`MAX`, 64, unless told), so a backlog starts a slot at a time, and a
+run ending while every slot is taken wakes the worker to fill it. Other
+processes' runs are picked up on the next pass, normally at most a second away.
+`wake` starts that pass sooner. `nudge` notifies the host once after a commit
+owes declared work, whether claimed here or left pending. A host can keep its
+`work` promise alive through handler completion and wake another worker to drain
+the remaining runs.
 
 Each pass examines at most 32 candidate runs, one candidate per handler at a
 time. Selection rotates between handled and explicitly disabled handlers; one
@@ -392,13 +398,13 @@ including its effect execution. Set `singleOwner: true` only for such a store,
 for example a Durable Object. Shared box workers leave this option unset.
 
 `work` drains recorded runs without claims or presence leases. By default it
-owes no start-up effects or sweeps and runs no expiration duty. A host calls
-`work` on writes and alarms, not on reads; it calls `startup` when a deployment
-owes start-up runs. Attempts are persisted before handler invocation and
-outcomes afterwards, so crash recovery, retry backoff, attempt limits and
-non-idempotent interruption handling still apply. `max`, `defer`, and
-`Attempt.progressed` keep their meaning. Overlapping calls to `work` on the same
-registry share its running set.
+owes no start-up effects and runs no expiration duty. A host calls `work` on
+writes and alarms, not on reads; it calls `startup` when a deployment owes
+start-up runs. Attempts are persisted before handler invocation and outcomes
+afterwards, so crash recovery, retry backoff, attempt limits and non-idempotent
+interruption handling still apply. `max`, `defer`, and `Attempt.progressed` keep
+their meaning. Overlapping calls to `work` on the same registry share its
+running set.
 
 To owe and deliver start-up runs together, call
 `work(g, undefined, {startup: true, passes: 1})`. A run given a free slot starts
@@ -407,7 +413,7 @@ has ended, which is the run's crash recovery, and a failure is written as the
 row its retry reads. Overflow is recorded pending for a later pass. Start-up
 admission shares the first pass's bounded window. `startup(g)` records runs
 without invoking handlers. A numeric third argument to `work` still bounds its
-discovery passes.
+queue passes.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -546,31 +552,26 @@ An interrupted run is tried again unless its declaration says
 external action. A pooled run rebuilds its event from the target's current
 state, so a handler needing a historical value must store it itself.
 
-### Sweeps, startup, and active effects
-
-A **sweep** is an effect's query selecting targets owed a `created` run when a
-worker first joins. It requires a `created` trigger. Each effect-target pair
-uses one derived eid, so workers sweeping together owe one run. A sweep can find
-work no commit recorded.
+### Startup and active effects
 
 `start: true` owes each joining shared worker one `started` run, targeting its
 `owner`. `startup: 'manual'` leaves that timing to the host; it is the default
 with `singleOwner: true`. `startup: 'join'` chooses joining explicitly. Each
 `fx.startup(g)` call persists a fresh run for every handled start-up effect,
-without joining, sweeping, or executing handlers. A persistence failure rejects
-the call; after it succeeds, `work` executes those runs with ordinary attempts
-and retries. The host keeps track of which deployments owe the call. Without the
+without joining or executing handlers. A persistence failure rejects the call;
+after it succeeds, `work` executes those runs with ordinary attempts and
+retries. The host keeps track of which deployments owe the call. Without the
 `effect` component, `startup` awaits the handled start-up effects inline. A
 handler failure is reported and rejects the call, so the host can retry the
 start-up work.
 
 Commit-triggered runs can be gated with `active`, a query that must match an
-entity; sweeps use their own query. A `target` query limits triggers to subjects
-matching before or after the write, including removals, moves out of scope and
-what a cascade deletes. An `option` names the declaring plugin's boolean opt-in;
-the composing host passes disabled names to the registry so every writer agrees
-with its workers. Writes to pool entities owe no effects, preventing pool
-bookkeeping from producing more runs.
+entity. A `target` query limits triggers to subjects matching before or after
+the write, including removals, moves out of scope and what a cascade deletes. An
+`option` names the declaring plugin's boolean opt-in; the composing host passes
+disabled names to the registry so every writer agrees with its workers. Writes
+to pool entities owe no effects, preventing pool bookkeeping from producing more
+runs.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -587,7 +588,6 @@ let vocab = loadVocab([effectDoc, {
     send_receipt: {
       effect: true,
       created: ['order'],
-      sweep: '.order',
       active: '.enabled',
     },
     prepare: { effect: true, start: true },
@@ -600,11 +600,9 @@ fx.handle({
   send_receipt: (e) => seen.push(`receipt:${e.entity.eid}`),
   prepare: (e) => seen.push(`${e.kind}:${e.entity.eid}`),
 })
-await g.apply([
-  { entity: { eid: 'w1' }, worker: {} },
-  { entity: { eid: 'o1' }, order: {} },
-])
-equal(await g.read('.effect'), [])
+await g.apply([{ entity: { eid: 'w1' }, worker: {}, enabled: {} }])
+await g.apply([{ entity: { eid: 'o1' }, order: {} }])
+equal((await g.read('.effect'))[0].effect?.state, 'pending')
 let stopping = new AbortController()
 let serving = fx.work(g, stopping.signal)
 try {

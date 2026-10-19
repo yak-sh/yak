@@ -2,9 +2,9 @@
 name: effects-and-rules
 description: >
   How work after a write is done in ~/code/tasks: transactional rules,
-  post-commit effects (the pool, start-up work, sweeps, retries, leases),
+  post-commit effects (the queue, start-up work, retries, leases),
   process-local observers, roles, services and independent workers. Use it
-  when changing an effect, rule, start-up job, sweep, lease, duty, service
+  when changing an effect, rule, start-up job, worker scan, lease, duty, service
   or role, an `/effects` or `/graph` facet or `effect: true` / `rule: true`
   vocab entry, or debugging work after a write: loops, never fires, fires
   too often, retries forever, or runs in the wrong process. Reading composed
@@ -135,11 +135,12 @@ What any errand runner that can't lose work lives with:
   a migration (`data-migration`), not start-up work. Most starts change nothing, so
   that case wants to be cheap: compare a stored hash before diffing
   (749273e48, `_vocab{hash}`).
-- **A `sweep`** is a query whose matches are owed a run again whenever a worker
-  starts, for work no commit wrote down. The pool selects identities, not
-  projected target components, and the handler reads the present target when
-  it runs; projecting targets there evaluated every matched session's computed
-  status and cost (T-65228).
+- **The pool consumes recorded work.** Its first turn and every later turn use
+  the same bounded, indexed query for recorded runs. A restart resumes that queue;
+  it does not rediscover work by scanning the entities handlers act on. The
+  owner's words: “the effects worker just approaches the db every turn and
+  says "what's next?"”. The commit records what it owes, so the worker can
+  answer that question without reconstructing application state.
 - **In a Worker, work is bounded by rows,** since the clock stands still while
   code runs (`yaks-app`).
 - **A failure is seen** (M-37965): the pool reports it, and `yak effect check`
@@ -164,6 +165,10 @@ packages/cli/host.ts, and packages/cli/README.md is the reference.
 - `effects` is a pool: any number of processes may work it at once.
 - `web` and each plugin's service are singletons; a service is named by its
   package and runs under a lease of that name.
+
+A service may deliberately poll mail, transcript files or another outside
+source. Its cadence belongs to that service; it is distinct from the effect
+pool selecting recorded runs.
 
 `yak serve` serves `web` only. When no live process serves a duty role, it
 starts an independent `yak work --roles <missing>` process, not a duty thread.
