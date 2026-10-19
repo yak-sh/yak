@@ -21,6 +21,8 @@ let rows = [
   run('expired', { lease_owner: 'peer', lease_expiry: stamp(1000) }),
   run('other', {}, 'post_gone'),
   run('disabled', { next: stamp(1001) }, 'post_swept'),
+  run('our-start', { kind: 'started', target: 'worker' }),
+  run('their-start', { kind: 'started', target: 'peer' }),
 ]
 let ids = (opts: Parameters<typeof ready>[1] = {}, names = ['post_note']) =>
   matcher(ready(names, opts), vocab, { now: 1000 })(rows).map((b) =>
@@ -28,13 +30,23 @@ let ids = (opts: Parameters<typeof ready>[1] = {}, names = ['post_note']) =>
   )
 
 test('ready work excludes unsupported handlers, future retries and live claims', () => {
-  equal(ids(), ['fresh', 'due', 'expired'])
+  equal(ids(), ['fresh', 'due', 'expired', 'our-start', 'their-start'])
 })
 test('disabled unclaimed work can settle while its retry deadline is in the future', () => {
   equal(ids({ disabled: ['post_swept'] }, ['post_swept']), ['disabled'])
 })
 test('a single owner still respects retries while recovering recorded claims', () => {
-  equal(ids({ singleOwner: true }), ['fresh', 'due', 'held', 'expired'])
+  equal(ids({ singleOwner: true }), [
+    'fresh',
+    'due',
+    'held',
+    'expired',
+    'our-start',
+    'their-start',
+  ])
+})
+test('shared startup work belongs to its target process before windowing', () => {
+  equal(ids({ owner: 'worker' }), ['fresh', 'due', 'expired', 'our-start'])
 })
 
 let storage = ram(vocab)

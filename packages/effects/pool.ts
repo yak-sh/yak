@@ -91,7 +91,7 @@ import {
 import { comps } from '@yaks/graph/bundle'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { type And, and, eq, limit as window, list, ne } from '@yaks/query'
+import { type And, and, limit as window, list, ne } from '@yaks/query'
 import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
@@ -112,13 +112,17 @@ let head = (
   singleOwner: boolean,
   disabled: boolean,
   n: number,
+  owner: string,
 ) => {
-  let key = JSON.stringify([handler, singleOwner, disabled, n])
+  let key = JSON.stringify([handler, singleOwner, disabled, n, owner])
   let q = HEADS.get(key)
   if (!q) {
     q = and(
-      ...ready([handler], { singleOwner, disabled: disabled ? [handler] : [] })
-        .clauses,
+      ...ready([handler], {
+        singleOwner,
+        disabled: disabled ? [handler] : [],
+        owner,
+      }).clauses,
       window(n),
     )
     HEADS.set(key, q)
@@ -633,6 +637,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         ...ready(names, {
           singleOwner: opts.singleOwner,
           disabled: [...disabled],
+          owner: me,
         }).clauses,
         window(1),
         ...live.length ? [ne('entity.eid', list(...live))] : [],
@@ -704,7 +709,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         if (!cached || !cached.rows.length && cached.full) {
           let n = Math.min(budget, max - running.size - admitting)
           let rows = await g.read(
-            except(head(name, !!opts.singleOwner, disabled.has(name), n), [
+            except(head(name, !!opts.singleOwner, disabled.has(name), n, me), [
               ...visited,
             ]),
             { unordered: true, now },

@@ -11,13 +11,20 @@ let free = or(
 
 export let ready = (
   handlers: string[],
-  opts: { singleOwner?: boolean; disabled?: string[] } = {},
+  opts: { singleOwner?: boolean; disabled?: string[]; owner?: string } = {},
 ): And => {
   let enabled = handlers.filter((name) => !opts.disabled?.includes(name))
   let disabled = handlers.filter((name) => opts.disabled?.includes(name))
   let claims = opts.singleOwner ? [] : [free]
+  // A replacement owes its own startup. A peer taking that row would run its
+  // own closure instead, then lose the duty when the peer shuts down.
+  let owner = opts.singleOwner || !opts.owner ? [] : [or(
+    absent('effect.kind'),
+    ne('effect.kind', 'started'),
+    eq('effect.target', opts.owner),
+  )]
   let active = enabled.length
-    ? [and(eq('effect.handler', list(...enabled)), due, ...claims)]
+    ? [and(eq('effect.handler', list(...enabled)), due, ...claims, ...owner)]
     : []
   let obsolete = disabled.length
     ? [

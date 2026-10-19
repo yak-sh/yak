@@ -33,6 +33,8 @@ import type { Access, Bundle, Comp, Eid } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
+import { and, eq, every, or } from '@yaks/query'
+import { finishedRun } from './cleanup.ts'
 
 /** The name of the component a lease is stored as. */
 export let LEASE = 'lease'
@@ -172,12 +174,18 @@ let relinquish = (b: Bundle, comp: string, props: string[]): Bundle => ({
   },
 })
 
+let started = (b: Bundle, holder: Eid) => {
+  let e = b.effect as Comp
+  return e.kind == 'started' && e.target == holder && e.state == 'pending'
+}
+
 /**
  * Every duty and effect lease a holder has, as bundles that release them,
  * guarded against a concurrent handover — to be applied
  * in the same batch that records the holder's ending, because they are one
  * fact: a process that is over is not doing anything, and the next one to ask
- * should not have to wait out an expiry nobody is using.
+ * should not have to wait out an expiry nobody is using. Its pending startup
+ * runs end with it: another process owes its own startup, not this closure.
  */
 export let released = (
   g: Access,
@@ -187,15 +195,27 @@ export let released = (
     contested(g) ? g.read(`.${LEASE}.holder=${holder}`) : [],
     (leases) =>
       after(
-        g.vocab.comp('effect') ? g.read(`.effect.lease_owner=${holder}`) : [],
+        g.vocab.comp('effect')
+          ? g.read(and(
+            or(
+              eq('effect.lease_owner', holder),
+              and(
+                eq('effect.kind', 'started'),
+                eq('effect.target', holder),
+                eq('effect.state', 'pending'),
+              ),
+            ),
+            every(),
+          ))
+          : [],
         (runs) => [
           ...leases.map((b) => relinquish(b, LEASE, ['holder', 'until'])),
-          ...runs.map((b) =>
-            relinquish(b, 'effect', [
+          ...runs.flatMap((b) =>
+            started(b, holder) ? finishedRun(b) : [relinquish(b, 'effect', [
               'lease_owner',
               'lease_token',
               'lease_expiry',
-            ])
+            ])]
           ),
         ],
       ),

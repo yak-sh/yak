@@ -82,6 +82,42 @@ test('a holder ending frees only its effect claims and keeps retry history', asy
   assertEquals((theirs.effect as Comp).lease_owner, 'p2')
 })
 
+let retired = g()
+await retired.apply([
+  ...['ours', 'pending', 'other', 'failed'].map((eid): Bundle => ({
+    entity: { eid },
+    effect: {
+      handler: 'post_note',
+      target: eid == 'other' ? 'p2' : 'p1',
+      kind: 'started',
+      state: eid == 'failed' ? 'failed' : 'pending',
+      ...eid == 'ours' ? { lease_owner: 'p1', lease_token: 'held' } : {},
+    },
+    ...eid == 'pending' ? { post: { title: 'Keep me' } } : {},
+  })),
+  claim('ordinary'),
+], { trusted: true })
+test('a process ending retires its pending startup, preserving other data and failures', async () => {
+  await retired.apply(await released(retired, 'p1'), { trusted: true })
+  let rows = await retired.get([
+    'ours',
+    'pending',
+    'other',
+    'failed',
+    'ordinary',
+  ])
+  assertEquals(rows.map((b) => [b.entity.eid, !!b.effect]), [
+    ['ours', false],
+    ['pending', false],
+    ['other', true],
+    ['failed', true],
+    ['ordinary', true],
+  ])
+  assertEquals(rows[0].tombstone, {})
+  assertEquals(rows[1].post, { title: 'Keep me' })
+  assertEquals((rows.at(-1)?.effect as Comp)?.lease_owner, undefined)
+})
+
 for (let comp of ['lease', 'effect']) {
   let graph = g()
   await take(graph, 'ours', { holder: 'p1', hold: 1000, now: at(0) })

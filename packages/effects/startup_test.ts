@@ -118,6 +118,32 @@ for (let singleOwner of [false, true]) {
   )
 }
 
+check(
+  'a shared worker leaves another live process its startup run',
+  async (s) => {
+    let old = proc({ owner: 'older', startup: 'manual' }, s)
+    let next = proc({ owner: 'replacement', startup: 'manual' }, s)
+    await next.fx.startup(next.g)
+    await work(old)
+    equal(old.seen, [])
+    await work(next)
+    equal(next.seen, ['started:replacement'])
+  },
+)
+
+let shared = store()
+let prior = proc({ owner: 'prior', startup: 'manual', page: 1 }, shared)
+let next = proc({ owner: 'next', startup: 'manual', page: 1 }, shared)
+for (let n = 0; n < 3; n++) await next.fx.startup(next.g)
+await prior.fx.startup(prior.g)
+test('foreign startup rows cannot fill another worker bounded window', async () => {
+  await work(prior)
+  equal(prior.seen, ['started:prior'])
+  await work(next)
+  equal(next.seen, ['started:next'])
+  equal((await rows(next.g)).length, 2)
+})
+
 for (let singleOwner of [false, true]) {
   check(
     `startup defaults distinguish shared joining from single-owner wakes (${singleOwner})`,

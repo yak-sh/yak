@@ -16,8 +16,9 @@ import { effects } from './registry.ts'
 
 let vocab = loadVocab([pick(effectDoc, ['effect']), {
   $defs: {
-    alpha: { effect: true, start: true },
-    beta: { effect: true, start: true },
+    alpha: { effect: true, start: true, changed: ['post'] },
+    beta: { effect: true, start: true, changed: ['post'] },
+    post: { component: true },
   },
 }])
 
@@ -88,7 +89,8 @@ let worker = (
         effect: {
           handler: eid[0] == 'a' ? 'alpha' : 'beta',
           target: eid,
-          kind: 'started',
+          kind: 'changed',
+          comp: 'post',
           state: 'pending',
           attempts: 0,
         },
@@ -121,9 +123,9 @@ let window = async (w: ReturnType<typeof worker>) => {
       // has reserved both slots, even before either handler begins.
       let owed = await w.tx((t) =>
         w.p.owe(t, [[w.fx.slots()[0], {
-          kind: 'started',
+          kind: 'changed',
           entity: { eid: 'new' },
-          name: '',
+          name: 'post',
         }]], 0)
       )
       owedCounts.push(owed.length)
@@ -195,9 +197,9 @@ let refused = async (w: ReturnType<typeof worker>) => {
   )
   let owed = await w.tx((t) =>
     w.p.owe(t, [[w.fx.slots()[0], {
-      kind: 'started',
+      kind: 'changed',
       entity: { eid: 'new' },
-      name: '',
+      name: 'post',
     }]], 0)
   )
   return { error, owed: owed.length, attempts: owed[0]?.row.attempts }
@@ -228,9 +230,9 @@ let filled = async (w: ReturnType<typeof worker>) => {
       injected = true
       let owed = await w.tx((t) =>
         w.p.owe(t, [[w.fx.slots()[0], {
-          kind: 'started',
+          kind: 'changed',
           entity: { eid: 'new' },
-          name: '',
+          name: 'post',
         }]], 0)
       )
       w.p.start(owed)
