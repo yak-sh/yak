@@ -1,6 +1,6 @@
 // Defaults may change without redirecting recorded calls or process handles.
-import { equal, test, throws } from '@yaks/testing'
-import { graph, mint } from '@yaks/graph'
+import { equal, ok, test, throws } from '@yaks/testing'
+import { graph, mint, Refused } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
@@ -10,7 +10,7 @@ import { docs as sessionDocs } from '@yaks/session/vocab'
 import { docs as harnessDocs } from '@yaks/harness/vocab'
 import { machineDoc } from './vocab.ts'
 import { workspacePolicy } from './graph.ts'
-import { sessionHome, targetFor } from './targets.ts'
+import { processWorkspace, sessionHome, targetFor } from './targets.ts'
 import { workspaceTools } from './tools.ts'
 import type { Workspace } from './workspace.ts'
 
@@ -127,4 +127,12 @@ test('shell records its target and recovery wait and stop keep the original work
 test('missing targets never fall back to local execution', async () => {
   await throws(() => targetFor(missing.g, undefined, {}))
   await throws(() => by('wait').run({ process: mint() }))
+})
+
+test('an absent process is a caller refusal, never a local recovery guess', async () => {
+  let error = await throws(
+    () => processWorkspace(missing.g, mint()),
+    'Process launch workspace is unknown',
+  )
+  ok(error instanceof Refused)
 })

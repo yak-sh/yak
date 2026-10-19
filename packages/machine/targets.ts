@@ -65,7 +65,7 @@ export let processWorkspace = async (
   let row = (await g.get([process], ['process']))[0]
   let workspace = component(row?.process)?.workspace
   if (typeof workspace != 'string') {
-    throw new Error('Process launch workspace is unknown: ' + process)
+    throw new Refused('Process launch workspace is unknown: ' + process)
   }
   return workspace
 }
