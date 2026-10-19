@@ -456,12 +456,16 @@ export let Similar = ({ e }: { e: Ent }) => {
   let text = textOf(e.doc?.title, e.doc?.body)
   useEffect(() => {
     let mine = ++seq.current // a newer text owns the list
+    let abort = new AbortController()
     let got = (hits: { eid: string; score: number }[]) => {
-      if (mine == seq.current) setKin(hits.filter((h) => h.eid != e.eid))
+      if (!abort.signal.aborted && mine == seq.current) {
+        setKin(hits.filter((h) => h.eid != e.eid))
+      }
     }
     if (!text) return got([])
     let q = encodeURIComponent(`.near=${e.eid}&.order=similar&.limit=5`)
-    fetch(`${base()}/query?q=${q}`).then((r) => (r.ok ? r.json() : []))
+    fetch(`${base()}/query?q=${q}`, { signal: abort.signal })
+      .then((r) => (r.ok ? r.json() : []))
       .then((rows) =>
         got(
           (rows as Record<string, unknown>[]).map((row) => {
@@ -473,6 +477,7 @@ export let Similar = ({ e }: { e: Ent }) => {
             }
           }).filter((h) => h.eid && h.score >= FLOOR),
         ), () => got([]))
+    return () => abort.abort()
   }, [text, e.eid])
   // A neighbor can die between sweeps — the cache, not the vector
   // table, says who still exists.
