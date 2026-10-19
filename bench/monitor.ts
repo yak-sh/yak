@@ -469,6 +469,7 @@ let check = async (
           'hook-waits',
           'operation-commands',
           'operation-scale',
+          'person-commands',
         ]
           .includes(suite)
       ) {

@@ -106,6 +106,7 @@ export let collect = async (
       'hook-waits',
       'operation-commands',
       'operation-scale',
+      'person-commands',
     ]
       .includes(suite)
   ) {
@@ -174,7 +175,12 @@ export let collect = async (
     let observations: Record<string, Samples>[][] = [[], [], []]
     let measure = async (at: number, slot: number) => {
       let dir = roots[at]
-      let direct = ['hook-waits', 'operation-commands', 'operation-scale']
+      let direct = [
+        'hook-waits',
+        'operation-commands',
+        'operation-scale',
+        'person-commands',
+      ]
         .includes(suite)
       let probe = direct ? 'standalone-worker.ts' : `${suite}-probe.ts`
       let rounds: Record<string, Samples>[] = []
