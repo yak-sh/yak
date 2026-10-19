@@ -101,10 +101,7 @@ await observed(
     let a = agent(opts)
     try {
       let s = await a.start('start two tools')
-      await until(() =>
-        started.includes('slow') && started.includes('fast') &&
-        requests.length >= 2
-      )
+      await until(() => started.includes('slow') && started.includes('fast'))
       let progress = await a.transcript(s)
       let calls = progress.filter((b) => b.call)
       equal(calls.length, 2)
@@ -112,13 +109,9 @@ await observed(
       equal(progress.filter((b) => b.tool_progress).length, 2)
       equal(progress.filter((b) => b.result).length, 0)
 
-      // A runner pass while both calls are held must yield, not ask the model
-      // again or wait on the tools. This assertion has no elapsed-time threshold.
-      await until(async () =>
-        (await a.transcript(s)).some((b) =>
-          body(b) == 'I can continue while tools run.'
-        )
-      )
+      // Pending progress is not a new input: neither its effect nor a runner
+      // pass may poll the model while both tools are held.
+      equal(requests.length, 1)
       let count = requests.length
       for (let i = 0; i < 3; i++) {
         equal((await react(h.g, s, lend(opts))).did, 'nothing')
@@ -126,19 +119,31 @@ await observed(
       equal(requests.length, count)
 
       await a.send(s, 'steer while both tools are pending')
-      await until(() => requests.some((r) => final(r, 'steer while both')))
+      await until(async () =>
+        (await a.transcript(s)).some((b) =>
+          body(b) == 'I can continue while tools run.'
+        )
+      )
+      equal(requests.length, 2)
+      ok(
+        requests[1].items.some((r) =>
+          r.kind == 'user' && r.text.includes('steer while both')
+        ),
+      )
       equal((await a.transcript(s)).filter((b) => b.result).length, 0)
 
       // The second call completes first. It wakes a model that has already
       // answered the steering input, without waiting for the first call.
       fast.resolve('FAST_FINAL')
       await until(() => requests.some((r) => final(r, 'FAST_FINAL')))
+      equal(requests.length, 3)
       equal((await a.transcript(s)).filter((b) => b.result).length, 1)
       slow.resolve('SLOW_FINAL')
       await until(() => requests.some((r) => final(r, 'SLOW_FINAL')))
       await until(async () => statusOf(await a.transcript(s)) == 'settled')
       let entries = await a.transcript(s)
       equal(statusOf(entries), 'settled')
+      equal(requests.length, 4)
       equal(entries.filter((b) => b.result).length, 2)
       equal(
         entries.filter((b) => b.tool_progress),
@@ -208,7 +213,11 @@ await observed(
     let a = agent(opts)
     try {
       let s = await a.start('hold a model ask while a tool completes')
-      await until(() => runs == 1 && requests.length == 2)
+      await until(() => runs == 1)
+      equal(requests.length, 1)
+      // Only explicit input, not synthetic progress, starts the held ask.
+      await a.send(s, 'continue while the tool is pending')
+      await until(() => requests.length == 2)
       tool.resolve('FINAL_DURING_ASK')
       await until(async () => (await a.transcript(s)).some((b) => b.result))
       let held = await a.transcript(s)
@@ -270,9 +279,8 @@ await observed(
     })
     try {
       let s = await a.start('start then stop')
-      await until(async () =>
-        runs == 1 && (await a.transcript(s)).some((b) => body(b) == 'working')
-      )
+      await until(() => runs == 1)
+      equal(requests, 1)
       await stoppedHost.g.apply([{
         entity: { eid: 'async-test-stop' },
         entry: { session: s },
