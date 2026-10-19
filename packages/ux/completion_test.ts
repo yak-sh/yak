@@ -337,3 +337,100 @@ for (let tag of ['input', 'textarea']) {
     }
   })
 }
+
+// Prepare the rendered integration fixture outside the timed act. Linkedom's
+// selection shim is scoped to preparation and the test, including on failure.
+let renderedCompletion = (() => {
+  let front = client(sharedVocab, [], { vault: false, wireVault: false })
+  let draftFront = client(loadVocab(draftDoc), [drafts()], {
+    vault: false,
+    wireVault: false,
+  })
+  let c = completion(front, {
+    drafts: desk(draftFront, { by: () => 'reader' }),
+    complete: () => ({
+      from: 0,
+      to: 2,
+      whole: false,
+      cands: [{ text: 'pear', kind: 'fruit' }],
+    }),
+  })
+  let { document, window } = parseHTML(
+    '<html><body><main></main><aside></aside><input></body></html>',
+  )
+  let root = document.querySelector('main')!
+  let list = document.querySelector('aside')!
+  let input = document.querySelector('input')!
+  let inputs = window.HTMLInputElement.prototype
+  let scope = () => {
+    let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+    let selection = Object.getOwnPropertyDescriptor(inputs, 'setSelectionRange')
+    Object.defineProperty(globalThis, 'document', {
+      value: document,
+      configurable: true,
+    })
+    Object.defineProperty(inputs, 'setSelectionRange', {
+      configurable: true,
+      value(this: HTMLInputElement, start: number, end: number) {
+        this.selectionStart = start
+        this.selectionEnd = end
+      },
+    })
+    return () => {
+      if (selection) {
+        Object.defineProperty(inputs, 'setSelectionRange', selection)
+      } else Reflect.deleteProperty(inputs, 'setSelectionRange')
+      if (prior) Object.defineProperty(globalThis, 'document', prior)
+      else Reflect.deleteProperty(globalThis, 'document')
+    }
+  }
+  let restore = scope()
+  let off = () => {}
+  try {
+    render(h(c.Field, { id: 'managed', initial: 'pe' }), root)
+    c.type('separate', 'pe')
+    off = c.bind('separate', input)
+    render(h(c.List, { id: 'separate', anchor: { current: input } }), list)
+  } catch (error) {
+    off()
+    render(null, root)
+    render(null, list)
+    c.dispose()
+    front.close()
+    draftFront.close()
+    throw error
+  } finally {
+    restore()
+  }
+  return { front, draftFront, c, root, list, input, off, scope }
+})()
+
+test('managed completion and a bound List restore drafts and acceptance carets', () => {
+  let { front, draftFront, c, root, list, input, off, scope } =
+    renderedCompletion
+  let restore = scope()
+  try {
+    let managed = root.querySelector('input')!
+    assertEquals(managed.value, 'pe')
+    assertEquals(managed.selectionStart, 2)
+    assertEquals(input.value, 'pe')
+    assertEquals(input.selectionStart, 2)
+    assertEquals(list.textContent?.includes('pear'), true)
+    c.accept('separate')
+    assertEquals(input.value, 'pear')
+    assertEquals(input.selectionStart, 4)
+    assertEquals(input.selectionEnd, 4)
+    off()
+    input.value = 'detached'
+    input.dispatchEvent(new input.ownerDocument.defaultView!.Event('input'))
+    assertEquals(c.text('separate'), 'pear')
+  } finally {
+    off()
+    render(null, root)
+    render(null, list)
+    c.dispose()
+    front.close()
+    draftFront.close()
+    restore()
+  }
+})

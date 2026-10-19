@@ -452,26 +452,25 @@ try {
 ```
 
 `Field` supplies a managed input; `bind` attaches the same behavior to an
-existing input and `List` draws its candidates. Both need a rendered Preact
-tree.
+existing input and `List` draws its candidates. Render these components in your
+Preact tree. Constructing a managed field does not require mounting a DOM:
 
 ```ts
-import { h, render } from 'preact'
-import { parseHTML } from 'linkedom'
+import { h } from 'preact'
 import { client } from '@yaks/client'
-import { desk, draftDoc, drafts } from '@yaks/draft'
+import { signal } from '@preact/signals'
 import { loadVocab } from '@yaks/vocab'
 import { docs } from '@yaks/ux/vocab'
 import { completion } from '@yaks/ux/completion'
 import { equal } from '@yaks/testing'
 
 let front = client(loadVocab(docs), [], { vault: false, wireVault: false })
-let draftFront = client(loadVocab(draftDoc), [drafts()], {
-  vault: false,
-  wireVault: false,
-})
+let text = signal('')
 let c = completion(front, {
-  drafts: desk(draftFront, { by: () => 'reader' }),
+  drafts: {
+    text: () => text.value,
+    type: (_id, value) => text.value = value,
+  },
   complete: (_text, caret) => ({
     from: 0,
     to: caret,
@@ -479,47 +478,13 @@ let c = completion(front, {
     cands: [{ text: 'pear', kind: 'fruit' }],
   }),
 })
-let { document } = parseHTML('<html><body><main></main><input></body></html>')
-let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
-Object.defineProperty(globalThis, 'document', {
-  value: document,
-  configurable: true,
-})
-let root = document.querySelector('main')!
-let input = document.querySelector('input')!
-// Linkedom has no selection API; supply it for managed and bound inputs.
-let inputs = document.defaultView.HTMLInputElement.prototype
-let selection = Object.getOwnPropertyDescriptor(inputs, 'setSelectionRange')
-Object.defineProperty(inputs, 'setSelectionRange', {
-  configurable: true,
-  value(this: HTMLInputElement, start: number) {
-    Object.defineProperty(this, 'selectionStart', {
-      value: start,
-      configurable: true,
-    })
-  },
-})
-let off = () => {}
 try {
-  render(h(c.Field, { id: 'managed', initial: 'pe' }), root)
-  equal(root.querySelector('input')?.value, 'pe')
-  c.type('separate', 'pe')
-  off = c.bind('separate', input)
-  render(h(c.List, { id: 'separate', anchor: { current: input } }), root)
-  equal(input.value, 'pe')
-  equal(root.textContent?.includes('pear'), true)
-  c.accept('separate')
-  equal(input.value, 'pear')
+  let field = h(c.Field, { id: 'fruit', initial: 'pe' })
+  equal(field.props.id, 'fruit')
+  equal(field.props.initial, 'pe')
 } finally {
-  off()
-  render(null, root)
   c.dispose()
   front.close()
-  draftFront.close()
-  if (selection) Object.defineProperty(inputs, 'setSelectionRange', selection)
-  else Reflect.deleteProperty(inputs, 'setSelectionRange')
-  if (prior) Object.defineProperty(globalThis, 'document', prior)
-  else Reflect.deleteProperty(globalThis, 'document')
 }
 ```
 
