@@ -69,6 +69,7 @@ import {
   type Bind,
   col,
   cond,
+  count,
   type Cte,
   eq,
   exists,
@@ -89,6 +90,7 @@ import {
   type Source,
   sources,
   star,
+  sub,
   table,
   TRUE,
   val,
@@ -1179,6 +1181,37 @@ let inRefs = (ctx: Ctx, groups: Arm[][], value: string): Cond => {
   })
 }
 
+let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
+  if (
+    ctx.spine || ctx.eids || claims(ctx, 'pred') || !ctx.d.owned ||
+    flattened(cs).some((c) =>
+      c.kind == 'pred' && c.path.join('.') == 'entity.eid' && !c.not
+    )
+  ) return
+  let flat = flattened(cs)
+  // A scalar test already implies its component. An additional required
+  // component can be much smaller, especially inside an OR arm's scope.
+  let extra = flat.filter((c) =>
+    c.kind == 'pred' && c.path.length == 1 &&
+    !flat.some((p) =>
+      p.kind == 'pred' && p.path.length == 2 && p.path[0] == c.path[0] &&
+      needs(opOf(p), p.value)
+    )
+  )
+  for (let c of [...extra, ...flat]) {
+    if (
+      c.kind != 'pred' || c.not || c.where || c.path.length != 1 ||
+      opOf(c) != EXISTS
+    ) continue
+    let comp = c.path[0]
+    if (
+      comp != 'entity' && ctx.v.comp(comp) && !computed(ctx.v, comp) &&
+      (ctx.d.scoped || source(ctx, comp) == `"${comp}"` &&
+          ctx.d.table(comp) == `"${comp}"`)
+    ) return comp
+  }
+}
+
 // An OR compiles to a UNION of selections, never to a disjunction in the WHERE
 // clause. SQLite can use indexes for an OR only when every branch is on the
 // from table; a branch on a left-joined component (`.settled.at>=…`) turns the
@@ -1205,7 +1238,11 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
     )
     let column = empty && ctx.d.col(empty.path[0], empty.path[1], ctx.v)
     return (column ? ['null', 'empty'] : [null]).map((point) => {
-      let branch = { ...ctx, tables: new Set<string>(), candidates: undefined }
+      let branch = {
+        ...ctx,
+        tables: new Set<string>(),
+        candidates: undefined,
+      }
       if (point) {
         branch.d = {
           ...ctx.d,
@@ -1219,6 +1256,7 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
         }
       }
       let where = clause(branch, x)
+      branch.present ??= presence(branch, [x])
       return { branch, where, joins: joinsOf(branch), x }
     })
   })
@@ -1260,21 +1298,24 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
     }))
   )
   let groups = cut(picks, ARMS).map((group) => ({
-    sql: group.map((a) => a.sql).join(' union '),
+    sql: group.map((a) => a.sql).join(' union all '),
     params: group.flatMap((a) => a.params),
   }))
   // Nest each capped compound as one arm. OR-ing several IN selections lets
   // stale estimates choose a scan of the outer spine; one IN seeks the union.
   while (groups.length > ARMS) {
     groups = cut(groups, ARMS).map((group) => ({
-      sql: group.map((g) => `select * from (${g.sql})`).join(' union '),
+      sql: group.map((g) => `select * from (${g.sql})`).join(' union all '),
       params: group.flatMap((g) => g.params),
     }))
   }
   let candidates = {
-    sql: groups.map((g) =>
-      groups.length == 1 ? g.sql : `select * from (${g.sql})`
-    ).join(' union '),
+    // DISTINCT emits each owner as it arrives; UNION sorts all arms before
+    // yielding, defeating a consumer's bounded membership/cardinality probe.
+    sql: `select distinct * from (${
+      groups.map((g) => groups.length == 1 ? g.sql : `select * from (${g.sql})`)
+        .join(' union all ')
+    })`,
     params: groups.flatMap((g) => g.params),
   }
   let test = cond({
@@ -2417,7 +2458,10 @@ let indexedRelation = (
   // Otherwise `.using .entry.session=X` walks every request in the graph
   // instead of seeking X's entries and checking their using component.
   let s = rel(from, o)
-  if (!root && !ctx.candidates && !ctx.correlated && s.where) {
+  if (
+    (!root || root.pred && ['<', '<=', '>', '>='].includes(opOf(root.pred))) &&
+    !ctx.candidates && !ctx.correlated && s.where
+  ) {
     let tests = s.where.t == 'op' && s.where.op == 'and'
       ? s.where.parts
       : [s.where]
@@ -2426,6 +2470,7 @@ let indexedRelation = (
       return q ? [{ q, test }] : []
     })
     if (selected.length) {
+      root = undefined
       ctx.candidates = {
         ...render(intersection(selected.map((s) => s.q))),
         test: and(...selected.map((s) => s.test)),
@@ -2618,12 +2663,35 @@ let indexedRelation = (
     // so the probe counts stored rows: never through a visibility policy,
     // whose test it would pay for each.
     let cap = Math.max(64, (find<Limit>(clauses, 'limit')?.n ?? 16) * 4)
-    let dense = raw(
+    let dense: Cond = raw(
       `exists (select 1 from ${
         ctx.d.owned?.(present) ?? ctx.d.table(present)
       } limit 1 offset ?)`,
       [cap],
     )
+    if (
+      root.pred && ['<', '<=', '>', '>='].includes(opOf(root.pred)) &&
+      ctx.v.indexes(root.comp).some((i) =>
+        i.props.length == 1 &&
+        indexName(ctx.v, root.comp, i.props) == root.index
+      )
+    ) {
+      let probe = { ...ctx, tables: new Set<string>(), correlated: true }
+      let range = clause(probe, root.pred)
+      // Compare physical keys before reading content or visibility. The
+      // range stops after the component population plus one; COUNT(*) on
+      // the bare component uses SQLite's B-tree count, with no row decoding.
+      dense = not(exists(select({
+        cols: [lit(1)],
+        from: raw(src),
+        where: range,
+        limit: lit(1),
+        offset: sub(select({
+          cols: [count()],
+          from: raw(ctx.d.owned?.(present) ?? ctx.d.table(present)),
+        })),
+      })))
+    }
     let sparse = rel(from, o)
     let presence: Select = {
       ...sparse,
@@ -2999,28 +3067,8 @@ let lower = (
       ) ctx.present = comp
     }
   }
-  if (
-    !ctx.present && !spine && !ctx.eids && !claims(ctx, 'pred') &&
-    ctx.d.owned &&
-    !find<Count>(cs, 'count') &&
-    !flattened(filters).some((c) =>
-      c.kind == 'pred' && c.path.join('.') == 'entity.eid' && !c.not
-    )
-  ) {
-    for (let c of flattened(filters)) {
-      if (
-        c.kind != 'pred' || c.not || c.where || c.path.length != 1 ||
-        opOf(c) != EXISTS
-      ) continue
-      let comp = c.path[0]
-      if (
-        comp == 'entity' || !vocab.comp(comp) || computed(vocab, comp) ||
-        !ctx.d.scoped &&
-          (source(ctx, comp) != `"${comp}"` || ctx.d.table(comp) != `"${comp}"`)
-      ) continue
-      ctx.present = comp
-      break
-    }
+  if (!ctx.present && !find<Count>(cs, 'count')) {
+    ctx.present = presence(ctx, filters)
   }
   let where = and(
     ...conjuncts(ctx, filters),
