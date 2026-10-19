@@ -83,6 +83,13 @@ Both endpoints are [references](../vocab/README.md#routing-and-references) with
 
 ## Relation declarations
 
+A relation may declare `parent: "from"` or `parent: "to"` to identify its parent
+endpoint. For example, `contains` declares `parent: "from"`: a container points
+to its child. An inverse relation can declare `parent: "to"`. Omitting the
+annotation leaves the relation unclassified; no parent/child meaning is inferred
+from its name. This metadata does not change the edge's direction or query
+behavior. Consumers such as @yaks/oracle use it to select directional context.
+
 Register `edgeKeywords` when loading the vocabulary. `relations()` maps query
 names to component names; `names()` maps component names to query names.
 `reversed()` maps query names to the phrases declared by `reversed`, for a

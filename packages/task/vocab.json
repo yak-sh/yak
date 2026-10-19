@@ -73,7 +73,8 @@
       "edge": "contains",
       "reversed": "contained by",
       "description": "that task is part of this one",
-      "properties": {}
+      "properties": {},
+      "parent": "from"
     },
     "requires": {
       "component": true,

@@ -42,7 +42,7 @@
           "type": "string",
           "ref": "entity",
           "death": "cascade",
-          "description": "whose space they were said in \u2014 every member of that space can read them, and they are deleted with it"
+          "description": "whose space they were said in — every member of that space can read them, and they are deleted with it"
         },
         "about": {
           "type": "string",
@@ -50,7 +50,7 @@
         },
         "context": {
           "type": "string",
-          "description": "the line or two needed to understand the words \u2014 what was being talked about, never a restatement of what was said"
+          "description": "the line or two needed to understand the words — what was being talked about, never a restatement of what was said"
         },
         "at": {
           "type": "string",
@@ -200,7 +200,7 @@
         "feedback": {
           "type": "string",
           "ref": "person",
-          "description": "the correcting person\u2019s id or name, or an empty string if unknown; either marks the memory as feedback"
+          "description": "the correcting person’s id or name, or an empty string if unknown; either marks the memory as feedback"
         },
         "about": {
           "type": "string",
@@ -209,7 +209,7 @@
         "id": {
           "type": "string",
           "ref": "memory",
-          "description": "existing memory\u2019s id or registered name to patch; omit to create a memory"
+          "description": "existing memory’s id or registered name to patch; omit to create a memory"
         },
         "was": {
           "type": "string",
@@ -225,7 +225,7 @@
       "noun": "memory",
       "verb": "recall",
       "title": "Recall memories",
-      "description": "Find saved memories by what they are about. Where the server has a vector index, said ranks them by meaning, closest first, whether or not they share its words; without one, said selects the memories containing all its words, newest first. near is an entity id or name whose meaning ranks the results instead, and said then selects by its words. With neither said nor near, returns the newest memories. Results are bundles (JSON objects with entity ids and component fields), each whole: the words wherever the memory marks them (a doc's body, a session entry's content) and its context, never snippets. Each carries $was.doc.body, the string to pass as memory_save\u2019s was when replacing those words. Optional ids, scope and feedback narrow the results; limit defaults to 8.",
+      "description": "Find saved memories by what they are about. Where the server has a vector index, said ranks them by meaning, closest first, whether or not they share its words; without one, said selects the memories containing all its words, newest first. near is an entity id or name whose meaning ranks the results instead, and said then selects by its words. With neither said nor near, returns the newest memories. Results are bundles (JSON objects with entity ids and component fields), each whole: the words wherever the memory marks them (a doc's body, a session entry's content) and its context, never snippets. Each carries $was.doc.body, the string to pass as memory_save’s was when replacing those words. Optional ids, scope and feedback narrow the results; limit defaults to 8.",
       "input": {
         "said": {
           "type": "string",
@@ -399,7 +399,7 @@
           "type": "string",
           "ref": "entity",
           "death": "keep",
-          "description": "Immutable context kept for the topic\u2019s own oracle."
+          "description": "Immutable context kept for the topic’s own oracle."
         },
         "children": {
           "type": "string",

@@ -108,6 +108,12 @@ and however they capitalise it. That is the guard against synonyms from the
 graph's side; the other is that a builder finds the topics that exist before it
 makes one.
 
+`topic_context{self,parent,children}` attaches three retained context references
+to a topic. Each points to an immutable `prompt{source,revision}` and
+`content{body}` record. Its oracle cultivates these contexts; the topic's brief
+stays in `doc.body`. [@yaks/oracle](../oracle/README.md) provides the guarded
+updates, evidence citations and native conversations.
+
 ## Writing
 
 `marked()` returns the bundle that marks an entity already holding the words:

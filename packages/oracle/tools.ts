@@ -8,20 +8,26 @@ import type { Runs } from '@yaks/graph/tools'
 import { promptEntry, snapshot } from '@yaks/context'
 import { defaultUsing, selectedUsing } from '@yaks/harness'
 import { humanCaller } from '@yaks/session'
+import { link } from '@yaks/edge'
+import { content } from '@yaks/kernel'
 import { learning } from './learn.ts'
+import { neighborhood } from './context.ts'
 
 let part = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 
-let context = (node: Bundle) => {
+let context = (node: Bundle, body: string) => {
   let o = part(node, 'oracle')
   return [
     'You are answering in a receiving fork of this oracle. The retained context below belongs to the oracle; this conversation is separate from other callers.',
-    `Oracle: ${node.entity.eid}\nDomain: ${o.domain}`,
-    String(o.self ?? ''),
+    `Topic: ${node.entity.eid}\nSubject: ${
+      part(node, 'doc').title ?? o.domain
+    }`,
+    body || String(o.self ?? ''),
     String(o.shared ?? ''),
     `Evidence entity ids: ${JSON.stringify(o.evidence ?? [])}`,
-    'Use graph_query to discover related oracles through oracle_child edges (child → parent). oracle_query opens a native receiving fork of another oracle. Read its session transcript through graph_query. Answer the current question; no ongoing background work is requested.',
+    'Grow knowledge in response to this question: discover and reuse existing topics with topic_find before topic_new. oracle_read gives the topic’s current context and $was.topic_context.head precondition; oracle_revise retains the topic’s evidence-backed body with that precondition, and topic_place puts that same topic beneath every useful parent. Keep each topic focused and the tree as small as the questions justify. Read recorded graph sources directly. Use hosted web research when offered by the selected provider; distinguish external citations, user statements and inference. Evidence ids must name the source entries you read, including your recorded research reply when it carries source links. Do not invent research or operating facts. If no source or research tool is available, say what remains unknown.',
+    'Use graph_query to discover related oracles through topic_child edges (child → parent). oracle_query opens a native receiving fork of another oracle. Read its session transcript through graph_query. Answer the current question; no ongoing background work is requested.',
   ].filter(Boolean).join('\n\n')
 }
 
@@ -51,37 +57,53 @@ export let runs = (): Runs => ({
     let eid = derivedEid(`oracle dialogue|${call.entity.eid}`)
     let [existing] = await g.get([eid])
     if (existing?.oracle_dialogue) return [existing]
-    let [node] = await g.get([String(args.oracle)], ['oracle', 'doc'])
-    if (!node?.oracle) throw new Refused('Choose an oracle')
+    let [node] = await g.get([String(args.oracle)], [
+      'oracle',
+      'doc',
+      'topic',
+      'topic_context',
+    ])
+    if (!node?.oracle && !node?.topic) throw new Refused('Choose a topic')
     let o = part(node, 'oracle')
-    let snap = await snapshot(context(node), node.entity.eid)
+    let nearby = node.topic ? await neighborhood(g, node) : undefined
+    let body = nearby?.body ?? context(node, '')
+    let snap = await snapshot(body, node.entity.eid)
     let seed = derivedEid(`oracle context|${node.entity.eid}|${snap.revision}`)
-    let anchor = derivedEid(`oracle context entry|${seed}`)
+    let anchor = derivedEid(
+      node.topic
+        ? `oracle opening context|${call.entity.eid}`
+        : `oracle context entry|${seed}`,
+    )
     let using = await usingFor(g, call, args.model)
     let actor = who(call)
     let operator = await humanCaller(g, actor)
+    let [caller] = actor?.by
+      ? await g.get([actor.by], ['native', 'session'])
+      : []
+    let parent = caller?.native ? caller.entity.eid : undefined
     let rows: Bundle[] = [{
-      entity: { eid: seed },
-      session: { ended: true },
-      doc: {
-        title: `${part(node, 'doc').title ?? o.domain}: retained context`,
-      },
-    }, {
-      ...promptEntry(seed, 1, snap.body, snap.source, 'shared', snap.revision),
-      entity: { eid: anchor },
-      $actor: { by: seed },
-    }, {
       entity: { eid },
       session: { id: eid, operator },
       native: {},
-      fork: { from: anchor },
+      ...parent ? { spawned: { parent } } : {},
+      ...!node.topic ? { fork: { from: anchor } } : {},
       doc: { title: text.split(/\r?\n/, 1)[0].slice(0, 160) },
       oracle_dialogue: {
-        tree: o.tree,
+        ...o.tree ? { tree: o.tree } : {},
         from: actor?.by ?? call.entity.eid,
         to: node.entity.eid,
         revision: snap.revision,
       },
+    }, {
+      ...promptEntry(
+        node.topic ? eid : seed,
+        1,
+        snap.body,
+        snap.source,
+        'shared',
+        snap.revision,
+      ),
+      entity: { eid: anchor },
     }, {
       entity: { eid: derivedEid(`oracle input|${call.entity.eid}`) },
       entry: { session: eid },
@@ -92,11 +114,29 @@ export let runs = (): Runs => ({
           'graph_query',
           'graph_show',
           'graph_schema',
+          'topic_find',
+          'topic_new',
+          'oracle_read',
+          'oracle_revise',
           'graph_apply',
           'oracle_query',
+          'wait',
         ],
       },
     }]
+    if (!node.topic) {
+      rows.unshift({
+        entity: { eid: seed },
+        session: { ended: true },
+        doc: {
+          title: `${part(node, 'doc').title ?? o.domain}: retained context`,
+        },
+      })
+    }
+    rows.push(...(nearby?.heads ?? []).map((head) => ({
+      ...link(anchor, 'cites', head.entity.eid),
+      cites: { hash: content(g.vocab)(head) },
+    })))
     await g.apply(rows.map((row) => ({
       ...row,
       ...actor && !row.$actor ? { $actor: actor } : {},
