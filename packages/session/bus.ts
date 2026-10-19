@@ -14,6 +14,7 @@ import {
   eq,
   fields,
   list,
+  or,
   present,
 } from '@yaks/query'
 import { CLAIM, SESSION } from './comp.ts'
@@ -45,18 +46,7 @@ let candidates = async (
       return g.vocab.prop(c, key)
     }))
   let unsaid = (component: string, ...clauses: Clause[]) =>
-    and(
-      present(component),
-      ...clauses,
-      absent('notified'),
-      route(
-        ...component == 'mail'
-          ? ['mail.reply_to', 'mail.target']
-          : component == 'deliver'
-          ? ['deliver.to']
-          : [`${component}.target`],
-      ),
-    )
+    and(present(component), ...clauses, absent('notified'))
   let queries = [
     ...g.vocab.comp('knock')
       ? [
@@ -115,7 +105,12 @@ let candidates = async (
         news.comments.creators.get(String(comp(b, 'comment').target)) ?? '',
       )
     ),
-    ...(await Promise.all(queries.map((q) => g.read(q)))).flat(),
+    ...queries.length
+      ? await g.read(and(
+        or(...queries),
+        route('knock.target', 'deliver.to'),
+      ))
+      : [],
   ]
   let comments = g.vocab.prop('filed', 'project')
     ? items.filter((b) => b.comment)

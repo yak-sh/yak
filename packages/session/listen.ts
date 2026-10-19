@@ -76,6 +76,7 @@ import {
   fields,
   type Input,
   list,
+  or,
   present,
   walk,
 } from '@yaks/query'
@@ -542,8 +543,9 @@ export let pending = async (
     ...mine(received.replies, 'mail', 'reply_to'),
   ]
   if (ids.length) addressed.push(...await graph.get(ids))
-  for (let q of addressedTo(vocab, session, !native)) {
-    addressed.push(...await graph.read(and(...q.clauses, every())))
+  let queries = addressedTo(vocab, session, !native)
+  if (queries.length) {
+    addressed.push(...await graph.read(and(or(...queries), every())))
   }
   // A session with no project can hear only its addressed items. Deriving
   // its transcript status cannot change that answer and reads its whole log.
