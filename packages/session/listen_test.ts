@@ -427,3 +427,45 @@ test('a listener does not miss a commit during its read', async () => {
   )
   equal(lines.length, 1)
 })
+
+await desk.apply([
+  {
+    entity: { eid: 'heir-record-p' },
+    doc: { title: 'Parent record' },
+    filed: { project: 'p' },
+  },
+  {
+    entity: { eid: 'heir-record-sub' },
+    doc: { title: 'Child record' },
+    filed: { project: 'sub' },
+  },
+])
+let mixedHeirItems: Bundle[] = [
+  { entity: { eid: 'heir-mail' }, mail: { target: 'p' } },
+  {
+    entity: { eid: 'heir-comment-sub' },
+    comment: { target: 'heir-record-sub' },
+  },
+  { entity: { eid: 'heir-comment-p' }, comment: { target: 'heir-record-p' } },
+  {
+    entity: { eid: 'heir-comment-again' },
+    comment: { target: 'heir-record-sub' },
+  },
+  {
+    entity: { eid: 'heir-comment-missing' },
+    comment: { target: 'heir-record-missing' },
+  },
+]
+let mixedHeirs = await heirs(desk, mixedHeirItems)
+test('mixed project mail and repeated comment targets retain their native heirs', () =>
+  equal([...mixedHeirs].sort(), ['busy', 'busy-sub']))
+let scopedHeirs = await heirs({
+  vocab: desk.vocab,
+  read: desk.read.bind(desk),
+  get: (ids, comps) =>
+    desk.get(ids, comps, {
+      visibility: { components: { filed: '.entity.eid!=heir-record-sub' } },
+    }),
+}, mixedHeirItems)
+test('hidden comment target filings cannot add project heirs', () =>
+  equal(scopedHeirs, ['busy']))

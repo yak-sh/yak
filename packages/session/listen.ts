@@ -238,19 +238,6 @@ export let worksFor = async (
   return home ? await family(graph, home, '->') : []
 }
 
-// The project a held item reached: a letter or knock's target, or the
-// project the commented-on record is filed under.
-let reachedBy = async (
-  graph: Pick<Graph, 'get'>,
-  b: Bundle,
-): Promise<string> => {
-  if (!b.comment) {
-    return str(comp(b, 'mail').target) || str(comp(b, 'knock').target)
-  }
-  let [target] = await graph.get([str(comp(b, 'comment').target)], ['filed'])
-  return str(comp(target, 'filed').project)
-}
-
 /** The native transcripts at work that may hear these items once they are
  * held: mid-turn, each wearing a persona whose home is a project an item
  * reached, or a project that one is filed under. One settled between turns
@@ -262,11 +249,27 @@ export let heirs = async (
   letters: Bundle[],
 ): Promise<Eid[]> => {
   if (!graph.vocab.prop('persona', 'home')) return []
+  // Many unread comments can share a target. Read each target's filing once
+  // through this same caller's graph, then retain the items' project order.
+  let targets = [
+    ...new Set(
+      letters.filter((b) => b.comment).map((b) =>
+        str(comp(b, 'comment').target)
+      ),
+    ),
+  ]
+  let filed = new Map(
+    (targets.length ? await graph.get(targets, ['filed']) : []).map((
+      b,
+    ) => [b.entity.eid, str(comp(b, 'filed').project)]),
+  )
   let reached = [
     ...new Set(
-      (await Promise.all(letters.map((b) => reachedBy(graph, b)))).filter(
-        Boolean,
-      ),
+      letters.map((b) =>
+        b.comment
+          ? filed.get(str(comp(b, 'comment').target)) ?? ''
+          : str(comp(b, 'mail').target) || str(comp(b, 'knock').target)
+      ).filter(Boolean),
     ),
   ]
   if (!reached.length) return []
