@@ -108,6 +108,24 @@ test('a graph describes what it is served with, and stops describing what it is 
     (await d.get([note], ['_comp']))[0]._comp,
     (await g.get([note], ['_comp']))[0]._comp,
   )
+  for (
+    let query of [
+      '._package ?doc',
+      '._comp ?doc',
+      '._extends ?doc',
+      '._prop ?doc',
+      '._before ?edge',
+    ]
+  ) {
+    let byId = (
+      a: { entity: { eid: string } },
+      b: { entity: { eid: string } },
+    ) => a.entity.eid.localeCompare(b.entity.eid)
+    assertEquals(
+      (await d.read(query)).sort(byId),
+      (await g.read(query)).sort(byId),
+    )
+  }
   // Described already, so a worker starting writes nothing.
   assertEquals(await described(g, g.vocab.docs), [])
 
@@ -145,9 +163,16 @@ test('a graph describes what it is served with, and stops describing what it is 
 })
 
 test('a retained declaration reads only changed description identities and resumes', async () => {
-  let old = [p({ a: { type: 'string' }, b: { type: 'number' } }), q]
+  let old = [
+    p({
+      kept: { type: 'string' },
+      a: { type: 'string', description: 'Old text.', computed: true },
+      b: { type: 'number' },
+    }),
+    q,
+  ]
   let serve = store(), g = await serve(old)
-  let next = [p({ a: { type: 'string' } }, [])]
+  let next = [p({ kept: { type: 'string' }, a: { type: 'string' } }, [])]
   let read = g.read.bind(g), get = g.get.bind(g)
   let scans = 0, identities: string[] = []
   g.read = (line, opts) => {
@@ -160,17 +185,31 @@ test('a retained declaration reads only changed description identities and resum
   }
   let patch = await described(g, [...base, ...next], [...base, ...old])
   assertEquals(scans, 0)
-  assertEquals(identities.includes(identityEid('_prop', ['note', 'a'])), false)
+  assertEquals(
+    identities.includes(
+      identityEid('_prop', [identityEid('_comp', ['note']), 'kept']),
+    ),
+    false,
+  )
+  let id = identityEid('_prop', [identityEid('_comp', ['note']), 'a'])
+  let changed = patch.find((b) => b.entity.eid == id)!
+  assertEquals((changed._prop as Comp).computed, null)
+  assertEquals((changed.doc as Comp).body, null)
   // An interrupted pass commits only one batch. The old declaration remains
   // the comparison until the global marker is committed last.
   await g.apply(patch.slice(0, 1), { trusted: true })
   let resumed = await described(g, [...base, ...next], [...base, ...old])
   await g.apply(resumed, { trusted: true })
   assertEquals(await described(g, [...base, ...next], [...base, ...next]), [])
+  let [stored] = await get([id], ['_prop', 'doc'])
+  assertEquals(Object.hasOwn(stored._prop as Comp, 'computed'), false)
+  assertEquals(Object.hasOwn(stored.doc as Comp, 'body'), false)
+  let d = deriving()(next)
+  assertEquals(await d.get([id], ['_prop', 'doc']), [stored])
   assertEquals(
     (await read('._prop.comp._comp.name=note')).map((b) =>
       (b._prop as Comp).name
     ),
-    ['a'],
+    ['kept', 'a'],
   )
 })

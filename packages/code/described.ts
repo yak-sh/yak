@@ -185,7 +185,25 @@ let absent = (c: Pred) =>
 let derivations = new WeakMap<Vocab, Map<string, Bundle>>()
 let derive = (vocab: Vocab) => {
   let held = derivations.get(vocab)
-  if (!held) derivations.set(vocab, held = rows(vocab, vocab.docs))
+  if (!held) {
+    held = rows(vocab, vocab.docs)
+    // `rows` are write patches: null clears an old property. A derived read
+    // has no old properties to clear, and storage reads omit absent columns.
+    for (let [id, row] of held) {
+      held.set(
+        id,
+        Object.fromEntries(
+          Object.entries(row).map(([name, comp]) => [
+            name,
+            Object.fromEntries(
+              Object.entries(comp as Comp).filter(([, value]) => value != null),
+            ),
+          ]),
+        ) as Bundle,
+      )
+    }
+    derivations.set(vocab, held)
+  }
   return held
 }
 
