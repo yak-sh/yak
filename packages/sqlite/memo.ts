@@ -35,6 +35,8 @@
 // derived properties, time phrases) is read every time. An answer about each
 // entity alone stands through a patch or a removal whose entities it selects
 // neither before nor after (`local`, `stand`).
+// Whole and named gets with SQL-state-only derivations use that same bounded
+// answer pool through one global data revision; every mutation ends reuse.
 //
 // What a patch leaves an entity holding is worked out from what memory held
 // and what the patch said, the way a read returns it (`patch`), and kept once
@@ -65,7 +67,7 @@ import {
   type Row,
   type Stmt,
 } from '@yaks/sql/core'
-import { tablesOf } from '@yaks/sql/query'
+import { derivedOf, storedOnly, tablesOf } from '@yaks/sql/query'
 import { type Filter, filter } from '@yaks/match'
 import { tables } from './layout.ts'
 import { type Answer as Packed, copied, packed } from './answer.ts'
@@ -123,6 +125,8 @@ export type Memo = {
 type Answer = {
   tables: [string, number][]
   rows: Packed
+  /** Whole/named gets with SQL-state-only derivations, under all DML. */
+  epoch?: number
   /** whether an entity is one the query selects, where memory can tell */
   test?: Filter
   /** Necessary component-presence tests, safe over unknown property values. */
@@ -680,7 +684,7 @@ export let memoized = (
       BLOBS,
       ...tables(vocab),
       ...Object.values(derived).flatMap((d) =>
-        d.stable ? tablesOf(d.expr(col('__owner'))) ?? [] : []
+        storedOnly(d, vocab) ? tablesOf(d.expr(col('__owner'))) ?? [] : []
       ),
     ]),
     clear: () => {
@@ -726,10 +730,11 @@ export let memoized = (
       evict(k.held.keys().next().value!)
     }
   }
+  let providers = derivedOf(vocab, derived)
   let dynamic = new Set(
-    Object.entries(derived).filter(([, value]) => !value.stable).map(([p]) =>
-      p.split('.')[0]
-    ),
+    Object.entries(providers).filter(([, d]) => !storedOnly(d, vocab)).map((
+      [p],
+    ) => p.split('.')[0]),
   )
   for (let name of vocab.comps) {
     if (
@@ -942,6 +947,106 @@ export let memoized = (
     for (let eid of k.after.keys()) k.after.set(eid, LOST)
     seen = now
   }
+  // A stable relation can change when another entity is patched. Such
+  // components refresh on every miss; only this global revision can reuse the
+  // whole answer. Dynamic providers and scoped refreshes keep their old path.
+  let related = Object.entries(providers).filter(([, d]) =>
+    !storedOnly(d, vocab)
+  )
+  let reusable = new Set(
+    related.filter(([, d]) => d.stable).map(([p]) => p.split('.')[0]),
+  )
+  let safe = (rows: Bundle[], comps?: string[]) => {
+    let names = new Set(rows.flatMap((b) => Object.keys(b)))
+    if ([...names].some((n) => vocab.comp(n)?.computed)) return false
+    let reads = related.filter(([p, d]) =>
+      names.has(p.split('.')[0]) && (!!comps || d.whole !== false)
+    )
+    return reads.length > 0 && reads.every(([, d]) => d.stable)
+  }
+  let remember = (key: string, a: Answer) => {
+    k.answers.set(key, a)
+    if (c.depth) c.answered.push([k.answers, key])
+    if (k.answers.size > ANSWERS) {
+      k.answers.delete(k.answers.keys().next().value!)
+    }
+  }
+  let getting = (
+    get: Get,
+    eids: string[],
+    comps?: string[],
+    refresh = true,
+  ) => {
+    // A get naming components is answered from an entity held whole, or
+    // held in part with them, cut to them. What one reads is held in part,
+    // unless it says all there is: an entity storage lacks, or a dead one.
+    let wanted = comps && new Set(comps)
+    // This transaction already knows the stored aspects its own patches
+    // produced. Their rows stand now; classification can still be owed.
+    let written = new Map<string, Bundle | null>()
+    if (c.depth && !c.blind && comps && !comps.some((n) => dynamic.has(n))) {
+      for (let eid of eids) {
+        let b = k.after.get(eid), part = k.afterPart.get(eid)
+        if (
+          b === undefined || b === LOST ||
+          part && !comps.every((n) => part.has(n))
+        ) continue
+        if (b && comps.some((n) => b[n] != null && HOLE in (b[n] as Comp))) {
+          continue
+        }
+        written.set(eid, b)
+      }
+    }
+    let missing = [...new Set(eids)].filter((eid) =>
+      !written.has(eid) && !holds(eid, wanted)
+    )
+    let read = new Set(missing)
+    let fresh = new Map(
+      (missing.length ? get(missing, comps) : []).map((
+        b,
+      ) => [b.entity.eid, b]),
+    )
+    if (!c.blind && missing.length <= SCAN) {
+      for (let eid of missing) {
+        if (c.dirty.has(eid)) continue
+        let b = fresh.get(eid) ?? null
+        hold(eid, b, wanted && b && !dead(b) ? wanted : undefined)
+      }
+    }
+    let hits = eids.filter((eid) =>
+      !written.has(eid) && !read.has(eid) && k.held.get(eid)
+    )
+    // A hit's dynamic components are read now, in one statement.
+    let names = [
+      ...new Set(
+        (refresh ? hits : []).flatMap((eid) =>
+          Object.keys(k.held.get(eid)!).filter((name) =>
+            dynamic.has(name) && (!wanted || wanted.has(name))
+          )
+        ),
+      ),
+    ]
+    let current = new Map(
+      (names.length ? get([...new Set(hits)], names) : []).map((
+        b,
+      ) => [b.entity.eid, b]),
+    )
+    let out = eids.flatMap((eid) => {
+      if (written.has(eid)) {
+        let b = written.get(eid)
+        return b ? [copy(b, wanted)] : []
+      }
+      if (read.has(eid)) return fresh.has(eid) ? [fresh.get(eid)!] : []
+      let held = k.held.get(eid)!
+      k.held.delete(eid)
+      k.held.set(eid, held)
+      if (!held) return []
+      let b = copy(held, wanted, names)
+      return [Object.assign(b, current.get(eid) ?? {})]
+    })
+    trim()
+    return out
+  }
   let stored = new Set(['tombstone', ...tables(vocab)])
   return {
     presence: (eid, tables) => {
@@ -984,7 +1089,7 @@ export let memoized = (
       let proof = typeof query == 'function' || !query
         ? undefined
         : rooted(vocab, query)
-      k.answers.set(key, {
+      remember(key, {
         tables: at,
         rows: kept,
         test: typeof query == 'function' ? query : proof?.test,
@@ -998,83 +1103,35 @@ export let memoized = (
           ]),
         ],
       })
-      if (c.depth) c.answered.push([k.answers, key])
-      if (k.answers.size > ANSWERS) {
-        k.answers.delete(k.answers.keys().next().value!)
-      }
       return rows
     },
     get: (get, eids, comps, refresh = true) => {
       sync()
-      // A get naming components is answered from an entity held whole, or
-      // held in part with them, cut to them. What one reads is held in part,
-      // unless it says all there is: an entity storage lacks, or a dead one.
-      let wanted = comps && new Set(comps)
-      // This transaction already knows the stored aspects its own patches
-      // produced. Their rows stand now; classification can still be owed.
-      let written = new Map<string, Bundle | null>()
-      if (c.depth && !c.blind && comps && !comps.some((n) => dynamic.has(n))) {
-        for (let eid of eids) {
-          let b = k.after.get(eid), part = k.afterPart.get(eid)
-          if (
-            b === undefined || b === LOST ||
-            part && !comps.every((n) => part.has(n))
-          ) continue
-          if (b && comps.some((n) => b[n] != null && HOLE in (b[n] as Comp))) {
-            continue
-          }
-          written.set(eid, b)
-        }
+      if (
+        !refresh || !reusable.size ||
+        comps && !comps.some((n) => reusable.has(n))
+      ) return getting(get, eids, comps, refresh)
+      let key = JSON.stringify(['get', eids, comps])
+      let limit = ANSWER - key.length * 2
+      if (limit <= 0) return getting(get, eids, comps, refresh)
+      let epoch = revision(driver, 'data')
+      let held = k.answers.get(key)
+      if (held?.epoch == epoch) {
+        k.answers.delete(key)
+        k.answers.set(key, held)
+        return copied(held.rows) as Bundle[]
       }
-      let missing = [...new Set(eids)].filter((eid) =>
-        !written.has(eid) && !holds(eid, wanted)
-      )
-      let read = new Set(missing)
-      let fresh = new Map(
-        (missing.length ? get(missing, comps) : []).map((
-          b,
-        ) => [b.entity.eid, b]),
-      )
-      if (!c.blind && missing.length <= SCAN) {
-        for (let eid of missing) {
-          if (c.dirty.has(eid)) continue
-          let b = fresh.get(eid) ?? null
-          hold(eid, b, wanted && b && !dead(b) ? wanted : undefined)
-        }
+      if (held) k.answers.delete(key)
+      let rows = getting(get, eids, comps, refresh)
+      if (!safe(rows, comps) || epoch != revision(driver, 'data')) return rows
+      if (!held && !k.asked.delete(key)) {
+        k.asked.add(key)
+        if (k.asked.size > ASKED) k.asked.delete(k.asked.values().next().value!)
+        return rows
       }
-      let hits = eids.filter((eid) =>
-        !written.has(eid) && !read.has(eid) && k.held.get(eid)
-      )
-      // A hit's dynamic components are read now, in one statement.
-      let names = [
-        ...new Set(
-          (refresh ? hits : []).flatMap((eid) =>
-            Object.keys(k.held.get(eid)!).filter((name) =>
-              dynamic.has(name) && (!wanted || wanted.has(name))
-            )
-          ),
-        ),
-      ]
-      let current = new Map(
-        (names.length ? get([...new Set(hits)], names) : []).map((
-          b,
-        ) => [b.entity.eid, b]),
-      )
-      let out = eids.flatMap((eid) => {
-        if (written.has(eid)) {
-          let b = written.get(eid)
-          return b ? [copy(b, wanted)] : []
-        }
-        if (read.has(eid)) return fresh.has(eid) ? [fresh.get(eid)!] : []
-        let held = k.held.get(eid)!
-        k.held.delete(eid)
-        k.held.set(eid, held)
-        if (!held) return []
-        let b = copy(held, wanted, names)
-        return [Object.assign(b, current.get(eid) ?? {})]
-      })
-      trim()
-      return out
+      let kept = packed(rows, limit)
+      if (kept) remember(key, { tables: [], epoch, rows: kept })
+      return rows
     },
     writes,
     removes: (eids, at, body) => {

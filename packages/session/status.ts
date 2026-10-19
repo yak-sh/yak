@@ -83,6 +83,7 @@ import { claudeStops } from './claude-control.ts'
 // Old servers still write state during the marks expansion. A non-null state
 // wins until cutover; otherwise waiting precedes admitted in the declared ladder.
 export let dispatchStatus = {
+  stable: true,
   tag: 'text' as const,
   values: ['queued', 'active', 'waiting', 'settled'],
   deps: ['dispatch', 'waiting', 'admitted'],
@@ -1220,6 +1221,8 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
     ...states,
     'session.status': {
       ...sessionStatus,
+      stable: !reading['content.body'] ||
+        reading['content.body'].stable == true,
       test: (owner, values, scope) => {
         if (
           !values.every((v) =>

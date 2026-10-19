@@ -65,6 +65,7 @@ export let weighing: Hook = (bundles, tx) => {
 /** `session.cost` as SQL, for @yaks/sqlite's derived-property registry: the
  * dollars its entries record, or nothing where none records any. */
 export let sessionCost: DerivedProp = {
+  stable: true,
   tag: 'number',
   whole: false,
   expr: (owner) =>
