@@ -100,6 +100,8 @@ import {
   eq,
   fields,
   limit as window,
+  list,
+  ne,
 } from '@yaks/query'
 import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
@@ -606,6 +608,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // The last pass found every slot taken: the next run to end wakes the
   // worker, rather than leaving its slot empty for a nap.
   let full = false
+  let pending = PENDING, signature = ''
   // The worker's wait between passes, which a wake cuts short.
   let nap = new AbortController()
   type Pass = { started: Promise<void>[]; more: boolean }
@@ -637,10 +640,20 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       return { started, more: false }
     }
     if (!budget) return { started, more: true }
-    // An empty pool needs one bounded identity seek, regardless of how many
-    // handlers this host serves. Pending work still uses its fair windows.
+    // Pending includes other handlers' work and our own live runs. Neither
+    // owes this worker a scan of every handler's pending window.
+    let live = [...running.keys()]
+    let key = JSON.stringify([names, live])
+    if (key != signature) {
+      signature = key
+      pending = and(
+        ...PENDING.clauses,
+        eq(`${EFFECT}.handler`, list(...names)),
+        ...live.length ? [ne('entity.eid', list(...live))] : [],
+      )
+    }
     if (
-      !(await g.read(PENDING, { storageOrder: true })).length
+      !(await g.read(pending, { storageOrder: true })).length
     ) {
       cursors.clear()
       exhausted.clear()
