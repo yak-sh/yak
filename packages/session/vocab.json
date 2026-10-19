@@ -741,7 +741,7 @@
       "removed": [
         "edge"
       ],
-      "target": ".entry|.session|.task|.requires|.contains",
+      "target": ".entry !imported|.session|.task|.requires|.contains",
       "tries": 8,
       "description": "advance a transcript by one independently owed step: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency (a `requires` or `contains` link going, read by the ends it had). A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },

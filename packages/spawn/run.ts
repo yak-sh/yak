@@ -161,6 +161,11 @@ export let spelling = async (
   return name == null ? undefined : String(name)
 }
 
+/** An entry that asks for a managed turn. Imported selections and served
+ * asks describe history; neither requests another process. */
+export let requestOf = (b: Bundle | undefined): Bundle | undefined =>
+  b?.entry && b.using && !b.imported && !b.ask ? b : undefined
+
 /**
  * Read a session's request out of its transcript: the `using` component on the
  * first entry that has one, and the instruction text stored with it.
@@ -181,7 +186,7 @@ export let asked = async (
   let [owner] = await g.get([session])
   if (owner?.native) return null
   let entries = await g.read(`.entry.session=${session}&.order=entry.seq&*`)
-  let request = entries.find((b) => b.using)
+  let request = entries.find(requestOf)
   if (!request) return null
   let using = comp(request, 'using')!
   if (!using.provider) return null
@@ -207,7 +212,9 @@ export let asked = async (
   }
   // The instruction is the prose the request came with; a request stated on an
   // entry of its own takes the transcript's first input instead.
-  let input = entries.find((b) => b.content && !b.output)
+  let input = entries.find((b) =>
+    b.content && !b.output && !b.imported && !b.notice
+  )
   let said = comp(request, 'content') ?? comp(input, 'content')
   return {
     provider: name,
@@ -353,7 +360,7 @@ export let carry = (
   let thread = comp(row, SESSION)?.id
   if (
     row.stop || row[EXIT] == null || thread == null ||
-    !said.some((b) => b.using)
+    !said.some(requestOf)
   ) return null
   return { ...job, ...since(said, job), thread: String(thread) }
 }

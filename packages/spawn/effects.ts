@@ -34,7 +34,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import type { Handlers } from '@yaks/effects'
 import { EXIT, PROCESS } from '@yaks/process'
-import { down, type Opts, start } from './run.ts'
+import { down, type Opts, requestOf, start } from './run.ts'
 
 /** What these handlers are given: the open graph. */
 export type Host = { graph: Graph; stopping?: AbortSignal }
@@ -84,7 +84,7 @@ export let spawning =
       // that run ends (./run.ts); one whose run is over carries on its thread.
       spawn_start: async (e) => {
         let entry = await one(host.graph, e.entity.eid)
-        if (!entry?.entry || entry.ask) return
+        if (!requestOf(entry)) return
         let session = String(comp(entry, 'entry')?.session ?? '')
         if (!session) return
         let row = await one(host.graph, session)
