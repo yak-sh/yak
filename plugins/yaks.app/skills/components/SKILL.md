@@ -570,7 +570,7 @@ These are the names, all of them:
     published quarantined questions quote reads recalled ref referenced
     refusal register_writes report repository representation requires
     restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded
-    serves session session_run sfu signed_in signin space spend staged stop
+    sending serves session session_run sfu signed_in signin space spend staged stop
     stripe submitted subscription supersedes supervises sweep switched task theme tool topic
     trashed tree_entry tunnel typed updated usage uses using verified wake wants
     web worked worktree written
