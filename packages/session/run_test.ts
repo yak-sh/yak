@@ -547,8 +547,11 @@ test('a graph with tasks and no claims runs its transcripts', async () => {
 
 test('a worker coming up runs what a restart left owed', async () => {
   let s = store()
-  // Written by a graph keeping no pool: nothing was owed on the way in.
-  graph({ storage: s, vocab }).apply(ask('s1'), { trusted: true })
+  // The writer records intent while no worker is running.
+  let fx = effects(vocab, { owes: 'declared' })
+  graph({ storage: s, vocab, plugins: [fx] }).apply(ask('s1'), {
+    trusted: true,
+  })
   let { model, asked } = fake()
   let p = proc(s, 'w1', model)
   await p.fx.work(p.g)
@@ -618,7 +621,8 @@ test('retryable errors keep a claim until the transcript fails', async () => {
 
 test('a worker reclaims claims left by already ended transcripts', async () => {
   let s = store()
-  await graph({ storage: s, vocab }).apply([
+  let fx = effects(vocab, { owes: 'declared' })
+  await graph({ storage: s, vocab, plugins: [fx] }).apply([
     { entity: { eid: 's1' }, session: { id: 's1' } },
     { entity: { eid: 'work' }, claim: { session: 's1' } },
     { entity: { eid: 'end' }, entry: { session: 's1' }, stop: {} },
@@ -941,4 +945,45 @@ test('duplicate wakes waiting on another worker leave pool room', async () => {
     await working
     await b.fx.idle()
   }
+})
+
+// Capability becoming available preserves the original obligation, while
+// terminal transcripts never wait for a provider they no longer need.
+let availability = await (async () => {
+  let s = store(), ready = false, time = 0
+  let { model, asked } = fake()
+  let a = proc(s, 'w1', model, { answers: () => ready }, () => time)
+  await a.g.apply(ask('waiting'))
+  await a.fx.work(a.g)
+  let waiting = await a.g.read(
+    '.effect.handler=session_run .effect.state=pending',
+  )
+  let before = asked.length
+  time = 1000
+  ready = true
+  let b = proc(s, 'w2', model, { answers: () => ready }, () => time)
+  await b.fx.work(b.g)
+  await b.fx.idle()
+  let status = statusOf(await transcript(b.g, 'waiting'))
+  ready = false
+  await b.g.apply([
+    ...ask('ended'),
+    { entity: { eid: 'ended-stop' }, entry: { session: 'ended' }, stop: {} },
+  ])
+  await b.fx.work(b.g)
+  await b.fx.idle()
+  let left = await b.g.read('.effect.handler=session_run .effect.state=pending')
+  return { waiting, before, asked: asked.length, status, left }
+})()
+
+test('unavailable providers leave work queued until a replacement can answer', () => {
+  assertEquals(availability.before, 0)
+  assertEquals(availability.waiting.length, 1)
+  assertEquals(availability.waiting[0].effect!.attempts, 0)
+  assertEquals(availability.asked, 1)
+  assertEquals(availability.status, 'settled')
+})
+
+test('terminal transcripts do not defer work for an unavailable provider', () => {
+  assertEquals(availability.left, [])
 })

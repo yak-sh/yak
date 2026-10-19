@@ -95,7 +95,7 @@ let holds = (g: Graph) =>
 // A transcript that has ended: its parent told, its dispatch settled, and its
 // place among the children given to the next. The parent is told first, so a
 // run cut short between the two leaves the child still `active`, which the
-// sweep of a worker coming up runs again, and telling is idempotent.
+// queued recovery can run again, and telling is idempotent.
 let ended = async (g: Graph, session: Eid, r: Runner) => {
   if (g.vocab.comp('provisional')) {
     let owed = await g.read(`.entry.session=${session}&.ask&.provisional`)
@@ -447,6 +447,11 @@ let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
   here.set(session, pass)
   let done = Promise.resolve().then(async () => {
     if (!await answering(g, session, r)) {
+      let status = await prepared(g, session)
+      if (ENDED.includes(status)) {
+        await ended(g, session, r)
+        return
+      }
       if (await usingOf(g, session) || await hasAsk(g, session)) {
         await r.attempt?.defer?.(1000)
       }
@@ -640,6 +645,14 @@ export let running = (g: Graph, runner: Runner): Handlers => {
           let [call] = await g.get([e.entity.eid])
           let session = (call?.entry as Comp | undefined)?.session
           if (!call?.tool_async || !session || !r.asyncTools) return
+          if (
+            ['stopped', 'failed'].includes(await prepared(g, String(session)))
+          ) return
+          if (
+            (await g.read(
+              `.result.call=${call.entity.eid} .limit=1 .fields=entity.eid`,
+            )).length
+          ) return
           const source = (call.call as Comp | undefined)?.source
           const [asked] = source ? await g.get([String(source)], ['using']) : []
           if (

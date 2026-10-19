@@ -479,11 +479,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     // that has failed before has anything to write.
     let attempt: Attempt = {
       last: () => tries >= limit(s),
-      defer: async (delay) => {
+      defer: (delay) => {
         if (!Number.isFinite(delay) || delay <= 0) {
           throw new RangeError('an effect deferral needs a positive delay')
         }
         deferred = Math.max(deferred ?? 0, clock() + delay)
+        return Promise.resolve()
       },
       progressed: async () => {
         tries = 1
