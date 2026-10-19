@@ -20,7 +20,7 @@ import {
 } from '@yaks/mirror'
 import { parseSkill, renderSkill } from './skill-text.ts'
 import { agreement, exact, prepareTree } from './skill-mirror-io.ts'
-import { renderFiles, repoSkills, skillLocations } from './skills.ts'
+import { renderFiles, skillScope } from './skills.ts'
 
 export type SkillSync = Report & { landed?: string; worktree?: string }
 export type SkillSyncOpts = { worktree?: string; run?: Run }
@@ -126,11 +126,7 @@ let syncRepository = async (
       contains('file.path', '.claude/skills/'),
       fields('file.path', 'file.repository', 'content.body'),
     ))
-    let all = await repoSkills(g)
-    let places = await skillLocations(g, all)
-    let skills = all.filter((b) =>
-      str(places.get(b.entity.eid), 'file', 'repository') == repository
-    )
+    let { skills, places } = await skillScope(g, repository)
     let edges = skills.length
       ? await g.read(and(
         present('references'),

@@ -165,15 +165,18 @@ let report = await syncSkills(
 
 `skillCatalog(graph, repository?)` returns descriptions without instruction
 bodies; `graphSkill(graph, title, repository?)` loads one exact graph skill.
-`repoSkills(graph, repository?)` reads complete graph skills; `skillLocation`
-follows one locator and `skillLocations(graph, skills)` resolves a batch of
-locators together. `skillFiles(graph, repository)` renders repository-relative
-text; `renderFiles(skills, locations, files)` renders an already-read snapshot
-without further graph reads. `skillsAt` and `loadSkill` overlay a session
-checkout's actual files read-only: local edits, additions and deletions are
-visible without importing them. A missing or ambiguous title is refused.
-Instructions are loaded by title only when needed; discovery needs just titles
-and descriptions.
+`repoSkills(graph, repository?)` reads complete graph skills. With a repository,
+it reads only that repository’s instruction bodies and refuses ambiguous
+locators on each selected skill. `skillScope(graph, repository)` returns those
+`skills` and their `places` together for consumers that need both.
+`skillLocation` follows one locator and `skillLocations(graph, skills)` resolves
+a batch of locators together. `skillFiles(graph, repository)` renders
+repository-relative text; `renderFiles(skills, locations, files)` renders an
+already-read snapshot without further graph reads. `skillsAt` and `loadSkill`
+overlay a session checkout's actual files read-only: local edits, additions and
+deletions are visible without importing them. A missing or ambiguous title is
+refused. Instructions are loaded by title only when needed; discovery needs just
+titles and descriptions.
 
 `syncSkills` uses [@yaks/mirror](../mirror) to reconcile tracked text files in
 the primary checkout with graph values, on whichever branch it has checked out.
