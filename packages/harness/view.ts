@@ -17,7 +17,7 @@ import type { ComponentRenderer } from '@yaks/preact'
 import { parse } from '@yaks/query'
 import { define, type Registry } from '@yaks/render'
 import { run, useHold } from '@yaks/tui'
-import { read } from '@yaks/cli/host'
+import { dbOf, read } from '@yaks/cli/host'
 import { App } from './app.ts'
 import { openDrafts } from './draft_vault.ts'
 import { remote } from './remote.ts'
@@ -29,12 +29,13 @@ type Up = {
 }
 
 let boot = async (
-  config: string,
+  path: string,
   session: string | undefined,
   progress: (text: string) => void,
 ): Promise<Up> => {
-  let drafts = await openDrafts()
-  let backend = await remote({ cwd: Deno.cwd(), config: read(config) }).catch(
+  let config = read(path)
+  let drafts = await openDrafts(dbOf(config))
+  let backend = await remote({ cwd: Deno.cwd(), config }).catch(
     async (error) => {
       await drafts.close()
       throw error

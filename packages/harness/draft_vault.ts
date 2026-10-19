@@ -3,12 +3,9 @@ import type { Saved, Vault } from '@yaks/client'
 import { join } from '@std/path/join'
 import { resolve } from '@std/path/resolve'
 import { frontend } from './frontend.ts'
-import { dbOf } from '@yaks/cli/host'
 
 let home = (env: (name: string) => string | undefined) =>
   env('HARNESS_HOME') || `${env('HOME') || '.'}/.yak`
-let dbPath = (env: (name: string) => string | undefined) =>
-  env('HARNESS_DB') || dbOf({}, env)
 
 export let draftVault = async (directory: string): Promise<Vault> => {
   await Deno.mkdir(directory, { recursive: true, mode: 0o700 })
@@ -71,8 +68,10 @@ export let draftVault = async (directory: string): Promise<Vault> => {
 
 /** Stable per-terminal identity, overridable for moving between terminals. */
 export let openDrafts = async (
+  database: string,
   env: (name: string) => string | undefined = Deno.env.get,
 ) => {
+  database = env('HARNESS_DB') || database
   let terminal = env('HARNESS_FRONTEND') ?? env('TMUX_PANE')
   if (!terminal) {
     try {
@@ -81,7 +80,6 @@ export let openDrafts = async (
       terminal = 'default'
     }
   }
-  const database = dbPath(env)
   const hash = await crypto.subtle.digest(
     'SHA-256',
     new TextEncoder().encode(resolve(database) + '\n' + terminal),
