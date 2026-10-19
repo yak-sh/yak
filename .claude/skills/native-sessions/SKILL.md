@@ -30,10 +30,17 @@ CLI that started it stops nothing.
 Commands and files target workspaces, not a session's location. A session's
 `home{workspace, cwd}` is a convenience default, not permissions. A workspace
 records a directory on a real computer or sandbox; `machine{address}` records
-only the real computer. With no workspace, the first file or command call records a sandbox intention
-through the host's explicitly configured adapter. Missing configuration refuses
-rather than creating a process directory. The host's current directory is never
-silently lent to a session (packages/harness/session_machines.ts).
+only the real computer. A local root `yak session new` started inside a Git
+checkout defaults to that checkout's local workspace: `workspace.root` is the
+checkout root and `home.cwd` is the directory where the command was started,
+including a subdirectory (packages/harness/workspace.ts `homeAt`). An explicit
+`--workspace` overrides this default. This selection belongs to the local CLI;
+a remote graph-only opening never borrows the server's current directory.
+
+Outside a checkout, or for a graph-only opening with no selected workspace,
+the first file or command call records a sandbox intention through the host's
+explicitly configured adapter. Missing configuration refuses with a request to
+select a workspace or provider; it never invents a process directory.
 
 Its persona comes from graph context: `--work <task-or-project>` admits the
 work's common persona and records its project; `--persona <id-or-name>` selects
@@ -45,7 +52,7 @@ nor loading scans files or provisions a machine. The persona skill mirror
 synchronizes repository skill files separately (`{skills: true}`).
 
 Ordinary file reads are not automatically model instructions; recorded prompt
-snapshots keep their original content. An explicitly named machine admits its
+snapshots keep their original content. A selected workspace admits its
 ancestor AGENTS.md files at session opening (packages/harness/instructions.ts),
 through Machine commands and reads. Missing instruction projections need graph
 context from `--work` or `--persona`, rather than a silent empty persona.
@@ -84,7 +91,8 @@ yak session new --work T-<n> --prompt @<scratchpad>/brief.md \
   --provider openai --model <model-name> --effort high
 ```
 
-Code work names an existing workspace or uses an explicitly configured sandbox
+Starting the local command from a checkout selects that checkout. Code work
+can instead name an existing workspace or use an explicitly configured sandbox
 adapter. A sandbox's `from` is initial provenance, not a backup of later edits.
 See packages/machine/README.md for execution and packages/sandbox/README.md for
 provisioning. A missing or pending placement is not the graph host's disk.
@@ -94,8 +102,9 @@ yak session new --prompt @<scratchpad>/brief.md --workspace <workspace-id> --cwd
 ```
 
 `--workspace` names a workspace record, not a path. An explicit workspace admits
-its ancestor instruction files through its own commands and reads. A model-only opening requires no workspace. The first file or command call
-requires a configured default sandbox adapter and records its pending intention.
+its ancestor instruction files through its own commands and reads. Graph-only model openings require no workspace. When no checkout or explicit
+workspace was selected, the first file or command call requires a configured
+default sandbox adapter and records its pending intention.
 
 Without model flags, selection comes from the provider's `using` row
 (packages/harness/model_selection.ts). `yak model list` is the configured

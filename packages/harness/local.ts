@@ -22,6 +22,7 @@ import { imageContext, registered } from './artifact_tools.ts'
 import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
 import { homeAt, machines } from './session_machines.ts'
+import { homeAt as checkoutHome } from './workspace.ts'
 import { earlierInput, instructionsFor } from './instructions.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
@@ -42,9 +43,8 @@ type NotHarness = {
 /** How the harness is started here: what it stores in, what serves it, and
  * what the agent may do. */
 export type Opts = ChildLimits & NotHarness & {
-  /** Optional command directory on the explicitly named workspace. */
+  /** Local root openings select the checkout containing this command directory. */
   cwd?: string
-  /** Explicit existing machine entity; otherwise shell/files request a sandbox. */
   /** the graph to run over */
   h: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
@@ -245,7 +245,9 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     opening: async (persona) => {
       let home = opts.workspace
         ? { workspace: opts.workspace, ...opts.cwd ? { cwd: opts.cwd } : {} }
-        : homeAt(undefined, opts.cwd)
+        : opts.cwd
+        ? await checkoutHome(h.g, opts.cwd)
+        : homeAt()
       let files = await instructionsFor(
         h.g,
         home,

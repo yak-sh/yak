@@ -15,3 +15,32 @@ export let commands: CliCommand[] = [
     },
   },
 ]
+
+/** The local command supplies its own filesystem context before the stored
+ * session_new call. A remote invocation never observes the server cwd. */
+export let tools = {
+  session_new: async (
+    args: Record<string, unknown>,
+    context: { config?: string; duties: boolean },
+  ) => {
+    if (args.workspace != null) return undefined
+    let { compose, read } = await import('@yaks/cli/host')
+    let { homeAt } = await import('./workspace.ts')
+    let host = await compose(
+      { ...read(context.config!), duties: false },
+      ['graph'],
+      undefined,
+      { process: false },
+    )
+    try {
+      let home = await homeAt(host.graph, Deno.cwd())
+      if (home.workspace) {
+        args.workspace = home.workspace
+        args.cwd ??= home.cwd
+      }
+    } finally {
+      await host.close()
+    }
+    return undefined
+  },
+}
