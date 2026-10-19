@@ -1025,9 +1025,9 @@ let recovery = await (async () => {
       { entity: { eid: 'b2' }, book: { title: 'Winter' } },
     ])
     // A previous worker settled Spring; Winter's durable work is still owed.
-    let owed = await host.graph.read('.effect')
+    let owed = await host.graph.read('.effect.target=b1')
     await detached(host.storage).patch(
-      owed.filter((b) => b.effect?.target == 'b1').map((b) => ({
+      owed.map((b) => ({
         entity: b.entity,
         effect: { state: 'done' },
       })),
