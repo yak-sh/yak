@@ -250,7 +250,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
     // An unnamed runner's own claim still owes the unfinished-call check.
     if (!opts.owner && by == owner) return 'free'
     if (by == opts.owner) return 'mine'
-    let [holder] = await g.get([String(by)])
+    let [holder] = await g.get([String(by)], ['exit'])
     return holder?.exit ? 'lapsed' : 'theirs'
   }
   // Each tool's row, as the batch that stood it up (`ensure`): one entry per
