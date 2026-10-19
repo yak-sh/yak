@@ -248,7 +248,7 @@ export let repositoryCatalog = (
   url: string,
   send: typeof fetch = fetch,
   now = Date.now,
-) => {
+): (common: string) => Promise<string | undefined> => {
   let known = new Map<
     string,
     { at: number; answer: Promise<string | undefined> }

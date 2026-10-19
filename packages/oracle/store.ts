@@ -8,6 +8,7 @@ import {
   growOracleTree,
   type OracleConversation,
   type OracleNode,
+  type OracleTree,
 } from './tree.ts'
 
 export type Saved = { root: string; nodes: OracleNode[] }
@@ -202,7 +203,7 @@ export let graphTree = async (
     retained?: boolean
     caller?: string
   },
-) => {
+): Promise<OracleTree & { save: () => Promise<void> }> => {
   let { tree: eid, title, retained, caller, ...opts } = options
   let saved = retained ? await loadTree(g, eid) : opts.resume
   let [head] = retained ? await g.get([eid], ['oracle_tree']) : []

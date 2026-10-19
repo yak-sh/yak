@@ -1,7 +1,10 @@
 // Verbatim evidence selection enforces the historical cutoff.
 import type { Bundle } from '@yaks/graph'
 
-export function ownerWords(rows: Bundle[], cutoff: string) {
+export function ownerWords(
+  rows: Bundle[],
+  cutoff: string,
+): { id: string; at: string; words: string }[] {
   return rows.map((row) => {
     let at = (row.created as { at?: string } | undefined)?.at
     let body = (row.content as { body?: string } | undefined)?.body ??

@@ -65,6 +65,56 @@ export type OracleLimits = {
   turns?: number
   depth?: number
 }
+type QueryInput = {
+  to?: string
+  from?: string
+  message: string
+  conversation?: string
+  maintenance?: boolean
+}
+type QueryResult = {
+  conversation: string
+  answer: string
+  declined: boolean
+  node: string
+}
+export type OracleTree = {
+  root: string
+  nodes: Map<string, OracleNode>
+  trace: OracleCall[]
+  conversations: Map<string, OracleConversation>
+  declines: { conversation: string; node: string; reason: string }[]
+  changes: {
+    node: string
+    before: string
+    after: string
+    conversation?: string
+  }[]
+  query: (
+    input: QueryInput,
+    queryDepth?: number,
+    budget?: { remaining: number; path: string[] },
+  ) => Promise<QueryResult>
+  question: () => (input: QueryInput) => Promise<QueryResult>
+  converse: (
+    input: { to?: string; from?: string; message: string; maxTurns?: number },
+  ) => Promise<QueryResult & { askerFork: string; askerItems: Item[] }>
+  evidence: Evidence[]
+  stats: () => {
+    nodes: number
+    readyNodes: number
+    targetNodes: number
+    shortfall: number
+    calls: number
+    growthCalls: number
+    answerCalls: number
+    declines: number
+    advertisementChanges: number
+    growthWallMs: number
+    wallMs: number
+    partialErrors: string[]
+  }
+}
 type Evidence = { id: string; at: string; words: string }
 type Dict = Record<string, unknown>
 const capabilities: Capability[] = [
@@ -192,7 +242,7 @@ export async function growOracleTree(options: {
   measureTokens?: (text: string) => number
   onCall?: (call: OracleCall) => void | Promise<void>
   resume?: { root: string; nodes: OracleNode[] }
-}) {
+}): Promise<OracleTree> {
   let limits = {
     targetNodes: options.limits.maxNodes,
     concurrency: 8,

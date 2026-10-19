@@ -23,7 +23,7 @@ import type { Reply } from '@yaks/tools'
 import type { Derived, Extension, Raw } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 import { semantic } from './compile.ts'
-import { type Statements, statements } from '@yaks/sql'
+import { type Statements, statements, type Stmt } from '@yaks/sql'
 import { schema as tables } from './ddl.ts'
 import { resolved } from './fields.ts'
 import { chosen, type Options, ready, spaceOf } from './options.ts'
@@ -34,7 +34,7 @@ import { type Host, neighbours } from './neighbours.ts'
  * rest of its composed schema. It contributes no rule to `apply()`: nothing a
  * client writes is a vector, and what keeps the vectors in step with the text
  * is the sweep (`./service`), off the write path. */
-export let schema = (host?: { storage: { statements?: Statements } }) =>
+export let schema = (host?: { storage: { statements?: Statements } }): Stmt[] =>
   tables(host ? statements(host.storage).ownership : undefined)
 
 /** Binding the index does not create or migrate its tables. */
