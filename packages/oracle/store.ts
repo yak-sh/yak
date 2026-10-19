@@ -103,7 +103,8 @@ export let treeBundles = async (
 }
 
 let entries = async (session: string, items: Item[]): Promise<Bundle[]> => {
-  let rows: Bundle[] = []
+  let ask = await id(session, 'ask')
+  let rows: Bundle[] = [{ entity: { eid: ask }, ask: {} }]
   let calls = new Map<string, string>()
   for (let [index, item] of items.entries()) {
     let eid = await id(session, String(index))
@@ -117,7 +118,7 @@ let entries = async (session: string, items: Item[]): Promise<Bundle[]> => {
       } catch {
         args = { text: item.args }
       }
-      row.call = { id: item.id, to: tool, args }
+      row.call = { id: item.id, to: tool, args, source: ask }
       row.execution = { by: session }
       row.content = { body: item.args }
       calls.set(item.id, eid)
@@ -125,7 +126,7 @@ let entries = async (session: string, items: Item[]): Promise<Bundle[]> => {
       row.result = { call: calls.get(item.id) }
       row.content = { body: item.output }
     } else if (item.kind != 'image') {
-      if (item.kind == 'assistant') row.output = {}
+      if (item.kind == 'assistant') row.output = { source: ask }
       if (item.kind == 'instruction') {
         row.prompt = { scope: 'local', source: 'oracle' }
       }

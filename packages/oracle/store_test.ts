@@ -7,6 +7,7 @@ import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
 import { sessionDoc } from '@yaks/session/vocab'
+import { project } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { docs as docDocs } from '@yaks/doc/vocab'
 import { contextDoc } from '@yaks/context/vocab'
@@ -73,6 +74,14 @@ let conversation = {
 let bundles = await treeBundles(eid, 'Colors', { root: 'root', nodes }, [
   conversation,
 ], evidence)
+await g.apply([{
+  entity: { eid: identityEid('tool', ['read_evidence']) },
+  tool: {
+    name: 'read_evidence',
+    description: 'Existing registered implementation',
+    revision: 'original',
+  },
+}])
 await g.apply(bundles)
 let before = await g.read('.oracle ?doc ?session')
 await g.apply(bundles)
@@ -104,6 +113,21 @@ let afterResume = await loadTree(g, eid)
 let dialogues = await g.read('.oracle_dialogue *')
 let tools = await g.read('.tool *')
 let transcripts = await g.read('.entry *')
+let sample = dialogues.find((r) =>
+  transcripts.some((t) => (t.entry as Comp).session == r.entity.eid && t.call)
+)!
+let sampleItems = transcripts.filter((r) =>
+  (r.entry as Comp).session == sample.entity.eid
+).sort((a, b) => Number((a.entry as Comp).seq) - Number((b.entry as Comp).seq))
+let projected = project(
+  sampleItems,
+  sampleItems,
+  new Map([[identityEid('tool', ['read_evidence']), {
+    name: 'read_evidence',
+    description: 'read',
+    parameters: { type: 'object' },
+  }]]),
+)
 test('resumed graph question writes session participants and transcript', async () => {
   equal(afterResume, loaded)
   equal(resumed.stats().growthCalls, 0)
@@ -120,4 +144,7 @@ test('resumed graph question writes session participants and transcript', async 
     )
   }
   equal(tools[0].entity.eid, identityEid('tool', ['read_evidence']))
+  equal((tools[0].tool as Comp).revision, 'original')
+  equal(projected, conversation.items)
+  equal(transcripts.filter((r) => r.call).every((r) => !!r.execution), true)
 })

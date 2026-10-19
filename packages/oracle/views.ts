@@ -60,7 +60,7 @@ let all: View[] = [
   ...['Inline', 'Title', 'Card.Title'].flatMap((view) =>
     ['oracle', 'oracle_tree'].map((comp) => ({
       view,
-      match: parse(`.${comp}`),
+      match: parse(comp == 'oracle' ? '.oracle .session' : '.oracle_tree'),
       Render: view == 'Inline' ? Inline : Title,
     }))
   ),
