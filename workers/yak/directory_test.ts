@@ -3,6 +3,9 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { Stale } from '@yaks/graph/errors'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { platformVocab } from './vocab.ts'
 import * as dirPart from './directory.ts'
 import { type App, directory, type Space } from './directory.ts'
 import type { Env } from './env.ts'
@@ -217,10 +220,59 @@ test('a release reaches consumer and home through stale isolate caches', async (
       'home-2',
     ])
   })
-  // Every app read reaches the directory: routing's one, then home's and the
-  // app's own.
-  assertEquals(reads, [2, 3])
+  // Routing seeks the address and front page separately; home's and the
+  // app's own reads also reach the directory.
+  assertEquals(reads, [3, 3])
 })
+
+// Read real graph predicates so address/home filtering, not a stub's roster,
+// determines which apps may route a path.
+let routingVocab = platformVocab()
+let routingGraph = graph({ storage: ram(routingVocab), vocab: routingVocab })
+await routingGraph.apply([
+  { entity: { eid: 's1' }, space: { slug: 'jeff' } },
+  { entity: { eid: 's2' }, space: { slug: 'other' } },
+  { entity: { eid: 's3' }, space: { slug: 'trashed-home' } },
+  ...[
+    ['a1', 's1', 'recipes'],
+    ['a2', 's1', 'front'],
+    ['a3', 's2', 'recipes'],
+    ['a4', 's3', 'front'],
+  ].map(([eid, space, slug]) => ({
+    entity: { eid },
+    app: { space, slug, access: 'public', version: 1 },
+    ...(eid != 'a1' ? { home: { first: '/recipes/*' } } : {}),
+    ...(eid == 'a4' ? { trashed: { at: '2026-10-19T00:00:00Z' } } : {}),
+  })),
+], { trusted: true })
+let routingDir = directory(dirPart.part({
+  query: (q) => routingGraph.read(q) as Promise<dirPart.Row[]>,
+  apply: () => Promise.resolve([]),
+}))
+
+for (
+  let [name, inSpace, slug, expected] of [
+    ['explicit address', 's1', 'recipes', ['a1', 'a2']],
+    ['missing address', 's1', 'missing', [null, 'a2']],
+    ['no address', 's1', undefined, [null, 'a2']],
+    ['empty address', 's1', '', [null, 'a2']],
+    ['front page address', 's1', 'front', ['a2', 'a2']],
+    ['another space', 's2', 'recipes', ['a3', 'a3']],
+    ['trashed front page', 's3', undefined, [null, null]],
+    ['explicit trashed address', 's3', 'front', ['a4', null]],
+  ] as const
+) {
+  test(`directory routing: ${name}`, async () => {
+    let { app, home } = await routingDir.routing(
+      { ...space, eid: inSpace },
+      slug,
+    )
+    assertEquals<readonly (string | null)[]>(
+      [app?.eid ?? null, home?.eid ?? null],
+      expected,
+    )
+  })
+}
 
 // A comp is the platform holding one of its own spaces to no ceiling. It is a
 // constant read here and a property nowhere: what makes that safe is that

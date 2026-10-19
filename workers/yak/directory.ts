@@ -1285,16 +1285,16 @@ export let directory = (via: Fetcher | Part, now = false) => {
       return row ? appOf(row) : null
     },
     // What routing a path asks (apps.ts): the app at its address and the
-    // space's front page, whose router may claim the path first. One read
-    // answers both, so a page view asks the directory about its apps once
-    // (T-124006), and it reads those two apps, never the space's roster
-    // (T-65908). With no address, the front page alone.
+    // space's front page, whose router may claim the path first. Separate
+    // seeks keep each answer bounded to its app rather than materializing
+    // a union over the space's roster. With no address, the front page alone.
     routing: async (space: Space, slug?: string | null) => {
       let at = `.app.space=${space.eid}`
-      let which = slug
-        ? `((${at}&.app.slug=${slug})|(${at}&.home))`
-        : `${at}&.home`
-      let apps = (await query(`${which}&${ABOUT}`, true)).map(appOf)
+      let [addressed, front] = await Promise.all([
+        slug ? query(`${at}&.app.slug=${slug}&${ABOUT}`, true) : [],
+        query(`${at}&.home&${ABOUT}`, true),
+      ])
+      let apps = [...addressed, ...front].map(appOf)
       return {
         app: apps.find((app) => app.slug == slug) ?? null,
         home: apps.find((app) => app.home && !app.trashed) ?? null,
