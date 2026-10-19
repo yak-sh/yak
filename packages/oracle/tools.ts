@@ -8,6 +8,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { promptEntry, snapshot } from '@yaks/context'
 import { defaultUsing, selectedUsing } from '@yaks/harness'
 import { humanCaller } from '@yaks/session'
+import { learning } from './learn.ts'
 
 let part = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -40,6 +41,7 @@ let usingFor = async (g: Graph, call: Bundle, model?: unknown) => {
 
 /** A call names the dialogue, so replay never creates another receiving fork. */
 export let runs = (): Runs => ({
+  ...learning(),
   oracle_query: async (call, g) => {
     let args = argsOf(call)
     let text = args.text

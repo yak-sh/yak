@@ -122,7 +122,7 @@
       "input": {
         "oracle": {
           "type": "string",
-          "ref": "oracle"
+          "ref": "entity"
         },
         "text": {
           "type": "string"
@@ -135,6 +135,119 @@
       "required": [
         "oracle",
         "text"
+      ],
+      "applied": true
+    },
+    "oracle_read": {
+      "tool": true,
+      "noun": "oracle",
+      "verb": "read",
+      "description": "Read a topic and its three directional retained contexts. $was.topic_context gives the preconditions for oracle_revise.",
+      "input": {
+        "oracle": {
+          "type": "string",
+          "ref": "entity"
+        }
+      },
+      "required": [
+        "oracle"
+      ],
+      "readOnly": true
+    },
+    "oracle_revise": {
+      "tool": true,
+      "noun": "oracle",
+      "verb": "revise",
+      "description": "Cultivate a topic\u2019s self, parent-facing or children-facing context from recorded evidence. Replaces only supplied directions, each with immutable provenance. Pass the corresponding $was.topic_context tokens from oracle_read; stale writes are refused. Existing receiving conversations keep their admitted contexts.",
+      "input": {
+        "oracle": {
+          "type": "string",
+          "ref": "topic"
+        },
+        "parent": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "ref": "entity"
+              }
+            }
+          },
+          "required": [
+            "body",
+            "evidence"
+          ]
+        },
+        "self": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "ref": "entity"
+              }
+            }
+          },
+          "required": [
+            "body",
+            "evidence"
+          ]
+        },
+        "children": {
+          "type": "object",
+          "properties": {
+            "body": {
+              "type": "string"
+            },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "ref": "entity"
+              }
+            }
+          },
+          "required": [
+            "body",
+            "evidence"
+          ]
+        },
+        "was": {
+          "type": "object",
+          "properties": {
+            "parent": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "self": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "children": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "oracle",
+        "was"
       ],
       "applied": true
     }
