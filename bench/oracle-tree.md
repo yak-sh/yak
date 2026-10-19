@@ -67,17 +67,18 @@ owner messages. Its results do not establish topic-oracle answer quality,
 research, useful organization or growth in response to questions.
 
 `topic-oracle.ts` measures a sequence against the native `oracle_query` tool.
-Start an isolated graph with only one root `topic{name}`. Existing `about` edges
-point from child topics to broader parent topics. `oracle_read` supplies the
-topic and its retained directional context; the benchmark preserves that answer
-whole. The receiving conversation pins context for itself and its direct
-neighbors, without recursively expanding the graph. Place the research corpus in
-that graph without prebuilding child oracles. `topicCorpus()` in
-`topic-oracle-workload.ts` reads the graph and sync package READMEs, preserving
-the exact source bytes as ordinary documents. `topicCases` supplies questions,
-continuations, a repeated subject approached from a different use and an
-unanswerable personal question. These are a small public workload, not the
-owner's personal evidence.
+Start an isolated graph with only one root `topic{name}`. All topics are
+recorded, including unplaced topics. Existing edge relation names and directions
+are preserved. `oracle_read` supplies each topic and its retained directional
+contexts; the benchmark preserves that answer whole. A receiving conversation
+pins its own self context and one-hop contexts selected by the relations'
+declared parent endpoints, without recursive expansion.
+
+Place the research corpus in that graph without prebuilding other topics.
+`topicCorpus()` in `topic-oracle-workload.ts` reads the graph and sync package
+READMEs, preserving the exact source bytes as ordinary documents. `topicCases`
+supplies questions, continuations, cross-use reuse, a preference correction and
+an unanswerable personal question. These are a small public workload.
 
 Use `nativeTopics(graph, agent, actor)` with the configured native agent's
 `send`, `idle` and `transcript` methods, then pass it as `host` to `runTopics`.

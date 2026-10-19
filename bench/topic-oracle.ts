@@ -75,10 +75,17 @@ export let topicState = async (
       call: { args: { oracle: row.entity.eid } },
     }, g)
   ))
+  let contexts = retained.flatMap((rows) => rows.slice(1))
+  let ids = contexts.map((row) => row.entity.eid)
+  let cites = ids.length
+    ? await g.read(`.cites .edge.from=${ids.join(',')} *`)
+    : []
   return {
     nodes: retained.map((rows) => rows[0]),
     edges,
-    contexts: retained.flatMap((rows) => rows.slice(1)),
+    contexts: [...new Map(
+      [...contexts, ...cites].map((row) => [row.entity.eid, row]),
+    ).values()],
   }
 }
 

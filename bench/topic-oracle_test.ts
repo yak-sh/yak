@@ -11,7 +11,9 @@ import {
   appendEntry,
   sessionDoc,
   sessions,
+  sessionTools,
   settle,
+  type ToolContext,
   transcript,
 } from '@yaks/session'
 import { effectDoc } from '@yaks/effects'
@@ -20,6 +22,7 @@ import { modelDoc, type Request } from '@yaks/model'
 import { contextDoc } from '@yaks/context'
 import { docDoc } from '@yaks/doc/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
+import { taskDoc } from '@yaks/task/vocab'
 import { topicEid, topics } from '../packages/memory/topic.ts'
 import { token } from '@yaks/graph/guard'
 import { oracleDoc } from '@yaks/oracle/vocab'
@@ -43,6 +46,18 @@ let vocab = loadVocab([
   contextDoc,
   docDoc,
   memoryDoc,
+  {
+    $defs: {
+      contains: taskDoc.$defs!.contains,
+      broader: {
+        component: true,
+        type: 'object',
+        edge: true,
+        parent: 'to',
+        properties: {},
+      },
+    },
+  },
   oracleDoc,
   effectDoc,
 ], [kernelKeywords, edgeKeywords])
@@ -87,6 +102,8 @@ let invoke = async (
   }, g)
   return JSON.stringify(write ? await g.apply(rows) : rows)
 }
+let childJobs: Promise<void>[] = []
+let children = new Map<string, string>()
 let tools = [
   {
     name: 'graph_show',
@@ -105,16 +122,18 @@ let tools = [
   })),
   {
     name: 'oracle_query',
-    run: async (args: Record<string, unknown>) => {
+    run: async (args: Record<string, unknown>, ctx?: ToolContext) => {
       let [row] = await runs().oracle_query({
         entity: { eid: crypto.randomUUID() },
         call: { args },
-        $actor: { by: actor },
+        $actor: { by: ctx!.session },
       }, g)
-      await idle(row.entity.eid)
-      return JSON.stringify(await transcript(g, row.entity.eid))
+      children.set(ctx!.session, row.entity.eid)
+      childJobs.push(idle(row.entity.eid))
+      return JSON.stringify([row])
     },
   },
+  ...sessionTools(g).filter((tool) => tool.name == 'wait'),
 ].map((tool) => ({ ...tool, description: tool.name, parameters: {} }))
 let contexts = (
   oracle: string,
@@ -135,7 +154,7 @@ let idle = (session: string) =>
     tools,
     model: async (r) => {
       requests.push(r)
-      if (requests.length > 25) throw new Error('Scripted request bound')
+      if (requests.length > 35) throw new Error('Scripted request bound')
       let n = turn.get(r.conversation!) ?? 0
       turn.set(r.conversation!, n + 1)
       let [dialogue] = await g.get([r.conversation!], ['oracle_dialogue'])
@@ -144,27 +163,22 @@ let idle = (session: string) =>
         growing.set(r.conversation!, !(await g.get([child])).length)
       }
       let was = { self: null, parent: null, children: null }
+      let learn = (name: string, body: string, prefix: string) => [
+        () => call('topic_new', { name, body }),
+        () => call('oracle_read', { oracle: topicEid(name) }),
+        () => call('oracle_revise', contexts(topicEid(name), prefix, was)),
+      ]
       let steps = [
         () => call('graph_show', { ids: [corpus[0].entity.eid] }),
-        () =>
-          call('topic_new', {
-            name: 'Graph patches',
-            body: 'Editing entity properties.',
-          }),
-        () => call('oracle_read', { oracle: child }),
-        () => call('oracle_revise', contexts(child, 'child-v1', was)),
-        () =>
-          call('topic_new', {
-            name: 'Property clearing',
-            body: 'Clearing a property.',
-          }),
-        () => call('oracle_read', { oracle: grandchild }),
-        () => call('oracle_revise', contexts(grandchild, 'twohop', was)),
+        ...learn('Graph patches', 'Editing entity properties.', 'child-v1'),
+        ...learn('Property clearing', 'Clearing a property.', 'twohop'),
         () =>
           call('graph_apply', {
             bundles: [
-              link(child, 'reads', root),
-              link(grandchild, 'cites', child),
+              link(root, 'contains', child),
+              link(child, 'broader', grandchild),
+              link(root, 'reads', grandchild),
+              link(grandchild, 'cites', root),
             ],
           }),
         () =>
@@ -175,9 +189,17 @@ let idle = (session: string) =>
         items = [{ kind: 'assistant' as const, text: 'Null clears the value.' }]
       } else if (growing.get(r.conversation!) && n < steps.length) {
         items = steps[n]()
-      } else if (growing.get(r.conversation!) && n == 10) {
+      } else if (
+        (growing.get(r.conversation!) && n == steps.length) ||
+        (!growing.get(r.conversation!) && n == 1)
+      ) {
+        items = call('wait', {
+          children: [children.get(r.conversation!)],
+          timeout: 1000,
+        })
+      } else if (growing.get(r.conversation!) && n == steps.length + 2) {
         items = call('oracle_read', { oracle: child })
-      } else if (growing.get(r.conversation!) && n == 11) {
+      } else if (growing.get(r.conversation!) && n == steps.length + 3) {
         let [node] = await g.get([child])
         items = call(
           'oracle_revise',
@@ -239,6 +261,7 @@ let results = await runTopics({
   },
 })
 
+await Promise.all(childJobs)
 let first = results[0].turns[0]
 let continuation = results[0].turns[1]
 let reuse = results[1].turns[0]
@@ -248,21 +271,23 @@ test('topic measurement starts at root and records research-driven growth throug
   equal(first.answer, 'Use null; omitted values stay.')
   equal(first.changes.added.filter((row) => row.topic).length, 2)
   equal(first.calls.filter((call) => call.name == 'oracle_revise').length, 2)
-  equal(first.after.edges.map((row) => row.reads ? 'reads' : 'cites').sort(), [
-    'cites',
-    'reads',
-  ])
+  equal(
+    first.after.edges.flatMap((row) =>
+      ['contains', 'broader', 'reads', 'cites'].filter((tag) => row[tag])
+    ).sort(),
+    ['broader', 'cites', 'contains', 'reads'],
+  )
   equal(first.transcripts.length, 2)
-  equal(first.totals.requests, 11)
-  equal(Math.round(first.totals.dollars! * 100), 11)
+  equal(first.totals.requests, 12)
+  equal(Math.round(first.totals.dollars! * 100), 12)
 })
 test('follow-ups keep their receiving fork while independent queries reuse learned topics', () => {
   equal(continuation.session, first.session)
   ok(reuse.session != first.session)
   equal(reuse.before.nodes.length, 3)
   equal(reuse.changes.added.filter((row) => row.topic).length, 0)
-  equal(reuse.totals.requests, 3)
-  equal(reuse.totals.inputTokens, 6)
+  equal(reuse.totals.requests, 4)
+  equal(reuse.totals.inputTokens, 8)
   equal(saved.length, 3)
   equal(
     results.flatMap((c) => c.turns).reduce((n, t) => n + t.totals.requests, 0),
@@ -293,13 +318,18 @@ test('directional one-hop context is pinned while corrections affect later recei
     t.session != reuse.session && t.session != firstChild.session
   )!
   ok(instructions(firstChild.session).includes('child-v1-self'))
+  ok(instructions(firstChild.session).includes('twohop-children'))
+  equal(instructions(firstChild.session).includes('twohop-parent'), false)
+  equal(instructions(firstChild.session).includes('twohop-self'), false)
   ok(instructions(laterChild.session).includes('child-v2-self'))
   let opening = instructions(reuse.session!)
-  ok(opening.includes('child-v2-children'))
+  ok(opening.includes('child-v2-parent'))
   equal(opening.includes('child-v2-self'), false)
-  equal(opening.includes('child-v2-parent'), false)
-  equal(opening.includes('twohop-children'), false)
-  equal(instructions(first.session!).includes('child-v2-children'), false)
+  equal(opening.includes('child-v2-children'), false)
+  for (let slot of ['self', 'parent', 'children']) {
+    equal(opening.includes(`twohop-${slot}`), false)
+  }
+  equal(instructions(first.session!).includes('child-v2-parent'), false)
   ok(continuation.changes.updated.some((row) => row.topic_context))
 })
 test('typed placements and context revisions survive state diffing without duplicate topics', () => {
