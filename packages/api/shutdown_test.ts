@@ -41,19 +41,19 @@ let fixture = () => {
 }
 
 let retiring = fixture()
+retiring.pause()
+retiring.g.apply([{ entity: { eid: 'one' }, book: { price: 2 } }])
+let refreshing = retiring.subs.commit([])
 test('registry shutdown cancels a shared refresh and releases its graph hook', async () => {
   let f = retiring
   let errors: unknown[][] = []
   let original = console.error
   console.error = (...args) => void errors.push(args)
   try {
-    f.pause()
-    f.g.apply([{ entity: { eid: 'one' }, book: { price: 2 } }])
-    let pending = f.subs.commit([])
     equal(f.signal()?.aborted, false)
     f.subs.stop()
     equal(f.signal()?.aborted, true)
-    await pending
+    await refreshing
     let reads = f.reads(), frames = f.frames.length
     f.g.apply([{ entity: { eid: 'one' }, book: { price: 3 } }])
     await f.subs.commit([])
@@ -159,7 +159,7 @@ let saved = (() => {
       position: {
         component: true,
         sync: 'peers',
-        durable: 'forever',
+        durable: '1s',
         save: '.book',
         properties: { x: { type: 'number' } },
       },
@@ -170,6 +170,7 @@ let saved = (() => {
   let release = Promise.withResolvers<void>()
   let started = Promise.withResolvers<void>()
   let signal: AbortSignal | undefined
+  let timers = new Set<() => void>()
   let subs = subscriptions({
     ...g,
     get: (ids, comps, opts) => {
@@ -177,12 +178,17 @@ let saved = (() => {
       started.resolve()
       return release.promise.then(() => g.get(ids, comps, opts))
     },
+  }, {
+    timer: (fn) => {
+      timers.add(fn)
+      return () => void timers.delete(fn)
+    },
   })
   let saving = subs.relay(() => {}, [{
     entity: { eid: 'one' },
     position: { x: 9 },
   }])
-  return { g, subs, saving, started, release, signal: () => signal }
+  return { g, subs, saving, started, release, timers, signal: () => signal }
 })()
 await saved.started.promise
 test('registry shutdown preserves an admitted peer save through its eligibility read', async () => {
@@ -191,4 +197,5 @@ test('registry shutdown preserves an admitted peer save through its eligibility 
   saved.release.resolve()
   await saved.saving
   equal((await saved.g.get(['one']))[0].position, { x: 9 })
+  equal(saved.timers.size, 0)
 })

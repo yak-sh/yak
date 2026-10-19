@@ -2465,6 +2465,7 @@ export let subscriptions = (graph: Graph, opts: {
               peers.values(bundles.map((b) => b.entity.eid)),
             ),
             (accepted) => {
+              if (ending.signal.aborted) return
               let out = peers.write(sink, accepted)
               return peerChange(out, sink)
             },
@@ -2479,13 +2480,16 @@ export let subscriptions = (graph: Graph, opts: {
           peers.values(bundles.map((b) => b.entity.eid)),
         ),
         (accepted) => {
+          if (ending.signal.aborted) return
           let waiting = relays.get(sink)
           if (waiting) {
             waiting.bundles = coalesced([...waiting.bundles, ...accepted])
             return waiting.done
           }
           let run = (rows: Bundle[]) =>
-            peerChange(peers.write(sink, rows), sink)
+            ending.signal.aborted
+              ? undefined
+              : peerChange(peers.write(sink, rows), sink)
           if (!pendingWork) return ordered(() => run(accepted))
           let next = { bundles: accepted, done: Promise.resolve() }
           relays.set(sink, next)
