@@ -2669,8 +2669,11 @@ let indexedRelation = (
       } limit 1 offset ?)`,
       [cap],
     )
+    // A masked presence count evaluates its policy per owner; keep its
+    // census bounded above instead of counting the entire visible table.
     if (
       root.pred && ['<', '<=', '>', '>='].includes(opOf(root.pred)) &&
+      !ctx.visibility?.components?.[present] &&
       ctx.v.indexes(root.comp).some((i) =>
         i.props.length == 1 &&
         indexName(ctx.v, root.comp, i.props) == root.index

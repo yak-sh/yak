@@ -16,8 +16,8 @@ import {
   from,
   insert,
   type Raw,
-  type Row,
   render,
+  type Row,
   screen,
   select,
   val,
@@ -28,6 +28,7 @@ let vocab = loadVocab({
     entity: { component: true, properties: { num: { type: 'number' } } },
     entry: { component: true, properties: {} },
     comment: { component: true, properties: {} },
+    held: { component: true, properties: {} },
     created: {
       component: true,
       properties: {
@@ -45,7 +46,15 @@ let vocab = loadVocab({
 })
 let db = new Database(':memory:'), sql = driver(db)
 for (
-  let name of ['entity', 'entry', 'comment', 'created', 'doc', 'tombstone']
+  let name of [
+    'entity',
+    'entry',
+    'comment',
+    'held',
+    'created',
+    'doc',
+    'tombstone',
+  ]
 ) {
   sql.query({
     t: 'create table',
@@ -96,6 +105,7 @@ for (let id = 1; id <= 4096; id++) {
         : 'unrelated',
     }),
   )
+  sql.query(insert('held', { entity: id }))
   if (id <= 64) sql.query(insert('entry', { entity: id }))
   if (id > 3968) sql.query(insert('comment', { entity: id }))
 }
@@ -129,6 +139,11 @@ let full = screen(parse(within), vocab, opts)!
 let quoted = screen(parse(`${before} ${quote}`), vocab, opts)!
 let sparse = compile(parse(`${before} needle .limit=2`), vocab, opts)
 let narrow = screen(parse(`.created.at>=${future} ${quote}`), vocab, opts)!
+let masked = screen(
+  parse(`.created.at>=${future} .held .doc.body~="Reader, "`),
+  vocab,
+  { ...opts, visibility: { components: { held: '.created.by=other' } } },
+)!
 let threshold = render(
   select({
     cols: [count()],
@@ -142,6 +157,22 @@ let ordered = compile(
 )
 
 let parity: [string, Raw, unknown[]][] = [
+  ...[false, true].map((hidden): [string, Raw, unknown[]] => [
+    `a masked required component ${hidden ? 'hides' : 'admits'} its owner`,
+    compile(
+      parse(`.created.at>=${future} .held .fields=entity.eid`),
+      vocab,
+      {
+        ...opts,
+        visibility: {
+          components: {
+            held: hidden ? `.created.at<${future}` : '.created.by=other',
+          },
+        },
+      },
+    ),
+    hidden ? [] : ['row-4096'],
+  ]),
   [
     'overlapping arms deduplicate',
     compile(parse('.entry|(.entry .created.by=person) .count'), vocab, opts),
@@ -182,6 +213,7 @@ for (
     quoted,
     sparse,
     narrow,
+    masked,
     threshold,
     ordered,
     ...parity.map((p) => p[1]),
@@ -204,6 +236,11 @@ test('a narrow scalar range still seeks before reading required bodies', () => {
   let result = probe(narrow)
   assertEquals(result.rows, [])
   assert(result.steps < 1000, `${result.steps} VM instructions`)
+})
+test('masked presence census stays bounded beside a narrow scalar range', () => {
+  let result = probe(masked)
+  assertEquals(result.rows, [])
+  assert(result.steps < 20_000, `${result.steps} VM instructions`)
 })
 test('bounded historical cardinality stops before later alternatives', () => {
   let result = probe(threshold)
