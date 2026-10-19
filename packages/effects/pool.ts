@@ -171,6 +171,9 @@ export type Attempt = {
   /** Whether this attempt is the run's last: if it fails now, it is left
    * failed, so what the handler records about the failure is what stands. */
   last: () => boolean
+  /** Wait for a dependency without spending an attempt. Return after calling
+   * this: the same run remains pending until this positive delay elapses. */
+  defer?: (delay: number) => Promise<void>
   /** The run got somewhere: a failure after this counts as its first attempt,
    * not one more in a row. For a run that does many steps, where one success
    * should give the next failure its full tries back. */
@@ -462,6 +465,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       run: Promise.resolve(),
     }
     let tries = held.attempts
+    let deferred: number | undefined
     let settle = (patch: Comp) =>
       kept
         ? swap(g, eid, { lease_token: held.token, attempts: held.attempts }, {
@@ -476,6 +480,12 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     // that has failed before has anything to write.
     let attempt: Attempt = {
       last: () => tries >= limit(s),
+      defer: async (delay) => {
+        if (!Number.isFinite(delay) || delay <= 0) {
+          throw new RangeError('an effect deferral needs a positive delay')
+        }
+        deferred = Math.max(deferred ?? 0, clock() + delay)
+      },
       progressed: async () => {
         tries = 1
         if (held.attempts <= 1) return
@@ -538,7 +548,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         )
         if (peek(g) && span?.active) span.end({ counts: { runs: 1 } })
         // Pool bookkeeping follows the completed handler, not its trace.
-        if (kept) {
+        if (deferred != null) {
+          tries = Math.max(0, tries - 1)
+          await settle({ state: 'pending', next: stamp(deferred), ...free })
+        } else if (kept) {
           await scope(undefined, () =>
             swap(
               g,

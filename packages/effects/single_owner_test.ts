@@ -63,7 +63,12 @@ let empty = await (async () => {
   a.writes.length = 0
   let next = proc(a.g.storage)
   for (let i = 0; i < 3; i++) await next.fx.work(next.g)
-  return { initially, ran: next.ran, writes: next.writes, leases: await next.g.read('.lease') }
+  return {
+    initially,
+    ran: next.ran,
+    writes: next.writes,
+    leases: await next.g.read('.lease'),
+  }
 })()
 
 test('single owner empty wakes owe no start work and write nothing', () => {

@@ -395,7 +395,7 @@ export let settle = (g: Graph, session: Eid, r: Runner): Promise<void> => {
       }
     } finally {
       here.delete(session)
-      // A replacement may have swept before the old worker drained.
+      // A replacement may have polled before the old worker drained.
       if (r.stopping?.aborted && g.vocab.comp('effect')) {
         let status = await currentStatus(g, session)
         if (['pending', 'running', 'queued'].includes(status)) {
@@ -446,7 +446,12 @@ let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
   let pass: Advance = { done: Promise.resolve(), again: false }
   here.set(session, pass)
   let done = Promise.resolve().then(async () => {
-    if (!await answering(g, session, r)) return
+    if (!await answering(g, session, r)) {
+      if (await usingOf(g, session) || await hasAsk(g, session)) {
+        await r.attempt?.defer?.(1000)
+      }
+      return
+    }
     await holding(g, `${RUN}/${session}`, {
       holder: r.holder,
       hold: r.hold ?? HOLD,
@@ -631,7 +636,7 @@ export let running = (g: Graph, runner: Runner): Handlers => {
   return {
     ...declared(g, 'session_tool')
       ? {
-        session_tool: async (e: Event) => {
+        session_tool: async (e: Event, _tx, _write, attempt) => {
           let [call] = await g.get([e.entity.eid])
           let session = (call?.entry as Comp | undefined)?.session
           if (!call?.tool_async || !session || !r.asyncTools) return
@@ -639,7 +644,10 @@ export let running = (g: Graph, runner: Runner): Handlers => {
           const [asked] = source ? await g.get([String(source)], ['using']) : []
           if (
             r.answers && !await r.answers(asked?.using as Comp | undefined)
-          ) return
+          ) {
+            await attempt?.defer?.(1000)
+            return
+          }
           // The tool runner's claim, not the session's lease, serializes this call.
           // A restarted effect inspects uncertain execution instead of replaying it.
           let s = await react(g, String(session), {

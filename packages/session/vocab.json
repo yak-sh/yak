@@ -747,7 +747,9 @@
     },
     "session_release": {
       "effect": true,
+      "changed": ["session.ended"],
       "created": [
+        "claim",
         "stop",
         "refusal",
         "exception",
@@ -795,9 +797,7 @@
     },
     "session_tool": {
       "effect": true,
-      "created": [
-        "tool_async"
-      ],
+      "match": ".call&.entry&.tool_async&!results",
       "target": ".call&.entry&.tool_async",
       "description": "execute one asynchronous native tool call independently of the session lease; the tools runner owns its execution claim and final result"
     },
