@@ -1,5 +1,5 @@
 // A sparse marker must not start from a shared author on every historical row.
-import { ok, test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { loadVocab } from '@yaks/vocab'
@@ -70,7 +70,8 @@ test('indexed disjunction arms seek referents despite shared history', () => {
       if (n > 100) add(1100, n - 100)
       let stmt = db.prepare(sql.sql)
       try {
-        ok(stmt.all(...sql.params).length >= 2)
+        // Unrelated rows share e3 as their author; neither arm selects them.
+        equal(stmt.all(...sql.params).map((r) => r.eid).sort(), ['e2', 'e3'])
         let steps = status.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 4, 0)
         ok(steps < 300, `${n} history rows: ${steps} VM steps\n${sql.sql}`)
       } finally {

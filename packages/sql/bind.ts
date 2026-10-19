@@ -1665,9 +1665,13 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
       : c.kind == 'pred' && !c.not && needs(opOf(c), c.value) &&
         opOf(c) != EXISTS
   let indexed = siblings.some((c) => c.kind == 'or' && valued(c))
-  // Keep every arm and screen on keyed probes: a held catalog is still
-  // unbounded in the number of unrelated shapes it would embed.
-  if (indexed && ctx.archetypes) ctx = { ...ctx, archetypes: undefined }
+  // Keep a screen and its arms on keyed probes: a held catalog is still
+  // unbounded in the number of unrelated shapes its absences would embed.
+  // Do not fork an unscreened OR's context: its arms publish the candidate
+  // driver there. Losing it leaves an IN test that can scan shared history.
+  if (indexed && none.length && ctx.archetypes) {
+    ctx = { ...ctx, archetypes: undefined }
+  }
   let gated = (!ctx.present || ctx.archetypes?.held) &&
     all.length + none.length > 1
   let shape = gated && !indexed
