@@ -404,7 +404,11 @@ the expression naming the entity's integer id. `tag` controls comparisons;
 `test(owner, values)` supplies the same predicate for one owner, used by bounded
 and correlated reads. Both receive typed literal operands and may return
 `undefined` to retain `expr`; projection and other operators always use `expr`.
-Their table reads follow the caller's entity and component visibility.
+Their table reads follow the caller's entity and component visibility. All three
+hooks receive an optional final `scope` argument: `scope.masked` names
+components with visibility policies. A stored archetype cannot prove their
+visible presence, so a hook using archetypes must use component reads in that
+scope.
 
 ```ts
 import { compile, type Derived, lit, worn } from '@yaks/sql'

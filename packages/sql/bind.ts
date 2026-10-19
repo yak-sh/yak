@@ -3496,16 +3496,17 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
       )
       : table(name, alias)
   }
+  let scope = { masked: [...screens.keys()] }
   let made = Object.fromEntries(
     Object.entries(derived).map(([path, prop]) => [
       path,
       {
         ...prop,
-        expr: (owner: Cond) => sources(prop.expr(owner), source),
+        expr: (owner: Cond) => sources(prop.expr(owner, scope), source),
         ...prop.test
           ? {
             test: (owner: Cond, values: Cond[]) => {
-              let test = prop.test!(owner, values)
+              let test = prop.test!(owner, values, scope)
               return test && sources(test, source)
             },
           }
@@ -3513,7 +3514,7 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
         ...prop.select
           ? {
             select: (values: Cond[]) => {
-              let set = prop.select!(values)
+              let set = prop.select!(values, scope)
               return set && sources(set, source)
             },
           }
@@ -3906,6 +3907,7 @@ let visible = (
       { get: () => catalog.held },
     )
     : undefined
+  let scope = { masked: Object.keys(visibility.components ?? {}) }
   let out = bound(
     ast,
     vocab,
@@ -3920,7 +3922,7 @@ let visible = (
             ...prop.test
               ? {
                 test: (owner: Cond, values: Cond[]) => {
-                  let test = prop.test!(owner, values)
+                  let test = prop.test!(owner, values, scope)
                   return test && sources(test, (name, alias) =>
                     vocab.comp(name)
                       ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
@@ -3931,7 +3933,7 @@ let visible = (
             ...prop.select
               ? {
                 select: (values: Cond[]) => {
-                  let set = prop.select!(values)
+                  let set = prop.select!(values, scope)
                   return set && sources(set, (name, alias) =>
                     vocab.comp(name)
                       ? raw(`${source(name)} as ${quoted(alias ?? name)}`)
@@ -3941,7 +3943,7 @@ let visible = (
               : {},
             expr: (owner: Cond) =>
               sources(
-                prop.expr(owner),
+                prop.expr(owner, scope),
                 (name, alias) =>
                   vocab.comp(name)
                     ? raw(`${source(name)} as ${quoted(alias ?? name)}`)

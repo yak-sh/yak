@@ -94,8 +94,12 @@ for (let size of [100, 1000]) {
   let before = steps()
   let rows = s.get(['owner'], ['session'])
   let vm = steps() - before
+  let masked = s.get(['owner'], ['session'], {
+    visibility: { components: { output: '!output' } },
+  })
   test(`status aggregates ordinary imported output within its row budget (${size})`, () => {
     match(rows, [{ session: { status: 'settled' } }])
+    match(masked, [{ session: { status: 'running' } }])
     ok(vm < size * 200 + 10000, `${vm} VM steps for ${size} outputs`)
   })
 }

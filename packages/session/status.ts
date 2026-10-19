@@ -73,7 +73,7 @@ import { attemptDerived } from './attempt.ts'
 import { derived as executionDerived } from '@yaks/tools/vocab'
 import { sessionCost } from './cost.ts'
 import { COST } from '@yaks/model/vocab'
-import type { Derived } from '@yaks/sql/core'
+import type { Derived, DerivedScope } from '@yaks/sql/core'
 import type { Vocab } from '@yaks/vocab'
 
 export * from './state.ts'
@@ -1214,11 +1214,13 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
   }
   let states = { ...attemptDerived(vocab), ...executionDerived(vocab) }
   let text = reading['content.body']?.text
+  let declared = (scope?: DerivedScope) => (name: string) =>
+    !!vocab.comp(name) && (name != 'archetype' || !scope?.masked.length)
   return {
     ...states,
     'session.status': {
       ...sessionStatus,
-      test: (owner, values) => {
+      test: (owner, values, scope) => {
         if (
           !values.every((v) =>
             (v.t == 'val' || v.t == 'lit') &&
@@ -1229,25 +1231,25 @@ export let sessionDerived = (vocab: Vocab, reading: Derived = {}): Derived => {
           sessionStatus.expr(
             owner,
             dispatch,
-            (name) => !!vocab.comp(name),
+            declared(scope),
             text,
             true,
           ),
           values,
         )
       },
-      select: (values) =>
+      select: (values, scope) =>
         sessionStatus.select(
           values,
           dispatch,
-          (name) => !!vocab.comp(name),
+          declared(scope),
           text,
         ),
-      expr: (owner) =>
+      expr: (owner, scope) =>
         sessionStatus.expr(
           owner,
           dispatch,
-          (name) => !!vocab.comp(name),
+          declared(scope),
           text,
         ),
     },

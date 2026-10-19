@@ -43,6 +43,10 @@ import {
 } from './ast.ts'
 import { type Tag, tagOf } from './sqlite.ts'
 
+// A stored archetype proves physical presence, not membership after a component
+// mask. Expressions using that shortcut can select their ordinary table reads.
+export type DerivedScope = { masked: string[] }
+
 // One derived property. `expr(owner)` builds the read expression, given the
 // expression naming this entity's integer id (the row being selected, or the
 // integer id a path dereferenced to); `tag` is the type a value is coerced to
@@ -58,16 +62,16 @@ export type DerivedProp = {
   tag: Tag
   values?: string[]
   deps?: string[]
-  expr: (owner: Expr) => Expr
+  expr: (owner: Expr, scope?: DerivedScope) => Expr
   // Exact integer owners whose value equals any supplied literal operand.
   // Operands have the same tag coercion as scalar equality; implementations may
   // decline unsupported operands.
   // Undefined declines this optimization; projection and other operators keep
   // using expr. The binder retains the owning-component presence guard.
-  select?: (values: Expr[]) => Select | undefined
+  select?: (values: Expr[], scope?: DerivedScope) => Select | undefined
   // Exact equality for one owner. Bounded and correlated reads use this
   // instead of a global selector; undefined falls back to expr.
-  test?: (owner: Expr, values: Expr[]) => Expr | undefined
+  test?: (owner: Expr, values: Expr[], scope?: DerivedScope) => Expr | undefined
   // Reads a value that is being replaced, without looking up the owner row.
   // Full-text-search triggers have to read the old and new values, and by then
   // the owner row may already have changed or been deleted, so an expression

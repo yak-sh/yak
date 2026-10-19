@@ -770,6 +770,48 @@ for (let typed of [false, true]) {
       ]
     })
   )
+  let outputs = shapes.filter(([name]) =>
+    [
+      'a harness turn answered',
+      'askless interrupted unanswered call beside output',
+      'askless unresolved progress beside output',
+      'prose beside current progress still permits continuation',
+      'assistant final while a progressed older call is pending',
+    ].includes(name)
+  ).map(([name, entries]) => {
+    let opts = { visibility: { components: { output: '!output' } } }
+    let id = `${name}/${S}`
+    let expected = statusOf(entries.map(({ output: _, ...row }) => row))
+    let got = storage1.get([id], ['session'], opts)
+    let read = g.read(
+      all(qeq('entity.eid', id), fields('session.status')),
+      opts,
+    ) as Bundle[]
+    let filtered = g.read(
+      all(
+        qeq('entity.eid', id),
+        qeq('session.status', expected),
+        fields('entity.eid'),
+      ),
+      opts,
+    ) as Bundle[]
+    return { name, expected, got, read, filtered }
+  })
+  test(`hidden outputs contribute no status facts (archetypes: ${typed})`, () => {
+    for (let { name, expected, got, read, filtered } of outputs) {
+      assertEquals(
+        (got[0]?.session as { status: string })?.status,
+        expected,
+        name,
+      )
+      assertEquals(
+        (read[0]?.session as { status: string })?.status,
+        expected,
+        name,
+      )
+      assertEquals(filtered.length, 1, name)
+    }
+  })
   test(`terminal predicates follow component masks (archetypes: ${typed})`, () => {
     assertEquals(
       masked.map(([name, comp, got]) => [name, comp, got]),
