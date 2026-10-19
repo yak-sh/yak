@@ -5,13 +5,15 @@
    the icon keeps its title's line. As a link or a button, the whole row is
    the target; the one picked is lit. */
 .Tile {
+  --padding: 1px 0;
+  --end-align: center;
   display: flex;
   align-items: baseline;
   gap: var(--half-gap);
   min-width: 0;
   color: var(--text);
   text-decoration: none;
-  padding: 1px 0;
+  padding: var(--padding);
   min-height: var(--tap);
 }
 /* A button's reset weighs no more than a class, so the states after it show
@@ -43,7 +45,7 @@ a.Tile:hover,
 .Tile_Icon,
 .Tile_End {
   flex: none;
-  align-self: center;
+  align-self: var(--end-align);
   display: inline-flex;
   align-items: center;
 }
@@ -69,10 +71,17 @@ a.Tile:hover,
   font-family: var(--mono);
 }
 .Tile_Title {
+  --white-space: nowrap;
+  --weight: inherit;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: var(--white-space);
+  font-weight: var(--weight);
+}
+.Tile_Title-wrap {
+  --white-space: normal;
+  --weight: 600;
 }
 .Tile_Note {
   color: var(--muted);
@@ -89,12 +98,16 @@ a.Tile:hover,
   white-space: nowrap;
 }
 .Tile_Sub {
+  --white-space: nowrap;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: var(--white-space);
   font-size: var(--small);
   color: var(--muted);
+}
+.Tile_Sub-wrap {
+  --white-space: normal;
 }
 .Tile_Sub-negative,
 .Tile_End-negative {
@@ -112,6 +125,8 @@ a.Tile:hover,
   margin-left: auto;
 }
 .Tile-head .Tile_Title {
+  --white-space: nowrap;
+  --weight: inherit;
   font-size: 1.1em;
   font-weight: 600;
 }
@@ -135,4 +150,9 @@ a.Tile:hover,
 }
 .Tile_Icon-special {
   color: var(--special);
+}
+
+.Tile-detail {
+  --padding: var(--half-gap) 0;
+  --end-align: start;
 }

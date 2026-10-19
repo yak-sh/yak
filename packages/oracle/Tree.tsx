@@ -130,10 +130,13 @@ export let Tree = ({ e, got, io }: Props) => (
 export let NodeTile = ({ e, io, got }: Props) => {
   let node = got?.face?.rows[0] ?? e
   return (
-    <Tile href={`${io.link(e.entity.eid)}?v=Oracle`}>
-      <Tile.Kind>Oracle</Tile.Kind>
-      <Tile.Title>{title(node)}</Tile.Title>
-      <Tile.Sub>{field(advert(node), 'description')}</Tile.Sub>
+    <Tile mod='detail' href={`${io.link(e.entity.eid)}?v=Oracle`}>
+      <Tile.Kind>
+        {comp(node, 'topic').name ? 'Oracle' : 'Legacy oracle'}
+      </Tile.Kind>
+      <Tile.Title mod='wrap'>{title(node)}</Tile.Title>
+      <Tile.Sub mod='wrap'>{field(advert(node), 'description')}</Tile.Sub>
+      <Tile.End>Open →</Tile.End>
     </Tile>
   )
 }

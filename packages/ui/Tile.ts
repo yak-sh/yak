@@ -3,6 +3,7 @@
  * a `Sub` under the title saying more of it, and an `End` at the far side (a
  * level, a count, a key, a pin). The title line holds the thing's `Id` and
  * `Kind`, its `Title`, a `Note` after it and a `Count`, in the order given.
+ * Title-wrap and Sub-wrap keep their full text on several lines.
  * Every piece is optional, and they are written flat: the tile sets its icon,
  * its words (the title line over the sub) and its end side by side, on a row
  * that never wraps, so the icon keeps its title's line at any width.
@@ -88,13 +89,16 @@ export let sheet = (c: Colors): Sheet => ({
   'Tile-hover': { bg: c.surface },
   'Tile-dim': { dim: true },
   'Tile-head': { bold: true },
+  'Tile-detail': { gap: true },
   Tile_Text: { spaced: true },
   Tile_Line: { spaced: true },
+  'Tile_Title-wrap': { wrap: true, bold: true },
   Tile_Id: { fg: c.muted },
   Tile_Kind: { fg: c.muted },
   Tile_Note: { fg: c.muted, spaced: true },
   Tile_Count: { fg: c.number },
   Tile_Sub: { fg: c.muted },
+  'Tile_Sub-wrap': { block: true, wrap: true },
   'Tile_Sub-negative': { fg: c.negative },
   'Tile_End-negative': { fg: c.negative },
   'Tile_Icon-info': { fg: c.info },
@@ -127,6 +131,20 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   ['Tile, Title', h(Tile, {}, h(Title, {}, 'Just a title'))],
+  [
+    'Tile, Title-wrap, Sub-wrap',
+    h(
+      Tile,
+      { href: '#oracle' },
+      h(Title, { mod: 'wrap' }, 'Vehicle maintenance'),
+      h(
+        Sub,
+        { mod: 'wrap' },
+        'Service intervals, dashboard indicators and operation from the owner manual.',
+      ),
+      h(End, {}, 'Open →'),
+    ),
+  ],
   [
     'Tile, Icon, Title, Sub, End',
     h(
