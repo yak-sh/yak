@@ -87,7 +87,7 @@ test('socket lands batched binary rows and leaves JSON tags literal', () => {
   w.close()
 })
 
-test('socket accepts raw binary ArrayBuffer and Blob replies in arrival order', async () => {
+let socketByteReplies = await (async () => {
   let sockets = pair(), seen: Frame[] = []
   let done: () => void = () => {}
   let landed = new Promise<void>((resolve) => {
@@ -112,10 +112,13 @@ test('socket accepts raw binary ArrayBuffer and Blob replies in arrival order', 
   sockets.client.emit('message', new Blob([packed]))
   sockets.client.emit('message', stringify({ id: 's', bundles: rows }))
   await landed
-  equal(seen.map((f) => f.bundles?.[0].payload), [
+  w.close()
+  return seen.map((f) => f.bundles?.[0].payload)
+})()
+test('socket accepts raw binary ArrayBuffer and Blob replies in arrival order', () => {
+  equal(socketByteReplies, [
     rows[0].payload,
     rows[0].payload,
     rows[0].payload,
   ])
-  w.close()
 })
