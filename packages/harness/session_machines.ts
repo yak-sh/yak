@@ -5,7 +5,7 @@ import { Refused } from '@yaks/graph/errors'
 import { CallError } from '@yaks/tools/errors'
 import type { Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import type { Machine } from '@yaks/machine'
+import { type Machine, settle } from '@yaks/machine'
 import { targetFor, type Workspaces } from '@yaks/machine/targets'
 import type { ChildLimits } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
@@ -207,20 +207,12 @@ export let machines = (
           }); if [ "$root" != / ]; then case "$file" in "$root"/*) ;; *) exit 1;; esac; fi; test -f "$file"; base64 -- "$file"`,
           loan.cwd,
         )
-        for (;;) {
-          let proc = await loan.machine.look(id)
-          if (!proc) throw new Error('Workspace export lost its process')
-          if (proc.exit) {
-            if (proc.exit.code != 0) {
-              throw new Error(
-                'Workspace export failed: ' +
-                  (await loan.machine.tail(id, 40)).join('\n'),
-              )
-            }
-            break
-          }
-          await new Promise((done) =>
-            setTimeout(done, loan.machine.poll ?? 100)
+        let proc = await settle(loan.machine, id)
+        if (!proc) throw new Error('Workspace export lost its process')
+        if (proc.exit?.code != 0) {
+          throw new Error(
+            'Workspace export failed: ' +
+              (await loan.machine.tail(id, 40)).join('\n'),
           )
         }
         let binary = atob(

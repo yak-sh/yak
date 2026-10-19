@@ -26,6 +26,7 @@ import { token } from '@yaks/graph/guard'
 import { processWorkspace, targetFor, type Workspaces } from './targets.ts'
 
 import type { Machine, Proc } from './mod.ts'
+import { settle } from './workspace.ts'
 
 /** How the machine tools behave, all optional. */
 export type MachineOpts = {
@@ -42,8 +43,6 @@ export type MachineOpts = {
 
 // How long `shell` waits for its command unless told otherwise (ms).
 let BUDGET = 5000
-
-let sleep = (ms: number) => new Promise((go) => setTimeout(go, ms))
 
 /** Whether a path names its own root.
  *
@@ -181,20 +180,8 @@ export let machineTools = (
     }))
   }
   let m = source
-  let poll = m.poll ?? 100
   let lines = o.lines ?? 40
   let here = async (ctx?: ToolContext) => await o.cwd?.(ctx)
-
-  // The process once it has ended or `ms` has passed, whichever is first;
-  // null for an id the machine does not know. Shutdown ends only this wait,
-  // not the independently owned command; its receipt remains recoverable.
-  let settle = async (id: string, ms: number, signal?: AbortSignal) => {
-    for (let end = Date.now() + ms;;) {
-      let p = await m.look(id)
-      if (!p || p.exit || signal?.aborted || Date.now() >= end) return p
-      await sleep(Math.max(0, Math.min(poll, end - Date.now())))
-    }
-  }
 
   let told = async (id: string, head: string) =>
     [head, ...await m.tail(id, lines)].join('\n')
@@ -223,13 +210,16 @@ export let machineTools = (
         ctx?.call.entity.eid,
         ctx?.session,
       )
-      let p = await settle(id, end - Date.now(), ctx?.signal) ?? {}
+      let p = await settle(m, id, {
+        ms: end - Date.now(),
+        signal: ctx?.signal,
+      }) ?? {}
       return shellResult(id, p, ctx?.signal?.aborted ? undefined : ms)
     },
     wait: async (args, ctx) => {
       let id = String(args.process ?? '')
       let ms = Number(args.timeout ?? 60_000)
-      let p = await settle(id, ms, ctx?.signal)
+      let p = await settle(m, id, { ms, signal: ctx?.signal })
       if (!p) return `no such process: ${id}`
       return told(
         id,
@@ -247,10 +237,10 @@ export let machineTools = (
       if (p.exit) return `process ${id} ${code(p.exit.code)} already`
       let grace = Number(args.grace ?? o.grace ?? 2000)
       await m.kill(id, 'SIGTERM')
-      p = await settle(id, grace)
+      p = await settle(m, id, { ms: grace })
       if (!p?.exit) {
         await m.kill(id, 'SIGKILL')
-        p = await settle(id, grace)
+        p = await settle(m, id, { ms: grace })
       }
       return p?.exit
         ? `process ${id} ${code(p.exit.code)}`

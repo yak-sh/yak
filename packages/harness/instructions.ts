@@ -6,7 +6,7 @@ import { targetFor, type Workspaces } from '@yaks/machine/targets'
 // become immutable prompt snapshots; later machine edits do not rewrite them.
 import type { Comp, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
-import type { Machine } from '@yaks/machine'
+import { type Machine, settle } from '@yaks/machine'
 import { owing } from './session_machines.ts'
 import type { As } from '@yaks/persona'
 
@@ -25,19 +25,13 @@ export let instructionFiles = async (
     }; directory=$(pwd -P); while :; do path="$directory/AGENTS.md"; if [ -L "$path" ] && [ ! -e "$path" ]; then printf '!%s\\n' "$path"; elif [ -e "$path" ]; then [ -f "$path" ] && [ -r "$path" ]; printf '%s\\n' "$path"; fi; [ "$directory" = / ] && break; directory=$(dirname -- "$directory"); done`,
     cwd,
   )
-  for (;;) {
-    let process = await machine.look(id)
-    if (!process) throw new Error('Instruction discovery lost its process')
-    if (process.exit) {
-      if (process.exit.code != 0) {
-        throw new Error(
-          `Instruction discovery exited ${process.exit.code}: ` +
-            (await machine.tail(id, 40)).join('\n'),
-        )
-      }
-      break
-    }
-    await new Promise((go) => setTimeout(go, machine.poll ?? 100))
+  let process = await settle(machine, id)
+  if (!process) throw new Error('Instruction discovery lost its process')
+  if (process.exit?.code != 0) {
+    throw new Error(
+      `Instruction discovery exited ${process.exit?.code}: ` +
+        (await machine.tail(id, 40)).join('\n'),
+    )
   }
   let paths = (await machine.tail(id, 10000)).filter(Boolean).reverse()
   if (home) {
@@ -48,18 +42,12 @@ export let instructionFiles = async (
       } ] && printf '%s\\n' ${quoted(source)}; fi`,
       cwd,
     )
-    for (;;) {
-      let p = await machine.look(found)
-      if (!p) throw new Error('Instruction discovery lost its process')
-      if (p.exit) {
-        if (p.exit.code != 0) {
-          throw new Error('Global instruction file is unavailable')
-        }
-        paths.unshift(...(await machine.tail(found, 1)).filter(Boolean))
-        break
-      }
-      await new Promise((go) => setTimeout(go, machine.poll ?? 100))
+    let p = await settle(machine, found)
+    if (!p) throw new Error('Instruction discovery lost its process')
+    if (p.exit?.code != 0) {
+      throw new Error('Global instruction file is unavailable')
     }
+    paths.unshift(...(await machine.tail(found, 1)).filter(Boolean))
   }
   let lost = paths.filter((p) => p.startsWith('!')).map((p) => p.slice(1))
   if (lost.length && !missing) throw unavailable(lost)

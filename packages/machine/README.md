@@ -103,7 +103,7 @@ equal(await workspace.receipt!(mint()), undefined)
 
 | Export                     | What it owns                                     |
 | -------------------------- | ------------------------------------------------ |
-| `@yaks/machine`            | Workspace and computer transport contracts       |
+| `@yaks/machine`            | Workspace and transport contracts, `settle`      |
 | `@yaks/machine/connectors` | Explicit local and SSH computer connections      |
 | `@yaks/machine/execution`  | Durable command receipts and file operations     |
 | `@yaks/machine/targets`    | Workspace target resolution and session defaults |
@@ -142,6 +142,13 @@ Each invocation records its resolved workspace and cwd in `call.args` before
 executing. Shell recovery uses that record. `wait` and `stop` follow the process
 entity's `process.workspace`, even after its session selects another home.
 Missing or unreachable targets refuse rather than execute on the graph server.
+
+`shell`, `wait` and `stop` wait on a process with `settle`, exported at
+`@yaks/machine`. It looks again after the machine's `poll` (100 ms unless the
+machine says otherwise), then half again as long each time, up to two seconds
+apart. A short command answers within a fraction of a second; a call waiting on
+a long one costs a look every two seconds. An abort ends only the wait, never
+the command.
 
 `@yaks/machine/targets` exports `sessionHome(graph, session, workspace, cwd?)`.
 It validates the target and performs a guarded home write; omitting cwd clears

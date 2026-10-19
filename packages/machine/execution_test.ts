@@ -1,5 +1,5 @@
 // Recovery is bound to the launch workspace, never a caller's later default.
-import { equal, test, throws } from '@yaks/testing'
+import { equal, ok, test, throws } from '@yaks/testing'
 import { graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -156,4 +156,42 @@ let isolation = await (async () => {
 })()
 test('workspace commands live outside their launching systemd unit', () => {
   if (isolation) equal(isolation.child == isolation.own, false)
+})
+
+// A receipt's pid is its command's only while its birth token matches: a pid
+// the kernel has given another process is never reported running.
+let ownership = await (async () => {
+  if (Deno.build.os != 'linux') return
+  let { localConnector } = await import('./connectors.ts')
+  let { settle } = await import('./workspace.ts')
+  let dir = await Deno.makeTempDir({ prefix: 'workspace-owned-' })
+  let workspace = mint()
+  await g.apply([{ entity: { eid: workspace }, workspace: { root: dir } }])
+  let m = executionWorkspace(g, await localConnector().connect('local://'), {
+    workspace,
+    root: dir,
+    receipts: dir + '/receipts',
+  })
+  let stranger = new Deno.Command('sleep', { args: ['30'] }).spawn()
+  try {
+    let id = await m.start('sleep 30')
+    let running = await m.look(id)
+    let pid = `${dir}/receipts/${workspace}/${id}/pid`
+    await Deno.writeTextFile(pid, String(stranger.pid))
+    let reused = await m.look(id)
+    await Deno.writeTextFile(pid, String(running?.pid))
+    await m.kill(id, 'SIGKILL')
+    return { running, reused, stopped: await settle(m, id, { ms: 5_000 }) }
+  } finally {
+    stranger.kill()
+    await stranger.status
+    await Deno.remove(dir, { recursive: true })
+  }
+})()
+test('a command is running only while its pid keeps its birth, and stops when killed', () => {
+  if (!ownership) return
+  let { running, reused, stopped } = ownership
+  ok(running?.pid && !running.exit)
+  equal(reused, { pid: running?.pid, exit: { code: null } })
+  equal(stopped?.exit, { code: null })
 })

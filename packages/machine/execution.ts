@@ -39,9 +39,13 @@ let decode = (text: string) =>
 
 // A PID is safe to signal only while its original Linux birth token matches.
 // The supervisor creates its own session; no unrelated/adopted process is killed.
+// The birth file holds the boot id and the process start time, a line each.
+// Only bash builtins run here, so a look costs one shell and no forks.
 let identity =
-  `token() { test -r /proc/"$1"/stat || return 1; cat /proc/sys/kernel/random/boot_id; sed 's/.*) //' /proc/"$1"/stat 2>/dev/null | awk '{print $20}'; }
-owned() { test -f "$d/pid" && test -f "$d/birth" || return 1; pid=$(cat "$d/pid"); case "$pid" in ''|*[!0-9]*) return 1;; esac; test "$(token "$pid")" = "$(cat "$d/birth")" && test -n "$(cat "$d/birth")"; }`
+  `token() { local stat; read -r born < /proc/sys/kernel/random/boot_id && read -r stat 2>/dev/null < /proc/"$1"/stat || return 1; set -- \${stat##*) }; born="$born
+\${20}"; }
+owned() { local boot= start=; pid=; test -f "$d/pid" && test -f "$d/birth" || return 1; read -r pid < "$d/pid" || :; case "$pid" in ''|*[!0-9]*) return 1;; esac; { read -r boot && read -r start; } < "$d/birth" || return 1; test -n "$boot" && token "$pid" && test "$born" = "$boot
+$start"; }`
 
 /** Bind a concrete workspace to an explicitly connected Linux computer.
  * bash, setsid, flock, base64 and /proc are required at the target. No default
@@ -57,7 +61,7 @@ export let executionWorkspace = (
   let processFor = (call: string) =>
     derivedEid(`workspace process|${target.workspace}|${call}`)
   let row = async (id: string) => {
-    let [record] = await g.get([id])
+    let [record] = await g.get([id], ['process', 'exit'])
     if (!record?.process) return
     let process = record.process as Comp
     if (process.workspace != target.workspace) {
@@ -140,7 +144,7 @@ else printf 'pending'; fi`,
       let supervisor = `d=${quote(d)}
 ${identity}
 printf '%s' "$$" > "$d/pid"
-token "$$" > "$d/birth"
+token "$$" && printf '%s\n' "$born" > "$d/birth"
 touch "$d/launched"
 set +e
 (cd -- ${quote(directory)} && bash -c ${quote(command)})
