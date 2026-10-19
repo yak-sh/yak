@@ -2,14 +2,14 @@
 // graph and machines, never a host checkout. Credentials, MCP and diagnostics
 // remain host integrations; shell and file work is routed through providers.
 
-import { claude } from '@yaks/claude'
-import { responses as openrouter } from '@yaks/openrouter'
 import { responses } from '@yaks/openai'
 import { artifactStore } from '@yaks/blob'
-import type { Model } from '@yaks/model'
+import { type Model, prefixCacheMark } from '@yaks/model'
+import { claudeDoc } from '@yaks/claude/vocab'
+import { openrouterDoc } from '@yaks/openrouter/vocab'
 import { type Bundle } from '@yaks/graph'
 import type { ChildLimits, Step, Tool } from '@yaks/session'
-import { watchMigrations } from '@yaks/sqlite'
+import { watchMigrations } from '@yaks/sqlite/migration'
 import { render as tree } from '@yaks/preact'
 import type { VNode } from 'preact'
 import { type Agent, agent, type Opts as AgentOpts } from './agent.ts'
@@ -120,6 +120,27 @@ export type Here = {
   report: (error: unknown, where: FailureContext) => void
 }
 
+// Provider transports are opened on use. Their synchronous recorders stay
+// available before the first request, just as a directly constructed Model's.
+let deferred = (
+  load: () => Promise<Model>,
+  meta: Pick<Model, 'mark' | 'vocab' | 'anchor'> & { recover?: true },
+): Model => {
+  let pending: Promise<Model> | undefined
+  let get = () => pending ??= load()
+  return Object.assign(
+    async (...args: Parameters<Model>) => (await get())(...args),
+    {
+      ...meta,
+      list: async () => await (await get()).list?.() ?? [],
+      info: async (name: string) => await (await get()).info?.(name),
+      ...meta.recover
+        ? { recover: async (call: string) => (await get()).recover!(call) }
+        : {},
+    },
+  ) as Model
+}
+
 /** What this machine lends an agent over `h`: the models behind its
  * credentials and sign-ins, the workspace and sandbox bindings, the MCP
  * servers, the pictures, the instruction files where a session opens, and
@@ -157,17 +178,44 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     model: opts.model,
     providers: {
       openai: model,
-      claude: claude(),
-      openrouter: openrouter({
-        fetch: http.fetch,
-        media: { store: artifactStore(h.artifacts) },
-        key: async () =>
-          (h.person
-            ? await auth.signin.key(h.person, 'openrouter')
-            : undefined) ?? refuse(
-              'OpenRouter is not connected. Run yak auth openrouter.',
-            ),
-      }),
+      claude: deferred(
+        () => import('@yaks/claude').then(({ claude }) => claude()),
+        {
+          vocab: claudeDoc,
+          mark: (reply) => ({
+            claude: {
+              response_id: reply.id,
+              session_id: (reply as typeof reply & { claudeSession?: string })
+                .claudeSession,
+            },
+          }),
+        },
+      ),
+      openrouter: deferred(
+        () =>
+          import('@yaks/openrouter').then(({ responses }) =>
+            responses({
+              fetch: http.fetch,
+              media: { store: artifactStore(h.artifacts) },
+              key: async () =>
+                (h.person
+                  ? await auth.signin.key(h.person, 'openrouter')
+                  : undefined) ?? refuse(
+                    'OpenRouter is not connected. Run yak auth openrouter.',
+                  ),
+            })
+          ),
+        {
+          vocab: openrouterDoc,
+          mark: (reply, cache) => ({
+            openrouter: {
+              response_id: reply.id,
+              ...prefixCacheMark(reply, cache),
+            },
+          }),
+          recover: true,
+        },
+      ),
       ...opts.providers,
     },
     tools: opts.tools ??

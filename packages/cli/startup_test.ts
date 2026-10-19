@@ -87,3 +87,10 @@ test('unsubscribed composition leaves its channel uncreated or idle', async () =
   await host.close()
   equal(idle.history(), [])
 })
+
+let privateHost = await compose({ db: ':memory:', plugins: [] }, ['graph'])
+let privateActive = peek(privateHost.graph)?.active ?? false
+await privateHost.close()
+test('a private memory host without a tracker leaves its graph channel idle', () => {
+  equal(privateActive, false)
+})

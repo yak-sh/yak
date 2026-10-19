@@ -655,7 +655,10 @@ let composed = async (
         // Read workers return their recorded trees to their caller rather than
         // duplicating delivery. A passing CLI and every duty/web process observe
         // their graph, without composing tracker tables into the watched store.
-        if (opts.process !== false) {
+        // An unconfigured private memory graph has no telemetry destination
+        // or PID-local capture sidecar. Keeping its channel subscribed would
+        // build and discard a complete tree for every startup/catalogue write.
+        if (opts.process !== false && (config.tracker || path != ':memory:')) {
           captureControl = config.tracker ? traceControl(path) : undefined
           recorded = traces(g, {
             getStart: getStarts(path),

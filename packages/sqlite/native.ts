@@ -11,7 +11,6 @@ import {
   col,
   type Driver,
   eq,
-  type Expr,
   lit,
   type Param,
   render,
@@ -78,46 +77,6 @@ export let deserialize = (db: Database, bytes: Uint8Array): void => {
   }
 }
 
-// SQLite can read an unknown double-quoted index column as a string literal.
-// Once a later migration adds that column, the index still holds the literal
-// keys and disagrees with its table. Check the AST against the table first.
-let refs = (e: Expr): string[] => {
-  switch (e.t) {
-    case 'col':
-      return [e.name]
-    case 'fn':
-      return e.args.flatMap(refs)
-    case 'op':
-      return e.parts.flatMap(refs)
-    case 'not':
-    case 'neg':
-    case 'null':
-    case 'cast':
-    case 'as':
-    case 'desc':
-      return refs(e.e)
-    case 'in':
-      return [
-        ...refs(e.e),
-        ...(Array.isArray(e.set) ? e.set.flatMap(refs) : []),
-      ]
-    case 'case':
-      return [
-        ...(e.of ? refs(e.of) : []),
-        ...e.arms.flatMap((arm) => arm.flatMap(refs)),
-        ...(e.else ? refs(e.else) : []),
-      ]
-    case 'over':
-      return [
-        ...refs(e.fn),
-        ...(e.partition ?? []).flatMap(refs),
-        ...(e.order ?? []).flatMap(refs),
-      ]
-    default:
-      return []
-  }
-}
-
 /*
  * Text in, rows out, over one open embedded database: what {@link driver}
  * renders every statement into.
@@ -150,6 +109,10 @@ let bindSteps = () =>
       result: 'i32',
     },
     sqlite3_reset: { parameters: ['pointer'], result: 'i32' },
+    sqlite3_db_config: {
+      parameters: ['pointer', 'i32', 'i32', 'pointer'],
+      result: 'i32',
+    },
   })
 let decoder = (names: string[], compile: Statement['getRowObject']) => {
   let key = JSON.stringify(names)
@@ -290,23 +253,19 @@ export let driver = (db: Database): Driver => {
   }))
   let file = db.path != ':memory:' && db.path != '' &&
     !!run(main.sql, main.params)[0]?.file
-  // An index is checked against its table before it is made: the check is a
-  // statement of its own, run first.
-  let covers = (s: Stmt) => {
-    if (s.t != 'create index') return
-    let cols = new Set(
-      query({ t: 'pragma', name: 'table_info', arg: s.on })
-        .map((r) => String(r.name)),
-    )
-    for (
-      let name of [...s.cols, ...(s.where ? [s.where] : [])].flatMap(refs)
-    ) {
-      if (!cols.has(name)) {
-        throw new Error(`index ${s.name} names missing column ${s.on}.${name}`)
-      }
-    }
+  // Refuse unknown double-quoted columns in DDL rather than letting SQLite
+  // interpret them as string literals. The parser checks expressions and WHERE
+  // clauses too, without one table_info query per index on every startup.
+  let code = (steps ??= bindSteps()).symbols.sqlite3_db_config(
+    db.unsafeHandle,
+    1014,
+    0,
+    null, // SQLITE_DBCONFIG_DQS_DDL
+  )
+  if (code) {
+    throw new Error(`SQLite cannot disable DDL string fallback (${code})`)
   }
-  let d = connection(run, { file, before: covers, changes: () => db.changes })
+  let d = connection(run, { file, changes: () => db.changes })
   let query = d.query
   return Object.assign(d, {
     // A database in memory is this process's alone, and copying a schema into

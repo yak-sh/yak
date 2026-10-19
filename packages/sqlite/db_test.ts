@@ -94,7 +94,7 @@ test('an index cannot name a column the table has not gained', () => {
         cols: [col('y')],
       }),
     Error,
-    'missing column t.y',
+    'no such column',
   )
   assertThrows(
     () =>
@@ -106,7 +106,7 @@ test('an index cannot name a column the table has not gained', () => {
         where: isNull(col('y')),
       }),
     Error,
-    'missing column t.y',
+    'no such column',
   )
   sql.query({ t: 'alter table', table: 't', add: { name: 'y' } })
   sql.query({ t: 'create index', name: 't_y', on: 't', cols: [col('y')] })

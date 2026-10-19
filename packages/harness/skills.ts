@@ -6,7 +6,6 @@ import { Refused } from '@yaks/graph/errors'
 import type { Item } from '@yaks/model'
 import type { Reply } from '@yaks/tools'
 import type { Tool } from '@yaks/session'
-import { graphSkill, skillCatalog, skillLocation } from '@yaks/persona/skills'
 import { graphTools } from './tools.ts'
 import { lineage } from '@yaks/project'
 
@@ -39,6 +38,7 @@ export let skillItems = async (
   current: { session: Eid; tools: readonly Tool[] },
 ): Promise<Item[]> => {
   if (!current.tools.some((tool) => tool.name == 'skill_read')) return []
+  let { skillCatalog } = await import('@yaks/persona/skills')
   let skills = await skillCatalog(g, await repository(g, current.session))
   skills = skills.filter((skill) => comp(skill.skill).invoke != 'user')
   if (!skills.length) return []
@@ -84,6 +84,7 @@ export let skillTools = (
         let session = who(call)?.by
         if (!session) throw new Refused('skill_read needs a session')
         let title = String(argsOf(call).skill)
+        let { graphSkill, skillLocation } = await import('@yaks/persona/skills')
         let skill = await graphSkill(g, title, await repository(g, session))
         if (comp(skill.skill).invoke == 'user') {
           throw new Refused('This skill permits user invocation only')

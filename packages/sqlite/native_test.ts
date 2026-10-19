@@ -254,3 +254,30 @@ let shapeReuse = (() => {
 test('a graph cycling through hundreds of SQL shapes reuses its statements', () => {
   assertEquals(shapeReuse, { first: 600, extra: 0, answer: 4200 })
 })
+
+// Index validation belongs to SQLite's parser, not a table_info round trip
+// for every index. Keep this fixture outside the timed assertion.
+let indexChecks = (() => {
+  let db = new Database(':memory:')
+  let sql = driver(db)
+  sql.query({ t: 'create table', name: 'indexed', cols: [{ name: 'value' }] })
+  let reads = 0
+  let prepare = db.prepare.bind(db)
+  db.prepare = (text: string) => {
+    if (/table_info/i.test(text)) reads++
+    return prepare(text)
+  }
+  for (let i = 0; i < 12; i++) {
+    sql.query({
+      t: 'create index',
+      name: `indexed_${i}`,
+      on: 'indexed',
+      cols: [col('value')],
+    })
+  }
+  db.close()
+  return reads
+})()
+test('native index creation does not inspect table columns separately', () => {
+  assertEquals(indexChecks, 0)
+})
