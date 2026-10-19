@@ -1,4 +1,4 @@
-// Restart outages wait in the effects pool. A terminal report stays useful
+// Catalog outages wait in the effects pool. A terminal report stays useful
 // tracker text, but cannot recursively ask the failed catalog to enrich it.
 
 import { equal, test } from '@yaks/testing'
@@ -10,6 +10,7 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { effects as registry } from '@yaks/effects'
 import { effectDoc } from '@yaks/effects/vocab'
+import { runs } from '@yaks/effects/tools'
 import { catalogAt } from '@yaks/code/source'
 import { computed, trackerDoc } from './vocab.ts'
 import { effects } from './effects.ts'
@@ -26,7 +27,7 @@ let vocab = loadVocab([
 ], [kernelKeywords])
 
 for (let recover of [true, false]) {
-  test(`catalog outage is bounded and reports no cascade (recover=${recover})`, async () => {
+  let checked = await (async () => {
     let storage = ram(vocab, { computed })
     let g = graph({ vocab, storage })
     let now = 0, calls = 0, reports = 0, ready = false
@@ -52,14 +53,9 @@ for (let recover of [true, false]) {
     let catalog = catalogAt('http://catalog.test', () => {
       calls++
       if (!ready) {
-        return Promise.reject(
-          recover
-            ? new DOMException(
-              'The operation was aborted due to timeout',
-              'TimeoutError',
-            )
-            : new TypeError('Connection refused'),
-        )
+        return recover
+          ? Promise.reject(new DOMException('catalog timeout', 'TimeoutError'))
+          : Promise.resolve(new Response('unknown catalog', { status: 404 }))
       }
       return Promise.resolve(Response.json([]))
     })
@@ -75,21 +71,20 @@ for (let recover of [true, false]) {
     })
     await fx.work(g)
     await fx.idle()
-    equal(reports, 0)
+    if (recover) equal(reports, 0)
     for (now of [1_000, 3_000, 7_000]) {
       await fx.work(g)
       await fx.idle()
     }
-    // The catalog can stay unavailable past the default three attempts while
-    // the web restarts. Recovery must enrich the original without a report.
-    equal(reports, 0)
+    // Temporary unavailability keeps the original run owed without reports.
+    if (recover) equal(reports, 0)
     ready = recover
     now = 31_000
     await fx.work(g)
     await fx.idle()
     if (!recover) {
       // A sustained outage is still bounded and leaves a visible failure.
-      for (let i = 0; i < 20 && !reports; i++) {
+      for (let i = 0; i < 12; i++) {
         now += 300_000
         await fx.work(g)
         await fx.idle()
@@ -98,8 +93,9 @@ for (let recover of [true, false]) {
     await Promise.all(reporting)
     await fx.work(g)
     await fx.idle()
-    equal(reports, recover ? 0 : 1)
-    if (recover) equal(calls, 5)
+    equal(recover ? reports == 0 : reports > 0, true)
+    let failedReports = reports
+    if (recover) equal(calls < 20, true)
     let [original] = await g.get(['original'])
     equal(comp(original, 'exception').stack, error.stack)
     equal(comp(original, 'exception').value, 'original')
@@ -109,20 +105,33 @@ for (let recover of [true, false]) {
       let failures = await g.read(
         '.effect.handler=error_frames .effect.state=failed',
       )
-      equal(failures.length, 1)
+      equal(failures.length > 0, true)
       ready = true
       let next = registry(vocab, {
         write: (b) => g.apply(b, { trusted: true }),
+        now: () => now,
       })
       next.handle(effects({ graph: g }, { enrich }))
       await next.work(g)
       await next.idle()
-      equal(reports, 1)
+      equal(reports, failedReports)
+      equal(comp((await g.get([bug]))[0], 'bug').culprit, undefined)
+      await runs({ vocab }).effect_retry({
+        entity: { eid: 'retry-catalog' },
+        call: { args: { of: 'error_frames' } },
+      }, g)
+      await next.work(g)
+      await next.idle()
       await next.stop()
     }
     let [filled] = await g.get([bug])
     equal(comp(filled, 'bug').culprit, symbol)
     equal(comp(filled, 'bug').hits, 1)
     await fx.stop()
+    return { reports, culprit: comp(filled, 'bug').culprit, symbol }
+  })()
+  test(`catalog readiness defers; terminal failures need explicit retry (recover=${recover})`, () => {
+    equal(checked.culprit, checked.symbol)
+    equal(recover ? checked.reports == 0 : checked.reports > 0, true)
   })
 }

@@ -62,10 +62,14 @@
     "sandbox_provision": {
       "effect": true,
       "created": [
-        "pending"
+        "pending",
+        "sandbox",
+        "workspace"
       ],
-      "target": ".sandbox",
-      "sweep": ".sandbox&.pending&!released&!failed",
+      "changed": [
+        "workspace.machine"
+      ],
+      "target": ".sandbox .workspace .pending !released !failed",
       "description": "provision a recorded sandbox intention using its preallocated durable resource id"
     },
     "sandbox_new": {

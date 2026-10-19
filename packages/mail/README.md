@@ -56,11 +56,10 @@ A message with both `mail` and `deliver` requests sending. A message with only
 `mail` is stored without sending, as a draft or received message. Received
 messages have no `deliver`, so receiving them does not send them back out.
 
-The default sending handler runs when `mail` is created. To send a draft when
-`deliver` is added later, also register
-`fx.created('deliver', sending({ sender }))`. The handler skips a message that
-already has `delivered`, `bounced` or `deliver.tried`; retry by creating a new
-message.
+The declared sending handler runs when either `mail` or `deliver` is created, so
+adding a recipient to a saved draft sends it. The handler skips a message that
+already has `delivered`, `bounced` or `deliver.tried`; retry those by creating a
+new message.
 
 Sending is at most once. The handler stamps `deliver.tried` before the message
 reaches the transport, so a crash between the send and its outcome leaves a
@@ -68,10 +67,10 @@ message with `tried` and no outcome, which is never handed over again. A sender
 that knows the message never left rejects with `Unsent` (`@yaks/host/senders`):
 the handler gives the claim back, writes the reason to `deliver.waiting` and
 fails the run, so the pool hands it over again after `retry.after` (six tries).
-The Cloudflare sender rejects that way for a failed connection and a 429. The
-`mail_post` effect declares a sweep over the messages still owed a send, so a
-worker coming up replays it and a message written while no sender could run goes
-out with the first process that has one.
+The Cloudflare sender rejects that way for a failed connection and a 429. Each
+write owes its delivery in the durable effect pool, so a worker can pick it up
+after an outage without rediscovering messages. Exhausted transport failures
+remain failed until explicitly retried with `effect retry`.
 
 ## Delivery after commit
 
@@ -300,13 +299,13 @@ The CLI host resolves `{ "secret": "NAME" }` through
 precedence over the built-in Cloudflare and stash senders. No sender
 configuration leaves outbound requests waiting too. Missing Cloudflare
 credentials or an unsupported transport writes `deliver.waiting` on every owed
-letter and throws through the host's effect reporter into the tracker, never
-marking the letter tried. The sender is read on each attempt, so credentials
-that arrive after startup can be used without rebuilding the handler. The
-ordinary startup sweep recovers unsent letters; successful delivery clears the
-waiting reason. A transport rejection records `bounced.reason` and is also
-reported, without ever sending that letter twice. `mail check` reports the
-configuration problem too.
+letter without marking it tried. In the pool, that same run remains pending and
+checks again after a minute without spending failed attempts. Direct calls
+without a pool throw the configuration error. The sender is read on each
+attempt, so repaired configuration is used without rebuilding the handler.
+Successful delivery clears the waiting reason. A transport rejection records
+`bounced.reason` and is also reported, without sending that letter twice.
+`mail check` reports configuration problems too.
 
 ## Pulling from an edge
 

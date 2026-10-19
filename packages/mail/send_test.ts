@@ -176,7 +176,7 @@ test('a letter that never left goes on the next try, not bounced', async () => {
   assertEquals(comp(sent, 'deliver')?.waiting ?? null, null)
 })
 
-test('a letter that never leaves waits, owed, for the sweep', async () => {
+test('a letter that never leaves waits, owed, for retry', async () => {
   let { post, go, row } = dropping(Infinity)
   await assertRejects(go, Unsent)
   let kept = await row()

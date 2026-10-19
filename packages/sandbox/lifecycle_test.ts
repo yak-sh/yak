@@ -256,3 +256,40 @@ test('the declared provisioning effect settles a committed sandbox intention', (
   equal(triggeredRow.pending, undefined)
   equal((triggeredRow.workspace as { root: string }).root, '/triggered')
 })
+
+// Readiness can arrive in a separate write from the provisioning intention.
+let later = crypto.randomUUID()
+await effectGraph.apply([{
+  entity: { eid: later },
+  workspace: { machine: triggered.machine },
+  pending: {},
+}])
+let beforeSandbox = (await effectGraph.get([later]))[0]
+await effectGraph.apply([{
+  entity: { eid: later },
+  sandbox: { provider: 'fixture' },
+}])
+let afterSandbox = (await effectGraph.get([later]))[0]
+test('provisioning starts when a pending workspace gains its sandbox', () => {
+  equal(!!beforeSandbox.pending, true)
+  equal(afterSandbox.pending, undefined)
+  equal((afterSandbox.workspace as { root: string }).root, '/triggered')
+})
+
+let latePlace = crypto.randomUUID()
+await effectGraph.apply([{
+  entity: { eid: latePlace },
+  sandbox: { provider: 'fixture' },
+  pending: {},
+}])
+let beforePlacement = (await effectGraph.get([latePlace]))[0]
+await effectGraph.apply([{
+  entity: { eid: latePlace },
+  workspace: { machine: triggered.machine },
+}])
+let afterPlacement = (await effectGraph.get([latePlace]))[0]
+test('provisioning waits for workspace placement in a later write', () => {
+  equal(!!beforePlacement.pending, true)
+  equal(afterPlacement.pending, undefined)
+  equal((afterPlacement.workspace as { root: string }).root, '/triggered')
+})

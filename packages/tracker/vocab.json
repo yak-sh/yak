@@ -316,8 +316,7 @@
       "created": [
         "error"
       ],
-      "active": ".error !error.bug",
-      "sweep": ".error !error.bug"
+      "target": ".error !error.bug"
     },
     "bug_notify": {
       "effect": true,
@@ -330,8 +329,7 @@
       "changed": [
         "regressed.at"
       ],
-      "active": ".bug !archived !resolved !notified|.mail .delivered",
-      "sweep": ".bug !archived !resolved !notified"
+      "target": ".bug !archived !resolved !notified|.mail .delivered"
     },
     "bug_follow": {
       "effect": true,
@@ -345,7 +343,7 @@
         "taken.at",
         "resolved.cause"
       ],
-      "active": ".bug .resolved|.bug .archived|.bug .taken"
+      "target": ".bug .resolved|.bug .archived|.bug .taken"
     },
     "error_trim": {
       "effect": true,
@@ -353,7 +351,7 @@
       "changed": [
         "error.bug"
       ],
-      "active": ".error .error.bug"
+      "target": ".error .error.bug"
     },
     "bug_list": {
       "tool": true,
@@ -491,16 +489,17 @@
     },
     "error_frames": {
       "effect": true,
-      "description": "Resolve grouped stack frames through the code catalog without recounting occurrences; allow ten attempts with pool backoff for catalog restarts, and retry unresolved records when the pool starts.",
+      "description": "Resolve grouped stack frames through the code catalog without recounting occurrences; unavailable catalogs defer the recorded run until they answer.",
       "tries": 10,
       "changed": [
-        "error.bug"
+        "error.bug",
+        "error.commit",
+        "exception.stack"
       ],
-      "active": ".error .exception .error.bug",
-      "sweep": ".error .exception .error.bug",
       "created": [
         "exception"
-      ]
+      ],
+      "target": ".error .exception .error.bug"
     }
   }
 }

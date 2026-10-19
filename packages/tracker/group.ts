@@ -258,7 +258,7 @@ export let reframe = async (
         },
       })
     }
-    // A start-up recheck mostly finds what is already written.
+    // A repeated request mostly finds what is already written.
     let same = JSON.stringify(frames) ==
       JSON.stringify(comp(row, 'exception').frames)
     if (same && patch.length == 1) return

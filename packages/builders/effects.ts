@@ -10,10 +10,11 @@
 import type { Bundle, Comp, ReadTx } from '@yaks/graph'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
+import { derivedEid } from '@yaks/graph/identity'
 import type { Handler, Handlers } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
 import { next, WAKE } from '@yaks/wake'
-import { BUILD, clock, type Options, reconcile } from './build.ts'
+import { BUILD, clock, due, type Options, reconcile } from './build.ts'
 import { answer, spent } from './answer.ts'
 import { adapted } from './model.ts'
 import { preserve } from './preserve.ts'
@@ -40,6 +41,18 @@ let settle = async (
       builder = fresh
     }
     if (builder.staged) return
+    if (
+      scheduled && !builder.archived &&
+      !due(comp(builder, 'builder'), (o.now ?? clock)())
+    ) {
+      if (o.vocab.comp(WAKE)) {
+        await write([{
+          entity: { eid: derivedEid(`builder floor ${eid}`) },
+          wake: { at: comp(builder, 'builder')!.floor, target: eid },
+        }])
+      }
+      return
+    }
     let { writes } = await reconcile(
       tx,
       builder,

@@ -7,9 +7,9 @@
 // fact about the graph, so the config names it beside the plugin (./options.ts)
 // and the factory builds it here.
 //
-// An outbound request must never settle silently. A missing sender leaves a
-// visible waiting reason without marking the letter tried, and throws through
-// the effect pool's reporting door. The startup sweep can still recover it.
+// A missing sender leaves a visible waiting reason without marking the letter
+// tried. A pool keeps that run pending until the sender is configured; an
+// inline caller receives the configuration error instead.
 // Read transport options on every attempt: secrets can arrive after startup.
 
 import type { Handler, Handlers } from '@yaks/effects'
@@ -50,12 +50,15 @@ export let post = (
   }
 }
 
-/** Leave unsent letters recoverable, but make the failure visible to both the
- * owner and the host's effect reporter, which forwards reports to the tracker. */
-export let waiting = (reason: string): Handler => (event, tx, write) =>
+/** Keep the request owed while its sender is unavailable. */
+export let waiting = (reason: string): Handler => (event, tx, write, attempt) =>
   after(letterOf(tx, event.entity), async (letter) => {
     if (!owed(letter)) return
     await write([{ entity: event.entity, deliver: { waiting: reason } }])
+    if (attempt?.defer) {
+      await attempt.defer(60_000)
+      return
+    }
     throw new Error(`@yaks/mail — ${reason}`)
   })
 

@@ -242,8 +242,32 @@ export let effects = (
     (host.config?.port ? `http://127.0.0.1:${host.config.port}` : undefined)
   return {
     error_group: (e) => group(host.graph, e.entity.eid),
-    error_frames: (e) => reframe(host.graph, e.entity.eid, enrich),
-    bug_notify: (e) => notify(host.graph, e.entity.eid, { ...options, url }),
+    error_frames: async (e, _tx, _write, attempt) => {
+      try {
+        await reframe(host.graph, e.entity.eid, enrich)
+      } catch (error) {
+        if (
+          attempt?.defer && error && typeof error == 'object' &&
+          'retry' in error
+        ) {
+          await attempt.defer(5_000)
+          return
+        }
+        throw error
+      }
+    },
+    bug_notify: async (e, _tx, _write, attempt) => {
+      if (
+        attempt?.defer && !options.notify && (!options.to || !options.store)
+      ) {
+        let [row] = await host.graph.get([e.entity.eid])
+        if (open(row)) {
+          await attempt.defer(60_000)
+          return
+        }
+      }
+      await notify(host.graph, e.entity.eid, { ...options, url })
+    },
     bug_follow: (e) =>
       follow(host.graph, e.entity.eid, { ...options, since: followSince, url }),
     error_trim: async (e) => {

@@ -29,12 +29,14 @@ let unarmed = { via: 'cloudflare', account: 'a' } as Transport
 let pooled = loadVocab([...club.docs, effectDoc])
 
 // A process over `storage`, working the pool with the code it was given.
-let proc = async (storage: Storage, handlers: Handlers) => {
+let proc = async (storage: Storage, handlers: Handlers, at = 0) => {
   let reports: unknown[] = []
   let fx = registry(pooled, {
     write: (b) => g.apply(b, { trusted: true }),
     report: (error) => reports.push(error),
     tries: 1,
+    owes: 'declared',
+    now: () => at,
     // A declaration's own tries outrank `tries`: spend them all at once.
     backoff: () => 0,
   })
@@ -51,12 +53,11 @@ let proc = async (storage: Storage, handlers: Handlers) => {
 // The process that wrote the letter, with whatever code the test gives it.
 let rig = (handlers: Handlers) => proc(ram(pooled), handlers)
 
-// Another process opening the same graph with a sender, and coming up: the
-// letters still owed are swept and sent.
-let sweep = async (g: Awaited<ReturnType<typeof rig>>, sender: Sender) => {
+// Another process can consume the same pending debt once it becomes eligible.
+let resume = async (g: Awaited<ReturnType<typeof rig>>, sender: Sender) => {
   let next = await proc(g.storage, {
     mail_post: sending({ sender, now: noon }),
-  })
+  }, 60_000)
   await next.fx.idle()
 }
 
@@ -199,20 +200,25 @@ test('adding a recipient to a saved letter sends it once', () => {
   assertEquals(lateRecipient.reports, [])
 })
 
-test('missing credentials leave every owed letter visibly waiting and report failures', async () => {
-  let g = await rig(effects(null, { sender: unarmed }))
-  await g.apply([ana, {
-    entity: { eid: 'e-in' },
-    mail: { from: 'bea@out.example', to: 'hello@books.example' },
-  }])
-  await g.fx.idle()
-  assertEquals(g.reports, [])
-  await g.apply([letter('e-one'), letter('e-two')])
-  await g.fx.idle()
-  assert(g.reports.length > 0)
-  assert(g.reports.every((e) => String(e).includes('waiting for credentials')))
-  for (let eid of ['e-one', 'e-two']) {
-    let kept = await read(g, eid)
+let missing = await rig(effects(null, { sender: unarmed }))
+await missing.apply([ana, {
+  entity: { eid: 'e-in' },
+  mail: { from: 'bea@out.example', to: 'hello@books.example' },
+}])
+await missing.fx.idle()
+let inboundReports = [...missing.reports]
+await missing.apply([letter('e-one'), letter('e-two')])
+await missing.fx.idle()
+let pending = await missing.read(
+  '.effect.handler=mail_post .effect.state=pending',
+)
+let waiting = await missing.get(['e-one', 'e-two'])
+test('missing credentials keep every owed letter visibly pending without failures', () => {
+  assertEquals(inboundReports, [])
+  assertEquals(missing.reports, [])
+  assert(pending.length > 0)
+  assert(pending.every((b) => (b.effect as Comp).attempts == 0))
+  for (let kept of waiting) {
     assert(
       String((kept.deliver as Comp).waiting).includes(
         'waiting for credentials',
@@ -233,28 +239,22 @@ test('no configured sender leaves an outbound letter waiting rather than silentl
     to: 'p-ana',
     waiting: 'waiting for a configured sender',
   })
-  assert(g.reports.length > 0)
-  assert(
-    g.reports.every((e) =>
-      String(e).includes('waiting for a configured sender')
-    ),
-  )
+  assertEquals(g.reports, [])
 })
 
-test('the ordinary startup sweep sends a waiting letter once and clears the reason', async () => {
-  let g = await rig(effects(null, { sender: unarmed }))
-  await g.apply([ana, letter('e-one')])
-  await g.fx.idle()
-  let box = stash()
-  await sweep(g, box)
-  assertEquals(box.sent.map((m) => m.subject), ['Potluck Friday'])
-  let sent = await read(g, 'e-one')
-  assertEquals(sent.delivered, { at: noon() })
-  assertEquals((sent.mail as Comp).message_id, 'stash-1')
-  assertEquals((sent.deliver as Comp).tried, noon())
-  assert((sent.deliver as Comp).waiting == null)
-  await sweep(g, box)
-  assertEquals(box.sent.length, 1)
+let repaired = await rig(effects(null, { sender: unarmed }))
+await repaired.apply([ana, letter('e-one')])
+await repaired.fx.idle()
+let repairedBox = stash()
+await resume(repaired, repairedBox)
+let repairedSent = await read(repaired, 'e-one')
+await resume(repaired, repairedBox)
+test('pending delivery survives reopening and sends once after configuration repair', () => {
+  assertEquals(repairedBox.sent.map((m) => m.subject), ['Potluck Friday'])
+  assertEquals(repairedSent.delivered, { at: noon() })
+  assertEquals((repairedSent.mail as Comp).message_id, 'stash-1')
+  assertEquals((repairedSent.deliver as Comp).tried, noon())
+  assert((repairedSent.deliver as Comp).waiting == null)
 })
 
 test('one running handler re-reads its sender after configuration arrives', async () => {
@@ -264,9 +264,8 @@ test('one running handler re-reads its sender after configuration arrives', asyn
   await g.apply([ana, letter('e-one')])
   await g.fx.idle()
   options.sender = { via: 'stash' }
-  // Use the same factory result in another process: the startup sweep is
-  // ordinary recovery, not a hand-written transport send.
-  let next = await proc(g.storage, code)
+  // The existing pending run becomes eligible in another process.
+  let next = await proc(g.storage, code, 60_000)
   await next.fx.idle()
   let sent = await read(g, 'e-one')
   assert(!!sent.delivered)
@@ -335,10 +334,10 @@ await handedOver.apply([
     delivered: { at: noon() },
   },
 ], { trusted: true })
-test('a letter handed over and never settled is not handed over again', async () => {
-  let box = stash()
-  await sweep(handedOver, box)
-  assertEquals(box.sent, [])
+let handedBox = stash()
+await resume(handedOver, handedBox)
+test('a letter handed over and never settled is not handed over again', () => {
+  assertEquals(handedBox.sent, [])
 })
 
 // The sending handler's boundary: committed rows and a durable write callback.

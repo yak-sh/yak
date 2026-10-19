@@ -263,9 +263,8 @@
         "mail",
         "deliver"
       ],
-      "sweep": ".mail&.deliver&!delivered&!bounced&!deliver.tried",
       "tries": 6,
-      "description": "hand an outbound letter to the sender and record its outcome. A send the sender knows never left is tried again. The sweep replays the letters still owed, so one written while no sender could run is sent by the first process that can"
+      "description": "Hand an outbound letter to the sender and record its outcome. A send the sender knows never left is tried again; an unavailable configured sender defers its recorded run."
     }
   }
 }

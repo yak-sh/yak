@@ -361,7 +361,6 @@
       "removed": [
         "staged"
       ],
-      "sweep": ".builder",
       "description": "build a builder whose floor has passed, unless its key is built; removing its staged mark builds it too"
     },
     "builder_edit": {

@@ -209,7 +209,8 @@ export let sending =
         }
         // The sender knows the letter never left: give the claim back, say
         // why it waits, and throw, so the pool hands it over again after the
-        // wait the sender asked for. The sweep finds it if every try fails.
+        // wait the sender asked for. A terminal failure keeps its receipt for
+        // an explicit retry once the transport is repaired.
         let unsent = async (error: Unsent) => {
           try {
             await write([{

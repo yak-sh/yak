@@ -230,7 +230,9 @@ An alternate model, provider, template or native input creates a shadow variant.
 Unchanged inputs create no call unless a redo flag selects them.
 `--input @input.json` merges the object into `sending.input` for that shadow
 run, without editing the builder. A scheduled wake checks the builder again. A
-configured `rest` advances `floor` after a call starts.
+configured `rest` advances `floor` after a call starts. Opening or moving a
+builder to a future `floor` records a wake for that instant when `@yaks/wake` is
+installed; its clock makes the builder eligible without a restart scan.
 
 `builder build <builder> --only <id…>` builds only the bindings whose outer
 entities are named (any id form, as in every write), and `--limit <n>` builds
