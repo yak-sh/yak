@@ -65,7 +65,9 @@ type Read = {
 let chain = async (g: Graph, session: Eid, o: Reach): Promise<Read> => {
   let names = o.bodies
     ? o.comps ? [...new Set([...o.comps, CONTENT])] : undefined
-    : o.comps ?? g.vocab.comps.filter((n) => n != CONTENT && n != 'session')
+    // A runner needs private execution pins too; `comps` is only the
+    // wire-writable component list and omits inference recovery authority.
+    : o.comps ?? g.vocab.all.filter((n) => n != CONTENT && n != 'session')
   return {
     g,
     segs: await transcriptSegments(g, session),

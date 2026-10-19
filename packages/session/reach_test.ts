@@ -319,3 +319,34 @@ for (let completed of [false, true]) {
     assertEquals(reads < 200, true)
   })
 }
+
+// Recovery metadata is server-only, but a runner reads it to resume a paid
+// request rather than classifying it as an anonymous interrupted call.
+let privateAsk = await world([
+  { entity: { eid: 'private-session' }, session: {} },
+  {
+    entity: { eid: 'private-input' },
+    entry: { session: 'private-session', seq: 1 },
+    content: { body: 'ask' },
+    using: { model: M },
+  },
+  {
+    entity: { eid: 'private-ask' },
+    entry: { session: 'private-session', seq: 2 },
+    ask: { to: M, through: 'private-input' },
+    attempt: { by: 'worker' },
+    inference: { executor: 'paid', request: 'frozen', receipt: 'completed' },
+    submitted: { at: '2026-10-01T00:00:00Z' },
+  },
+])
+let privateReached =
+  (await reach(privateAsk, 'private-session', { turn: true }))
+    .find((b) => b.entity.eid == 'private-ask')!
+test('a runner reads server-only executor pins when gathering the newest ask', () => {
+  assertEquals(privateReached.inference, {
+    executor: 'paid',
+    request: 'frozen',
+    receipt: 'completed',
+  })
+  assertEquals(privateReached.submitted, { at: '2026-10-01T00:00:00Z' })
+})
