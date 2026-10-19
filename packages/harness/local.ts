@@ -124,16 +124,25 @@ export type Here = {
 // available before the first request, just as a directly constructed Model's.
 let deferred = (
   load: () => Promise<Model>,
-  meta: Pick<Model, 'mark' | 'vocab' | 'anchor'> & { recover?: true },
+  meta: Pick<Model, 'mark' | 'vocab' | 'anchor'> & {
+    recover?: true
+    info?: true
+  },
 ): Model => {
   let pending: Promise<Model> | undefined
   let get = () => pending ??= load()
   return Object.assign(
     async (...args: Parameters<Model>) => (await get())(...args),
     {
-      ...meta,
+      ...Object.fromEntries(
+        Object.entries(meta).filter(([key]) =>
+          key != 'recover' && key != 'info'
+        ),
+      ),
       list: async () => await (await get()).list?.() ?? [],
-      info: async (name: string) => await (await get()).info?.(name),
+      ...meta.info
+        ? { info: async (name: string) => await (await get()).info?.(name) }
+        : {},
       ...meta.recover
         ? { recover: async (call: string) => (await get()).recover!(call) }
         : {},
@@ -182,6 +191,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
         () => import('@yaks/claude').then(({ claude }) => claude()),
         {
           vocab: claudeDoc,
+          info: true,
           mark: (reply) => ({
             claude: {
               response_id: reply.id,
@@ -207,6 +217,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
           ),
         {
           vocab: openrouterDoc,
+          info: true,
           mark: (reply, cache) => ({
             openrouter: {
               response_id: reply.id,
