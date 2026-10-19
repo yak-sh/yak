@@ -86,11 +86,13 @@ let told = async (g: Graph, id: string) => {
 
 let DAY = 24 * 60 * 60 * 1000
 
+let reapStore = store()
+seed(reapStore, { entity: { eid: ids.p2 }, claim: { session: ids.gone } })
+let reapGraph = locked(reapStore)
+
 test('the duty frees the locks whose holder is gone as it starts', async () => {
-  let s = store()
-  seed(s, { entity: { eid: ids.p2 }, claim: { session: ids.gone } })
-  await service({ graph: locked(s) }, {}, AbortSignal.abort())
-  assertEquals(lockOn(s, ids.p2), undefined)
+  await service({ graph: reapGraph }, {}, AbortSignal.abort())
+  assertEquals(lockOn(reapStore, ids.p2), undefined)
 })
 
 test('a recent transcript is followed in full; an old one is read in later, its prose alone', () =>
@@ -121,30 +123,60 @@ test('a recent transcript is followed in full; an old one is read in later, its 
     ])
   }))
 
-test('a look reads the newest transcript first, and a long one a slice at a time', () =>
-  projects({
-    long: { text: lines('a', 'b', 'c'), ago: 1000 },
-    live: { text: lines('hi') },
-    old: { text: lines('x', 'y'), ago: 30 * DAY },
-  }, async (dir) => {
-    let g = locked(store())
-    let seen: Seen = { tails: new Map(), done: new Set() }
-    // A slice of nothing reads a line; a budget of nothing, one transcript.
-    let once = (budget?: number) => look(g, dir, seen, { slice: 0, budget })
-    await once(0)
-    await once(0)
-    assertEquals(await told(g, 'live'), ['hi', 'thought 0', 'said 0'])
-    assertEquals(await told(g, 'long'), undefined)
-    assertEquals(await told(g, 'old'), undefined)
-    // With time to spare, a line of each, and of the old one too.
+let fairness: {
+  first: (string[] | undefined)[]
+  last: (string[] | undefined)[]
+}
+await projects({
+  long: { text: lines('a', 'b', 'c'), ago: 1000 },
+  live: { text: lines('hi') },
+  old: { text: lines('x', 'y'), ago: 30 * DAY },
+}, async (dir) => {
+  let g = locked(store()), seen: Seen = { tails: new Map(), done: new Set() }
+  let once = () => look(g, dir, seen, { slice: 0, budget: 0 })
+  for (let i = 0; i < 3; i++) await once()
+  let first = await Promise.all(
+    ['live', 'long', 'old'].map((id) => told(g, id)),
+  )
+  for (let i = 0; i < 18; i++) {
+    Deno.writeTextFileSync(`${dir}/-home-me-code/live.jsonl`, lines('more'), {
+      append: true,
+    })
     await once()
-    await once()
-    assertEquals(await told(g, 'long'), ['a', 'thought 0', 'said 0'])
-    assertEquals(await told(g, 'old'), ['x', 'said 0'])
-    for (let i = 0; i < 4; i++) await once()
-    assertEquals((await told(g, 'long'))!.length, 9)
-    assertEquals(await told(g, 'old'), ['x', 'said 0', 'y', 'said 1'])
-  }))
+  }
+  fairness = {
+    first,
+    last: await Promise.all(['long', 'old'].map((id) => told(g, id))),
+  }
+})
+
+test('bounded looks advance every source while another transcript keeps growing', () => {
+  assertEquals(fairness.first, [['hi'], ['a'], ['x']])
+  assertEquals(fairness.last[0]?.length, 9)
+  assertEquals(fairness.last[1], ['x', 'said 0', 'y', 'said 1'])
+})
+
+let coldChildCall: unknown
+await projects({
+  parent: { text: tool },
+  'parent/subagents/agent-child': {
+    text: side(lines('child input')),
+    ago: 1000,
+  },
+}, async (dir) => {
+  Deno.writeTextFileSync(
+    `${dir}/-home-me-code/parent/subagents/agent-child.meta.json`,
+    JSON.stringify({ toolUseId: 't1' }),
+  )
+  let g = locked(store())
+  await look(g, dir, { tails: new Map(), done: new Set() })
+  let [child] = await g.get([sessionEid('child', 'parent')])
+  coldChildCall = (child.spawned as Comp)?.call
+})
+
+test('a cold child still names its parent call when the parent file is newer', () => {
+  assertEquals(coldChildCall, callOf(sessionEid('parent'), 't1'))
+})
 
 test('a session is the entity its harness id names', () => {
   let id = '49805559-ca98-4c0a-873e-45c19ec7316c'

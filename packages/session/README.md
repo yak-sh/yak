@@ -540,10 +540,11 @@ too, so the two never collide. Each entry is dated when the harness wrote it.
 `YYYY/MM/DD/rollout-<date>-<thread>.jsonl` under its sessions directory: one
 written to in the last `full` milliseconds is read as it grows, at full depth,
 and an older one is read in lazily, one per pass, its prose and provider/model
-selections. A look reads the transcripts it already follows least behind first,
-then the ones it has yet to open most recently written first, each for a slice
-(`SLICE`, 100 ms) until its budget (`BUDGET`, a second) is spent, so a backlog
-is read over many looks and a live session's next lines lead every one. It skips
+selections. A look reserves its first bounded slice for the pending source least
+recently read, including old backfill, so growing tails cannot starve other
+files. Cold parents precede their subagents. The remaining budget reads open
+tails least behind first, then unopened recent files newest first, each for a
+slice (`SLICE`, 100 ms) until its budget (`BUDGET`, a second) is spent. It skips
 a managed run, whose transcript asks a provider for it (`using{provider}`). A
 subagent's transcript, `<session>/subagents/agent-<id>.jsonl`, is read the same
 way (`subagent`, the reader whose lines are all side conversations) into a

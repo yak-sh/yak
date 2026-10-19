@@ -89,6 +89,8 @@ export type Seen = {
   done: Set<string>
   versions?: Map<string, string>
   retry?: Map<string, number>
+  turns?: Map<string, number>
+  turn?: number
 }
 
 /** Whether a session is a managed run: its transcript asks a provider for
@@ -283,7 +285,8 @@ export let look = async (
   let now = o.now ?? Date.now()
   let start = performance.now()
   let spent = () => performance.now() - start >= (o.budget ?? BUDGET)
-  let old: Found | undefined
+  type Due = { f: Found; lag?: number; at: number; prose?: boolean }
+  let old: Due | undefined
   let read = () => ({
     person: o.person,
     signal: o.signal,
@@ -291,7 +294,7 @@ export let look = async (
   })
   // Each transcript with lines to read: how far behind a tail on it is, or
   // when it was written where none is open yet.
-  let owed: { f: Found; lag?: number; at: number }[] = []
+  let owed: Due[] = []
   for (let f of [...transcripts(dir), ...o.codex ? rollouts(o.codex) : []]) {
     let st = stat(f.path)
     let t = seen.tails.get(f.path)
@@ -311,7 +314,7 @@ export let look = async (
     let at = st?.mtime?.getTime() ?? 0
     if (!st || t === null || (t && !pending(t, st.size))) continue
     if (now - at >= (o.full ?? FULL)) {
-      if (!seen.done.has(f.path)) old ??= f
+      if (!seen.done.has(f.path)) old ??= { f, at, prose: true }
       continue
     }
     owed.push({ f, at, ...t ? { lag: st.size - t.at + t.rest.length } : {} })
@@ -330,13 +333,38 @@ export let look = async (
       ? 1
       : Number(!!a.f.parent) - Number(!!b.f.parent) || b.at - a.at
   )
-  for (let [i, { f }] of owed.entries()) {
+  // One slice cannot be monopolized by growing tails. The rest of the look
+  // retains live priority; a cold source and old backfill both get a turn.
+  let turns = seen.turns ??= new Map()
+  let candidates = [...owed, ...old ? [old] : []].filter(({ f }) =>
+    !f.parent || !owed.some((parent) =>
+      parent.f.id == f.parent &&
+      !parent.f.parent && !seen.tails.has(parent.f.path)
+    )
+  )
+  let fair =
+    candidates.sort((a, b) =>
+      (turns.get(a.f.path) ?? 0) - (turns.get(b.f.path) ?? 0) || a.at - b.at
+    )[0]
+  if (fair) {
+    owed = [fair, ...owed.filter((d) => d != fair)]
+    if (fair == old) old = undefined
+  }
+  for (let [i, { f, prose }] of owed.entries()) {
     if (o.signal?.aborted || i && spent()) return
     let t = seen.tails.get(f.path)
     try {
       t ??= await opened(g, f, o.signal)
       seen.tails.set(f.path, t)
-      if (t) await pull(g, t, format(f, t), read())
+      if (t) await pull(g, t, format(f, t), { ...read(), prose })
+      turns.set(f.path, seen.turn = (seen.turn ?? 0) + 1)
+      if (
+        prose && !o.signal?.aborted &&
+        !(t && pending(t, stat(f.path)?.size ?? 0))
+      ) {
+        seen.done.add(f.path)
+        seen.tails.delete(f.path)
+      }
     } catch (error) {
       seen.tails.delete(f.path)
       await t?.stream?.close()
@@ -347,22 +375,24 @@ export let look = async (
   }
   if (!old || o.signal?.aborted || owed.length && spent()) return
   // Keep the cursor and unread bytes between backfill slices.
-  let t = seen.tails.get(old.path)
+  let f = old.f
+  let t = seen.tails.get(f.path)
   try {
-    t ??= await opened(g, old, o.signal)
-    seen.tails.set(old.path, t)
-    if (t) await pull(g, t, format(old, t), { ...read(), prose: true })
+    t ??= await opened(g, f, o.signal)
+    seen.tails.set(f.path, t)
+    if (t) await pull(g, t, format(f, t), { ...read(), prose: true })
+    turns.set(f.path, seen.turn = (seen.turn ?? 0) + 1)
   } catch (error) {
-    seen.tails.delete(old.path)
+    seen.tails.delete(f.path)
     await t?.stream?.close()
-    if (!old.path.endsWith('.zst')) throw error
-    ;(seen.retry ??= new Map()).set(old.path, now + 60000)
+    if (!f.path.endsWith('.zst')) throw error
+    ;(seen.retry ??= new Map()).set(f.path, now + 60000)
     ;(o.report ?? console.error)(error)
     return
   }
-  if (!o.signal?.aborted && !(t && pending(t, stat(old.path)?.size ?? 0))) {
-    seen.done.add(old.path)
-    seen.tails.delete(old.path)
+  if (!o.signal?.aborted && !(t && pending(t, stat(f.path)?.size ?? 0))) {
+    seen.done.add(f.path)
+    seen.tails.delete(f.path)
   }
 }
 
