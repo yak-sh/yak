@@ -80,7 +80,7 @@ for (let count of [100, 1000]) {
   })
 }
 
-let { driver: d, steps } = stepping()
+let { driver: d } = stepping()
 let store = storage(d, v, { derived: sessionDerived(v) })
 let g = graph({
   vocab: v,
