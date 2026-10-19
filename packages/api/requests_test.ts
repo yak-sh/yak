@@ -125,3 +125,20 @@ test('an upgraded socket response is handed back intact rather than streamed', (
   equal(upgradeAnswer, upgraded)
   equal(upgradeHeld, [])
 })
+
+// Deno aborts the successful upgrade's HTTP request. Cancellation must not
+// replace its opaque 101 while the request wrapper unwinds.
+let abortUpgrade = new AbortController()
+let upgrades = requests(served(() => {
+  abortUpgrade.abort()
+  return upgraded
+}, {}))
+let abortAnswer = await upgrades.handle(
+  new Request('http://test/ws', {
+    headers: { upgrade: 'websocket' },
+    signal: abortUpgrade.signal,
+  }),
+)
+test('successful upgrade request abort cannot replace its runtime response', () => {
+  equal(abortAnswer, upgraded)
+})

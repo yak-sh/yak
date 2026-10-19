@@ -23,7 +23,10 @@ export let receive = async <T>(
   request: Request,
   read: () => T | Promise<T>,
 ) => {
-  if (!reading(request)) return await read()
+  if (
+    !reading(request) ||
+    (request.headers.get('upgrade') ?? '').toLowerCase() == 'websocket'
+  ) return await read()
   let signal = request.signal
   let cancelled = new Cancelled('request was interrupted')
   if (signal.aborted) throw cancelled
