@@ -55,17 +55,22 @@ let noLeases = (a: ReturnType<typeof proc>) => {
   }
 }
 
-test('single owner empty wakes owe no start or sweep work and write nothing', async () => {
+let empty = await (async () => {
   let a = proc()
   await a.g.apply([post('p1')])
   await a.fx.work(a.g)
-  equal(a.ran.sort(), ['p1', 'sweep']) // Only the runs this commit owed.
+  let initially = a.ran.sort()
   a.writes.length = 0
   let next = proc(a.g.storage)
   for (let i = 0; i < 3; i++) await next.fx.work(next.g)
-  equal(next.ran, [])
-  equal(next.writes, [])
-  equal(await next.g.read('.lease'), [])
+  return { initially, ran: next.ran, writes: next.writes, leases: await next.g.read('.lease') }
+})()
+
+test('single owner empty wakes owe no start work and write nothing', () => {
+  equal(empty.initially, ['p1', 'sweep'])
+  equal(empty.ran, [])
+  equal(empty.writes, [])
+  equal(empty.leases, [])
 })
 
 test('single owner recorded success writes only attempt and outcome, without lease fields', async () => {
@@ -81,7 +86,7 @@ test('single owner recorded success writes only attempt and outcome, without lea
 })
 
 // Joining the empty pool is fixture setup; the writes must start their own
-// runs. The birth, written at load, owes a note and a sweep; the case times a
+// runs. The birth, written at load, owes two handlers; the case times a
 // change, which owes one more note, and checks every run either write owed.
 let writerVocab = loadVocab([effectDoc, owes, {
   $defs: {

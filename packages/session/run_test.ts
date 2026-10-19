@@ -761,7 +761,7 @@ let replacement = await (async () => {
   let gate = new Promise<void>((go) => open = go)
   let asks = 0, runs = 0
   let asked = Promise.withResolvers<void>()
-  let swept = Promise.withResolvers<void>()
+  let ready = Promise.withResolvers<void>()
   let settled = Promise.withResolvers<void>()
   let tool = {
     name: 'echo',
@@ -818,10 +818,10 @@ let replacement = await (async () => {
     { entity: { eid: toolEid('echo') }, tool: { name: 'echo' } },
     ...ask('s1'),
   ])
-  let rows = b.g.rows.bind(b.g)
-  b.g.rows = async (...args) => {
-    let found = await rows(...args)
-    if (String(args[0]).includes('.session.status=')) swept.resolve()
+  let read = b.g.read.bind(b.g)
+  b.g.read = async (...args) => {
+    let found = await read(...args)
+    if (JSON.stringify(args[0]).includes('"effect","state"')) ready.resolve()
     return found
   }
   return {
@@ -831,22 +831,22 @@ let replacement = await (async () => {
     nextStop,
     open,
     asked,
-    swept,
+    ready,
     settled,
     counts: () => ({ asks, runs }),
   }
 })()
 
 test('a ready replacement continues a drained multi-step turn without a nudge', async () => {
-  let { a, b, stop, nextStop, open, asked, swept, settled, counts } =
+  let { a, b, stop, nextStop, open, asked, ready, settled, counts } =
     replacement
   let first = a.fx.work(a.g, stop.signal)
   let second: Promise<void> | undefined
   try {
     await asked.promise
     second = b.fx.work(b.g, nextStop.signal)
-    // The replacement has swept the transcript while w1 still owns its lease.
-    await swept.promise
+    // The replacement has polled the queue while w1 still owns its lease.
+    await ready.promise
     await settle(b.g, 's1', b.r)
     assertEquals(counts(), { asks: 1, runs: 0 })
     stop.abort()

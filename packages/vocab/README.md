@@ -775,7 +775,6 @@ const doc = {
     send_mail: {
       effect: true,
       created: ['mail'],
-      sweep: '.mail !sent',
       tries: 3,
       option: 'sending',
       target: '.mail',
@@ -792,7 +791,6 @@ equal(rulesIn(doc), [{
 equal(effectsIn(doc), [{
   name: 'send_mail',
   created: ['mail'],
-  sweep: '.mail !sent',
   tries: 3,
   option: 'sending',
   target: '.mail',
@@ -801,11 +799,11 @@ equal(effectsIn(doc), [{
 
 Effect declarations carry `created` and `removed` component lists, `changed`
 component or property lists, `match`, `start`, `active`, `target`, `option`,
-`sweep`, `tries` and `idempotent`. At least one of `created`, `changed`,
-`removed`, `match` or `start` must owe work.
-[@yaks/effects](../effects/README.md) defines their execution;
-[@yaks/graph](../graph/README.md#rules) executes rules. These loaders read
-declarations without parsing queries or running either kind of work.
+`tries` and `idempotent`. At least one of `created`, `changed`, `removed`,
+`match` or `start` must owe work. [@yaks/effects](../effects/README.md) defines
+their execution; [@yaks/graph](../graph/README.md#rules) executes rules. These
+loaders read declarations without parsing queries or running either kind of
+work.
 
 `option` names a boolean option of the declaring plugin: `option: 'sending'`
 owes runs only with `with: { sending: true }`. Graph writers and effects workers

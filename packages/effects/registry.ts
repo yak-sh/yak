@@ -486,12 +486,6 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
     // Start-up work: owed by a worker joining the pool (./pool.ts), and by
     // no commit, so its slot watches nothing.
     if (effect.start) at({ comp: '', kind: 'started' })
-    if (effect.sweep && !effect.created) {
-      throw new Error(
-        `effect ${effect.name} declares a sweep and no created trigger — ` +
-          'a sweep owes the created run of what it selects',
-      )
-    }
   }
 
   let observe = (s: Omit<Slot, 'id'>, id: string) => {

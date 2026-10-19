@@ -76,7 +76,7 @@ export let owes: VocabDoc = {
       tries: 2,
     },
     post_gone: { effect: true, removed: ['post'], idempotent: false },
-    post_swept: { effect: true, created: ['post'], sweep: '.post' },
+    post_swept: { effect: true, created: ['post'] },
   },
 }
 

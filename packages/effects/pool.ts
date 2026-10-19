@@ -34,8 +34,7 @@
 // Object's runtime refuses them as overloaded), no timer fires, no child
 // process is reaped and no signal is heard. So a worker gives way between
 // passes, a pass examines a bounded window, and no more than `max` runs go at
-// once ({@link MAX} unless told): a backlog, a start-up sweep's thousands
-// included, is worked a slot at a time, each freed slot filled at once.
+// once ({@link MAX} unless told): a backlog is worked a slot at a time, each freed slot filled at once.
 //
 // Success deletes its run under the same claim guard; it leaves no done row.
 // There are two ways a run does not complete, and they are not the same:
@@ -90,7 +89,6 @@ import {
   unlink,
 } from '@yaks/trace'
 import { comps } from '@yaks/graph/bundle'
-import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import {
@@ -197,7 +195,7 @@ export let POOL = '@yaks/effects'
 /** How a pool is worked. */
 export type PoolOpts = {
   /** One process exclusively owns this store (for example a Durable Object).
-   * Drain recorded runs without claims, presence leases, sweeps, or expiration
+   * Drain recorded runs without claims, presence leases, or expiration
    * duties. Persist attempts and outcomes for crash recovery and retries,
    * but for a start-up run started at once, whose recovery is the host's
    * pass and which writes only a failure. Never enable this for a shared box
@@ -205,7 +203,7 @@ export type PoolOpts = {
   singleOwner?: boolean
   /** When start-up runs are owed: on joining the pool (`join`, the default
    * for shared workers), or only when the host calls startup (`manual`, the
-   * default for single-owner stores). Sweeps keep their joining behavior. */
+   * default for single-owner stores). */
   startup?: 'join' | 'manual'
   /** Effects explicitly disabled by this configuration, whose unclaimed runs owe no work. */
   disabled?: string[]
@@ -237,11 +235,6 @@ export type PoolOpts = {
    * nobody is known to be) */
   gone?: (holder: Eid) => boolean | Promise<boolean>
 }
-
-// The row a sweep owes `handler`'s run on `target` in: one per pair, so
-// workers sweeping at once meet on it. It is never deleted, only owed again.
-let sweptEid = (handler: string, target: Eid): Eid =>
-  derivedEid(`${EFFECT}|sweep|${handler}|${target}`)
 
 /** A run this process claimed as it wrote it, to start after the commit. */
 export type Owed = { eid: Eid; row: Comp }
@@ -808,78 +801,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     }
   }
 
-  // What a declaration's `sweep` selects, owed a run again unless one is
-  // already owed: how a worker coming up finds what nobody wrote down. A swept
-  // run is one row per effect and target (`sweptEid`), owed again by
-  // each sweep that finds it settled, and every write is guarded on the state
-  // it was read in — so two workers coming up at once owe one run, not two:
-  // the second finds its precondition moved, reads again, and has nothing
-  // left to owe.
-  let swept = async (
-    g: Access,
-    s: Slot,
-    query: string,
-    tries = 3,
-  ): Promise<void> => {
-    // A sweep owes runs to identities. Projecting targets here evaluates
-    // computed properties (session status/cost) again for every match, though
-    // only the eid is used; the handler reads its current target when it runs.
-    let found = (await g.rows(query)) as { eid: Eid }[]
-    if (!found.length) return
-    let held = await g.read(and(
-      eq(`${EFFECT}.handler`, s.id),
-      eq(`${EFFECT}.state`, 'pending'),
-    ))
-    let owed = new Set(held.map((b) => String((b[EFFECT] as Comp).target)))
-    let due = found.filter((b) => !owed.has(b.eid))
-    let eids = due.map((b) => sweptEid(s.id, b.eid))
-    let was = new Map(
-      (await g.get(eids)).map((b) => [b.entity.eid, b[EFFECT] as Comp]),
-    )
-    let at = stamp(clock())
-    let rows: Bundle[] = due.map((b, i) => ({
-      entity: { eid: eids[i] },
-      [EFFECT]: {
-        handler: s.id,
-        target: b.eid,
-        comp: s.effect!.created![0],
-        kind: 'created',
-        state: 'pending',
-        attempts: 0,
-        at,
-        generation: 0,
-        error: null,
-        next: null,
-        ...free,
-      },
-      $was: { [EFFECT]: { state: token(was.get(eids[i])?.state ?? null) } },
-    }))
-    if (!rows.length) return
-    try {
-      await g.apply(rows, { trusted: true })
-    } catch (error) {
-      if (!(error instanceof Stale) || tries <= 1) throw error
-      return swept(g, s, query, tries - 1)
-    }
-  }
-  let sweep = async (g: Access) => {
-    let seen = new Set<string>()
-    for (let s of ctx.slots()) {
-      let query = s.effect?.sweep
-      if (!query || !s.run || seen.has(s.id)) continue
-      seen.add(s.id)
-      try {
-        await swept(g, s, query)
-      } catch (err) {
-        ctx.report(err, {
-          handler: s.id,
-          slot: s,
-        })
-      }
-    }
-  }
-
-  // The worker that stays up: present, a pass, the claims renewed, a wait.
   // Its presence lease goes with it, so nobody waits out its expiry.
   let stay = async (g: Access, signal: AbortSignal, budget = page) => {
     let seat = `${POOL}/${me}`
@@ -986,8 +907,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   }
 
   // Joining the pool, once: this process claims what it writes from now on,
-  // it owes start-up work where the host chose joining, and what the declared
-  // sweeps select is owed a run in a shared store.
+  // it owes start-up work where the host chose joining. Source commits have
+  // already recorded every other run; discovery is the same on every pass.
   let joined = false
   let join = async (
     g: Access,
@@ -1010,7 +931,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         })
       }
     }
-    if (!opts.singleOwner) await sweep(g)
     return requested ? starting(g, immediate) : []
   }
 

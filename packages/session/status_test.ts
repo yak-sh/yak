@@ -871,7 +871,7 @@ test('a harness ending stays ended while its importer catches up, then clears on
 // Where an app's transcripts live, a Durable Object's SQLite, workerd refuses
 // an expression past 100 deep, and the runner's sweep nests the status inside
 // a union: the query a worker coming up asks for the turns nobody wrote down.
-test("the runner's sweep finds a transcript owed a turn in a Durable Object", () => {
+test('active transcripts can be queried in a Durable Object', () => {
   let [run] = effectsIn(sessionDoc).filter((e) => e.name == 'session_run')
   let s = held(durable(), vocab, { derived: sessionDerived(vocab) })
   s.install()

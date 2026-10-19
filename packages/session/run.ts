@@ -482,7 +482,7 @@ let advance = (g: Graph, session: Eid, r: Runner): Promise<void> => {
 }
 
 // Each committed input, result, completed request or context checkpoint owes
-// its transcript a step. Admission and sweeps name the transcript directly;
+// its transcript a step. Admission names the transcript directly;
 // a task or dependency change also wakes the transcripts holding that work.
 // A removed dependency is read with the ends it had before the commit.
 let about = async (g: Graph, e: Event): Promise<Eid[]> => {
@@ -557,8 +557,8 @@ export let answer = async (
   if (await answering(g, session, r)) await settle(g, session, r)
 }
 
-// A terminal entry, a held task finishing, or a claim found by a worker's
-// sweep identifies the transcript whose locks may be due for release. A
+// A terminal entry or a held task finishing identifies the transcript whose
+// locks may be due for release. A
 // managed run that ended cleanly keeps the ones it is parked on (./wake.ts):
 // its next run is owed, or waits on a dependency. The guard protects a claim
 // that another writer handed to a different session after this read. A swept

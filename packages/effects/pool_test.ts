@@ -20,7 +20,7 @@ import { loadVocab, pick } from '@yaks/vocab'
 import { parse } from '@yaks/query'
 import { memory } from '../graph/testing.ts'
 import { test, tick, until } from '@yaks/testing'
-import { effects, type Handler, type Job, type Opts } from './registry.ts'
+import { effects, type Handler, type Opts } from './registry.ts'
 import { leaseEid } from './lease.ts'
 import { MAX, POOL, working } from './pool.ts'
 import { pooledBlog } from './testing.ts'
@@ -391,29 +391,32 @@ test('a run its worker dropped is run again, unless running twice is not safe', 
   assertEquals((await run(next.g, 'post_gone', eid)).state, 'failed')
 })
 
-test('a sweep owes what it selects one run, however many workers start at once', async () => {
+let recorded = await (async () => {
   let s = store()
-  // Written by a graph that owes nothing: no registry at all.
-  let bare = graph({ storage: s, vocab: pooledBlog })
-  await bare.apply([post('p1'), post('p2')])
-  let [a, b] = [proc(s), proc(s)]
+  let writer = proc(s, { owes: 'declared' })
+  await writer.g.apply([post('p1'), post('p2')])
   let ran: string[] = []
-  for (let p of [a, b]) {
+  let open = () => {
+    let p = proc(s)
     p.fx.handle({ post_swept: (e) => void ran.push(e.entity.eid) })
+    return p
   }
+  let [a, b] = [open(), open()]
   await Promise.all([a.fx.work(a.g), b.fx.work(b.g)])
   await Promise.all([a.fx.idle(), b.fx.idle()])
-  assertEquals(ran.sort(), ['p1', 'p2'])
-  // A second pass is not a worker coming up.
-  await a.fx.work(a.g)
-  assertEquals(ran.length, 2)
-  // The next one to come up sweeps again: a sweep is how what nobody wrote
-  // down is found, so what it selects is owed until it stops selecting it.
-  let c = proc(s)
-  c.fx.handle({ post_swept: (e) => void ran.push(e.entity.eid) })
+  let first = [...ran].sort()
+  let c = open()
   await c.fx.work(c.g)
-  await c.fx.idle()
-  assertEquals(ran.length, 4)
+  let restarted = [...ran].sort()
+  await writer.g.apply([post('p3')])
+  await c.fx.work(c.g)
+  return { first, restarted, later: ran.sort() }
+})()
+
+test('writers record work before any worker exists and competing workers run it once', () => {
+  assertEquals(recorded.first, ['p1', 'p2'])
+  assertEquals(recorded.restarted, ['p1', 'p2'])
+  assertEquals(recorded.later, ['p1', 'p2', 'p3'])
 })
 
 // Code for every effect the blog declares, so a worker can serve the pool.
@@ -661,31 +664,6 @@ test('finite pool passes leave newly owed work for the next wake', async () => {
   await a.fx.work(a.g, AbortSignal.abort(), 1)
   assertEquals(a.ran, ['p1', 'p2'])
   assertEquals(a.oops, [])
-})
-
-test('a restart sweep selects identities without projecting every target', async () => {
-  let s = store(), bare = graph({ storage: s, vocab: pooledBlog })
-  await bare.apply([post('p1'), post('p2')])
-  let p = proc(s), read = p.g.read.bind(p.g)
-  p.fx.handle({ post_swept: (e) => void p.ran.push(e.entity.eid) })
-  p.g.read = (query, opts) => {
-    if (query == '.post') throw Error('sweep projected target components')
-    return read(query, opts)
-  }
-  await p.fx.work(p.g)
-  await p.fx.idle()
-  assertEquals(p.ran.sort(), ['p1', 'p2'])
-  assertEquals(p.oops, [])
-
-  let failures: Job[] = []
-  let failed = proc(s, { report: (_error, job) => void failures.push(job) })
-  failed.fx.handle({ post_swept: failed.note })
-  failed.g.rows = () => {
-    throw Error('cannot select sweep')
-  }
-  await failed.fx.work(failed.g)
-  await failed.fx.idle()
-  assertEquals(failures.map((job) => job.event?.entity.eid), [undefined])
 })
 
 test('a worker settles disabled runs from older writers without calling a handler', async () => {

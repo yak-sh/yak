@@ -19,10 +19,10 @@ import type { VocabDoc } from './types.ts'
  *
  * effectsIn({
  *   $defs: {
- *     send_mail: { effect: true, created: ['mail'], sweep: '.mail !sent' },
+ *     send_mail: { effect: true, created: ['mail'] },
  *   },
  * })
- * // [{ name: 'send_mail', created: ['mail'], sweep: '.mail !sent' }]
+ * // [{ name: 'send_mail', created: ['mail'] }]
  * ```
  */
 export type EffectDecl = {
@@ -51,9 +51,6 @@ export type EffectDecl = {
   /** a query over what committed: a run is owed wherever a batch made it hold
    * for an entity the batch touched */
   match?: string
-  /** a query selecting the entities still owed a run, asked when a worker
-   * starts. Declaring one promises the effect is safe to run twice */
-  sweep?: string
   /** the most attempts a run gets before it is left `failed` */
   tries?: number
   /** `false` where running it twice is not the same as running it once */
@@ -88,7 +85,6 @@ export let effectsIn = (input: VocabDoc | VocabDoc[]): EffectDecl[] => {
       for (
         let key of [
           'match',
-          'sweep',
           'active',
           'description',
           'option',

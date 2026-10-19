@@ -742,7 +742,6 @@
         "edge"
       ],
       "target": ".entry|.session|.task|.requires|.contains",
-      "sweep": ".session.status=pending,running,queued (.entries.using|.entries.ask)|.dispatch.status=active,queued,waiting",
       "tries": 8,
       "description": "advance a transcript by one independently owed step: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency (a `requires` or `contains` link going, read by the ends it had). A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },
@@ -758,8 +757,7 @@
         "completed",
         "cancelled"
       ],
-      "sweep": ".claim",
-      "description": "release claims held by a transcript that stopped or failed, except those a managed run that ended cleanly is parked on: a task still waiting on a dependency, or any while a request waits for its next run. A parked task finishing lets its claim go. A worker also finds claims left by runs that ended while no worker was serving effects"
+      "description": "release claims held by a transcript that stopped or failed, except those a managed run that ended cleanly is parked on: a task still waiting on a dependency, or any while a request waits for its next run. A parked task finishing lets its claim go. Runs recorded with terminal marks are claimed by the next worker even when no worker was serving effects"
     },
     "session_wake": {
       "effect": true,
@@ -801,7 +799,6 @@
         "tool_async"
       ],
       "target": ".call&.entry&.tool_async",
-      "sweep": ".call&.entry&.tool_async&!results",
       "description": "execute one asynchronous native tool call independently of the session lease; the tools runner owns its execution claim and final result"
     },
     "sending": {
