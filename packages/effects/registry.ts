@@ -811,7 +811,12 @@ export let effects = (vocab: Vocab, opts: Opts = {}): Effects => {
       owed.delete(key!)
       pooled!.start(mine)
     }
-    if (key && (left.delete(key) || mine?.length)) opts.nudge?.()
+    if (key && (left.delete(key) || mine?.length)) {
+      // The local worker may be asleep after an empty pass. A host nudge
+      // notifies other workers, but cannot wake this registry's own pool.
+      pooled!.wake()
+      opts.nudge?.()
+    }
     let gen = generation(bundles)
     if (gen > depth || !slots.some(here)) return clean()
     let write = writer(gen)
