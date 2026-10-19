@@ -29,9 +29,10 @@ export let Talk = ({ e, io }: Props) => {
   let names = io.ask(model ? { model: `.entity.eid=${model} ?model ?doc` } : {})
   let m = names.model?.rows[0]?.model
   let name = m && typeof m == 'object' && 'name' in m ? String(m.name) : ''
+  let target = e.topic ? 'about this topic' : 'this oracle'
   return (
     <Section data-section='ask-oracle'>
-      <Section.Title>Ask this oracle</Section.Title>
+      <Section.Title>Ask {target}</Section.Title>
       <Section.Sub>
         Starts a separate native conversation{name ? ` with ${name}` : ''}. Open
         it below to read and continue; its session page can change models.
@@ -40,7 +41,7 @@ export let Talk = ({ e, io }: Props) => {
         eid={e.entity.eid}
         entry
         make={(text) => question(e.entity.eid, text)}
-        placeholder='Ask this oracle…'
+        placeholder={`Ask ${target}…`}
         submit='Start conversation'
       />
       {got.failures.rows.map((row) => {

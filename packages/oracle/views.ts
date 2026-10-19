@@ -3,6 +3,7 @@
 import type { Bundle, View } from '@yaks/inspect'
 import { parse } from '@yaks/query'
 import { Talk } from './Talk.tsx'
+import { Topic, TopicTile } from './Topic.tsx'
 import {
   Dialogue,
   Inline,
@@ -44,7 +45,39 @@ let nodeFace = {
   }),
 }
 
+let topicFace = {
+  match: parse('.topic .topic_context'),
+  Render: TopicTile,
+  asks: (e: Bundle) => ({
+    face: `.entity.eid=${e.entity.eid} .fields=doc.title,doc.body,topic.name`,
+  }),
+}
+let topicAsks = (e: Bundle) => ({
+  outgoing: `.edge .edge.from=${e.entity.eid} .edge.to.topic * .limit=100`,
+  incoming: `.edge .edge.to=${e.entity.eid} .edge.from.topic * .limit=100`,
+  dialogues:
+    `.oracle_dialogue.to=${e.entity.eid} * .order=-created.at .limit=50`,
+})
+
 let all: View[] = [
+  ...['Oracle', 'Page', 'Full'].map((view) => ({
+    view,
+    match: parse('.topic .topic_context'),
+    asks: topicAsks,
+    Render: Topic,
+  })),
+  { view: 'Oracle.Query', match: parse('.topic .topic_context'), Render: Talk },
+  ...['Tile', 'List.Tile', 'Feed.Tile', 'Search.Tile', 'Tray.List.Tile'].map((
+    view,
+  ) => ({
+    ...topicFace,
+    view,
+  })),
+  ...['Inline', 'Title', 'Card.Title'].map((view) => ({
+    view,
+    match: parse('.topic .topic_context'),
+    Render: view == 'Inline' ? Inline : Title,
+  })),
   { ...nodeFace, view: 'Oracle.Tree.Tile' },
   { view: 'Oracle.Query', match: parse('.oracle .session'), Render: Talk },
   ...['Feed.Tile', 'Search.Tile', 'Tray.List.Tile'].map((view) => ({

@@ -53,7 +53,7 @@ export let branches = (nodes: Bundle[], edges: Bundle[], root: string) => {
   return [root, ...byId.keys()].flatMap(walk)
 }
 
-let State = ({ answer, empty }: { answer: Answer; empty: string }) =>
+export let State = ({ answer, empty }: { answer: Answer; empty: string }) =>
   answer.error
     ? <Section.Note mod='refused'>{answer.error}</Section.Note>
     : answer.rows.length
@@ -75,7 +75,7 @@ let Twig = ({ branch, io }: { branch: Branch; io: Io }) => (
   </Rows.Item>
 )
 
-let Conversations = ({ answer, io }: { answer: Answer; io: Io }) => (
+export let Conversations = ({ answer, io }: { answer: Answer; io: Io }) => (
   <Section data-section='conversations'>
     <Section.Title>Conversations</Section.Title>
     <Section.Sub>
