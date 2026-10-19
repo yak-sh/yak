@@ -12,7 +12,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { docDoc } from '@yaks/doc'
 import { sessionDoc } from './comp.ts'
-import { hear, heirs, listen, pending, said } from './listen.ts'
+import { ended, hear, heirs, listen, pending, said } from './listen.ts'
 import { statusComputed } from './state.ts'
 
 let vocab = loadVocab([docDoc, sessionDoc], [idKeywords])
@@ -163,6 +163,13 @@ await desk.apply([
   ...transcript('idle', 'operator', 'settled'),
   ...transcript('busy-sub', 'specialist', 'working'),
 ])
+let terminal = await desk.get(
+  ['running', 'ended', 'stopped', 'busy', 'idle'],
+  ['session'],
+)
+test('a batch of sessions distinguishes harness end and stop from live and settled turns', async () =>
+  equal([...await ended(desk, terminal)].sort(), ['ended', 'stopped']))
+
 for (
   let bundle of [
     wrote('running', 'p'),

@@ -22,11 +22,11 @@ import {
   arrived,
   comments,
   deliver,
+  ended,
   heirs,
   knocked,
   natives,
   type News,
-  over,
   pending,
   replies as replyRoutes,
 } from './listen.ts'
@@ -155,9 +155,8 @@ let hearing = async (g: Graph, ids: Eid[]): Promise<Eid[]> => {
   let found = ids.length
     ? await natives(g, [eq('entity.eid', list(...ids))], [`${SESSION}.ended`])
     : []
-  let out: Eid[] = []
-  for (let s of found) if (!await over(g, s)) out.push(s.entity.eid)
-  return out
+  let gone = await ended(g, found)
+  return found.filter((s) => !gone.has(s.entity.eid)).map((s) => s.entity.eid)
 }
 
 /** A line a native transcript is owed: the item, what is said of it, and the

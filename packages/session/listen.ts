@@ -123,20 +123,24 @@ let addressedTo = (
   ]
 }
 
-/** Whether a session is over: its harness ended it, or its transcript
- * stopped or failed. One between turns is not. */
-export let over = async (
+/** The sessions whose harness ended or whose transcript stopped or failed.
+ * Late output cannot hide a stop; a settled turn is still live. */
+export let ended = async (
   graph: Pick<Graph, 'read'>,
-  s: Bundle,
-): Promise<boolean> => {
-  if (comp(s, SESSION).ended == true) return true
-  // Late results can follow a stop without reopening it. The graph's status
-  // reads that boundary; a tail of entries can hide it.
-  return (await graph.read(and(
-    eq('entity.eid', s.entity.eid),
-    eq(`${SESSION}.status`, list('stopped', 'failed')),
-    fields('entity.eid'),
-  ))).length > 0
+  sessions: Bundle[],
+): Promise<Set<Eid>> => {
+  let gone = sessions.filter((s) => comp(s, SESSION).ended == true)
+  let live = sessions.filter((s) => comp(s, SESSION).ended != true)
+  return new Set([
+    ...gone,
+    ...live.length
+      ? await graph.read(and(
+        eq('entity.eid', value(live.map((s) => s.entity.eid))),
+        eq(`${SESSION}.status`, list('stopped', 'failed')),
+        fields('entity.eid'),
+      ))
+      : [],
+  ].map((s) => s.entity.eid))
 }
 
 let eids = (rows: Bundle[]): Eid[] => rows.map((b) => b.entity.eid)
@@ -260,7 +264,18 @@ export let heirs = async (
   if (!reached.length) return []
   let homes = [
     ...new Set(
-      (await Promise.all(reached.map((p) => family(graph, p, '<-')))).flat(),
+      [
+        ...reached,
+        ...graph.vocab.prop('filed', 'project') && graph.vocab.comp('project')
+          ? eids(
+            await graph.read(and(
+              present('project'),
+              or(...reached.map((p) => walk('filed.project', '<-', p))),
+              fields('entity.eid'),
+            )),
+          )
+          : [],
+      ],
     ),
   ]
   // The native transcripts wearing a persona homed there, then those at work.
@@ -361,10 +376,7 @@ export let held = async (
       fields('session.ended'),
     ))
     : []
-  let gone = new Set<Eid>()
-  for (let s of sessions) {
-    if (s.entity.eid != session && await over(graph, s)) gone.add(s.entity.eid)
-  }
+  let gone = await ended(graph, sessions.filter((s) => s.entity.eid != session))
   let wrote = new Set(sessions.map((s) => s.entity.eid))
   let by = (b: Bundle) => writer.get(to(b)) ?? ''
   return [
