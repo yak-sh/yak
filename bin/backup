@@ -149,6 +149,16 @@ restore() {
   say "restored $night in $(( $(date +%s) - started ))s"
 }
 
+# Prove the bucket holds each file's bytes, and that zstd can decode them,
+# before releasing local space. A later failure leaves no counts marker, so
+# none of this night's partial uploads can be mistaken for a recovery point.
+uploaded() {
+  rclone copy "$work/night" "$remote/snapshots/$night"
+  rclone check -q --one-way --download "$work/night" "$remote/snapshots/$night"
+  zstd -tq "$work/night"/*.zst
+  rm "$work/night"/*.zst
+}
+
 backup() {
   started=$(date +%s)
   night=$(date -u +%Y-%m-%dT%H%M%SZ)
@@ -162,19 +172,27 @@ backup() {
   # The copies go where YAK_BACKUP_SNAPSHOT_DIR says, by default the system's
   # temporary directory: not /dev/shm, where a 10 GB snapshot would take
   # nearly half this box's memory. A snapshot and its compressed copy are on
-  # disk together, and the live graph keeps 5 GiB to grow into.
+  # disk together. Each database is uploaded and released before the next,
+  # and the live graph keeps 5 GiB to grow into.
   dir=${YAK_BACKUP_SNAPSHOT_DIR:-${TMPDIR:-/tmp}}
   case "$dir" in
     /*) ;;
     *) die "snapshot directory must be absolute" ;;
   esac
   [ -d "$dir" ] || die "snapshot directory does not exist: $dir"
-  need=5242880
+  # A run killed past its bound cannot clean up. Reclaim its private
+  # directory before measuring space, not after refusing the next run.
+  find "$dir" -maxdepth 1 -type d -name 'yak-backup.*' -mmin +120 \
+    -exec rm -rf {} + 2>/dev/null || true
+  largest=0
   for db in $databases; do
+    size=0
     for f in "$data/$db" "$data/$db-wal"; do
-      [ ! -f "$f" ] || need=$(( need + 2 * ($(stat -c %s "$f") + 1023) / 1024 ))
+      [ ! -f "$f" ] || size=$(( size + ($(stat -c %s "$f") + 1023) / 1024 ))
     done
+    [ "$size" -le "$largest" ] || largest=$size
   done
+  need=$(( 5242880 + 2 * largest ))
   free=$(df -Pk "$dir" | awk 'NR == 2 { print $4 }')
   case "$free" in
     '' | *[!0-9]*) die "cannot measure snapshot space" ;;
@@ -182,10 +200,7 @@ backup() {
   [ "$free" -ge "$need" ] ||
     die "snapshot directory needs $need KiB, has $free KiB"
 
-  # Every copy belongs to this run's private directory and goes with it. A
-  # run killed past its bound cannot clean up, and none lives two hours.
-  find "$dir" -maxdepth 1 -type d -name 'yak-backup.*' -mmin +120 \
-    -exec rm -rf {} + 2>/dev/null || true
+  # Every copy belongs to this run's private directory and goes with it.
   work=$(mktemp -d "$dir/yak-backup.XXXXXXXX")
   trap 'rm -rf "$work"' EXIT
   trap 'exit 1' HUP INT QUIT TERM
@@ -205,17 +220,14 @@ backup() {
     checked "$copy"
     counts "$db" "$copy" >> "$work/counts"
     zstd -q -T0 --rm "$copy" -o "$work/night/$db.zst"
+    uploaded
   done
   set --
   for f in $files; do [ ! -e "$data/$f" ] || set -- "$@" "$f"; done
-  [ $# = 0 ] || tar -C "$data" --zstd -cf "$work/night/files.tar.zst" "$@"
-
-  # The proof: the bucket holds these bytes exactly (check --download compares
-  # every one), and each compressed file decodes to what zstd checksummed as
-  # it read the checked snapshot.
-  rclone copy "$work/night" "$remote/snapshots/$night"
-  rclone check -q --download "$work/night" "$remote/snapshots/$night"
-  zstd -tq "$work/night"/*.zst
+  if [ $# != 0 ]; then
+    tar -C "$data" --zstd -cf "$work/night/files.tar.zst" "$@"
+    uploaded
+  fi
   [ ! -d "$data/images" ] ||
     rclone copy --ignore-existing "$data/images" "$remote/images"
   rclone copyto "$work/counts" "$remote/snapshots/$night/counts"

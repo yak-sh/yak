@@ -238,7 +238,11 @@ test('a damaged database fails the night and drops nothing', async () => {
     let out = await f.backup()
     ok(!out.success)
     match(decode(out.stderr), /tracker\.db failed quick_check/)
-    equal(f.nights(), ['2026-01-01T044200Z'])
+    let [partial] = f.nights().filter((n) => n != '2026-01-01T044200Z')
+    equal(f.nights(), ['2026-01-01T044200Z', partial])
+    // The first database uploaded, but no counts marks this failed night
+    // complete: a restore still chooses the previous recovery point.
+    equal(ls(`${f.remote}/snapshots/${partial}`), ['yak.db.zst'])
     equal(ls(f.scratch), [])
   } finally {
     await f.close()
@@ -248,6 +252,28 @@ test('a damaged database fails the night and drops nothing', async () => {
 test('a snapshot directory without enough space is refused', async () => {
   let f = await fixture()
   try {
+    // Two sparse files fit one at a time, but not together. SQLite copies
+    // only the pages in their headers, so this checks the disk calculation
+    // without writing gigabytes or depending on the box's available space.
+    let disk = await new Deno.Command('df', {
+      args: ['-Pk', f.scratch],
+    }).output()
+    ok(disk.success)
+    let free = Number(decode(disk.stdout).trim().split('\n')[1].split(/\s+/)[3])
+    let size = Math.floor((free - 5242880) / 3) * 1024
+    ok(size > 0)
+    for (let db of ['yak.db', 'tracker.db']) {
+      await Deno.truncate(`${f.data}/${db}`, size)
+    }
+    let stale = `${f.scratch}/yak-backup.expired`
+    await Deno.mkdir(stale)
+    let past = new Date(Date.now() - 3 * 60 * 60 * 1000)
+    await Deno.utime(stale, past, past)
+    let fits = await f.backup()
+    ok(fits.success, decode(fits.stderr))
+    equal(f.nights().length, 1)
+    equal(ls(f.scratch), [])
+
     // A sparse terabyte: the capacity gate refuses it before any copy.
     await Deno.truncate(`${f.data}/yak.db`, 2 ** 40)
     // Named, and the default: the system's temporary directory.
