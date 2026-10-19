@@ -42,7 +42,7 @@ import type { Bundle, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { feed } from './bus.ts'
 import { SESSION } from './comp.ts'
-import { claude, subagent } from './readers.ts'
+import { claude, codexRollout, subagent } from './readers.ts'
 import { reapLeases } from './reap.ts'
 import { behind, callOf, pull, type Tail, tail } from './tail.ts'
 import { sessionEid, sessionFor } from './who.ts'
@@ -55,6 +55,9 @@ export type Options = {
   /** the Claude projects directory transcripts are read from (default
    * `~/.claude/projects`) */
   transcripts?: string
+  /** Codex sessions directory (default `$CODEX_HOME/sessions` or
+   * `~/.codex/sessions`). */
+  codex?: string
   /** how long a session keeps its full depth after it was last written, in
    * milliseconds (default 14 days) */
   full?: number
@@ -71,10 +74,19 @@ export let claudeProjects = (): string | undefined => {
   return root && `${root}/projects`
 }
 
+/** Where Codex keeps its rollout files. */
+export let codexSessions = (): string | undefined => {
+  let env = globalThis.Deno?.env
+  let root = env?.get('CODEX_HOME') ??
+    (env?.get('HOME') ? `${env.get('HOME')}/.codex` : undefined)
+  return root && `${root}/sessions`
+}
+
 /** One transcript on disk: the harness's id for the session, and the file. */
 export type Found = {
   id: string
   path: string
+  runner?: 'codex'
   /** a subagent's: the harness's id for the session that started it */
   parent?: string
 }
@@ -111,6 +123,50 @@ export let transcripts = (dir: string): Found[] => {
     }
   }
   return [...out, ...agents]
+}
+
+// Rollouts are dated YYYY/MM/DD, and the filename carries the thread UUID.
+// The same bounded look follows both providers; no second duty scans them.
+export let rollouts = (dir: string, depth = 0): Found[] => {
+  let files: Deno.DirEntry[]
+  try {
+    files = [...Deno.readDirSync(dir)]
+  } catch {
+    return []
+  }
+  return files.flatMap((f) => {
+    let path = `${dir}/${f.name}`
+    if (f.isDirectory && depth < 3 && /^\d+$/.test(f.name)) {
+      return rollouts(path, depth + 1)
+    }
+    let id = f.name.match(
+      /^rollout-.+-([\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12})\.jsonl$/i,
+    )?.[1]
+    return f.isFile && id ? [{ id, path, runner: 'codex' as const }] : []
+  })
+}
+
+// Only the header is needed to identify a child. Never read its whole log
+// merely to open a tail; the importer will read the remaining bytes once.
+let header = (path: string): Record<string, unknown> => {
+  let file = Deno.openSync(path)
+  try {
+    let buf = new Uint8Array(4096), text = '', dec = new TextDecoder()
+    for (let n = file.readSync(buf); n; n = file.readSync(buf)) {
+      text += dec.decode(buf.subarray(0, n), { stream: true })
+      if (text.includes('\n')) {
+        try {
+          return JSON.parse(text.split('\n')[0]).payload ?? {}
+        } catch {
+          return {}
+        }
+      }
+      if (text.length > 1024 * 1024) return {}
+    }
+    return {}
+  } finally {
+    file.close()
+  }
 }
 
 /** What one process knows about the files it reads: the tail on each one it
@@ -166,6 +222,28 @@ let spawned = async (g: Graph, f: Found & { parent: string }) => {
 
 // A tail on a transcript, or null where its session is a managed run.
 let opened = async (g: Graph, f: Found): Promise<Tail | null> => {
+  if (f.runner == 'codex') {
+    let meta = header(f.path)
+    let source = meta.source as {
+      subagent?: { thread_spawn?: { parent_thread_id?: string } }
+    } | undefined
+    f.parent = source?.subagent?.thread_spawn?.parent_thread_id
+    let eid = sessionEid(f.id)
+    let parent = f.parent && sessionEid(f.parent)
+    let s = await sessionFor(g, f.id, ['session.id'])
+    if (s && await managed(g, s.entity.eid)) return null
+    await g.apply([
+      ...(parent
+        ? [{ entity: { eid: parent }, session: { id: f.parent } }]
+        : []),
+      {
+        entity: { eid },
+        session: { id: f.id, ...(parent ? { operator: false } : {}) },
+        ...(parent ? { spawned: { parent } } : {}),
+      },
+    ], { trusted: true })
+    return tail(g, f.path, { session: eid, id: f.id })
+  }
   if (f.parent) {
     return tail(g, f.path, {
       session: await spawned(g, { ...f, parent: f.parent }),
@@ -181,7 +259,24 @@ let opened = async (g: Graph, f: Found): Promise<Tail | null> => {
 }
 
 // How a transcript's lines read: a subagent's are all side conversations.
-let format = (f: Found) => f.parent ? subagent : claude
+let format = (f: Found, t: Tail) =>
+  f.runner == 'codex'
+    ? (e: Parameters<typeof codexRollout>[0]) => {
+      let said = codexRollout(e)
+      if (
+        e.type == 'session_meta' &&
+        (e.payload as { id?: string })?.id != f.id
+      ) return { entries: [] }
+      if (f.parent || t.operator === false) {
+        said.entries = said.entries.map((c) =>
+          c.content && !c.output && !c.result ? { ...c, notice: {} } : c
+        )
+      }
+      return said
+    }
+    : f.parent
+    ? subagent
+    : claude
 
 let stat = (path: string) => {
   try {
@@ -213,6 +308,7 @@ export let look = async (
   seen: Seen,
   o: {
     person?: Eid
+    codex?: string
     full?: number
     now?: number
     signal?: AbortSignal
@@ -232,7 +328,7 @@ export let look = async (
   // Each transcript with lines to read: how far behind a tail on it is, or
   // when it was written where none is open yet.
   let owed: { f: Found; lag?: number; at: number }[] = []
-  for (let f of transcripts(dir)) {
+  for (let f of [...transcripts(dir), ...o.codex ? rollouts(o.codex) : []]) {
     let st = stat(f.path)
     let t = seen.tails.get(f.path)
     let at = st?.mtime?.getTime() ?? 0
@@ -264,7 +360,7 @@ export let look = async (
     // A tail a failure cut short is dropped, and the next look opens a new
     // one where the transcript stands.
     if (t) {
-      await pull(g, t, format(f), read()).catch((e) => {
+      await pull(g, t, format(f, t), read()).catch((e) => {
         seen.tails.delete(f.path)
         throw e
       })
@@ -275,7 +371,7 @@ export let look = async (
   let t = seen.tails.get(old.path) ?? await opened(g, old)
   seen.tails.set(old.path, t)
   if (t) {
-    await pull(g, t, format(old), { ...read(), prose: true }).catch((e) => {
+    await pull(g, t, format(old, t), { ...read(), prose: true }).catch((e) => {
       seen.tails.delete(old.path)
       throw e
     })
@@ -379,6 +475,7 @@ export let service = async (
 ): Promise<void> => {
   await reapLeases(host.graph.storage)
   let dir = options.transcripts ?? claudeProjects()
+  let codex = options.codex ?? codexSessions()
   if (signal.aborted) return
   let said = host.config?.person
   let person = said && ((await host.graph.address([said])).get(said) ?? said)
@@ -388,8 +485,9 @@ export let service = async (
   while (!signal.aborted) {
     try {
       await feed(host.graph)
-      if (dir) {
-        await look(host.graph, dir, seen, {
+      if (dir || codex) {
+        await look(host.graph, dir ?? '', seen, {
+          codex,
           ...(person ? { person: person as Eid } : {}),
           full: options.full,
           signal,

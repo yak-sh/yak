@@ -536,14 +536,15 @@ too, so the two never collide. Each entry is dated when the harness wrote it.
 
 `@yaks/spawn` follows a managed run's stdout with it. The
 `@yaks/session/service` duty follows Claude Code's transcript files,
-`<project>/<session>.jsonl` under its projects directory: one written to in the
-last `full` milliseconds is read as it grows, at full depth, and an older one is
-read in lazily, one per pass, its prose alone. A look reads the transcripts it
-already follows least behind first, then the ones it has yet to open most
-recently written first, each for a slice (`SLICE`, 100 ms) until its budget
-(`BUDGET`, a second) is spent, so a backlog is read over many looks and a live
-session's next lines lead every one. It skips a managed run, whose transcript
-asks a provider for it (`using{provider}`). A subagent's transcript,
+`<project>/<session>.jsonl` under its projects directory, and Codex rollouts,
+`YYYY/MM/DD/rollout-<date>-<thread>.jsonl` under its sessions directory: one
+written to in the last `full` milliseconds is read as it grows, at full depth,
+and an older one is read in lazily, one per pass, its prose alone. A look reads
+the transcripts it already follows least behind first, then the ones it has yet
+to open most recently written first, each for a slice (`SLICE`, 100 ms) until
+its budget (`BUDGET`, a second) is spent, so a backlog is read over many looks
+and a live session's next lines lead every one. It skips a managed run, whose
+transcript asks a provider for it (`using{provider}`). A subagent's transcript,
 `<session>/subagents/agent-<id>.jsonl`, is read the same way (`subagent`, the
 reader whose lines are all side conversations) into a session of its own:
 `session{id}` the agent id, its eid `sessionEid(id, parent)`, and
@@ -551,6 +552,15 @@ reader whose lines are all side conversations) into a session of its own:
 `agent-<id>.meta.json` beside it, the call that did. A Claude Code compaction
 summary becomes a checkpoint in the transcript; a native continuation starts
 there.
+
+Codex rollouts use `codexRollout`; managed `codex exec --json` output uses
+`codex`. Rollouts keep each response item once, omitting its event notification
+mirror. Injected instructions and inter-agent messages are notices, model prose
+is output, and tool results name their calls by `call_id`. A child's thread UUID
+stays its identity even when its rollout carries inherited metadata; it names
+its parent with `spawned{parent}`. Imported model selections name the Codex CLI
+provider through `using{provider, model, effort}`. The rollout file is the
+source record; compressed archives are not followed.
 
 The duty scans sessions one at a time, starting another scan an hour after the
 last finishes. `stale()` yields pages of at most 50 imported entry identities
@@ -564,8 +574,12 @@ their sum.
 | Option        | Default              | Meaning                                 |
 | ------------- | -------------------- | --------------------------------------- |
 | `every`       | `1000`               | milliseconds between looks              |
-| `transcripts` | `~/.claude/projects` | where transcripts are read from         |
+| `transcripts` | `~/.claude/projects` | where Claude transcripts are read from  |
+| `codex`       | `~/.codex/sessions`  | where Codex rollouts are read from      |
 | `full`        | 14 days              | how long a session keeps its full depth |
+
+The Codex default follows `CODEX_HOME` when set; the Claude default follows
+`CLAUDE_CONFIG_DIR`.
 
 ## Identity and HTTP attribution
 
@@ -612,7 +626,8 @@ The main module exports:
   `sessionDerived`, `statusComputed`, and the bounded transcript functions;
 - identity and rendering: `sessionFor()`, `sessionEid()`, `speaking()`,
   `where()`, and `sessionViews`, the portable transcript renderers;
-- harness readers: `claude`, `subagent`, `codex`, `readers`, and `scrub()`;
+- harness readers: `claude`, `subagent`, `codex`, `codexRollout`, `readers`, and
+  `scrub()`;
 - error types including `Bounced`, `Unnamed`, and `UnknownSession`.
 
 Additional entry points are `@yaks/session/vocab`, `/graph` (with

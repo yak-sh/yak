@@ -32,7 +32,7 @@
 // the main module, which a browser loads.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { derivedEid } from '@yaks/graph/identity'
+import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { status } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { who } from '@yaks/graph/call'
@@ -162,7 +162,18 @@ export let imported = (
   }
   said.entries.forEach((c, i) => {
     if (o.prose && !prose(c)) return
-    let { call, result, execution, output, ...rest } = c
+    let { call, result, execution, output, using, ...rest } = c
+    if (using) {
+      let refs: Comp = { ...using }
+      for (let name of ['provider', 'model']) {
+        if (!using[name]) continue
+        let value = String(using[name])
+        let eid = identityEid(name, [value])
+        put({ entity: { eid }, [name]: { name: value } })
+        refs[name] = eid
+      }
+      rest.using = refs
+    }
     let at = { entry: { session }, imported: { source, line } }
     if (call) {
       let { to, ...asked } = call
@@ -198,14 +209,17 @@ export let imported = (
 // since writing it again moves its stamp for nothing; an answer's state only
 // where its call is there, or the patch alone would make an entity.
 let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
-  let touched = bundles.filter((b) => !b.entry && (b.tool || b.execution))
+  let touched = bundles.filter((b) =>
+    !b.entry && (b.tool || b.provider || b.model || b.execution)
+  )
   if (!touched.length) return bundles
   let rows = await g.get(touched.map((b) => b.entity.eid))
   let there = new Set(
     rows.filter((r) => r && r[TOMBSTONE] == null).map((r) => r!.entity.eid),
   )
   return bundles.filter((b) =>
-    !touched.includes(b) || (b.tool ? !there.has(b.entity.eid) : there.has(
+    !touched.includes(b) ||
+    (b.tool || b.provider || b.model ? !there.has(b.entity.eid) : there.has(
       b.entity.eid,
     ))
   )

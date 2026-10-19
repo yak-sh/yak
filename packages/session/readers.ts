@@ -357,3 +357,91 @@ export let codex: Reader = (e) => {
 
 /** The readers this package ships, by the harness's name. */
 export let readers: Record<string, Reader> = { claude, codex }
+
+// Codex rollouts repeat their visible messages in event_msg notifications.
+// Read response_item once; event_msg only supplies turn boundaries and usage.
+let rolloutText = (v: unknown): string =>
+  typeof v == 'string' ? v : list(v)
+    .filter((b) =>
+      ['text', 'input_text', 'output_text', 'summary_text'].includes(
+        str(b.type),
+      )
+    )
+    .map((b) => str(b.text)).join('\n')
+
+let argumentsOf = (raw: unknown): Event => {
+  if (typeof raw != 'string') return obj(raw)
+  try {
+    return obj(JSON.parse(raw))
+  } catch {
+    return { input: raw }
+  }
+}
+
+let rolloutInput = (it: Event): Comps[] => {
+  let kinds =
+    obj(it.internal_chat_message_metadata_passthrough).content_item_kinds
+  let blocks = list(it.content)
+  return blocks.flatMap((b, i) => {
+    let body = rolloutText([b])
+    let kind = Array.isArray(kinds) ? str(kinds[i]) : ''
+    let typed = it.role == 'user' &&
+      (kind
+        ? kind.startsWith('user.')
+        : !/^(?:# AGENTS\.md|<environment_context>|<INSTRUCTIONS>)/.test(body))
+    return said(body, typed ? {} : { notice: {} })
+  })
+}
+
+let rolloutItem = (it: Event): Comps[] =>
+  it.type == 'message'
+    ? it.role == 'assistant'
+      ? said(rolloutText(it.content), { output: {} })
+      : rolloutInput(it)
+    : it.type == 'agent_message'
+    ? said(rolloutText(it.content), { notice: {} })
+    : it.type == 'reasoning'
+    ? said(rolloutText(it.summary), { reasoning: {}, output: {} })
+    : it.type == 'function_call' || it.type == 'custom_tool_call'
+    ? [
+      call(
+        [str(it.namespace), str(it.name)].filter(Boolean).join('.'),
+        it.call_id,
+        it.type == 'custom_tool_call'
+          ? { input: it.input }
+          : argumentsOf(it.arguments),
+      ),
+    ]
+    : it.type == 'function_call_output' || it.type == 'custom_tool_call_output'
+    ? [result(it.call_id, rolloutText(it.output), false)]
+    : []
+
+/** Codex's on-disk rollout format. Read messages from response_item so the
+ * event_msg mirrors never duplicate them. A using names the CLI runner and
+ * model; the importer resolves those names into graph identities. */
+export let codexRollout: Reader = (e) => {
+  let it = obj(e.payload)
+  let entries = e.type == 'response_item'
+    ? rolloutItem(it)
+    : e.type == 'session_meta'
+    ? [{ using: { provider: 'codex' }, notice: {} }]
+    : e.type == 'turn_context' && it.model
+    ? [{
+      using: {
+        provider: 'codex',
+        model: str(it.model),
+        ...(it.effort ? { effort: str(it.effort) } : {}),
+      },
+      notice: {},
+    }]
+    : e.type == 'event_msg' && it.type == 'task_complete'
+    ? [{ stop: {} }]
+    : e.type == 'event_msg' && it.type == 'turn_aborted'
+    ? [{ stop: {} }]
+    : e.type == 'token_usage_record'
+    ? Object.keys(codexUsage(it.usage)).length ? [codexUsage(it.usage)] : []
+    : e.type == 'compacted'
+    ? said(str(it.message), { checkpoint: {}, notice: {} })
+    : []
+  return { entries, ...(str(e.timestamp) ? { at: str(e.timestamp) } : {}) }
+}
