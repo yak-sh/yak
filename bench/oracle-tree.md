@@ -59,3 +59,56 @@ by the caller, not again by the tree. A bound is not a quality result: grade
 answers against held-out evidence and report construction, query cost, retries,
 usage and wall time separately. A rubric with nineteen points is not nineteen
 independent questions.
+
+## Query-grown topic workload
+
+The historical `context-reading.ts` workload measures interpretation of past
+owner messages. Its results do not establish topic-oracle answer quality,
+research, useful organization or growth in response to questions.
+
+`topic-oracle.ts` measures a sequence against the native `oracle_query` tool.
+Start an isolated graph with only one root `topic{name}`. Existing `about` edges
+point from child topics to broader parent topics. `oracle_read` supplies the
+topic and its retained directional context; the benchmark preserves that answer
+whole. The receiving conversation pins context for itself and its direct
+neighbors, without recursively expanding the graph. Place the research corpus in
+that graph without prebuilding child oracles. `topicCorpus()` in
+`topic-oracle-workload.ts` reads the graph and sync package READMEs, preserving
+the exact source bytes as ordinary documents. `topicCases` supplies questions,
+continuations, a repeated subject approached from a different use and an
+unanswerable personal question. These are a small public workload, not the
+owner's personal evidence.
+
+Use `nativeTopics(graph, agent, actor)` with the configured native agent's
+`send`, `idle` and `transcript` methods, then pass it as `host` to `runTopics`.
+Supply `root`, `cases`, `mode` (`scripted` or `model`) and `save` to persist
+each observation. `runTopics` refuses a prebuilt tree. It starts each
+independent case at the root and continues follow-ups in the same receiving
+fork. The ordinary native host owns model calls, research, tools and completion;
+the benchmark implements no session loop or credentials.
+
+Every turn retains its question, answer or failure, before/after topic, retained
+context and edge rows, changed rows, receiving-fork transcripts, tool calls,
+model request counts, reported usage/cost and wall time. Descendant work counts
+once across the sequence after all receiving forks settle, including a parent
+woken by a finishing child. Missing usage and cost stay unknown. Retain the
+initial corpus, model selection, host configuration and code revision beside the
+output when running an experiment.
+
+`topic-oracle-rubric.ts` supplies external criteria and source references; never
+add it to the research corpus or model context. Grade separately against the
+source documents. Assess answer correctness and citations, uncertainty on the
+unknown question, whether the structures are coherent single topics, whether
+follow-ups retain their context, and whether the repeated subject reuses learned
+context and a topic's identity rather than creating duplicate subjects. Check
+that corrections update retained context for later receiving conversations while
+existing conversations keep their opening context. Assess the self,
+parent-facing and child-facing contexts separately, including one-hop inclusion
+and two-hop exclusion. Inspect placement through the retained edges, including
+any topic reached through multiple parents. Report growth/research and routing
+work per question as well as totals. There is no required node count or exact
+taxonomy, and creating nodes alone earns no quality credit.
+
+A scripted-model test proves this measurement path and the native fork
+mechanism. It says nothing about a model's answers, research or topic choices. A
+model experiment remains a separately authorized, bounded manual run.
