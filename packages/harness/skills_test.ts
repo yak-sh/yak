@@ -13,6 +13,9 @@ let fixture = async () => {
   let g = graph({ vocab, storage: ram(vocab) })
   let h = { g, close: () => {} }
   await h.g.apply([{
+    entity: { eid: 'unavailable-computer' },
+    machine: { address: 'missing://computer' },
+  }, {
     entity: { eid: 'unavailable-machine' },
     workspace: { machine: 'unavailable-computer', root: '/unavailable' },
   }, {

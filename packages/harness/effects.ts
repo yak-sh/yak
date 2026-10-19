@@ -38,7 +38,12 @@ export let effects = (
       : undefined,
   })
   host.defer(() => lent.release?.())
-  let binding = machines(host.graph, host.sandboxes, host.resolveHome, host.workspaces)
+  let binding = machines(
+    host.graph,
+    host.sandboxes,
+    host.resolveHome,
+    host.workspaces,
+  )
   let runner = lend(lent)
   return {
     ...running(host.graph, {

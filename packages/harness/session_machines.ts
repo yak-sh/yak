@@ -1,3 +1,4 @@
+import { Refused } from '@yaks/graph/errors'
 // Session homes are convenience defaults over durable workspace identities.
 // Sandbox intentions are recorded before provisioning; changing a default never
 // disposes a resource or changes the target of a previously launched process.
@@ -69,7 +70,7 @@ export let machines = (
   let lent = async (session: string, supplied?: Comp) => {
     let at = await home(session, supplied)
     if (!workspaces) {
-      throw new Error('This host lends no workspace execution binding')
+      throw new Refused('This host lends no workspace execution binding')
     }
     let target = await targetFor(g, undefined, at)
     let record = (await g.get([target.workspace], ['workspace']))[0]

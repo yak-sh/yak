@@ -47,9 +47,7 @@ test('instruction admission snapshots machine files in stable ancestor order', a
       )).length,
       2,
     )
-    await assertRejects(() =>
-      instructionFiles(machine, dir + '/absent')
-    )
+    await assertRejects(() => instructionFiles(machine, dir + '/absent'))
 
     let project = crypto.randomUUID()
     let persona = crypto.randomUUID()
@@ -78,7 +76,10 @@ test('instruction admission snapshots machine files in stable ancestor order', a
       'Instruction projection is missing',
     )
     let admittedFiles = await instructionsFor(
-      h.g, home, binding.workspaces, { work: task },
+      h.g,
+      home,
+      binding.workspaces,
+      { work: task },
     )
     assertEquals(admittedFiles.length, 1)
     assertEquals(

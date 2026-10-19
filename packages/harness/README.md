@@ -115,9 +115,9 @@ plus the supporting-file base path through the attributed graph runner. It does
 not execute scripts or start a fork from metadata.
 
 Catalogue and instructions come from graph skills through @yaks/persona. Reading
-skills never provisions a machine or scans a checkout. Graph edits appear on
-the next request; repository files are synchronized separately by the persona
-skill mirror (`{skills: true}`). Supporting-file paths are repository-relative.
+skills never provisions a machine or scans a checkout. Graph edits appear on the
+next request; repository files are synchronized separately by the persona skill
+mirror (`{skills: true}`). Supporting-file paths are repository-relative.
 User-only skills are not model-discovered or loaded.
 
 Explicit tool registries and transcript allowlists remain exact: they do not
@@ -188,9 +188,9 @@ binding, and admits its instruction files and repository persona. Existing
 managed fixers keep their original runner; changing heal config does not migrate
 or stop them.
 
-A session starts without borrowing the CLI's current directory or filesystem.
-A model-only opening needs no workspace. Its first file or command call records
-an intention through the configured default sandbox binding; no adapter means a
+A session starts without borrowing the CLI's current directory or filesystem. A
+model-only opening needs no workspace. Its first file or command call records an
+intention through the configured default sandbox binding; no adapter means a
 refusal. `--workspace <workspace-id>` names a file-and-command target; `--cwd`
 selects its command directory. `--work <task-or-project>` admits that work's
 common graph persona and files the session under its project; `--persona`

@@ -30,7 +30,7 @@ test('package JSON declarations preserve artifact references and compose with th
     { ...harnessDoc.$defs, ...homeDoc.$defs },
     backend.$defs,
   )
-  assertEquals(vocab.prop('home', 'machine')?.ref, 'machine')
+  assertEquals(vocab.prop('home', 'workspace')?.ref, 'workspace')
   assertEquals(vocab.prop('attachment', 'artifact')?.ref, 'artifact')
   assertEquals(vocab.prop('created', 'at')?.stamped, true)
   assertEquals(artifact.$defs.attachment.properties.artifact.death, 'keep')

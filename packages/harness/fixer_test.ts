@@ -1,3 +1,4 @@
+import { Refused } from '@yaks/graph/errors'
 // A heal request is routed by its provider, not by whether a CLI launched it.
 import { equal, ok, test, throws } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
@@ -25,9 +26,15 @@ let fixture = async () => {
   let homes = 0
   host.resolveHome = async () => {
     homes++
-    return { workspace: attached.workspace, cwd: directory }
+    await host.graph.apply([
+      { entity: { eid: 'computer' }, machine: { address: 'local://' } },
+      {
+        entity: { eid: 'checkout' },
+        workspace: { machine: 'computer', root: directory },
+      },
+    ])
+    return { workspace: 'checkout', cwd: directory }
   }
-
 
   return {
     host,
@@ -150,6 +157,12 @@ let workspaceFixers = await (async () => {
           machine: { address: 'unknown://remote' },
         }])
         return home
+      }
+      f.host.workspaces = {
+        connect: () =>
+          Promise.reject(
+            new Refused('Computer connector is not configured: unknown'),
+          ),
       }
     }
     let handlers = effects(f.host)
