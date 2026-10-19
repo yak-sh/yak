@@ -22,7 +22,7 @@ export let tools = {
   session_new: async (
     args: Record<string, unknown>,
     context: { config?: string; duties: boolean },
-  ) => {
+  ): Promise<undefined> => {
     if (args.workspace != null) return undefined
     let { compose, read } = await import('@yaks/cli/host')
     let { homeAt } = await import('./workspace.ts')
