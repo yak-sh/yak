@@ -67,10 +67,10 @@ a loaded box, where any fixed sleep is either too short or wasted.
 - `serve` and `work` pin their code in a [runtime snapshot](../../../packages/cli/README.md).
   Give every probe launch `YAK_RUNTIME_CACHE=$D/runtime`, including unit
   templates, so those cached sources are reaped with the probe.
-- `@yaks/session` reads every Claude transcript under `~/.claude/projects`
-  unless told otherwise, which floods a probe with this box's sessions. Give it
-  an empty directory:
-  `{"use": "@yaks/session", "with": {"transcripts": "<absolute path under $D>"}}`.
+- `@yaks/session` follows Claude transcripts and Codex rollouts unless told
+  otherwise, which floods a probe with this box's sessions. Point both roots
+  at an empty directory:
+  `{"use": "@yaks/session", "with": {"transcripts": "<absolute path under $D>", "codex": "<absolute path under $D>"}}`.
 - Plugins with outside effects (mail, spawn, harness, connections) do from a
   probe exactly what they do anywhere: send the mail, start the agent. Leave
   them out unless the change is about them; a mail probe gives @yaks/mail

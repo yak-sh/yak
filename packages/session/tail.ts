@@ -39,11 +39,16 @@ import { who } from '@yaks/graph/call'
 import { toolEid } from '@yaks/tools/result'
 import type { Comps, Reader, Said } from './readers.ts'
 import { humanCaller } from './who.ts'
+import type { Chunks } from './archive.ts'
 
 /** A log being read, and the session it is read into. */
 export type Tail = {
   /** the file */
   path: string
+  /** an immutable source read in bounded asynchronous chunks */
+  stream?: Chunks
+  version?: string
+  skip?: number
   /** the session; a transcript file can name one the graph has not met yet,
    * and it is created with the first line that says something, or once the
    * lines read say nothing */
@@ -123,6 +128,9 @@ export let prose = (c: Comps): boolean =>
     (!!c.checkpoint && (k == 'checkpoint' || k == 'notice'))
   )
 
+// Selections retain the runner/model provenance of old imported sessions.
+let retained = (c: Comps) => prose(c) || !!c.using
+
 // What a person typed: prose with no output beside it.
 let typed = (c: Comps) => prose(c) && !c.output && !c.checkpoint
 
@@ -161,7 +169,7 @@ export let imported = (
     out.set(b.entity.eid, was ? merge(was, b) : b)
   }
   said.entries.forEach((c, i) => {
-    if (o.prose && !prose(c)) return
+    if (o.prose && !retained(c)) return
     let { call, result, execution, output, using, ...rest } = c
     if (using) {
       let refs: Comp = { ...using }
@@ -226,7 +234,8 @@ let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
 }
 
 /** The entity that keeps how far a log has been read, named by its file. */
-export let logOf = (source: string): Eid => derivedEid(`log ${source}`)
+export let logOf = (source: string): Eid =>
+  derivedEid(`log ${source.replace(/\.jsonl\.zst$/, '.jsonl')}`)
 
 // Whether a log is its session's first: the one the session names, or any log
 // of a session that names none yet.
@@ -277,12 +286,32 @@ let after = (path: string, lines: number): number => {
 export let tail = async (
   g: Graph,
   path: string,
-  o: { session?: Eid; id?: string } = {},
+  o: {
+    session?: Eid
+    id?: string
+    stream?: Chunks
+    prefix?: string
+    version?: string
+  } = {},
 ): Promise<Tail> => {
   let log = logOf(path)
   let [row] = await g.get([log])
   let held = row && row[TOMBSTONE] == null ? comp(row, 'log') : undefined
-  let line = Number(held?.consumed ?? 0)
+  let previous = held?.version ?? held?.finished
+  let changed = o.version && previous && previous != o.version
+  let line = changed ? 0 : Number(held?.consumed ?? 0)
+  if (held?.source && held.source != path) {
+    await g.apply([{
+      entity: { eid: log },
+      log: { source: path },
+    }], { trusted: true })
+  }
+  if (changed) {
+    await g.apply([{
+      entity: { eid: log },
+      log: { consumed: 0, finished: null, version: o.version },
+    }], { trusted: true })
+  }
   let fields = [
     'session.operator',
     'session.source',
@@ -315,8 +344,9 @@ export let tail = async (
     own: await owns(g, { ...o, log }),
     known: !!held,
     line,
-    at: after(path, line),
-    rest: '',
+    at: o.stream ? 0 : after(path, line),
+    ...(o.stream ? { skip: line } : {}),
+    rest: o.prefix ?? '',
     dec: new TextDecoder(),
   }
 }
@@ -345,11 +375,18 @@ let sip = (t: Tail): string => {
 }
 
 // The complete lines since the last read.
-let lines = (t: Tail, final = false): string[] => {
-  let parts = (t.rest + sip(t)).split('\n')
+let lines = async (t: Tail, final = false): Promise<string[]> => {
+  let text = t.rest
+  if (!text.includes('\n')) {
+    text += t.stream ? await t.stream.read() ?? '' : sip(t)
+  }
+  let parts = text.split('\n')
+  final ||= !!t.stream?.done
   t.rest = final ? '' : parts.pop() ?? ''
   if (final && parts.at(-1) === '') parts.pop()
-  return parts
+  let skip = Math.min(t.skip ?? 0, parts.length)
+  if (t.skip) t.skip -= skip
+  return parts.slice(skip)
 }
 
 let parsed = (text: string): Record<string, unknown> | undefined => {
@@ -371,6 +408,7 @@ let marks = (t: Tail, line: number, typed = false): Bundle[] => {
       entity: { eid: t.log },
       log: {
         consumed: line,
+        ...(t.version ? { version: t.version } : {}),
         ...(t.known ? {} : { session: t.session, source: t.path }),
       },
     },
@@ -433,7 +471,7 @@ export let pull = async (
   // The line the session's `consumed` stands at.
   let marked = t.line
   let breath = performance.now()
-  let all = lines(t, o.final)
+  let all = await lines(t, o.final)
   for (let [i, text] of all.entries()) {
     if (o.signal?.aborted || i && performance.now() > (o.until ?? Infinity)) {
       t.rest = [...all.slice(i), t.rest].join('\n')
@@ -449,7 +487,7 @@ export let pull = async (
     let event = parsed(text)
     if (!event) continue
     let said = read(event)
-    let kept = o.prose ? said.entries.filter(prose) : said.entries
+    let kept = o.prose ? said.entries.filter(retained) : said.entries
     if (!kept.length && !said.about) continue
     t.session ??= await created(g, t)
     await settle(g, t)
@@ -490,6 +528,12 @@ export let pull = async (
     await settle(g, t)
     await g.apply(marks(t, t.line), { trusted: true })
     t.known = true
+  }
+  if (t.stream?.done && !behind(t) && !t.skip && t.version) {
+    await g.apply([{
+      entity: { eid: t.log },
+      log: { finished: t.version },
+    }], { trusted: true })
   }
   return t.line - from
 }

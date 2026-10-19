@@ -539,19 +539,19 @@ too, so the two never collide. Each entry is dated when the harness wrote it.
 `<project>/<session>.jsonl` under its projects directory, and Codex rollouts,
 `YYYY/MM/DD/rollout-<date>-<thread>.jsonl` under its sessions directory: one
 written to in the last `full` milliseconds is read as it grows, at full depth,
-and an older one is read in lazily, one per pass, its prose alone. A look reads
-the transcripts it already follows least behind first, then the ones it has yet
-to open most recently written first, each for a slice (`SLICE`, 100 ms) until
-its budget (`BUDGET`, a second) is spent, so a backlog is read over many looks
-and a live session's next lines lead every one. It skips a managed run, whose
-transcript asks a provider for it (`using{provider}`). A subagent's transcript,
-`<session>/subagents/agent-<id>.jsonl`, is read the same way (`subagent`, the
-reader whose lines are all side conversations) into a session of its own:
-`session{id}` the agent id, its eid `sessionEid(id, parent)`, and
-`spawned{parent, call}` naming the session that started it and, from the
-`agent-<id>.meta.json` beside it, the call that did. A Claude Code compaction
-summary becomes a checkpoint in the transcript; a native continuation starts
-there.
+and an older one is read in lazily, one per pass, its prose and provider/model
+selections. A look reads the transcripts it already follows least behind first,
+then the ones it has yet to open most recently written first, each for a slice
+(`SLICE`, 100 ms) until its budget (`BUDGET`, a second) is spent, so a backlog
+is read over many looks and a live session's next lines lead every one. It skips
+a managed run, whose transcript asks a provider for it (`using{provider}`). A
+subagent's transcript, `<session>/subagents/agent-<id>.jsonl`, is read the same
+way (`subagent`, the reader whose lines are all side conversations) into a
+session of its own: `session{id}` the agent id, its eid
+`sessionEid(id, parent)`, and `spawned{parent, call}` naming the session that
+started it and, from the `agent-<id>.meta.json` beside it, the call that did. A
+Claude Code compaction summary becomes a checkpoint in the transcript; a native
+continuation starts there.
 
 Codex rollouts use `codexRollout`; managed `codex exec --json` output uses
 `codex`. Rollouts keep each response item once, omitting its event notification
@@ -560,16 +560,24 @@ is output, and tool results name their calls by `call_id`. A child's thread UUID
 stays its identity even when its rollout carries inherited metadata; it names
 its parent with `spawned{parent}`. Imported model selections name the Codex CLI
 provider through `using{provider, model, effort}`. The rollout file is the
-source record; compressed archives are not followed.
+source record. Compressed `.jsonl.zst` archives stream through the same
+importer; `zstd` must be installed on the host. Each pull reads one decoded
+chunk and shares the duty's time budget. `log{version, finished}` records the
+source file's size and modification time and the version whose decoder reached
+successful EOF. A restart resumes incomplete archives by skipping consumed
+lines; completed unchanged archives do no decoding. Changed source versions
+restart their cursor, and compressing a plain rollout retains its log and entry
+identities. A failed archive retries after a minute while the other files
+progress.
 
 The duty scans sessions one at a time, starting another scan an hour after the
 last finishes. `stale()` yields pages of at most 50 imported entry identities
 from sessions whose newest entry is older than `full`, checking that age before
 each page. `strip()` deletes one page between looks: calls, results, thoughts,
 notices and a turn's ending go; what a person typed and what the model said
-stay. Compaction summaries stay too, so an older transcript can still resume,
-and so does an entry that records what a turn cost, since the session's cost is
-their sum.
+stay. Provider/model selections and compaction summaries stay too, so an older
+transcript can still resume, and so does an entry that records what a turn cost,
+since the session's cost is their sum.
 
 | Option        | Default              | Meaning                                 |
 | ------------- | -------------------- | --------------------------------------- |

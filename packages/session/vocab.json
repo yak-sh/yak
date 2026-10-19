@@ -312,6 +312,16 @@
           "type": "number",
           "stamped": true,
           "description": "how many of its lines the importer has read; where a resume begins"
+        },
+        "version": {
+          "type": "string",
+          "stamped": true,
+          "description": "file size and modification time of the immutable source being consumed; a changed version restarts its line cursor"
+        },
+        "finished": {
+          "type": "string",
+          "stamped": true,
+          "description": "the immutable source version fully consumed after successful decoder EOF; its file size and modification time, so changed bytes reopen it"
         }
       },
       "description": "a file a session is read from, and how far it has been read"

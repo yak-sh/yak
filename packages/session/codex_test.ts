@@ -215,13 +215,15 @@ test('Codex children retain thread identities and never attribute a delegated pr
     {},
   )
   assertEquals(childEntries.find((b) => body(b) == 'peer report')!.notice, {})
+  assertEquals(
+    childEntries.find((b) => body(b) == 'follow-up delegation')!.notice,
+    {},
+  )
 })
 
 test('old Codex rollouts backfill prose through the existing bounded importer', () => {
-  assertEquals(old.map(body), ['help me', 'done'])
+  assertEquals(old.filter((b) => b.content).map(body), ['help me', 'done'])
+  assertEquals(old.filter((b) => b.using).length, 2)
 })
 
-globalThis.addEventListener(
-  'unload',
-  () => Deno.removeSync(dir, { recursive: true }),
-)
+Deno.removeSync(dir, { recursive: true })

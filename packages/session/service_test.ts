@@ -53,10 +53,7 @@ let side = (text: string) =>
 // A Claude projects directory holding one transcript per name, a session's id
 // or `<session>/subagents/agent-<id>`, each last written `ago` milliseconds
 // before now.
-let projects = async (
-  files: Record<string, { text: string; ago?: number }>,
-  body: (dir: string) => Promise<void>,
-) => {
+let projectFiles = (files: Record<string, { text: string; ago?: number }>) => {
   let dir = Deno.makeTempDirSync()
   for (let [name, f] of Object.entries(files)) {
     let path = `${dir}/-home-me-code/${name}.jsonl`
@@ -65,6 +62,14 @@ let projects = async (
     let at = new Date(Date.now() - (f.ago ?? 0))
     Deno.utimeSync(path, at, at)
   }
+  return dir
+}
+
+let projects = async (
+  files: Record<string, { text: string; ago?: number }>,
+  body: (dir: string) => Promise<void>,
+) => {
+  let dir = projectFiles(files)
   try {
     await body(dir)
   } finally {
@@ -193,20 +198,28 @@ test("a subagent's transcript is a session of its own, started by its parent's c
   })
 })
 
-test('a managed run is read from its own output, not its transcript file', () =>
-  projects({ run1: { text: lines('asked') } }, async (dir) => {
-    let s = store()
-    let provider = identityEid('provider', ['claude'])
-    seed(s, { entity: { eid: provider }, provider: { name: 'claude' } }, {
-      entity: { eid: 'request' },
-      entry: { session: ids.run1 },
-      content: { body: 'do it' },
-      using: { provider },
-    })
-    let g = locked(s)
-    await look(g, dir, { tails: new Map(), done: new Set() })
-    assertEquals(await told(g, 'one'), ['do it'])
-  }))
+let managedDir = projectFiles({ run1: { text: lines('asked') } })
+let managedStore = store()
+let managedProvider = identityEid('provider', ['claude'])
+seed(managedStore, {
+  entity: { eid: managedProvider },
+  provider: { name: 'claude' },
+}, {
+  entity: { eid: 'request' },
+  entry: { session: ids.run1 },
+  content: { body: 'do it' },
+  using: { provider: managedProvider },
+})
+let managedGraph = locked(managedStore)
+
+test('a managed run is read from its own output, not its transcript file', async () => {
+  try {
+    await look(managedGraph, managedDir, { tails: new Map(), done: new Set() })
+    assertEquals(await told(managedGraph, 'one'), ['do it'])
+  } finally {
+    Deno.removeSync(managedDir, { recursive: true })
+  }
+})
 
 let trim = async (g: Graph, o: Parameters<typeof stale>[1] = {}) => {
   for await (let eids of stale(g, o)) await strip(g, eids)

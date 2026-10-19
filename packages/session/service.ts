@@ -38,14 +38,30 @@
 // what a session says now never waits behind it. What a person typed and what
 // the model said stay, and so does everything nobody imported.
 
-import type { Bundle, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { feed } from './bus.ts'
 import { SESSION } from './comp.ts'
 import { claude, codexRollout, subagent } from './readers.ts'
 import { reapLeases } from './reap.ts'
-import { behind, callOf, pull, type Tail, tail } from './tail.ts'
+import { behind, callOf, logOf, pull, type Tail, tail } from './tail.ts'
 import { sessionEid, sessionFor } from './who.ts'
+import { archive } from './archive.ts'
+import {
+  claudeProjects,
+  codexSessions,
+  type Found,
+  header,
+  rollouts,
+  transcripts,
+} from './files.ts'
+export {
+  claudeProjects,
+  codexSessions,
+  type Found,
+  rollouts,
+  transcripts,
+} from './files.ts'
 
 /** What a config file can set for this plugin's duty. */
 export type Options = {
@@ -66,112 +82,14 @@ export type Options = {
 /** How long a session keeps its full depth once it stops being written. */
 export let FULL = 14 * 24 * 60 * 60 * 1000
 
-/** Where Claude keeps its transcripts on this machine. */
-export let claudeProjects = (): string | undefined => {
-  let env = globalThis.Deno?.env
-  let root = env?.get('CLAUDE_CONFIG_DIR') ??
-    (env?.get('HOME') ? `${env.get('HOME')}/.claude` : undefined)
-  return root && `${root}/projects`
-}
-
-/** Where Codex keeps its rollout files. */
-export let codexSessions = (): string | undefined => {
-  let env = globalThis.Deno?.env
-  let root = env?.get('CODEX_HOME') ??
-    (env?.get('HOME') ? `${env.get('HOME')}/.codex` : undefined)
-  return root && `${root}/sessions`
-}
-
-/** One transcript on disk: the harness's id for the session, and the file. */
-export type Found = {
-  id: string
-  path: string
-  runner?: 'codex'
-  /** a subagent's: the harness's id for the session that started it */
-  parent?: string
-}
-
-/** Every transcript under a Claude projects directory: the sessions', then
- * their subagents'. */
-export let transcripts = (dir: string): Found[] => {
-  let out: Found[] = []
-  let agents: Found[] = []
-  let list = (d: string) => {
-    try {
-      return [...Deno.readDirSync(d)]
-    } catch {
-      return []
-    }
-  }
-  for (let project of list(dir)) {
-    if (!project.isDirectory) continue
-    let at = `${dir}/${project.name}`
-    for (let f of list(at)) {
-      if (f.isFile && f.name.endsWith('.jsonl')) {
-        out.push({
-          id: f.name.slice(0, -'.jsonl'.length),
-          path: `${at}/${f.name}`,
-        })
-      }
-      if (!f.isDirectory) continue
-      for (let a of list(`${at}/${f.name}/subagents`)) {
-        let id = a.name.match(/^agent-(.+)\.jsonl$/)?.[1]
-        if (!a.isFile || !id) continue
-        let path = `${at}/${f.name}/subagents/${a.name}`
-        agents.push({ id, path, parent: f.name })
-      }
-    }
-  }
-  return [...out, ...agents]
-}
-
-// Rollouts are dated YYYY/MM/DD, and the filename carries the thread UUID.
-// The same bounded look follows both providers; no second duty scans them.
-export let rollouts = (dir: string, depth = 0): Found[] => {
-  let files: Deno.DirEntry[]
-  try {
-    files = [...Deno.readDirSync(dir)]
-  } catch {
-    return []
-  }
-  return files.flatMap((f) => {
-    let path = `${dir}/${f.name}`
-    if (f.isDirectory && depth < 3 && /^\d+$/.test(f.name)) {
-      return rollouts(path, depth + 1)
-    }
-    let id = f.name.match(
-      /^rollout-.+-([\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12})\.jsonl$/i,
-    )?.[1]
-    return f.isFile && id ? [{ id, path, runner: 'codex' as const }] : []
-  })
-}
-
-// Only the header is needed to identify a child. Never read its whole log
-// merely to open a tail; the importer will read the remaining bytes once.
-let header = (path: string): Record<string, unknown> => {
-  let file = Deno.openSync(path)
-  try {
-    let buf = new Uint8Array(4096), text = '', dec = new TextDecoder()
-    for (let n = file.readSync(buf); n; n = file.readSync(buf)) {
-      text += dec.decode(buf.subarray(0, n), { stream: true })
-      if (text.includes('\n')) {
-        try {
-          return JSON.parse(text.split('\n')[0]).payload ?? {}
-        } catch {
-          return {}
-        }
-      }
-      if (text.length > 1024 * 1024) return {}
-    }
-    return {}
-  } finally {
-    file.close()
-  }
-}
-
 /** What one process knows about the files it reads: the tail on each one it
  * follows (`null` for a managed run's), and the older ones read to the end. */
-export type Seen = { tails: Map<string, Tail | null>; done: Set<string> }
+export type Seen = {
+  tails: Map<string, Tail | null>
+  done: Set<string>
+  versions?: Map<string, string>
+  retry?: Map<string, number>
+}
 
 /** Whether a session is a managed run: its transcript asks a provider for
  * one, which is the request @yaks/spawn answers. */
@@ -221,28 +139,67 @@ let spawned = async (g: Graph, f: Found & { parent: string }) => {
 }
 
 // A tail on a transcript, or null where its session is a managed run.
-let opened = async (g: Graph, f: Found): Promise<Tail | null> => {
+let opened = async (
+  g: Graph,
+  f: Found,
+  signal?: AbortSignal,
+): Promise<Tail | null> => {
   if (f.runner == 'codex') {
-    let meta = header(f.path)
-    let source = meta.source as {
-      subagent?: { thread_spawn?: { parent_thread_id?: string } }
-    } | undefined
-    f.parent = source?.subagent?.thread_spawn?.parent_thread_id
-    let eid = sessionEid(f.id)
-    let parent = f.parent && sessionEid(f.parent)
     let s = await sessionFor(g, f.id, ['session.id'])
     if (s && await managed(g, s.entity.eid)) return null
-    await g.apply([
-      ...(parent
-        ? [{ entity: { eid: parent }, session: { id: f.parent } }]
-        : []),
-      {
-        entity: { eid },
-        session: { id: f.id, ...(parent ? { operator: false } : {}) },
-        ...(parent ? { spawned: { parent } } : {}),
-      },
-    ], { trusted: true })
-    return tail(g, f.path, { session: eid, id: f.id })
+    let version = f.path.endsWith('.zst') ? versionOf(stat(f.path)) : undefined
+    let [log] = version ? await g.get([logOf(f.path)]) : []
+    if (version && (log?.log as Comp | undefined)?.finished == version) {
+      return null
+    }
+    let stream = version ? archive(f.path, signal) : undefined
+    let prefix = ''
+    let meta: Record<string, unknown>
+    try {
+      if (stream) {
+        while (
+          !prefix.includes('\n') && !stream.done && !signal?.aborted &&
+          prefix.length < 1024 * 1024
+        ) {
+          prefix += await stream.read() ?? ''
+        }
+        try {
+          meta = JSON.parse(prefix.split('\n')[0]).payload ?? {}
+        } catch {
+          meta = {}
+        }
+      } else meta = header(f.path)
+      if (signal?.aborted) {
+        await stream?.close()
+        return null
+      }
+      let source = meta.source as {
+        subagent?: { thread_spawn?: { parent_thread_id?: string } }
+      } | undefined
+      f.parent = source?.subagent?.thread_spawn?.parent_thread_id
+      let eid = sessionEid(f.id)
+      let parent = f.parent && sessionEid(f.parent)
+      await g.apply([
+        ...(parent
+          ? [{ entity: { eid: parent }, session: { id: f.parent } }]
+          : []),
+        {
+          entity: { eid },
+          session: { id: f.id, ...(parent ? { operator: false } : {}) },
+          ...(parent ? { spawned: { parent } } : {}),
+        },
+      ], { trusted: true })
+      return await tail(g, f.path, {
+        session: eid,
+        id: f.id,
+        stream,
+        prefix,
+        version,
+      })
+    } catch (error) {
+      await stream?.close()
+      throw error
+    }
   }
   if (f.parent) {
     return tail(g, f.path, {
@@ -286,6 +243,12 @@ let stat = (path: string) => {
   }
 }
 
+let versionOf = (file: Deno.FileInfo | undefined) =>
+  file ? `${file.size}:${file.mtime?.getTime() ?? 0}` : ''
+
+let pending = (t: Tail, size: number) =>
+  behind(t) || (t.stream ? !t.stream.done : t.at < size)
+
 /** How long a look reads one transcript before it turns to the next, in
  * milliseconds. */
 export let SLICE = 100
@@ -314,6 +277,7 @@ export let look = async (
     signal?: AbortSignal
     slice?: number
     budget?: number
+    report?: (error: unknown) => void
   } = {},
 ): Promise<void> => {
   let now = o.now ?? Date.now()
@@ -331,8 +295,21 @@ export let look = async (
   for (let f of [...transcripts(dir), ...o.codex ? rollouts(o.codex) : []]) {
     let st = stat(f.path)
     let t = seen.tails.get(f.path)
+    if (f.path.endsWith('.zst')) {
+      let version = versionOf(st)
+      seen.versions ??= new Map()
+      if (seen.versions.has(f.path) && seen.versions.get(f.path) != version) {
+        await t?.stream?.close()
+        seen.tails.delete(f.path)
+        seen.done.delete(f.path)
+        seen.retry?.delete(f.path)
+        t = undefined
+      }
+      seen.versions.set(f.path, version)
+    }
+    if ((seen.retry?.get(f.path) ?? 0) > now) continue
     let at = st?.mtime?.getTime() ?? 0
-    if (!st || t === null || (t && t.at >= st.size && !behind(t))) continue
+    if (!st || t === null || (t && !pending(t, st.size))) continue
     if (now - at >= (o.full ?? FULL)) {
       if (!seen.done.has(f.path)) old ??= f
       continue
@@ -355,28 +332,35 @@ export let look = async (
   )
   for (let [i, { f }] of owed.entries()) {
     if (o.signal?.aborted || i && spent()) return
-    let t = seen.tails.get(f.path) ?? await opened(g, f)
-    seen.tails.set(f.path, t)
-    // A tail a failure cut short is dropped, and the next look opens a new
-    // one where the transcript stands.
-    if (t) {
-      await pull(g, t, format(f, t), read()).catch((e) => {
-        seen.tails.delete(f.path)
-        throw e
-      })
+    let t = seen.tails.get(f.path)
+    try {
+      t ??= await opened(g, f, o.signal)
+      seen.tails.set(f.path, t)
+      if (t) await pull(g, t, format(f, t), read())
+    } catch (error) {
+      seen.tails.delete(f.path)
+      await t?.stream?.close()
+      if (!f.path.endsWith('.zst')) throw error
+      ;(seen.retry ??= new Map()).set(f.path, now + 60000)
+      ;(o.report ?? console.error)(error)
     }
   }
   if (!old || o.signal?.aborted || owed.length && spent()) return
   // Keep the cursor and unread bytes between backfill slices.
-  let t = seen.tails.get(old.path) ?? await opened(g, old)
-  seen.tails.set(old.path, t)
-  if (t) {
-    await pull(g, t, format(old, t), { ...read(), prose: true }).catch((e) => {
-      seen.tails.delete(old.path)
-      throw e
-    })
+  let t = seen.tails.get(old.path)
+  try {
+    t ??= await opened(g, old, o.signal)
+    seen.tails.set(old.path, t)
+    if (t) await pull(g, t, format(old, t), { ...read(), prose: true })
+  } catch (error) {
+    seen.tails.delete(old.path)
+    await t?.stream?.close()
+    if (!old.path.endsWith('.zst')) throw error
+    ;(seen.retry ??= new Map()).set(old.path, now + 60000)
+    ;(o.report ?? console.error)(error)
+    return
   }
-  if (!o.signal?.aborted && !(t && behind(t))) {
+  if (!o.signal?.aborted && !(t && pending(t, stat(old.path)?.size ?? 0))) {
     seen.done.add(old.path)
     seen.tails.delete(old.path)
   }
@@ -397,7 +381,7 @@ let STRIPPED = [
   'usage',
 ]
 let stripped = (g: Graph) =>
-  `.imported${g.vocab.comp('cost') ? '&!cost' : ''}&(${
+  `.imported&!using${g.vocab.comp('cost') ? '&!cost' : ''}&(${
     ['!content', ...STRIPPED.filter((c) => g.vocab.comp(c)).map((c) => `.${c}`)]
       .join('|')
   })`
@@ -482,40 +466,44 @@ export let service = async (
   let seen: Seen = { tails: new Map(), done: new Set() }
   let trimming: AsyncGenerator<Eid[]> | undefined
   let due = 0
-  while (!signal.aborted) {
-    try {
-      await feed(host.graph)
-      if (dir || codex) {
-        await look(host.graph, dir ?? '', seen, {
-          codex,
-          ...(person ? { person: person as Eid } : {}),
-          full: options.full,
-          signal,
-        })
-      }
-      if (!trimming && Date.now() >= due) {
-        trimming = stale(host.graph, { full: options.full, signal })
-      }
-      if (trimming) {
-        let page: IteratorResult<Eid[]>
-        try {
-          page = await trimming.next()
-        } catch (e) {
-          trimming = undefined
-          throw e
+  try {
+    while (!signal.aborted) {
+      try {
+        await feed(host.graph)
+        if (dir || codex) {
+          await look(host.graph, dir ?? '', seen, {
+            codex,
+            ...(person ? { person: person as Eid } : {}),
+            full: options.full,
+            signal,
+          })
         }
-        if (page.done) {
-          trimming = undefined
-          due = Date.now() + HOUR
-        } else {
-          // The iterator has advanced before deletion, so a failed page is
-          // skipped until the next hourly pass rather than retried forever.
-          await strip(host.graph, page.value)
+        if (!trimming && Date.now() >= due) {
+          trimming = stale(host.graph, { full: options.full, signal })
         }
+        if (trimming) {
+          let page: IteratorResult<Eid[]>
+          try {
+            page = await trimming.next()
+          } catch (e) {
+            trimming = undefined
+            throw e
+          }
+          if (page.done) {
+            trimming = undefined
+            due = Date.now() + HOUR
+          } else {
+            // The iterator has advanced before deletion, so a failed page is
+            // skipped until the next hourly pass rather than retried forever.
+            await strip(host.graph, page.value)
+          }
+        }
+      } catch (e) {
+        console.error('transcripts —', e)
       }
-    } catch (e) {
-      console.error('transcripts —', e)
+      await sleep(options.every ?? 1000, signal)
     }
-    await sleep(options.every ?? 1000, signal)
+  } finally {
+    await Promise.all([...seen.tails.values()].map((t) => t?.stream?.close()))
   }
 }
