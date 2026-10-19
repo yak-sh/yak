@@ -239,7 +239,9 @@ test('the code is found by its address among many newer letters', async () => {
   )
   let read = await mailbox([old, ours, ...others])
   assertEquals(
-    await codeFor(read, 'probe@bot.yak.sh', since, { wait: 0 }),
+    await codeFor(read, 'probe@bot.yak.sh', since, {
+      now: () => since + 10_000,
+    }),
     '444444',
   )
 })
