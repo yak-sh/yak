@@ -105,15 +105,13 @@ let doc: VocabDoc = {
   },
 }
 
-// What a commit to the shop owes: a note for every book, and a price for one
-// that has none — which a process coming up finds again by its sweep.
+// What a commit to the shop owes: a note and a price for every new book.
 let owes: VocabDoc = {
   $defs: {
     book_seen: { effect: true, created: ['book'] },
     book_priced: {
       effect: true,
       created: ['book'],
-      sweep: '.book !book.price',
     },
   },
 }
@@ -1004,7 +1002,7 @@ test('graph writers owe an optional effect only when its plugin opts in', async 
   }
 })
 
-test('a process coming up owes again what a declared sweep selects', async () => {
+test('a process coming up consumes recorded work and leaves settled work alone', async () => {
   let ran: string[] = []
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
@@ -1021,17 +1019,21 @@ test('a process coming up owes again what a declared sweep selects', async () =>
     }),
   )
   try {
-    // Two books, one of them unpriced — the shape the sweep's query names.
+    // Writers record work before any process takes the effects role.
     await host.graph.apply([
       { entity: { eid: 'b1' }, book: { title: 'Spring', price: 12 } },
       { entity: { eid: 'b2' }, book: { title: 'Winter' } },
     ])
-    // Every run they owed, settled — as a process since gone left them.
+    // A previous worker settled Spring; Winter's durable work is still owed.
     let owed = await host.graph.read('.effect')
     await detached(host.storage).patch(
-      owed.map((b) => ({ entity: b.entity, effect: { state: 'done' } })),
+      owed.filter((b) => b.effect?.target == 'b1').map((b) => ({
+        entity: b.entity,
+        effect: { state: 'done' },
+      })),
     )
-    // Coming up, the pool owes again only the book its sweep still selects.
+    await host.duties(AbortSignal.abort())
+    assertEquals(ran, ['Winter'])
     await host.duties(AbortSignal.abort())
     assertEquals(ran, ['Winter'])
   } finally {
