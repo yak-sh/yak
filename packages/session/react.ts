@@ -761,7 +761,6 @@ export let react = async (
     ask: Bundle,
     reply: Reply,
     providerModel: Model,
-    byName: Map<string, Eid>,
     stream: Streams = new Map(),
   ): Promise<Step> => {
     const finalAsk: Bundle = {
@@ -801,7 +800,7 @@ export let react = async (
         const call = line(
           {
             [CALL]: {
-              to: byName.get(item.name),
+              to: toolEid(item.name),
               id: item.id,
               ...args ? { args } : {},
               source: ask.entity.eid,
@@ -947,18 +946,10 @@ export let react = async (
         },
       }
     }
-    let calls = reply.items.flatMap((item) =>
-      item.kind == 'call' ? [[item.name, toolEid(item.name)] as const] : []
-    )
-    let known = new Set(
-      (await g.get(calls.map(([, eid]) => eid), [TOOL])).filter((b) => b.tool)
-        .map((b) => b.entity.eid),
-    )
     return complete(
       unfinished,
       reply,
       original?.model ?? deps.model,
-      new Map(calls.filter(([, eid]) => known.has(eid))),
     )
   }
   if (unfinished?.inference && !executor) return current()
@@ -1033,7 +1024,9 @@ export let react = async (
   // Resolve the finite offered/called identities, not every tool in the
   // store. Canonical tools are named by their declaration; retained calls
   // may name an older stored identity and still resolve from that row.
-  let toolEntities = new Map<Eid, Tool>()
+  let toolEntities = new Map<Eid, Tool>(
+    tools.map((tool) => [toolEid(tool.name), tool]),
+  )
   let targets = [
     ...new Set([
       ...tools.map((t) => toolEid(t.name)),
@@ -1763,7 +1756,6 @@ export let react = async (
     ask,
     reply,
     providerModel,
-    new Map([...toolEntities].map(([eid, t]) => [t.name, eid])),
     stream,
   )
 }

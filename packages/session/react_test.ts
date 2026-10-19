@@ -218,6 +218,50 @@ test('a turn whose using names tools is offered those alone, the runner’s by n
   assertEquals(textOf((await transcript(g, ids.s))[3]), 'HI')
 })
 
+// The declaration is available before any process has registered its tool row.
+const freshTools = world()
+const freshCalls: unknown[] = []
+const fresh = {
+  ...echo,
+  name: 'fresh',
+  run: (args: Record<string, unknown>) => {
+    freshCalls.push(args)
+    return 'first use worked'
+  },
+}
+const freshModel = scripted([{
+  id: 'fresh-reply',
+  model: 'fake-1',
+  items: [{
+    kind: 'call',
+    id: 'fresh-call',
+    name: 'fresh',
+    args: '{"text":"hi"}',
+  }],
+}])
+await react(freshTools, ids.s, {
+  model: freshModel.model,
+  tools: [fresh],
+  asyncTools: true,
+  mint,
+})
+const freshCall = (await transcript(freshTools, ids.s)).find((b) => b.call)!
+await react(freshTools, ids.s, {
+  model: freshModel.model,
+  tools: [fresh],
+  runCall: freshCall.entity.eid,
+  mint,
+})
+const freshEntries = await transcript(freshTools, ids.s)
+
+test('a newly offered tool records its identity and executes on first async use', () => {
+  assertEquals((freshCall.call as Comp).to, toolEid('fresh'))
+  assertEquals(freshCalls, [{ text: 'hi' }])
+  let result = freshEntries.find((b) => b.result)!
+  assertEquals((result.result as Comp).call, freshCall.entity.eid)
+  assertEquals(textOf(result), 'first use worked')
+})
+
 test('an anchored ask can include a late result from an earlier call', async () => {
   let g = world()
   await g.apply([{

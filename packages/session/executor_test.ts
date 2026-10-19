@@ -414,3 +414,20 @@ await scenario(
     equal(p.inline(), 0)
   },
 )
+
+await scenario(
+  'a hosted receipt keeps a first-use tool target before registration',
+  async (p, equal) => {
+    pending(p)
+    p.reply({
+      id: 'first-tool',
+      model: 'hosted',
+      items: [{ kind: 'call', id: 'first', name: 'fresh', args: '{}' }],
+    })
+    await react(p.g, 'session', p.r)
+    let entries = await transcript(p.g, 'session')
+    let call = entries.find((b) => b.call)!
+    equal((call.call as Record<string, unknown>).to, toolEid('fresh'))
+    equal(p.inline(), 0)
+  },
+)
