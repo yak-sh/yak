@@ -236,12 +236,12 @@ let compiled = (
 // it reaches (`.fields=review.book.doc.title`), found among the rest the way a
 // path predicate finds it.
 type Field = { read: (b: Bundle, among: Index) => unknown; tag: Tag }
-let field = (ctx: Ctx, path: string, markers = false): Field => {
+let field = (ctx: Ctx, path: string, projection = false): Field => {
   let hops = ctx.v.aim(path)
   let leaf = hops[hops.length - 1]
   if (!leaf.prop) {
     if (
-      !markers || hops.length != 1 || ctx.v.props(leaf.comp).length ||
+      !projection || hops.length != 1 || ctx.v.props(leaf.comp).length ||
       ctx.v.comp(leaf.comp)?.computed
     ) {
       throw whole(ctx.v, leaf.comp, BY)
@@ -251,12 +251,12 @@ let field = (ctx: Ctx, path: string, markers = false): Field => {
   chained(ctx.v, hops)
   let read = reader(ctx.v, leaf.comp, leaf.prop, ctx.computed)
   if (!read) throw new Unsupported('a computed property here', path, BY)
-  if (read.tag == 'jsonb') {
+  if (read.tag == 'jsonb' && !projection) {
     let at = `${leaf.comp}.${leaf.prop}`
     throw new Unsupported(
-      'ordering or projecting by it',
-      `.${at} holds a JSON value — only its presence (.${at}) can be ` +
-        'asked of it yet',
+      'ordering by it',
+      `.${at} holds a JSON value — it can be projected or tested for ` +
+        `presence (.${at})`,
       BY,
     )
   }

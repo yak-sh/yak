@@ -903,9 +903,10 @@ Text terms need [@yaks/fts](../fts/README.md) or another Extension; `.near`
 needs [@yaks/embedding](../embedding/README.md); `.edges` and edge-typed walks
 need [@yaks/edge](../edge/README.md). Nested reverse associations and reverse
 child predicates reading entity metadata are unsupported. JSON-valued properties
-permit presence tests but not comparisons, ordering or projection. Some scalar
-comparisons also decline when SQLite cannot match their semantics, such as
-non-ASCII containment. [bind.ts](./bind.ts) states the restrictions.
+permit presence tests and whole-value projections, but not comparisons, ordering
+or aggregation. Some scalar comparisons also decline when SQLite cannot match
+their semantics, such as non-ASCII containment. [bind.ts](./bind.ts) states the
+restrictions.
 
 The package is pure TypeScript and uses `@yaks/query`, `@yaks/vocab` and
 `@yaks/id`. Execution requires a compatible driver and the expected layout;

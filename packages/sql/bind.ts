@@ -502,15 +502,14 @@ let readProp = (ctx: Ctx, comp: string, prop: string, owner: string): Read => {
   return read
 }
 
-// A property holding a JSON value (type object, array or a union) is read whole
-// by a gather, and nothing here compares, orders or projects one yet: its
-// presence (`.path`) is the one question a query may ask of it.
+// JSON values can be read whole; comparisons and ordering have no scalar
+// interpretation. Their presence is still a predicate.
 let opaque = (tag: Tag, what: string, path: string): void => {
   if (tag != 'jsonb') return
   throw new Unsupported(
     what,
-    `.${path} holds a JSON value — only its presence (.${path}) can be ` +
-      'asked of it yet',
+    `.${path} holds a JSON value — it can be projected or tested for ` +
+      `presence (.${path})`,
   )
 }
 
@@ -2065,13 +2064,13 @@ let resolveField = (
   ctx: Ctx,
   pathStr: string,
   owner?: string,
-  markers = false,
+  projection = false,
 ): Field => {
   let hops = ctx.v.aim(pathStr)
   let [root, leaf] = [hops[0], hops[hops.length - 1]]
   if (!leaf.prop) {
     if (
-      !markers || hops.length != 1 || ctx.v.props(leaf.comp).length ||
+      !projection || hops.length != 1 || ctx.v.props(leaf.comp).length ||
       computed(ctx.v, leaf.comp)
     ) {
       throw whole(ctx.v, leaf.comp)
@@ -2089,7 +2088,7 @@ let resolveField = (
   }
   chained(ctx.v, hops)
   let tag = tagAt(ctx.v, ctx.derived, leaf.comp, leaf.prop)
-  opaque(tag, 'ordering or projecting by it', `${leaf.comp}.${leaf.prop}`)
+  if (!projection) opaque(tag, 'ordering by it', `${leaf.comp}.${leaf.prop}`)
   // A component these entities never wear holds nothing to read.
   if (!reachable(ctx, hops)) return { expr: 'null', tag }
   let read: Read
@@ -3049,8 +3048,8 @@ let lower = (
   let fields = find<Fields>(cs, 'fields')
   let cols = [ctx.d.membership]
   for (let f of fields?.fields ?? []) {
-    let { expr } = resolveField(ctx, f.path.join('.'), undefined, true)
-    cols.push(`${expr} as "${f.path.join('.')}"`)
+    let { expr, tag } = resolveField(ctx, f.path.join('.'), undefined, true)
+    cols.push(`${ctx.d.project(expr, tag)} as "${f.path.join('.')}"`)
   }
   // SQLite computes a result column before its sorter cuts the window, so a
   // projection is read for every row the filter selects, not just the page.

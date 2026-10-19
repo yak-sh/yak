@@ -64,6 +64,9 @@ export type Dialect = {
   // reads the owner column; a column of `entity` is read from the entity table
   // directly. `null` if the schema has no such property.
   col: (comp: string, prop: string, v: Vocab) => string | null
+  // JSON crosses as text, without a subtype that could make the driver
+  // decode it before the storage adapter.
+  project: (expr: string, tag: Tag) => string
   // The stored reference column, before it is projected to an eid. An equality
   // test can look the operand up once and then compare this indexed integer
   // column.
@@ -426,6 +429,7 @@ let all = (parts: Frag[]): Frag =>
   }
 
 export let sqlite: Dialect = {
+  project: (expr, tag) => tag == 'jsonb' ? `(json(${expr}) || '')` : expr,
   owned: (comp) => `${q(comp)} not indexed`,
   indexed: (comp, index) => `${q(comp)} indexed by ${q(index)}`,
   refCol: (comp, prop) => `${q(comp)}.${q(field(prop))}`,
