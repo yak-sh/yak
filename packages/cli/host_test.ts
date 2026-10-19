@@ -1169,6 +1169,15 @@ test('a thread its process ended holds nothing, though the pid it ran in lives o
     // Its process ends it where it stands, and writes its ending.
     await host.end(thread, 'interrupted: ended')
     assertEquals(await held(host.graph, 'run/t1'), { name: 'run/t1' })
+    let [released] = await host.graph.get(['r1'], ['effect'])
+    assertEquals(released.effect, {
+      handler: 'book_seen',
+      target: 'b1',
+      comp: 'book',
+      kind: 'created',
+      state: 'pending',
+      attempts: 1,
+    })
     // A renewal that raced its ending takes the run back in its name…
     assertEquals(await run(thread), true)
     // …and is passed at once, as is the effect it claimed.
