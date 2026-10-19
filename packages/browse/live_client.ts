@@ -21,25 +21,31 @@ let projections = new WeakMap<typeof vocab, typeof vocab>()
 let browserVocab = () => {
   let kept = projections.get(vocab)
   if (kept) return kept
-  let docs = structuredClone(vocab.docs)
-  for (let doc of docs) {
-    for (let [name, def] of Object.entries(doc.$defs ?? {})) {
-      if (!def.component || name == 'entity') continue
-      // Computed query-result components are received data in this replica,
-      // never storage-backed computations to run in the page.
-      let ladder = def.status
-      delete def.status
-      if (def.extends) continue
-      def.computed = false
-      def.properties ??= {}
-      def.properties.eid = { type: 'string' }
-      if (ladder) def.properties.status = { type: 'string' }
-      for (let prop of Object.values(def.properties ?? {})) {
-        if (prop.computed) delete prop.enum
-        prop.computed = false
-      }
-    }
-  }
+  let docs = vocab.docs.map((doc) => ({
+    ...doc,
+    $defs: Object.fromEntries(
+      Object.entries(doc.$defs ?? {}).map(([name, def]) => {
+        if (!def.component || name == 'entity') return [name, def]
+        let { status, ...copy } = def
+        if (def.extends) return [name, copy]
+        return [name, {
+          ...copy,
+          computed: false,
+          properties: {
+            ...Object.fromEntries(
+              Object.entries(def.properties ?? {}).map(([name, prop]) => {
+                let copy = { ...prop, computed: false }
+                if (prop.computed) delete copy.enum
+                return [name, copy]
+              }),
+            ),
+            eid: { type: 'string', computed: false },
+            ...status ? { status: { type: 'string', computed: false } } : {},
+          },
+        }]
+      }),
+    ),
+  }))
   let projected = loadVocab(docs, keywords)
   projections.set(vocab, projected)
   return projected
