@@ -1,5 +1,6 @@
 // A web host's graph reads run in one worker over the same file. The graph's
 // read interface stays the query door; only the thread executing it changes.
+import { parse } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
 import { type Context, context, type Event, forward } from '@yaks/trace'
 
@@ -90,7 +91,9 @@ export let readThread = (
       ask({ op: 'rows', query, opts }).then((value) => value as Row[]),
     get: (eids, comps) =>
       ask({ op: 'get', eids, comps }).then((value) => value as Bundle[]),
-    ready: () => ask({ op: 'get', eids: [] }).then(() => {}),
+    // Compile and gather one bounded read before the listener takes traffic.
+    // An empty get confirms composition but skips the query path entirely.
+    ready: () => ask({ op: 'read', query: parse('.limit=1') }).then(() => {}),
     // The HTTP server has already given in-flight requests their grace. A
     // read-only worker owns no writes to drain, and may be executing synchronous
     // SQL: it cannot receive a close message until that query returns. End it

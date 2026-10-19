@@ -148,3 +148,54 @@ test('closing a busy web reader terminates it and rejects its waiting reads', as
     globalThis.Worker = Original
   }
 })
+
+// Readiness must exercise the reader's query path, not an empty identity seek.
+test('reader readiness waits for a bounded read and propagates its refusal', async () => {
+  let Original = globalThis.Worker
+  let answer: (failed: boolean) => void = () => {}
+  class Reader {
+    onmessage: ((event: { data: unknown }) => void) | null = null
+    onerror = null
+    postMessage(data: { id?: number; op?: string }) {
+      if (!data.id) return
+      if (data.op == 'get') {
+        this.onmessage?.({ data: { id: data.id, value: [] } })
+      } else {
+        answer = (failed) =>
+          this.onmessage?.({
+            data: failed
+              ? {
+                id: data.id,
+                error: {
+                  name: 'Refused',
+                  message: 'query failed',
+                  details: {},
+                },
+              }
+              : { id: data.id, value: [] },
+          })
+      }
+    }
+    terminate() {}
+  }
+  globalThis.Worker = Reader as unknown as typeof Worker
+  let reader = readThread('unused.json')
+  try {
+    let settled = false
+    let waiting = reader.ready().then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    assertEquals(settled, false)
+    answer(false)
+    await waiting
+    assertEquals(settled, true)
+    let failed = assertRejects(() => reader.ready(), Error, 'query failed')
+    answer(true)
+    await failed
+  } finally {
+    await reader.close()
+    globalThis.Worker = Original
+  }
+})
