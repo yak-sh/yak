@@ -31,7 +31,6 @@ type Up = {
 let boot = async (
   path: string,
   session: string | undefined,
-  progress: (text: string) => void,
 ): Promise<Up> => {
   let config = read(path)
   let drafts = await openDrafts(dbOf(config))
@@ -42,14 +41,6 @@ let boot = async (
     },
   )
   try {
-    progress('resuming unfinished sessions…')
-    await backend.resume().catch((error) => {
-      throw new Error(
-        `resuming unfinished sessions: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      )
-    })
     if (session) await drafts.ui.patch({ selected: session })
     return { backend, drafts }
   } catch (error) {
@@ -64,12 +55,11 @@ let Harness = ({ e, config }: { e?: Bundle; config?: string }) => {
     ? String((e.entry as Comp | undefined)?.session ?? e.entity.eid)
     : undefined
   let [up, set] = useState<Up | Error>()
-  let [stage, progress] = useState('opening the harness graph…')
   useEffect(() => {
     if (!config) {
       return void set(new Error('a terminal app needs a config to open'))
     }
-    let booting = boot(config, session, progress)
+    let booting = boot(config, session)
     booting.then(set, set)
     return () =>
       void booting.then(({ backend, drafts }) =>
@@ -86,7 +76,7 @@ let Harness = ({ e, config }: { e?: Bundle; config?: string }) => {
     await up.backend.close({ timeout: null })
   }, up && !(up instanceof Error) ? up.backend.force : undefined)
   if (up instanceof Error) return h('div', null, `harness: ${up.message}`)
-  if (!up) return h('div', null, stage)
+  if (!up) return h('div', null, 'opening the harness graph…')
   return h(App, {
     agent: up.backend.agent,
     subscribe: up.backend.subscribe,
