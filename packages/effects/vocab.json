@@ -9,7 +9,21 @@
       "index": [
         [
           "handler",
-          "state"
+          "state",
+          "lease_owner",
+          "next"
+        ],
+        [
+          "handler",
+          "state",
+          "next",
+          "lease_expiry"
+        ],
+        [
+          "handler",
+          "state",
+          "lease_expiry",
+          "next"
         ]
       ],
       "type": "object",
@@ -100,7 +114,8 @@
         "lease_owner": {
           "type": "string",
           "stamped": true,
-          "description": "the process that claimed this run"
+          "description": "the process that claimed this run",
+          "index": true
         },
         "lease_token": {
           "type": "string",

@@ -91,48 +91,39 @@ import {
 import { comps } from '@yaks/graph/bundle'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import {
-  after as cursorAfter,
-  type And,
-  and,
-  eq,
-  fields,
-  limit as window,
-  list,
-  ne,
-} from '@yaks/query'
+import { type And, and, eq, limit as window, list, ne } from '@yaks/query'
 import type { Report, Slot } from './registry.ts'
 import type { Event, Kind } from './trace.ts'
 import type { Write } from './write.ts'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 import { finishedRun } from './cleanup.ts'
+import { except, ready } from './ready.ts'
 
 export { effectDoc } from './docs.ts'
 
 /** The pool's component, by the name ./vocab.json declares it. */
 export let EFFECT = 'effect'
 
-// The queries every pass asks, built once: storage keeps what it compiled
-// against the tree it was given, so a tree built afresh each pass is compiled
-// afresh each pass.
-let PENDING = and(
-  eq(`${EFFECT}.state`, 'pending'),
-  window(1),
-  fields('entity.eid'),
-)
+// Keep relative time in the cached query and supply the pass's clock when
+// reading it. The first pass and every later pass ask the same indexed question.
 let HEADS = new Map<string, And>()
-// The next pending run of one handler: the first, or the first after `cursor`.
-let head = (handler: string, cursor?: Eid) => {
-  let q = HEADS.get(handler)
+let head = (
+  handler: string,
+  singleOwner: boolean,
+  disabled: boolean,
+  n: number,
+) => {
+  let key = JSON.stringify([handler, singleOwner, disabled, n])
+  let q = HEADS.get(key)
   if (!q) {
     q = and(
-      eq(`${EFFECT}.handler`, handler),
-      eq(`${EFFECT}.state`, 'pending'),
-      window(1),
+      ...ready([handler], { singleOwner, disabled: disabled ? [handler] : [] })
+        .clauses,
+      window(n),
     )
-    HEADS.set(handler, q)
+    HEADS.set(key, q)
   }
-  return cursor ? and(...q.clauses, cursorAfter(cursor)) : q
+  return q
 }
 
 /** The most attempts a run gets where its declaration does not say: the
@@ -608,13 +599,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   // holds and whose backoff is up, claimed and started. Returns the runs.
   // Separate handler windows keep one backlog from owning the pass.
   let turn = 0
-  let cursors = new Map<string, Eid>()
-  let exhausted = new Set<string>()
-  let scanStarted = false
   // The last pass found every slot taken: the next run to end wakes the
   // worker, rather than leaving its slot empty for a nap.
   let full = false
-  let pending = PENDING, signature = ''
+  let pending: And, signature = ''
   // The worker's wait between passes, which a wake cuts short.
   let nap = new AbortController()
   type Pass = { started: Promise<void>[]; more: boolean }
@@ -624,17 +612,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let claims: { eid: Eid; row: Comp; mine: Comp }[] = []
     let reserved = 0
     full = false
-    // Asked once a pass per owner: a process that ended without letting go
-    // holds nothing, whatever its claims' expiry says.
-    let asked = new Map<string, Promise<boolean>>()
-    let gone = (owner: string) => {
-      if (owner == me) return Promise.resolve(false)
-      let known = asked.get(owner)
-      if (!known) {
-        asked.set(owner, known = Promise.resolve(opts.gone?.(owner) ?? false))
-      }
-      return known
-    }
     let names = [
       ...new Set([
         ...ctx.slots().filter((s) => s.effect && s.run).map((s) => s.id),
@@ -653,17 +630,16 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     if (key != signature) {
       signature = key
       pending = and(
-        ...PENDING.clauses,
-        eq(`${EFFECT}.handler`, list(...names)),
+        ...ready(names, {
+          singleOwner: opts.singleOwner,
+          disabled: [...disabled],
+        }).clauses,
+        window(1),
         ...live.length ? [ne('entity.eid', list(...live))] : [],
       )
     }
-    if (
-      !(await g.read(pending, { storageOrder: true })).length
-    ) {
-      cursors.clear()
-      exhausted.clear()
-      scanStarted = false
+    let [first] = await g.read(pending, { unordered: true, now })
+    if (!first) {
       return { started, more: false }
     }
     let examine = async (b: Bundle) => {
@@ -687,8 +663,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       if (!s || running.has(eid)) return
       let expiry = row.lease_expiry ? Date.parse(String(row.lease_expiry)) : 0
       if (
-        !opts.singleOwner && row.lease_owner && expiry > now &&
-        !await gone(String(row.lease_owner))
+        !opts.singleOwner && row.lease_owner && expiry > now
       ) return
       if (row.next && Date.parse(String(row.next)) > now) return
       let attempts = Number(row.attempts ?? 0)
@@ -712,7 +687,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       admitting++
       reserved++
     }
-    let drained = new Set<string>()
+    let drained = new Set<string>(), visited = new Set(live)
+    let heads = new Map<string, { rows: Bundle[]; full: boolean }>([
+      [String((first[EFFECT] as Comp).handler), { rows: [first], full: true }],
+    ])
     try {
       while (
         member && running.size + admitting < max && budget > 0 &&
@@ -722,26 +700,31 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         turn = (turn + 1) % names.length
         if (drained.has(name)) continue
         // One candidate, then the next handler's, not the rest of this backlog.
-        let cursor = cursors.get(name)
-        let [b] = await g.read(head(name, cursor), { storageOrder: true })
+        let cached = heads.get(name)
+        if (!cached || !cached.rows.length && cached.full) {
+          let n = Math.min(budget, max - running.size - admitting)
+          let rows = await g.read(
+            except(head(name, !!opts.singleOwner, disabled.has(name), n), [
+              ...visited,
+            ]),
+            { unordered: true, now },
+          )
+          heads.set(name, cached = { rows, full: rows.length == n })
+        }
+        let b = cached.rows.shift()
         // Revisit a drained handler's head next pass: a writer can owe it a
         // new run while another handler still has thousands left to examine.
         // Finding it empty spends no budget, so idle handlers cannot crowd a
         // backlog out of the pass.
         if (!b) {
-          exhausted.add(name)
-          cursors.delete(name)
           drained.add(name)
           continue
         }
         budget--
-        exhausted.delete(name)
-        cursors.set(name, b.entity.eid)
+        visited.add(b.entity.eid)
         await examine(b)
       }
       if (!member) {
-        cursors.clear()
-        exhausted.clear()
         return { started, more: false }
       }
       let begin = ({ eid, row, mine }: typeof claims[number]) => {
@@ -777,16 +760,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       admitting -= reserved
     }
     full = member && running.size >= max
-    scanStarted ||= started.length > 0
-    let more = names.some((name) => !exhausted.has(name))
-    if (!more) {
-      // A drain revisits the head once after starts: those runs may have
-      // written more work. An entirely blocked traversal ends, not spins.
-      more = scanStarted
-      scanStarted = false
-      cursors.clear()
-      exhausted.clear()
-    }
+    let more = started.length > 0 || budget <= 0
+
     return { started, more }
   }
 
@@ -1022,8 +997,6 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       let requested = typeof options == 'number' ? { passes: options } : options
       let passes = requested.passes ?? Infinity
       graph = g
-      exhausted.clear()
-      scanStarted = false
       if (signal.aborted) {
         if (
           !opts.singleOwner &&
