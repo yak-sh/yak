@@ -72,11 +72,11 @@ deno add jsr:@yaks/effects
 
 ## Exports
 
-| Import                | Exports                                                                                                                                                                                                                                                                                       |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/effects`       | `effects`; registry, handler, registration and event types; `before`, `wanting`, `events`, `strip`, `BEFORE`; `generation`, `marked`, `unmark`, `ORIGIN`, `Write`; `pool`, `working`, `effectDoc`, pool types and retry settings; lease operations and types; `PROVISIONAL`, `provisionalDoc` |
-| `@yaks/effects/vocab` | `docs`, `description`, `effectDoc`, `provisionalDoc`                                                                                                                                                                                                                                          |
-| `@yaks/effects/tools` | `runs`, `Options`: implementation and configuration of `effect_check`                                                                                                                                                                                                                         |
+| Import                | Exports                                                                                                                                                                                                                                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@yaks/effects`       | `effects`; registry, handler, registration and event types; `before`, `wanting`, `events`, `strip`, `BEFORE`; `generation`, `marked`, `unmark`, `ORIGIN`, `Write`; `pool`, `working`, `effectDoc`, pool types and retry settings; lease operations and types; `expire`, `expireDaily`, `expiration`; `PROVISIONAL`, `provisionalDoc` |
+| `@yaks/effects/vocab` | `docs`, `description`, `effectDoc`, `provisionalDoc`                                                                                                                                                                                                                                                                                 |
+| `@yaks/effects/tools` | `runs`, `Options`: implementation and configuration of `effect_check`                                                                                                                                                                                                                                                                |
 
 `effectDoc` declares `effect`, `lease`, `provisional`, and `effect_check`.
 `docs` contains `effectDoc`; loading it alone does not install a registry or
@@ -662,11 +662,16 @@ equal(await fx.settle(g, 'publish'), 0)
 ## Expiration
 
 A component's [`expire` declaration](../vocab/README.md#expiration) selects
-component rows to remove. The effects worker runs one generic sweep of the
-composed vocabulary on startup and daily. The expiration duty's lease is shared
-by workers; a successful pass leaves it standing for a day, and a failed or
-interrupted pass leaves only a short hold for recovery. A worker checks the
-lease again while it stays up, so no restart is needed for the next pass.
+component rows to remove. The CLI's effects role serves expiration as a separate
+upkeep duty named `@yaks/effects`, alongside the effect pool. The pool's startup
+and work selection do not invoke it.
+
+`expiration(g, {owner, signal, report})` keeps that duty running until its
+signal aborts. It checks the persisted daily lease through `expireDaily`, with a
+30-second cadence when leases are available. A successful pass keeps the
+`@yaks/effects/expire` lease for a day; failure or interruption leaves a short
+hold for recovery. Replacing a worker preserves that daily schedule, and a
+failure is reported before the duty tries again.
 
 `expire(g)` runs a pass explicitly and returns the number of matching component
 rows removed. Each transaction removes at most 100 rows by default. Removal uses

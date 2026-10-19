@@ -168,7 +168,8 @@ packages/cli/host.ts, and packages/cli/README.md is the reference.
 
 A service may deliberately poll mail, transcript files or another outside
 source. Its cadence belongs to that service; it is distinct from the effect
-pool selecting recorded runs.
+pool selecting recorded runs. Daily expiration is a separate upkeep duty too
+(`packages/effects/expire.ts`), outside the pool's startup and work selection.
 
 `yak serve` serves `web` only. When no live process serves a duty role, it
 starts an independent `yak work --roles <missing>` process, not a duty thread.
