@@ -41,8 +41,9 @@ let door =
 
 let comp = (b: Bundle | undefined, name: string) => b?.[name] as Comp
 
+let recorded = await seeded()
 test('the door records a letter and answers with its id', async () => {
-  let { g } = await seeded()
+  let { g } = recorded
   let post = door(g, { domain: 'books.example' })
   let answer = await post({})
   assertEquals(answer.status, 200)
@@ -53,17 +54,22 @@ test('the door records a letter and answers with its id', async () => {
   assertEquals(comp(letter, 'mail').target, ana)
 })
 
-test('the same letter posted twice is recorded once', async () => {
+let duplicateAnswers = await (async () => {
   let { g } = await seeded()
   let post = door(g, { domain: 'books.example' })
   let sent = { headers: { 'Message-ID': '<a1@x.example>', Subject: 'twice' } }
   let first = await (await post(sent)).json() as { eid: string }
-  assertEquals(typeof first.eid, 'string')
-  assertEquals(await (await post(sent)).json(), { eid: null })
+  let second = await (await post(sent)).json()
+  return { first, second }
+})()
+test('the same letter posted twice is recorded once', () => {
+  assertEquals(typeof duplicateAnswers.first.eid, 'string')
+  assertEquals(duplicateAnswers.second, { eid: null })
 })
 
+let credentialed = await seeded()
 test('a secret is what the door asks for, when one is named', async () => {
-  let { g } = await seeded()
+  let { g } = credentialed
   let post = door(g, { door: { secret: 'shh' } })
   assertEquals((await post({}, 'shh')).status, 200)
   assertEquals((await post({}, 'sh')).status, 401)
@@ -71,13 +77,15 @@ test('a secret is what the door asks for, when one is named', async () => {
   assertEquals((await post({})).status, 401)
 })
 
-test('no secret leaves the door as open as the /apply beside it', async () => {
-  let { g } = await seeded()
-  assertEquals((await door(g)({})).status, 200)
+let openDoorFixture = await seeded()
+let openDoorStatus = (await door(openDoorFixture.g)({})).status
+test('no secret leaves the door as open as the /apply beside it', () => {
+  assertEquals(openDoorStatus, 200)
 })
 
+let malformed = await seeded()
 test('a body that is not a letter is refused, and says so', async () => {
-  let { g } = await seeded()
+  let { g } = malformed
   let post = door(g)
   assertEquals((await post('not json')).status, 400)
   let answer = await post({ to: undefined })
@@ -85,8 +93,9 @@ test('a body that is not a letter is refused, and says so', async () => {
   assertEquals((await answer.json() as { error: string }).error, 'Refused')
 })
 
-test('the path is the door option, and the default is one word', async () => {
-  let { g } = await seeded()
+let pathFixture = await seeded()
+test('the path is the door option, and the default is one word', () => {
+  let { g } = pathFixture
   assertEquals(routes({ graph: g }, {})[0].path, PATH)
   let said = routes({ graph: g }, { door: { path: '/letters' } })
   assertEquals(said[0].path, '/letters')
