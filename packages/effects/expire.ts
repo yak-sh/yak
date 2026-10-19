@@ -124,8 +124,21 @@ export let expireDaily = async (
     await renewing
   }
   if (error) throw error
-  if (!opts.signal?.aborted && !lost.signal.aborted) {
-    await take(g, EXPIRE, { holder: opts.owner, now, hold: DAY })
+  if (!opts.signal?.aborted && !lost.signal.aborted && g.vocab.comp(LEASE)) {
+    let [row] = await g.get([leaseEid(EXPIRE)], [LEASE])
+    let held = row?.[LEASE] as Comp | undefined
+    if (held?.holder != opts.owner) return
+    try {
+      await g.apply([{
+        entity: { eid: leaseEid(EXPIRE) },
+        [LEASE]: { holder: null, until: new Date(now() + DAY).toISOString() },
+        $was: {
+          [LEASE]: { holder: token(held.holder), until: token(held.until) },
+        },
+      }], { trusted: true })
+    } catch (error) {
+      if (!(error instanceof Stale)) throw error
+    }
   }
 }
 

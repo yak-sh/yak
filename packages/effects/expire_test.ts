@@ -6,7 +6,7 @@ import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { DAY, expiration, EXPIRE, expire, expireDaily } from './expire.ts'
 import { effectDoc } from './pool.ts'
-import { leaseEid } from './lease.ts'
+import { leaseEid, released } from './lease.ts'
 
 let vocab = loadVocab([{
   ...effectDoc,
@@ -144,6 +144,22 @@ test('a failed daily sweep leaves a short recoverable hold, not a day-long succe
   ok(Date.parse(String(lease?.until)) < now + DAY)
   await expireDaily(g, { owner: 'two', now: () => now + DAY })
   ok((await g.get(['retry']))[0].tombstone)
+})
+
+let endedWorker = await (async () => {
+  let g = make()
+  await expireDaily(g, { owner: 'worker', now: () => now })
+  await g.apply([run('next')], { trusted: true })
+  await g.apply(await released(g, 'worker'), { trusted: true })
+  return g
+})()
+
+test('a completed expiration keeps its next due date after its worker ends', async () => {
+  await expireDaily(endedWorker, { owner: 'rival', now: () => now + 1000 })
+  ok((await endedWorker.get(['next']))[0].effect)
+  let held = (await endedWorker.get([leaseEid(EXPIRE)]))[0].lease as Comp
+  equal(held.until, new Date(now + DAY).toISOString())
+  equal(held.holder, undefined)
 })
 
 let serviceExpiry = await (async () => {
