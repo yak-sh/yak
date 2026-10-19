@@ -924,6 +924,8 @@ export let sessionStatus = {
       'failed',
       'ask',
       'call',
+      'result',
+      'tool_progress',
       'output',
       'attempt',
       'attempt_by',
@@ -1134,7 +1136,12 @@ export let sessionStatus = {
         ],
         [or(n('ask'), n('call')), lit('running')],
         [
-          n('output'),
+          and(
+            n('output'),
+            not(n('result')),
+            not(n('tool_progress')),
+            not(n('interrupted')),
+          ),
           iff(
             after(col('n_boundary_seq', 'f')),
             lit('pending'),

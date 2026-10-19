@@ -502,6 +502,16 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(3, { call: { to: T, id: 'c1', source: 'e2' } }),
     entry(4, { result: { call: 'e3' }, content: { body: 'echo' } }),
   ], 'pending'],
+  ['a result carrying its output source still needs a model turn', [
+    request(1),
+    entry(2, { ask: { to: M } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' } }),
+    entry(4, {
+      result: { call: 'e3' },
+      content: { body: 'echo' },
+      output: { source: 'e3' },
+    }),
+  ], 'pending'],
   [
     'an output',
     [input(1), entry(2, { ask: { to: M } }), said(3, 'e2')],
@@ -597,9 +607,10 @@ for (let [name, entries] of shapes.slice()) {
         .some((c) => b[c])
     )
   ) continue
-  let marked = entries.map((b, i) =>
-    i == entries.length - 1 ? b : { ...b, output: b.output ?? { source: S } }
-  )
+  let marked = entries.map((b) => ({
+    ...b,
+    output: b.output ?? { source: S },
+  }))
   shapes.push([`output beside marks: ${name}`, marked, statusOf(marked)])
 }
 
@@ -704,6 +715,22 @@ for (let typed of [false, true]) {
   }])
   g.apply(shapes.flatMap(([name, entries]) => apart(name, entries)), {
     trusted: true,
+  })
+  let scoped = shapes.filter(([, entries]) => {
+    let latest = entries.at(-1)
+    return latest?.result && latest.output
+  }).map(([name, , word]) => {
+    let [row] = g.read(all(
+      qeq('entity.eid', `${name}/${S}`),
+      fields('session.status'),
+    )) as Bundle[]
+    return [name, (row.session as { status: string }).status, word]
+  })
+  test(`scoped result status matches the rule (archetypes: ${typed})`, () => {
+    assertEquals(
+      scoped.map(([name, got]) => [name, got]),
+      scoped.map(([name, , want]) => [name, want]),
+    )
   })
   let terminal = shapes.map(([name, , word]) => {
     let found = g.read(all(
