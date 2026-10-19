@@ -589,6 +589,20 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'pending'],
 ]
 
+// Output is not exclusive: a reply can carry work or a control mark too.
+for (let [name, entries] of shapes.slice()) {
+  if (
+    !entries.some((b) =>
+      ['call', 'result', 'tool_progress', 'ask', 'stop', 'refusal', 'using']
+        .some((c) => b[c])
+    )
+  ) continue
+  let marked = entries.map((b, i) =>
+    i == entries.length - 1 ? b : { ...b, output: b.output ?? { source: S } }
+  )
+  shapes.push([`output beside marks: ${name}`, marked, statusOf(marked)])
+}
+
 for (let [name, entries, want] of shapes) {
   let reversed = entries.toReversed()
   test(`statusOf reads the newest entry: ${name}`, () => {

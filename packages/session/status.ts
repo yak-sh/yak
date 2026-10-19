@@ -1024,7 +1024,19 @@ export let sessionStatus = {
         as(fn('max', col('entity', 't')), 'any'),
       ],
       from: from(turn, 't'),
-      where: not(row.passive),
+      // Past plain outputs contribute no historical fact. Keep both anchors
+      // and every other mark: an output can also carry outstanding work.
+      where: and(
+        not(row.passive),
+        or(
+          newest,
+          asked,
+          lacks('output'),
+          ...comps.filter((c) => c != 'content' && c != 'output').map((c) =>
+            has(c)
+          ),
+        ),
+      ),
     })
     let n = (name: string) => notNull(col('n_' + name, 'f'))
     let f = (name: string) => col(name, 'f')
