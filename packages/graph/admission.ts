@@ -26,9 +26,9 @@ export let rehearsing = (tx: Tx, vocab: Vocab, snap: Snap): Tx => {
         let at = new Map(found.map((b) => [b.entity.eid, b]))
         return eids.flatMap((eid) => rows.get(eid) ?? at.get(eid) ?? [])
       }),
-    read: (q, opts) => {
+    read: (q, opts, comps) => {
       query()
-      return tx.read(q, opts)
+      return tx.read(q, opts, comps)
     },
     ...(tx.whole
       ? {

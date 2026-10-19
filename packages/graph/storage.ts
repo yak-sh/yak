@@ -82,8 +82,12 @@ export type Doom = { gone: Gone[]; loose: Loose[] }
  * throws.
  */
 export type Tx = {
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: ReadOpts) => Bundle[] | Promise<Bundle[]>
+  /** a query → whole bundles, or only `comps` when named */
+  read: (
+    query: Query,
+    opts?: ReadOpts,
+    comps?: string[],
+  ) => Bundle[] | Promise<Bundle[]>
   /** the same result as `read`, in one round trip: an adapter that talks over
    * a network embeds the matching set as a subquery in each statement of its
    * read, so the whole result is one request instead of one request to learn
@@ -216,7 +220,7 @@ export type Storage = {
  * transaction is either impossible or exactly the wrong thing.
  */
 export let detached = (storage: Storage): Tx => ({
-  read: (query, opts) => storage.read(query, opts),
+  read: (query, opts, comps) => storage.read(query, opts, comps),
   get: (eids, comps, opts) => storage.get(eids, comps, opts),
   // A match is a question about committed data, which is exactly what there
   // is to ask out here: an effect registered on a pattern (@yaks/effects) asks

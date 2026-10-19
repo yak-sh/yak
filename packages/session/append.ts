@@ -9,7 +9,7 @@ import { UnknownSession } from './unknown.ts'
 
 let entry = (b: Bundle | undefined) => b?.entry as Comp | undefined
 
-export let sequencing: Hook = (bundles, tx, _err, context) =>
+export let sequencing: Hook = (bundles, tx) =>
   after(
     tx.get(bundles.filter((b) => b.entry).map((b) => b.entity.eid), ['entry']),
     (existing) => {
@@ -69,6 +69,8 @@ export let sequencing: Hook = (bundles, tx, _err, context) =>
                 '.entry.session=' + session +
                   '&.order=-entry.seq&.limit=1',
               ),
+              undefined,
+              ['entry'],
             ),
             (latest) =>
               after(
@@ -88,6 +90,8 @@ export let sequencing: Hook = (bundles, tx, _err, context) =>
                             ) => Number(entry(b)!.seq)),
                         ),
                     ),
+                    undefined,
+                    ['entry'],
                   )
                   : [],
                 (collisions) => {
@@ -99,12 +103,9 @@ export let sequencing: Hook = (bundles, tx, _err, context) =>
                   return after(
                     tx.read(
                       '.entity.eid=' + session +
-                        '&.session&.fields=entity.eid' +
-                        ((context?.graph as Graph | undefined)?.vocab.comp(
-                            'fork',
-                          )
-                          ? ',fork.from'
-                          : ''),
+                        '&.session',
+                      undefined,
+                      ['fork'],
                     ),
                     (found) => {
                       if (

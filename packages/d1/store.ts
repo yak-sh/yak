@@ -411,12 +411,12 @@ export let storage = <S extends Prepared<S>>(
     }
 
     let tx: Tx = {
-      read: async (query, opts) =>
+      read: async (query, opts, comps) =>
         overlaid(
           query as Query,
           opts?.now,
-          await read(query as Query, { ...base, ...opts }),
-        ),
+          await read(query as Query, { ...base, ...opts }, comps),
+        ).map(only(comps ? new Set(comps) : null)),
       whole: async (query, opts) =>
         overlaid(
           query as Query,

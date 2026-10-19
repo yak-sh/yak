@@ -212,8 +212,8 @@ export type { Storage } from '@yaks/graph'
  * and lets a caller of this package read a bundle without awaiting one.
  */
 export type Tx = {
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: ReadOpts) => Bundle[]
+  /** a query → whole bundles, or only `comps` when named */
+  read: (query: Query, opts?: ReadOpts, comps?: string[]) => Bundle[]
   /** identity, not search: these entities as they stand, carrying the
    * components `comps` names or every one */
   get: (eids: string[], comps?: string[]) => Bundle[]
@@ -617,13 +617,13 @@ export let storage = (
       ), 'read')
   }
   let tx: Tx = {
-    read: (query, o) =>
+    read: (query, o, comps) =>
       read(
         driver,
         vocab,
         query,
         { ...opts(), ...o },
-        undefined,
+        comps,
         (q) => asked(q, o),
         fetched(o),
       ),
@@ -750,7 +750,7 @@ export let storage = (
         // Pending component rows already stand in this transaction. Read them
         // directly rather than persisting an intermediate archetype just to
         // read before the graph's final stamp/tracker flush.
-        read: (query, o) => {
+        read: (query, o, comps) => {
           let direct = owed().length > 0
           return read(
             driver,
@@ -761,7 +761,7 @@ export let storage = (
               ...o,
               ...direct ? { archetypes: () => undefined } : {},
             },
-            undefined,
+            comps,
             (q) => asked(q, o, direct),
             fetched(o, getting),
           )

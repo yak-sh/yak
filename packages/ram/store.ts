@@ -90,8 +90,8 @@ export type RamOpts = {
  * rejected write leaves the map exactly as it found it.
  */
 export type Tx = {
-  /** a query → the matching entities as whole bundles */
-  read: (query: Query, opts?: ReadOpts) => Bundle[]
+  /** a query → whole bundles, or only `comps` when named */
+  read: (query: Query, opts?: ReadOpts, comps?: string[]) => Bundle[]
   /** lookup by id, not search: these entities as they stand, carrying the
    * components `comps` names or every one. A deleted one carries `tombstone`;
    * an unknown one is simply absent. */
@@ -468,14 +468,16 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
   let derived = Object.entries(base.computed ?? {}).map(([path, read]) =>
     [...path.split('.'), read] as [string, string, Computed[string]]
   )
-  let computed = (b: Bundle, among: Index): Bundle => {
+  let computed = (b: Bundle, among: Index, names?: string[]): Bundle => {
     let out = b
     for (let name of statuses) {
+      if (names && !names.includes(name)) continue
       let value = b[name] as Comp | undefined
       if (!value) continue
       out = { ...out, [name]: { ...value, status: statusOf(vocab, name, b) } }
     }
     for (let [name, prop, read] of derived) {
+      if (names && !names.includes(name)) continue
       if (!b[name]) continue
       let value = read(b, among)
       let comp = { ...out[name] as Comp }
@@ -550,7 +552,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       computed: base.computed,
     })(among)
     let gathered = statuses.length || derived.length
-      ? found.map((b) => computed(b, among))
+      ? found.map((b) => computed(b, among, comps))
       : found
     return (comps ? gathered.map(only(new Set(comps))) : gathered).map(detached)
   }
@@ -722,7 +724,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       : rows
     for (let eid of eids) {
       let rec = scoped.get(eid)
-      if (rec) out.push(detached(cut(among ? computed(rec, among) : rec)))
+      if (rec) {
+        out.push(detached(cut(among ? computed(rec, among, names) : rec)))
+      }
     }
     return out
   }

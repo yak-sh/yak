@@ -65,7 +65,7 @@ export let reader = (opts: {
   let viewHooks = plugins.filter((p) => p.view)
   const emptyReadOpts: ReadOpts = {}
   let outsideRead = opts.outside ?? (() => ({
-    read: (q, o) => storage.read(q, o),
+    read: (q, o, comps) => storage.read(q, o, comps),
     get: (ids, comps, o) => storage.get(ids, comps, o),
   }))
   let scoped = (readOpts: ReadOpts = {}): ReadOpts => {
@@ -104,7 +104,8 @@ export let reader = (opts: {
         person: options.person,
         administrative: options.administrative,
       })
-    let read: ReadTx['read'] = (q, o) => authoritative.read(q, limited(o))
+    let read: ReadTx['read'] = (q, o, comps) =>
+      authoritative.read(q, limited(o), comps)
     let tx: ReadTx = {
       read,
       whole: read,

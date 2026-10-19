@@ -151,7 +151,7 @@ export let memory = (): Storage => {
       eids.flatMap((e) => bundleOf(e) ?? []).map(
         only(names ? new Set(names) : null),
       ),
-    read: (query) => {
+    read: (query, _opts, names) => {
       let any = equalities(query)
       return [...rows]
         .filter(([, r]) =>
@@ -159,6 +159,7 @@ export let memory = (): Storage => {
           any.some((e) => e.values.some((v) => v === r.comps[e.comp]?.[e.prop]))
         )
         .flatMap(([eid]) => bundleOf(eid) ?? [])
+        .map(only(names ? new Set(names) : null))
     },
     patch: (bundles) => {
       let born: Entity[] = []
@@ -205,7 +206,7 @@ export let memory = (): Storage => {
 
   return {
     install: () => {},
-    read: (query) => tx.read(query),
+    read: (query, opts, names) => tx.read(query, opts, names),
     rows: (query) =>
       (tx.read(query) as Bundle[]).map((b) => ({ eid: b.entity.eid }) as Row),
     get: (eids, names) => tx.get(eids, names),
@@ -229,13 +230,13 @@ export let memory = (): Storage => {
  * proves the pipeline's sync pass-through actually passes async through. */
 export let slow = (base: Storage): Storage => ({
   install: () => Promise.resolve(base.install()),
-  read: (query, opts) => Promise.resolve(base.read(query, opts)),
+  read: (query, opts, names) => Promise.resolve(base.read(query, opts, names)),
   rows: (query, opts) => Promise.resolve(base.rows(query, opts)),
   get: (eids, names) => Promise.resolve(base.get(eids, names)),
   tx: (body) =>
     base.tx((tx) =>
       body({
-        read: (q, o) => Promise.resolve(tx.read(q, o)),
+        read: (q, o, names) => Promise.resolve(tx.read(q, o, names)),
         get: (eids, names) => Promise.resolve(tx.get(eids, names)),
         patch: (bundles) => Promise.resolve(tx.patch(bundles)),
         remove: (entities) => Promise.resolve(tx.remove(entities)),
