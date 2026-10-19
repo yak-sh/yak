@@ -48,37 +48,70 @@ let shaped = (b: Bundle): boolean => {
   }
 }
 
-/** The separate SKILL.md file entity a skill references. Its path may still
- * name the old folder while a graph rename is waiting to be materialized. */
-export let skillLocation = async (
+/** Resolve referenced SKILL.md entities together. A locator may still name
+ * the old folder while a graph rename is waiting to be materialized. */
+export let skillLocations = async (
   g: Graph,
-  skill: Bundle | string,
-): Promise<Bundle | undefined> => {
+  skills: (Bundle | string)[],
+): Promise<Map<string, Bundle>> => {
+  let locations = new Map<string, Bundle>()
   if (
     !g.vocab.comps.includes('references') || !g.vocab.comps.includes('file')
-  ) {
-    return undefined
-  }
-  let eid = typeof skill == 'string' ? skill : skill.entity.eid
+  ) return locations
+  let ids = skills.map((b) => typeof b == 'string' ? b : b.entity.eid)
+  if (!ids.length) return locations
   let edges = await g.read(and(
     present('references'),
-    eq('edge.from', eid),
+    eq('edge.from', list(...ids)),
     every(),
   ))
-  let targets = edges.map((b) => text(b, 'edge', 'to'))
-    .filter((id): id is string => id != undefined)
-  let files = targets.length ? await g.get([...new Set(targets)], ['file']) : []
-  let locations = files.filter((b) => {
-    let path = text(b, 'file', 'path')
-    return !!text(b, 'file', 'repository') &&
-      !!path &&
-      /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/SKILL\.md$/i.test(path)
-  })
-  if (locations.length > 1) {
-    throw new Refused(`Skill ${eid} references more than one SKILL.md`)
+  let targets = new Map<string, Set<string>>()
+  let remember = (from: string, b: Bundle) => {
+    let to = text(b, 'edge', 'to')
+    if (!to) return
+    if (!targets.has(from)) targets.set(from, new Set())
+    targets.get(from)!.add(to)
   }
-  return locations[0]
+  // A reader may mask the source property after filtering by it. In that
+  // case the individual predicate supplies the identity we cannot read.
+  if (edges.some((b) => !text(b, 'edge', 'from'))) {
+    for (let eid of ids) {
+      for (
+        let b of await g.read(and(
+          present('references'),
+          eq('edge.from', eid),
+          every(),
+        ))
+      ) remember(eid, b)
+    }
+  } else {
+    for (let b of edges) remember(text(b, 'edge', 'from')!, b)
+  }
+  let eids = [...new Set([...targets.values()].flatMap((ids) => [...ids]))]
+  let files = eids.length ? await g.get(eids, ['file']) : []
+  let index = new Map(
+    files.filter((b) => {
+      let path = text(b, 'file', 'path')
+      return !!text(b, 'file', 'repository') &&
+        !!path &&
+        /^\.claude\/skills\/[a-z0-9][a-z0-9_-]*\/SKILL\.md$/i.test(path)
+    }).map((b) => [b.entity.eid, b]),
+  )
+  for (let eid of ids) {
+    let found = [...targets.get(eid) ?? []].map((id) => index.get(id))
+      .filter((b): b is Bundle => b != undefined)
+    if (found.length > 1) {
+      throw new Refused(`Skill ${eid} references more than one SKILL.md`)
+    }
+    if (found[0]) locations.set(eid, found[0])
+  }
+  return locations
 }
+
+export let skillLocation = async (g: Graph, skill: Bundle | string) =>
+  (await skillLocations(g, [skill])).get(
+    typeof skill == 'string' ? skill : skill.entity.eid,
+  )
 
 let inRepo = async (
   g: Graph,
@@ -169,9 +202,10 @@ export let repoSkills = async (
   if (!g.vocab.comps.includes(SKILL)) return []
   let skills = (await g.read(and(present(SKILL), every()))).filter(shaped)
   if (repository == undefined) return sorted(skills)
+  let locations = await skillLocations(g, skills)
   let scoped: Bundle[] = []
   for (let skill of skills) {
-    let file = await skillLocation(g, skill)
+    let file = locations.get(skill.entity.eid)
     if (file && text(file, 'file', 'repository') == repository) {
       scoped.push(skill)
     }
@@ -189,12 +223,12 @@ let relative = (path: string): boolean =>
   !path.includes(':') &&
   path.split('/').every((part) => !!part && part != '.' && part != '..')
 
-/** The skill documents and text supporting files the graph owns. */
-export let skillFiles = async (
-  g: Graph,
-  repository: string,
-): Promise<Map<string, string>> => {
-  let skills = await repoSkills(g, repository)
+/** Render one read's skills and locators together, including pending renames. */
+export let renderFiles = (
+  skills: Bundle[],
+  locations: Map<string, Bundle>,
+  supports: Bundle[],
+): Map<string, string> => {
   let files = new Map<string, string>()
   let dirs = new Map<string, string>()
   let put = (path: string, body: string): void => {
@@ -209,7 +243,7 @@ export let skillFiles = async (
     let title = text(skill, 'doc', 'title')!
     let to = `.claude/skills/${title}/`
     put(pathOf(title), rendered(skill))
-    let location = await skillLocation(g, skill)
+    let location = locations.get(skill.entity.eid)
     let path = location && text(location, 'file', 'path')
     if (path) {
       let from = path.slice(0, -'SKILL.md'.length)
@@ -225,17 +259,13 @@ export let skillFiles = async (
     if (!dirs.has(dir)) dirs.set(dir, dir)
   }
   if (!skills.length) return files
-  let supports = await g.read(and(
-    present('file'),
-    present('content'),
-    eq('file.repository', repository),
-    contains('file.path', '.claude/skills/'),
-    fields('file.path', 'content.body'),
-  ))
-  supports.sort((a, b) =>
-    (text(a, 'file', 'path') ?? '').localeCompare(text(b, 'file', 'path') ?? '')
-  )
-  for (let b of supports) {
+  for (
+    let b of supports.toSorted((a, b) =>
+      (text(a, 'file', 'path') ?? '').localeCompare(
+        text(b, 'file', 'path') ?? '',
+      )
+    )
+  ) {
     let path = text(b, 'file', 'path')
     let body = text(b, 'content', 'body')
     if (!path || body == undefined || !relative(path)) continue
@@ -246,6 +276,28 @@ export let skillFiles = async (
     }
   }
   return files
+}
+
+/** The skill documents and text supporting files the graph owns. */
+export let skillFiles = async (g: Graph, repository: string) => {
+  let all = await repoSkills(g)
+  let locations = await skillLocations(g, all)
+  let skills = all.filter((b) =>
+    text(locations.get(b.entity.eid) ?? b, 'file', 'repository') == repository
+  )
+  return renderFiles(
+    skills,
+    locations,
+    skills.length
+      ? await g.read(and(
+        present('file'),
+        present('content'),
+        eq('file.repository', repository),
+        contains('file.path', '.claude/skills/'),
+        fields('file.path', 'content.body'),
+      ))
+      : [],
+  )
 }
 
 // Never follow a link in the skill tree. Missing files represent deletions,
@@ -270,8 +322,9 @@ let localSkills = async (
     return []
   }
   let byPath = new Map<string, Bundle>()
+  let locations = await skillLocations(g, graph)
   for (let skill of graph) {
-    let location = await skillLocation(g, skill)
+    let location = locations.get(skill.entity.eid)
     let path = location && text(location, 'file', 'path')
     if (path) byPath.set(path, skill)
   }

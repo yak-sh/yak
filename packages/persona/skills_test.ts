@@ -23,6 +23,7 @@ import {
   skillCatalog,
   skillFiles,
   skillLocation,
+  skillLocations,
   skillsAt,
 } from './skills.ts'
 
@@ -159,22 +160,23 @@ test('graph skills are complete, sorted and repository-scoped', async () => {
   ])
 })
 
+let safeFiles = world()
+let support = (path: string, body: string, repository = repo): Bundle => ({
+  ...file(repository, path),
+  content: { body },
+})
+await safeFiles.apply([
+  ...skill('a', 'review'),
+  support('.claude/skills/review/scripts/check.ts', 'check()\n'),
+  support('.claude/skills/missing/notes.txt', 'orphan'),
+  support('.claude/skills/review/../../escape', 'escape'),
+  support('.claude/skills/review/a\\b', 'escape'),
+  support('.claude/skills/review/other.txt', 'other', elsewhere),
+  file(repo, '.claude/skills/review/image.png'),
+])
+
 test('skillFiles renders documents and only safe text under owned directories', async () => {
-  let g = world()
-  let support = (path: string, body: string, repository = repo): Bundle => ({
-    ...file(repository, path),
-    content: { body },
-  })
-  await g.apply([
-    ...skill('a', 'review'),
-    support('.claude/skills/review/scripts/check.ts', 'check()\n'),
-    support('.claude/skills/missing/notes.txt', 'orphan'),
-    support('.claude/skills/review/../../escape', 'escape'),
-    support('.claude/skills/review/a\\b', 'escape'),
-    support('.claude/skills/review/other.txt', 'other', elsewhere),
-    file(repo, '.claude/skills/review/image.png'),
-  ])
-  let files = await skillFiles(g, repo)
+  let files = await skillFiles(safeFiles, repo)
   assertEquals([...files.keys()], [
     '.claude/skills/review/SKILL.md',
     '.claude/skills/review/scripts/check.ts',
@@ -215,20 +217,76 @@ test('skill locations accept identity or bundle and never put file on the skill'
   )
 })
 
+let located = world()
+let many = Array.from({ length: 12 }, (_, i) => `bulk-${i}`)
+await located.apply(many.flatMap((id) => skill(id, id)))
+
+test('bulk skill locations keep identity and scope within bounded reads', async () => {
+  let reads = 0
+  let g: Graph = {
+    ...located,
+    read: (...args) => (reads++, located.read(...args)),
+    get: (...args) => (reads++, located.get(...args)),
+  }
+  let locations = await skillLocations(g, [...many, 'absent'])
+  assertEquals([...locations.keys()], many)
+  for (let id of many) {
+    assertEquals(
+      locations.get(id)?.file,
+      file(repo, `.claude/skills/${id}/SKILL.md`).file,
+    )
+  }
+  assert(reads <= 2, `Location reads grew with skills: ${reads}`)
+})
+
+test('bulk skill locations respect hidden edges and masked file aspects', async () => {
+  let g: Graph = {
+    ...located,
+    read: async (...args) =>
+      (await located.read(...args)).filter((b) =>
+        (b.edge as { from?: string })?.from != many[0]
+      ),
+    get: async (...args) =>
+      (await located.get(...args)).map((b) =>
+        b.entity.eid ==
+            file(repo, `.claude/skills/${many[1]}/SKILL.md`).entity.eid
+          ? { entity: b.entity }
+          : b
+      ),
+  }
+  let locations = await skillLocations(g, many)
+  assertEquals([...locations.keys()], many.slice(2))
+})
+
+test('a masked source property keeps the matching skill locator', async () => {
+  let g: Graph = {
+    ...located,
+    read: async (...args) =>
+      (await located.read(...args)).map((b) => ({
+        ...b,
+        edge: { to: (b.edge as { to: string }).to },
+      })),
+  }
+  let locations = await skillLocations(g, many.slice(0, 2))
+  assertEquals([...locations.keys()], many.slice(0, 2))
+})
+
+let renamedGraph = world()
+await renamedGraph.apply([
+  ...skill('held', 'old-name'),
+  {
+    ...file(repo, '.claude/skills/old-name/scripts/dom.ts'),
+    content: { body: 'dom()\n' },
+  },
+  {
+    ...file(repo, '.claude/skills/old-name/notes/readme.md'),
+    content: { body: 'notes' },
+  },
+  { entity: { eid: 'held' }, doc: { title: 'new-name' } },
+])
+
 test('graph title renames move companion suffixes before the locator changes', async () => {
-  let g = world()
-  await g.apply([
-    ...skill('held', 'old-name'),
-    {
-      ...file(repo, '.claude/skills/old-name/scripts/dom.ts'),
-      content: { body: 'dom()\n' },
-    },
-    {
-      ...file(repo, '.claude/skills/old-name/notes/readme.md'),
-      content: { body: 'notes' },
-    },
-    { entity: { eid: 'held' }, doc: { title: 'new-name' } },
-  ])
+  let g = renamedGraph
   let files = await skillFiles(g, repo)
   assertEquals([...files.keys()], [
     '.claude/skills/new-name/SKILL.md',

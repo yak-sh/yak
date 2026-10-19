@@ -20,7 +20,7 @@ import {
 } from '@yaks/mirror'
 import { parseSkill, renderSkill } from './skill-text.ts'
 import { agreement, exact, prepareTree } from './skill-mirror-io.ts'
-import { repoSkills, skillFiles, skillLocation } from './skills.ts'
+import { renderFiles, repoSkills, skillLocations } from './skills.ts'
 
 export type SkillSync = Report & { landed?: string; worktree?: string }
 export type SkillSyncOpts = { worktree?: string; run?: Run }
@@ -126,7 +126,11 @@ let syncRepository = async (
       contains('file.path', '.claude/skills/'),
       fields('file.path', 'file.repository', 'content.body'),
     ))
-    let skills = await repoSkills(g, repository)
+    let all = await repoSkills(g)
+    let places = await skillLocations(g, all)
+    let skills = all.filter((b) =>
+      str(places.get(b.entity.eid), 'file', 'repository') == repository
+    )
     let edges = skills.length
       ? await g.read(and(
         present('references'),
@@ -136,7 +140,7 @@ let syncRepository = async (
       : []
     let locations = new Map<string, Bundle>()
     for (let skill of skills) {
-      let location = await skillLocation(g, skill)
+      let location = places.get(skill.entity.eid)
       if (location) locations.set(str(location, 'file', 'path'), skill)
     }
     for (let [old, skill] of locations) {
@@ -149,7 +153,7 @@ let syncRepository = async (
       b.entity.eid,
       b,
     ]))
-    let values = await skillFiles(g, repository)
+    let values = renderFiles(skills, places, files)
     for (let path of values.keys()) {
       if (!covered(path)) throw new Refused(`skills: unsafe path ${path}`)
     }

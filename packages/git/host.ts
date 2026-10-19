@@ -157,9 +157,14 @@ export let primary = async (g: Graph): Promise<string[]> => {
     (b.repository as Comp).common,
   ]))
   if (!common.size) return []
+  let dirs = [...common.values()].filter((p): p is string =>
+    typeof p == 'string'
+  )
+  if (!dirs.length) return []
   let trees = await g.read(and(
     present('worktree'),
     eq('worktree.repository', list(...common.keys())),
+    eq('worktree.gitdir', list(...dirs)),
     fields('worktree.repository', 'worktree.gitdir', 'workspace.root'),
   ))
   let roots: string[] = []

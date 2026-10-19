@@ -166,8 +166,10 @@ let report = await syncSkills(
 `skillCatalog(graph, repository?)` returns descriptions without instruction
 bodies; `graphSkill(graph, title, repository?)` loads one exact graph skill.
 `repoSkills(graph, repository?)` reads complete graph skills; `skillLocation`
-follows the locator, and `skillFiles(graph, repository)` renders
-repository-relative text. `skillsAt` and `loadSkill` overlay a session
+follows one locator and `skillLocations(graph, skills)` resolves a batch of
+locators together. `skillFiles(graph, repository)` renders repository-relative
+text; `renderFiles(skills, locations, files)` renders an already-read snapshot
+without further graph reads. `skillsAt` and `loadSkill` overlay a session
 checkout's actual files read-only: local edits, additions and deletions are
 visible without importing them. A missing or ambiguous title is refused.
 Instructions are loaded by title only when needed; discovery needs just titles
