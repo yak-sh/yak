@@ -1244,6 +1244,8 @@ refusal and did **not** send to the defect reporter.
 
 A local runner adds
 [earlier words](../memory/README.md#earlier-words-beside-a-prompt) beside the
-latest person-authored input through its turn-context preparation. It uses the
-host's configured person and meaning index. An agent-authored input receives no
-person history. Stored inputs and admitted instruction snapshots stay unchanged.
+person-authored input before its first ask. It uses the host's configured person
+and meaning index. The session stores the result as `input_context{items}`
+beside that input, including an empty result. Tool turns and replacement workers
+reuse that snapshot. An agent-authored input receives no person history. Input
+prose and admitted instruction snapshots stay unchanged.

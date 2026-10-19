@@ -21,7 +21,7 @@ let g = {
 } as unknown as Graph
 
 test('native turn context carries earlier words without changing the input', async () => {
-  let items = await earlierInput(g, [input], 'ada')
+  let items = await earlierInput(g, input, 'ada')
   equal(items.length, 1)
   equal(items[0].text.includes('old · 2026-01-01'), true)
   equal(items[0].text.includes('keep attachment files immutable'), true)
@@ -29,10 +29,10 @@ test('native turn context carries earlier words without changing the input', asy
 })
 test('an agent input does not borrow the configured person’s history', async () => {
   equal(
-    await earlierInput(g, [{
+    await earlierInput(g, {
       ...input,
       created: { by: 'agent', at: '2026-02-01T00:00:00Z' },
-    }], 'ada'),
+    }, 'ada'),
     [],
   )
 })

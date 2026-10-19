@@ -719,3 +719,13 @@ has a 650 ms deadline; an absent or busy server adds no earlier words and never
 opens a graph in the hook process. The server uses the configured `person` and
 their document title for explicitly attributed comment quotations. Without a
 configured person it returns nothing. Session-start context is independent.
+
+### Context beside an input
+
+A runner's `inputItems(input, entries)` hook prepares provider-neutral model
+items once for each new input before its first ask. The server stores those
+items in `input_context{items}` on the input, guarded against changes to its
+body or session. An empty list records that no context was found. Projection
+sends the snapshot beside its input, so later tool turns and replacement workers
+reuse the same context. Already submitted inputs and inherited fork history are
+not researched again. `requestItems` remains dynamic per request.

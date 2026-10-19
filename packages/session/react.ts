@@ -1,5 +1,6 @@
 import { derivedEid } from '@yaks/graph/identity'
 import { compactAsk } from './compact_ask.ts'
+import { inputItems, prepareInput } from './input_context.ts'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
 import { UnfinishedCall } from '@yaks/tools/errors'
@@ -211,6 +212,8 @@ export type Deps = {
     window: Bundle[],
     entries: Bundle[],
   ) => Promise<Map<Eid, Item[]>>
+  /** Prepare a durable context snapshot beside each new input, once. */
+  inputItems?: (entry: Bundle, entries: Bundle[]) => Item[] | Promise<Item[]>
   /** Dynamic provider-neutral context after the exact tool offer is resolved.
    * Unlike contextItems, these items have no transcript/media source. */
   requestItems?: (
@@ -319,7 +322,8 @@ let turnEntries = async (
   session: Eid,
   deps: Deps,
 ): Promise<{ entries: Bundle[]; bodies: boolean }> => {
-  let bodies = !!(deps.contextItems || deps.requestItems || deps.compactModel)
+  let bodies = !!(deps.contextItems || deps.inputItems || deps.requestItems ||
+    deps.compactModel)
   return { entries: await reach(g, session, { turn: true, bodies }), bodies }
 }
 
@@ -398,7 +402,7 @@ export let project = (
       out.push({
         kind: 'user',
         text: opts.inputText?.(b, transcript) ?? textOf(b),
-      })
+      }, ...inputItems(b))
     } else if (kind == 'output') {
       out.push({ kind: 'assistant', text: textOf(b) })
     } else if (kind == 'call' && c?.source != opts.anchor) {
@@ -1311,6 +1315,9 @@ export let react = async (
   let media: Map<Eid, Item[]> | undefined
   let dynamic: Item[]
   try {
+    if (deps.inputItems) {
+      await prepareInput(g, session, window, entries, deps.inputItems)
+    }
     media = deps.contextItems
       ? await deps.contextItems(window, entries)
       : undefined
@@ -1318,6 +1325,7 @@ export let react = async (
       ? await deps.requestItems(window, entries, { session, tools }) ?? []
       : []
   } catch (error) {
+    if (error instanceof Stale) throw error
     // A host refusing to prepare context cannot be fixed by asking again.
     // Record it before returning, so its queued continuation sees an ended
     // transcript and the runner delivers it and releases its child place.

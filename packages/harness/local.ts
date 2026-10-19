@@ -261,10 +261,8 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     },
     context: (window, entries) =>
       imageContext(h.g, window, entries, h.artifacts),
-    requestItems: async (_, entries, current) => [
-      ...await skillItems(h.g, current),
-      ...await earlierInput(h.g, entries, h.person, h.meaning),
-    ],
+    inputItems: (input) => earlierInput(h.g, input, h.person, h.meaning),
+    requestItems: (_, _entries, current) => skillItems(h.g, current),
     report,
     release: async () => {
       http.close()

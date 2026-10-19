@@ -112,19 +112,19 @@ export let instructionsFor = async (
 /** Historical owner words ride beside the latest input, not in instructions. */
 export async function earlierInput(
   g: Graph,
-  entries: import('@yaks/graph').Bundle[],
+  input: import('@yaks/graph').Bundle,
   person?: string,
   meaning?: import('@yaks/host').Meaning,
 ) {
-  let latest = entries.findLast((b) =>
-    kindOf(b) == 'input' && !b.prompt && !b.notice && !b.meta && !b.reasoning &&
-    !b.checkpoint && !b.cancel
-  )
-  if (!latest || !person || (latest.created as Comp)?.by != person) return []
+  if (
+    kindOf(input) != 'input' || input.prompt || input.notice || input.meta ||
+    input.reasoning || input.checkpoint || input.cancel || !person ||
+    (input.created as Comp)?.by != person
+  ) return []
   let body = await earlier(g, {
     person,
-    words: String((latest.content as Comp).body ?? ''),
-    before: String((latest.created as Comp)?.at ?? ''),
+    words: String((input.content as Comp).body ?? ''),
+    before: String((input.created as Comp)?.at ?? ''),
     meaning,
   })
   return body ? [{ kind: 'user' as const, text: body }] : []
