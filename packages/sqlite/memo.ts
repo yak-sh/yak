@@ -116,6 +116,7 @@ export type Memo = {
     query?: And | Filter,
     membership?: boolean,
     strict?: string[],
+    shape?: Filter,
   ) => Row[]
 }
 
@@ -124,6 +125,8 @@ type Answer = {
   rows: Packed
   /** whether an entity is one the query selects, where memory can tell */
   test?: Filter
+  /** Necessary component-presence tests, safe over unknown property values. */
+  shape?: Filter
   /** An identity set depends on predicate truth, not selected values. */
   membership?: boolean
   /** Sources whose changes cannot be decided by this row's predicate. */
@@ -276,19 +279,22 @@ export let local = (vocab: Vocab, q: And): boolean => {
 export let rooted = (
   vocab: Vocab,
   query: And,
-): { test: Filter; strict: string[] } | undefined => {
+): { test: Filter; shape: Filter; strict: string[] } | undefined => {
   let strict = new Set<string>()
   let path = (segs: string[], facet = false) => {
     let hops = vocab.aim(segs.join('.'), facet)
     for (let h of hops.slice(1)) strict.add(h.comp)
     return hops.length <= 1
   }
-  let visit = (c: Clause): Clause => {
+  let visit = (c: Clause, shapes = false): Clause => {
     if (c.kind == 'and' || c.kind == 'or') {
-      return { ...c, clauses: c.clauses.map(visit) }
+      return { ...c, clauses: c.clauses.map((c) => visit(c, shapes)) }
     }
     if (c.kind == 'pred') {
-      return path(c.path, bare(c)) ? c : { kind: 'every' }
+      return path(c.path, bare(c)) &&
+          (!shapes || !vocab.aim(c.path.join('.'), bare(c))[0].prop)
+        ? c
+        : { kind: 'every' }
     }
     if (c.kind == 'fields') {
       c.fields.forEach((f) => path(f.path))
@@ -303,7 +309,14 @@ export let rooted = (
   }
   try {
     return {
-      test: filter({ ...query, clauses: query.clauses.map(visit) }, vocab),
+      test: filter(
+        { ...query, clauses: query.clauses.map((c) => visit(c)) },
+        vocab,
+      ),
+      shape: filter({
+        ...query,
+        clauses: query.clauses.map((c) => visit(c, true)),
+      }, vocab),
       strict: [...strict],
     }
   } catch {
@@ -884,16 +897,6 @@ export let memoized = (
     }
     return next
   }
-  let seen = -1
-  // Another connection's commit, or anything else this one cannot see.
-  // What an answer is kept across writes by, for a query `local` allows.
-  let tested = (q: And): Filter | undefined => {
-    try {
-      return rooted(vocab, q)?.test
-    } catch {
-      return undefined
-    }
-  }
   // An answer whose query the entities a patch moved were selected by neither
   // before nor after it stands where it stood: its tables moved, its rows did
   // not. `before` is the tables' counts the patch began at.
@@ -902,8 +905,9 @@ export let memoized = (
     now: Map<string, Bundle | null | typeof LOST>,
     before: Map<string, number>,
   ) => {
-    let selects = (test: Filter, b: Bundle | null | typeof LOST | undefined) =>
-      b === LOST || b === undefined || (b != null && (holed(b) || test(b)))
+    let selects = (a: Answer, b: Bundle | null | typeof LOST | undefined) =>
+      b === LOST || b === undefined ||
+      (b != null && (holed(b) ? a.shape?.(b) ?? true : a.test!(b)))
     for (let a of k.answers.values()) {
       if (!a.test) continue
       if (a.tables.some(([t, n]) => (before.get(t) ?? 0) != n)) continue
@@ -917,16 +921,19 @@ export let memoized = (
         if (a.membership) {
           if (
             [before, after].some((b) =>
-              b === LOST || b === undefined || b && holed(b as Bundle)
+              typeof b == 'symbol' || b === undefined ||
+              b && holed(b) && (a.shape?.(b) ?? true)
             )
           ) return true
-          return selects(a.test!, before) != selects(a.test!, after)
+          return selects(a, before) != selects(a, after)
         }
-        return selects(a.test!, before) || selects(a.test!, after)
+        return selects(a, before) || selects(a, after)
       })
       if (!moved) a.tables = a.tables.map(([t]) => [t, c.versions.get(t) ?? 0])
     }
   }
+  let seen = -1
+  // Another connection's commit, or anything else this one cannot see.
   let sync = () => {
     let now = revision(driver, 'outside')
     if (now == seen) return
@@ -947,7 +954,7 @@ export let memoized = (
         ? undefined
         : tables.filter((name) => b[name] != null)
     },
-    answer: (key, tables, run, query, membership, strict) => {
+    answer: (key, tables, run, query, membership, strict, shape) => {
       if (!tables) return run()
       sync()
       let current = (table: string) => c.versions.get(table) ?? 0
@@ -974,18 +981,20 @@ export let memoized = (
       if (at.some(([t, n]) => current(t) != n)) return rows
       let kept = packed(rows, ANSWER)
       if (!kept) return rows
+      let proof = typeof query == 'function' || !query
+        ? undefined
+        : rooted(vocab, query)
       k.answers.set(key, {
         tables: at,
         rows: kept,
-        test: typeof query == 'function' ? query : query && tested(query),
+        test: typeof query == 'function' ? query : proof?.test,
+        shape: shape ?? proof?.shape,
         membership: membership &&
           (typeof query == 'function' || !!query && local(vocab, query)),
         strict: [
           ...new Set([
             ...strict ?? [],
-            ...typeof query == 'function' || !query
-              ? []
-              : rooted(vocab, query)?.strict ?? [],
+            ...proof?.strict ?? [],
           ]),
         ],
       })

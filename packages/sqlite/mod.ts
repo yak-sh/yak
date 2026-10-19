@@ -562,6 +562,7 @@ export let storage = (
     }
     let standing: And | Filter | undefined = query
     let strict: string[] | undefined
+    let shape: Filter | undefined
     let identities = (c: Clause): boolean =>
       c.kind == 'and' || c.kind == 'or'
         ? c.clauses.every(identities)
@@ -589,6 +590,7 @@ export let storage = (
         standing = ordinary && (!policy || allowed)
           ? (b) => ordinary(b) && (!allowed || allowed(b))
           : undefined
+        if (standing && proof) shape = proof.shape
         // A reference's target can become hidden without its source changing.
         // Local source predicates cannot prove that policy change irrelevant.
         if (!simple(query)) {
@@ -622,6 +624,7 @@ export let storage = (
         standing,
         identities(query) && local(vocab, query),
         strict,
+        shape,
       ), 'read')
   }
   let tx: Tx = {

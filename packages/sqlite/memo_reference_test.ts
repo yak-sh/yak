@@ -8,6 +8,7 @@ import { archetypeDoc } from '@yaks/archetype/vocab'
 import { archetypes } from '../archetype/plugin.ts'
 import { open } from './db.ts'
 import { storage } from './mod.ts'
+import { lit } from '@yaks/sql'
 
 let vocab = loadVocab([kernelDoc, archetypeDoc, {
   $defs: {
@@ -15,7 +16,7 @@ let vocab = loadVocab([kernelDoc, archetypeDoc, {
     doc: {
       component: true,
       type: 'object',
-      properties: { title: { type: 'string' } },
+      properties: { title: { type: 'string' }, body: { type: 'string' } },
     },
     notified: { component: true, type: 'object', properties: {} },
     apply_receipt: { component: true, type: 'object', properties: {} },
@@ -23,7 +24,12 @@ let vocab = loadVocab([kernelDoc, archetypeDoc, {
 }], [kernelKeywords])
 let id = (i: number) =>
   `00000000-0000-4000-8000-${i.toString(16).padStart(12, '0')}`
-let d = open(':memory:'), s = storage(d, vocab)
+let d = open(':memory:'),
+  s = storage(d, vocab, {
+    derived: {
+      'doc.body': { stable: true, tag: 'text', expr: () => lit('derived') },
+    },
+  })
 s.install()
 let query = d.query, reads = 0
 d.query = (stmt) => {
@@ -96,6 +102,17 @@ await g.apply([{ entity: { eid: id(10) }, doc: { title: 'news' } }])
 let property = await g.read(propertyQuery, opts)
 test('a referenced property edit changes an otherwise unselected owner answer', () => {
   equal(property.map((b) => b.entity.eid), [id(1000), id(1382)])
+})
+let alternate = '.comment | .doc.title=match .fields=entity.eid'
+await warm(alternate)
+await g.apply([{
+  entity: { eid: id(2001) },
+  doc: { title: 'match', body: 'value' },
+}])
+let added = await g.read(alternate, opts)
+test('unknown values that can match an alternative still invalidate its answer', () => {
+  equal(added.length, 536)
+  ok(added.some((b) => b.entity.eid == id(2001)))
 })
 d.close()
 
