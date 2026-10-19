@@ -1,5 +1,6 @@
 // Durable command receipts live on the launch filesystem, not in a connector
 // object's memory. Reconnecting observes that receipt and never relaunches it.
+import { scope } from '@yaks/process/isolate'
 import { CallError } from '@yaks/tools/errors'
 import type { Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
@@ -158,7 +159,21 @@ flock -x 9
 if test ! -f "$d/claimed"; then
   touch "$d/claimed"
   printf '%s' ${quote(supervisor)} > "$d/run"
-  setsid bash "$d/run" 9>&- </dev/null >"$d/output" 2>&1 &
+  if test -d /run/systemd/system; then
+    uid=$(id -u)
+    export XDG_RUNTIME_DIR="/run/user/$uid"
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus"
+    ${
+        scope('yak-process-' + id).map(quote).join(' ')
+      } setsid bash "$d/run" 9>&- </dev/null >"$d/output" 2>&1 &
+  else
+    setsid bash "$d/run" 9>&- </dev/null >"$d/output" 2>&1 &
+  fi
+  launcher=$!
+  while test ! -f "$d/launched"; do
+    if ! kill -0 "$launcher" 2>/dev/null; then wait "$launcher"; exit 1; fi
+    sleep 0.01
+  done
 fi`)
       await observed(id)
       return id

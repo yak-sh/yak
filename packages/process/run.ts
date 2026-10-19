@@ -35,6 +35,7 @@
 // is a log, and the graph records the process, not its log. A caller reads the
 // end of it with `tail`, and cleans the files once it is done with them.
 
+import { bus, scope } from './isolate.ts'
 import type { Bundle } from '@yaks/graph'
 import {
   EXIT,
@@ -218,18 +219,10 @@ let platforms: Record<string, Platform> = {
   // child in our own cgroup.
   linux: ({ unit, uid }) => ({
     detach: [
-      'systemd-run',
-      '--user',
-      '--scope',
-      '--collect',
-      '--quiet',
-      `--unit=${unit}`,
+      ...scope(unit),
       'setsid',
     ],
-    env: {
-      XDG_RUNTIME_DIR: `/run/user/${uid}`,
-      DBUS_SESSION_BUS_ADDRESS: `unix:path=/run/user/${uid}/bus`,
-    },
+    env: bus(uid),
     word: literal,
   }),
   // launchd stops a job by signalling its process group (launchd.plist(5),

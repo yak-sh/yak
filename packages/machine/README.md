@@ -72,11 +72,15 @@ claim and launch leaves a receipt to inspect, not permission to run again. Local
 @yaks/process recovery leaves these workspace-qualified runs alone.
 
 The target needs Linux `/proc`, bash, setsid, flock, base64 and ordinary file
-utilities. The detached supervisor has its own process group. Stop checks both
-its boot id and process birth token before signalling that group, never an
-unrelated reused PID. If the supervisor dies without writing an exit code,
-`look` records an unknown exit, not an invented success. No connector reaps or
-sweeps user receipts; deletion belongs to explicit resource disposal.
+utilities. On a systemd computer, launches require its user manager and enter an
+independent scope through `@yaks/process/isolate`; stopping the launcher's unit
+leaves the command, output and exit receipt intact. Failure to enter the scope
+fails the launch rather than keeping it in the launcher's unit. The detached
+supervisor has its own process group. Stop checks both its boot id and process
+birth token before signalling that group, never an unrelated reused PID. If the
+supervisor dies without writing an exit code, `look` records an unknown exit,
+not an invented success. No connector reaps or sweeps user receipts; deletion
+belongs to explicit resource disposal.
 
 ```ts
 import { equal } from '@yaks/testing'

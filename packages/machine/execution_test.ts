@@ -123,3 +123,37 @@ test('user command exit 127 is returned as a shell result at the local connector
 test('missing user paths are refusals through the actual local control script', () => {
   equal((localFailures.pathFault as Error).name, 'CallError')
 })
+
+// A new session alone still belongs to the launcher's service cgroup. The
+// service manager must not own a receipt's command when that launcher drains.
+let isolation = await (async () => {
+  if (Deno.build.os != 'linux') return
+  try {
+    await Deno.stat('/run/systemd/system')
+  } catch {
+    return
+  }
+  let { localConnector } = await import('./connectors.ts')
+  let { until } = await import('@yaks/testing')
+  let dir = await Deno.makeTempDir({ prefix: 'workspace-scope-' })
+  let workspace = mint()
+  await g.apply([{ entity: { eid: workspace }, workspace: { root: dir } }])
+  let m = executionWorkspace(g, await localConnector().connect('local://'), {
+    workspace,
+    root: dir,
+    receipts: dir + '/receipts',
+  })
+  try {
+    let id = await m.start('cat /proc/self/cgroup')
+    await until(async () => (await m.look(id))?.exit != null)
+    return {
+      own: (await Deno.readTextFile('/proc/self/cgroup')).trim(),
+      child: (await m.tail(id, 10)).join('\n').trim(),
+    }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})()
+test('workspace commands live outside their launching systemd unit', () => {
+  if (isolation) equal(isolation.child == isolation.own, false)
+})

@@ -187,3 +187,18 @@ File-and-command execution belongs to
 records `process.workspace` and its original `process.cwd`. Changing a session's
 default workspace does not change process recovery or stop that process. Sandbox
 provisioning belongs to [@yaks/sandbox](../sandbox/README.md).
+
+## Linux isolation
+
+`@yaks/process/isolate` provides `scope(unit)`, the argv prefix that runs a
+command in an independent systemd user scope, and `bus(uid)`, its user-manager
+environment. Receipt-based launchers use this same boundary without adopting the
+local supervisor's files or graph ownership.
+
+```ts
+import { equal } from '@yaks/testing'
+import { bus, scope } from '@yaks/process/isolate'
+
+equal(bus(1000).XDG_RUNTIME_DIR, '/run/user/1000')
+equal(scope('example-run').at(-1), '--unit=example-run')
+```
