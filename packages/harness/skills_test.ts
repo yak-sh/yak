@@ -32,13 +32,17 @@ let fixture = async () => {
   let catalogue = async () =>
     (await skillItems(h.g, { session: 'session', tools }))
       .map((item) => 'text' in item ? item.text : '').join('\n')
+  // A model's calls already exist when the tool executes. Keep admission
+  // setup outside the action these cases measure, with a fresh call per load.
+  let calls: Bundle[] = Array.from({ length: 3 }, (_, i) => ({
+    entity: { eid: crypto.randomUUID() },
+    call: { id: 'skill-' + i },
+    entry: { session: 'session' },
+  }))
+  await h.g.apply(calls)
   let load = async (skill = 'checking') => {
-    let call: Bundle = {
-      entity: { eid: crypto.randomUUID() },
-      call: { id: skill },
-      entry: { session: 'session' },
-    }
-    await h.g.apply([call])
+    let call = calls.shift()!
+
     let result = await tools[0].run({ skill }, {
       session: 'session',
       call,
@@ -46,10 +50,15 @@ let fixture = async () => {
     })
     return { call, result }
   }
+  // The tool catalogue is installed before a running session makes requests.
+  // Prime that setup with its own call; measured loads still use fresh calls.
+  await catalogue()
+  await load()
   return { ...h, tools, catalogue, load }
 }
 let exact = await fixture()
 let edits = await fixture()
+let removed = await fixture()
 let manual = await fixture()
 await manual.g.apply([{
   entity: { eid: 'checking' },
@@ -97,13 +106,19 @@ test('native session project scopes matching skill titles to its repository', as
     let catalogue = await scoped.catalogue()
     assert(catalogue.includes('Check observable behavior'))
     assert(!catalogue.includes('Unrelated repository'))
-    let { result } = await scoped.load()
-    assert(result.includes('Exact graph instructions'))
-    assert(result.includes('.claude/skills/checking'))
-    assert(!result.includes('Wrong instructions'))
   } finally {
     scoped.close()
   }
+})
+
+// Capture graph-runner integrations with their complete stored receipts; cases
+// below check each result separately from catalogue generation.
+let scopedLoad = await scoped.load()
+test('scoped skill loading returns only the selected repository instructions', () => {
+  let { result } = scopedLoad
+  assert(result.includes('Exact graph instructions'))
+  assert(result.includes('.claude/skills/checking'))
+  assert(!result.includes('Wrong instructions'))
 })
 
 test('native skills discover descriptions and load attributed graph instructions without a machine', async () => {
@@ -111,7 +126,15 @@ test('native skills discover descriptions and load attributed graph instructions
     let catalogue = await exact.catalogue()
     assert(catalogue.includes('Check observable behavior'))
     assert(!catalogue.includes('Exact graph instructions'))
-    let { call, result } = await exact.load()
+  } finally {
+    exact.close()
+  }
+})
+
+let exactLoad = await exact.load()
+test('native skill loading attributes graph instructions without a machine', async () => {
+  try {
+    let { call, result } = exactLoad
     assert(result.includes('Exact graph instructions\n'))
     let [inner] = await exact.g.get([
       derivedEid(`harness graph tool ${call.entity.eid}`),
@@ -129,27 +152,35 @@ test('native skills discover descriptions and load attributed graph instructions
   }
 })
 
-test('graph skill edits and removals reach the next native request', async () => {
-  try {
-    await edits.g.apply([{
-      entity: { eid: 'checking' },
-      doc: { body: 'Changed description' },
-      content: { body: 'Changed instructions' },
-    }])
-    assert((await edits.catalogue()).includes('Changed description'))
-    assert((await edits.load()).result.includes('Changed instructions'))
-    await edits.g.apply([{ entity: { eid: 'checking' }, skill: null }])
-    assertEquals(await edits.catalogue(), '')
-    assert((await edits.load()).result.includes('No skill named checking'))
-  } finally {
-    edits.close()
-  }
+// Both fixtures have already served the initial catalogue and instructions.
+// Edits occur between requests; the next request must not reuse those values.
+await edits.g.apply([{
+  entity: { eid: 'checking' },
+  doc: { body: 'Changed description' },
+  content: { body: 'Changed instructions' },
+}])
+await removed.g.apply([{ entity: { eid: 'checking' }, skill: null }])
+
+test('graph skill edits reach the next native catalogue', async () => {
+  assert((await edits.catalogue()).includes('Changed description'))
+})
+let editedLoad = await edits.load()
+test('graph skill edits reach the next native instruction load', () => {
+  assert(editedLoad.result.includes('Changed instructions'))
+})
+test('graph skill removals reach the next native catalogue', async () => {
+  assertEquals(await removed.catalogue(), '')
+})
+let removedLoad = await removed.load()
+test('graph skill removals refuse the next native instruction load', () => {
+  assert(removedLoad.result.includes('No skill named checking'))
 })
 
+let manualLoad = await manual.load()
 test('user-only graph skills stay hidden and refuse model loading', async () => {
   try {
     assertEquals(await manual.catalogue(), '')
-    let { result } = await manual.load()
+    let { result } = manualLoad
     assert(result.includes('user invocation only'))
     assert(!result.includes('Exact graph instructions'))
   } finally {
@@ -157,9 +188,10 @@ test('user-only graph skills stay hidden and refuse model loading', async () => 
   }
 })
 
-test('ambiguous graph skill names refuse rather than loading another repository', async () => {
+let ambiguousLoad = await ambiguous.load()
+test('ambiguous graph skill names refuse rather than loading another repository', () => {
   try {
-    let { result } = await ambiguous.load()
+    let { result } = ambiguousLoad
     assert(result.includes('more than one repository'))
     assert(!result.includes('Different instructions'))
   } finally {
