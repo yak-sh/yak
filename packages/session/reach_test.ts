@@ -12,6 +12,7 @@ import {
 } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { ram } from '@yaks/ram'
+import { archetypeDoc } from '@yaks/archetype/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { effectDoc } from '@yaks/effects'
@@ -322,23 +323,32 @@ for (let completed of [false, true]) {
 
 // Recovery metadata is server-only, but a runner reads it to resume a paid
 // request rather than classifying it as an anonymous interrupted call.
-let privateAsk = await world([
-  { entity: { eid: 'private-session' }, session: {} },
-  {
-    entity: { eid: 'private-input' },
-    entry: { session: 'private-session', seq: 1 },
-    content: { body: 'ask' },
-    using: { model: M },
-  },
-  {
-    entity: { eid: 'private-ask' },
-    entry: { session: 'private-session', seq: 2 },
-    ask: { to: M, through: 'private-input' },
-    attempt: { by: 'worker' },
-    inference: { executor: 'paid', request: 'frozen', receipt: 'completed' },
-    submitted: { at: '2026-10-01T00:00:00Z' },
-  },
-])
+let recoveryVocab = loadVocab([...vocab.docs, archetypeDoc], [kernelKeywords])
+let recoveryStorage = ram(recoveryVocab, { computed: attemptComputed })
+await recoveryStorage.tx((tx) =>
+  tx.patch([
+    { entity: { eid: 'private-session' }, session: {} },
+    {
+      entity: { eid: 'private-input' },
+      entry: { session: 'private-session', seq: 1 },
+      content: { body: 'ask' },
+      using: { model: M },
+    },
+    {
+      entity: { eid: 'private-ask' },
+      entry: { session: 'private-session', seq: 2 },
+      ask: { to: M, through: 'private-input' },
+      attempt: { by: 'worker' },
+      inference: { executor: 'paid', request: 'frozen', receipt: 'completed' },
+      submitted: { at: '2026-10-01T00:00:00Z' },
+    },
+  ])
+)
+let privateAsk = graph({
+  storage: recoveryStorage,
+  vocab: recoveryVocab,
+  plugins: [sessions()],
+})
 let privateReached =
   (await reach(privateAsk, 'private-session', { turn: true }))
     .find((b) => b.entity.eid == 'private-ask')!
