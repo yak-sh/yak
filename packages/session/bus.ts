@@ -33,23 +33,29 @@ let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 // Find pending items first. Most sessions have no bus work, so a timer never
 // needs to scan their transcripts.
 let candidates = async (g: Graph): Promise<Eid[]> => {
-  let route = fields(...[
-    'comment.target',
-    'knock.target',
-    'deliver.to',
-    'mail.reply_to',
-    'mail.target',
-  ].filter((p) => {
-    let [c, key] = p.split('.')
-    return g.vocab.prop(c, key)
-  }))
-  let unsaid = (...clauses: Clause[]) =>
-    and(...clauses, absent('notified'), route)
+  let route = (...props: string[]) =>
+    fields(...props.filter((p) => {
+      let [c, key] = p.split('.')
+      return g.vocab.prop(c, key)
+    }))
+  let unsaid = (component: string, ...clauses: Clause[]) =>
+    and(
+      present(component),
+      ...clauses,
+      absent('notified'),
+      route(
+        ...component == 'mail'
+          ? ['mail.reply_to', 'mail.target']
+          : component == 'deliver'
+          ? ['deliver.to']
+          : [`${component}.target`],
+      ),
+    )
   let queries = [
     ...g.vocab.comp('comment')
       ? [
         unsaid(
-          present('comment'),
+          'comment',
           present('comment.target.created.via.session'),
           absent('created.via.session'),
         ),
@@ -58,15 +64,15 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
     ...g.vocab.comp('knock')
       ? [
         unsaid(
-          present('knock'),
+          'knock',
           present('knock.target.session'),
         ),
-        unsaid(present('knock'), present('knock.target.claim.session')),
+        unsaid('knock', present('knock.target.claim.session')),
       ]
       : [],
     ...g.vocab.comp('deliver')
       ? [unsaid(
-        present('deliver'),
+        'deliver',
         present('deliver.to.session'),
       )]
       : [],
@@ -78,13 +84,13 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   let [replies, reached] = g.vocab.comp('mail')
     ? await Promise.all([
       g.read(
-        unsaid(present('mail'), present('mail.reply_to.created.via.session')),
+        unsaid('mail', present('mail.reply_to.created.via.session')),
       ),
-      g.read(and(...arrived().clauses, route)),
+      g.read(and(...arrived().clauses, route('mail.target', 'mail.reply_to'))),
     ])
     : [[], []]
   let projects = g.vocab.comp('knock') && g.vocab.comp('project')
-    ? await g.read(and(...knocked().clauses, route))
+    ? await g.read(and(...knocked().clauses, route('knock.target')))
     : []
   let items = (await Promise.all(queries.map((q) => g.read(q)))).flat()
   let comments = g.vocab.prop('filed', 'project')

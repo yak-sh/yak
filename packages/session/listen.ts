@@ -482,7 +482,9 @@ export let pending = async (
     ? await graph.get([session], ['process'])
     : []
   let native = !process?.process &&
-    (await graph.read(`.entry.session=${session}&.using&.limit=1`)).length > 0
+    (await graph.read(
+        `.entry.session=${session}&.using&.fields=entity.eid&.limit=1`,
+      )).length > 0
   let addressed: Bundle[] = []
   for (let q of addressedTo(vocab, session, !native)) {
     addressed.push(...await graph.read(and(...q.clauses, every())))
