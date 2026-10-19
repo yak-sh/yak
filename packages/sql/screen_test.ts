@@ -15,7 +15,9 @@ import {
   eq,
   type Extension,
   insert,
+  member,
   type Screen,
+  screen,
   select,
   table,
   val,
@@ -286,4 +288,22 @@ test('finite owner planning leaves unused visibility sources unopened', () => {
     visibility: { components: { person: '.unknown' } },
   })
   assertEquals(db.query(statement).map((r) => r.eid), ['target'])
+})
+
+let chosen = 1, resolved = 1
+let stateful: Extension = {
+  name: 'stateful',
+  begin: () => {
+    resolved = chosen
+  },
+  compile: { text: (_c, site) => eq(site.owner, val(resolved)) },
+}
+let first = screen(parse('Chosen'), ownerVocab, { extend: [stateful] })!
+chosen = 2
+screen(parse('Chosen'), ownerVocab, { extend: [stateful] })
+let firstOwners = db.query(first).map((r) => r.id)
+let firstProbe = db.query(select({ cols: [as(member(first, val(1)), 'yes')] }))
+test('a retained selection probes the extension values that selected its IDs', () => {
+  assertEquals(firstOwners, [1])
+  assertEquals(firstProbe, [{ yes: 1 }])
 })

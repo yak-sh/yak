@@ -2090,18 +2090,20 @@ let selectionScreen = (
   let frozen = { ...opts, now: opts.now ?? Date.now() }
   let admits = bound(query, vocab, frozen, d, [], { screening })
   let quiet = (frozen.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
+  // Extensions may retain values resolved for this query. Capture both forms
+  // before a later query begins on those same compiler instances.
+  let keyed = bound(query, vocab, { ...frozen, extend: quiet }, d, [], {
+    screening,
+    correlated: true,
+  })
   return {
     ...render({
       ...admits,
       cols: [raw(`${d.ownerKey('entity')} as id`)],
       order: [],
     }),
-    probe: (owner) => {
-      let keyed = bound(query, vocab, { ...frozen, extend: quiet }, d, [], {
-        screening,
-        correlated: true,
-      })
-      return exists({
+    probe: (owner) =>
+      exists({
         ...keyed,
         cols: [lit(1)],
         // Bind the operand outside the relation's aliases. An outer owner
@@ -2121,8 +2123,7 @@ let selectionScreen = (
           keyed.where ?? TRUE,
         ),
         order: [],
-      })
-    },
+      }),
   }
 }
 
