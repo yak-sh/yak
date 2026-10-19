@@ -194,3 +194,33 @@ for (let shell of ['absent', 'empty', 'deleted']) {
     )
   })
 }
+
+let shapes = await named(1)
+let nested: NamedTool = {
+  name: 'nested_refs',
+  description: 'Resolve nested references',
+  run: () => [],
+  inputSchema: {
+    properties: {
+      group: {
+        type: ['object', 'array'],
+        properties: {
+          members: {
+            type: 'array',
+            items: { type: ['string', 'null'], ref: 'person' },
+          },
+        },
+      },
+    },
+  },
+}
+test('nested reference resolution preserves a valid array in an object-or-array schema', async () => {
+  equal(await resolved(nested, { group: [] }, shapes.g), { group: [] })
+})
+test('reference arrays preserve null entries and the caller’s input', async () => {
+  let args = { group: { members: ['Ada', null] } }
+  equal(await resolved(nested, args, shapes.g), {
+    group: { members: ['person-1', null] },
+  })
+  equal(args, { group: { members: ['Ada', null] } })
+})

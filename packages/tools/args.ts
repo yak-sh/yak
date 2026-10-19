@@ -124,7 +124,10 @@ export let resolved = async (
           value.map((item) => resolve(schema.items, item)),
         )
       }
-      if (value && typeof value == 'object' && schema?.properties) {
+      if (
+        value && typeof value == 'object' && !Array.isArray(value) &&
+        schema?.properties
+      ) {
         let out = { ...value }
         for (let [key, child] of Object.entries(schema.properties)) {
           if (Object.hasOwn(value, key)) {
@@ -157,7 +160,12 @@ export let resolved = async (
         throw missing(kind, said[i])
       }
     }
-    return Array.isArray(value) ? eids : eids[0]
+    let index = 0
+    return Array.isArray(value)
+      ? value.map((item) =>
+        typeof item == 'string' && item != '' ? eids[index++] : item
+      )
+      : eids[0]
   }
   return await resolve(tool.inputSchema, args) as Args
 }
