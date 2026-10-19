@@ -232,6 +232,70 @@ await store.tx(async () => {
         !a.session && !b.session,
         'Cannot merge sessions as filesystem observations',
       )
+      // Qualified observations may have arrived since the copy was taken.
+      // Coalesce dependent identities before moving a unique parent reference.
+      if (a.repository) {
+        let prior = db.query(
+          select({ from: table('file'), where: by('repository', oldId) }),
+        )
+        for (let f of prior) {
+          let same = db.query(
+            select({
+              from: table('file'),
+              where: and(
+                by('repository', targetId),
+                by('path', String(f.path)),
+              ),
+            }),
+          )[0]
+          if (same) {
+            let from = db.query(
+              select({
+                from: table('entity'),
+                where: by('id', Number(f.entity)),
+              }),
+            )[0]
+            let to = db.query(
+              select({
+                from: table('entity'),
+                where: by('id', Number(same.entity)),
+              }),
+            )[0]
+            await rename(String(from.eid), String(to.eid))
+          }
+        }
+      }
+      if (a.file) {
+        let prior = db.query(
+          select({ from: table('symbol'), where: by('module', oldId) }),
+        )
+        for (let sym of prior) {
+          let same = db.query(
+            select({
+              from: table('symbol'),
+              where: and(
+                by('module', targetId),
+                by('name', String(sym.name)),
+              ),
+            }),
+          )[0]
+          if (same) {
+            let from = db.query(
+              select({
+                from: table('entity'),
+                where: by('id', Number(sym.entity)),
+              }),
+            )[0]
+            let to = db.query(
+              select({
+                from: table('entity'),
+                where: by('id', Number(same.entity)),
+              }),
+            )[0]
+            await rename(String(from.eid), String(to.eid))
+          }
+        }
+      }
       let patch: Bundle = { entity: { eid: target } }
       for (let [name, value] of Object.entries(a)) {
         if (
@@ -259,24 +323,36 @@ await store.tx(async () => {
           !['entity', 'created', 'updated'].includes(name)
         ) clear[name] = null
       }
-      let provenance = db.query(
-        select({ from: table('created'), where: by('entity', oldId) }),
-      )[0]
+      // Tombstoning a merged facet must not erase any immutable owner text or
+      // its writer. Keep their exact physical rows on the historical address.
+      let retained = [
+        'created',
+        'doc',
+        'content',
+        'attachment',
+        'ask',
+        'output',
+        'call',
+        'entry',
+        'session',
+        'log',
+      ].flatMap((t) => {
+        if (!existing.has(t)) return []
+        let r =
+          db.query(select({ from: table(t), where: by('entity', oldId) }))[0]
+        return r ? [[t, r] as const] : []
+      })
       await g.apply([clear], { trusted: true, stamp: false })
-      if (provenance) {
+      for (let [t, r] of retained) {
         db.query({
           t: 'insert',
-          into: 'created',
+          into: t,
           or: 'ignore',
-          cols: Object.keys(provenance),
-          rows: [
-            Object.values(provenance).map((v) =>
-              lit(v as string | number | null)
-            ),
-          ],
+          cols: Object.keys(r),
+          rows: [Object.values(r).map((v) => lit(v as string | number | null))],
         })
-        reclassify(db, [old])
       }
+      if (retained.length) reclassify(db, [old])
     }
     redirects.set(old, target)
   }
