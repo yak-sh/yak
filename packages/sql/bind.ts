@@ -2674,18 +2674,6 @@ let lower = (
       break
     }
   }
-  // Resolve once so registered rankers can decline ordinary number order
-  // without disabling it, while a ranker claiming it retains its own path.
-  let earlyOrder = find<Order>(cs, 'order')
-  let numberedSort = earlyOrder?.value == '-entity.num'
-    ? sortOf(ctx, earlyOrder.value)
-    : undefined
-  ctx.numberedShapePage = !!ctx.v.prop('entity', 'num') &&
-    find<Order>(cs, 'order')?.value == '-entity.num' &&
-    (find<Limit>(cs, 'limit')?.n ?? 0) > 0 &&
-    !find<Fields>(cs, 'fields') && !find<After>(cs, 'after') &&
-    !ctx.v.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
-    !numberedSort?.ranked
   let where = and(
     ...conjuncts(ctx, filters),
     ...ctx.eids
@@ -2760,7 +2748,16 @@ let lower = (
   // ordering by a property no filter mentions is what pulls its table in, and a
   // join list taken any earlier would not have it.
   let order = find<Order>(cs, 'order')
-  let sort = numberedSort ?? (order ? sortOf(ctx, order.value) : null)
+  let sort = order ? sortOf(ctx, order.value) : null
+  // Shape selection happens below, after ordinary sort hooks have resolved.
+  // Registered rankers may decline number order; a claimed rank retains its
+  // own path, without moving the hook before this query's clauses compile.
+  ctx.numberedShapePage = !!ctx.v.prop('entity', 'num') &&
+    order?.value == '-entity.num' &&
+    (find<Limit>(cs, 'limit')?.n ?? 0) > 0 &&
+    !find<Fields>(cs, 'fields') && !find<After>(cs, 'after') &&
+    !ctx.v.prop('entity', 'num')?.computed && !ctx.derived['entity.num'] &&
+    !sort?.ranked
   let limit = find<Limit>(cs, 'limit')
   let after = find<After>(cs, 'after')
   // Whether this store numbers its entities: @yaks/id's document declares the
