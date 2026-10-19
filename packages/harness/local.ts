@@ -28,6 +28,7 @@ import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
 import { skillItems, skillTools } from './skills.ts'
 import { pooledHttp } from './http.ts'
+import { deferredModel } from './deferred_model.ts'
 
 export { type Harness, hosted } from './store.ts'
 export { graphTools, harnessTools } from './tools.ts'
@@ -120,36 +121,6 @@ export type Here = {
   report: (error: unknown, where: FailureContext) => void
 }
 
-// Provider transports are opened on use. Their synchronous recorders stay
-// available before the first request, just as a directly constructed Model's.
-let deferred = (
-  load: () => Promise<Model>,
-  meta: Pick<Model, 'mark' | 'vocab' | 'anchor'> & {
-    recover?: true
-    info?: true
-  },
-): Model => {
-  let pending: Promise<Model> | undefined
-  let get = () => pending ??= load()
-  return Object.assign(
-    async (...args: Parameters<Model>) => (await get())(...args),
-    {
-      ...Object.fromEntries(
-        Object.entries(meta).filter(([key]) =>
-          key != 'recover' && key != 'info'
-        ),
-      ),
-      list: async () => await (await get()).list?.() ?? [],
-      ...meta.info
-        ? { info: async (name: string) => await (await get()).info?.(name) }
-        : {},
-      ...meta.recover
-        ? { recover: async (call: string) => (await get()).recover!(call) }
-        : {},
-    },
-  ) as Model
-}
-
 /** What this machine lends an agent over `h`: the models behind its
  * credentials and sign-ins, the workspace and sandbox bindings, the MCP
  * servers, the pictures, the instruction files where a session opens, and
@@ -187,7 +158,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
     model: opts.model,
     providers: {
       openai: model,
-      claude: deferred(
+      claude: deferredModel(
         () => import('@yaks/claude').then(({ claude }) => claude()),
         {
           vocab: claudeDoc,
@@ -201,7 +172,7 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
           }),
         },
       ),
-      openrouter: deferred(
+      openrouter: deferredModel(
         () =>
           import('@yaks/openrouter').then(({ responses }) =>
             responses({
