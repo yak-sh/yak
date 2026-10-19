@@ -79,3 +79,67 @@ for (let count of [100, 1000]) {
     ok(vm < 3000, `${vm} VM steps beside ${count} delivered comments`)
   })
 }
+
+let { driver: d, steps } = stepping()
+let store = storage(d, v, { derived: sessionDerived(v) })
+let g = graph({
+  vocab: v,
+  storage: store,
+  plugins: [sessions(), archetypes()],
+})
+await g.apply([
+  { entity: { eid: 'person' }, doc: {} },
+  { entity: { eid: 'agent' }, session: {} },
+  ...Array.from({ length: 4 }, (_, i) => [
+    { entity: { eid: `native${i}` }, session: {} },
+    {
+      entity: { eid: `pick${i}` },
+      entry: { session: `native${i}` },
+      using: {},
+    },
+    {
+      entity: { eid: `target${i}` },
+      task: {},
+      $actor: { by: `native${i}`, via: `native${i}` },
+    },
+    {
+      entity: { eid: `news${i}` },
+      comment: { target: `target${i}` },
+      $actor: { by: 'person', via: 'person' },
+    },
+  ]).flat(),
+], { trusted: true })
+await g.apply([{
+  entity: { eid: 'agent-comment' },
+  comment: { target: 'target0' },
+  $actor: { by: 'agent', via: 'agent' },
+}], { trusted: true })
+let [sample] = await g.get(['agent-comment'])
+store.tx((tx) =>
+  tx.patch(Array.from({ length: 4000 }, (_, i) => ({
+    ...sample,
+    entity: { eid: `agent-comment${i}`, archetype: sample.entity.archetype },
+  })))
+)
+await due(g)
+let read = g.read.bind(g), reread = 0
+g.read = async (q, opts) => {
+  let rows = await read(q, opts)
+  reread += rows.filter((b) => b.comment).length
+  return rows
+}
+let got = await due(g), readComments = reread
+test('several recipients share one pass over unread agent history', () => {
+  equal(got.map((x) => [x.session, x.item.entity.eid]), [
+    ['native0', 'news0'],
+    ['native1', 'news1'],
+    ['native2', 'news2'],
+    ['native3', 'news3'],
+  ])
+  equal(readComments, got.length)
+})
+await g.apply([{ entity: { eid: 'person' }, session: {} }], { trusted: true })
+let changed = await due(g)
+test('a new bus pass rereads whether an author is a session', () => {
+  equal(changed, [])
+})

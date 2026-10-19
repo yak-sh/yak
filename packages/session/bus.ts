@@ -19,6 +19,7 @@ import {
 import { CLAIM, SESSION } from './comp.ts'
 import {
   arrived,
+  comments,
   deliver,
   heirs,
   knocked,
@@ -32,7 +33,10 @@ let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 
 // Find pending items first. Most sessions have no bus work, so a timer never
 // needs to scan their transcripts.
-let candidates = async (g: Graph): Promise<Eid[]> => {
+let candidates = async (
+  g: Graph,
+  news: Awaited<ReturnType<typeof comments>>,
+): Promise<Eid[]> => {
   let route = (...props: string[]) =>
     fields(...props.filter((p) => {
       let [c, key] = p.split('.')
@@ -86,21 +90,7 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
   // First select unsaid human comments, then inspect only their targets.
   // Following target.created.via.session inside the global comment scan made
   // SQLite repeat the target chain over every historical comment each tick.
-  let comments0 = g.vocab.comp('comment')
-    ? await g.read(unsaid('comment', absent('created.via.session')))
-    : []
-  let commentTargets = [
-    ...new Set(comments0.map((b) => String(comp(b, 'comment').target))),
-  ]
-  let created = commentTargets.length
-    ? await g.get(commentTargets, ['created'])
-    : []
-  let creators = [
-    ...new Set(created.flatMap((b) => {
-      let id = comp(b, 'created').via
-      return typeof id == 'string' ? [id] : []
-    })),
-  ]
+  let creators = [...new Set(news.creators.values())].filter(Boolean)
   let sessions = new Set(
     creators.length
       ? (await g.read(and(
@@ -110,13 +100,9 @@ let candidates = async (g: Graph): Promise<Eid[]> => {
       ))).map((b) => b.entity.eid)
       : [],
   )
-  let addressed = new Set(
-    created.filter((b) => sessions.has(String(comp(b, 'created').via)))
-      .map((b) => b.entity.eid),
-  )
   let items = [
-    ...comments0.filter((b) =>
-      addressed.has(String(comp(b, 'comment').target))
+    ...news.items.filter((b) =>
+      sessions.has(news.creators.get(String(comp(b, 'comment').target)) ?? '')
     ),
     ...(await Promise.all(queries.map((q) => g.read(q)))).flat(),
   ]
@@ -179,8 +165,11 @@ export type Due = { session: Eid; item: Bundle; line: string }
 export let due = async (g: Graph): Promise<Due[]> => {
   if (!g.vocab.comp('notified')) return []
   let out: Due[] = []
-  for (let id of await hearing(g, await candidates(g))) {
-    for (let said of await pending(g, id)) out.push({ session: id, ...said })
+  let news = await comments(g)
+  for (let id of await hearing(g, await candidates(g, news))) {
+    for (let said of await pending(g, id, news)) {
+      out.push({ session: id, ...said })
+    }
   }
   return out
 }

@@ -470,10 +470,34 @@ export let pendingItems = async (
   return items
 }
 
+/** The unread human comments and their targets' creators at one bus pass.
+ * Shared only within that pass; the next pass reads other writers anew. */
+export let comments = async (
+  graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
+): Promise<{ items: Bundle[]; creators: Map<Eid, string> }> => {
+  let items = graph.vocab.comp('comment')
+    ? await graph.read(and(
+      present('comment'),
+      absent(NOTIFIED),
+      absent('created.via.session'),
+      fields('comment.target'),
+    ))
+    : []
+  let targets = [...new Set(items.map((b) => str(comp(b, 'comment').target)))]
+  let rows = targets.length ? await graph.get(targets, ['created']) : []
+  return {
+    items,
+    creators: new Map(
+      rows.map((b) => [b.entity.eid, str(comp(b, 'created').via)]),
+    ),
+  }
+}
+
 /** What this session has yet to hear, as the item and its readable line. */
 export let pending = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
+  news?: Awaited<ReturnType<typeof comments>>,
 ): Promise<{ item: Bundle; line: string }[]> => {
   let vocab = graph.vocab
   // Ordinary claimed-thread comments stay out of native transcripts. Replies
@@ -495,23 +519,10 @@ export let pending = async (
   // Restrict to unsaid human comments before inspecting the creator of each
   // target. A correlated target join scanned already-delivered history.
   if (vocab.comp('comment')) {
-    let comments = await graph.read(and(
-      present('comment'),
-      absent(NOTIFIED),
-      absent('created.via.session'),
-      fields('comment.target'),
-    ))
-    let targets = [
-      ...new Set(comments.map((b) => str(comp(b, 'comment').target))),
-    ]
-    let made = new Set(
-      (targets.length ? await graph.get(targets, ['created']) : [])
-        .filter((b) => comp(b, 'created').via == session).map((b) =>
-          b.entity.eid
-        ),
-    )
-    let ids = comments.filter((b) => made.has(str(comp(b, 'comment').target)))
-      .map((b) => b.entity.eid)
+    let { items, creators } = news ?? await comments(graph)
+    let ids = items.filter((b) =>
+      creators.get(str(comp(b, 'comment').target)) == session
+    ).map((b) => b.entity.eid)
     if (ids.length) addressed.push(...await graph.get(ids))
   }
   for (let q of addressedTo(vocab, session, !native, false)) {
