@@ -118,7 +118,7 @@ import {
   idOf,
   ladders,
 } from './derived.ts'
-import type { Extension, Screen, Site } from './extend.ts'
+import type { Extension, Screen, Selection, Site } from './extend.ts'
 import { type Identity, identity, literals } from './ident.ts'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
@@ -1183,7 +1183,8 @@ let inRefs = (ctx: Ctx, groups: Arm[][], value: string): Cond => {
 
 let presence = (ctx: Ctx, cs: Clause[]): string | undefined => {
   if (
-    ctx.spine || ctx.eids || claims(ctx, 'pred') || !ctx.d.owned ||
+    ctx.spine || ctx.eids || ctx.correlated || claims(ctx, 'pred') ||
+    !ctx.d.owned ||
     flattened(cs).some((c) =>
       c.kind == 'pred' && c.path.join('.') == 'entity.eid' && !c.not
     )
@@ -2082,17 +2083,47 @@ let selectionScreen = (
   opts: BindOpts = {},
   d: Dialect = sqlite,
   screening = false,
-): Raw | null => {
+): Selection | null => {
   let rest = ast.clauses.filter((c) => !directive(c))
   if (!rest.length && !opts.visibility && !opts.eids) return null
-  let admits = bound({ ...ast, clauses: rest }, vocab, opts, d, [], {
-    screening,
-  })
-  return render({
-    ...admits,
-    cols: [raw(`${d.ownerKey('entity')} as id`)],
-    order: [],
-  })
+  let query = { ...ast, clauses: rest }
+  let frozen = { ...opts, now: opts.now ?? Date.now() }
+  let admits = bound(query, vocab, frozen, d, [], { screening })
+  let quiet = (frozen.extend ?? []).map(({ begin: _begin, ...rest }) => rest)
+  return {
+    ...render({
+      ...admits,
+      cols: [raw(`${d.ownerKey('entity')} as id`)],
+      order: [],
+    }),
+    probe: (owner) => {
+      let keyed = bound(query, vocab, { ...frozen, extend: quiet }, d, [], {
+        screening,
+        correlated: true,
+      })
+      return exists({
+        ...keyed,
+        cols: [lit(1)],
+        // Bind the operand outside the relation's aliases. An outer owner
+        // may itself be named entity; it must not resolve to our inner row.
+        from: from(select({ cols: [as(owner, 'id')] }), '__probe_key'),
+        joins: [
+          ...(Array.isArray(keyed.from)
+            ? keyed.from
+            : keyed.from
+            ? [keyed.from]
+            : [])
+            .map((src): Join => ({ how: 'cross', src })),
+          ...keyed.joins ?? [],
+        ],
+        where: and(
+          eq(raw(d.ownerKey('entity')), col('id', '__probe_key')),
+          keyed.where ?? TRUE,
+        ),
+        order: [],
+      })
+    },
+  }
 }
 
 export let screen = (
@@ -2100,7 +2131,7 @@ export let screen = (
   vocab: Vocab,
   opts: BindOpts = {},
   d: Dialect = sqlite,
-): Raw | null => selectionScreen(ast, vocab, opts, d)
+): Selection | null => selectionScreen(ast, vocab, opts, d)
 
 // Erasing a clause widens a screen. A true OR arm admits everything; under a
 // negative child quantifier the whole predicate must go, since weakening its
@@ -2335,6 +2366,7 @@ let indexedRelation = (
   from: string,
   o: Parameters<typeof rel>[1],
 ): Select => {
+  if (ctx.correlated) return rel(from, o)
   // A finite identity selection is narrower than any component predicate.
   // Driving from the component's session/owner index re-sorts its entire
   // history before applying these ids, even when only three can be returned.
@@ -2822,7 +2854,16 @@ export let prepared = (
   if (opts.visibility) {
     return {
       opts,
-      lower: () => visible(ast, vocab, opts, d, reads, scope?.screening),
+      lower: () =>
+        visible(
+          ast,
+          vocab,
+          opts,
+          d,
+          reads,
+          scope?.screening,
+          scope?.correlated,
+        ),
     }
   }
   // The spine first (./spine.ts): a query that asks for a computed component's
@@ -3057,7 +3098,8 @@ let lower = (
   // A component page (including the platform's negative listing screen)
   // already has a keyed driving table. No catalog is needed to discover it.
   if (
-    !spine && !ctx.eids && !claims(ctx, 'pred') && ctx.d.owned &&
+    !spine && !ctx.eids && !ctx.correlated && !claims(ctx, 'pred') &&
+    ctx.d.owned &&
     find<Limit>(cs, 'limit')
   ) {
     let facets = flattened(filters).map((c) => facetOf(ctx, c))
@@ -3670,6 +3712,7 @@ let visible = (
   base: Dialect,
   reads: string[],
   screening = false,
+  correlated = false,
 ): Select => {
   let visibility = opts.visibility!
   let plain = { ...opts, visibility: undefined }
@@ -3910,7 +3953,7 @@ let visible = (
     },
     scoped,
     reads,
-    { visibility, dialect: base, screening },
+    { visibility, dialect: base, screening, correlated },
   )
   return { ...out, with: [...ctes.values(), ...out.with ?? []] }
 }

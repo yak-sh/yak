@@ -15,6 +15,7 @@ import {
   type Raw,
   render,
   select,
+  type Selection,
   sourceScreen,
   table,
 } from '@yaks/sql'
@@ -90,11 +91,17 @@ export let visibleVectors = (
 }
 
 /** Combine independent owner selections before a ranking is cut. */
-export let screened = (within?: Raw | null, visible?: Raw): Raw | undefined =>
+export let screened = (
+  within?: Selection | null,
+  visible?: Selection,
+): Selection | undefined =>
   visible && within
-    ? render(select({
-      cols: [col('id', 'w')],
-      from: from(within, 'w'),
-      where: admitted(visible, col('id', 'w')),
-    }))
+    ? {
+      ...render(select({
+        cols: [col('id', 'w')],
+        from: from(within, 'w'),
+        where: admitted(visible, col('id', 'w')),
+      })),
+      probe: (owner) => and(admitted(within, owner), admitted(visible, owner)),
+    }
     : visible ?? within ?? undefined

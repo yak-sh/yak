@@ -9,17 +9,24 @@ import { schema, search } from '@yaks/fts'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import {
+  as,
   col,
   compile,
   count,
+  each,
+  eq,
+  type Expr,
   fn,
   from,
   insert,
+  member,
   type Raw,
   render,
   type Row,
   screen,
   select,
+  sub,
+  table,
   val,
 } from './mod.ts'
 
@@ -207,8 +214,95 @@ let parity: [string, Raw, unknown[]][] = [
   ],
 ]
 
+let cas = {
+  ...opts,
+  derived: {
+    'doc.body': {
+      tag: 'text' as const,
+      expr: (owner: Expr) =>
+        sub(select({
+          cols: [col('body', '__blob')],
+          from: table('doc', '__blob'),
+          where: eq(col('entity', '__blob'), owner),
+        })),
+    },
+  },
+}
+let filters: [string, Raw, number[]][] = [
+  [
+    'stored text lookup stays keyed',
+    screen(parse(`${before} ${quote}`), vocab, cas)!,
+    [4095],
+  ],
+  ['presence and absence OR', screen(parse('.entry|!comment'), vocab, opts)!, [
+    64,
+    100,
+  ]],
+  [
+    'screen directives do not narrow membership',
+    screen(parse('.entry .order=-created.at .limit=1'), vocab, opts)!,
+    [64],
+  ],
+  [
+    'component policies remain in keyed membership',
+    screen(parse(`${before} ${quote}`), vocab, {
+      ...opts,
+      visibility: { components: { doc: '.entity.num=4096' } },
+    })!,
+    [],
+  ],
+  [
+    'owner restrictions remain in keyed membership',
+    screen(parse(within), vocab, { ...opts, eids: ['row-4095'] })!,
+    [4095],
+  ],
+]
+let memberships: [string, Raw, number[]][] = filters.map((
+  [name, selection, expected],
+) => [
+  name,
+  render(select({
+    cols: [as(col('value', 'c'), 'id')],
+    from: from(each([4095, 4096, 64, 100, 9999]), 'c'),
+    where: member(selection, col('value', 'c')),
+  })),
+  expected,
+])
+
+let manual = render(select({
+  cols: [col('id')],
+  from: table('entity'),
+  where: eq(col('id'), val(64)),
+}))
+let fallback = render(select({
+  cols: [col('id', '__member')],
+  from: from(
+    select({ cols: [as(col('value'), 'id')], from: from(each([64, 100])) }),
+    '__member',
+  ),
+  where: member(manual, col('id', '__member')),
+}))
+let keyed = render(select({
+  cols: [as(col('value', 'c'), 'id')],
+  from: from(each([4095, 4096, 64, 100]), 'c'),
+  where: member(full, col('value', 'c')),
+}))
+let shadowed = render(select({
+  cols: [col('id', 'entity')],
+  from: from(each([4095, 4096, 64, 100]), 'ids'),
+  joins: [{
+    how: 'cross',
+    src: table('entity'),
+    on: eq(col('value', 'ids'), col('id', 'entity')),
+  }],
+  where: member(full, col('id', 'entity')),
+}))
+
 for (
   let q of [
+    fallback,
+    keyed,
+    shadowed,
     full,
     quoted,
     sparse,
@@ -217,6 +311,7 @@ for (
     threshold,
     ordered,
     ...parity.map((p) => p[1]),
+    ...memberships.map((p) => p[1]),
   ]
 ) {
   statements.set(q, db.prepare(q.sql))
@@ -258,3 +353,20 @@ for (let [name, q, expected] of parity) {
     assertEquals(result.rows.map((r) => r.eid ?? r.n ?? r.id), expected)
   })
 }
+
+test('historical membership probes each owner without enumerating history', () => {
+  let result = probe(keyed)
+  assertEquals(result.rows.map((r) => r.id), [4095, 64])
+  assert(result.steps < 500, `${result.steps} VM instructions`)
+})
+test('keyed membership retains an outer owner that shares the entity alias', () => {
+  assertEquals(probe(shadowed).rows.map((r) => r.id), [4095, 64])
+})
+
+for (let [name, q, expected] of memberships) {
+  test(name, () => assertEquals(probe(q).rows.map((r) => r.id), expected))
+}
+
+test('manual selection membership preserves a colliding outer alias', () => {
+  assertEquals(probe(fallback).rows.map((r) => r.id), [64])
+})

@@ -9,13 +9,16 @@ import {
   col,
   compile,
   insert,
+  member,
   render,
+  screen,
   select,
   type Statements,
   table,
 } from '@yaks/sql'
 import { semantic } from './compile.ts'
 import { fields } from './fields.ts'
+import { screened, visibleVectors } from './visibility.ts'
 import { meaning } from './search.ts'
 import { sweep } from './sweep.ts'
 import { embedder, shop, stocked } from './testing.ts'
@@ -141,4 +144,17 @@ test('a removed private source stays excluded until its vector is reconciled', (
     }),
   )
   assertEquals(rows.map((r) => String(r.eid)), ['book-3'])
+})
+
+let combined = screened(
+  screen(parse('.book'), shop),
+  visibleVectors(shop, fields(shop), other),
+)!
+let combinedOwners = db.query(select({
+  cols: [col('eid')],
+  from: table('entity'),
+  where: member(combined, col('id', 'entity')),
+})).map((r) => r.eid)
+test('composed keyed screens retain vector source visibility', () => {
+  assertEquals(combinedOwners, ['book-1', 'book-3'])
 })

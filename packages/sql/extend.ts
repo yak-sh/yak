@@ -42,8 +42,33 @@
 
 import type { Clause } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
-import type { Expr, Query, Raw, Source } from './ast.ts'
+import {
+  as,
+  col,
+  eq,
+  exists,
+  type Expr,
+  from,
+  lit,
+  type Query,
+  type Raw,
+  select,
+  type Source,
+} from './ast.ts'
 import type { BindOpts } from './bind.ts'
+
+/** An owner-ID relation with an equivalent keyed membership predicate. */
+export type Selection = Raw & { probe?: (owner: Expr) => Expr }
+
+/** Test one owner without enumerating an iterable selection when the compiler
+ * supplied its keyed form. Ordinary rendered relations keep SQL semantics. */
+export let member = (selection: Selection, owner: Expr): Expr =>
+  selection.probe?.(owner) ?? exists(select({
+    cols: [lit(1)],
+    from: from(select({ cols: [as(owner, 'id')] }), '__probe_key'),
+    joins: [{ how: 'cross', src: from(selection, '__member') }],
+    where: eq(col('id', '__member'), col('id', '__probe_key')),
+  }))
 
 // What a contributed compiler is given besides the clause: everything the
 // binder itself works from, plus the one change it is allowed to make to the
@@ -122,15 +147,14 @@ export type Begin = (screen: Screen) => void
 // admits — the owner ids an extension's own rows are keyed by, in no order.
 // This extension's own clauses are left out, since they are what is being
 // resolved, and so are the directives that shape an answer (order, limit,
-// projection), since they never narrow it. Ids rather than eids because a
-// ranker tests its candidates against it one by one: `exists (select 1 from
-// (screen) s where s.id = candidate)` is a primary-key read of the candidate's
-// own row, where an eid would first be looked up in the eid index. It is a
-// function because compiling it costs something an extension that does not
+// projection), since they never narrow it. IDs key the ranker's own rows;
+// member(screen, owner) uses the compiler's equivalent keyed predicate rather
+// than hoping SQLite pushes a key through a union or distinct relation. It is
+// a function because compiling it costs something an extension that does not
 // rank should not have to pay, and it returns null when there is nothing else
 // in the query — there is nothing to narrow by, so every entity in the database
 // is a candidate.
-export type Screen = (() => Raw | null) & {
+export type Screen = (() => Selection | null) & {
   // A proven upper bound on owner count; a short list may drive key seeks.
   maximum?: number
 }

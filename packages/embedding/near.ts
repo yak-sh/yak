@@ -24,8 +24,8 @@ import {
   lit,
   not,
   oneOf,
-  type Raw,
   select,
+  type Selection,
   type Statements,
   table,
   val,
@@ -46,7 +46,7 @@ export type Near = { entity: Eid; owner: number; similarity: number }
  * must be among — what @yaks/sql's `screen` compiled for the rest of the query,
  * passed straight in (the same interface @yaks/fts's `find` takes).
  */
-export type Screen = Raw
+export type Screen = Selection
 
 /**
  * A ranking: the nearest `limit` entities to a query vector, most similar

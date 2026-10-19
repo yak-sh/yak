@@ -1,6 +1,8 @@
 // Native scans answer exact cosine through filters and concurrent writes.
 
 import { test } from '@yaks/testing'
+import { parse } from '@yaks/query'
+import { loadVocab } from '@yaks/vocab'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import {
   among,
@@ -9,6 +11,7 @@ import {
   gt,
   insert,
   render,
+  screen,
   select,
   type Statements,
   table,
@@ -271,5 +274,89 @@ test(
     assert(!prepare(db))
     let q = anchor(db, 9)
     assertEquals(names(db, q), names(plain(db), q))
+  }),
+)
+
+test(
+  'native ranking probes a disjunctive historical screen before its cut',
+  await scene(() => {
+    let db = native(128)
+    for (let name of ['entry', 'comment', 'created', 'doc']) {
+      db.query({
+        t: 'create table',
+        name,
+        cols: [
+          { name: 'entity', type: 'integer', pk: true },
+          ...name == 'created'
+            ? [{ name: 'at', type: 'text' as const }, {
+              name: 'by',
+              type: 'text' as const,
+            }]
+            : name == 'doc'
+            ? [{ name: 'body', type: 'text' as const }]
+            : [],
+        ],
+      })
+    }
+    db.query({
+      t: 'create index',
+      name: 'created_at',
+      on: 'created',
+      cols: [col('at')],
+    })
+    db.query({
+      t: 'create index',
+      name: 'created_by',
+      on: 'created',
+      cols: [col('by')],
+    })
+    let vocab = loadVocab({
+      $defs: {
+        entity: { component: true, properties: {} },
+        entry: { component: true, properties: {} },
+        comment: { component: true, properties: {} },
+        created: {
+          component: true,
+          properties: {
+            at: { type: 'string', format: 'date-time', index: true },
+            by: { type: 'string', index: true },
+          },
+        },
+        doc: { component: true, properties: { body: { type: 'string' } } },
+      },
+    })
+    let ids = [
+      ...Array.from({ length: 128 }, (_, i) => i + 1),
+      ...Array.from({ length: FEW + 64 }, (_, i) => i + 1000),
+    ]
+    db.atomic(() => {
+      for (let id of ids) {
+        if (id >= 1000) db.query(insert('entity', { id, eid: `v-${id}` }))
+        db.query(
+          insert('created', {
+            entity: id,
+            at: '2026-01-01T00:00:00.000Z',
+            by: 'person',
+          }),
+        )
+        if (id <= 32 || id >= 1000) db.query(insert('entry', { entity: id }))
+        if (id == 100) {
+          db.query(insert('comment', { entity: id }))
+          db.query(
+            insert('doc', { entity: id, body: 'Reader, original words' }),
+          )
+        }
+      }
+    })
+    let within = screen(
+      parse(
+        '.created.at<2027-01-01 ((.entry .created.by=person)|(.comment .doc.body~="Reader, "))',
+      ),
+      vocab,
+    )!
+    let q = anchor(db, 100)
+    let opts = { within, limit: 3, floor: -1 }
+    assertEquals(names(db, q, opts), names(plain(db), q, opts))
+    assertEquals(names(db, q, opts)[0], 'v-100')
   }),
 )

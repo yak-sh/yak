@@ -8,10 +8,10 @@ import {
   count,
   eq,
   exists,
-  type Expr,
   fn,
   from,
   lit,
+  member,
   not,
   type Raw,
   select,
@@ -160,14 +160,8 @@ export let prepare = (db: Statements, dim?: number): boolean => {
   return !!dim && init(db, c, dim)
 }
 
-/** Whether a candidate is one the screen admits: a primary-key read of its
- * row, never the whole screen made first. */
-export let admitted = (within: Raw, owner: Expr): Expr =>
-  exists(select({
-    cols: [lit(1)],
-    from: from(within, 's'),
-    where: eq(col('id', 's'), owner),
-  }))
+/** Whether this owner is admitted by the selection's keyed predicate. */
+export let admitted = member
 
 /** How many entities a screen may admit and still be read whole: its vectors
  * cost less to score directly than to scan the whole corpus. */
