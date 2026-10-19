@@ -6,17 +6,10 @@ import {
   localConnector,
   sshConnector,
 } from '@yaks/machine/connectors'
-import type { SandboxBinding, SandboxOptions } from './lifecycle.ts'
+import type { Configuration, SandboxOptions } from './lifecycle.ts'
+export type { Configuration } from './lifecycle.ts'
 import type { SandboxProvider } from './provider.ts'
 
-type Descriptor = {
-  use: string
-  machine?: string
-  with?: Record<string, unknown>
-}
-export type Configuration = {
-  providers?: Record<string, SandboxBinding | Descriptor>
-}
 export type ConfigurationHost = {
   graph: Graph
   config?: { sandboxes?: Configuration }

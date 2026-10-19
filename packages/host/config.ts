@@ -37,7 +37,7 @@ export type Config = {
     receipts: string
   }
   /** Sandbox adapters, separate from computer connection transports. */
-  sandboxes?: import('@yaks/sandbox/configuration').Configuration & {
+  sandboxes?: import('@yaks/sandbox/lifecycle').Configuration & {
     defaultProvider?: string
   }
   /** the SQLite file, or `:memory:` for a graph that lasts as long as the

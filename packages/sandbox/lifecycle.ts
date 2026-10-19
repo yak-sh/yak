@@ -13,6 +13,18 @@ import { exportPath } from './provider.ts'
 export type SandboxBinding = { provider: SandboxProvider; machine?: string }
 export type SandboxBindings = Record<string, SandboxBinding>
 export type SandboxOptions = { providers: SandboxBindings }
+/** Serializable adapter selection, separate from the module that connects it. */
+export type Configuration = {
+  providers?: Record<
+    string,
+    SandboxBinding | {
+      use: string
+      machine?: string
+      with?: Record<string, unknown>
+    }
+  >
+}
+
 export type SandboxNew = {
   id?: string
   machine?: string
