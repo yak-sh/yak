@@ -368,7 +368,13 @@ let privateAsk = graph({
 })
 let privateEntries = await reach(privateAsk, 'private-session', { turn: true })
 let privateReached = privateEntries.find((b) => b.entity.eid == 'private-ask')!
+let privateWhole = view(await transcript(privateAsk, 'private-session'))
 test('a runner reads server-only executor pins when gathering the newest ask', () => {
+  assertEquals(view(privateEntries), privateWhole)
+  assertEquals(privateEntries.map((b) => b.entity.eid), [
+    'private-input',
+    'private-ask',
+  ])
   assertEquals(
     privateEntries.find((b) => b.entity.eid == 'private-input')?.content,
     {},

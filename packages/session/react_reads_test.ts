@@ -342,11 +342,12 @@ let oldTurns = (m: string, session: string, n: number) =>
 {
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
   let g = graph({ vocab, storage: s, plugins: [sessions()] })
+  let m = identityEid('model', ['fake'])
   await g.apply([{ entity: { eid: 'holder' } }])
   await g.apply([
     { entity: { eid: 'terminal' }, session: {} },
-    { entity: { eid: 'fake' }, model: { name: 'fake' } },
-    ...oldTurns('fake', 'terminal', 45),
+    { entity: { eid: m }, model: { name: 'fake' } },
+    ...oldTurns(m, 'terminal', 45),
     {
       entity: { eid: 'end' },
       entry: { session: 'terminal', seq: 500 },
@@ -354,20 +355,20 @@ let oldTurns = (m: string, session: string, n: number) =>
       stop: {},
     },
   ])
-  test('a terminal runner reads a bounded part of the entry history', async () => {
-    let reads = 0, read = g.read.bind(g)
-    g.read = async (q, o) => {
-      let found = await read(q, o)
-      reads += found.length
-      return found
-    }
-    await settle(g, 'terminal', {
-      holder: 'holder',
-      model: () => {
-        throw new Error('terminal model asked')
-      },
-      tools: [],
-    })
+  let reads = 0, read = g.read.bind(g)
+  g.read = async (q, o) => {
+    let found = await read(q, o)
+    reads += found.length
+    return found
+  }
+  await settle(g, 'terminal', {
+    holder: 'holder',
+    model: () => {
+      throw new Error('terminal model asked')
+    },
+    tools: [],
+  })
+  test('a terminal runner reads a bounded part of the entry history', () => {
     assert(reads < 100, `read ${reads} rows`)
   })
 }
@@ -396,18 +397,19 @@ for (let fork of [false, true]) {
       using: { model: m },
     },
   ])
+  let rows = 0, read = g.read.bind(g)
+  g.read = async (q, o) => {
+    let got = await read(q, o)
+    rows += got.length
+    return got
+  }
+  let status = await currentStatus(g, owner)
   test(
     `the status of a ${
       fork ? 'forked' : 'queued'
     } transcript reads a bounded part of it`,
-    async () => {
-      let rows = 0, read = g.read.bind(g)
-      g.read = async (q, o) => {
-        let got = await read(q, o)
-        rows += got.length
-        return got
-      }
-      assertEquals(await currentStatus(g, owner), 'pending')
+    () => {
+      assertEquals(status, 'pending')
       assert(rows < 100, `read ${rows} rows of a 135 line transcript`)
     },
   )
