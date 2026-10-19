@@ -226,7 +226,9 @@ test('an alias resolves within its own chunk and nowhere else', async () => {
   assertEquals(no.committed, CHUNK)
 })
 
-test('a disconnected streaming import remains owned until its received draft lands', async () => {
+// Run the retained import to completion before timing its captured outcomes.
+// This still cancels the response while the graph's real apply is held open.
+let disconnected = await (async () => {
   let graph = shopGraph()
   let started = Promise.withResolvers<void>()
   let commit = Promise.withResolvers<void>()
@@ -245,14 +247,19 @@ test('a disconnected streaming import remains owned until its received draft lan
   active.cancel()
   let drained = false
   let ending = active.drain().then(() => drained = true)
+  let beforeCommit: boolean
   try {
     await Promise.resolve()
-    assertEquals(drained, false)
+    beforeCommit = drained
   } finally {
     commit.resolve()
     await ending
   }
-  assertEquals((await graph.get([`b${CHUNK + 1}`], ['book']))[0].book, {
-    price: CHUNK + 1,
-  })
+  let book = (await graph.get([`b${CHUNK + 1}`], ['book']))[0].book
+  return { beforeCommit, book }
+})()
+
+test('a disconnected streaming import remains owned until its received draft lands', () => {
+  assertEquals(disconnected.beforeCommit, false)
+  assertEquals(disconnected.book, { price: CHUNK + 1 })
 })

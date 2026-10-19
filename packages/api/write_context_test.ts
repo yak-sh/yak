@@ -111,16 +111,17 @@ for (let stream of [false, true]) {
       entity: { eid: 'current' },
       book: { price: 2 },
     }], false)
-    test(`${mode} answers old aliases and current writes in their caller's vocabulary`, async () => {
-      let { graph, handler } = aliases
-      let [minted] = await decode(await handler(oldAlias))
+    // Capture both caller vocabularies on this mode's own graph before timing.
+    let [minted] = await decode(await aliases.handler(oldAlias))
+    let [applied] = await decode(await aliases.handler(currentWrite))
+    let stored = await aliases.graph.read('.book')
+    test(`${mode} answers old aliases and current writes in their caller's vocabulary`, () => {
       assertEquals(minted.$alias, '$book')
       assertEquals(minted.entity.eid.startsWith('$'), false)
       assertEquals(comp(minted, 'oldbook'), { cost: 1 })
-      let [applied] = await decode(await handler(currentWrite))
       assertEquals(comp(applied, 'book'), { price: 2 })
       assertEquals(applied.oldbook, undefined)
-      assertEquals((await graph.read('.book')).length, check ? 0 : 2)
+      assertEquals(stored.length, check ? 0 : 2)
     })
 
     test(`${mode} rolls back a refused contextualized batch whole`, async () => {

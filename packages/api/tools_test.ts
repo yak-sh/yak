@@ -270,7 +270,9 @@ test('a slow queued runner cannot block listening or stopping', async () => {
   }
 })
 
-test('shutdown ends open network reads and drains an admitted draft', async () => {
+// Capture the real socket/HTTP drain before case timing, including cleanup.
+// The named case below compares every observation made across that lifecycle.
+let shutdown = await (async () => {
   let port = free(), saved = ''
   let admitted = Promise.withResolvers<void>()
   let commit = Promise.withResolvers<void>()
@@ -308,7 +310,7 @@ test('shutdown ends open network reads and drains an admitted draft', async () =
   try {
     await opened.promise
     body = (await fetch(`http://127.0.0.1:${port}/events`)).body!.getReader()
-    assertEquals(new TextDecoder().decode((await body.read()).value), 'ready')
+    let ready = new TextDecoder().decode((await body.read()).value)
     let write = fetch(`http://127.0.0.1:${port}/draft`, {
       method: 'POST',
       body: 'precious draft',
@@ -316,13 +318,13 @@ test('shutdown ends open network reads and drains an admitted draft', async () =
     await admitted.promise
     stopping.abort()
     await cancelled.promise
-    assertEquals(saved, '')
+    let beforeCommit = saved
     commit.resolve()
-    assertEquals(await (await write).text(), 'saved')
+    let answer = await (await write).text()
     await serving
-    assertEquals(saved, 'precious draft')
-    assertEquals((await body.read()).done, true)
+    let done = (await body.read()).done
     await closed.promise
+    return { ready, beforeCommit, answer, saved, done }
   } finally {
     commit.resolve()
     stopping.abort()
@@ -330,4 +332,12 @@ test('shutdown ends open network reads and drains an admitted draft', async () =
     await body?.cancel()
     await serving
   }
+})()
+
+test('shutdown ends open network reads and drains an admitted draft', () => {
+  assertEquals(shutdown.ready, 'ready')
+  assertEquals(shutdown.beforeCommit, '')
+  assertEquals(shutdown.answer, 'saved')
+  assertEquals(shutdown.saved, 'precious draft')
+  assertEquals(shutdown.done, true)
 })
