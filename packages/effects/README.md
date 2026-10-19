@@ -367,19 +367,11 @@ owes declared work, whether claimed here or left pending. A host can keep its
 `work` promise alive through handler completion and wake another worker to drain
 the remaining runs.
 
-Each pass examines at most 32 candidate runs, one candidate per handler at a
-time. Selection rotates between handled and explicitly disabled handlers; one
-handler's backlog cannot fill every pass ahead of another handler. The `effect`
-index on `handler, state` and physical insertion-order cursors keep SQLite
-selection bounded even when entity numbers were imported out of order. Claims,
-backoff and local admission are checked on each candidate. A blocked slice
-advances its cursor rather than ending a drain; a complete traversal with no
-starts ends the drain. A worker that stays passes again at once while a
-traversal is unfinished, and waits for the next pass only once one finds nothing
-more to start. A handler found empty costs a pass no candidate, so idle handlers
-cannot crowd a backlog out of it. Disabled handlers settle through the same
-bounded selection without spending attempts. These windows do not change `max`,
-which limits concurrent runs rather than candidate reads.
+Each pass examines a bounded page of candidate runs, 32 by default. A candidate
+starts only when it is due, claimable and has a local slot. Selection shares
+turns among handled and explicitly disabled effects, so one handler's backlog
+does not crowd out the others. Disabled runs settle without spending attempts.
+The page bounds candidate reads; `max` separately limits concurrent handlers.
 
 `pool(ctx, options)` exposes the same operations for a caller supplying registry
 slots, a writer, and a reporter.
