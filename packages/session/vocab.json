@@ -12,13 +12,13 @@
       "type": "object",
       "wire": false,
       "embed": false,
-      "description": "Immutable model-facing context admitted beside one transcript input, reused across requests and worker restarts.",
+      "description": "Historical context snapshot retained beside a transcript input for inspection; excluded from model requests.",
       "properties": {
         "items": {
           "type": "array",
           "items": { "type": "object", "additionalProperties": true },
           "stamped": true,
-          "description": "Provider-neutral context items frozen when this input is first prepared; empty records that preparation found none."
+          "description": "Stored provider-neutral context items; an empty list records that no context was found."
         }
       }
     },

@@ -13,6 +13,7 @@ import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
 import { loadVocab, pick } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
+import { contextDoc } from '@yaks/context'
 import { transcriptGraph } from './testing.ts'
 import { react, transcript } from './react.ts'
 import { RUN, type Runner, settle } from './run.ts'
@@ -20,6 +21,7 @@ import { RUN, type Runner, settle } from './run.ts'
 let vocab = loadVocab([
   pick(sessionDoc, [
     'session',
+    'input_context',
     'entry',
     'ask',
     'using',
@@ -31,6 +33,7 @@ let vocab = loadVocab([
   ]),
   toolsDoc,
   modelDoc,
+  pick(contextDoc, ['prompt']),
   pick(effectDoc, ['lease']),
   pick(kernelDoc, ['interrupted', 'failed']),
 ])
@@ -431,3 +434,51 @@ await scenario(
     equal(p.inline(), 0)
   },
 )
+
+for (let hosted of [false, true]) {
+  await scenario(
+    `${
+      hosted ? 'hosted' : 'inline'
+    } requests keep explicit context without stored recall`,
+    async (p, equal) => {
+      let recalled = {
+        items: [{ kind: 'user', text: 'private historical words' }],
+      }
+      await p.g.apply([{
+        entity: { eid: 'input' },
+        input_context: recalled,
+      }, {
+        entity: { eid: 'instructions' },
+        entry: { session: 'session' },
+        prompt: {},
+        content: { body: 'Deliberately admitted topic context' },
+      }], { trusted: true })
+      let requests: Request[] = []
+      p.r.model = (req) => {
+        requests.push(req)
+        return Promise.resolve({ id: 'fake', model: req.model, items: [] })
+      }
+      if (!hosted) delete p.r.executor
+      p.r.requestItems = () =>
+        Promise.resolve([{ kind: 'instruction', text: 'Available skills' }])
+      p.r.contextItems = () =>
+        Promise.resolve(
+          new Map([
+            ['input', [{
+              kind: 'user',
+              text: 'Explicit source-bound context',
+            }]],
+          ]),
+        )
+      await react(p.g, 'session', p.r)
+      let req = (hosted ? p.submitted : requests)[0]
+      equal(req.items, [
+        { kind: 'instruction', text: 'Available skills' },
+        { kind: 'user', text: 'hello' },
+        { kind: 'user', text: 'Explicit source-bound context' },
+        { kind: 'instruction', text: 'Deliberately admitted topic context' },
+      ])
+      equal((await p.g.get(['input']))[0].input_context, recalled)
+    },
+  )
+}

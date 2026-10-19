@@ -710,22 +710,15 @@ the project's checkout, with the thread as its brief and the project's common
 persona, is where that will plug in (./listen.ts), once sessions may be started
 again (T-95308) and its provider, model and spend are chosen.
 
-### Earlier words on prompt submission
+### Prompt timing
 
-`yak session context --hook -` prints prompt timing from the local transcript
-and asks the configured server's `/session/earlier` door for
-[earlier words](../memory/README.md#earlier-words-beside-a-prompt). The request
-has a 650 ms deadline; an absent or busy server adds no earlier words and never
-opens a graph in the hook process. The server uses the configured `person` and
-their document title for explicitly attributed comment quotations. Without a
-configured person it returns nothing. Session-start context is independent.
+`yak session context --hook -` prints prompt timing from the local transcript.
+Session-start context is independent.
 
-### Context beside an input
+### Request context
 
-A runner's `inputItems(input, entries)` hook prepares provider-neutral model
-items once for each new input before its first ask. The server stores those
-items in `input_context{items}` on the input, guarded against changes to its
-body or session. An empty list records that no context was found. Projection
-sends the snapshot beside its input, so later tool turns and replacement workers
-reuse the same context. Already submitted inputs and inherited fork history are
-not researched again. `requestItems` remains dynamic per request.
+A runner projects explicit transcript inputs, admitted instructions and
+source-bound media into model requests. `requestItems` supplies dynamic context
+such as the available skill catalogue. Sending a request does not retrieve
+historical quotations. Stored `input_context{items}` snapshots remain
+inspectable and are excluded from model requests.

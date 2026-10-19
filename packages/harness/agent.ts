@@ -180,8 +180,6 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   opening?: (persona?: Eid, session?: Eid) => Promise<Opening>
   /** context an ask carries without storing its bytes in entries */
   context?: Deps['contextItems']
-  /** Context frozen beside a new input before its first ask. */
-  inputItems?: Deps['inputItems']
   /** Dynamic context independent of source-bound image items. */
   requestItems?: Deps['requestItems']
   /** defects, apart from refusals (default `console.error`) */
@@ -479,7 +477,6 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       inheritedInstructions(inherited, opts.instructions),
     inputText,
     contextItems: opts.context,
-    inputItems: opts.inputItems,
     requestItems: opts.requestItems,
     resultText: tools.some((t) => t.name == 'graph_value_read')
       ? (entry) => outputView(h.g, entry, opts.outputLimit)

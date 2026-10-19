@@ -64,3 +64,33 @@ test('structured context delegates to the ordinary tool runner', async () => {
     undefined,
   )
 })
+
+let config = Deno.makeTempFileSync()
+Deno.writeTextFileSync(config, JSON.stringify({ port: 1 }))
+
+test('prompt submission prints timing without fetching historical context', async () => {
+  let fetch = globalThis.fetch
+  let requests = 0
+  globalThis.fetch = () => {
+    requests++
+    return Promise.resolve(new Response('private historical words'))
+  }
+  let out: string[] = []
+  try {
+    equal(
+      await run({
+        hook: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          transcript_path: path,
+          prompt: 'attachment files',
+        }),
+      }, { ...context, config, out: (s) => out.push(s) }),
+      0,
+    )
+    equal(requests, 0)
+    equal(out.length, 1)
+    equal(out[0].includes('private historical words'), false)
+  } finally {
+    globalThis.fetch = fetch
+  }
+})
