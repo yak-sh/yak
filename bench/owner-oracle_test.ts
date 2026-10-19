@@ -24,31 +24,33 @@ test('owner projection admits only strictly earlier verbatim text', () => {
   throws(() => ownerWords([{ entity: { eid: 'missing' } }], cutoff))
 })
 
-test('growth chooses structure and query forks never inherit another answer', async () => {
-  let seen: Request[] = []
-  let fake: Model = (r) => {
-    seen.push(structuredClone(r))
-    return Promise.resolve({
-      id: 'r' + seen.length,
-      model: r.model,
-      items: [{
-        kind: 'assistant',
-        text: seen.length == 1
-          ? 'My own organization: evidence and caveats.'
-          : 'answer-' + seen.length,
-      }],
-      usage: { input_tokens: 5, output_tokens: 3, cached_tokens: 0 },
-    })
-  }
-  let calls: Parameters<typeof totals>[0] = []
-  let oracle = await ownerOracle({
-    rows,
-    cutoff,
-    grow: recording(fake, calls),
-    query: recording(fake, calls),
+let seen: Request[] = []
+let fake: Model = (r) => {
+  seen.push(structuredClone(r))
+  return Promise.resolve({
+    id: 'r' + seen.length,
+    model: r.model,
+    items: [{
+      kind: 'assistant',
+      text: seen.length == 1
+        ? 'My own organization: evidence and caveats.'
+        : 'answer-' + seen.length,
+    }],
+    usage: { input_tokens: 5, output_tokens: 3, cached_tokens: 0 },
   })
-  equal(await oracle.tool.run({ question: 'First question' }), 'answer-2')
-  equal(await oracle.tool.run({ question: 'Second question' }), 'answer-3')
+}
+let calls: Parameters<typeof totals>[0] = []
+let oracle = await ownerOracle({
+  rows,
+  cutoff,
+  grow: recording(fake, calls),
+  query: recording(fake, calls),
+})
+let firstAnswer = await oracle.tool.run({ question: 'First question' })
+let secondAnswer = await oracle.tool.run({ question: 'Second question' })
+test('growth chooses structure and query forks never inherit another answer', () => {
+  equal(firstAnswer, 'answer-2')
+  equal(secondAnswer, 'answer-3')
   equal(seen[1].items.slice(0, -1), seen[2].items.slice(0, -1))
   equal(seen[1].conversation == seen[2].conversation, false)
   equal(JSON.stringify(seen[2]).includes('answer-2'), false)
@@ -63,32 +65,35 @@ test('growth chooses structure and query forks never inherit another answer', as
   equal(oracle.evidence.queries.length, 2)
 })
 
-test('failed oracle queries remain in the call and fork ledger', async () => {
-  let calls: Parameters<typeof totals>[0] = []
-  let grow: Model = (r) =>
-    Promise.resolve({
-      id: 'grown',
-      model: r.model,
-      items: [{ kind: 'assistant', text: 'context' }],
-    })
-  let query: Model = () => Promise.reject(new Error('synthetic failure'))
-  let oracle = await ownerOracle({
-    rows,
-    cutoff,
-    grow: recording(grow, calls),
-    query: recording(query, calls),
+let failedCalls: Parameters<typeof totals>[0] = []
+let grow: Model = (r) =>
+  Promise.resolve({
+    id: 'grown',
+    model: r.model,
+    items: [{ kind: 'assistant', text: 'context' }],
   })
-  let failed = false
-  try {
-    await oracle.tool.run({ question: 'fail' })
-  } catch {
-    failed = true
-  }
+let query: Model = () => Promise.reject(new Error('synthetic failure'))
+let failedOracle = await ownerOracle({
+  rows,
+  cutoff,
+  grow: recording(grow, failedCalls),
+  query: recording(query, failedCalls),
+})
+let failed = false
+try {
+  await failedOracle.tool.run({ question: 'fail' })
+} catch {
+  failed = true
+}
+test('failed oracle queries remain in the call and fork ledger', () => {
   equal(failed, true)
-  equal(calls.length, 2)
-  equal(calls[1].error?.includes('synthetic failure'), true)
-  equal(oracle.evidence.queries[0].error?.includes('synthetic failure'), true)
-  equal(totals(calls).inputTokens, null)
+  equal(failedCalls.length, 2)
+  equal(failedCalls[1].error?.includes('synthetic failure'), true)
+  equal(
+    failedOracle.evidence.queries[0].error?.includes('synthetic failure'),
+    true,
+  )
+  equal(totals(failedCalls).inputTokens, null)
 })
 
 let interleavedRoles = await (async () => {
