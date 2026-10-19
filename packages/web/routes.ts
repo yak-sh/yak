@@ -27,6 +27,8 @@ import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
 import { type Config, located, subpath, used } from '@yaks/cli/config'
 import type { Registry } from '@yaks/render'
+import type { Vault } from '@yaks/secrets'
+import { authorization } from './authorize.ts'
 
 /** What this facet reads off the host it is composing into: the vocabulary
  * its plugins loaded, and the graph a name is resolved in. */
@@ -35,6 +37,7 @@ export type Hosting = {
   vocab: Vocab
   graph: Graph
   who?: Authenticate
+  vault?: Vault
   /** aborts as the host closes, ending the app's build if it is still going */
   stopping?: AbortSignal
 }
@@ -109,6 +112,9 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
     return new Response(lost.body, { status: 404, headers: lost.headers })
   }
   return [
+    ...host.vault && host.vocab.comp('connection')
+      ? [authorization({ ...host, vault: host.vault })]
+      : [],
     { method: 'GET', path: '/*', handle: named },
     { method: 'GET', path: '/', handle: page },
     {

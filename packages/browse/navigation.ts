@@ -82,6 +82,10 @@ export let destinationAt = (
 
 /** The schema: the inspector's map of how the data is made. */
 export let schemaPath = '/?map'
+export let configPath = '/?config'
+export let configAt = (at: string): boolean =>
+  new URL(at, 'http://x').pathname == '/' &&
+  new URL(at, 'http://x').search == '?config'
 export let schemaAt = (at: string): boolean => {
   let url = new URL(at, 'http://x')
   return url.pathname == '/' && url.searchParams.has('map')
@@ -92,10 +96,14 @@ export let places = (
   home: Place,
   all: Destination[],
   schema: boolean,
+  configuration = false,
 ): Place[] => [
   home,
   ...all.map((d) => ({ name: d.name, icon: d.icon, path: `/?${d.key}` })),
   ...schema ? [{ name: 'Schema', icon: 'database', path: schemaPath }] : [],
+  ...configuration
+    ? [{ name: 'Configuration', icon: 'settings', path: configPath }]
+    : [],
 ]
 
 /** The sidebar line an address lights: its own, or none for a search. */

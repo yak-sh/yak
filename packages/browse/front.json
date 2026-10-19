@@ -41,6 +41,21 @@
           "description": "the sidebar is visible"
         }
       }
+    },
+    "Configuration": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "progress of a private configuration operation; never holds credential input",
+      "properties": {
+        "busy": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
     }
   }
 }

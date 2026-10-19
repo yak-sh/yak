@@ -52,13 +52,16 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
       ['Bugs', '/?bugs'],
       ['Sessions', '/?sessions'],
       ['Schema', '/?map'],
+      ['Configuration', '/?config'],
     ])
     assertEquals(lit(), 'Home')
     await send(line('Bugs'), 'click')
     assertEquals([route.value, lit()], ['/?bugs', 'Bugs'])
+    await send(line('Configuration'), 'click')
+    assertEquals([route.value, lit()], ['/?config', 'Configuration'])
     await send(root.querySelector('[aria-label="Search (/)"]')!, 'click')
     assertEquals(searchOpen.value, true)
-    assertEquals(route.value, '/?bugs')
+    assertEquals(route.value, '/?config')
     searchOpen.value = false
   } finally {
     free()

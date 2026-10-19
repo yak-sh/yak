@@ -1,7 +1,7 @@
 import { InspectPage } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { left, scrolledTo } from '../history.ts'
-import { destinationAt, schemaAt } from '../navigation.ts'
+import { configAt, destinationAt, schemaAt } from '../navigation.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
@@ -38,6 +38,7 @@ import {
 import { QueryList } from './views/List.tsx'
 import { Id } from './views/Inline.tsx'
 import { SubscriptionFailure } from './SubscriptionFailure.tsx'
+import { Configuration } from './Configuration.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -221,7 +222,9 @@ export let Page = ({ at }: { at: string }) => {
         start={left.value}
         onScroll={scrolledTo}
       >
-        {schemaAt(at)
+        {configAt(at)
+          ? <Configuration />
+          : schemaAt(at)
           ? <InspectPage map />
           : search != null
           ? <SearchPage query={search} />

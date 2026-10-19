@@ -34,6 +34,12 @@ admission and write handler. `/web/owner` resolves that person through the
 graph's address interface. The generic `/apply`, `/query` and `/ws` doors stay
 with @yaks/api.
 
+With secrets and connections configured, Browse's sidebar opens Configuration at
+`/?config`: replace a secret with a masked value or `op://` reference, or sign
+in to an integration. Credential writes go directly to `/web/apply`, never
+through an offline outbox. `POST /web/authorize` uses @yaks/connections'
+authorization and keeps return URLs outside the graph.
+
 A one-segment alias such as `/lemon-cake` answers the page when it names an
 entity, and the same page with status 404 otherwise. Other plugins keep their
 more-specific routes.
