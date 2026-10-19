@@ -2780,7 +2780,18 @@ let lower = (
   // projects only the rows on it: a 50-row page of an entity's 36,994 changes,
   // each change's transaction projected, took 200 ms read the other way and
   // takes 11 this way.
-  if (limit && fields) {
+  // Identity columns already belong to the selection's entity spine. Keep
+  // them on that road: paging by id and reopening both entity and the order's
+  // component only repeats reads (notably for transcript shape hints). A
+  // backed spine or a derived identity value still needs deferred projection.
+  let identityFields = !ctx.spine && ctx.d.owned &&
+    fields?.fields.every((f) =>
+      f.path.length == 2 && f.path[0] == 'entity' &&
+      ['eid', 'num', 'archetype'].includes(f.path[1]) &&
+      !vocab.prop('entity', f.path[1])?.computed &&
+      !ctx.derived[f.path.join('.')]
+    )
+  if (limit && fields && !identityFields) {
     let page = render({
       ...relation(ctx.d.spine, {
         cols: [owner],
