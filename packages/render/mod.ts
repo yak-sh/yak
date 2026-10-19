@@ -168,6 +168,26 @@ let best = <R extends Registration>(
   return top
 }
 
+// Only registration metadata is indexed. A new array (extend, preparation or
+// host replacement) gets new pools; every selection still tests its bundle.
+let pools = new WeakMap<
+  readonly Registration[],
+  Map<string, readonly Registration[]>
+>()
+let byView = <R extends Registration>(renderers: readonly R[]) => {
+  let found = pools.get(renderers)
+  if (!found) {
+    let grouped = new Map<string, R[]>()
+    for (let r of renderers) {
+      let rows = grouped.get(r.view)
+      if (rows) rows.push(r)
+      else grouped.set(r.view, [r])
+    }
+    pools.set(renderers, found = grouped)
+  }
+  return found as Map<string, readonly R[]>
+}
+
 let walk = <R extends Registration>(
   registry: Selection<R>,
   bundle: Bundle,
@@ -175,8 +195,9 @@ let walk = <R extends Registration>(
   vocab: Vocab,
 ): R | undefined => {
   let { renderers, views, archetypes } = registry
+  let named = byView(renderers)
   let pick = (name: string) =>
-    best(renderers.filter((r) => r.view == name), bundle, vocab, archetypes)
+    best(named.get(name) ?? [], bundle, vocab, archetypes)
   if (!view) {
     return best(
       renderers.filter((r) => !views || views.includes(r.view)),
@@ -250,12 +271,10 @@ export let applicable = <R extends Registration>(
     bundle = projection(vocab, ctx)
     vocab = propVocab
   }
-  let views = registry.views ??
-    [...new Set(registry.renderers.map((r) => r.view))]
+  let named = byView(registry.renderers)
+  let views = registry.views ?? [...named.keys()]
   return views.filter((view) =>
-    registry.renderers.some((r) =>
-      r.view == view && matches(r.match, bundle, vocab, archetypes)
-    )
+    named.get(view)?.some((r) => matches(r.match, bundle, vocab, archetypes))
   )
 }
 
