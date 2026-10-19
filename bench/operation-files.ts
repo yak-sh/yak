@@ -15,7 +15,6 @@ export let fileOperations = async (
   c: OperationContext,
 ): Promise<Operation[]> => {
   let { graph, dir, PROJECT, PERSONA, fresh, saved, includes } = c
-  let tree = crypto.randomUUID()
   let path = `${dir}/checkout`
   await Deno.mkdir(path, { recursive: true })
   for (
@@ -52,14 +51,14 @@ export let fileOperations = async (
     common: `${path}/.git`,
   }, { entity: { eid: '' } })
   await graph.apply([
-    { entity: { eid: workspace }, workspace: { root: path } },
+    {
+      entity: { eid: workspace },
+      workspace: { root: path },
+      worktree: { repository: repo, gitdir: `${path}/.git` },
+    },
     {
       entity: { eid: repo },
       repository: { workspace, common: `${path}/.git` },
-    },
-    {
-      entity: { eid: tree },
-      worktree: { repository: repo, path, gitdir: `${path}/.git` },
     },
     {
       entity: { eid: PROJECT },
