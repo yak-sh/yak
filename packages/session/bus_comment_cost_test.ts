@@ -1,6 +1,6 @@
 // Delivered comment history must not make a bus pass scan its target joins.
 import { equal, ok, test } from '@yaks/testing'
-import { type Bundle, graph } from '@yaks/graph'
+import { type Bundle, graph, type Visibility } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { sessionDoc } from '@yaks/session'
@@ -140,17 +140,16 @@ test('several recipients share one pass over unread agent history', () => {
   equal(readComments, got.length)
   ok(vm < 160_000, `${vm} VM steps beside unread agent history`)
 })
-for (
-  let [name, visibility, count] of [
-    ['hidden author', { entity: '.entity.eid!=agent' }, 4],
-    ['hidden session', { components: { session: '.entity.eid!=agent' } }, 4005],
-    ['hidden stamp', { components: { created: '!comment' } }, 4005],
-  ] as const
-) {
+let scopes: [string, Visibility, number][] = [
+  ['hidden author', { entity: '.entity.eid!=agent' }, 4],
+  ['hidden session', { components: { session: '.entity.eid!=agent' } }, 4005],
+  ['hidden stamp', { components: { created: '!comment' } }, 4005],
+]
+for (let [name, visibility, count] of scopes) {
   let scoped = graph({
     vocab: v,
     storage: store,
-    plugins: [{ scope: () => visibility }],
+    plugins: [{ name: 'scope', scope: () => visibility }],
   })
   let selected = await comments(scoped)
   test(`human comment routing preserves ${name} visibility`, () => {
