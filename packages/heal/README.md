@@ -30,12 +30,13 @@ deno add jsr:@yaks/heal
 The `@yaks/heal/service` **follower** follows bugs in the configured tracker
 graphs through a headless [client](../client/README.md) subscription on `/ws`,
 and the platform tracker on yaks.app, when `remote` names it, through
-[tracker](../tracker/README.md)'s polled `./poll` watch. The platform's bugs
-reach people, so each pass takes them first, and after a restart no other
-tracker's bug takes a fixer slot until the platform's first poll settles
-(answered or failed, within a minute). The Worker has no page, so their tasks
-link the bug's page on the first configured tracker web
-(`/?q=.bug&side=yaks.app&bug=<eid>`), or with none name
+[tracker](../tracker/README.md)'s polled `./poll` watch. A **pass** reconciles
+the bugs of each followed tracker in turn: every bug in a periodic pass, or only
+the bugs whose answer moved. The platform's bugs reach people, so each pass
+takes them first, and after a restart no other tracker's bug takes a fixer slot
+until the platform's first poll settles (answered or failed, within a minute).
+The Worker has no page, so their tasks link the bug's page on the first
+configured tracker web (`/?q=.bug&side=yaks.app&bug=<eid>`), or with none name
 `yak bug show <eid> --source yaks.app`. Its marks carry no precondition. The
 tracker web role serves that query independently of intake. One process holds
 the `@yaks/heal` service lease: the subscription and the serial fixer decisions
@@ -46,7 +47,12 @@ pool. Serve that role beside the box's other worker roles, for example
 For a bug without a task, one apply writes the task, its `about` edge and, when
 the gates allow it, the fixer request. An existing task linked by an `about`
 edge is reused. A replay or another follower reads the task and its claim and
-writes nothing while its fixer has work outstanding. The request is a
+writes nothing while its fixer has work outstanding. A pass reads its bugs' work
+together, so its reads do not grow with its bugs: one read finds every bug's
+`about` edges, one reads their tasks, and the first decision that needs fixer
+history reads it for every open bug. The home project and `nofix` are read once
+a pass, and the running fixers once until the pass requests a fixer. A bug whose
+work the pass writes reads its task and fixers again. The request is a
 `session{operator}` with `fixer{bug}`, an `entry{session}` with `content{body}`
 and `using{provider, model, effort}`, and a `claim{session}` on the task. No
 process starts inside the follower; the configured provider handles that request
@@ -165,13 +171,14 @@ without duties runs no follower.
 
 The root export is `healDoc` and the pure `actionable` filter.
 `@yaks/heal/vocab` exports `docs` for plugin loaders. `@yaks/heal/service`
-exports `service`, `track` (a headless tracker watch), `follow` (one bug's
-reconciliation), and `taskEid`. `service` accepts `open(url)` returning a
-`Tracker` (a client `Watch` with `mutate`) and an abortable `wait(ms, signal)`
-for hosts with their own graph transport or clock.
+exports `service`, `track` (a headless tracker watch), `follow` (one tracker's
+pass), and `taskEid`. `service` accepts `open(url)` returning a `Tracker` (a
+client `Watch` with `mutate`) and an abortable `wait(ms, signal)` for hosts with
+their own graph transport or clock.
 
-`follow(graph, options)(bug, url, tracker.mutate)` reconciles one bug through
-the same acknowledged write door.
+`await follow(graph, options)(bugs, url, tracker.mutate)` reads the pass's work
+for `bugs` and answers `(bug) => Promise<void>`, which reconciles one of them
+through the same acknowledged write door.
 
 `@yaks/fts` has a `heal()` that rebuilds a full-text index. That is a different
 act.

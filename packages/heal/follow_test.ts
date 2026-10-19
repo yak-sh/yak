@@ -48,6 +48,15 @@ let project = identityEid('project', ['home'])
 let other = identityEid('project', ['other'])
 let bug = identityEid('bug', ['missing row'])
 let comp = (b: Bundle, name: string) => b[name] as Comp
+// One bug reconciled in a pass of its own.
+let alone = (g: Graph, options?: Options) => {
+  let pass = follow(g, options)
+  return async (
+    row: Bundle,
+    at: string,
+    mutate: Parameters<typeof pass>[2],
+  ) => (await pass([row], at, mutate))(row)
+}
 let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
@@ -179,7 +188,7 @@ let fixture = async (options: Options = {}, unstamped = false) => {
     },
   }
   let run = () => service(host, config)
-  let reconcile = follow(g, config)
+  let reconcile = alone(g, config)
   let replay = async () => {
     let [row] = await tracker.get([bug])
     await reconcile(row, url, (rows) => tracker.apply(rows, { trusted: true }))
@@ -218,7 +227,7 @@ let put = (g: Graph, bundles: Bundle[]) => g.apply(bundles, { trusted: true })
 
 let fresh = await fixture({}, true)
 let [freshBug] = await fresh.tracker.get([bug])
-let fileFresh = follow(fresh.g, fresh.config)
+let fileFresh = alone(fresh.g, fresh.config)
 await fileFresh(freshBug, url, (rows) => put(fresh.tracker, rows))
 let freshWritten = await fresh.g.get(
   fresh.commits[0].map((row) => row.entity.eid),
@@ -272,7 +281,7 @@ test('a started fixer marks its bug taken in the tracker, once', async () => {
 
 // An older tracker refuses the mark it doesn't know yet (a deploy in between).
 let unmarked = await fixture()
-let refusing = follow(unmarked.g, unmarked.config)
+let refusing = alone(unmarked.g, unmarked.config)
 let refused = await (async () => {
   let [row] = await unmarked.tracker.get([bug])
   return refusing(row, url, () => Promise.reject(Error('no take door')))
@@ -691,7 +700,7 @@ for (
   test(`the headless answer carries a tracker ${bugMark} mark to its task`, async () => {
     let row = f.watch.value.find((row) => row.entity.eid == bug)!
     ok(row[bugMark])
-    await follow(f.g)(row, url, f.watch.mutate)
+    await alone(f.g)(row, url, f.watch.mutate)
     ok((await f.g.get([taskEid(bug)]))[0][taskMark])
     f.watch.close()
     f.close()
@@ -928,7 +937,7 @@ await put(transport.g, [{
 let transportBug = transport.watch.value[0]
 let markKeys: (string | undefined)[] = []
 let sendMark = () =>
-  follow(transport.g)(transportBug, url, (rows, opts) => {
+  alone(transport.g)(transportBug, url, (rows, opts) => {
     markKeys.push(opts?.key)
     return transport.watch.mutate(rows, opts)
   })
@@ -964,13 +973,13 @@ await put(lost.g, [{
 let lostBug = lost.watch.value[0]
 lost.lose()
 await throws(
-  () => follow(lost.g)(lostBug, url, lost.watch.mutate),
+  () => alone(lost.g)(lostBug, url, lost.watch.mutate),
   'acknowledgement lost',
 )
 await lost.ready()
 lost.trackerCommits.length = 0
 lost.lose(false)
-await follow(lost.g)(lostBug, url, lost.watch.mutate)
+await alone(lost.g)(lostBug, url, lost.watch.mutate)
 test('a lost tracker acknowledgement replays without another write', async () => {
   ok((await lost.tracker.get([bug]))[0].archived)
   equal(lost.posts(), 2)
@@ -989,7 +998,7 @@ test('a tracker regression during mark admission rejects the stale answer', asyn
   raced.trackerCommits.length = 0
   await throws(
     () =>
-      follow(raced.g)(
+      alone(raced.g)(
         before,
         url,
         (rows) => raced.tracker.apply(rows, { trusted: true }),
@@ -1021,7 +1030,7 @@ test('the platform tracker is followed first', async () => {
 let platform = async (trackers: string[]) => {
   let f = await fixture({ trackers, provider: undefined })
   let [row] = await f.tracker.get([bug])
-  let reconcile = follow(f.g, f.config)
+  let reconcile = alone(f.g, f.config)
   return async () => {
     await reconcile(row, PLATFORM, (rows) => put(f.tracker, rows))
     let [task] = await f.g.get([taskEid(bug)])
@@ -1269,7 +1278,7 @@ for (
 for (let changed of ['claim', 'completed', 'cancelled']) {
   let { f, holder } = await settledCase()
   let [task] = await f.g.get([taskEid(bug)])
-  let { fix } = fixing(f.g, f.config)
+  let { fix } = fixing(f.g, f.config)([bug])
   if (changed == 'claim') {
     await put(f.g, [{ entity: { eid: 'racing-worker' }, session: {} }])
   }
@@ -1506,7 +1515,7 @@ for (let terminal of ['ended', 'stop', 'failed']) {
 for (let source of [url, 'yaks.app']) {
   let f = await fixture({ cli: 'yak --config /srv/tracker.json' })
   let [evidence] = await f.tracker.get([bug])
-  let reconcile = follow(f.g, f.config)
+  let reconcile = alone(f.g, f.config)
   test(`${source == url ? 'local' : 'platform'} fixer instructions target their authoritative tracker`, async () => {
     await reconcile(evidence, source, (rows) => put(f.tracker, rows))
     let [entry] = await rows(f.g, 'entry')
@@ -1615,4 +1624,60 @@ test('a managed fixer fills capacity without deriving any transcript status', as
   equal(await count(managedStatus.g, 'fixer'), 1)
   equal(await count(managedStatus.g, 'task'), 1)
   managedStatus.close()
+})
+
+// Bugs standing in each state a whole pass meets: open work held by a running
+// fixer or waiting at the cap, and closed work completed or cancelled. Then
+// one more whole pass, with every box read it makes counted.
+let standing = async (open: number, closed: number) => {
+  let f = await fixture()
+  let bugs = (kind: string, n: number) =>
+    Array.from({ length: n }, (_, i) => identityEid('bug', [`${kind} ${i}`]))
+  let report = (eids: string[]) =>
+    put(
+      f.tracker,
+      eids.map((eid) => ({
+        entity: { eid },
+        bug: { fault: eid, hits: 1, last: '2026-10-02T00:00:01Z' },
+        doc: { title: eid },
+      })),
+    )
+  let shut = bugs('closed', closed)
+  await report(bugs('open', open - 1))
+  await f.run()
+  await report(shut)
+  await f.run()
+  await put(
+    f.tracker,
+    shut.map((eid, i) => ({
+      entity: { eid },
+      [i % 2 ? 'archived' : 'resolved']: {},
+    })),
+  )
+  await f.run()
+  let { read, get, address } = f.g
+  let reads = 0
+  f.g.read = (...args) => (reads++, read(...args))
+  f.g.get = (...args) => (reads++, get(...args))
+  f.g.address = (...args) => (reads++, address(...args))
+  f.commits.length = f.trackerCommits.length = 0
+  await f.run()
+  Object.assign(f.g, { read, get, address })
+  let found = {
+    reads,
+    writes: [...f.commits, ...f.trackerCommits],
+    tasks: await count(f.g, 'task'),
+    fixers: await count(f.g, 'fixer'),
+    taken: (await f.tracker.read(and(present('taken')))).length,
+    closed: await count(f.g, 'completed') + await count(f.g, 'cancelled'),
+  }
+  f.close()
+  return found
+}
+let few = await standing(3, 2)
+let many = await standing(9, 8)
+test('a whole pass reads every bug it follows at once', () => {
+  let { reads } = few
+  equal(few, { reads, writes: [], tasks: 5, fixers: 2, taken: 2, closed: 2 })
+  equal(many, { reads, writes: [], tasks: 17, fixers: 2, taken: 2, closed: 8 })
 })

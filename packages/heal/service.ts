@@ -181,8 +181,7 @@ export let service = async (
             if (url == platform && !once && !heard.has(url)) break
             continue
           }
-          for (let bug of watch.value) {
-            if (!once && signal.aborted) return
+          let due = watch.value.flatMap((bug) => {
             let key = `${url} ${bug.entity.eid}`
             // Occurrence counts and last-seen timestamps change on every hit;
             // they do not change the work or a fixer gate. A regression, mark
@@ -195,9 +194,18 @@ export let service = async (
               bug.archived,
               bug.taken,
             ])
-            if (!all && replayed.get(key) == row) continue
+            return all || replayed.get(key) != row ? [{ bug, key, row }] : []
+          })
+          if (!due.length) continue
+          let settle = await reconcile(
+            due.map(({ bug }) => bug),
+            url,
+            watch.mutate,
+          )
+          for (let { bug, key, row } of due) {
+            if (!once && signal.aborted) return
             try {
-              await reconcile(bug, url, watch.mutate)
+              await settle(bug)
               replayed.set(key, row)
             } catch (error) {
               replayed.delete(key)

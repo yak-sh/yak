@@ -8,7 +8,7 @@ import { token } from '@yaks/graph/sha256'
 import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
 import { human } from '@yaks/id'
-import { and, eq, present } from '@yaks/query'
+import { and, eq, list, present } from '@yaks/query'
 import { remoteBug } from '@yaks/tracker'
 import { active, fixing, type Options } from './fix.ts'
 
@@ -61,49 +61,48 @@ let knock = (
 // A running fixer holding the bug's task has taken the bug, and the tracker
 // tells the bug's letter thread. It is news once per opening: a bug with no
 // `taken` mark, or one that came back after it, both times read off the
-// tracker's own clock. A replay or a stale answer sends nothing new.
+// tracker's own clock. A replay or a stale answer sends nothing new. A holder
+// that is none of the bug's fixers has not taken it.
 let take = async (
   g: Graph,
   bug: Bundle,
   task: Bundle | undefined,
+  fixers: (bug: string) => Promise<Bundle[]>,
   mutate: Client['mutate'],
 ) => {
   let holder = str(comp(task, 'claim')?.session)
   if (!task || !holder || bug.resolved || bug.archived) return
   let back = moment(comp(bug, 'regressed')?.at)
   if (bug.taken && !(back > moment(comp(bug, 'taken')?.at))) return
-  let [fixer] = await g.get([holder])
-  if (
-    !fixer || str(comp(fixer, 'fixer')?.bug) != bug.entity.eid || fixer.exit ||
-    fixer.native && !active(fixer)
-  ) return
+  let fixer = (await fixers(bug.entity.eid))
+    .find((f) => f.entity.eid == holder)
+  if (!fixer || fixer.exit || fixer.native && !active(fixer)) return
   await mark(mutate, [{
     entity: { eid: bug.entity.eid },
     taken: { task: task.entity.num ? human(g.vocab)(task) : task.entity.eid },
   }], [bug.regressed ?? null, bug.taken ?? null])
 }
 
-/** Reconcile a tracker answer. The caller retries either store's failed writes. */
+/** Reconcile one tracker's answer a pass at a time: a pass reads the work of
+ * all its bugs at once and answers how to reconcile each. The caller retries
+ * either store's failed writes. */
 export let follow = (
   g: Graph,
   options: Options & { trackers?: string[] } = {},
-): (bug: Bundle, url: string, mutate: Client['mutate']) => Promise<void> => {
-  let { fix, home } = fixing(g, options)
+): (
+  bugs: Bundle[],
+  url: string,
+  mutate: Client['mutate'],
+) => Promise<(bug: Bundle) => Promise<void>> => {
+  let decide = fixing(g, options)
+  // What a decision reads off a task, never its computed components.
+  let parts = ['task', 'doc', 'filed', 'claim', 'completed', 'cancelled']
+    .filter((name) => g.vocab.comp(name))
   // A tracker graph has a page per bug. The platform's Worker answers only
   // signed reads, so its bugs open on a tracker web's side for them, and
   // without one they are read with a command.
   let base = (at: string) => at.replace(/\/$/, '')
   let web = options.trackers?.find((at) => /^https?:/.test(at))
-  // Where the bug's work item may be: the derived task, or one an about edge
-  // links. A pass writes only the derived task and its edge, so one read of
-  // the links serves the whole pass.
-  let linked = async (evidence: string) => {
-    let edges = await g.read(and(present('about'), eq('edge.to', evidence)))
-    let from = edges.map((edge) => str(comp(edge, 'edge')?.from))
-    return [...new Set([...from, taskEid(evidence)])]
-  }
-  let taskIn = async (eids: string[]) =>
-    (await g.get(eids)).find((row) => row.task)
   // What a fixer does last: resolve its bug in the tracker, explained, which
   // completes the task once the follower hears it. A bug is resolved only
   // with its explanation, so the fixer, who knows why, writes it.
@@ -132,108 +131,153 @@ export let follow = (
       '--recur why it is believed to be one.',
     ].join('\n\n')
   }
-  let reconcile = (
-    bug: Bundle,
-    url: string,
-    mutate: Client['mutate'],
-    eids: string[],
-  ) =>
-    fix(async () => {
-      let evidence = bug.entity.eid
-      let eid = taskEid(evidence)
-      let task = await taskIn(eids)
-      if (task) {
-        let close = bug.archived && !task.cancelled
-          ? 'cancelled'
-          : bug.resolved && !task.completed && !task.cancelled
-          ? 'completed'
-          : undefined
-        if (close) {
-          let source = close == 'cancelled' ? 'archived' : 'resolved'
-          await g.apply([{
-            entity: task.entity,
-            [close]: { at: comp(bug, source)?.at },
-            ...(close == 'cancelled' ? { completed: null } : {}),
-            $was: {
-              completed: { at: token(comp(task, 'completed')?.at) },
-              cancelled: { at: token(comp(task, 'cancelled')?.at) },
-            },
-          }], { trusted: true })
-          return
-        }
-        if (bug.archived) return
-        let reopen = !!task.completed &&
-          moment(comp(bug, 'regressed')?.at) >
-            moment(comp(task, 'completed')?.at)
-        // Cancelled work archives its bug. Completed work resolves nothing:
-        // a resolution needs its explanation, which the resolver writes on
-        // the bug itself, and that resolution completes the task above.
-        if (task.cancelled) {
-          await mark(mutate, [{
-            entity: { eid: bug.entity.eid },
-            archived: {},
-            // A new regression or someone else's mark invalidates this answer.
-            $was: {
-              bug: { fault: token(comp(bug, 'bug')?.fault) },
-              resolved: { at: token(comp(bug, 'resolved')?.at) },
-              archived: { at: token(comp(bug, 'archived')?.at) },
-              regressed: {
-                at: token(comp(bug, 'regressed')?.at),
-                error: token(comp(bug, 'regressed')?.error),
+  return async (bugs, url, mutate) => {
+    bugs = bugs.filter((bug) => bug.bug)
+    let { fix, home, fixers } = decide(
+      bugs.filter((bug) => !bug.resolved && !bug.archived)
+        .map((bug) => bug.entity.eid),
+    )
+    // Where each bug's work item may be: a task an about edge links, or the
+    // derived one. A pass writes only derived tasks and their edges, so one
+    // read of the links serves the whole pass.
+    let candidates = new Map<string, string[]>()
+    let locate = async (evidence: string[]) => {
+      if (!evidence.length) return
+      let edges = await g.read(
+        and(present('about'), eq('edge.to', list(...evidence))),
+      )
+      let from = new Map(evidence.map((eid) => [eid, [] as string[]]))
+      for (let edge of edges) {
+        from.get(str(comp(edge, 'edge')?.to))
+          ?.push(str(comp(edge, 'edge')?.from))
+      }
+      for (let [eid, tasks] of from) {
+        candidates.set(eid, [...new Set([...tasks, taskEid(eid)])])
+      }
+    }
+    // The candidates as the pass found them, read together. A decision that
+    // wrote, or failed to, reads its own again.
+    let known = new Map<string, Bundle | undefined>()
+    let taskIn = async (eids: string[]) => {
+      let unread = eids.filter((eid) => !known.has(eid))
+      if (unread.length) {
+        let rows = await g.get(unread, parts)
+        let found = new Map(rows.map((row) => [row.entity.eid, row]))
+        for (let eid of unread) known.set(eid, found.get(eid))
+      }
+      return eids.map((eid) => known.get(eid)).find((row) => row?.task)
+    }
+    // Whether the decision wrote the box.
+    let reconcile = async (bug: Bundle, eids: string[]) => {
+      let closed = false
+      return await fix(async () => {
+        let evidence = bug.entity.eid
+        let eid = taskEid(evidence)
+        let task = await taskIn(eids)
+        if (task) {
+          let close = bug.archived && !task.cancelled
+            ? 'cancelled'
+            : bug.resolved && !task.completed && !task.cancelled
+            ? 'completed'
+            : undefined
+          if (close) {
+            let source = close == 'cancelled' ? 'archived' : 'resolved'
+            closed = true
+            await g.apply([{
+              entity: task.entity,
+              [close]: { at: comp(bug, source)?.at },
+              ...(close == 'cancelled' ? { completed: null } : {}),
+              $was: {
+                completed: { at: token(comp(task, 'completed')?.at) },
+                cancelled: { at: token(comp(task, 'cancelled')?.at) },
               },
-            },
-          }])
+            }], { trusted: true })
+            return
+          }
+          if (bug.archived) return
+          let reopen = !!task.completed &&
+            moment(comp(bug, 'regressed')?.at) >
+              moment(comp(task, 'completed')?.at)
+          // Cancelled work archives its bug. Completed work resolves nothing:
+          // a resolution needs its explanation, which the resolver writes on
+          // the bug itself, and that resolution completes the task above.
+          if (task.cancelled) {
+            await mark(mutate, [{
+              entity: { eid: bug.entity.eid },
+              archived: {},
+              // A new regression or someone else's mark invalidates this answer.
+              $was: {
+                bug: { fault: token(comp(bug, 'bug')?.fault) },
+                resolved: { at: token(comp(bug, 'resolved')?.at) },
+                archived: { at: token(comp(bug, 'archived')?.at) },
+                regressed: {
+                  at: token(comp(bug, 'regressed')?.at),
+                  error: token(comp(bug, 'regressed')?.error),
+                },
+              },
+            }])
+          }
+          if (task.cancelled || bug.resolved) return
+          return {
+            task,
+            bug: evidence,
+            reopen,
+            open: true,
+            last: last(evidence, url),
+          }
         }
-        if (task.cancelled || bug.resolved) return
+        if (bug.resolved || bug.archived) return
+        let project = await home()
+        let page = /^https?:/.test(url)
+          ? `${base(url)}/${encodeURIComponent(evidence)}`
+          : web && `${base(web)}${remoteBug(url, evidence)}`
+        let where = page
+          ? `[the tracker](${page})`
+          : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
+        let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
+          'Fix tracker bug'
+        task = {
+          entity: { eid },
+          task: {},
+          doc: {
+            title,
+            body: `Fix the bug recorded at ${where}.${
+              /^https?:/.test(url) ? '' : APP
+            }`,
+          },
+          filed: { ...(project ? { project } : {}), priority: 1 },
+          $was: { doc: { title: null } },
+        }
         return {
           task,
           bug: evidence,
-          reopen,
-          open: true,
           last: last(evidence, url),
+          writes: [
+            task,
+            link(eid, 'about', evidence),
+            ...knock(g, project, evidence, title, where),
+          ],
         }
+      }) || closed
+    }
+    await locate(bugs.map((bug) => bug.entity.eid))
+    await taskIn([...candidates.values()].flat())
+    // The work commits first; telling the tracker a fixer took the bug comes
+    // after, so a tracker that cannot take the mark yet (an older Worker
+    // during a deploy) never holds back a fixer. A later pass sends what
+    // failed. A bug the pass was not given is located alone.
+    return async (bug: Bundle) => {
+      if (!bug.bug) return
+      if (!candidates.has(bug.entity.eid)) await locate([bug.entity.eid])
+      let eids = candidates.get(bug.entity.eid)!
+      let wrote = true
+      try {
+        wrote = await reconcile(bug, eids)
+      } finally {
+        if (wrote) { for (let eid of eids) known.delete(eid) }
       }
       if (bug.resolved || bug.archived) return
-      let project = await home()
-      let page = /^https?:/.test(url)
-        ? `${base(url)}/${encodeURIComponent(evidence)}`
-        : web && `${base(web)}${remoteBug(url, evidence)}`
-      let where = page
-        ? `[the tracker](${page})`
-        : `${url}'s tracker: \`yak bug show ${evidence} --source ${url}\``
-      let title = str(comp(bug, 'doc')?.title).split('\n')[0] ||
-        'Fix tracker bug'
-      task = {
-        entity: { eid },
-        task: {},
-        doc: {
-          title,
-          body: `Fix the bug recorded at ${where}.${
-            /^https?:/.test(url) ? '' : APP
-          }`,
-        },
-        filed: { ...(project ? { project } : {}), priority: 1 },
-        $was: { doc: { title: null } },
-      }
-      return {
-        task,
-        bug: evidence,
-        last: last(evidence, url),
-        writes: [
-          task,
-          link(eid, 'about', evidence),
-          ...knock(g, project, evidence, title, where),
-        ],
-      }
-    })
-  // The work commits first; telling the tracker a fixer took the bug comes
-  // after, so a tracker that cannot take the mark yet (an older Worker during
-  // a deploy) never holds back a fixer. A later pass sends what failed.
-  return async (bug: Bundle, url: string, mutate: Client['mutate']) => {
-    if (!bug.bug) return
-    let eids = await linked(bug.entity.eid)
-    await reconcile(bug, url, mutate, eids)
-    if (bug.resolved || bug.archived) return
-    await take(g, bug, await taskIn(eids), mutate)
+      await take(g, bug, await taskIn(eids), fixers, mutate)
+    }
   }
 }

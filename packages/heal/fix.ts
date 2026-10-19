@@ -1,5 +1,5 @@
-// The fixer gates and request shared by legacy bug effects and the tracker
-// follower. A decision and its writes are serialized so the cap sees earlier
+// The fixer gates and request the tracker follower decides with, a pass at a
+// time. A decision and its writes are serialized so the cap sees earlier
 // requests; the task claim guards against another writer taking the work.
 
 import type { Bundle, Comp, Graph } from '@yaks/graph'
@@ -93,11 +93,26 @@ export let active = (fixer: Bundle, now = Date.now()): boolean => {
   return !!fixer.process || young(fixer, STARTING, now)
 }
 
-/** Decide and write through one graph. Gate refusals still commit `writes`. */
+/** What one pass's decisions share, each read once. */
+type Pass = {
+  /** the home project */
+  home: () => Promise<string | undefined>
+  /** whether a project wears `nofix` */
+  muted: (project: string) => Promise<boolean>
+  /** the fixers requested for a bug, with their lifecycle (`reading`) */
+  fixers: (bug: string) => Promise<Bundle[]>
+  /** every fixer without an exit, with its lifecycle */
+  unexited: () => Promise<Bundle[]>
+}
+
+/** Decide and write through one graph, a pass of bugs at a time. Gate
+ * refusals still commit `writes`. */
 export let fixing = (g: Graph, options: Options = {}) => {
   let serial = serially()
   // Slot checks need lifecycle facts, never the computed transcript cost.
+  // A pass reads many bugs' fixers at once, each naming its bug.
   let lifecycle = [
+    'fixer.bug',
     'session.ended',
     'process.pid',
     'created.at',
@@ -140,30 +155,26 @@ export let fixing = (g: Graph, options: Options = {}) => {
     )
   }
   let unexited = and(present('fixer'), absent('exit'))
-  // The home project, resolved once per decision: the work and its gates ask.
-  let homed: Promise<string | undefined> | undefined
-  let home = () => homed ??= named(g, options.project, 'project')
-  let blocked = async ({ task }: Work, history: Bundle[]) => {
+  let blocked = async ({ task }: Work, history: Bundle[], pass: Pass) => {
     let project = str(comp(task, 'filed')?.project)
-    for (let p of new Set([await home(), project])) {
-      if (p && comp(await one(g, p), 'nofix')) return true
+    for (let p of new Set([await pass.home(), project])) {
+      if (p && await pass.muted(p)) return true
     }
     let now = Date.now()
     if (history.some((f) => young(f, options.cooldown ?? 30 * 60_000, now))) {
       return true
     }
-    let running = (await reading(unexited))
-      .filter((f) => active(f, now))
+    let running = (await pass.unexited()).filter((f) => active(f, now))
     return running.length >= (options.cap ?? 2)
   }
 
-  let request = async (work: Work): Promise<Bundle[]> => {
+  let request = async (work: Work, pass: Pass): Promise<Bundle[]> => {
     let { task, bug, reopen, open, last } = work
     if (
       !options.provider || task.cancelled ||
       (!reopen && !open && task.completed)
     ) return []
-    let history = await reading(and(eq('fixer.bug', bug)))
+    let history = await pass.fixers(bug)
     let latest =
       history.toSorted((a, b) =>
         str(comp(b, 'created')?.at).localeCompare(str(comp(a, 'created')?.at))
@@ -194,7 +205,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
       // get a fresh request after cooldown; their stopped transcript stays put.
       if (!open && (history.length || task.claim)) return []
     }
-    if (await blocked(work, continuing ? [] : history)) return []
+    if (await blocked(work, continuing ? [] : history, pass)) return []
     let provider = await named(g, options.provider, 'provider')
     if (!provider) throw new Error(`not a provider: ${options.provider}`)
     let model = await named(g, options.model, 'model')
@@ -242,13 +253,61 @@ export let fixing = (g: Graph, options: Options = {}) => {
     ]
   }
 
-  let fix = (read: () => Promise<Work | undefined>) =>
-    serial(async () => {
-      homed = undefined
-      let work = await read()
-      if (!work) return
-      let rows = [...(work.writes ?? []), ...await request(work)]
-      if (rows.length) await g.apply(rows, { trusted: true })
-    })
-  return { fix, home }
+  /** A pass over some tracker bugs. Its decisions share what they read: the
+   * fixers of every bug in the pass, read together when a decision first asks,
+   * and the home project, mutes and running fixers. A requested fixer changes
+   * its bug's fixers and the slots, so those are read again. `fix` answers
+   * whether it wrote. */
+  return (bugs: string[]) => {
+    let homed: Promise<string | undefined> | undefined
+    let mutes = new Map<string, Promise<boolean>>()
+    let held = new Map<string, Bundle[]>()
+    let together: Promise<void> | undefined
+    let running: Promise<Bundle[]> | undefined
+    let pass: Pass = {
+      home: () => homed ??= named(g, options.project, 'project'),
+      muted: (project) => {
+        if (!mutes.has(project)) {
+          mutes.set(
+            project,
+            Promise.resolve(g.get([project], ['nofix']))
+              .then(([row]) => !!row?.nofix),
+          )
+        }
+        return mutes.get(project)!
+      },
+      fixers: async (bug) => {
+        together ??= (async () => {
+          let rows = bugs.length
+            ? await reading(and(eq('fixer.bug', list(...bugs))))
+            : []
+          for (let each of bugs) held.set(each, [])
+          for (let row of rows) {
+            held.get(str(comp(row, 'fixer')?.bug))?.push(row)
+          }
+        })()
+        await together
+        let known = held.get(bug)
+        if (!known) {
+          held.set(bug, known = await reading(and(eq('fixer.bug', bug))))
+        }
+        return known
+      },
+      unexited: () => running ??= reading(unexited),
+    }
+    let fix = (read: () => Promise<Work | undefined>) =>
+      serial(async () => {
+        let work = await read()
+        if (!work) return false
+        let asked = await request(work, pass)
+        if (asked.length) {
+          held.delete(work.bug)
+          running = undefined
+        }
+        let rows = [...(work.writes ?? []), ...asked]
+        if (rows.length) await g.apply(rows, { trusted: true })
+        return rows.length > 0
+      })
+    return { fix, home: pass.home, fixers: pass.fixers }
+  }
 }
