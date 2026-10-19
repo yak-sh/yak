@@ -203,33 +203,48 @@ export let graphSkill = async (
 }
 
 /** Complete skills and their locators for one repository. Other repositories
- * supply no bodies; every selected skill still has its full locator checked. */
+ * supply no bodies; every selected skill still has its full locator checked.
+ * Companions include file contents in the same repository read for a mirror. */
 export let skillScope = async (
   g: Graph,
   repository: string,
+  companions = false,
 ): Promise<{
   skills: Bundle[]
   places: Map<string, Bundle>
   edges: Bundle[]
+  files: Bundle[]
 }> => {
   let places = new Map<string, Bundle>()
   if (![SKILL, 'references', 'file'].every((c) => g.vocab.comps.includes(c))) {
-    return { skills: [], places, edges: [] }
+    return { skills: [], places, edges: [], files: [] }
   }
-  let rows = await g.read(and(
-    present('references'),
-    eq('edge.to.file.repository', repository),
-    contains('edge.to.file.path', '.claude/skills/'),
-    fields('edge.from', 'edge.to', 'edge.to.file.path'),
-  ))
+  let rows = companions
+    ? await g.read(and(
+      present('file'),
+      eq('file.repository', repository),
+      contains('file.path', '.claude/skills/'),
+      fields('file.path', 'file.repository', 'content.body'),
+    ))
+    : await g.read(and(
+      present('references'),
+      eq('edge.to.file.repository', repository),
+      contains('edge.to.file.path', '.claude/skills/'),
+      fields('edge.from', 'edge.to', 'edge.to.file.path'),
+    ))
   let files = new Set(
-    rows.filter((b) =>
-      primary(
-        text(b, 'file', 'path') ?? '',
-      )
-    ).map((b) => b.entity.eid),
+    rows.filter((b) => primary(text(b, 'file', 'path') ?? ''))
+      .map((b) => b.entity.eid),
   )
-  let links = rows.filter((b) => files.has(text(b, 'edge', 'to') ?? ''))
+  let links = companions
+    ? files.size
+      ? await g.read(and(
+        present('references'),
+        eq('edge.to', list(...files)),
+        fields('edge.from', 'edge.to'),
+      ))
+      : []
+    : rows.filter((b) => files.has(text(b, 'edge', 'to') ?? ''))
   let ids = new Set(
     links.map((b) => text(b, 'edge', 'from'))
       .filter((id): id is string => id != undefined),
@@ -266,6 +281,7 @@ export let skillScope = async (
   return {
     skills,
     places,
+    files: companions ? rows : [],
     edges: skills.flatMap((b) => sites.links.get(b.entity.eid) ?? []),
   }
 }
@@ -348,20 +364,8 @@ export let renderFiles = (
 
 /** The skill documents and text supporting files the graph owns. */
 export let skillFiles = async (g: Graph, repository: string) => {
-  let { skills, places } = await skillScope(g, repository)
-  return renderFiles(
-    skills,
-    places,
-    skills.length
-      ? await g.read(and(
-        present('file'),
-        present('content'),
-        eq('file.repository', repository),
-        contains('file.path', '.claude/skills/'),
-        fields('file.path', 'content.body'),
-      ))
-      : [],
-  )
+  let { skills, places, files } = await skillScope(g, repository, true)
+  return renderFiles(skills, places, files)
 }
 
 // Never follow a link in the skill tree. Missing files represent deletions,

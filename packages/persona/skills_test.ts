@@ -586,3 +586,62 @@ test('a skill scope preserves masked reference evidence without leaking sources'
   assertEquals(edges.length, 2)
   assert(edges.every((b) => (b.edge as { from?: string }).from == undefined))
 })
+
+let inventoried = world()
+let companion = file(repo, '.claude/skills/visible/helper.ts')
+let hidden = file(repo, '.claude/skills/hidden/SKILL.md')
+await inventoried.apply([
+  ...skill('visible', 'visible'),
+  ...skill('hidden', 'hidden'),
+  { ...companion, content: { body: 'Visible support\n' } },
+  ...skill('foreign', 'foreign', elsewhere),
+])
+let restricted: Graph = {
+  ...inventoried,
+  read: async (...args) =>
+    (await inventoried.read(...args)).filter((b) =>
+      b.entity.eid != hidden.entity.eid
+    ).map((b) =>
+      b.entity.eid == companion.entity.eid
+        ? { entity: b.entity, file: b.file }
+        : b
+    ),
+  get: async (...args) =>
+    (await inventoried.get(...args)).filter((b) =>
+      b.entity.eid != hidden.entity.eid
+    ),
+}
+
+test('a skill scope respects hidden locators and masked companion bodies', async () => {
+  let { skills, files } = await skillScope(restricted, repo, true)
+  assertEquals(skills.map((b) => b.entity.eid), ['visible'])
+  assertEquals(
+    files.find((b) => b.entity.eid == companion.entity.eid)?.content,
+    undefined,
+  )
+  assert(
+    files.every((b) => (b.file as { repository: string }).repository == repo),
+  )
+  let rendered = await skillFiles(restricted, repo)
+  assertEquals([...rendered.keys()], ['.claude/skills/visible/SKILL.md'])
+})
+
+let ambiguous = world()
+let otherLocation = file(elsewhere, '.claude/skills/visible/SKILL.md')
+await ambiguous.apply([
+  ...skill('ambiguous', 'visible'),
+  otherLocation,
+  {
+    entity: { eid: derivedEid('other-locator') },
+    edge: { from: 'ambiguous', to: otherLocation.entity.eid },
+    references: {},
+  },
+])
+
+test('repository selection still refuses a second locator in another repository', async () => {
+  await assertRejects(
+    () => skillScope(ambiguous, repo, true),
+    Refused,
+    'references more than one SKILL.md',
+  )
+})
