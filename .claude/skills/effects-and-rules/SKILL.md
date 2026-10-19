@@ -129,6 +129,11 @@ What any errand runner that can't lose work lives with:
   requests, context checkpoints and final results owe subsequent steps;
   synthetic pending progress does not ask the model again. The
   backoff is the pool's, so a handler carries none of its own.
+- **Waiting keeps its run.** A pooled handler can await
+  `attempt.defer(delayMs)` and return normally when a dependency is not ready.
+  Its existing run waits in the queue without holding a slot, spending an
+  attempt or reporting a failure. The positive delay is the earliest it may
+  run again, not a timer loop inside the handler.
 - **Start-up work is `start: true`.** It's owed once when a process starts
   working the pool, by that process, for the code it has; a CLI command
   opening the graph owes nothing (43b4d4e26). Rows that need fixing once are

@@ -468,6 +468,50 @@ its attempt count after progress, giving a subsequent failure its full retry
 allowance. `attempt.retry(body)` retries a local completion while keeping the
 claim, so the handler need not repeat its external work.
 
+A pooled handler waiting for a dependency calls `await attempt.defer(delayMs)`
+and returns normally. The positive, finite delay leaves the same run pending
+until it is due again, releases its claim and slot, and spends no retry attempt.
+It is waiting work, so no failure is reported. The next invocation comes through
+the pool's ordinary queue selection.
+
+```ts
+import { graph } from '@yaks/graph'
+import { loadVocab } from '@yaks/vocab'
+import { ram } from '@yaks/ram'
+import { effectDoc, effects } from '@yaks/effects'
+import { equal } from '@yaks/testing'
+
+let vocab = loadVocab([effectDoc, {
+  $defs: {
+    order: { component: true },
+    send_receipt: { effect: true, created: ['order'] },
+  },
+}])
+let now = 0, calls = 0
+let fx = effects(vocab, { now: () => now })
+let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
+fx.handle({
+  send_receipt: async (_event, _tx, _write, attempt) => {
+    if (++calls == 1) {
+      await attempt!.defer!(1000)
+      return
+    }
+  },
+})
+await g.apply([{ entity: { eid: 'order-1' }, order: {} }])
+await fx.work(g)
+now = 999
+await fx.work(g)
+equal(calls, 1)
+now = 1000
+await fx.work(g)
+equal(calls, 2)
+equal(await g.read('.effect'), [])
+await fx.stop()
+```
+
+Failures still follow the declaration's attempt limit and backoff:
+
 ```ts
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
