@@ -107,6 +107,8 @@ export let service = async (
       options.notice ?? syncNotice(host.graph, direction),
       direction,
       options.timer,
+      undefined,
+      stop,
     )
   let outward = health('delivery'), inward = health('standing')
 
@@ -119,6 +121,7 @@ export let service = async (
       try {
         await pass()
       } catch (error) {
+        if (stop?.aborted && error === stop.reason) return
         try {
           // A failed retry must not report into its own outbox.
           if (remote) console.error('tracker delivery failed —', error)

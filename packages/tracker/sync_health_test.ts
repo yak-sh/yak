@@ -41,3 +41,31 @@ test('sync watchdog preserves the failing errand outcome', async () => {
   let watch = watching(async () => {}, 'delivery')
   await throws(() => watch(down))
 })
+
+let stopping = await (async () => {
+  let time = clock(), stop = new AbortController(), notices = 0
+  let watch = watching(
+    () => {
+      notices++
+      return Promise.resolve()
+    },
+    'standing',
+    (run, ms) => time.after(ms, run),
+    60_000,
+    stop.signal,
+  )
+  let end!: () => void
+  let pending = watch(() =>
+    new Promise<void>((done) => {
+      end = done
+    })
+  )
+  stop.abort()
+  await time.advance(60_000)
+  end()
+  await pending
+  return notices
+})()
+test('a stopped service has no overdue sync notice while it drains', () => {
+  equal(stopping, 0)
+})

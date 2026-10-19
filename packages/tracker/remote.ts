@@ -98,7 +98,10 @@ export let request = async (
       last = error
       // The caller's own deadline or stop ends the request; an attempt's own
       // deadline means another try, on a new connection.
-      if (init.signal?.aborted) break
+      if (init.signal?.aborted) {
+        if (!late(init.signal.reason)) init.signal.throwIfAborted()
+        break
+      }
     }
   }
   throw late(last)

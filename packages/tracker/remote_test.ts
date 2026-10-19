@@ -59,3 +59,17 @@ test("the caller's own deadline ends a request without another attempt", async (
   )
   equal(clients.length, 1)
 })
+
+test('a caller stopping a request preserves its cancellation, not an outage', async () => {
+  let stop = new AbortController(), calls = 0
+  let go = (() => {
+    calls++
+    stop.abort()
+    return Promise.reject(stop.signal.reason)
+  }) as typeof fetch
+  let error = await request(remote, 'bugs', new URLSearchParams(), {
+    signal: stop.signal,
+  }, go).catch((error) => error)
+  equal(error, stop.signal.reason)
+  equal(calls, 1)
+})

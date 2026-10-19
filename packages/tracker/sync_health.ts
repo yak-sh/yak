@@ -17,10 +17,11 @@ export let watching = (
   direction: string,
   after: Timer = timer,
   overdue = 60_000,
+  signal?: AbortSignal,
 ): (pass: () => Promise<void>) => Promise<void> => {
   let failed = false
   let say = (held: boolean) => {
-    if (failed) return
+    if (failed || signal?.aborted) return
     failed = true
     return notice(Error(
       `Tracker ${direction} sync ${

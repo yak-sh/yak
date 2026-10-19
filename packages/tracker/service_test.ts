@@ -250,3 +250,40 @@ let batched = await (async () => {
 test('a flood leaves in bounded intake batches rather than one connection per occurrence', () => {
   equal(batched, { sizes: [100, 100, 5], left: 0 })
 })
+
+// A rolling restart aborts the standing read, not the remote tracker.
+let cancelled = await (async () => {
+  let stop = new AbortController(), g = fixture()
+  let entered!: () => void
+  let reading = new Promise<void>((done) => entered = done)
+  let notices: string[] = [], failure = ''
+  let running = service({ graph: g }, {
+    source: async function* () {},
+    remote,
+    notice: (error) => {
+      notices.push(error.message)
+      return Promise.resolve()
+    },
+    fetch: ((_url, init) => {
+      entered()
+      return new Promise<Response>((_done, fail) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => fail(init.signal?.reason),
+          {
+            once: true,
+          },
+        )
+      })
+    }) as typeof fetch,
+  }, stop.signal).catch((error) => {
+    failure = String(error)
+  })
+  await reading
+  stop.abort()
+  await running
+  return { notices, failure }
+})()
+test('stopping a standing read settles the service without a tracker outage', () => {
+  equal(cancelled, { notices: [], failure: '' })
+})
