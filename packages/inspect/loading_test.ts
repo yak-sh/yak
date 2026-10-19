@@ -120,7 +120,7 @@ test('session tiles distinguish the native loop, managed provider and imported t
   )
   equal(
     importedTile.querySelector('.Tile_Kind')?.textContent?.trim(),
-    'imported',
+    'imported · claude',
   )
   equal(
     unknownTile.querySelector('.Tile_Kind')?.textContent?.trim(),

@@ -300,8 +300,8 @@ export let SessionPage = ({ e, io }: Props): JSX.Element => {
  * Reads are bounded and projected; naming a row never loads a transcript. */
 export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
   let eid = e.entity.eid
-  let request = rows(got.first).find((b) => b.using && !b.imported)
-  let provider = str(request, 'using', 'provider')
+  let using = rows(got.first).find((b) => b.using)
+  let provider = str(using, 'using', 'provider')
   useNamed(io, [provider])
   let origin = e.native
     ? 'native'
