@@ -4,7 +4,7 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { and, contains, eq, fields, list, present } from '@yaks/query'
+import { and, contains, eq, fields, present } from '@yaks/query'
 import { land, LandError, type Run, run } from '@yaks/git/land'
 import {
   localFilesystem,
@@ -95,20 +95,38 @@ let syncRepository = async (
   let lock: Deno.FsFile | undefined
   try {
     root = await Deno.realPath(root)
-    let listing = await git(root, ['worktree', 'list', '--porcelain'])
-    let main = listing.split('\n\n')[0]
-    let mainRoot = main.split('\n').find((l) => l.startsWith('worktree '))
-      ?.slice(9)
-    if (mainRoot != root || !main.includes('\nbranch refs/heads/')) {
+    // Ask only about this checkout. Listing every linked worktree makes each
+    // ordinary poll pay for unrelated agent checkouts in the repository.
+    let check = await command([
+      'rev-parse',
+      '--is-bare-repository',
+      '--path-format=absolute',
+      '--show-toplevel',
+      '--git-common-dir',
+      '--absolute-git-dir',
+      '--symbolic-full-name',
+      '--verify',
+      '--quiet',
+      'HEAD',
+    ], root)
+    let [bare, top, shared, own, branch] = check.out.trimEnd().split('\n')
+    if (bare == 'true') {
       fail('skills: root must be a primary checkout on a branch')
       return out
     }
-    let common = (await git(root, [
-      'rev-parse',
-      '--path-format=absolute',
-      '--git-common-dir',
-    ])).trim()
-    common = await Deno.realPath(common)
+    if (!check.ok && check.code != 1) {
+      throw new Error(
+        check.err || check.out || 'skills: cannot inspect checkout',
+      )
+    }
+    let common = await Deno.realPath(shared)
+    let gitdir = await Deno.realPath(own)
+    // An unborn branch has no HEAD object yet; symbolic-ref still names it.
+    if (!check.ok) branch = (await git(root, ['symbolic-ref', 'HEAD'])).trim()
+    if (top != root || gitdir != common || !branch?.startsWith('refs/heads/')) {
+      fail('skills: root must be a primary checkout on a branch')
+      return out
+    }
     // Keep the inode: unlinking it races with waiters. The kernel releases
     // this advisory lock even when a CLI/effects process crashes.
     lock = await Deno.open(`${common}/skill-mirror.lock`, {
@@ -126,14 +144,7 @@ let syncRepository = async (
       contains('file.path', '.claude/skills/'),
       fields('file.path', 'file.repository', 'content.body'),
     ))
-    let { skills, places } = await skillScope(g, repository)
-    let edges = skills.length
-      ? await g.read(and(
-        present('references'),
-        eq('edge.from', list(...skills.map((b) => b.entity.eid))),
-        fields('edge.from', 'edge.to'),
-      ))
-      : []
+    let { skills, places, edges } = await skillScope(g, repository)
     let locations = new Map<string, Bundle>()
     for (let skill of skills) {
       let location = places.get(skill.entity.eid)

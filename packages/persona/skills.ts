@@ -52,16 +52,18 @@ let shaped = (b: Bundle): boolean => {
 
 /** Resolve referenced SKILL.md entities together. A locator may still name
  * the old folder while a graph rename is waiting to be materialized. */
-export let skillLocations = async (
+let skillSites = async (
   g: Graph,
   skills: (Bundle | string)[],
-): Promise<Map<string, Bundle>> => {
+): Promise<{ places: Map<string, Bundle>; links: Map<string, Bundle[]> }> => {
   let locations = new Map<string, Bundle>()
+  let links = new Map<string, Bundle[]>()
+  let result = { places: locations, links }
   if (
     !g.vocab.comps.includes('references') || !g.vocab.comps.includes('file')
-  ) return locations
+  ) return result
   let ids = skills.map((b) => typeof b == 'string' ? b : b.entity.eid)
-  if (!ids.length) return locations
+  if (!ids.length) return result
   let edges = await g.read(and(
     present('references'),
     eq('edge.from', list(...ids)),
@@ -69,6 +71,8 @@ export let skillLocations = async (
   ))
   let targets = new Map<string, Set<string>>()
   let remember = (from: string, b: Bundle) => {
+    if (!links.has(from)) links.set(from, [])
+    links.get(from)!.push(b)
     let to = text(b, 'edge', 'to')
     if (!to) return
     if (!targets.has(from)) targets.set(from, new Set())
@@ -107,8 +111,11 @@ export let skillLocations = async (
     }
     if (found[0]) locations.set(eid, found[0])
   }
-  return locations
+  return result
 }
+
+export let skillLocations = async (g: Graph, skills: (Bundle | string)[]) =>
+  (await skillSites(g, skills)).places
 
 export let skillLocation = async (g: Graph, skill: Bundle | string) =>
   (await skillLocations(g, [skill])).get(
@@ -200,10 +207,14 @@ export let graphSkill = async (
 export let skillScope = async (
   g: Graph,
   repository: string,
-): Promise<{ skills: Bundle[]; places: Map<string, Bundle> }> => {
+): Promise<{
+  skills: Bundle[]
+  places: Map<string, Bundle>
+  edges: Bundle[]
+}> => {
   let places = new Map<string, Bundle>()
   if (![SKILL, 'references', 'file'].every((c) => g.vocab.comps.includes(c))) {
-    return { skills: [], places }
+    return { skills: [], places, edges: [] }
   }
   let rows = await g.read(and(
     present('references'),
@@ -246,13 +257,16 @@ export let skillScope = async (
       every(),
     ))).filter(shaped)
     : []
-  places = await skillLocations(g, skills)
+  let sites = await skillSites(g, skills)
+  places = sites.places
+  skills = sorted(skills.filter((b) => {
+    let location = places.get(b.entity.eid)
+    return location && text(location, 'file', 'repository') == repository
+  }))
   return {
-    skills: sorted(skills.filter((b) => {
-      let location = places.get(b.entity.eid)
-      return location && text(location, 'file', 'repository') == repository
-    })),
+    skills,
     places,
+    edges: skills.flatMap((b) => sites.links.get(b.entity.eid) ?? []),
   }
 }
 

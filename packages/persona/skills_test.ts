@@ -25,6 +25,7 @@ import {
   skillLocation,
   skillLocations,
   skillsAt,
+  skillScope,
 } from './skills.ts'
 
 let repo = repositoryEid('/repo/.git', 'test-filesystem')
@@ -532,4 +533,56 @@ test('a missing checkout has no local skills and never falls back to graph instr
   } finally {
     await Deno.remove(dir, { recursive: true })
   }
+})
+
+let scoped = world()
+await scoped.apply([
+  ...skill('scoped', 'scoped'),
+  ...skill('outside', 'outside', elsewhere),
+  file(repo, 'notes.md'),
+  {
+    entity: { eid: 'support-reference' },
+    edge: {
+      from: 'scoped',
+      to: file(repo, 'notes.md').entity.eid,
+    },
+    references: {},
+  },
+])
+
+test('a skill scope keeps all reference evidence for only its selected skills', async () => {
+  let { skills, places, edges } = await skillScope(scoped, repo)
+  assertEquals(skills.map((b) => b.entity.eid), ['scoped'])
+  assertEquals(
+    places.get('scoped')?.file,
+    file(repo, '.claude/skills/scoped/SKILL.md').file,
+  )
+  assertEquals(
+    new Set(edges.map((b) => b.entity.eid)),
+    new Set([
+      skill('scoped', 'scoped')[2].entity.eid,
+      'support-reference',
+    ]),
+  )
+  assert(edges.every((b) => (b.edge as { from: string }).from == 'scoped'))
+  assert(edges.every((b) => b.references != undefined))
+})
+
+test('a skill scope preserves masked reference evidence without leaking sources', async () => {
+  let g: Graph = {
+    ...scoped,
+    read: async (...args) =>
+      (await scoped.read(...args)).map((b) =>
+        b.edge
+          ? {
+            ...b,
+            edge: { to: (b.edge as { to: string }).to },
+          }
+          : b
+      ),
+  }
+  let { skills, edges } = await skillScope(g, repo)
+  assertEquals(skills.map((b) => b.entity.eid), ['scoped'])
+  assertEquals(edges.length, 2)
+  assert(edges.every((b) => (b.edge as { from?: string }).from == undefined))
 })

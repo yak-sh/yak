@@ -740,3 +740,90 @@ test('skill mirror only acknowledges exact non-rename export bytes after landing
     Deno.removeSync(dir, { recursive: true })
   }
 })
+
+let checkoutKinds = await (async () => {
+  let { dir, root, g, memory } = await setup()
+  try {
+    await git(root, 'checkout', '--detach')
+    let detached = await syncSkills(g, root, memory)
+    await git(root, 'checkout', 'main')
+    let linked = `${dir}/linked`
+    await git(root, 'worktree', 'add', '-b', 'linked', linked)
+    let child = await syncSkills(g, linked, memory)
+    await git(root, 'symbolic-ref', 'HEAD', 'refs/heads/unborn')
+    let unborn = await syncSkills(g, root, memory)
+    let bareRoot = `${dir}/bare`
+    await git(root, 'init', '--bare', bareRoot)
+    let bare = await syncSkills(g, bareRoot, memory)
+    return { detached, child, unborn, bare }
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})()
+
+test('skills mirror refuses detached, linked and bare roots before importing', () => {
+  for (
+    let result of [
+      checkoutKinds.detached,
+      checkoutKinds.child,
+      checkoutKinds.bare,
+    ]
+  ) {
+    assertEquals(result.read, [])
+    assertEquals(result.wrote, [])
+    assertEquals(result.failed, [
+      'skills: root must be a primary checkout on a branch',
+    ])
+  }
+})
+
+test('skills mirror imports tracked files on an unborn primary branch', () => {
+  assertEquals(checkoutKinds.unborn.failed, [])
+  assertEquals(checkoutKinds.unborn.read.length, 2)
+})
+
+let movedReference = await (async () => {
+  let { dir, root, repository, g, memory } = await setup()
+  try {
+    await syncSkills(g, root, memory)
+    let [skill] = await repoSkills(g, repository)
+    let [edge] = await g.read(and(
+      present('references'),
+      eq('edge.from', skill.entity.eid),
+      every(),
+    ))
+    let companion = identityEid('file', [
+      '.claude/skills/sample/dom.ts',
+      repository,
+    ])
+    await git(root, 'rm', '.claude/skills/sample/SKILL.md')
+    let apply = g.apply
+    g.apply = async (...args) => {
+      g.apply = apply
+      await apply([{
+        entity: edge.entity,
+        edge: { to: companion },
+      }])
+      return apply(...args)
+    }
+    let result = await syncSkills(g, root, memory)
+    let kept = (await g.get([skill.entity.eid]))[0]
+    let reference = (await g.get([edge.entity.eid]))[0]
+    return {
+      conflicts: result.conflicts.length,
+      read: result.read,
+      kept: kept.content,
+      to: (reference.edge as Comp).to,
+      companion,
+    }
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})()
+
+test('skill deletion refuses a reference retargeted after its scope was read', () => {
+  assertEquals(movedReference.conflicts, 1)
+  assertEquals(movedReference.read, [])
+  assertEquals(movedReference.kept, { body: 'Instructions\n' })
+  assertEquals(movedReference.to, movedReference.companion)
+})
