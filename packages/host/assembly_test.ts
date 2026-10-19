@@ -495,12 +495,13 @@ let ruleShadow = await assembly(
   },
 )
 let ruleOwned = ruleShadow.bind(binding()).host
-test('graph-owned rules run against shadows without original plugin rules returning', async () => {
-  await ruleOwned.graph.apply([{
-    entity: { eid: 'b' },
-    book: { author: 'Unknown' },
-  }])
-  equal((await ruleOwned.graph.get(['b']))[0].book, { author: 'Herbert' })
+await ruleOwned.graph.apply([{
+  entity: { eid: 'b' },
+  book: { author: 'Unknown' },
+}])
+let ruleOwnedBook = (await ruleOwned.graph.get(['b']))[0].book
+test('graph-owned rules run against shadows without original plugin rules returning', () => {
+  equal(ruleOwnedBook, { author: 'Herbert' })
 })
 
 let twiceConfigured = (await assembly(
