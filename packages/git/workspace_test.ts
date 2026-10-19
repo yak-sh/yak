@@ -1,6 +1,8 @@
 // Stable filesystem identity and foreign-target refusal through Git's public
 // workspace API, without processes or caller-directory assumptions.
 import { equal, ok, test, throws } from '@yaks/testing'
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { fixture } from './testing.ts'
 import { filesystem, retained, workspaceGit } from './workspace.ts'
 import { repositoryEid } from './host.ts'
@@ -83,10 +85,10 @@ test('unknown and contradictory placement refuses without executing a transport'
   equal(calls, 0)
 })
 
-test('a process keeps its launch subtree after the session switches elsewhere', async () => {
-  equal(await retained(g, 'a'), true)
-  equal(await retained(g, 'c'), false)
-})
+test('a process keeps its launch subtree after the session switches elsewhere', async () =>
+  equal(await retained(g, 'a'), true))
+test('a process on another computer cannot keep this checkout', async () =>
+  equal(await retained(g, 'c'), false))
 
 let cwdGuard = fixture({
   docs: [{
@@ -117,3 +119,108 @@ await cwdGuard.apply([
 ])
 test('an ancestor launch workspace with a checkout cwd also keeps its files', async () =>
   equal(await retained(cwdGuard, 'tree'), true))
+
+let store = ram(g.vocab)
+let watched = graph({ vocab: g.vocab, storage: store })
+store.tx((tx) =>
+  tx.patch([
+    { entity: { eid: 'tree' }, workspace: { machine: 'box', root: '/repo' } },
+    {
+      entity: { eid: 'outside' },
+      workspace: { machine: 'box', root: '/away' },
+    },
+    ...Array.from({ length: 1000 }, (_, i) => [
+      {
+        entity: { eid: `place${i}` },
+        workspace: { machine: 'box', root: '/away' },
+      },
+      {
+        entity: { eid: `process${i}` },
+        process: { workspace: `place${i}`, cwd: '/away' },
+      },
+      {
+        entity: { eid: `home${i}` },
+        home: { workspace: `place${i}`, cwd: '/away' },
+      },
+    ]).flat(),
+  ])
+)
+let read = watched.read.bind(watched),
+  returned = 0,
+  calls = 0,
+  inject = Infinity
+watched.read = async (q, opts) => {
+  let rows = await read(q, opts)
+  returned += rows.length
+  if (++calls == inject) {
+    store.tx((tx) =>
+      tx.patch([{
+        entity: { eid: 'late' },
+        process: { workspace: 'tree' },
+      }])
+    )
+  }
+  return rows
+}
+let kept = await retained(watched, 'tree'), cost = returned, reads = calls
+test('checkout retention does not load unrelated process and home histories', () => {
+  equal(kept, false)
+  ok(
+    cost < 10,
+    `${cost} rows returned beside 1000 unrelated homes and processes`,
+  )
+})
+for (let at = 1; at < reads; at++) {
+  store.tx((tx) => tx.patch([{ entity: { eid: 'late' }, process: null }]))
+  calls = 0
+  inject = at
+  let kept = await retained(watched, 'tree')
+  test(`a process attaching after read ${at} still keeps its checkout`, () => {
+    equal(kept, true)
+  })
+}
+inject = Infinity
+store.tx((tx) =>
+  tx.patch([
+    {
+      entity: { eid: 'box-a' },
+      sandbox: {},
+      workspace: { machine: 'box', root: '/' },
+    },
+    {
+      entity: { eid: 'box-b' },
+      sandbox: {},
+      workspace: { machine: 'box', root: '/' },
+    },
+    {
+      entity: { eid: 'boxed' },
+      workspace: { machine: 'box', root: '/repo', sandbox: 'box-a' },
+    },
+    {
+      entity: { eid: 'foreign-process' },
+      process: { workspace: 'box-b', cwd: '/repo/src' },
+    },
+    {
+      entity: { eid: 'lookalike' },
+      workspace: { machine: 'box', root: '/repoish', sandbox: 'box-a' },
+    },
+    {
+      entity: { eid: 'similar-home' },
+      home: { workspace: 'lookalike', cwd: '/repoish/src' },
+    },
+  ])
+)
+let foreign = await retained(watched, 'boxed')
+test('another sandbox and a similar path cannot keep a checkout', () => {
+  equal(foreign, false)
+})
+store.tx((tx) =>
+  tx.patch([{
+    entity: { eid: 'ancestor-process' },
+    process: { workspace: 'box-a', cwd: '/repo/src' },
+  }])
+)
+let ancestor = await retained(watched, 'boxed')
+test('a process launched at its sandbox root keeps a checkout by cwd', () => {
+  equal(ancestor, true)
+})

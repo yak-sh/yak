@@ -1,6 +1,17 @@
 // Git acts through one explicitly connected filesystem. The transport may be
 // local, SSH or a sandbox; no failed or unknown target chooses the host disk.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
+import {
+  absent,
+  and,
+  contains,
+  eq,
+  fields,
+  limit,
+  list,
+  present,
+  want,
+} from '@yaks/query'
 import { quote } from '@yaks/machine/connectors'
 import type { ComputerTransport } from '@yaks/machine'
 import { filesystemEid } from './placement.ts'
@@ -339,56 +350,61 @@ fi`)).trimEnd()
  * workspace even after a session switches its default. Missing placement is
  * not evidence that it runs elsewhere. */
 export let retained = async (g: Graph, workspace: string): Promise<boolean> => {
-  let [target] = await g.get([workspace])
+  let [target] = await g.get([workspace], ['workspace'])
   let place = target?.workspace as Comp | undefined
   if (!place || typeof place.root != 'string') return true
   let root = place.root.replace(/\/+$/, '')
-  let contexts = await g.read(
-    '.workspace' + (g.vocab.comp('sandbox') ? ' ?sandbox' : ''),
-  )
-  let ids = contexts.filter((b) => {
-    let p = b.workspace as Comp
-    return p.machine == place.machine &&
-      (p.sandbox ?? (b.sandbox ? b.entity.eid : null)) ==
-        (place.sandbox ?? null) &&
-      typeof p.root == 'string' &&
-      (p.root == place.root || p.root.startsWith(root + '/'))
-  }).map((b) => b.entity.eid)
   let inTree = (path: unknown) =>
     typeof path == 'string' &&
     (path == place.root || path.startsWith(root + '/'))
-  let sameContext = (id: unknown) => {
-    let target = contexts.find((b) => b.entity.eid == id)
-    let p = target?.workspace as Comp | undefined
+  let beside = (b: Bundle) => {
+    let p = b.workspace as Comp | undefined
     return p && p.machine == place.machine &&
-      (p.sandbox ?? (target?.sandbox ? target.entity.eid : null)) ==
+      (p.sandbox ?? (b.sandbox ? b.entity.eid : null)) ==
         (place.sandbox ?? null)
   }
-  if (g.vocab.prop('process', 'workspace') && g.vocab.prop('process', 'cwd')) {
-    for (let b of await g.read('.process !exit')) {
-      let p = b.process as Comp
-      if (sameContext(p.workspace) && inTree(p.cwd)) return true
-    }
-  }
-  if (g.vocab.prop('home', 'workspace') && g.vocab.prop('home', 'cwd')) {
-    for (let b of await g.read('.home')) {
-      let h = b.home as Comp
-      if (sameContext(h.workspace) && inTree(h.cwd)) return true
-    }
-  }
-  let held = new Set(ids)
-  if (g.vocab.prop('home', 'workspace')) {
+  let sandbox = g.vocab.comp('sandbox') ? ['sandbox'] : []
+  let contexts = await g.read(and(
+    present('workspace'),
+    ...root ? [contains('workspace.root', root)] : [],
+    ...sandbox.map(want),
+  ))
+  let ids = contexts.filter((b) =>
+    beside(b) && inTree((b.workspace as Comp).root)
+  ).map((b) => b.entity.eid)
+  for (let name of ['process', 'home']) {
+    if (!g.vocab.prop(name, 'workspace') || !g.vocab.prop(name, 'cwd')) continue
+    let rows = await g.read(and(
+      present(name),
+      ...name == 'process' ? [absent('exit')] : [],
+      ...root ? [contains(`${name}.cwd`, root)] : [],
+      fields(`${name}.workspace`, `${name}.cwd`),
+    ))
+    let refs = [...new Set(rows.map((b) => (b[name] as Comp).workspace))]
+      .filter((id): id is string => typeof id == 'string')
+    let local = new Set(
+      (await g.get(refs, ['workspace', ...sandbox]))
+        .filter(beside).map((b) => b.entity.eid),
+    )
     if (
-      (await g.read('.home')).some((b) =>
-        held.has(String((b.home as Comp).workspace))
-      )
+      rows.some((b) => {
+        let p = b[name] as Comp
+        return local.has(String(p.workspace)) && inTree(p.cwd)
+      })
     ) return true
   }
-  if (g.vocab.prop('process', 'workspace')) {
+  // Recheck direct attachments after the cwd checks: another process can
+  // attach while those reads yield. Never keep a liveness snapshot across passes.
+  for (let name of ['home', 'process']) {
+    if (!ids.length || !g.vocab.prop(name, 'workspace')) continue
     if (
-      (await g.read('.process !exit')).some((b) =>
-        held.has(String((b.process as Comp).workspace))
-      )
+      (await g.read(and(
+        present(name),
+        ...name == 'process' ? [absent('exit')] : [],
+        eq(`${name}.workspace`, list(...ids)),
+        fields('entity.eid'),
+        limit(1),
+      ))).length
     ) return true
   }
   return false
