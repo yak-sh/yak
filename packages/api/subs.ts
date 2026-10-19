@@ -152,6 +152,8 @@ export type Subs = {
   restore: (openings: Opening[], deferStatic?: boolean) => void | Promise<void>
   /** Answer deferred static watches on an explicit read/handshake. */
   resume?: () => void | Promise<void>
+  /** Stop observation and cancel registry reads; admitted saves keep running. */
+  stop: () => void
   /** close one subscription */
   close: (sink: Sink, id: string) => void | Promise<void>
   /** close every subscription a sink holds — a client went away */
@@ -440,6 +442,23 @@ export let subscriptions = (graph: Graph, opts: {
   /** Clock used by pending save queries. */
   now?: () => number
 } = {}): Subs => {
+  let base = graph
+  let ending = new AbortController()
+  let readingOpts = (opts?: ReadOpts): ReadOpts => {
+    ending.signal.throwIfAborted()
+    return {
+      ...opts,
+      signal: opts?.signal
+        ? AbortSignal.any([ending.signal, opts.signal])
+        : ending.signal,
+    }
+  }
+  graph = {
+    ...base,
+    read: (q, opts) => base.read(q, readingOpts(opts)),
+    rows: (q, opts) => base.rows(q, readingOpts(opts)),
+    get: (ids, comps, opts) => base.get(ids, comps, readingOpts(opts)),
+  }
   let revision = opts.revision?.()
   let held = new Map<Sink, Map<string, Sub>>()
   let all = () =>
@@ -625,7 +644,8 @@ export let subscriptions = (graph: Graph, opts: {
     }
     return out
   }
-  let saves = saving<Sink>(graph, (fn, ms) =>
+  // Saved peer edits belong to the writer, beyond subscription observation.
+  let saves = saving<Sink>(base, (fn, ms) =>
     (opts.timer ?? ((fn, ms) => {
       let t = setTimeout(fn, ms)
       return () => clearTimeout(t)
@@ -1360,7 +1380,7 @@ export let subscriptions = (graph: Graph, opts: {
   // One pass over the transactions that committed since the last: each one
   // to the raw feeds, then all of them at once to the queries.
   let fanout = (txs: Bundle[][]) => {
-    let target = opts.activity ?? graph
+    let target = opts.activity ?? base
     let c = peek(target)
     if (!c) return commitNow(txs)
     // Refreshes can run after the writer has already answered. The box host
@@ -1393,6 +1413,7 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   let commitNow = (txs: Bundle[][]) => {
+    if (ending.signal.aborted) return
     flush()
     let applied = txs.flat()
     let wrote = new Set(applied.map((b) => b.entity.eid))
@@ -1601,6 +1622,7 @@ export let subscriptions = (graph: Graph, opts: {
   // commit that arrives meanwhile: when their turn comes they are one pass.
   let waiting: { txs: Bundle[][]; done: Promise<void> } | undefined
   let commit = (applied: Bundle[]): void | Promise<void> => {
+    if (ending.signal.aborted) return
     for (let mine of held.values()) {
       for (let sub of mine.values()) {
         if (
@@ -2027,7 +2049,7 @@ export let subscriptions = (graph: Graph, opts: {
     except?: Sink,
     casted = false,
   ): void | Promise<void> => {
-    if (!bundles.length) return
+    if (ending.signal.aborted || !bundles.length) return
     for (let mine of held.values()) {
       for (let sub of mine.values()) {
         if (sub.loading && (!sub.reads || sub.peer)) sub.dirty = true
@@ -2122,7 +2144,7 @@ export let subscriptions = (graph: Graph, opts: {
     })
   }
 
-  const live = transient(graph)
+  const live = transient(base)
   const pending = new Map<Sink, Map<string, TransientFrame[]>>()
   let scheduled = false
   const flush = () => {
@@ -2135,7 +2157,7 @@ export let subscriptions = (graph: Graph, opts: {
       }
     }
   }
-  live.subscribe((frame) => {
+  let stopLive = live.subscribe((frame) => {
     if (syncOf(graph.vocab, frame.component) == 'none') return
     for (const mine of held.values()) {
       for (const sub of mine.values()) {
@@ -2159,7 +2181,8 @@ export let subscriptions = (graph: Graph, opts: {
     name: '@yaks/api',
     hooks: {
       effect: (bundles, _tx, _err, context) => {
-        let target = opts.activity ?? graph
+        if (ending.signal.aborted) return bundles
+        let target = opts.activity ?? base
         if (context?.parent && peek(target)) {
           link(target, bundles, context.parent)
         }
@@ -2209,6 +2232,7 @@ export let subscriptions = (graph: Graph, opts: {
   let enqueue = (sink: Sink, bundles: Bundle[], writer?: PeerWriter) => {
     bundles = formed(bundles)
     let stage = (accepted: Bundle[]) => {
+      if (ending.signal.aborted) return
       let rows = peers.write(sink, accepted)
       if (!rows.length) return
       if (!batch) {
@@ -2313,7 +2337,7 @@ export let subscriptions = (graph: Graph, opts: {
   // changed even when no feed is installed. Such a change has no write set,
   // so every query gets an authoritative reset and retained answers let go.
   let check = (): void | Promise<void> => {
-    if (!opts.revision) return
+    if (ending.signal.aborted || !opts.revision) return
     let next = opts.revision()
     if (Object.is(next, revision)) return
     revision = next
@@ -2341,8 +2365,23 @@ export let subscriptions = (graph: Graph, opts: {
   }
 
   return {
+    stop: () => {
+      if (ending.signal.aborted) return
+      ending.abort(new Refused('subscription registry stopped'))
+      let subs = [...held.values()].flatMap((mine) => [...mine.values()])
+      held.clear()
+      for (let sub of subs) forget(sub, false)
+      for (let share of shared.values()) unshare(share)
+      stopLive()
+      peers.close()
+      pending.clear()
+      observers.clear()
+      batch?.cancel()
+      batch?.resolve()
+      batch = undefined
+    },
     vocab: graph.vocab,
-    activity: opts.activity ?? graph,
+    activity: opts.activity ?? base,
     // A host can read while its own graph apply is saving a relay. This read
     // takes the currently admitted held values without entering ordered work.
     read: (query, readOpts) =>
@@ -2361,11 +2400,13 @@ export let subscriptions = (graph: Graph, opts: {
     },
     enqueue,
     open: (sink, id, query, readOpts) => {
+      ending.signal.throwIfAborted()
       flushPeers()
       checking()
       return open(sink, id, query, readOpts)
     },
     restore: (openings, deferStatic = false) => {
+      ending.signal.throwIfAborted()
       flushPeers()
       checking()
       let rows = new Map<string, Answer>()
@@ -2394,6 +2435,7 @@ export let subscriptions = (graph: Graph, opts: {
       let mine = held.get(sink)
       held.delete(sink)
       for (let sub of mine?.values() ?? []) forget(sub)
+      if (ending.signal.aborted) return saves.drop(sink)
       return ordered(() => {
         // Connection-lifetime values leave with their writer. Timed values
         // remain available for another writer until their own expiry.

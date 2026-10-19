@@ -90,6 +90,7 @@ export let handler = (host: Hosting, options: {
     stopped = true
     cancel()
     stopFeed?.()
+    subs.stop()
   }
   if (stopped) stop()
   else host.stopping?.addEventListener('abort', stop, { once: true })
