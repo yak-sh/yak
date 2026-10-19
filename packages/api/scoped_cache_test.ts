@@ -67,7 +67,10 @@ let fixture = (only?: string, references = false) => {
   }
   return { g, subs, ear, reads: () => reads }
 }
-let reused = fixture()
+let reused = fixture(), reusedFirst = reused.ear(), reusedNext = reused.ear()
+reused.subs.open(reusedFirst.sink, 'books', '.book&*', { person: 'bob' })
+let reusedAnswer = reusedFirst.take()
+reused.subs.drop(reusedFirst.sink)
 let windowed = (() => {
   let { g, subs, ear, reads } = fixture('bob'), alice = ear(), bob = ear()
   let query = '.book&?preference&.order=book.price&.limit=10'
@@ -77,7 +80,7 @@ let windowed = (() => {
   bob.take()
   return { g, reads, alice, bob }
 })()
-test('underfilled windows filter commit facts for each caller before delivering', () => {
+let scopedWindow = (() => {
   let { g, reads, alice, bob } = windowed
   let before = reads()
   g.apply([{
@@ -85,31 +88,38 @@ test('underfilled windows filter commit facts for each caller before delivering'
     book: { price: 4 },
     preference: { color: 'changed' },
   }], { trusted: true })
-  equal(reads(), before)
-  equal(alice.take()[0].bundles, [{
+  return {
+    reads: reads(),
+    before,
+    alice: alice.take()[0].bundles,
+    bob: bob.take()[0].bundles,
+  }
+})()
+test('underfilled windows filter commit facts for each caller before delivering', () => {
+  equal(scopedWindow.reads, scopedWindow.before)
+  equal(scopedWindow.alice, [{
     entity: { eid: 'bob' },
     book: { price: 4 },
   }])
-  equal(bob.take()[0].bundles, [{
+  equal(scopedWindow.bob, [{
     entity: { eid: 'bob' },
     book: { price: 4 },
     preference: { color: 'changed' },
   }])
 })
 test('a person reopens a retained query without reading its unchanged rows', () => {
-  let { subs, ear, reads } = reused, first = ear(), next = ear()
-  subs.open(first.sink, 'books', '.book&*', { person: 'bob' })
-  let answer = first.take()
-  subs.drop(first.sink)
+  let { subs, reads } = reused, next = reusedNext
   let before = reads()
   subs.open(next.sink, 'books', '.book&*', { person: 'bob' })
   equal(reads(), before)
-  equal(next.take(), answer)
+  equal(next.take(), reusedAnswer)
 })
-let separate = fixture()
+let separate = fixture(),
+  separateAlice = separate.ear(),
+  separateBob = separate.ear()
+separate.subs.open(separateAlice.sink, 'books', '.book&*', { person: 'alice' })
 test('shared query answers stay separate for each person', () => {
-  let { subs, ear } = separate, alice = ear(), bob = ear()
-  subs.open(alice.sink, 'books', '.book&*', { person: 'alice' })
+  let { subs } = separate, alice = separateAlice, bob = separateBob
   subs.open(bob.sink, 'books', '.book&*', { person: 'bob' })
   let owned = JSON.stringify(alice.take()), foreign = JSON.stringify(bob.take())
   equal(owned.includes('unsent'), true)
@@ -124,24 +134,26 @@ let retain = (only?: string, references = false) => {
   f.subs.drop(first.sink)
   return f
 }
-let moved = retain()
+let moved = retain(), movedNext = moved.ear()
+// Trusted writes prepare the changed store; each retained-answer case times
+// reopening that answer, not the graph write as well.
+moved.g.apply([{ entity: { eid: 'secret' }, draft: { by: 'bob' } }], {
+  trusted: true,
+})
 test('a retained scoped answer follows trusted ownership changes', () => {
-  let { g, subs, ear } = moved, next = ear()
-  g.apply([{ entity: { eid: 'secret' }, draft: { by: 'bob' } }], {
-    trusted: true,
-  })
+  let { subs } = moved, next = movedNext
   subs.open(next.sink, 'books', '.book&*', { person: 'bob' })
   equal(JSON.stringify(next.take()).includes('unsent'), true)
 })
-let enclosed = retain()
+let enclosed = retain(), enclosedNext = enclosed.ear()
+enclosed.g.apply([{
+  entity: { eid: 'alice' },
+  draft: { by: 'alice', text: 'private' },
+}], {
+  trusted: true,
+})
 test('a retained scoped answer removes public rows made private by the server', () => {
-  let { g, subs, ear } = enclosed, next = ear()
-  g.apply([{
-    entity: { eid: 'alice' },
-    draft: { by: 'alice', text: 'private' },
-  }], {
-    trusted: true,
-  })
+  let { subs } = enclosed, next = enclosedNext
   subs.open(next.sink, 'books', '.book&*', { person: 'bob' })
   equal(next.take()[0].bundles?.map((b) => b.entity.eid), ['bob'])
 })
@@ -149,29 +161,36 @@ let changed = fixture('alice')
 let changedFirst = changed.ear(), changedNext = changed.ear()
 changed.subs.open(changedFirst.sink, 'books', '.book&*', { person: 'bob' })
 changedFirst.take()
+changed.g.apply([{
+  entity: { eid: 'alice' },
+  preference: { color: 'hidden-update' },
+}], {
+  trusted: true,
+})
+let changedFrames = changedFirst.take()
+changed.subs.drop(changedFirst.sink)
 test('routed scoped answers mask foreign aspects before updating the cache', () => {
-  let { g, subs, reads } = changed, first = changedFirst, next = changedNext
-  g.apply([{
-    entity: { eid: 'alice' },
-    preference: { color: 'hidden-update' },
-  }], {
-    trusted: true,
-  })
-  equal(JSON.stringify(first.take()).includes('hidden-update'), false)
-  subs.drop(first.sink)
+  let { subs, reads } = changed, next = changedNext
+  equal(JSON.stringify(changedFrames).includes('hidden-update'), false)
   let before = reads()
   subs.open(next.sink, 'books', '.book&*', { person: 'bob' })
   equal(reads(), before)
   equal(JSON.stringify(next.take()).includes('hidden-update'), false)
 })
 let predicate = fixture('alice')
+let predicateFirst = predicate.ear(), predicateNext = predicate.ear()
+predicate.subs.open(predicateFirst.sink, 'red', '.preference.color=red&*', {
+  person: 'bob',
+})
+predicateFirst.take()
+predicate.g.apply([{ entity: { eid: 'alice' }, book: { price: 4 } }], {
+  trusted: true,
+})
+let predicateFrames = predicateFirst.take()
+predicate.subs.drop(predicateFirst.sink)
 test('foreign personal aspects cannot enter routed query membership', () => {
-  let { g, subs, ear, reads } = predicate, first = ear(), next = ear()
-  subs.open(first.sink, 'red', '.preference.color=red&*', { person: 'bob' })
-  first.take()
-  g.apply([{ entity: { eid: 'alice' }, book: { price: 4 } }], { trusted: true })
-  equal(first.take(), [])
-  subs.drop(first.sink)
+  let { subs, reads } = predicate, next = predicateNext
+  equal(predicateFrames, [])
   let before = reads()
   subs.open(next.sink, 'red', '.preference.color=red&*', { person: 'bob' })
   equal(reads(), before)
@@ -203,17 +222,20 @@ linked.g.apply([{
   entity: { eid: 'target' },
   draft: { by: 'alice', text: 'private' },
 }], { trusted: true })
-test('an active scoped answer masks a reference when its target becomes private', async () => {
+// Resolve delivery and disposal before timing the captured contract.
+let privateFrame = linkedEar.take()[0]
+deliver(privateFrame)
+let privateWatch = watched.value[0].link
+let privateLocal = (await browser.graph.get(['alice']))[0].link
+browser.close()
+test('an active scoped answer masks a reference when its target becomes private', () => {
   equal((publicLink as { to: string }).to, 'target')
-  let frame = linkedEar.take()[0]
-  // Stored-query frames carry whole rows, not patches. Omitting a covered
-  // property must clear its former public value in the real client as well.
-  equal(frame.bundles?.[0].link, {})
-  equal(frame.coverage, undefined)
-  deliver(frame)
-  equal(watched.value[0].link, {})
-  equal((await browser.graph.get(['alice']))[0].link, {})
-  browser.close()
+  // Stored-query frames replace whole rows, so an omitted covered property
+  // clears its former public value in the real client as well.
+  equal(privateFrame.bundles?.[0].link, {})
+  equal(privateFrame.coverage, undefined)
+  equal(privateWatch, {})
+  equal(privateLocal, {})
 })
 let closedLink = fixture('alice', true)
 let closedFirst = closedLink.ear(), closedNext = closedLink.ear()
