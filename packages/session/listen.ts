@@ -170,6 +170,7 @@ export let natives = async (
       present(SESSION),
       ...graph.vocab.comp('process') ? [absent('process')] : [],
       ...graph.vocab.prop(SESSION, 'log') ? [absent(`${SESSION}.log`)] : [],
+      fields('entity.eid'),
     )),
   )
   return own.length
