@@ -118,7 +118,7 @@ export let monitor = (options: {
   let cancel = () => {}
   let busy: Promise<void> | undefined
   let dirty = false
-  let absent = new Set<string>()
+  let absent: Set<string> | undefined
   let retry = 0
   // A telemetry outage must not prevent restoring coverage or retrying it.
   let report = (error: unknown, role?: string) => {
@@ -132,10 +132,12 @@ export let monitor = (options: {
     try {
       let needed = await options.uncovered()
       if (stop.signal.aborted) return
+      // The first inspection discovers what this web must start. Only a
+      // role lost after that baseline is an unexpected coverage failure.
       let previous = absent
       absent = new Set(needed)
       for (let role of needed) {
-        if (!previous.has(role)) {
+        if (previous && !previous.has(role)) {
           report(
             new Error(`No live process serves duty role "${role}"`),
             role,

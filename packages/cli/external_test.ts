@@ -235,7 +235,7 @@ let fixture = (initial: string[] = []) => {
   }
 }
 
-test('coverage reports each absent duty before a launch can succeed', async () => {
+test('initial uncovered duties start without reporting a startup failure', async () => {
   let f = fixture(['effects', 'wake'])
   let launched = deferred<void>()
   let starting = deferred<void>()
@@ -243,11 +243,9 @@ test('coverage reports each absent duty before a launch can succeed', async () =
     starting.resolve()
     return launched.promise
   })
-  // Inspect/report do not wait for worker readiness.
+  // Startup absence is expected until the first worker is ready.
   await starting.promise
   assertEquals(f.events.map((e) => [e.kind, e.role ?? e.roles]), [
-    ['report', 'effects'],
-    ['report', 'wake'],
     ['start', ['effects', 'wake']],
   ])
   launched.resolve()
@@ -297,7 +295,7 @@ test('failed recovery retries on a bounded poll, without flooding missing report
   f.launch(() => Promise.reject(new Error('cannot spawn')))
   try {
     await f.coverage.checked
-    assertEquals(f.events.map((e) => e.kind), ['report', 'start', 'report'])
+    assertEquals(f.events.map((e) => e.kind), ['start', 'report'])
     for (let i = 0; i < 20; i++) f.notify()
     await f.time.advance(99)
     assertEquals(f.events.filter((e) => e.kind == 'start').length, 1)
@@ -308,7 +306,7 @@ test('failed recovery retries on a bounded poll, without flooding missing report
       f.events.filter((e) =>
         e.kind == 'report' && String(e.error).includes('No live process')
       ).length,
-      1,
+      0,
     )
   } finally {
     await f.coverage.close()
@@ -384,10 +382,10 @@ test('web shutdown cancels pending launch, unsubscribes and stops retrying', asy
   f.control.abort()
   await f.coverage.close()
   assertEquals(aborted, true)
-  assertEquals(f.events.map((e) => e.kind), ['report', 'start'])
+  assertEquals(f.events.map((e) => e.kind), ['start'])
   f.notify()
   await f.time.advance(1000)
-  assertEquals(f.events.map((e) => e.kind), ['report', 'start'])
+  assertEquals(f.events.map((e) => e.kind), ['start'])
   assertEquals(f.unsubscribed(), 1)
 })
 
