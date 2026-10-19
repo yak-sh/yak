@@ -1692,6 +1692,32 @@ let keyTest = (ctx: Ctx, c: Clause): boolean => {
     )
 }
 
+// An unmasked owner's local presence policy can be proved by its shape.
+// Reference reads still use their scoped relations, never this owner proof.
+let allowed = (ctx: Ctx): Presence | undefined => {
+  let scope = ctx.visibility?.entity
+  if (
+    !scope || ctx.owner || ctx.correlated ||
+    ctx.d.admitted != '"entity"' ||
+    Object.keys(ctx.visibility?.components ?? {}).length
+  ) return
+  let clauses = flattened(
+    (typeof scope == 'string' ? parse(scope) : scope).clauses,
+  )
+  if (
+    !clauses.length ||
+    clauses.some((c) =>
+      c.kind != 'pred' || !['', EXISTS].includes(opOf(c)) || !blank(c.value)
+    )
+  ) return
+  let facets = [...clauses, absent('tombstone')].map((c) => facetOf(ctx, c))
+  if (facets.some((f) => !f || ctx.backed[f.comp])) return
+  return {
+    all: facets.flatMap((f) => f?.present ? [f.comp] : []),
+    none: facets.flatMap((f) => f && !f.present ? [f.comp] : []),
+  }
+}
+
 let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
@@ -1779,20 +1805,27 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null
   // Presence plus absence selects the still-pending owners, not all the
-  // historical rows of the presence component. Retain the ordinary visible
-  // entity join after selecting those physical keys.
+  // historical rows of the presence component. A proved presence policy can
+  // admit those owners too; every other policy retains its scoped spine.
   if (
     shape && ctx.present && none.length && !ctx.bounded && !ctx.spine &&
     !ctx.candidates && ctx.d.archetypeSource
   ) {
+    let policy = allowed(ctx)
+    let admitted = policy && byArchetype(ctx, {
+      all: [...new Set([...all, ...wearing, ...policy.all ?? []])],
+      none: [...new Set([...none, ...policy.none ?? []])],
+    })
+    if (admitted) shape = admitted
     let held = render(shape)
     ctx.shapeCandidates = true
     ctx.candidates = {
-      sql: `select "entity"."id" from ${
+      sql: `select "entity".${admitted ? '*' : '"id"'} from ${
         ctx.d.archetypeSource(ctx.v)
       } where ${held.sql}`,
       params: held.params,
       test: shape,
+      whole: !!admitted,
     }
   }
   // A disjunction can provide candidates even when no component is required.
