@@ -197,8 +197,8 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
   }
   let vocab = platformVocab()
   let storage = ram(vocab)
-  let directory = graph({ vocab, storage })
-  await directory.apply([
+  let writer = boot(vocab, storage, STORE, true)
+  await writer.g.apply([
     { entity: { eid: 'space' }, space: { slug: 'ada' } },
     {
       entity: { eid: 'app' },
@@ -210,6 +210,7 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
     },
     link(browser, 'worked', 'app'),
   ], { trusted: true, stamp: false })
+  await writer.fx.stop()
   let recovery = boot(vocab, storage, STORE, true)
   await recovery.drain()
   assertEquals(calls, 1)
