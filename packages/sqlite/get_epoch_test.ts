@@ -329,3 +329,35 @@ test('per-call providers bypass the store fixed-provider answer', () => {
   equal(overrides, ['override', 'override', 'override'])
   ok(overrideReads > 0)
 })
+
+let pending = fixture()
+await pending.g.apply([{
+  entity: { eid: 'later' },
+  doc: { title: 'existing' },
+}])
+let pendingRows: Bundle[][] = [], pendingViews: Bundle[][] = []
+let identities: Bundle[][] = [], pendingReuse = -1
+await pending.s.tx(async (tx) => {
+  tx.patch([{ entity: { eid: 'later' }, session: {} }])
+  for (let n = 0; n < 3; n++) {
+    identities.push(pending.s.get(['later']))
+    identities.push(await pending.g.get(['later']))
+    pendingRows.push(tx.read('.session'))
+    pendingViews.push(tx.read('.session', {
+      visibility: { entity: '!apply_receipt' },
+    }))
+  }
+  let before = pending.reads()
+  identities.push(await pending.g.get(['later']))
+  pendingReuse = pending.reads() - before
+})
+identities.push(await pending.g.get(['later']))
+pending.d.close()
+test('a transaction query gathers components whose classification is pending', () => {
+  equal(pendingReuse, 0)
+  for (let rows of [...pendingRows, ...pendingViews, ...identities]) {
+    equal(rows.map((b) => b.entity.eid), ['later'])
+    equal(rows[0].doc, { title: 'existing' })
+    equal(status(rows), 'empty')
+  }
+})

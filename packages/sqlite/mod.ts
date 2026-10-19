@@ -405,8 +405,11 @@ export let storage = (
   base: Opts = {},
 ): Store => {
   let opts = options(driver, vocab, base)
+  let owing = () => [
+    ...new Set((ledgers.get(driver) ?? []).flatMap((u) => u.ledger.owed())),
+  ]
   let identity = (eids: string[], comps?: string[]) =>
-    get(driver, vocab, eids, opts(), comps)
+    get(driver, vocab, eids, opts(), comps, owing())
   let report = base.report ?? logged
   // Whether this store keeps archetypes, and whether their descriptors are
   // numbered like any other entity.
@@ -476,25 +479,27 @@ export let storage = (
     comps: string[] | undefined,
     o: Opts,
     run: () => Bundle[],
+    pending: string[] = owing(),
   ) => {
     if (!policies(o) || virtual(eids, o)) return run()
     // Registries are fixed per store. A per-call replacement is unknown and
     // bypasses reuse; the remaining effective inputs belong in the key.
     let { derived: _d, backed: _b, extend: _e, archetypes: _a, ...inputs } = o
-    return memo.view(keyed(['get', eids, comps, inputs]), run, comps)
+    return memo.view(keyed(['get', eids, comps, inputs, pending]), run, comps)
   }
   let kept = (
     fetch: (eids: string[], comps?: string[]) => Bundle[],
     eids: string[],
     comps?: string[],
     refresh = true,
+    pending: string[] = owing(),
   ) => {
     let o = opts()
     let run = () =>
       o.visibility || virtual(eids, o)
         ? fetch(eids, comps)
         : memo.get(fetch, eids, comps, refresh)
-    return refresh ? reused(eids, comps, o, run) : run()
+    return refresh ? reused(eids, comps, o, run, pending) : run()
   }
   let cached = (eids: string[], comps?: string[], refresh = true) =>
     kept(identity, eids, comps, refresh)
@@ -503,6 +508,7 @@ export let storage = (
     comps: string[] | undefined,
     o: Opts,
     fetch = cached,
+    pending: string[] = owing(),
   ) => {
     let effective = { ...opts(), ...o }
     let eligible = known(o)
@@ -516,18 +522,23 @@ export let storage = (
         eids,
         effective,
         comps,
-        [],
+        pending,
         eligible && !base.visibility && !virtual(eids, effective)
           ? reading(effective, fetch)
           : undefined,
       )
-    return eligible ? reused(eids, comps, effective, run) : run()
+    return eligible ? reused(eids, comps, effective, run, pending) : run()
   }
-  let fetched = (o: Opts = {}, fetch = cached) =>
+  let fetched = (
+    o: Opts = {},
+    fetch = cached,
+    pending: () => string[] = owing,
+  ) =>
     Object.keys(o).every((k) =>
         k != 'now' && (UNREAD.has(k) || k == 'visibility')
       )
-      ? (eids: string[], comps?: string[]) => viewed(eids, comps, o, fetch)
+      ? (eids: string[], comps?: string[]) =>
+        viewed(eids, comps, o, fetch, pending())
       : undefined
   let tested = (query: And, exactIds = false): Filter | undefined => {
     if (!basis(vocab, query, base.derived) || !local(vocab, query)) {
@@ -780,6 +791,7 @@ export let storage = (
             moved,
             comps,
             refresh,
+            pending,
           ),
           ...rest.length ? cached(rest, comps, refresh) : [],
         ].map((b) => [b.entity.eid, b]),
@@ -831,7 +843,7 @@ export let storage = (
             },
             comps,
             (q) => asked(q, o, direct),
-            fetched(o, getting),
+            fetched(o, getting, owed),
           )
         },
         patch: (bundles) => {
