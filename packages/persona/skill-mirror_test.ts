@@ -4,6 +4,7 @@ import { and, eq, every, present } from '@yaks/query'
 import { type Comp, derivedEid, type Graph, identityEid } from '@yaks/graph'
 import { run } from '@yaks/git/land'
 import { localFilesystem, repositoryEid } from '@yaks/git/host'
+import { caught } from '@yaks/tracker/report'
 import { syncSkills } from './skill-mirror.ts'
 import { repoSkills, skillFiles, skillLocation } from './skills.ts'
 import { world } from './testing.ts'
@@ -47,6 +48,46 @@ let setup = async () => {
 }
 let files = async (g: Graph, repository: string) =>
   await g.read(and(present('file'), eq('file.repository', repository), every()))
+
+let master = await (async () => {
+  let { dir, root, repository, g, memory } = await setup()
+  try {
+    await git(root, 'branch', '-m', 'master')
+    let imported = await syncSkills(g, root, memory)
+    if (imported.failed.length) return imported
+    let [skill] = await repoSkills(g, repository)
+    await g.apply([{
+      entity: skill.entity,
+      content: { body: 'Master instructions\n' },
+    }])
+    let unsafe = await syncSkills(g, root, memory, { worktree: root })
+    let exported = await syncSkills(g, root, memory)
+    return {
+      read: imported.read.length,
+      refused: unsafe.failed.length,
+      wrote: exported.wrote.length,
+      failed: exported.failed,
+      landed: !!exported.landed,
+      branch: await git(root, 'branch', '--show-current'),
+      clean: await git(root, 'status', '--porcelain'),
+      body: Deno.readTextFileSync(`${root}/.claude/skills/sample/SKILL.md`),
+    }
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})()
+test('skills mirror lands from a dedicated worktree onto primary branch master', () => {
+  assertEquals(master, {
+    read: 2,
+    refused: 1,
+    wrote: 1,
+    failed: [],
+    landed: true,
+    branch: 'master',
+    clean: '',
+    body: text('sample', 'Master instructions\n'),
+  })
+})
 
 test('skill mirror imports documents and tracked support without canonical oscillation', async () => {
   let { dir, root, repository, g, memory } = await setup()
@@ -155,7 +196,7 @@ test('skill mirror refuses concurrent divergence and dirty main graph exports', 
     await git(root, 'checkout', '--', '.claude/skills/sample/SKILL.md')
     Deno.writeTextFileSync(`${root}/unrelated.txt`, 'precious\n')
     let blocked = await syncSkills(g, root, memory)
-    assert(blocked.failed.some((s) => s.includes('main is dirty')))
+    assert(blocked.failed.some((s) => s.includes('primary checkout is dirty')))
     assertEquals(blocked.landed, undefined)
     assertEquals(Deno.readTextFileSync(path), text())
   } finally {
@@ -338,7 +379,7 @@ test('skill mirror unexpected runner failure rejects and releases lock', async (
   let { dir, root, g, memory } = await setup()
   let fault = new Error('injected unexpected runner failure')
   try {
-    await assertRejects(
+    let error = await assertRejects(
       () =>
         syncSkills(g, root, memory, {
           run: (args, cwd) => {
@@ -348,6 +389,31 @@ test('skill mirror unexpected runner failure rejects and releases lock', async (
         }),
       Error,
       fault.message,
+    )
+    assert(error.message.includes(root))
+    assertEquals(error, fault)
+    let messages: string[] = []
+    await caught(error, {
+      sink: (rows) => {
+        messages.push(
+          ...rows.map((b) => String((b.exception as Comp)?.stack ?? '')),
+        )
+      },
+    })
+    assert(messages.some((message) => message.includes(root)))
+    await assertRejects(
+      () =>
+        syncSkills(g, root, memory, {
+          run: () =>
+            Promise.resolve({
+              ok: false,
+              code: 128,
+              out: '',
+              err: 'injected Git I/O failure',
+            }),
+        }),
+      Error,
+      `skills at ${root}: injected Git I/O failure`,
     )
     assertEquals((await syncSkills(g, root, memory)).read.length, 2)
   } finally {

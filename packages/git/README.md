@@ -572,10 +572,14 @@ The `idle` and `every` options set the idle threshold and pass interval.
 `locate(cwd)` reads the canonical checkout root, common Git directory and
 worktree Git directory without writing to the graph. It returns no observation
 when the directory is missing or is not a checkout; other failures remain
-errors. `reconcile(g, common)` removes the `worktree` component from missing
-unmanaged checkouts in that repository, keeping their entities and other
+errors. `primary(g)` lists current primary checkouts on this filesystem,
+checking observations against Git without changing the graph.
+`reconcile(g, common)` removes the `worktree` component from unmanaged checkouts
+whose directory or Git metadata is gone, keeping their entities and other
 components. Managed rows retain the history `restore` needs. The service
-reconciles each repository before collecting its idle worktrees.
+reconciles each repository before collecting its idle worktrees, including
+repositories whose common directory disappeared, and reports unexpected failures
+through the host with the repository path.
 
 Host-local locking assumes one filesystem and one shared graph, used by
 cooperating processes on that machine. A checkout moved on disk, or changed by

@@ -126,11 +126,23 @@ export let collect = async (
  * worktree kept for what it holds is not, since that is an agent's work in
  * progress. */
 export let service = async (
-  host: { graph: Graph },
+  host: {
+    graph: Graph
+    report?: (
+      error: unknown,
+      context: { tags: Record<string, string> },
+    ) => void | Promise<void>
+  },
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
   processes: () => Promise<Set<string>> = processPaths,
 ): Promise<void> => {
+  let report = (error: unknown, root: string) =>
+    host.report
+      ? host.report(error, {
+        tags: { package: '@yaks/git', step: 'worktree collection', root },
+      })
+      : console.error('@yaks/git worktree collection —', root, error)
   // A pass the service is told to stop (its lease taken by another process)
   // ends between worktrees; a one-shot pass runs whole.
   let stopping = signal.aborted ? undefined : signal
@@ -143,25 +155,30 @@ export let service = async (
     ) {
       if (stopping?.aborted) return
       let common = (r.repository as Comp).common
-      if (typeof common != 'string' || !await there(common)) continue
+      if (typeof common != 'string') continue
       // One repository failing is reported and the pass goes on to the next;
       // what it left is the next pass's to find.
-      let kept = await collect(
-        host.graph,
-        common,
-        options.idle,
-        Date.now(),
-        processes,
-        stopping,
-      ).catch(
-        (error) => {
-          console.warn('@yaks/git worktree collection —', common, error)
-          return {} as Record<string, Held>
-        },
-      )
+      let kept: Record<string, Held> = await (await there(common)
+        ? collect(
+          host.graph,
+          common,
+          options.idle,
+          Date.now(),
+          processes,
+          stopping,
+        )
+        : reconcile(host.graph, common).then(() => ({}))).catch(
+          async (error) => {
+            await report(error, common)
+            return {}
+          },
+        )
       let failed = Object.keys(kept).filter((p) => kept[p] == 'failed')
       if (failed.length) {
-        console.warn('@yaks/git could not take back', failed.join(', '))
+        await report(
+          new Error(`Could not take back ${failed.join(', ')}`),
+          common,
+        )
       }
     }
     if (signal.aborted) return

@@ -11,6 +11,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
+import { and, eq, fields, list, present } from '@yaks/query'
 import { refEid } from './refs.ts'
 import { localFilesystem } from './placement.ts'
 export { filesystemEid, localFilesystem } from './placement.ts'
@@ -110,9 +111,22 @@ export let locate = async (cwd: string): Promise<
       '--show-toplevel',
       '--git-common-dir',
       '--absolute-git-dir',
-    ], true)
+    ])
   } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error
+    if (
+      error instanceof Error &&
+      error.message.includes('fatal: not a git repository')
+    ) {
+      try {
+        await Deno.lstat(`${cwd}/.git`)
+      } catch (missing) {
+        if (missing instanceof Deno.errors.NotFound) return undefined
+        throw missing
+      }
+    }
+    if (!(error instanceof Deno.errors.NotFound)) {
+      throw new Error(`Git checkout ${cwd}: ${String(error)}`, { cause: error })
+    }
     // ENOENT can also mean the git executable is missing. Only a missing
     // checkout directory is an absent observation.
     try {
@@ -121,7 +135,7 @@ export let locate = async (cwd: string): Promise<
       if (missing instanceof Deno.errors.NotFound) return undefined
       throw missing
     }
-    throw error
+    throw new Error(`Git checkout ${cwd}: ${String(error)}`, { cause: error })
   }
   if (!dirs) return undefined
   let [path, common, gitdir] = await Promise.all(
@@ -130,7 +144,40 @@ export let locate = async (cwd: string): Promise<
   return { path, common, gitdir }
 }
 
-/** Retire missing unmanaged checkout observations, keeping the entity and its
+/** Current primary checkouts on this filesystem. Historical observations and
+ * managed restore records do not stand in for a checkout that Git can open. */
+export let primary = async (g: Graph): Promise<string[]> => {
+  let filesystem = await localFilesystem(g)
+  let repos = await g.read(and(
+    eq('repository.workspace', filesystem.entity.eid),
+    fields('repository.common'),
+  ))
+  let common = new Map(repos.map((b) => [
+    b.entity.eid,
+    (b.repository as Comp).common,
+  ]))
+  if (!common.size) return []
+  let trees = await g.read(and(
+    present('worktree'),
+    eq('worktree.repository', list(...common.keys())),
+    fields('worktree.repository', 'worktree.gitdir', 'workspace.root'),
+  ))
+  let roots: string[] = []
+  for (let b of trees) {
+    let tree = b.worktree as Comp
+    let root = (b.workspace as Comp | undefined)?.root
+    let dir = common.get(String(tree.repository))
+    if (tree.gitdir != dir || typeof root != 'string') continue
+    let current = await locate(root)
+    if (
+      current && current.gitdir == dir && current.common == dir &&
+      current.path == root
+    ) roots.push(root)
+  }
+  return [...new Set(roots)].sort()
+}
+
+/** Retire obsolete unmanaged checkout observations, keeping the entity and its
  * other components. Managed rows retain the history required by restore. */
 export let reconcile = async (g: Graph, common: string): Promise<void> => {
   let filesystem = await localFilesystem(g)
@@ -143,20 +190,20 @@ export let reconcile = async (g: Graph, common: string): Promise<void> => {
     let w = tree.worktree as Comp
     let path = (tree.workspace as Comp | undefined)?.root
     if (w.managed || typeof path != 'string') continue
-    try {
-      await Deno.stat(path)
-    } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error
-      await g.apply([{
-        entity: { eid: tree.entity.eid },
-        worktree: null,
-        $was: {
-          worktree: Object.fromEntries(
-            Object.entries(w).map(([key, value]) => [key, token(value)]),
-          ),
-        },
-      }])
-    }
+    let current = await locate(path)
+    if (
+      current?.path == path && current.common == common &&
+      current.gitdir == w.gitdir
+    ) continue
+    await g.apply([{
+      entity: { eid: tree.entity.eid },
+      worktree: null,
+      $was: {
+        worktree: Object.fromEntries(
+          Object.entries(w).map(([key, value]) => [key, token(value)]),
+        ),
+      },
+    }])
   }
 }
 

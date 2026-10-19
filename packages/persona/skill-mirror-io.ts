@@ -88,13 +88,14 @@ export let prepareTree = async (
       .trim()
   let top = (await git(tree, ['rev-parse', '--show-toplevel'])).trim()
   let branch = (await git(tree, ['symbolic-ref', '--quiet', 'HEAD'])).trim()
+  let primary = (await git(root, ['symbolic-ref', '--quiet', 'HEAD'])).trim()
   if (
     await Deno.realPath(dir) != common || await Deno.realPath(tree) == root ||
     await Deno.realPath(gitdir) == common || top != await Deno.realPath(tree) ||
-    branch == 'refs/heads/main' ||
+    branch == primary ||
     (await git(tree, ['status', '--porcelain=v1', '--untracked-files=all']))
       .trim()
-  ) throw new Refused('skills: export needs a clean linked non-main worktree')
+  ) throw new Refused('skills: export needs a clean linked worktree')
   let current = (await git(tree, ['rev-parse', 'HEAD'])).trim()
   if (current == head) return
   let ancestor = await run(

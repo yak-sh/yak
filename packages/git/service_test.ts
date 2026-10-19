@@ -8,6 +8,7 @@ import {
   discover,
   inUse,
   localFilesystem,
+  primary,
   processPaths,
 } from './host.ts'
 import {
@@ -246,14 +247,51 @@ test('collection retires externally removed observations and preserves managed r
     await git(f.repo, 'worktree', 'remove', gone)
     await git(f.repo, 'worktree', 'remove', managed)
     await git(f.repo, 'branch', '-D', 'gone')
-    await discover(f.g, f.repo)
+    let main = await discover(f.g, f.repo)
     let [ref] = await f.g.read('.ref.name=refs/heads/gone')
     assertEquals((ref.ref as { present: boolean }).present, false)
     assertEquals(await collect(f.g, f.common), {})
     assertEquals((await f.g.get([tree.entity.eid]))[0]?.worktree, undefined)
     assert((await f.g.get([saved.entity.eid]))[0]?.worktree)
     assertEquals(await collect(f.g, f.common), {})
+    assertEquals(await primary(f.g), [f.repo])
+    await Deno.rename(f.common, f.common + '.saved')
+    assertEquals(await primary(f.g), [])
+    assert((await f.g.get([main.entity.eid]))[0]?.worktree)
+    await service({ graph: f.g }, {})
+    let [kept] = await f.g.get([main.entity.eid])
+    assertEquals(kept.worktree, undefined)
+    assertEquals(kept.workspace, main.workspace)
+    assert((await f.g.get([saved.entity.eid]))[0]?.worktree)
   } finally {
     await f.free()
   }
+})
+
+let corrupt = await (async () => {
+  let f = await fixture()
+  try {
+    let tree = await discover(f.g, f.repo)
+    await Deno.rename(f.common, f.common + '.saved')
+    await Deno.mkdir(f.common)
+    let errors: unknown[] = []
+    let roots: unknown[] = []
+    await service({
+      graph: f.g,
+      report: (error, context) => {
+        errors.push(error)
+        roots.push(context?.tags?.root)
+      },
+    }, {})
+    return {
+      errors: errors.map((e) => String(e).includes(f.repo)),
+      roots: roots.map((r) => r == f.common),
+      kept: (await f.g.get([tree.entity.eid]))[0]?.worktree != undefined,
+    }
+  } finally {
+    await f.free()
+  }
+})()
+test('unexpected Git failure reports its root and preserves checkout history', () => {
+  assertEquals(corrupt, { errors: [true], roots: [true], kept: true })
 })

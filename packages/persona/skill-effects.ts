@@ -131,7 +131,7 @@ export let skillEffects = (
             console.warn(`@yaks/persona skills — conflict: ${path}`)
           }
           for (let reason of result.failed) {
-            console.warn('@yaks/persona skills —', reason)
+            console.warn('@yaks/persona skills —', root, reason)
           }
         }
       },

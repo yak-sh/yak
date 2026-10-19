@@ -4,9 +4,13 @@ import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
-import { and, contains, eq, every, fields, list, present } from '@yaks/query'
+import { and, contains, eq, fields, list, present } from '@yaks/query'
 import { land, LandError, type Run, run } from '@yaks/git/land'
-import { localFilesystem, repositoryEid } from '@yaks/git/host'
+import {
+  localFilesystem,
+  primary as primaryRoots,
+  repositoryEid,
+} from '@yaks/git/host'
 import {
   type Agreed,
   type Binding,
@@ -60,23 +64,8 @@ let guarded = (before: Bundle | undefined, change: Bundle): Bundle => {
   return { ...change, $was: was }
 }
 
-/** Primary worktrees known to the graph, not linked agent checkouts. */
-export let skillRoots = async (g: Graph): Promise<string[]> => {
-  let repos = await g.read(and(present('repository'), every()))
-  let common = new Map(repos.map((b) => [
-    b.entity.eid,
-    str(b, 'repository', 'common'),
-  ]))
-  let trees = await g.read(and(present('worktree'), every()))
-  return [
-    ...new Set(
-      trees.filter((b) =>
-        str(b, 'worktree', 'gitdir') ==
-          common.get(str(b, 'worktree', 'repository'))
-      ).map((b) => str(b, 'workspace', 'root')).filter(Boolean),
-    ),
-  ].sort()
-}
+/** Current local primary checkouts, including repositories using master. */
+export let skillRoots = primaryRoots
 
 /** Mirror tracked skill text, keeping agreement outside the graph. Expected
  * conflicts and Git refusals are reports. A failed landing retains its linked
@@ -98,7 +87,7 @@ let syncRepository = async (
   let git = async (at: string, args: string[]) => {
     let r = await command(args, at)
     if (!r.ok) {
-      throw new Refused(r.err || r.out || `git ${args.join(' ')} failed`)
+      throw new Error(r.err || r.out || `git ${args.join(' ')} failed`)
     }
     return r.out
   }
@@ -110,8 +99,8 @@ let syncRepository = async (
     let main = listing.split('\n\n')[0]
     let mainRoot = main.split('\n').find((l) => l.startsWith('worktree '))
       ?.slice(9)
-    if (mainRoot != root || !main.includes('\nbranch refs/heads/main')) {
-      fail('skills: root must be the primary checkout on main')
+    if (mainRoot != root || !main.includes('\nbranch refs/heads/')) {
+      fail('skills: root must be a primary checkout on a branch')
       return out
     }
     let common = (await git(root, [
@@ -372,7 +361,7 @@ let syncRepository = async (
       (await git(root, ['status', '--porcelain=v1', '--untracked-files=all']))
         .trim()
     ) {
-      fail('skills: main is dirty; graph exports not staged')
+      fail('skills: primary checkout is dirty; graph exports not staged')
       return out
     }
     let head = (await git(root, ['rev-parse', 'HEAD'])).trim()
@@ -586,17 +575,30 @@ let syncRepository = async (
 // they called: resolving the root asynchronously let a later one finish its
 // lookup first and take the head.
 let pending = new Map<string, Promise<unknown>>()
+let failed = (root: string, error: unknown) => {
+  if (!(error instanceof Error)) {
+    return new Error(`skills at ${root}: ${String(error)}`, { cause: error })
+  }
+  error.message = `skills at ${root}: ${error.message}`
+  return error
+}
 export let syncSkills = async (
   g: Graph,
   root: string,
   memory: string,
   opts: SkillSyncOpts = {},
 ): Promise<SkillSync> => {
-  root = Deno.realPathSync(root)
+  try {
+    root = Deno.realPathSync(root)
+  } catch (error) {
+    throw failed(root, error)
+  }
   let before = pending.get(root) ?? Promise.resolve()
   let next = before.catch(() => {}).then(() =>
     syncRepository(g, root, memory, opts)
-  )
+  ).catch((error) => {
+    throw failed(root, error)
+  })
   pending.set(root, next)
   try {
     return await next

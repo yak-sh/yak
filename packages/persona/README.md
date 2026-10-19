@@ -174,7 +174,8 @@ Instructions are loaded by title only when needed; discovery needs just titles
 and descriptions.
 
 `syncSkills` uses [@yaks/mirror](../mirror) to reconcile tracked text files in
-the primary checkout with graph values. Imports are atomic, attributed and
+the primary checkout with graph values, on whichever branch it has checked out.
+Only current local checkouts are polled. Imports are atomic, attributed and
 guarded against concurrent graph changes. Concurrent file/graph changes are
 conflicts, not last-writer wins. Exports use a clean dedicated linked worktree,
 commit only skills and land before updating the agreement. A dirty primary
