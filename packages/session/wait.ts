@@ -2,17 +2,25 @@
 // by another process, which an in-process subscription would never hear.
 import type { Graph } from '@yaks/graph'
 
-type Clock = {
+/** The time a wait keeps: when it is, and a callback after a delay that the
+ * returned function cancels. */
+export type Clock = {
   now: () => number
   after: (ms: number, callback: () => void) => () => void
 }
-let real: Clock = {
+
+/** The system's clock. */
+export let system: Clock = {
   now: () => Date.now(),
   after: (ms, callback) => {
     let timer = setTimeout(callback, ms)
     return () => clearTimeout(timer)
   },
 }
+
+// The first beat. Each beat doubles it up to `every`, so a wait answers within
+// about the time it has already waited, and a long one costs a read a beat.
+let start = 25
 
 let pause = (clock: Clock, ms: number, signal?: AbortSignal): Promise<void> =>
   new Promise((resolve) => {
@@ -26,10 +34,11 @@ let pause = (clock: Clock, ms: number, signal?: AbortSignal): Promise<void> =>
     if (signal?.aborted) done()
   })
 
-/** Read initially and after committed changes, at most a second apart by
- * default. Always yield once more on timeout or abort. Stores without revision
- * support are read on each beat. The revision is sampled before the caller's
- * read, so a write during that read cannot be missed. */
+/** Read initially and after committed changes, on a beat that starts at 25 ms
+ * and doubles until it is `every` (a second by default). Always yield once
+ * more on timeout or abort. Stores without revision support are read on each
+ * beat. The revision is sampled before the caller's read, so a write during
+ * that read cannot be missed. */
 export async function* changes(
   graph: { storage: Pick<Graph['storage'], 'revision'> },
   options: {
@@ -39,8 +48,10 @@ export async function* changes(
     clock?: Clock
   } = {},
 ): AsyncGenerator<boolean> {
-  let clock = options.clock ?? real
+  let clock = options.clock ?? system
+  let every = options.every ?? 1000
   let end = clock.now() + (options.timeout ?? Infinity)
+  let beat = Math.min(start, every)
   let first = true, prior: unknown
   for (;;) {
     let done = !!options.signal?.aborted || clock.now() >= end
@@ -53,8 +64,9 @@ export async function* changes(
     if (done) return
     await pause(
       clock,
-      Math.min(options.every ?? 1000, Math.max(0, end - clock.now())),
+      Math.min(beat, Math.max(0, end - clock.now())),
       options.signal,
     )
+    beat = Math.min(beat * 2, every)
   }
 }

@@ -10,10 +10,11 @@ import { aside, dispatchStatus, tail } from './admission.ts'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
-import { done, statusOf as taskStatus } from '@yaks/task'
+import { done, statusComps, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
 import { live, newestAsk, textOf, usingBefore } from './state.ts'
+import { changes, type Clock, system } from './wait.ts'
 
 export type ChildLimits = {
   /** Defaults for user-created tasks, resolved before durable queue admission. */
@@ -26,11 +27,14 @@ export type ChildLimits = {
   prepareChild?: (
     input: { parent: Eid; child: Eid; args: Record<string, unknown> },
   ) => Promise<Omit<Bundle, 'entity'>>
+  /** The clock a wait keeps time by (default the system's). */
+  clock?: Clock
 }
 let locks = new WeakMap<Graph, Promise<unknown>>()
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
-let row = async (g: Graph, eid: Eid) => (await g.get([eid]))[0]
+let row = async (g: Graph, eid: Eid, comps?: string[]) =>
+  (await g.get([eid], comps))[0]
 
 // Waiting needs only the child's place, not its computed transcript status/cost.
 export let childPlace = async (
@@ -42,8 +46,12 @@ export let childPlace = async (
     ['dispatch', 'admitted', 'waiting'].filter((name) => g.vocab.comp(name)),
   ))[0]
 
-let taskRow = async (g: Graph, id: string): Promise<Bundle> => {
-  let b = await row(g, id)
+let taskRow = async (
+  g: Graph,
+  id: string,
+  comps?: string[],
+): Promise<Bundle> => {
+  let b = await row(g, id, comps)
   let num = /^T-(\d+)$/i.exec(id)?.[1]
   if (!b && num) [b] = await g.read(`.task .entity.num=${Number(num)} *`)
   if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
@@ -395,9 +403,13 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
         throw new ToolError('wait', 'name at least one task or child session')
       }
       let ids = [...new Set(named as string[])]
+      // Each look reads only what decides the answer: a task's status marks,
+      // a child's place and transcript status. A child's output is read once,
+      // for the answer.
+      let marks = statusComps(g.vocab)
       if (args.tasks != null) {
         ids = await Promise.all(
-          ids.map(async (id) => (await taskRow(g, id)).entity.eid),
+          ids.map(async (id) => (await taskRow(g, id, marks)).entity.eid),
         )
       }
       for (let id of args.tasks == null ? ids : []) {
@@ -409,46 +421,52 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
       if (!Number.isFinite(ms) || ms < 0) {
         throw new ToolError('timeout', 'invalid timeout')
       }
-      let end = Date.now() + ms
+      let clock = limits.clock ?? system
+      let end = clock.now() + ms
       let back = await aside(g, ctx.session, limits, ctx.signal)
+      let task = async (id: Eid) => ({
+        task: id,
+        status: taskStatus(g.vocab, await taskRow(g, id, marks)),
+        done: await done(g, id),
+      })
+      let child = async (session: Eid) => {
+        let state = dispatchStatus(await childPlace(g, session))
+        let now = await entryStatus(g, session)
+        return state == 'queued' && now != 'stopped' ? 'queued' : now
+      }
+      let ended = (status: string) =>
+        ['settled', 'failed', 'stopped'].includes(status)
       try {
-        for (;;) {
+        for await (
+          let over of changes(g, {
+            timeout: end - clock.now(),
+            signal: ctx.signal,
+            clock,
+          })
+        ) {
           if (ctx.signal?.aborted) return JSON.stringify({ stopped: true })
           if (args.tasks != null) {
-            let results = await Promise.all(ids.map(async (id) => {
-              let b = await taskRow(g, id)
-              return {
-                task: id,
-                status: taskStatus(g.vocab, b),
-                done: await done(g, id),
-              }
-            }))
-            if (results.every((r) => r.done) || Date.now() >= end) {
+            let results = await Promise.all(ids.map(task))
+            if (results.every((r) => r.done) || over) {
               return JSON.stringify(results)
             }
           } else {
-            let results = await Promise.all(ids.map(async (session) => {
-              let state = dispatchStatus(await childPlace(g, session))
-              let now = await entryStatus(g, session)
-              let last = await newestOf(g, session)
-              return {
-                session,
-                status: state == 'queued' && now != 'stopped' ? 'queued' : now,
-                output: last ? textOf(last) : '',
-              }
-            }))
-            if (
-              results.every((r) =>
-                ['settled', 'failed', 'stopped'].includes(r.status)
-              ) || Date.now() >= end
-            ) {
-              return JSON.stringify(results)
+            let states = await Promise.all(ids.map(child))
+            if (states.every(ended) || over) {
+              return JSON.stringify(
+                await Promise.all(ids.map(async (session, n) => {
+                  let last = await newestOf(g, session)
+                  return {
+                    session,
+                    status: states[n],
+                    output: last ? textOf(last) : '',
+                  }
+                })),
+              )
             }
           }
-          await new Promise((go) =>
-            setTimeout(go, Math.min(25, end - Date.now()))
-          )
         }
+        throw new Error('wait ended without a final read')
       } finally {
         await back()
       }

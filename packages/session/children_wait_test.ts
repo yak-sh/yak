@@ -1,11 +1,13 @@
 // A queued poll reads a child's place, not its computed session summary. The
 // transcript still supplies the result, including a stop overriding the queue.
 import { assert, assertEquals } from '@std/assert'
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { storage } from '@yaks/sqlite'
-import { kernelDoc } from '@yaks/kernel/vocab'
+import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
+import { edgeDoc, edgeKeywords } from '@yaks/edge/vocab'
+import { taskDoc } from '@yaks/task/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
@@ -136,4 +138,68 @@ test('SQLite child wait does not evaluate an unused session summary', async () =
   assertEquals(dispatchStatus(await childPlace(sqlite, 'child')), 'queued')
   assertEquals(summaries, 0)
   assert(pollSteps > 0 && pollSteps < 100, `poll used ${pollSteps} VM steps`)
+})
+
+// A task wait reads nothing while the graph is quiet and, once a write moves
+// the store's revision, reads the task's status marks, never its whole row.
+let tasked = loadVocab(
+  [kernelDoc, edgeDoc, taskDoc, sessionDoc, toolsDoc, modelDoc],
+  [kernelKeywords, edgeKeywords],
+)
+let held = ram(tasked)
+let reads = 0, whole = 0, revision = 0
+let tg = graph({
+  vocab: tasked,
+  storage: {
+    ...held,
+    get: (eids, comps, opts) => (
+      reads++, comps || whole++, held.get(eids, comps, opts)
+    ),
+    read: (query, opts, comps) => (reads++, held.read(query, opts, comps)),
+    revision: () => revision,
+  },
+})
+let finish = (eid: string) => {
+  held.tx((tx) => tx.patch([{ entity: { eid }, completed: {} }]))
+  revision++
+}
+await tg.apply([
+  { entity: { eid: 't' }, task: {} },
+  { entity: { eid: 'warm' }, task: {} },
+], { trusted: true })
+// Time moves only while the wait sleeps: each beat holds the clock until the
+// look it wakes is over, the wait asleep again or answered.
+let time = clock(), awake = () => {}
+let asleep = () => new Promise<void>((on) => awake = on)
+let waitOn = sessionTools(tg, {
+  clock: {
+    now: time.now,
+    after: (ms, go) => {
+      let cancel = time.after(ms, () => (go(), asleep()))
+      awake()
+      return cancel
+    },
+  },
+}).find((t) => t.name == 'wait')!
+let look = (task: string, timeout: number) =>
+  Promise.resolve(waitOn.run({ tasks: [task], timeout }, {
+    session: 'parent',
+    call: { entity: { eid: 'wait' } },
+    entries: [],
+  }))
+finish('warm')
+await look('warm', 0)
+
+test('a task wait reads nothing while the graph is quiet and answers within a second of the task finishing', async () => {
+  whole = 0
+  let said: unknown, slept = asleep()
+  let answer = look('t', 10_000).then((s) => (said = JSON.parse(s), awake()))
+  await Promise.race([slept, answer])
+  let looked = reads
+  await time.advance(5_000)
+  assertEquals(reads, looked)
+  finish('t')
+  await time.advance(1_000)
+  assertEquals(said, [{ task: 't', status: 'done', done: true }])
+  assertEquals(whole, 0)
 })

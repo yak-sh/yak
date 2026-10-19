@@ -10,6 +10,7 @@ import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { and, limit, ne, order, present, want } from '@yaks/query'
 import type { ChildLimits } from './children.ts'
+import { changes } from './wait.ts'
 
 let dispatch = (b: Bundle | undefined) => b?.dispatch as Comp | undefined
 
@@ -144,8 +145,8 @@ export let aside = async (
   return async () => {
     await swap(g, session, 'waiting', { state: 'queued' })
     await admitNext(g, limits)
-    while (!signal?.aborted && await state(g, session) == 'queued') {
-      await new Promise((go) => setTimeout(go, 25))
+    for await (let over of changes(g, { signal, clock: limits.clock })) {
+      if (over || await state(g, session) != 'queued') return
     }
   }
 }

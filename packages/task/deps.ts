@@ -27,7 +27,7 @@ import { after } from '@yaks/fp'
 import { detached } from '@yaks/graph/storage'
 import { and, eq, or, present } from '@yaks/query'
 import { EDGE } from '@yaks/edge'
-import { settled, statusOf } from './words.ts'
+import { settled, statusComps, statusOf } from './words.ts'
 import { BLOCKED, CONTAINS, REQUIRES } from './comp.ts'
 
 /**
@@ -130,10 +130,11 @@ export let openDeps = (
   opts: DepOpts = {},
 ): number | Promise<number> => {
   let tx = detached(storage)
+  let marks = statusComps(vocab)
   return after(
     ends(tx, eid, opts.relations ?? [REQUIRES, CONTAINS], 'from'),
     (kids) =>
-      kids.length == 0 ? 0 : after(tx.get(kids), (bundles) => {
+      kids.length == 0 ? 0 : after(tx.get(kids, marks), (bundles) => {
         // Counted by what has settled, so a child the storage does not hold —
         // and which therefore cannot be shown to have finished — stays counted.
         let done = bundles.filter((b) => settled(statusOf(vocab, b))).length
@@ -156,7 +157,7 @@ export let done = (
   eid: Eid,
   opts: DepOpts = {},
 ): boolean | Promise<boolean> =>
-  after(held.storage.get([eid]), (bundles) => {
+  after(held.storage.get([eid], statusComps(held.vocab)), (bundles) => {
     if (!bundles[0] || !settled(statusOf(held.vocab, bundles[0]))) return false
     return after(openDeps(held, eid, opts), (count) => count == 0)
   }) as boolean | Promise<boolean>

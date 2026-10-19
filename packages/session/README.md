@@ -391,6 +391,13 @@ Spawned children share one bound, `maxChildren`: a child waits
 `dispatch.state: queued` until fewer than that many are `active`, and a child
 waiting on its own children gives up its place while it waits.
 
+The `wait` tool, like every wait here (`changes` in `@yaks/session/wait`), reads
+again only once the store's revision has moved, on a beat that starts at 25 ms
+and doubles to a second: a short wait answers about as soon as what it waits on
+finishes, and a long one costs at most a read a second. Each read takes a task's
+status marks (`statusComps` in @yaks/task) or a child's place and transcript
+status, never a whole row.
+
 <a id="recorded-tool-execution"></a>
 
 Tool execution vocabulary belongs to `@yaks/tools`. The session loop builds a

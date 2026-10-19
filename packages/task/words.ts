@@ -41,6 +41,14 @@ export let statusOf = (
   b: Record<string, unknown>,
 ): string | null => ladder(v, TASK, b)
 
+/** What {@link statusOf} reads of a task: `task` and the mark on each rung of
+ * the ladder the vocabulary declares. A read naming only these answers the
+ * status without the rest the task wears. */
+export let statusComps = (v: Vocab): string[] => [
+  TASK,
+  ...(v.comp(TASK)?.ladder?.rungs ?? []).map((r) => r.comp),
+]
+
 /** Does this status mean the work is over: finished, or called off? An open
  * task has not settled, and neither has one somebody is on (`wip`). This is
  * what {@link https://jsr.io/@yaks/task/doc/~/openDeps | openDeps} counts by

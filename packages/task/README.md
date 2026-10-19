@@ -179,6 +179,11 @@ Another package adds a rung with an `extends` entry, appended after these.
 claim marks work in progress, which is not completion: `settled(status)` is true
 for `done` and `cancelled` alone.
 
+`statusComps(vocab)` names what the status reads: `task` and the mark on every
+rung, including those another package adds. A read naming only these answers the
+status without the rest a task wears, which is how `done` and `openDeps` read:
+`graph.get([eid], statusComps(vocab))`.
+
 ## Blocked is not a status
 
 `blocked{on}` describes an external obstacle independently of status. Adding it
@@ -291,11 +296,11 @@ and Cloudflare Workers with suitable storage and package resolution.
 
 ## Interface
 
-| Import path        | Exports                                                                                                                                                                                                                  |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/task`       | `taskDoc`, `tasks`, `settled`, `statusOf`, `gated`, `openDeps`, `dependencies`, `dependents`, `done`, `answer`; types `Choice`, `Decision`, `DepOpts`; constants `TASK`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`. |
-| `@yaks/task/vocab` | `taskDoc` and `docs`.                                                                                                                                                                                                    |
-| `@yaks/task/graph` | `plugins()`, returning the task graph plugin in an array.                                                                                                                                                                |
-| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                                                         |
-| `@yaks/task/form`  | `DecisionForm`, `answerPlace` for a decision question and its answer.                                                                                                                                                    |
-| `@yaks/task/views` | `views`: the `Status` renderer, the status read with `statusOf` through the vocabulary the view was chosen by; `inspectViews()`: loads a task's page in the inspector.                                                   |
+| Import path        | Exports                                                                                                                                                                                                                                 |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/task`       | `taskDoc`, `tasks`, `settled`, `statusOf`, `statusComps`, `gated`, `openDeps`, `dependencies`, `dependents`, `done`, `answer`; types `Choice`, `Decision`, `DepOpts`; constants `TASK`, `CANCELLED`, `BLOCKED`, `REQUIRES`, `CONTAINS`. |
+| `@yaks/task/vocab` | `taskDoc` and `docs`.                                                                                                                                                                                                                   |
+| `@yaks/task/graph` | `plugins()`, returning the task graph plugin in an array.                                                                                                                                                                               |
+| `@yaks/task/tools` | `runs()`, status patches in `marked`, and the query-building helper `listing()`.                                                                                                                                                        |
+| `@yaks/task/form`  | `DecisionForm`, `answerPlace` for a decision question and its answer.                                                                                                                                                                   |
+| `@yaks/task/views` | `views`: the `Status` renderer, the status read with `statusOf` through the vocabulary the view was chosen by; `inspectViews()`: loads a task's page in the inspector.                                                                  |
