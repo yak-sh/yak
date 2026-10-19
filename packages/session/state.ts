@@ -110,7 +110,8 @@ export let openCalls = (entries: Bundle[]): Bundle[] =>
 
 /** Whether input or a tool answer has arrived beyond the newest request's
  * context boundary. Progress is a model-facing answer, not a final result.
- * This says the model owes work, independently of tools still running. */
+ * The current reply's progress permits one continuation; older progress never
+ * asks again. This says the model owes work independently of tools running. */
 export let modelReady = (entries: Bundle[]): boolean => {
   let all = ordered(entries).filter((b) => !b.notice)
   let ask = newestAsk(all)
@@ -118,8 +119,16 @@ export let modelReady = (entries: Bundle[]): boolean => {
     b.entity.eid == (ask?.ask as Comp | undefined)?.through
   )
   let boundary = through ? seqOf(through) : ask ? seqOf(ask) : 0
+  let calls = new Set(
+    all.filter((b) =>
+      ask && (b.call as Comp | undefined)?.source == ask.entity.eid
+    ).map((b) => b.entity.eid),
+  )
   return all.some((b) =>
-    seqOf(b) > boundary && (kindOf(b) == 'input' || !!b.result)
+    seqOf(b) > boundary && (
+      kindOf(b) == 'input' || !!b.result ||
+      !!b.tool_progress && calls.has(String((b.tool_progress as Comp).call))
+    )
   )
 }
 

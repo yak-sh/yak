@@ -260,6 +260,20 @@ export let sessionStatus = {
         gt(col('seq', 'qi'), col('boundary', 'qa')),
         or(
           wears('result', col('entity', 'qi')),
+          declared('tool_progress') && declared('call')
+            ? exists(select({
+              cols: [lit(1)],
+              from: table('tool_progress', 'qp'),
+              joins: [join(
+                table('call', 'qc'),
+                eq(col('entity', 'qc'), col('call', 'qp')),
+              )],
+              where: and(
+                eq(col('entity', 'qp'), col('entity', 'qi')),
+                eq(col('source', 'qc'), col('entity', 'qa')),
+              ),
+            }))
+            : lit(false),
           and(
             wears('content', col('entity', 'qi')),
             ...inputKinds.map((name) => not(wears(name, col('entity', 'qi')))),
@@ -831,8 +845,7 @@ export let sessionStatus = {
         ),
         prop('attempt', 'by'),
         prop('execution', 'by'),
-        // A call's answer. The runner cannot take another ask before all calls
-        // in the previous turn answer.
+        // Final results close work; progress permits the model to continue.
         as(
           declared('call')
             ? iff(
@@ -863,6 +876,7 @@ export let sessionStatus = {
           'progressed',
         ),
         col('boundary_seq', 'span'),
+        as(col('asked', 'span'), 'ask_id'),
         col('refused_source', 'span'),
         as(eq(col('entity', 'span'), col('newest', 'span')), 'newest'),
         as(eq(col('entity', 'span'), col('asked', 'span')), 'asked'),
@@ -970,7 +984,27 @@ export let sessionStatus = {
           fn(
             'max',
             iff(
-              or(row.input, has('result')),
+              or(
+                row.input,
+                has('result'),
+                declared('tool_progress') && declared('call')
+                  ? and(
+                    has('tool_progress'),
+                    exists(select({
+                      cols: [lit(1)],
+                      from: table('tool_progress', 'rp'),
+                      joins: [join(
+                        table('call', 'rc'),
+                        eq(col('entity', 'rc'), col('call', 'rp')),
+                      )],
+                      where: and(
+                        eq(col('entity', 'rp'), col('entity', 't')),
+                        eq(col('source', 'rc'), col('ask_id', 't')),
+                      ),
+                    })),
+                  )
+                  : lit(false),
+              ),
               col('seq', 't'),
               lit(null),
             ),

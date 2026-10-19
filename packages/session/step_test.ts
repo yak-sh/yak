@@ -1,4 +1,4 @@
-// Hosted steps return independently; pending tool work is not another ask.
+// Hosted steps return independently; tools overlap a model continuation.
 import { equal, test } from '@yaks/testing'
 import { graph, identityEid } from '@yaks/graph'
 import { effectDoc } from '@yaks/effects'
@@ -115,20 +115,21 @@ release()
 await Promise.all(tools)
 let finals = (await entries()).filter((b) => b.result)
 await run('session_run', finals[0].entity.eid, 'result')
-let next = asks[1], finishedAsks = asks.length
+let next = asks[2], finishedAsks = asks.length
 let [boundary] = await g.rows(
   '.entry.session=s .ask .order=-entry.seq .limit=1 .fields=ask.through',
 )
 
-test('independent calls finish together and the next ask includes their finals', () => {
+test('tools overlap a continuation and their finals reach the following ask', () => {
   equal(started, [1, 2])
-  equal(pendingAsks, 1)
-  equal(finishedAsks, 2)
+  equal(pendingAsks, 2)
+  equal(finishedAsks, 3)
   equal(finals.length, 2)
   for (let n of [1, 2]) {
     equal(
       next.items.some((item) =>
-        item.kind == 'result' && item.output.includes(`FINAL_${n}`)
+        item.kind == 'result' && item.output.includes(`FINAL_${n}`) ||
+        item.kind == 'user' && item.text.includes(`FINAL_${n}`)
       ),
       true,
     )
@@ -149,6 +150,6 @@ await run('session_run', 'steering', 'using')
 let secondStepAsks = asks.length
 
 test('input arriving during a model step is consumed by its own owed step', () => {
-  equal(firstStepAsks, 3)
-  equal(secondStepAsks, 4)
+  equal(firstStepAsks, 4)
+  equal(secondStepAsks, 5)
 })
