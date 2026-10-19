@@ -154,7 +154,11 @@ let changed = page(tree, 'Tree')
 // Prepare the rendered fixtures outside the assertion budget.
 test('oracle tree follows child edge order and draws clickable domain advertisements', () => {
   let links = [...treePage.querySelectorAll('[aria-label="Oracle tree"] a')]
-  equal(links.map((a) => a.getAttribute('href')), ['/root', '/first', '/last'])
+  equal(links.map((a) => a.getAttribute('href')), [
+    '/root?v=Oracle',
+    '/first?v=Oracle',
+    '/last?v=Oracle',
+  ])
   ok(links[1].textContent?.includes('Plants oracle'))
   ok(links[1].textContent?.includes('Ask about Plants'))
   equal(treePage.querySelectorAll('.Rows-nested').length, 1)
@@ -170,17 +174,17 @@ test('oracle nodes and conversations go through shared renderers and retain sess
     [...rootPage.querySelectorAll('[data-section="children"] a')].map((a) =>
       a.getAttribute('href')
     ),
-    ['/first', '/last'],
+    ['/first?v=Oracle', '/last?v=Oracle'],
   )
   ok(nodePage.querySelector('[href="/tree"]'))
-  ok(nodePage.querySelector('[data-section="parent"] [href="/root"]'))
+  ok(nodePage.querySelector('[data-section="parent"] [href="/root?v=Oracle"]'))
   ok(
     nodePage.querySelector('[data-section="conversations"] [href="/dialogue"]'),
   )
 })
 test('oracle tree reads new advertisements without a separate tree store', () => {
   ok(
-    changed.querySelector('[href="/first"]')?.textContent?.includes(
+    changed.querySelector('[href="/first?v=Oracle"]')?.textContent?.includes(
       'Updated plant oracle',
     ),
   )
