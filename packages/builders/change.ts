@@ -6,7 +6,7 @@ import { comps, dead } from '@yaks/graph/bundle'
 import { guard } from '@yaks/graph/guard'
 import { resolve } from '@yaks/graph/identity'
 import { after, each } from '@yaks/fp'
-import { and, eq } from '@yaks/query'
+import { and, eq, list } from '@yaks/query'
 import type { Vocab } from '@yaks/vocab'
 import { step, steps } from './steps.ts'
 import { type Options, reconcile } from './build.ts'
@@ -27,24 +27,29 @@ export let changing = (vocab: Vocab, here: Here = {}): Hook =>
     !(b.output as Comp | undefined)?.value
   )
   if (!changes.length) return bundles
+  // Component selections repeat across writes, so keep their scalar queries
+  // reusable in storage. Entity selections are mostly empty and unique: batch
+  // those probes instead of paying one storage operation per changed entity.
+  // Keep each any-of below the host's bind limit, including query overhead.
+  let entities = [...new Set(changes.map((b) => `entity:${b.entity.eid}`))]
   let sources = [
-    ...new Set(changes.flatMap((b) => [
-      `entity:${b.entity.eid}`,
+    ...new Set([
       'component:*',
-      ...comps(b).map(([name]) => `component:${name}`),
-    ])),
-  ]
-  // No arbitrary dependency-owner existence probe: it reads an unrelated
-  // entity even though only these indexed source matches can matter.
-  // One question per source: a component's dependents are the same for every
-  // write, so storage answers them from memory, and an entity's are one probe
-  // that finds none for nearly every entity.
+      ...changes.flatMap((b) => comps(b).map(([name]) => `component:${name}`)),
+    ]),
+  ].map((source) => eq('builder_dep.source', source))
+  for (let i = 0; i < entities.length; i += 64) {
+    let group = entities.slice(i, i + 64)
+    sources.push(
+      eq('builder_dep.source', group.length == 1 ? group[0] : list(...group)),
+    )
+  }
   return after(
     each(
       sources,
       [] as Bundle[],
       (deps, source) =>
-        after(tx.read(and(eq('builder_dep.source', source))), (found) => {
+        after(tx.read(and(source)), (found) => {
           deps.push(...found)
           return deps
         }),

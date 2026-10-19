@@ -141,23 +141,33 @@ let sourceTx = {
 } as unknown as Parameters<ReturnType<typeof changing>>[1]
 let sourceHook = changing(workshop())
 
-test('an unrelated batch probes each dependency source without reading an arbitrary owner', () => {
+let sourceWrites = Array.from({ length: 65 }, (_, i) => ({
+  entity: { eid: `source-${i}` },
+  doc: { title: 'Unrelated' },
+}))
+let sourceNames = [
+  'component:*',
+  'component:doc',
+  ...sourceWrites.map((b) => `entity:${b.entity.eid}`),
+]
+test('an unrelated large batch bounds dependency probes without reading an arbitrary owner', () => {
   sourceQueries = []
-  let writes = [
-    { entity: { eid: 'one' }, doc: { title: 'One' } },
-    { entity: { eid: 'two' }, doc: { title: 'Two' } },
-    { entity: { eid: 'one' }, doc: { body: 'Again' } },
-  ]
+  let writes = [...sourceWrites, sourceWrites[0]]
   equal(sourceHook(writes, sourceTx), writes)
+  // Two reusable component selections and two bounded entity selections.
+  equal(sourceQueries.length, 4)
   equal(
     sourceQueries.flatMap((q) =>
-      q.clauses.map((c) =>
-        c.kind == 'pred' && c.path.join('.') == 'builder_dep.source' &&
-          c.value?.kind == 'scalar'
-          ? c.value.raw
-          : null
+      q.clauses.flatMap((c) =>
+        c.kind == 'pred' && c.path.join('.') == 'builder_dep.source'
+          ? c.value?.kind == 'scalar'
+            ? [c.value.raw]
+            : c.value?.kind == 'list'
+            ? c.value.items.map((v) => v.kind == 'scalar' ? v.raw : null)
+            : []
+          : []
       )
     ),
-    ['entity:one', 'component:*', 'component:doc', 'entity:two'],
+    sourceNames,
   )
 })
