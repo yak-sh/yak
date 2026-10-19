@@ -11,7 +11,7 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
-import { and, eq, fields, list, present } from '@yaks/query'
+import { and, eq, fields, present } from '@yaks/query'
 import { refEid } from './refs.ts'
 import { localFilesystem } from './placement.ts'
 export { filesystemEid, localFilesystem } from './placement.ts'
@@ -148,31 +148,33 @@ export let locate = async (cwd: string): Promise<
  * managed restore records do not stand in for a checkout that Git can open. */
 export let primary = async (g: Graph): Promise<string[]> => {
   let filesystem = await localFilesystem(g)
-  let repos = await g.read(and(
-    eq('repository.workspace', filesystem.entity.eid),
-    fields('repository.common'),
-  ))
-  let common = new Map(repos.map((b) => [
-    b.entity.eid,
-    (b.repository as Comp).common,
-  ]))
-  if (!common.size) return []
-  let dirs = [...common.values()].filter((p): p is string =>
-    typeof p == 'string'
-  )
-  if (!dirs.length) return []
-  let trees = await g.read(and(
+  let rows = await g.read(and(
     present('worktree'),
-    eq('worktree.repository', list(...common.keys())),
-    eq('worktree.gitdir', list(...dirs)),
-    fields('worktree.repository', 'worktree.gitdir', 'workspace.root'),
+    eq('worktree.repository.repository.workspace', filesystem.entity.eid),
+    fields(
+      'worktree.repository',
+      'worktree.gitdir',
+      'workspace.root',
+      'worktree.repository.repository.common',
+    ),
   ))
+  let common = new Map(
+    rows.filter((b) => b.repository).map((b) => [
+      b.entity.eid,
+      (b.repository as Comp).common,
+    ]),
+  )
+  let trees = rows.filter((b) => b.worktree)
   let roots: string[] = []
   for (let b of trees) {
     let tree = b.worktree as Comp
     let root = (b.workspace as Comp | undefined)?.root
     let dir = common.get(String(tree.repository))
-    if (tree.gitdir != dir || typeof root != 'string') continue
+    if (
+      typeof dir != 'string' || tree.gitdir != dir || typeof root != 'string'
+    ) {
+      continue
+    }
     let current = await locate(root)
     if (
       current && current.gitdir == dir && current.common == dir &&
