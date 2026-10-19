@@ -1718,6 +1718,61 @@ let allowed = (ctx: Ctx): Presence | undefined => {
   }
 }
 
+// A classified owner range can test its complete Boolean shape once.
+// Include mandatory facets before unioning alternatives, so an absent leaf
+// never embeds the unrelated catalog. Declined catalogs keep the
+// ordinary component selections.
+let shapeOr = (
+  ctx: Ctx,
+  siblings: Clause[],
+  scopes: Clause[],
+): Map<Clause, Cond> => {
+  let out = new Map<Clause, Cond>()
+  let facet = (c: Clause) => {
+    if (
+      c.kind != 'pred' || !['', EXISTS].includes(opOf(c)) || !blank(c.value)
+    ) return null
+    let f = facetOf(ctx, c)
+    return f && !ctx.backed[f.comp] ? f : null
+  }
+  let indexedOwner = !ctx.bounded && !ctx.owner && !ctx.correlated &&
+    !ctx.spine && !Object.keys(ctx.visibility?.components ?? {}).length &&
+    !claims(ctx, 'pred') && ctx.d.indexed &&
+    siblings.some((c) =>
+      c.kind == 'pred' && !c.not && !c.where && c.path.length == 2 &&
+      c.path[0] != 'entity' && opOf(c) == '' && c.value != null &&
+      !computed(ctx.v, c.path[0]) && !ctx.backed[c.path[0]] &&
+      !ctx.v.prop(c.path[0], c.path[1])?.computed &&
+      !ctx.derived[c.path.join('.')] &&
+      indexFor(ctx, c.path[0], c.path[1], siblings)
+    )
+  if (indexedOwner && ctx.archetypes && ctx.d.archetype) {
+    let required = [...siblings, ...scopes].flatMap((c) => {
+      let f = facet(c)
+      return f ? [f] : []
+    })
+    for (let c of siblings) {
+      if (c.kind != 'or') continue
+      let arms = c.clauses.map((arm) => flattened([arm]).map(facet))
+      if (arms.some((arm) => arm.some((f) => !f))) continue
+      let sets = arms.map((arm) => {
+        let facets = [...required, ...arm.flatMap((f) => f ? [f] : [])]
+        return ctx.archetypes!({
+          all: facets.filter((f) => f.present).map((f) => f.comp),
+          none: facets.filter((f) => !f.present).map((f) => f.comp),
+        })
+      })
+      if (sets.some((ids) => !ids)) continue
+      let ids = [...new Set(sets.flatMap((ids) => ids ?? []))]
+      out.set(
+        c,
+        ids.length ? cond(ctx.d.among(ctx.d.archetype(ctx.owner), ids)) : FALSE,
+      )
+    }
+  }
+  return out
+}
+
 let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let all: string[] = []
   let none: string[] = []
@@ -1765,7 +1820,8 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   let scopes = siblings.some((c) => c.kind == 'or')
     ? siblings.flatMap((c): Clause[] => implied(ctx, c).map(present))
     : []
-  let cs = addressed(ctx, [...siblings, ...scopes]).flatMap((c) => {
+  let shapes = shapeOr(ctx, siblings, scopes)
+  let cs = addressed(ctx, [...siblings, ...scopes], shapes).flatMap((c) => {
     let x = rungs(ctx, c)
     return x?.kind == 'and' ? x.clauses : [x ?? c]
   })
@@ -1809,7 +1865,7 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // admit those owners too; every other policy retains its scoped spine.
   if (
     shape && ctx.present && none.length && !ctx.bounded && !ctx.spine &&
-    !ctx.candidates && ctx.d.archetypeSource
+    !ctx.candidates && !shapes.size && ctx.d.archetypeSource
   ) {
     let policy = allowed(ctx)
     let admitted = policy && byArchetype(ctx, {
@@ -1829,7 +1885,9 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     }
   }
   // A disjunction can provide candidates even when no component is required.
-  let conditions = new Map(rest.map((c) => [c, clause(ctx, c)]))
+  let conditions = new Map(
+    rest.map((c) => [c, shapes.get(c) ?? clause(ctx, c)]),
+  )
   // These reference tests read only a candidate's own key. Filter it before
   // the scoped spine checks visibility, retaining that outer intersection.
   if (
@@ -1883,7 +1941,11 @@ let implied = (ctx: Ctx, c: Clause): string[] => {
 // its required components and exact entity addresses into each arm: applying
 // the narrowing only outside a UNION still scans every entity inside it.
 // Nested disjunctions inherit the same scope.
-let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
+let addressed = (
+  ctx: Ctx,
+  cs: Clause[],
+  shapes: Map<Clause, Cond>,
+): Clause[] => {
   let scope = cs.filter((c): c is Pred =>
     c.kind == 'pred' && !c.not && !c.where && !claims(ctx, 'pred') &&
     (c.path.join('.') == 'entity.eid' && c.op == '=' && c.value != null ||
@@ -1892,7 +1954,7 @@ let addressed = (ctx: Ctx, cs: Clause[]): Clause[] => {
   )
   return scope.length
     ? cs.map((c) =>
-      c.kind == 'or'
+      c.kind == 'or' && !shapes.has(c)
         ? {
           ...c,
           clauses: c.clauses.map((alt): And => ({
@@ -3739,14 +3801,15 @@ let visible = (
   if (tally) return tally
   let catalog = opts.archetypes
   let archetypes: ArchetypeSet | undefined = catalog
-    ? Object.assign(
+    ? Object.defineProperty(
       (p: Presence) =>
         [...p.all ?? [], ...p.none ?? []].some((name) =>
             visibility.components?.[name]
           )
           ? undefined
           : catalog(p),
-      { held: catalog.held },
+      'held',
+      { get: () => catalog.held },
     )
     : undefined
   let out = bound(
