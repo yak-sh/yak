@@ -118,7 +118,7 @@
       "tool": true,
       "noun": "oracle",
       "verb": "query",
-      "description": "Open a native receiving fork of an oracle, using its retained context and the configured model. Returns immediately; continue in the returned session.",
+      "description": "Open a native conversation about a topic, admitting its self and direct family contexts as a frozen prompt with the configured model. Returns immediately; native callers can wait on the delegated session. Retained experiment oracles keep their receiving-fork behavior.",
       "input": {
         "oracle": {
           "type": "string",
@@ -158,7 +158,7 @@
       "tool": true,
       "noun": "oracle",
       "verb": "revise",
-      "description": "Cultivate a topic\u2019s self, parent-facing or children-facing context from recorded evidence. Replaces only supplied directions, each with immutable provenance. Pass the corresponding $was.topic_context tokens from oracle_read; stale writes are refused. Existing receiving conversations keep their admitted contexts.",
+      "description": "Cultivate a topic’s self, parent-facing or children-facing context from recorded evidence. Replaces only supplied directions, each with immutable provenance. Pass the corresponding $was.topic_context tokens from oracle_read; stale writes are refused. Existing receiving conversations keep their admitted contexts.",
       "input": {
         "oracle": {
           "type": "string",

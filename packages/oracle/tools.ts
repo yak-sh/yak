@@ -1,5 +1,5 @@
-// Oracle questions enter the native transcript machinery. Retained context is
-// frozen in a passive session; each question forks that exact snapshot.
+// Topic questions admit immutable context into native conversations. Retained
+// experiment oracles keep their existing receiving-fork snapshot history.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
 import { derivedEid } from '@yaks/graph/identity'
@@ -16,18 +16,15 @@ import { neighborhood } from './context.ts'
 let part = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 
-let context = (node: Bundle, body: string) => {
+let context = (node: Bundle) => {
   let o = part(node, 'oracle')
   return [
     'You are answering in a receiving fork of this oracle. The retained context below belongs to the oracle; this conversation is separate from other callers.',
-    `Topic: ${node.entity.eid}\nSubject: ${
-      part(node, 'doc').title ?? o.domain
-    }`,
-    body || String(o.self ?? ''),
+    `Oracle: ${node.entity.eid}\nDomain: ${o.domain}`,
+    String(o.self ?? ''),
     String(o.shared ?? ''),
     `Evidence entity ids: ${JSON.stringify(o.evidence ?? [])}`,
-    'Grow knowledge in response to this question: discover and reuse existing topics with topic_find before topic_new. oracle_read gives the topic’s current context and $was.topic_context.head precondition; oracle_revise retains the topic’s evidence-backed body with that precondition, and topic_place puts that same topic beneath every useful parent. Keep each topic focused and the tree as small as the questions justify. Read recorded graph sources directly. Use hosted web research when offered by the selected provider; distinguish external citations, user statements and inference. Evidence ids must name the source entries you read, including your recorded research reply when it carries source links. Do not invent research or operating facts. If no source or research tool is available, say what remains unknown.',
-    'Use graph_query to discover related oracles through topic_child edges (child → parent). oracle_query opens a native receiving fork of another oracle. Read its session transcript through graph_query. Answer the current question; no ongoing background work is requested.',
+    'Use graph_query to discover related oracles through oracle_child edges (child → parent). oracle_query opens a native receiving fork of another oracle. Read its session transcript through graph_query. Answer the current question; no ongoing background work is requested.',
   ].filter(Boolean).join('\n\n')
 }
 
@@ -66,7 +63,7 @@ export let runs = (): Runs => ({
     if (!node?.oracle && !node?.topic) throw new Refused('Choose a topic')
     let o = part(node, 'oracle')
     let nearby = node.topic ? await neighborhood(g, node) : undefined
-    let body = nearby?.body ?? context(node, '')
+    let body = nearby?.body ?? context(node)
     let snap = await snapshot(body, node.entity.eid)
     let seed = derivedEid(`oracle context|${node.entity.eid}|${snap.revision}`)
     let anchor = derivedEid(
