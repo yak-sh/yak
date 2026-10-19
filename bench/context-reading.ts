@@ -575,7 +575,7 @@ export async function run(packet: Packet, options: {
           setup.graph,
           { cwd: options.cwd },
           files,
-          options.persona,
+          { persona: options.persona },
         ),
       )
     }
@@ -671,7 +671,7 @@ export async function run(packet: Packet, options: {
           let nativeTools = options.native
             ? readOnly([
               ...harnessTools(host.graph, { machines: binding }),
-              ...skillTools(host.graph, binding),
+              ...skillTools(host.graph),
             ])
             : []
           if (packet.ownerOracle) {
@@ -706,7 +706,7 @@ export async function run(packet: Packet, options: {
             name: 'gpt-6.1-sol',
             tools: nativeTools,
             requestItems: options.native
-              ? (_, __, current) => skillItems(host.graph, current, binding)
+              ? (_, __, current) => skillItems(host.graph, current)
               : undefined,
             remote: () => Promise.resolve([]),
             named: () => [],
