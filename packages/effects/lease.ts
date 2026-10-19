@@ -29,7 +29,7 @@
 // is written.
 
 import { after } from '@yaks/fp'
-import type { Access, Bundle, Eid } from '@yaks/graph'
+import type { Access, Bundle, Comp, Eid } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
@@ -162,8 +162,19 @@ export let drop = async (
   }
 }
 
+let relinquish = (b: Bundle, comp: string, props: string[]): Bundle => ({
+  entity: { eid: b.entity.eid },
+  [comp]: Object.fromEntries(props.map((p) => [p, null])),
+  $was: {
+    [comp]: Object.fromEntries(
+      props.map((p) => [p, token((b[comp] as Comp)?.[p] ?? null)]),
+    ),
+  },
+})
+
 /**
- * Every lease a holder has, as the bundles that release them — to be applied
+ * Every duty and effect lease a holder has, as bundles that release them,
+ * guarded against a concurrent handover — to be applied
  * in the same batch that records the holder's ending, because they are one
  * fact: a process that is over is not doing anything, and the next one to ask
  * should not have to wait out an expiry nobody is using.
@@ -172,13 +183,22 @@ export let released = (
   g: Access,
   holder: Eid,
 ): Bundle[] | Promise<Bundle[]> =>
-  !contested(g) ? [] : after(
-    g.read(`.${LEASE}.holder=${holder}`),
-    (rows: Bundle[]): Bundle[] =>
-      rows.map((b) => ({
-        entity: { eid: b.entity.eid },
-        [LEASE]: { holder: null, until: null },
-      })),
+  after(
+    contested(g) ? g.read(`.${LEASE}.holder=${holder}`) : [],
+    (leases) =>
+      after(
+        g.vocab.comp('effect') ? g.read(`.effect.lease_owner=${holder}`) : [],
+        (runs) => [
+          ...leases.map((b) => relinquish(b, LEASE, ['holder', 'until'])),
+          ...runs.map((b) =>
+            relinquish(b, 'effect', [
+              'lease_owner',
+              'lease_token',
+              'lease_expiry',
+            ])
+          ),
+        ],
+      ),
   )
 
 /** Who holds a lease right now, if anybody — the read a check makes. */

@@ -1,6 +1,7 @@
 // The duty, and the contest for it.
 
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
+import { Stale } from '@yaks/graph/errors'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { test, until as soon } from '@yaks/testing'
 import { blogGraph, pooledBlog } from './testing.ts'
@@ -51,6 +52,62 @@ await take(releasing, 'sweep', { holder: 'p1', hold: 1000, now: at(0) })
 let ending = g()
 await take(ending, 'ours', { holder: 'p1', hold: 1000, now: at(0) })
 await take(ending, 'theirs', { holder: 'p2', hold: 1000, now: at(0) })
+
+let claim = (eid: string, owner = 'p1'): Bundle => ({
+  entity: { eid },
+  effect: {
+    handler: 'post_note',
+    target: 'p1',
+    state: 'pending',
+    attempts: 2,
+    next: new Date(2000).toISOString(),
+    lease_owner: owner,
+    lease_token: eid,
+    lease_expiry: new Date(1000).toISOString(),
+  },
+})
+let claimed = g()
+await claimed.apply([claim('ours'), claim('theirs', 'p2')], { trusted: true })
+
+test('a holder ending frees only its effect claims and keeps retry history', async () => {
+  await claimed.apply(await released(claimed, 'p1'), { trusted: true })
+  let [ours, theirs] = await claimed.get(['ours', 'theirs'])
+  assertEquals(ours.effect, {
+    handler: 'post_note',
+    target: 'p1',
+    state: 'pending',
+    attempts: 2,
+    next: new Date(2000).toISOString(),
+  })
+  assertEquals((theirs.effect as Comp).lease_owner, 'p2')
+})
+
+for (let comp of ['lease', 'effect']) {
+  let graph = g()
+  await take(graph, 'ours', { holder: 'p1', hold: 1000, now: at(0) })
+  await graph.apply([claim('run')], { trusted: true })
+  let release = await released(graph, 'p1')
+  let row = comp == 'lease'
+    ? { entity: { eid: leaseEid('ours') }, lease: { holder: 'p2' } }
+    : { entity: { eid: 'run' }, effect: { lease_owner: 'p2' } }
+  await graph.apply([row], { trusted: true })
+
+  test(`a captured release cannot clear a transferred ${comp} claim`, async () => {
+    await assertRejects(
+      async () => {
+        await graph.apply(release, { trusted: true })
+      },
+      Stale,
+    )
+    let [current] = await graph.get([row.entity.eid])
+    assertEquals(
+      (current[comp] as Comp)[
+        comp == 'lease' ? 'holder' : 'lease_owner'
+      ],
+      'p2',
+    )
+  })
+}
 
 test('a holder ending releases its leases in an ordinary batch without replaying identity stamps', async () => {
   await ending.apply([
