@@ -12,6 +12,7 @@ let fixture = (extra: string[] = []) => {
   let elapsed = 0
   let options: RestartOptions = {
     runtimeDir: '/runtime/',
+    lock: () => Promise.resolve({ close: () => {} }),
     systemctl: '/fake/systemctl',
     run: (command, args) => {
       assertEquals(command, '/fake/systemctl')
@@ -276,4 +277,51 @@ test('restart rolls configured mail even on its first installation', async () =>
   first.options.processes = [{ unit: 'yak-mail' }]
   await restart(first.options)
   assertEquals(started(first).length, 1)
+})
+
+// Exercise the OS lock too: both calls start before either snapshot completes.
+// Finish filesystem work outside the timed assertion.
+let concurrent = await Deno.makeTempDir({ prefix: 'yak-restart-' })
+let active = new Set(['probe@old.service'])
+let snapshots: string[][] = []
+let starts: string[] = []
+let options: RestartOptions = {
+  runtimeDir: concurrent,
+  roles: [{ unit: 'probe', old: ['probe@*.service'] }],
+  ready: () => Promise.resolve(true),
+  run: (_command, args) => {
+    if (args.includes('list-units')) snapshots.push([...active])
+    if (args.includes('start')) {
+      active.add(args[3])
+      starts.push(args[3])
+    }
+    if (args.includes('stop')) {
+      for (let unit of args.slice(3)) active.delete(unit)
+    }
+    return Promise.resolve({
+      code: 0,
+      stdout: [...active].join('\n'),
+      stderr: '',
+    })
+  },
+}
+await Promise.all([restart(options), restart(options)])
+let survivors = [...active]
+// A failed handover must release the same lock for the next caller.
+await assertRejects(() =>
+  restart({
+    ...options,
+    run: () => Promise.reject(new Error('listing failed')),
+  })
+)
+await restart(options)
+await Deno.remove(concurrent, { recursive: true })
+
+test('concurrent restarts leave one replacement and release the lock on failure', () => {
+  assertEquals(snapshots.slice(0, 2), [
+    ['probe@old.service'],
+    [starts[0]],
+  ])
+  assertEquals(survivors, [starts[1]])
+  assertEquals([...active], [starts[2]])
 })

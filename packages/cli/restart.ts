@@ -13,6 +13,7 @@ export type Role = {
 }
 
 export type RestartOptions = {
+  lock?: (path: string) => Promise<{ close: () => void }>
   processes?: import('./config.ts').Config['processes']
   runtimeDir: string
   roles?: Role[]
@@ -72,10 +73,35 @@ let matches = (pattern: string, unit: string) => {
     : unit.startsWith(before) && unit.endsWith(after)
 }
 
+// Keep the inode: unlinking it would let a waiter and a new caller lock
+// different files. The OS releases the lock even if the CLI is killed.
+let lock = async (path: string) => {
+  let file = await Deno.open(path, { create: true, write: true })
+  try {
+    await file.lock(true)
+    return file
+  } catch (error) {
+    file.close()
+    throw error
+  }
+}
+
+/** Serialize the snapshot and handover across CLI processes. */
+export let restart = async (options: RestartOptions): Promise<string> => {
+  let held = await (options.lock ?? lock)(
+    `${options.runtimeDir.replace(/\/$/, '')}/yak-restart.lock`,
+  )
+  try {
+    return await handover(options)
+  } finally {
+    held.close()
+  }
+}
+
 /** Hand every role over through user systemd, and say what was done: each
  * replacement, how long it took to be ready, and the units it replaces. A
  * failure rejects; optional roles are rolled only when active. */
-export let restart = async (options: RestartOptions): Promise<string> => {
+let handover = async (options: RestartOptions): Promise<string> => {
   let execute = options.run ?? run
   let exists = options.ready ?? ready
   let now = options.now ?? (() => performance.now())
