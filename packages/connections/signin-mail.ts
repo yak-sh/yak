@@ -29,17 +29,27 @@ export let codeFor = async (
   read: (q: Query) => Bundle[] | Promise<Bundle[]>,
   address: string,
   since: number,
-  opts: { wait?: number; poll?: number } = {},
+  opts: {
+    wait?: number
+    poll?: number
+    now?: () => number
+    sleep?: (ms: number) => Promise<void>
+  } = {},
 ): Promise<string> => {
-  let deadline = Date.now() + (opts.wait ?? 90_000)
+  let now = opts.now ?? Date.now
+  let sleep = opts.sleep ??
+    ((ms) => new Promise<void>((go) => setTimeout(go, ms)))
+  // A delayed mail pull does not invalidate the code's ten-minute lifetime.
+  let deadline = since + (opts.wait ?? 10 * 60_000)
   for (;;) {
     let code = codeIn(await read(lettersFor(address, since)), address, since)
-    if (code) return code
-    if (Date.now() >= deadline) {
+    let left = deadline - now()
+    if (code && left > 0) return code
+    if (left <= 0) {
       throw new Error(
         `no sign-in code for ${address}; this graph must receive its mail`,
       )
     }
-    await new Promise((go) => setTimeout(go, opts.poll ?? 3_000))
+    await sleep(Math.min(opts.poll ?? 3_000, left))
   }
 }
