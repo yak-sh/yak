@@ -932,7 +932,7 @@ let composed = async (
             return shut()
           }
           try {
-            await wait('process ending', async () =>
+            await wait('process ending', () =>
               finish(selfEid(), ended(code)))
           } catch (e) {
             await report(e, { tags: { step: 'close host' } })

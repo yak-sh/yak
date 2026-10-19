@@ -1002,7 +1002,7 @@ test('graph writers owe an optional effect only when its plugin opts in', async 
   }
 })
 
-test('a process coming up consumes recorded work and leaves settled work alone', async () => {
+let recovery = await (async () => {
   let ran: string[] = []
   let host = await compose(
     { db: ':memory:', plugins: ['shop'] },
@@ -1033,12 +1033,16 @@ test('a process coming up consumes recorded work and leaves settled work alone',
       })),
     )
     await host.duties(AbortSignal.abort())
-    assertEquals(ran, ['Winter'])
+    let first = [...ran]
     await host.duties(AbortSignal.abort())
-    assertEquals(ran, ['Winter'])
+    return { first, next: [...ran] }
   } finally {
     await host.close()
   }
+})()
+test('a process coming up consumes recorded work and leaves settled work alone', () => {
+  assertEquals(recovery.first, ['Winter'])
+  assertEquals(recovery.next, ['Winter'])
 })
 
 test('an explicit pass runs the retries that are due', async () => {
