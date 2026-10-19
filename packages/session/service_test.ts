@@ -156,6 +156,25 @@ test('bounded looks advance every source while another transcript keeps growing'
   assertEquals(fairness.last[1], ['x', 'said 0', 'y', 'said 1'])
 })
 
+let waiting: string[] | undefined
+await projects({
+  waiting: { text: lines('waiting'), ago: 1000 },
+  live: { text: lines('live') },
+}, async (dir) => {
+  let g = locked(store()), seen: Seen = { tails: new Map(), done: new Set() }
+  for (let i = 0; i < 4; i++) {
+    let path = `${dir}/-home-me-code/old-${i}.jsonl`
+    Deno.writeTextFileSync(path, lines('old').split('\n')[0] + '\n')
+    Deno.utimeSync(path, new Date(0), new Date(0))
+    await look(g, dir, seen, { slice: 0, budget: 0 })
+  }
+  waiting = await told(g, 'waiting')
+})
+
+test('new historical files join behind a source already waiting for its turn', () => {
+  assertEquals(waiting?.[0], 'waiting')
+})
+
 let coldChildCall: unknown
 await projects({
   parent: { text: tool },

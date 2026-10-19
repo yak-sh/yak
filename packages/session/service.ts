@@ -342,10 +342,13 @@ export let look = async (
       !parent.f.parent && !seen.tails.has(parent.f.path)
     )
   )
+  // New sources join behind those already waiting, including when the old
+  // backfill finishes a small file and discovers the next one.
+  for (let { f } of candidates.toSorted((a, b) => a.at - b.at)) {
+    if (!turns.has(f.path)) turns.set(f.path, seen.turn = (seen.turn ?? 0) + 1)
+  }
   let fair =
-    candidates.sort((a, b) =>
-      (turns.get(a.f.path) ?? 0) - (turns.get(b.f.path) ?? 0) || a.at - b.at
-    )[0]
+    candidates.sort((a, b) => turns.get(a.f.path)! - turns.get(b.f.path)!)[0]
   if (fair) {
     owed = [fair, ...owed.filter((d) => d != fair)]
     if (fair == old) old = undefined
