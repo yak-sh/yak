@@ -206,9 +206,21 @@ let byArchetype = (
   let ids = ctx.archetypes(predicate)
   if (!ids) return null
   let key = ctx.d.archetype(owner)
-  // A catalog can hold more matching archetypes than a host can bind in one
-  // statement. The dialect's set lookup binds the whole list once.
-  let set = ids.length ? ctx.d.among(key, [...ids]) : { sql: '0', params: [] }
+  // An absent leaf usually admits most shapes. Its positive complement names
+  // the same complete catalog with fewer values, without changing the scoped
+  // owner lookup or the missing-reference result.
+  let positive = missing && !predicate.all?.length &&
+      predicate.none?.length == 1
+    ? ctx.archetypes({ all: predicate.none })
+    : undefined
+  let inverse = positive != null && positive.length < ids.length
+  let chosen = inverse ? positive ?? ids : ids
+  let member = chosen.length
+    ? ctx.d.among(key, [...chosen])
+    : { sql: '0', params: [] }
+  let set = inverse
+    ? { sql: `not (${member.sql})`, params: member.params }
+    : member
   // A dereference that resolved to no entity has no components, so a test for
   // the absence of one succeeds. An ordinary owner — the row being selected, or
   // a child row — always exists. Coalescing the membership tests the referent
