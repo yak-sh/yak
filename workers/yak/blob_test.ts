@@ -169,22 +169,60 @@ type Row = {
   image?: { w: number; h: number }
 }
 
-test('the file door: a page uploads bytes and gets an address', async () => {
+// Stand up empty apps and load the served client before timing the door.
+// No bytes or attachment rows exist until the page uploads them in the case.
+// The constrained app is a separate fixture: deploying its policy is not an
+// upload, and must not dominate the proof that uploads obey that policy.
+let pageDoor = await (async () => {
   let k = await kernel()
   let jeff5 = unique('jeff5')
   let dir = Deno.makeTempDirSync({ prefix: 'tasks-blob-' })
-  let them = await seed(k, [{ slug: jeff5, apps: ['photos'] }])
+  let them = await seed(k, [{
+    slug: jeff5,
+    apps: ['photos', 'pictures', 'dropbox'],
+  }])
+  let agent = connector(k, them.cookie)
+  await agent.tool('app_set', { space: jeff5, app: 'dropbox', access: 'open' })
+  let pictures = { space: jeff5, app: 'pictures' }
+  await agent.tool('app_files', {
+    ...pictures,
+    files: [{
+      path: 'vocab.json',
+      content: JSON.stringify({
+        blob: { maxLength: 4096, contentMediaType: 'image/*' },
+      }),
+    }],
+  })
+  await agent.tool('app_deploy', pictures)
+  let mod = await served(k, dir, `${jeff5}.yaks.app`)
   let mine = browser(k, `${jeff5}.yaks.app`, them.cookie)
   let anyone = browser(k, `${jeff5}.yaks.app`)
+  // Open each empty store before measuring uploads; do not prime the door
+  // with a file or seed the rows its first real upload is meant to create.
+  for (let app of ['photos', 'pictures', 'dropbox']) {
+    assertEquals(
+      await mod.store(`${mine.origin}/${app}/api/`).query('.attachment'),
+      [],
+    )
+  }
+  return { k, jeff5, dir, them, mine, anyone, mod }
+})()
+let pngSha = await hex(png)
+let page = new TextEncoder().encode('<h1>hi</h1>')
+let pageSha = await hex(page)
+
+test('the file door: a page uploads bytes and gets an address', async () => {
+  let { k, jeff5, dir, them, mine, anyone, mod } = pageDoor
   try {
-    let mod = await served(k, dir, `${jeff5}.yaks.app`)
     let store = mod.store(`${mine.origin}/photos/api/`)
+
+    assertEquals(await store.query('.attachment'), [])
 
     // The guide's own two lines: a file in, its address back.
     let file: File = await store.upload(
       new File([png], 'cake.png', { type: 'image/png' }),
     )
-    assertEquals(file.eid, await hex(png))
+    assertEquals(file.eid, pngSha)
     assertEquals(file.mime, 'image/png')
     assertEquals(file.bytes, png.byteLength)
     assertMatch(
@@ -284,10 +322,8 @@ test('the file door: a page uploads bytes and gets an address', async () => {
 
     // On an `open` app, though, a stranger is a writer: the door that lets
     // anyone with the link save a row lets them put a photo beside it.
-    let agent = connector(k, them.cookie)
-    let photos = { space: jeff5, app: 'photos' }
-    await agent.tool('app_set', { ...photos, access: 'open' })
-    let theirs: File = await strangers.upload(
+    let open = mod.store(`${anyone.origin}/dropbox/api/`)
+    let theirs: File = await open.upload(
       new File([new Uint8Array([1, 2, 3])], 'theirs.bin'),
     )
     assert(theirs.eid != file.eid)
@@ -296,17 +332,7 @@ test('the file door: a page uploads bytes and gets an address', async () => {
     // The app says which files it takes, in its vocab.json, and every upload
     // is held to it: its size, and its type as read off the bytes, whatever
     // the upload calls it.
-    await agent.tool('app_files', {
-      ...photos,
-      files: [{
-        path: 'vocab.json',
-        content: JSON.stringify({
-          blob: { maxLength: 4096, contentMediaType: 'image/*' },
-        }),
-      }],
-    })
-    await agent.tool('app_deploy', photos)
-    let page = new TextEncoder().encode('<h1>hi</h1>')
+    store = mod.store(`${mine.origin}/pictures/api/`)
     let said = (f: Blob) => store.upload(f).catch((e: Error) => e.message)
     assertEquals(
       await said(new File([page], 'cake.png', { type: 'image/png' })),
@@ -320,14 +346,14 @@ test('the file door: a page uploads bytes and gets an address', async () => {
     // In parts too: too big when it begins, and the wrong type once whole,
     // when the bytes it made are deleted again, so it begins anew.
     let parts = (sha: string, init: RequestInit) =>
-      k.at(`${jeff5}.yaks.app`, `/photos/api/blob/${sha}`, {
+      k.at(`${jeff5}.yaks.app`, `/pictures/api/blob/${sha}`, {
         ...init,
         headers: { cookie: them.cookie, ...init.headers },
       })
     let begin = (sha: string, bytes: number) =>
       parts(sha, { method: 'POST', body: JSON.stringify({ bytes }) })
     assertEquals((await begin('a'.repeat(64), 4097)).status, 413)
-    let sha = await hex(page)
+    let sha = pageSha
     assertEquals(await (await begin(sha, page.length)).json(), {
       part: 8 * 1024 * 1024,
       need: [1],
