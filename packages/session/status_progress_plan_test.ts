@@ -1,12 +1,12 @@
 // Status decisions that do not need a historical census stay bounded by the turn.
 import { equal, ok, test } from '@yaks/testing'
+import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { storage } from '@yaks/sqlite'
 import { compile, insert, render } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { driver } from '../sqlite/native.ts'
-import { sqlitePath } from '../sqlite/sqlitepath.ts'
 import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'

@@ -1,9 +1,9 @@
+import { sqlitePath } from './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { equal, ok, test } from '@yaks/testing'
 import { compile, render } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { driver } from './native.ts'
-import { sqlitePath } from './sqlitepath.ts'
 import { presenceVocab, seedPresence } from './sparse_presence_fixture.ts'
 
 let db = new Database(':memory:'), d = driver(db), hot = seedPresence(d)
