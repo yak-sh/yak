@@ -22,7 +22,6 @@ export let attributionDoc: VocabDoc = {
       created: ['worked'],
       changed: ['worked'],
       active: pending,
-      sweep: pending,
       description: 'fill the authors of a signed-in browser’s guest rows',
     },
   },

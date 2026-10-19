@@ -8,9 +8,6 @@ export let docs: VocabDoc[] = [{
       changed: ['trashed'],
       removed: ['trashed'],
       active: '(.app|.space)',
-      // Cover marks written before durable notification was installed. Only
-      // the directory reconciles these once on restart; apps never poll.
-      sweep: '(.app|.space) .trashed',
       description: 'deliver current app or space dormancy until acknowledged',
     },
   },
