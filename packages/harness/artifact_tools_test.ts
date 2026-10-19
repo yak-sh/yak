@@ -3,7 +3,7 @@ import { assert, assertEquals, assertRejects } from '@std/assert'
 import { artifactTools, imageContext } from './artifact_tools.ts'
 import { local } from './local.ts'
 import { input } from '@yaks/openai'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import type { Item } from '@yaks/model'
 import {
   artifactBytes,
@@ -142,11 +142,20 @@ test('tool-driven vision reaches the next model request and survives database re
   try {
     let session = await a.start('inspect and attach')
     await a.idle(session)
-    // Async tools can prompt progress-only turns before their final images.
+    // Independent tool progress can carry the image while attach is still
+    // pending. Observe the ask that received both final results, not that
+    // earlier snapshot: replay replaces pending results with their finals.
     let completed = requests.findLast((items) =>
-      items.some((item) => item.kind == 'image')
+      items.some((item) => item.kind == 'image') &&
+      items.filter((item) =>
+          item.kind == 'result' && item.output.startsWith('{')
+        ).length == 2
     )
-    assert(completed, 'a completed image_view must reach the model')
+    assert(
+      completed,
+      'the image and both final tool results must reach the model',
+    )
+    assertEquals(completed, requests.at(-1))
     let images = completed.filter((item) => item.kind == 'image')
     assertEquals(images.length, 1)
     assertEquals(images[0].bytes, png)
@@ -181,17 +190,24 @@ test('tool-driven vision reaches the next model request and survives database re
     assertEquals(requests.at(-1)!.filter((i) => i.kind == 'image').length, 1)
     assertEquals(finals(requests.at(-1)!), finals(completed))
     let entries = await a.transcript(session)
+    assertEquals(
+      entries.filter((e) => e.output && e.content).map((e) =>
+        (e.content as Comp).body
+      ),
+      ['seen', 'seen'],
+    )
     assertEquals(entries.filter((e) => e.attachment).length, 2)
     assertEquals(entries.filter((e) => e.exception).length, 0)
     await a.close()
     h = await harness(dir + '/test.db')
+    entries = await h.g.read(`.entry.session=${session}&*`)
     let restored = [...(await imageContext(
       h.g,
       entries,
       entries,
       h.artifacts,
     )).values()].flat()
-    assertEquals(restored.length, 1)
+    assertEquals(restored, images)
     h.close()
   } finally {
     await a.close()
