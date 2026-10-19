@@ -102,7 +102,10 @@ let composed = await (async () => {
     ))
     await service(host, { remote, fetch: go })
     let remoteRows = await tracker.graph.read('.error ?created ?during *')
-    let rows = await host.graph.read('.error ?created ?during *')
+    let local = await host.graph.read('.error ?created ?during *')
+    let eid = original.rows.find((row) => row.error)!.entity.eid
+    let rows = local.filter((row) => row.entity.eid == eid)
+    let notices = local.filter((row) => row.entity.eid != eid)
     return {
       actor,
       entity,
@@ -112,6 +115,7 @@ let composed = await (async () => {
       outageTraces,
       remoteRows,
       rows,
+      notices,
       remoteTraces: await tracker.graph.read('.trace *'),
       traces: (await host.graph.read('.trace *')).length,
       spans: (await host.graph.read('.span *')).length,
@@ -130,6 +134,7 @@ test('a composed tracker drains a separate spool, preserving error attribution',
   // Both pure and mixed traces are admitted locally during the remote outage.
   equal(composed.outageTraces, 2)
   equal(remoteRows.length, 1)
+  equal(remoteRows[0].entity.eid, rows[0].entity.eid)
   let { source, handler, command } = comp(remoteRows[0], 'error')
     .tags as Record<string, string>
   equal([source, handler, command], ['box', 'mail_post', 'yak graph query'])
@@ -137,6 +142,9 @@ test('a composed tracker drains a separate spool, preserving error attribution',
   equal(comp(remoteRows[0], 'during').entity, entity)
   equal(composed.remoteTraces, [])
   equal([composed.traces, composed.spans], [2, 2])
+  // The outage admits its own local health notice, not another delivery.
+  equal(composed.notices.length, 1)
+  equal(comp(composed.notices[0], 'error').fault, 'tracker_sync:delivery')
   equal(rows.length, 1)
   equal(comp(rows[0], 'created').by, actor.by)
   equal(comp(rows[0], 'created').via, actor.via)
