@@ -474,7 +474,10 @@ until it is due again, releases its claim and slot, and spends no retry attempt.
 It is waiting work, so no failure is reported. The next invocation comes through
 the pool's ordinary queue selection.
 
-```ts
+The complete waiting and retry lifecycle is covered by the
+[deferral tests](./defer_test.ts).
+
+```ts ignore
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
@@ -499,12 +502,12 @@ fx.handle({
   },
 })
 await g.apply([{ entity: { eid: 'order-1' }, order: {} }])
-await fx.work(g)
+await fx.work(g, undefined, 1)
 now = 999
-await fx.work(g)
+await fx.work(g, undefined, 1)
 equal(calls, 1)
 now = 1000
-await fx.work(g)
+await fx.work(g, undefined, 1)
 equal(calls, 2)
 equal(await g.read('.effect'), [])
 await fx.stop()
@@ -617,12 +620,15 @@ disabled names to the registry so every writer agrees with its workers. Writes
 to pool entities owe no effects, preventing pool bookkeeping from producing more
 runs.
 
-```ts
+Startup delivery and active gates are exercised in the
+[startup tests](./startup_test.ts) and [declaration tests](./registry_test.ts).
+
+```ts ignore
 import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { effectDoc, effects, working } from '@yaks/effects'
-import { equal, until } from '@yaks/testing'
+import { effectDoc, effects } from '@yaks/effects'
+import { equal } from '@yaks/testing'
 
 let vocab = loadVocab([effectDoc, {
   $defs: {
@@ -637,7 +643,7 @@ let vocab = loadVocab([effectDoc, {
     prepare: { effect: true, start: true },
   },
 }])
-let fx = effects(vocab, { owner: 'w1' })
+let fx = effects(vocab, { owner: 'w1', startup: 'manual' })
 let g = graph({ storage: ram(vocab), vocab, plugins: [fx] })
 let seen: string[] = []
 fx.handle({
@@ -647,18 +653,11 @@ fx.handle({
 await g.apply([{ entity: { eid: 'w1' }, worker: {}, enabled: {} }])
 await g.apply([{ entity: { eid: 'o1' }, order: {} }])
 equal((await g.read('.effect'))[0].effect?.state, 'pending')
-let stopping = new AbortController()
-let serving = fx.work(g, stopping.signal)
-try {
-  await until(() => working(g))
-  await fx.idle()
-  equal(seen.sort(), ['receipt:o1', 'started:w1'])
-} finally {
-  stopping.abort()
-  await serving
-  await fx.stop()
-}
-equal(await working(g), false)
+await fx.startup(g)
+await fx.work(g, undefined, 1)
+equal(seen.sort(), ['receipt:o1', 'started:w1'])
+equal(await g.read('.effect'), [])
+await fx.stop()
 ```
 
 ### Settling stale runs
