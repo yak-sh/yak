@@ -541,7 +541,6 @@ export let anatomyDocuments = (documents: unknown): {
             'start',
             'active',
             'match',
-            'sweep',
             'tries',
             'idempotent',
           ]),

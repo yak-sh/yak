@@ -1326,7 +1326,7 @@ export let react = async (
       : []
   } catch (error) {
     // A host refusing to prepare context cannot be fixed by asking again.
-    // Record it before returning, so the pool and restart sweep see an ended
+    // Record it before returning, so its queued continuation sees an ended
     // transcript and the runner delivers it and releases its child place.
     if (error instanceof Refused) {
       return append([line({ [REFUSAL]: { code: 'context' } }, error.message)])

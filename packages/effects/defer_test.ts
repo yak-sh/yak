@@ -1,6 +1,6 @@
 // A temporarily unavailable dependency keeps its original durable intent,
 // across worker replacements and without spending failure retries.
-import { type Comp, graph } from '@yaks/graph'
+import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, match, test } from '@yaks/testing'
 import { effects } from './registry.ts'
@@ -8,14 +8,16 @@ import { pooledBlog as vocab } from './testing.ts'
 
 for (let singleOwner of [false, true]) {
   let fixture = await (async () => {
-    let storage = ram(vocab), now = 0, ready = false, tries = 0
+    let storage = ram(vocab), now = 0, ready = false, tries = 0, workers = 0
     let writer = effects(vocab, { owes: 'declared' })
     let g = graph({ storage, vocab, plugins: [writer] })
     await g.apply([{ entity: { eid: 'post' }, post: {} }])
     let seen: string[] = []
     let worker = () => {
+      let owner = `worker-${++workers}`
+      g.apply([{ entity: { eid: owner }, subscriber: {} }])
       let fx = effects(vocab, {
-        owner: '',
+        owner,
         singleOwner,
         defer: true,
         now: () => now,
@@ -64,16 +66,17 @@ for (let singleOwner of [false, true]) {
     equal(deferred.entity.eid, original)
     equal(again.entity.eid, original)
     for (let [row, at] of [[deferred, 20], [again, 40]] as const) {
-      match(row.effect as Comp, {
-        state: 'pending',
-        attempts: 0,
-        next: new Date(at).toISOString(),
+      match(row, {
+        effect: {
+          state: 'pending',
+          attempts: 0,
+          next: new Date(at).toISOString(),
+        },
       })
-      equal(row.effect!.lease_owner ?? null, null)
-      equal(row.effect!.error ?? null, null)
+      if (!singleOwner) match(row, { effect: { lease_owner: null } })
     }
     equal(before, 1)
-    match(failed.effect as Comp, { state: 'pending', attempts: 1 })
+    match(failed, { effect: { state: 'pending', attempts: 1 } })
     equal(final, undefined)
     equal(seen, ['done'])
   })

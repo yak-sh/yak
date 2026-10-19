@@ -40,7 +40,7 @@ import { kindOf, sessionDerived, statusOf, textOf } from './status.ts'
 import { answers } from './providers.ts'
 import { sessionTools } from './children.ts'
 import { RUN, type Runner, running, settle } from './run.ts'
-import { test, until } from '@yaks/testing'
+import { match, test, until } from '@yaks/testing'
 
 let worker: VocabDoc = {
   $defs: {
@@ -979,7 +979,7 @@ let availability = await (async () => {
 test('unavailable providers leave work queued until a replacement can answer', () => {
   assertEquals(availability.before, 0)
   assertEquals(availability.waiting.length, 1)
-  assertEquals(availability.waiting[0].effect!.attempts, 0)
+  match(availability.waiting[0], { effect: { attempts: 0 } })
   assertEquals(availability.asked, 1)
   assertEquals(availability.status, 'settled')
 })
