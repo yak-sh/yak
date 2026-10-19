@@ -7,7 +7,7 @@ import { derivedEid } from '@yaks/graph/identity'
 
 import type { Event, Handlers } from '@yaks/effects'
 import { enqueue, held as lease, HOLD, holding } from '@yaks/effects'
-import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import type { Bundle, Comp, Eid, Graph, ReadTx } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { effectsIn } from '@yaks/vocab'
@@ -27,6 +27,7 @@ import { STOP_ENTRY } from './native.ts'
 import { currentStatus, type Deps, react, type Step } from './react.ts'
 import { hasAsk, usingOf } from './reach.ts'
 import { seqOf, type TranscriptStatus } from './state.ts'
+import { UnknownSession } from './unknown.ts'
 import { cleanEnd, requested, unlinked, waits, wake } from './wake.ts'
 
 /** What a host lends the runner: how a step is taken (./react.ts `Deps`), the
@@ -560,24 +561,45 @@ export let answer = async (
 // sweep identifies the transcript whose locks may be due for release. A
 // managed run that ended cleanly keeps the ones it is parked on (./wake.ts):
 // its next run is owed, or waits on a dependency. The guard protects a claim
-// that another writer handed to a different session after this read.
-let release = async (g: Graph, e: Event): Promise<void> => {
+// that another writer handed to a different session after this read. A swept
+// claim can also name a holder the graph no longer has.
+let release = async (g: Graph, e: Event, tx: ReadTx): Promise<void> => {
   let b = await one(g, e.entity.eid, ['entry', CLAIM])
   let session = b && await isSession(g, b.entity.eid)
     ? b.entity.eid
     : comp(b, 'entry')?.session ?? comp(b, CLAIM)?.session
   if (typeof session != 'string') return
+  let present = async () =>
+    (await tx.read(
+      `.entity.eid=${session}&.session&.fields=entity.eid`,
+    )).length > 0
+  let live = await present()
+  // A hidden holder is not a missing holder. Effects receive an authoritative
+  // reader, while the graph still controls which claims this run can touch.
+  if (live && !await isSession(g, session)) return
   let row = await one(g, session, ['process', 'exit', STOP_ENTRY])
-  if (row?.process && !row.exit) return
-  let status = await currentStatus(g, session)
-  if (status != 'stopped' && status != 'failed') return
-  let owed = cleanEnd(row) && await requested(g, session)
+  if (live && row?.process && !row.exit) return
+  if (live) {
+    let status: TranscriptStatus | undefined
+    try {
+      status = await currentStatus(g, session)
+    } catch (error) {
+      if (!(error instanceof UnknownSession) || error.session != session) {
+        throw error
+      }
+      if (await present()) return
+      live = false
+    }
+    if (live && status != 'stopped' && status != 'failed') return
+  }
+  let parked = live && cleanEnd(row)
+  let owed = parked && await requested(g, session)
   for (
     let held of await g.read(
       `.${CLAIM}.session=${session}&.fields=entity.eid`,
     )
   ) {
-    if (owed || cleanEnd(row) && await waits(g, session, held.entity.eid)) {
+    if (owed || parked && await waits(g, session, held.entity.eid)) {
       continue
     }
     try {
@@ -644,7 +666,7 @@ export let running = (g: Graph, runner: Runner): Handlers => {
       if (thrown) throw thrown
     },
     ...declared(g, 'session_release')
-      ? { session_release: (e: Event) => release(g, e) }
+      ? { session_release: (e: Event, tx: ReadTx) => release(g, e, tx) }
       : {},
     ...declared(g, 'session_wake')
       ? { session_wake: (e: Event) => woken(g, e) }
