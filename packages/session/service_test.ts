@@ -3,7 +3,7 @@ import { assertEquals } from '@std/assert'
 import { type Comp, type Graph, identityEid } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
 import { BATCH, look, type Seen, service, stale, strip } from './service.ts'
-import { callOf } from './tail.ts'
+import { callOf, logOf } from './tail.ts'
 import { sessionEid } from './who.ts'
 
 let lines = (...texts: string[]) =>
@@ -316,3 +316,45 @@ for (let revived of [false, true]) {
     )
   })
 }
+
+let reopened = 0, opened = 0, resumed: string[] | undefined
+let speaking: string[] | undefined
+await projects(
+  { old: { text: lines('a', 'b', 'c'), ago: 30 * DAY } },
+  async (dir) => {
+    let g = locked(store()), get = g.get.bind(g)
+    let log = logOf(`${dir}/-home-me-code/old.jsonl`)
+    g.get = (ids, comps) => {
+      if (ids.includes(log)) reopened++
+      return get(ids, comps)
+    }
+    let seen: Seen = { tails: new Map(), done: new Set() }
+    for (let i = 0; i < 8; i++) await look(g, dir, seen, { slice: 0 })
+    resumed = await told(g, 'old')
+    opened = reopened
+    Deno.writeTextFileSync(`${dir}/-home-me-code/old.jsonl`, lines('new'), {
+      append: true,
+    })
+    await look(g, dir, seen)
+    speaking = await told(g, 'old')
+  },
+)
+test('an old transcript resumes its open tail across partial backfill slices', () => {
+  assertEquals(resumed, ['a', 'said 0', 'b', 'said 1', 'c', 'said 2'])
+  assertEquals(opened, 1)
+})
+
+test('an old transcript speaking again is followed at full depth', () => {
+  assertEquals(speaking, [
+    'a',
+    'said 0',
+    'b',
+    'said 1',
+    'c',
+    'said 2',
+    'new',
+    'thought 0',
+    'said 0',
+  ])
+  assertEquals(reopened, 2)
+})

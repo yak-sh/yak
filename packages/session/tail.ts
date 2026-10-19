@@ -230,18 +230,25 @@ let owns = async (g: Graph, t: Pick<Tail, 'session' | 'log'>) => {
 // after that the tail walks forward and the count walks with it.
 let after = (path: string, lines: number): number => {
   if (!lines) return 0
-  let text: Uint8Array
+  let f
   try {
-    text = Deno.readFileSync(path)
+    f = Deno.openSync(path)
   } catch {
     return 0 // never written: there is nothing to skip
   }
-  let seen = 0
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] != 10) continue
-    if (++seen == lines) return i + 1
+  try {
+    let buf = new Uint8Array(64 * 1024), at = 0, seen = 0
+    for (let n = f.readSync(buf); n; n = f.readSync(buf)) {
+      let text = buf.subarray(0, n)
+      for (let i = text.indexOf(10); i >= 0; i = text.indexOf(10, i + 1)) {
+        if (++seen == lines) return at + i + 1
+      }
+      at += n
+    }
+    return at
+  } finally {
+    f.close()
   }
-  return text.length
 }
 
 /**

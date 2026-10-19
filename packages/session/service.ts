@@ -237,7 +237,7 @@ export let look = async (
     let t = seen.tails.get(f.path)
     let at = st?.mtime?.getTime() ?? 0
     if (!st || t === null || (t && t.at >= st.size && !behind(t))) continue
-    if (!t && now - at >= (o.full ?? FULL)) {
+    if (now - at >= (o.full ?? FULL)) {
       if (!seen.done.has(f.path)) old ??= f
       continue
     }
@@ -271,9 +271,19 @@ export let look = async (
     }
   }
   if (!old || o.signal?.aborted || owed.length && spent()) return
-  let t = await opened(g, old)
-  if (t) await pull(g, t, format(old), { ...read(), prose: true })
-  if (!o.signal?.aborted && !(t && behind(t))) seen.done.add(old.path)
+  // Keep the cursor and unread bytes between backfill slices.
+  let t = seen.tails.get(old.path) ?? await opened(g, old)
+  seen.tails.set(old.path, t)
+  if (t) {
+    await pull(g, t, format(old), { ...read(), prose: true }).catch((e) => {
+      seen.tails.delete(old.path)
+      throw e
+    })
+  }
+  if (!o.signal?.aborted && !(t && behind(t))) {
+    seen.done.add(old.path)
+    seen.tails.delete(old.path)
+  }
 }
 
 // What a strip takes from an imported entry: all of it where there is no

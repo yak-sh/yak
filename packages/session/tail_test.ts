@@ -265,3 +265,15 @@ test('two logs of one session each keep their own entries and their own place', 
     free()
   }
 })
+
+for (let size of [65535, 65536, 65537, 131073]) {
+  let f = await prepared('ø'.repeat(size), typed('after the boundary'))
+  await pull(f.g, f.t, claude, { until: 0 })
+  let resumed = await tail(f.g, f.path, { session: ids.run1 })
+  let offset = resumed.at, count = await pull(f.g, resumed, claude)
+  f.free()
+  test(`a resumed UTF-8 transcript finds the next line past ${size} characters`, () => {
+    assertEquals(offset, size * 2 + 1)
+    assertEquals(count, 1)
+  })
+}
