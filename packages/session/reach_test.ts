@@ -273,3 +273,49 @@ for (let bound of ['window', 'checkpoint'] as const) {
     assertEquals(statusRows < 120, true)
   })
 }
+
+// Imported history can contain thousands of controls but no asks. Neither
+// the first model request nor a completed first request owes a retry streak.
+for (let completed of [false, true]) {
+  let g = await world([
+    { entity: { eid: 's' }, session: {} },
+    ...Array.from({ length: 1024 }, (_, i): Bundle => ({
+      entity: { eid: `retained-${i}` },
+      entry: { session: 's' },
+      content: { body: 'old control' },
+      ...i % 2 ? { stop: {} } : { notice: {} },
+    })),
+    {
+      entity: { eid: 'now' },
+      entry: { session: 's', seq: 1 },
+      content: { body: 'new turn' },
+      using: { model: M },
+      sending: { window: 1 },
+    },
+    ...completed
+      ? [{
+        entity: { eid: 'first-ask' },
+        entry: { session: 's', seq: 2 },
+        ask: { to: M, through: 'now' },
+        using: { model: M },
+        attempt: { by: null },
+      }]
+      : [],
+  ])
+  let whole = await transcript(g, 's')
+  let loaded = 0, get = g.get.bind(g)
+  g.get = async (...args) => {
+    let rows = await get(...args)
+    loaded += rows.length
+    return rows
+  }
+  let bounded = await reach(g, 's', { turn: true })
+  let reads = loaded
+  let actual = view(bounded), expected = view(whole)
+  let status = statusOf(bounded), expectedStatus = statusOf(whole)
+  test(`legacy controls do not force retry history before a ${completed ? 'completed' : 'first'} ask`, () => {
+    assertEquals(actual, expected)
+    assertEquals(status, expectedStatus)
+    assertEquals(reads < 200, true)
+  })
+}

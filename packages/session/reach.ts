@@ -306,6 +306,7 @@ type Needs = {
   stop: () => Promise<number | undefined>
   seqAt: (eid: Eid) => Promise<number | undefined>
   mark?: number
+  noAsk?: boolean
   window: (rows: Bundle[]) => Promise<unknown>
 }
 
@@ -314,8 +315,14 @@ let floor = async (n: Needs, turn: boolean): Promise<number | undefined> => {
   let all = rows.filter((b) => !b.notice || stoppedNotice(b))
   let ask = all.findLast((b) => kindOf(b) == 'ask')
   let turns = all.filter((b) => b.ask || kindOf(b) == 'input')
-  if (!ask || turns.length < RETRIES) return undefined
-  let seqs = [seqOf(ask), seqOf(turns.at(-RETRIES)!)]
+  if (!ask && !n.noAsk) return undefined
+  // A completed request ends the retry streak. With no request at all there
+  // is no retry history to find among older notices and stops.
+  if (ask && turns.length < RETRIES && attemptState(ask) != 'completed') {
+    return undefined
+  }
+  let seqs = ask ? [seqOf(ask)] : []
+  if (turns.length >= RETRIES) seqs.push(seqOf(turns.at(-RETRIES)!))
   // The newest input or stop says whether the transcript is stopped. An
   // imported stop is a notice among the lines, found only by reading them.
   let control = all.findLast((b) => ['input', 'stop'].includes(kindOf(b)!))
@@ -331,12 +338,14 @@ let floor = async (n: Needs, turn: boolean): Promise<number | undefined> => {
     let at = through == null ? undefined : await n.seqAt(String(through))
     if (at != null) seqs.push(at)
   }
-  await sent(ask)
+  if (ask) await sent(ask)
   if (turn) {
     let done = rows.findLast((b) => b.ask && attemptState(b) == 'completed')
-    if (!done) return undefined
-    seqs.push(seqOf(done))
-    await sent(done)
+    if (!done && !n.noAsk) return undefined
+    if (done) {
+      seqs.push(seqOf(done))
+      await sent(done)
+    }
     if (n.mark != null) seqs.push(n.mark)
     else {
       let size = Math.floor(Number(await n.window(rows)))
@@ -387,6 +396,10 @@ let read = async (g: Graph, session: Eid, o: Reach): Promise<Bundle[]> => {
       if (through != null) held.push(...await fetch(r, [String(through)]))
     }
   }
+  n.noAsk = !await newest(
+    { ...r, names: [ENTRY], fields: '?entry' },
+    `&.${ASK}`,
+  )
   let page = pages(r), size = FIRST
   while (true) {
     rows.unshift(...(await page.next(size)).reverse())
