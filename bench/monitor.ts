@@ -276,10 +276,14 @@ let bank = async (path: string, value: Baseline) => {
     await Deno.remove(tmp).catch(() => {})
   }
 }
+export let committed = async (suite: string): Promise<Baseline> => {
+  let { standalone } = await import('./standalone.ts')
+  let entry = standalone.find((b) => b.suite().name == suite)
+  let path = entry?.baseline ?? `bench/${suite}.baseline.json`
+  return JSON.parse(await Deno.readTextFile(`${root}${path}`))
+}
 let reference = async (suite: string) => {
-  let committed: Baseline = JSON.parse(
-    await Deno.readTextFile(`${root}bench/${suite}.baseline.json`),
-  )
+  let source = await committed(suite)
   let dir = `${home}/.cache/yak/bench/best`
   await Deno.mkdir(dir, { recursive: true })
   let path = `${dir}/${suite}.baseline.json`
@@ -289,18 +293,18 @@ let reference = async (suite: string) => {
   } catch (error) {
     if (!(error instanceof Deno.errors.NotFound)) throw error
   }
-  // A protocol change gets its own committed reference, not incomparable old data.
+  // A protocol change gets its own source reference, not incomparable old data.
   if (
     previous && ['suite', 'metric', 'workload', 'runtime', 'cpu'].some(
       (key) =>
-        previous![key as keyof Baseline] != committed[key as keyof Baseline],
+        previous![key as keyof Baseline] != source[key as keyof Baseline],
     )
   ) previous = undefined
   let next = previous
     ? {
-      ...committed,
+      ...source,
       tolerance: 0,
-      benches: committed.benches.map((b) => {
+      benches: source.benches.map((b) => {
         let old = previous!.benches.find((c) => c.name == b.name)
         return {
           ...b,
@@ -316,9 +320,9 @@ let reference = async (suite: string) => {
       }),
     }
     : {
-      ...committed,
+      ...source,
       tolerance: 0,
-      benches: committed.benches.map((b) => ({ ...b, tolerance: 0 })),
+      benches: source.benches.map((b) => ({ ...b, tolerance: 0 })),
     }
   await bank(path, next)
   return path

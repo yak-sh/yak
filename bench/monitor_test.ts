@@ -3,6 +3,7 @@
 import type { Run } from '@yaks/benchmark'
 import { clock, equal, ok, test } from '@yaks/testing'
 import {
+  committed,
   HOURLY,
   measurement,
   type Outcome,
@@ -10,6 +11,16 @@ import {
   watch,
   WINDOW,
 } from './monitor.ts'
+
+let steps = await committed('harness-steps')
+let expected = JSON.parse(
+  await Deno.readTextFile(
+    new URL('../packages/harness/steps.baseline.json', import.meta.url),
+  ),
+)
+test('the monitor reads a suite baseline outside bench', () => {
+  equal(steps, expected)
+})
 
 let run = (verdict: Run['verdict'], commit = 'c2'): Run => ({
   version: 1,
