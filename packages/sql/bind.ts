@@ -211,8 +211,11 @@ let byArchetype = (
   let set = ids.length ? ctx.d.among(key, [...ids]) : { sql: '0', params: [] }
   // A dereference that resolved to no entity has no components, so a test for
   // the absence of one succeeds. An ordinary owner — the row being selected, or
-  // a child row — always exists.
-  let sql = missing ? `(${key} is null or ${set.sql})` : set.sql
+  // a child row — always exists. Coalescing the membership tests the referent
+  // once; a separate null test repeats every lookup along the reference chain.
+  let sql = missing
+    ? ids.length ? `coalesce(${set.sql}, 1)` : `${key} is null`
+    : set.sql
   return cond({ sql, params: set.params })
 }
 

@@ -19,6 +19,7 @@ import { storage } from '@yaks/sqlite'
 import { archetypes } from '../archetype/plugin.ts'
 import { sessions } from './plugin.ts'
 import { due } from './bus.ts'
+import { comments } from './listen.ts'
 let v = loadVocab([
   kernelDoc,
   sessionDoc,
@@ -80,7 +81,7 @@ for (let count of [100, 1000]) {
   })
 }
 
-let { driver: d } = stepping()
+let { driver: d, steps } = stepping()
 let store = storage(d, v, { derived: sessionDerived(v) })
 let g = graph({
   vocab: v,
@@ -128,7 +129,7 @@ g.read = async (q, opts) => {
   reread += rows.filter((b) => b.comment).length
   return rows
 }
-let got = await due(g), readComments = reread
+let at = steps(), got = await due(g), vm = steps() - at, readComments = reread
 test('several recipients share one pass over unread agent history', () => {
   equal(got.map((x) => [x.session, x.item.entity.eid]), [
     ['native0', 'news0'],
@@ -137,9 +138,38 @@ test('several recipients share one pass over unread agent history', () => {
     ['native3', 'news3'],
   ])
   equal(readComments, got.length)
+  ok(vm < 160_000, `${vm} VM steps beside unread agent history`)
 })
+for (
+  let [name, visibility, count] of [
+    ['hidden author', { entity: '.entity.eid!=agent' }, 4],
+    ['hidden session', { components: { session: '.entity.eid!=agent' } }, 4005],
+    ['hidden stamp', { components: { created: '!comment' } }, 4005],
+  ] as const
+) {
+  let scoped = graph({
+    vocab: v,
+    storage: store,
+    plugins: [{ scope: () => visibility }],
+  })
+  let selected = await comments(scoped)
+  test(`human comment routing preserves ${name} visibility`, () => {
+    equal(selected.items.length, count)
+  })
+}
 await g.apply([{ entity: { eid: 'person' }, session: {} }], { trusted: true })
 let changed = await due(g)
 test('a new bus pass rereads whether an author is a session', () => {
   equal(changed, [])
+})
+await g.apply([{
+  entity: { eid: 'unstamped' },
+  comment: { target: 'target0' },
+}], { trusted: true })
+let unstamped = await due(g)
+test('a missing author reference still delivers a human comment', () => {
+  equal(unstamped.map((x) => [x.session, x.item.entity.eid]), [[
+    'native0',
+    'unstamped',
+  ]])
 })
