@@ -24,8 +24,10 @@ import {
   heirs,
   knocked,
   natives,
+  type News,
   over,
   pending,
+  replies as replyRoutes,
 } from './listen.ts'
 import { sessionFor } from './who.ts'
 
@@ -35,7 +37,7 @@ let comp = (b: Bundle, name: string): Comp => (b[name] ?? {}) as Comp
 // needs to scan their transcripts.
 let candidates = async (
   g: Graph,
-  news: Awaited<ReturnType<typeof comments>>,
+  news: News,
 ): Promise<Eid[]> => {
   let route = (...props: string[]) =>
     fields(...props.filter((p) => {
@@ -76,21 +78,23 @@ let candidates = async (
   // that session is over, for a session of the project it reached; any other
   // letter that reached a project, and a knock at one, is that project's from
   // the start.
-  let [replies, reached] = g.vocab.comp('mail')
-    ? await Promise.all([
-      g.read(
-        unsaid('mail', present('mail.reply_to.created.via.session')),
-      ),
-      g.read(and(...arrived().clauses, route('mail.target', 'mail.reply_to'))),
-    ])
-    : [[], []]
+  let reached = g.vocab.comp('mail')
+    ? await g.read(
+      and(...arrived().clauses, route('mail.target', 'mail.reply_to')),
+    )
+    : []
   let projects = g.vocab.comp('knock') && g.vocab.comp('project')
     ? await g.read(and(...knocked().clauses, route('knock.target')))
     : []
   // First select unsaid human comments, then inspect only their targets.
   // Following target.created.via.session inside the global comment scan made
   // SQLite repeat the target chain over every historical comment each tick.
-  let creators = [...new Set(news.creators.values())].filter(Boolean)
+  let creators = [
+    ...new Set([
+      ...news.comments.creators.values(),
+      ...news.replies.creators.values(),
+    ]),
+  ].filter(Boolean)
   let sessions = new Set(
     creators.length
       ? (await g.read(and(
@@ -100,19 +104,22 @@ let candidates = async (
       ))).map((b) => b.entity.eid)
       : [],
   )
+  let replies = news.replies.items.filter((b) =>
+    sessions.has(
+      news.replies.creators.get(String(comp(b, 'mail').reply_to)) ?? '',
+    )
+  )
   let items = [
-    ...news.items.filter((b) =>
-      sessions.has(news.creators.get(String(comp(b, 'comment').target)) ?? '')
+    ...news.comments.items.filter((b) =>
+      sessions.has(
+        news.comments.creators.get(String(comp(b, 'comment').target)) ?? '',
+      )
     ),
     ...(await Promise.all(queries.map((q) => g.read(q)))).flat(),
   ]
   let comments = g.vocab.prop('filed', 'project')
     ? items.filter((b) => b.comment)
     : []
-  let answered = await g.get(
-    replies.map((b) => String(comp(b, 'mail').reply_to)),
-    ['created'],
-  )
   let targets = [
     ...new Set(
       [
@@ -120,7 +127,9 @@ let candidates = async (
           comp(b, 'comment').target ?? comp(b, 'knock').target ??
             comp(b, 'deliver').to
         ),
-        ...answered.map((b) => comp(b, 'created').via),
+        ...replies.map((b) =>
+          news.replies.creators.get(String(comp(b, 'mail').reply_to))
+        ),
       ].filter((id): id is Eid => typeof id == 'string'),
     ),
   ]
@@ -165,7 +174,7 @@ export type Due = { session: Eid; item: Bundle; line: string }
 export let due = async (g: Graph): Promise<Due[]> => {
   if (!g.vocab.comp('notified')) return []
   let out: Due[] = []
-  let news = await comments(g)
+  let news = { comments: await comments(g), replies: await replyRoutes(g) }
   for (let id of await hearing(g, await candidates(g, news))) {
     for (let said of await pending(g, id, news)) {
       out.push({ session: id, ...said })

@@ -1675,7 +1675,11 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
     ctx = { ...ctx, archetypes: undefined }
   }
   let gated = (!ctx.present || ctx.archetypes?.held) &&
-    all.length + none.length > 1
+    (all.length + none.length > 1 ||
+      none.length > 0 &&
+        rest.some((c) =>
+          c.kind == 'pred' && opOf(c) == EXISTS && implied(ctx, c).length > 0
+        ))
   let shape = gated && !indexed
     ? byArchetype(ctx, { all: [...new Set([...all, ...wearing])], none })
     : null

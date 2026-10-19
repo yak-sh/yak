@@ -95,30 +95,20 @@ let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 /** The queries for what is addressed to one session and not yet said. Each
  * asks about one component the graph declares; a graph without knocks or
  * letters has nothing to hear about them. */
-export let addressedTo = (
+let addressedTo = (
   vocab: Vocab,
   session: Eid,
   claimedComments = true,
-  createdComments = true,
 ): And[] => {
   let has = (name: string) => !!vocab.comp(name)
   let unsaid = (...clauses: Clause[]) => and(...clauses, absent(NOTIFIED))
   return [
-    ...has('comment')
+    ...has('comment') && claimedComments
       ? [
-        ...createdComments
-          ? [unsaid(
-            present('comment'),
-            eq('comment.target.created.via', session),
-            absent('created.via.session'),
-          )]
-          : [],
-        ...claimedComments
-          ? [unsaid(
-            present('comment'),
-            eq(`comment.target.${CLAIM}.session`, session),
-          )]
-          : [],
+        unsaid(
+          present('comment'),
+          eq(`comment.target.${CLAIM}.session`, session),
+        ),
       ]
       : [],
     ...has('knock')
@@ -129,11 +119,6 @@ export let addressedTo = (
       : [],
     ...has('deliver')
       ? [unsaid(present('deliver'), eq('deliver.to', session))]
-      : [],
-    // A letter answering one this session wrote: the reply to its mail comes
-    // back to it, wherever the far side sent it.
-    ...has('mail')
-      ? [unsaid(present('mail'), eq('mail.reply_to.created.via', session))]
       : [],
   ]
 }
@@ -470,21 +455,23 @@ export let pendingItems = async (
   return items
 }
 
-/** The unread human comments and their targets' creators at one bus pass.
- * Shared only within that pass; the next pass reads other writers anew. */
-export let comments = async (
-  graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
-): Promise<{ items: Bundle[]; creators: Map<Eid, string> }> => {
-  let items = graph.vocab.comp('comment')
+type Routes = { items: Bundle[]; creators: Map<Eid, string> }
+export type News = { comments: Routes; replies: Routes }
+
+let routed = async (
+  graph: Pick<Graph, 'vocab' | 'read'>,
+  query: And,
+  name: string,
+  prop: string,
+): Promise<Routes> => {
+  let items = graph.vocab.comp(name) ? await graph.read(query) : []
+  let targets = [...new Set(items.map((b) => str(comp(b, name)[prop])))]
+  let rows = targets.length
     ? await graph.read(and(
-      present('comment'),
-      absent(NOTIFIED),
-      absent('created.via.session'),
-      fields('comment.target'),
+      eq('entity.eid', value(targets)),
+      fields('created.via'),
     ))
     : []
-  let targets = [...new Set(items.map((b) => str(comp(b, 'comment').target)))]
-  let rows = targets.length ? await graph.get(targets, ['created']) : []
   return {
     items,
     creators: new Map(
@@ -493,11 +480,38 @@ export let comments = async (
   }
 }
 
+/** Unread human comments and their targets' creators, through the caller's scope. */
+export let comments = (graph: Pick<Graph, 'vocab' | 'read'>): Promise<Routes> =>
+  routed(
+    graph,
+    and(
+      present('comment'),
+      absent(NOTIFIED),
+      absent('created.via.session'),
+      fields('comment.target'),
+    ),
+    'comment',
+    'target',
+  )
+
+/** Unread replies and the writers they answer, without walking a writer's work. */
+export let replies = (graph: Pick<Graph, 'vocab' | 'read'>): Promise<Routes> =>
+  routed(
+    graph,
+    and(
+      present('mail.reply_to'),
+      absent(NOTIFIED),
+      fields('mail.reply_to', 'mail.target'),
+    ),
+    'mail',
+    'reply_to',
+  )
+
 /** What this session has yet to hear, as the item and its readable line. */
 export let pending = async (
   graph: Pick<Graph, 'vocab' | 'read' | 'get'>,
   session: Eid,
-  news?: Awaited<ReturnType<typeof comments>>,
+  news?: News,
 ): Promise<{ item: Bundle; line: string }[]> => {
   let vocab = graph.vocab
   // Ordinary claimed-thread comments stay out of native transcripts. Replies
@@ -518,14 +532,17 @@ export let pending = async (
   let addressed: Bundle[] = []
   // Restrict to unsaid human comments before inspecting the creator of each
   // target. A correlated target join scanned already-delivered history.
-  if (vocab.comp('comment')) {
-    let { items, creators } = news ?? await comments(graph)
-    let ids = items.filter((b) =>
-      creators.get(str(comp(b, 'comment').target)) == session
-    ).map((b) => b.entity.eid)
-    if (ids.length) addressed.push(...await graph.get(ids))
-  }
-  for (let q of addressedTo(vocab, session, !native, false)) {
+  let received = news ??
+    { comments: await comments(graph), replies: await replies(graph) }
+  let mine = (r: Routes, name: string, prop: string) =>
+    r.items.filter((b) => r.creators.get(str(comp(b, name)[prop])) == session)
+      .map((b) => b.entity.eid)
+  let ids = [
+    ...mine(received.comments, 'comment', 'target'),
+    ...mine(received.replies, 'mail', 'reply_to'),
+  ]
+  if (ids.length) addressed.push(...await graph.get(ids))
+  for (let q of addressedTo(vocab, session, !native)) {
     addressed.push(...await graph.read(and(...q.clauses, every())))
   }
   // A session with no project can hear only its addressed items. Deriving

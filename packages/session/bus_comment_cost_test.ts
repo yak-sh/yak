@@ -19,7 +19,7 @@ import { storage } from '@yaks/sqlite'
 import { archetypes } from '../archetype/plugin.ts'
 import { sessions } from './plugin.ts'
 import { due } from './bus.ts'
-import { comments } from './listen.ts'
+import { comments, pending } from './listen.ts'
 let v = loadVocab([
   kernelDoc,
   sessionDoc,
@@ -189,4 +189,76 @@ test('a missing author reference still delivers a human comment', () => {
     'native0',
     'unstamped',
   ]])
+})
+
+let meter = stepping(),
+  mailStore = storage(meter.driver, v, { derived: sessionDerived(v) })
+let mailGraph = graph({
+  vocab: v,
+  storage: mailStore,
+  plugins: [sessions(), archetypes()],
+})
+await mailGraph.apply([
+  { entity: { eid: 'human' }, doc: {} },
+  { entity: { eid: 'writer' }, session: {} },
+  { entity: { eid: 'work' }, doc: {}, $actor: { by: 'writer', via: 'writer' } },
+  {
+    entity: { eid: 'sent' },
+    mail: {},
+    $actor: { by: 'writer', via: 'writer' },
+  },
+  {
+    entity: { eid: 'reply' },
+    mail: { reply_to: 'sent' },
+    doc: { body: 'answer' },
+    $actor: { by: 'human', via: 'human' },
+  },
+], { trusted: true })
+let [work] = await mailGraph.get(['work'])
+mailStore.tx((tx) =>
+  tx.patch(Array.from({ length: 4000 }, (_, i) => ({
+    ...work,
+    entity: { eid: `work${i}`, archetype: work.entity.archetype },
+  })))
+)
+await pending(mailGraph, 'writer')
+let beforeMail = meter.steps(), reply = await pending(mailGraph, 'writer')
+let replyVm = meter.steps() - beforeMail
+test('a reply seeks its writer without traversing everything that writer created', () => {
+  equal(reply.map(({ item }) => item.entity.eid), ['reply'])
+  ok(replyVm < 10_000, `${replyVm} VM steps beside a writer's unrelated work`)
+})
+
+let mailScopes: [string, Visibility][] = [
+  ['hidden answered letter', { entity: '.entity.eid!=sent' }],
+  ['hidden writer', { entity: '.entity.eid!=writer' }],
+  ['hidden creator stamp', { components: { created: '.entity.eid!=sent' } }],
+  ['hidden reply', { components: { mail: '.entity.eid!=reply' } }],
+]
+for (let [name, visibility] of mailScopes) {
+  let scoped = graph({
+    vocab: v,
+    storage: mailStore,
+    plugins: [{ name: 'mail-scope', scope: () => visibility }],
+  })
+  let items = await pending(scoped, 'writer')
+  test(`reply routing preserves ${name} visibility`, () => equal(items, []))
+}
+
+let unreadReplies = '.mail.reply_to !notified .fields=mail.reply_to,mail.target'
+let replyScope = graph({
+  vocab: v,
+  storage: mailStore,
+  plugins: [{ name: 'unread-scope', scope: () => ({ entity: '!cancelled' }) }],
+})
+await replyScope.read(unreadReplies)
+let beforeReplies = meter.steps(),
+  selectedReplies = await replyScope.read(unreadReplies)
+let selectedVm = meter.steps() - beforeReplies
+test('property presence shares the sparse shape selection with absence', () => {
+  equal(selectedReplies.map((b) => b.entity.eid), ['reply'])
+  ok(
+    selectedVm < 3000,
+    `${selectedVm} VM steps beside unrelated component owners`,
+  )
 })
