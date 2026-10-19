@@ -2878,8 +2878,22 @@ let lower = (
   let cs = ast.clauses
   let bounded = limited(ast, ctx)
   if (bounded) {
-    ctx.candidates = { ...bounded, test: TRUE }
-    ctx.correlated = true
+    // These ids passed the complete predicate inside this same statement.
+    // Only shaping remains; repeating the filter adds joins and lowering
+    // work without narrowing the answer.
+    return lower(
+      {
+        kind: 'and',
+        clauses: cs.filter(directive),
+      },
+      {
+        ...ctx,
+        candidates: { ...bounded, test: TRUE },
+        correlated: true,
+      },
+      reads,
+      scope,
+    )
   }
   for (let c of cs) {
     if (UNREACHED.has(c.kind) && !claims(ctx, c.kind)) {

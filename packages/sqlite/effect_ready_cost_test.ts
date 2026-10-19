@@ -3,7 +3,8 @@
 import './sqlitepath.ts'
 import { Database } from '@db/sqlite'
 import { assert, assertEquals } from '@std/assert'
-import { and, limit } from '@yaks/query'
+import { and, fields, limit } from '@yaks/query'
+import { graph } from '@yaks/graph'
 import { compile, insert } from '@yaks/sql'
 import { storage } from './mod.ts'
 import { test } from '@yaks/testing'
@@ -67,7 +68,7 @@ let fixture = (n: number, mode: string) => {
   let query = compile(q, vocab, { now: 1000, unordered: true })
   let plan = sql.query({ t: 'explain query plan', of: query })
     .map((r) => String(r.detail)).join('\n')
-  return { db, stmt: db.prepare(query.sql), query, plan }
+  return { db, sql, q, stmt: db.prepare(query.sql), query, plan }
 }
 
 let observed = (f: ReturnType<typeof fixture>) => {
@@ -94,3 +95,55 @@ for (let mode of ['idle blocked', 'one ready', 'many ready']) {
     })
   }
 }
+
+let moving = async () => {
+  let f = fixture(64, 'idle blocked')
+  try {
+    for (
+      let [id, handler, state] of [
+        [10000, 'target', 'done'],
+        [10001, 'other', 'pending'],
+      ] as const
+    ) {
+      f.sql.query(insert('entity', { id, eid: `outside-${id}` }))
+      f.sql.query(insert('effect', { entity: id, handler, state }))
+    }
+    let g = graph({ storage: storage(f.sql, vocab), vocab })
+    let counts = []
+    let found = []
+    for (let now of [1000, 1999, 2000, 1000]) {
+      let rows = await g.read(f.q, { unordered: true, now })
+      counts.push(rows.length)
+      found.push(
+        ...rows.map((b) => Object.fromEntries(Object.entries(b.effect ?? {}))),
+      )
+    }
+    let projected = await g.rows(
+      and(
+        ...ready(['target']).clauses,
+        fields('effect.handler'),
+        limit(2),
+      ),
+      { unordered: true, now: 2000 },
+    )
+    return { counts, found, projected }
+  } finally {
+    f.stmt.finalize()
+    f.db.close()
+  }
+}
+let changed = await moving()
+test('a complete eligible read rebinds its clock and retains every scalar filter', () => {
+  assertEquals(changed.counts, [0, 0, 1, 0])
+  assertEquals(changed.found.map((r) => [r.handler, r.state]), [
+    ['target', 'pending'],
+  ])
+})
+test('a bounded eligible read retains its projection and distinct limit', () => {
+  assertEquals(changed.projected.length, 2)
+  assertEquals(new Set(changed.projected.map((r) => r.eid)).size, 2)
+  assertEquals(changed.projected.map((r) => r['effect.handler']), [
+    'target',
+    'target',
+  ])
+})
