@@ -1592,9 +1592,13 @@ test('cooldown refuses a new fixer before reading global capacity', async () => 
 // A managed fixer's slot never needs the status of its transcript. Keep that
 // projection unavailable while ordinary reads and writes remain real.
 let managedStatus = await fixture({ cap: 1 })
+let otherFault = crypto.randomUUID()
 await put(managedStatus.g, [{
+  entity: { eid: otherFault },
+  doc: { title: 'Other fault' },
+}, {
   entity: { eid: 'managed-status-holder' },
-  fixer: { bug: 'some-other-fault' },
+  fixer: { bug: otherFault },
   session: {},
   process: { pid: 42 },
 }])
