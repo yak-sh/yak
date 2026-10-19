@@ -1097,3 +1097,62 @@ test('a stale tool refusal returns the committed text and its read token', async
   assertEquals(text.includes(`current: ${JSON.stringify(body)}`), true)
   assertEquals(text.includes(`was: ${token(body)}`), true)
 })
+
+let nested: Tool = {
+  noun: 'person',
+  verb: 'nested',
+  description: 'Record nested person references',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      group: {
+        type: 'object',
+        properties: {
+          members: { type: 'array', items: { type: 'string', ref: 'person' } },
+        },
+      },
+      groups: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { owner: { type: 'string', ref: 'person' } },
+        },
+      },
+    },
+  },
+  run: (
+    call,
+  ) => [{
+    entity: { eid: 'nested-write' },
+    content: { body: JSON.stringify(argsOf(call)) },
+  }],
+}
+let deep = named([nested]), absent = named([nested])
+await deep.r.ensure()
+await absent.r.ensure()
+await deep.g.apply([{ entity: { eid: 'p1' }, person: {} }])
+await absent.g.apply([{ entity: { eid: 'p1' }, person: {} }])
+
+test('nested object and array references reach the writer as existing entity ids', async () => {
+  await deep.r.call(
+    called('person_nested', {
+      group: { members: ['Ada'] },
+      groups: [{ owner: 'Ada' }],
+    }),
+  )
+  let [row] = await deep.g.get(['nested-write'])
+  assertEquals(JSON.parse(body(row)), {
+    group: { members: ['p1'] },
+    groups: [{ owner: 'p1' }],
+  })
+})
+test('an unresolved nested reference refuses before the tool writes', async () => {
+  let answer = await absent.r.call(
+    called('person_nested', { groups: [{ owner: 'ghost' }] }),
+  )
+  assertEquals(
+    (answer.find((b) => b.refusal)?.refusal as Comp).code,
+    'arguments',
+  )
+  assertEquals(await absent.g.get(['nested-write']), [])
+})

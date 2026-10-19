@@ -71,7 +71,7 @@ export let validated = (tool: NamedTool, args: Args): Args => {
   return out
 }
 
-type Prop = { ref?: unknown; items?: { ref?: unknown } }
+type Prop = { ref?: unknown; items?: Prop; properties?: Record<string, Prop> }
 
 /**
  * The arguments a schema declares references, each with the kind it names:
@@ -113,10 +113,30 @@ export let resolved = async (
   args: Args,
   graph: Graph,
 ): Promise<Args> => {
-  let out = { ...args }
-  for (let [key, kind] of refs(tool.inputSchema)) {
-    let said = ids(args[key])
-    if (!said.length) continue
+  let resolve = async (
+    schema: Prop | undefined,
+    value: unknown,
+  ): Promise<unknown> => {
+    let kind = schema?.ref ?? schema?.items?.ref
+    if (typeof kind != 'string') {
+      if (Array.isArray(value) && schema?.items) {
+        return await Promise.all(
+          value.map((item) => resolve(schema.items, item)),
+        )
+      }
+      if (value && typeof value == 'object' && schema?.properties) {
+        let out = { ...value }
+        for (let [key, child] of Object.entries(schema.properties)) {
+          if (Object.hasOwn(value, key)) {
+            Reflect.set(out, key, await resolve(child, Reflect.get(value, key)))
+          }
+        }
+        return out
+      }
+      return value
+    }
+    let said = ids(value)
+    if (!said.length) return value
     let eids: string[]
     try {
       eids = await referenced(graph, said, kind)
@@ -137,7 +157,7 @@ export let resolved = async (
         throw missing(kind, said[i])
       }
     }
-    out[key] = Array.isArray(args[key]) ? eids : eids[0]
+    return Array.isArray(value) ? eids : eids[0]
   }
-  return out
+  return await resolve(tool.inputSchema, args) as Args
 }
