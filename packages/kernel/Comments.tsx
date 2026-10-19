@@ -62,11 +62,23 @@ export let composerBundles = (
 export let commentPlace = (eid: string, entry = false, replyTo?: string) =>
   `${eid}.${replyTo ? `reply:${replyTo}` : entry ? 'input' : 'comment'}`
 
-export let Composer = ({ eid, entry = false, using, replyTo, onPost }: {
+export let Composer = ({
+  eid,
+  entry = false,
+  using,
+  replyTo,
+  onPost,
+  make,
+  placeholder,
+  submit = 'send',
+}: {
   eid: string
   entry?: boolean
   replyTo?: string
   onPost?: () => void
+  make?: (text: string) => Bundle[]
+  placeholder?: string
+  submit?: string
   using?: { provider: string; model?: string; effort?: string }
 }): JSX.Element => {
   let host = commentHost(), box = useRef<HTMLTextAreaElement>(null)
@@ -87,10 +99,11 @@ export let Composer = ({ eid, entry = false, using, replyTo, onPost }: {
     sync(box.current)
   }
   let post = () => {
-    let body = box.current?.value.trim()
-    if (!body) return
+    let body = box.current?.value ?? ''
+    if (!body.trim()) return
     spend(
-      composerBundles(eid, body, entry, crypto.randomUUID(), using, replyTo),
+      make?.(body) ??
+        composerBundles(eid, body, entry, crypto.randomUUID(), using, replyTo),
     )
     box.current!.value = ''
     setLine('')
@@ -156,10 +169,11 @@ export let Composer = ({ eid, entry = false, using, replyTo, onPost }: {
             setLine(el.value)
             setPick(0)
           }}
-          placeholder={replyTo ? 'reply…' : prompt(host.get(eid), entry, model)}
+          placeholder={placeholder ??
+            (replyTo ? 'reply…' : prompt(host.get(eid), entry, model))}
           onKeyDown={key}
         />
-        <Button type='submit' disabled={!line.trim()}>send</Button>
+        <Button type='submit' disabled={!line.trim()}>{submit}</Button>
       </Say>
     </>
   )

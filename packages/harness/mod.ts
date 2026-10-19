@@ -40,3 +40,5 @@
  */
 
 export * from './agent.ts'
+
+export { defaultUsing, selectedUsing } from './model_selection.ts'

@@ -25,6 +25,8 @@ let advert = (e: Bundle) => {
 let field = (value: object, name: string) =>
   name in value ? text(Reflect.get(value, name)) : ''
 export let title = (e: Bundle): string =>
+  (text(comp(e, 'topic').name) &&
+    (text(comp(e, 'doc').title) || text(comp(e, 'topic').name))) ||
   field(advert(e), 'title') || text(comp(e, 'doc').title) ||
   text(comp(e, 'oracle').domain) || 'Oracle'
 
@@ -117,18 +119,24 @@ export let Tree = ({ e, got, io }: Props) => (
           ))}
       </Rows>
     </Section>
+    {got.nodes.rows.filter((node) =>
+      node.entity.eid == text(comp(e, 'oracle_tree').root)
+    ).map((node) => io.show(node, 'Oracle.Query'))}
     <Conversations answer={got.dialogues} io={io} />
   </>
 )
 
 /** The oracle's advertisement is the node's shared face in every list. */
-export let NodeTile = ({ e, io }: Props) => (
-  <Tile href={`${io.link(e.entity.eid)}?v=Oracle`}>
-    <Tile.Title>{title(e)}</Tile.Title>
-    <Tile.Kind>{text(comp(e, 'oracle').domain)}</Tile.Kind>
-    <Tile.Sub>{field(advert(e), 'description')}</Tile.Sub>
-  </Tile>
-)
+export let NodeTile = ({ e, io, got }: Props) => {
+  let node = got?.face?.rows[0] ?? e
+  return (
+    <Tile href={`${io.link(e.entity.eid)}?v=Oracle`}>
+      <Tile.Kind>Oracle</Tile.Kind>
+      <Tile.Title>{title(node)}</Tile.Title>
+      <Tile.Sub>{field(advert(node), 'description')}</Tile.Sub>
+    </Tile>
+  )
+}
 export let TreeTile = ({ e, io }: Props) => (
   <Tile href={io.link(e.entity.eid)}>
     <Tile.Title>{title(e)}</Tile.Title>
@@ -202,6 +210,7 @@ export let Node = ({ e, got, io }: Props) => {
           <Section.Note mod='refused'>{related.error}</Section.Note>
         )}
       </Section>
+      {io.show(e, 'Oracle.Query')}
       <Conversations answer={got.dialogues} io={io} />
     </>
   )
@@ -219,7 +228,13 @@ export let Dialogue = ({ e, io }: Props) => {
     <Tile href={io.link(e.entity.eid)}>
       <Tile.Title>{name(text(d.from))} → {name(text(d.to))}</Tile.Title>
       <Tile.Kind>
-        {d.declined ? 'declined' : d.finished ? 'finished' : 'in progress'}
+        {e.native
+          ? text(comp(e, 'session').status) || 'pending'
+          : d.declined
+          ? 'declined'
+          : d.finished
+          ? 'finished'
+          : 'in progress'}
       </Tile.Kind>
       <Tile.Sub>
         revision {String(d.revision ?? 0)} · {String(d.turns ?? 0)} turns

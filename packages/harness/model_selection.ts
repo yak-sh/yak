@@ -34,7 +34,7 @@ export const selectedUsing = async (
   g: Graph,
   session: string,
   before?: number,
-  seen = new Set<string>(),
+  seen: Set<string> = new Set<string>(),
 ): Promise<Comp | undefined> => {
   if (seen.has(session)) throw new Error('Cyclic session ancestry')
   seen.add(session)

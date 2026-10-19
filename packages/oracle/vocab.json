@@ -113,6 +113,30 @@
         }
       },
       "description": "A query conversation between oracle sessions."
+    },
+    "oracle_query": {
+      "tool": true,
+      "noun": "oracle",
+      "verb": "query",
+      "description": "Open a native receiving fork of an oracle, using its retained context and the configured model. Returns immediately; continue in the returned session.",
+      "input": {
+        "oracle": {
+          "type": "string",
+          "ref": "oracle"
+        },
+        "text": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string",
+          "ref": "model"
+        }
+      },
+      "required": [
+        "oracle",
+        "text"
+      ],
+      "applied": true
     }
   }
 }

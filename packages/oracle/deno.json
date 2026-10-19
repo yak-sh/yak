@@ -5,7 +5,8 @@
     ".": "./mod.ts",
     "./evidence": "./evidence.ts",
     "./vocab": "./vocab.ts",
-    "./views": "./views.ts"
+    "./views": "./views.ts",
+    "./tools": "./tools.ts"
   },
   "license": "Apache-2.0",
   "description": "Evidence-grown oracle trees, bounded questions and conversations kept as graph entities.",

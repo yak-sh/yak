@@ -2,6 +2,7 @@
 // Both exports share entries so browse adapts each only once, with its Io.
 import type { Bundle, View } from '@yaks/inspect'
 import { parse } from '@yaks/query'
+import { Talk } from './Talk.tsx'
 import {
   Dialogue,
   Inline,
@@ -33,8 +34,23 @@ let nodeAsks = (e: Bundle) => ({
     `(.oracle_dialogue.from=${e.entity.eid}|.oracle_dialogue.to=${e.entity.eid}) * .order=-created.at .limit=50`,
 })
 
+let nodeFace = {
+  match: parse('.oracle .session'),
+  Render: NodeTile,
+  asks: (e: Bundle, io: import('@yaks/inspect').Io) => ({
+    face: `.entity.eid=${e.entity.eid} .fields=doc.title,oracle.advert${
+      io.vocab.comp('topic') ? ',topic.name' : ''
+    }`,
+  }),
+}
+
 let all: View[] = [
-  { view: 'Oracle.Tree.Tile', match: parse('.oracle'), Render: NodeTile },
+  { ...nodeFace, view: 'Oracle.Tree.Tile' },
+  { view: 'Oracle.Query', match: parse('.oracle .session'), Render: Talk },
+  ...['Feed.Tile', 'Search.Tile', 'Tray.List.Tile'].map((view) => ({
+    ...nodeFace,
+    view,
+  })),
   {
     view: 'Oracle.Dialogue.Tile',
     match: parse('.oracle_dialogue'),
@@ -53,7 +69,7 @@ let all: View[] = [
     Render: Node,
   })),
   ...['Tile', 'List.Tile'].flatMap((view) => [
-    { view, match: parse('.oracle .session'), Render: NodeTile },
+    { ...nodeFace, view },
     { view, match: parse('.oracle_tree'), Render: TreeTile },
     { view, match: parse('.session .oracle_dialogue'), Render: Dialogue },
   ]),

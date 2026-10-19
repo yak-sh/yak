@@ -9,7 +9,7 @@ import { ram } from '@yaks/ram'
 import { define, resolve } from '@yaks/render'
 import type { Answer, Asks, Bundle, Io } from '@yaks/inspect'
 import { docs } from './vocab.ts'
-import { branches } from './Tree.tsx'
+import { branches, title } from './Tree.tsx'
 import { inspectViews } from './views.ts'
 
 let vocab = loadVocab([...docs, {
@@ -226,5 +226,44 @@ test('oracle view exposes its exact retained self context as text', () => {
   equal(
     nodePage.querySelector('[data-section="self-context"] .Value')?.textContent,
     'Exact context.\n\n<keep these words> & spacing.',
+  )
+})
+
+let sparse: Bundle = { entity: first.entity, oracle: {}, session: {} }
+let tileFaces = [
+  'Tile',
+  'List.Tile',
+  'Feed.Tile',
+  'Search.Tile',
+  'Tray.List.Tile',
+]
+  .map((view) => page(sparse, view))
+test('oracle tiles show their title and advertisement from projected metadata on every list surface', () => {
+  for (let face of tileFaces) {
+    equal(
+      face.querySelector('.Tile_Line .Tile_Title')?.textContent,
+      'Updated plant oracle',
+    )
+    equal(
+      face.querySelector('.Tile_Text > .Tile_Sub')?.textContent,
+      'New advertisement',
+    )
+  }
+})
+
+test('an oracle topic supplies its short title separately from its advertisement', () => {
+  equal(
+    title({
+      entity: { eid: 'topic-oracle' },
+      topic: { name: 'cars' },
+      doc: { title: 'Cars' },
+      oracle: {
+        advert: {
+          title:
+            'Answers every possible question about the world of motor vehicles',
+        },
+      },
+    }),
+    'Cars',
   )
 })
