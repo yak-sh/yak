@@ -31,7 +31,10 @@ export let visibleVectors = (
   fields: Field[],
   visibility?: BindOpts['visibility'],
 ): Raw | undefined => {
-  if (!visibility) return undefined
+  if (
+    !visibility ||
+    !visibility.entity && !Object.keys(visibility.components ?? {}).length
+  ) return undefined
   let opts = { visibility }
   let entity = sourceScreen(vocab, opts)
   let restricted = fields.filter((f) =>
@@ -61,6 +64,9 @@ export let visibleVectors = (
       not(admitted(permission(f)!, col('entity', 'c'))),
     ],
   )
+  if (!restricted.length && !Object.keys(visibility.components ?? {}).length) {
+    return entity ?? undefined
+  }
   let id = col('id', 'v')
   return render(select({
     cols: [id],

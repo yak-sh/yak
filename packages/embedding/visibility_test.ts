@@ -71,6 +71,18 @@ test('a public entity with hidden source text cannot be a semantic anchor', () =
   assertEquals(ask('book-2', other), [])
 })
 
+let entityOnly = ask('book-1', { entity: '.entity.eid!=book-2' })
+let combinedPolicy = ask('book-1', {
+  entity: '.entity.eid!=book-3',
+  components: other.components,
+})
+test('semantic candidates retain entity restrictions when no source is hidden', () => {
+  assertEquals(entityOnly, ['book-3'])
+})
+test('semantic candidates retain both entity and source restrictions', () => {
+  assertEquals(combinedPolicy, [])
+})
+
 test('semantic candidates exclude hidden source text before the limit', () => {
   assertEquals(ask('book-1', other), ['book-3'])
 })

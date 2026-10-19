@@ -112,7 +112,18 @@ export let semantic = (
       return FALSE
     }
     let limit = opts.limit ?? 8
-    let within = screened(asked?.(), visible)
+    let scope = asked?.()
+    // The ordinary candidate screen already enforces entity visibility. Only
+    // vector-source restrictions add information to that screen; checking the
+    // same entity policy twice makes every broad scan pay twice per vector.
+    let sources = scope && site.visibility
+      ? visibleVectors(
+        site.vocab,
+        opts.fields ?? fields(site.vocab, searched),
+        { ...site.visibility, entity: undefined },
+      )
+      : visible
+    let within = screened(scope, sources)
     // An anchor with no vector has no neighbourhood, and compiling that to a
     // constant false selects nothing rather than widening to everything.
     // The ranking is asked for one extra: the anchor scores 1 against itself
