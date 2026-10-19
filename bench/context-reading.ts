@@ -23,7 +23,8 @@ import { vaultOf } from '../packages/cli/vault.ts'
 import { openaiCredential } from '../packages/harness/openai_auth.ts'
 import { instructionFiles } from '../packages/harness/instructions.ts'
 import { owing } from '../packages/harness/session_machines.ts'
-import { processMachine } from '@yaks/process/machine'
+import { executionWorkspace } from '@yaks/machine/execution'
+import { localConnector } from '@yaks/machine/connectors'
 import { responses } from '@yaks/openai'
 import { type Snapshot, snapshot } from '@yaks/context'
 import type { Model, Reply, Request } from '@yaks/model'
@@ -565,9 +566,19 @@ export async function run(packet: Packet, options: {
       )
     ) as Bundle[]
     await setup.graph.apply(source, { trusted: true })
+    let explicit = executionWorkspace(
+      setup.graph,
+      await localConnector().connect('local://'),
+      {
+        workspace: crypto.randomUUID(),
+        root: options.cwd,
+        receipts: (Deno.env.get('TMPDIR') ?? '/tmp') +
+          '/context-reading-receipts',
+      },
+    )
     files = packet.files ??
       (options.opening == 'repo-current'
-        ? await instructionFiles(processMachine(setup.graph), options.cwd)
+        ? await instructionFiles(explicit, options.cwd)
         : [])
     if (options.persona && !packet.files) {
       files.push(
