@@ -32,9 +32,9 @@ import { BODY, DOC, TITLE } from '@yaks/doc'
 import { at } from './addr.ts'
 import { html, text } from './md.ts'
 import { BOUNCED, DELIVER, DELIVERED, EMAIL, MAIL } from './comp.ts'
-import type { Message, Sender } from '@yaks/host'
+import type { Message, Sender } from '@yaks/host/senders'
 import { Unsent } from '@yaks/host/senders'
-export type { Message, Receipt, Sender } from '@yaks/host'
+export type { Message, Receipt, Sender } from '@yaks/host/senders'
 export { Unsent }
 
 /** How the effect is built. */
