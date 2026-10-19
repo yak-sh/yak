@@ -426,6 +426,7 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
           )
         ) throw new Error('bad anatomy')
         let nodes = parts(source)
+        let nodeIds = new Set(nodes.map((n) => n.id))
         let current = new Set([
           ...nodes.map((n) => n.id),
           ...source.anatomy.edges.map((e) => e.id),
@@ -446,8 +447,7 @@ export let atlas = (opts: ModelOptions = {}): AtlasModel => {
         }
         for (let edge of source.anatomy.edges) {
           if (
-            !nodes.some((n) => n.id == edge.from) ||
-            !nodes.some((n) => n.id == edge.to)
+            !nodeIds.has(edge.from) || !nodeIds.has(edge.to)
           ) continue
           bundles.push({
             entity: { eid: identity(edge.id) },
