@@ -1,3 +1,4 @@
+import { rowHolds } from './row_holds.ts'
 import { writeOwner } from './owner.ts'
 import { hosting, legacyOutboxName, storageKey } from './hosting.ts'
 // The browser half: one graph cache, narrow render signals, one socket,
@@ -927,7 +928,7 @@ export let clearForTest = () => {
   resultUses.clear()
   resultSignals.clear()
   routeUses.clear()
-  rowsUses.clear()
+  rowsSub.clear()
   oneShots.clear()
   mem = makeResolver()
   agreement = undefined
@@ -2281,25 +2282,11 @@ export let routeSub = (eid: string, fields?: string) => {
   }
 }
 
-// Several tiles' rows in ONE sub. A reference list or a shelf of pins paints N
+// Several tiles' rows in one sub. A reference list or a shelf of pins paints N
 // entities, and N `route:<eid>:*` subs cost N serves and N frames where one
-// `id=a,b,c` line answers the same rows together (T-37445). Named by the joined
-// ids and refcounted like a route sub; a list that changes re-asks under the
-// new name, which is what a per-target hold already did.
-let rowsUses = new Map<string, number>()
-export let rowsSub = (eids: string[]) => {
-  if (!eids.length) return () => {}
-  let sub = `rows:${eids.join(',')}`
-  let n = rowsUses.get(sub) ?? 0
-  rowsUses.set(sub, n + 1)
-  if (!n) ownBoard(sub, `id=${eids.join(',')}`)
-  return () => {
-    let held = (rowsUses.get(sub) ?? 1) - 1
-    if (held > 0) return void rowsUses.set(sub, held)
-    rowsUses.delete(sub)
-    dropBoard(sub)
-  }
-}
+// `id=a,b,c` line answers the same rows together. Concurrent readers share an
+// immutable bounded request; each still owns its lifetime independently.
+export let rowsSub = rowHolds(ownBoard, dropBoard)
 
 // What an entity sub asks for BESIDE its row (T-22371): the edges incident to
 // it, and enough of each far endpoint to render the sentence — an id (the spine

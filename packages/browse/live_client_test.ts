@@ -6,6 +6,7 @@ import { assertEquals, assertRejects } from '@std/assert'
 import { WriteRefused, WriteUnknown } from '@yaks/client'
 import type { Frame, Socket } from '@yaks/sync'
 import { liveClient } from './live_client.ts'
+import { rowHolds } from './row_holds.ts'
 
 // A socket that is open at once, keeps what is sent on it, and lets the test
 // speak for the host. Frames land when the timer turns (T-37445).
@@ -259,4 +260,93 @@ test('authored narrow reads reach the wire without widening to whole rows', () =
   } finally {
     c.box.close()
   }
+})
+
+// One immutable group owns its delivered rows even as individual cells leave.
+let grouped = replica()
+let groupJobs: (() => void)[] = []
+let groupName = ''
+let groupHold = rowHolds(
+  (name, line) => {
+    groupName = name
+    grouped.c.open(name, line.replace('id=', '.entity.eid='))
+  },
+  (name) => grouped.c.close(name),
+  (run) => groupJobs.push(run),
+)
+let groupIds = Array.from({ length: 20 }, (_, i) => `group-${i}`)
+let groupOff = groupIds.map((eid) => groupHold([eid]))
+for (let run of groupJobs.splice(0)) run()
+let groupChanges = groupIds.flatMap((eid, i) => [
+  { eid, name: 'entity', comp: { eid, num: i + 1 } },
+  { eid, name: 'doc', comp: { title: `Row ${i}` } },
+])
+grouped.c.receive({ sub: groupName, replace: true, changes: groupChanges })
+for (let off of groupOff.slice(0, 19)) off()
+grouped.c.receive({
+  sub: groupName,
+  changes: [{ eid: groupIds[19], name: 'doc', comp: { title: 'Updated' } }],
+})
+test('grouped cell demand delivers all rows and keeps live updates for survivors', () => {
+  assertEquals(grouped.sent.filter((m) => 'subscribe' in m).length, 1)
+  assertEquals(grouped.c.members(groupName), groupIds)
+  assertEquals(grouped.c.box.ent(groupIds[0])?.doc, { title: 'Row 0' })
+  assertEquals(grouped.c.box.ent(groupIds[19])?.doc, { title: 'Updated' })
+  assertEquals(grouped.sent.filter((m) => 'unsubscribe' in m).length, 0)
+  groupOff[19]()
+  assertEquals(grouped.sent.filter((m) => 'unsubscribe' in m).length, 1)
+  grouped.c.box.close()
+})
+
+let refusedGroup = replica()
+let refusedJobs: (() => void)[] = []
+let refusedName = ''
+let refusedHold = rowHolds(
+  (name, line) => {
+    refusedName = name
+    refusedGroup.c.open(name, line.replace('id=', '.entity.eid='))
+  },
+  (name) => refusedGroup.c.close(name),
+  (run) => refusedJobs.push(run),
+)
+let refusedOff = [refusedHold(['private']), refusedHold(['gone'])]
+for (let run of refusedJobs.splice(0)) run()
+refusedGroup.c.receive({ sub: refusedName, error: 'not permitted' })
+test('a refused group exposes no rows and keeps refusal until replacement', () => {
+  assertEquals(refusedGroup.c.members(refusedName), [])
+  assertEquals(refusedGroup.c.ready(refusedName), false)
+  for (let off of refusedOff) off()
+  assertEquals(refusedGroup.sent.filter((m) => 'unsubscribe' in m).length, 1)
+  refusedGroup.c.box.close()
+})
+
+let replacedGroup = replica()
+let replacedJobs: (() => void)[] = []
+let replacedName = ''
+let replacedHold = rowHolds(
+  (name, line) => {
+    replacedName = name
+    replacedGroup.c.open(name, line.replace('id=', '.entity.eid='))
+  },
+  (name) => replacedGroup.c.close(name),
+  (run) => replacedJobs.push(run),
+)
+let replacedOff = [replacedHold(['present']), replacedHold(['absent'])]
+for (let run of replacedJobs.splice(0)) run()
+replacedGroup.c.receive({
+  sub: replacedName,
+  replace: true,
+  changes: [
+    { eid: 'present', name: 'entity', comp: { eid: 'present', num: 1 } },
+    { eid: 'present', name: 'doc', comp: { title: 'Present' } },
+  ],
+})
+test('a group membership includes only rows the server actually returned', () => {
+  assertEquals(replacedGroup.c.members(replacedName), ['present'])
+  assertEquals(replacedGroup.c.ready(replacedName), true)
+  assertEquals(replacedGroup.c.box.ent('absent'), undefined)
+  replacedGroup.c.receive({ sub: replacedName, replace: true, changes: [] })
+  assertEquals(replacedGroup.c.members(replacedName), [])
+  for (let off of replacedOff) off()
+  replacedGroup.c.box.close()
 })
