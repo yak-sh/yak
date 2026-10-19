@@ -73,7 +73,7 @@ for (let singleOwner of [false, true]) {
           next: new Date(at).toISOString(),
         },
       })
-      if (!singleOwner) match(row, { effect: { lease_owner: null } })
+      if (!singleOwner) equal(row.effect?.lease_owner ?? null, null)
     }
     equal(before, 1)
     match(failed, { effect: { state: 'pending', attempts: 1 } })

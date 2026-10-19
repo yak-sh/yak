@@ -194,10 +194,10 @@ rows. After rollback, the `audit` phase records the conflict in a separate
 transaction. Claims do not expire. Deleting a session releases its claims
 through the graph cascade. `reapLeases(storage)` releases claims whose holder is
 no longer a session; the `/service` duty runs it when it starts.
-`session_release` runs when a transcript stops or fails and releases its claims;
-its sweep also finds claims left by transcripts that ended before a worker ran.
-A managed run that ended cleanly keeps the claims it is parked on (see below),
-and lets each go once its task finishes or nothing is left to wait for.
+`session_release` records work when a transcript ends or receives a claim after
+ending, so a later worker releases those claims through the ordinary queue. A
+managed run that ended cleanly keeps the claims it is parked on (see below), and
+lets each go once its task finishes or nothing is left to wait for.
 
 ## Parking on a task
 

@@ -215,7 +215,7 @@ for (let mark of ['queued', 'admitted', 'waiting']) {
     assertEquals(told[0].content, {
       body: 'child finished settled\nalready done',
     })
-    // A later sweep neither recreates the envelope nor duplicates delivery.
+    // Repeated settlement neither recreates the envelope nor duplicates delivery.
     await settle(p.g, 'finished', p.r)
     assertEquals((await p.g.get(['finished']))[0].dispatch, undefined)
     assertEquals((await transcript(p.g, 'root')).length, 1)
