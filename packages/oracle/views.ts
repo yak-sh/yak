@@ -34,6 +34,12 @@ let nodeAsks = (e: Bundle) => ({
 })
 
 let all: View[] = [
+  { view: 'Oracle.Tree.Tile', match: parse('.oracle'), Render: NodeTile },
+  {
+    view: 'Oracle.Dialogue.Tile',
+    match: parse('.oracle_dialogue'),
+    Render: Dialogue,
+  },
   ...['Tree', 'Page', 'Full'].map((view) => ({
     view,
     match: parse('.oracle_tree'),
@@ -42,12 +48,12 @@ let all: View[] = [
   })),
   ...['Oracle', 'Page', 'Full'].map((view) => ({
     view,
-    match: parse('.oracle'),
+    match: parse('.oracle .session'),
     asks: nodeAsks,
     Render: Node,
   })),
   ...['Tile', 'List.Tile'].flatMap((view) => [
-    { view, match: parse('.oracle'), Render: NodeTile },
+    { view, match: parse('.oracle .session'), Render: NodeTile },
     { view, match: parse('.oracle_tree'), Render: TreeTile },
     { view, match: parse('.session .oracle_dialogue'), Render: Dialogue },
   ]),

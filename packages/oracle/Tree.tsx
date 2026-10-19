@@ -114,7 +114,7 @@ export let Tree = ({ e, got, io }: Props) => (
 
 /** The oracle's advertisement is the node's shared face in every list. */
 export let NodeTile = ({ e, io }: Props) => (
-  <Tile href={io.link(e.entity.eid)}>
+  <Tile href={`${io.link(e.entity.eid)}?v=Oracle`}>
     <Tile.Title>{title(e)}</Tile.Title>
     <Tile.Kind>{text(comp(e, 'oracle').domain)}</Tile.Kind>
     <Tile.Sub>{field(advert(e), 'description')}</Tile.Sub>

@@ -35,6 +35,7 @@ let tree: Bundle = {
 }
 let node = (eid: string, domain: string): Bundle => ({
   entity: { eid },
+  session: { ended: true },
   oracle: {
     tree: 'tree',
     domain,
