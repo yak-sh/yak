@@ -752,12 +752,17 @@ test('graceful stop after ask persistence drains the admitted dispatch', async (
   assertEquals(statusOf(await transcript(p.g, 's1')), 'settled')
 })
 
-test('a ready replacement continues a drained multi-step turn without a nudge', async () => {
+// Build and seed the two graphs before timing; both workers still start,
+// contend for the real session lease, drain and hand over inside the case.
+let replacement = await (async () => {
   let s = store()
   let stop = new AbortController(), nextStop = new AbortController()
   let open!: () => void
   let gate = new Promise<void>((go) => open = go)
   let asks = 0, runs = 0
+  let asked = Promise.withResolvers<void>()
+  let swept = Promise.withResolvers<void>()
+  let settled = Promise.withResolvers<void>()
   let tool = {
     name: 'echo',
     description: 'say it back',
@@ -769,6 +774,7 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
   }
   let model: Model = async (req) => {
     if (++asks == 1) {
+      asked.resolve()
       await gate
       req.signal?.throwIfAborted()
       return {
@@ -777,6 +783,11 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
         items: [{ kind: 'call', id: 'c1', name: 'echo', args: '{}' }],
       }
     }
+    assert(
+      req.items.some((item) =>
+        item.kind == 'result' && item.output.includes('echoed')
+      ),
+    )
     return {
       id: 'done',
       model: req.model,
@@ -784,36 +795,72 @@ test('a ready replacement continues a drained multi-step turn without a nudge', 
     }
   }
   let a = proc(s, 'w1', model, { stopping: stop.signal, tools: [tool] })
-  let b = proc(s, 'w2', model, { tools: [tool] })
+  let available!: ReturnType<typeof answers>
+  let b = proc(s, 'w2', model, {
+    tools: [tool],
+    // A progress-only reply is runnable upstream, but this model waits for
+    // the echo's final. Preserve the session argument at the readiness seam.
+    answers: async (using, current) => {
+      if (!await available(using, current)) return false
+      // A tool effect checks provider availability without a session.
+      if (current == null) return true
+      assertEquals(current, 's1')
+      let entries = await transcript(b.g, current)
+      return !entries.some((entry) => entry.call) ||
+        entries.some((entry) => entry.result)
+    },
+    each: (step) => {
+      if (step.status == 'settled') settled.resolve()
+    },
+  })
+  available = answers(b.g, {}, model)
   await a.g.apply([
     { entity: { eid: toolEid('echo') }, tool: { name: 'echo' } },
     ...ask('s1'),
   ])
+  let rows = b.g.rows.bind(b.g)
+  b.g.rows = async (...args) => {
+    let found = await rows(...args)
+    if (String(args[0]).includes('.session.status=')) swept.resolve()
+    return found
+  }
+  return {
+    a,
+    b,
+    stop,
+    nextStop,
+    open,
+    asked,
+    swept,
+    settled,
+    counts: () => ({ asks, runs }),
+  }
+})()
+
+test('a ready replacement continues a drained multi-step turn without a nudge', async () => {
+  let { a, b, stop, nextStop, open, asked, swept, settled, counts } =
+    replacement
   let first = a.fx.work(a.g, stop.signal)
   let second: Promise<void> | undefined
   try {
-    await until(() => asks == 1)
-    let swept = false, rows = b.g.rows.bind(b.g)
-    b.g.rows = async (...args) => {
-      let found = await rows(...args)
-      if (String(args[0]).includes('.session.status=')) swept = true
-      return found
-    }
+    await asked.promise
     second = b.fx.work(b.g, nextStop.signal)
-    // Sweeps project identities through rows(); wait until the replacement
-    // has seen the transcript while the old lease is held.
-    await until(() => swept)
-    await settle(b.g, 's1', b.r) // already tried: old still holds it
+    // The replacement has swept the transcript while w1 still owns its lease.
+    await swept.promise
+    await settle(b.g, 's1', b.r)
+    assertEquals(counts(), { asks: 1, runs: 0 })
     stop.abort()
     open()
     await first
     await a.fx.idle()
     // The replacement's next pass, which its nap would reach within a second.
     b.fx.wake()
-    await until(async () => statusOf(await transcript(b.g, 's1')) == 'settled')
-    assertEquals(asks, 2)
-    assertEquals(runs, 1)
+    await settled.promise
+    assertEquals(counts(), { asks: 2, runs: 1 })
     let entries = await transcript(b.g, 's1')
+    assertEquals(statusOf(entries), 'settled')
+    assertEquals(textOf(entries.find((entry) => entry.result)!), 'echoed')
+    assertEquals(textOf(entries.at(-1)!), 'done')
     assertEquals(entries.filter((b) => b.result).length, 1)
     assertEquals(entries.filter((b) => !b.tool_progress).map(kindOf), [
       'input',
