@@ -39,6 +39,23 @@ test('a single-owner install keeps rows and removes peer tracking cost', () => {
   equal(meta(local).get('table:archetype'), undefined)
 })
 
+// Another schema left tokens on tables this one does not version, the way an
+// unlanded checkout's CLI does to the file it opens. The next pass retires
+// them; a write that a leftover trigger would hear proves it gone.
+let strayed = mem()
+storage({ ...strayed, file: true }, shop).install()
+for (let s of versioned('doc')) strayed.query(s)
+let healed = storage({ ...strayed, file: true }, vocab)
+healed.install()
+graph({ storage: healed, vocab, plugins: [archetypes()] }).apply([
+  { entity: { eid: 'stray' }, doc: { title: 'Stray' } },
+])
+
+test('an install retires the table tokens its schema does not keep', () => {
+  equal(meta(strayed).get('table:doc'), undefined)
+  ok(meta(strayed).get('table:archetype'))
+})
+
 // The reader sees a peer's SQLite data_version rather than its AST writes.
 // The fixture keeps its connection and installed schema outside timed cases.
 let peer = () => {

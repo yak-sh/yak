@@ -69,7 +69,7 @@ import {
 import { checks, objects, type Stood, stood } from './physical.ts'
 import { unit } from './unit.ts'
 import { busy } from './error.ts'
-import { unversioned, versioned } from './versions.ts'
+import { clocked, versioned } from './versions.ts'
 
 import type { Statistics } from './meta.ts'
 import { META, tables } from './layout.ts'
@@ -312,9 +312,15 @@ export let tabled = (
   file = false,
 ): Stmt[] => [
   ...spine(vocab),
-  ...file && vocab.comp('archetype') ? versioned('archetype') : [],
+  ...clocks(vocab, file).flatMap(versioned),
   ...docDdl(vocab, derived),
 ]
+
+// The tables a file keeps a token for (./versions.ts): archetype, which every
+// connection's catalog follows (./catalog.ts). A single-owner store sees its
+// own writes and keeps none.
+let clocks = (vocab: Vocab, file: boolean): string[] =>
+  file && vocab.comp('archetype') ? ['archetype'] : []
 
 let spine = (vocab: Vocab): Stmt[] => [
   ...SPINE,
@@ -343,9 +349,7 @@ export let retabled = (
   let make = view.find((s): s is CreateView => s.t == 'create view')
   return [
     ...spine(vocab),
-    ...vocab.comp('archetype')
-      ? driver.file ? versioned('archetype') : unversioned('archetype')
-      : [],
+    ...clocked(driver, clocks(vocab, !!driver.file)),
     ...make && stands(driver, make) ? [] : view,
   ]
 }

@@ -58,6 +58,24 @@ export let unversioned = (table: string): Stmt[] => [
   { t: 'delete', from: META, where: eq(col('k'), val(key(table))) },
 ]
 
+/** A file's tokens brought to exactly `keep`: each kept table versioned, and
+ * every other table's token retired, whoever installed it (a schema that once
+ * kept one, or an unlanded checkout's CLI that opened this file). A token
+ * nobody reads only taxes every write to its table. */
+export let clocked = (driver: Driver, keep: string[]): Stmt[] => [
+  ...keep.flatMap(versioned),
+  ...[
+    ...new Set(
+      catalogue(driver).flatMap((o) =>
+        o.type == 'trigger' && !keep.includes(o.tbl_name) &&
+          events.some((e) => o.name == `${o.tbl_name}_version_${e}`)
+          ? [o.tbl_name]
+          : []
+      ),
+    ),
+  ].flatMap(unversioned),
+]
+
 // A counter would reuse a value after rollback and a different mutation. A
 // fresh token cannot confuse that new state with a snapshot of the undone one.
 let tracking = new WeakMap<Driver, {
