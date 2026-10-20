@@ -4,6 +4,7 @@ import { type Bundle, type Comp, graph, Stale, type Storage } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { attributed, registrationDoc } from './attribution.ts'
 import { effects as attributionEffects } from './facets/attribution-effects.ts'
@@ -20,7 +21,13 @@ let another = '00000000-0000-4000-8000-000000000004'
 
 // Each boot gets a new registry over the same durable rows. The namespace
 // answers locally; neither the app nor directory is a live store.
-let registered = loadVocab([spineDoc, docDoc, effectDoc, registrationDoc])
+let registered = loadVocab([
+  spineDoc,
+  provenanceDoc,
+  docDoc,
+  effectDoc,
+  registrationDoc,
+])
 let registrations = () => {
   let vocab = registered
   let storage = ram(vocab)
@@ -225,7 +232,7 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
   assertEquals(calls, 1)
 })
 
-let heldVocab = loadVocab([spineDoc, docDoc])
+let heldVocab = loadVocab([spineDoc, provenanceDoc, docDoc])
 let held = () => graph({ vocab: heldVocab, storage: ram(heldVocab) })
 
 let bounded = held()

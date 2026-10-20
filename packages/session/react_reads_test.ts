@@ -7,6 +7,7 @@ import { storage } from '@yaks/sqlite'
 import { mem } from '../sqlite/testing.ts'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { modelDoc, type Request } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { contextDoc } from '@yaks/context'
@@ -25,6 +26,7 @@ let vocab = loadVocab([
   contextDoc,
   effectDoc,
   kernelDoc,
+  provenanceDoc,
   archetypeDoc,
 ], [kernelKeywords])
 

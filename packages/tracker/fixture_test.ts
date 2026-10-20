@@ -13,6 +13,7 @@ import { Refused } from '@yaks/graph/errors'
 import { guard } from '@yaks/graph/guard'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { apiDoc } from '@yaks/api/vocab'
 import { docDoc } from '@yaks/doc'
@@ -25,6 +26,7 @@ import { effects, type Options } from './effects.ts'
 
 export let vocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   toolsDoc,
   apiDoc,
   docDoc,

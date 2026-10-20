@@ -4,6 +4,7 @@
 
 import { test } from '@yaks/testing'
 import { kernelDoc } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import {
   type Bundle,
@@ -75,7 +76,15 @@ let NOW = 1_000_000
 
 // A credential on its way to the vault wears @yaks/effects' `provisional`.
 let vocab = loadVocab(
-  [kernelDoc, here, edgeDoc, secretsDoc, provisionalDoc, connectionsDoc],
+  [
+    kernelDoc,
+    provenanceDoc,
+    here,
+    edgeDoc,
+    secretsDoc,
+    provisionalDoc,
+    connectionsDoc,
+  ],
   [edgeKeywords],
 )
 

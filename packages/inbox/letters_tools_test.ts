@@ -7,6 +7,7 @@ import { type Actor, type Bundle, type Comp, graph, mint } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { mailbox, mailDoc } from '@yaks/mail'
 import { runs as mail } from '@yaks/mail/tools'
@@ -42,22 +43,30 @@ let ids = (answer: Bundle[]): string[] => answer.map((b) => b.entity.eid)
 
 // A club with an address book: Ana reads the club's mail at its own desk.
 let club = async () => {
-  let vocab = loadVocab([kernelDoc, docDoc, mailDoc, inboxDoc, notifyDoc, {
-    $defs: {
-      content: {
-        component: true,
-        type: 'object',
-        properties: { body: { type: 'string' } },
-      },
-      output: {
-        component: true,
-        type: 'object',
-        properties: {
-          source: { type: 'string', ref: 'entity', death: 'keep' },
+  let vocab = loadVocab([
+    kernelDoc,
+    provenanceDoc,
+    docDoc,
+    mailDoc,
+    inboxDoc,
+    notifyDoc,
+    {
+      $defs: {
+        content: {
+          component: true,
+          type: 'object',
+          properties: { body: { type: 'string' } },
+        },
+        output: {
+          component: true,
+          type: 'object',
+          properties: {
+            source: { type: 'string', ref: 'entity', death: 'keep' },
+          },
         },
       },
     },
-  }], [kernelKeywords])
+  ], [kernelKeywords])
   let g = graph({
     vocab,
     storage: ram(vocab),

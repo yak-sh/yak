@@ -7,6 +7,7 @@ import { graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { CallError } from '@yaks/tools/errors'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { apiDoc } from '@yaks/api/vocab'
 import { docDoc } from '@yaks/doc'
@@ -39,6 +40,7 @@ import {
 export let platform = derivedEid('tracker|platform')
 export let vocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   toolsDoc,
   apiDoc,
   docDoc,

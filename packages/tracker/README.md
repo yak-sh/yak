@@ -56,14 +56,14 @@ so.
 
 ## Host interface
 
-Load `trackerDoc` with @yaks/kernel, @yaks/tools, @yaks/api, @yaks/doc and
-@yaks/mail. RAM takes `computed`; SQL storage takes `derived`. `bug.status`
-comes from the resolved/archived marks. `bug.people` counts the distinct people
-its retained occurrences reached, by their `user_id` tag, and `bug.account` is
-`person` when any reached a person or a person's space and `test` when only test
-accounts: a customer's bug reads apart from a probe's. Who wrote an occurrence
-is the reporting process, never whom it reached. `bug.hits` is historical and
-does not shrink when occurrences are trimmed.
+Load `trackerDoc` with @yaks/kernel, @yaks/provenance, @yaks/tools, @yaks/api,
+@yaks/doc and @yaks/mail. RAM takes `computed`; SQL storage takes `derived`.
+`bug.status` comes from the resolved/archived marks. `bug.people` counts the
+distinct people its retained occurrences reached, by their `user_id` tag, and
+`bug.account` is `person` when any reached a person or a person's space and
+`test` when only test accounts: a customer's bug reads apart from a probe's. Who
+wrote an occurrence is the reporting process, never whom it reached. `bug.hits`
+is historical and does not shrink when occurrences are trimmed.
 
 `report(error, context)` never throws. Context supplies `sink`, the failing
 work's `actor`, commit/version, global `during` references, and optionally a

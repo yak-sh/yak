@@ -7,6 +7,9 @@ import { loadVocab } from '@yaks/vocab'
 import type { Bundle } from './net.ts'
 import { comp } from './bundle.ts'
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
+import provenance from '../../packages/provenance/vocab.json' with {
+  type: 'json',
+}
 import words from './vocab.json' with { type: 'json' }
 import { workerOf } from './worker.js'
 import { flat } from './terrain.ts'
@@ -21,7 +24,7 @@ let OTHER_PERSON = '33333333-3333-4333-8333-333333333333'
 let HERO = '01234567-89ab-cdef-0123-456789abcdef'
 let OTHER = '11234567-89ab-cdef-0123-456789abcdef'
 let fixture = async (named = false) => {
-  let vocab = loadVocab([core, words])
+  let vocab = loadVocab([core, provenance, words])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply([
     ...themeRows,

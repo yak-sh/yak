@@ -1,0 +1,15 @@
+{
+  "name": "@yaks/provenance",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Who made an entity and who last changed it, when, and through what: the created and updated stamps the graph fills in on every write.",
+  "publish": {
+    "exclude": [
+      "**/*_test.ts"
+    ]
+  }
+}

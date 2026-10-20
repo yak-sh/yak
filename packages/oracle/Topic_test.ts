@@ -10,6 +10,7 @@ import { define, resolve } from '@yaks/render'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { contextDoc } from '@yaks/context'
 import { docDoc } from '@yaks/doc/vocab'
 import { sessionDoc } from '@yaks/session'
@@ -22,6 +23,7 @@ let vocab = loadVocab([
   toolsDoc,
   memoryDoc,
   kernelDoc,
+  provenanceDoc,
   contextDoc,
   docDoc,
   sessionDoc,

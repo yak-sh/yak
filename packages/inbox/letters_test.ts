@@ -4,6 +4,7 @@ import { type Bundle, type Comp, detached, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { projectDoc } from '@yaks/project'
@@ -83,6 +84,7 @@ let comp = (b: Bundle, name: string) => b[name] as Comp
 
 let vocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   docDoc,
   edgeDoc,
   taskDoc,

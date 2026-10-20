@@ -12,12 +12,21 @@ import { idDoc } from '@yaks/id/vocab'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { taskDoc } from '@yaks/task'
 import { loadVocab } from '@yaks/vocab'
 import type { Context } from '@yaks/tracker/report'
 import { letters, routes } from './routes.ts'
 
-let vocab = loadVocab([kernelDoc, docDoc, taskDoc, keyDoc, aliasDoc, idDoc], [
+let vocab = loadVocab([
+  kernelDoc,
+  provenanceDoc,
+  docDoc,
+  taskDoc,
+  keyDoc,
+  aliasDoc,
+  idDoc,
+], [
   kernelKeywords,
   keyKeywords,
 ])

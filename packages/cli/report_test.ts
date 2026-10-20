@@ -19,6 +19,7 @@ export let trackerConfig = (dir: string) => ({
   tracker: { spool: `${dir}/spool` },
   plugins: [
     '@yaks/kernel',
+    '@yaks/provenance',
     '@yaks/doc',
     '@yaks/tools',
     '@yaks/api',

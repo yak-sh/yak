@@ -20,6 +20,7 @@ import {
 import { effectDoc, effects } from '@yaks/effects'
 import { ram } from '@yaks/ram'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { idDoc } from '@yaks/id/vocab'
 import { executionComputed } from './state.ts'
 import { loadVocab } from '@yaks/vocab'
@@ -56,7 +57,7 @@ let echo: Tool = {
 }
 
 let words = (extra: Record<string, unknown> = {}) =>
-  loadVocab([callDoc, toolDoc, kernelDoc, idDoc, {
+  loadVocab([callDoc, toolDoc, kernelDoc, provenanceDoc, idDoc, {
     $defs: {
       person: { component: true, properties: {} },
       // What a runner's owner is: a process, and its ending (@yaks/process).

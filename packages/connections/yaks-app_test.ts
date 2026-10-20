@@ -16,6 +16,7 @@ let open = () =>
     db: ':memory:',
     plugins: [
       '@yaks/kernel',
+      '@yaks/provenance',
       '@yaks/id',
       '@yaks/edge',
       '@yaks/doc',

@@ -15,6 +15,7 @@ let box = async () => {
     person: 'owner',
     plugins: [
       '@yaks/kernel',
+      '@yaks/provenance',
       '@yaks/id',
       '@yaks/edge',
       '@yaks/doc',

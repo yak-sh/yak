@@ -9,6 +9,7 @@
 import { learn } from './types.ts'
 import { test as declareTest } from '@yaks/testing'
 import { docs as kernel } from '@yaks/kernel/vocab'
+import { docs as provenance } from '@yaks/provenance/vocab'
 import { docs as id } from '@yaks/id/vocab'
 import { docs as secrets } from '@yaks/secrets/vocab'
 import { docs as key } from '@yaks/key/vocab'
@@ -71,6 +72,7 @@ Object.defineProperty(globalThis, 'localStorage', {
 
 learn([
   kernel,
+  provenance,
   id,
   secrets,
   key,

@@ -3,6 +3,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, graph, type Visibility } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { sessionDoc } from '@yaks/session'
 import { sessionDerived } from './status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -22,6 +23,7 @@ import { due } from './bus.ts'
 import { comments, pending } from './listen.ts'
 let v = loadVocab([
   kernelDoc,
+  provenanceDoc,
   sessionDoc,
   toolsDoc,
   docDoc,

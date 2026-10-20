@@ -7,6 +7,7 @@ import { mem } from '../sqlite/testing.ts'
 import { storage } from '@yaks/sqlite'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { sessionDoc } from './comp.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
@@ -14,7 +15,13 @@ import { sessionDerived } from './status.ts'
 import { staleLeases } from './reap.ts'
 import { stale } from './service.ts'
 
-let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, kernelDoc], [
+let vocab = loadVocab([
+  sessionDoc,
+  toolsDoc,
+  modelDoc,
+  kernelDoc,
+  provenanceDoc,
+], [
   kernelKeywords,
 ])
 let derived = sessionDerived(vocab)

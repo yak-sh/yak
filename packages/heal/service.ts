@@ -13,6 +13,7 @@ import { sleep } from '@yaks/effects'
 import type { Graph } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { trackerDoc } from '@yaks/tracker/vocab'
 import { poll } from '@yaks/tracker/poll'
@@ -53,7 +54,8 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
 let vocab = loadVocab([
-  pick(kernelDoc, 'entity', 'created', 'updated', 'resolved', 'archived'),
+  pick(kernelDoc, 'entity', 'resolved', 'archived'),
+  provenanceDoc,
   pick(docDoc, 'doc'),
   pick(trackerDoc, 'bug', 'regressed', 'taken', 'resolved'),
 ], [kernelKeywords])

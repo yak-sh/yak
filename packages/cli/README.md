@@ -119,6 +119,7 @@ A config is plain JSON, so a plugin is one more line. Pass another with
   "db": "graph.db",
   "plugins": [
     "@yaks/kernel",
+    "@yaks/provenance",
     "@yaks/id",
     "@yaks/secrets",
     "@yaks/doc",
@@ -263,6 +264,7 @@ refusal, not a process-directory sandbox.
   "db": "./graph.db",
   "plugins": [
     "@yaks/kernel",
+    "@yaks/provenance",
     "@yaks/machine",
     "@yaks/sandbox",
     "@yaks/harness"

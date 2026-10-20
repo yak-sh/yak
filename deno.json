@@ -183,6 +183,7 @@
     "./packages/context",
     "./packages/mcp-client",
     "./packages/kernel",
+    "./packages/provenance",
     "./packages/platform",
     "./packages/goal",
     "./packages/design",

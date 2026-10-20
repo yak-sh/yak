@@ -21,8 +21,6 @@ that did not arrive through an authenticated HTTP or MCP request.
 
 | Mark              | Meaning                                                                                                                                   |
 | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **`created`**     | Who made the entity, when and through what.                                                                                               |
-| **`updated`**     | Who last changed the entity, when and through what.                                                                                       |
 | **`opened`**      | Somebody looked at the entity.                                                                                                            |
 | **`archived`**    | Hidden from ordinary listings, without deleting history or stopping execution.                                                            |
 | **`completed`**   | The work was finished; removing the mark reopens it.                                                                                      |
@@ -41,6 +39,8 @@ that did not arrive through an authenticated HTTP or MCP request.
 These declarations record marks; applications implement listing filters,
 concurrency bounds and other behavior associated with them. A status can be
 computed from marks: [@yaks/task](../task/README.md) reads `completed` as done.
+The stamps every write leaves, `created` and `updated`, are
+[@yaks/provenance](../provenance/README.md)'s.
 
 A **`favorite`** records that somebody marked the entity as a favorite. It
 declares stamped `at` but has no `by` or `via`, so the graph does not stamp it
@@ -76,11 +76,10 @@ equal(work.favorite, {})
 ## Vocabulary documents
 
 `kernelDoc` declares all this package's components and its comment tool.
-`spineDoc` selects `entity`, `created` and `updated`; `marksDoc` selects
-`opened` and `archived`. Load the subsets when the other declarations are
-unnecessary. `docs` contains `kernelDoc`, `keywords` contains `kernelKeywords`,
-and `description` is the manifest's summary. The `./vocab` entry point imports
-no storage or runtime API.
+`spineDoc` selects `entity`; `marksDoc` selects `opened` and `archived`. Load
+the subsets when the other declarations are unnecessary. `docs` contains
+`kernelDoc`, `keywords` contains `kernelKeywords`, and `description` is the
+manifest's summary. The `./vocab` entry point imports no storage or runtime API.
 
 ```ts
 import { marksDoc, spineDoc } from '@yaks/kernel/vocab'
@@ -95,7 +94,6 @@ await g.apply([{ entity: { eid: 'note' }, opened: {}, archived: {} }])
 let [note] = await g.read('.archived&*')
 equal(note.entity.eid, 'note')
 equal(typeof note.opened?.at, 'string')
-equal(typeof note.created?.at, 'string')
 ```
 
 The `entity` declaration adds `archetype` to the identity component.

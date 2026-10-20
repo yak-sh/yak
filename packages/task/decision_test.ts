@@ -5,6 +5,7 @@ import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
 import { projectDoc } from '@yaks/project'
@@ -29,7 +30,16 @@ let ask = {
 }
 let world = async () => {
   let vocab = loadVocab(
-    [kernelDoc, docDoc, edgeDoc, taskDoc, projectDoc, callDoc, toolDoc],
+    [
+      kernelDoc,
+      provenanceDoc,
+      docDoc,
+      edgeDoc,
+      taskDoc,
+      projectDoc,
+      callDoc,
+      toolDoc,
+    ],
     [kernelKeywords, edgeKeywords],
   )
   let g = graph({

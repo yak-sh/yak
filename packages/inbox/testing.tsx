@@ -20,6 +20,7 @@ import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { DecisionForm } from '@yaks/task/form'
@@ -47,6 +48,7 @@ import { inspectViews } from './inspect.tsx'
 /** The words the tests' graph speaks. */
 export let vocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   docDoc,
   taskDoc,
   projectDoc,

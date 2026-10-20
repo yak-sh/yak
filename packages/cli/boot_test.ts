@@ -33,6 +33,7 @@ test(
           '@yaks/api',
           '@yaks/mcp',
           '@yaks/kernel',
+          '@yaks/provenance',
           '@yaks/id',
           '@yaks/session',
           '@yaks/harness',

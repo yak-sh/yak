@@ -12,6 +12,7 @@ import { attemptComputed } from './attempt.ts'
 import { executionComputed } from '@yaks/tools'
 import { effectDoc } from '@yaks/effects'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { effects } from '@yaks/effects'
@@ -50,6 +51,7 @@ let fakeDoc: VocabDoc = {
 }
 let vocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   { $defs: { provisional: effectDoc.$defs!.provisional } },
   sessionDoc,
   toolsDoc,

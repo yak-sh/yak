@@ -135,32 +135,6 @@
       },
       "description": "The work this entity records was finished: a task done. Who finished it is kept across later writes of the mark. Removing the mark reopens the work."
     },
-    "created": {
-      "component": true,
-      "type": "object",
-      "journal": false,
-      "properties": {
-        "by": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true
-        },
-        "at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true,
-          "index": true
-        },
-        "via": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true
-        }
-      },
-      "description": "who made it, when, and through what"
-    },
     "decided": {
       "component": true,
       "type": "object",
@@ -435,31 +409,6 @@
       "reversed": "supervised by",
       "properties": {},
       "description": "edge tag: this entity oversees that one"
-    },
-    "updated": {
-      "component": true,
-      "type": "object",
-      "journal": false,
-      "properties": {
-        "by": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true
-        },
-        "at": {
-          "type": "string",
-          "format": "date-time",
-          "stamped": true
-        },
-        "via": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "stamped": true
-        }
-      },
-      "description": "who last changed it, when, and through what"
     },
     "verified": {
       "component": true,

@@ -13,6 +13,7 @@ import { ram } from '@yaks/ram'
 import { edgeDoc, edgeEid, edgeKeywords, link } from '@yaks/edge'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { taskDoc } from '@yaks/task'
 import { projectDoc } from '@yaks/project'
@@ -62,7 +63,8 @@ let pick = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
 let vocab = loadVocab([
-  pick(kernelDoc, 'entity', 'created', 'completed', 'about'),
+  pick(kernelDoc, 'entity', 'completed', 'about'),
+  pick(provenanceDoc, 'created'),
   edgeDoc,
   pick(docDoc, 'doc'),
   pick(taskDoc, 'task', 'cancelled'),
@@ -77,13 +79,8 @@ let vocab = loadVocab([
 
 let trackerVocab = loadVocab([
   apiDoc,
-  pick(
-    kernelDoc,
-    'entity',
-    'created',
-    'resolved',
-    'archived',
-  ),
+  pick(kernelDoc, 'entity', 'resolved', 'archived'),
+  pick(provenanceDoc, 'created'),
   pick(docDoc, 'doc'),
   pick(trackerDoc, 'bug', 'error', 'during', 'regressed', 'taken', 'resolved'),
   pick(mailDoc, 'notified'),

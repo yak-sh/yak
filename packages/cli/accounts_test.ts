@@ -11,6 +11,7 @@ import { reader } from '@yaks/graph/read'
 import { ram } from '@yaks/ram'
 import { ramVault, secretEid, secretsDoc } from '@yaks/secrets'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { idDoc, idKeywords } from '@yaks/id'
 import { ids } from '@yaks/id/graph'
 import { personaDoc } from '@yaks/persona/vocab'
@@ -98,11 +99,11 @@ test('a pasted yaks.app grant works beside an OAuth integration without a regist
 // and a vault in memory. The read-only preflight sees only the vocabulary the
 // caller selected; composing a host is the executable-plugin boundary.
 let baseVocab = loadVocab(
-  [kernelDoc, idDoc, connectionsDoc, secretsDoc],
+  [kernelDoc, provenanceDoc, idDoc, connectionsDoc, secretsDoc],
   [kernelKeywords, idKeywords],
 )
 let ownerVocab = loadVocab(
-  [kernelDoc, idDoc, connectionsDoc, secretsDoc, personaDoc],
+  [kernelDoc, provenanceDoc, idDoc, connectionsDoc, secretsDoc, personaDoc],
   [kernelKeywords, idKeywords],
 )
 let owner = '12345678-1234-1234-1234-123456789abc'

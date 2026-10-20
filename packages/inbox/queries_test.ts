@@ -4,6 +4,7 @@ import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { notifyDoc } from '@yaks/notify/vocab'
 import { taskDoc } from '@yaks/task'
@@ -26,6 +27,7 @@ let rows = (bundles: Bundle[]): Row[] =>
 test('candidate reads include replies, archived roots and open dependents; repeated archive stamps anew', async () => {
   let vocab = loadVocab([
     kernelDoc,
+    provenanceDoc,
     docDoc,
     taskDoc,
     projectDoc,

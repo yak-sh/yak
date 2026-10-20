@@ -3,6 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { loadVocab } from '@yaks/vocab'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { archetypes } from '../archetype/plugin.ts'
@@ -10,7 +11,7 @@ import { open } from './db.ts'
 import { storage } from './mod.ts'
 import { lit } from '@yaks/sql'
 
-let vocab = loadVocab([kernelDoc, archetypeDoc, {
+let vocab = loadVocab([kernelDoc, provenanceDoc, archetypeDoc, {
   $defs: {
     session: { component: true, type: 'object', properties: {} },
     doc: {

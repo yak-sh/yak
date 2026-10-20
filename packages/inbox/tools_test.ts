@@ -6,6 +6,7 @@ import { test } from '@yaks/testing'
 import { type Bundle, type Comp, graph, mint } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -33,6 +34,7 @@ let caller = '00000000-0000-4000-8000-000000000002'
 let tools = loadTools(inboxDoc, runs())
 let vocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   docDoc,
   callDoc,
   toolDoc,
@@ -222,6 +224,7 @@ let messageIds = await (async () => {
   for (let reference of ['mail', 'notified']) {
     let v = loadVocab([
       kernelDoc,
+      provenanceDoc,
       docDoc,
       callDoc,
       toolDoc,

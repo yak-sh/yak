@@ -10,6 +10,9 @@ import { api } from '@yaks/api'
 import { loadVocab } from '@yaks/vocab'
 import { pair } from '../../packages/sync/testing.ts'
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
+import provenance from '../../packages/provenance/vocab.json' with {
+  type: 'json',
+}
 import words from './vocab.json' with { type: 'json' }
 import { connect } from './net.ts'
 import { game } from './play.ts'
@@ -40,7 +43,7 @@ let idle: Intent = {
 
 let peers = () => {
   seedDesigns()
-  let vocab = loadVocab([words, core])
+  let vocab = loadVocab([words, core, provenance])
   let store = graph({ storage: ram(vocab), vocab })
   let heroes: string[] = Array.from({ length: 3 }, () => crypto.randomUUID())
     .sort()

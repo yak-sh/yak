@@ -253,13 +253,16 @@ import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernel, kernelDoc, kernelKeywords } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { inboxDoc } from '@yaks/inbox/vocab'
 import { reading } from '@yaks/inbox/mail'
 import { arrived, mailDoc } from '@yaks/mail'
 import { equal } from '@yaks/testing'
 
-let vocab = loadVocab([kernelDoc, docDoc, inboxDoc, mailDoc], [kernelKeywords])
+let vocab = loadVocab([kernelDoc, provenanceDoc, docDoc, inboxDoc, mailDoc], [
+  kernelKeywords,
+])
 let g = graph({ vocab, storage: ram(vocab), plugins: [kernel()] })
 await g.apply([{
   entity: { eid: 'ana' },

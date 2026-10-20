@@ -5,6 +5,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { memberDoc, members, Paced, pacing, policy } from '@yaks/member'
 import { spineDoc } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { authenticating } from './graph.ts'
 import { instrumentEid } from './instrument.ts'
@@ -45,7 +46,7 @@ test('a verified outside instrument writes an eid at the graph door', async () =
   equal(request.headers.get('x-yak-via'), credential)
 })
 
-let oldVocab = loadVocab([spineDoc, docDoc, memberDoc])
+let oldVocab = loadVocab([spineDoc, provenanceDoc, docDoc, memberDoc])
 let oldStorage = ram(oldVocab)
 let app = '00000000-0000-4000-8000-000000000010'
 let historical = '00000000-0000-4000-8000-000000000011'

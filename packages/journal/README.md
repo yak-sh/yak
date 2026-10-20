@@ -60,10 +60,10 @@ guarantee.
 
 A component its vocabulary declares `journal: false` (@yaks/vocab) is not
 recorded: a process's own bookkeeping rather than anyone's data, such as the
-`created` and `updated` stamps (@yaks/kernel), which the transaction row already
-records, an effect run or a lease (@yaks/effects). Such a write has no history
-and no undo, though the feed still carries it to the other hosts on the store
-(below). Deleting an entity that held only such components is not recorded
+`created` and `updated` stamps (@yaks/provenance), which the transaction row
+already records, an effect run or a lease (@yaks/effects). Such a write has no
+history and no undo, though the feed still carries it to the other hosts on the
+store (below). Deleting an entity that held only such components is not recorded
 either, so it leaves no trace at all; the plugin's one read before a write, on
 the `precondition` phase, is what each entity a bundle deletes holds. A
 transaction with nothing left to record writes no row.
@@ -173,7 +173,7 @@ journal references remain, so repair history before pruning the source.
 Add the package to a compatible `yak` plugin configuration:
 
 ```json
-{ "plugins": ["@yaks/kernel", "@yaks/journal"] }
+{ "plugins": ["@yaks/kernel", "@yaks/provenance", "@yaks/journal"] }
 ```
 
 `@yaks/journal/graph` creates the SQL tables on the host's connection and

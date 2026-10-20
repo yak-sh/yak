@@ -5,11 +5,12 @@ import { equal } from '@yaks/testing'
 import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { kernelDoc, kernelKeywords } from './vocab.ts'
 import { kernel } from './plugin.ts'
 
 test('interruption records its writer and removal permits a retry', async () => {
-  let vocab = loadVocab([kernelDoc], [kernelKeywords])
+  let vocab = loadVocab([kernelDoc, provenanceDoc], [kernelKeywords])
   let g = graph({ storage: ram(vocab), vocab, plugins: [kernel()] })
   await g.apply([{ entity: { eid: 'writer' } }])
   await g.apply([{

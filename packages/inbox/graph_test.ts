@@ -4,6 +4,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { type Frame, subscriptions } from '@yaks/api'
 import { kernelDoc } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { notifyDoc } from '@yaks/notify/vocab'
 import { taskDoc } from '@yaks/task'
@@ -16,6 +17,7 @@ import { summaryQuery } from './queries.ts'
 let shop = () => {
   let v = loadVocab([
     kernelDoc,
+    provenanceDoc,
     docDoc,
     taskDoc,
     sessionDoc,

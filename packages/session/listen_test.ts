@@ -3,6 +3,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
 import { idKeywords } from '@yaks/id'
 import { kernelDoc } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { mailDoc } from '@yaks/mail/vocab'
 import { notifyDoc } from '@yaks/notify/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
@@ -82,6 +83,7 @@ test('what the session wrote itself is never said, and what is said is marked', 
 
 let words = loadVocab([
   kernelDoc,
+  provenanceDoc,
   docDoc,
   mailDoc,
   notifyDoc,

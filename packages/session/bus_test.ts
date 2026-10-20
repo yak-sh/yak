@@ -5,6 +5,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, type Graph, graph, type Storage } from '@yaks/graph'
 import { processDoc } from '@yaks/process'
 import { kernelDoc } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { docDoc } from '@yaks/doc'
 import { effects } from '@yaks/effects'
 import { mailDoc } from '@yaks/mail/vocab'
@@ -29,6 +30,7 @@ import { runs } from './tools.ts'
 
 let vocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   processDoc,
   docDoc,
   mailDoc,
@@ -208,7 +210,8 @@ let words = (doc: VocabDoc, ...names: string[]): VocabDoc => ({
   $defs: Object.fromEntries(names.map((name) => [name, doc.$defs![name]])),
 })
 let hookVocab = loadVocab([
-  words(kernelDoc, 'entity', 'created', 'updated'),
+  words(kernelDoc, 'entity'),
+  provenanceDoc,
   words(docDoc, 'doc'),
   words(sessionDoc, 'session', 'hooked', 'entry', 'using'),
   words(mailDoc, 'mail', 'deliver', 'notified'),
@@ -451,7 +454,8 @@ let HELD = await image([
 // This fixture holds knocks, not mail: keep the graph's real transcript and
 // project rules without installing unrelated letter delivery paths.
 let heldVocab = loadVocab([
-  words(kernelDoc, 'entity', 'created', 'updated'),
+  words(kernelDoc, 'entity'),
+  provenanceDoc,
   words(docDoc, 'doc'),
   words(notifyDoc, 'knock'),
   words(toolsDoc, 'content', 'output'),
@@ -674,6 +678,7 @@ for (let agent of [false, true]) {
 
 let routedVocab = loadVocab([
   kernelDoc,
+  provenanceDoc,
   processDoc,
   docDoc,
   mailDoc,

@@ -16,6 +16,7 @@ import type { Config } from './config.ts'
  * resolves from its own release (./config.ts `located`). */
 export let STARTER = [
   '@yaks/kernel',
+  '@yaks/provenance',
   '@yaks/id',
   '@yaks/secrets',
   '@yaks/alias',

@@ -5,6 +5,7 @@ import { test } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { kernelDoc } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance'
 import { loadVocab } from '@yaks/vocab'
 import { sessionDoc } from './comp.ts'
 import {
@@ -18,7 +19,7 @@ import {
 } from './admission.ts'
 
 let store = () => {
-  let vocab = loadVocab([kernelDoc, sessionDoc])
+  let vocab = loadVocab([kernelDoc, provenanceDoc, sessionDoc])
   return graph({ vocab, storage: ram(vocab) })
 }
 
@@ -162,7 +163,7 @@ test('RAM admission retains legacy queue order and respects occupied places', as
 let SETTLED = 20
 let read = 0
 let counted = await (async () => {
-  let vocab = loadVocab([kernelDoc, sessionDoc])
+  let vocab = loadVocab([kernelDoc, provenanceDoc, sessionDoc])
   let s = ram(vocab)
   let g = graph({
     vocab,

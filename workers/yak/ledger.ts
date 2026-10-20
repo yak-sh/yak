@@ -37,6 +37,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { spineDoc } from '@yaks/kernel/vocab'
+import { provenanceDoc } from '@yaks/provenance/vocab'
 import { appKeywords } from './vocab.ts'
 
 /** The words an invocation is made of: what stays in the ledger. */
@@ -89,7 +90,7 @@ let both: Record<string, PropSchema> = {
 // diagnostic fields kept intact, over the core
 // stamps — a call's `created{by, via}` is who asked, and the tool runs as them
 // (@yaks/graph `who`).
-let VOCAB = loadVocab([spineDoc, {
+let VOCAB = loadVocab([spineDoc, provenanceDoc, {
   title: 'invocation',
   $defs: { ...without(toolsDoc, SHARED).$defs, ...both },
 }], appKeywords)

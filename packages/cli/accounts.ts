@@ -34,6 +34,7 @@ export let personal = async (state: string = stateDir()): Promise<string> => {
         person,
         plugins: [
           '@yaks/kernel',
+          '@yaks/provenance',
           '@yaks/edge',
           '@yaks/doc',
           '@yaks/effects',
@@ -147,7 +148,12 @@ export let accounts = <H extends AccountHost>(
         /^[a-z]+-[0-9]+$/i.test(config.person)
           ? plugins
           : plugins.filter((p) =>
-            ['@yaks/kernel', '@yaks/id', '@yaks/connections'].includes(p)
+            [
+              '@yaks/kernel',
+              '@yaks/provenance',
+              '@yaks/id',
+              '@yaks/connections',
+            ].includes(p)
           ),
       )
       let owner = await person({ config, graph: r.graph })

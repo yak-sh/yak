@@ -5,6 +5,7 @@
   },
   "plugins": [
     "@yaks/kernel",
+    "@yaks/provenance",
     "@yaks/id",
     "@yaks/archetype",
     "@yaks/doc",

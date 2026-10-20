@@ -13,6 +13,7 @@ import { fields } from './fields.ts'
 
 let PLUGINS: Plug[] = [
   '@yaks/kernel',
+  '@yaks/provenance',
   '@yaks/edge',
   '@yaks/doc',
   '@yaks/task',

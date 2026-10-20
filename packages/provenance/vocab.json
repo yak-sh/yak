@@ -1,0 +1,59 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "provenance",
+  "$defs": {
+    "created": {
+      "component": true,
+      "type": "object",
+      "journal": false,
+      "properties": {
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "index": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "who made it, when, and through what"
+    },
+    "updated": {
+      "component": true,
+      "type": "object",
+      "journal": false,
+      "properties": {
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true
+        }
+      },
+      "description": "who last changed it, when, and through what"
+    }
+  }
+}

@@ -12,14 +12,10 @@ export { kernelKeywords }
 /** The kernel vocabulary, as the document `loadVocab` takes. */
 export let kernelDoc: VocabDoc = doc as VocabDoc
 
-/** Just `entity{archetype}` and the two provenance marks every graph
- * wants, `created{at, by, via}` and `updated{at, by, via}` — for a program that
- * loads those without the rest of the kernel's components. */
-export let spineDoc: VocabDoc = pick(kernelDoc, [
-  'entity',
-  'created',
-  'updated',
-], 'spine')
+/** Just `entity{archetype}`, for a program that loads it without the rest of
+ * the kernel's components. @yaks/provenance declares the stamps beside it,
+ * `created` and `updated`. */
+export let spineDoc: VocabDoc = pick(kernelDoc, ['entity'], 'spine')
 
 /** The two marks anything at all can carry — `opened`, somebody looked at it,
  * and `archived`, somebody put it away — for a program that loads `spineDoc`

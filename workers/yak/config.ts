@@ -13,7 +13,9 @@ let storePlugins = (plugins: Plug[]): Plug[] =>
       : { ...plug, facets: plug.facets ?? storeFacets }
   )
 
-let spine = ['entity', 'created', 'updated']
+let spine = ['entity']
+// The stamps every write leaves, beside the kernel in every store.
+let provenance: Plug = { use: '@yaks/provenance', facets: ['vocab'] }
 let relations = [
   'about',
   'cites',
@@ -60,6 +62,7 @@ export let appConfig: Config = {
         'favorite',
       ],
     },
+    provenance,
     ...machine,
     // Apps have no numbers, but every store accepts human ids on input.
     { use: '@yaks/id', words: [] },
@@ -169,6 +172,7 @@ export let directoryConfig: Config = {
       facets: ['vocab'],
       words: [...spine, ...relations, ...marks, 'completed'],
     },
+    provenance,
     ...machine,
     '@yaks/id',
     ...addressed,
@@ -238,6 +242,7 @@ export let gitConfig: Config = {
   numbers: true,
   plugins: storePlugins([
     { use: '@yaks/kernel', facets: ['vocab'], words: spine },
+    provenance,
     ...machine,
     '@yaks/id',
     ...addressed,

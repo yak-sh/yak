@@ -10,6 +10,9 @@ import { connect, vocabulary } from './net.ts'
 import { seedDesigns } from './designs_fixture.ts'
 import words from './vocab.json' with { type: 'json' }
 import core from '../../packages/kernel/vocab.json' with { type: 'json' }
+import provenance from '../../packages/provenance/vocab.json' with {
+  type: 'json',
+}
 import { docDoc } from '@yaks/doc'
 import { apiDoc } from '@yaks/api/vocab'
 
@@ -24,7 +27,7 @@ test('a vocabulary 500 recovers before the page can query created', async () => 
       return Promise.resolve(
         ++calls == 1
           ? new Response('store unavailable', { status: 500 })
-          : Response.json([words, core]),
+          : Response.json([words, core, provenance]),
       )
     }
 
@@ -56,7 +59,7 @@ test('a vocabulary 500 recovers before the page can query created', async () => 
 test('creature builds use the server answer without matching computed current locally', async () => {
   seedDesigns()
   let socket = pair().client
-  let vocab = loadVocab([words, core, builderDoc, docDoc])
+  let vocab = loadVocab([words, core, provenance, builderDoc, docDoc])
   let page = connect(new URL('https://example.test/vale/api/'), vocab, {
     connect: () => socket,
     fetch: () => Response.json([]),
@@ -168,7 +171,7 @@ test('figures wait for current-main provenance and disappear when stale', async 
   let socket = pair().client
   let page = connect(
     new URL('https://example.test/vale/api/'),
-    loadVocab([words, core, builderDoc]),
+    loadVocab([words, core, provenance, builderDoc]),
     {
       connect: () => socket,
       fetch: () => Response.json([]),
@@ -235,7 +238,7 @@ test('spawn command sends no obsolete player input even with a selected hero', a
   let socket = pair().client
   let page = connect(
     new URL('https://example.test/vale/api/'),
-    loadVocab([words, core, builderDoc, ...invocationDocs]),
+    loadVocab([words, core, provenance, builderDoc, ...invocationDocs]),
     {
       connect: () => socket,
       fetch: () => Response.json([]),
@@ -295,7 +298,7 @@ let storePage = (opts: Pick<ClientOpts, 'fetch' | 'report'> = {}) => {
   let socket = pair().client
   let page = connect(
     new URL('https://example.test/vale/api/'),
-    loadVocab([words, core]),
+    loadVocab([words, core, provenance]),
     {
       connect: () => socket,
       fetch: () => Response.json([]),
@@ -374,7 +377,7 @@ test('a gathering refused locally or by the store does not break later writes', 
   seedDesigns()
   for (let where of ['page', 'store'] as const) {
     using time = new FakeTime()
-    let vocab = loadVocab([words, core, apiDoc])
+    let vocab = loadVocab([words, core, provenance, apiDoc])
     let store = graph({ storage: ram(vocab), vocab })
     store.apply([{ entity: { eid: 'hero' }, player: {} }, harvest('first')])
     let serve = api({

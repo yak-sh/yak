@@ -380,12 +380,15 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/workers-ai](./workers-ai)** — Implement the model interface over
   Cloudflare Workers AI through the `AI` binding a Worker is given, with no key:
   chat messages out, either of the catalog's answer shapes back.
-- **[@yaks/kernel](./kernel)** — Shared identity, provenance and metadata
-  schemas: `entity`, `created`, `updated`, `decided`, `quarantined`, `comment`,
-  `image`, `favorite` and relationship tags, and the lifecycle marks a status is
-  read from (`completed`, `failed`, `broken`, `resolved`, `verified`). It also
-  defines schema keywords such as `governed`, `lazy` and `well`. Its one plugin
-  keeps who completed something.
+- **[@yaks/kernel](./kernel)** — Shared identity and metadata schemas: `entity`,
+  `decided`, `quarantined`, `comment`, `image`, `favorite` and relationship
+  tags, and the lifecycle marks a status is read from (`completed`, `failed`,
+  `broken`, `resolved`, `verified`). It also defines schema keywords such as
+  `governed`, `lazy` and `well`. Its one plugin keeps who completed something.
+- **[@yaks/provenance](./provenance)** — Who made an entity and who last changed
+  it, when, and through what: `created{at, by, via}` and `updated{at, by, via}`,
+  which the graph stamps on every write. A graph composed without it keeps
+  neither.
 
 - **[@yaks/task](./task)** — Task records, plans and containment relationships.
   Status is computed from marks such as @yaks/kernel's `completed` and its own

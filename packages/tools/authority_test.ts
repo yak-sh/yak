@@ -7,9 +7,10 @@ import { type Actor, type Bundle, graph, Refused, who } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel'
+import { provenanceDoc } from '@yaks/provenance'
 import { runner, toolEid, toolsDoc } from './mod.ts'
 
-let vocab = loadVocab([kernelDoc, toolsDoc])
+let vocab = loadVocab([kernelDoc, provenanceDoc, toolsDoc])
 let original = { by: 'owner', via: 'owner-session' }
 let editor = { by: 'editor' }
 let request = {

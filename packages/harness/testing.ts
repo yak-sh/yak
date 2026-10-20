@@ -33,6 +33,7 @@ import { HARNESS } from './default.ts'
  * in a task's status it contributes. */
 export let PLUGINS: string[] = [
   '@yaks/kernel',
+  '@yaks/provenance',
   '@yaks/id',
   '@yaks/key',
   '@yaks/alias',
