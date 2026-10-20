@@ -1,7 +1,7 @@
 // The independent Worker routes authenticated reads/RPC, a public deployment
 // canary, and trusted queue deliveries. It has no directory or yak binding.
 
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, Comp } from '@yaks/graph'
 import { minted } from '@yaks/graph/identity'
 import { sha256 } from '@yaks/graph/sha256'
 import { bugEid } from '@yaks/tracker'
@@ -26,6 +26,8 @@ export type Env = Omit<Settings, 'TRACKERS'> & {
   TRACKERS: { getByName: (scope: string) => Stub }
 }
 let uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// A deploy's canary is the content hash of its bundle and its nonce.
+let receipt = (hash: string, nonce: string) => sha256(`${hash}|${nonce}`)
 export let canary = (
   hash: string,
   version?: string,
@@ -34,7 +36,7 @@ export let canary = (
   at = new Date().toISOString(),
 ) => {
   let fault = `tracker-canary|${hash}`
-  let eid = sha256(`${hash}|${nonce}`)
+  let eid = receipt(hash, nonce)
   let requestEid = sha256(`${eid}|request`)
   let context = origin(
     'yak-tracker',
@@ -56,6 +58,96 @@ export let canary = (
   // A deployment exercises grouping without notifying a synthetic bug.
   rows.push({ entity: { eid: bugEid('', fault) }, archived: {} })
   return rows
+}
+// A deploy whose canary did not arrive, filed on its bundle's own bug. Unlike
+// the canary it is not archived, so its letter reaches an agent and the owner
+// at once. Why is read here, never taken from the caller, and a receipt is one
+// occurrence however often its report is sent.
+export let missing = (
+  hash: string,
+  nonce: string,
+  why: string,
+  version?: string,
+  request?: Request,
+) => {
+  let eid = sha256(`${receipt(hash, nonce)}|missing`)
+  let error = Error(`tracker deploy ${hash} is unconfirmed: ${why}`)
+  delete error.stack
+  return capture(error, {
+    sink: () => {},
+    ...origin(
+      'yak-tracker',
+      version,
+      'fetch.canary',
+      request,
+      sha256(`${eid}|request`),
+    ),
+    eid,
+    fault: `tracker-deploy|${hash}`,
+  })
+}
+// How long an admitted canary's grouping may wait for its run. Intake arms the
+// object's alarm a second out, so a longer wait means the effect queue that
+// alarm drives is not running under this bundle: a failure, not a delay.
+export let STALL = 120_000
+/** Where a deploy's canary stands: arrived, or why not, and whether that is a
+ * failure of the deployed build or a wait still under way. */
+export type Standing =
+  | { arrived: true }
+  | { arrived: false; failed: boolean; why: string }
+// Read from the platform object's graph, never waited for: grouping is the
+// alarm's work, so a canary that answered only once grouped would read a
+// stalled queue as silence. Undefined is an object that could not answer.
+let standing = async (
+  ask: (path: string) => Promise<Response>,
+  hash: string,
+  eid: string,
+  now: number,
+): Promise<Standing | undefined> => {
+  let waiting = (why: string): Standing => ({
+    arrived: false,
+    failed: false,
+    why,
+  })
+  let failed = (why: string): Standing => ({
+    arrived: false,
+    failed: true,
+    why,
+  })
+  // An object moves to a new version minutes after this Worker, so the
+  // canary can arrive only once the object runs this bundle too. An object
+  // from before the route answers 404 and is not there yet.
+  let bundle = await ask('/bundle')
+  if (bundle.status == 404) {
+    return waiting('its Tracker object runs a release from before /bundle')
+  }
+  if (!bundle.ok) return
+  let held = (await bundle.json()).hash
+  if (held != hash) return waiting(`its Tracker object runs bundle ${held}`)
+  // The canary and the run that groups it, in one read: a run deletes itself
+  // as it groups, so one snapshot sees one or the other.
+  let read = await ask(`/query?q=${
+    encodeURIComponent(
+      `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" | ` +
+        `.effect.handler=error_group .effect.target=${eid}`,
+    )
+  }`)
+  if (!read.ok) return
+  let rows: Bundle[] = await read.json()
+  let canary = rows.find((row) => row.error)?.error as Comp | undefined
+  let run = rows.find((row) => row.effect)?.effect as Comp | undefined
+  if (!canary) return waiting('its canary never reached the object')
+  if (canary.bug) return { arrived: true }
+  if (!run) return waiting('its canary is ungrouped and owes no grouping run')
+  if (run.error) return failed(`its grouping threw: ${run.error}`)
+  let waited = now - Date.parse(String(run.next ?? run.at))
+  return waited > STALL
+    ? failed(
+      `its grouping run waited ${
+        Math.round(waited / 1000)
+      } s for the object's effect queue`,
+    )
+    : waiting('its grouping run is due')
 }
 export let scopeOf = (url: URL) => {
   let scope = url.searchParams.get('scope')
@@ -89,13 +181,36 @@ export let worker = (
       eid,
     })
   }
+  // Where a receipt stands, asked through the object's stable read doors
+  // across Worker/DO deployment propagation. The runtime holds its signing
+  // key; the build learns only whether its canary arrived or failed.
+  let stand = async (hash: string, eid: string) => {
+    if (!env.TRACKER_SECRET) return
+    let signed = await ticket({
+      scope: platform,
+      person: platform,
+      admin: true,
+      exp: Date.now() / 1000 + 60,
+    }, env.TRACKER_SECRET)
+    let object = env.TRACKERS.getByName(platform)
+    let headers = { authorization: `Bearer ${signed}` }
+    return standing(
+      (path) =>
+        object.fetch(
+          new Request(`https://tracker.internal${path}`, { headers }),
+        ),
+      hash,
+      eid,
+      now(),
+    )
+  }
   return {
     fetch: async (request: Request): Promise<Response> => {
       let url = new URL(request.url)
       let scope = scopeOf(url)
       if (!scope) return json({ error: 'tracker global scope required' }, 400)
       try {
-        if (url.pathname == '/canary') {
+        if (url.pathname == '/canary' || url.pathname == '/canary/missing') {
           if (scope != platform) return json({ error: 'platform only' }, 403)
           let hash = url.searchParams.get('hash')
           if (!hash || !/^[0-9a-f]{64}$/.test(hash)) {
@@ -107,44 +222,40 @@ export let worker = (
           if (hash != env.BUNDLE_HASH) {
             return json({ error: 'bundle is not deployed' }, 409)
           }
+          if (url.pathname == '/canary/missing') {
+            if (request.method != 'POST') {
+              return json({ error: 'canary method denied' }, 405)
+            }
+            let nonce = url.searchParams.get('nonce')
+            if (!nonce || !uuid.test(nonce)) {
+              return json({ error: 'canary nonce required' }, 400)
+            }
+            let stood = await stand(hash, receipt(hash, nonce))
+            if (!stood) return json({ error: 'tracker unavailable' }, 503)
+            if (stood.arrived) return json({ error: 'canary arrived' }, 409)
+            if (!env.ERRORS) return json({ error: 'queue unavailable' }, 503)
+            let rows = missing(
+              hash,
+              nonce,
+              stood.why,
+              env.CF_VERSION_METADATA?.id,
+              request,
+            )
+            await env.ERRORS.send(rows)
+            return json({ eid: rows[0].entity.eid })
+          }
           if (request.method == 'GET') {
             let eid = url.searchParams.get('eid')
             if (!eid || !minted(eid)) {
               return json({ error: 'canary receipt required' }, 400)
             }
-            if (!env.TRACKER_SECRET) {
-              return json({ error: 'tracker unavailable' }, 503)
-            }
-            // Use the stable read door across Worker/DO deployment propagation.
-            // The runtime holds its signing key; the build receives only a boolean.
-            let signed = await ticket({
-              scope: platform,
-              person: platform,
-              admin: true,
-              exp: Date.now() / 1000 + 60,
-            }, env.TRACKER_SECRET)
-            let object = env.TRACKERS.getByName(platform)
-            let headers = { authorization: `Bearer ${signed}` }
-            // An object moves to a new version minutes after this Worker, so
-            // the canary has arrived only once the object runs this bundle too.
-            // An object from before the route answers 404 and is not there yet.
-            // That is asked first, so a deploy's wait asks for nothing more.
-            let bundle = await object.fetch(
-              new Request('https://tracker.internal/bundle', { headers }),
+            let stood = await stand(hash, eid)
+            if (!stood) return json({ error: 'tracker unavailable' }, 503)
+            return json(
+              stood.arrived
+                ? { arrived: true }
+                : { arrived: false, ...stood.failed ? { failed: true } : {} },
             )
-            if (!bundle.ok || (await bundle.json()).hash != hash) {
-              return json({ arrived: false })
-            }
-            let query = new URL('https://tracker.internal/query')
-            query.searchParams.set(
-              'q',
-              `.entity.eid=${eid} .error.fault="tracker-canary|${hash}" .error.bug .limit=1`,
-            )
-            let response = await object.fetch(new Request(query, { headers }))
-            if (!response.ok) {
-              return json({ error: 'tracker unavailable' }, 503)
-            }
-            return json({ arrived: (await response.json()).length == 1 })
           }
           if (request.method != 'POST') {
             return json({ error: 'canary method denied' }, 405)

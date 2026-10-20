@@ -136,8 +136,8 @@ Account setup supplies `yak-errors`, `yak-errors-dead`, a Workers Builds
 connection for this Worker, its own Email Sending binding, and the dedicated
 `TRACKER_SECRET`, `MAIL_FROM`, `MAIL_TO` Worker secrets. The build needs no
 tracker secret; configure its nonsecret `TRACKER_URL` with the Worker URL. The
-build may deploy only this Worker and restore its previous version. Source is
-ready; production queue and build activation are separate account operations.
+build may deploy only this Worker. Source is ready; production queue and build
+activation are separate account operations.
 
 The first ordinary wake with all mail settings persists the activation time and
 refreshes the recipient in an already installed platform tracker. Earlier bug
@@ -157,10 +157,12 @@ captures while indefinitely postponing the effects that group them.
 the nonsecret `BUNDLE_HASH` binding and publishes a content-hash canary through
 the Worker's queue. It republishes the same capture every thirty seconds until
 intake and grouping produce its bug, allowing Worker and object versions to
-converge. It restores the prior deployed version if the canary is absent after
-ten minutes. A first deployment has no prior version; its failed canary reports
-that explicitly. No legacy error store is deleted, and yak reporting/read-path
-changes are outside this Worker.
+converge. A canary the tracker says failed, or one still missing after ten
+minutes, is reported to the tracker and fails the build. Nothing rolls back: the
+new version stays live, and an agent decides whether to roll back or fix
+forward. A build superseded by a newer deployment reports nothing. No legacy
+error store is deleted, and yak reporting/read-path changes are outside this
+Worker.
 
 `POST /canary?scope=platform&hash=<bundle-hash>&nonce=<uuid>&at=<iso-time>`
 needs no ticket and returns `{eid}` for a synthetic error. Only the deployed
@@ -168,8 +170,17 @@ needs no ticket and returns `{eid}` for a synthetic error. Only the deployed
 fifteen minutes old or one minute ahead. The server derives the content-hash eid
 from the bundle hash and nonce; retrying them with the same timestamp preserves
 the entire capture. The request body is ignored. `GET` on the same URL with
-`&eid=<receipt>` returns only `{arrived: boolean}`, true once that exact canary
-has reached grouping and the platform Tracker object reports the same
-`BUNDLE_HASH` (its admin-only `GET /bundle`). A Durable Object moves to a new
-version seconds to minutes after the Worker, so until then the deploy is not
-live. Graph reads and other tracker operations require scope tickets.
+`&eid=<receipt>` returns only `{arrived: boolean, failed?: true}`. It is true
+once that exact canary has reached grouping and the platform Tracker object
+reports the same `BUNDLE_HASH` (its admin-only `GET /bundle`). A Durable Object
+moves to a new version seconds to minutes after the Worker, so until then the
+deploy is not live. Grouping is the object's alarm-driven effect queue, so the
+answer reads the canary and its grouping run from the graph rather than waiting
+for them: a run that threw, or one due for over two minutes, is `failed`. A
+stalled queue is a failed canary, never silence.
+
+`POST /canary/missing?scope=platform&hash=<bundle-hash>&nonce=<uuid>` needs no
+ticket. Unless that canary arrived (409), it reports the deploy unconfirmed,
+with why as the Worker reads it, on a `tracker-deploy|<hash>` bug that is not
+archived, so it notifies. One nonce is one occurrence however often it is sent.
+Graph reads and other tracker operations require scope tickets.
