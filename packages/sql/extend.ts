@@ -40,7 +40,7 @@
 //   }
 //   compile(ast, vocab, { extend: [shelves] })
 
-import type { Clause } from '@yaks/query/core'
+import { type Clause, map } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import {
   as,
@@ -122,6 +122,31 @@ export type Extension = {
   compile: Partial<Record<Clause['kind'], Compile>>
   order?: OrderBy
   begin?: Begin
+}
+
+/** Whether any of `exts` compiles a clause of `q`, its order among them: the
+ * query the binder lowers alone, wherever an extension is registered.
+ *
+ * ```ts
+ * import { parse } from '@yaks/query'
+ * import { claimed } from '@yaks/sql'
+ *
+ * let fts = { name: 'fts', compile: { text: () => null } }
+ * claimed([fts], parse('.doc.title=a')) // false
+ * claimed([fts], parse('.doc (a | .task)')) // true
+ * ```
+ */
+export let claimed = (exts: readonly Extension[], q: Clause): boolean => {
+  let found = false
+  if (exts.length) {
+    map(q, (c) => {
+      found ||= exts.some((e) =>
+        !!e.compile[c.kind] || c.kind == 'order' && !!e.order
+      )
+      return c
+    })
+  }
+  return found
 }
 
 // One call to `bind` is one query, and this hook marks the boundary. An

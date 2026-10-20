@@ -118,7 +118,13 @@ import {
   idOf,
   ladders,
 } from './derived.ts'
-import type { Extension, Screen, Selection, Site } from './extend.ts'
+import {
+  claimed,
+  type Extension,
+  type Screen,
+  type Selection,
+  type Site,
+} from './extend.ts'
 import { type Identity, identity, literals } from './ident.ts'
 import { walk as walked } from './walk.ts'
 import { Unsupported, whole } from './unsupported.ts'
@@ -3012,7 +3018,8 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
   let limit = find<Limit>(ast.clauses, 'limit')
   if (
     !ctx.unordered || !limit || limit.n <= 0 || ctx.spine || ctx.correlated ||
-    ctx.row || ctx.owner || ctx.visibility || ctx.eids || ctx.ext.length ||
+    ctx.row || ctx.owner || ctx.visibility || ctx.eids ||
+    claimed(ctx.ext, ast) ||
     ast.clauses.some((c) =>
       ['order', 'after', 'count', 'tally', 'distinct'].includes(c.kind)
     )

@@ -72,7 +72,7 @@ All exports are available from `@yaks/sql`; the table groups them by purpose.
 | Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
 | Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
 | Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`                                                                             |
-| Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`                                                                |
+| Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`, `claimed`                                                     |
 | Presence optimization | `ArchetypeSet`, `Matching`, `archetypeSet`                                                                                  |
 | Rule compilation      | `rule`, `Plan`, `On`, `At`, `Gone`                                                                                          |
 | Reference lookups     | `identity`, `Identity`, `walk`                                                                                              |

@@ -7,7 +7,7 @@ import { parse } from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { driver } from '../sqlite/native.ts'
 import { sqlitePath } from '../sqlite/sqlitepath.ts'
-import { col, compile, indexName, insert } from './mod.ts'
+import { col, compile, type Extension, indexName, insert, lit } from './mod.ts'
 
 let indexes = [
   ['handler', 'state', 'owner', 'next'],
@@ -126,28 +126,37 @@ for (let [name, line, expected] of cases) {
   })
 }
 
-let dense = compile(
-  parse(
-    '.job.handler=dense .job.state=pending ' +
-      `(!job.next|.job.next<=${now}) ` +
-      `(!job.owner|!job.expiry|.job.expiry<=${now}) .limit=1`,
-  ),
-  vocab,
-  { unordered: true },
-)
-// The native driver retains prepared statements between worker turns.
-let head = db.prepare(dense.sql)
-test('an unordered bounded disjunction stops at indexed heads of a dense backlog', () => {
-  try {
-    let rows = head.all(...dense.params)
-    assertEquals(rows.length, 1)
-    assert(String(rows[0].eid).startsWith('dense-'))
-    let steps = status.symbols.sqlite3_stmt_status(head.unsafeHandle, 4, 0)
-    assert(steps < 2000, `${steps} VM instructions`)
-  } finally {
-    head.finalize()
-  }
-})
+// A search extension the query never asks for leaves its plan alone.
+let search: Extension = { name: 'search', compile: { text: () => lit(0) } }
+for (
+  let [name, extend] of [
+    ['', []],
+    [', beside an extension it never asks', [search]],
+  ] as [string, Extension[]][]
+) {
+  let dense = compile(
+    parse(
+      '.job.handler=dense .job.state=pending ' +
+        `(!job.next|.job.next<=${now}) ` +
+        `(!job.owner|!job.expiry|.job.expiry<=${now}) .limit=1`,
+    ),
+    vocab,
+    { unordered: true, extend },
+  )
+  // The native driver retains prepared statements between worker turns.
+  let head = db.prepare(dense.sql)
+  test(`an unordered bounded disjunction stops at indexed heads of a dense backlog${name}`, () => {
+    try {
+      let rows = head.all(...dense.params)
+      assertEquals(rows.length, 1)
+      assert(String(rows[0].eid).startsWith('dense-'))
+      let steps = status.symbols.sqlite3_stmt_status(head.unsafeHandle, 4, 0)
+      assert(steps < 2000, `${steps} VM instructions`)
+    } finally {
+      head.finalize()
+    }
+  })
+}
 
 let overlap = compile(
   parse(
