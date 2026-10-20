@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertMatch } from '@std/assert'
 import { duration, took, toolTiming } from './timing.ts'
-import { project } from './react.ts'
+import { project } from './project.ts'
 
 test('wall-clock formats quick calls and flags only commands over a minute', () => {
   assertEquals(duration(12.3), '12ms')

@@ -71,7 +71,6 @@ import {
   FORK,
   OUTPUT,
   REFUSAL,
-  RESULT,
   USING,
 } from './native.ts'
 import {
@@ -127,7 +126,8 @@ export type ToolContext = {
 /** A refused tool invocation: expected, recorded as a refusal and a result. */
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
-import { took } from './timing.ts'
+import { project } from './project.ts'
+export { project } from './project.ts'
 
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
@@ -202,8 +202,9 @@ export type Deps = {
   instructions?: string
   /** Resolve inherited base instructions for future asks without rewriting history. */
   resolveInstructions?: (inherited: string | undefined) => string | undefined
-  /** Host rendering of an input's prose; stored content stays unchanged. */
-  inputText?: (entry: Bundle, transcript: Bundle[]) => string
+  /** Host rendering of each input's prose in a transcript; stored content
+   * stays unchanged. */
+  inputText?: (transcript: Bundle[]) => (entry: Bundle) => string
   /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
   resultText?: (entry: Bundle) => Promise<string>
   /** Resolve explicitly admitted multimodal context without storing bytes in entries. */
@@ -322,127 +323,6 @@ let turnEntries = async (
   let bodies = !!(deps.contextItems || deps.requestItems ||
     deps.compactModel)
   return { entries: await reach(g, session, { turn: true, bodies }), bodies }
-}
-
-/** The model's view of a window of the transcript: inputs as user turns, what
- * the model returned as assistant turns, tool calls and results as the pair a
- * model expects. The full transcript resolves a result's call even when that
- * call is outside the window. Ask entries are our record, not the model's; a
- * tool call the anchored reply itself asked for is already in the provider's
- * state, so only its result travels. */
-export let project = (
-  transcript: Bundle[],
-  window: Bundle[],
-  tools: Map<Eid, Declared>,
-  opts: {
-    anchor?: Eid
-    results?: Map<Eid, string>
-    media?: Map<Eid, Item[]>
-    history?: boolean
-    inputText?: Deps['inputText']
-    /** Strict routes accept one tool output; append later updates as user text. */
-    resultUpdatesAsUser?: boolean
-  } = {},
-): Item[] => {
-  let out: Item[] = []
-  let byId = new Map(transcript.map((b) => [b.entity.eid, b]))
-  // A tool can finish (or a person steer) while the provider is answering.
-  // Those entries were not in that request. Keep its response immediately
-  // after its frozen boundary, then append the unsent updates. Never move or
-  // replace a previously submitted running result: the next full-context
-  // request must extend the previous request + response byte-for-byte.
-  let bounds = transcript.filter((b) => b.ask).map((b) =>
-    seqOf(byId.get(String(comp(b, ASK)?.through)) ?? b)
-  )
-  let finals = new Set(
-    window.flatMap((b) => b.result ? [String(comp(b, RESULT)?.call)] : []),
-  )
-  let landed = new Map(
-    transcript.flatMap((b) =>
-      b.result ? [[String(comp(b, RESULT)?.call), seqOf(b)]] : []
-    ),
-  )
-  // A fast tool needs only its final answer. A request sent a Pending when its
-  // boundary reached the Pending but not yet its final; one that reached both
-  // sent the final alone. Keep a sent Pending: that immutable prefix cannot be
-  // rewritten afterwards, and a Pending no request sent is never sent late.
-  let sent = (progress: Bundle) => {
-    let final = landed.get(String(comp(progress, 'tool_progress')?.call)) ??
-      Infinity
-    return bounds.some((t) => seqOf(progress) <= t && t < final)
-  }
-  let logical = window.filter((b) =>
-    !b.tool_progress || sent(b) ||
-    !finals.has(String(comp(b, 'tool_progress')?.call))
-  )
-  for (const ask of ordered(transcript).filter((b) => b.ask)) {
-    const reply = logical.filter((b) => {
-      if (comp(b, OUTPUT)?.source == ask.entity.eid) return true
-      if (comp(b, CALL)?.source == ask.entity.eid) return true
-      const call = byId.get(String(comp(b, 'tool_progress')?.call))
-      return call && comp(call, CALL)?.source == ask.entity.eid
-    })
-    if (!reply.length) continue
-    const rest = logical.filter((b) => !reply.includes(b))
-    const boundary = rest.findIndex((b) =>
-      b.entity.eid == comp(ask, ASK)?.through
-    )
-    if (boundary >= 0) rest.splice(boundary + 1, 0, ...reply)
-    else continue
-    logical = rest
-  }
-  for (let b of logical) {
-    let kind = kindOf(b)
-    let c = comp(b, CALL)
-    if (b.prompt || b.checkpoint || b.task_context) {
-      if (b.checkpoint && !opts.history) {
-        out.push(
-          ...taskItems(
-            (b.checkpoint as Comp).tasks as Tasks ??
-              {},
-          ),
-        )
-      }
-      out.push({ kind: 'instruction', text: textOf(b) })
-    } else if (kind == 'input') {
-      out.push({
-        kind: 'user',
-        text: opts.inputText?.(b, transcript) ?? textOf(b),
-      })
-    } else if (kind == 'output') {
-      out.push({ kind: 'assistant', text: textOf(b) })
-    } else if (kind == 'call' && c?.source != opts.anchor) {
-      out.push({
-        kind: 'call',
-        id: String(c!.id),
-        name: tools.get(String(c!.to))?.name ?? 'tool',
-        args: c!.args == null ? textOf(b) || '{}' : JSON.stringify(c!.args),
-      })
-    } else if (kind == 'result') {
-      let eid = String(comp(b, RESULT)?.call ?? comp(b, 'tool_progress')?.call)
-      let call = byId.get(eid)
-      if (!call?.call) {
-        throw new Error(
-          `Result ${b.entity.eid} references missing call ${eid}`,
-        )
-      }
-      let text = opts.results?.get(b.entity.eid) ?? textOf(b)
-      let ms = comp(b, RESULT)?.ms
-      const output = typeof ms == 'number' ? took(text, ms) : text
-      const id = String(comp(call, CALL)?.id ?? '')
-      if (
-        opts.resultUpdatesAsUser && b.result &&
-        transcript.some((v) =>
-          comp(v, 'tool_progress')?.call == eid && seqOf(v) < seqOf(b) &&
-          sent(v)
-        )
-      ) {
-        out.push({ kind: 'user', text: `Tool ${id} completed:\n${output}` })
-      } else out.push({ kind: 'result', id, output })
-    }
-    out.push(...opts.media?.get(b.entity.eid) ?? [])
-  }
-  return out
 }
 
 // A model failure may pass: the provider marked it `retry` (overloaded, rate

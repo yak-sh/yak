@@ -179,6 +179,9 @@ type Ctx = {
   candidates?: Frag & { test: Cond; whole?: boolean }
   shapeCandidates?: boolean
   numberedShapePage?: boolean
+  /** A mandatory equality's index reads in the statement's order, and the
+   * statement keeps a page: that seek stops at the page (`seeksPage`). */
+  paged?: boolean
   /** A mandatory finite root identity, known before presence is planned. */
   bounded?: boolean
   screens?: Map<Extension, Screen>
@@ -1905,9 +1908,12 @@ let conjuncts = (ctx: Ctx, clauses: Clause[]): Cond[] => {
   // Presence plus absence selects the still-pending owners, not all the
   // historical rows of the presence component. A proved presence policy can
   // admit those owners too; every other policy retains its scoped spine.
+  // A paged seek is narrower still: the newest of a session's entries
+  // wearing the shape is read from that session's index, not chosen among
+  // every owner the shape has in the graph.
   if (
     shape && ctx.present && none.length && !ctx.bounded && !ctx.spine &&
-    !ctx.candidates && !shapes.size && ctx.d.archetypeSource
+    !ctx.candidates && !shapes.size && ctx.d.archetypeSource && !ctx.paged
   ) {
     let policy = allowed(ctx)
     let admitted = policy && byArchetype(ctx, {
@@ -2069,6 +2075,27 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
 let UNREACHED = new Set(['near', 'edges'])
 let find = <T extends Clause>(cs: Clause[], kind: string): T | undefined =>
   cs.find((c) => c.kind == kind) as T | undefined
+
+// Whether one value of a mandatory equality seeks an index whose next column
+// is the statement's order, and the statement keeps a page: that seek reads
+// in order and stops at the page (`.entry.session=S&.order=-entry.seq&.limit=1`).
+let seeksPage = (ctx: Ctx, cs: Clause[]): boolean => {
+  let order = find<Order>(cs, 'order')?.value.replace(/^-/, '')
+  return !!order && !!find<Limit>(cs, 'limit') && !!ctx.d.indexed &&
+    flattened(cs).some((c) => {
+      if (
+        c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
+        opOf(c) != '' || literals(c.value)?.length != 1
+      ) return false
+      let [comp, prop] = c.path
+      let p = ctx.v.prop(comp, prop)
+      return comp != 'entity' && !!p && !p.computed &&
+        !computed(ctx.v, comp) && !ctx.derived[c.path.join('.')] &&
+        ctx.v.indexes(comp).some((i) =>
+          !i.present && i.props[0] == prop && `${comp}.${i.props[1]}` == order
+        )
+    })
+}
 
 /**
  * The entities a query admits, as a statement selecting their integer ids as
@@ -2366,6 +2393,8 @@ let indexedRelation = (
   clauses: Clause[],
   from: string,
   o: Parameters<typeof rel>[1],
+  /** the rows the statement keeps, in `o.order`, when it keeps a page */
+  page?: number,
 ): Select => {
   if (ctx.correlated) return rel(from, o)
   // A finite identity selection is narrower than any component predicate.
@@ -2762,12 +2791,19 @@ let indexedRelation = (
         })),
       ],
     }
+    // A paged statement pages each arm in its own order too: an index that
+    // reads in that order then stops at the page, where the newest entry of
+    // a long session carrying a component read the whole session first.
     let gated = (q: Select, enabled: Cond) => {
       let gate = render({
         ...q,
         cols: [raw(ctx.d.ownerKey('entity') + ' as "id"')],
-        order: undefined,
-        limit: { t: 'case', arms: [[enabled, val(-1)]], else: val(0) },
+        order: page == null ? undefined : q.order,
+        limit: {
+          t: 'case',
+          arms: [[enabled, val(page ?? -1)]],
+          else: val(0),
+        },
       })
       return {
         t: 'select' as const,
@@ -3045,8 +3081,11 @@ let lower = (
   // sparse/empty range a seek rather than a scan of historical component rows.
   // Only mandatory conjunctions qualify; optional and OR arms must retain
   // their outer joins, as must derived values and alternate backing sources.
-  let relation = (from: string, o: Parameters<typeof rel>[1]): Select =>
-    indexedRelation(ctx, ast.clauses, from, o)
+  let relation = (
+    from: string,
+    o: Parameters<typeof rel>[1],
+    page?: number,
+  ): Select => indexedRelation(ctx, ast.clauses, from, o, page)
   let finished = (s: Select): Select =>
     ctx.shared.size
       ? {
@@ -3119,6 +3158,7 @@ let lower = (
   if (!ctx.present && !find<Count>(cs, 'count')) {
     ctx.present = presence(ctx, filters)
   }
+  ctx.paged = seeksPage(ctx, cs)
   let where = and(
     ...conjuncts(ctx, filters),
     ...ctx.eids
@@ -3281,7 +3321,7 @@ let lower = (
         joins: paged,
         where: windowed,
         order: ordered,
-      }),
+      }, limit.n),
       limit: val(limit.n),
     })
     // The page drives the projection, a scoped spine's too (the entity table
@@ -3406,7 +3446,7 @@ let lower = (
       joins: joinsOf(ctx),
       where: windowed,
       order: ordered,
-    }),
+    }, limit?.n),
     limit: limit ? val(limit.n) : undefined,
   })
 }
