@@ -200,12 +200,11 @@ test('reader readiness waits for a bounded read and propagates its refusal', asy
   }
 })
 
-// A synchronous query occupies its worker until it returns or its owner aborts.
-// Independent reads and the latest remaining click keep their own progress.
-test('independent reads bypass slow SQL and abandoned clicks release every lane', async () => {
-  let Original = globalThis.Worker
-  let workers: Reader[] = []
-  class Reader {
+// A fake worker: it records each read posted to it and answers the latest
+// when told, as a worker returning from synchronous SQL would.
+let fakes = () => {
+  let workers: Fake[] = []
+  class Fake {
     onmessage: ((event: { data: unknown }) => void) | null = null
     onerror = null
     jobs: { id: number; query?: string; opts?: object }[] = []
@@ -224,7 +223,26 @@ test('independent reads bypass slow SQL and abandoned clicks release every lane'
       this.onmessage?.({ data: { id: job.id, value: [] } })
     }
   }
-  globalThis.Worker = Reader as unknown as typeof Worker
+  let Original = globalThis.Worker
+  globalThis.Worker = Fake as unknown as typeof Worker
+  return { workers, restore: () => globalThis.Worker = Original }
+}
+let abandoned = (reader: ReturnType<typeof readThread>, query: string) => {
+  let abort = new AbortController()
+  let refused = assertRejects(
+    () => Promise.resolve(reader.read(query, { signal: abort.signal })),
+    DOMException,
+    'aborted',
+  )
+  return { abort: () => abort.abort(), refused }
+}
+
+// A synchronous query occupies its worker until it returns. Independent reads
+// bypass a slow one. A cancelled read is refused at once, and its worker,
+// kept, takes the next read when that SQL returns: Deno keeps part of every
+// worker that ends, so a cancel never ends one.
+test('independent reads bypass slow SQL and cancelled reads keep their workers', async () => {
+  let { workers, restore } = fakes()
   let reader = readThread('unused.json')
   try {
     let slow = reader.read('.slow')
@@ -234,32 +252,53 @@ test('independent reads bypass slow SQL and abandoned clicks release every lane'
     assertEquals(await fast, [])
     workers[0].answer()
     await slow
-    let pending: Promise<unknown>[] = []
-    let aborts = Array.from({ length: 4 }, () => new AbortController())
-    for (let abort of aborts) {
-      pending.push(assertRejects(
-        () =>
-          Promise.resolve(
-            reader.read('.abandoned', { signal: abort.signal }),
-          ),
-        DOMException,
-        'aborted',
-      ))
-    }
-    // Only the two admitted reads were posted; the others wait outside workers.
-    assertEquals(workers.filter((w) => !w.ended).length, 2)
-    for (let abort of aborts) abort.abort()
-    await Promise.all(pending)
+    let clicks = Array.from({ length: 4 }, () => abandoned(reader, '.old'))
+    for (let click of clicks) click.abort()
+    await Promise.all(clicks.map((c) => c.refused))
     let latest = reader.read('.latest')
-    let alive = workers.filter((w) => !w.ended)
-    assertEquals(alive.length, 1)
-    assertEquals(workers.length, 3)
-    assertEquals(alive[0].jobs.at(-1)?.query, '.latest')
-    assertEquals(alive[0].jobs.at(-1)?.opts, {})
-    alive[0].answer()
+    // The first worker back from its cancelled read answers the latest one.
+    workers[1].answer()
+    assertEquals(workers[1].jobs.at(-1)?.query, '.latest')
+    assertEquals(workers[1].jobs.at(-1)?.opts, {})
+    workers[1].answer()
     assertEquals(await latest, [])
+    workers[0].answer()
+    let next = reader.read('.next')
+    assertEquals(workers[0].jobs.at(-1)?.query, '.next')
+    workers[0].answer()
+    assertEquals(await next, [])
+    assertEquals(workers.map((w) => w.ended), [false, false])
   } finally {
     await reader.close()
-    globalThis.Worker = Original
+    restore()
+  }
+})
+
+// A cancelled read still running past its grace is a runaway: its worker is
+// let go, and the reads waiting behind it go on in a new one.
+test('a cancelled read past its grace gives up its worker', async () => {
+  let { workers, restore } = fakes()
+  let overdue: (() => void)[] = []
+  let reader = readThread('unused.json', {
+    timer: (fn) => {
+      overdue.push(fn)
+      return () => {}
+    },
+  })
+  try {
+    let runaway = abandoned(reader, '.runaway')
+    let busy = reader.read('.busy')
+    let queued = reader.read('.queued')
+    runaway.abort()
+    await runaway.refused
+    for (let fn of overdue) fn()
+    assertEquals(workers[0].ended, true)
+    assertEquals(workers[2].jobs.at(-1)?.query, '.queued')
+    workers[1].answer()
+    workers[2].answer()
+    assertEquals(await Promise.all([busy, queued]), [[], []])
+  } finally {
+    await reader.close()
+    restore()
   }
 })

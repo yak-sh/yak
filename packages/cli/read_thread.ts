@@ -1,5 +1,9 @@
-// A web host reads through a bounded pool of read-only workers. Cancelling a
-// read ends its worker, including synchronous SQL, without touching writers.
+// A web host reads through a bounded pool of read-only workers, each started
+// once and kept. A worker is never ended to cancel a read: Deno keeps part of
+// every worker that ends (7 to 14 MB of the modules it loaded, measured on
+// Deno 2.9), so a web that ended one per cancelled read grew by gigabytes a
+// day as tabs navigated (T-130803). A cancelled read is answered at once, and
+// its worker finishes the synchronous SQL unheard, then takes the next read.
 import { parse } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
 import { type Context, context, type Event, forward } from '@yaks/trace'
@@ -24,11 +28,23 @@ export type Heard =
   )
   | { closed: true }
 
-/** Independent reads share at most two workers, started only when needed.
- * Each worker owns one read at a time, so an abandoned read can be terminated
- * without rejecting another caller or waiting for synchronous SQL to return. */
+let later = (fn: () => void, ms: number) => {
+  let id = setTimeout(fn, ms)
+  return () => clearTimeout(id)
+}
+
+/** Independent reads share at most two workers, started only when needed and
+ * kept for the reader's life. Each worker owns one read at a time. A read
+ * cancelled while it runs is rejected at once and its answer dropped when it
+ * comes; only one still running `grace` ms after its caller left (a runaway
+ * query) ends its worker, so it cannot hold a lane for good. */
 export let readThread = (
   config: string,
+  { grace = 10_000, timer = later }: {
+    grace?: number
+    /** schedule `fn` after `ms` and return its cancellation */
+    timer?: (fn: () => void, ms: number) => () => void
+  } = {},
 ): Reader & { ready: () => Promise<void>; close: () => Promise<void> } => {
   type Job = {
     id: number
@@ -37,13 +53,16 @@ export let readThread = (
     reject: (error: unknown) => void
     trace?: Context
     off: () => void
+    /** its caller left; the answer goes nowhere */
+    dropped?: boolean
   }
-  type Lane = { worker: Worker; job?: Job }
+  type Lane = { worker: Worker; job?: Job; overdue?: () => void }
   let lanes = new Set<Lane>()
   let waiting: Job[] = []
   let next = 0
   let closed = false
   let stop = (lane: Lane) => {
+    lane.overdue?.()
     lane.worker.terminate()
     lanes.delete(lane)
   }
@@ -51,7 +70,9 @@ export let readThread = (
     if ('closed' in answer || lane.job?.id != answer.id) return
     let job = lane.job
     lane.job = undefined
+    lane.overdue?.()
     job.off()
+    if (job.dropped) return drain()
     if (job.trace && answer.spans) {
       forward(job.trace, answer.spans, answer.origin)
     }
@@ -106,13 +127,16 @@ export let readThread = (
     return new Promise((resolve, reject) => {
       let cancel = () => {
         waiting = waiting.filter((j) => j !== job)
-        let lane = [...lanes].find((l) => l.job === job)
-        if (lane) stop(lane)
         job.off()
         reject(signal!.reason)
-        // A navigation drops several old watches in one turn. Let those
-        // cancellations finish before starting a replacement worker.
-        queueMicrotask(drain)
+        let lane = [...lanes].find((l) => l.job === job)
+        if (!lane) return
+        job.dropped = true
+        lane.overdue = timer(() => {
+          if (lane.job !== job) return
+          stop(lane)
+          drain()
+        }, grace)
       }
       let job: Job = {
         id: ++next,
