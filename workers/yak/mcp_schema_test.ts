@@ -679,135 +679,48 @@ test('graph_schema answers the index, a word whole, and a kind', async () => {
   }
 })
 
-// The write door's schema is the caller's vocabulary (T-34153). Jeff, on an
-// agent trying to send a letter with graph_apply: "how are agents supposed to
-// learn our comp schema? claude was trying to send mail ... but is just
-// guessing at the comp types". So the published input schema is checked here
-// the way a client checks it — with a JSON Schema validator, against the
-// letter bundle the guide teaches (public/docs/mail.md §Sending a letter).
-test(
-  "graph_apply's input schema is the vocabulary a client can write",
-  async () => {
-    let k = await kernel()
-    let ear: ReturnType<typeof hearing> | undefined
-    try {
-      let jeff = await signIn(k)
-      let agent = connector(k, jeff.cookie)
-      let apps = ['cookbook', 'lending', 'runs']
-      for (let slug of apps) {
-        await agent.tool('app_new', { slug, title: slug })
-      }
-      let schema = async () => {
-        let { tools } = await agent.call('tools/list')
-        let one = (tools as { name: string; inputSchema: object }[])
-          .find((t) => t.name == 'graph_apply')!
-        return {
-          input: one.inputSchema,
-          // What a tool list costs the agent that reads it, before it has asked
-          // anything: the number worth watching when the schema grows.
-          bytes: JSON.stringify(tools).length,
-        }
-      }
-      let first = await schema()
-      let ajv = new Ajv({ strict: false })
-      let takes = (input: object, bundles: unknown) =>
-        ajv.compile(input)({ bundles })
-
-      // The guide's own letter: a recipient wearing `email{address}`, the letter
-      // as `doc` + `mail`, and the ask, `deliver{to}`.
-      let sending = [
-        { entity: { eid: '$ana' }, email: { address: 'ana@example.com' } },
-        {
-          entity: { eid: '$note' },
-          doc: { title: 'Your order is on its way', body: 'Two jars.' },
-          mail: {},
-          deliver: { to: '$ana' },
-        },
-      ]
-      assert(takes(first.input, sending), JSON.stringify(ajv.errors))
-      // A property nobody declared is NOT refused by the schema (T-34277): a
-      // client holds this copy for the whole conversation while the vocabulary
-      // grows under it, so a closed schema would refuse a property that exists.
-      // The schema describes; the server decides, and says which properties are
-      // declared and where to read them.
-      let misspelt = [{
-        entity: { eid: '$ana' },
-        $app: 'cookbook',
-        email: { adress: 'ana@example.com' },
-      }]
-      assertEquals(takes(first.input, misspelt), true)
-      let refused = (await assertRejects(
-        () => agent.tool('graph_apply', { bundles: misspelt }),
-        Error,
-      )).message
-      assertStringIncludes(refused, 'unknown property: email.adress')
-      assertStringIncludes(refused, 'email has address (string)')
-      assertStringIncludes(refused, 'graph_schema')
-      // And the type is there to be read: `mail.verified` is a boolean, and the
-      // vocabulary's own sentence about it rides along.
-      let mail = JSON.stringify(
-        (first.input as { properties: Record<string, unknown> }).properties,
-      )
-      assertStringIncludes(mail, 'the address it came from')
-      assertEquals(
-        takes(first.input, [{
-          entity: { eid: 'e1' },
-          mail: { verified: 'yes' },
-        }]),
-        false,
-      )
-
-      // A vocabulary grows mid-connection, and the schema a client is holding
-      // goes stale with it — app_deploy plants the words and the next
-      // `tools/list` is typed for them. The tool names did not move, so
-      // nothing is said on the stream (T-34541): a client is told its list
-      // moved only when it did, and the open write door is what makes a
-      // client holding the older schema work anyway.
-      let stream = await k.at('yaks.app', '/mcp', {
-        headers: { cookie: jeff.cookie, accept: 'text/event-stream' },
-      })
-      ear = hearing(stream)
-      await until(() => ear!.said().includes(': open'), {
-        timeout: 10_000,
-        poll: 50,
-        label: 'the stream to open',
-      })
-      await agent.tool('app_files', {
-        app: 'cookbook',
-        op: 'write',
-        path: 'vocab.json',
-        content: vocabFile({ recipe: { serves: num } }),
-      })
-      await agent.tool('app_deploy', { app: 'cookbook' })
-      assertEquals(ear.said().includes('list_changed'), false)
-      let grown = await schema()
-      assert(
-        takes(grown.input, [{ entity: { eid: 'r1' }, recipe: { serves: 4 } }]),
-      )
-      assertEquals(
-        takes(grown.input, [{
-          entity: { eid: 'r1' },
-          recipe: { serves: 'four' },
-        }]),
-        false,
-      )
-      // The older schema typed nothing about a word nobody had declared yet,
-      // so a client holding it sends `serves` as anything at all and the
-      // server decides — which is the whole reason the write door is open.
-      assertEquals(
-        takes(first.input, [{
-          entity: { eid: 'r1' },
-          recipe: { serves: 'four' },
-        }]),
-        true,
-      )
-      console.log(
-        `tools/list: ${first.bytes} bytes over ${apps.length} apps, ` +
-          `${grown.bytes} with a component of their own`,
-      )
-    } finally {
-      await ear?.stop()
-      await k.stop()
-    }
-  },
-)
+// The write door's schema is the generic bundle, whatever the caller's
+// vocabulary, and graph_schema is where the words are read. A client checking a
+// call against the listed schema passes the letter the guide teaches
+// (public/docs/mail.md §Sending a letter), and the server is what refuses a
+// word nobody declared, saying where the declared ones are read.
+test('graph_apply takes the bundle a client sends, and the server decides', async () => {
+  let k = await kernel()
+  try {
+    let jeff = await signIn(k)
+    let agent = connector(k, jeff.cookie)
+    await agent.tool('app_new', { slug: 'cookbook', title: 'cookbook' })
+    let { tools } = await agent.call('tools/list')
+    let input = (tools as { name: string; inputSchema: object }[])
+      .find((t) => t.name == 'graph_apply')!.inputSchema
+    let ajv = new Ajv({ strict: false })
+    let takes = (bundles: unknown) => ajv.compile(input)({ bundles })
+    // The guide's own letter: a recipient wearing `email{address}`, the letter
+    // as `doc` + `mail`, and the ask, `deliver{to}`.
+    let sending = [
+      { entity: { eid: '$ana' }, email: { address: 'ana@example.com' } },
+      {
+        entity: { eid: '$note' },
+        doc: { title: 'Your order is on its way', body: 'Two jars.' },
+        mail: {},
+        deliver: { to: '$ana' },
+      },
+    ]
+    assert(takes(sending), JSON.stringify(ajv.errors))
+    let misspelt = [{
+      entity: { eid: '$ana' },
+      $app: 'cookbook',
+      email: { adress: 'ana@example.com' },
+    }]
+    assert(takes(misspelt), JSON.stringify(ajv.errors))
+    let refused = (await assertRejects(
+      () => agent.tool('graph_apply', { bundles: misspelt }),
+      Error,
+    )).message
+    assertStringIncludes(refused, 'unknown property: email.adress')
+    assertStringIncludes(refused, 'email has address (string)')
+    assertStringIncludes(refused, 'graph_schema')
+  } finally {
+    await k.stop()
+  }
+})

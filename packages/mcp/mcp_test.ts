@@ -471,20 +471,19 @@ test('a refusal is the tool error the agent reads, not a broken call', async () 
     assertStringIncludes(text(out), 'only trusted writers')
     assertEquals(await graph.get(['b1', 'b2']), [])
   }
-  // The write door's schema is the vocabulary (T-34153), so a bundle with no
-  // identity and a value of the wrong type are each refused where they were
-  // typed — with the path that names them.
+  // The write door's schema is the generic bundle, so the graph is what
+  // refuses a bundle with no identity, a word nobody declared and a value of the
+  // wrong type, each naming what it refused.
   let said = async (bundles: unknown) => {
     let out = await called(client, 'graph_apply', { bundles })
     assertEquals(out.isError, true)
     assert(Array.isArray(out.content))
     return String(out.content[0].text)
   }
-  assert((await said([{ book: {} }])).includes('bundles.0.entity'))
-  // A property nobody declared is the server's refusal, not the schema's: the
-  // schema is open so a client's cached copy cannot refuse a word this graph
-  // has since learned. It names the properties that do exist, and where to read
-  // them (T-34277).
+  let nobody = await said([{ book: {} }])
+  assert(nobody.includes('bundle 0 needs an entity'), nobody)
+  // A property nobody declared names the properties that do exist, and where
+  // to read them (T-34277).
   let colour = await said([{ entity: { eid: 'b1' }, book: { colour: 'red' } }])
   assert(colour.includes('unknown property: book.colour'), colour)
   assert(
@@ -500,7 +499,7 @@ test('a refusal is the tool error the agent reads, not a broken call', async () 
   assert(two.includes('unknown properties: book.colour, book.size'), two)
   assert(two.includes('graph_schema'), two)
   let price = await said([{ entity: { eid: 'b1' }, book: { price: 'lots' } }])
-  assert(price.includes('Expected number'), price)
+  assert(price.includes('book.price is a number'), price)
 
   // And what the schema cannot see — a batch that is not an array of bundles
   // at all — the tool still says for itself.

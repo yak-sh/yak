@@ -83,11 +83,10 @@ composed from a config gets it by listing this package
 one — [@yaks/api](../api/README.md) does — and a config listing neither runs the
 same tools in its own process with nothing listening.
 
-The generic tier is restated for this transport (`core: true`), which is what
-gives `graph_apply` the bundle schema the host's own vocabulary describes. The
-host's copies of that tier (@yaks/graph `tier`, the form a command line reads)
-are dropped from the list the route is handed, so each generic tool is listed
-once.
+The generic tier is restated for this transport (`core: true`), which adds what
+only a server knows: the search it ranks with. The host's copies of that tier
+(@yaks/graph `tier`, the form a command line reads) are dropped from the list
+the route is handed, so each generic tool is listed once.
 
 ## Storage
 
@@ -146,7 +145,6 @@ equal(asked, 1)
 | `@yaks/mcp`        | `mcp`, `MountOptions`, `Handler`: HTTP handler and its types                                                                                        |
 | `@yaks/mcp`        | `server`, `Options`, `instructed`: SDK server for a caller-supplied transport, and the instructions an exchange sends                               |
 | `@yaks/mcp`        | `core`, `CoreOpts`, `Search`, `Guide`: generic tool construction and callbacks                                                                      |
-| `@yaks/mcp`        | `bundleSchema`, `schemaSchema`, `BundleOpts`, `Depth`: Zod schemas for bundles and schema results                                                   |
 | `@yaks/mcp`        | `listing`, `roster`, `rosterVersion`, `rosterLine`: tool definitions, names, and change notices                                                     |
 | `@yaks/mcp`        | `shapeOf`, `inputSchemaOf`, `annotated`, `COMMAND`, `Security`: argument schemas, MCP annotations, command metadata key, and security metadata type |
 | `@yaks/mcp/tools`  | `core`, `shapeOf`, `inputSchemaOf`, `translated`: the generic tier, argument schemas and former argument names without the MCP SDK                  |
@@ -233,22 +231,15 @@ A recorded failure carries a `refusal` or `exception` component and sets
 `isError`. Errors caught before a recorded answer is available can return only
 error text and `isError`, without `structuredContent`.
 
-`graph_apply`'s input schema is generated from the current vocabulary. Other
-tools also declare their argument schemas. To generate a bundle schema yourself:
-
-```ts ignore
-import { bundleSchema } from '@yaks/mcp'
-
-let schema = bundleSchema(vocab, { depth: 'full' })
-```
-
 ## The schema describes, the server decides
 
-Bundle input schemas describe declared components and properties but allow
-unknown properties through to the graph. This lets a client with a cached tool
-schema submit a property added since it connected. The graph remains responsible
-for rejecting undeclared properties. Such errors point callers to
-`graph_schema`, which reads the current vocabulary.
+`graph_apply`'s input schema is the generic bundle: an array of objects, each
+with `entity: {eid}` and open components. It is the same over every vocabulary,
+so the tool list costs the same whatever a store declares, and a client that
+cached it never holds a stale copy of the vocabulary. `graph_schema` reads the
+components and properties this graph declares. The graph refuses an undeclared
+component or property and a value of the wrong type, and its refusal points the
+caller to `graph_schema`.
 
 ## A tool list goes stale
 
@@ -275,8 +266,8 @@ import { translated } from '@yaks/mcp/tools'
 assertEquals(translated('graph_apply', { change: [] }), { bundles: [] })
 ```
 
-New components automatically appear in `graph_schema` and newly generated write
-schemas. A new component therefore does not require a new tool.
+New components automatically appear in `graph_schema`, and `graph_apply` writes
+them. A new component therefore does not require a new tool.
 
 ## Authentication and write attribution
 

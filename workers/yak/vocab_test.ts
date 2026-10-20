@@ -27,7 +27,6 @@ import {
   livesIn,
   meant,
   numbered,
-  platformApart,
   platformVocab,
   reserved,
   stated,
@@ -329,22 +328,6 @@ test('the loaded app vocabulary plants its component tables', () => {
   assert(!sql.some((s) => s.t == 'create virtual table'))
 })
 
-test('the directory and an app spell one word apart: member.role', () => {
-  // The platform's roster is its access ladder, read space-wide (apps.ts
-  // `reads`/`edits`, tools.ts `inSpace`); @yaks/member keeps belonging apart
-  // from access, which it expresses as a grant or the app's mode. So the two
-  // stores mean two things by one property, and the MCP door types it nowhere
-  // rather than as either (agent.ts `spoken`, T-34273).
-  assertEquals(platformApart(), ['member.role'])
-  assertEquals(platformVocab().prop('member', 'role')?.values, [
-    'owner',
-    'editor',
-    'viewer',
-  ])
-  assertEquals(appVocab().prop('member', 'role')?.values, ['owner', 'member'])
-})
-
-// The directory's schema is compiled once as the file loads.
 let platformIndexes = indexes(schema(platformVocab()))
 test('the platform declares the uniques its races are decided by', () => {
   for (

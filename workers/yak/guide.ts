@@ -184,10 +184,8 @@ the same for everybody and changes only when this platform is released — what
 an app of the person's own can do is a command, which the commands tool lists
 and the command tool runs.
 
-Never guess at a component's properties: graph_apply's own input schema is
-the vocabulary you can reach — every component, every property, every type.
-And graph_schema explains what each component means: called bare, an index of
-every one of them; graph_schema({component: 'mail'}) for that one component in
+Never guess at a component's properties: graph_schema says what each
+component is and what it holds. Called bare, an index of every one of them; graph_schema({component: 'mail'}) for that one component in
 full — each property's type and meaning, what points at it, a bundle that
 writes it, the guide page for it; graph_schema({kind: 'mail'}) for what an
 entity of that kind is made of.

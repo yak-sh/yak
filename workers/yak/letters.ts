@@ -12,9 +12,9 @@
 // sentence lives there ({@link SCOPE}), and again in the door's instructions
 // (mcp.ts).
 //
-// The answer is the generic tier's shape: whole bundles, under an output
-// schema derived from the vocabulary the caller's apps declare (@yaks/mcp
-// `bundleSchema`), so a letter reads back the way every other row does.
+// The answer is the generic tier's shape: whole bundles, under the generic
+// bundle output schema (@yaks/mcp `answerSchema`), so a letter reads back the
+// way every other row does.
 import { z } from 'zod'
 import type { Bundle, Tool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'

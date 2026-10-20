@@ -35,7 +35,6 @@ import {
 } from '@yaks/tools/result'
 import { CallError } from '@yaks/tools/errors'
 import { runner } from '@yaks/tools'
-import type { BundleOpts, Depth } from './schema.ts'
 import {
   core,
   type CoreOpts,
@@ -119,14 +118,6 @@ export type Options = {
    * ({@link instructed}). A host whose instructions cost reads to say pays
    * them once per connection, at `initialize`, rather than on every call. */
   instructions?: string | (() => string | Promise<string>)
-  /** how much of the vocabulary each tool's output schema describes
-   * (default: `full` — see {@link Depth}; `graph_apply`'s input schema is
-   * always `full`) */
-  schema?: Depth
-  /** a property the calling program returns or accepts differently than the
-   * vocabulary declares — a reference that reads back as a named object, or a
-   * property two of its stores name differently (see {@link BundleOpts}) */
-  prop?: BundleOpts['prop']
   /** where a component is documented at length, when the calling program has
    * such a page — `graph_schema` returns it beside the properties */
   guide?: Guide
@@ -377,8 +368,6 @@ export let listing = (opts: Options): Tool[] =>
   [
     ...(opts.core === false ? [] : core({
       vocab: opts.graph.vocab,
-      depth: opts.schema,
-      prop: opts.prop,
       guide: opts.guide,
       search: opts.search,
       readOnly: opts.readOnly,

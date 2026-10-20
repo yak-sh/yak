@@ -3,10 +3,9 @@
 // and `search` are declared in its vocab.json and implemented in
 // `@yaks/graph/tools` — and this file restates their arguments in the form
 // this transport accepts, plus everything a declaration cannot know because it
-// is written before there is a server: the bundles this vocabulary accepts,
-// the way back out of a delete this store offers, how a read narrows to one
-// part of the graph, the extra arguments an endpoint scopes its reads by, and
-// whether the write tool is listed at all.
+// is written before there is a server: the way back out of a delete this store
+// offers, how a read narrows to one part of the graph, the extra arguments an
+// endpoint scopes its reads by, and whether the write tool is listed at all.
 //
 // So the command line and an MCP tool list describe the same tools, and each
 // description is written in one place.
@@ -16,12 +15,12 @@
 // describes tools to a model and serves none (@yaks/harness) imports
 // `@yaks/mcp/tools` and never pays for a server.
 //
-// The reads keep the JSON Schema their declarations wrote, because that is
-// what the runner reads: it validates a call against it and resolves every
-// argument marked a reference (`ref`) to the eid it names (@yaks/tools). The
-// write's arguments are Zod, because the bundles it accepts are built in Zod
-// from the vocabulary (./schema.ts), and Zod refuses a wrong value at the path
-// it was typed with a sentence an agent can act on.
+// Every tool in the tier keeps the JSON Schema its declaration wrote, because
+// that is what the runner reads: it validates a call against it and resolves
+// every argument marked a reference (`ref`) to the eid it names (@yaks/tools).
+// `graph_apply` takes the generic bundle, `{entity: {eid}}` and open
+// components, over every vocabulary: the tool list is sent before every
+// request, and `graph_schema` reads the vocabulary when an agent needs it.
 
 import { z } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -31,9 +30,8 @@ import type { Guide } from '@yaks/graph'
 import { type Search, tier } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import { publicToolSchema } from '@yaks/vocab/tools'
-import { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
 
-export type { Depth, Search }
+export type { Search }
 
 // @yaks/graph leaves a tool's schemas opaque, because the core package depends
 // on no validation library. This is where `Schema` gets a concrete meaning:
@@ -71,9 +69,9 @@ let open = (v: unknown) => v === true || (isObj(v) && !Object.keys(v).length)
 // A converted Zod schema, said in fewer words. zod-to-json-schema spells out
 // what JSON Schema already assumes (an object open to more properties, an
 // object naming none) and writes a nullable object or enum as an `anyOf`
-// beside `{type: 'null'}`, which is a type list. Each says the same thing, and
-// `graph_apply`'s input says it once per component, on a listing every client
-// is sent before it asks anything. Its draft-07 dialect line goes too: MCP
+// beside `{type: 'null'}`, which is a type list. Each says the same thing, on
+// a listing every client is sent before it asks anything. Its draft-07 dialect
+// line goes too: MCP
 // reads a tool schema as 2020-12, which means the same for every keyword here.
 let terse = (s: unknown): unknown => {
   if (!isObj(s)) return s
@@ -157,15 +155,9 @@ let converted = (tool: Tool): Json => {
 
 /** What the generic tier needs in order to describe itself. */
 export type CoreOpts = {
-  /** the vocabulary the tools describe their results with */
+  /** the vocabulary the tools read and write, whose query keywords the reads
+   * understand */
   vocab: Vocab
-  /** how much of each property a bundle schema describes. `graph_apply`'s
-   * input schema is always `full` and no tool here declares an output schema,
-   * so this is carried for callers that pass one and changes nothing yet. */
-  depth?: Depth
-  /** a property this server returns or accepts differently than the vocabulary
-   * declares — see {@link BundleOpts} */
-  prop?: BundleOpts['prop']
   /** where a component is documented at length, when this server has such a
    * page — see {@link Guide} */
   guide?: Guide
@@ -202,12 +194,10 @@ export type CoreOpts = {
 
 /**
  * A refusal naming a property this graph does not declare, with a pointer to
- * `graph_schema` appended — the tool that reports what this graph declares
- * right now. The write tool's input schema is open (schema.ts) precisely so
- * that a client's cached copy cannot refuse a property declared since it
- * connected, which leaves the server the only authority on what a component
- * accepts and makes this the only place a caller learns its copy is out of
- * date.
+ * `graph_schema` appended — the tool that reports what this graph declares.
+ * The write tool's input schema is the generic bundle, so the server is the
+ * only authority on what a component accepts, and this refusal is where a
+ * caller that guessed learns where to read it.
  *
  * It matches on the refusal's text rather than on an error class: the runner
  * stores a refusal as an entity's text long before any transport renders it,
@@ -216,8 +206,7 @@ export type CoreOpts = {
  */
 export let pointing = (said: string): string =>
   /unknown propert(y|ies)\b/.test(said)
-    ? `${said}. Your tool list may predate a change to this vocabulary — ` +
-      'graph_schema reports what this graph declares right now.'
+    ? `${said}. graph_schema reports what this graph declares.`
     : said
 
 // The generic tier's former argument names, each onto the one that takes it
@@ -268,88 +257,6 @@ export let translated = (
   )
 }
 
-// One declared argument, in Zod. Not a general JSON Schema reader: the only
-// declaration it ever sees is the write's own, so it handles the shapes that
-// one declaration uses rather than pretending to cover all of JSON Schema.
-type Arg = {
-  type?: string
-  items?: Arg
-  anyOf?: Arg[]
-  enum?: readonly string[]
-  description?: string
-}
-
-let zodArg = (arg: Arg): z.ZodTypeAny => {
-  if (arg.anyOf?.length) {
-    let [one, two, ...rest] = arg.anyOf.map(zodArg)
-    return two ? z.union([one, two, ...rest]) : one
-  }
-  if (arg.enum?.length) {
-    return z.enum([...arg.enum] as [string, ...string[]])
-  }
-  return arg.type == 'number' || arg.type == 'integer'
-    ? z.number()
-    : arg.type == 'boolean'
-    ? z.boolean()
-    : arg.type == 'array'
-    ? z.array(arg.items ? zodArg(arg.items) : z.unknown())
-    : arg.type == 'object'
-    ? z.record(z.unknown())
-    : z.string()
-}
-
-// A declaration's whole `input` map, in Zod: every argument optional unless
-// the declaration marked it required, with each argument's description carried
-// through — that description is what an agent reads before it calls the tool.
-let zodInput = (
-  schema: { properties?: Record<string, Arg>; required?: string[] } = {},
-): Record<string, z.ZodTypeAny> => {
-  let need = new Set(schema.required ?? [])
-  return Object.fromEntries(
-    Object.entries(schema.properties ?? {}).map(([name, arg]) => {
-      let said: z.ZodTypeAny = zodArg(arg)
-      if (!need.has(name)) said = said.optional()
-      return [name, arg.description ? said.describe(arg.description) : said]
-    }),
-  )
-}
-
-// The write's arguments over one vocabulary read through one `prop`, made
-// once and shared by every server built over them: a server is built per
-// request, and this is the largest schema one has. The bundles a write
-// accepts are this graph's, so the declaration names only "an array of
-// bundles" and the vocabulary fills in what one IS — every component, every
-// writable property and every type (T-34153). No fixed schema could state it:
-// the shape comes from one graph's vocabulary, and a declaration is written
-// before there is a graph. Always `full` — a write tool that leaves a
-// property's type to the reader is a tool an agent guesses at. Most calls
-// neither write nor list the tools, so the bundle schema is built the first
-// time one of them reads it.
-let writes = new WeakMap<Vocab, WeakMap<object, Record<string, z.ZodTypeAny>>>()
-let PLAIN = {}
-let writing = (
-  vocab: Vocab,
-  prop: BundleOpts['prop'],
-  said: { properties?: Record<string, Arg>; required?: string[] },
-): Record<string, z.ZodTypeAny> => {
-  let byProp = writes.get(vocab) ?? new WeakMap()
-  writes.set(vocab, byProp)
-  let held = byProp.get(prop ?? PLAIN)
-  if (held) return held
-  let built: z.ZodTypeAny | undefined
-  let bundles: z.ZodTypeAny = z.lazy(() =>
-    built ??= z.array(
-      bundleSchema(vocab, { depth: 'full', nulls: true, write: true, prop }),
-    )
-  )
-  let input = zodInput(said)
-  let about = said.properties?.bundles?.description
-  if (!said.required?.includes('bundles')) bundles = bundles.optional()
-  input.bundles = about ? bundles.describe(about) : bundles
-  byProp.set(prop ?? PLAIN, input)
-  return input
-}
-
 /**
  * The generic tier, as tools: `graph_apply`, `graph_query`, `graph_show`,
  * `graph_schema`, and `search` when a {@link Search} was passed —
@@ -357,15 +264,14 @@ let writing = (
  * arguments shaped for this server.
  *
  * ```ts ignore
- * let tools = core({ vocab: shop, depth: 'full' })
+ * let tools = core({ vocab: shop })
  * ```
  */
-export let core = (opts: CoreOpts): Tool[] => {
-  let { vocab, prop } = opts
-  return tier({
+export let core = (opts: CoreOpts): Tool[] =>
+  tier({
     search: opts.search,
     guide: opts.guide,
-    keywords: vocab.keywords,
+    keywords: opts.vocab.keywords,
   })
     // What this server is, decided once for the whole tier: a server that only
     // reads does not list the write at all — the write is not a tool that
@@ -373,37 +279,29 @@ export let core = (opts: CoreOpts): Tool[] => {
     .filter((t) => t.readOnly || !opts.readOnly)
     .map((t) => {
       let said = (t.inputSchema ?? {}) as {
-        properties?: Record<string, Arg>
+        properties?: Record<string, unknown>
         required?: string[]
       }
-      if (t.name != 'graph_apply') {
-        // A server whose reads are scoped by something of its own declares
-        // that on every read — yaks.app's signed-out endpoint names which app
-        // to read — and those arguments come first, where a caller reads them.
-        let scope = t.readOnly && opts.scope ? opts.scope : {}
-        let required = [...Object.keys(scope), ...(said.required ?? [])]
-        let narrow = t.name == 'graph_query' && opts.narrow
-        return {
-          ...t,
-          ...(narrow ? { description: `${t.description} ${narrow}` } : {}),
-          inputSchema: {
-            ...said,
-            properties: { ...scope, ...said.properties },
-            ...(required.length ? { required } : {}),
-          },
-        }
-      }
+      // A server whose reads are scoped by something of its own declares that
+      // on every read — yaks.app's signed-out endpoint names which app to read
+      // — and those arguments come first, where a caller reads them.
+      let scope = t.readOnly && opts.scope ? opts.scope : {}
+      let required = [...Object.keys(scope), ...(said.required ?? [])]
+      // What this server adds to a tool's description in its own words: how a
+      // read narrows, and how a delete is undone, each where an agent reads it
+      // at the moment it writes the query or decides to risk the write.
+      let added = t.name == 'graph_query'
+        ? opts.narrow
+        : t.name == 'graph_apply'
+        ? opts.undo
+        : undefined
       return {
         ...t,
-        // The declaration's JSON Schema is dropped: a tool declares its
-        // arguments once, and here that is the Zod above. Declaring both is
-        // refused outright (@yaks/vocab `validateToolInput`), and rightly.
-        inputSchema: undefined,
-        input: writing(vocab, prop, said),
-        // How a caller undoes a delete on this server, in its own words,
-        // appended to the write's description — because that is where an agent
-        // reads it at the moment it is deciding whether to risk the write.
-        ...(opts.undo ? { description: `${t.description} ${opts.undo}` } : {}),
+        ...(added ? { description: `${t.description} ${added}` } : {}),
+        inputSchema: {
+          ...said,
+          properties: { ...scope, ...said.properties },
+          ...(required.length ? { required } : {}),
+        },
       }
     })
-}

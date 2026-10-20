@@ -931,10 +931,8 @@ test(
       assertEquals(own.entity.eid, box)
       assertEquals(own.recipe, { title: 'Pancakes', serves: 4 })
       // A property the manifest never named is still a typo, not a new word.
-      // The write schema describes the vocabulary (T-34153) and stays open, so
-      // a client's cached copy cannot refuse a word deployed since it
-      // connected (T-34277) — the server refuses this, naming the property, the
-      // properties that do exist, and where to read them.
+      // The server refuses it, naming the property, the properties that do
+      // exist, and where to read them (T-34277).
       let typo = (await assertRejects(
         () =>
           agent.tool('graph_apply', {

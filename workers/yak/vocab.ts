@@ -161,19 +161,6 @@ export let appDerived = (vocab: Vocab, reading: Derived = {}): Derived => ({
   ...builds(vocab),
 })
 
-let shapeOf = (s: PropSchema): string =>
-  s.enum ? s.enum.join('|') : String(s.type ?? '?')
-/** The platform's properties shaped otherwise than an app store's. */
-export let platformApart = once((): string[] => {
-  let app = storeWords('app').vocab
-  return platformDocs().flatMap((doc) => Object.entries(doc.$defs ?? {}))
-    .flatMap(([name, mine]) => {
-      let theirs = app.def(name)?.properties
-      return Object.entries(mine.properties ?? {}).filter(([prop, s]) =>
-        theirs?.[prop] && shapeOf(theirs[prop]) != shapeOf(s)
-      ).map(([prop]) => `${name}.${prop}`)
-    })
-})
 export let componentsOf = (docs: VocabDoc[]): string[] =>
   docs.filter((d) => d.reserved !== false).flatMap((d) =>
     Object.entries(d.$defs ?? {}).filter(([, e]) =>

@@ -9,7 +9,7 @@ import { local } from './local.ts'
 
 let schemas = async () => {
   let h = await harness()
-  let table = core({ vocab: h.vocab, depth: 'names' })
+  let table = core({ vocab: h.vocab })
     .map((t) => [t.name, inputSchemaOf(t)] as const)
   h.close()
   return new Map(table)

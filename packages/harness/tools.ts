@@ -11,9 +11,9 @@ import { type Blobs, valueTools } from '@yaks/blob'
 // Both halves already exist — ./machine.ts declares the machine tools over
 // whatever machine the host lends, @yaks/mcp declares the generic graph tools —
 // and the only
-// thing between them is a difference of format. A graph tool declares its
-// arguments as a Zod schema, because that is what the MCP SDK takes; a model
-// wants JSON Schema. So this file is one adapter: `graphTools` declares each
+// thing between them is a difference of format. A graph tool may declare its
+// arguments as a Zod schema, which the MCP SDK takes; a model wants JSON
+// Schema. So this file is one adapter: `graphTools` declares each
 // tool with its arguments as JSON Schema, writes a call entity for each call
 // and records what it returned.
 //
@@ -30,7 +30,7 @@ import { type Blobs, valueTools } from '@yaks/blob'
 
 import { machines, type SessionMachines } from './session_machines.ts'
 import type { Entity, Graph, Tool as GraphTool } from '@yaks/graph'
-import { core, type Depth, inputSchemaOf } from '@yaks/mcp/tools'
+import { core, inputSchemaOf } from '@yaks/mcp/tools'
 import { workspaceTools } from '@yaks/machine/tools'
 import { sessionHome, type Workspaces } from '@yaks/machine/targets'
 import {
@@ -50,13 +50,12 @@ export let graphTools = (
   g: Graph,
   opts: {
     actor?: Entity | null
-    depth?: Depth
     reply?: Reply
     tools?: GraphTool[]
   } = {},
 ): Tool[] => {
   let tier = opts.tools ??
-    core({ vocab: g.vocab, depth: opts.depth ?? 'names' })
+    core({ vocab: g.vocab })
   // A runner: these calls are this agent's own, and `call()` runs them here.
   // Nothing sweeps a queue from inside an agent — a call somebody else wrote
   // is for whoever works the effects to notice, by handling the same rules.
@@ -110,7 +109,6 @@ export let harnessTools = (
   opts:
     & {
       cwd?: string
-      depth?: Depth
       /** where artifacts' bytes are kept (the harness's `artifacts`) */
       artifacts?: Blobs
       /** the root a task child's checkout is cut under */
@@ -201,7 +199,7 @@ export let harnessTools = (
       },
     },
     ...artifactTools(g, opts),
-    ...graphTools(g, { depth: opts.depth, reply: opts.reply }).filter((t) =>
+    ...graphTools(g, { reply: opts.reply }).filter((t) =>
       t.name != 'session_home'
     ),
     ...valueTools(async (entity) =>

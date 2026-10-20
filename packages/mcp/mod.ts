@@ -28,10 +28,10 @@
  * themselves as `structuredContent`. Every tool declares the same output schema
  * for those bundles ({@link answerSchema}) — the generic bundle answer, not a
  * shape derived from the vocabulary, since a typed bundle per tool would send
- * the whole vocabulary over and over in one `tools/list`. The schema that is
- * derived from the vocabulary is `graph_apply`'s input ({@link bundleSchema}).
- * `graph_schema` is the one answer that is not entities: its structured
- * content is a vocabulary document, and its output schema the meta-schema.
+ * the whole vocabulary over and over in one `tools/list`. `graph_apply` takes
+ * the generic bundle too, and `graph_schema` is where the vocabulary is read.
+ * It is the one answer that is not entities: its structured content is a
+ * vocabulary document, and its output schema the meta-schema.
  *
  * ## A call is an entity
  * An MCP `tools/call` does not call a function directly. It writes a
@@ -99,7 +99,6 @@ export {
   type Search,
   shapeOf,
 } from './tools.ts'
-export { type BundleOpts, bundleSchema, type Depth } from './schema.ts'
 // The vocabulary described belongs to @yaks/graph — `graph_schema` builds its
 // answer there — and a server that passes `guide` imports its type from the
 // same place.

@@ -270,10 +270,9 @@ its own entity carrying the parent's eid in `comment.target`.
 ## What a refusal tells you
 
 `graph_schema` reports the vocabulary: every component, its properties and their
-types, for the app or the space you name. `graph_apply`'s input schema is that
-vocabulary too, and it is deliberately open: a property your cached copy of the
-schema has never heard of still reaches the store, and a property nobody
-declared is refused there. The schema describes; the server decides.
+types, for the app or the space you name. `graph_apply`'s input schema is the
+generic bundle, `{entity: {eid}}` and any components, so the store is what
+refuses a property nobody declared.
 
 Name a property that is not there, in a write or in a query, and the refusal
 lists the whole component, with each property's type as its schema declared it —

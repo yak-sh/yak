@@ -48,8 +48,7 @@ import { parse, stringify, tokens } from '@yaks/query'
 import { addressed, wordish } from '@yaks/alias'
 import { barred, openly } from './anon.ts'
 import type { Search } from '@yaks/mcp'
-import type { Prop, PropSchema, Vocab } from '@yaks/vocab'
-import { META } from './directory.ts'
+import type { PropSchema, Vocab } from '@yaks/vocab'
 import { clock } from './timing.ts'
 import { letters } from './letters.ts'
 import { packageTools } from './package-tools.ts'
@@ -64,7 +63,7 @@ import {
   TOOLS,
 } from './tools.ts'
 import { ceiling, serve, unseenBlock } from './unseen.ts'
-import { appVocab, packagesOf, platformApart, wordOf } from './vocab.ts'
+import { appVocab, packagesOf } from './vocab.ts'
 import { bare, joined, lined } from './wire.ts'
 import { apex, type Host, hosted } from './host.ts'
 import { refuse, unavailable } from './tool.ts'
@@ -460,34 +459,15 @@ let held = (
 }
 
 // Every reachable app's `vocab.json`, merged over the core documents. First
-// declaration wins, which is where a word lives (T-32728), so the schema an
-// agent is handed says each property the way the store that owns it does.
-//
-// It also says which properties the reach cannot agree on: two spaces may spell
-// one word differently (mcp_publish_test.ts "a word two spaces spell
-// differently stays two words"), and the merged vocabulary keeps one of the two. A schema
-// derived from it would then refuse a write the other store takes, so those
-// properties are named here and typed nowhere (`reading` below).
-//
-// The directory is the other side of that same disagreement, and it is not an
-// app: it answers no `/vocab`, and the words it holds are the platform's own
-// (vocab.ts `platformDocs`), composed from its package and Worker documents.
-// One of them — `member.role` — both sides spell and mean
-// differently: the platform's roster is its access ladder
-// (`owner|editor|viewer`, read space-wide by apps.ts), while @yaks/member
-// keeps belonging (`owner|member`) apart from access, which it expresses as a
-// grant or the app's mode. Typed as the package's, the door refused a seat the
-// directory itself takes (T-34273).
-//
-// It is never in the default reach — `dir.spaces` leaves the meta space out,
-// so a person who owns `yak` still means their own space when they name none
-// — yet a batch may be aimed at it by name (`$app: yak/platform`, `named`
-// below). So the question is who may address it, which is who holds a seat in
-// the meta space, and that is the same question `named` asks.
-let spoken = async (
-  ctx: Ctx,
-  reach: Reach[],
-): Promise<{ vocab: Vocab; clashes: Set<string> }> => {
+// declaration wins, which is where a word lives (T-32728): two apps in two
+// spaces may each home one word, and then one name means two things (reach.ts
+// `apartIn`), and the first declarer is the word here, the same rule the
+// space's own union loads by. The platform declares first: an app that held a
+// word before the platform said it keeps it in its own store (vocab.ts
+// `beneath`), and here the word is the platform's. Each store still decides
+// what it takes: a write routes each component to the store that declares it
+// (reach.ts `written`).
+let spoken = async (ctx: Ctx, reach: Reach[]): Promise<Vocab> => {
   // Each store's words as the document it keeps, read once per request
   // (reach.ts `vocabAt`): the roster already asked for them (standing.ts
   // `kindsOf`).
@@ -495,73 +475,17 @@ let spoken = async (
     reach.map((r) => vocabAt(ctx.env, r.space, r.app)),
   )
   let defs: Record<string, PropSchema> = {}
-  let clashes = new Set<string>()
   let core = appVocab()
   for (let one of said) {
     for (let [name, schema] of Object.entries(one.$defs ?? {})) {
-      let mine = defs[name] ?? core.def(name)
-      if (!mine) {
-        defs[name] = schema
-        continue
-      }
-      // Two apps in two spaces may each home one word, and then one name
-      // means two things (reach.ts `apartIn`). The first declarer is the word
-      // here — the same rule the space's own union loads by — and a property
-      // they spell differently is typed nowhere (`reading` below). The
-      // platform declares first: an app that held a word before the platform
-      // said it keeps it in its own store (vocab.ts `beneath`), and here the
-      // word is the platform's.
-      //
-      // Inside one space there is nothing to merge: a word has one home, and
-      // a property a borrower declared was planted on the home's manifest by
-      // the deploy that brought it (tools.ts `released`), so the home's
-      // document already says every property the word has.
-      for (let [prop, s] of Object.entries(schema.properties ?? {})) {
-        let had = mine.properties?.[prop]
-        if (had && wordOf(had) != wordOf(s)) clashes.add(`${name}.${prop}`)
-      }
+      if (!defs[name] && !core.def(name)) defs[name] = schema
     }
-  }
-  let seats = await ctx.dir.seated(ctx.person)
-  if (seats.some((s) => s.space.slug == META.space)) {
-    for (let prop of platformApart()) clashes.add(prop)
   }
   // And the words their `"platform"` dependencies lend (vocab.ts `lent`),
   // beneath every app's own.
   let packages = [...new Set(said.flatMap(packagesOf))].sort()
-  return {
-    vocab: appVocab({ $defs: defs, ...packages.length ? { packages } : {} }),
-    clashes,
-  }
+  return appVocab({ $defs: defs, ...packages.length ? { packages } : {} })
 }
-
-/**
- * How this door's properties read and write, where that is not what the
- * vocabulary declares (@yaks/mcp `BundleOpts.prop`):
- *
- * - a reference reads back as the eid or as `{eid, name}`, because outputs
- *   speak human (graph.ts `#speak`); a write takes the id;
- * - a property two reachable apps spell differently is typed nowhere, since the
- *   store that owns the word is the one that decides.
- */
-export let reading = (clashes: Set<string>): Reader => {
-  let key = [...clashes].sort().join('\n')
-  let held = readers.get(key)
-  if (held) return held
-  let made: Reader = (p, o) =>
-    clashes.has(`${p.comp}.${p.prop}`)
-      ? z.unknown()
-      : p.category == 'ref' && !o.write
-      ? z.union([z.string(), z.object({ eid: z.string() }).passthrough()])
-      : undefined
-  readers.set(key, made)
-  if (readers.size > 64) readers.delete(readers.keys().next().value!)
-  return made
-}
-type Reader = (p: Prop, o: { write?: boolean }) => z.ZodTypeAny | undefined
-// One reader per set of clashes, so the tool schemas @yaks/mcp derives through
-// it are made once for each vocabulary rather than on every request.
-let readers = new Map<string, Reader>()
 
 // The batch as applied, as `graph_apply` promises it: one bundle per entity,
 // each minted under an alias carrying the name the batch called it by — which
@@ -652,9 +576,7 @@ export let renewing =
 
 /**
  * The caller's reach as one graph: every app they can read, asked together and
- * answered as one bundle per entity, with the platform's tools on it — and
- * beside it how a property of this graph reads and writes ({@link reading}),
- * which the schema an agent is handed is derived through.
+ * answered as one bundle per entity, with the platform's tools on it.
  *
  * A write routes each component to the app that declares it (reach.ts
  * `written`), which is what an entity spanning apps means — so `graph_apply`
@@ -663,8 +585,8 @@ export let renewing =
 export let reaching = async (
   ctx: Ctx,
   reach: Reach[],
-): Promise<{ graph: Graph; prop: ReturnType<typeof reading> }> => {
-  let { vocab, clashes } = await spoken(ctx, reach)
+): Promise<Graph> => {
+  let vocab = await spoken(ctx, reach)
   let fresh = renewing(ctx, reach)
   let storage = held(ctx, reach, fresh)
   // The post room is a person's own mailbox work (letters.ts), and it is
@@ -719,5 +641,5 @@ export let reaching = async (
     apply: writing,
     admit: (bundles, opts) => writing(bundles, { ...opts, check: true }),
   }
-  return { graph: self, prop: reading(clashes) }
+  return self
 }

@@ -395,28 +395,15 @@ let door = async (ctx: Ctx, session: string) => {
   // call reads no app's notes and no space's memories.
   let stood = standing(ctx, reach)
   ctx.standing = stood.notes
-  // The graph, and how a property of it reads and writes: a reference reads
-  // back in human form, and a component two of the caller's spaces declare
-  // differently is given no type at all (agent.ts `reading`). The schemas in
-  // the tool list are derived through it, so they describe what this server
-  // actually accepts and returns. A store's vocabulary is read once per
+  // The caller's reach as one graph. A store's vocabulary is read once per
   // request (hops.ts `recall`), and the roster reads the same declarations.
-  let { graph, prop } = await c.time('reaching', () => reaching(ctx, reach))
+  let graph = await c.time('reaching', () => reaching(ctx, reach))
   let opts = {
     graph,
     // Where the call about to be served is recorded (ledger.ts): its own
     // in-memory graph, because the one above is a composition over other
     // people's stores and a question is not their data.
     calls: ledger(graph),
-    prop,
-    // A read's schema is left at property names here, while the write tools are
-    // typed in full (@yaks/mcp, T-34153). Measured over a space of three apps:
-    // the typed write tools cost 9 KB of tool list, and typing the four read
-    // schemas as well costs 33 KB more. The types are what a write needs — a
-    // read hands over the values themselves — and this connector's vocabulary
-    // is a union of every store in reach, so those 33 KB are the least exact
-    // part of it, paid on every connection.
-    schema: 'names' as const,
     // And where a component is documented at length, so graph_schema hands
     // over the page beside the properties (guide.ts `pageFor`).
     guide: (comp: string) => pageFor(comp, ctx.env),
@@ -549,12 +536,10 @@ let stranger = async (
       return erred(rpc.id, err)
     }
   }
-  let { graph, prop } = await reaching(ctx, reach)
+  let graph = await reaching(ctx, reach)
   let opts = {
     graph,
     calls: ledger(graph),
-    prop,
-    schema: 'names' as const,
     guide: (comp: string) => pageFor(comp, env),
     search: searching(ctx, reach),
     // Every tool, and what each one declares about signing in (anon.ts

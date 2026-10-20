@@ -1,7 +1,8 @@
 /// <reference lib="deno.ns" />
-// The two schemas a client receives. The write door's input is the vocabulary:
-// every component, every writable property and every type, before an agent
-// guesses at one (T-34153). Every tool whose answer is entities answers the
+// The two schemas a client receives. The write door's input is the generic
+// bundle, whatever the vocabulary, and a client that checks a call against it
+// must pass every bundle the server takes. Every tool whose answer is entities
+// answers the
 // one bundle shape (server.ts `answerSchema`), listed on all of them, and a
 // host holds us to it — it compiles the schema off `tools/list` and refuses a
 // reply that does not match — so the answers are checked here against the
@@ -20,18 +21,8 @@ import {
 } from '@modelcontextprotocol/client'
 import { createMcpHandler } from '@modelcontextprotocol/server'
 import { server } from './server.ts'
-import { connect, pinned, shopGraph } from './testing.ts'
-
-// graph_apply's published input schema — the write door as a client reads it.
-let writing = async () => {
-  let client = await connect()
-  let { tools } = await client.listTools()
-  let tool = tools.find((t: { name: string }) => t.name == 'graph_apply')
-  await client.close()
-  return tool!.inputSchema as {
-    properties: { bundles: { items: Record<string, unknown> } }
-  }
-}
+import { core, inputSchemaOf } from './tools.ts'
+import { connect, pinned, shop, shopGraph } from './testing.ts'
 
 let at = (o: unknown, ...keys: string[]): unknown =>
   keys.reduce(
@@ -128,66 +119,18 @@ let door = (schema: unknown) => {
     check({ bundles: [{ entity: { eid: '$b' }, ...bundle }] }).valid
 }
 
-test('graph_apply takes the vocabulary, typed and described', async () => {
-  let schema = await writing()
-  let book = at(schema, 'properties', 'bundles', 'items', 'properties', 'book')
-  let props = at(book, 'properties')
-  assertEquals(Object.keys(props as object), ['price', 'status', 'author'])
-  assertEquals(at(props, 'price', 'description'), 'what it costs, in pounds')
-  let ok = door(schema)
+// graph_apply's published input schema, compiled as the file loads.
+let ok = door(
+  inputSchemaOf(core({ vocab: shop }).find((t) => t.name == 'graph_apply')!),
+)
+
+test('a client checking a write against graph_apply passes what the server takes', () => {
   assertEquals(ok({ book: { price: 9, status: 'sold' } }), true)
-  assertEquals(ok({ book: { price: 'nine' } }), false)
-  assertEquals(ok({ book: { status: 'lost' } }), false)
-  // A null property is cleared and a null component removed.
-  assertEquals(ok({ book: { price: null, status: null } }), true)
-  assertEquals(ok({ book: null }), true)
-  // The two sugars a batch may say beside its components, and the entity.
+  assertEquals(ok({ book: { price: null }, doc: null }), true)
   assertEquals(ok({ $delete: true, $was: { book: { price: null } } }), true)
-  assertEquals(ok({ $delete: 'yes' }), false)
-  assertEquals(ok({ entity: {} }), false)
-})
-
-// A host whose door takes a property differently than the vocabulary declares
-// says so once, and the write schema is derived through it — yaks.app takes an
-// id for a reference (agent.ts `reading`).
-test('a host states its own reading of a property on the write door', async () => {
-  let client = await connect({
-    prop: (prop, o) =>
-      prop.category == 'ref' && !o.write
-        ? z.object({ eid: z.string() }).passthrough()
-        : undefined,
-  })
-  let { tools } = await client.listTools()
-  let schema = tools.find((t: { name: string }) => t.name == 'graph_apply')
-    ?.inputSchema
-  await client.close()
-  let author = at(
-    schema,
-    'properties',
-    'bundles',
-    'items',
-    'properties',
-    'book',
-    'properties',
-    'author',
-  )
-  assertEquals(at(author, 'type'), ['string', 'null'])
-})
-
-test('the write door names its own words, and stays open to newer ones', async () => {
-  let schema = await writing()
-  let items = at(schema, 'properties', 'bundles', 'items', 'properties')
-  // `created.at` and `created.by` are the server's own, so nothing invites a
-  // client to write one, and one that read a bundle and sent it back is not
-  // refused by its own copy of this schema for the stamps riding along.
-  assertEquals(at(items, 'created', 'properties'), undefined)
-  let ok = door(schema)
-  assertEquals(ok({ created: { at: '2026-10-12', by: 'm1' } }), true)
-  // And each component is open (T-34277): a client caches this schema with the
-  // tool list it came in and the vocabulary grows under it, so a closed one
-  // would have that stale copy refuse a property that now exists. The schema
-  // describes; the server decides, and says which properties are declared.
-  assertEquals(ok({ book: { pages: 300 } }), true)
+  // The server's stamps riding back on a bundle a client read, and a word
+  // declared after the client listed the tools.
+  assertEquals(ok({ created: { at: '2026-10-12' }, later: { x: 1 } }), true)
 })
 
 test('a JSON Schema input declaration reaches the listing unchanged', async () => {
