@@ -2,7 +2,8 @@
 // One-time: take out of the journal what its vocabulary now keeps out of it
 // (`journal: false`), the history of plumbing rather than of anyone's data.
 //
-//   deno run -A bin/migrate-journal-plumbing.ts <db> [--dry] [--batch=N] [--rest=ms]
+//   deno run -A bin/migrate-journal-plumbing.ts <db> [--dry] [--batch=N]
+//     [--rest=ms] [--sets=<file>] [--from=<change id>]
 //
 // Deleted, change by change, with each change's fields:
 // - every change to a component every package's vocabulary declares
@@ -78,33 +79,42 @@ say('off', off.length, 'relations', relations.join(','))
 let before = count()
 say('before', before)
 
-db.exec('create temp table off (name text primary key)')
-db.exec('create temp table relation (name text primary key)')
-for (let name of off) db.prepare('insert into off values (?)').run(name)
-for (let name of relations) {
-  db.prepare('insert into relation values (?)').run(name)
-}
 // Links whose relation is kept out, and entities whose recorded history is
-// only plumbing: read once, before anything is deleted.
-db.exec(`create temp table links (entity integer primary key)`)
-db.exec(`insert into links select distinct entity from journal_change
-  where component in (select name from relation)`)
-say('links', one('select count(*) n from temp.links').n)
-db.exec(`create temp table plumb (entity integer primary key)`)
-db.exec(`insert into plumb select entity from journal_change
-  group by entity
-  having sum(component in (select name from off)
-      or (component = 'edge' and entity in (select entity from links))) > 0
-    and sum(component not in (select name from off) and component != 'entity'
-      and not (component = 'edge' and entity in (select entity from links))) = 0`)
-say('plumbing entities', one('select count(*) n from temp.plumb').n)
+// only plumbing: read once, before anything is deleted, and kept in a file
+// beside the run (`--sets=<path>`), so a run that stops resumes (`--from=<id>`)
+// with the sets as they stood before it deleted anything.
+let sets = Deno.args.find((a) => a.startsWith('--sets='))?.slice(7)
+if (!sets) throw new Error('--sets=<file> names where the sets are kept')
+db.exec(`attach '${sets}' as sets`)
+if (!one(`select count(*) n from sets.sqlite_schema where name = 'plumb'`).n) {
+  db.exec('create table sets.off (name text primary key)')
+  db.exec('create table sets.relation (name text primary key)')
+  for (let name of off) db.prepare('insert into sets.off values (?)').run(name)
+  for (let name of relations) {
+    db.prepare('insert into sets.relation values (?)').run(name)
+  }
+  db.exec(`create table sets.links (entity integer primary key)`)
+  db.exec(`insert into sets.links select distinct entity from journal_change
+    where component in (select name from sets.relation)`)
+  db.exec(`create table sets.plumb (entity integer primary key)`)
+  db.exec(`insert into sets.plumb select entity from journal_change
+    group by entity
+    having sum(component in (select name from sets.off)
+        or (component = 'edge' and entity in (select entity from sets.links))) > 0
+      and sum(component not in (select name from sets.off)
+        and component != 'entity'
+        and not (component = 'edge' and entity in (select entity from sets.links))) = 0`)
+}
+say('links', one('select count(*) n from sets.links').n)
+say('plumbing entities', one('select count(*) n from sets.plumb').n)
 
 // The unary `+` keeps the batch's id range driving the scan: left to it, the
 // planner answers the OR by probing journal_change once per row of `links`
 // and `plumb` (millions), every batch, under the write lock.
-let doomed = `(+component in (select name from off)
-  or (+component = 'edge' and +entity in (select entity from links))
-  or (+component = 'entity' and +entity in (select entity from plumb)))`
+let doomed = `(+component in (select name from sets.off)
+  or (+component = 'edge' and +entity in (select entity from sets.links))
+  or (+component = 'entity' and +entity in (select entity from sets.plumb)))`
+let from = flag('from', 0)
 let tip = one('select max(id) n from journal_change').n ?? 0
 let txTip = one('select max(id) n from journal_tx').n ?? 0
 
@@ -125,34 +135,49 @@ let changes = db.prepare(
   `delete from journal_change where id > ? and id <= ? and ${doomed}`,
 )
 let gone = { change: 0, field: 0, tx: 0 }
-// The longest any batch held the write lock, in ms.
+// The longest any batch held the write lock, in ms, from taking it.
 let held = 0
-let locked = (work: () => void) => {
-  let t = performance.now()
-  db.exec('begin immediate')
-  work()
-  db.exec('commit')
-  held = Math.max(held, Math.round(performance.now() - t))
-  // A batch that held the lock this long would stall the live writers: stop.
-  if (held > 2000) throw new Error(`a batch held the write lock ${held}ms`)
+// Each batch spans as many ids as keep its hold near TARGET ms, halving after
+// a long one and doubling after a short one, and the run rests at least as
+// long as it held, so the live writers have the lock most of the time.
+let TARGET = 250
+let pass = async (
+  label: string,
+  start: number,
+  end: number,
+  work: (lo: number, hi: number) => void,
+) => {
+  let span = batch
+  let said = 0
+  for (let lo = start; lo < end;) {
+    let hi = Math.min(lo + span, end)
+    db.exec('begin immediate')
+    let t = performance.now()
+    work(lo, hi)
+    db.exec('commit')
+    let ms = Math.round(performance.now() - t)
+    held = Math.max(held, ms)
+    // A batch that held the lock this long would stall the live writers: stop.
+    if (ms > 5000) throw new Error(`a batch held the write lock ${ms}ms`)
+    span = ms > TARGET * 2
+      ? Math.max(200, span >> 1)
+      : ms < TARGET / 2
+      ? Math.min(batch * 10, span * 2)
+      : span
+    lo = hi
+    if (++said % 500 == 0) say(label, hi, gone, { held, span })
+    await sleep(Math.max(rest, ms))
+  }
 }
-for (let lo = 0; lo < tip; lo += batch) {
-  let hi = Math.min(lo + batch, tip)
-  locked(() => {
-    gone.field += Number(fields.run(lo, hi).changes)
-    gone.change += Number(changes.run(lo, hi).changes)
-  })
-  if ((lo / batch) % 100 == 0) say('changes through', hi, gone, { held })
-  await sleep(rest)
-}
+await pass('changes through', from, tip, (lo, hi) => {
+  gone.field += Number(fields.run(lo, hi).changes)
+  gone.change += Number(changes.run(lo, hi).changes)
+})
 let empty = db.prepare(`delete from journal_tx where id > ? and id <= ?
   and not exists (select 1 from journal_change c where c.tx = journal_tx.id)`)
-for (let lo = 0; lo < txTip; lo += batch) {
-  let hi = Math.min(lo + batch, txTip)
-  locked(() => gone.tx += Number(empty.run(lo, hi).changes))
-  if ((lo / batch) % 100 == 0) say('transactions through', hi, gone, { held })
-  await sleep(rest)
-}
+await pass('transactions through', 0, txTip, (lo, hi) => {
+  gone.tx += Number(empty.run(lo, hi).changes)
+})
 let after = count()
 say('deleted', gone, { held })
 say('after', after)
