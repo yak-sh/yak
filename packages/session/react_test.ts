@@ -2158,6 +2158,61 @@ test('an anchored continuation includes a tool final committed during its preced
   }, { kind: 'assistant', text: 'held reply' }])
 })
 
+// An async call's Pending travels only where an earlier request sent it: that
+// request's boundary reached the Pending before its final had landed.
+let resend = async (boundary: string) => {
+  let g = world()
+  await g.apply([
+    {
+      entity: { eid: 'fast-ask' },
+      entry: { session: ids.s },
+      ask: { to: ids.m, through: 'e1' },
+    },
+    {
+      entity: { eid: 'fast-call' },
+      entry: { session: ids.s },
+      call: { to: ids.t, id: 'fast-c1', args: {}, source: 'fast-ask' },
+      tool_async: {},
+    },
+    {
+      entity: { eid: 'fast-progress' },
+      entry: { session: ids.s },
+      tool_progress: { call: 'fast-call' },
+      content: { body: 'Pending.' },
+    },
+    {
+      entity: { eid: 'fast-final' },
+      entry: { session: ids.s },
+      result: { call: 'fast-call' },
+      content: { body: 'FAST' },
+    },
+    {
+      entity: { eid: 'fast-next' },
+      entry: { session: ids.s },
+      ask: { to: ids.m, through: boundary },
+    },
+    {
+      entity: { eid: 'fast-seen' },
+      entry: { session: ids.s },
+      output: { source: 'fast-next' },
+      content: { body: 'seen' },
+    },
+  ], { trusted: true })
+  await appendEntry(g, ids.s, 'And now?')
+  let next = scripted([says('fast-r3', 'ok')], false)
+  await react(g, ids.s, { model: next.model, tools: [echo], asyncTools: true })
+  return next.asked[0].items.flatMap((item) =>
+    item.kind == 'result' ? [item.output] : []
+  )
+}
+let pendingSent = await resend('fast-progress')
+let finalFirst = await resend('fast-final')
+
+test('a Pending is resent only when an earlier request sent it', () => {
+  assertEquals(pendingSent, ['Pending.'])
+  assertEquals(finalFirst, ['FAST'])
+})
+
 const pendingSession = world()
 const pendingModel = scripted([
   calls(['pending-c1', 'hi']),

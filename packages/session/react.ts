@@ -351,19 +351,28 @@ export let project = (
   // after its frozen boundary, then append the unsent updates. Never move or
   // replace a previously submitted running result: the next full-context
   // request must extend the previous request + response byte-for-byte.
-  let through = Math.max(
-    0,
-    ...transcript.filter((b) => b.ask).map((b) =>
-      seqOf(byId.get(String(comp(b, ASK)?.through)) ?? b)
-    ),
+  let bounds = transcript.filter((b) => b.ask).map((b) =>
+    seqOf(byId.get(String(comp(b, ASK)?.through)) ?? b)
   )
   let finals = new Set(
     window.flatMap((b) => b.result ? [String(comp(b, RESULT)?.call)] : []),
   )
-  // A fast tool needs only its final answer. Keep Pending once a previous
-  // request sent it: that immutable prefix cannot be rewritten afterwards.
+  let landed = new Map(
+    transcript.flatMap((b) =>
+      b.result ? [[String(comp(b, RESULT)?.call), seqOf(b)]] : []
+    ),
+  )
+  // A fast tool needs only its final answer. A request sent a Pending when its
+  // boundary reached the Pending but not yet its final; one that reached both
+  // sent the final alone. Keep a sent Pending: that immutable prefix cannot be
+  // rewritten afterwards, and a Pending no request sent is never sent late.
+  let sent = (progress: Bundle) => {
+    let final = landed.get(String(comp(progress, 'tool_progress')?.call)) ??
+      Infinity
+    return bounds.some((t) => seqOf(progress) <= t && t < final)
+  }
   let logical = window.filter((b) =>
-    !b.tool_progress || seqOf(b) <= through ||
+    !b.tool_progress || sent(b) ||
     !finals.has(String(comp(b, 'tool_progress')?.call))
   )
   for (const ask of ordered(transcript).filter((b) => b.ask)) {
@@ -425,7 +434,7 @@ export let project = (
         opts.resultUpdatesAsUser && b.result &&
         transcript.some((v) =>
           comp(v, 'tool_progress')?.call == eid && seqOf(v) < seqOf(b) &&
-          seqOf(v) <= through
+          sent(v)
         )
       ) {
         out.push({ kind: 'user', text: `Tool ${id} completed:\n${output}` })
