@@ -45,8 +45,17 @@ import { feed } from './bus.ts'
 import { SESSION } from './comp.ts'
 import { claude, codexRollout, subagent } from './readers.ts'
 import { reapLeases } from './reap.ts'
-import { behind, callOf, logOf, pull, type Tail, tail } from './tail.ts'
+import {
+  behind,
+  callOf,
+  logOf,
+  pull,
+  recount,
+  type Tail,
+  tail,
+} from './tail.ts'
 import { sessionEid, sessionFor } from './who.ts'
+import { step, walker } from './parts.ts'
 import { archive } from './archive.ts'
 import {
   claudeProjects,
@@ -531,4 +540,100 @@ export let service = async (
   } finally {
     await Promise.all([...seen.tails.values()].map((t) => t?.stream?.close()))
   }
+}
+
+/**
+ * Read every transcript written since `since` again for its model requests
+ * (./tail.ts `recount`), and walk the graph's own sessions for theirs: what
+ * was written before requests were read and measured. A transcript the duty
+ * has not read yet is left to it, and a managed run's is @yaks/spawn's
+ * (`recounted` there). Answers how many requests it measured.
+ *
+ * ```ts
+ * import { recounted } from '@yaks/session/service'
+ *
+ * // await recounted(graph, '2026-10-13')
+ * ```
+ */
+export let recounted = async (
+  g: Graph,
+  since: string,
+  o: Options & { signal?: AbortSignal } = {},
+): Promise<number> => {
+  let after = Date.parse(since)
+  let found = [
+    ...transcripts(o.transcripts ?? claudeProjects() ?? ''),
+    ...rollouts(o.codex ?? codexSessions() ?? ''),
+  ].filter((f) =>
+    !f.path.endsWith('.zst') &&
+    (stat(f.path)?.mtime?.getTime() ?? 0) >= after
+  )
+  let wrote = 0
+  for (let f of found) {
+    if (o.signal?.aborted) break
+    let [log] = await g.get([logOf(f.path)])
+    let session = (log?.log as Comp | undefined)?.session
+    if (!session || log![TOMBSTONE] != null) continue
+    if (await managed(g, String(session))) continue
+    let [s] = await g.get([String(session)], [SESSION])
+    if (f.runner == 'codex') {
+      let source = header(f.path).source as {
+        subagent?: { thread_spawn?: { parent_thread_id?: string } }
+      } | undefined
+      f.parent = source?.subagent?.thread_spawn?.parent_thread_id
+    }
+    let operator = (s?.[SESSION] as Comp | undefined)?.operator as
+      | boolean
+      | undefined
+    wrote += await recount(
+      g,
+      f.path,
+      format(f, { operator } as Tail),
+      { session: String(session), signal: o.signal },
+    )
+  }
+  return wrote + await natives(g, since, o.signal)
+}
+
+// What each request of the graph's own sessions carried (./parts.ts), walked
+// from their entries as the graph holds them, for the requests written before
+// the runner recorded it at send time (./react.ts). Their fixed part never
+// reached the graph, so it is sized from each session's first request.
+let natives = async (
+  g: Graph,
+  since: string,
+  signal?: AbortSignal,
+): Promise<number> => {
+  let owed = await g.rows(
+    `.ask .usage !imported !context_parts .created.at>=${
+      JSON.stringify(since)
+    } .fields=entry.session`,
+  ) as { 'entry.session'?: Eid }[]
+  let sessions = [...new Set(owed.map((r) => r['entry.session']))]
+    .filter((s): s is Eid => !!s)
+  let names = new Map(
+    (await g.read('.tool *')).map((b) => [
+      b.entity.eid,
+      String((b.tool as Comp).name),
+    ]),
+  )
+  let wrote = 0
+  for (let session of sessions) {
+    if (signal?.aborted) break
+    let w = walker({ names })
+    let [held] = await g.get([session], ['fixed'])
+    let bundles: Bundle[] = []
+    for (
+      let b of await g.read(`.entry.session=${session} .order=entry.seq *`)
+    ) {
+      let made = step(w, b)
+      if (!b.usage || b.context_parts) continue
+      bundles.push(...made.filter((m) => !m.fixed || !held?.fixed))
+    }
+    for (let i = 0; i < bundles.length; i += BATCH) {
+      await g.apply(bundles.slice(i, i + BATCH), { trusted: true })
+    }
+    wrote += bundles.filter((b) => b.context_parts).length
+  }
+  return wrote
 }

@@ -77,15 +77,16 @@ test('the log becomes the transcript: one entry per line that says something', a
   try {
     await follow(g, 'S1', claude.read, { dir })
     let said = await entries(g)
-    // The request, the model request it made with what that used, what it
-    // said, and the ending — the line that was not JSON is left in the file.
+    // The request, what it said, the model request that said it with what
+    // that used, and the ending — the line that was not JSON is left in the
+    // file.
     assertEquals(said.length, 4)
-    assertEquals(comp(said[1], 'usage').output_tokens, 3)
-    assertEquals(comp(said[2], 'content').body, 'hi')
+    assertEquals(comp(said[1], 'content').body, 'hi')
     // Everything a provider prints is output, and the run is the session.
-    assertEquals(comp(said[2], 'output').source, 'S1')
-    assertEquals(comp(said[2], 'imported').line, 2)
-    assertEquals(comp(said[2], 'imported').source, `${dir}/S1.out`)
+    assertEquals(comp(said[1], 'output').source, 'S1')
+    assertEquals(comp(said[1], 'imported').line, 2)
+    assertEquals(comp(said[1], 'imported').source, `${dir}/S1.out`)
+    assertEquals(comp(said[2], 'usage').output_tokens, 3)
     assertEquals(comp(said[3], 'stop'), {})
     // The line that says what the provider calls its own thread patches the
     // session rather than becoming an entry.

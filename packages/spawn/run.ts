@@ -59,7 +59,7 @@ import {
   sessionEnv,
   unanswered,
 } from '@yaks/session'
-import { pull, type Tail, tail } from '@yaks/session/tail'
+import { pull, recount, type Tail, tail } from '@yaks/session/tail'
 import {
   clean,
   EXIT,
@@ -649,4 +649,45 @@ export let down = async (
     await sleep(o.poll ?? 250)
   }
   await signal(session, pid, 'KILL', o)
+}
+
+/**
+ * Read the log of every run written since `since` again for its model
+ * requests (@yaks/session/tail `recount`): the requests and what each one
+ * carried, where a reading from before requests were read counted only the
+ * run's whole usage on its ending. Answers how many requests it wrote.
+ *
+ * ```ts
+ * import { recounted } from '@yaks/spawn'
+ *
+ * // await recounted(graph, '2026-10-13')
+ * ```
+ */
+export let recounted = async (
+  g: Graph,
+  since: string,
+  o: Opts = {},
+): Promise<number> => {
+  let after = Date.parse(since)
+  let wrote = 0
+  for (let b of await g.read(`.${SESSION}&.${PROCESS}`)) {
+    if (o.signal?.aborted) break
+    let session = b.entity.eid
+    let out = paths(session, o).out
+    let written = 0
+    try {
+      written = Deno.statSync(out).mtime?.getTime() ?? 0
+    } catch {
+      continue // no log: nothing to read again
+    }
+    if (written < after) continue
+    let job = await asked(g, session).catch(() => null)
+    let adapter = job && (o.adapters ?? known)[job.provider]
+    if (!adapter) continue
+    wrote += await recount(g, out, adapter.read, {
+      session,
+      signal: o.signal,
+    })
+  }
+  return wrote
 }

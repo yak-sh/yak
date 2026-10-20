@@ -143,7 +143,7 @@ test('claude: a managed run opens with its id, and each reply names its request'
         },
       },
     }),
-    [{
+    [{ content: { body: 'hi' }, output: {} }, {
       ask: { id: 'msg_1', to: 'claude-opus-5-5' },
       usage: {
         input_tokens: 22210,
@@ -153,7 +153,7 @@ test('claude: a managed run opens with its id, and each reply names its request'
         cache_write_1h_tokens: 8476,
         reasoning_tokens: 30,
       },
-    }, { content: { body: 'hi' }, output: {} }],
+    }],
   )
   assertEquals(
     entries(claude, {

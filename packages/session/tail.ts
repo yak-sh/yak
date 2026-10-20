@@ -624,3 +624,108 @@ export let pull = async (
   }
   return t.line - from
 }
+
+// What an earlier reading of a line put on an entry that a request now
+// carries on its own entry: a run's whole usage on its ending, Codex's usage
+// on an entry of its own. The usage comes off, with the cost, request and
+// context beside it, and an entry left with nothing of its own goes.
+let unspent = async (
+  g: Graph,
+  key: string,
+  line: number,
+  said: Said,
+  made: Bundle[],
+): Promise<Bundle[]> => {
+  let eids = said.entries.map((_, i) => derivedEid(`${key} ${line} ${i}`))
+  if (!eids.length) return []
+  let now = new Map(made.map((b) => [b.entity.eid, b]))
+  let plumbing = [
+    'entry',
+    'imported',
+    'usage',
+    'cost',
+    'ask',
+    'context_parts',
+    'created',
+    'updated',
+  ]
+  return (await g.get(eids)).flatMap((r): Bundle[] => {
+    if (!r || r[TOMBSTONE] != null || !r.usage) return []
+    let eid = r.entity.eid
+    if (now.get(eid)?.usage) return []
+    let own = Object.keys(r).some((k) =>
+      k != 'entity' && !k.startsWith('$') && !plumbing.includes(k)
+    )
+    return [
+      own
+        ? {
+          entity: { eid },
+          usage: null,
+          cost: null,
+          ask: null,
+          context_parts: null,
+        }
+        : { entity: { eid }, $delete: true },
+    ]
+  })
+}
+
+/**
+ * Read a log already imported again from its start, for its model requests
+ * alone: each request's entry (`ask`, `usage`, `context_parts`) where the
+ * session lacks it, the session's `fixed`, and plan limits, each dated when
+ * the line was written. What an earlier reading counted elsewhere comes off,
+ * so each request is counted once (`unspent`). The transcript's other entries
+ * are followed, never written. Answers how many requests it wrote.
+ *
+ * ```ts
+ * import { claude } from '@yaks/session'
+ * import { recount } from '@yaks/session/tail'
+ *
+ * // await recount(graph, path, claude, { session })
+ * ```
+ */
+export let recount = async (
+  g: Graph,
+  path: string,
+  read: Reader,
+  o: { session: Eid; signal?: AbortSignal },
+): Promise<number> => {
+  let text: string
+  try {
+    text = await Deno.readTextFile(path)
+  } catch {
+    return 0 // gone: nothing to read again
+  }
+  let own = await owns(g, { session: o.session, log: logOf(path) })
+  let key = own ? o.session : `${o.session} ${path}`
+  let w = walker()
+  let line = 0, wrote = 0
+  for (let raw of text.split('\n')) {
+    if (o.signal?.aborted) break
+    line++
+    let event = parsed(raw)
+    if (!event) continue
+    let said = read(event)
+    for (let f of said.fixed ?? []) fix(w, f)
+    let made = imported(said, { session: o.session, source: path, line, own })
+    let owed = walked(w, made)
+    let asked = made.filter((b) =>
+      b.entry ? b.ask && b.usage : b.provider || b.model || b.rate_limit
+    )
+    let gone = await unspent(g, key, line, said, made)
+    let bundles = await settled(g, fold(asked, owed))
+    let fresh = bundles.filter((b) => b.entry).length
+    if (
+      !fresh && !gone.length && !bundles.some((b) => b.rate_limit || b.fixed)
+    ) {
+      continue
+    }
+    await g.apply([...bundles, ...gone], {
+      trusted: true,
+      ...(said.at ? { now: said.at } : {}),
+    })
+    wrote += fresh
+  }
+  return wrote
+}

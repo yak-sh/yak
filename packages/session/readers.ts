@@ -201,7 +201,8 @@ let codexUsage = (raw: unknown): Comps => {
 
 // The API request a reply answers. Claude Code writes each block of a reply on
 // a line of its own, every one naming the request and its final usage; the
-// importer keeps the first.
+// importer keeps the first. It follows the line's blocks, so they keep the
+// places an import from before requests were read gave them.
 let requested = (e: Event): Comps[] => {
   let m = obj(e.message)
   let model = str(m.model)
@@ -309,7 +310,7 @@ let line: Reader = (e) => {
   let entries: Comps[] = e.type == 'user' && e.isCompactSummary
     ? said(text(obj(e.message).content), { checkpoint: {}, notice: {} })
     : e.type == 'assistant'
-    ? [...requested(e), ...blocks(e).flatMap(assistant)]
+    ? [...blocks(e).flatMap(assistant), ...requested(e)]
     : e.type == 'user'
     ? blocks(e).flatMap((b) => user(b, human(e)))
     // A message typed while a turn runs reaches the model as this attachment.

@@ -3182,6 +3182,9 @@
     "packages/session/reap_test.ts": {
       "a lock whose holder is gone is freed, a session’s is left alone": 1.1
     },
+    "packages/session/recount_test.ts": {
+      "reading a log again counts each request once, with what it carried": 4.5
+    },
     "packages/session/result-entry_test.ts": {
       "independent callers can complete out of order without losing transcript association": 1.8,
       "result membership is joined before sequence allocation and observers": 2.4
