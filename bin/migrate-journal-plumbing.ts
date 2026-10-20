@@ -63,6 +63,9 @@ let relations = off.filter((name) => {
 
 let db = new DatabaseSync(args[0])
 db.exec('pragma busy_timeout = 30000')
+// The live processes checkpoint the WAL as they commit; this run's commits
+// would otherwise checkpoint it themselves, seconds of I/O inside each one.
+db.exec('pragma wal_autocheckpoint = 0')
 let one = (sql: string, ...p: (string | number)[]) =>
   db.prepare(sql).get(...p) as Record<string, number>
 let count = () => ({
@@ -137,7 +140,7 @@ let changes = db.prepare(
 let gone = { change: 0, field: 0, tx: 0 }
 // The longest any batch held the write lock, in ms, from taking it.
 let held = 0
-// Each batch spans as many ids as keep its hold near TARGET ms, halving after
+// Each batch spans as many ids as keep its hold near TARGET ms, quartering after
 // a long one and doubling after a short one, and the run rests at least as
 // long as it held, so the live writers have the lock most of the time.
 let TARGET = 250
@@ -160,9 +163,9 @@ let pass = async (
     // A batch that held the lock this long would stall the live writers: stop.
     if (ms > 5000) throw new Error(`a batch held the write lock ${ms}ms`)
     span = ms > TARGET * 2
-      ? Math.max(200, span >> 1)
+      ? Math.max(100, span >> 2)
       : ms < TARGET / 2
-      ? Math.min(batch * 10, span * 2)
+      ? Math.min(batch * 4, span * 2)
       : span
     lo = hi
     if (++said % 500 == 0) say(label, hi, gone, { held, span })
