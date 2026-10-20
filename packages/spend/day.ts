@@ -85,8 +85,14 @@ let briefed = async (
     let ids = str(first?.['content.body']).match(/\bT-\d+\b/g) ?? []
     if (ids.length) named.set(s, [...new Set(ids)])
   }
-  let ids = [...new Set([...named.values()].flat())]
-  let at = ids.length ? await g.address(ids) : new Map<string, Eid>()
+  // A brief can name a task that is gone or never was: it names nothing.
+  let at = new Map<string, Eid>()
+  for (let id of new Set([...named.values()].flat())) {
+    let found = await Promise.resolve()
+      .then(() => g.address([id]))
+      .catch(() => undefined)
+    if (found?.get(id)) at.set(id, found.get(id)!)
+  }
   return new Map(
     [...named].map((
       [s, ns],
