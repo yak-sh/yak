@@ -83,6 +83,7 @@ let alarms = lasting('alarm-index-probe')
 let dormant = alarms.object('alarm-index/dormant')
 let due = alarms.object('alarm-index/due')
 let later = alarms.object('alarm-index/later')
+let stuck = alarms.object('alarm-index/stuck')
 let idleReads = 0
 let idleAlarm = alarms.states.get('alarm-index/dormant')!.storage.getAlarm
 alarms.states.get('alarm-index/dormant')!.storage.getAlarm = () => {
@@ -103,9 +104,15 @@ later.alarm = () => {
   delivered.push('later')
   return Promise.resolve()
 }
+let unstick = Promise.withResolvers<void>()
+stuck.alarm = async () => {
+  delivered.push('stuck')
+  await unstick.promise
+}
 // Observe real deliveries once as the runtime fixture is built; timed checks
 // inspect the independent outcomes rather than schema shutdown scheduling.
 let alarmDeliveries: string[][] = []
+let stuckDeliveries: string[] = []
 try {
   let dueStorage = alarms.states.get('alarm-index/due')!.storage
   let laterStorage = alarms.states.get('alarm-index/later')!.storage
@@ -121,6 +128,15 @@ try {
   await alarms.ring()
   alarmDeliveries.push([...delivered])
   await dueStorage.deleteAlarm()
+  // One object's alarm still running, and another's comes due.
+  delivered.length = 0
+  await alarms.states.get('alarm-index/stuck')!.storage.setAlarm(0)
+  let stuckRing = alarms.ring()
+  await dueStorage.setAlarm(0)
+  await alarms.ring()
+  stuckDeliveries = [...delivered]
+  unstick.resolve()
+  await stuckRing
 } finally {
   await alarms[Symbol.asyncDispose]()
 }
@@ -128,3 +144,5 @@ test('alarm delivery skips idle objects and delivers a rearm on the next tick', 
   assertEquals(alarmDeliveries, [['due'], ['due'], ['due', 'due']])
   assertEquals(idleReads, 0)
 })
+test("an object's alarm still running holds back no other object's", () =>
+  assertEquals(stuckDeliveries, ['stuck', 'due']))

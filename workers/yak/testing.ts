@@ -1003,28 +1003,33 @@ export let lasting = (
       (vars.SANDBOX ? workspaces(vars.SANDBOX) : undefined),
   } as unknown as Env
   // Every alarm that is due, delivered the way the runtime delivers one: the
-  // instant cleared, then the object's `alarm()`, which may arm the next. A
-  // test drives this by hand; a kernel (probe.ts) on a timer.
-  let ringing: Promise<void> | null = null
-  let ring = (): Promise<void> => {
-    if (closing) return Promise.resolve()
-    if (ringing) return ringing
-    return ringing = (async () => {
-      for (let name of [...armed]) {
-        let ctx = states.get(name)!
-        let at = await ctx.storage.getAlarm()
-        if (at == null || at > Date.now()) continue
-        await ctx.storage.deleteAlarm()
-        await object(name).alarm()
-      }
-    })().finally(() => {
-      ringing = null
-    })
+  // instant cleared, then the object's `alarm()`, which may arm the next.
+  // Each object's delivery is its own, as in the runtime: an object is never
+  // delivered to twice at once, and one whose alarm is still running holds
+  // back no other object's. A test drives this by hand; a kernel (probe.ts)
+  // on a timer, shared by every test in the process.
+  let ringing = new Map<string, Promise<void>>()
+  let deliver = (name: string) => {
+    let ctx = states.get(name)!
+    let delivery = (async () => {
+      let at = await ctx.storage.getAlarm()
+      if (at == null || at > Date.now()) return
+      await ctx.storage.deleteAlarm()
+      await object(name).alarm()
+    })().finally(() => ringing.delete(name))
+    ringing.set(name, delivery)
+    return delivery
   }
-  // Every store's waitUntil work, and the alarm delivery under way: what a
+  let ring = async (): Promise<void> => {
+    if (closing) return
+    await Promise.all(
+      [...armed].filter((name) => !ringing.has(name)).map(deliver),
+    )
+  }
+  // Every store's waitUntil work, and the alarm deliveries under way: what a
   // write leaves running after it answers, such as the effects it owed.
   let pending = () => [
-    ...ringing ? [ringing] : [],
+    ...ringing.values(),
     ...stores.flatMap((ctx) => [...ctx.pending]),
   ]
   // Until nothing is left running, including work that work started.
