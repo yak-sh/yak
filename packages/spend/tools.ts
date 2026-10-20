@@ -12,7 +12,7 @@ import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { after, dayOf, recompute } from './day.ts'
 import { merged, ranked, type Spend, spendOf } from './tally.ts'
-import { type Limit, limitsOf, paceOf, span } from './window.ts'
+import { current, type Limit, limitsOf, paceOf, span } from './window.ts'
 import { dollars, label, tokens } from './words.ts'
 
 let answer = (call: Bundle, body: string): Bundle[] => [{
@@ -109,7 +109,7 @@ export let report = async (
     } written to it, ${tokens(s.tokens[2])} fresh, ${
       tokens(s.tokens[3])
     } generated)`,
-    ...limits.map((l) => {
+    ...limits.filter((l) => current(l, o.now ?? Date.now())).map((l) => {
       let pace = paceOf(l, o.now ?? Date.now())
       return `${l.provider} ${l.window == 10080 ? 'week' : 'five hours'}: ${
         Math.round(l.used)
