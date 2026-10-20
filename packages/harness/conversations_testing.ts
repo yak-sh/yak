@@ -9,6 +9,7 @@ import { runs } from './runs.ts'
 import { at } from './testing.ts'
 import { compose } from '@yaks/cli/host'
 import { hosted } from './store.ts'
+import { HARNESS } from './model_selection.ts'
 
 export let conversationFixture = async () => {
   let config = at()
@@ -17,15 +18,15 @@ export let conversationFixture = async () => {
   let h = hosted(host, () => host.close())
   await h.g.apply([
     { entity: { eid: '$model' }, model: { name: 'fake' } },
-    {
-      entity: { eid: '$provider' },
-      provider: { name: 'openai' },
-      using: { model: '$model' },
-    },
+    { entity: { eid: '$provider' }, provider: { name: 'openai' } },
     {
       entity: { eid: '$serves' },
       edge: { from: '$provider', to: '$model' },
       serves: { name: 'fake' },
+    },
+    {
+      entity: { eid: HARNESS },
+      using: { provider: '$provider', model: '$model' },
     },
   ], { trusted: true })
   let owner = crypto.randomUUID(), other = crypto.randomUUID()

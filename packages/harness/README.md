@@ -207,13 +207,22 @@ process supervisor's files unless `PROCESS_DIR` is set. Probes use their own
 provider directory and process state, while leaving `HOME` unchanged so Deno
 reuses its module cache.
 
-Name a model with `--model`, or set `using.model` on its provider row. It is
-reached with `$OPENAI_API_KEY` or the OpenAI connection. `yak auth` belongs to
-[@yaks/connections](../connections). It lists integrations; pass a name or title
-to sign in. It prints an authorization link and reads the complete return URL
-with terminal echo disabled. The return URL is never a command argument or
-transcript entry. `yak model list` lists names from the OpenAI endpoint reached
-by that credential.
+Name a model with `--model` and its provider with `--provider`. A model named
+alone is asked wherever it is served. What a session asks when neither is named
+is the default (`defaultUsing`): the `using{provider, model}` on this package's
+row, `package{name: "@yaks/harness"}`, whose eid is derived from that name. One
+write changes it:
+
+```sh
+yak graph apply --bundles '[{"entity": {"eid": "8b429c76-beb1-8dcf-82fc-c68f7f0e5c73"}, "using": {"provider": "openrouter", "model": "z-ai/glm-5.3"}}]'
+```
+
+OpenAI is reached with `$OPENAI_API_KEY` or the OpenAI connection. `yak auth`
+belongs to [@yaks/connections](../connections). It lists integrations; pass a
+name or title to sign in. It prints an authorization link and reads the complete
+return URL with terminal echo disabled. The return URL is never a command
+argument or transcript entry. `yak model list` lists names from the OpenAI
+endpoint reached by that credential.
 
 ```ts
 import { compose } from '@yaks/cli/host'

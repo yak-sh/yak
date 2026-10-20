@@ -39,8 +39,12 @@ let started = async (model: Model = echo) =>
 
 test('the seed is the same rows however many times it is applied', async () => {
   let h = await harness()
-  h.g.apply(seed({ model: 'gpt-6-astra' }), { trusted: true })
-  h.g.apply(seed({ model: 'gpt-6-astra' }), { trusted: true })
+  h.g.apply(seed({ provider: 'openai', model: 'gpt-6-astra' }), {
+    trusted: true,
+  })
+  h.g.apply(seed({ provider: 'openai', model: 'gpt-6-astra' }), {
+    trusted: true,
+  })
   assertEquals((await h.g.read('.provider&*')).length, 1)
   assertEquals((await h.g.read('.serves&*')).length, 1)
   let models = await h.g.read('.model&*')

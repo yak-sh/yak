@@ -31,7 +31,7 @@ let context = (node: Bundle) => {
 let usingFor = async (g: Graph, call: Bundle, model?: unknown) => {
   let by = who(call)?.by
   let inherited = by ? await selectedUsing(g, by) : undefined
-  let using = inherited ?? await defaultUsing(g, 'openai')
+  let using = inherited ?? await defaultUsing(g)
   if (model == null) return using
   let [row] = await g.get([String(model)], ['model'])
   if (!row?.model) throw new Refused('Choose an existing model')

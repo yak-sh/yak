@@ -49,9 +49,9 @@ export type Opts = ChildLimits & NotHarness & {
   h: Harness
   /** what serves an ask (default: @yaks/openai over the found credential) */
   model?: Model
-  /** the model to ask for by name (otherwise the provider row's using.model) */
+  /** the model to ask for by name (otherwise the graph's `defaultUsing`) */
   name?: string
-  /** Default provider for new sessions; model selection remains graph data. */
+  /** the provider to ask, by name, and the one `model` serves */
   provider?: string
   /** Host implementations keyed by provider.name, for embedding and testing. */
   providers?: Record<string, Model>

@@ -3,6 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
+import { HARNESS } from '@yaks/harness'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { edgeDoc, edgeKeywords, edges, link } from '@yaks/edge'
@@ -53,7 +54,8 @@ await g.apply([
     native: {},
   },
   { entity: { eid: model }, model: { name: 'fixture' } },
-  { entity: { eid: provider }, provider: { name: 'openai' }, using: { model } },
+  { entity: { eid: provider }, provider: { name: 'openai' } },
+  { entity: { eid: HARNESS }, using: { provider, model } },
   { ...link(provider, 'serves', model), serves: { name: 'fixture' } },
   {
     entity: { eid: oracle },

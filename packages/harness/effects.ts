@@ -19,20 +19,15 @@ import { unfinishedEach } from './unfinished.ts'
 import { overheadEach } from './overhead.ts'
 import { machines } from './session_machines.ts'
 
-let word = (options: Record<string, unknown>, name: string) =>
-  typeof options[name] == 'string' ? options[name] : undefined
-
-/** The runner, lent this machine, over the host's graph. The model to ask for
- * by default and its provider may be named in the plugin's options, and so
- * may `compactAt`, the share of its model's context window a transcript fills
- * before it is compacted (half where absent). */
+/** The runner, lent this machine, over the host's graph. The plugin's options
+ * may name `compactAt`, the share of its model's context window a transcript
+ * fills before it is compacted (half where absent); the model a session asks
+ * by default is graph data (./model_selection.ts `defaultUsing`). */
 export let effects = (
   host: Host,
   options: Record<string, unknown> = {},
 ): Handlers => {
   let { lent } = here(hosted(host), {
-    name: word(options, 'name'),
-    provider: word(options, 'provider'),
     compactAt: typeof options.compactAt == 'number'
       ? options.compactAt
       : undefined,

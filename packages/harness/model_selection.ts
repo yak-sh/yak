@@ -3,6 +3,7 @@
 import { type Bundle, type Comp, type Graph } from '@yaks/graph'
 import { CallError } from '@yaks/tools/errors'
 import { edgeEid } from '@yaks/edge'
+import { identityEid } from '@yaks/graph/identity'
 import type { Model } from '@yaks/model'
 import { offerFor, offers } from '@yaks/session'
 
@@ -86,12 +87,20 @@ export const modelSelection = async (
   return { choices, current }
 }
 
-/** A provider's default is a graph reference, never a release in code. */
-export let defaultUsing = async (g: Graph, provider: string): Promise<Comp> => {
-  let [row] = await g.read(`.provider.name=${provider}&?using`)
+/** The native harness's own entity, @yaks/code's row for this package: its
+ * eid is derived from the package's name, so every graph names it alike. */
+export let HARNESS = identityEid('package', ['@yaks/harness'])
+
+/** What a native session asks when nothing names it: the `using{provider,
+ * model}` on {@link HARNESS}, so one write changes it and no release does. */
+export let defaultUsing = async (g: Graph): Promise<Comp> => {
+  let [row] = await g.get([HARNESS], ['using'])
   let using = row?.using as Comp | undefined
-  if (!using?.model) {
-    throw new CallError('model', `Choose a model for ${provider}`)
+  if (!using?.provider || !using.model) {
+    throw new CallError(
+      'model',
+      `Choose a model: no default using{provider, model} on ${HARNESS}`,
+    )
   }
-  return { provider: row.entity.eid, ...using }
+  return using
 }

@@ -58,7 +58,9 @@ let round = async (steps: number) => {
     parameters: { type: 'object', properties: {} },
     run: () => `echoed ${++calls}!`,
   }]
-  await h.g.apply(seed({ model: 'scripted', tools }), { trusted: true })
+  await h.g.apply(seed({ provider: 'openai', model: 'scripted', tools }), {
+    trusted: true,
+  })
   const a = agent({ h, name: 'scripted', tools, model })
   const runner = working(h, {
     asyncTools: true,

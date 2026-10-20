@@ -28,7 +28,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import type { Effects } from '@yaks/effects'
 import type { Vocab } from '@yaks/vocab'
-import { MODEL, type Model, PROVIDER, TOOL } from '@yaks/model'
+import { MODEL, type Model, ModelError, PROVIDER, TOOL } from '@yaks/model'
 import { toolEid } from '@yaks/tools/result'
 import {
   admit,
@@ -76,23 +76,23 @@ import { type RuntimeAction, runtimeAction, runtimeRows } from './runtime.ts'
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 
 /** The provider, model and tool rows a transcript is served from, as one
- * idempotent batch with identities derived from each name, and the provider's offering of the model is a `serves` edge. */
+ * idempotent batch with identities derived from each name, and the provider's
+ * offering of the model is a `serves` edge. */
 export let seed = (
   o: { provider?: string; model?: string; tools?: Tool[] } = {},
 ): Bundle[] => {
-  let model = o.model
-  let provider = identityEid(PROVIDER, [o.provider ?? 'openai'])
-  let selected = model ? identityEid(MODEL, [model]) : ''
+  let provider = o.provider ? identityEid(PROVIDER, [o.provider]) : ''
+  let model = o.model ? identityEid(MODEL, [o.model]) : ''
   return [
-    {
-      entity: { eid: provider },
-      [PROVIDER]: { name: o.provider ?? 'openai' },
-    },
-    ...model
-      ? [{ entity: { eid: selected }, [MODEL]: { name: model } }, {
-        entity: { eid: edgeEid(provider, 'serves', selected) },
-        edge: { from: provider, to: selected },
-        serves: { name: model },
+    ...provider
+      ? [{ entity: { eid: provider }, [PROVIDER]: { name: o.provider } }]
+      : [],
+    ...model ? [{ entity: { eid: model }, [MODEL]: { name: o.model } }] : [],
+    ...provider && model
+      ? [{
+        entity: { eid: edgeEid(provider, 'serves', model) },
+        edge: { from: provider, to: model },
+        serves: { name: o.model },
       }]
       : [],
     ...(o.tools ?? []).map((t) => ({
@@ -155,9 +155,9 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   model?: Model
   /** implementations keyed by `provider.name` */
   providers?: Record<string, Model>
-  /** the model to ask for by name (the provider row's `using.model`) */
+  /** the model to ask for by name (otherwise the graph's `defaultUsing`) */
   name?: string
-  /** Default provider for new sessions; model selection remains graph data. */
+  /** the provider to ask, by name, and the one `model` serves */
   provider?: string
   /** what the agent may call */
   tools?: Tool[]
@@ -341,9 +341,14 @@ let reporter = (opts: { report?: (error: unknown, where: Where) => void }) =>
 
 // What serves each provider, by `provider.name`.
 let served = (opts: Pick<Opts, 'model' | 'providers' | 'provider'>) => ({
-  ...opts.model ? { [opts.provider ?? 'openai']: opts.model } : {},
+  ...opts.model && opts.provider ? { [opts.provider]: opts.model } : {},
   ...opts.providers,
 })
+
+// The runner's model where nothing resolves one: a host lent no model asks
+// through `resolveModel` alone.
+let unserved: Model = () =>
+  Promise.reject(new ModelError('provider', 'Choose a model'))
 
 /**
  * The runner an agent's options lend (@yaks/session `Runner`), over the
@@ -361,11 +366,10 @@ let served = (opts: Pick<Opts, 'model' | 'providers' | 'provider'>) => ({
 export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   let h = opts.h
   let report = reporter(opts)
-  const provider = opts.provider ?? 'openai'
+  const provider = opts.provider
   let name = opts.name ?? ''
   const implementations = served(opts)
-  let model = opts.model ?? implementations[provider]
-  if (!model) throw new Error('Nothing serves provider ' + provider)
+  let model = opts.model ?? implementations[provider ?? ''] ?? unserved
   let tools = opts.tools ?? []
   let remote = opts.remote ?? (() => Promise.resolve([]))
   let remoteSignature = ''
@@ -384,13 +388,21 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     childProperties,
     prepareChild,
   } = opts
-  let compact = implementations.openai
-    ? {
-      model: implementations.openai,
-      name: opts.provider == 'openrouter' ? '' : name,
-      provider: identityEid(PROVIDER, ['openai']),
-    }
-    : undefined
+  let resolveModel = providerResolver(
+    h.g,
+    implementations,
+    opts.model,
+    undefined,
+    (error) => report(error, { phase: 'model-metadata' }),
+  )
+  // Compaction is a text task, even when a transcript selects a media model:
+  // it asks the model this agent was lent by name, else the default
+  // (./model_selection.ts), read again before every ask.
+  let compact: NonNullable<Deps['compactModel']> = {
+    model,
+    name,
+    ...provider ? { provider: identityEid(PROVIDER, [provider]) } : {},
+  }
   return {
     holder: h.me,
     asyncTools: true,
@@ -401,22 +413,20 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     childProperties,
     prepareChild,
     model,
-    resolveModel: providerResolver(
-      h.g,
-      implementations,
-      opts.model,
-      undefined,
-      (error) => report(error, { phase: 'model-metadata' }),
-    ),
+    resolveModel,
     compactModel: compact,
     answers: answers(h.g, implementations, opts.model),
     tools,
     named: opts.named,
     toolSnapshot: async (phase, session, boundary) => {
-      if (compact && !compact.name) {
-        let using = await defaultUsing(h.g, 'openai')
+      if (!name) {
+        let using = await defaultUsing(h.g)
         let [row] = await h.g.get([String(using.model)])
-        compact.name = String((row?.model as Comp).name)
+        Object.assign(
+          compact,
+          { provider: undefined },
+          await resolveModel(using, row),
+        )
       }
       await (seeded ??= seedMissing(
         h.g,
@@ -501,7 +511,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
 export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
   let h = opts.h
   let report = reporter(opts)
-  const provider = opts.provider ?? 'openai'
+  const provider = opts.provider
   let name = opts.name ?? ''
   const implementations = served(opts)
   let tools = opts.tools ?? []
@@ -516,8 +526,9 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
     report(error, { phase: 'effects' })
   )
 
-  let using = {
-    provider: identityEid(PROVIDER, [provider]),
+  // What this agent was lent by name; the default stands in for no model.
+  let using: { provider?: Eid; model?: Eid } = {
+    ...provider ? { provider: identityEid(PROVIDER, [provider]) } : {},
     ...name ? { model: identityEid(MODEL, [name]) } : {},
   }
   let names: Record<string, string> = {
@@ -580,7 +591,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
       modelSelection(
         h.g,
         session,
-        using.model ? using : await defaultUsing(h.g, provider),
+        using.model ? using : await defaultUsing(h.g),
       ),
     selectModel: async (session, model) => {
       const [owner] = await h.g.get([session])
@@ -604,8 +615,7 @@ export let agent = <H extends Host>(opts: Opts<H>): Agent<H> => {
           ? await modelUsing(h.g, o.model, implementations)
           : using.model
           ? {}
-          : await defaultUsing(h.g, provider)
-        if (!using.model && chosen.model) using.model = String(chosen.model)
+          : await defaultUsing(h.g)
         let eid = crypto.randomUUID()
         return begin(h.g, prompt, {
           eid,

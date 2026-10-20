@@ -41,7 +41,11 @@ await Deno.writeTextFile(
 )
 let output: string[] = [], exitCode: number | undefined
 let prior = Deno.cwd(),
-  args: Record<string, unknown> = { tui: true, model: 'fixture' },
+  args: Record<string, unknown> = {
+    tui: true,
+    provider: 'openai',
+    model: 'fixture',
+  },
   explicit = { workspace: 'explicit', cwd: '/elsewhere' }
 try {
   Deno.chdir(sub)
@@ -56,6 +60,8 @@ try {
       '--tui',
       'session',
       'new',
+      '--provider',
+      'openai',
       '--model',
       'fixture',
     ],
@@ -82,7 +88,7 @@ let [opened] = await runs(host).session_new!({
 }, host.graph)
 let [remote] = await runs(host).session_new!({
   entity: { eid: crypto.randomUUID() },
-  call: { args: { tui: true, model: 'fixture' } },
+  call: { args: { tui: true, provider: 'openai', model: 'fixture' } },
 }, host.graph)
 let lent = here(hosted(host), { cwd: sub })
 let localOpening = await lent.lent.opening!()
@@ -96,6 +102,7 @@ await Deno.remove(dir, { recursive: true })
 test('local session new defaults to the launch checkout root and nested command directory', () => {
   equal(args, {
     tui: true,
+    provider: 'openai',
     model: 'fixture',
     workspace: home.workspace,
     cwd: sub,

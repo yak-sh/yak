@@ -38,6 +38,41 @@ let word = (args: Args, name: string): string | undefined => {
   return typeof v == 'string' ? v : undefined
 }
 
+let nameOf = (row: Bundle | undefined, comp: string) =>
+  (row?.[comp] as Comp | undefined)?.name as string | undefined
+
+// The `using` a call asks for by provider and model name, its rows seeded. A
+// model named alone is asked wherever it is served, and only one nothing
+// serves yet goes to the default's provider (./model_selection.ts); a
+// provider named alone takes the default model only where it is the
+// default's.
+let named = async (
+  graph: Graph,
+  provider?: string,
+  model?: string,
+): Promise<Comp> => {
+  if (!provider && !model) return await defaultUsing(graph)
+  if (!provider) {
+    let eid = identityEid(MODEL, [model!])
+    let served = await graph.read(`.serves .edge.to=${eid} .limit=1`)
+    if (served.length) return { model: eid }
+  }
+  let fallback = provider && model ? undefined : await defaultUsing(graph)
+  let [p, m] = fallback
+    ? await graph.get([String(fallback.provider), String(fallback.model)])
+    : []
+  if (provider && !model && provider != nameOf(p, PROVIDER)) {
+    throw new Refused(`Choose a model for ${provider}`)
+  }
+  provider ??= nameOf(p, PROVIDER)!
+  model ??= nameOf(m, MODEL)!
+  await graph.apply(seed({ provider, model }), { trusted: true })
+  return {
+    provider: identityEid(PROVIDER, [provider]),
+    model: identityEid(MODEL, [model]),
+  }
+}
+
 // What a session is doing while it is still working: owing a turn, owing a
 // tool's answer, or waiting for a place to run.
 let WORKING = ['pending', 'running', 'queued']
@@ -119,13 +154,7 @@ export let runs = (host?: Host): Runs => ({
     if (!prompt && args.tui !== true) {
       throw new Refused('session new needs a prompt without --tui')
     }
-    let provider = word(args, 'provider') ?? 'openai'
-    let selected = word(args, 'model')
-      ? undefined
-      : await defaultUsing(graph, provider)
-    let [row] = selected ? await graph.get([String(selected.model)]) : []
-    let model = word(args, 'model') ?? String((row?.model as Comp)?.name)
-    await graph.apply(seed({ provider, model }), { trusted: true })
+    let using = await named(graph, word(args, 'provider'), word(args, 'model'))
     let effort = word(args, 'effort')
     let persona = word(args, 'persona')
     let work = word(args, 'work')
@@ -150,11 +179,7 @@ export let runs = (host?: Host): Runs => ({
       ...persona ? { persona } : {},
       by: caller(call),
       via: who(call)?.via,
-      using: {
-        provider: identityEid(PROVIDER, [provider]),
-        model: identityEid(MODEL, [model]),
-        ...effort ? { effort } : {},
-      },
+      using: { ...using, ...effort ? { effort } : {} },
     })
     return prompt
       ? await settled(graph, s, host?.stopping)
@@ -171,20 +196,18 @@ export let runs = (host?: Host): Runs => ({
     let model = word(args, 'model')
     let using = prior
     if (provider || model || !prior?.model) {
+      // A provider named alone keeps the model in force.
       let [p, m] = await graph.get([
         String(prior?.provider ?? ''),
         String(prior?.model ?? ''),
       ])
-      provider ??= model
-        ? 'openai'
-        : String((p?.provider as Comp | undefined)?.name ?? 'openai')
-      model ??= String((m?.model as Comp | undefined)?.name ?? '')
-      if (!model) throw new Refused('Choose a model')
-      await graph.apply(seed({ provider, model }), { trusted: true })
       using = {
-        ...prior,
-        provider: identityEid(PROVIDER, [provider]),
-        model: identityEid(MODEL, [model]),
+        ...prior?.effort ? { effort: prior.effort } : {},
+        ...await named(
+          graph,
+          provider ?? (model ? undefined : nameOf(p, PROVIDER)),
+          model ?? nameOf(m, MODEL),
+        ),
       }
     }
     await graph.apply([{

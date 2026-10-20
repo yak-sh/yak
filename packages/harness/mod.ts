@@ -41,4 +41,4 @@
 
 export * from './agent.ts'
 
-export { defaultUsing, selectedUsing } from './model_selection.ts'
+export { defaultUsing, HARNESS, selectedUsing } from './model_selection.ts'

@@ -4,6 +4,7 @@ import { equal, ok, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { ram } from '@yaks/ram'
+import { HARNESS } from '@yaks/harness'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
@@ -34,7 +35,8 @@ let owner = crypto.randomUUID()
 await g.apply([
   { entity: { eid: owner }, doc: { title: 'Caller' } },
   { entity: { eid: model }, model: { name: 'fixture' } },
-  { entity: { eid: provider }, provider: { name: 'openai' }, using: { model } },
+  { entity: { eid: provider }, provider: { name: 'openai' } },
+  { entity: { eid: HARNESS }, using: { provider, model } },
   { ...link(provider, 'serves', model), serves: { name: 'fixture' } },
   { entity: { eid: tree }, oracle_tree: { root: oracle } },
   {

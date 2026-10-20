@@ -34,6 +34,7 @@ test('OpenRouter provider uses UUIDs and is selected per session/ask, including 
     cwd: repo(),
     h,
     name: 'gpt-6-astra',
+    provider: 'openai',
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
   try {
@@ -174,6 +175,7 @@ test('a model two providers serve is asked by the named one, by its name for it'
     cwd: repo(),
     h,
     name: 'gpt-6-astra',
+    provider: 'openai',
     providers: { openai: fake('openai'), openrouter: fake('openrouter') },
   })
   const ask = async (using: Comp) => {

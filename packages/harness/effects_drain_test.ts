@@ -6,6 +6,7 @@ import { equal, test } from '@yaks/testing'
 import { effects } from './effects.ts'
 import { seed } from './agent.ts'
 import { at } from './testing.ts'
+import { HARNESS } from './model_selection.ts'
 
 let observed = await (async () => {
   let config = at()
@@ -57,7 +58,7 @@ let observed = await (async () => {
   Deno.env.get = (name) =>
     name == 'OPENAI_API_KEY' ? 'fixture-key' : originalEnv(name)
   try {
-    host.fx.handle(effects(host, { name: 'drain-model' }))
+    host.fx.handle(effects(host))
   } finally {
     globalThis.fetch = originalFetch
     Deno.env.get = originalEnv
@@ -67,7 +68,11 @@ let observed = await (async () => {
   let ended = false
   try {
     await host.graph.apply([
-      ...seed({ model: 'drain-model' }),
+      ...seed({ provider: 'openai', model: 'drain-model' }),
+      {
+        entity: { eid: HARNESS },
+        using: { provider: identityEid('provider', ['openai']), model },
+      },
       {
         entity: { eid: model },
         model: { name: 'drain-model', context: 10000 },

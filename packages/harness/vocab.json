@@ -55,11 +55,11 @@
         },
         "model": {
           "type": "string",
-          "description": "the model to ask, by name (otherwise the provider row's using.model)"
+          "description": "the model to ask, by name (otherwise the default: the using{provider, model} on the @yaks/harness package's row)"
         },
         "provider": {
           "type": "string",
-          "description": "the backend that serves it: openai or openrouter"
+          "description": "the backend that serves it, by name: openai or openrouter (otherwise the default's)"
         },
         "persona": {
           "type": "string",
@@ -107,11 +107,11 @@
         },
         "model": {
           "type": "string",
-          "description": "the model to ask, by name (otherwise the provider row's using.model)"
+          "description": "the model to ask, by name (otherwise the default: the using{provider, model} on the @yaks/harness package's row)"
         },
         "provider": {
           "type": "string",
-          "description": "the backend that serves it: openai or openrouter"
+          "description": "the backend that serves it, by name: openai or openrouter (otherwise the default's)"
         }
       },
       "required": [

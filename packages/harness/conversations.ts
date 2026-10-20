@@ -182,7 +182,7 @@ export let conversations = (host?: Pick<Host, 'me' | 'config'>): Runs => ({
     let project = await projectAt(g, args)
     let prompt = required(args, 'prompt')
     let files = await contextAt(g, owner, project)
-    let using = await defaultUsing(g, 'openai')
+    let using = await defaultUsing(g)
     let id = await begin(g, prompt, {
       by: owner,
       files,

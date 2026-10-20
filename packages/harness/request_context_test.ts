@@ -26,7 +26,7 @@ let observed = await (async () => {
   let { lent } = here(host, { model, tools: [], streaming: false })
   try {
     await h.g.apply([
-      ...seed({ model: 'fake' }),
+      ...seed({ provider: 'openai', model: 'fake' }),
       { entity: { eid: 'person' }, doc: { title: 'Person' } },
       { entity: { eid: 'session' }, session: {} },
       {

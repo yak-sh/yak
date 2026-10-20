@@ -552,7 +552,7 @@ test('a compaction refusal keeps the provider detail in its refusal entry', asyn
   let h = await harness()
   try {
     await h.g.apply([
-      ...seed({ model: 'gpt-6-sol' }),
+      ...seed({ provider: 'openai', model: 'gpt-6-sol' }),
       { entity: { eid: 'session' }, session: {} },
       {
         entity: { eid: 'input' },

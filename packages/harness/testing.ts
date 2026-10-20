@@ -19,6 +19,7 @@ import { type Harness, hosted } from './store.ts'
 import { type ComponentType } from 'preact'
 import { mount as tui } from '../tui/testing.ts'
 import { dress } from './sheet.ts'
+import { HARNESS } from './model_selection.ts'
 
 /** The packages a harness graph is made of in these tests: what a transcript
  * is (@yaks/session), what it asks for and what answers (@yaks/tools,
@@ -80,15 +81,15 @@ export let harness = async (
   await g.apply(await install(g.read), { trusted: true })
   await g.apply([
     { entity: { eid: '$model' }, model: { name: 'gpt-6-astra' } },
-    {
-      entity: { eid: '$provider' },
-      provider: { name: 'openai' },
-      using: { model: '$model' },
-    },
+    { entity: { eid: '$provider' }, provider: { name: 'openai' } },
     {
       entity: { eid: '$serves' },
       edge: { from: '$provider', to: '$model' },
       serves: { name: 'gpt-6-astra' },
+    },
+    {
+      entity: { eid: HARNESS },
+      using: { provider: '$provider', model: '$model' },
     },
   ], { trusted: true })
   let h = { ...hosted(host, () => host.close()), sql: host.storage.statements }

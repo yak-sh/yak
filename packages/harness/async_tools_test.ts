@@ -338,7 +338,7 @@ await observed(
     // worker yet. The crash boundary is after execution was recorded, before a
     // result reached the graph: recovery must inspect, never invoke run again.
     let declared = await recoveredHost.g.apply(
-      seed({ model: opts.name, tools }),
+      seed({ provider: 'openai', model: opts.name, tools }),
       { trusted: true },
     )
     let model = declared.find((b) => b.model)!.entity.eid

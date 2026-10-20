@@ -18,13 +18,15 @@ export let question = (oracle: string, text: string): Bundle[] => [{
 export let Talk = ({ e, io }: Props) => {
   if (!io.edits) return null
   let got = io.ask({
-    provider: '.provider.name=openai ?using',
+    // The default a native conversation starts on: @yaks/harness
+    // `defaultUsing`, the `using` on that package's row.
+    harness: `.entity.eid=${identityEid('package', ['@yaks/harness'])} ?using`,
     failures:
       `(.refusal|.exception) .output.source.call.source=${e.entity.eid} ?content .order=-created.at .limit=3`,
   })
-  let provider = got.provider.rows[0]?.using
-  let model = provider && typeof provider == 'object' && 'model' in provider
-    ? String(provider.model)
+  let using = got.harness.rows[0]?.using
+  let model = using && typeof using == 'object' && 'model' in using
+    ? String(using.model)
     : ''
   let names = io.ask(model ? { model: `.entity.eid=${model} ?model ?doc` } : {})
   let m = names.model?.rows[0]?.model
