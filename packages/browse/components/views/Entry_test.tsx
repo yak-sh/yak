@@ -50,7 +50,7 @@ let rows = () => {
     [call]: {
       entity: { eid: call, num: 1 },
       entry: { eid: call, session, seq: 1 },
-      call: { eid: call, key: 'call' },
+      call: { eid: call, id: 'call' },
       bash: { eid: call, command: 'printf one\nprintf two' },
     },
     [answer]: {
@@ -417,16 +417,20 @@ let metadataSpeakers: (string | null | undefined)[] = []
 withDom((root) => {
   for (
     let meta of [
-      { call: { to: 'read-evidence', args: { id: 'evidence' } } },
-      { prompt: { scope: 'local' } },
-      { notice: {} },
+      { call: { eid: 'metadata', to: 'read-evidence', args: { id: 'e' } } },
+      { prompt: { eid: 'metadata', scope: 'local' } },
+      { notice: { eid: 'metadata' } },
     ]
   ) {
-    let e = {
+    let e: Ent = {
       eid: 'metadata',
-      content: { body: '{"data":"kept"}' },
+      num: 1,
+      kind: 'entry',
+      refs: [],
+      kids: [],
+      content: { eid: 'metadata', body: '{"data":"kept"}' },
       ...meta,
-    } as Ent
+    }
     render(<MessageSummary e={e} />, root)
     metadataSpeakers.push(root.querySelector('.Entry_Speaker')?.textContent)
   }

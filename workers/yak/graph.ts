@@ -4843,6 +4843,7 @@ export class Store {
       read: subs.read,
       observe: subs.observe,
       resume: subs.resume,
+      stop: subs.stop,
       snapshot: (query, opts) =>
         subs.snapshot(
           typeof query == 'string'

@@ -758,7 +758,13 @@ export type Output = {
   source: string
   id?: string | null
 }
-export type Call = { eid: string; key: string }
+export type Call = {
+  eid: string
+  to?: string | null
+  id?: string | null
+  args?: Record<string, unknown> | null
+  source?: string | null
+}
 // Provider-neutral named tool use (D-16704): an imported tool call with no
 // first-class facet keeps its real name and a one-line arg preview. The word
 // is the transcript's own — @yaks/tools' `tool` is the registered tool ENTITY

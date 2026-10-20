@@ -114,10 +114,15 @@ let skillSites = async (
   return result
 }
 
-export let skillLocations = async (g: Graph, skills: (Bundle | string)[]) =>
-  (await skillSites(g, skills)).places
+export let skillLocations = async (
+  g: Graph,
+  skills: (Bundle | string)[],
+): Promise<Map<string, Bundle>> => (await skillSites(g, skills)).places
 
-export let skillLocation = async (g: Graph, skill: Bundle | string) =>
+export let skillLocation = async (
+  g: Graph,
+  skill: Bundle | string,
+): Promise<Bundle | undefined> =>
   (await skillLocations(g, [skill])).get(
     typeof skill == 'string' ? skill : skill.entity.eid,
   )
@@ -363,7 +368,10 @@ export let renderFiles = (
 }
 
 /** The skill documents and text supporting files the graph owns. */
-export let skillFiles = async (g: Graph, repository: string) => {
+export let skillFiles = async (
+  g: Graph,
+  repository: string,
+): Promise<Map<string, string>> => {
   let { skills, places, files } = await skillScope(g, repository, true)
   return renderFiles(skills, places, files)
 }

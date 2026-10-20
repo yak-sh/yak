@@ -1,6 +1,6 @@
 // A temporarily unavailable dependency keeps its original durable intent,
 // across worker replacements and without spending failure retries.
-import { graph } from '@yaks/graph'
+import { type Comp, graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { equal, match, test } from '@yaks/testing'
 import { effects } from './registry.ts'
@@ -73,7 +73,9 @@ for (let singleOwner of [false, true]) {
           next: new Date(at).toISOString(),
         },
       })
-      if (!singleOwner) equal(row.effect?.lease_owner ?? null, null)
+      if (!singleOwner) {
+        equal((row.effect as Comp | undefined)?.lease_owner ?? null, null)
+      }
     }
     equal(before, 1)
     match(failed, { effect: { state: 'pending', attempts: 1 } })
