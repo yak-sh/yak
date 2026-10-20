@@ -586,9 +586,16 @@ test('a read takes its entities from memory', () => {
   read()
   read()
   assertEquals(reads(f, read), 0)
-  // A caller that may stop waiting asks the same question.
+  // What the caller is doing around a read is no part of it: one traced under
+  // each request's own activity, or that may stop waiting, asks the same.
   let { signal } = new AbortController()
-  assertEquals(reads(f, () => f.s.read('.player.active=true', { signal })), 0)
+  for (let o of [{ signal }, { parent: '1' }, { parent: '2' }]) {
+    assertEquals(reads(f, () => f.s.read('.player.active=true', o)), 0)
+    assertEquals(reads(f, () => f.s.get(['hero'], undefined, o)), 0)
+  }
+  // With no policy to apply, who asks reads the same entities.
+  let who = { person: null, administrative: false }
+  assertEquals(reads(f, () => f.s.get(['hero'], undefined, who)), 0)
   f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }]))
   assertEquals(read()[0].position, { x: 3 })
   assertEquals(

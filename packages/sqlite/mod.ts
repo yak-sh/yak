@@ -355,7 +355,6 @@ const UNREAD = new Set([
   'administrative',
   'native',
   'durable',
-  'parent',
   'patch',
   'speaks',
   'now',
@@ -363,13 +362,14 @@ const UNREAD = new Set([
   'unordered',
 ])
 
-// A read's options without its `signal`, which only says when the caller stops
-// waiting. A read here is synchronous and over before it could, so the signal
-// is no input of the answer, and a read made under one shares every answer
-// and statement kept for the same read made without.
-let asking = <O extends { signal?: AbortSignal }>(o?: O) => {
-  if (!o?.signal) return o
-  let { signal: _, ...rest } = o
+// A read's options without what its caller is doing around it: the activity
+// it runs under (`parent`, new with every request) and when it stops waiting
+// (`signal`). A read here is synchronous and traced by its unit, so neither is
+// an input of the answer, and a read made under them shares every answer and
+// statement kept for the same read made without.
+let asking = <O extends { signal?: AbortSignal; parent?: string }>(o?: O) => {
+  if (!o) return o
+  let { signal: _signal, parent: _parent, ...rest } = o
   return rest
 }
 
@@ -522,9 +522,9 @@ export let storage = (
   ) => {
     let effective = { ...opts(), ...o }
     let eligible = known(o)
-    if (!effective.visibility && !Object.keys(o).length) {
-      return fetch(eids, comps)
-    }
+    // With no policy to apply, an option the statement is the same under
+    // leaves an identity read as memory holds it.
+    if (!effective.visibility && eligible) return fetch(eids, comps)
     let run = () =>
       get(
         driver,
