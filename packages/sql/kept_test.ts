@@ -1,6 +1,17 @@
-// Query plans preserve operands and compiler boundaries as callers change them.
+// A kept statement answers what the binder would, whatever a caller changes
+// between calls: operands, options, the clock, the catalog, the extensions.
 import { equal, ok, test } from '@yaks/testing'
-import { and, eq, limit, list, or, type Pred, present } from '@yaks/query'
+import {
+  and,
+  eq,
+  le,
+  limit,
+  list,
+  or,
+  type Pred,
+  present,
+  time,
+} from '@yaks/query'
 import { loadVocab } from '@yaks/vocab'
 import { bind, type BindOpts } from './bind.ts'
 import {
@@ -12,7 +23,6 @@ import {
   select,
   val,
 } from './mod.ts'
-import { referenceQuery } from './reference_query.ts'
 import { render } from './render.ts'
 
 let vocab = loadVocab({
@@ -43,10 +53,7 @@ let query = (a: string, b = a) =>
 let same = (q: ReturnType<typeof and>, opts: BindOpts = {}) => {
   let actual = compile(q, vocab, opts), expected = render(bind(q, vocab, opts))
   equal([actual.sql, actual.params], [expected.sql, expected.params])
-  if (actual.origin) {
-    let origin = render(actual.origin)
-    equal([origin.sql, origin.params], [actual.sql, actual.params])
-  }
+  if (actual.origin) equal(render(actual.origin).sql, actual.sql)
   return actual
 }
 
@@ -102,23 +109,14 @@ for (
   })
 }
 
-test('reference answers isolate caller mutations, including bound origin fragments', () => {
-  let q = query(eid(7)), first = same(q)
-  let origin = first.origin!
-  first.sql = 'changed'
-  first.params.fill('changed')
-  if (origin.t == 'select' && origin.where?.t == 'raw') {
-    origin.where.params.fill('changed')
-  }
-  if (origin.t == 'select') {
-    origin.cols!.push(val('extra'))
-    let from = Array.isArray(origin.from) ? origin.from[0] : origin.from
-    if (from?.t == 'table') from.name = 'changed'
-    if (from?.t == 'raw') from.sql = 'changed'
-    origin.joins?.splice(0)
+test('an answer a caller changes leaves the next one whole', () => {
+  let q = query(eid(7))
+  for (let k = 0; k < 2; k++) {
+    let answer = same(q)
+    answer.sql = 'changed'
+    answer.params.fill('changed')
   }
   same(query(eid(8)))
-  same(q)
 })
 
 // A text extension that counts the queries it begins and keeps the last
@@ -297,8 +295,9 @@ for (
     ['human identity', and(eq('entity.eid', '0'.repeat(40))), {}],
   ] as [string, ReturnType<typeof and>, BindOpts][]
 ) {
-  test(`reference query declines ${name} without changing compilation`, () => {
-    equal(referenceQuery(q, vocab, opts), undefined)
+  test(`${name} shapes answer as the binder does, asked again`, () => {
+    same(q, opts)
+    same(q, opts)
     same(q, opts)
   })
 }
@@ -315,7 +314,6 @@ test('catalog-sensitive predicates read each current snapshot', () => {
   }, { held: true })
   let opts = { archetypes }
   let q = and(present('one'), present('two'), eq('link.left', eid(1)))
-  equal(referenceQuery(q, vocab, opts), undefined)
   let first = compile(q, vocab, opts)
   id = 2
   let second = compile(q, vocab, opts)
@@ -332,4 +330,89 @@ test('reference queries follow the current catalog held mode', () => {
   same(and(eq('link.left', eid(1))), opts)
   archetypes.held = false
   same(and(eq('link.left', eid(2))), opts)
+})
+
+// A shape asked at several moments, and with several root sets: each answer
+// is the binder's own. The phrases include ones that round to a day, an hour
+// or a month, which no fixed offset from the clock can stand for. A shape's
+// second call is the first one bound into its kept statement.
+let timed = loadVocab([...vocab.docs, {
+  $defs: {
+    run: {
+      component: true,
+      properties: {
+        next: { type: 'string', format: 'date-time' },
+        at: { type: 'number', format: 'date-time' },
+        handler: { type: 'string' },
+      },
+    },
+  },
+}])
+let moments = [
+  Date.UTC(2026, 9, 20, 23, 59, 59, 999),
+  Date.UTC(2028, 2, 31, 3, 4, 5, 6),
+]
+let timedSame = (q: ReturnType<typeof and>, opts: BindOpts) => {
+  let actual = compile(q, timed, opts), expected = render(bind(q, timed, opts))
+  equal([actual.sql, actual.params], [expected.sql, expected.params])
+}
+for (
+  let phrase of [
+    'now',
+    '1 hour ago',
+    'in 5m',
+    'today',
+    'this hour',
+    '9am',
+    '1 month ago',
+    '2 years ago',
+    'yesterday..now',
+    '2026-10-20',
+  ]
+) {
+  test(`a kept statement follows the clock: ${phrase}`, () => {
+    let op = phrase.includes('..') ? eq : le
+    let q = and(op('run.next', time(phrase)), op('run.at', time(phrase)))
+    for (let now of moments) timedSame(q, { now })
+  })
+}
+
+for (
+  let calls of [
+    [[1], [2]],
+    [[3, 4], [5, 6]],
+    [[7, 7], [8, 8]],
+    [[9, 1, 9], [2, 3, 2]],
+  ]
+) {
+  test(`a kept statement binds each call's roots: ${calls[0]}`, () => {
+    let q = and(eq('run.handler', 'h'), le('run.next', time('now')))
+    for (let ids of calls) timedSame(q, { now: moments[0], eids: ids.map(eid) })
+  })
+}
+
+for (
+  let calls of [[[1, 2], [3, 4]], [[7, 7], [8, 8]], [[8, 9, 10], [1, 2, 3]]]
+) {
+  test(`a kept statement binds lists of ids it excludes: ${calls[0]}`, () => {
+    for (let ids of calls) {
+      let q = and(eq('run.handler', 'h'), {
+        kind: 'pred',
+        path: ['entity', 'eid'],
+        op: '!=',
+        value: list(...ids.map(eid)),
+      } as Pred, limit(1))
+      timedSame(q, { now: moments[0], unordered: true })
+    }
+  })
+}
+
+test('a kept statement stops standing when the catalog answers otherwise', () => {
+  let ids = [1]
+  let archetypes = Object.assign(() => ids, { held: true })
+  let q = and(present('one'), present('two'), eq('link.left', eid(1)))
+  for (let next of [[1], [1], [2]]) {
+    ids = next
+    same(q, { archetypes })
+  }
 })

@@ -676,7 +676,9 @@ Paths can follow references. Explicit ordering uses descending entity number and
 then integer id to break ties. Without explicit ordering, a `.limit` or `.after`
 window reads newest first; a complete result reads oldest first. Unnumbered
 entities use integer id alone. A `.after` cursor is bound like any other value,
-so every page of one query is the same statement.
+so every page of one query is the same statement. A `.limit` is written into the
+statement, because SQLite prepares a statement again each time its limit is
+bound.
 
 ```ts
 import { compile } from '@yaks/sql'
@@ -692,10 +694,10 @@ let vocab = loadVocab({
     },
   },
 })
-equal(compile(parse('.book .order=book.price .limit=2'), vocab).params, [2])
+equal(compile(parse('.book .order=book.price .limit=2'), vocab).params, [])
 let page = (after: string) =>
   compile(parse(`.book .after=${after} .fields=book.price .limit=2`), vocab)
-equal(page('b1').params, ['b1', 'b1', 2])
+equal(page('b1').params, ['b1', 'b1'])
 equal(page('b1').sql, page('b2').sql)
 equal(compile(parse('.book .count'), vocab).sql.includes('count(*) as n'), true)
 equal(

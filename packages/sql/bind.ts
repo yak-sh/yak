@@ -2868,9 +2868,13 @@ export let bound = (
   scope?: Scope,
 ): Select => prepared(ast, vocab, opts, d, reads, scope).lower()
 
-// Begin once, retaining the context chosen before callbacks run. A caller may
-// reuse a proven lowering after this boundary; falling back continues this
-// same context, including its spine and the original live query/options.
+// A query begun: every extension has been told (its `begin`), and the
+// context it will lower in is chosen. `opts` holds the options as that context
+// captured them, before any `begin` ran. A caller may reuse a proven lowering
+// after this boundary (./kept.ts); falling back continues this same context,
+// including its spine and the original live query/options.
+export type Prepared = { opts: BindOpts; spine?: string; lower: () => Select }
+
 export let prepared = (
   ast: And,
   vocab: Vocab,
@@ -2878,8 +2882,7 @@ export let prepared = (
   d: Dialect = sqlite,
   reads: string[] = [],
   scope?: Scope,
-  hear?: () => void,
-): { opts: BindOpts; spine?: string; lower: () => Select } => {
+): Prepared => {
   if (opts.missingIndexes?.length && d.indexed) {
     let original = d
     let missing = new Set(opts.missingIndexes)
@@ -2893,19 +2896,15 @@ export let prepared = (
   }
   d = absentDialect(d, vocab, opts.absent)
   if (opts.visibility) {
-    return {
+    return visible(
+      ast,
+      vocab,
       opts,
-      lower: () =>
-        visible(
-          ast,
-          vocab,
-          opts,
-          d,
-          reads,
-          scope?.screening,
-          scope?.correlated,
-        ),
-    }
+      d,
+      reads,
+      scope?.screening,
+      scope?.correlated,
+    )
   }
   // The spine first (./spine.ts): a query that asks for a computed component's
   // entities reads that backing's rows, which no extension indexes and no
@@ -2931,14 +2930,6 @@ export let prepared = (
     eids: opts.eids,
     references: opts.references,
     visibility: scope?.visibility ?? opts.visibility,
-  }
-  if (hear && ctx.archetypes) {
-    let held = ctx.archetypes
-    ctx.archetypes = (p) => {
-      hear()
-      return held(p)
-    }
-    Object.defineProperty(ctx.archetypes, 'held', { get: () => held.held })
   }
   let captured: BindOpts = {
     ...opts.missingIndexes ? { missingIndexes: opts.missingIndexes } : {},
@@ -3758,7 +3749,7 @@ let visible = (
   reads: string[],
   screening = false,
   correlated = false,
-): Select => {
+): Prepared => {
   let visibility = opts.visibility!
   let plain = { ...opts, visibility: undefined }
   let ctes = new Map<string, Cte>()
@@ -3937,7 +3928,7 @@ let visible = (
     ctes,
     screening,
   )
-  if (tally) return tally
+  if (tally) return { opts, lower: () => tally }
   let catalog = opts.archetypes
   let archetypes: ArchetypeSet | undefined = catalog
     ? Object.defineProperty(
@@ -3952,7 +3943,7 @@ let visible = (
     )
     : undefined
   let scope = { masked: Object.keys(visibility.components ?? {}) }
-  let out = bound(
+  let inner = prepared(
     ast,
     vocab,
     {
@@ -4001,7 +3992,13 @@ let visible = (
     reads,
     { visibility, dialect: base, screening, correlated },
   )
-  return { ...out, with: [...ctes.values(), ...out.with ?? []] }
+  return {
+    ...inner,
+    lower: () => {
+      let out = inner.lower()
+      return { ...out, with: [...ctes.values(), ...out.with ?? []] }
+    },
+  }
 }
 
 // One `.order=` value, read two ways: over the selected row (through the joins

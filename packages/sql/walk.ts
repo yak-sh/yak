@@ -52,10 +52,10 @@ let reached = (c: Walk, step: Frag): Frag => {
       `) select id from __walk where ` +
       (bounded
         ? `depth > 0`
-        : `id != (select id from entity where ${s.sql}) limit ?`),
+        : `id != (select id from entity where ${s.sql}) limit ${WALK_LIMIT}`),
     params: c.depth != null
       ? [...s.params, ...step.params, c.depth]
-      : [...s.params, ...step.params, ...s.params, WALK_LIMIT],
+      : [...s.params, ...step.params, ...s.params],
   }
 }
 

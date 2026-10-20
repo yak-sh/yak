@@ -243,14 +243,21 @@ let withs = (ctes: Cte[] | undefined, c: Ctx): string =>
     } `
     : ''
 
-// The clauses after a query's body: ordering, then the window.
+// The clauses after a query's body: ordering, then the window. A limit that is
+// a whole number is written into the text: SQLite plans with a bound limit's
+// value, so it prepares a statement again each time its limit is bound, which
+// is every time it runs, and a statement the size of a pool's due read takes
+// longer to prepare than to answer.
 let tail = (
   s: { order?: Expr[]; limit?: Expr; offset?: Expr },
   c: Ctx,
 ): string =>
   (s.order?.length ? ` order by ${list(s.order, c)}` : '') +
-  (s.limit ? ` limit ${expr(s.limit, c)}` : '') +
+  (s.limit ? ` limit ${whole(s.limit) ?? expr(s.limit, c)}` : '') +
   (s.offset ? ` offset ${expr(s.offset, c)}` : '')
+
+let whole = (e: Expr): string | undefined =>
+  e.t == 'val' && Number.isSafeInteger(e.v) ? literal(e.v) : undefined
 
 // A collection's members as VALUES rows, unless it is one JSON array: one too
 // large to write out, or any in stable text (./ast.ts `each`).

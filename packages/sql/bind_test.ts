@@ -314,7 +314,8 @@ test('a window with no .order is newest-first by spine num', () => {
   let { sql, params } = compile(parse('.task.priority=1&.limit=2&.after=7'), v)
   assert(sql.includes('order by "entity"."num" desc'), sql)
   assert(sql.includes('"entity"."num" < ?'), sql)
-  assertEquals(params, [1, 7, 2])
+  assert(sql.endsWith('limit 2'), sql)
+  assertEquals(params, [1, 7])
 })
 
 // A number is opt in (@yaks/id), so the same vocabulary without it: the spine
@@ -328,7 +329,7 @@ let unnumbered = loadVocab({
 
 test('a store with no numbers still states its order, by the spine id', () => {
   let { sql } = compile(parse('.task.priority=1&.limit=2'), unnumbered)
-  assert(sql.endsWith('order by "entity"."id" desc limit ?'), sql)
+  assert(sql.endsWith('order by "entity"."id" desc limit 2'), sql)
   assert(!sql.includes('"entity"."num"'), sql)
 })
 
@@ -359,7 +360,7 @@ test('an explicit .order survives a window', () => {
   assert(
     sql.endsWith(
       'order by "doc"."title" desc, "entity"."num" desc, ' +
-        '"entity"."id" desc limit ?',
+        '"entity"."id" desc limit 2',
     ),
     sql,
   )
@@ -374,8 +375,8 @@ test('.after pages within the asked order, keyed on the anchor', () => {
   // ties fall to the spine num, and an anchor no entity has is the first page
   assert(sql.includes(`"entity"."num" < ?`), sql)
   assert(sql.includes('not exists (select 1 from "entity" as "__cur"'), sql)
-  // the anchor, bound wherever it is read, then the tie and the window
-  assertEquals(params, [7, 7, 7, 7, 7, 2])
+  // the anchor, bound wherever it is read, then the tie
+  assertEquals(params, [7, 7, 7, 7, 7])
 })
 
 test('.after over a derived order reads the anchor through the hook', () => {
