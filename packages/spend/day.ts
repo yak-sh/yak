@@ -2,9 +2,10 @@
  * A day's tally, read from the graph and kept as its `spend` row: the
  * requests whose entries were written that UTC day (an imported entry is
  * dated when its line was written), the prices, the sessions' fixed parts,
- * and the tasks each session worked on, which are the ones it claims, or
- * commented on, filed or finished from that day to the next. A subagent works
- * on its parent's tasks.
+ * and the tasks each session worked on: the ones it claims, or commented on,
+ * filed or finished from that day to the next. A subagent writes as the
+ * session that started it, so its tasks are the ones its brief names, else
+ * that session's.
  *
  * @module
  */
@@ -67,7 +68,30 @@ let roots = async (g: Graph, sessions: Eid[]) => {
     for (let i = 0; parent.has(s) && i < 5; i++) s = parent.get(s)!
     return s
   }
-  return { root, fixed }
+  return { root, parent, fixed }
+}
+
+// The tasks a subagent was started on: those its brief, the first thing its
+// transcript says, names. Its writes are its parent's, so they cannot say.
+let briefed = async (
+  g: Graph,
+  subagents: Eid[],
+): Promise<Map<Eid, Eid[]>> => {
+  let named = new Map<Eid, string[]>()
+  for (let s of subagents) {
+    let [first] = await g.rows(
+      `.entry.session=${s} .content .order=entry.seq .limit=1 .fields=content.body`,
+    ) as Record<string, unknown>[]
+    let ids = str(first?.['content.body']).match(/\bT-\d+\b/g) ?? []
+    if (ids.length) named.set(s, [...new Set(ids)])
+  }
+  let ids = [...new Set([...named.values()].flat())]
+  let at = ids.length ? await g.address(ids) : new Map<string, Eid>()
+  return new Map(
+    [...named].map((
+      [s, ns],
+    ) => [s, ns.map((n) => at.get(n)).filter((e): e is Eid => !!e)]),
+  )
 }
 
 // The tasks each root session worked on from `day` to the next.
@@ -126,9 +150,19 @@ export let known = async (
   let sessions = [
     ...new Set(rows.map((b) => str(comp(b, 'entry').session)).filter(Boolean)),
   ]
-  let { root, fixed } = await roots(g, sessions)
+  let { root, parent, fixed } = await roots(g, sessions)
   let byRoot = await worked(g, day, root)
-  let tasks = new Map(sessions.map((s) => [s, byRoot.get(root(s)) ?? []]))
+  let brief = await briefed(g, [...parent.keys()])
+  // A subagent's tasks are its brief's, else the nearest brief up its line,
+  // else what the session at its root worked on.
+  let of = (s: Eid): Eid[] => {
+    for (let at: Eid | undefined = s, i = 0; at && i < 6; i++) {
+      if (brief.get(at)?.length) return brief.get(at)!
+      at = parent.get(at)
+    }
+    return byRoot.get(root(s)) ?? []
+  }
+  let tasks = new Map(sessions.map((s) => [s, of(s)]))
   return { prices, fixed, tasks }
 }
 

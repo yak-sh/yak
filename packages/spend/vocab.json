@@ -66,7 +66,7 @@
             "maxItems": 2
           },
           "stamped": true,
-          "description": "by task eid, each session's share split evenly across the tasks it worked on, a subagent's counted with the session that started it: [tokens, dollars]"
+          "description": "by task eid, each session's share split evenly across the tasks it worked on, a subagent's across the tasks its brief names, else as the session that started it: [tokens, dollars]"
         },
         "models": {
           "type": "object",

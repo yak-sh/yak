@@ -25,8 +25,9 @@ A day's tally is a `spend` row on an eid derived from its `day`, holding its
 - `parts`: `[read, written, fresh, generated, dollars]` by part;
 - `sessions`: `[tokens, dollars, requests]` by session;
 - `tasks`: `[tokens, dollars]` by task, each session split evenly across the
-  tasks it claimed, commented on, filed or finished that day or the next, a
-  subagent counted with the session that started it;
+  tasks it claimed, commented on, filed or finished that day or the next, and a
+  subagent across the tasks its brief names, else as the session that started
+  it;
 - `models`: `[read, written, fresh, generated, dollars, requests]` by model;
 - `entries`: `[tokens, dollars]` for the fifty transcript entries that cost most
   as they were carried request after request.

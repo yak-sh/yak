@@ -163,7 +163,7 @@ let Breakdown = (
         'written',
         'fresh',
         'generated',
-        ...before ? ['before'] : [],
+        ...before ? ['week before'] : [],
       ],
     }),
     h(Ranking, {
@@ -179,7 +179,7 @@ let Breakdown = (
     h(Ranking, {
       title: 'Tasks',
       sub:
-        'Each session split evenly across the tasks it claimed, commented on, filed or finished, a subagent counted with the session that started it.',
+        'Each session split evenly across the tasks it claimed, commented on, filed or finished, and a subagent across the tasks its brief names, else as the session that started it.',
       rows: tasks,
       at: 1,
       name: named,
