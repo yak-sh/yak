@@ -586,6 +586,9 @@ test('a read takes its entities from memory', () => {
   read()
   read()
   assertEquals(reads(f, read), 0)
+  // A caller that may stop waiting asks the same question.
+  let { signal } = new AbortController()
+  assertEquals(reads(f, () => f.s.read('.player.active=true', { signal })), 0)
   f.s.tx((tx) => tx.patch([{ entity: { eid: 'hero' }, position: { x: 3 } }]))
   assertEquals(read()[0].position, { x: 3 })
   assertEquals(

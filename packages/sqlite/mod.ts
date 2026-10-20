@@ -363,6 +363,16 @@ const UNREAD = new Set([
   'unordered',
 ])
 
+// A read's options without its `signal`, which only says when the caller stops
+// waiting. A read here is synchronous and over before it could, so the signal
+// is no input of the answer, and a read made under one shares every answer
+// and statement kept for the same read made without.
+let asking = <O extends { signal?: AbortSignal }>(o?: O) => {
+  if (!o?.signal) return o
+  let { signal: _, ...rest } = o
+  return rest
+}
+
 // The effective read options are data; order of object keys is immaterial,
 // while arrays, query clauses, paths and literal token strings keep order.
 let keyed = (value: unknown) =>
@@ -696,8 +706,9 @@ export let storage = (
       ), 'read')
   }
   let tx: Tx = {
-    read: (query, o, comps) =>
-      read(
+    read: (query, signalled, comps) => {
+      let o = asking(signalled)
+      return read(
         driver,
         vocab,
         query,
@@ -705,7 +716,8 @@ export let storage = (
         comps,
         (q) => asked(q, o),
         fetched(o),
-      ),
+      )
+    },
     get: identity,
     doom: (eids) => doom(driver, vocab, eids),
     bindings: (matches, bundles, covers) =>
@@ -830,7 +842,8 @@ export let storage = (
         // Pending component rows already stand in this transaction. Read them
         // directly rather than persisting an intermediate archetype just to
         // read before the graph's final stamp/tracker flush.
-        read: (query, o, comps) => {
+        read: (query, signalled, comps) => {
+          let o = asking(signalled)
           let direct = owed().length > 0
           return read(
             driver,
@@ -1025,23 +1038,11 @@ export let storage = (
     },
     read: (query, o, comps) => {
       ensure()
-      return unit(
-        driver,
-        () =>
-          read(
-            driver,
-            vocab,
-            query,
-            { ...opts(), ...o },
-            comps,
-            (q) => asked(q, o),
-            fetched(o),
-          ),
-        'read',
-      )
+      return unit(driver, () => tx.read(query, o, comps), 'read')
     },
-    rows: (query, o) => {
+    rows: (query, signalled) => {
       ensure()
+      let o = asking(signalled)
       let parsed = ast(query)
       if (
         classified && base.counts != 'eager' &&
@@ -1053,14 +1054,14 @@ export let storage = (
     },
     screen: (query, o) => {
       ensure()
-      return screened(driver, vocab, query, { ...opts(), ...o })
+      return screened(driver, vocab, query, { ...opts(), ...asking(o) })
     },
     get: (eids, comps, o) => {
       if (!eids.length) return []
       ensure()
       return unit(
         driver,
-        () => viewed(eids, comps, o ?? {}),
+        () => viewed(eids, comps, asking(o) ?? {}),
         'read',
       )
     },
