@@ -2254,7 +2254,7 @@
       "a native session carries its chosen graph persona into the model request": 176.1,
       "a session begun for a person holds their words, and none of the instructions": 31.8,
       "graph-only instruction admission never acquires a default machine": 22,
-      "instruction admission snapshots machine files in stable ancestor order": 359.8,
+      "instruction admission snapshots machine files in stable ancestor order": 85.1,
       "retired CLI instructions are omitted on future asks without rewriting history": 376.2,
       "root admission is snapshotted and explicit later context is an instruction": 232.9
     },
