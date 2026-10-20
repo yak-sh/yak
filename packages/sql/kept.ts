@@ -128,58 +128,68 @@ let agree = (a: Asked[], b: Asked[]) =>
       : !('presence' in y) && x.held === y.held
   })
 
-// Each extension as the binder sees it, noting when one answers for a clause
-// or an order. A probe's extensions never begin: only a caller's call begins a
-// query.
-let watched = (
-  ext: Extension[] | undefined,
-  touched: { any: boolean },
-  begins: boolean,
-): Extension[] | undefined =>
-  ext?.map((e) => {
-    let mark = <T>(out: T): T => {
-      if (out != null) touched.any = true
-      return out
-    }
-    let live = (get: () => unknown) => ({ get, enumerable: true })
-    return Object.defineProperties({
-      ...e,
-      compile: new Proxy(e.compile, {
+// The call whose extensions are watched: whether one answered for a clause
+// or an order while it prepared and lowered. A lowering inside a lowering (a
+// store read an extension makes) watches its own.
+let watching: { any: boolean } | undefined
+let within = <T>(touched: { any: boolean }, run: () => T): T => {
+  let outer = watching
+  watching = touched
+  try {
+    return run()
+  } finally {
+    watching = outer
+  }
+}
+let mark = <T>(out: T): T => {
+  if (out != null && watching) watching.any = true
+  return out
+}
+
+// Each extension as the binder sees it, kept per extension so a call builds
+// nothing: its hooks read live, each answer noted. A probe's extensions never
+// begin: only a caller's call begins a query.
+let hooked = new WeakMap<object, Extension['compile']>()
+let hooks = (compile: Extension['compile']) => {
+  let found = hooked.get(compile)
+  if (!found) {
+    hooked.set(
+      compile,
+      found = new Proxy(compile, {
         get: (hooks, kind) => {
           let f = hooks[kind as keyof typeof hooks]
           return f && ((c: never, s: Site) => mark(f(c, s)))
         },
       }),
-    }, {
-      order: live(() =>
-        e.order && ((value: string, s: Site) => mark(e.order!(value, s)))
-      ),
-      begin: live(() => begins ? e.begin : undefined),
-    })
-  })
-
-// The caller's options with `fields` in place of theirs, every other one read
-// live: a `begin` hook may replace one, and a screen reads it when asked.
-let over = (opts: BindOpts, fields: BindOpts): BindOpts =>
-  new Proxy(opts, {
-    get: (o, k) =>
-      Object.hasOwn(fields, k)
-        ? fields[k as keyof BindOpts]
-        : Reflect.get(o, k),
-    has: (o, k) => Object.hasOwn(fields, k) || Reflect.has(o, k),
-    ownKeys: (
-      o,
-    ) => [...new Set([...Reflect.ownKeys(o), ...Object.keys(fields)])],
-    getOwnPropertyDescriptor: (o, k) =>
-      Object.hasOwn(fields, k)
-        ? {
-          value: fields[k as keyof BindOpts],
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        }
-        : Reflect.getOwnPropertyDescriptor(o, k),
-  })
+    )
+  }
+  return found
+}
+let viewed = [new WeakMap<Extension, Extension>(), new WeakMap()]
+let view = (e: Extension, begins: boolean): Extension => {
+  let views = viewed[begins ? 1 : 0], found = views.get(e)
+  if (!found) {
+    views.set(
+      e,
+      found = {
+        name: e.name,
+        get compile() {
+          return hooks(e.compile)
+        },
+        get order() {
+          let order = e.order
+          return order && ((value: string, s: Site) => mark(order(value, s)))
+        },
+        get begin() {
+          return begins ? e.begin : undefined
+        },
+      },
+    )
+  }
+  return found
+}
+let watched = (ext: Extension[] | undefined, begins: boolean) =>
+  ext?.map((e) => view(e, begins))
 
 // The ids a lowering treats as opaque: a uuid or a content hash.
 let generated = /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$|^[0-9a-f]{40,64}$/i
@@ -390,19 +400,21 @@ let proven = (
         if (refs[k] !== undefined) references![operands[k]] = refs[k]!
       })
     }
-    let p = prepared(
-      renamed(ast, (id) => operands[call.operands.indexOf(id)]),
-      vocab,
-      {
-        ...opts,
-        now,
-        eids: opts.eids && roots,
-        references,
-        archetypes: recorded(opts.archetypes, asked),
-        extend: watched(opts.extend, touched, false),
-      },
-    )
-    let out = render(p.lower())
+    let out = within(touched, () =>
+      render(
+        prepared(
+          renamed(ast, (id) => operands[call.operands.indexOf(id)]),
+          vocab,
+          { ...opts, now, eids: opts.eids && roots, references },
+          undefined,
+          undefined,
+          undefined,
+          {
+            archetypes: recorded(opts.archetypes, asked),
+            extend: watched(opts.extend, false),
+          },
+        ).lower(),
+      ))
     if (touched.any || !agree(asked, seen.asked) || out.sql != seen.first.sql) {
       return null
     }
@@ -464,15 +476,15 @@ export let compile = (
   opts: BindOpts = {},
 ): Raw => {
   let asked: Asked[] = [], touched = { any: false }
-  let p = prepared(
-    ast,
-    vocab,
-    over(opts, {
-      archetypes: recorded(opts.archetypes, asked),
-      extend: watched(opts.extend, touched, true),
-    }),
+  let p = within(
+    touched,
+    () =>
+      prepared(ast, vocab, opts, undefined, undefined, undefined, {
+        archetypes: recorded(opts.archetypes, asked),
+        extend: watched(opts.extend, true),
+      }),
   )
-  let lowered = () => render(p.lower())
+  let lowered = () => within(touched, () => render(p.lower()))
   let shaped = called(ast, opts, p)
   if (!shaped) return lowered()
   let { key, call } = shaped

@@ -2875,6 +2875,11 @@ export let bound = (
 // including its spine and the original live query/options.
 export type Prepared = { opts: BindOpts; spine?: string; lower: () => Select }
 
+// The catalog and the extensions a lowering asks, in place of the options'
+// own: a caller that watches what the lowering asks of them (./kept.ts) hands
+// in its watching forms, and every other option is read as the caller holds it.
+export type Heard = Pick<BindOpts, 'archetypes' | 'extend'>
+
 export let prepared = (
   ast: And,
   vocab: Vocab,
@@ -2882,6 +2887,7 @@ export let prepared = (
   d: Dialect = sqlite,
   reads: string[] = [],
   scope?: Scope,
+  heard: Heard = opts,
 ): Prepared => {
   if (opts.missingIndexes?.length && d.indexed) {
     let original = d
@@ -2904,6 +2910,7 @@ export let prepared = (
       reads,
       scope?.screening,
       scope?.correlated,
+      heard,
     )
   }
   // The spine first (./spine.ts): a query that asks for a computed component's
@@ -2916,14 +2923,14 @@ export let prepared = (
     d: backedDialect(d, vocab, backed, spine),
     derived: derivedOf(vocab, opts.derived),
     backed,
-    ext: spine ? [] : opts.extend ?? [],
+    ext: spine ? [] : heard.extend ?? [],
     now: opts.now ?? Date.now(),
     storageOrder: opts.storageOrder,
     unordered: opts.unordered,
     tables: new Set(),
     shared: new Map(),
     identities: new WeakMap(),
-    archetypes: spine ? undefined : opts.archetypes,
+    archetypes: spine ? undefined : heard.archetypes,
     spine,
     correlated: scope?.correlated,
     exactIds: opts.exactIds,
@@ -3571,7 +3578,7 @@ let scopedTally = (
   scoped: Dialect,
   reads: string[],
   visibility: NonNullable<BindOpts['visibility']>,
-  ctes: Map<string, Cte>,
+  ctes: Map<string, () => Cte>,
   screening: boolean,
 ): Select | undefined => {
   // A complete archetype tally groups the covering spine index before it
@@ -3720,7 +3727,7 @@ let scopedTally = (
           )
         }
         return select({
-          with: [...ctes.values(), {
+          with: [...[...ctes.values()].map((cte) => cte()), {
             name: '__tally_groups',
             materialized: true,
             q: { t: 'compound', op: 'union all', parts },
@@ -3749,10 +3756,14 @@ let visible = (
   reads: string[],
   screening = false,
   correlated = false,
+  heard: Heard = opts,
 ): Prepared => {
   let visibility = opts.visibility!
   let plain = { ...opts, visibility: undefined }
-  let ctes = new Map<string, Cte>()
+  // Each scoped relation is named as the dialect asks for it and written when
+  // the statement is lowered: a caller that keeps the statement (./kept.ts)
+  // never writes them again.
+  let ctes = new Map<string, () => Cte>()
   let quoted = (name: string) => `"${name.replaceAll('"', '""')}"`
   let aspects = Object.entries(visibility.components ?? {})
   let masked = !!vocab.prop('entity', 'archetype') && aspects.length > 0
@@ -3829,52 +3840,62 @@ let visible = (
     }
     let name = `__visible_${comp}`
     if (!ctes.has(name)) {
-      let where = []
-      if (comp != 'entity' && visibility.entity) {
-        where.push(exists(select({
-          cols: [val(1)],
-          from: raw(`${source('entity')} as "__owner"`),
-          where: eq(raw('"__owner"."id"'), raw('"__visible"."entity"')),
-        })))
-      }
-      if (scope) {
-        where.push(permits(
-          scope,
-          raw(`"__visible"."${comp == 'entity' ? 'id' : 'entity'}"`),
-        ))
-      }
-      let cols: Cond[] | undefined
-      if (comp == 'entity' && masked) {
-        let hidden = aspects.map(([name, policy]) =>
-          and(
-            exists(select({
-              cols: [val(1)],
-              from: raw(`${base.source?.(name) ?? quoted(name)} as "__aspect"`),
-              where: eq(raw('"__aspect"."entity"'), raw('"__visible"."id"')),
-            })),
-            not(permits(policy, raw('"__visible"."id"'))),
-          )
-        )
-        cols = [
-          ...['id', 'eid', 'num'].map((p) => raw(`"__visible".${quoted(p)}`)),
-          raw('"__visible"."archetype" as "__stored_archetype"'),
-          as(
-            when([[or(...hidden), lit(null)]], raw('"__visible"."archetype"')),
-            'archetype',
-          ),
-        ]
-      }
-      ctes.set(name, {
-        name,
-        materialized: false,
-        q: select({
-          cols,
-          from: raw(`${base.source?.(comp) ?? quoted(comp)} as "__visible"`),
-          where: and(...where),
-        }),
-      })
+      if (comp != 'entity' && visibility.entity) source('entity')
+      let cte: Cte | undefined
+      ctes.set(name, () => cte ??= admits(comp, name, scope))
     }
     return quoted(name)
+  }
+  // The rows of `comp` the visibility admits, as the relation named `name`.
+  let admits = (
+    comp: string,
+    name: string,
+    scope: string | And | undefined,
+  ): Cte => {
+    let where = []
+    if (comp != 'entity' && visibility.entity) {
+      where.push(exists(select({
+        cols: [val(1)],
+        from: raw(`${source('entity')} as "__owner"`),
+        where: eq(raw('"__owner"."id"'), raw('"__visible"."entity"')),
+      })))
+    }
+    if (scope) {
+      where.push(permits(
+        scope,
+        raw(`"__visible"."${comp == 'entity' ? 'id' : 'entity'}"`),
+      ))
+    }
+    let cols: Cond[] | undefined
+    if (comp == 'entity' && masked) {
+      let hidden = aspects.map(([name, policy]) =>
+        and(
+          exists(select({
+            cols: [val(1)],
+            from: raw(`${base.source?.(name) ?? quoted(name)} as "__aspect"`),
+            where: eq(raw('"__aspect"."entity"'), raw('"__visible"."id"')),
+          })),
+          not(permits(policy, raw('"__visible"."id"'))),
+        )
+      )
+      cols = [
+        ...['id', 'eid', 'num'].map((p) => raw(`"__visible".${quoted(p)}`)),
+        raw('"__visible"."archetype" as "__stored_archetype"'),
+        as(
+          when([[or(...hidden), lit(null)]], raw('"__visible"."archetype"')),
+          'archetype',
+        ),
+      ]
+    }
+    return {
+      name,
+      materialized: false,
+      q: select({
+        cols,
+        from: raw(`${base.source?.(comp) ?? quoted(comp)} as "__visible"`),
+        where: and(...where),
+      }),
+    }
   }
   let entity = source('entity')
   let scoped: Dialect = {
@@ -3920,7 +3941,7 @@ let visible = (
   let tally = scopedTally(
     ast,
     vocab,
-    opts,
+    heard === opts ? opts : { ...opts, ...heard },
     base,
     scoped,
     reads,
@@ -3929,7 +3950,7 @@ let visible = (
     screening,
   )
   if (tally) return { opts, lower: () => tally }
-  let catalog = opts.archetypes
+  let catalog = heard.archetypes
   let archetypes: ArchetypeSet | undefined = catalog
     ? Object.defineProperty(
       (p: Presence) =>
@@ -3991,12 +4012,16 @@ let visible = (
     scoped,
     reads,
     { visibility, dialect: base, screening, correlated },
+    { archetypes, extend: heard.extend },
   )
   return {
     ...inner,
     lower: () => {
       let out = inner.lower()
-      return { ...out, with: [...ctes.values(), ...out.with ?? []] }
+      return {
+        ...out,
+        with: [...[...ctes.values()].map((cte) => cte()), ...out.with ?? []],
+      }
     },
   }
 }

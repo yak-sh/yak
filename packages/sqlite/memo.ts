@@ -186,6 +186,8 @@ export let basis = (
   let out = new Set(['tombstone'])
   if (catalogued) out.add('archetype')
   let path = (segs: string[], facet = false): boolean => {
+    // A backlink is no path aim() answers: say so without the refusal.
+    if (!vocab.comp(segs[0]) && vocab.assoc(segs[0])) return false
     let hops
     try {
       hops = vocab.aim(segs.join('.'), facet)
