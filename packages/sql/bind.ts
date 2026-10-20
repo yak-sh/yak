@@ -191,6 +191,9 @@ type Ctx = {
   owner?: string
   /** An owner probe needs a predicate, not global candidate selections. */
   correlated?: boolean
+  /** A bounded alternative's seek finds its rows: a disjunction left in it
+   * tests each of them (`limited`). */
+  row?: boolean
   exactIds?: boolean
   eids?: BindOpts['eids']
   references?: BindOpts['references']
@@ -887,12 +890,14 @@ let indexFor = (ctx: Ctx, comp: string, prop: string, cs: Clause[]) => {
     return eq * 4 + Number(range) * 2 +
       Number(order == `${comp}.${next}`)
   }
-  let choices = ctx.v.indexes(comp)
-    .filter((i) => i.props[0] == prop && !i.present)
-    .sort((a, b) => score(b.props) - score(a.props))
-  let index = choices[0]
-  return index &&
-    { name: indexName(ctx.v, comp, index.props), n: score(index.props) }
+  // The first of the best, each index scored once.
+  let best: { props: string[]; n: number } | undefined
+  for (let { props, present } of ctx.v.indexes(comp)) {
+    if (props[0] != prop || present) continue
+    let n = score(props)
+    if (!best || n > best.n) best = { props, n }
+  }
+  return best && { name: indexName(ctx.v, comp, best.props), n: best.n }
 }
 
 // Whether a path's equality can be read from its far end, one index seek per
@@ -1264,9 +1269,10 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
       return { branch, where, joins: joinsOf(branch), x }
     })
   })
-  // A correlated row, or one of a few named owners, is already in hand: its
-  // alternatives are tests of that row, never selections of their own.
-  if (ctx.correlated || ctx.bounded) {
+  // A correlated row, one of a few named owners, or a row a bounded seek found
+  // is already in hand: its alternatives are tests of that row, never
+  // selections of their own.
+  if (ctx.correlated || ctx.bounded || ctx.row) {
     for (let { branch } of branches) {
       for (let table of branch.tables) ctx.tables.add(table)
     }
@@ -2002,7 +2008,7 @@ let addressed = (
       c.path.length == 1 && c.op == '!' ||
       c.path.length == 2 && needs(opOf(c), c.value))
   )
-  return scope.length
+  return scope.length && !ctx.row
     ? cs.map((c) =>
       c.kind == 'or' && !shapes.has(c)
         ? {
@@ -2981,6 +2987,24 @@ export let prepared = (
   }
 }
 
+// Whether an index can seek a test: an equality or a comparison of an indexed
+// property, or of an entity's own id.
+let indexable = (ctx: Ctx, p: Pred): boolean =>
+  p.path.length == 2 && ['', '<', '<=', '>', '>='].includes(opOf(p)) &&
+  (p.path[0] == 'entity' ||
+    ctx.v.indexes(p.path[0]).some((i) =>
+      !i.present && i.props.includes(p.path[1])
+    ))
+
+let leaves = (cs: Clause[]): Pred[] =>
+  cs.flatMap((c) =>
+    c.kind == 'pred'
+      ? [c]
+      : c.kind == 'and' || c.kind == 'or'
+      ? leaves(c.clauses)
+      : []
+  )
+
 // Any N rows can come from at most N rows of each complete alternative. Keep
 // the cap inside those indexed seeks; a UNION of whole histories defeats an
 // outer LIMIT even when the caller does not ask for an order.
@@ -2988,23 +3012,34 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
   let limit = find<Limit>(ast.clauses, 'limit')
   if (
     !ctx.unordered || !limit || limit.n <= 0 || ctx.spine || ctx.correlated ||
-    ctx.owner || ctx.visibility || ctx.eids || ctx.ext.length ||
+    ctx.row || ctx.owner || ctx.visibility || ctx.eids || ctx.ext.length ||
     ast.clauses.some((c) =>
       ['order', 'after', 'count', 'tally', 'distinct'].includes(c.kind)
     )
   ) return
-  let arms = alternatives(ast.clauses.filter((c) => !directive(c)))
-  if (!arms) return
-  if (
-    arms.length == 1 &&
-    !arms[0].some((c) =>
-      opOf(c) == '' && blank(c.value) && !ctx.points?.has(c.path.join('.')) &&
+  let filters = ast.clauses.filter((c) => !directive(c))
+  let emptyOf = (cs: Clause[]) =>
+    cs.filter((c): c is Pred =>
+      c.kind == 'pred' && opOf(c) == '' && blank(c.value) &&
+      !ctx.points?.has(c.path.join('.')) &&
       ctx.v.prop(c.path[0], c.path[1])?.affinity == 'text'
     )
-  ) return
+  // The ordinary plan streams one disjunction's arms as its candidates, and
+  // the outer limit stops them. A second disjunction it reads whole, to test
+  // the first's rows against; an empty text test it cannot seek at all.
+  let ors = (cs: Clause[]): number =>
+    cs.reduce(
+      (n, c) =>
+        n + (c.kind == 'or' ? 1 : 0) +
+        (c.kind == 'or' || c.kind == 'and' ? ors(c.clauses) : 0),
+      0,
+    )
+  if (ors(filters) < 2 && !emptyOf(flattened(filters)).length) return
+  let arms = alternatives(filters, (p) => indexable(ctx, p))
+  if (!arms) return
   let choices = arms.flatMap((cs) => {
     if (
-      cs.some((c) =>
+      leaves(cs).some((c) =>
         c.path.length != 2 || c.path[0] != 'entity' &&
           (!ctx.v.prop(c.path[0], c.path[1]) ||
             computed(ctx.v, c.path[0]) ||
@@ -3012,11 +3047,7 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
             ctx.derived[c.path.join('.')])
       )
     ) return []
-    let empty = cs.filter((c) =>
-      opOf(c) == '' && blank(c.value) &&
-      !ctx.points?.has(c.path.join('.')) &&
-      ctx.v.prop(c.path[0], c.path[1])?.affinity == 'text'
-    )
+    let empty = emptyOf(cs)
     if (empty.length > 6) return []
     let modes = empty.reduce<Map<string, boolean>[]>(
       (sets, c) =>
@@ -3047,6 +3078,7 @@ let limited = (ast: And, ctx: Ctx): Frag | undefined => {
       tables: new Set(),
       candidates: undefined,
       points: new Set(empty.map((c) => c.path.join('.'))),
+      row: true,
     }
     let q = lower({ kind: 'and', clauses: [...cs, limit] }, branch, [])
     return select({

@@ -63,10 +63,27 @@ let fixture = (n: number, mode: string) => {
       insert('effect', { entity: n + 1, handler: 'target', state: 'pending' }),
     )
   }
+  // A process's startup run is its own: a peer's is passed over.
+  if (mode == 'started') {
+    for (let [id, eid] of [[n + 1, 'peer'], [n + 2, 'me']] as const) {
+      sql.query(insert('entity', { id, eid }))
+      sql.query(insert('entity', { id: id + 2, eid: `${eid}-start` }))
+      sql.query(insert('effect', {
+        entity: id + 2,
+        handler: 'target',
+        state: 'pending',
+        kind: 'started',
+        target: id,
+      }))
+    }
+  }
   // The first lookup follows installation over a graph with the old index
   // declaration and a populated backlog, as an existing host upgrades.
   storage(sql, vocab).install()
-  let q = and(...ready(['target']).clauses, limit(1))
+  let q = and(
+    ...ready(['target'], mode == 'started' ? { owner: 'me' } : {}).clauses,
+    limit(1),
+  )
   let query = compile(q, vocab, { now: 1000, unordered: true })
   let plan = sql.query({ t: 'explain query plan', of: query })
     .map((r) => String(r.detail)).join('\n')
@@ -86,12 +103,13 @@ let observed = (f: ReturnType<typeof fixture>) => {
   }
 }
 
-for (let mode of ['idle blocked', 'one ready', 'many ready']) {
+for (let mode of ['idle blocked', 'one ready', 'many ready', 'started']) {
   for (let n of [64, 4096]) {
     let { found, scans, steps, plan } = observed(fixture(n, mode))
     test(`${mode}: an effects lookup stays bounded across ${n} pending rows`, () => {
       assertEquals(found.length, mode == 'idle blocked' ? 0 : 1)
       if (mode == 'one ready') assertEquals(found[0].eid, 'ready')
+      if (mode == 'started') assertEquals(found[0].eid, 'me-start')
       assert(scans < 20, `${scans} scan advances\n${plan}`)
       assert(steps < 2000, `${steps} VM steps\n${plan}`)
     })
