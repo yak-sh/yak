@@ -2486,7 +2486,11 @@ let indexedRelation = (
   }
   // A direct mandatory predicate also bounds every OR arm. Starting at its
   // whole prefix again would discard the narrower candidates just selected.
-  if (ctx.candidates && root?.pred?.path.length == 2) root = undefined
+  // A shape's candidates are every owner of its archetypes, history included,
+  // and carry no such predicate: the predicate's index still drives them.
+  if (
+    ctx.candidates && !ctx.shapeCandidates && root?.pred?.path.length == 2
+  ) root = undefined
   // A presence table is the fallback, after a bounded indexed predicate.
   // Otherwise `.using .entry.session=X` walks every request in the graph
   // instead of seeking X's entries and checking their using component.
