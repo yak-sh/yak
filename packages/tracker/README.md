@@ -141,9 +141,11 @@ replies own their own notified mark. Archived bugs still count but never notify.
 Retention keeps the newest hundred plus the first occurrence of each commit (or
 version without a commit).
 
-An occurrence regresses a resolved bug only when its `error.at` is later than
-`resolved.at` and its commit (or version without a commit) is unseen in the
-group. Earlier occurrences and occurrences at the resolution timestamp still
+An occurrence regresses a resolved bug when its `error.at` is later than
+`resolved.at`, unless its commit (or version without a commit) was already seen
+in the group: that is old code still running. One naming no release, such as a
+systemd unit's failure reported from outside the unit, regresses on its time
+alone. Earlier occurrences and occurrences at the resolution timestamp still
 count, but retain `resolved` and `notified` without adding `regressed`.
 
 ## Browsing

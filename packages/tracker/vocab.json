@@ -216,7 +216,7 @@
     "regressed": {
       "component": true,
       "type": "object",
-      "description": "A resolved bug returned in code that had not produced it before resolution.",
+      "description": "A resolved bug that happened again after its resolution, in code that had not produced it before or naming no release at all.",
       "properties": {
         "at": {
           "type": "string",

@@ -202,7 +202,7 @@ test('old code counts without reopening; a new commit regresses once', async () 
   equal(comp((await bugs(g))[0], 'bug').status, 'archived')
 })
 
-for (let kind of ['commit', 'version']) {
+for (let kind of ['commit', 'version', 'no release']) {
   for (
     let [when, at] of [
       ['before', '2026-10-02T00:00:01Z'],
@@ -217,6 +217,10 @@ for (let kind of ['commit', 'version']) {
     if (kind == 'version') {
       first.error = { ...comp(first, 'error'), commit: null, version: 1 }
       row.error = { ...comp(row, 'error'), commit: null, version: 2 }
+    }
+    if (kind == 'no release') {
+      first.error = { ...comp(first, 'error'), commit: null }
+      row.error = { ...comp(row, 'error'), commit: null }
     }
     await put(g, first)
     let [bug] = await bugs(g)

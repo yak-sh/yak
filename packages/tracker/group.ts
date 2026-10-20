@@ -52,10 +52,14 @@ let inherited = (row: Bundle, bug: Bundle | undefined, before: Bundle[]) => {
     ),
   )
 }
+/** A resolved bug comes back when it happens after its resolution, unless the
+ * occurrence names a release the group already saw: that is old code still
+ * running. An occurrence naming no release (a systemd unit's failure, reported
+ * from outside the process that ran) has only its time to go by. */
 export let regresses = (row: Bundle, bug: Bundle, before: Bundle[]): boolean =>
   !imported(row) && !!bug.resolved &&
   str(comp(row, 'error').at) > str(comp(bug, 'resolved').at) &&
-  !!release(row) && !before.some((old) => release(old) == release(row))
+  !(release(row) && before.some((old) => release(old) == release(row)))
 
 export let grouped = (
   row: Bundle,
