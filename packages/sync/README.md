@@ -345,15 +345,16 @@ applying. Until the first answer arrives, local queries can return incomplete
 cached data. `refusal(id)` exposes the refusal until a successful answer or an
 unsubscribe clears it.
 
-The socket reconnects with a delay doubling from `wait` (default 250 ms) to
-`most` (default 30 seconds), resetting on open. Once an open socket that closed
-opens again, `report` receives a `Dropped` error naming its close code and how
-long it was down; an outage still going at `most` is reported once as it lasts.
-`timer` supplies reconnect and pace timers. Refused subscriptions are not
-reopened automatically; explicitly subscribe on their id to retry. The first
-successful frame after reconnecting replaces prior membership, adding missing
-entities to `gone`. Cached data alone never makes a subscription ready on a new
-connection.
+A connection that held at least `wait` (default 250 ms) and dropped, as one does
+when its server hands over to a replacement, is reopened at once. A failed
+attempt is retried after a delay doubling from `wait` to `most` (default 30
+seconds), resetting on open. Once an open socket that closed opens again,
+`report` receives a `Dropped` error naming its close code and how long it was
+down; an outage still going at `most` is reported once as it lasts. `timer`
+supplies reconnect and pace timers. Refused subscriptions are not reopened
+automatically; explicitly subscribe on their id to retry. The first successful
+frame after reconnecting replaces prior membership, adding missing entities to
+`gone`. Cached data alone never makes a subscription ready on a new connection.
 
 ### The store's clock
 
@@ -422,11 +423,14 @@ still writing. `Mine` is the predicate identifying those components.
 omitted properties within the supplied
 [coverage](../graph/README.md#projections). It retains local and unsaved peer
 components. `preserve(eid, component, property?)` can retain omitted values
-owned elsewhere; `mine` protects this node's peer writes.
+owned elsewhere; `mine` protects this node's peer writes. A row that already
+reads as the snapshot says is not applied again and is not in what it returns,
+so an answer heard whole again after a reconnect changes only what moved.
 
 `replicate(graph, bundles)` marks and applies server patches as trusted replica
-writes. Register `marks` on a graph that uses these incoming helpers without a
-Sync; it declares the requests they use.
+writes, unstamped: a replica keeps the stamps its server wrote. Register `marks`
+on a graph that uses these incoming helpers without a Sync; it declares the
+requests they use.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -458,6 +462,10 @@ await g.apply([{
 }])
 await snapshot(g, [{ entity: { eid: 'b1' }, book: { title: 'DUNE' } }])
 equal((await g.get(['b1']))[0].book, { title: 'DUNE' })
+equal(
+  await snapshot(g, [{ entity: { eid: 'b1' }, book: { title: 'DUNE' } }]),
+  [],
+)
 await land(g, { id: 'books', gone: ['b1'] })
 equal((await g.get(['b1']))[0].book, undefined)
 equal((await g.get(['b1']))[0].draft, { text: 'notes' })

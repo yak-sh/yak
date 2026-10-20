@@ -83,13 +83,14 @@ export let echo = (bundles: Bundle[]): Bundle[] =>
 export let echoed = (b: Bundle): boolean => b[ECHO] === true
 
 /** What the server sent, applied to this replica: marked as an echo so it never
- * goes back, trusted since the server admitted it already, and as a replica so
- * a component this copy was not loaded with is left out rather than refused. */
+ * goes back, trusted since the server admitted it already, unstamped since its
+ * stamps are the server's, and as a replica so a component this copy was not
+ * loaded with is left out rather than refused. */
 export let replicate = (
   graph: Graph,
   bundles: Bundle[],
 ): Bundle[] | Promise<Bundle[]> =>
-  graph.apply(echo(bundles), { trusted: true, replica: true })
+  graph.apply(echo(bundles), { trusted: true, replica: true, stamp: false })
 
 /** A bundle with the marks removed: what a caller gets back from `apply()`,
  * which is their data and not this package's bookkeeping. */

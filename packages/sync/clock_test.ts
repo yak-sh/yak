@@ -70,10 +70,9 @@ test('socket clock calibrates, refines, holds through reconnect, and stops on cl
     JSON.stringify({ clock: 2000, received: 2210, sent: 2210 }),
   )
   equal(w.now(), 2220)
-  sockets[0].client.close()
+  sockets[0].client.close() // it held a second, so it is reopened at once
   equal(w.now(), 2220)
   due.shift()!() // obsolete sample timer cannot send
-  due.shift()!() // reconnect
   sockets[1].client.emit('open')
   time = 2040
   sockets[1].server.send(

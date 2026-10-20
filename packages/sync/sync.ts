@@ -100,7 +100,8 @@ export type SyncOpts = {
   timer?: Timer
   /** headers on every `POST /apply` — an authorization, say */
   headers?: Record<string, string>
-  /** the first reconnect delay in ms, doubling to `most` (default: 250) */
+  /** the reconnect delay in ms after a failed attempt, doubling to `most`
+   * (default: 250); a connection that held this long is retried at once */
   wait?: number
   /** the longest reconnect delay in ms (default: 30_000) */
   most?: number

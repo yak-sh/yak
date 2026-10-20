@@ -113,7 +113,8 @@ export type WireOpts = {
   time?: () => number
   /** how a reconnect is scheduled (default: `setTimeout`) */
   timer?: Timer
-  /** the first reconnect delay in ms, doubling to `most` (default: 250) */
+  /** the reconnect delay in ms after a failed attempt, doubling to `most`
+   * (default: 250); a connection that held this long is retried at once */
   wait?: number
   /** the longest reconnect delay in ms (default: 30_000) */
   most?: number
@@ -297,8 +298,13 @@ export let wire = (opts: WireOpts): Wire => {
     return opts.land({ ...frame, gone })
   }
 
-  let retry = () => {
+  // `now`: the connection that dropped had held for a while, which is what a
+  // server handing over to its replacement looks like, so the next one opens
+  // at once. A connection that fails, or drops as soon as it opened, waits out
+  // the backoff, so a server that accepts and hangs up is never hammered.
+  let retry = (now = false) => {
     if (closed || retrying) return
+    if (now) return open()
     retrying = true
     timer(() => {
       retrying = false
@@ -312,8 +318,10 @@ export let wire = (opts: WireOpts): Wire => {
     if (socket && socket.readyState <= OPEN) return
     let s = connect(wsUrl(opts.url))
     socket = s
+    let opened: number | undefined
     s.addEventListener('open', () => {
       if (socket != s || closed) return
+      opened = agreed.read()
       waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
       told = false
@@ -421,20 +429,21 @@ export let wire = (opts: WireOpts): Wire => {
       let why = (e as ErrorEvent).message || 'the connection failed'
       opts.report(new Error(`${wsUrl(opts.url)}: ${why}; still reconnecting`))
     })
-    let opened = false
-    s.addEventListener('open', () => opened = true)
     s.addEventListener('close', (e) => {
       if (socket != s) return
       socket = null
       // A connection that never opened is a retry failing, not a drop.
-      if (opened) down ??= { at: agreed.read(), code: (e as CloseEvent).code }
+      if (opened !== undefined) {
+        down ??= { at: agreed.read(), code: (e as CloseEvent).code }
+      }
       stopClock()
       waiting = []
       inbox = []
+      // The next connection is on its way before the page hears of the loss.
+      retry(opened !== undefined && agreed.read() - opened >= first)
       for (let id of asks.keys()) {
         if (!refused.has(id)) opts.pending?.(id)
       }
-      retry()
     })
   }
 

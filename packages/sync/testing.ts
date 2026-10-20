@@ -316,6 +316,7 @@ export let client = (srv: Server): Client => {
     fetch: (request) => srv.handler(request),
     connect,
     timer,
+    time: () => now,
     report: (t) => trouble.push(t),
   })
   return {

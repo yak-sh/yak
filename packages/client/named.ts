@@ -198,8 +198,15 @@ export let namedClient = (opts: {
     handles.set(sub, { line, watch })
     let names = named.get(wire) ?? new Set()
     named.set(wire, names.add(sub))
+    // Readiness is retained across reconnects, so a socket that drops and
+    // answers again with the same rows changes nothing a reader can see, and
+    // the host is not woken for it.
+    let told: unknown[] = []
     let heard = () => {
       if (watch.ready) answered.add(wire)
+      let now = [watch.value, watch.reduced, watch.refused, answered.has(wire)]
+      if (now.every((v, i) => v === told[i])) return
+      told = now
       opts.ready(sub)
     }
     watch.subscribe(heard)

@@ -57,6 +57,25 @@ test('inactive LRU is bounded, reads touch without changing query order', async 
   c.close()
 })
 
+let heard = fixture()
+let heardAll = heard.c.watch('.doc')
+heard.frame('s1', [row('a'), row('b')])
+
+test('a whole answer heard again lands only the rows that moved', () => {
+  let { c, sockets } = heard
+  let w = heardAll
+  let touched: string[] = []
+  c.cache.onRows((eids) => touched.push(...eids))
+  let moved = { ...row('b'), doc: { title: 'B' } }
+  sockets[0].emit(
+    'message',
+    JSON.stringify({ id: 's1', bundles: [row('a'), moved], reset: true }),
+  )
+  assertEquals(touched, ['b'])
+  assertEquals(w.value.map((b) => comp(b, 'doc').title), ['a', 'B'])
+  c.close()
+})
+
 let shared = fixture({ retention: 0 })
 let sharedAll = shared.c.watch('.doc')
 let sharedOne = shared.c.watch('.doc.title=a')

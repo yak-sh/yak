@@ -299,6 +299,26 @@ test('a dropped socket resubscribes and catches up on what it missed', async () 
   b.wire.close()
 })
 
+test('a connection that held is reopened at once, one that did not backs off', async () => {
+  let srv = server()
+  let c = client(srv)
+  let reopened = async (ms: number) => {
+    let before = srv.sockets.length
+    c.pass(ms)
+    await c.idle()
+    return srv.sockets.length > before
+  }
+  c.wire.open()
+  await c.idle()
+  c.pass(1000)
+  srv.sockets[0].close() // its server hands over to a replacement
+  assert(await reopened(0))
+  srv.sockets[1].close() // hung up as soon as it answered
+  assert(!await reopened(249))
+  assert(await reopened(1))
+  c.wire.close()
+})
+
 test('what came from the server is never sent back to it', async () => {
   let srv = server()
   let c = client(srv)

@@ -18,7 +18,7 @@
 // finds them beside the entity they belong to.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
-import { after } from '@yaks/fp'
+import { after, same } from '@yaks/fp'
 import { comps, dead } from '@yaks/graph/bundle'
 import { transient } from '@yaks/graph/read'
 import { replicate } from './mark.ts'
@@ -164,11 +164,35 @@ export let hear = (
   })
 }
 
+// Whether a patch would change the row held: an entity field, component or
+// property it sets that does not already read so, or one it clears that is
+// there. A whole answer heard again after a reconnect is mostly rows that did
+// not move, and applying those would redo every reader's work for nothing.
+let changes = (held: Bundle | undefined, patch: Bundle): boolean => {
+  if (!held || dead(held) || dead(patch)) return true
+  for (let [key, value] of Object.entries(patch.entity)) {
+    if (!same((held.entity as Record<string, unknown>)[key], value)) return true
+  }
+  for (let [name, comp] of comps(patch)) {
+    let was = held[name] as Comp | null | undefined
+    if (comp == null ? was != null : was == null) return true
+    for (let [prop, value] of Object.entries(comp ?? {})) {
+      if (value == null ? was![prop] != null : !same(was![prop], value)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 /** Replace the components the server stores with a query's whole rows,
  * including the properties it reports as absent. A raw feed carries patches
  * instead, and must use land(). Local components and unsaved peer components
  * never ride a stored row, so a snapshot never removes them. Saved peer values
- * initialize readers while this node's own live writes remain ahead of them. */
+ * initialize readers while this node's own live writes remain ahead of them.
+ * A row that already reads as its snapshot says is left alone, and is not in
+ * what this returns: landing a whole answer again costs a comparison per row,
+ * and only what moved is applied. */
 export let snapshot = (
   graph: Graph,
   bundles: Bundle[],
@@ -221,7 +245,7 @@ export let snapshot = (
           }
         }
         return out
-      })
+      }).filter((patch) => changes(previous.get(patch.entity.eid), patch))
       return patches.length ? replicate(graph, patches) : []
     },
   )
