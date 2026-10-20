@@ -349,8 +349,9 @@ let line: Reader = (e) => {
  * `claude -p --output-format stream-json` prints. The two share their message
  * lines; the file adds the queue and the harness's own notes, and the stream
  * adds the line that opens a run and the one that ends it. A side
- * conversation, which older files keep inline, is a subagent's, not this
- * session's.
+ * conversation, which older files keep inline and the stream marks with the
+ * call that started it, is a subagent's, read from its own transcript, not
+ * this session's.
  *
  * ```ts
  * import { claude } from '@yaks/session'
@@ -358,9 +359,12 @@ let line: Reader = (e) => {
  *
  * let typed = { type: 'user', origin: { kind: 'human' }, message: { content: 'hi' } }
  * assertEquals(claude(typed).entries, [{ content: { body: 'hi' } }])
+ * let aside = { type: 'assistant', parent_tool_use_id: 'toolu_1', message: { content: 'done' } }
+ * assertEquals(claude(aside).entries, [])
  * ```
  */
-export let claude: Reader = (e) => e.isSidechain ? nothing : line(e)
+export let claude: Reader = (e) =>
+  e.isSidechain || e.parent_tool_use_id ? nothing : line(e)
 
 /**
  * A Claude Code subagent's own transcript
