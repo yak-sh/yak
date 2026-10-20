@@ -17,9 +17,10 @@ export let ready = (
   let disabled = handlers.filter((name) => opts.disabled?.includes(name))
   let claims = opts.singleOwner ? [] : [free]
   // A replacement owes its own startup. A peer taking that row would run its
-  // own closure instead, then lose the duty when the peer shuts down.
+  // own closure instead, then lose the duty when the peer shuts down. Not
+  // equals holds where there is no kind, so absence needs no arm of its own;
+  // each arm of this disjunction is another seek per pass.
   let owner = opts.singleOwner || !opts.owner ? [] : [or(
-    absent('effect.kind'),
     ne('effect.kind', 'started'),
     eq('effect.target', opts.owner),
   )]
