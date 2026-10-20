@@ -58,7 +58,14 @@
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, dead } from '@yaks/graph/bundle'
 import type { Prop, Vocab } from '@yaks/vocab'
-import { type And, bare, type Clause, drifts, type Pred } from '@yaks/query'
+import {
+  type And,
+  and,
+  bare,
+  type Clause,
+  drifts,
+  type Pred,
+} from '@yaks/query'
 import {
   col,
   type Derived,
@@ -293,6 +300,9 @@ export let rooted = (
     for (let h of hops.slice(1)) strict.add(h.comp)
     return hops.length <= 1
   }
+  // A predicate the proof cannot test stands as true, the empty conjunction,
+  // wherever it sits. `every` is a projection, which @yaks/match drops at the
+  // top and refuses inside a disjunction.
   let visit = (c: Clause, shapes = false): Clause => {
     if (c.kind == 'and' || c.kind == 'or') {
       return { ...c, clauses: c.clauses.map((c) => visit(c, shapes)) }
@@ -301,7 +311,7 @@ export let rooted = (
       return path(c.path, bare(c)) &&
           (!shapes || !vocab.aim(c.path.join('.'), bare(c))[0].prop)
         ? c
-        : { kind: 'every' }
+        : and()
     }
     if (c.kind == 'fields') {
       c.fields.forEach((f) => path(f.path))
