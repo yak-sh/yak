@@ -122,7 +122,7 @@ Think about who needs it, and when.
 - **A task or a design** holds what's to be done. A skill says what is.
 
 A preloaded memory that only one area needs is a skill waiting to happen.
-Moving it changes the persona, so mention it to the owner first (M-31947).
+Moving it changes the persona, so mention it to the owner first (M-31946).
 
 ## The description is how it gets found
 

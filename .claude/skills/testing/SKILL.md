@@ -133,9 +133,10 @@ stronger.
   (bench/suites.md); the `benchmark:` line closing a run is that timing,
   report-only, not a test result.
 - `deno task check` (fmt, lint, bytes, types, publish, browser, workers and
-  content) is separate from tests; run `deno fmt` and `deno lint` on the files
-  you changed before landing—the gate refuses both—and run the other parts
-  your change touches (`deno task check:types`, …).
+  content) is separate from tests, and `deno task gate` runs both; run
+  `deno fmt` and `deno lint` on the files you changed before landing—the gate
+  refuses both—and run the other parts your change touches
+  (`deno task check:types`, …).
 - Piping a run eats its exit code: read `${pipestatus[1]}` before acting.
 - A run doesn't type-check (`--no-check`); the gate does. `deno check` the files
   you changed, test files included, before landing.
