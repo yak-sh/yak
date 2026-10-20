@@ -8,7 +8,7 @@
   "tolerance": 0.25,
   "benches": [
     {
-      "name": "push → live",
+      "name": "build → live",
       "unit": "s",
       "better": "lower",
       "median": 47.478

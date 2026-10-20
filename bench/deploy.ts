@@ -9,6 +9,9 @@ import {
 export type Deploy = {
   sha: string
   pushed: string
+  /** when Cloudflare's build of the commit began running (Workers Builds
+   * `running_on`): what came before it was the build waiting its turn */
+  started?: string
   uploaded: string
   live: string | null
   seconds: number | null
@@ -32,6 +35,10 @@ export let records = (text: string): Deploy[] =>
         !r || typeof r.sha != 'string' || !/^[a-f\d]{40}$/i.test(r.sha) ||
         !stamp(r.pushed) ||
         !stamp(r.uploaded) || Date.parse(r.uploaded) < Date.parse(r.pushed) ||
+        (r.started !== undefined &&
+          (!stamp(r.started) ||
+            Date.parse(r.started) < Date.parse(r.pushed) ||
+            Date.parse(r.uploaded) < Date.parse(r.started))) ||
         (r.estimated !== undefined && typeof r.estimated != 'boolean') ||
         (r.backfill !== undefined && typeof r.backfill != 'boolean') ||
         (r.live === null
@@ -50,27 +57,34 @@ export let records = (text: string): Deploy[] =>
     }
   })
 
-// A deploy is two halves with different owners. `upload` is Cloudflare's —
-// build queue, clone, cache restore, bundle, version create — and `propagate`
-// is that version to the first verified 200. Which half moved is the whole
-// question when a number grows, so every line that prints a total prints the
-// split beside it.
+// A deploy is three spans. `queue` is the build waiting for Cloudflare to
+// start it, which a burst of pushes lengthens and nothing in the repo does;
+// `upload` is the build itself (clone, cache restore, bundle, version create);
+// `propagate` is that version to the first verified 200. Which one moved is
+// the whole question when a number grows, so every line that prints a total
+// prints the split beside it.
 //
-// Derived, never stored: the row keeps its three stamps and the arithmetic
-// runs on them, so a row written before this existed reads the same way as one
-// written after. Splitting Cloudflare's queue back out of `upload` would need
-// the Workers Builds API, which refuses every credential on this box — it
-// takes a user-scoped API token (bench/deploys.md).
+// Derived, never stored: the row keeps its stamps and the arithmetic runs on
+// them. `started` comes from the Workers Builds API (bin/deploy-time.ts); a
+// row without it counts the wait as the build's own.
+let secs = (from: string, to: string) =>
+  (Date.parse(to) - Date.parse(from)) / 1000
+
 export let stages = (r: Deploy) => ({
-  upload: (Date.parse(r.uploaded) - Date.parse(r.pushed)) / 1000,
-  propagate: r.live == null
-    ? null
-    : (Date.parse(r.live) - Date.parse(r.uploaded)) / 1000,
+  queue: r.started == null ? null : secs(r.pushed, r.started),
+  upload: secs(r.started ?? r.pushed, r.uploaded),
+  propagate: r.live == null ? null : secs(r.uploaded, r.live),
 })
 
+/** The deploy's own time: its build starting to live, the queue before it
+ * left out. */
+export let own = (r: Deploy) =>
+  r.live == null ? null : secs(r.started ?? r.pushed, r.live)
+
 export let split = (r: Deploy) => {
-  let { upload, propagate } = stages(r)
-  return `upload ${upload.toFixed(3)}s` +
+  let { queue, upload, propagate } = stages(r)
+  return (queue == null ? '' : `queue ${queue.toFixed(3)}s + `) +
+    `upload ${upload.toFixed(3)}s` +
     (propagate == null ? '' : ` + propagate ${propagate.toFixed(3)}s`)
 }
 
@@ -108,19 +122,19 @@ export let suite = (rows: Deploy[]): CollectedSuite | null => {
     metric: 'latest-verified-live',
     workload: 1,
     benches: [
-      { name: 'push → live', unit: 's' },
+      { name: 'build → live', unit: 's' },
       { name: '60s budget exceeded', unit: 'violations' },
     ],
     collect: () => ({
-      'push → live': {
-        value: row.seconds!,
+      'build → live': {
+        value: own(row)!,
         source: 'verified-live',
         details: row,
       },
       // The old gate also enforces a strict 60s budget. Encoding its violation
       // as a sample keeps the shared ratchet as the only verdict mechanism.
       '60s budget exceeded': {
-        value: overBudget(row.seconds!) ? 1 : 0,
+        value: overBudget(own(row)!) ? 1 : 0,
         source: '60s-budget',
       },
     }),
@@ -131,7 +145,7 @@ export let run = async (options: Options, rows?: Deploy[]) => {
   let measured = rows ?? await readRecords()
   let work = suite(measured)
   if (
-    options.mode == 'accept' && work && overBudget(latest(measured)!.seconds!)
+    options.mode == 'accept' && work && overBudget(own(latest(measured)!)!)
   ) {
     throw new Error('Cannot accept a deploy exceeding the strict 60s budget')
   }

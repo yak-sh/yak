@@ -76,23 +76,25 @@ successful record keeps its first observation. Historical probes either cannot
 verify the version or yield a late upper bound; `backfill: true` excludes both
 from the ratchet.
 
-Every line that prints a total prints the split beside it: `upload` is
-`uploaded - pushed`, Cloudflare's half — build queue, clone, cache restore,
-bundle, version create — and `propagate` is `live - uploaded`, that version to
-the first verified 200. `stages()` and `split()` in `bench/deploy.ts` derive
-both from the three stamps a row already carries, so a row written before the
-split existed reads the same way as one written after; nothing derived is
-stored. Splitting Cloudflare's queue back out of `upload` would take the
+Every line that prints a total prints the split beside it: `queue` is
+`started - pushed`, the build waiting for Cloudflare to start it; `upload` is
+`uploaded - started`, the build itself (clone, cache restore, bundle, version
+create); and `propagate` is `live - uploaded`, that version to the first
+verified 200. `started` is the build's `running_on` from the
 [Workers Builds API](https://developers.cloudflare.com/workers/ci-cd/builds/api-reference/),
-which needs a user-scoped API token minted in the dashboard: the box's wrangler
-OAuth login has no builds scope and every `/builds/` path answers 403, so the
-build's own queued/started/finished stamps are not readable from here.
+read with the runner's `CLOUDFLARE_API_TOKEN` once the probes are done; it takes
+the Workers CI Read permission. A row without it (an older row, or a token that
+cannot read builds) has no `queue`, and its wait counts as the build's own.
+`stages()`, `own()` and `split()` in `bench/deploy.ts` derive all of it from the
+row's stamps; nothing derived is stored.
 
-The baseline preserves the minimum recorded prospective live time. Its 25%
-tolerance permits up to `floor × 1.25`; an independent strict 60-second ceiling
-also applies, so exactly 60 seconds fails. Both comparisons use the same
-benchmark ratchet. Explicit acceptance can lower the floor from reviewed
-observations; a check only compares and writes its result to
+The gate judges the deploy's own time, `build → live` (`own()`:
+`live - started`), so a build waiting its turn behind a burst of pushes is not
+counted against it. The baseline preserves the minimum recorded prospective live
+time. Its 25% tolerance permits up to `floor × 1.25`; an independent strict
+60-second ceiling also applies, so exactly 60 seconds fails. Both comparisons
+use the same benchmark ratchet. Explicit acceptance can lower the floor from
+reviewed observations; a check only compares and writes its result to
 `bench/deploy.results.json`. No recorded rows pass as bootstrap. Corrupt rows
 and an unverified latest deploy fail. Historical backfills stay outside the
 ratchet.

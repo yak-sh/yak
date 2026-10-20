@@ -20,6 +20,11 @@ let row = (seconds: number, n = 0): Deploy => ({
   seconds,
 })
 let history = (...times: number[]) => times.map(row)
+// A deploy `seconds` from push to live whose build waited `queue` of them.
+let waited = (seconds: number, queue: number): Deploy => ({
+  ...row(seconds),
+  started: new Date(queue * 1000).toISOString(),
+})
 
 test('deploy records: JSONL, blank lines, and unavailable historical live times', () => {
   let old = { ...row(40), live: null, seconds: null, backfill: true }
@@ -48,6 +53,9 @@ test('deploy records: corrupt measurements cannot reset the gate', () => {
       { ...row(20), live: null },
       { ...row(20), backfill: 'false' },
       { ...row(20), estimated: 1 },
+      { ...row(20), started: 'soon' },
+      { ...row(20, 1), started: row(20).pushed },
+      { ...row(20), started: row(20).live },
     ]
   ) {
     assertThrows(
@@ -67,11 +75,15 @@ test('deploy stages: the split is arithmetic on the stamps every row already has
   // Cloudflare owns `upload`, we own `propagate`; the verdict never says which
   // grew unless both are on the line. T-35426's three REGRESSIONs were 40s of
   // upload and two minutes of "propagate" that was the gate's own test suite.
-  assertEquals(stages(row(60)), { upload: 30, propagate: 30 })
+  assertEquals(stages(row(60)), { queue: null, upload: 30, propagate: 30 })
   assertEquals(split(row(60)), 'upload 30.000s + propagate 30.000s')
   let unverified = { ...row(60), live: null, seconds: null }
-  assertEquals(stages(unverified), { upload: 30, propagate: null })
+  assertEquals(stages(unverified), { queue: null, upload: 30, propagate: null })
   assertEquals(split(unverified), 'upload 30.000s')
+  assertEquals(
+    split(waited(60, 10)),
+    'queue 10.000s + upload 20.000s + propagate 30.000s',
+  )
 })
 
 let options = (base: Baseline) => ({
@@ -97,7 +109,7 @@ let bank = (): Promise<Baseline> =>
     JSON.parse,
   )
 
-test('deploy suite: banked push-to-live floor refuses a synthetic regression', async () => {
+test('deploy suite: banked build-to-live floor refuses a synthetic regression', async () => {
   let base = await bank()
   let floor = base.benches[0].median
   let check = options(base)
@@ -119,6 +131,24 @@ test('deploy suite: the strict 60s ceiling uses the same ratchet', async () => {
   assertEquals((await run(check, history(50, 59.999)))?.verdict, 'passed')
   let error = await assertRejects(() => run(check, history(50, 60)), Regressed)
   assertEquals((error as Regressed).result.regressions.map((r) => r.name), [
+    '60s budget exceeded',
+  ])
+})
+
+// The baseline as banked, read once.
+let banked = await bank()
+
+test('deploy suite: a build waiting its turn behind a burst of pushes is not the deploy', async () => {
+  let base = structuredClone(banked)
+  base.benches[0].median = 50
+  let check = options(base)
+  assertEquals((await run(check, [waited(80, 30)]))?.verdict, 'passed')
+  let error = await assertRejects(
+    () => run(check, [waited(80, 10)]),
+    Regressed,
+  )
+  assertEquals((error as Regressed).result.regressions.map((r) => r.name), [
+    'build → live',
     '60s budget exceeded',
   ])
 })

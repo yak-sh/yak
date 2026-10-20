@@ -149,6 +149,56 @@ let versions = (): Promise<Version[]> =>
   )
 let pause = () => new Promise((ok) => setTimeout(ok, 1000))
 
+// The account and Worker the builds belong to, as wrangler.toml names them.
+let worker = async () => {
+  let toml = await Deno.readTextFile(
+    new URL('../workers/yak/wrangler.toml', import.meta.url),
+  )
+  let key = (k: string) =>
+    new RegExp(`^${k}\\s*=\\s*"([^"]+)"`, 'm').exec(toml)?.[1]
+  return { account: key('account_id'), name: key('name') }
+}
+
+// The Cloudflare API, read with the runner's CLOUDFLARE_API_TOKEN.
+let cloudflare = async (path: string): Promise<unknown> => {
+  let token = Deno.env.get('CLOUDFLARE_API_TOKEN')
+  if (!token) throw new Error('no CLOUDFLARE_API_TOKEN')
+  let { account } = await worker()
+  let res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${account}/${path}`,
+    {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10_000),
+    },
+  )
+  let body = await res.json()
+  if (!body.success) throw new Error(`${path}: HTTP ${res.status}`)
+  return body.result
+}
+
+type Build = {
+  running_on?: string | null
+  build_trigger_metadata?: { commit_hash?: string; branch?: string }
+}
+
+/** When Cloudflare's build of `sha` began running (Workers Builds
+ * `running_on`), so a row can tell the build waiting its turn from the build
+ * itself. Reading it takes a token that reads Workers CI. */
+export let buildStart = async (
+  sha: string,
+  get: (path: string) => Promise<unknown> = cloudflare,
+  name = 'yak',
+): Promise<string | undefined> => {
+  let scripts = await get('workers/scripts') as { id: string; tag: string }[]
+  let tag = scripts.find((s) => s.id == name)?.tag
+  if (!tag) return
+  let builds = await get(`builds/workers/${tag}/builds?per_page=25`) as Build[]
+  return builds.find((b) =>
+    b.build_trigger_metadata?.commit_hash == sha &&
+    b.build_trigger_metadata.branch == 'main'
+  )?.running_on ?? undefined
+}
+
 export let observe = async (
   version: Version,
   backfill = false,
@@ -389,9 +439,23 @@ export let main = async (args = Deno.args) => {
       sha,
       related: versions,
     })
+    // Asked once the probes are done, so it never delays the first one. A row
+    // without it counts the build's wait as its own (bench/deploy.ts `own`).
+    let running = await buildStart(sha, cloudflare, (await worker()).name)
+      .catch((e: Error) => {
+        console.log(`${sha.slice(0, 8)}: build start unknown — ${e.message}`)
+        return undefined
+      })
+    // GitHub's push stamp is a proxy that can trail the build Cloudflare
+    // started on it, and a build can wait no less than nothing.
+    let started = running && Date.parse(running) <= Date.parse(uploaded)
+      ? new Date(Math.max(Date.parse(running), Date.parse(push.pushed)))
+        .toISOString()
+      : undefined
     let row: Deploy = {
       sha,
       ...push,
+      ...started ? { started } : {},
       uploaded,
       live,
       seconds: live
