@@ -11,13 +11,18 @@
 import type { Keywords } from '@yaks/vocab'
 import doc from './meta/blob.vocab.json' with { type: 'json' }
 
-/** The URI a vocabulary file lists under `$vocabulary` to use `store`. */
+/** The URI a vocabulary file lists under `$vocabulary` to use `store` and
+ * `address`. */
 export let BLOB_URI = 'https://yak.sh/vocab/blob'
 
 /**
- * The `store` keyword vocabulary, ready to register:
+ * The `store` and `address` keyword vocabulary, ready to register:
  * `loadVocab(docs, [blobKeywords])` carries each property's declaration onto
  * `v.prop(comp, prop).keywords.store`, which is where {@link bodies} reads
  * it.
  */
-export let blobKeywords: Keywords = { uri: BLOB_URI, prop: ['store'], doc }
+export let blobKeywords: Keywords = {
+  uri: BLOB_URI,
+  prop: ['store', 'address'],
+  doc,
+}

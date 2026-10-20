@@ -13,7 +13,8 @@
           "type": "number"
         },
         "address": {
-          "type": "string"
+          "type": "string",
+          "address": true
         },
         "media_type": {
           "type": "string"
@@ -34,7 +35,8 @@
         },
         "address": {
           "type": "string",
-          "stamped": true
+          "stamped": true,
+          "address": true
         },
         "media_type": {
           "type": "string",

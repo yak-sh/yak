@@ -61,6 +61,11 @@ export let serve = (port: Port, graph: Access): PortLink =>
           return graph.outside.read(...args as [Query, ReadOpts?])
         case 'outside.get':
           return graph.outside.get(...args as [Eid[], string[]?])
+        // A graph that keeps no deletion time offers no graves.
+        case 'outside.buried':
+          return graph.outside.buried?.(
+            ...args as [string, { after?: string; limit: number }],
+          ) ?? { eids: [] }
         case 'outside.bindings': {
           if (!graph.outside.bindings) {
             throw new Error('this graph evaluates no bindings')
@@ -94,6 +99,7 @@ export let remote = (port: Port, vocab: Vocab): Remote => {
       read: (...args) => ask('outside.read', args),
       get: (...args) => ask('outside.get', args),
       bindings: (...args) => ask('outside.bindings', args),
+      buried: (...args) => ask('outside.buried', args),
     },
     close: () => link.close(),
   }

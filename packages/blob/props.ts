@@ -29,3 +29,19 @@ export let bodies = (vocab: Vocab): Body[] =>
       .filter((prop) => isBody(vocab.prop(comp, prop)))
       .map((prop) => ({ comp, prop }))
   )
+
+/**
+ * Every stored property whose value names bytes in the store: the bodies, and
+ * the properties declaring `address: true`, whose package wrote the bytes and
+ * keeps their address itself. While a row of one names an address, its bytes
+ * are kept.
+ */
+export let holders = (vocab: Vocab): Body[] =>
+  vocab.all.flatMap((comp) =>
+    vocab.props(comp)
+      .filter((prop) => {
+        let p = vocab.prop(comp, prop)
+        return !p?.computed && (isBody(p) || p?.keywords?.address === true)
+      })
+      .map((prop) => ({ comp, prop }))
+  )

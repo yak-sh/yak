@@ -27,6 +27,7 @@
         "bytes": {
           "type": "string",
           "stamped": true,
+          "address": true,
           "description": "where the stored copy is: its SHA-256 address in the server's blob store"
         }
       },

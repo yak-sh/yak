@@ -4,7 +4,14 @@ import { equal, ok, test } from '@yaks/testing'
 import { type Access, type Bundle, type Comp, graph } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { DAY, expiration, EXPIRE, expire, expireDaily } from './expire.ts'
+import {
+  DAY,
+  expiration,
+  EXPIRE,
+  expire,
+  expireDaily,
+  TOMBSTONES,
+} from './expire.ts'
 import { effectDoc } from './pool.ts'
 import { leaseEid, released } from './lease.ts'
 
@@ -211,4 +218,34 @@ test('expiration rejects nonfilter declarations and aborts before removing rows'
   }
   equal(await expire(cancelled, { signal: AbortSignal.abort(), now }), 0)
   ok((await cancelled.get(['one']))[0].effect)
+})
+
+// A tombstone outlives its delete by the retention, then goes, unless
+// something still names it.
+let mournedVocab = loadVocab({
+  $defs: {
+    item: { component: true },
+    mark: {
+      component: true,
+      properties: { by: { type: 'string', ref: 'entity', death: 'keep' } },
+    },
+  },
+})
+let mourned = graph({ vocab: mournedVocab, storage: ram(mournedVocab) })
+await mourned.apply([
+  { entity: { eid: 'gone' }, item: {} },
+  { entity: { eid: 'named' }, item: {} },
+  { entity: { eid: 'marker' }, mark: { by: 'named' } },
+])
+await mourned.apply([
+  { entity: { eid: 'gone' }, $delete: true },
+  { entity: { eid: 'named' }, $delete: true },
+])
+
+test('expire prunes a tombstone once its retention passes, unless something names it', async () => {
+  equal(await expire(mourned, { now: Date.now() }), 0)
+  ok((await mourned.get(['gone']))[0].tombstone)
+  equal(await expire(mourned, { now: Date.now() + TOMBSTONES + DAY }), 1)
+  equal(await mourned.get(['gone']), [])
+  ok((await mourned.get(['named']))[0].tombstone)
 })

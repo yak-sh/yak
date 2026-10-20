@@ -154,11 +154,26 @@ export type Tx = {
    * phase's decision (./mutate.ts); an eid that is not tombstoned is left
    * alone. */
   revive: (eids: Eid[]) => void | Promise<void>
+  /** Up to `limit` tombstoned identities deleted before `before` (ISO-8601)
+   * that nothing refers to: what a retention sweep may `$prune`. A walk goes
+   * in the store's own order, resuming at `after`, the `next` the page before
+   * it answered; a page that ends the walk answers none. A store that keeps
+   * no deletion time leaves it out. */
+  buried?: (
+    before: string,
+    page: { after?: string; limit: number },
+  ) => Graves | Promise<Graves>
 }
+
+/** A page of graves, and where the walk resumes after them. */
+export type Graves = { eids: Eid[]; next?: string }
 
 /** Reads against committed data outside a write transaction. Writes go
  * through the graph's `apply()` so its admission, rules and effects run. */
-export type ReadTx = Pick<Tx, 'read' | 'get' | 'whole' | 'about' | 'bindings'>
+export type ReadTx = Pick<
+  Tx,
+  'read' | 'get' | 'whole' | 'about' | 'bindings' | 'buried'
+>
 
 /**
  * A storage adapter. `@yaks/sqlite` implements this over an embedded database;
@@ -199,6 +214,12 @@ export type Storage = {
     comps?: string[],
     opts?: ReadOpts,
   ) => Bundle[] | Promise<Bundle[]>
+  /** the graves a retention sweep may prune, read without a write
+   * transaction ({@link Tx.buried}) */
+  buried?: (
+    before: string,
+    page: { after?: string; limit: number },
+  ) => Graves | Promise<Graves>
   /** run `body` in a transaction: commit on return, roll back on throw. Like
    * every other member it is async or sync — an embedded adapter returns
    * whatever the body returned, an adapter over a network returns a promise
@@ -222,6 +243,9 @@ export type Storage = {
 export let detached = (storage: Storage): Tx => ({
   read: (query, opts, comps) => storage.read(query, opts, comps),
   get: (eids, comps, opts) => storage.get(eids, comps, opts),
+  ...storage.buried
+    ? { buried: (before, page) => storage.buried!(before, page) }
+    : {},
   // A match is a question about committed data, which is exactly what there
   // is to ask out here: an effect registered on a pattern (@yaks/effects) asks
   // it after the batch has been applied. A store that cannot evaluate one

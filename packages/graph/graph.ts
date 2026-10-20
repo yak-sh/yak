@@ -165,6 +165,10 @@ export type ApplyOpts = {
    * is skipped: stored values are kept without validation or ref resolution.
    * `trusted` alone still admits a new write strictly. */
   replica?: boolean
+  /** the batch removes values whose life ended (@yaks/vocab `expire`):
+   * nothing keeps them for history, so a plugin holding a copy of one, such
+   * as @yaks/blob's bytes, lets it go. Refused unless `trusted` is true. */
+  expiring?: boolean
   /** the timestamp every stamp in this batch uses, ISO-8601 (default: now) */
   now?: string
   /** a dry run: every phase runs and the transaction is rolled back instead of
@@ -338,6 +342,7 @@ type Run = {
   transaction?: object
   admission: boolean
   trusted?: boolean
+  expiring?: boolean
   tracing?: Context
   parent: () => string | undefined
   resources: Record<string, Resource>
@@ -596,6 +601,7 @@ export let graph = (opts: Options): Graph => {
               parent: run.parent(),
               admission: run.admission,
               trusted: run.trusted,
+              expiring: run.expiring,
             }),
           plugin,
         )
@@ -604,6 +610,7 @@ export let graph = (opts: Options): Graph => {
           transaction: run.transaction,
           admission: run.admission,
           trusted: run.trusted,
+          expiring: run.expiring,
         })
       out = after(out, (b) => run.actors(b, tx))
       if (isPromise(out)) {
@@ -677,6 +684,9 @@ export let graph = (opts: Options): Graph => {
     if (o.stamp === false && !o.trusted) {
       throw new Refused('only trusted writes may disable stamping')
     }
+    if (o.expiring && !o.trusted) {
+      throw new Refused('only trusted writes may expire values')
+    }
     let current = tracing?.parent
     let checking = false
     let st = state()
@@ -736,6 +746,7 @@ export let graph = (opts: Options): Graph => {
     let run: Run = {
       admission,
       trusted: o.trusted,
+      expiring: o.expiring,
       tracing,
       parent: () => current,
       resources,
@@ -1099,6 +1110,7 @@ export let graph = (opts: Options): Graph => {
                         [...b, ...bundles.filter((row) => row.$prune)],
                         tx,
                         vocab,
+                        !!o.trusted,
                       ),
                   ]),
               ],

@@ -20,6 +20,7 @@ let vocab = loadVocab([{
   },
 }])
 let canonical = '11111111-1111-4111-8111-111111111111'
+let grave = '33333333-3333-4333-8333-333333333333'
 
 let spined = loadVocab([spineDoc, archetypeDoc])
 let shaped = preparedStore(spined)
@@ -173,9 +174,10 @@ for (
       { entity: { eid: 'held' }, doc: { title: 'Keep' } },
       { entity: { eid: 'pointed' } },
       { entity: { eid: canonical } },
+      { entity: { eid: grave } },
       { entity: { eid: 'writer' }, mark: { by: 'pointed' } },
     ])
-    tx.remove([{ eid: 'buried' }])
+    tx.remove([{ eid: 'buried' }, { eid: grave }])
   })
 
   // Prepare the adapter's statement and query caches outside the cases.
@@ -202,6 +204,28 @@ for (
       assertEquals((await g.get([canonical])).length, 1)
     })
   }
+
+  test(`${name}: a generated identity is pruned only from its tombstone, by trusted code`, () => {
+    assertThrows(
+      () => g.apply([{ entity: { eid: grave }, $prune: true }]),
+      Refused,
+    )
+    assertThrows(
+      () =>
+        g.apply([{ entity: { eid: canonical }, $prune: true }], {
+          trusted: true,
+        }),
+      Refused,
+    )
+  })
+
+  test(`${name}: trusted code prunes a generated identity's tombstone`, () => {
+    assertEquals(
+      g.apply([{ entity: { eid: grave }, $prune: true }], { trusted: true }),
+      [{ entity: { eid: grave }, tombstone: {} }],
+    )
+    assertEquals(g.get([grave]), [])
+  })
 
   test(`${name}: pruning an absent malformed identity does nothing`, () => {
     assertEquals(g.apply([{ entity: { eid: 'absent' }, $prune: true }]), [])

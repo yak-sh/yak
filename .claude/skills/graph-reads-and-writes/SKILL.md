@@ -95,6 +95,9 @@ code that chose that writer is fixed where it chose.
 `$delete` tombstones the entity: `tombstone: {}` keeps its eid and number. A
 later write whose `$was` was read before the delete raced it and is dropped; any
 other write brings the entity back holding only what that write gives (M-17876).
+A tombstone is kept 30 days, long past any race; then the daily expiration
+prunes it (packages/effects/expire.ts) unless something still names it (the
+journal, a `keep` reference), and its eid and number name nothing.
 References follow their `death` keyword (packages/graph/cascade.ts): `cascade`
 deletes the referrer, `detach` clears the property, `release` drops the
 referencing component, `keep` leaves history. Deleting an entity also deletes

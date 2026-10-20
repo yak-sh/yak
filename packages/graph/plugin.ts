@@ -117,6 +117,9 @@ export type HookContext = {
   graph: object
   /** An internal server capability, never accepted from incoming bundles. */
   trusted?: boolean
+  /** The batch removes expired values (`ApplyOpts.expiring`): a plugin
+   * holding a copy of a removed value lets it go. */
+  expiring?: boolean
   /** The signed batch whose operation the hook observes. */
   bundles?: Bundle[]
   parent?: string

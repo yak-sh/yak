@@ -54,7 +54,8 @@
     "content": {
       "component": true,
       "type": "object",
-      "description": "Text content.",
+      "description": "Text content. A tool's result keeps its text for 30 days; the call that asked for it stays.",
+      "expire": ".result .created.at<=\"30d ago\"",
       "properties": {
         "body": {
           "type": "string",

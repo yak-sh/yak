@@ -22,18 +22,23 @@
 
 import type { Vocab } from '@yaks/vocab'
 import {
+  among,
+  and,
+  array,
   col,
   type Derived,
   type Driver,
   eq,
   type Expr,
+  field,
+  not,
   select,
   type Stmt,
   sub,
   table,
   val,
 } from '@yaks/sql/core'
-import { bodies } from './props.ts'
+import { bodies, type Body } from './props.ts'
 import { type Blobs, encode } from './store.ts'
 
 /**
@@ -93,6 +98,36 @@ export let blobSchema = (layout: Layout = {}): Stmt[] => {
 }
 
 /**
+ * The statement letting go of the objects `shas` names, except each a column
+ * of `held` still names: one scan of each holding table, whatever the count.
+ */
+export let dropSql = (
+  shas: string[],
+  held: Body[],
+  layout: Layout = {},
+): Stmt => {
+  let l = named(layout)
+  let listed = array(shas)
+  return {
+    t: 'delete',
+    from: l.table,
+    where: and(
+      among(col(l.key), listed),
+      ...held.map(({ comp, prop }) =>
+        not(among(
+          col(l.key),
+          select({
+            cols: [col(field(prop))],
+            from: table(comp),
+            where: among(col(field(prop)), listed),
+          }),
+        ))
+      ),
+    ),
+  }
+}
+
+/**
  * A {@link Blobs} over a SQLite table. Synchronous, so a graph writing through
  * it stays synchronous end to end; `put` is `insert or ignore`, because writing
  * the same address twice is writing the same bytes twice.
@@ -120,6 +155,9 @@ export let sqliteBlobs = (driver: Driver, layout: Layout = {}): Blobs => {
         cols: [l.key, l.value],
         rows: [[val(sha), val(asText(bytes))]],
       })
+    },
+    drop: (shas, held) => {
+      if (shas.length) driver.query(dropSql(shas, held, layout))
     },
   }
 }

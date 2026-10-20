@@ -77,11 +77,11 @@ use the same driver so their writes participate in the same transaction.
 
 | Root export                                                                                       | Purpose                                                  |
 | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `blobKeywords`, `BLOB_URI`                                                                        | Register the `store` keyword                             |
-| `Body`, `bodies`, `isBody`                                                                        | Select marked properties                                 |
+| `blobKeywords`, `BLOB_URI`                                                                        | Register the `store` and `address` keywords              |
+| `Body`, `bodies`, `isBody`, `holders`                                                             | Select marked properties                                 |
 | `blobs`, `BlobOpts`, `Reference`                                                                  | Graph write plugin and optional stored-reference mapping |
 | `Blobs`, `memoryBlobs`, `address`, `encode`, `decode`                                             | Store interface and text addressing                      |
-| `sqliteBlobs`, `blobSchema`, `Layout`                                                             | SQLite text storage                                      |
+| `sqliteBlobs`, `blobSchema`, `dropSql`, `Layout`                                                  | SQLite text storage                                      |
 | `fileBlobs`, `objectBlobs`, `Bucket`, `patient`                                                   | Filesystem and object storage                            |
 | `Objects`, `Opened`, `Loaded`, `bucketObjects`                                                    | A bucket keyed by name: read, delete, list               |
 | `parts`, `Multipart`, `Assembly`, `memoryMultipart`, `sized`, `Gone`, `Wrong`, `MOST`, `MiB`      | Resumable uploads in parts, checked against their hash   |
@@ -326,6 +326,39 @@ in, so a part size is too.
 `hasher(from?)` hashes bytes a piece at a time with `add`; `end()` answers the
 state after them, and `end(total)` the finished digest, `total` being every byte
 hashed since `START`. `fold(from, bytes, total?)` is the same over one buffer.
+
+## Expiring bodies
+
+A body's bytes outlive the row that wrote them, so an edit's history still reads
+the old text. A body removed by an expiring write
+(`apply(bundles, { trusted:
+true, expiring: true })`, which the vocabulary's
+[`expire`](../vocab/README.md#expiration) sweep makes) is kept for no one: the
+plugin notes the address each removed body held and, once the write is done,
+asks the store to `drop(shas, held)` them. A store drops only what no row of
+`held` names: every body property, and every property declaring `address: true`,
+whose package put the bytes there itself and keeps the address (a Git blob's
+`blob.sha`, an artifact's `address`). `holders(vocab)` lists them. `sqliteBlobs`
+drops in one statement; a store without `drop` keeps everything.
+
+```ts
+import { equal } from '@yaks/testing'
+import { address, blobSchema, encode, sqliteBlobs } from '@yaks/blob'
+import { open } from '@yaks/sqlite/db'
+import { val } from '@yaks/sql'
+
+let driver = open(':memory:')
+for (let stmt of blobSchema()) driver.query(stmt)
+driver.query({ t: 'create table', name: 'copy', cols: [{ name: 'sha' }] })
+let store = sqliteBlobs(driver)
+for (let text of ['lone', 'kept']) store.put(address(text), encode(text))
+let kept = val(address('kept'))
+driver.query({ t: 'insert', into: 'copy', cols: ['sha'], rows: [[kept]] })
+let copy = { comp: 'copy', prop: 'sha' }
+store.drop!([address('lone'), address('kept')], [copy])
+equal(store.has(address('lone')), false)
+equal(store.has(address('kept')), true)
+```
 
 ## Which blobs are taken
 

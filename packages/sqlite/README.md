@@ -181,6 +181,14 @@ has every component table cleared. The transaction points each one no tracker
 has pointed at the tombstone set as it closes (`entomb`), so a presence lookup
 passes the dead by however they were removed.
 
+`store.buried(before, { after, limit })` offers the graves a retention sweep may
+prune (./buried.ts): tombstones laid before `before` that no column in the file
+names, whichever package keyed it to `entity` (the journal's, an embedding's)
+and every `keep` reference, which carries no key. It walks them by integer id,
+so a page's `next` still marks the place once that page is pruned. `tx.prune()`
+erases a whole page in three statements (`pruneSql`), checking each identity
+once against every table and reference, in the write's transaction.
+
 ## Read
 
 `@yaks/sqlite/reader` exports `reader(driver, vocab, options)`, a read-only

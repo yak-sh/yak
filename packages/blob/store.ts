@@ -17,6 +17,7 @@
 
 import { sha256 } from '@yaks/graph/sha256'
 import type { Opened } from './object.ts'
+import type { Body } from './props.ts'
 
 /**
  * A content-addressed byte store. `sha` is always the lowercase-hex SHA-256 of
@@ -38,6 +39,10 @@ export type Blobs = {
   /** store these bytes under this hash; storing the same pair twice is a
    * no-op, because the second copy is the first one */
   put: (sha: string, bytes: Uint8Array) => void | Promise<void>
+  /** Let go of these objects, keeping each one a row of `held` still names:
+   * what an expired value leaves behind. A store that cannot tell which rows
+   * name an object leaves this out and keeps everything. */
+  drop?: (shas: string[], held: Body[]) => void | Promise<void>
 }
 
 let utf8 = new TextEncoder()

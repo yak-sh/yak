@@ -48,7 +48,9 @@ import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, TOMBSTONE } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
 import {
+  among,
   and,
+  array,
   as,
   col,
   cross,
@@ -404,48 +406,48 @@ let patchOne = (
  * lands on the identity it kept. */
 export let unburySql = (eid: string): Delete => dropSql(eid, TOMBSTONE)
 
-/** Erase empty, unreferenced identity spines. The guard runs in the write's
- * transaction, including on a deferred adapter: a reference added since its
- * read prevents erasure. The final NOT NULL assertion makes a failed guard
- * roll back the batch instead of reporting a repair that did not happen. */
-export let pruneSql = (vocab: Vocab, eids: string[]): Write[] =>
-  eids.flatMap((eid) => {
-    let holds = (name: string, prop: string): Expr =>
-      exists(select({
-        cols: [lit(1)],
-        from: table(name),
-        where: eq(col(prop), owner(eid)),
-      }))
-    let empty = and(
-      ...tables(vocab).filter((c) => c != 'entity' && c != TOMBSTONE)
-        .map((c) => not(holds(c, 'entity'))),
-      ...vocab.refProps().filter(([c, p]) => !vocab.prop(c, p)?.computed)
-        .map(([c, p]) => not(holds(c, field(p)))),
-      not(holds('entity', 'archetype')),
-    )
-    return [
-      {
-        t: 'delete',
-        from: TOMBSTONE,
-        where: and(eq(col('entity'), owner(eid)), empty),
-      },
-      {
-        t: 'delete',
-        from: 'entity',
-        where: and(eq(col('eid'), val(eid)), empty),
-      },
-      {
-        t: 'insert',
-        into: 'entity',
-        cols: ['eid'],
-        q: select({
-          cols: [lit(null)],
-          from: table('entity'),
-          where: eq(col('eid'), val(eid)),
-        }),
-      },
-    ] as Write[]
-  })
+/** Erase empty, unreferenced identity spines, the whole set in three
+ * statements whatever its size. The guard runs once per identity, in the
+ * write's transaction, including on a deferred adapter: a reference added
+ * since its read prevents erasure. The tombstones go first, unguarded, since
+ * an identity row is erased only once nothing keys to it; the final NOT NULL
+ * assertion then rolls the batch back, tombstones included, when the guard
+ * kept an identity, instead of reporting a repair that did not happen. */
+export let pruneSql = (vocab: Vocab, eids: string[]): Write[] => {
+  if (!eids.length) return []
+  let listed = array(eids)
+  let named = among(col('eid'), listed)
+  let holds = (name: string, prop: string): Expr =>
+    exists(select({
+      cols: [lit(1)],
+      from: table(name, '__r'),
+      where: eq(col(prop, '__r'), col('id', 'entity')),
+    }))
+  let empty = and(
+    ...tables(vocab).filter((c) => c != 'entity' && c != TOMBSTONE)
+      .map((c) => not(holds(c, 'entity'))),
+    ...vocab.refProps().filter(([c, p]) => !vocab.prop(c, p)?.computed)
+      .map(([c, p]) => not(holds(c, field(p)))),
+    not(holds('entity', 'archetype')),
+  )
+  return [
+    {
+      t: 'delete',
+      from: TOMBSTONE,
+      where: among(
+        col('entity'),
+        select({ cols: [col('id')], from: table('entity'), where: named }),
+      ),
+    },
+    { t: 'delete', from: 'entity', where: and(named, empty) },
+    {
+      t: 'insert',
+      into: 'entity',
+      cols: ['eid'],
+      q: select({ cols: [lit(null)], from: table('entity'), where: named }),
+    },
+  ]
+}
 
 /** Run an orphan repair's guarded physical erasure. */
 export let prune = (driver: Driver, vocab: Vocab, eids: string[]): void => {

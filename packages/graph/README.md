@@ -205,14 +205,20 @@ handling added to it. It contains one composed patch per affected entity; it is
 not a full snapshot of every affected entity. A deleted entity is represented by
 its identity plus `tombstone: {}`.
 
-`$prune: true` repairs a malformed **orphan identity**: an identity whose eid
-was not generated, which holds no components except an optional tombstone, and
-which no reference names. It uses the exact stored eid, including an empty
-string, and removes the identity itself. Generated eids, held components and
-inbound references refuse the batch. The request carries no component edits; its
-returned tombstone lets subscribers remove the orphan from their caches. Pruning
-runs after transaction hooks, and the repair is recorded by its caller rather
-than the component journal.
+`$prune: true` removes an identity itself, once it holds no components and no
+reference names it. It repairs a malformed **orphan identity**, one whose eid
+was not generated, using the exact stored eid, including an empty string. It
+also collects an old tombstone: a tombstone exists to swallow a write that raced
+its delete, and once none can still arrive, trusted server code (the daily
+expiration in [@yaks/effects](../effects/README.md#expiration)) prunes it. A
+generated eid is pruned only from its tombstone and only by a trusted write;
+held components and inbound references refuse the batch. The request carries no
+component edits; its returned tombstone lets subscribers remove the identity
+from their caches. Pruning runs after transaction hooks, and is recorded by its
+caller rather than the component journal. A store that keeps deletion times
+offers the graves a sweep may prune through `outside.buried(before, page)`: up
+to `page.limit` tombstones laid before `before` that nothing names, resuming the
+walk at `page.after`, the `next` the page before answered.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -257,6 +263,10 @@ effects. Trusted server code may correct metadata with
 rules are skipped, preserving stored timestamps and attribution, while plugin
 rules and hooks, validation, journaling and effects still run. Disabling
 stamping is refused without `trusted: true`.
+`apply(bundles, { trusted: true, expiring: true })` removes values whose life
+ended (an [`expire`](../vocab/README.md#expiration) declaration): nothing keeps
+them for history, so a plugin holding a copy of one lets it go, as
+[@yaks/blob](../blob/README.md#expiring-bodies) does with a body's bytes.
 `apply(bundles, { trusted: true, replica: true })` lands rows another graph
 already admitted in a partial copy of it, leaving out the components this
 vocabulary does not declare instead of refusing them, and keeping the computed

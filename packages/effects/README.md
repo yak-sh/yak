@@ -712,12 +712,23 @@ hold for recovery. Replacing a worker preserves that daily schedule, and a
 failure is reported before the duty tries again.
 
 `expire(g)` runs a pass explicitly and returns the number of matching component
-rows removed. Each transaction removes at most 100 rows by default. Removal uses
-the graph's `apply()` with guards against values changed since selection, so its
-reference consequences, tombstones, journal and subscribers follow the ordinary
-write path. The graph removes owners left with only provenance stamps. The
-Successful effect runs are deleted when they settle. Failed runs stay readable
-until a person removes them.
+rows removed and tombstones pruned. Each transaction removes at most 100 rows by
+default, and before the next one the pass rests as long as the last held the
+write lock, so other writers waiting on the file get in between. Removal uses
+the graph's `apply()` with guards against values changed since selection, and as
+an expiring write (`expiring: true`), so its reference consequences, tombstones,
+journal and subscribers follow the ordinary write path and a removed body's
+bytes go (@yaks/blob). The graph removes owners left with only provenance
+stamps. Successful effect runs are deleted when they settle. Failed runs stay
+readable until a person removes them.
+
+Then the pass prunes tombstones laid more than `TOMBSTONES` (30 days) ago: a
+tombstone swallows a write that raced its delete, and none arrives that late. It
+walks the store's graves (`g.outside.buried`) a page at a time and prunes each
+page with `$prune`, which erases an identity only while nothing names it, so a
+tombstone the journal or a `keep` reference still names stays. A page refused
+because something reached a grave meanwhile waits for the next pass; a store
+that keeps no deletion time has no graves.
 
 ```ts
 import { graph } from '@yaks/graph'

@@ -5,12 +5,19 @@
 // roll back together. Both leave text intact until the guard checks it, then
 // substitute references in `precondition` and restore text in `commit`. `$blob`
 // carries the prepared references and original text through the batch.
+//
+// Bytes outlive the row that wrote them: an edit's history still reads the
+// old text. A value that expires (@yaks/graph `ApplyOpts.expiring`) is kept
+// for no one, so its bytes go with it: `precondition` notes the address each
+// removed body held, and `commit` lets the store drop those no other row
+// names (`Blobs.drop`).
 
 import type { Bundle, Comp } from '@yaks/graph/bundle'
-import { hook, type Plugin } from '@yaks/graph/plugin'
+import { hook, type HookContext, type Plugin } from '@yaks/graph/plugin'
+import type { Tx } from '@yaks/graph'
 import { after, each } from '@yaks/fp'
 import type { Vocab } from '@yaks/vocab'
-import { bodies, type Body } from './props.ts'
+import { bodies, type Body, holders } from './props.ts'
 import { address, type Blobs, encode } from './store.ts'
 
 let STASH = '$blob'
@@ -128,6 +135,40 @@ export let blobs = (
   let props = opts.props ?? bodies(vocab)
   let keys = [...new Set(props.map((p) => p.comp))]
   let reference = opts.reference ?? ((sha: string) => sha)
+  // The addresses an expiring batch removed, by transaction attempt. A store
+  // whose rows hold its own references cannot be asked by address.
+  let expired = new WeakMap<object, Set<string>>()
+  let drops = !!store.drop && !opts.reference
+  let held = holders(vocab)
+  let note = (bundles: Bundle[], tx: Tx, context?: HookContext) => {
+    let at = context?.transaction
+    if (!drops || !context?.expiring || !at) return
+    let gone = bundles.flatMap((b) =>
+      props.filter(({ comp, prop }) =>
+        b[comp] === null || patch(b, comp)?.[prop] === null
+      ).map((p) => [b.entity.eid, p] as const)
+    )
+    if (!gone.length) return
+    let eids = [...new Set(gone.map(([eid]) => eid))]
+    let comps = [...new Set(gone.map(([, p]) => p.comp))]
+    return after(tx.get(eids, comps), (found) => {
+      let rows = new Map(found.map((b) => [b.entity.eid, b]))
+      let shas = expired.get(at) ?? new Set<string>()
+      for (let [eid, { comp, prop }] of gone) {
+        let row = rows.get(eid)
+        let value = row && patch(row, comp)?.[prop]
+        if (typeof value == 'string') shas.add(address(value))
+      }
+      expired.set(at, shas)
+    })
+  }
+  let drop = (context?: HookContext) => {
+    let at = context?.transaction
+    let shas = at && expired.get(at)
+    if (!at || !shas?.size) return
+    expired.delete(at)
+    return store.drop!([...shas], held)
+  }
   let prepare = (bundles: Bundle[]) => {
     // Cache only within this batch: a rolled-back transactional reference
     // must never be reused. Equal values need one hash and one store call.
@@ -164,12 +205,23 @@ export let blobs = (
         keys,
         (bundles) => store.transactional ? bundles : prepare(bundles),
       ),
-      precondition: hook([...keys, STASH], (bundles) =>
-        after(
-          store.transactional ? prepare(bundles) : bundles,
-          (ready) => ready.map(swap),
-        )),
-      commit: hook([STASH], (bundles) => bundles.map(restore)),
+      precondition: hook(
+        [...keys, STASH],
+        (bundles, tx, _err, context) =>
+          after(
+            note(bundles, tx, context),
+            () =>
+              after(
+                store.transactional ? prepare(bundles) : bundles,
+                (ready) => ready.map(swap),
+              ),
+          ),
+      ),
+      commit: hook(
+        [...keys, STASH],
+        (bundles, _tx, _err, context) =>
+          after(drop(context), () => bundles.map(restore)),
+      ),
     },
   }
 }

@@ -36,6 +36,7 @@ import type {
   Doom,
   Eid,
   Entity,
+  Graves,
   Match,
   ReadOpts,
   Row,
@@ -135,6 +136,9 @@ export type Store = {
   /** these entities as they stand, carrying the components `comps` names or
    * every one */
   get: (eids: Eid[], comps?: string[], opts?: ReadOpts) => Bundle[]
+  /** tombstones laid before `before` that nothing refers to, oldest first,
+   * resuming at `after` */
+  buried: (before: string, page: { after?: string; limit: number }) => Graves
   /** run `body` in a transaction: commit on return, roll back on throw */
   tx: <R>(body: (tx: Tx) => R) => R
 }
@@ -251,6 +255,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       : JSON.stringify(values)
   }
   let next = 1
+  // When each tombstone was laid, keyed by the record itself, so a rollback
+  // that puts an earlier record back takes the time with it.
+  let laid = new WeakMap<Bundle, string>()
   // The undo log: for each entity a transaction is about to change, the record
   // it held first. Replayed backwards, it is the rollback.
   let log: [Eid, Bundle | undefined, Entity | undefined][] = []
@@ -837,7 +844,9 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
         if (!entity) continue
         save(eid)
         cold.delete(eid)
-        put(eid, tombstoned(entity))
+        let grave = tombstoned(entity)
+        laid.set(grave, new Date().toISOString())
+        put(eid, grave)
       }
     },
     prune: (eids) => {
@@ -857,6 +866,32 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     },
   }
 
+  // Tombstones laid before `before` that no stored reference names, oldest
+  // first. The cursor is the last grave's time and eid, which still marks
+  // the place once that grave is pruned.
+  let graves = (
+    before: string,
+    page: { after?: string; limit: number },
+  ): Graves => {
+    let refs = vocab.refProps().filter(([c, p]) => !vocab.prop(c, p)?.computed)
+    let named = (eid: Eid) =>
+      refs.some(([c, p]) => worn.has(c) && !!keys(c, p).get(keyOf(eid)!)?.size)
+    let mark = (at: string, eid: Eid) => JSON.stringify([at, eid])
+    let found = [...rows].flatMap(([eid, b]) => {
+      let at = laid.get(b)
+      return at != null && at < before ? [mark(at, eid)] : []
+    }).sort().filter((m) => page.after == null || m > page.after)
+    let eids: Eid[] = []
+    let next: string | undefined
+    for (let m of found) {
+      if (eids.length >= page.limit) break
+      next = m
+      let [, eid] = JSON.parse(m)
+      if (!named(eid)) eids.push(eid)
+    }
+    return eids.length < page.limit || next == null ? { eids } : { eids, next }
+  }
+
   return {
     // A computed override may read another component, even when its named
     // component is absent, so only a stored property's value says it is worn.
@@ -867,6 +902,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
     read,
     rows: raw,
     get,
+    buried: graves,
     tx: (body) => {
       // A nested transaction is a savepoint: it rolls back to where it opened,
       // and its entries stay in the log for the outer one to undo in its turn.

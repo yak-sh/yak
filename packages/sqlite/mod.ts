@@ -67,6 +67,7 @@ import type {
   Doom,
   Eid,
   Entity,
+  Graves,
   Match,
   ReadOpts,
 } from '@yaks/graph'
@@ -109,6 +110,7 @@ import { componentTables, shape } from './physical.ts'
 import { build, forgo, reshape, type Sizes } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
+import { burying } from './buried.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
@@ -238,6 +240,8 @@ export type Tx = {
   prune: (eids: string[]) => void
   /** bring these tombstoned entities back: tombstone gone, identity kept */
   revive: (eids: string[]) => void
+  /** the graves a retention sweep may prune (./buried.ts) */
+  buried: (before: string, page: { after?: string; limit: number }) => Graves
 }
 
 /**
@@ -297,6 +301,10 @@ export type Store = {
   read: (query: Query, opts?: BindOpts & ReadOpts, comps?: string[]) => Bundle[]
   /** a query → the compiled statement's raw rows (counts, tallies) */
   rows: (query: Query, opts?: BindOpts & ReadOpts) => Row[]
+  /** the graves a retention sweep may prune: tombstones laid before `before`
+   * that nothing in the file names (./buried.ts), a page of them from `after`,
+   * read as one snapshot */
+  buried: (before: string, page: { after?: string; limit: number }) => Graves
   /** a query → a statement selecting the ids of the entities it admits, as
    * this store compiles its reads (./read.ts `screened`); null for a query
    * with nothing to narrow by */
@@ -709,6 +717,7 @@ export let storage = (
         shape,
       ), 'read')
   }
+  let graves = burying(driver, vocab)
   let tx: Tx = {
     read: (query, signalled, comps) => {
       let o = asking(signalled)
@@ -750,6 +759,7 @@ export let storage = (
     },
     revive: (eids) => memo.writes(() => revive(driver, eids), () => eids),
     prune: (eids) => memo.writes(() => prune(driver, vocab, eids), () => eids),
+    buried: (before, page) => graves(before, page),
   }
   // A unit over a store that keeps archetypes keeps every pointer in step,
   // whichever door wrote: @yaks/graph's tracker, a hook writing through a
@@ -1065,6 +1075,10 @@ export let storage = (
     screen: (query, o) => {
       ensure()
       return screened(driver, vocab, query, { ...opts(), ...asking(o) })
+    },
+    buried: (before, page) => {
+      ensure()
+      return unit(driver, () => graves(before, page), 'read')
     },
     get: (eids, comps, o) => {
       if (!eids.length) return []
