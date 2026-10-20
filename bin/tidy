@@ -144,17 +144,22 @@ untouched() {
   done
 }
 
-# Every working directory and open file of our processes, one per line.
-opened=$(for p in /proc/[0-9]*; do
-  [ -O "$p" ] && readlink "$p/cwd" "$p"/fd/* 2>/dev/null
-done)
+# Every working directory and open file of our processes, one per line, and
+# every process's command line: each read once for the whole pass, in one
+# process, where a readlink per process and a pgrep per worktree took a
+# fifth of a second on a busy box. A command list that could not be read
+# keeps every worktree.
+opened=$(find /proc/[0-9]*/cwd /proc/[0-9]*/fd -maxdepth 1 -type l \
+  -user "$(id -u)" -printf '%l\n' 2>/dev/null)
+commands=$(ps -e -ww -o args=) && listed=1 || listed=
 
 # Whether a process of ours works in $1, holds a file inside it open, or
-# names it on its command line.
+# any process names it on its command line.
 used() {
   printf '%s\n' "$opened" | awk -v p="$1" '
     $0 == p || index($0, p "/") == 1 { found = 1; exit }
-    END { exit !found }' || named "$1"
+    END { exit !found }' && return
+  [ -z "$listed" ] || printf '%s\n' "$commands" | grep -Eq -- "$(names "$1")"
 }
 
 # Whether everything committed in worktree $1 is on main: HEAD is, or each

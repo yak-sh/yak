@@ -53,73 +53,78 @@ let fixture = async () => {
   }
 }
 
-test('tidy collects a worktree only when nothing in it can be lost', async () => {
+// The repository and its worktrees are built as the file loads, so the case
+// times only the pass that collects them.
+let worktrees = await (async () => {
   let f = await fixture()
-  let sleeper: Deno.ChildProcess | undefined
-  try {
-    let commit = async (at: string, file: string) => {
-      await Deno.writeTextFile(`${at}/${file}`, file)
-      await git(at, 'add', file)
-      await git(at, 'commit', '-q', '-m', file)
+  let commit = async (at: string, file: string) => {
+    await Deno.writeTextFile(`${at}/${file}`, file)
+    await git(at, 'add', file)
+    await git(at, 'commit', '-q', '-m', file)
+  }
+  await commit(f.repo, 'a')
+  let add = async (
+    name: string,
+    at = `${f.repo}/.claude/worktrees/${name}`,
+  ) => {
+    await git(f.repo, 'worktree', 'add', '-q', '-b', name, at, 'main')
+    return at
+  }
+  let done = await add('done')
+  // Wherever a worktree was made, the same rule holds.
+  let outside = await add('outside', `${f.dir}/outside`)
+  // Its commit reached main as another commit, the way a rebase lands it.
+  let picked = await add('picked')
+  await commit(picked, 'p')
+  await git(f.repo, 'cherry-pick', 'picked')
+  let ahead = await add('ahead')
+  await commit(ahead, 'unmerged')
+  let dirty = await add('dirty')
+  await Deno.writeTextFile(`${dirty}/a`, 'changed')
+  let untracked = await add('untracked')
+  await Deno.writeTextFile(`${untracked}/b`, 'new')
+  let locked = await add('locked')
+  await git(f.repo, 'worktree', 'lock', locked)
+  let used = await add('used')
+  let sleeper = new Deno.Command('sleep', { args: ['60'], cwd: used }).spawn()
+  let busy = await add('busy')
+  // Git last wrote every worktree but busy four hours ago.
+  let then = Date.now() / 1000 - 4 * 3600
+  for (
+    let name of [
+      'done',
+      'outside',
+      'picked',
+      'ahead',
+      'dirty',
+      'untracked',
+      'locked',
+      'used',
+    ]
+  ) {
+    for (let file of ['HEAD', 'index', 'logs/HEAD']) {
+      Deno.utimeSync(`${f.repo}/.git/worktrees/${name}/${file}`, then, then)
     }
-    await commit(f.repo, 'a')
-    let add = async (
-      name: string,
-      at = `${f.repo}/.claude/worktrees/${name}`,
-    ) => {
-      await git(f.repo, 'worktree', 'add', '-q', '-b', name, at, 'main')
-      return at
-    }
-    let done = await add('done')
-    // Wherever a worktree was made, the same rule holds.
-    let outside = await add('outside', `${f.dir}/outside`)
-    // Its commit reached main as another commit, the way a rebase lands it.
-    let picked = await add('picked')
-    await commit(picked, 'p')
-    await git(f.repo, 'cherry-pick', 'picked')
-    let ahead = await add('ahead')
-    await commit(ahead, 'unmerged')
-    let dirty = await add('dirty')
-    await Deno.writeTextFile(`${dirty}/a`, 'changed')
-    let untracked = await add('untracked')
-    await Deno.writeTextFile(`${untracked}/b`, 'new')
-    let locked = await add('locked')
-    await git(f.repo, 'worktree', 'lock', locked)
-    let used = await add('used')
-    sleeper = new Deno.Command('sleep', { args: ['60'], cwd: used }).spawn()
-    let busy = await add('busy')
-    // Git last wrote every worktree but busy four hours ago.
-    let then = Date.now() / 1000 - 4 * 3600
-    for (
-      let name of [
-        'done',
-        'outside',
-        'picked',
-        'ahead',
-        'dirty',
-        'untracked',
-        'locked',
-        'used',
-      ]
-    ) {
-      for (let file of ['HEAD', 'index', 'logs/HEAD']) {
-        Deno.utimeSync(`${f.repo}/.git/worktrees/${name}/${file}`, then, then)
-      }
-    }
+  }
+  let gone = [done, outside, picked]
+  let kept = [ahead, dirty, untracked, locked, used, busy]
+  return { f, sleeper, gone, kept }
+})()
 
+test('tidy collects a worktree only when nothing in it can be lost', async () => {
+  let { f, sleeper, gone, kept } = worktrees
+  try {
     let out = await f.tidy()
 
-    let gone = [done, outside, picked]
     assertEquals(out.length, gone.length, out.join('\n'))
-    let all = [...gone, ahead, dirty, untracked, locked, used, busy]
-    assertEquals(all.filter(exists), all.slice(gone.length))
+    assertEquals([...gone, ...kept].filter(exists), kept)
     assertEquals(
       (await git(f.repo, 'branch', '--format=%(refname:short)')).split('\n'),
       ['ahead', 'busy', 'dirty', 'locked', 'main', 'untracked', 'used'],
     )
   } finally {
-    sleeper?.kill()
-    await sleeper?.status
+    sleeper.kill()
+    await sleeper.status
     await f.close()
   }
 })
