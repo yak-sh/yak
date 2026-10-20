@@ -566,25 +566,16 @@ entity admitted by the other filters, without ordering, limits or projections.
 `begin(screen)` runs once per bind and lets a reused Extension reset its state.
 The screen excludes that Extension's clauses and returns `null` when there are
 no remaining filters. Ranking among these ids before limiting preserves the
-other filters. The exported `screen` builds this statement for a whole query. A
-clause's `Site.screen` supplies candidates for its own root owner scope; it is
-absent inside child filters and when compiling another extension's screen. Its
-`maximum` reports a proven upper bound on owner count, so a short owner list can
-drive keyed reads. `Site.share(query)` supplies a source for an uncorrelated
-relation, sharing its bound values across the current statement. Erasing an
-extension's clauses widens nested Boolean filters and negative child tests,
-preserving every possible match.
+other filters. A clause's `Site.screen` supplies candidates for its own root
+owner scope; it is absent inside child filters and when compiling another
+extension's screen. Its `maximum` reports a proven upper bound on owner count,
+so a short owner list can drive keyed reads. `Site.share(query)` supplies a
+source for an uncorrelated relation, sharing its bound values across the current
+statement. Erasing an extension's clauses widens nested Boolean filters and
+negative child tests, preserving every possible match.
 
 ```ts
-import {
-  among,
-  col,
-  compile,
-  type Extension,
-  lit,
-  screen,
-  select,
-} from '@yaks/sql'
+import { among, col, compile, type Extension, lit, select } from '@yaks/sql'
 import { parse } from '@yaks/query'
 import { equal } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
@@ -620,6 +611,25 @@ compile(parse('poetry .doc.title=Dune .order=rank .limit=2'), vocab, {
   extend: [ranking],
 })
 equal(candidates, [['Dune']])
+```
+
+The exported `screen` builds this statement for a whole query, and answers
+`null` when no filter is left:
+
+```ts
+import { screen } from '@yaks/sql'
+import { parse } from '@yaks/query'
+import { equal } from '@yaks/testing'
+import { loadVocab } from '@yaks/vocab'
+
+let vocab = loadVocab({
+  $defs: {
+    doc: {
+      component: true,
+      properties: { title: { type: 'string' } },
+    },
+  },
+})
 equal(screen(parse('.doc.title=Dune .limit=2'), vocab)?.params, ['Dune'])
 equal(screen(parse('.limit=2'), vocab), null)
 ```
