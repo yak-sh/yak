@@ -319,11 +319,16 @@ async function origins() {
       return { bundles }
     })
     let mounted = mount(<QueryList eid='origins' query={allSessionsQuery} />)
+    let kinds = () =>
+      [...mounted.root.querySelectorAll('.Tile_Kind')].map((k) =>
+        k.textContent?.trim()
+      )
     try {
+      // Painted once every row is there and the provider an ask names has
+      // arrived by name, not as its bare `#id`.
       await until(() =>
         mounted.root.querySelectorAll('.Tile').length == 4 &&
-        mounted.root.querySelector('.Tile_Kind')?.textContent?.trim() ==
-          'native'
+        kinds()[0] == 'native' && !kinds().some((k) => k?.includes('#'))
       )
       return [...mounted.root.querySelectorAll('.Tile')].map((tile) => [
         tile.querySelector('.Tile_Title')?.textContent,
