@@ -203,7 +203,12 @@ await look(childGraph, '', childSeen, { codex: dir, person: ids.ada })
 let [childRow] = await childGraph.get([child])
 let childEntries = await childGraph.read(`.entry.session=${child} *`)
 Deno.utimeSync(path(id), new Date(0), new Date(0))
-await look(history, '', seen(), { codex: dir, now: Date.now() + 30 * 86400000 })
+// A month on, both rollouts are old. A look reads one old rollout, whichever
+// the filesystem lists first (tmpfs lists the newest file first), so two
+// looks read both.
+let backfill = seen(), later = Date.now() + 30 * 86400000
+await look(history, '', backfill, { codex: dir, now: later })
+await look(history, '', backfill, { codex: dir, now: later })
 let old = await rows(history)
 
 test('Codex children retain thread identities and never attribute a delegated prompt to the owner', () => {
