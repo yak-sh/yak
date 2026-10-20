@@ -2210,11 +2210,11 @@
       "bad MCP definitions and transport failures do not block other servers and are visible in authorization panel": 35.9,
       "graph MCP definitions persist; rename keeps identity, edits and removal affect next discovery": 117.9,
       "graph MCP namespace collisions fail explicitly without opening duplicate connections": 20.8,
-      "issued calls keep their handler when another ask refreshes the same public name": 182.2,
+      "issued calls keep their handler when another ask refreshes the same public name": 421.8,
       "reconfiguration changes tool identity without retargeting previously issued calls": 34
     },
     "packages/harness/mcp_test.ts": {
-      "configured remote MCP tool publishes mockup through existing call/result transcript": 142.5,
+      "configured remote MCP tool publishes mockup through existing call/result transcript": 309.6,
       "remote images use external artifacts while large text retains bounded context policy": 49.3,
       "tool isError uses expected tool failure rather than a defect": 29.9,
       "worker owns MCP connection and preserves exact configured tool schemas": 178.5
@@ -2254,7 +2254,7 @@
       "a native session carries its chosen graph persona into the model request": 176.1,
       "a session begun for a person holds their words, and none of the instructions": 31.8,
       "graph-only instruction admission never acquires a default machine": 22,
-      "instruction admission snapshots machine files in stable ancestor order": 122.3,
+      "instruction admission snapshots machine files in stable ancestor order": 359.8,
       "retired CLI instructions are omitted on future asks without rewriting history": 376.2,
       "root admission is snapshotted and explicit later context is an instruction": 232.9
     },
@@ -2299,7 +2299,7 @@
       "resume wakes what a restart left owed a turn": 114.8,
       "selected session lists queued direct children": 57.7,
       "send appends to a transcript and the runner answers it": 162.3,
-      "send commits during a provider turn and unserved input reaches the next anchored request": 111.2,
+      "send commits during a provider turn and unserved input reaches the next anchored request": 246.2,
       "session summaries do not depend on task completion": 100.5,
       "session titles read only the first eligible local entry": 92,
       "session titles use local assignment, not inherited parent context": 77.3,
@@ -3207,7 +3207,7 @@
       "a managed transcript keeps its claim until its process exits": 21.9,
       "a provider’s no is not asked again, whatever the pool allows": 26.3,
       "a ready replacement continues a drained multi-step turn without a nudge": 59.9,
-      "a reply between failures gives the next failure its tries back": 130.6,
+      "a reply between failures gives the next failure its tries back": 350.3,
       "a request one process writes is answered by a process working the pool": 40.2,
       "a request the provider failed is asked again once the wait it named is up": 49.6,
       "a requestItems refusal ends a child once, including across restart": 74.3,
@@ -3221,7 +3221,7 @@
       "children past the bound wait queued, and each ending admits the next": 83.2,
       "duplicate transcript wakes leave pool room for another transcript": 138.7,
       "duplicate wakes waiting on another worker leave pool room": 157.9,
-      "failures in a row wait longer each time, and the last one stands": 123.1,
+      "failures in a row wait longer each time, and the last one stands": 284.2,
       "graceful stop after ask persistence drains the admitted dispatch": 21.1,
       "graceful stop during preparation admits no ask and leaves the input owed": 14.5,
       "retryable errors keep a claim until the transcript fails": 31.7,
@@ -4366,7 +4366,7 @@
       "builds: a commit that failed is built again, once": 16.4
     },
     "workers/yak/call_test.ts": {
-      "a command that takes an argument runs in its store": 267.6
+      "a command that takes an argument runs in its store": 499.5
     },
     "workers/yak/client_test.ts": {
       "a page keeping a copy of its store learns who made its own write": 116.9,
