@@ -67,7 +67,7 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     set('synchronous', 'normal')
     set('journal_size_limit', 64 * 1024 * 1024)
   }
-  return Object.assign(d, {
+  let made = Object.assign(d, {
     extension: (file: string) => {
       db.enableLoadExtension = true
       try {
@@ -78,4 +78,10 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     },
     close: () => db.close(),
   })
+  opening.wrap?.(made)
+  return made
 }
+
+/** A prototype seam for ./history_bench.ts: sees each driver this module opens,
+ * before anything uses it. Not for landing. */
+export let opening: { wrap?: (d: Opened) => void } = {}

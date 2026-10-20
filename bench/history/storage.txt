@@ -1,0 +1,8 @@
+versioned tables: 224
+unversioned bytes 288509952  rows 4228853  bytes/row 68
+versioned bytes 1192779776  rows 8308682 (open 4228858, closed 4079824)
+  of which $from/$to indexes 201146368
+  bytes per closed version 222  without the $from/$to indexes 172
+tx bytes 547639296 rows 7720569 bytes/tx 71
+journal bytes tx 840290304 change 1739444224 field 3828555776 total 6408290304
+journal changes 20239124  bytes/change 317  (change+field only 275)
