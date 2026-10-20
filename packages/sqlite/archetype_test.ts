@@ -323,7 +323,10 @@ test('archetype: dry run and late rollback cannot poison cached sets', () => {
   )
 })
 
-test('archetype: the journal sees a descriptor creation, once', () => {
+// A descriptor is derived storage state (`journal: false`, 4936d5746): the
+// journal keeps the batch that minted it and nothing of the descriptor. The
+// batch is applied as the file loads; the case reads what landed.
+let journaled = (() => {
   let v = loadVocab([archetypeDoc, domain])
   let d = mem()
   let s = storage(d, v)
@@ -336,15 +339,13 @@ test('archetype: the journal sees a descriptor creation, once', () => {
     plugins: [journal(j, v), archetypes()],
   })
   g.apply([{ entity: { eid: 'a' }, task: {} }])
+  return d
+})()
+test('archetype: the journal keeps a batch and none of its descriptor', () => {
+  let d = journaled
   assertEquals(tally(d, 'entity', by({ archetype: null })), 0)
-  let descriptors = () =>
-    tally(d, 'journal_change', by({ component: 'archetype' }))
-  assert(descriptors() > 0)
-  let before = descriptors()
-  // A descriptor is minted once: the second batch finds the same archetype and
-  // writes nothing new about it.
-  g.apply([{ entity: { eid: 'a' }, task: {} }])
-  assertEquals(descriptors(), before)
+  assert(tally(d, 'journal_change', by({ component: 'task' })) > 0)
+  assertEquals(tally(d, 'journal_change', by({ component: 'archetype' })), 0)
 })
 
 test('archetype: traced flushes cover classification around commit hooks', async () => {
