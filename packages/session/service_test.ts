@@ -282,12 +282,22 @@ let staleEntries = async (g: Graph, o: Parameters<typeof stale>[1] = {}) => {
   return eids
 }
 
-// A turn's ending, with what it cost.
+// A reply naming its request: what it used, weighed at its model's price.
 let ended = JSON.stringify({
-  type: 'result',
-  total_cost_usd: 0.25,
-  usage: { input_tokens: 10, output_tokens: 5 },
+  type: 'assistant',
+  message: {
+    id: 'msg_1',
+    model: 'priced',
+    content: [],
+    usage: { input_tokens: 10, output_tokens: 5 },
+  },
 }) + '\n'
+let priced = (s: ReturnType<typeof store>) =>
+  seed(s, {
+    entity: { eid: identityEid('model', ['priced']) },
+    model: { name: 'priced' },
+    price: { input: 1e4, output: 3e4 },
+  })
 
 test('a session quiet past its full depth is stripped to its prose and its cost', () =>
   projects({
@@ -295,7 +305,9 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
     'past/subagents/agent-p': { text: dated(side(tool), 30 * DAY) },
     today: { text: lines('hello') + tool },
   }, async (dir) => {
-    let g = locked(store())
+    let s = store()
+    priced(s)
+    let g = locked(s)
     await look(g, dir, { tails: new Map(), done: new Set() }, {
       person: ids.ada,
     })
@@ -303,7 +315,7 @@ test('a session quiet past its full depth is stripped to its prose and its cost'
     assertEquals(await told(g, 'past'), ['long ago', 'said 0', '(call)'])
     let [past] = await g.read('.session.id=past')
     let [spent] = await g.read(`.entry.session=${past.entity.eid}&.cost&*`)
-    assertEquals(spent.cost, { dollars: 0.25, reported: true })
+    assertEquals(spent.cost, { dollars: 0.25, reported: false })
     assertEquals(await told(g, 'p'), [])
     assertEquals(await told(g, 'today'), [
       'hello',

@@ -119,32 +119,49 @@ test('claude: a tool call and its result, a credential scrubbed from both', () =
   )
 })
 
-test('claude: a managed run opens with its id and ends with its cost', () => {
+test('claude: a managed run opens with its id, and each reply names its request', () => {
   assertEquals(
     claude({ type: 'system', subtype: 'init', session_id: 'abc' }).about,
     { session: { id: 'abc' } },
   )
+  // A request's usage, its cache reads and writes counted as input; what the
+  // run cost in all is the sum of its requests, so its ending says no more.
   assertEquals(
-    entries(claude, { type: 'result', usage: { input_tokens: 12 } }),
-    [{ stop: {}, usage: { input_tokens: 12 } }],
+    entries(claude, {
+      type: 'assistant',
+      message: {
+        id: 'msg_1',
+        model: 'claude-opus-5-5',
+        content: [{ type: 'text', text: 'hi' }],
+        usage: {
+          input_tokens: 10,
+          cache_creation_input_tokens: 8476,
+          cache_creation: { ephemeral_1h_input_tokens: 8476 },
+          cache_read_input_tokens: 13724,
+          output_tokens: 41,
+          output_tokens_details: { thinking_tokens: 30 },
+        },
+      },
+    }),
+    [{
+      ask: { id: 'msg_1', to: 'claude-opus-5-5' },
+      usage: {
+        input_tokens: 22210,
+        output_tokens: 41,
+        cached_tokens: 13724,
+        cache_write_tokens: 8476,
+        cache_write_1h_tokens: 8476,
+        reasoning_tokens: 30,
+      },
+    }, { content: { body: 'hi' }, output: {} }],
   )
-  // Its own dollars, and its cache reads and writes counted as input.
   assertEquals(
     entries(claude, {
       type: 'result',
       total_cost_usd: 0.0185394,
-      usage: {
-        input_tokens: 10,
-        cache_creation_input_tokens: 8476,
-        cache_read_input_tokens: 13724,
-        output_tokens: 41,
-      },
+      usage: { input_tokens: 12 },
     }),
-    [{
-      stop: {},
-      usage: { input_tokens: 22210, output_tokens: 41, cached_tokens: 13724 },
-      cost: { dollars: 0.0185394, reported: true },
-    }],
+    [{ stop: {} }],
   )
   // A refusal is an ending too — with the diagnosis it carried.
   assertEquals(

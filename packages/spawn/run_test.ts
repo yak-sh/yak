@@ -63,23 +63,30 @@ test('an effort the model does not serve is refused, not launched', async () => 
 test('the log becomes the transcript: one entry per line that says something', async () => {
   let { g, dir, close } = await logged([
     { type: 'system', subtype: 'init', session_id: 'abc' },
-    { type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } },
+    {
+      type: 'assistant',
+      message: {
+        id: 'msg_1',
+        content: [{ type: 'text', text: 'hi' }],
+        usage: { output_tokens: 3 },
+      },
+    },
     'Client.listTools() called but server does not advertise tools capability',
     { type: 'result', usage: { output_tokens: 3 } },
   ])
   try {
     await follow(g, 'S1', claude.read, { dir })
     let said = await entries(g)
-    // The request, what it said, and the ending — the line that was not JSON
-    // is left in the file.
-    assertEquals(said.length, 3)
-    assertEquals(comp(said[1], 'content').body, 'hi')
+    // The request, the model request it made with what that used, what it
+    // said, and the ending — the line that was not JSON is left in the file.
+    assertEquals(said.length, 4)
+    assertEquals(comp(said[1], 'usage').output_tokens, 3)
+    assertEquals(comp(said[2], 'content').body, 'hi')
     // Everything a provider prints is output, and the run is the session.
-    assertEquals(comp(said[1], 'output').source, 'S1')
-    assertEquals(comp(said[1], 'imported').line, 2)
-    assertEquals(comp(said[1], 'imported').source, `${dir}/S1.out`)
-    assertEquals(comp(said[2], 'stop'), {})
-    assertEquals(comp(said[2], 'usage').output_tokens, 3)
+    assertEquals(comp(said[2], 'output').source, 'S1')
+    assertEquals(comp(said[2], 'imported').line, 2)
+    assertEquals(comp(said[2], 'imported').source, `${dir}/S1.out`)
+    assertEquals(comp(said[3], 'stop'), {})
     // The line that says what the provider calls its own thread patches the
     // session rather than becoming an entry.
     let [row] = await g.read('.session&*')
@@ -88,7 +95,7 @@ test('the log becomes the transcript: one entry per line that says something', a
 
     // The stamp is the cursor: reading the same file again imports nothing.
     await follow(g, 'S1', claude.read, { dir })
-    assertEquals((await entries(g)).length, 3)
+    assertEquals((await entries(g)).length, 4)
   } finally {
     close()
   }

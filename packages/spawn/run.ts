@@ -229,14 +229,17 @@ export let asked = async (
   }
 }
 
-// A turn's ending carries what it cost, and says which ask it answers the way
-// a daemon's ask entry does, so whatever reads usage off `ask` rows
-// (@yaks/session `transcriptUsage`) reads a run's too.
+// What a run used says which ask it answers the way a daemon's ask entry
+// does, so whatever reads usage off `ask` rows (@yaks/session
+// `transcriptUsage`) reads a run's too. A request the log names keeps its own
+// id and model.
 let answering = (read: Reader, ask: Comp): Reader => (e) => {
   let said = read(e)
   return {
     ...said,
-    entries: said.entries.map((c) => c.usage ? { ...c, ask } : c),
+    entries: said.entries.map((c) =>
+      c.usage ? { ...c, ask: { ...ask, ...c.ask } } : c
+    ),
   }
 }
 

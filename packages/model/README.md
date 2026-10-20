@@ -44,11 +44,11 @@ deno add jsr:@yaks/model
 
 ## Exports
 
-| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/model`       | `Executor`, `Inference`, `InferenceHost`, `InferenceReceipt`, `FrozenModelRequest`, `infer`, `inferenceReply`, `frozenRequest`, `thawedRequest`; `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`; `submitted`, `acknowledged`, `submitCall`; `MediaReceipt`, `MediaReceipts`, `MediaRecord`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RESPONSE` |
-| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Export              | Provides                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/model`       | `Executor`, `Inference`, `InferenceHost`, `InferenceReceipt`, `FrozenModelRequest`, `infer`, `inferenceReply`, `frozenRequest`, `thawedRequest`; `Model`, `Request`, `Reply`, `Item`, `Tool`, `TextDelta`, `Question`, `Questions`, `Answer`, `Usage`, `Price`, `Mark`, `Answered`, `Listed`; `ModelError`; `models`, `modelDoc`, `addressed`, `requesting`, `confirmed`; `weigh`, `billed`, `limitEid`, `dollars`, `hourly`, `attribute`, `generated`, `merged`, `Paid`, `Part`; `submitted`, `acknowledged`, `submitCall`; `MediaReceipt`, `MediaReceipts`, `MediaRecord`, `mediaReceipts`, `receivedMedia`, `recoveredMedia`; component-name constants `PROVIDER`, `MODEL`, `TOOL`, `QUESTIONS`, `ANSWER`, `USAGE`, `PRICE`, `COST`, `RATE_LIMIT`, `RESPONSE` |
+| `@yaks/model/vocab` | `modelDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `@yaks/model/graph` | `plugins()`, returning `[models()]`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ## Items and delivery
 
@@ -289,17 +289,28 @@ equal(await model.info!('missing'), undefined)
 
 ## Usage, price and cost
 
-**Usage** (`Usage`, `usage`) is token counts for one model request. Cached input
-and reasoning output are subsets of input and output, not extra tokens; an
-absent count is unknown. **Price** (`Price`, `price`) is dollars per million
-input, output and optional cached input tokens. **Cost** (`cost`) is the dollars
-spent by one model request or tool call, with `reported` saying whether the
-provider supplied that amount.
+**Usage** (`Usage`, `usage`) is token counts for one model request. Cached
+input, input written to the cache (`cache_write_tokens`, and of those the ones
+kept an hour, `cache_write_1h_tokens`) and reasoning output are subsets of input
+and output, not extra tokens; an absent count is unknown. **Price** (`Price`,
+`price`) is dollars per million input, output and optional cached, cache-write
+and hour-long cache-write tokens. **Cost** (`cost`) is the dollars spent by one
+model request or tool call, with `reported` saying whether the provider supplied
+that amount. A **rate limit** (`rate_limit{provider, window, used, resets, at}`)
+is the latest reading of how much of a provider's plan a window has used.
 
 `weigh(price, usage)` calculates dollars, treating missing counts as zero and
-using the input price when the cached price is absent. `billed(reply, price?)`
-uses `Reply.cost` first (provider-reported unless `costReported: false`), then
-weighs usage if both usage and price exist, or returns `undefined`.
+using the input price when the cached or cache-write price is absent.
+`billed(reply, price?)` uses `Reply.cost` first (provider-reported unless
+`costReported: false`), then weighs usage if both usage and price exist, or
+returns `undefined`.
+
+A prompt is cached as a prefix in the order it is sent, so where a token sits
+says how it was paid. `attribute(usage, parts)` lays a request's input parts out
+in that order, scales their sizes to the reported input, and splits each into
+`Paid` tokens: read from the cache, written to it, fresh, and generated.
+`generated(tokens, parts)` splits output the same way by size, `merged` adds
+splits together, and `dollars(price, paid, hour)` prices one.
 
 ```ts
 import { billed, weigh } from '@yaks/model'

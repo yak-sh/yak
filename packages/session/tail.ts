@@ -37,9 +37,11 @@ import { status } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { who } from '@yaks/graph/call'
 import { toolEid } from '@yaks/tools/result'
+import { limitEid } from '@yaks/model'
 import type { Comps, Reader, Said } from './readers.ts'
 import { humanCaller } from './who.ts'
 import type { Chunks } from './archive.ts'
+import { fix, step, type Walk, walker } from './parts.ts'
 
 /** A log being read, and the session it is read into. */
 export type Tail = {
@@ -73,6 +75,9 @@ export type Tail = {
   at: number
   rest: string
   dec: TextDecoder
+  /** what the requests read so far carried (./parts.ts), followed from the
+   * log's first line */
+  walk?: Walk
 }
 
 /** How a line is read in. */
@@ -109,6 +114,11 @@ let comp = (b: Bundle | undefined, name: string) =>
  * which is also what its result names. */
 export let callOf = (session: Eid, id: string): Eid =>
   derivedEid(`call ${session} ${id}`)
+
+/** The entry a model request becomes, named by the harness's own id for it,
+ * which every line of its reply names again. */
+export let askOf = (session: Eid, id: string): Eid =>
+  derivedEid(`ask ${session} ${id}`)
 
 /**
  * Whether an entry is prose: what a person typed (content alone), or what the
@@ -170,19 +180,31 @@ export let imported = (
   }
   said.entries.forEach((c, i) => {
     if (o.prose && !retained(c)) return
-    let { call, result, execution, output, using, ...rest } = c
+    let { call, result, execution, output, using, ask, ...rest } = c
+    let row = (name: string, value: unknown) => {
+      let eid = identityEid(name, [String(value)])
+      put({ entity: { eid }, [name]: { name: String(value) } })
+      return eid
+    }
     if (using) {
       let refs: Comp = { ...using }
       for (let name of ['provider', 'model']) {
-        if (!using[name]) continue
-        let value = String(using[name])
-        let eid = identityEid(name, [value])
-        put({ entity: { eid }, [name]: { name: value } })
-        refs[name] = eid
+        if (using[name]) refs[name] = row(name, using[name])
       }
       rest.using = refs
     }
     let at = { entry: { session }, imported: { source, line } }
+    if (ask && ask.id == null) rest.ask = ask
+    else if (ask) {
+      let { id, to, ...asked } = ask
+      put({
+        entity: { eid: askOf(session, String(id ?? `${line} ${i}`)) },
+        ...at,
+        ask: { ...asked, ...(to ? { to: row('model', to) } : {}) },
+        ...rest,
+      })
+      return
+    }
     if (call) {
       let { to, ...asked } = call
       let name = String(to ?? '')
@@ -210,26 +232,51 @@ export let imported = (
     if (answers && execution) put({ entity: { eid: answers }, execution })
   })
   if (said.about) put({ entity: { eid: session }, ...said.about })
+  for (let l of said.limits ?? []) {
+    let provider = identityEid('provider', [l.provider])
+    put({ entity: { eid: provider }, provider: { name: l.provider } })
+    put({
+      entity: { eid: limitEid(provider, l.window) },
+      rate_limit: {
+        provider,
+        window: l.window,
+        used: l.used,
+        ...l.resets ? { resets: l.resets } : {},
+        ...said.at ? { at: said.at } : {},
+      },
+    })
+  }
   return [...out.values()]
 }
 
 // The rows a line only touches. A tool's row is written where it is missing,
-// since writing it again moves its stamp for nothing; an answer's state only
-// where its call is there, or the patch alone would make an entity.
+// since writing it again moves its stamp for nothing, and so is a request,
+// which every line of its reply names again; an answer's state only where its
+// call is there, or the patch alone would make an entity; a plan-limit
+// reading only over an older one.
 let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
   let touched = bundles.filter((b) =>
-    !b.entry && (b.tool || b.provider || b.model || b.execution)
+    (!b.entry && (b.tool || b.provider || b.model || b.execution)) ||
+    (b.entry && b.ask) || b.rate_limit
   )
   if (!touched.length) return bundles
   let rows = await g.get(touched.map((b) => b.entity.eid))
-  let there = new Set(
-    rows.filter((r) => r && r[TOMBSTONE] == null).map((r) => r!.entity.eid),
+  let stored = new Map(
+    rows.filter((r) => r && r[TOMBSTONE] == null).map((r) => [
+      r!.entity.eid,
+      r!,
+    ]),
   )
+  let newer = (b: Bundle) =>
+    String(comp(b, 'rate_limit')?.at ?? '') >=
+      String(comp(stored.get(b.entity.eid), 'rate_limit')?.at ?? '')
   return bundles.filter((b) =>
     !touched.includes(b) ||
-    (b.tool || b.provider || b.model ? !there.has(b.entity.eid) : there.has(
-      b.entity.eid,
-    ))
+    (b.rate_limit
+      ? newer(b)
+      : b.tool || b.provider || b.model || b.ask
+      ? !stored.has(b.entity.eid)
+      : stored.has(b.entity.eid))
   )
 }
 
@@ -447,6 +494,43 @@ let created = async (g: Graph, t: Tail): Promise<Eid> => {
   return made.find((b) => b.session)!.entity.eid
 }
 
+// What a line's entries owe the requests they carry (./parts.ts).
+let walked = (w: Walk, made: Bundle[]): Bundle[] =>
+  made.filter((b) => b.entry || b.tool).flatMap((b) => step(w, b))
+
+// The walk a tail keeps, begun before it reads a line: a log read from its
+// start begins one empty, and one taken up partway first follows the lines
+// already read, writing nothing, so its next request knows what came before.
+let follow = async (t: Tail, read: Reader, o: Pull) => {
+  if (t.walk) return
+  t.walk = walker()
+  if (!t.line || t.stream || !t.session) return
+  let text: string
+  try {
+    text = await Deno.readTextFile(t.path)
+  } catch {
+    return // gone: what follows is all there is
+  }
+  let line = 0
+  for (let raw of text.split('\n')) {
+    if (++line > t.line) break
+    let event = parsed(raw)
+    if (!event) continue
+    let said = read(event)
+    for (let f of said.fixed ?? []) fix(t.walk, f)
+    walked(
+      t.walk,
+      imported(said, {
+        ...o,
+        session: t.session,
+        source: t.path,
+        line,
+        own: t.own,
+      }),
+    )
+  }
+}
+
 /**
  * Read what the log holds past the tail into its session, one transaction per
  * line, each dated when the harness wrote it where the line says. A line the
@@ -472,6 +556,7 @@ export let pull = async (
   let marked = t.line
   let breath = performance.now()
   let all = await lines(t, o.final)
+  if (all.length && !o.prose) await follow(t, read, o)
   for (let [i, text] of all.entries()) {
     if (o.signal?.aborted || i && performance.now() > (o.until ?? Infinity)) {
       t.rest = [...all.slice(i), t.rest].join('\n')
@@ -487,19 +572,21 @@ export let pull = async (
     let event = parsed(text)
     if (!event) continue
     let said = read(event)
+    if (t.walk) { for (let f of said.fixed ?? []) fix(t.walk, f) }
     let kept = o.prose ? said.entries.filter(retained) : said.entries
-    if (!kept.length && !said.about) continue
+    if (!kept.length && !said.about && !said.limits?.length) continue
     t.session ??= await created(g, t)
     await settle(g, t)
     let person = kept.some(typed)
+    let made = imported(said, {
+      ...o,
+      session: t.session,
+      source: t.path,
+      line,
+      own: t.own,
+    })
     let bundles = fold(
-      imported(said, {
-        ...o,
-        session: t.session,
-        source: t.path,
-        line,
-        own: t.own,
-      }),
+      fold(made, t.walk ? walked(t.walk, made) : []),
       marks(t, line, person),
     )
     // Trusted: `imported` is server-owned, and this is the server reading a

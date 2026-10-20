@@ -68,9 +68,8 @@ test('the request starts the provider, and what it printed is the transcript', a
     assert((await bodies(g.g)).includes('working: do the thing'))
     let last = (await said(g.g)).at(-1)!
     assertEquals(comp(last, 'stop'), {})
-    assertEquals(comp(last, 'usage')?.output_tokens, 34)
-    // Where a daemon's ask keeps it, so what reads a transcript's usage reads
-    // a run's.
+    // Each request's usage is where a daemon's ask keeps it, so what reads a
+    // transcript's usage reads a run's.
     let [cost] = await transcriptUsage(g.g, 'S1')
     assertEquals(comp(cost, 'usage')?.output_tokens, 34)
     assertEquals(comp(cost, 'ask')?.through, 'E1')

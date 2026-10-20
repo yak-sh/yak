@@ -52,6 +52,7 @@ import {
   MODEL,
   type Model,
   ModelError,
+  type Part,
   PROVIDER,
   QUESTIONS,
   type Questions,
@@ -128,6 +129,13 @@ export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
 import { project } from './project.ts'
 export { project } from './project.ts'
+import {
+  contextParts,
+  instructionParts,
+  itemLines,
+  type Line,
+  toolPart,
+} from './parts.ts'
 
 /** A tool the model may call: its declaration, and how to run it. */
 export type Tool = Declared & {
@@ -529,6 +537,23 @@ let summarize = async (
 
 let two = (n: number) => String(Math.round(n * 100) / 100)
 
+// The session's `fixed`, where the request just answered carried a fixed part
+// other than the one it records.
+let carried = async (
+  g: Graph,
+  session: Eid,
+  sent?: { fixed: Part[] },
+): Promise<Bundle[]> => {
+  if (!sent || !g.vocab.comp('fixed')) return []
+  let parts: Record<string, number> = {}
+  for (let [k, n] of sent.fixed) parts[k] = (parts[k] ?? 0) + n
+  let [held] = await g.get([session], ['fixed'])
+  let was = (held?.fixed as { parts?: unknown } | undefined)?.parts
+  return JSON.stringify(was) == JSON.stringify(parts)
+    ? []
+    : [{ entity: { eid: session }, fixed: { parts } }]
+}
+
 /** An answer as the line a later turn reads: `plan: forge, 0.82`. */
 let saying = (question: string, a: Answer): string => {
   let said = a.choice ?? [a.score, a.noul].find((n) => n != null)
@@ -552,6 +577,10 @@ export let react = async (
   let { entries, bodies } = await turnEntries(g, session, deps)
   let status = statusOf(entries)
   let nothing: Step = { did: 'nothing', status, added: [] }
+  // What the request this step sends carries (./parts.ts): the fixed part
+  // (tools, instructions, the skills it lists) and the conversation, whole
+  // even where an anchor leaves the provider holding its start.
+  let sent: { fixed: Part[]; lines: Line[] } | undefined
   let newest = entries.at(-1)
   let seen = entries.findLast((b) => comp(b, ENTRY)?.session == session)
   let asked = newestAsk(entries)
@@ -679,7 +708,10 @@ export let react = async (
       },
       attempt: { by: null },
     }
-    let added: Bundle[] = [finalAsk]
+    if (reply.usage && sent) {
+      finalAsk.context_parts = contextParts(sent.fixed, sent.lines, reply.usage)
+    }
+    let added: Bundle[] = [finalAsk, ...await carried(g, session, sent)]
     let textIndex = 0
     const progress: Bundle[] = []
     for (let item of reply.items) {
@@ -1390,6 +1422,22 @@ export let react = async (
           : { error: e, phase: 'compaction' },
       )
     }
+  }
+  sent = {
+    fixed: [
+      ...req.tools.map(toolPart),
+      ...instructionParts(String(req.instructions ?? ''), 'system'),
+      ...itemLines(dynamic).map(([, n]): Part => ['skills', n]),
+    ],
+    lines: itemLines(
+      anchorId
+        ? project(entries, window, toolEntities, {
+          results,
+          media,
+          inputText: deps.inputText,
+        })
+        : req.items.slice(dynamic.length),
+    ),
   }
   let ask = unfinished && executor ? unfinished : line({
     [ASK]: { to: modelEid, through: newest.entity.eid },

@@ -170,6 +170,14 @@
           "type": "integer",
           "description": "input tokens read from the provider cache; not a guarantee of future cache availability"
         },
+        "cache_write_tokens": {
+          "type": "integer",
+          "description": "input tokens written to the provider cache by this request, within input_tokens"
+        },
+        "cache_write_1h_tokens": {
+          "type": "integer",
+          "description": "of the cache writes, those kept an hour rather than minutes, which a provider can price higher"
+        },
         "reasoning_tokens": {
           "type": "integer",
           "description": "reasoning tokens within output tokens"
@@ -192,6 +200,14 @@
         "cached": {
           "type": "number",
           "description": "dollars per million input tokens read from the provider cache; the input price where absent"
+        },
+        "cache_write": {
+          "type": "number",
+          "description": "dollars per million input tokens written to the provider cache; the input price where absent"
+        },
+        "cache_write_1h": {
+          "type": "number",
+          "description": "dollars per million input tokens written to the cache for an hour; the cache_write price where absent"
         }
       }
     },
@@ -207,6 +223,40 @@
         "reported": {
           "type": "boolean",
           "description": "true when the provider reported the dollars; false when they were weighed from the model's `price`"
+        }
+      }
+    },
+    "rate_limit": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "how much of a provider's plan limit is used: one row per provider and window, holding its latest reading",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "ref": "provider",
+          "death": "cascade",
+          "description": "the provider whose plan it is",
+          "identity": true
+        },
+        "window": {
+          "type": "integer",
+          "description": "the limit's window in minutes: 10080 for a week, 300 for five hours",
+          "identity": true
+        },
+        "used": {
+          "type": "number",
+          "description": "percent of the window's limit used, as the provider reported it"
+        },
+        "resets": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the window resets"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "when the provider reported it"
         }
       }
     },

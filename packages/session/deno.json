@@ -9,6 +9,7 @@
     "./views": "./views.ts",
     "./service": "./service.ts",
     "./routes": "./routes.ts",
+    "./parts": "./parts.ts",
     "./tail": "./tail.ts",
     "./status": "./status.ts",
     "./wait": "./wait.ts",

@@ -75,19 +75,34 @@ export {
 
 export {
   COST,
+  dollars,
+  hourly,
   modelDoc,
   PRICE,
   type Price,
+  RATE_LIMIT,
   USAGE,
   type Usage,
   weigh,
 } from './vocab.ts'
+export {
+  attribute,
+  generated,
+  merged,
+  type Paid,
+  type Part,
+} from './attribute.ts'
 export { cachedPrefixExpires, cacheExpiry, prefixCacheMark } from './cache.ts'
 export { acknowledged, submitCall, submitted } from './submission.ts'
 export type { CacheContext } from './cache.ts'
 import type { CacheContext } from './cache.ts'
 
 export let PROVIDER = 'provider'
+
+/** The row holding a provider's latest reading of one plan-limit window
+ * (`rate_limit`), named by its provider entity and the window in minutes. */
+export let limitEid = (provider: Eid, window: number): Eid =>
+  identityEid('rate_limit', [provider, String(window)])
 export let MODEL = 'model'
 export let TOOL = 'tool'
 export let QUESTIONS = 'questions'

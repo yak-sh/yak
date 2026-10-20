@@ -30,6 +30,7 @@
 // they keep, not from their docs.
 
 import { claudeStops } from './claude-control.ts'
+import { type Fixed, instructionParts, toolPart } from './parts.ts'
 
 /** One parsed line of a harness's log. */
 export type Event = Record<string, unknown>
@@ -45,6 +46,18 @@ export type Said = {
   about?: Comps
   /** when the harness wrote it, where the line says */
   at?: string
+  /** what it says about the fixed part every request carries (./parts.ts) */
+  fixed?: Fixed[]
+  /** what it says about the provider's plan limits */
+  limits?: Limit[]
+}
+
+/** A provider's plan limit, as a log reports it (@yaks/model `rate_limit`). */
+export type Limit = {
+  provider: string
+  window: number
+  used: number
+  resets?: string
 }
 
 /** A harness's line format. */
@@ -135,11 +148,17 @@ let put = (k: string, v?: number) => v == null ? {} : { [k]: v }
 // @yaks/model's `usage`, whose `input_tokens` counts every input token, cached
 // ones included: what Codex reports. Claude reports its cache reads and writes
 // beside an `input_tokens` that counts only the rest, so they are added in.
-let usage = (input?: number, output?: number, cached?: number): Comps => {
+let usage = (
+  input?: number,
+  output?: number,
+  cached?: number,
+  more: Record<string, number | undefined> = {},
+): Comps => {
   let told = {
     ...put('input_tokens', input),
     ...put('output_tokens', output),
     ...put('cached_tokens', cached),
+    ...Object.assign({}, ...Object.entries(more).map(([k, n]) => put(k, n))),
   }
   return Object.keys(told).length ? { usage: told } : {}
 }
@@ -157,6 +176,13 @@ let claudeUsage = (raw: unknown): Comps => {
       : parts.reduce((a: number, n) => a + (n ?? 0), 0),
     count(u.output_tokens),
     count(u.cache_read_input_tokens),
+    {
+      cache_write_tokens: count(u.cache_creation_input_tokens),
+      cache_write_1h_tokens: count(
+        obj(u.cache_creation).ephemeral_1h_input_tokens,
+      ),
+      reasoning_tokens: count(obj(u.output_tokens_details).thinking_tokens),
+    },
   )
 }
 
@@ -166,13 +192,76 @@ let codexUsage = (raw: unknown): Comps => {
     count(u.input_tokens),
     count(u.output_tokens),
     count(u.cached_input_tokens),
+    {
+      cache_write_tokens: count(u.cache_write_input_tokens),
+      reasoning_tokens: count(u.reasoning_output_tokens),
+    },
   )
 }
 
-// What Claude Code says a run cost, in dollars: its own figure, at list price.
-let spent = (dollars: unknown): Comps => {
-  let n = count(dollars)
-  return n == null ? {} : { cost: { dollars: n, reported: true } }
+// The API request a reply answers. Claude Code writes each block of a reply on
+// a line of its own, every one naming the request and its final usage; the
+// importer keeps the first.
+let requested = (e: Event): Comps[] => {
+  let m = obj(e.message)
+  let model = str(m.model)
+  let used = claudeUsage(m.usage)
+  let id = str(m.id) || str(e.requestId)
+  return id && model != '<synthetic>' && Object.keys(used).length
+    ? [{ ask: { id, ...(model ? { to: model } : {}) }, ...used }]
+    : []
+}
+
+let home = (path: string) => path.replace(/^\/home\/[^/]+(?=\/)/, '~')
+
+// What a line sent the model, in characters: what Claude Code rendered.
+let shown = (e: Event, fallback = '') =>
+  list(e.rendered).map((r) => str(r.content)).join('').length ||
+  fallback.length
+
+// What Claude Code says about the fixed part every request carries: its system
+// prompt and tool schemas, the instruction files, and its listings.
+let fixedOf = (e: Event): Fixed[] => {
+  let a = obj(e.attachment)
+  return e.type != 'attachment' ? [] : a.type == 'prompt_snapshot'
+    ? [
+      {
+        source: 'system',
+        parts: (Array.isArray(a.systemPrompt) ? a.systemPrompt : [])
+          .flatMap((p) => instructionParts(str(p), 'system')),
+      },
+      ...list(a.tools).length
+        ? [{ source: 'tools', parts: list(a.tools).map(toolPart) }]
+        : [],
+    ]
+    : a.type == 'instructions'
+    ? [{
+      source: 'instructions',
+      parts: list(a.files).flatMap((f) =>
+        instructionParts(str(f.content), `instructions ${home(str(f.path))}`)
+      ),
+    }]
+    : a.type == 'skill_listing'
+    ? [{
+      source: 'skills',
+      parts: [['skills', shown(e, str(a.content))]],
+      add: !a.isInitial,
+    }]
+    : a.type == 'deferred_tools_delta'
+    ? [{
+      source: 'deferred',
+      parts: [['deferred tools', shown(e)]],
+      add: true,
+    }]
+    : a.type == 'mcp_instructions_delta'
+    ? [{ source: 'mcp', parts: [['mcp instructions', shown(e)]], add: true }]
+    : a.type == 'agent_listing_delta'
+    ? [{
+      source: 'agents',
+      parts: [['agent listing', shown(e)]],
+      add: !a.isInitial,
+    }]
+    : []
 }
 
 // A slash command is recorded as its wrapper; the person typed the command.
@@ -220,7 +309,7 @@ let line: Reader = (e) => {
   let entries: Comps[] = e.type == 'user' && e.isCompactSummary
     ? said(text(obj(e.message).content), { checkpoint: {}, notice: {} })
     : e.type == 'assistant'
-    ? blocks(e).flatMap(assistant)
+    ? [...requested(e), ...blocks(e).flatMap(assistant)]
     : e.type == 'user'
     ? blocks(e).flatMap((b) => user(b, human(e)))
     // A message typed while a turn runs reaches the model as this attachment.
@@ -239,14 +328,18 @@ let line: Reader = (e) => {
         }
         : {}),
       stop: {},
-      ...claudeUsage(e.usage),
-      ...spent(e.total_cost_usd),
     }]
     : []
   let about = e.type == 'system' && e.subtype == 'init' && e.session_id
     ? { session: { id: String(e.session_id) } }
     : undefined
-  return { entries, ...(about ? { about } : {}), ...(at ? { at } : {}) }
+  let fixed = fixedOf(e)
+  return {
+    entries,
+    ...(about ? { about } : {}),
+    ...(at ? { at } : {}),
+    ...(fixed.length ? { fixed } : {}),
+  }
 }
 
 /**
@@ -439,9 +532,39 @@ export let codexRollout: Reader = (e) => {
     : e.type == 'event_msg' && it.type == 'turn_aborted'
     ? [{ stop: {} }]
     : e.type == 'token_usage_record'
-    ? Object.keys(codexUsage(it.usage)).length ? [codexUsage(it.usage)] : []
+    ? Object.keys(codexUsage(it.usage)).length
+      ? [{
+        ask: { id: str(it.response_id) || str(it.turn_id) },
+        ...codexUsage(it.usage),
+      }]
+      : []
     : e.type == 'compacted'
     ? said(str(it.message), { checkpoint: {}, notice: {} })
     : []
-  return { entries, ...(str(e.timestamp) ? { at: str(e.timestamp) } : {}) }
+  let system = str(obj(it.base_instructions).text)
+  let limits = e.type == 'event_msg' && it.type == 'token_count'
+    ? limited(obj(it.rate_limits))
+    : []
+  return {
+    entries,
+    ...(str(e.timestamp) ? { at: str(e.timestamp) } : {}),
+    ...(e.type == 'session_meta' && system
+      ? { fixed: [{ source: 'system', parts: [['system', system.length]] }] }
+      : {}),
+    ...(limits.length ? { limits } : {}),
+  }
 }
+
+// Codex's plan limits, as a token count reports them: a primary window and
+// perhaps a secondary one, each a percentage used and when it resets.
+let limited = (r: Event): Limit[] =>
+  [obj(r.primary), obj(r.secondary)].flatMap((w) =>
+    w.window_minutes == null || count(w.used_percent) == null ? [] : [{
+      provider: 'codex',
+      window: Number(w.window_minutes),
+      used: Number(w.used_percent),
+      ...count(w.resets_at) == null
+        ? {}
+        : { resets: new Date(Number(w.resets_at) * 1000).toISOString() },
+    }]
+  )

@@ -17,7 +17,10 @@
       "properties": {
         "items": {
           "type": "array",
-          "items": { "type": "object", "additionalProperties": true },
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          },
           "stamped": true,
           "description": "Stored provider-neutral context items; an empty list records that no context was found."
         }
@@ -40,6 +43,61 @@
           "ref": "entry",
           "death": "keep",
           "description": "the last entry of the prefix it was asked with"
+        }
+      }
+    },
+    "context_parts": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "embed": false,
+      "expire": ".context_parts .created.at<=\"30d ago\"",
+      "type": "object",
+      "description": "where one model request's tokens went, beside its `usage`: each part of its context, and each large entry in it, with its tokens as they were paid (read from the provider cache, written to it, sent fresh, generated). The totals are the provider's; the split across parts is estimated from their sizes. The fixed part every request carries is one part, `fixed`, whose pieces are the session's `fixed`",
+      "properties": {
+        "parts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "stamped": true,
+          "description": "tokens by part: `fixed`, `input`, `notice`, `output`, `reasoning`, `checkpoint`, `call <tool>`, `result <tool>`, each as [read, write, fresh, generated]"
+        },
+        "entries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "stamped": true,
+          "description": "the same, for each entry of the context large enough to be named on its own, by its eid"
+        }
+      }
+    },
+    "fixed": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "embed": false,
+      "type": "object",
+      "description": "what every model request of a session carries before its conversation, piece by piece in prompt order, each sized in characters: the harness's system prompt, each tool's schema, the instructions and each part of the persona, the skills, tools and agents it lists, and `unseen` for what its log never showed",
+      "properties": {
+        "parts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "stamped": true,
+          "description": "characters by piece: `system`, `tool <name>`, `persona <id>`, `instructions <file>`, `skills`, `mcp instructions`, `deferred tools`, `agent listing`, `unseen`"
         }
       }
     },
@@ -785,7 +843,9 @@
     },
     "session_release": {
       "effect": true,
-      "changed": ["session.ended"],
+      "changed": [
+        "session.ended"
+      ],
       "created": [
         "claim",
         "stop",
