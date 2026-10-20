@@ -63,6 +63,11 @@ for (let [a, b] of [[1, 1], [2, 2], [2, 3], [3, 2], [4, 4]]) {
   })
 }
 
+test('a list of ids asked again with others binds the others', () => {
+  same(and(eq('entity.eid', list(eid(5), eid(6)))))
+  same(and(eq('entity.eid', list(eid(7), eid(8)))))
+})
+
 test('an edited identity AST binds its current operand', () => {
   let q = and(eq('entity.eid', eid(1)))
   same(q)

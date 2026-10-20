@@ -375,12 +375,15 @@ let same = (a: Raw, b: Raw) =>
   )
 
 // The shape's statement with its values located, proved as the comment at the
-// top says; null when it cannot be.
+// top says; null when it cannot be. `ast` and `opts` are the call asking now,
+// whose ids may differ from the seen call's: the stand-ins replace its own ids
+// at their places, which the shape makes the seen call's places too.
 let proven = (
   ast: And,
   vocab: Vocab,
   opts: BindOpts,
   seen: Seen,
+  asking: Call,
 ): Kept | null => {
   let { call } = seen
   let probes: Probe[] = []
@@ -395,7 +398,7 @@ let proven = (
     )
     let references = opts.references && { ...opts.references }
     if (references) {
-      for (let id of call.operands) delete references[id]
+      for (let id of asking.operands) delete references[id]
       call.operands.forEach((_, k) => {
         if (refs[k] !== undefined) references![operands[k]] = refs[k]!
       })
@@ -403,7 +406,7 @@ let proven = (
     let out = within(touched, () =>
       render(
         prepared(
-          renamed(ast, (id) => operands[call.operands.indexOf(id)]),
+          renamed(ast, (id) => operands[asking.operands.indexOf(id)]),
           vocab,
           { ...opts, now, eids: opts.eids && roots, references },
           undefined,
@@ -496,7 +499,7 @@ export let compile = (
   }
   // Seen once, under a catalog that still answers as it did: prove it.
   if (held && 'first' in held && stands(held.asked, opts.archetypes)) {
-    let kept = proven(ast, vocab, opts, held)
+    let kept = proven(ast, vocab, opts, held, call)
     put(s, key, kept)
     return kept ? bound(kept, call) : lowered()
   }
