@@ -24,8 +24,9 @@
 //
 // A process working the pool claims the rows its own commits owe as it writes
 // them, and starts them once the commit is done: nothing another process could
-// do with them would be sooner. What another process wrote waits for the next
-// pass, at most {@link CAP} away.
+// do with them would be sooner. What another process wrote is heard as it
+// lands, where the storage can hear it ({@link PoolOpts.watch}), and is
+// otherwise found by the next pass, at most {@link CAP} away.
 //
 // A worker shares its thread with whatever hosts it, and a synchronous
 // storage (SQLite, on the box or in a Durable Object) never hands the thread
@@ -180,7 +181,7 @@ export type Attempt = {
 }
 
 /** The longest a worker waits between passes (ms): how soon a run another
- * process wrote is picked up. */
+ * process wrote is picked up when nothing hears it land. */
 export let CAP = 1_000
 
 /** The most runs a worker has going at once where it is not told (`max`). */
@@ -231,6 +232,11 @@ export type PoolOpts = {
    * presence need not be waited out. Ending processes release their claims;
    * otherwise claims recover when their leases expire. */
   gone?: (holder: Eid) => boolean | Promise<boolean>
+  /** Hear the runs another process commits soon after they land (@yaks/sqlite
+   * `Store.watch` of the `effect` component): `heard` is called, and a
+   * worker that stays passes at once instead of at the next pass, up to
+   * {@link CAP} away. Answers a stop. */
+  watch?: (heard: () => void) => () => void
 }
 
 /** A run this process claimed as it wrote it, to start after the commit. */
@@ -800,6 +806,19 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
     let present = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(LEASE) &&
       ctx.slots().every((s) => !s.effect || disabled.has(s.id) || !!s.run)
     let until = 0
+    let told = (err: unknown) =>
+      ctx.report(err, {
+        handler: POOL,
+        event: { kind: 'created', entity: { eid: me }, name: EFFECT },
+      })
+    // A worker that cannot hear other processes still finds their runs, a
+    // pass later.
+    let unwatch = () => {}
+    try {
+      unwatch = opts.watch?.(() => nap.abort()) ?? unwatch
+    } catch (err) {
+      told(err)
+    }
     try {
       while (!signal.aborted) {
         // A traversal the last pass left unfinished goes on at once; the
@@ -816,10 +835,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           await renew(g)
         } catch (err) {
           if (signal.aborted) break
-          ctx.report(err, {
-            handler: POOL,
-            event: { kind: 'created', entity: { eid: me }, name: EFFECT },
-          })
+          told(err)
         }
         await sleep(more ? 0 : CAP, AbortSignal.any([signal, nap.signal]))
         // A wake ends the nap at once, never the turn: what the pass started,
@@ -830,6 +846,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         }
       }
     } finally {
+      unwatch()
       if (present) {
         try {
           await g.apply([{ entity: { eid: leaseEid(seat) }, $delete: true }])

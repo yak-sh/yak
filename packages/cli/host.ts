@@ -81,7 +81,7 @@ import {
   schema as textSchema,
   search,
 } from '@yaks/fts'
-import { effects, expiration, released } from '@yaks/effects'
+import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { command, reporter, revision } from './report.ts'
 import {
@@ -652,6 +652,8 @@ let composed = async (
           lease: config.lease,
           gone: built.gone,
           nudge: opts.thread?.nudge,
+          // Runs another process commits wake this one's pool at once.
+          watch: (heard) => store?.watch?.(EFFECT, heard) ?? (() => {}),
           report: (error, job) =>
             void report(error, {
               during: {

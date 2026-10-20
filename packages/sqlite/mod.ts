@@ -112,6 +112,7 @@ import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
+import { watch } from './watch.ts'
 
 export {
   type Backfill,
@@ -255,6 +256,9 @@ export type Tx = {
 export type Store = {
   /** Current committed-data invalidation token, including external WAL writes. */
   revision?: () => unknown
+  /** Call `heard` soon after another connection commits a new row of
+   * `comp` (./watch.ts). Only a store over a file has one. Answers a stop. */
+  watch?: (comp: string, heard: () => void) => () => void
   statements: Statements
   migrations: MigrationControl
   checks: ReturnType<typeof diagnostics>
@@ -1010,6 +1014,12 @@ export let storage = (
     checks: diagnostics(driver),
     migrations: migrations(driver),
     revision: () => revision(driver, 'data'),
+    ...driver.watch
+      ? {
+        watch: (comp: string, heard: () => void) =>
+          watch(driver, vocab, comp, heard),
+      }
+      : {},
     worn: worn(vocab, base.derived),
     // A caller replaying these statements over a standing file must add new
     // columns before creating their indexes. `schema()` alone describes a

@@ -38,6 +38,13 @@ export type Driver = {
    */
   file?: boolean
   /**
+   * Hear the file change: `changed` is called soon after another connection
+   * commits to it, and may be called when nothing this caller wants did.
+   * Answers a stop. Only a driver over a file other processes may write has
+   * one; a connection that owns its database alone sees every change itself.
+   */
+  watch?: (changed: () => void) => () => void
+  /**
    * Keep planner statistics during installation. A file engine permits a
    * bounded sample; Durable Object SQLite permits optimization but refuses
    * `analysis_limit`, so any analysis there reads full indexes. Omitted for

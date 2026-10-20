@@ -6,6 +6,7 @@
 import { sqlitePath } from './sqlitepath.ts'
 import { Database, Statement } from '@db/sqlite'
 import { driver as connection } from './driver.ts'
+import { scope } from '@yaks/trace'
 import {
   call,
   col,
@@ -234,6 +235,32 @@ let holding = (query: (s: Stmt) => Row[]) => {
   return { objects: JSON.stringify(objects), empty }
 }
 
+// Another connection's commit to a file moves its data_version, a pragma that
+// reads no page, so looking every LOOK ms hears each process's commits within
+// a few milliseconds for a few microseconds a look. (Deno's file watcher could
+// hear them sooner, but closing one while events are in flight can block the
+// thread for good.) The timer holds no process open and runs outside any
+// trace, so its reads are nobody's spans. A look that fails stops looking:
+// whoever listens still passes on a timer of its own.
+let LOOK = 5
+let listen = (version: () => unknown) => (changed: () => void): () => void => {
+  let last = version()
+  let look = () => {
+    try {
+      let now = version()
+      if (now === last) return
+      last = now
+      changed()
+    } catch (error) {
+      clearInterval(timer)
+      console.error('sqlite watch —', error)
+    }
+  }
+  let timer = scope(undefined, () => setInterval(look, LOOK))
+  Deno.unrefTimer(timer)
+  return () => clearInterval(timer)
+}
+
 /**
  * The {@link Driver} over one open embedded database.
  *
@@ -253,6 +280,7 @@ export let driver = (db: Database): Driver => {
   }))
   let file = db.path != ':memory:' && db.path != '' &&
     !!run(main.sql, main.params)[0]?.file
+  let version = render({ t: 'pragma', name: 'data_version' })
   // Refuse unknown double-quoted columns in DDL rather than letting SQLite
   // interpret them as string literals. The parser checks expressions and WHERE
   // clauses too, without one table_info query per index on every startup.
@@ -267,11 +295,12 @@ export let driver = (db: Database): Driver => {
   }
   let d = connection(run, { file, changes: () => db.changes })
   let query = d.query
+  let watch = listen(() => run(version.sql, version.params)[0]?.data_version)
   return Object.assign(d, {
     // A database in memory is this process's alone, and copying a schema into
     // one is a page copy where making it is hundreds of statements. One on
     // disk is made in place: another process may have it open.
-    ...file ? {} : {
+    ...file ? { watch } : {
       template: (key: string, make: () => void) => {
         let before = holding(query)
         if (!before.empty || db.inTransaction) return make()

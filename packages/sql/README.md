@@ -324,9 +324,10 @@ equal(sent[0], 'insert into "book" ("title") values (?)')
 
 Optional driver capabilities include `tx` for synchronous transactions,
 `extension` for native SQL extensions, `template` for reusable empty schemas,
-`file` for a database file needing a write lock before reads, and `arms` for the
-engine's compound-select allowance. Async engines wrap execution at their own
-boundary.
+`file` for a database file needing a write lock before reads, `watch` for
+hearing a file change soon after another connection commits to it, and `arms`
+for the engine's compound-select allowance. Async engines wrap execution at
+their own boundary.
 
 A **revision** is a connection-local invalidation token for a schema, catalog,
 or data snapshot. `revision(driver, 'schema')` changes after DDL and after a

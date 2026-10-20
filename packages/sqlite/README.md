@@ -294,6 +294,7 @@ store does not see whole (raw SQL) moves the counts alone.
 | `screen(query, opts?)`       | A statement selecting the ids a query admits, compiled as reads are     |
 | `get(eids, comps?)`          | Those entities as stored, read without taking the write lock            |
 | `tx(body)`                   | Runs the callback in a transaction and returns its result               |
+| `watch(comp, heard)`         | Hears each new `comp` row another connection adds; answers a stop       |
 
 `install()` preserves existing data, adds missing columns, and rebuilds a table
 whose foreign keys or checks (a reference's death word, an enum) no longer match
@@ -476,6 +477,14 @@ directory and turns on foreign keys; a file also runs in WAL mode with
 timeout. It honors `DENO_SQLITE_PATH`, otherwise selecting the platform's system
 library. This module uses Deno environment/FFI APIs. The root adapter can
 instead receive another runtime's synchronous SQLite driver.
+
+A file driver also has `watch`: every 5 ms it reads the file's `data_version`,
+which moves when another connection commits, and calls back when it moved. A
+look costs a few microseconds, and its timer holds no process open.
+`Store.watch(comp, heard)` builds on it: on each call it reads the component
+table's newest id, one seek, and calls `heard` only when it grew, which is a row
+added since, as an entity's id is never reused. A store in memory has no
+`watch`, since only its own connection writes it.
 
 The embedded driver emits one `sql` span per statement while
 [@yaks/trace](../trace/README.md) observes it or an enclosing graph operation.

@@ -361,11 +361,14 @@ A worker joining the pool claims runs its own commits owe and starts them after
 commit. `defer: true` leaves those runs for `work`; `max` limits simultaneous
 handlers (`MAX`, 64, unless told), so a backlog starts a slot at a time, and a
 run ending while every slot is taken wakes the worker to fill it. Other
-processes' runs are picked up on the next pass, normally at most a second away.
-`wake` starts that pass sooner. `nudge` notifies the host once after a commit
-owes declared work, whether claimed here or left pending. A host can keep its
-`work` promise alive through handler completion and wake another worker to drain
-the remaining runs.
+processes' runs are heard as they land when the host gives `watch`, a
+subscription calling back on each new `effect` row (@yaks/sqlite's
+`Store.watch`, about 5 ms behind the other process's commit); without it they
+are picked up on the next pass, at most a second (`CAP`) away. `wake` starts
+that pass sooner. `nudge` notifies the host once after a commit owes declared
+work, whether claimed here or left pending. A host can keep its `work` promise
+alive through handler completion and wake another worker to drain the remaining
+runs.
 
 Each pass examines a bounded page of candidate runs, 32 by default. A candidate
 starts only when it is due, claimable and has a local slot. Selection shares
