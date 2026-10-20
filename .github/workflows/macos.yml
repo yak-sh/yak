@@ -17,9 +17,10 @@ on:
     paths: [packages/process/**, .github/workflows/macos.yml]
   workflow_dispatch:
 
+# As the gate: a run on main finishes, and only the newest push waits.
 concurrency:
   group: macos-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   process:

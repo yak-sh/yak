@@ -41,11 +41,13 @@ on:
   # busy main cannot cancel it: `gh workflow run gate.yml --ref <branch>`.
   workflow_dispatch:
 
-# One gate per ref. A second push supersedes the first — nobody reads the
-# verdict on a commit that is already history.
+# One gate per ref at a time. On main a gate that started runs to its verdict,
+# and only the newest push waits behind it (GitHub keeps one pending run per
+# group, replacing it), so a busy main still says green or red every gate's
+# length. Elsewhere a second push supersedes the first.
 concurrency:
   group: gate-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   gate:
