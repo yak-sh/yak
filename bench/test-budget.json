@@ -12,7 +12,7 @@
     }
   },
   "platforms": {
-    "workerd": 180558
+    "workerd": 80688.4
   },
   "tests": {
     "apps/vale/abilities.ts": {
@@ -38,7 +38,7 @@
       "every stored row within reach lies in exactly one of the area's tiles": 33.1
     },
     "apps/vale/areas_test.ts": {
-      "Store and descriptions share the ground effect authored shape": 23.2
+      "Store and descriptions share the ground effect authored shape": 1.1
     },
     "apps/vale/beasts.ts": {
       "apps/vale/beasts.ts: 196e97f8a18a": 8.3
@@ -54,9 +54,6 @@
     },
     "apps/vale/boundaries_test.ts": {
       "a boundary chunk agrees with the next chunk at the seam": 22.6
-    },
-    "apps/vale/boxes.ts": {
-      "apps/vale/boxes.ts: 8ede808310f3": 1.4
     },
     "apps/vale/bridge_span_test.ts": {
       "a bridge has a dry deck over the river in cold and grown ground": 28.1,
@@ -83,9 +80,6 @@
       "village buildings leave clear plots for one another and landmarks": 42.4,
       "village crafting stations are inside their workshops": 573.7
     },
-    "apps/vale/cam.ts": {
-      "apps/vale/cam.ts: f21ce273ec13": 27.9
-    },
     "apps/vale/caves_test.ts": {
       "the cave has matching cold and grown layers and a clear camera": 37.6,
       "the ridge cave is walkable from its mouth and back": 22.4
@@ -100,9 +94,6 @@
     "apps/vale/chart_test.ts": {
       "a chart grows each chunk once even when larger than the terrain cache": 1.9,
       "the same flat cover and water paint alike at finer and coarser voxel edges": 4.6
-    },
-    "apps/vale/chartbook_test.ts": {
-      "grown charts survive pan, zoom and reopening without loading terrain": 11.2
     },
     "apps/vale/chartcover_test.ts": {
       "candidate regions contain every sampled owner along warped borders and frontier": 4,
@@ -127,14 +118,12 @@
     "apps/vale/command-field_test.ts": {
       "acknowledged command drafts survive reload without the emergency stash": 16.3,
       "binding before hydration cannot replace a saved draft with empty input": 3.9,
-      "close before ready does not reopen the desk or write stored drafts": 8,
       "close keeps unacknowledged edits and blocks late completion writes": 10.9,
       "completion accepts candidates and an old account answer cannot cross accounts": 3.8,
       "emergency stashes are scoped to the app and account": 8,
       "switching accounts isolates held drafts and clears choices and signed-out input": 9.6
     },
     "apps/vale/command-lookup_test.ts": {
-      "creature suggestions follow renames, alias changes and removals": 1.1,
       "creature suggestions offer only names and aliases execution can resolve": 1.3,
       "place suggestions retain position eids and use accepted land and villager names": 5.8
     },
@@ -160,7 +149,7 @@
     },
     "apps/vale/designs_test.ts": {
       "one building plan refreshes its terrain and collision": 152.1,
-      "one land theme keeps another land’s cached terrain": 29.4
+      "one land theme keeps another land’s cached terrain": 1.7
     },
     "apps/vale/dodge_test.ts": {
       "dodging sideways moves without turning the hero": 325.3
@@ -171,13 +160,10 @@
     "apps/vale/equipment_glow_test.ts": {
       "a staff and tome carry their own soft light": 10.2
     },
-    "apps/vale/figure.ts": {
-      "apps/vale/figure.ts: 52367a7d91be": 5.1
-    },
     "apps/vale/figure_builder_test.ts": {
       "all seeded figures pass store admission unchanged": 56.7,
-      "figure admission refuses malformed, unsafe and cyclic geometry": 33.3,
-      "figure builder selects only main current kinds, not seeds or shadows": 20.6,
+      "figure admission refuses malformed, unsafe and cyclic geometry": 9.4,
+      "figure builder selects only main current kinds, not seeds or shadows": 3.3,
       "figure subscription and installer leave stale and shadow outputs out": 57
     },
     "apps/vale/figures_test.ts": {
@@ -229,12 +215,9 @@
       "an open sheet draws as it opens, and not again while what it shows stays": 61.2,
       "the compass opens the map without a separate fire travel button": 28.6
     },
-    "apps/vale/input_test.ts": {
-      "steering and orbit use locked deltas or captured drags in either swap": 2.1
-    },
     "apps/vale/inspect_worker_test.ts": {
       "inspect worker checks owner and reads live hero state": 1.7,
-      "inspect worker resolves land and villager names": 35.2
+      "inspect worker resolves land and villager names": 1.7
     },
     "apps/vale/items_test.ts": {
       "item designs in the store feed gear, recipes and stock": 9,
@@ -290,9 +273,6 @@
       "an elected peer keeps chasing a retreating hero until the home leash": 1621.7,
       "peer relays leave my hero in place and several creatures chasing": 760.3
     },
-    "apps/vale/node_glow_test.ts": {
-      "finer resources send more visible, distinct moving motes": 1.7
-    },
     "apps/vale/nodes_test.ts": {
       "gathered trees topple, lose their plates, and return on respawn": 5.8,
       "rare resources keep visible rarity light before their plates appear": 1.3,
@@ -306,14 +286,8 @@
     "apps/vale/noises_test.ts": {
       "village fire is near the square but not beyond surrounding buildings": 32
     },
-    "apps/vale/notices.ts": {
-      "apps/vale/notices.ts: bdc1eca7aeec": 2.1
-    },
     "apps/vale/once_test.ts": {
       "a delayed query returns its rows instead of an empty answer": 1.1
-    },
-    "apps/vale/one-shots_test.ts": {
-      "a generated step plays from its onset for one step, excluding later taps": 2.3
     },
     "apps/vale/pack_test.ts": {
       "a click inspects and double-click equips eligible bag gear in its appropriate slot": 18.3,
@@ -333,9 +307,6 @@
     },
     "apps/vale/papers.ts": {
       "apps/vale/papers.ts: 4284b3be152d": 6.3
-    },
-    "apps/vale/parts.ts": {
-      "apps/vale/parts.ts: 0fb563c4c370": 1.2
     },
     "apps/vale/party-flow_test.ts": {
       "two heroes invite and accept through their pages into one party": 78.7
@@ -422,9 +393,6 @@
       "bleed and stun effects need no implicit weapon blow": 4.4,
       "targetless ranged attacks keep the mouse landing point through windup": 2.5
     },
-    "apps/vale/sprite-paint.ts": {
-      "apps/vale/sprite-paint.ts: 19bf13ee9e14": 1.6
-    },
     "apps/vale/stand.ts": {
       "apps/vale/stand.ts: 43e88da33a24": 2.8
     },
@@ -433,7 +401,7 @@
       "prop spacing profiles follow their drawn faces": 87.2
     },
     "apps/vale/status_test.ts": {
-      "new lasting effects are admitted, described and skill-replaced": 20.5
+      "new lasting effects are admitted, described and skill-replaced": 1.2
     },
     "apps/vale/stock.ts": {
       "apps/vale/stock.ts: 357fce59c5db": 2.4,
@@ -464,7 +432,7 @@
     },
     "apps/vale/streets_test.ts": {
       "a hillside plot levels into its retaining wall": 2.3,
-      "each placed village door opens onto a clear street": 28.1,
+      "each placed village door opens onto a clear street": 2.3,
       "grown streets climb by walkable steps and match cold ground": 1137.3,
       "village roads join the streets without crossing plots": 85.7
     },
@@ -473,16 +441,12 @@
     },
     "apps/vale/teleport_test.ts": {
       "an active hero moves once and a returning hero keeps the move": 2.9,
-      "teleport can meet a villager at their current world position": 2.7,
       "teleport destinations stay in their land and refuse unsafe coordinates": 3.9,
       "teleport targets live positions and stored companion spots": 2.2,
       "the teleport worker admits owner and refuses editor": 6
     },
     "apps/vale/terrain.ts": {
-      "apps/vale/terrain.ts: cf8aa70e0320": 71.4
-    },
-    "apps/vale/themes_test.ts": {
-      "a changed ground cover repaints an already-grown chunk": 2.4
+      "apps/vale/terrain.ts: cf8aa70e0320": 8.8
     },
     "apps/vale/trades_test.ts": {
       "Trades exposes upgrade requirements and comparisons for carried pieces": 7.3,
@@ -497,14 +461,10 @@
     },
     "apps/vale/ui-kit_test.ts": {
       "Vale composition puts the theme before kit and skin fallback assets": 9.8,
-      "Vale semantic colours in the terminal resolve the current browser tokens": 1.3,
       "Vale specimens carry browser content and paint in the terminal": 6.5
     },
     "apps/vale/ui/lists_test.ts": {
       "every list keeps its icons on their lines, every grid its rows, and moves nothing when picked, on a desktop and a phone": 894.1
-    },
-    "apps/vale/ui/split_test.ts": {
-      "selection keeps every list node and scroll; back stays on list during refresh": 1.3
     },
     "apps/vale/upgrade.ts": {
       "apps/vale/upgrade.ts: 987fff1572e9": 9.1
@@ -541,11 +501,8 @@
       "a failed daily backup becomes a tracker bug": 332.6,
       "a failed restore is the reader’s, not a tracker bug": 118.8,
       "a night restores to the data dir it was taken from": 476.3,
-      "a snapshot directory without enough space is refused": 42.8,
+      "a snapshot directory without enough space is refused": 11.6,
       "the newest seven complete nights stay, and nothing else": 323.1
-    },
-    "bin/build-yak_test.ts": {
-      "build-yak: production precedes staging, and either failure fails Builds": 18.7
     },
     "bin/check-platform_test.ts": {
       "platform entrypoints cover every standalone config and the tail Worker": 46.1
@@ -559,16 +516,6 @@
     },
     "bin/deploy-time_test.ts": {
       "deploy record: concurrent append is idempotent, and a failed probe can complete": 2.6
-    },
-    "bin/migrate-session-machines_test.ts": {
-      "composed CLI host translates a pre-machine home before any provisioning": 15,
-      "host boundary attaches legacy checkout without consuming old worker source": 9.1,
-      "ordinary CLI reads remain available before destination expansion": 50.6,
-      "retired checkout uses explicit absolute cwd, not an unrelated host directory": 17.7,
-      "session home expansion preserves in-flight checkout, command cwd and graph references": 17
-    },
-    "bin/release_test.ts": {
-      "unlisted: a package it would publish that jsr.io has no page for": 1.7
     },
     "bin/scratch_test.ts": {
       "a stray fails a named base and only warns on the shared one": 7.7,
@@ -624,7 +571,6 @@
       "tail follows the local Wrangler stream without polling MCP": 13.4
     },
     "packages/admin/push_test.ts": {
-      "a directory reads as text, bytes that are not UTF-8 as base64, and no dotfiles": 1.4,
       "a large directory fits bounded calls before deletion and deploy": 5.8,
       "a push waits for a deploying server to answer file hashes": 2.9,
       "an interrupted push can be run again before deletion or deploy": 1.8,
@@ -655,7 +601,6 @@
       "socket subscribe awaits and subsequent refreshes have separate request trees": 1.2
     },
     "packages/api/api_test.ts": {
-      "/query answers an aggregate with its value, not a row set": 1.1,
       "/query sends a selection larger than one piece of its stream, whole": 7.5,
       "an interrupted request body is refused before reading or applying the graph": 1.1
     },
@@ -678,7 +623,6 @@
       "socket snapshots, batches and projections omit local data and its coverage": 6.7
     },
     "packages/api/relay_test.ts": {
-      "a durable reference edit orders after pending peer membership": 1.1,
       "a live query reads the current peer value and loses it on disconnect": 1.1,
       "a peer predicate admits late and moving rows, then lets them go": 1.3,
       "a peer-held reference follows its target and can retarget": 2.1,
@@ -688,7 +632,6 @@
       "peer-only rows keep a missing durable candidate until expiry": 2.9,
       "reference peer movement sends rows only on entry and exit": 1.4,
       "reference peer watch follows edits, retargets and deletion": 1.6,
-      "relay refuses unsaved input before changing its held value": 1.4,
       "scoped reference refresh keeps other roots and direct branches": 10.4,
       "shared reference source keeps each watch membership": 1.4,
       "shared reference watches refresh from one moved peer read": 8.5,
@@ -699,17 +642,14 @@
     "packages/api/save_test.ts": {
       "a clear removes the saved value and its pending timer": 1.8,
       "a failed eligibility read can wake again on a relevant stored change": 6.5,
-      "a known local save deadline owns one timer rather than polling SQLite each second": 1.2,
       "a negated association time condition can become eligible without a commit": 1.4,
       "a refusal at save time is reported to its writer and can finish on close": 1.3,
       "a refused final save still releases the connection and its timers": 1.4,
       "a refused takeover cannot poison a legitimate pending save": 1.2,
-      "computed eligibility wakes on its referenced dependency": 1.1,
       "durable updates keep newer held positions and respect field projections": 1.7,
       "live peer queries use held values while ordinary graph reads retain the save": 1.8,
       "peer saving merges latest patches once an interval and settles when quiet": 2,
       "pending peer patches do not recheck unchanged stored eligibility on every relay": 2.5,
-      "pending saves stay with the last writer after disconnect": 1.5,
       "the socket saves with its authenticated actor and vocabulary versions": 1.2
     },
     "packages/api/socket_test.ts": {
@@ -724,21 +664,17 @@
       "a derived value can join a window without its component": 5.6,
       "a derived value that needs its component skips births without it": 3.8,
       "a projection carries what its paths reach, and follows it": 2,
-      "a query the graph cannot answer is refused, not held": 1.3,
       "a referenced computed dependency refreshes only its owner": 7.6,
       "a refresh follows its query onto the entities it reads": 7.1,
       "a subscription to an entity’s history hears each change": 6.1,
       "a watch asked again after closing answers from memory, as it stands now": 6.5,
-      "a windowed query ignores writes outside its fixed owner": 1.3,
       "an unrelated change to a member does not read or repeat its answer": 1.2,
       "backlinks change only when a referrer changes": 1.7,
       "commits made while a pass reads are one pass after it": 1.1,
       "component-selected snapshots cover requested components, including absent ones": 1.2,
       "local ordered windows query members and births, refill from unseen rows after deletion": 2.5,
-      "restoring shared watches reads each answer once and keeps each live": 1.8,
       "subscriptions answer caller views on opening, refresh, raw feed and restore (false)": 2.2,
       "subscriptions answer caller views on opening, refresh, raw feed and restore (true)": 13.1,
-      "underfilled local windows send only edited members until their capacity fills": 1.3,
       "watches asking the same query share one answer": 2.8,
       "windowed property filters skip births without their components": 1.7
     },
@@ -768,8 +704,7 @@
       "packages/benchmark/README.md: 92bceefba6d8": 35.2
     },
     "packages/benchmark/benchmark_test.ts": {
-      "a symlinked output directory cannot overwrite the baseline": 3.1,
-      "sample resolution rounds tolerance boundaries and must match the baseline": 1.4
+      "a symlinked output directory cannot overwrite the baseline": 3.1
     },
     "packages/benchmark/throughput_test.ts": {
       "throughput collects each storage report separately from normalized apply and relay reports": 1.5,
@@ -782,9 +717,6 @@
       "packages/blob/README.md: af38a6c3bc1f": 7.8,
       "packages/blob/README.md: d4d6d19bab10": 38.3,
       "packages/blob/README.md: c18fda435a27": 4.5
-    },
-    "packages/blob/content_type_test.ts": {
-      "artifact types survive when their supported signatures are shorter than file sniffing needs": 1.5
     },
     "packages/blob/file_test.ts": {
       "the file backend stores one file per address": 1.1
@@ -842,10 +774,7 @@
       "the words are indexed on every write path, not just the plugin": 2
     },
     "packages/browse/bundle_test.ts": {
-      "the app bundles into one browser module": 379.8
-    },
-    "packages/browse/components/Ansi_test.tsx": {
-      "ANSI output becomes escaped HTML spans": 1.1
+      "the app bundles into one browser module": 0.6
     },
     "packages/browse/components/Canvas_test.ts": {
       "a cancelled pan forgets movement and never settles": 3.9
@@ -860,15 +789,13 @@
     },
     "packages/browse/components/Comments_test.ts": {
       "a thread shows answers under their question, not under unrelated notes": 29.7,
-      "byline reads actor and instrument from the created stamp": 12.3,
+      "byline reads actor and instrument from the created stamp": 1.1,
       "composer names an unnamed session by its chip id": 0.6,
       "shared comment send line keeps drafts, sends by submit or Enter once and leaves Shift+Enter alone": 9.1,
       "viaName names a session by its chip id, never its harness uuid": 4.8
     },
     "packages/browse/components/Entity_test.ts": {
-      "Entity mounts hooks with the original Ent and extra props": 1.9,
-      "a pending proposal keeps deletion named as deletion": 10.1,
-      "query groups preserve chosen tabs and default faces": 11.5
+      "Entity mounts hooks with the original Ent and extra props": 1.9
     },
     "packages/browse/components/Markdown_test.tsx": {
       "markdown fills the chosen face and forwards its props": 6.6
@@ -895,7 +822,7 @@
       "the tray shows live and recent sessions in separate sections": 4.5
     },
     "packages/browse/components/archetype_test.ts": {
-      "432 archetypes preserve every registry pick": 1479.9
+      "432 archetypes preserve every registry pick": 347.6
     },
     "packages/browse/components/cursor_test.ts": {
       "a cursor write never navigates the tab (update-only)": 8,
@@ -922,8 +849,7 @@
     },
     "packages/browse/components/restore_test.ts": {
       "a legacy link never pulls back someone who moved on": 7.7,
-      "a legacy task link resolves and replaces its address": 16.9,
-      "an unresolved legacy link leaves home reachable": 8
+      "a legacy task link resolves and replaces its address": 16.9
     },
     "packages/browse/components/useQuery_test.tsx": {
       "eid-keyed view queries release on retarget and last unmount": 18.8
@@ -979,9 +905,6 @@
       "session Tile names its work, model, and last activity without IDs": 7.7,
       "session lifecycle shares the task summary lane": 6.5,
       "session list Tile names its brief without exposing IDs": 2.5,
-      "session references dedupe entities and links in mention order": 1.1,
-      "session references link commits with actor repository context": 5.8,
-      "session references use the usual entity and URL faces": 6.4,
       "session row names the first ask and keeps the brief beneath it": 12.2,
       "session timestamps link to graph entries": 5.9,
       "session title names model and effort": 6.8
@@ -989,7 +912,6 @@
     "packages/browse/components/views/Show_test.tsx": {
       "Runs and Tasks ask only their typed memberships, not every reverse ref": 9.1,
       "a board whose saved query cannot be read shows why": 6.3,
-      "a hook-using renderer mounts through the helper": 5.9,
       "a superseded entity is marked on its face with what replaced it": 8.2,
       "a view that throws fails in its own slot, and the page paints": 20.7,
       "claim chip loads its referenced session instead of painting a blank": 15.1,
@@ -1014,8 +936,7 @@
       "highlight: an absent language is detected": 115.7
     },
     "packages/browse/live_archetypes_failure_test.ts": {
-      "failed descriptor reads release and can retry on the next render": 19.2,
-      "malformed or misaddressed descriptors are never trusted": 1
+      "failed descriptor reads release and can retry on the next render": 19.2
     },
     "packages/browse/live_archetypes_test.ts": {
       "projected descriptors batch, wake renderers, release, and survive eviction": 25.1
@@ -1029,23 +950,17 @@
     },
     "packages/browse/live_test.ts": {
       "a board renders from the subscription and tracks joins and leaves": 6.3,
-      "a frame wakes only the readers of its own sub and rows": 2.8,
       "a graph that answers it has no canvas gets its first": 24.8,
       "a hot board sleeps through card births and deaths": 11.3,
       "a lost socket reconnects in place; the painted cache survives": 14.4,
       "a replacement frame forgets the prior query set": 1.6,
-      "a subscribed board sleeps through an unrelated ordinary patch": 7,
-      "applyLocal: entity death sweeps its edges into the report": 5.7,
       "applyLocal: narrow signals wake only touched graph slices": 7.7,
       "applyLocal: reports touched eids and edges": 9.8,
-      "backlinks: reverse-union set + via, awake only for its own target": 1.2,
       "board membership sleeps through an unrelated row patch": 5.7,
       "boardAll: whole-graph match, chrome/comments/self excluded": 5.9,
       "boardPost excludes chrome and self from the subscription members": 5.7,
       "boardsOver: awake only when a board names or drops the target": 7.8,
-      "boot paints the first answer while the durable outbox never answers": 12,
       "camera motion and card stacking stay off the graph signal": 8.1,
-      "catch-up then live batch apply in arrival order": 5.6,
       "client singletons: four tab subs, local reads, isolation (T-21490)": 7.2,
       "comments: reverse-ref set, awake only for its own thread": 8,
       "each aggregate frame replaces the whole tally": 5.2,
@@ -1062,7 +977,6 @@
       "myMode: this actor's subscription, off the reverse index": 1.3,
       "narrow signals follow births, subscription eviction, and census": 6.5,
       "pinned sleeps through an unrelated row patch": 5.7,
-      "queryEids indexes any {eid} reference with no bespoke index": 8,
       "queryEids resolves pending wakes off the reverse index, narrowly": 10.1,
       "relationship indices wake only their affected targets": 7.3,
       "reverse subs: held per open card, torn down on close (T-21489)": 5.5,
@@ -1079,7 +993,6 @@
     "packages/browse/md_test.ts": {
       "md: fenced code follows its language or detects one": 5.6,
       "md: fenced code with blank lines survives whole": 6.6,
-      "md: ids in code stay literal; mid-word letters stay words": 2.7,
       "mdAbs: everything else renders as the canvas does": 1.8
     },
     "packages/browse/near_test.ts": {
@@ -1088,7 +1001,6 @@
     "packages/browse/optional_canvas_test.ts": {
       "a cold web module graph loads without canvas": 369.6,
       "canvas contributions disappear without changing the stored entities": 30.6,
-      "uninstalled-plugin edits stay parked without being replayed or cleared": 6.6,
       "without canvas, home reads the owner in the offered home page and entity links still resolve": 5.5
     },
     "packages/browse/optional_domains_test.tsx": {
@@ -1123,11 +1035,7 @@
       "session selection is capped after putting current runners ahead of newest history": 1.6,
       "standing session queries exclude automation and bound every arm": 1.5
     },
-    "packages/browse/sync_test.ts": {
-      "the indicator mirrors the outbox: a mutate adds, an ack clears": 8
-    },
     "packages/browse/tui/App_test.ts": {
-      "configured Inspect facet renders a query through its host adapter, not raw Render": 2.3,
       "the shared Browse App paints its sidebar and home; its search field goes to a query page": 18
     },
     "packages/browse/tui/md_test.tsx": {
@@ -1240,7 +1148,7 @@
     },
     "packages/cli/checks_test.ts": {
       "a composed host finds exactly the two states we broke": 74.4,
-      "the checks are the tools whose verb is check": 42
+      "the checks are the tools whose verb is check": 9.8
     },
     "packages/cli/cli_test.ts": {
       "a command line goes through the published schema and answers": 5.7,
@@ -1250,7 +1158,6 @@
       "the tool list is the subcommand list": 3.9
     },
     "packages/cli/external_cli_test.ts": {
-      "ordinary serve fallback outlives HTTP shutdown": 703.5,
       "restart CLI queues replacements before old stops with no blocking shutdown": 48.4
     },
     "packages/cli/host_test.ts": {
@@ -1275,7 +1182,6 @@
       "a plugin attaches reply bundles through the host runner": 10.9,
       "a plugin named with options gets them, beside the host": 8.4,
       "a plugin’s tools are imported by the first call of one of them": 4.3,
-      "a process coming up owes again what a declared sweep selects": 18.4,
       "a process imports the facets of the roles it serves, and no others": 13.6,
       "a process that runs no effects owes a run for each declared effect it writes": 8.8,
       "a process writes itself in, signs with that row, and stamps its exit": 6.2,
@@ -1301,9 +1207,6 @@
     "packages/cli/local_test.ts": {
       "a graph read exits and leaves owed effects unclaimed": 198.6
     },
-    "packages/cli/machines_test.ts": {
-      "CLI lends lazy process machines, prepares graph commits, and detaches existing machines": 73.1
-    },
     "packages/cli/page_test.ts": {
       "a body started early that fails is made again by the first request": 2.6,
       "a body that never comes is given up on, and made again": 3.5,
@@ -1323,9 +1226,6 @@
     },
     "packages/cli/readonly_test.ts": {
       "local read commands leave graph bytes unchanged under a concurrent writer": 77.4
-    },
-    "packages/cli/report_test.ts": {
-      "a composed tracker drains a separate spool, preserving error attribution": 36.2
     },
     "packages/cli/restart_handover_test.ts": {
       "restart drains tracker intake without losing its spool or a web request": 2078.8
@@ -1393,7 +1293,6 @@
       "a write shows its optimistic rule at once, and the server adds its own": 1.7
     },
     "packages/client/server-watch_test.ts": {
-      "a rider is answered and held, never a member; each role releases independently": 4,
       "answer metadata bounds include empty answers, long keys and coverage; eviction never invents hits": 1.4,
       "opt-in one-shot properties retain paint, not coverage, within the row budget": 3.3,
       "ranked server answers and riders restore unready with epoch guard: indexedDB": 3.2,
@@ -1401,9 +1300,6 @@
       "replacement preserves server ranking; content deltas do not reorder": 1.2,
       "semantic vault bounds and epoch-conditional writes: indexedDB": 2.1,
       "server evaluation never parses, filters or primes the query locally": 2.1
-    },
-    "packages/client/vault_test.ts": {
-      "a watch sees the local tier arrive at boot": 1.3
     },
     "packages/client/watch_test.ts": {
       "a watch hears a frame the server pushed": 2,
@@ -1428,7 +1324,6 @@
       "a deleted owner takes its connections, and their credentials": 3.1,
       "a sign-in answering a key needs no registered client, and the key is its credential": 2.5,
       "a space owner can attach a connected account in place of an unmet ask": 5.7,
-      "an OAuth client is kept once, and a custom integration never signs in as a built one’s": 1.4,
       "attachment does not turn a direct-key request into an implicit grant": 2.5,
       "attachment requires the space connection and sufficient OAuth scopes": 2.7,
       "begin and connect: a sign-in keeps its grant behind the connection’s own handle": 2.7,
@@ -1496,9 +1391,6 @@
     },
     "packages/doc/README.md": {
       "packages/doc/README.md: 9159004c9a05": 17
-    },
-    "packages/draft/desk.ts": {
-      "packages/draft/desk.ts: b7162c36cc42": 3.1
     },
     "packages/draft/desk_test.ts": {
       "a discard keeps what another interface typed meanwhile": 7.4,
@@ -1579,12 +1471,10 @@
     "packages/edge/plugin_test.ts": {
       "a link dies with either end": 2.9,
       "a link states itself and is stored": 4.4,
-      "a link to an entity the same batch mints resolves first": 1.7,
       "a patch that states no ends is left alone": 2.3,
       "a sentence spread over two bundles is one sentence": 2,
       "an aliased link mints at the sentence it states": 2.1,
       "an edge missing an end is refused, naming the end": 1.6,
-      "an edge with no relation is refused, and says so": 1.6,
       "the same link stated twice is one entity": 2.4,
       "unlinking drops the sentence and keeps the identity": 2.8
     },
@@ -1608,11 +1498,7 @@
     },
     "packages/effects/README.md": {
       "packages/effects/README.md: 9caf88693bc9": 7.1,
-      "packages/effects/README.md: 49410d25c1a9": 9.3,
       "packages/effects/README.md: 1b27a39430a9": 1.3,
-      "packages/effects/README.md: 5f3514d212ab": 5.4,
-      "packages/effects/README.md: d7143876b5d8": 1.5,
-      "packages/effects/README.md: 9cd44cda0613": 1.5,
       "packages/effects/README.md: 789eaac84534": 6.9,
       "packages/effects/README.md: 7e37e7ba8697": 3.7,
       "packages/effects/README.md: 8bf006e02329": 6.9
@@ -1646,20 +1532,16 @@
       "RAM: max=1 gives the other handler its next finite wake": 7.2,
       "SQLite: finite wakes cross a blocked prefix without spending attempts or stealing a lease": 22,
       "SQLite: max=1 gives the other handler its next finite wake": 17.1,
-      "SQLite: physical pages ignore imported entity numbers and equal timestamps": 4.2,
       "a SQLite backlog cannot hide another handler or turn LIMIT into a full scan": 167.1
     },
     "packages/effects/pool_test.ts": {
       "a pass on the way through leaves the pool to a process that stays": 10.8,
       "a pooled event retains all components moved on its target": 3.4,
       "a process working only some effects leaves the rest to a pass through": 10.8,
-      "a process working the pool runs what it writes, once committed": 1.4,
-      "a restart sweep selects identities without projecting every target": 3.7,
       "a run its worker dropped is run again, unless running twice is not safe": 3.8,
       "a run that got somewhere counts its next failure as its first": 6.3,
       "a run that throws comes back due, and rests failed once its tries are spent": 3.8,
       "a run's write owes a generation on, and the chain stops at depth": 1.5,
-      "a sweep owes what it selects one run, however many workers start at once": 7.5,
       "a thread that wrote runs down wakes the worker beside it": 14,
       "a worker clearing a backlog lets its host answer between passes": 10.5,
       "a worker refills a freed slot while another handler is still running": 16,
@@ -1684,7 +1566,6 @@
     "packages/effects/single_owner_test.ts": {
       "pool capacity and overlapping drains run each owed handler once (false)": 15.5,
       "pool capacity and overlapping drains run each owed handler once (true)": 13,
-      "single owner empty wakes owe no start or sweep work and write nothing": 4.3,
       "single owner live work and idle never renew claims or take presence duties": 10.9,
       "single owner progress restores attempts before a later failure": 13,
       "single owner recorded success writes only attempt and outcome, without lease fields": 3.7,
@@ -1729,9 +1610,6 @@
       "text past what one statement may carry still joins in field order": 1.8
     },
     "packages/embedding/graph_test.ts": {
-      "a key that has not arrived still names the space it will fill": 3.5,
-      "a phrase search sees an embedder that arrives after composition": 3.9,
-      "plugins raises the vectors and adds no rule to apply()": 1.3,
       "the extension a config builds answers .near over these vectors": 3,
       "the neighbourhood the config bounded is the one it gets": 3.3
     },
@@ -1743,16 +1621,6 @@
     },
     "packages/embedding/mod.ts": {
       "packages/embedding/mod.ts: db434ea2aa3e": 9.1
-    },
-    "packages/embedding/native_test.ts": {
-      "a build is made once, and again when enough vectors changed": 26.6,
-      "a database it was never installed on reads every vector": 6.2,
-      "a native build shares the enclosing atomic unit and rolls back with it": 7.7,
-      "a screen admitting many, all of them far, reads further": 64.8,
-      "a screen narrows before the nearest are cut, however thin": 11.8,
-      "a vector written after the build is near at once; a gone one is not": 11.5,
-      "another connection loads the newer build": 33.5,
-      "the index answers what reading every vector answers": 38.3
     },
     "packages/embedding/near_test.ts": {
       "a bounded scan keeps the nearest across more than one screen": 3.2,
@@ -1807,31 +1675,18 @@
     },
     "packages/embedding/sweep_test.ts": {
       "a drain sweeps a batch at a time until nothing is owed": 4,
-      "a field read through an override is read as what it stands for": 1.7,
       "a limit takes the newest and says what is left": 2.8,
       "a new model re-embeds the whole corpus, once": 3,
       "a restored entity, and a vector deleted by hand, are made again": 4,
-      "a review is its own entity, not part of the book it is about": 1.8,
       "a text the model refuses is dropped; the batch it rode in is not": 13.3,
-      "a vocabulary with nothing to embed sweeps to nothing": 1.3,
       "a write from anywhere is owed a look; unchanged text is not re-embedded": 2.7,
       "an embedder that cannot be reached keeps everything owed": 2.6,
-      "an entity gets one text, joined from every field it wears": 1.9,
       "an entity wearing an embed: false component gets no vector": 2.7,
       "emptied, deleted and undressed entities lose their vectors": 2.7,
       "text found through another component counts only while that one is worn": 3.1,
       "the fields changing queues everything, once": 3,
       "the sweep embeds everything owed, then nothing": 3.9,
       "the vectors are derived: drop the table and the sweep rebuilds it": 3.7
-    },
-    "packages/embedding/tools_test.ts": {
-      "a build owed moments ago is the sweep having its turn": 2.3,
-      "a database this process alone has open draws no warning": 2.3,
-      "a host still waiting for its config says what it is waiting for": 2,
-      "an empty table is not a stalled index": 1.1,
-      "an index behind for longer than the sweep takes is a fail": 2.7,
-      "an index the sweep built is nothing to report": 4.1,
-      "where every search reads every vector, it says why": 4.6
     },
     "packages/embedding/workers-ai_test.ts": {
       "an input the model will not take is Refused; an outage is not": 4.8,
@@ -1843,8 +1698,7 @@
     "packages/esbuild/compile_test.ts": {
       "a build whose esbuild ends throws Stopped, and the next starts esbuild again": 23.9,
       "a worker keeps its runtime's imports and bundles the rest": 4.3,
-      "an app's mistakes come back as lines that say where": 6.9,
-      "the server compiles a posted job into one module per page": 18
+      "an app's mistakes come back as lines that say where": 6.9
     },
     "packages/esbuild/graph.ts": {
       "packages/esbuild/graph.ts: 8c9ae176b5bb": 35.6,
@@ -1858,7 +1712,6 @@
       "an install resolves each range flat, and a build reads the files it asks for": 9.6
     },
     "packages/esbuild/plan_test.ts": {
-      "a TypeScript worker compiles, with the files it reaches": 2,
       "a module graph reads siblings together and keeps import order": 1.5,
       "a module worker a page script starts compiles as an entry of its own": 1.3,
       "a page script compiles when it is TypeScript or imports a declared package": 1.5
@@ -1868,16 +1721,14 @@
       "package resources retain module-relative addresses for nested entries": 47.6
     },
     "packages/facets_test.ts": {
-      "a package with words exports them at ./vocab, and they load": 60.5,
-      "compose takes every facet of the plugins a config names, for every role": 49.5,
-      "every other facet a package exports is shaped the way a host reads it": 359.3,
+      "a package with words exports them at ./vocab, and they load": 3.1,
+      "compose takes every facet of the plugins a config names, for every role": 12.4,
+      "every other facet a package exports is shaped the way a host reads it": 7.9,
       "every package's words load beside every other package's": 3.5
     },
     "packages/filter/filters_test.ts": {
-      "Enter takes a word to where it reads whole, then keeps it": 1.3,
       "a source that answers later lands its list unless typing moved on": 3,
       "in a page, the element types, the list paints, and a taken word lands at the caret": 12.3,
-      "in a terminal, the field paints its caret and its list under it": 1.4,
       "typing offers what can come next, and the keys walk and take it": 1.9
     },
     "packages/fts/README.md": {
@@ -1968,15 +1819,13 @@
       "the packfile section is side-band framed, band 1": 2.9
     },
     "packages/git/index_test.ts": {
-      "a commit body is in the store, verbatim": 1.6,
       "a commit chain is the ids git takes, and a parent walk": 2,
       "a large manifest reuses stored Git blobs under a 100-bind limit": 54.9,
       "a manifest becomes the trees git would build": 1.8,
       "a manifest written twice writes one graph and reads no bytes again": 4.7,
       "a repeat manifest reads existing Git names in batches": 16.9,
       "a tree links to each child under the name it holds it by": 1.3,
-      "an object row is its type, its size and its bytes": 1.4,
-      "the SHA-256 name is a key off the SHA-1 one": 1.3
+      "an object row is its type, its size and its bytes": 1.4
     },
     "packages/git/land_test.ts": {
       "--allow-revert lands the rewind, with a warning": 22.7,
@@ -2026,9 +1875,6 @@
       "collection retires externally removed observations and preserves managed restore history": 32.5,
       "the service collects each repository the graph knows": 41
     },
-    "packages/git/sha1_test.ts": {
-      "the digest is the platform's, at every padding boundary": 1.4
-    },
     "packages/git/tools_test.ts": {
       "a citation whose file moved since it was verified fails the check": 21.7,
       "verify marks the citation and moves its revision to the commit checked out": 7.6
@@ -2036,9 +1882,6 @@
     "packages/graph/README.md": {
       "packages/graph/README.md: c0dde94e8a30": 2.1,
       "packages/graph/README.md: c8ec71f62b33": 2.3,
-      "packages/graph/README.md: b02e2685daa5": 1.3,
-      "packages/graph/README.md: 3e409b12b4d4": 1.2,
-      "packages/graph/README.md: 5439f2f2dc7f": 1.2,
       "packages/graph/README.md: 853dfae2f809": 2.1
     },
     "packages/graph/activity_test.ts": {
@@ -2057,9 +1900,6 @@
       "trusted metadata corrections preserve provenance (async)": 1.1,
       "trusted metadata corrections preserve provenance (sync)": 1.1
     },
-    "packages/graph/ordered_test.ts": {
-      "beforeWrite: independent batches require unanimous guards (false, false)": 1.1
-    },
     "packages/graph/projection_test.ts": {
       "a projection answers what it names, and what its paths reach": 1.2
     },
@@ -2067,8 +1907,7 @@
       "read hooks rewrite storage predicates and get projections before answering": 1.2
     },
     "packages/graph/rules_effect_test.ts": {
-      "each failing effect rule is reported and later observers still run": 1.1,
-      "effect rules match stored tags and this batch’s writes": 1.3
+      "each failing effect rule is reported and later observers still run": 1.1
     },
     "packages/graph/rules_test.ts": {
       "warmed admission refreshes relative-time rules (1 rows)": 1.1
@@ -2140,10 +1979,7 @@
       "SOURCE worker fake matches inline read and rejects unrelated entries": 461
     },
     "packages/harness/diagnostics_test.ts": {
-      "a database failure cannot recurse: the original is printed instead": 3.8,
-      "a defect is an exception entity, stack and cause kept, secrets redacted, and never an entry": 24.9,
-      "a fatal unhandled rejection really exits the subprocess, saying what it was": 30.4,
-      "a graph shutdown drain is bounded": 3.4
+      "a fatal unhandled rejection really exits the subprocess, saying what it was": 30.4
     },
     "packages/harness/draft_host_test.ts": {
       "host profiles isolate frontends, lock concurrent writers and recover across reopen": 5.4
@@ -2162,16 +1998,14 @@
       "blob-backed graph remains writable after SQL failure and rolls back the whole batch": 26.2
     },
     "packages/harness/facets_test.ts": {
-      "JSON Schema tool uses identical metadata and constraints through MCP and provider adapter": 87.1,
+      "JSON Schema tool uses identical metadata and constraints through MCP and provider adapter": 34.2,
       "connection authorization is a CLI command without a stored call": 34.7,
       "session new accepts a graph persona and snapshots its instructions": 44.6,
       "session new keeps an agent instrument when its caller speaks for a person": 39.5,
       "session new opens an empty TUI session and requires input otherwise": 34.3,
-      "session new returns the reply its session settles on, past its tool calls": 146.5,
       "the harness composes as a plugin, and its words reach a command line and MCP": 26.6
     },
     "packages/harness/frontend_test.ts": {
-      "VISUAL state and local yank belong only to their frontend graph": 1.1,
       "external frontend writes drive controlled input and selection": 5.5,
       "frontend graph is private, transient and query granular": 2,
       "typing in frontend does not reread domain or render history (10,000 entries)": 43.7
@@ -2198,9 +2032,6 @@
       "NORMAL sidebar commands use the same session actions and INSERT remains literal": 29.5,
       "controlled NORMAL routing preserves draft, selects sources, and hides help in INSERT": 12.6
     },
-    "packages/harness/machine_lifecycle_test.ts": {
-      "declared lifecycle releases stopped machines without destroying settled-turn files": 57.6
-    },
     "packages/harness/mcp_auth_test.ts": {
       "authorization UI captures pasted callback privately, preserving draft and never sending it": 3.6,
       "local HTTP OAuth exchange reconnects MCP discovery and works through worker controls": 317.7
@@ -2210,11 +2041,11 @@
       "bad MCP definitions and transport failures do not block other servers and are visible in authorization panel": 35.9,
       "graph MCP definitions persist; rename keeps identity, edits and removal affect next discovery": 117.9,
       "graph MCP namespace collisions fail explicitly without opening duplicate connections": 20.8,
-      "issued calls keep their handler when another ask refreshes the same public name": 421.8,
+      "issued calls keep their handler when another ask refreshes the same public name": 270.8,
       "reconfiguration changes tool identity without retargeting previously issued calls": 34
     },
     "packages/harness/mcp_test.ts": {
-      "configured remote MCP tool publishes mockup through existing call/result transcript": 309.6,
+      "configured remote MCP tool publishes mockup through existing call/result transcript": 242.1,
       "remote images use external artifacts while large text retains bounded context policy": 49.3,
       "tool isError uses expected tool failure rather than a defect": 29.9,
       "worker owns MCP connection and preserves exact configured tool schemas": 178.5
@@ -2299,7 +2130,7 @@
       "resume wakes what a restart left owed a turn": 114.8,
       "selected session lists queued direct children": 57.7,
       "send appends to a transcript and the runner answers it": 162.3,
-      "send commits during a provider turn and unserved input reaches the next anchored request": 246.2,
+      "send commits during a provider turn and unserved input reaches the next anchored request": 170.4,
       "session summaries do not depend on task completion": 100.5,
       "session titles read only the first eligible local entry": 92,
       "session titles use local assignment, not inherited parent context": 77.3,
@@ -2317,19 +2148,6 @@
       "runtime queued cancellation commits terminal entry and legacy settlement together": 11.1,
       "runtime queued cancellation is scoped, and inspection does not schedule execution": 92.9,
       "worker runtime projection and scoped continuation use explicit commands": 112.9
-    },
-    "packages/harness/session_machines_test.ts": {
-      "machine home is lazy and first need records one stable sandbox": 1.5,
-      "releasing a shared machine waits for borrowers and is repeatable": 1.3
-    },
-    "packages/harness/skills_test.ts": {
-      "command subdirectories load from the machine repository root without changing home": 85.9,
-      "graph discovery and tool allowlists never provision a machine": 32.9,
-      "machine catalogue refreshes dirty edits, untracked additions and deletions": 121.1,
-      "machine descriptions load exact attributed instructions without importing files": 118.9,
-      "resumed sessions use their own machines and never borrow parent files": 143.8,
-      "skill discovery ignores links and reports malformed authored metadata": 128.1,
-      "user-only skills are undiscoverable and the machine loader refuses them": 120.3
     },
     "packages/harness/store_test.ts": {
       "SQLite commits simultaneous append batches with distinct positions": 124,
@@ -2404,7 +2222,6 @@
     "packages/harness/transcript_test.ts": {
       "instruction snapshots display one clipped provenance row without changing source": 1.4,
       "message markdown is semantic ANSI while tool results remain literal": 2.5,
-      "result previews cap source and wrapped rows without changing stored text": 1.2,
       "transcript dims sequence and tool prose and colors each entry kind": 3.1,
       "user inputs share composer borders, machine entries do not": 3.3
     },
@@ -2423,9 +2240,6 @@
     },
     "packages/html/html_test.ts": {
       "HTML escapes content and agrees with the mounted Preact view": 2.6
-    },
-    "packages/id/README.md": {
-      "packages/id/README.md: a5e3ffdade22": 2.2
     },
     "packages/inbox/Person_test.tsx": {
       "a new conversation keeps its exact words across a remount, refuses blank ones and calls inbox_new once": 2.2,
@@ -2453,11 +2267,9 @@
       "counts wait for the summary, ask the list’s one line, and follow watch and mute": 13.8
     },
     "packages/inbox/graph_test.ts": {
-      "a web reader calculates summary views in its read worker, without a second local scan": 2.2,
       "summary subscription is exact, refreshes on policy dependencies, and keeps history off the wire": 7.8
     },
     "packages/inbox/letters_test.ts": {
-      "a different known sender and an inactive inbox cannot start conversations": 2.6,
       "a verified new inbox letter is a caller-attributed conversation, once, and replies remain comments": 3.9,
       "digest thread addresses route comments and custom answers; the digest itself is not an arbitrary decision": 3.2,
       "invalid choice numbers keep a comment without completing the decision": 2.2,
@@ -2482,7 +2294,6 @@
       "an address you wear puts a letter in your inbox": 2.3,
       "archiving is the one act that hides, and --all is the way back": 2.6,
       "inbox list searches complete received words while default results are summaries": 7.1,
-      "mail reads and archives act on the shared root and refresh after a reply": 8.4,
       "the inbox is what is addressed to you and not archived": 6.6
     },
     "packages/inbox/queries_test.ts": {
@@ -2527,24 +2338,17 @@
     },
     "packages/journal/backed_test.ts": {
       "a batch carrying two writers’ work records each one’s as theirs": 7.8,
-      "a change names its transaction, which reads like any entity": 1.4,
       "a change points at the _comp describing its component": 1.3,
-      "a history pages newest first": 1.3,
       "a history reads who wrote each change through its transaction": 1.1,
       "a transaction is found by who wrote it, and through it": 1.7,
-      "an entity’s history is a query over its changes": 13.8,
+      "an entity’s history is a query over its changes": 0.7,
       "nothing writes the journal’s components": 9.9
     },
     "packages/journal/feed_test.ts": {
-      "a batch carries only its own operations": 4.1,
-      "a batch from the feed recasts as the bundles it committed": 4.1,
-      "a feed drains what was committed while it was away": 3.9,
       "a follower hears a deletion as the patches that made it": 6.3,
       "a follower hears what another host committed, and not its own": 3.9,
       "a follower pages through a burst without losing any of it": 4.8,
-      "a store an older journal made takes the host once it is opened again": 1.6,
-      "an exhausted feed is empty, and the tip is the cursor": 4.3,
-      "the feed hands out the batches after a cursor, in order": 12.9
+      "a store an older journal made takes the host once it is opened again": 1.6
     },
     "packages/journal/log_test.ts": {
       "a batch row carries the actor, the instrument and the moment": 3.5,
@@ -2605,15 +2409,7 @@
     "packages/kernel/interruption_test.ts": {
       "interruption records its writer and removal permits a retry": 1.4
     },
-    "packages/kernel/plugin.ts": {
-      "packages/kernel/plugin.ts: bdd8870c34ae": 1.4
-    },
-    "packages/lens/document_test.ts": {
-      "concat splits values and consumes sources, with explicit separators and literals": 1.2
-    },
     "packages/lens/plugin_test.ts": {
-      "migration selection skips contracted sources and finds the remaining old rows": 1.1,
-      "old graph writes, filtered reads and get projections pass through rename hooks synchronously": 1.5,
       "retained lenses serve old callers after the source property is undeclared": 3.2
     },
     "packages/logic/goal.ts": {
@@ -2627,33 +2423,19 @@
       "packages/logic/relations.ts: await Array.fromAsync(race(x, delay(10, eq(x, 1)))) -> [1]": 11.3,
       "packages/logic/relations.ts: await Array.fromAsync(race(x, request(okData, x))).then(([res]) => res.text()) -> 'ok'": 2.1
     },
-    "packages/machine/README.md": {
-      "packages/machine/README.md: e52d3669942e": 2.2
-    },
-    "packages/machine/vocab_test.ts": {
-      "machine lifecycle patches preserve provider and provenance": 1.1
-    },
     "packages/mail/README.md": {
       "packages/mail/README.md: 1da6a4c0d349": 2.6
-    },
-    "packages/mail/arrive_test.ts": {
-      "arrived: a letter is written by its sender, never by the graph owner": 1.3,
-      "wearer: the address book, read backwards": 3.1
     },
     "packages/mail/effects_test.ts": {
       "a transport rejection records a bounce and reaches the effect reporter without a resend": 1.2,
       "a transport that is named and complete sends": 2.4,
       "an unresolved recipient bounces visibly and is also reported": 1.3,
-      "missing credentials leave every owed letter visibly waiting and report failures": 2.1,
-      "one running handler re-reads its sender after configuration arrives": 4.5,
-      "the letter is marked tried before the transport sees it": 1.2,
-      "the ordinary startup sweep sends a waiting letter once and clears the reason": 4.6
+      "one running handler re-reads its sender after configuration arrives": 4.5
     },
     "packages/mail/invite.ts": {
       "packages/mail/invite.ts: 852b624b0546": 1.5
     },
     "packages/mail/invite_test.ts": {
-      "a member with no address gets a bounced invitation, not silence": 1.1,
       "a new seat writes an invitation, and the invitation goes": 1.5
     },
     "packages/mail/pull_test.ts": {
@@ -2664,20 +2446,13 @@
       "service: a timed-out pull is tried again": 6
     },
     "packages/mail/routes_test.ts": {
-      "a secret is what the door asks for, when one is named": 1.1,
-      "the door records a letter and answers with its id": 1.2
+      "a secret is what the door asks for, when one is named": 1.1
     },
     "packages/mail/send_test.ts": {
-      "a letter that asks to go, goes — and says so": 1.3,
       "a letter with no sender bounces before the transport is troubled": 1.1,
-      "a reply threads on what the answered letter went out as": 1.4,
-      "a transport that refuses writes the reason it gave": 1.3
+      "a reply threads on what the answered letter went out as": 1.4
     },
     "packages/mail/tools_test.ts": {
-      "a reply to an arrival goes to its author, from the desk it came to": 1.2,
-      "a reply to your own letter goes to whom you wrote it": 1.2,
-      "reading a letter marks it, and shows its thread": 1.9,
-      "reading and answering mark the letter and the first of its thread, afresh each time": 2.1,
       "sending mints the address it is for, and goes": 1.2,
       "who is asking supplies the from address, and its absence is loud": 1.2
     },
@@ -2762,7 +2537,6 @@
       "stdio selects modern or legacy using the same attributed tool factory": 26.8,
       "the door answers the protocol, and signs what a tool writes": 3.9,
       "the door hands over the face it was given": 7,
-      "the door refuses a body it cannot parse, and leaves an unreadable modern one to the SDK": 1.2,
       "what the host owes a direct call rides after the answer, which is unchanged": 1.4,
       "x-via keeps its session, and a one-shot CLI call gets one": 11.3
     },
@@ -2770,7 +2544,7 @@
       "a JSON Schema input declaration reaches the listing unchanged": 2.8,
       "a non-object declared schema is not replaced in the neutral tool listing": 4.9,
       "every tool publishes its answer, and its answers fit it": 43.6,
-      "modern custom parameter headers use the exact registered input schema before dispatch": 29.6
+      "modern custom parameter headers use the exact registered input schema before dispatch": 7.6
     },
     "packages/mcp/skills_test.ts": {
       "Skills attachment refuses unsafe, nonconforming and oversized snapshots before discovery": 32.3,
@@ -2787,11 +2561,8 @@
       "a guest changes and deletes only rows made through its via": 2.6,
       "a guest via supplies no person identity or permission": 1.3,
       "a paced refusal rolls back all values and clocks in its batch": 1.2,
-      "a signed-in row belongs to its by even when a guest has its via": 6.5,
-      "a signed-in visitor changes and deletes what they wrote": 7.7,
       "a visitor adds to an open thing and changes nobody else’s row": 7,
       "a writer paces each entity separately, including an owner": 2.5,
-      "an owner writes": 1.2,
       "vouched standing governs both writes and admission without reviving old grants": 1.1
     },
     "packages/member/keywords_test.ts": {
@@ -2799,14 +2570,12 @@
     },
     "packages/member/permit_test.ts": {
       "a mark never grants request edits, deletion, rebinding or creation": 2.4,
-      "a permitted mark retains conditional write checks and pacing": 1.7,
       "a referenced hero owner completes once, in either hook order": 2.5,
       "a referenced owner may remove a mark without editing the request": 2.3,
       "only an unbylined hero belongs to its browser": 1.2,
       "permission requires a live stored target and obeys mode and mark floors": 2.9
     },
     "packages/memory/tools_test.ts": {
-      "a thread is what it is about, then every comment, oldest first": 1.2,
       "around reads an entry as grep -C reads a line": 1.8,
       "on marks the entity named, only for words it holds": 1.2,
       "session is where it was said, and what that session worked on": 1.9,
@@ -2825,7 +2594,6 @@
     "packages/model/mod_test.ts": {
       "a name a provider and a model both hold is refused": 1.4,
       "a name is accepted wherever a model reference is": 1.5,
-      "a new name on a staged builder exists pending, never offered": 1.3,
       "a provider or a model is addressed by its name": 1.6
     },
     "packages/model2vec/model2vec_test.ts": {
@@ -2874,7 +2642,7 @@
     "packages/page/page_test.ts": {
       "GET /page/<eid> answers the frozen document, fenced and dated": 6.6,
       "POST /page refuses what is not a page": 7.4,
-      "POST /page witnesses a page, bytes and all": 33.4,
+      "POST /page witnesses a page, bytes and all": 5.8,
       "a page that already has bytes is not fetched again": 11.2,
       "a page witnessed by its address alone is fetched after the commit": 6.9,
       "witnessing one page twice is one entity": 7.5
@@ -2888,12 +2656,9 @@
     "packages/persona/files_test.ts": {
       "a sub-project's personas are specialists in its parent's checkout": 1.8,
       "a sync keeps the main checkout current, never a linked worktree": 2.6,
-      "a sync writes the files, removes a stale one, then has nothing to do": 1.8,
-      "the common persona is AGENTS.md; a specialist says only what it adds": 2.2
+      "a sync writes the files, removes a stale one, then has nothing to do": 1.8
     },
     "packages/persona/owed_test.ts": {
-      "a file that is the persona file is not said twice; any other file is": 1.1,
-      "a sub-project with no persona of its own hears its parent's": 1.2,
       "a sub-project's agent hears its own common persona and its parent's": 1.3
     },
     "packages/persona/persona-triggers_test.ts": {
@@ -2901,13 +2666,10 @@
       "only persona relations owe persona files, including a tag added to an existing edge": 2.9
     },
     "packages/persona/skill-effects_test.ts": {
-      "skill effects await failure, share burst rejection, and retry later": 1.3,
       "skill effects hold separate watcher and per-pass graph leases": 7.4,
       "skill effects preserve temporary memo bytes between handler calls and failures": 1.4,
       "skill effects real temp Git and RAM graph preserve import/export agreement": 70.7,
-      "skill effects use stable DB-adjacent per-absolute-root memo paths": 1.1,
       "skill per-pass lease release errors reject the awaited effect and retry": 1.2,
-      "skill watcher failure is awaited, cleans, and retains agreement for retry": 1.2,
       "skill watcher reconciles at startup, polls, and cleans on shutdown": 12.8
     },
     "packages/persona/skill-mirror_test.ts": {
@@ -2932,12 +2694,9 @@
       "skill mirror unreadable memo is an unexpected I/O failure, not an empty agreement": 12.3
     },
     "packages/persona/skill-text_test.ts": {
-      "fork maps to skill while other context and unknown fields survive untouched": 1.2,
-      "malformed, missing and non-object frontmatter is refused": 1.4,
       "the body is exact, including line endings, delimiters and inert expansions": 1.3
     },
     "packages/persona/skill-triggers_test.ts": {
-      "a bare edge touching a skill owes nothing; adding endpoints to its reference locator does": 1.5,
       "scope includes metadata, skill locators and root changes but excludes other files and links": 3.2,
       "settlement retires obsolete content runs and preserves owed, claimed and failed runs": 1.8,
       "tool content owes no skill reconciliation; skill text and companion files do": 3.6
@@ -2950,33 +2709,11 @@
       "local description and body edits preserve graph identity without import": 10.4,
       "local skill directories and documents never follow symlinks": 7.2,
       "malformed local frontmatter is refused, not replaced with stale graph text": 5.2,
-      "skill locations accept identity or bundle and never put file on the skill": 1.2,
-      "skillFiles refuses duplicate titles and renamed companion destinations": 1.6,
       "unregistered repositories get temporary views rather than borrowing graph names": 5.5,
       "untracked additions, folder renames and deletions replace the graph view": 11.2
     },
     "packages/platform/README.md": {
       "packages/platform/README.md: 51e79ef0165c": 1.1
-    },
-    "packages/process/README.md": {
-      "packages/process/README.md: 161accd58151": 1.1,
-      "packages/process/README.md: 7a0cf6de65f0": 136.4
-    },
-    "packages/process/machine_test.ts": {
-      "a command tail keeps a line wider than a read block whole": 21.5,
-      "a command that outlives its budget answers with the process, and stop ends it": 34.5,
-      "a session shell speaks as its transcript, not its launcher": 25.5,
-      "a short command answers inline, with its output and its code": 33.8,
-      "an interrupted shell call recovers its process without running twice": 83.3,
-      "shell uses bash and inherits the harness environment": 25.6,
-      "wait answers the code of a child that outlived its call": 83.2,
-      "wait says still running when its own timeout passes, and names nothing it cannot find": 33.5
-    },
-    "packages/process/provider_test.ts": {
-      "commit preparation is explicit, reused on retry and must finish before request answers": 1.6,
-      "each sandbox has its own directory, survives wake and releases independently": 35.1,
-      "process machines discover their own repositories but never an enclosing repository": 335.9,
-      "release stops a sandbox process but not another sandbox process": 60
     },
     "packages/process/run_test.ts": {
       "a sweep cleans only the runs that ended longer ago than its age": 32.8,
@@ -3016,13 +2753,6 @@
     "packages/project/README.md": {
       "packages/project/README.md: 60210cdfff89": 1.1
     },
-    "packages/project/tree_test.ts": {
-      "a project is never filed under itself or anything under it": 1.2,
-      "what is under a project is one walk, at any depth": 1.1
-    },
-    "packages/ram/declared_test.ts": {
-      "a gated rule fires once and writes what it said": 1.1
-    },
     "packages/ram/parity_test.ts": {
       "a ram graph and a sqlite graph agree, batch for batch": 74.5,
       "a ram graph selects what each query means": 2.1
@@ -3031,9 +2761,7 @@
       "an indexed read answers every query the way a scan does": 3.1
     },
     "packages/rtc/door_test.ts": {
-      "a change to a session carries the key it was opened with": 1.6,
-      "a session subscribes only to sessions this store holds, and not at the ceiling": 2.3,
-      "opening a session keeps it here under a lease, and hands its key back once": 8.6
+      "a session subscribes only to sessions this store holds, and not at the ceiling": 2.3
     },
     "packages/rtc/join_test.ts": {
       "same-hero replacement waits for old asynchronous clear before new presence": 2.9,
@@ -3045,7 +2773,6 @@
     "packages/secrets/secrets_test.ts": {
       "a failure the vault calls retryable is provisional, tried again until it seals": 5.5,
       "a retryable failure that outlasts every try is reported": 12.2,
-      "the sentinel is the handle hashed under the vault salt, and survives a rotation": 1.3,
       "the writer waits for the seal; a reader in between sees the mark": 3.9
     },
     "packages/session/README.md": {
@@ -3056,16 +2783,11 @@
     "packages/session/admission_test.ts": {
       "RAM admission retains legacy queue order and respects occupied places": 1.7,
       "a terminal entry and settlement are one transaction even when the entry is refused": 1.6,
-      "admission preserves legacy active with stale waiting in RAM without computed registration": 1.1,
-      "admission preserves legacy active without marks in RAM without computed registration": 1.1,
-      "admission preserves legacy empty string remains authoritative in RAM without computed registration": 1.1,
-      "admission preserves legacy queued with stale marks in RAM without computed registration": 1.2,
       "dispatch transitions preserve legacy authority and settle converted envelopes by removal": 3.1,
       "mixed children share the bound and a waiter keeps its queue order": 2.5
     },
     "packages/session/append_test.ts": {
       "append starts after a nested fork boundary": 2.2,
-      "batch child-before-parent order still allocates after the new fork anchor": 1.1,
       "concurrent append and passive notices receive integer sequence positions": 7.9
     },
     "packages/session/audit_test.ts": {
@@ -3101,22 +2823,16 @@
     "packages/session/graph_test.ts": {
       "the run a request names is who its writes are by, and through": 1.2
     },
-    "packages/session/lease_test.ts": {
-      "a dying run lets its locks go, and the page lives": 1.2
-    },
     "packages/session/providers_test.ts": {
-      "metadata transport failure does not suppress a model ask": 2.2,
       "resolved provider snapshots dispatch retention on every reply and keeps explicit expiry": 1.6
     },
     "packages/session/react_reads_test.ts": {
-      "a terminal runner checks the derived verdict before loading entry history": 34.8,
       "bounded body selection matches full model history for crossing calls and typed questions (legacy: false)": 77,
       "bounded body selection matches full model history for crossing calls and typed questions (legacy: true)": 75.2,
       "completion status sees old concurrent edits without rereading prose (fork: false)": 72.8,
       "completion status sees old concurrent edits without rereading prose (fork: true)": 44.8,
       "finite model window reads selected prose, retaining exact inherited lines (fork: false)": 41.4,
       "finite model window reads selected prose, retaining exact inherited lines (fork: true)": 48.5,
-      "status-only completion asks the existing derived fact without loading historical entries": 30,
       "the runner inspects finite-window status without loading old transcript prose": 44.6
     },
     "packages/session/react_test.ts": {
@@ -3176,9 +2892,6 @@
       "unstarted older calls get results without replay or provider dispatch": 4.6,
       "usage is persisted once on its ask, not on output entries": 2.4
     },
-    "packages/session/read_roots_test.ts": {
-      "append and fork-window roots read positions, not session status or prose": 1.6
-    },
     "packages/session/reap_test.ts": {
       "a lock whose holder is gone is freed, a session’s is left alone": 1.1
     },
@@ -3186,7 +2899,6 @@
       "reading a log again counts each request once, with what it carried": 4.5
     },
     "packages/session/result-entry_test.ts": {
-      "independent callers can complete out of order without losing transcript association": 1.8,
       "result membership is joined before sequence allocation and observers": 2.4
     },
     "packages/session/run_recovery_regression_test.ts": {
@@ -3210,7 +2922,7 @@
       "a managed transcript keeps its claim until its process exits": 21.9,
       "a provider’s no is not asked again, whatever the pool allows": 26.3,
       "a ready replacement continues a drained multi-step turn without a nudge": 59.9,
-      "a reply between failures gives the next failure its tries back": 350.3,
+      "a reply between failures gives the next failure its tries back": 224.3,
       "a request one process writes is answered by a process working the pool": 40.2,
       "a request the provider failed is asked again once the wait it named is up": 49.6,
       "a requestItems refusal ends a child once, including across restart": 74.3,
@@ -3224,15 +2936,13 @@
       "children past the bound wait queued, and each ending admits the next": 83.2,
       "duplicate transcript wakes leave pool room for another transcript": 138.7,
       "duplicate wakes waiting on another worker leave pool room": 157.9,
-      "failures in a row wait longer each time, and the last one stands": 284.2,
+      "failures in a row wait longer each time, and the last one stands": 195.3,
       "graceful stop after ask persistence drains the admitted dispatch": 21.1,
       "graceful stop during preparation admits no ask and leaves the input owed": 14.5,
       "retryable errors keep a claim until the transcript fails": 31.7,
-      "two processes running one transcript at once ask its model once": 27.6,
-      "unexpected context errors remain failures of the run": 12.9
+      "two processes running one transcript at once ask its model once": 27.6
     },
     "packages/session/service_test.ts": {
-      "a look reads the newest transcript first, and a long one a slice at a time": 5.7,
       "a recent transcript is followed in full; an old one is read in later, its prose alone": 5.8,
       "a session is the entity its harness id names": 1.9,
       "a session quiet past its full depth is stripped to its prose and its cost": 6.8,
@@ -3252,29 +2962,19 @@
       "session status seeks its own turn without reading unrelated asks": 68.5,
       "the SQL view answers the same word as the rule (archetypes: false)": 71,
       "the SQL view answers the same word as the rule (archetypes: true)": 93.9,
-      "the runner's sweep finds a transcript owed a turn in a Durable Object": 22,
       "unsequenced legacy asks retain interruption verdict (false)": 9.4,
       "unsequenced legacy asks retain interruption verdict (true)": 19.7
     },
     "packages/session/tail_test.ts": {
       "a compacted summary survives a prose-only import": 1.5,
-      "a pull told to stop stops between lines, and the rest is read after": 1.6,
       "a resume starts where the log was read, whatever became of its entries": 1.9,
-      "a tail reads on from where the transcript stands, and never twice": 1.6,
       "a transcript file becomes the session it names, at full depth": 3.4,
       "human text preserves automatic openings across import and resume": 8.8,
-      "prose alone: what was typed and what the model said": 1.2,
-      "two logs of one session each keep their own entries and their own place": 1.5
-    },
-    "packages/session/tools_test.ts": {
-      "session check reconciles a quiet, fully imported harness log": 4.2
+      "prose alone: what was typed and what the model said": 1.2
     },
     "packages/session/window_test.ts": {
       "nested fork page crosses stable ancestor boundaries without newer parent output": 2.7,
       "transcript windows bound bodies, support both edges and entry anchors": 3.6
-    },
-    "packages/spawn/adapters_test.ts": {
-      "a provider is its argv: the thread it is told to be, and -- last": 1.1
     },
     "packages/spawn/run_test.ts": {
       "a pass that fails is taken up again where the transcript stands": 23.6,
@@ -3289,7 +2989,6 @@
       "a restart adopts the run and reads its log on from where it stands": 38.8,
       "a run on a sub-project's task hears each common persona above it": 38.3,
       "a run works in a checkout of its own, taken back when it ends": 76.8,
-      "a stop committed with a request prevents its launch": 1.7,
       "a stop on the session reaches the agent": 37.1,
       "the chosen persona reaches a managed provider": 33,
       "the request starts the provider, and what it printed is the transcript": 35.5
@@ -3303,28 +3002,19 @@
       "a spawn records the chosen persona on its session": 3.4,
       "a spawn refuses what is not a provider, and work that is not there": 5.8,
       "a transcript-only wait returns when its output settles": 2.6,
-      "a wait answers \"still running\" rather than killing anything": 1.6,
-      "a wait answers when the server answering it starts to stop": 1.6,
       "session stop ends a managed run": 40.1,
-      "session stop refuses a session without a managed process": 3.3,
       "spawn --wait runs the provider and answers what it came to": 26.7
     },
     "packages/sql/archetype_test.ts": {
       "archetype plans: positive facets drive their table while boolean kinds keep composition": 1.5
     },
     "packages/sqlite/README.md": {
-      "packages/sqlite/README.md: a317265a9128": 8.7,
-      "packages/sqlite/README.md: 23e947aeea28": 13.3,
       "packages/sqlite/README.md: bee42ecc0e2a": 2.2,
       "packages/sqlite/README.md: 9126aac52780": 6.6,
-      "packages/sqlite/README.md: c89665a9ccbe": 8.2,
-      "packages/sqlite/README.md: 7254874b0123": 6.6,
-      "packages/sqlite/README.md: c4d7159966c8": 3.4,
       "packages/sqlite/README.md: d87c776048e2": 2.9,
       "packages/sqlite/README.md: 280280d7483a": 6.6,
       "packages/sqlite/README.md: 797d0ddda267": 11.5,
-      "packages/sqlite/README.md: b11104c58d4a": 3.9,
-      "packages/sqlite/README.md: fb831850a2e1": 2
+      "packages/sqlite/README.md: b11104c58d4a": 3.9
     },
     "packages/sqlite/activity_test.ts": {
       "SQL parents survive interleaved async hooks and tracker flushes": 3.9,
@@ -3335,10 +3025,6 @@
       "a span begun after an await stays above the retained transaction SQL": 5.2
     },
     "packages/sqlite/archetype_collision_test.ts": {
-      "archetype/blob: file backfill and reopen preserve text in both insertion orders": 25,
-      "archetype/blob: ram, blobs first=true": 1.9,
-      "archetype/blob: sqlite, blobs first=false": 4.9,
-      "archetype/blob: sqlite, blobs first=true": 7.2,
       "archetype: legacy migration refuses invalid identities atomically": 2.9,
       "archetype: legacy migration refuses occupied identities atomically": 3.7,
       "archetype: migrate legacy SHA descriptors in place, references and retirement survive": 10.8,
@@ -3383,7 +3069,6 @@
       "archetype: reclassify classifies rows written past the graph, no triggers": 5.8,
       "archetype: reference-only births, release/cascade and tombstones": 5.8,
       "archetype: stamps join the final set and value-only writes do not assign again": 7.3,
-      "archetype: the journal sees a descriptor creation, once": 3.9,
       "archetype: traced flushes cover classification around commit hooks": 4.6,
       "archetype: two writers, create, value-only, add/remove, same-batch net move": 9,
       "identity reads see pending component changes before classification": 18.1,
@@ -3414,9 +3099,6 @@
     "packages/sqlite/date_plan_test.ts": {
       "indexed dates seek empty wakes under stale statistics": 64.2,
       "indexed dates seek sparse wakes under stale statistics": 68
-    },
-    "packages/sqlite/db_test.ts": {
-      "a file opens in WAL with NORMAL sync and a bounded journal": 1.1
     },
     "packages/sqlite/ddl_test.ts": {
       "a changed constraint replaces the index with the same name": 4.8,
@@ -3497,9 +3179,6 @@
     },
     "packages/sqlite/index_budget_test.ts": {
       "numberless archetype stores keep one candidate index across repeated installs": 3.9
-    },
-    "packages/sqlite/inspect_test.ts": {
-      "identity inspection sees graves and live component presence without values": 1.4
     },
     "packages/sqlite/joined_get_test.ts": {
       "a selected identity reads backed rows that have no stored spine": 3.1,
@@ -3593,7 +3272,6 @@
     "packages/sqlite/number_test.ts": {
       "SQLite migration retains historic high-water across clearing and reopen": 2.7,
       "a mint may state the number it is adopting": 2.1,
-      "a store that is not adopting mints its own numbers regardless": 1.6,
       "an adopting store takes the number a patch states": 2.1,
       "sqlite: a reference to nothing numbers nothing": 2.6,
       "sqlite: excepting an undeclared component numbers on": 2,
@@ -3620,7 +3298,6 @@
       "a disjunction longer than SQLite nests expressions reads": 51,
       "a gathered bundle carries the entity number storage minted": 1.7,
       "a reference reads back as the target eid": 2,
-      "a reference-deref path filters through the target": 1.9,
       "a reverse child property presence tests the child": 3.5,
       "a reverse read binds one value per property, however many it asks about": 3.3,
       "a scalar filter selects the matching entities": 2.3,
@@ -3630,7 +3307,6 @@
       "indexed filters retain another component presence requirement": 3.9,
       "numeric gather ownership stays internal; present is an ordinary property": 2.7,
       "rows() hands back an aggregate shape verbatim": 1.7,
-      "the kind scope selects the most specific kind": 1.9,
       "the newest-first window pages a prefix": 1.8,
       "whole gathers omit an opted-out derived sum but explicit queries read it": 3.5,
       "whole-set gathers are bounded by vocabulary, not the 100 entities; get preserves identity order": 9.8,
@@ -3688,11 +3364,9 @@
     },
     "packages/sqlite/write_test.ts": {
       "a batch past 100 entities binds under the Durable Object limit": 32.4,
-      "a boolean round-trips through integer storage": 1.8,
       "a bundle creates an entity wearing its components": 2,
       "a composite unique refuses only the whole pair": 1.8,
       "a declared unique refuses the second writer of the value": 2.1,
-      "a null component drops the row, the entity survives": 1.8,
       "a null property clears it, its siblings untouched": 1.6,
       "a patch asks about numbering exceptions only where they decide a number": 3,
       "a patch asks once about identity, whatever the batch is": 2.7,
@@ -3701,7 +3375,6 @@
       "a reference may name a target minted later in the same batch": 1.7,
       "a table is asked what it requires once while its schema stands": 2.1,
       "a tombstoned entity takes no patch until it is revived": 2.3,
-      "a transaction rolls back on a throw, and nests": 2.2,
       "get answers by identity, and says nothing about an unknown eid": 1.4,
       "number:false reports explicit unnumbered births without consuming numbers": 2.1,
       "numbering exceptions ask once across tables and entities": 15,
@@ -3710,10 +3383,7 @@
     },
     "packages/sync/README.md": {
       "packages/sync/README.md: 93fab85c9ec1": 2.5,
-      "packages/sync/README.md: f76d84955580": 1.7,
-      "packages/sync/README.md: da8cded8db39": 1.5,
-      "packages/sync/README.md: 3924f99f3a66": 2.7,
-      "packages/sync/README.md: 3baf8b416d4a": 1.4
+      "packages/sync/README.md: da8cded8db39": 1.5
     },
     "packages/sync/port_test.ts": {
       "MessagePort request limits and timeout bound abandoned operations": 11.7,
@@ -3789,9 +3459,6 @@
     "packages/text/parity_test.ts": {
       "one renderer preserves its document through Preact and markdown": 3
     },
-    "packages/text/text_test.ts": {
-      "nested and ordered lists keep indentation and start numbering": 1.3
-    },
     "packages/threads/thread_test.ts": {
       "a completed pass can be followed by live duties": 73.4,
       "a thread claims effects from the owning RAM graph and writes through its rules": 91.3,
@@ -3810,9 +3477,6 @@
       "cap keeps expensive rows before time, with ancestors and stable ties": 32.9,
       "folded branches and direct work remain in inclusive counts, not added twice": 6.3
     },
-    "packages/timing/inspect.ts": {
-      "packages/timing/inspect.ts: ratio(290029, 149) -> '1,947× as many'": 4.7
-    },
     "packages/timing/migrate_test.ts": {
       "legacy rehearsal replaces JSON with measured entities and is resumable": 2.9
     },
@@ -3829,8 +3493,7 @@
       "the trace list puts each kind of request together, the most work first": 1.4
     },
     "packages/timing/vocab_test.ts": {
-      "summaries and separately measured span entities round-trip in a tracker": 2.1,
-      "suppressed repeats are a separately removable root span metric": 1.5
+      "summaries and separately measured span entities round-trip in a tracker": 2.1
     },
     "packages/tools/README.md": {
       "packages/tools/README.md: 9d4c1d004c7e": 2.8,
@@ -3840,15 +3503,7 @@
       "packages/tools/README.md: f674e29b62c3": 2.4,
       "packages/tools/README.md: 062bdd68e980": 1.2
     },
-    "packages/tools/args_test.ts": {
-      "name resolution ignores deleted word eid before alias": 2.7,
-      "name resolution ignores deleted word eid before title": 2.4,
-      "name resolution ignores empty word eid before alias": 2.7,
-      "name resolution ignores empty word eid before title": 2.7,
-      "tool name resolution: one match": 1.8
-    },
     "packages/tools/declared_test.ts": {
-      "a command keeps its declared grammar and never derives one": 1.4,
       "a manifest: one refusal names every problem": 1.2
     },
     "packages/tools/read_test.ts": {
@@ -3885,8 +3540,6 @@
       "a refused tool still carries what its caller is owed": 1.7,
       "a rehearsal keeps its answer in the call graph": 1.8,
       "a reply is told what the call wrote: the write, never a read or a rehearsal": 2.5,
-      "a runner told which tool a call points at writes that row alone": 1.4,
-      "a runner writes only the tool rows the graph lacks or holds otherwise": 1.3,
       "a tool that ANSWERS a fault has not failed": 1.6,
       "a tool that reads calls answers them, and only its own record is the runner's": 1.8,
       "a tool writes in the CALLER's name, never the runner's": 2,
@@ -3899,19 +3552,13 @@
       "returned refusal rows are data, not a failed call": 1.6,
       "two runners over one graph are one claimant and one answer": 2.1
     },
-    "packages/tracker/catalog_test.ts": {
-      "catalog outage is bounded and reports no cascade (recover=false)": 19.4,
-      "catalog outage is bounded and reports no cascade (recover=true)": 11.1
-    },
     "packages/tracker/effects_test.ts": {
       "declared effects group intake and retain occurrences downstream": 3.9
     },
     "packages/tracker/file_test.ts": {
-      "a file spool survives reopening, preserves concurrent appends and actors": 9.4,
       "a service told to stop takes no more records, and leaves the rest spooled": 2.8,
       "concurrent intake acknowledges records listed by another reader without losing later appends": 3.2,
-      "failed admission leaves the spool for restart; commit before ack replays once": 2.7,
-      "partial unpublished records remain while later complete appends drain": 4.9
+      "failed admission leaves the spool for restart; commit before ack replays once": 2.7
     },
     "packages/tracker/frames_test.ts": {
       "later frame resolution fills a culprit without recounting its group": 2.7
@@ -3924,14 +3571,10 @@
       "retention preserves the first per commit and historical hit count": 5
     },
     "packages/tracker/migrate_test.ts": {
-      "different human and legacy titles refuse before clearing either": 1.4,
       "titles move once without changing identity, errors or edited titles": 2.2
     },
     "packages/tracker/reframe_test.ts": {
-      "a competing frame result is revalidated rather than overwritten stale": 2.1,
-      "frames resolved again to the same answer write nothing": 1.9,
-      "group moves during catalog await link only its current group": 2.6,
-      "source and commit changed during catalog await are re-enriched": 2.1
+      "group moves during catalog await link only its current group": 2.6
     },
     "packages/tracker/role_test.ts": {
       "box role groups and enriches a spool occurrence through its configured catalog": 139.1
@@ -3948,16 +3591,13 @@
     "packages/tui/Frame_test.ts": {
       "bounded panels share height rather than pushing sibling headings offscreen": 6.3,
       "fit panels shrink and return their unused height to the expanding tree": 4.3,
-      "proportional terminal sidebar keeps its minimum and reflows on resize": 1.4,
-      "the sidebar sits beside the main column, panel by panel": 1.7
+      "proportional terminal sidebar keeps its minimum and reflows on resize": 1.4
     },
     "packages/tui/Scroll_test.ts": {
       "the window follows new content, and holds still once scrolled": 1.7
     },
     "packages/tui/Textarea_test.ts": {
-      "a keystroke repaints the line it changed, not the screen": 6.1,
-      "soft input wraps and resizes without changing submitted text": 1.3,
-      "typing shows on screen, and Enter submits and clears": 1.2
+      "a keystroke repaints the line it changed, not the screen": 6.1
     },
     "packages/tui/VirtualList_test.ts": {
       "cold bottom open and resize only measure the viewport; warm paint measures nothing": 6.9,
@@ -3965,7 +3605,6 @@
       "input-only paints do not parse history; switching viewport resets follow without stealing editor keys": 8,
       "mounted generic controlled list reveals offscreen selection lazily": 5.2,
       "mounted virtual list renders only visible history and stays warm on key repaint": 7.9,
-      "pending virtual windows retain their frame and scrollbar without repainting": 1.1,
       "uniform partial pages have stable global scroll positions": 1.2,
       "visible edits and theme invalidate layout; bounded cache evicts old history": 7.2
     },
@@ -3996,9 +3635,6 @@
       "virtual source selection visits one item and never renders history": 9.6,
       "visual surfaces cycle, select exact source, yank explicitly, cancel without editing": 1.5
     },
-    "packages/tunnel/cloudflare_test.ts": {
-      "a gateway is bound to the tunnel’s service and nothing else": 1.1
-    },
     "packages/tunnel/filter.ts": {
       "packages/tunnel/filter.ts: 6a89037fca3d": 1.8
     },
@@ -4017,7 +3653,6 @@
       "packages/ui/README.md: b5537ebaa051": 2.4,
       "packages/ui/README.md: e3eef007185a": 18.4,
       "packages/ui/README.md: ab886a5558b7": 6.7,
-      "packages/ui/README.md: 2fcfa234e2e9": 3.2,
       "packages/ui/README.md: 1889c7ee6ec9": 11.3
     },
     "packages/ui/composition_test.ts": {
@@ -4045,7 +3680,6 @@
       "terminal guide switches skins and themes without losing its place": 82.6
     },
     "packages/ux/Disclosure_test.ts": {
-      "a disclosure is closed unless its supplied state says open": 1.2,
       "the page graph keeps disclosure state across remounts and apart by owner": 1.1
     },
     "packages/ux/Edit_test.ts": {
@@ -4072,8 +3706,7 @@
     },
     "packages/ux/README.md": {
       "packages/ux/README.md: 27b36bb7b3f0": 4,
-      "packages/ux/README.md: 5f9ab2213a96": 2.5,
-      "packages/ux/README.md: ceb2d1804a17": 2.9
+      "packages/ux/README.md: 5f9ab2213a96": 2.5
     },
     "packages/ux/completion_test.ts": {
       "a bound input refreshes its reactive list only when the caret moves": 15.4,
@@ -4105,8 +3738,7 @@
       "HTTP selection preserves full snapshots and refuses invalid parameter shapes": 1.6,
       "SSE hello and same-epoch replay retain order, IDs and explicit omission counts": 1.3,
       "malformed and future event cursors are refused without leaving a lease": 1.2,
-      "stream overflow counts records only and hello survives a stalled reader": 4.8,
-      "sync and async null policies are intentional and auth settles before work": 1.3
+      "stream overflow counts records only and hello survives a stalled reader": 4.8
     },
     "packages/visualize/model_test.ts": {
       "MRI a disconnect changes status without claiming lost records": 3,
@@ -4139,11 +3771,7 @@
       "the queries that describe a vocabulary answer from its entities": 6.3
     },
     "packages/vocab/meta_test.ts": {
-      "a marked component is a component, an unmarked entry is nobody’s": 2.3,
       "a tool declaration is checked as a tool": 1.4
-    },
-    "packages/vocab/tools_test.ts": {
-      "draft-07 outputs validate without defaults and unsupported dialects fail clearly": 1.1
     },
     "packages/vocab_test.ts": {
       "packages: every vocab.json is plain JSON that loads": 7.2,
@@ -4170,26 +3798,18 @@
     "packages/wake/next_test.ts": {
       "next reads expressions and preserves the wake entry point": 1.4
     },
-    "packages/wake/tick_test.ts": {
-      "tick commits one wake per batch and leaves a refusal due": 1.5
-    },
     "packages/wake/while_test.ts": {
       "a pass shares match answers while each wake chooses its own cadence": 1.7,
-      "a wake goes on at the first cadence that holds, and sleeps when none does": 1.9,
-      "a wake write changes matches on the next pass": 1.4
+      "a wake goes on at the first cadence that holds, and sleeps when none does": 1.9
     },
     "packages/web/page_test.ts": {
       "page code mints uuids outside a secure context": 10
     },
     "packages/web/routes_test.ts": {
-      "a name opens the page, and a path naming nothing is the 404 page": 6.7,
-      "web and terminal writes are attributed to the configured owner through API admission": 2.9
+      "a name opens the page, and a path naming nothing is the 404 page": 6.7
     },
     "packages/workerd/upgrade_test.ts": {
       "/ws through this upgrade serves subscriptions": 1.2
-    },
-    "packages/workerd/worker_test.ts": {
-      "a Worker answers apply and query over its bindings": 1.1
     },
     "packages/workers-ai/audio_test.ts": {
       "elevenlabs/music-v2 preserves music direction and stores audio at its tariff": 16.6,
@@ -4220,7 +3840,6 @@
       "postboot failure does not poison the object and reporting never throws": 4.2
     },
     "workers/tracker/trace-budget_test.ts": {
-      "budget status is platform-admin only and does not boot a graph": 1.4,
       "corrupt durable reservations fail closed without writing or reporting": 15.9,
       "failed empty schema setup retains its charge across restart without reporting": 18,
       "failed forwarding keeps a pending durable charge rather than refunding on restart": 18.5,
@@ -4402,16 +4021,9 @@
       "the secret tools the directory listed keep a key the worker reads as itself, name it, and forget it": 104.7,
       "without a vault no key is taken, and the page says so": 24.5
     },
-    "workers/yak/content_test.ts": {
-      "no content file names an entity — the identity property does": 1.9
-    },
     "workers/yak/deploy-lifecycle_test.ts": {
-      "a network release notice cannot fail a committed deploy": 70.5,
-      "a non-ok release notice cannot fail a committed deploy": 65.5,
       "deploy reload marks survive recording, and pointer notices follow the commit": 167.6,
-      "legacy source-less rollback keeps deploy rows unchanged and remains undoable": 163,
       "rollback selects kept bytes without minting or changing deploys, then deploy allocates above history": 174.9,
-      "updates carry every crossed required source mark but exclude the installed and later releases": 480.7,
       "worker errors after rollback and an in-flight pointer move name the routed bytes": 159.6
     },
     "workers/yak/directory_test.ts": {
@@ -4455,24 +4067,19 @@
       "directory recovery delivers trash before the dormant store boots": 27.2,
       "trash makes a store dormant across every wake and restore keeps its data": 64.7
     },
-    "workers/yak/draft_test.ts": {
-      "a schema-only legacy draft recovers its original files on edit": 296.8,
-      "a source-less app keeps every original byte through a schema draft": 489
-    },
     "workers/yak/drop_test.ts": {
       "a bare index.html is an app, once it is named": 118.2,
       "a dropped zip becomes an app at its own address": 182.9,
       "a dropped zip carries a worker and the wasm it imports": 113.7,
       "the drop zone is on the owner's New app page": 188,
-      "what the door will not take, it says in a sentence": 532.5
+      "what the door will not take, it says in a sentence": 74
     },
     "workers/yak/embedding_alarm_test.ts": {
       "an embedding failure honors the store retry interval across reboot": 32.9
     },
     "workers/yak/embedding_test.ts": {
       "a store answers .near from its own vectors, closest first": 16.7,
-      "deployment of vectors in another space re-embeds them all": 33.3,
-      "words rank by meaning among what a line selects": 23.4
+      "deployment of vectors in another space re-embeds them all": 33.3
     },
     "workers/yak/erase_kernel_test.ts": {
       "a space erased: the letter, the act, and the name back": 446.9,
@@ -4481,7 +4088,6 @@
     },
     "workers/yak/erase_test.ts": {
       "a deleted space takes its conversation and its workbench": 42.6,
-      "a ticket opens one space for one person, for an hour": 1.8,
       "the sweep erases a space out of days, and leaves one in them": 277.5,
       "the sweep erases the trash that is out of days, and only that": 128.3,
       "the trash wake names 04:20 UTC and nothing coarser rounds it off": 3.6
@@ -4489,21 +4095,14 @@
     "workers/yak/esbuild_test.ts": {
       "TypeScript and npm imports compile at deploy, and serve as JavaScript": 212.8,
       "a changed lock or previously plain script replans a release": 224.5,
-      "a compile that fails refuses the deploy, and the last release serves": 102.7,
       "a compile too big for the compiler says so, and the last release serves": 235.3,
-      "a deploy reuses unchanged compiled entries": 219.6,
       "a page that no longer needs compiling serves as written": 185.1,
       "a released app stages changed files over its source": 181.7,
       "an app with nothing to compile never calls the compiler": 142.3,
       "an edit crossing deployment is replayed into the next draft": 206.4,
-      "compiler assets cannot replace an app-owned path": 37.6,
       "concurrent first edits share one private draft": 213.7,
-      "draft files stay private through a refused deploy and rollback": 206.8,
       "package assets serve with their MIME and survive reuse and rollback": 350.3,
       "with no compiler bound, a deploy that needs one is refused in a sentence": 31.9
-    },
-    "workers/yak/files_blob_test.ts": {
-      "the cached blob door streams bytes and bounds uncached seeks": 1.2
     },
     "workers/yak/gallery_test.ts": {
       "a gallery ticket carries its answer for a week and no longer": 1.7
@@ -4512,7 +4111,6 @@
       "a private app asks for a credential, and judges the one it gets": 41.8,
       "a trashed app is gone to a credential as much as to nobody": 44.5,
       "an app that is not there, and a path that is no repository": 20.4,
-      "an app whose bytes are pinned per-app still serves a pack": 42.6,
       "git clones a private app with the token as the password": 142.1,
       "git clones an app at <app>.git, and its history is its deploys": 175.2,
       "git clones the browser address, with and without its slash": 171.5,
@@ -4573,11 +4171,9 @@
       "the writer the kernel vouched for is a person here, by name": 27.3
     },
     "workers/yak/guide_test.ts": {
-      "every page offered is a file, and says what it is": 1.9,
       "the components page prints every property of every component it lists": 1.7
     },
     "workers/yak/handoff_test.ts": {
-      "opener: a valid token names its person and is spent": 2.4,
       "opener: expired, tampered, wrong-host, wrong-secret refused": 1.4
     },
     "workers/yak/hints_test.ts": {
@@ -4660,7 +4256,6 @@
     },
     "workers/yak/lib/token_test.ts": {
       "a forged, edited, foreign, or expired token is null": 1.5,
-      "a signed token verifies to its claims": 1.3,
       "a token sealed before 2c05d0f6 opens for its own use and no other": 13.2,
       "a value sealed for one use opens as no other, a session least": 2.9,
       "an old session verifies, marked for re-minting; other old kinds do not": 3
@@ -4708,7 +4303,6 @@
       "the deploy that fixes a break closes it": 216.6
     },
     "workers/yak/mcp_fanout_test.ts": {
-      "MCP discovers accepted retypes and retained words from legacy releases without waking Stores": 561.1,
       "MCP discovery fetches zero app Stores and a named write fetches only its app": 709.1
     },
     "workers/yak/mcp_graph_test.ts": {
@@ -4762,7 +4356,7 @@
     "workers/yak/mcp_schema_test.ts": {
       "a kind an app declares is two commands, with no tool of its own": 275.4,
       "an app declares its own commands, and command runs them": 709.8,
-      "graph_apply takes the bundle a client sends, and the server decides": 388.1,
+      "graph_apply takes the bundle a client sends, and the server decides": 71.3,
       "graph_schema answers the index, a word whole, and a kind": 212.5,
       "the roster is one list for everybody, and apps carry commands": 480.9
     },
@@ -4790,9 +4384,7 @@
     },
     "workers/yak/migrate_test.ts": {
       "a Store heals vector tables made while their key was named entity": 77.7,
-      "a Store keeps exception request ids across the rename": 119.1,
       "a Store retires an old build identity index on its next schema wake": 90.4,
-      "a declared index the rows cannot satisfy refuses the boot": 48.1,
       "a doc_value-backed legacy index upgrades to the composed FTS schema": 89.7,
       "a kind the vocabulary stopped listing is written beside the rows it kept": 160,
       "a nullable unique key is raised over older rows without one": 155.7,
@@ -4853,9 +4445,6 @@
       "a guest pace survives signing in and the adoption of its unsigned stamps": 240.8,
       "stored pacing separates entities and sealed vias, keeps earlier writers, and ignores claimed vias": 673.9
     },
-    "workers/yak/page-release_test.ts": {
-      "page release watches only own sockets, forwards frames untouched, and never reloads without a click": 1.2
-    },
     "workers/yak/pages_test.ts": {
       "connections: the person’s own, then this space with what it could add, then each other space": 4.2
     },
@@ -4864,7 +4453,6 @@
       "yak/platform: classification, legacy backfill, and immutable metadata": 65.7
     },
     "workers/yak/platform_test.ts": {
-      "a break the platform noted about itself is the meta store's": 5.3,
       "a hostname resolves to the app it serves and the space it is in": 40,
       "a person is found by their address, or minted at it": 8.8,
       "a sign-in code is minted, spent once, and gone": 43.2,
@@ -4884,9 +4472,6 @@
     },
     "workers/yak/probe_http_test.ts": {
       "relay keeps the app and person across browser requests": 14
-    },
-    "workers/yak/probe_test.ts": {
-      "mailed waits for a new delivery rather than returning a spent code": 101.1
     },
     "workers/yak/provisioning_test.ts": {
       "a domain marked active still routes to its app": 168.5,
@@ -4942,9 +4527,6 @@
       "release door gates readers and validates the page version": 32.1,
       "release door reads immutable JSON/YAML vocab, caches pairs, and follows the fresh app version": 43.2
     },
-    "workers/yak/release_test.ts": {
-      "a release serves unchanged, changed, and compiled files": 1.5
-    },
     "workers/yak/released_test.ts": {
       "only kernel POST /released tells every held socket, without subscriptions": 5.1,
       "page socket forwards only its own release raw, outside the ack queue": 13.2
@@ -4959,12 +4541,8 @@
       "a page reports its own breaks, and the agent hears": 575.8,
       "a page that dies on its first import says so": 185.8,
       "a refusal the door meant is not a break": 120.5,
-      "the platform's own break is ours, not the app's": 128.4,
+      "the platform's own break is ours, not the app's": 37.7,
       "the platform's own scripts are never the app's break": 134.6
-    },
-    "workers/yak/retry_test.ts": {
-      "http://builder/say: fresh stub and request, one eviction retry only": 1.1,
-      "http://builder/ws: fresh stub and request, one eviction retry only": 2.1
     },
     "workers/yak/roster_test.ts": {
       "every tool the connector lists is called, and one with no call fails this": 11617.3
@@ -4984,7 +4562,6 @@
       "a build pays for its workbench and leaves none running": 33.4,
       "a build that ships pays for both in one write": 95.5,
       "a command that outlives its call is a process wait and stop reach": 37.6,
-      "a deploy builds and pushes the base only when it is missing": 1.3,
       "a lone connector call pays for itself and leaves the container": 25.5,
       "a member who cannot write is not given the workbench": 21.7,
       "a path that is not one is refused before the shell sees it": 31.4,
@@ -4998,8 +4575,7 @@
       "the budget refuses in a sentence, and only after it is spent": 18.5,
       "the deploy names the container, and the image is the SDK version": 3.7,
       "the machine tools write, run and read, and a ship copies out": 77.7,
-      "the month of sandbox time is the account's, and it refuses": 31.6,
-      "the token is in the environment and never in the transcript": 30.5
+      "the month of sandbox time is the account's, and it refuses": 31.6
     },
     "workers/yak/schema_cost_test.ts": {
       "a platform schema edit does not rewrite unchanged app schema pages": 134.5
@@ -5051,7 +4627,7 @@
       "rung 1: a platform path never reaches an app": 53.2,
       "rung 1½: a `first` glob hands the path to the home worker": 26,
       "rung 1½: a glob over a store door never takes it": 45.6,
-      "rung 1½: a router that hangs is skipped when its patience runs out": 1481.5,
+      "rung 1½: a router that hangs is skipped when its patience runs out": 78.2,
       "rung 1½: a router that throws is skipped, and written on the home app": 73.4,
       "rung 1½: the router acts as the caller, not as the app it fronts": 31,
       "rung 1½: the router's 404 passes, and the app answers": 25.7,
@@ -5066,18 +4642,14 @@
       "worker non-HTML and bodyless answers are not rewritten": 143.7
     },
     "workers/yak/session_test.ts": {
-      "a browser keeps its instrument when it signs in, without claiming a person before it does": 2.8,
-      "a session past half its life is renewed; one still young is not": 1.9,
       "a token minted for anything else is no session, and renews into none": 2,
-      "an existing session gains a browser instrument and keeps its person and standing": 4.5,
       "forged and expired browser instruments never become a writer": 4.7
     },
     "workers/yak/signin_test.ts": {
       "forty guesses at once still get five, and the code dies": 4
     },
     "workers/yak/site_kernel_test.ts": {
-      "the apex answers the crawler and the model": 44,
-      "the public site subrequest preserves deployment version overrides without forwarding credentials": 101.3
+      "the apex answers the crawler and the model": 44
     },
     "workers/yak/site_test.ts": {
       "every footer link names a page that is there": 12.8,
@@ -5101,8 +4673,6 @@
       "platform disposal waits for store work before releasing storage": 18
     },
     "workers/yak/tools_test.ts": {
-      "a deploy says how many round trips it took": 72.3,
-      "a fetch takes https, a live answer, and nothing over the ceiling": 13.1,
       "a listing asks the directory a fixed number of times": 303.5,
       "app_list says the caller’s role in each space it lists": 103,
       "free custom domains return plan settings before provisioning": 29.2,
@@ -5152,22 +4722,16 @@
       "a blob lives while anything names it, and a day besides": 2.2,
       "a deploy recorded as a restart says its answer lands once": 31.4,
       "a deploy recorded as a restart throws its answer lands once": 26.7,
-      "a manifest names paths and shas, not the bytes": 1.2,
-      "a plugin names bytes, and the sweep keeps them": 1.8,
       "no version is ever buried, and every one keeps its bytes": 2.6,
       "the prune lets go only of bytes nothing names any more": 2,
       "the worker a rollback put back is the source uploaded": 1.2
     },
     "workers/yak/visit_test.ts": {
-      "a visitor to an open app adds, and changes only what they wrote": 641.1
+      "a visitor to an open app adds, and changes only what they wrote": 183.6
     },
     "workers/yak/vocab_test.ts": {
       "a request permits only declared marks through stored references": 9.2,
-      "a searched property of an app reaches the index fields": 1.9,
-      "an app has no numbers; the platform's own stores do": 1.3,
-      "app vocab keeps external UX state page-only, including transient events": 1.3,
-      "every example vocab.json in the repo loads": 33.3,
-      "the loaded app vocabulary plants its component tables": 2.1
+      "every example vocab.json in the repo loads": 10.8
     },
     "workers/yak/wake_test.ts": {
       "a call wearing a wake waits for it, and answers when it fires": 156.7,
@@ -5194,7 +4758,6 @@
     },
     "workers/yak/wrangler_test.ts": {
       "a sibling's images are its Dockerfiles and their build contexts": 2.2,
-      "base preparation overlaps sibling uploads and gates the kernel": 4.5,
       "every @yaks/* the checker knows is the file the bundler gets": 4.2,
       "wrangler: app-only pushes do not supersede a build, but Worker source and newer live versions do": 137.8
     },
@@ -5213,7 +4776,7 @@
       "an interrupted write keeps its body while reads recover and explicit retry applies once": 15,
       "an ordinary receipt expires with its parts once its window has passed": 146.3,
       "concurrent resends of one key return the same minted answer": 7.8,
-      "inspection dry-runs a held write without changing it or the graph": 55.7,
+      "inspection dry-runs a held write without changing it or the graph": 20.4,
       "inspection refuses a streaming write without applying it": 4.6,
       "ordinary large receipts retain the exact answer across rows": 123.5,
       "receipt insertion failure rolls back the mutation and keeps replayable input": 14.7,
