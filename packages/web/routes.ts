@@ -15,6 +15,12 @@ import { type Application, application } from './app.ts'
 // `/web/*` is what that page loads: the app bundled from main.tsx (@yaks/cli
 // `bundle`), its stylesheet (@yaks/ui's in Everforest, then this package's
 // own), icons and manifest. The vocabulary is @yaks/api's `/vocab`.
+//
+// The page carries the tracker's page reporter (@yaks/tracker/page) inline,
+// ahead of its own code, as yaks.app weaves it into every app's page
+// (workers/yak/page-script.ts). What it catches it posts to `/api/report`,
+// which reads the body as yaks.app's door does (@yaks/tracker/report
+// `broken`) and hands each break to the host's own telemetry.
 
 import { type Authenticate, type Route, write } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
@@ -26,6 +32,7 @@ import { type Body, bundle, kept } from '@yaks/cli/page'
 import { preload } from './preload.ts'
 import { person } from '@yaks/cli/host'
 import { type Config, located, subpath, used } from '@yaks/cli/config'
+import { broken, type Context } from '@yaks/tracker/report'
 import type { Registry } from '@yaks/render'
 import type { Vault } from '@yaks/secrets'
 import { authorization } from './authorize.ts'
@@ -40,6 +47,8 @@ export type Hosting = {
   vault?: Vault
   /** aborts as the host closes, ending the app's build if it is still going */
   stopping?: AbortSignal
+  /** the host's telemetry, where what a page reports is sent */
+  report?: (error: unknown, context?: Partial<Context>) => unknown
 }
 
 /** Every letter an id in this vocabulary can start with, in both cases. */
@@ -53,6 +62,22 @@ let here = (path: string) => new URL(path, import.meta.url)
 let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
 let bytes = (path: string) => () =>
   fetch(here(path)).then(async (r) => new Uint8Array(await r.arrayBuffer()))
+
+// The page reporter as a script element at the page's root, where its door
+// `api/report` is. `</script` in its text would end the element early; `<\/`
+// is the same string to JavaScript.
+let reporter = async () => {
+  let code = await text(import.meta.resolve(located('@yaks/tracker/page')))()
+  return `<script data-yak-at="/">${
+    code.replace(/<\/(script)/gi, '<\\/$1')
+  }</script>`
+}
+
+/** The page, its reporter first in its head. */
+let html = async () => {
+  let [page, script] = await Promise.all([text('./index.html')(), reporter()])
+  return page.replace('<head>', `<head>${script}`)
+}
 
 let styles = async (app: Application) =>
   (await Promise.all([
@@ -101,7 +126,12 @@ let names = async (graph: Graph, path: string): Promise<boolean> => {
 export type Options = { home?: { title: string; query: string }; app?: string }
 
 export let routes = (host: Hosting, options: Options = {}): Route[] => {
-  let cached = kept('/', 'text/html; charset=utf-8', text('./index.html'))
+  let cached = kept('/', 'text/html; charset=utf-8', html)
+  let owner = () =>
+    person({
+      graph: host.graph,
+      config: host.config ?? { db: ':memory:', plugins: [] },
+    })
   let page = async (request: Request) => preload(await cached(request))
   let app = () => application(host.config?.plugins ?? [], options.app)
   let named = async (request: Request) => {
@@ -121,30 +151,48 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       method: 'POST',
       path: '/web/apply',
       handle: async (request) => {
-        let owner = await person({
-          graph: host.graph,
-          config: host.config ?? { db: ':memory:', plugins: [] },
-        })
+        let by = await owner()
         let via = await host.who?.(request)
         // This door is the configured person's keyboard, in both web and TUI.
         // The API owns admission, stamps and writes; the page owns attribution.
         return write(
           host.graph,
           request,
-          owner ? { by: owner, via: via?.via ?? via?.by } : via ?? null,
+          by ? { by, via: via?.via ?? via?.by } : via ?? null,
         )
       },
     },
     {
       method: 'GET',
       path: '/web/owner',
-      handle: async () =>
-        Response.json({
-          owner: await person({
-            graph: host.graph,
-            config: host.config ?? { db: ':memory:', plugins: [] },
-          }),
-        }),
+      handle: async () => Response.json({ owner: await owner() }),
+    },
+    {
+      method: 'POST',
+      path: '/api/report',
+      // Whoever is looking at the page is the configured person, and the
+      // reporter caps what one page load sends.
+      handle: async (request) => {
+        let breaks = broken(await request.text())
+        let by = breaks.length ? await owner() : undefined
+        let agent = request.headers.get('user-agent')
+        for (let b of breaks) {
+          await host.report?.(
+            Object.assign(new Error(b.message), { stack: b.stack }),
+            {
+              mechanism: b.mechanism,
+              breadcrumbs: b.breadcrumbs,
+              tags: {
+                entrypoint: 'browser report',
+                request: b.request,
+                ...by ? { user_id: by } : {},
+                ...agent ? { agent } : {},
+              },
+            },
+          )
+        }
+        return new Response(null, { status: 204 })
+      },
     },
     { method: 'GET', path: '/%23*', handle: page },
     ...letters(host.vocab).flatMap((l): Route[] => [

@@ -26,7 +26,7 @@ import { told } from './stream.ts'
 import { divided, gauged, level } from './meter.ts'
 import { holding } from './held.ts'
 import { caught, defect } from './defects.ts'
-import { capture, origin, queue } from '@yaks/tracker/report'
+import { type Break, capture, origin, queue } from '@yaks/tracker/report'
 import { errorsAt, errorsIn } from './app-errors.ts'
 import { refuse } from './tool.ts'
 import { isTestAddress } from './lib/bots.ts'
@@ -170,6 +170,7 @@ let seenByPlatform = (
   version: number | null | undefined,
   at: { env: Env; request?: Request; entrypoint?: string },
   reached: Record<string, string | undefined>,
+  page: Pick<Break, 'mechanism' | 'breadcrumbs'>,
 ) => {
   let place = origin(
     at.env.WORKER_NAME ?? 'yak',
@@ -179,6 +180,7 @@ let seenByPlatform = (
   )
   return capture(error, {
     ...place,
+    ...page,
     sink: () => {},
     version: version ?? undefined,
     environment: at.env.ENVIRONMENT == 'staging' ? 'staging' : 'production',
@@ -199,6 +201,8 @@ export let noted = async (
     version?: number | null
     message: string
     stack?: string
+    mechanism?: Break['mechanism']
+    breadcrumbs?: Break['breadcrumbs']
   },
   at: {
     env: Env
@@ -230,8 +234,10 @@ export let noted = async (
       ...account ? { account } : {},
       ...viewer ? { user_id: viewer } : {},
     }
+    let page = { mechanism: broke.mechanism, breadcrumbs: broke.breadcrumbs }
     await queue(at.env.ERRORS)(capture(error, {
       ...place,
+      ...page,
       commit: undefined,
       sink: () => {},
       version: broke.version ?? undefined,
@@ -245,7 +251,7 @@ export let noted = async (
     }))
     if (account == 'person') {
       await queue(at.env.ERRORS)(
-        seenByPlatform(error, broke.version, at, reached),
+        seenByPlatform(error, broke.version, at, reached, page),
       )
     }
   }

@@ -133,6 +133,7 @@
             src ? ` ${src}` : ''
           }`,
           url: src || location.href,
+          mechanism: 'onerror',
         })
       if (!where || unasked(el)) return miss()
       return answers(where.href).then(
@@ -146,6 +147,7 @@
       stack: e.error && e.error.stack,
       url: e.filename || location.href,
       line: e.lineno,
+      mechanism: 'onerror',
     })
   }, true)
 
@@ -159,16 +161,25 @@
       stack: e.reason && e.reason.stack,
       url: location.href,
       status,
+      mechanism: 'onunhandledrejection',
     })
   })
 
   let consoleError = globalThis.console?.error
   if (consoleError) {
     globalThis.console.error = (...args) => {
-      // Console arguments can carry user data; only the first sentence is kept.
+      // Console arguments can carry user data; only the first sentence is
+      // kept, and the stack of an error logged beside it, which says where
+      // the code that logged it was, as an uncaught one's does.
       let message = said(args[0]).slice(0, 2000)
+      let error = args.find((a) => a instanceof Error)
       crumb('console', message)
-      send({ message, url: location.href, mechanism: 'console' })
+      send({
+        message,
+        stack: error && error.stack,
+        url: location.href,
+        mechanism: 'console',
+      })
       consoleError.apply(console, args)
     }
   }
@@ -195,6 +206,7 @@
           // in browsers we cannot reach, and the rule lives where we can.
           status: r.status,
           answer: why.slice(0, 2000),
+          mechanism: 'wrapper',
         })
         // The one thing this script does read the status for: whether to draw
         // over the page. A no somebody meant is the platform working and never
@@ -210,7 +222,11 @@
       // hears it either way, and one it leaves uncaught reaches
       // `unhandledrejection` above.
       if (mine(where) && e?.name == 'TimeoutError') {
-        broke({ message: `${asked(where)}: ${said(e)}`, url: location.href })
+        broke({
+          message: `${asked(where)}: ${said(e)}`,
+          url: location.href,
+          mechanism: 'wrapper',
+        })
       } else if (mine(where)) crumb('fetch', `${where.pathname}: ${said(e)}`)
       throw e
     }

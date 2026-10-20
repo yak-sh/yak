@@ -546,7 +546,14 @@ let EntityFace = (
   },
 ) => {
   let [error, retry] = useErrorBoundary((error) => {
-    console.error(`the ${view ?? 'default'} view of ${eid}:`, error)
+    // The page tracker files console.error's first argument, with the stack
+    // of the error beside it.
+    console.error(
+      `the ${view ?? 'default'} view of ${eid} could not be drawn: ${
+        said(error)
+      }`,
+      error,
+    )
     problem.value = `a view could not be drawn: ${said(error)}`
   })
   if (error) {

@@ -147,6 +147,7 @@ import type { Door } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
+import { broken } from '@yaks/tracker/report'
 import { isVerifiedBot } from './lib/bots.ts'
 import { drafted, fullAt, hashed, recoverRelease } from './tools.ts'
 import { ADDRESS } from './route.ts'
@@ -1042,70 +1043,6 @@ let flooding = (space: Space, app: App) => {
   return ++hit.n > RATE
 }
 
-let pathOf = (url: unknown) => {
-  try {
-    return new URL(String(url)).pathname
-  } catch {
-    return String(url ?? '')
-  }
-}
-
-// What one report says broke, in whatever words its sender has: the
-// injected script's `message`, or the fields the Reporting API fills in for
-// a CSP violation, a crash, a deprecation, a network error.
-let said = (b: Record<string, unknown>) =>
-  String(
-    b.message ??
-      [b.type, b.effectiveDirective, b.blockedURL, b.statusCode, b.phase]
-        .filter(Boolean).join(' '),
-  ).slice(0, 4000)
-
-// A report body, either shape: the small `{message, stack?, url?, line?}` the
-// injected script posts (with its page version), or the Reporting API's
-// array of `{type, url, body}`.
-// Junk answers with nothing — a malformed body is the sender's bug, not a
-// break in this app, and writing it as one would be the noise we are here to
-// stop.
-let broken = (body: string) => {
-  let sent: unknown
-  try {
-    sent = JSON.parse(body)
-  } catch {
-    return []
-  }
-  let reports = (Array.isArray(sent) ? sent : [sent]) as Record<
-    string,
-    unknown
-  >[]
-  return reports.flatMap((r) => {
-    if (!r || typeof r != 'object') return []
-    let b = (r.body ?? r) as Record<string, unknown>
-    // A no somebody answered on purpose is not a break, whoever answered it
-    // — the platform's own doors, or the app's worker relaying an outside
-    // service's refusal (unseen.ts `refusal` is the one rule). The reporter
-    // sends the answer's status beside its bytes (public/report.js), and
-    // this is the seam that reads them; a report with no status at all is a
-    // script error or an unhandled rejection, and those are breaks.
-    if (refusal(String(b.answer ?? ''), Number(b.status))) return []
-    let message = said(b)
-    if (!message) return []
-    let at = pathOf(r.url ?? b.url ?? b.documentURL)
-    let source = b.sourceFile ?? b.url
-    return [{
-      version:
-        typeof b.version == 'number' && Number.isSafeInteger(b.version) &&
-          b.version >= 0
-          ? b.version
-          : null,
-      request: `${typeof r.type == 'string' ? r.type : 'page'} ${at}`.trim(),
-      message,
-      stack: String(
-        b.stack ?? (source ? `${source}:${b.lineNumber ?? b.line ?? ''}` : ''),
-      ),
-    }]
-  })
-}
-
 // The bytes' own name (versions.ts `sha256`, the content address a version's
 // manifest is made of) is the object's key and the entity's eid here, so the
 // same photo sent twice is one object and one row.
@@ -1772,7 +1709,10 @@ let api = async (
       return new Response(null, { status: 204 })
     }
     if (flooding(space, app)) return json(429, 'too_many_reports')
-    let reports = broken(await req.text())
+    // A no somebody answered on purpose is not a break, whoever answered it:
+    // the platform's own doors, or the app's worker relaying an outside
+    // service's refusal (unseen.ts `refusal` is the one rule).
+    let reports = broken(await req.text(), refusal)
     // The injected reporter names the page that ran, not the newest release.
     // Older reporters and the browser's Reporting API have no page version;
     // keep their serving-version fallback, read past the directory's cache.

@@ -235,6 +235,135 @@ export let caught = (error: unknown, context: Context): Promise<void> => {
   }
 }
 
+/** One break a page reported to its door: the page reporter's own body
+ * (./page), or an entry the browser's Reporting API sent. */
+export type Break = {
+  /** the page's release, when its reporter said which it loaded */
+  version: number | null
+  /** `page /path`, or the Reporting API's type and the page's path */
+  request: string
+  message: string
+  stack: string
+  mechanism?: Mechanism
+  breadcrumbs?: Crumb[]
+}
+type Mechanism = NonNullable<Context['mechanism']>
+let MECHANISMS = new Set<unknown>([
+  'catch',
+  'wrapper',
+  'onerror',
+  'onunhandledrejection',
+  'console',
+])
+
+// What one report says broke, in whatever words its sender has: the page
+// reporter's `message`, or the fields the Reporting API fills in for a CSP
+// violation, a crash, a deprecation, a network error.
+let saying = (b: Record<string, unknown>) =>
+  String(
+    b.message ??
+      [b.type, b.effectiveDirective, b.blockedURL, b.statusCode, b.phase]
+        .filter(Boolean).join(' '),
+  ).slice(0, 4000)
+
+let pathOf = (url: unknown) => {
+  try {
+    return new URL(String(url)).pathname
+  } catch {
+    return String(url ?? '')
+  }
+}
+
+let crumbs = (sent: unknown): Crumb[] | undefined => {
+  if (!Array.isArray(sent)) return undefined
+  let kept = sent.slice(-20).flatMap((c) =>
+    c && typeof c == 'object' && typeof c.at == 'string' &&
+      typeof c.category == 'string' && typeof c.message == 'string'
+      ? [{
+        at: c.at,
+        category: c.category.slice(0, 100),
+        message: c.message.slice(0, 2000),
+      }]
+      : []
+  )
+  return kept.length ? kept : undefined
+}
+
+/** A no the page was answered on purpose: a 4xx status. */
+export let meant = (_answer: string, status: number): boolean =>
+  status >= 400 && status < 500
+
+/**
+ * The breaks a page's report door was sent, out of either body: the page
+ * reporter's `{message, stack?, url?, line?, status?, answer?, mechanism?,
+ * version?, breadcrumbs?}`, or the Reporting API's array of `{type, url,
+ * body}`. Junk answers with nothing: a malformed body is the sender's bug, not
+ * a break in the page. An answer the reporter saw that `refusal` calls a no
+ * somebody meant (default {@link meant}) is the page working, not a break.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { broken } from '@yaks/tracker/report'
+ *
+ * let [one] = broken(JSON.stringify({
+ *   message: 'x is undefined',
+ *   url: 'https://box.test/T-9',
+ *   mechanism: 'onerror',
+ * }))
+ * equal([one.request, one.message, one.mechanism], [
+ *   'page /T-9',
+ *   'x is undefined',
+ *   'onerror',
+ * ])
+ * equal(broken(JSON.stringify({ message: '403 /apply', status: 403 })), [])
+ * equal(broken('not json'), [])
+ * ```
+ */
+export let broken = (
+  body: string,
+  refusal: (answer: string, status: number) => boolean = meant,
+): Break[] => {
+  let sent: unknown
+  try {
+    sent = JSON.parse(body)
+  } catch {
+    return []
+  }
+  let reports = (Array.isArray(sent) ? sent : [sent]) as Record<
+    string,
+    unknown
+  >[]
+  return reports.flatMap((r): Break[] => {
+    if (!r || typeof r != 'object') return []
+    let b = (r.body ?? r) as Record<string, unknown>
+    // The reporter sends the answer's status beside its bytes (./page); a
+    // report with no status at all is a script error or an unhandled
+    // rejection, and those are breaks.
+    if (refusal(String(b.answer ?? ''), Number(b.status))) return []
+    let message = saying(b)
+    if (!message) return []
+    let at = pathOf(r.url ?? b.url ?? b.documentURL)
+    let source = b.sourceFile ?? b.url
+    let breadcrumbs = crumbs(b.breadcrumbs)
+    return [{
+      version:
+        typeof b.version == 'number' && Number.isSafeInteger(b.version) &&
+          b.version >= 0
+          ? b.version
+          : null,
+      request: `${typeof r.type == 'string' ? r.type : 'page'} ${at}`.trim(),
+      message,
+      stack: String(
+        b.stack ?? (source ? `${source}:${b.lineNumber ?? b.line ?? ''}` : ''),
+      ),
+      ...MECHANISMS.has(b.mechanism)
+        ? { mechanism: b.mechanism as Mechanism }
+        : {},
+      ...breadcrumbs ? { breadcrumbs } : {},
+    }]
+  })
+}
+
 export let queue =
   (binding: { send: (body: Bundle[]) => Promise<void> }): Sink => (rows) =>
     binding.send(rows)

@@ -346,11 +346,14 @@ cached data. `refusal(id)` exposes the refusal until a successful answer or an
 unsubscribe clears it.
 
 The socket reconnects with a delay doubling from `wait` (default 250 ms) to
-`most` (default 30 seconds), resetting on open. `timer` supplies reconnect and
-pace timers. Refused subscriptions are not reopened automatically; explicitly
-subscribe on their id to retry. The first successful frame after reconnecting
-replaces prior membership, adding missing entities to `gone`. Cached data alone
-never makes a subscription ready on a new connection.
+`most` (default 30 seconds), resetting on open. Once an open socket that closed
+opens again, `report` receives a `Dropped` error naming its close code and how
+long it was down; an outage still going at `most` is reported once as it lasts.
+`timer` supplies reconnect and pace timers. Refused subscriptions are not
+reopened automatically; explicitly subscribe on their id to retry. The first
+successful frame after reconnecting replaces prior membership, adding missing
+entities to `gone`. Cached data alone never makes a subscription ready on a new
+connection.
 
 ### The store's clock
 

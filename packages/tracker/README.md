@@ -10,7 +10,7 @@ references may name entities in other stores.
 | -------------- | ----------------------------------------------------------- |
 | `.`            | Fault keys, grouping patches, regression and retention      |
 | `./vocab`      | Tracker words, RAM computations and SQL-derived expressions |
-| `./report`     | Capture, transport and `coalesce`                           |
+| `./report`     | Capture, transport, `coalesce` and a page's reports         |
 | `./page`       | Classic browser capture script and twenty breadcrumbs       |
 | `./effects`    | `error_group`, `bug_notify`, `bug_follow`, `error_trim`     |
 | `./views`      | Bug pages, list rows, error frames and the Bugs destination |
@@ -242,10 +242,16 @@ and hosted app files remain text: v1 supplies no source-map guesses.
 
 ## Transition boundaries
 
-The browser capture script is woven inline into each page an app serves
-(workers/yak/page-script.ts), reads its door off its tag's `data-yak-at` and the
-page's release off `data-yak-version`, and uses the platform intake payload. The
-platform admits captured failures into the tracker.
+The browser capture script (`./page`) is woven inline into each page an app
+serves (workers/yak/page-script.ts) and into the box's web page (@yaks/web). It
+reads its door off its tag's `data-yak-at` and the page's release off
+`data-yak-version`, and posts each uncaught error, unhandled rejection, failed
+fetch and `console.error` to `<at>api/report`, tagged with the `mechanism` that
+caught it and the breadcrumbs before it. `broken(body, refusal)` in `./report`
+reads either door's body, the reporter's or the browser's Reporting API's, into
+breaks, leaving out an answer `refusal` calls a no somebody meant (default: a
+4xx). The platform admits captured failures into the tracker; the box hands them
+to the host's reporter, which spools them like any other.
 
 [@yaks/tools](../tools/README.md) declares `exception{type, value}` for what was
 thrown in an answer or transcript entry. Tracker extends it with `stack`,

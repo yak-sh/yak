@@ -285,6 +285,7 @@ test('a dropped socket resubscribes and catches up on what it missed', async () 
   b.fire() // the one reconnect the backoff scheduled
   await b.idle()
   assert(b.wire.connected())
+  assertEquals(b.trouble.map((t) => t.error?.name), ['Dropped'])
   // The set as it now stands: the new one arrived, the deleted one left.
   assertEquals(
     (b.graph.read('.recipe.course=dinner&*') as Bundle[]).map((x) =>
@@ -354,7 +355,7 @@ test('an oversized subscribe refuses once, never reopens, and does not erase pai
     c.fire()
     await c.idle()
     assertEquals(srv.sockets.length, 2)
-    assertEquals(c.trouble.length, 1)
+    assertEquals(c.trouble.slice(1).map((t) => t.error?.name), ['Dropped'])
     assertEquals(
       c.socket()?.sent.filter((m) => (m as { id?: string }).id == 'large'),
       [],

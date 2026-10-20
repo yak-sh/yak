@@ -48,7 +48,7 @@ test('socket clock calibrates, refines, holds through reconnect, and stops on cl
       throw new Error('clock is not a subscription frame')
     },
     report: (e) => {
-      throw e
+      if ((e as Error).name != 'Dropped') throw e
     },
   })
   equal(w.now(), 1000) // opens without a subscription

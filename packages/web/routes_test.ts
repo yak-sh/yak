@@ -14,6 +14,7 @@ import { ram } from '@yaks/ram'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { taskDoc } from '@yaks/task'
 import { loadVocab } from '@yaks/vocab'
+import type { Context } from '@yaks/tracker/report'
 import { letters, routes } from './routes.ts'
 
 let vocab = loadVocab([kernelDoc, docDoc, taskDoc, keyDoc, aliasDoc, idDoc], [
@@ -118,7 +119,54 @@ test('a kindless entity opens at the id the page displays', async () => {
 test('every address answers the one page, which loads the bundled app', async () => {
   let page = await reached('/T-9')!.handle(new Request('http://x/T-9'))
   assertEquals(page.headers.get('content-type'), 'text/html; charset=utf-8')
-  assertEquals((await page.text()).includes('src="/web/app.js"'), true)
+  let html = await page.text()
+  assertEquals(html.includes('src="/web/app.js"'), true)
+  // The tracker's page reporter runs before it, reporting to /api/report.
+  assertEquals(html.includes('<script data-yak-at="/">'), true)
+})
+
+test("a page's report reaches the host's telemetry as the owner's break", async () => {
+  let said: [Error, Partial<Context> | undefined][] = []
+  let door = routes({
+    vocab,
+    graph,
+    config: { db: ':memory:', plugins: ['@yaks/browse'], person: 'lemon-cake' },
+    report: (error, context) => said.push([error as Error, context]),
+  }).find((r) => r.path == '/api/report')!
+  let send = (body: unknown) =>
+    door.handle(
+      new Request('http://x/api/report', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    )
+  assertEquals(
+    (await send({
+      message: 'x is undefined',
+      stack: 'TypeError: x is undefined\n    at draw (http://x/web/app.js:9:2)',
+      url: 'http://x/T-9',
+      mechanism: 'onerror',
+    })).status,
+    204,
+  )
+  await send({ message: '403 /apply: no', status: 403 }) // a no it meant
+  let [owner] = await graph.read('.doc.title=x')
+  assertEquals(
+    said.map(([e, c]) => [
+      e.message,
+      e.stack?.split('\n')[1].trim(),
+      c?.mechanism,
+      c?.tags?.request,
+      c?.tags?.user_id,
+    ]),
+    [[
+      'x is undefined',
+      'at draw (http://x/web/app.js:9:2)',
+      'onerror',
+      'page /T-9',
+      owner.entity.eid,
+    ]],
+  )
 })
 
 test('the page learns the configured owner by the graph address interface', async () => {

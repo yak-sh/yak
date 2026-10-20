@@ -154,6 +154,20 @@ export type Wire = {
   close: () => void
 }
 
+/** An open socket that closed under this wire and opened again: what closed
+ * it (its close code, when it gave one) and how long it was down. Said once it
+ * reopens, so a report about it reaches a server that is back. */
+export class Dropped extends Error {
+  constructor(url: string, code: number | undefined, ms: number) {
+    super(
+      `${url} closed${code ? ` (${code})` : ''} and reopened after ${
+        (ms / 1000).toFixed(1)
+      } s`,
+    )
+    this.name = 'Dropped'
+  }
+}
+
 /** The next reconnect delay: double it, but never past the ceiling. */
 export let backoff = (wait: number, most: number): number =>
   Math.min(wait * 2, most)
@@ -190,10 +204,11 @@ export let wire = (opts: WireOpts): Wire => {
   let wait = first
   let retrying = false // the one timer — never a second
   let closed = false
-  // A drop the reconnect outlasts is not a failure: a server restarting is
-  // one. Once the backoff reaches its ceiling the outage is reported, once,
-  // until a connection opens again.
+  // Every drop is reported once the socket opens again (`Dropped`), and an
+  // outage the backoff reaches its ceiling in is reported as it goes on,
+  // once, until a connection opens again.
   let told = false
+  let down: { at: number; code?: number } | undefined
   let n = 0
   let waiting: Bundle[] = []
   let draining = false
@@ -302,6 +317,12 @@ export let wire = (opts: WireOpts): Wire => {
       waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
       told = false
+      if (down) {
+        opts.report(
+          new Dropped(wsUrl(opts.url), down.code, agreed.read() - down.at),
+        )
+        down = undefined
+      }
       agreed.reset()
       rounds = 0
       probe()
@@ -400,9 +421,13 @@ export let wire = (opts: WireOpts): Wire => {
       let why = (e as ErrorEvent).message || 'the connection failed'
       opts.report(new Error(`${wsUrl(opts.url)}: ${why}; still reconnecting`))
     })
-    s.addEventListener('close', () => {
+    let opened = false
+    s.addEventListener('open', () => opened = true)
+    s.addEventListener('close', (e) => {
       if (socket != s) return
       socket = null
+      // A connection that never opened is a retry failing, not a drop.
+      if (opened) down ??= { at: agreed.read(), code: (e as CloseEvent).code }
       stopClock()
       waiting = []
       inbox = []

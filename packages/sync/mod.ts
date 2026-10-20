@@ -52,7 +52,7 @@
  * applied to the local graph, so a render reads the local store and never
  * awaits. A dropped socket reconnects with a widening backoff, sends every
  * subscription again, and treats the first frame after a reopen as the whole
- * set.
+ * set. Each drop is reported as a {@link Dropped} once the socket reopens.
  *
  * ## Both transports are injected
  * {@link SyncOpts.fetch} and {@link SyncOpts.connect} default to the
@@ -86,6 +86,7 @@ export {
   type Ask,
   backoff,
   type Connect,
+  Dropped,
   type Frame,
   type Socket,
   type Timer,

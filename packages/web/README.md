@@ -29,6 +29,12 @@ The routes facet answers `/` and entity addresses such as `/T-9` with the page.
 @yaks/ui's stylesheet followed by browse's styles. The manifest and icons live
 beside the page.
 
+The page carries @yaks/tracker's page reporter inline, ahead of the app. It
+posts what it catches to `POST /api/report`, which reads the body with
+@yaks/tracker's `broken` and hands each break to the host's `report` as the
+configured person's, tagged `entrypoint: browser report` and the page's path. A
+box whose config names a tracker spool files them as bugs.
+
 `POST /web/apply` attributes writes to the configured person using the API's
 admission and write handler. `/web/owner` resolves that person through the
 graph's address interface. The generic `/apply`, `/query` and `/ws` doors stay
