@@ -292,11 +292,23 @@ export let measure = async (
   if (slow.length) {
     let files = [...new Set(slow.map((s) => s.file))]
     console.log(`\n─── measuring ${files.length} file(s) again ───`)
-    // Each of them passed, so the runner remembered it: `--all`.
-    let again = await timed(suite, ['--all', '--twice'], files)
-    runs = fastest(runs, again.runs)
+    // One platform at a time: the first pass runs them all at once, so a test
+    // measured again beside another platform's runtime meets the same load
+    // that put it over. Each of them passed, so the runner remembered it:
+    // `--all`.
+    let again: Record<string, Times> = {}, stop: number | undefined
+    for (let platform of new Set(slow.map((s) => s.platform))) {
+      let held = slow.filter((s) => s.platform == platform).map((s) => s.file)
+      let one = await timed(suite, ['--all', '--twice'], [...new Set(held)])
+      Object.assign(again, one.runs)
+      if (one.stopped) {
+        stop = one.code
+        break
+      }
+    }
+    runs = fastest(runs, again)
     forget(retracted(runs, failing(judge(b, runs), gated)))
-    if (again.stopped) return { code: again.code, runs: {}, gate, whole }
+    if (stop != null) return { code: stop, runs: {}, gate, whole }
   }
   if (whole) {
     await Deno.remove(KEPT, { recursive: true }).catch(() => {})
