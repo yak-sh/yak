@@ -98,6 +98,12 @@ test('a stop cuts what is still in flight once its grace is up', async () => {
   let asking = Promise.withResolvers<void>()
   let cancelled = false
   let { host, stopping } = fake(port, (request) => {
+    // A write whose answer streams on, like an MCP call's event stream.
+    if (request.method == 'POST') {
+      return new Response(
+        new ReadableStream({ start: (c) => c.enqueue(new Uint8Array([58])) }),
+      )
+    }
     if (!request.url.endsWith('/hang')) return new Response('ok')
     asking.resolve()
     request.signal.addEventListener('abort', () => cancelled = true)
@@ -111,6 +117,10 @@ test('a stop cuts what is still in flight once its grace is up', async () => {
   let client = new AbortController()
   let hung = fetch(`http://127.0.0.1:${port}/hang`, { signal: client.signal })
     .catch(() => {})
+  let streaming = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: 'POST',
+    body: '{}',
+  })
   try {
     await asking.promise
     stopping.abort()
@@ -122,6 +132,7 @@ test('a stop cuts what is still in flight once its grace is up', async () => {
   } finally {
     client.abort()
     await hung
+    await streaming.body?.cancel()
   }
 })
 

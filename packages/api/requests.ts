@@ -98,12 +98,17 @@ let streamed = (
   return new Response(body, response)
 }
 
-/** The work a listener admits: grace may cut reads, never an admitted write. */
+/** The work a listener admits: the cut at the end of a grace stops reads and
+ * every answer still streaming that no admitted work is producing, never an
+ * admitted write. */
 export let requests = (handler: Handler) => {
-  let reads = new AbortController()
+  let cut = new AbortController()
   let pending = new Set<Promise<unknown>>()
   let open = new Map<Request, string>()
   let producers = new Map<Promise<unknown>, Request>()
+  let outputs = new Map<Request, AbortController>()
+  let producing = (request: Request) =>
+    [...producers.values()].includes(request)
   let failures: unknown[] = []
   let keep = (done: Promise<unknown>) => {
     pending.add(done)
@@ -137,6 +142,7 @@ export let requests = (handler: Handler) => {
       open.set(request, 'handler')
       let ended = () => {
         open.delete(request)
+        outputs.delete(request)
       }
       let response = (answer: Response, signal?: AbortSignal) => {
         open.set(request, 'response body')
@@ -155,7 +161,7 @@ export let requests = (handler: Handler) => {
       }
       if (reading(request)) {
         let scoped = new Request(request, {
-          signal: AbortSignal.any([request.signal, reads.signal]),
+          signal: AbortSignal.any([request.signal, cut.signal]),
         })
         return receive(scoped, () => handler(scoped)).then(
           (answer) => response(answer, scoped.signal),
@@ -170,12 +176,26 @@ export let requests = (handler: Handler) => {
       }
       let done = Promise.resolve().then(() => handler(request))
       keep(done)
-      return done.then((answer) => response(answer), (error) => {
+      return done.then((answer) => {
+        // An answer its admitted work is still producing ends with that work.
+        // Any other still streaming at the cut is only output, like an MCP
+        // call's event stream, and would hold the listener open past any
+        // grace. An answer given after the cut is a finished write's, whole.
+        if (cut.signal.aborted) return response(answer)
+        let quiet = new AbortController()
+        outputs.set(request, quiet)
+        return response(answer, quiet.signal)
+      }, (error) => {
         ended()
         throw error
       })
     },
-    cancel: () => reads.abort(),
+    cancel: () => {
+      cut.abort()
+      for (let [request, quiet] of outputs) {
+        if (!producing(request)) quiet.abort()
+      }
+    },
     drain: async () => {
       while (pending.size) await Promise.allSettled(pending)
       if (failures.length) {

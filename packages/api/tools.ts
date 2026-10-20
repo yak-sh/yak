@@ -24,8 +24,9 @@
 // until it stops, which is why the address is reported on stderr as soon as
 // the port is bound; and a server is never run again by a sweep. Stopped by a
 // signal, it stops taking requests and closes its sockets, lets the requests
-// in flight finish for a grace of seconds, then cancels reads and waits for
-// admitted writes before returning. The reader then closes after the request
+// in flight finish for a grace of seconds, then cancels reads, cuts every
+// answer still streaming that no admitted write is producing (an MCP call's
+// event stream), and waits for admitted writes before returning. The reader then closes after the request
 // owners finish, preserving edits. A killed process leaves its call claimed;
 // the next server closes that process and interrupts the call (host.ts `bury`).
 //
@@ -55,8 +56,9 @@ export let PORT = 8787
  * says so. */
 export let HOSTNAME = '127.0.0.1'
 
-/** Seconds a stopping server lets reads finish before cancelling them.
- * Admitted writes drain even after this grace expires. */
+/** Seconds a stopping server lets requests finish before cancelling reads
+ * and cutting streamed answers. Admitted writes drain even after this grace
+ * expires. */
 export let GRACE = 10
 
 /** What this tool needs from the host that composed it: the request handler to
@@ -117,8 +119,8 @@ export let runs = (host: Serving): Runs => ({
       throw error
     }
     // Stopping: no new connection, every socket closed, and the requests in
-    // flight let finish until the grace is up. Reads are then cancelled;
-    // admitted writes finish before the listener and graph close.
+    // flight let finish until the grace is up. Reads and streamed answers are
+    // then cut; admitted writes finish before the listener and graph close.
     let cut = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let graced = new Promise<void>((done) => {
