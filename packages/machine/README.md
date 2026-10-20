@@ -146,9 +146,10 @@ Missing or unreachable targets refuse rather than execute on the graph server.
 `shell`, `wait` and `stop` wait on a process with `settle`, exported at
 `@yaks/machine`. It looks again after the machine's `poll` (100 ms unless the
 machine says otherwise), then half again as long each time, up to two seconds
-apart. A short command answers within a fraction of a second; a call waiting on
-a long one costs a look every two seconds. An abort ends only the wait, never
-the command.
+apart. An execution workspace takes its transport's `poll`: the local computer's
+is 5 ms, since a look there is one shell, not a network round trip. A short
+command answers within a fraction of a second; a call waiting on a long one
+costs a look every two seconds. An abort ends only the wait, never the command.
 
 `@yaks/machine/targets` exports `sessionHome(graph, session, workspace, cwd?)`.
 It validates the target and performs a guarded home write; omitting cwd clears

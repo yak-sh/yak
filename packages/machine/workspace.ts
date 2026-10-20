@@ -71,6 +71,9 @@ export type WorkspaceTarget = {
  * Failure must propagate; a remote failure never selects the local transport. */
 export type ComputerTransport = {
   execute(script: string): Promise<string>
+  /** how soon a wait on a process here first looks again (ms, default 100):
+   * a look is one control script, a local shell or a network round trip */
+  poll?: number
 }
 
 /** A configured connector reaches an existing computer, never provisions it. */

@@ -41,8 +41,11 @@ export let localConnector = (
     if (address != 'local://') {
       throw new Error('Local connector requires local://')
     }
+    // A look here is one local shell, so a short command's exit is seen
+    // within milliseconds rather than after a remote round trip's 100 ms.
     return Promise.resolve({
       execute: (script: string) => run('bash', ['-s'], script),
+      poll: 5,
     })
   },
 })

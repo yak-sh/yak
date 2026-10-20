@@ -113,6 +113,7 @@ else printf 'pending'; fi`,
     return {}
   }
   return {
+    poll: transport.poll,
     start: async (command, cwd, call) => {
       let directory = cwd == null ? root : fileAt(root, cwd)
       let id = call ? processFor(call) : crypto.randomUUID()
