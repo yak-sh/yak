@@ -1,6 +1,6 @@
 // A prototype measurement, not for landing: the box's composed graph on a copy
 // of its database, in one of three configurations, timing the writes and
-// reads D-… compares.
+// reads D-130964 compares.
 //
 //   deno run -A --config deno.json packages/sqlite/history_bench.ts \
 //     <db> <journal|history|neither> [rounds]
