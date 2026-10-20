@@ -321,8 +321,19 @@ export let drifts = (
     }
     if (type != 'time' && type != 'number') return false
     let op = c.op == '!=' ? '=' : c.op, value = c.value
-    return JSON.stringify(timeEdges(op, value, now)) !=
+    let key = `${op} ${JSON.stringify(value)}`, held = drifting.get(key)
+    if (held != null) return held
+    held = JSON.stringify(timeEdges(op, value, now)) !=
       JSON.stringify(timeEdges(op, value, now + 366 * 86_400_000))
+    if (drifting.size >= 1024) drifting.delete(drifting.keys().next().value!)
+    drifting.set(key, held)
+    return held
   }
   return visit(q)
 }
+
+// Whether a comparison drifts is a fact about its operator and value, never
+// the moment it is asked: a phrase names an instant relative to the clock
+// wherever it is read, an instant is the same everywhere. A store asks it of
+// every read, so each answer is kept.
+let drifting = new Map<string, boolean>()

@@ -1264,7 +1264,9 @@ let union = (ctx: Ctx, alts: Clause[]): Cond => {
       return { branch, where, joins: joinsOf(branch), x }
     })
   })
-  if (ctx.correlated) {
+  // A correlated row, or one of a few named owners, is already in hand: its
+  // alternatives are tests of that row, never selections of their own.
+  if (ctx.correlated || ctx.bounded) {
     for (let { branch } of branches) {
       for (let table of branch.tables) ctx.tables.add(table)
     }

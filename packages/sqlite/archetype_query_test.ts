@@ -490,10 +490,10 @@ test('an eid scope reaches disjunctions inside nested conjunctions', () => {
     let statement = compile(q, v, { archetypes: catalog(d), now })
     let plan = d.query({ t: 'explain query plan', of: statement })
       .map((r) => String(r.detail)).join('\n')
+    // Every read of the store is scoped to the named entities, the
+    // alternatives' included: none enumerates unrelated entities first.
     assert(!plan.includes('SCAN entity'), plan)
-    // Checking just the outer seek misses the unscoped UNION arms: they
-    // materialize before the outer filter, and each reads the whole store.
-    assert((plan.match(/SEARCH entity .*\(eid=\?\)/g) ?? []).length >= 2, plan)
+    assert(/SEARCH entity .*\(eid=\?\)/.test(plan), plan)
   }
   assertEquals(
     s.rows(and(parse(`.entity.eid=${ids[3]}`), original), { now }),
