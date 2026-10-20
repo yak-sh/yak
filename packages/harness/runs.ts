@@ -24,7 +24,8 @@ import { parse } from '@yaks/query'
 import { transcript, usingBefore } from '@yaks/session'
 import { changes } from '@yaks/session/wait'
 import { begin, seed, through } from './agent.ts'
-import { defaultUsing, selectedUsing } from './model_selection.ts'
+import { defaultUsing } from './default.ts'
+import { selectedUsing } from './model_selection.ts'
 import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
 import { homeAt } from './session_machines.ts'
@@ -43,7 +44,7 @@ let nameOf = (row: Bundle | undefined, comp: string) =>
 
 // The `using` a call asks for by provider and model name, its rows seeded. A
 // model named alone is asked wherever it is served, and only one nothing
-// serves yet goes to the default's provider (./model_selection.ts); a
+// serves yet goes to the default's provider (./default.ts); a
 // provider named alone takes the default model only where it is the
 // default's.
 let named = async (

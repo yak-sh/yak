@@ -46,12 +46,9 @@ export let unfinishedNativeFinal = async (
   )
   // Heal's follower owns continuation of an open fixer, including the quiet
   // interval between its final answer and the next tracker reconciliation.
-  // A fixer mark alone is history; disabled heal must not suppress reports.
-  const heal = host.config?.plugins?.find((plugin) =>
-    typeof plugin == 'object' && plugin.use == '@yaks/heal'
-  )
-  const enabled = typeof heal == 'object' && !!heal.with?.provider
-  const [fixer] = enabled
+  // A fixer mark alone is history: without heal (its `fixer` undeclared) or
+  // with its project muted, the report is not suppressed.
+  const [fixer] = host.graph.vocab.comp('fixer')
     ? await host.graph.get([session], ['fixer', 'stop', 'exit'])
     : []
   const bug = (fixer?.fixer as Comp | undefined)?.bug

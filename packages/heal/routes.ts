@@ -4,9 +4,9 @@ import type { Route } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
 import { home, type Options } from './fix.ts'
 
-export type Control = { project?: string; configured: boolean }
+export type Control = { project?: string }
 
-/** Reveal only the home project and whether a fixer provider is configured. */
+/** Reveal only the home project. */
 export let routes = (
   host: { graph: Graph },
   options: Options = {},
@@ -15,9 +15,6 @@ export let routes = (
   path: '/heal/control',
   handle: async () =>
     Response.json(
-      {
-        project: await home(host.graph, options),
-        configured: !!options.provider,
-      } satisfies Control,
+      { project: await home(host.graph, options) } satisfies Control,
     ),
 }]

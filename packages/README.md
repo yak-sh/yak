@@ -349,9 +349,9 @@ grouped approximately by function, **not** by dependency order.
   each. It defines no components of its own.
 - **[@yaks/heal](./heal)** — follows a separate tracker graph. Each bug gets one
   task and an `about` edge; its count and stack stay in the tracker. The
-  follower requests a @yaks/spawn session holding the task's claim, marked
-  `fixer{bug}`, behind the provider, `nofix`, cap and cooldown gates. Tracker
-  regressions can start another fixer on completed work.
+  follower requests a native session on the harness's default model, holding the
+  task's claim and marked `fixer{bug}`, behind the `nofix`, cap and cooldown
+  gates. Tracker regressions can start another fixer on completed work.
 - **[@yaks/context](./context)** — Build instruction entries with source ids and
   snapshot hashes so a transcript can record what a model was given.
   `promptEntry()` itself performs no writes; `outputView()` stores projection

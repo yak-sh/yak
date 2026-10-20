@@ -22,7 +22,7 @@ import { machines } from './session_machines.ts'
 /** The runner, lent this machine, over the host's graph. The plugin's options
  * may name `compactAt`, the share of its model's context window a transcript
  * fills before it is compacted (half where absent); the model a session asks
- * by default is graph data (./model_selection.ts `defaultUsing`). */
+ * by default is graph data (./default.ts `defaultUsing`). */
 export let effects = (
   host: Host,
   options: Record<string, unknown> = {},

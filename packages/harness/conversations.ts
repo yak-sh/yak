@@ -11,7 +11,7 @@ import { snapshot } from '@yaks/context'
 import { humanCaller, textOf } from '@yaks/session'
 import { readInbox } from '@yaks/inbox/read'
 import { begin, through } from './agent.ts'
-import { defaultUsing } from './model_selection.ts'
+import { defaultUsing } from './default.ts'
 
 let part = (b: Bundle | undefined, c: string): Comp => (b?.[c] ?? {}) as Comp
 let quote = (value: string) => JSON.stringify(value)

@@ -30,6 +30,7 @@ import { and, every, present } from '@yaks/query'
 import { type Fake, pair } from '../sync/testing.ts'
 import { group } from '@yaks/tracker'
 import { computed, trackerDoc } from '@yaks/tracker/vocab'
+import { HARNESS } from '@yaks/harness/default'
 import { healDoc } from './vocab.ts'
 import { fixing } from './fix.ts'
 import {
@@ -140,6 +141,7 @@ let fixture = async (options: Options = {}, unstamped = false) => {
   await g.apply([
     { entity: { eid: provider }, provider: { name: 'codex' } },
     { entity: { eid: model }, model: { name: 'sol' } },
+    { entity: { eid: HARNESS }, using: { provider, model } },
     { entity: { eid: project }, project: {} },
     { entity: { eid: other }, project: {} },
   ], { trusted: true })
@@ -166,8 +168,6 @@ let fixture = async (options: Options = {}, unstamped = false) => {
   }], { trusted: true })
   let seen = watches(tracker)
   let config: Options = {
-    provider,
-    model,
     project,
     effort: 'high',
     trackers: [url],
@@ -224,6 +224,13 @@ let rows = (g: Graph, component: string) => g.read(whole[component])
 let count = async (g: Graph, component: string) =>
   (await g.read(selected[component])).length
 let put = (g: Graph, bundles: Bundle[]) => g.apply(bundles, { trusted: true })
+// Fixers switched off on the home project: the follower files and marks only.
+let off = async (options: Options = {}, unstamped = false) => {
+  let f = await fixture(options, unstamped)
+  await put(f.g, [{ entity: { eid: project }, nofix: {} }])
+  f.commits.length = 0
+  return f
+}
 
 let fresh = await fixture({}, true)
 let [freshBug] = await fresh.tracker.get([bug])
@@ -307,14 +314,8 @@ test('a second follower and a replay leave the box untouched', async () => {
   replayed.close()
 })
 
-for (let gate of ['provider', 'nofix', 'cap', 'cooldown']) {
-  let f = await fixture(
-    gate == 'provider'
-      ? { provider: undefined }
-      : gate == 'cap'
-      ? { cap: 0 }
-      : {},
-  )
+for (let gate of ['nofix', 'cap', 'cooldown']) {
+  let f = await fixture(gate == 'cap' ? { cap: 0 } : {})
   if (gate == 'nofix') {
     await put(f.g, [{ entity: { eid: project }, nofix: {} }])
   }
@@ -406,7 +407,7 @@ test('a completed task waits for a regression, not another occurrence', async ()
   done.close()
 })
 
-let retry = await fixture({ provider: undefined }, true)
+let retry = await off({}, true)
 retry.breakBox(true)
 let retryWatch = retry.config.open!(url)
 test('the service retries an unwritable box without another tracker event', async () => {
@@ -439,7 +440,7 @@ test('the service retries an unwritable box without another tracker event', asyn
   retry.close()
 })
 
-let flood = await fixture({ provider: undefined })
+let flood = await off()
 let gone = [1, 2, 3].map((n) => identityEid('bug', [`gone ${n}`]))
 await put(
   flood.tracker,
@@ -480,7 +481,7 @@ test('occurrence-only tracker hits do not replay unchanged open or closed work',
   equal(asked(bug), 2)
 })
 
-let outage = await fixture({ provider: undefined })
+let outage = await off()
 test('the service resumes when a tracker is available again', async () => {
   let opens = 0, waits = 0, closed = 0
   let stop = new AbortController()
@@ -527,7 +528,7 @@ test('the follower reuses a task already linked to its tracker bug', async () =>
 
 // The transport uses the graph's API and sync's socket pairs, with no network.
 let remote = async (unstamped = false) => {
-  let f = await fixture({ provider: undefined }, unstamped)
+  let f = await off({}, unstamped)
   let unavailable = false, lose = false, posts = 0
   let due: (() => void)[] = []
   let pending: Fake[] = []
@@ -744,7 +745,7 @@ for (
   })
 }
 
-let archiveDone = await fixture({ provider: undefined })
+let archiveDone = await off()
 let linkedTask = identityEid('task', ['linked completed work'])
 await put(archiveDone.g, [{
   entity: { eid: linkedTask },
@@ -762,7 +763,7 @@ test('tracker archival cancels completed work linked under an older task id', as
   archiveDone.close()
 })
 
-let closeRetry = await fixture({ provider: undefined })
+let closeRetry = await off()
 await closeRetry.replay()
 await put(closeRetry.tracker, [{ entity: { eid: bug }, resolved: {} }])
 closeRetry.breakBox(true)
@@ -810,7 +811,7 @@ test('replaying a reopened regression does not file another fixer', async () => 
 
 // Terminal work is the durable receipt for a tracker mark, across service runs.
 let finished = async (mark: string) => {
-  let f = await fixture({ provider: undefined })
+  let f = await off()
   await f.run()
   await put(f.g, [{
     entity: { eid: taskEid(bug) },
@@ -1010,7 +1011,7 @@ test('a tracker regression during mark admission rejects the stale answer', asyn
   raced.close()
 })
 
-let ordered = await fixture({ provider: undefined })
+let ordered = await off()
 test('the platform tracker is followed first', async () => {
   let opened: string[] = []
   await service(ordered.host, {
@@ -1028,7 +1029,7 @@ test('the platform tracker is followed first', async () => {
 // The body of the platform bug's task, filed by a follower that knows which
 // trackers have a web of their own.
 let platform = async (trackers: string[]) => {
-  let f = await fixture({ trackers, provider: undefined })
+  let f = await off({ trackers })
   let [row] = await f.tracker.get([bug])
   let reconcile = alone(f.g, f.config)
   return async () => {
@@ -1049,7 +1050,7 @@ test("with no tracker web, a platform bug's task names the command that reads it
   ok((await noWeb()).includes(`yak bug show ${bug} --source yaks.app`))
 })
 
-let held = await fixture({ provider: undefined })
+let held = await off()
 test("until the platform's first poll settles, no other tracker's bug takes a slot", async () => {
   let listeners: ((bundles: Bundle[]) => void)[] = []
   let polled = { ready: false }

@@ -18,6 +18,7 @@ let nothingStep: Step = { did: 'nothing', status: 'settled', added: [] }
 let fake = (log: unknown[], blocked = false, native = true) =>
   ({
     graph: {
+      vocab: { comp: () => undefined },
       read: (q: string) => {
         log.push(q.includes('.native') ? 'checked' : q)
         return Promise.resolve(
@@ -83,8 +84,8 @@ const healReports: string[] = []
 let healOwns = true
 let mutedHeal = false
 const healHost = {
-  config: { plugins: [{ use: '@yaks/heal', with: { provider: 'openai' } }] },
   graph: {
+    vocab: { comp: (name: string) => name == 'fixer' ? {} : undefined },
     get: () =>
       Promise.resolve([{ entity: { eid: 's' }, fixer: { bug: 'bug' } }]),
     read: (q: string) =>

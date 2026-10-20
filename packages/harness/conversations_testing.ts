@@ -9,7 +9,7 @@ import { runs } from './runs.ts'
 import { at } from './testing.ts'
 import { compose } from '@yaks/cli/host'
 import { hosted } from './store.ts'
-import { HARNESS } from './model_selection.ts'
+import { HARNESS } from './default.ts'
 
 export let conversationFixture = async () => {
   let config = at()

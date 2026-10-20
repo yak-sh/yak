@@ -5,15 +5,13 @@
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { addressed } from '@yaks/graph/call'
 import { token } from '@yaks/graph/sha256'
+import { defaultUsing } from '@yaks/harness/default'
 import { human } from '@yaks/id'
 import { absent, and, eq, fields, list, present } from '@yaks/query'
 
-/** What config can set. */
+/** What config can set. A fixer asks the native harness's default model
+ * (@yaks/harness/default), like every session that names none. */
 export type Options = {
-  /** who runs a fixer, by name or id; without one, nothing starts */
-  provider?: string
-  /** the model a fixer runs on, by name or id */
-  model?: string
   /** the effort a fixer asks for */
   effort?: string
   /** the home project; `nofix` on it mutes every fixer */
@@ -41,8 +39,7 @@ let str = (v: unknown) => v == null ? '' : String(v)
 let one = async (g: Graph, eid: string): Promise<Bundle | undefined> =>
   (await g.get([eid]))[0]
 
-// The entity config names, by id or by its `name` (`codex`), where it wears
-// `wears`.
+// The entity config names, by id or by its `name`, where it wears `wears`.
 let named = async (g: Graph, id: string | undefined, wears: string) => {
   if (!id) return undefined
   let [eid] = await addressed(g, [id])
@@ -174,10 +171,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
 
   let request = async (work: Work, pass: Pass): Promise<Bundle[]> => {
     let { task, bug, reopen, open, last } = work
-    if (
-      !options.provider || task.cancelled ||
-      (!reopen && !open && task.completed)
-    ) return []
+    if (task.cancelled || (!reopen && !open && task.completed)) return []
     let history = await pass.fixers(bug)
     let latest =
       history.toSorted((a, b) =>
@@ -210,12 +204,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
       if (!open && (history.length || task.claim)) return []
     }
     if (await blocked(work, continuing ? [] : history, pass)) return []
-    let provider = await named(g, options.provider, 'provider')
-    if (!provider) throw new Error(`not a provider: ${options.provider}`)
-    let model = await named(g, options.model, 'model')
-    if (options.model && !model) {
-      throw new Error(`not a model: ${options.model}`)
-    }
+    let { provider, model } = await defaultUsing(g)
     let session = continuing ? latest.entity.eid : uuid()
     let title = str(comp(task, 'doc')?.title)
     return [
@@ -240,7 +229,7 @@ export let fixing = (g: Graph, options: Options = {}) => {
         },
         using: {
           provider,
-          ...(model ? { model } : {}),
+          model,
           ...(options.effort ? { effort: options.effort } : {}),
         },
       },

@@ -23,7 +23,7 @@ await g.apply([
   { entity: { eid: project }, project: {}, nofix: {} },
   { entity: { eid: other }, project: {}, nofix: {} },
 ])
-let route = routes({ graph: g }, { project, provider: 'openai' })[0]
+let route = routes({ graph: g }, { project })[0]
 let response = await route.handle(new Request('http://probe/heal/control'))
 let control = await response.json()
 let row = (await g.get([project]))[0]
@@ -57,7 +57,7 @@ drawn.free()
 let otherMuted = !!(await g.get([other]))[0].nofix
 
 test('the Sessions switch persists off/on and restores off after remount', () => {
-  equal(control, { project, configured: true })
+  equal(control, { project })
   equal(initially, 'false')
   equal(enabled, true)
   equal(disabled, true)

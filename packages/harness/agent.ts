@@ -62,8 +62,8 @@ import {
 import { outputView, promptEntry, type Snapshot } from '@yaks/context'
 import { lineage } from '@yaks/project'
 import { render } from '@yaks/text'
+import { defaultUsing } from './default.ts'
 import {
-  defaultUsing,
   type ModelSelection,
   modelSelection,
   modelUsing,
@@ -397,7 +397,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   )
   // Compaction is a text task, even when a transcript selects a media model:
   // it asks the model this agent was lent by name, else the default
-  // (./model_selection.ts), read again before every ask.
+  // (./default.ts), read again before every ask.
   let compact: NonNullable<Deps['compactModel']> = {
     model,
     name,

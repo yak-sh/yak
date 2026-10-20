@@ -3,6 +3,7 @@
   "version": "0.2.10",
   "exports": {
     ".": "./mod.ts",
+    "./default": "./default.ts",
     "./local": "./local.ts",
     "./tui": "./view.ts",
     "./vocab": "./vocab.ts",

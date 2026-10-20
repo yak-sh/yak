@@ -6,7 +6,7 @@ import { equal, test } from '@yaks/testing'
 import { effects } from './effects.ts'
 import { seed } from './agent.ts'
 import { at } from './testing.ts'
-import { HARNESS } from './model_selection.ts'
+import { HARNESS } from './default.ts'
 
 let observed = await (async () => {
   let config = at()

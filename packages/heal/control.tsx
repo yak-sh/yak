@@ -11,13 +11,13 @@ export let AutoSpawn = (
   { io, control }: { io: Io; control: Control },
 ) => {
   let [error, setError] = useState<string>()
-  let { project, configured } = control
+  let { project } = control
   let { home } = io.ask(
     project ? { home: `.entity.eid=${project} ?nofix` } : {},
   )
   let row = home?.rows[0]
   let ready = !!home?.ready && !!row
-  let on = configured && ready && !row?.nofix
+  let on = ready && !row?.nofix
   return (
     <Section>
       <Section.Title>
@@ -27,7 +27,7 @@ export let AutoSpawn = (
           role='switch'
           aria-label='Automatic fixers'
           aria-checked={!!on}
-          disabled={!configured || !ready}
+          disabled={!ready}
           onClick={() => {
             if (!project || !ready) return
             setError(undefined)
@@ -47,9 +47,6 @@ export let AutoSpawn = (
         {' '}
         Existing sessions continue. Manual sessions remain available.
       </Section.Sub>
-      {!configured && (
-        <Section.Sub>No fixer provider is configured.</Section.Sub>
-      )}
       {!project && (
         <Section.Note mod='refused'>
           Configure a home project for the automatic fixer switch.

@@ -31,9 +31,8 @@ same choice and a restart keeps it. Off pauses new fixer starts and automatic
 follow-up turns; existing sessions continue and manual sessions remain
 available. Turning it on lets pending tracker bugs start again on the next
 follower pass, under the usual cap and cooldown. Individual project mutes stay
-in place. A configured `project` and `provider` are needed to enable the switch.
-The read-only `/heal/control` door exposes that project's eid and whether a
-provider is configured; it exposes no credentials.
+in place. A configured `project` is needed to enable the switch. The read-only
+`/heal/control` door exposes that project's eid and nothing else.
 
 ## What happens
 
@@ -64,22 +63,24 @@ history reads it for every open bug. The home project and `nofix` are read once
 a pass, and the running fixers once until the pass requests a fixer. A bug whose
 work the pass writes reads its task and fixers again. The request is a
 `session{operator}` with `fixer{bug}`, an `entry{session}` with `content{body}`
-and `using{provider, model, effort}`, and a `claim{session}` on the task. No
-process starts inside the follower; the configured provider handles that request
-through the native harness or [spawn](../spawn/README.md). The entry names the
-task and the fixer's last step: once the fix is live, resolve the bug with its
-explanation through `cli`'s `bug resolve`, which the tracker requires of every
-resolution ([tracker](../tracker/README.md#resolving-a-bug)). Its instructions
-name the authoritative tracker and require a `bug show` readback there. Both
-commands remove inherited `YAKS_HOST` defensively for bare `yak`, while
-preserving the configured `cli` and config; an explicit `--config` already
-selects its graph. Only the platform tracker uses `--source yaks.app`; resolving
-the same bug in another tracker does not complete the authoritative tracker's
-work.
+and `using{provider, model, effort}`, and a `claim{session}` on the task. The
+provider and model are the native harness's default (`defaultUsing` from
+`@yaks/harness/default`, the `using` on the harness's package row), read when
+the request is written, so the graph write that changes every native session's
+model changes the fixers' too; the request fails while no default is set. No
+process starts inside the follower; the native harness answers the request. The
+entry names the task and the fixer's last step: once the fix is live, resolve
+the bug with its explanation through `cli`'s `bug resolve`, which the tracker
+requires of every resolution ([tracker](../tracker/README.md#resolving-a-bug)).
+Its instructions name the authoritative tracker and require a `bug show`
+readback there. Both commands remove inherited `YAKS_HOST` defensively for bare
+`yak`, while preserving the configured `cli` and config; an explicit `--config`
+already selects its graph. Only the platform tracker uses `--source yaks.app`;
+resolving the same bug in another tracker does not complete the authoritative
+tracker's work.
 
-Four gates precede the request; a gate refusing it still leaves the task filed:
+Three gates precede the request; a gate refusing it still leaves the task filed:
 
-- off: no `provider` configured;
 - muted: `nofix` on the task's project or on the home project;
 - at cap: `cap` fixers running: native transcripts in `pending`, `running` or
   `queued`, or managed fixers with no `exit` and a process or a start under five
@@ -88,8 +89,8 @@ Four gates precede the request; a gate refusing it still leaves the task filed:
 
 A native fixer remains active beyond five minutes without a process. A normal
 `settled` turn with its tracker bug still open receives a continuation input in
-the same session, with the configured provider, model and effort. It reclaims a
-released task in the same guarded apply. A claim held by another session is
+the same session, with the default model and the configured effort. It reclaims
+a released task in the same guarded apply. A claim held by another session is
 reclaimed only with terminal evidence (`exit`, an explicit stop/end, or a
 terminal transcript status); a live or unknown holder keeps its claim. The
 continuation observes the cap and `nofix`, but not cooldown, which limits new
@@ -154,8 +155,6 @@ service.
       "url": "https://your-tracker-worker.example",
       "secret": { "secret": "TRACKER_SECRET" }
     },
-    "provider": "claude",
-    "model": "opus",
     "effort": "high",
     "project": "P-19",
     "cap": 2,
@@ -168,14 +167,14 @@ service.
 `trackers` names base URLs of tracker graphs, not database files or config
 paths. `remote` is the platform tracker Worker, the same `{url, secret}` as
 @yaks/tracker's own `remote`, polled every 30 seconds at most. With neither, the
-follower has nothing to do. `provider`, `model` and `project` are ids or names.
-`cap` defaults to 2; `cooldown` defaults to 1800000 ms; a changed tracker answer
-starts a pass within a second, and `every` (default 60000 ms) re-checks the
-gates and task marks when nothing changed. `cli` is the command line a fixer
-runs the tracker's tools with (default `yak`): on a box whose tracker keeps a
-config of its own, `yak --config` naming it. Every key is optional. Without
-`provider`, bugs still get tasks, but no fixer is requested. A host running
-without duties runs no follower.
+follower has nothing to do. `project` is an id or a name. `effort` is what each
+fixer asks of the default model. `cap` defaults to 2; `cooldown` defaults to
+1800000 ms; a changed tracker answer starts a pass within a second, and `every`
+(default 60000 ms) re-checks the gates and task marks when nothing changed.
+`cli` is the command line a fixer runs the tracker's tools with (default `yak`):
+on a box whose tracker keeps a config of its own, `yak --config` naming it.
+Every key is optional. With `nofix` on the home project, bugs still get tasks,
+but no fixer is requested. A host running without duties runs no follower.
 
 ## Exports
 

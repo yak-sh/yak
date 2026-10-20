@@ -19,7 +19,7 @@ import { type Harness, hosted } from './store.ts'
 import { type ComponentType } from 'preact'
 import { mount as tui } from '../tui/testing.ts'
 import { dress } from './sheet.ts'
-import { HARNESS } from './model_selection.ts'
+import { HARNESS } from './default.ts'
 
 /** The packages a harness graph is made of in these tests: what a transcript
  * is (@yaks/session), what it asks for and what answers (@yaks/tools,
