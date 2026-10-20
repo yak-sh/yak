@@ -56,6 +56,7 @@ let m: Workspace = {
   tail: () => Promise.resolve([]),
   kill: () => Promise.resolve(),
   read: (path) => Promise.resolve(path),
+  stat: () => Promise.resolve([]),
   write: () => Promise.resolve(),
 }
 let tools = workspaceTools(replay.g, {

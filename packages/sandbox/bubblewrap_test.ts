@@ -61,6 +61,15 @@ test('sandbox commands and files see only their own workspace and a read-only sy
     await second.workspace.write('src/file', 'second')
     assertEquals(await first.workspace.read('src/file'), 'first')
     assertEquals(await second.workspace.read('src/file'), 'second')
+    // Paths are what the guest sees: the host's private file is not there.
+    assertEquals(
+      await first.workspace.stat(['src/file', '/workspace', `${dir}/private`]),
+      [
+        { kind: 'file', canonical: '/workspace/src/file' },
+        { kind: 'directory', canonical: '/workspace' },
+        { kind: 'missing' },
+      ],
+    )
     for (let cwd of [undefined, 'src']) {
       assertMatch(
         await tools(first.workspace).shell.run({

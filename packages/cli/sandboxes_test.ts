@@ -44,6 +44,7 @@ let workspaces = {
       tail: () => Promise.resolve(['explicit output']),
       kill: () => Promise.resolve(),
       read: () => Promise.resolve(''),
+      stat: () => Promise.resolve([]),
       write: () => Promise.resolve(),
     })
   },

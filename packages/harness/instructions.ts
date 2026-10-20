@@ -4,54 +4,45 @@ import { targetFor, type Workspaces } from '@yaks/machine/targets'
 // become immutable prompt snapshots; later machine edits do not rewrite them.
 import type { Comp, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
-import { type Machine, settle } from '@yaks/machine'
+import type { Machine } from '@yaks/machine'
 import { owing } from './session_machines.ts'
 import type { As } from '@yaks/persona'
 
-let quoted = (text: string) => "'" + text.replaceAll("'", "'\\''") + "'"
+/** Each directory from the root down to `dir`, an absolute path. */
+let ancestors = (dir: string): string[] =>
+  dir == '/'
+    ? ['/']
+    : [...ancestors(dir.slice(0, dir.lastIndexOf('/')) || '/'), dir]
 
-/** Root-to-leaf AGENTS.md files on a machine, with canonical source paths. */
+/** Root-to-leaf AGENTS.md files on a machine, with canonical source paths:
+ * the machine says what each candidate is, then its files are read. A link
+ * to nothing is a projection gone missing, kept in `missing` where given. */
 export let instructionFiles = async (
   machine: Machine,
   cwd: string,
   home?: string,
   missing?: string[],
 ): Promise<Snapshot[]> => {
-  let id = await machine.start(
-    `set -e; cd -- ${
-      quoted(cwd)
-    }; directory=$(pwd -P); while :; do path="$directory/AGENTS.md"; if [ -L "$path" ] && [ ! -e "$path" ]; then printf '!%s\\n' "$path"; elif [ -e "$path" ]; then [ -f "$path" ] && [ -r "$path" ]; printf '%s\\n' "$path"; fi; [ "$directory" = / ] && break; directory=$(dirname -- "$directory"); done`,
-    cwd,
-  )
-  let process = await settle(machine, id)
-  if (!process) throw new Error('Instruction discovery lost its process')
-  if (process.exit?.code != 0) {
-    throw new Error(
-      `Instruction discovery exited ${process.exit?.code}: ` +
-        (await machine.tail(id, 40)).join('\n'),
-    )
+  let [here] = await machine.stat([cwd])
+  if (here.kind != 'directory') {
+    throw new Error('Instruction discovery has no directory: ' + cwd)
   }
-  let paths = (await machine.tail(id, 10000)).filter(Boolean).reverse()
-  if (home) {
-    let source = `${home.replace(/\/+$/, '')}/.agents/AGENTS.md`
-    let found = await machine.start(
-      `if [ -e ${quoted(source)} ]; then [ -f ${quoted(source)} ] && [ -r ${
-        quoted(source)
-      } ] && printf '%s\\n' ${quoted(source)}; fi`,
-      cwd,
-    )
-    let p = await settle(machine, found)
-    if (!p) throw new Error('Instruction discovery lost its process')
-    if (p.exit?.code != 0) {
-      throw new Error('Global instruction file is unavailable')
-    }
-    paths.unshift(...(await machine.tail(found, 1)).filter(Boolean))
-  }
-  let lost = paths.filter((p) => p.startsWith('!')).map((p) => p.slice(1))
+  let global = home && `${home.replace(/\/+$/, '')}/.agents/AGENTS.md`
+  let paths = [
+    ...global ? [global] : [],
+    ...ancestors(here.canonical).map((d) => (d == '/' ? '' : d) + '/AGENTS.md'),
+  ]
+  let found = await machine.stat(paths)
+  let lost = paths.filter((p, i) => found[i].kind == 'dangling' && p != global)
   if (lost.length && !missing) throw unavailable(lost)
   missing?.push(...lost)
   let files: Snapshot[] = []
-  for (let source of paths.filter((p) => !p.startsWith('!'))) {
+  for (let [i, source] of paths.entries()) {
+    let { kind } = found[i]
+    if (kind == 'missing' || kind == 'dangling') continue
+    if (kind != 'file') {
+      throw new Error('Instruction file is not a regular file: ' + source)
+    }
     files.push(await snapshot(await machine.read(source), source))
   }
   return files

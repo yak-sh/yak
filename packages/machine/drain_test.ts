@@ -21,6 +21,7 @@ let fixture = (name: string) => {
       return Promise.resolve()
     },
     read: () => Promise.resolve(''),
+    stat: () => Promise.resolve([]),
     write: () => Promise.resolve(),
   }
   let recovery = false

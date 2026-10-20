@@ -1,7 +1,7 @@
 // Cloudflare containers as sandbox providers. The namespace supplies the
 // deployed image; the host supplies invocation environment and RPC retry policy.
 // Grants, accounts and billing are not container concerns.
-import type { Workspace } from '@yaks/machine'
+import { shellStat, type Workspace } from '@yaks/machine'
 import type { SandboxProvider, SandboxRef, SandboxRequest } from './provider.ts'
 
 /** How a command runs in the container: where, for how long at most, and with
@@ -468,6 +468,7 @@ let workspaceOf = (box: Box): Workspace => ({
     await box.killProcess(id)
   },
   read: async (path) => (await box.readFile(path)).content,
+  stat: shellStat((script) => checked(box, `cd ${CWD} || exit 1\n${script}`)),
   write: async (path, content) => {
     let dir = path.slice(0, path.lastIndexOf('/'))
     if (dir) await box.mkdir(dir, { recursive: true })

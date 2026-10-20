@@ -5,7 +5,7 @@ import { resolve } from '@std/path/posix/resolve'
 import { decodeBase64, encodeBase64 } from '@std/encoding/base64'
 import { derivedEid } from '@yaks/graph/identity'
 import { CallError } from '@yaks/tools/errors'
-import type { Proc, Workspace } from '@yaks/machine'
+import type { Proc, Stat, Workspace } from '@yaks/machine'
 import type {
   SandboxConnection,
   SandboxProvider,
@@ -332,6 +332,10 @@ export let sandboxProvider = (o: SandboxProviderOpts): SandboxProvider => {
             await rpc<string>(ref, { op: 'read', path: guestPath(path) }),
           ),
         ),
+      stat: (paths) =>
+        paths.length
+          ? rpc<Stat[]>(ref, { op: 'stat', paths: paths.map(guestPath) })
+          : Promise.resolve([]),
       write: (path, content) =>
         rpc<void>(ref, {
           op: 'write',

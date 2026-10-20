@@ -124,6 +124,49 @@ test('missing user paths are refusals through the actual local control script', 
   equal((localFailures.pathFault as Error).name, 'CallError')
 })
 
+// What paths name is a read through the same control script: links resolved,
+// a link to nothing told from nothing at all, and no command started.
+let stat = await (async () => {
+  let { localConnector } = await import('./connectors.ts')
+  let dir = await Deno.realPath(
+    await Deno.makeTempDir({ prefix: 'workspace-stat-' }),
+  )
+  let workspace = mint()
+  await g.apply([{ entity: { eid: workspace }, workspace: { root: dir } }])
+  let m = executionWorkspace(g, await localConnector().connect('local://'), {
+    workspace,
+    root: dir,
+    receipts: dir + '/receipts',
+  })
+  await Deno.mkdir(dir + '/repo')
+  await Deno.writeTextFile(dir + '/repo/file', '')
+  await Deno.symlink('repo', dir + '/link')
+  await Deno.symlink('absent', dir + '/dangling')
+  try {
+    let said = await m.stat([
+      'link/file',
+      dir + '/link',
+      'dangling',
+      'absent',
+      '/dev/null',
+    ])
+    let started = await g.read(`.process.workspace=${workspace}`)
+    return { dir, said, started }
+  } finally {
+    await Deno.remove(dir, { recursive: true })
+  }
+})()
+test('stat says what each path names, its links resolved, starting nothing', () => {
+  equal(stat.said, [
+    { kind: 'file', canonical: stat.dir + '/repo/file' },
+    { kind: 'directory', canonical: stat.dir + '/repo' },
+    { kind: 'dangling' },
+    { kind: 'missing' },
+    { kind: 'other', canonical: '/dev/null' },
+  ])
+  equal(stat.started, [])
+})
+
 // A new session alone still belongs to the launcher's service cgroup. The
 // service manager must not own a receipt's command when that launcher drains.
 let isolation = await (async () => {

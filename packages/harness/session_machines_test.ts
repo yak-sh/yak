@@ -43,6 +43,7 @@ let binding = machines(g, undefined, undefined, {
       tail: () => Promise.resolve([]),
       kill: async () => {},
       read: (path) => Promise.resolve(files.get(id)!.get(path)!),
+      stat: () => Promise.resolve([]),
       write: (path, content) => {
         files.get(id)!.set(path, content)
         return Promise.resolve()

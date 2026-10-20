@@ -7,7 +7,9 @@ import { derivedEid } from '@yaks/graph/identity'
 import type { Proc } from './mod.ts'
 import {
   type ComputerTransport,
+  decode,
   quote,
+  shellStat,
   type Workspace,
   type WorkspaceTarget,
 } from './workspace.ts'
@@ -32,10 +34,6 @@ let encode = (text: string) => {
   for (let byte of bytes) out += String.fromCharCode(byte)
   return btoa(out)
 }
-let decode = (text: string) =>
-  new TextDecoder().decode(
-    Uint8Array.from(atob(text.replaceAll(/\s/g, '')), (c) => c.charCodeAt(0)),
-  )
 
 // A PID is safe to signal only while its original Linux birth token matches.
 // The supervisor creates its own session; no unrelated/adopted process is killed.
@@ -232,6 +230,8 @@ fi`)
       }
       return decode(answer.slice(3))
     },
+    stat: (paths) =>
+      shellStat(transport.execute)(paths.map((path) => fileAt(root, path))),
     write: async (path, content) => {
       let file = fileAt(root, path),
         parent = file.slice(0, file.lastIndexOf('/')) || '/'

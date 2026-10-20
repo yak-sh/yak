@@ -71,6 +71,13 @@ command or cwd arguments are refused. A crash in the ambiguous interval between
 claim and launch leaves a receipt to inspect, not permission to run again. Local
 @yaks/process recovery leaves these workspace-qualified runs alone.
 
+`read`, `write` and `stat` are one control script each and start no command.
+`stat(paths)` says what each path names once its links are followed (`file`,
+`directory`, `other`, `missing`, or `dangling` for a link to nothing) and its
+canonical path; finding a session's instruction files is two of them. Every
+workspace answers `stat`, and `shellStat(execute)` gives one to any computer
+that runs bash scripts.
+
 The target needs Linux `/proc`, bash, setsid, flock, base64 and ordinary file
 utilities. On a systemd computer, launches require its user manager and enter an
 independent scope through `@yaks/process/isolate`; stopping the launcher's unit

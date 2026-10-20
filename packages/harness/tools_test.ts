@@ -101,6 +101,7 @@ test('the merged wait preserves process output and child status alongside task w
             tail: () => Promise.resolve(['process output']),
             kill: async () => {},
             read: () => Promise.resolve(''),
+            stat: () => Promise.resolve([]),
             write: async () => {},
           }),
       },

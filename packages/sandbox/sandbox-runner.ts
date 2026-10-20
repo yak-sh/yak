@@ -93,7 +93,7 @@ class PathFault(Exception):
 # the whole one loads more of Python than the operation does. A path fault
 # exits 3, so the host can tell it from a failure of ours.
 def run_file(code, path, data=None):
-    script = ('import errno, os, sys\np = sys.argv[1]\ntry:\n    ' + code +
+    script = ('import errno, os, sys\np = sys.argv[1]\ntry:\n    ' + code.replace('\n', '\n    ') +
               '\nexcept Exception as e:\n    print(f"{type(e).__name__}: {e}", file=sys.stderr)'
               '\n    sys.exit(3 if getattr(e, "errno", None) in (errno.ENOENT, errno.EACCES,'
               ' errno.ENOTDIR, errno.EISDIR, errno.EROFS) else 1)')
@@ -105,6 +105,21 @@ def run_file(code, path, data=None):
     if result.returncode:
         raise RuntimeError(said)
     return result.stdout
+
+# What each path in the JSON list p names, its links followed: the kind and,
+# where it names something, its canonical path. An unreachable path is
+# missing, as a shell's test -e says.
+STAT = '''import json, stat
+said = []
+for q in json.loads(p):
+    try:
+        mode = os.stat(q).st_mode
+    except OSError:
+        said.append({'kind': 'dangling' if os.path.islink(q) else 'missing'})
+        continue
+    kind = 'file' if stat.S_ISREG(mode) else 'directory' if stat.S_ISDIR(mode) else 'other'
+    said.append({'kind': kind, 'canonical': os.path.realpath(q)})
+sys.stdout.write(json.dumps(said))'''
 
 def handle(request):
     op = request['op']
@@ -169,6 +184,8 @@ def handle(request):
             code = ('p = os.path.realpath(p); '
                     'assert p.startswith("/workspace/"), "export escapes workspace"; ' + code)
         return base64.b64encode(run_file(code, request['path'])).decode()
+    if op == 'stat':
+        return json.loads(run_file(STAT, json.dumps(request['paths'])))
     if op == 'write':
         run_file('os.makedirs(os.path.dirname(p), exist_ok=True); '
                  'open(p, "wb").write(sys.stdin.buffer.read())',

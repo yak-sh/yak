@@ -22,6 +22,7 @@ test('every session shell starts in its home despite a caller cwd', async () => 
     tail: () => Promise.resolve([]),
     kill: () => Promise.resolve(),
     read: () => Promise.resolve(''),
+    stat: () => Promise.resolve([]),
     write: () => Promise.resolve(),
   }
   let homes: Record<string, string> = { parent: '/worktree', child: '/child' }
