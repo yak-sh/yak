@@ -60,6 +60,7 @@ import {
   unanswered,
 } from '@yaks/session'
 import { pull, recount, type Tail, tail } from '@yaks/session/tail'
+import { kept } from '@yaks/session/service'
 import {
   clean,
   EXIT,
@@ -652,10 +653,14 @@ export let down = async (
 }
 
 /**
- * Read the log of every run written since `since` again for its model
- * requests (@yaks/session/tail `recount`): the requests and what each one
- * carried, where a reading from before requests were read counted only the
- * run's whole usage on its ending. Answers how many requests it wrote.
+ * Read every run written since `since` again for its model requests
+ * (@yaks/session/tail `recount`): the requests and what each one carried,
+ * where a reading from before requests were read counted only the run's whole
+ * usage on its ending. A run is read from the copy its provider keeps of its
+ * thread (@yaks/session/service `kept`), which also holds the parts every
+ * request carried ahead of the conversation (its system prompt, its tools),
+ * else from its own log, which is tidied away in time. Answers how many
+ * requests it wrote.
  *
  * ```ts
  * import { recounted } from '@yaks/spawn'
@@ -669,25 +674,35 @@ export let recounted = async (
   o: Opts = {},
 ): Promise<number> => {
   let after = Date.parse(since)
+  let copies = kept()
   let wrote = 0
-  for (let b of await g.read(`.${SESSION}&.${PROCESS}`)) {
+  for (let b of await g.read(`.${SESSION}&.${PROCESS}&*`)) {
     if (o.signal?.aborted) break
     let session = b.entity.eid
-    let out = paths(session, o).out
-    let written = 0
-    try {
-      written = Deno.statSync(out).mtime?.getTime() ?? 0
-    } catch {
-      continue // no log: nothing to read again
-    }
-    if (written < after) continue
-    let job = await asked(g, session).catch(() => null)
-    let adapter = job && (o.adapters ?? known)[job.provider]
-    if (!adapter) continue
-    wrote += await recount(g, out, adapter.read, {
+    let copy = copies.get(String(comp(b, SESSION)?.id ?? session))
+    let log = copy ?? await own(g, session, o)
+    if (!log || (mtime(log.path) ?? 0) < after) continue
+    wrote += await recount(g, log.path, log.read, {
       session,
       signal: o.signal,
     })
   }
   return wrote
+}
+
+let mtime = (path: string) => {
+  try {
+    return Deno.statSync(path).mtime?.getTime()
+  } catch {
+    return undefined
+  }
+}
+
+// A run's own log and how its provider's lines read, while it is kept.
+let own = async (g: Graph, session: string, o: Opts) => {
+  let path = paths(session, o).out
+  if (mtime(path) == null) return null
+  let job = await asked(g, session).catch(() => null)
+  let adapter = job && (o.adapters ?? known)[job.provider]
+  return adapter ? { path, read: adapter.read } : null
 }

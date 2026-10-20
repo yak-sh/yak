@@ -26,18 +26,29 @@ let used = async (g: Graph, session: string) =>
   (await g.read(`.entry.session=${session} .usage .order=entry.seq *`))
     .map((b) => (b.usage as { input_tokens: number }).input_tokens)
 
+let log = async (): Promise<string> => {
+  let path = await Deno.makeTempFile({ suffix: '.jsonl' })
+  await Deno.writeTextFile(
+    path,
+    [reply('msg_1', 10), reply('msg_2', 20), { type: 'result' }]
+      .map((e) => JSON.stringify(e)).join('\n') + '\n',
+  )
+  return path
+}
+
+// A session whose run's own log was read before requests were.
+let read = async (g: Graph, path: string, id: string) => {
+  let [s] = await g.apply([{ entity: { eid: '$s' }, session: { id } }])
+  let session = s.entity.eid
+  await pull(g, await tail(g, path, { session }), before, { final: true })
+  return session
+}
+
 test('reading a log again counts each request once, with what it carried', async () => {
   let g = locked(store())
-  let path = await Deno.makeTempFile({ suffix: '.jsonl' })
+  let path = await log(), copy = await log()
   try {
-    await Deno.writeTextFile(
-      path,
-      [reply('msg_1', 10), reply('msg_2', 20), { type: 'result' }]
-        .map((e) => JSON.stringify(e)).join('\n') + '\n',
-    )
-    let [s] = await g.apply([{ entity: { eid: '$s' }, session: { id: 'r' } }])
-    let session = s.entity.eid
-    await pull(g, await tail(g, path, { session }), before, { final: true })
+    let session = await read(g, path, 'r')
     assertEquals(await used(g, session), [30])
     assertEquals(await recount(g, path, claude, { session }), 2)
     assertEquals(await used(g, session), [10, 20])
@@ -45,7 +56,16 @@ test('reading a log again counts each request once, with what it carried', async
     // Its words stay where the first reading put them.
     assertEquals((await g.read('.content')).length, 2)
     assertEquals(await recount(g, path, claude, { session }), 0)
+    // A copy of a run's log, such as the transcript its provider keeps, counts
+    // the requests in place of the whole run's usage on its ending; a reader
+    // that sees the run only whole leaves it there.
+    let other = await read(g, copy, 'q')
+    assertEquals(await recount(g, path, before, { session: other }), 0)
+    assertEquals(await used(g, other), [30])
+    assertEquals(await recount(g, path, claude, { session: other }), 2)
+    assertEquals(await used(g, other), [10, 20])
   } finally {
     await Deno.remove(path)
+    await Deno.remove(copy)
   }
 })

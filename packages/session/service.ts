@@ -43,7 +43,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { feed } from './bus.ts'
 import { SESSION } from './comp.ts'
-import { claude, codexRollout, subagent } from './readers.ts'
+import { claude, codexRollout, type Reader, subagent } from './readers.ts'
 import { reapLeases } from './reap.ts'
 import {
   behind,
@@ -236,7 +236,7 @@ let opened = async (
 }
 
 // How a transcript's lines read: a subagent's are all side conversations.
-let format = (f: Found, t: Tail) =>
+let format = (f: Found, t: Pick<Tail, 'operator'> = {}): Reader =>
   f.runner == 'codex'
     ? (e: Parameters<typeof codexRollout>[0]) => {
       let said = codexRollout(e)
@@ -601,12 +601,35 @@ export let recounted = async (
     wrote += await recount(
       g,
       f.path,
-      format(f, { operator } as Tail),
+      format(f, { operator }),
       { session: String(session), signal: o.signal },
     )
   }
   return wrote + await natives(g, since, o.signal)
 }
+
+/**
+ * The copy each provider keeps of its threads on this machine (Claude Code's
+ * transcripts, Codex's rollouts), by the provider's id for the thread: where
+ * it is and how its lines read. A managed run's own log can be tidied away
+ * while its provider's copy stays (@yaks/spawn `recounted`).
+ *
+ * ```ts
+ * import { kept } from '@yaks/session/service'
+ *
+ * // let copy = kept().get(thread)
+ * ```
+ */
+export let kept = (
+  o: Options = {},
+): Map<string, { path: string; read: Reader }> =>
+  new Map(
+    [
+      ...transcripts(o.transcripts ?? claudeProjects() ?? ''),
+      ...rollouts(o.codex ?? codexSessions() ?? ''),
+    ].filter((f) => !f.parent && !f.path.endsWith('.zst'))
+      .map((f) => [f.id, { path: f.path, read: format(f) }]),
+  )
 
 // What each request of the graph's own sessions carried (./parts.ts), walked
 // from their entries as the graph holds them, for the requests written before

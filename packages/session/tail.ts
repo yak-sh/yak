@@ -674,9 +674,12 @@ let unspent = async (
  * Read a log already imported again from its start, for its model requests
  * alone: each request's entry (`ask`, `usage`, `context_parts`) where the
  * session lacks it, the session's `fixed`, and plan limits, each dated when
- * the line was written. What an earlier reading counted elsewhere comes off,
- * so each request is counted once (`unspent`). The transcript's other entries
- * are followed, never written. Answers how many requests it wrote.
+ * the line was written. What an earlier reading counted elsewhere (on the
+ * line's other entries, or as the whole run's usage on its ending) comes off,
+ * so each request is counted once. The log can be a copy of the session's
+ * own, such as the transcript a provider keeps of a managed run. The
+ * transcript's other entries are followed, never written. Answers how many
+ * requests it wrote.
  *
  * ```ts
  * import { claude } from '@yaks/session'
@@ -727,5 +730,25 @@ export let recount = async (
     })
     wrote += fresh
   }
+  let over = await ended(g, o.session)
+  if (over.length) await g.apply(over, { trusted: true })
   return wrote
+}
+
+// A run's ending that an earlier reading gave the whole run's usage, where
+// the session's requests now carry their own: the usage comes off it, with
+// the cost, request and context beside it, as `unspent` takes it off a line
+// read again. A provider that reports usage only per run keeps it there.
+let ended = async (g: Graph, session: Eid): Promise<Bundle[]> => {
+  let [counted] = await g.read(
+    `.entry.session=${session} .ask .usage !stop .limit=1`,
+  )
+  if (!counted) return []
+  return (await g.read(`.entry.session=${session} .stop .usage`)).map((b) => ({
+    entity: { eid: b.entity.eid },
+    usage: null,
+    cost: null,
+    ask: null,
+    context_parts: null,
+  }))
 }
