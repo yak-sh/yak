@@ -38,6 +38,7 @@
 // what a session says now never waits behind it. What a person typed and what
 // the model said stay, and so does everything nobody imported.
 
+import { sleep } from '@yaks/fp'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { feed } from './bus.ts'
@@ -471,15 +472,6 @@ export let strip = async (g: Graph, eids: Eid[]): Promise<void> => {
 
 // How often the duty looks for sessions to strip.
 let HOUR = 60 * 60 * 1000
-
-let sleep = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((done) => {
-    let timer = setTimeout(done, ms)
-    signal.addEventListener('abort', () => {
-      clearTimeout(timer)
-      done()
-    }, { once: true })
-  })
 
 /** Free the locks whose holder is gone, then read transcripts in and strip
  * the stale sessions until `signal` aborts. A pass that fails is logged and

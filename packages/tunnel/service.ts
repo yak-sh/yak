@@ -15,6 +15,8 @@
 // nothing to run, and the duty ends at once: a machine whose tunnel something
 // else already runs leaves it out.
 
+import { sleep } from '@yaks/fp'
+
 /** What a config file can set for this plugin. */
 export type Options = {
   /** the tunnel's token; with none, there is nothing to run */
@@ -68,16 +70,6 @@ export let spawned: Spawn = (cmd, args, env) => {
   }
 }
 
-// A pause the signal cuts short.
-let rest = (ms: number, signal: AbortSignal) =>
-  new Promise<void>((done) => {
-    let t = setTimeout(done, ms)
-    signal.addEventListener('abort', () => {
-      clearTimeout(t)
-      done()
-    }, { once: true })
-  })
-
 // The connector, kept up until the signal aborts.
 let connector = async (options: Options, signal: AbortSignal) => {
   let { token, cloudflared = 'cloudflared', spawn = spawned, pause = 1_000 } =
@@ -96,7 +88,7 @@ let connector = async (options: Options, signal: AbortSignal) => {
     // A connector that stayed up a while failed for a new reason: start the
     // pause over rather than make it wait out an old backoff.
     if (Date.now() - started > MOST) wait = pause
-    await rest(wait, signal)
+    await sleep(wait, signal)
     wait = Math.min(wait * 2, MOST)
   }
 }

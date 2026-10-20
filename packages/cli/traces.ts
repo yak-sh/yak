@@ -1,12 +1,27 @@
 // Box telemetry observes the runtime channel, never the watched database.
 // Selection happens after a root completes; all unselected trees die in memory.
+//
+// A tree is held until its root ends, and some roots never do: an effect that
+// watches for the life of the process, a socket. Delivery keeps at most
+// TRACE_MAX_SPANS of a tree, so a tree past a few times that is cut back to
+// the spans worth holding (@yaks/timing `held`). Held whole, such a root kept
+// every span it ever ran until the worker ran out of heap.
 import type { Bundle } from '@yaks/graph'
-import { type RequestState, sampleRequest, selectRequest } from '@yaks/timing'
+import {
+  held,
+  type RequestState,
+  sampleRequest,
+  selectRequest,
+  TRACE_MAX_SPANS,
+} from '@yaks/timing'
 import { channel, type Event } from '@yaks/trace'
 import type { Sink } from '@yaks/tracker/report'
 
 export type Capture = { requested: boolean; rate: number }
 export type Traces = { close: () => Promise<void> }
+
+// The most spans one tree holds before it is cut back.
+let HOLD = 4 * TRACE_MAX_SPANS
 
 export let traces = (
   graph: object,
@@ -30,6 +45,14 @@ export let traces = (
     events: Map<string, Event>
     capture: Promise<Capture | undefined>
   }>()
+  let trim = (events: Map<string, Event>) => {
+    let keep = held([...events.values()])
+    for (let id of events.keys()) {
+      if (keep.has(id)) continue
+      events.delete(id)
+      roots.delete(id)
+    }
+  }
   let pending = new Set<Promise<void>>()
   // Selection can be waiting on another process's capture-control lock. It
   // has delivered nothing yet and must not hold a closing server open.
@@ -109,6 +132,7 @@ export let traces = (
     if (!tree) return
     roots.set(event.id, root)
     tree.events.set(event.id, event)
+    if (tree.events.size > HOLD) trim(tree.events)
     if (event.id != root || event.stage == 'start') return
     trees.delete(root)
     for (let id of tree.events.keys()) roots.delete(id)

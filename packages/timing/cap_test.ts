@@ -3,7 +3,7 @@
 import { equal, ok, test } from '@yaks/testing'
 import type { Event } from '@yaks/trace'
 import { sampleRequest, TRACE_MAX_SPANS } from './mod.ts'
-import { cap } from './cap.ts'
+import { cap, held } from './cap.ts'
 
 let event = (id: string, parent?: string, read = 1, duration = 0): Event => ({
   id,
@@ -87,4 +87,17 @@ test('an over-cap ancestor path folds whole, while fitting sibling work remains'
   equal(kept.some((e) => e.id == 'too-deep'), false)
   equal(kept.some((e) => e.id == 'sibling'), true)
   ok(kept.length <= TRACE_MAX_SPANS)
+})
+
+test('a tree still recording holds what cap keeps and every open span', () => {
+  let open: Event = { ...event('open', 'root', 0), stage: 'start' }
+  let spans = [
+    event('root', undefined, 2000),
+    event('hot', 'root', 500),
+    open,
+    ...Array.from({ length: 1000 }, (_, i) => event(String(i), 'root')),
+  ]
+  let ids = held(spans)
+  for (let id of ['root', 'hot', 'open']) ok(ids.has(id))
+  equal(ids.size, TRACE_MAX_SPANS + 1)
 })

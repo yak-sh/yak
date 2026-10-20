@@ -799,9 +799,12 @@ rows read or written, an armed capture, or an ordinary random sample. Automatic
 traces are admitted once per operation and code name per rolling hour in a host;
 suppressed repeats accompany the next admitted trace as root `repeats{n}`.
 Captures and samples bypass that automatic quota. Sampling defaults to zero.
-Unselected trees stay in memory only: no extra SQL, projection or delivery.
-There are no per-minute timing rows. Traces use `@yaks/timing`'s span entities
-and independent metric components, not JSON trees in the watched store.
+Unselected trees stay in memory only: no extra SQL, projection or delivery. A
+tree is held until its root ends, so one whose root outlives its work (an effect
+that watches for the life of the process) is cut back past `4 × TRACE_MAX_SPANS`
+spans to the ones `@yaks/timing`'s `held` names. There are no per-minute timing
+rows. Traces use `@yaks/timing`'s span entities and independent metric
+components, not JSON trees in the watched store.
 
 Arm the next operations without opening the database:
 

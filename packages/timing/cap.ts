@@ -39,3 +39,13 @@ export let cap = (spans: readonly Event[]): readonly Event[] => {
   }
   return spans.filter((event) => kept.has(event.id))
 }
+
+/** The spans worth holding of a tree still being recorded: what {@link cap}
+ * would keep were its root to end now, and every span still open, which spans
+ * recorded later hang under. A recorder holding a root that outlives its work
+ * (a watcher, a socket) cuts its tree back to these. */
+export let held = (spans: readonly Event[]): Set<string> => {
+  let ids = new Set(cap(spans).map((event) => event.id))
+  for (let event of spans) if (event.stage == 'start') ids.add(event.id)
+  return ids
+}

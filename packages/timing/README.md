@@ -63,11 +63,11 @@ equal(selected[1].elapsed, { start: 0, ms: 20 })
 
 ## Exports
 
-| Export               | Provides                                                                                                                                                                         |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `TRACE_MAX_SPANS`, `thresholds`, `timingDoc`; summary, trace and sampling types |
-| `@yaks/timing/views` | `views`, `inspectViews`: trace and span views, a trace's page and the trace list; `destinations`: the Traces page in a browsing app's sidebar                                    |
-| `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                                               |
+| Export               | Provides                                                                                                                                                                                 |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/timing`       | `summarize`, `bounds`, `sample`, `project`, `selectedRequest`, `selectRequest`, `sampleRequest`, `held`, `TRACE_MAX_SPANS`, `thresholds`, `timingDoc`; summary, trace and sampling types |
+| `@yaks/timing/views` | `views`, `inspectViews`: trace and span views, a trace's page and the trace list; `destinations`: the Traces page in a browsing app's sidebar                                            |
+| `@yaks/timing/vocab` | `timingDoc`, `docs`, `description`                                                                                                                                                       |
 
 ## Closed-minute summaries
 
@@ -315,6 +315,10 @@ equal(page.asks!(trace, {} as never, {}), {
   spans: '.span.trace=example-trace * .order=elapsed.start',
 })
 ```
+
+`held` names the spans a recorder keeps of a tree whose root has not ended yet:
+those `sampleRequest` would retain were it to end now, and every span still
+open.
 
 `sampleRequest` retains at most `TRACE_MAX_SPANS` (200) spans. It keeps the
 request root, then ranks spans by rows read plus rows written, breaking ties by

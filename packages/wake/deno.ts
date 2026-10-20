@@ -7,6 +7,7 @@
  * @module
  */
 
+import { sleep } from '@yaks/fp'
 import { soonest } from './due.ts'
 import { rouse } from './while.ts'
 import { type Driver, tick, type Ticked } from './tick.ts'
@@ -24,18 +25,6 @@ export type LoopOpts = {
    * `while` could not arm among the rejected */
   onTick?: (result: Ticked) => void | Promise<void>
 }
-
-let sleep = (ms: number, signal?: AbortSignal): Promise<void> =>
-  new Promise((resolve) => {
-    let done = () => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', done)
-      resolve()
-    }
-    let timer = setTimeout(done, ms)
-    signal?.addEventListener('abort', done, { once: true })
-    if (signal?.aborted) done()
-  })
 
 /**
  * Rouse and tick immediately, then sleep until the next due instant or the
