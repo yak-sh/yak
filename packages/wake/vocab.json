@@ -52,6 +52,7 @@
     },
     "fired": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "when a wake last fired",
       "properties": {

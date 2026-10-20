@@ -125,12 +125,12 @@ export type LogOpts = {
   /** the store's read overrides (@yaks/sql `Derived`, the ones it was opened
    * with): a property whose stored value reads as something else — the
    * address @yaks/blob keeps in place of a body — is recorded as stored and
-   * read back through its `text`, so history, the feed and undo hold what a
-   * reader of the graph sees and what a writer writes */
+   * read back through its `text`, so history and undo hold what a reader of
+   * the graph sees and what a writer writes */
   derived?: Derived
   /** who this log writes as: the one host (a graph opened by one process or
-   * thread) whose transactions it records, so a reader can tell its own from
-   * another host's (./feed.ts). Default: a fresh id, one per log. */
+   * thread) whose transactions it records, so history can tell one host's
+   * from another's. Default: a fresh id, one per log. */
   host?: string
 }
 
@@ -140,7 +140,7 @@ export type LogOpts = {
 // `tx.id` is an integer primary key, so it is the next rowid — monotonic, which
 // is what lets the total order rest on something other than a clock, and what
 // every cursor in the system holds. `tx.host` names the host that wrote it
-// (`LogOpts.host`), so a host following the feed skips what it wrote itself.
+// (`LogOpts.host`).
 //
 // `change.operation` is `upsert` (the component is present; an empty one is an
 // upsert with no field rows) or `remove` (the component was removed, or the
@@ -245,12 +245,8 @@ export type Log = {
   entries: (target: Eid, n?: number) => Entry[]
   /** every transaction one instrument wrote, newest first, whole */
   by: (via: Eid, n?: number) => Entry[]
-  /** the transactions after a cursor, oldest first — the feed — at most `n`
-   * when given */
+  /** the transactions after a cursor, oldest first, at most `n` when given */
   since: (cursor?: number, n?: number) => Entry[]
-  /** the host that wrote each transaction after a cursor, oldest first, at
-   * most `n` — the feed without its contents */
-  hosts: (cursor: number, n: number) => { seq: number; host: string | null }[]
   /** one transaction as a Batch, both sides of every movement */
   at: (seq: number) => Batch | undefined
   /** what happened to one entity, oldest first, as Batch */
@@ -286,7 +282,7 @@ export type Log = {
  * Bind the log to a store: `log({ rows: (s) => db.query(s) })`. Its `write`
  * records one transaction inside the caller's own, `history(eid)` is every
  * transaction that touched an entity, oldest first, and `since(cursor)` is
- * the feed after a cursor.
+ * every transaction after a cursor.
  */
 export let log = (opts: LogOpts): Log => {
   let rows = opts.rows
@@ -734,8 +730,8 @@ export let log = (opts: LogOpts): Log => {
       limit: val(n),
     })).map((r) => entryOf(r))
 
-  /** The transactions after a cursor, oldest first — the feed — at most `n` of
-   * them when a reader pages. The before-side is not derived here: a feed
+  /** The transactions after a cursor, oldest first, at most `n` of them when a
+   * reader pages. The before-side is not derived here: a reader paging forward
    * replays what was written, and deriving it would turn one range read into a
    * walk of the log per entity. */
   let since = (cursor = 0, n?: number): Entry[] =>
@@ -744,17 +740,6 @@ export let log = (opts: LogOpts): Log => {
       order: [jt('id')],
       ...(n == null ? {} : { limit: val(n) }),
     })).map((r) => entryOf(r))
-
-  /** Who wrote each transaction after a cursor, and nothing else: a follower
-   * reads the contents of only the ones it keeps. */
-  let hosts = (cursor: number, n: number) =>
-    rows(select({
-      cols: [col('id'), col('host')],
-      from: table('journal_tx'),
-      where: gt(col('id'), val(cursor)),
-      order: [col('id')],
-      limit: val(n),
-    })).map((r) => ({ seq: num(r.id), host: str(r.host) }))
 
   /** One transaction, whole, as a Batch — both sides of every movement, which
    * is what `undone()` reverses and `applied()` replays. */
@@ -918,7 +903,6 @@ export let log = (opts: LogOpts): Log => {
     entries,
     by,
     since,
-    hosts,
     at,
     history,
     before,

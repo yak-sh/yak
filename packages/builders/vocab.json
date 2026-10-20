@@ -76,6 +76,7 @@
     },
     "builder_dep": {
       "component": true,
+      "journal": false,
       "type": "object",
       "wire": false,
       "identity": [
@@ -102,6 +103,7 @@
     },
     "build": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "builder": {
@@ -176,18 +178,21 @@
     },
     "build_of": {
       "component": true,
+      "journal": false,
       "type": "object",
       "key": true,
       "description": "the key a build is found by: `<builder>/<variant>/<match>`, so a rebuild lands on the build already there"
     },
     "output_of": {
       "component": true,
+      "journal": false,
       "type": "object",
       "key": true,
       "description": "the key of one take: <build>/<slot>/<call>, so replaying one answer keeps its entity and another answer adds a take"
     },
     "built": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "before": [

@@ -39,6 +39,7 @@
     },
     "sfu": {
       "component": true,
+      "journal": false,
       "type": "object",
       "wire": false,
       "description": "A Realtime session this app's door opened, while its lease holds: the wake beside it is when the lease ends, and the session's tracks close when it does.",

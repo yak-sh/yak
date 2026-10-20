@@ -150,6 +150,7 @@
     },
     "usage": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "provider-reported token counts for one completed model request, stored on the entry for that request; not cumulative, and not an estimate of current context size",
       "properties": {
@@ -196,6 +197,7 @@
     },
     "cost": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "what one model request or tool call cost, in dollars, on the entity that spent it: a request's entry beside its `usage`, or a call",
       "properties": {
@@ -210,6 +212,7 @@
     },
     "response": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "what a provider answered a model request that failed, as it arrived, kept beside the line recording the failure so the failure can be read rather than reconstructed; never the request's credentials",
       "properties": {

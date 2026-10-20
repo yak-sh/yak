@@ -2,6 +2,7 @@
   "$defs": {
     "_lens": {
       "component": true,
+      "journal": false,
       "type": "object",
       "wire": false,
       "identity": ["package", "step"],

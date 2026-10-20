@@ -2,6 +2,7 @@
   "$defs": {
     "prop": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "comp": {

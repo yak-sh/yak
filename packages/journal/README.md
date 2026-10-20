@@ -1,9 +1,9 @@
 # @yaks/journal
 
-Records graph transactions in SQL tables and provides entity history, undo, and
-a cursor-based change feed. Install the journal plugin on the same database
-connection as the graph so its records commit or roll back with the changes they
-describe.
+Records graph transactions in SQL tables and provides entity history and undo,
+and a feed that carries every commit to the other processes that opened the same
+store. Install the journal plugin on the same database connection as the graph
+so its records commit or roll back with the changes they describe.
 
 A **bundle** is one entity's components as a JSON object. A **batch** is a list
 of bundles applied in one transaction, normally one `graph.apply()` call. The
@@ -42,8 +42,8 @@ indexed history rather than stored alongside each new value.
 
 A property the store keeps in another form, such as the address @yaks/blob keeps
 in place of a body, is recorded as stored and read back through the store's read
-overrides (`log({ derived })`; `@yaks/journal/graph` binds the host's). History,
-the feed and undo then hold the text a reader of the graph sees.
+overrides (`log({ derived })`; `@yaks/journal/graph` binds the host's). History
+and undo then hold the text a reader of the graph sees.
 
 The tables hold no rows of the entity table and are not included in graph
 snapshots. Normal writes append records; explicit redaction methods can modify
@@ -61,12 +61,12 @@ guarantee.
 A component its vocabulary declares `journal: false` (@yaks/vocab) is not
 recorded: a process's own bookkeeping rather than anyone's data, such as the
 `created` and `updated` stamps (@yaks/kernel), which the transaction row already
-records, or an effect run (@yaks/effects). Such a write has no history and no
-undo, and a host following the feed never hears of it. Deleting an entity that
-held only such components is not recorded either, so it leaves no trace at all;
-the plugin's one read before a write, on the `precondition` phase, is what each
-entity a bundle deletes holds. A transaction with nothing left to record writes
-no row.
+records, an effect run or a lease (@yaks/effects). Such a write has no history
+and no undo, though the feed still carries it to the other hosts on the store
+(below). Deleting an entity that held only such components is not recorded
+either, so it leaves no trace at all; the plugin's one read before a write, on
+the `precondition` phase, is what each entity a bundle deletes holds. A
+transaction with nothing left to record writes no row.
 
 ```ts
 import { assertEquals } from '@std/assert'
@@ -240,7 +240,6 @@ batches with before/after deltas.
 | `j.entries(eid, n?)`                                   | Latest entries for an entity, newest first                   |
 | `j.by(via, n?)`                                        | Entries written through an instrument, newest first          |
 | `j.since(cursor?, n?)`                                 | Entries strictly after the cursor, oldest first              |
-| `j.hosts(cursor, n)`                                   | The host that wrote each transaction after the cursor        |
 | `j.at(seq)`                                            | One reconstructed `Batch`, or `undefined`                    |
 | `j.patches(seq, target?)`                              | Recorded operations, optionally restricted to one entity     |
 | `j.before(eid, seq)`                                   | Components just before a transaction                         |
@@ -251,8 +250,8 @@ batches with before/after deltas.
 | `j.scrubValue(field, value)`, `j.scrubRef(field, ref)` | Explicit history redaction                                   |
 | `j.holds(ref)`                                         | Whether history still references stored content              |
 
-To turn a feed entry into graph bundles, load its batch with `j.at(entry.seq)`
-and pass that to `applied(batch)`. `applied()` reconstructs the bundles without
+To turn an entry into graph bundles, load its batch with `j.at(entry.seq)` and
+pass that to `applied(batch)`. `applied()` reconstructs the bundles without
 reading current graph state. It does not repeat transaction attribution in the
 returned bundles.
 
@@ -264,27 +263,38 @@ journal alone does not guarantee exactly-once external effects.
 
 A graph's `effect` phase runs only for the commits that graph made. Another
 process or thread that opened the same store — a `yak` command beside
-`yak serve`, the thread working the effect pool — commits where it cannot see.
-Each log writes as one host (`log({ rows, host })`, a fresh id by default), and
-every transaction records it, so a host can follow the feed and keep only what
+`yak serve`, a worker serving the effects role — commits where it cannot see.
+The **feed** is how one host hears another: each commit writes one row to the
+`journal_feed` table inside its own transaction, holding the host that made it
+and the bundles it applied, one per entity, with a deletion as `$delete`
+(`carried(bundles)`). A follower pages through it from a cursor and keeps what
 someone else wrote:
 
 ```ts ignore
-let next = follow(j) // from the log's tip
+let f = feedOf({ rows }) // writes as a fresh host; feeder(f) is its plugin
+let next = follow(f) // from the feed's tip
 // …another host commits…
 next() // [{ seq, applied: [{ entity: { eid: 'p1' }, page: { title: 'Hi' } }] }]
 ```
 
-`recast(patches)` is the shape a graph's `effect` phase is handed: one bundle
-per recorded operation, a deletion as `$delete`. In a server,
-`@yaks/journal/graph` exports `feed`, which a host offers as `host.feed(each)`:
-it looks every 200ms (`{"use": "@yaks/journal", "with": {"every": 50}}` to
-change it) and hands each commit to `each` in order. A commit `each` fails on is
-offered again at the next look, up to five times, before it is reported and
-passed over. @yaks/api feeds its `/ws` subscriptions this way.
+The feed is plumbing, not history. It carries every commit, journaled or not, so
+a lease another process renews reaches this host's subscriptions as a task's new
+title does. A row is kept for ten minutes (`KEEP`) and pruned by a later write,
+so the table holds minutes of commits rather than growing with them. A follower
+that was away longer than that is told how many commits it missed.
 
-A store an older journal made gains the `host` column the next time a writing
-host opens it (`schema()`, @yaks/sqlite `grow`).
+The feed's plugin writes what the `commit` phase hands it, so it goes after any
+plugin that puts a value back there: @yaks/blob's text for the address it
+stored. A host composes plugins in config order, and `@yaks/journal/graph`'s
+`plugins` returns the journal's and the feed's, bound as the same host
+(`logFor`, `feedFor`). Its `feed` is what a host offers as `host.feed(each)`: it
+looks every 200ms (`{"use": "@yaks/journal", "with": {"every": 50}}` to change
+it) and hands each commit to `each` in order. A commit `each` fails on is
+offered again at the next look, up to five times, before it is reported to the
+host and passed over. @yaks/api feeds its `/ws` subscriptions this way.
+
+A store an older journal made gains the `host` column and the feed's table the
+next time a writing host opens it (`schema()`, @yaks/sqlite `grow`).
 
 ## Undo
 

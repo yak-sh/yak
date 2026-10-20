@@ -6,6 +6,7 @@
   "$defs": {
     "rebuilt": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "on a main commit Workers Builds left not live past the bound: the deploy catch-up (packages/admin/catchup.ts) started main's build through its deploy hook, once. Removing it asks for another start",
       "properties": {

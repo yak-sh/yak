@@ -1,105 +1,126 @@
 /// <reference lib="deno.ns" />
-// The feed: a cursor that only moves forward, pages that never overlap, and a
-// batch that rebuilds into the bundles it committed — the two things a server
-// does with the journal (recast to subscribers, drive effects at most once).
+// The feed: what one host hears of the commits another makes to the same
+// store, journaled or not, and how long the store keeps them for it. Each case
+// gets two hosts over a store of its own, built when the file loads, and
+// times only the commits and the hearing.
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
-import { applied } from './undo.ts'
-import { follow } from './feed.ts'
+import { feedDdl, feedOf, follow } from './feed.ts'
 import { ddl } from './log.ts'
 import { logFor, plugins, schema } from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
 import { add, statements } from '@yaks/sqlite'
-import { sync, wiki, wikiGraph, wikiLog } from './testing.ts'
-
-let fixture = (n: number) => {
-  let { g, j } = wikiGraph()
-  for (let i = 1; i <= n; i++) {
-    sync(g.apply([{ entity: { eid: `p${i}` }, page: { title: `page ${i}` } }]))
-  }
-  return { g, j }
-}
-
-test('the feed hands out the batches after a cursor, in order', () => {
-  let f = fixture(5)
-  assertEquals(f.j.since(0).map((e) => e.seq), [1, 2, 3, 4, 5])
-  assertEquals(f.j.since(3).map((e) => e.seq), [4, 5])
-})
-
-test('an exhausted feed is empty, and the tip is the cursor', () => {
-  let f = fixture(2)
-  assertEquals(f.j.tip(), 2)
-  assertEquals(f.j.since(2), [])
-})
-
-test('a batch carries only its own operations', () => {
-  let f = fixture(3)
-  let [second] = f.j.since(1)
-  assertEquals(second.seq, 2)
-  assertEquals(second.patches.map((p) => p.target), ['p2'])
-})
-
-test('a batch from the feed recasts as the bundles it committed', () => {
-  let { g, j } = wikiGraph()
-  let bundles: Bundle[] = [
-    { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
-    { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
-  ]
-  sync(g.apply(bundles))
-  assertEquals(j.since(0).map((e) => applied(j.at(e.seq)!)), [bundles])
-})
-
-test('a feed drains what was committed while it was away', () => {
-  let f = fixture(2)
-  let cursor = f.j.since(0).at(-1)!.seq
-  sync(f.g.apply([{ entity: { eid: 'p9' }, page: { title: 'late' } }]))
-  assertEquals(f.j.since(cursor).map((e) => e.seq), [3])
-})
+import { sync, wiki, wikiLog } from './testing.ts'
 
 // Two hosts over one database: this one, following the feed, and another
-// writing to it — a `yak` command beside `yak serve`, say.
-let hosts = () => {
+// writing to it — a `yak` command beside `yak serve`, say. Both have written
+// what the cases write once, so a case pays for no first write.
+let hosts = (opts: { page?: number } = {}) => {
   let w = wikiLog()
-  return { g: w.g(), j: w.j, them: w.other() }
+  let g = w.g()
+  let them = w.other()
+  for (let host of [g, them.g]) {
+    sync(host.apply([
+      { entity: { eid: 'w1' }, page: { title: 'warm', text: 'warm' } },
+      { entity: { eid: 'w2' }, render: { state: 'warm' } },
+    ]))
+  }
+  let next = follow(w.f, opts)
+  return { g, j: w.j, them, next }
 }
 let page = (title: string) => (eid: string): Bundle => ({
   entity: { eid },
   page: { title },
 })
+// What was heard, without the number and the stamps every commit carries.
+let heard = (next: () => { applied: Bundle[] }[]) =>
+  next().map((h) =>
+    h.applied.map(({ entity, created: _c, updated: _u, ...rest }) => ({
+      entity: { eid: entity.eid },
+      ...rest,
+    }))
+  )
 
+// What another host committed is heard whole: the text a store keeps by its
+// address as the text, and what the journal leaves out (`render`) beside what
+// it keeps.
+let own = hosts()
 test('a follower hears what another host committed, and not its own', () => {
-  let { g, j, them } = hosts()
-  sync(g.apply([page('before')('p0')]))
-  let next = follow(j)
-  sync(g.apply([page('mine')('p1')]))
-  sync(them.g.apply([page('theirs')('p2')]))
-  assertEquals(next().map((h) => h.applied), [[page('theirs')('p2')]])
-  assertEquals(next(), [])
+  sync(own.g.apply([page('mine')('p1')]))
+  let theirs = [
+    { entity: { eid: 'p2' }, page: { title: 'theirs', text: 'a long body' } },
+    { entity: { eid: 'r1' }, render: { state: 'owed' } },
+  ]
+  sync(own.them.g.apply(theirs))
+  assertEquals(heard(own.next), [theirs])
+  assertEquals(own.next(), [])
 })
 
+let doomed = hosts()
+sync(doomed.g.apply([
+  page('Kickoff')('p1'),
+  { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
+]))
+doomed.next()
 test('a follower hears a deletion as the patches that made it', () => {
-  let { g, j, them } = hosts()
-  sync(g.apply([
-    page('Kickoff')('p1'),
-    { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
-  ]))
-  let next = follow(j)
-  sync(them.g.apply([{ entity: { eid: 'p1' }, $delete: true }]))
-  let [{ applied: heard }] = next()
-  assertEquals(heard.filter((b) => b.$delete).map((b) => b.entity.eid).sort(), [
-    'n1',
+  sync(doomed.them.g.apply([{ entity: { eid: 'p1' }, $delete: true }]))
+  let [{ applied }] = doomed.next()
+  assertEquals(applied.filter((b) => b.$delete).map((b) => b.entity.eid), [
     'p1',
+    'n1',
   ])
 })
 
+let burst = hosts({ page: 2 })
 test('a follower pages through a burst without losing any of it', () => {
-  let { j, them } = hosts()
-  let next = follow(j, { page: 2 })
-  for (let i = 1; i <= 5; i++) sync(them.g.apply([page('p')(`p${i}`)]))
-  let eids = next().map((h) => h.applied[0].entity.eid)
+  for (let i = 1; i <= 5; i++) sync(burst.them.g.apply([page('p')(`p${i}`)]))
+  let eids = burst.next().map((h) => h.applied[0].entity.eid)
   assertEquals(eids, ['p1', 'p2', 'p3', 'p4', 'p5'])
+})
+
+// Two feeds over a bare table, on a clock of their own.
+let clocked = () => {
+  let db = mem()
+  for (let s of feedDdl()) db.query(s)
+  let clock = { t: 0 }
+  let o = {
+    rows: (s: Parameters<typeof db.query>[0]) => db.query(s),
+    keep: 1000,
+    now: () => clock.t,
+  }
+  return { clock, mine: feedOf(o), theirs: feedOf(o) }
+}
+
+let binary = clocked()
+let reading = follow(binary.mine)
+test('bytes cross the feed whole', () => {
+  let bytes = new Uint8Array([19, 0, 255, 128])
+  binary.theirs.write([{ entity: { eid: 'd1' }, doc: { bytes } }])
+  assertEquals(reading()[0].applied, [{
+    entity: { eid: 'd1' },
+    doc: { bytes },
+  }])
+})
+
+let aging = clocked()
+let missed: number[] = []
+let away = follow(aging.mine, { missed: (n) => missed.push(n) })
+test('the feed keeps a commit for a while, and says what a follower missed', () => {
+  let { clock, theirs } = aging
+  let eids = () => away().map((h) => h.applied[0].entity.eid)
+  theirs.write([page('a')('p1')])
+  clock.t = 500
+  theirs.write([page('b')('p2')])
+  clock.t = 2000
+  theirs.write([page('c')('p3')])
+  assertEquals(eids(), ['p3'])
+  assertEquals(missed, [2])
+  clock.t = 5000
+  theirs.write([page('d')('p4')])
+  assertEquals(eids(), ['p4'])
+  assertEquals(missed, [2])
 })
 
 test('a store an older journal made takes the host once it is opened again', () => {

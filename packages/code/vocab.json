@@ -7,6 +7,7 @@
   "$defs": {
     "package": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "before": ["doc"],
@@ -31,6 +32,7 @@
     },
     "module": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "before": ["doc", "file"],
@@ -50,6 +52,7 @@
     },
     "symbol": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "before": ["doc"],
@@ -78,6 +81,7 @@
     },
     "imports": {
       "component": true,
+      "journal": false,
       "type": "object",
       "edge": true,
       "reversed": "imported by",

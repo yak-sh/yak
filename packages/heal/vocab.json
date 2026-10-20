@@ -7,6 +7,7 @@
   "$defs": {
     "fixer": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "on a session started to fix a bug",
       "properties": {

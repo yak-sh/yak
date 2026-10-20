@@ -3,6 +3,7 @@
   "$defs": {
     "service": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "before": [
@@ -35,6 +36,7 @@
     },
     "process": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "description": "a program observed on its launch workspace; its entity id, not a pid alone, is the durable process handle",
@@ -68,6 +70,7 @@
     },
     "runtime": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "what a process runs on, written by the process about itself when it starts, beside its `process` component: the JavaScript runtime, its version and the operating system. It is how a failure in that process says what it ran on",
       "properties": {
@@ -87,6 +90,7 @@
     },
     "exit": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "the process has ended \u2014 never rewritten, and deleted only by the transaction that records the next attempt on a supervised entity",
       "properties": {

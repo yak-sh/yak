@@ -12,6 +12,7 @@ import type { Bundle } from '@yaks/graph/bundle'
 import { mint } from '@yaks/graph/identity'
 import { effects } from '@yaks/effects'
 import { ddl, journal, type Log, log } from './log.ts'
+import { applied } from './undo.ts'
 import { col, notNull, tally, val } from '@yaks/sql'
 import { mem, raised } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
@@ -335,4 +336,29 @@ test('a second graph over the same log counts on from its tip', () => {
   sync(two.apply([{ entity: { eid: 'p2' }, page: { title: 'Two' } }]))
   assertEquals(held.j.history('p1')[0].seq, 1)
   assertEquals(held.j.history('p2')[0].seq, 2)
+})
+
+let paged = wikiGraph()
+for (let i = 1; i <= 3; i++) {
+  let page = { title: `page ${i}` }
+  sync(paged.g.apply([{ entity: { eid: `p${i}` }, page }]))
+}
+test('the log pages the transactions after a cursor, in order', () => {
+  let { j } = paged
+  let after = (seq: number) =>
+    j.since(seq).map((e) => e.patches.map((p) => p.target))
+  assertEquals(after(1), [['p2'], ['p3']])
+  assertEquals(j.tip(), 3)
+  assertEquals(after(3), [])
+})
+
+let replayed = wikiGraph()
+let committed: Bundle[] = [
+  { entity: { eid: 'p1' }, page: { title: 'Kickoff' } },
+  { entity: { eid: 'n1' }, note: { text: 'aside', page: 'p1' } },
+]
+sync(replayed.g.apply(committed))
+test('a transaction from the log replays as the bundles it committed', () => {
+  let { j } = replayed
+  assertEquals(j.since(0).map((e) => applied(j.at(e.seq)!)), [committed])
 })

@@ -8,6 +8,7 @@
   "$defs": {
     "camera": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "unique": [
@@ -83,6 +84,7 @@
     },
     "client": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "sync": "server",
@@ -107,6 +109,7 @@
     },
     "cursor": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "unique": [
@@ -137,6 +140,7 @@
     },
     "fold": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "unique": [
@@ -266,6 +270,7 @@
     },
     "shelf": {
       "component": true,
+      "journal": false,
       "type": "object",
       "unique": [
         [

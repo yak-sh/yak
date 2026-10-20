@@ -3,6 +3,7 @@
   "$defs": {
     "prompt": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "Explicitly admitted instruction snapshot; never inferred from file reads or tool output. Content carries the exact text.",
       "properties": {
@@ -22,6 +23,7 @@
     },
     "context_output": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "Immutable full tool-result snapshot, scoped by originating transcript entry.",
       "properties": {

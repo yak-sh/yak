@@ -22,6 +22,7 @@
     },
     "representation": {
       "component": true,
+      "journal": false,
       "wire": false,
       "type": "object",
       "description": "Immutable HTTP headers for one use of content-addressed bytes.",

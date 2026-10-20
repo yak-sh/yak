@@ -9,6 +9,7 @@
   "$defs": {
     "input_context": {
       "component": true,
+      "journal": false,
       "type": "object",
       "wire": false,
       "embed": false,
@@ -24,6 +25,7 @@
     },
     "ask": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "the model was asked here, from the prefix ending at `through`; what the provider keeps about it is stored in that provider's own component beside this one",
       "properties": {
@@ -66,12 +68,14 @@
     },
     "attention": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {},
       "description": "an entry to be read before the next ask"
     },
     "hooked": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {},
       "description": "on a session: its harness reports the tool calls of its own line of work to the hook door (POST /session/hook), where the bus says what the session is owed. Every context the harness runs shares the session\u2019s id, so a tool reply never says it"
@@ -101,6 +105,7 @@
     },
     "checkpoint": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "through": {
@@ -139,6 +144,7 @@
     },
     "task_context": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "checkpoint": {
@@ -167,6 +173,7 @@
     },
     "claim": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "description": "a session\u2019s lock on the entity it is stored on",
@@ -196,6 +203,7 @@
     },
     "conflict": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "description": "two sessions wanted one thing: written after the refusal, never by a client",
@@ -231,6 +239,7 @@
     },
     "dispatch": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "a child's place under the concurrency bound; settling removes it",
       "properties": {
@@ -294,6 +303,7 @@
     },
     "imported": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "source": {
@@ -309,6 +319,7 @@
     },
     "log": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "session": {
@@ -343,6 +354,7 @@
     },
     "notice": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "passive transcript context, included in the next ask without requesting one",
       "properties": {
@@ -495,6 +507,7 @@
     },
     "using": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "provider, model and effort: on an input it sets or switches them, on an ask it records what was served",
       "properties": {
@@ -800,16 +813,19 @@
     },
     "native": {
       "component": true,
+      "journal": false,
       "description": "A transcript run by the native model/tool loop, not an outside CLI agent."
     },
     "tool_async": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "a native transcript call dispatched by its own durable effect; no session lease waits for it",
       "properties": {}
     },
     "tool_progress": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "an immutable in-progress tool result; the final result is a separate appended entry, never a replacement",
       "properties": {
@@ -828,6 +844,7 @@
     },
     "sending": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "what is sent to a model: selected on an input, recorded on an ask",
       "properties": {

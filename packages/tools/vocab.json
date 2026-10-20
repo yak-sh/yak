@@ -96,6 +96,7 @@
     },
     "exception": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "What was thrown, retained in an answer or transcript entry. The catcher reports the original failure to the tracker separately.",
       "properties": {
@@ -137,6 +138,7 @@
     },
     "tool": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "description": "A registered tool that callers can invoke.",
@@ -167,6 +169,7 @@
     },
     "finding": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "What a check measured: fail for a violated contract, warn for a leak or a verdict it could not establish.",
       "properties": {

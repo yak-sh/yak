@@ -1,48 +1,73 @@
 // `@yaks/journal/graph` — what a server composed from a config file imports to
-// switch the journal on. Its schema is the append-only tables a writing host
-// adds to its store, and it returns the plugin that writes a row per
-// component every transaction touched.
+// switch the journal on. Its schema is the journal's append-only tables and
+// the feed's short-lived one, which a writing host adds to its store; its
+// plugins write a row per component every transaction touched that the
+// vocabulary keeps as history, and a row per commit to the feed.
 //
-// `logFor` is here rather than inside `plugins` because `@yaks/journal/tools`
-// reads the same tables this plugin writes, and the feed follows them: one
-// host, one log, bound in one place. One log per host is also what names the
-// host its transactions are written as, so the feed below can leave out what
-// this host wrote itself.
+// `logFor` and `feedFor` are here rather than inside `plugins` because
+// `@yaks/journal/tools` reads the same tables this plugin writes, and the feed
+// below follows its own: one host, one log and one feed, bound in one place.
+// Both write as the same host, which is what lets the feed leave out what this
+// host wrote itself.
 
 import type { Bundle, Plugin } from '@yaks/graph'
 import { type Derived, type Statements, statements, type Stmt } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { ddl, journal, type Log, log } from './mod.ts'
-import { follow, type Heard } from './feed.ts'
+import { ddl, journal, type Log, log, type Rows } from './mod.ts'
+import {
+  type Feed,
+  feedDdl,
+  feeder,
+  feedOf,
+  follow,
+  type Heard,
+} from './feed.ts'
 
 let logs = new WeakMap<object, Log>()
+let feeds = new WeakMap<object, Feed>()
 
 /** What a log is bound to: the host's storage, and the read overrides
  * its store was opened with, so a value the store keeps in another form reads
  * back the way the graph reads it (./log.ts `LogOpts.derived`). */
 export type Bound = { storage: { statements?: Statements }; derived?: Derived }
 
+let rowsOf = (host: Bound): Rows => {
+  let sql = statements(host.storage)
+  return (s: Stmt) => sql.query(s)
+}
+
 /** The log bound to a host: the three tables, read and written over that
  * host's storage transaction, as that host. The same host gets the same log. */
 export let logFor = (host: Bound): Log => {
   let found = logs.get(host)
   if (!found) {
-    let sql = statements(host.storage)
-    let rows = (s: Stmt) => sql.query(s)
-    logs.set(host, found = log({ rows, derived: host.derived }))
+    logs.set(host, found = log({ rows: rowsOf(host), derived: host.derived }))
   }
   return found
 }
 
-/** The journal's tables, which a writing host adds with the rest of its
- * composed schema; a store an older journal made gains the columns it
- * predates there (@yaks/sqlite `grow`). */
-export let schema = (): Stmt[] => ddl()
+/** The feed bound to a host, written as the host its log writes as. The same
+ * host gets the same feed. */
+export let feedFor = (host: Bound): Feed => {
+  let found = feeds.get(host)
+  if (!found) {
+    let rows = rowsOf(host)
+    feeds.set(host, found = feedOf({ rows, host: logFor(host).host }))
+  }
+  return found
+}
 
-/** Bind journal hooks over the tables the installer prepared, recording what
- * the host's vocabulary does not keep out of the journal. */
+/** The journal's tables and the feed's, which a writing host adds with the
+ * rest of its composed schema; a store an older journal made gains the columns
+ * it predates there (@yaks/sqlite `grow`). */
+export let schema = (): Stmt[] => [...ddl(), ...feedDdl()]
+
+/** Bind the hooks over the tables the installer prepared: the journal,
+ * recording what the host's vocabulary keeps as history, and the feed,
+ * carrying every commit to the other hosts. */
 export let plugins = (host: Bound & { vocab: Vocab }): Plugin[] => [
   journal(logFor(host), host.vocab),
+  feeder(feedFor(host)),
 ]
 
 /** How often a host looks for what other hosts committed, in ms, unless the
@@ -59,19 +84,30 @@ export type Each = (applied: Bundle[]) => void | Promise<void>
 export let TRIES = 5
 
 /**
- * The commits other hosts made to this store, handed to `each` as the patches
+ * The commits other hosts made to this store, handed to `each` as the bundles
  * they applied, oldest first, from the moment `each` is given until the
  * returned function is called or the host stops. What a subscription registry
  * or a cache is fed so it also sees writes its own graph did not make: a `yak`
- * command's beside `yak serve`, or the effect pool's in its own thread.
+ * command's beside `yak serve`, or a worker's serving the effects role.
+ * Whatever goes wrong on the way is the host's to report.
  */
 export let feed = (
-  host: Bound & { stopping: AbortSignal },
+  host: Bound & {
+    stopping: AbortSignal
+    report?: (error: unknown) => void | Promise<void>
+  },
   options: { every?: number } = {},
 ) =>
 (each: Each): () => void => {
   let every = options.every ?? EVERY
-  let next = follow(logFor(host))
+  let told = (error: unknown) =>
+    host.report
+      ? void host.report(error)
+      : console.error('@yaks/journal feed —', error)
+  let next = follow(feedFor(host), {
+    missed: (n) =>
+      told(new Error(`the feed pruned ${n} commits before they were read`)),
+  })
   let queue: (Heard & { tries: number })[] = []
   let timer: ReturnType<typeof setTimeout> | undefined
   let stopped = false
@@ -85,7 +121,7 @@ export let feed = (
     try {
       queue.push(...next().map((h) => ({ ...h, tries: 0 })))
     } catch (err) {
-      console.error('@yaks/journal feed —', err)
+      told(err)
     }
     while (queue.length && !stopped) {
       let head = queue[0]
@@ -93,7 +129,7 @@ export let feed = (
         await each(head.applied)
       } catch (err) {
         if (++head.tries < TRIES) break
-        console.error(`@yaks/journal feed — passed over ${head.seq}:`, err)
+        told(new Error(`the feed passed over ${head.seq}`, { cause: err }))
       }
       queue.shift()
     }

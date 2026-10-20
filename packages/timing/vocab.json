@@ -3,6 +3,7 @@
   "$defs": {
     "timing": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,
@@ -73,6 +74,7 @@
     },
     "trace": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,
@@ -98,6 +100,7 @@
     },
     "span": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,
@@ -151,6 +154,7 @@
     },
     "elapsed": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,
@@ -171,6 +175,7 @@
     },
     "rows_read": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,
@@ -186,6 +191,7 @@
     },
     "rows_written": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,
@@ -201,6 +207,7 @@
     },
     "statements": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,
@@ -243,6 +250,7 @@
     },
     "repeats": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "wire": false,

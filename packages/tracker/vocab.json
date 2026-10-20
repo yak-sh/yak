@@ -3,6 +3,7 @@
   "$defs": {
     "error": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "A sample of a mistake with an occurrence count, minted by the reporter so resends land once.",
       "properties": {
@@ -75,6 +76,7 @@
     },
     "during": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "What an error happened among, by global eid.",
       "properties": {
@@ -129,6 +131,7 @@
     },
     "breadcrumbs": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "The last twenty page navigations, API calls and console errors.",
       "properties": {
@@ -249,6 +252,7 @@
     },
     "taken": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "A fixer started on the bug. Written again when a fixer takes it after a regression.",
       "properties": {

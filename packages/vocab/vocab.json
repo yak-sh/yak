@@ -7,6 +7,7 @@
   "$defs": {
     "_package": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "wire": false,
@@ -22,6 +23,7 @@
     },
     "_comp": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "wire": false,
@@ -102,6 +104,7 @@
     },
     "_prop": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "wire": false,
@@ -220,6 +223,7 @@
     },
     "_before": {
       "component": true,
+      "journal": false,
       "type": "object",
       "edge": true,
       "wire": false,
@@ -227,6 +231,7 @@
     },
     "_extends": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "wire": false,
@@ -254,6 +259,7 @@
     },
     "_vocab": {
       "component": true,
+      "journal": false,
       "type": "object",
       "wire": false,
       "description": "the vocabulary the other rows describe, as a whole: one entity per graph, whose hash says what they were last brought into line with, so a graph already describing it is known to without reading them",

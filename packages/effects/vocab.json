@@ -134,7 +134,8 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "a duty held by one process at a time — its eid is derived from `name`, so two processes reaching for the same duty address one row and the winner is settled by the graph's own precondition",
+      "journal": false,
+      "description": "a duty held by one process at a time — its eid is derived from `name`, so two processes reaching for the same duty address one row and the winner is settled by the graph's own precondition; plumbing between the processes on one store, so it is not history",
       "properties": {
         "name": {
           "type": "string",
@@ -155,6 +156,7 @@
     },
     "provisional": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "an entity whose asynchronous step has not finished yet: it sits where it always does, and the effect that finishes the step removes this mark. A reader who sees it knows the entity is not settled; the writer who started the step waits for it and never sees the mark",
       "properties": {

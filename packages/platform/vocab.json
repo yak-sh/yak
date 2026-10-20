@@ -194,6 +194,7 @@
     },
     "meter": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "month": {
@@ -253,6 +254,7 @@
     },
     "plan": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "tier": {
@@ -323,6 +325,7 @@
     },
     "report": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "properties": {
@@ -354,6 +357,7 @@
     },
     "signin": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "properties": {

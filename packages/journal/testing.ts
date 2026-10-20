@@ -8,9 +8,9 @@
 // page's text is kept by its address (@yaks/blob), as a body is on the box, so
 // the tests also watch the log read it back as text.
 //
-// The log is tables beside the store's own, so a fixture is a private copy of
-// the wiki's installed schema, blob and journal tables, and fixed actors, with
-// a graph over it. The clock is fixed, so a test can assert on the timestamp a
+// The log and the feed are tables beside the store's own, so a fixture is a
+// private copy of the wiki's installed schema, blob, journal and feed tables,
+// and fixed actors, with a graph over it. The clock is fixed, so a test can assert on the timestamp a
 // transaction was stamped with.
 
 import {
@@ -28,7 +28,8 @@ import { preparedDriver, snapshot } from '../sqlite/testing.ts'
 import { statements, storage } from '@yaks/sqlite'
 import { lit, type Statements } from '@yaks/sql'
 import { ddl, journal, type Log } from './log.ts'
-import { logFor } from './graph.ts'
+import { type Feed, feedDdl, feeder } from './feed.ts'
+import { feedFor, logFor } from './graph.ts'
 
 let doc: VocabDoc = {
   $defs: {
@@ -123,6 +124,7 @@ let base = { derived, schemaReady: () => true }
 let empty = snapshot(wiki, base, [
   ...blobSchema(),
   ...ddl(),
+  ...feedDdl(),
   {
     t: 'insert',
     into: 'entity',
@@ -138,42 +140,50 @@ export let actors = (g: Graph) =>
     { now: NOW },
   )
 
-/** An embedded database with the wiki's tables and the journal's, and a log
- * bound to it — what a graph and a test both read through. The statement
- * capability is returned beside them so the tools use the same storage. */
+/** An embedded database with the wiki's tables, the journal's and the feed's,
+ * and a log and a feed bound to it — what a graph and a test both read
+ * through. The statement capability is returned beside them so the tools use
+ * the same storage. */
 export let wikiLog = (): {
   g: (p?: Options['plugins']) => Graph
   j: Log
+  f: Feed
   storage: { statements: Statements }
-  /** another host over the same database: a graph journaling as a log of its
-   * own, the way a second process or thread opening the file would */
-  other: () => { g: Graph; j: Log }
+  /** another host over the same database: a graph journaling as a log and a
+   * feed of its own, the way a second process or thread opening the file
+   * would */
+  other: () => { g: Graph; j: Log; f: Feed }
 } => {
   let db = preparedDriver(empty)
   let store = storage(db, wiki, base)
   actors(graph({ storage: store, vocab: wiki }))
   let texts = blobs(wiki, sqliteBlobs(db))
-  let as = (j: Log, plugins: Options['plugins'] = []) =>
-    graph({
-      storage: store,
-      vocab: wiki,
-      plugins: [
-        journal(j, wiki, { now: () => NOW }),
-        edges(wiki),
-        texts,
-        ...plugins,
-      ],
-    })
   let held = { statements: statements(db) }
-  let bound = () => logFor({ storage: held, derived })
-  let j = bound()
+  let host = () => {
+    let bound = { storage: held, derived }
+    let j = logFor(bound)
+    let f = feedFor(bound)
+    let g = (plugins: Options['plugins'] = []) =>
+      graph({
+        storage: store,
+        vocab: wiki,
+        plugins: [
+          journal(j, wiki, { now: () => NOW }),
+          edges(wiki),
+          texts,
+          feeder(f),
+          ...plugins,
+        ],
+      })
+    return { g, j, f }
+  }
+  let mine = host()
   return {
-    g: (plugins = []) => as(j, plugins),
-    j,
+    ...mine,
     storage: held,
     other: () => {
-      let j = bound()
-      return { g: as(j), j }
+      let theirs = host()
+      return { ...theirs, g: theirs.g() }
     },
   }
 }

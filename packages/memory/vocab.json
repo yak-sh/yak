@@ -387,6 +387,7 @@
     },
     "topic_context": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "parent": {

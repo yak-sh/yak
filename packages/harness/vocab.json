@@ -6,6 +6,7 @@
   "$defs": {
     "home": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "a session's default file-and-command target, not its permissions or the location of the agent; no home means no implicit local filesystem",
       "properties": {

@@ -102,6 +102,7 @@
     },
     "delivered": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "the letter left: half of the outcome pair",
       "properties": {
@@ -115,6 +116,7 @@
     },
     "bounced": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "the letter did not leave: the other half",
       "properties": {
@@ -133,6 +135,7 @@
     },
     "notified": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "a recipient was told about something",
       "properties": {

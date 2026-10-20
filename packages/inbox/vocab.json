@@ -151,6 +151,7 @@
     },
     "mail_notice": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "An email rendering of inbox activity, not new conversation; its snapshot prevents re-sending the same activity. A digest has no mail.target.",
       "properties": {

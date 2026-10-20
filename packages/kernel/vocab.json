@@ -278,6 +278,7 @@
     },
     "opened": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "at": {
@@ -533,6 +534,7 @@
     },
     "admitted": {
       "component": true,
+      "journal": false,
       "type": "object",
       "index": [
         [
@@ -565,6 +567,7 @@
     },
     "waiting": {
       "component": true,
+      "journal": false,
       "type": "object",
       "index": [
         [
@@ -597,6 +600,7 @@
     },
     "pending": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "at": {
@@ -624,6 +628,7 @@
     },
     "interrupted": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "at": {

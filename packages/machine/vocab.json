@@ -2,6 +2,7 @@
   "$defs": {
     "machine": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "description": "an actual computer with a stable identity and an optional connector address; without a reachable address it is inventory, not an execution target",
@@ -14,6 +15,7 @@
     },
     "workspace": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "description": "a file-and-command target on a computer or in a sandbox; its root is a default directory, not an access boundary. Missing placement is unknown, never this host",

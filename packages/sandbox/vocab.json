@@ -2,6 +2,7 @@
   "$defs": {
     "sandbox": {
       "component": true,
+      "journal": false,
       "type": "object",
       "embed": false,
       "description": "an actual or requested container or jail on the computer recorded in its workspace; placement is never inferred from the graph host",
@@ -34,6 +35,7 @@
     },
     "released": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "confirmed disposal of a sandbox; written only after external disposal succeeds, never on a home switch",
       "properties": {

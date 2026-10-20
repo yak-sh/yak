@@ -30,6 +30,7 @@
     },
     "recall": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "count": {
@@ -54,6 +55,7 @@
     },
     "recalled": {
       "component": true,
+      "journal": false,
       "type": "object",
       "edge": "recalled",
       "reversed": "recalled by",

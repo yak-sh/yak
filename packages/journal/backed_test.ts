@@ -24,7 +24,8 @@ let vocab = loadVocab([...wiki.docs, metaDoc, journalDoc], [
 // A wiki journaling into its own database, read through the journal's
 // backings. Three writes: ada makes p1, bob (through cli) retitles it and
 // makes p2, ada deletes p2. A fourth describes `page` and `entity` as the
-// `_comp` entities a change points at.
+// `_comp` entities a change points at, which the journal keeps no history of,
+// and a fifth makes a note, a component nothing describes.
 let build = () => {
   let db = mem()
   let store = storage(db, vocab, { backed: backed(vocab) })
@@ -50,6 +51,7 @@ let build = () => {
     _comp: { name },
   }))
   sync(g.apply(described, { trusted: true }))
+  apply([{ entity: { eid: 'n1' }, note: { text: 'aside' } }])
   let read = (q: string) => sync(g.read(q))
   let rows = (q: string) => sync(g.rows(q))
   // What a change says, on one line, its component by the name its `_comp`
@@ -98,10 +100,8 @@ test('a change points at the _comp describing its component', () => {
   ])
   let [page] = read('._comp.name=page')
   assertEquals(read(`._change.comp=${page.entity.eid}`).length, 3)
-  // Nothing describes `_comp`, so the change that wrote one points at none.
-  assertEquals(said(read(`._change.target=${page.entity.eid}`)), [
-    `- ${page.entity.eid} {"name":"page"}`,
-  ])
+  // Nothing describes `note`, so the change that wrote one points at none.
+  assertEquals(said(read('._change.target=n1')), ['- n1 {"text":"aside"}'])
 })
 
 test('a change names its transaction, which reads like any entity', () => {

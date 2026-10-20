@@ -1,7 +1,8 @@
 /**
  * @yaks/journal — who wrote what, and when: attribution and history for a
- * {@link https://jsr.io/@yaks/graph | @yaks/graph}, with undo and a feed of
- * changes falling out of the same record.
+ * {@link https://jsr.io/@yaks/graph | @yaks/graph}, with undo falling out of
+ * the same record, and a feed that carries every commit to the other hosts
+ * that opened the store.
  *
  * Take a page several people edit. Somebody renames it, somebody else rewrites
  * a paragraph, somebody deletes a note attached to it. Afterwards the page
@@ -70,11 +71,12 @@
  * - {@link Log.since} — the transactions after a cursor, oldest first.
  *   {@link applied} turns one back into the bundles it committed; a consumer
  *   that stores the cursor before it does the work runs effects at most once.
- * - {@link follow} — the feed as one host sees it: every transaction another
- *   host committed to the same store since the last look, as the patches it
- *   applied ({@link recast}). Each log writes as one host
- *   ({@link LogOpts.host}), so a graph's subscribers can be told of the commits
- *   its own `effect` phase never saw: another process's, another thread's.
+ * - {@link follow} — the feed as one host sees it: every commit another host
+ *   made to the same store since the last look, as the bundles it applied
+ *   ({@link carried}), journaled or not. Each {@link Feed} writes as one host,
+ *   so a graph's subscribers can be told of the commits its own `effect` phase
+ *   never saw: another process's, another thread's. The feed keeps a commit
+ *   for minutes ({@link KEEP}); it is how hosts hear each other, not history.
  * - {@link backed} — the journal read as entities: `_tx` and `_change`, the
  *   computed components its vocabulary declares, queried like any other
  *   (`._change.target=T-5`) from the journal's own rows.

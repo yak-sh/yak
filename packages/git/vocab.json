@@ -8,6 +8,7 @@
   "$defs": {
     "gitobj": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "description": "one Git object; its entity id is its SHA-1 object id, so writing the same object twice writes one row",
@@ -30,6 +31,7 @@
     },
     "blob": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "where an object's bytes are: their address in the @yaks/blob store",
       "properties": {
@@ -42,6 +44,7 @@
     },
     "tree_entry": {
       "component": true,
+      "journal": false,
       "type": "object",
       "edge": true,
       "reversed": "entry in",
@@ -59,6 +62,7 @@
     },
     "parent": {
       "component": true,
+      "journal": false,
       "type": "object",
       "edge": true,
       "reversed": "parent of",
@@ -67,12 +71,14 @@
     },
     "compat": {
       "component": true,
+      "journal": false,
       "type": "object",
       "key": true,
       "description": "Git's compat object id: the same object's SHA-256 id, keyed by its SHA-1 id, so a client may ask for either (Git's hash-function transition, stored as key rows)"
     },
     "ref": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "where one branch of one repository points; one row per repository and branch name, so moving a branch updates the row that is already there",
       "properties": {
@@ -108,6 +114,7 @@
     },
     "repository": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "A Git object database identified by its stable filesystem workspace and canonical common directory.",
       "properties": {
@@ -134,6 +141,7 @@
     },
     "worktree": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "A local checkout. Its identity is the repository plus the canonical checkout root, not the branch or HEAD.",
       "properties": {
@@ -165,6 +173,7 @@
     },
     "checkout": {
       "component": true,
+      "journal": false,
       "type": "object",
       "description": "A stored request to create a checkout on this machine; ready only once Git has succeeded. A failed request keeps its error so it can be retried.",
       "properties": {
@@ -221,6 +230,7 @@
     },
     "file": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "identity": [
@@ -243,6 +253,7 @@
     },
     "revision": {
       "component": true,
+      "journal": false,
       "type": "object",
       "properties": {
         "commit": {

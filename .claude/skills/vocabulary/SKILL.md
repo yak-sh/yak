@@ -316,11 +316,10 @@ Each component answers these on purpose, through its keywords:
   another store is `keep`.
 - **How it is found:** `search` for full-text, `embed: false` for an entity that
   should never be embedded (tool results, logs).
-- **Whether it is history:** `journal: false` for a process's own bookkeeping,
-  such as an effect run or the `created`/`updated` stamps: no history, no undo,
-  and no feed to other processes, which is also why a runner lease stays
-  journaled while a page in `yak serve` watches it. The owner: "we journal user
-  data, not internal plumbing".
+- **Whether it is history:** `journal: false` for plumbing, such as an effect
+  run, a lease or the `created`/`updated` stamps: no history and no undo. Other
+  processes still hear it, since @yaks/journal's feed carries every commit,
+  journaled or not. The owner: "we journal user data, not internal plumbing".
 
 ## Reading it back
 

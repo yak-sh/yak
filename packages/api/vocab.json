@@ -6,6 +6,7 @@
   "$defs": {
     "request": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "description": "An HTTP request as the server that answered it records it. The entity's id is the one the caller was answered with, in the x-request-id header, so a person holding a failed answer can name its record. Only a request that broke is written: one answered with a status of 500 or over.",

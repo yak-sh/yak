@@ -7,6 +7,7 @@
   "$defs": {
     "tmux": {
       "component": true,
+      "journal": false,
       "type": "object",
       "kind": true,
       "properties": {
