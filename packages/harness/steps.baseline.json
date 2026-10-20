@@ -11,14 +11,14 @@
       "name": "no-tools",
       "unit": "ms",
       "better": "lower",
-      "median": 1049.6800509999994,
+      "median": 76.63235099999997,
       "tolerance": 0
     },
     {
       "name": "tool-step",
       "unit": "ms",
       "better": "lower",
-      "median": 87.36376449999996,
+      "median": 50.38683816666666,
       "tolerance": 0
     }
   ]
