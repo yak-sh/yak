@@ -110,28 +110,35 @@ export let managed = async (g: Graph, session: Eid): Promise<boolean> =>
     `.entry.session=${session}&.using.provider&!imported&.limit=1`,
   )).length > 0
 
-// The call a subagent was started by, as the harness names it in the meta
-// file beside the transcript.
-let startedBy = (path: string): string | undefined => {
+// What the harness says of a subagent in the meta file beside its
+// transcript: the call that started it, and what that call said it was for.
+let meta = (path: string): { call?: string; title?: string } => {
   try {
-    let meta = JSON.parse(
+    let m = JSON.parse(
       Deno.readTextFileSync(`${path.slice(0, -'.jsonl'.length)}.meta.json`),
     )
-    return typeof meta?.toolUseId == 'string' ? meta.toolUseId : undefined
+    let said = (v: unknown) => typeof v == 'string' && v ? v : undefined
+    return { call: said(m?.toolUseId), title: said(m?.description) }
   } catch {
-    return undefined // no meta file: the link names no call
+    return {} // no meta file: the link names no call
   }
 }
 
 // A subagent's session, linked to the session that started it and to the call
-// that did, where the graph holds it: written the first time its transcript
-// is opened, with the parent where the graph has not met it yet.
+// that did, where the graph holds it, and titled by what that call said it
+// was for: written the first time its transcript is opened, with the parent
+// where the graph has not met it yet. One opened before it was titled is
+// titled then.
 let spawned = async (g: Graph, f: Found & { parent: string }) => {
   let eid = sessionEid(f.id, f.parent)
-  let [s] = await g.get([eid], ['spawned'])
-  if (s?.spawned && s[TOMBSTONE] == null) return eid
+  let { call: id, title } = meta(f.path)
+  let doc = title && g.vocab.comp('doc') ? { doc: { title } } : {}
+  let [s] = await g.get([eid], ['spawned', 'doc'])
+  if (s?.spawned && s[TOMBSTONE] == null) {
+    if (!s.doc && doc.doc) await g.apply([{ entity: { eid }, ...doc }])
+    return eid
+  }
   let parent = (await sessionFor(g, f.parent, ['session.id']))?.entity.eid
-  let id = startedBy(f.path)
   let call = parent && id ? callOf(parent, id) : undefined
   let [made] = call ? await g.get([call]) : []
   await g.apply([
@@ -145,6 +152,7 @@ let spawned = async (g: Graph, f: Found & { parent: string }) => {
         parent: parent ?? '$parent',
         ...made?.entry && made[TOMBSTONE] == null ? { call } : {},
       },
+      ...doc,
     },
   ] as Bundle[])
   return eid

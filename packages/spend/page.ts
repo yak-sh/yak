@@ -228,7 +228,6 @@ export let Page = ({ io, got }: Props): JSX.Element => {
   let limits = limitsOf(got.limits?.rows ?? [], names)
   let days = (got.days?.rows ?? []).map(spendOf).filter((s): s is Spend => !!s)
   let [from, to] = span(limits, now)
-  let length = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1
   let within = (a: string, b: string) =>
     days.filter((d) => d.day >= a && d.day <= b)
   let week = merged(within(from, to))
@@ -243,7 +242,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
       h(
         Head.Sub,
         {},
-        `${from} to ${to}, the ${length} UTC days of this Claude plan week, beside the week before. Tallied from every model request every ten minutes.`,
+        `${from} to ${to} (UTC): this Claude plan week so far, beside the week before. Tallied from every model request every ten minutes.`,
       ),
       h(
         Head.Facts,
