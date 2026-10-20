@@ -553,9 +553,10 @@ export let service = async (
 /**
  * Read every transcript written since `since` again for its model requests
  * (./tail.ts `recount`), and walk the graph's own sessions for theirs: what
- * was written before requests were read and measured. A transcript the duty
- * has not read yet is left to it, and a managed run's is @yaks/spawn's
- * (`recounted` there). Answers how many requests it measured.
+ * was written before requests were read and measured; and title each
+ * subagent read before sessions were titled. A transcript the duty has not
+ * read yet is left to it, and a managed run's is @yaks/spawn's (`recounted`
+ * there). Answers how many requests it measured.
  *
  * ```ts
  * import { recounted } from '@yaks/session/service'
@@ -583,6 +584,10 @@ export let recounted = async (
     let session = (log?.log as Comp | undefined)?.session
     if (!session || log![TOMBSTONE] != null) continue
     if (await managed(g, String(session))) continue
+    // A subagent read before sessions were titled is titled now.
+    if (f.runner != 'codex' && f.parent) {
+      await spawned(g, { ...f, parent: f.parent })
+    }
     let [s] = await g.get([String(session)], [SESSION])
     if (f.runner == 'codex') {
       let source = header(f.path).source as {
