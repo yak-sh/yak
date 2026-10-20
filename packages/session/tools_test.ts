@@ -416,77 +416,50 @@ test('a settled transcript is never stalled, however old', async () => {
   assertEquals((await checkup('session_check', g)).level, undefined)
 })
 
-test('session check reconciles a quiet, fully imported harness log', async () => {
+// A harness log last written nine minutes ago, its first line imported into
+// an operator's transcript: made when the file loads, so a case times only
+// the check.
+let quiet = (text: string) => {
   let path = Deno.makeTempFileSync()
-  try {
-    Deno.writeTextFileSync(path, '{"type":"user"}\n')
-    let at = new Date(ago(9))
-    Deno.utimeSync(path, at, at)
-    let s = store()
-    seed(
-      s,
-      { entity: { eid: ids.run1 }, session: { operator: true, log: 'log1' } },
-      {
-        entity: { eid: 'log1' },
-        log: {
-          session: ids.run1,
-          source: path,
-          consumed: 1,
-        },
-      },
-      line(1, ago(9), {
-        entity: { eid: 'l1' },
-        content: { body: 'go' },
-        imported: { source: path, line: 1 },
-      }),
-    )
-    let g = locked(s)
-    let answer = await runs({ vocab: pages }).session_check!(
-      { entity: { eid: 'c1' }, call: { args: {} } },
-      g,
-    ) as Bundle[]
-    assertEquals(answer.length, 2)
-    assertEquals(comp(answer[1], 'session').ended, true)
-    await g.apply(answer.slice(1))
-    assertEquals(comp((await g.get([ids.run1]))[0]!, 'session').ended, true)
-  } finally {
-    Deno.removeSync(path)
-  }
+  Deno.writeTextFileSync(path, text)
+  let at = new Date(ago(9))
+  Deno.utimeSync(path, at, at)
+  let s = store()
+  seed(
+    s,
+    { entity: { eid: ids.run1 }, session: { operator: true, log: 'log1' } },
+    {
+      entity: { eid: 'log1' },
+      log: { session: ids.run1, source: path, consumed: 1 },
+    },
+    line(1, ago(9), {
+      entity: { eid: 'l1' },
+      content: { body: 'go' },
+      imported: { source: path, line: 1 },
+    }),
+  )
+  return locked(s)
+}
+let whole = quiet('{"type":"user"}\n')
+let partial = quiet('{"type":"user"}\nmore\n')
+let check = (g: Graph) =>
+  runs({ vocab: pages }).session_check!(
+    { entity: { eid: 'c1' }, call: { args: {} } },
+    g,
+  ) as Promise<Bundle[]>
+
+test('session check reconciles a quiet, fully imported harness log', async () => {
+  let answer = await check(whole)
+  assertEquals(answer.length, 2)
+  assertEquals(comp(answer[1], 'session').ended, true)
+  await whole.apply(answer.slice(1))
+  assertEquals(comp((await whole.get([ids.run1]))[0]!, 'session').ended, true)
 })
 
 test('session check leaves an incomplete imported log for inspection', async () => {
-  let path = Deno.makeTempFileSync()
-  try {
-    Deno.writeTextFileSync(path, '{"type":"user"}\nmore\n')
-    let at = new Date(ago(9))
-    Deno.utimeSync(path, at, at)
-    let s = store()
-    seed(
-      s,
-      { entity: { eid: ids.run1 }, session: { operator: true, log: 'log1' } },
-      {
-        entity: { eid: 'log1' },
-        log: {
-          session: ids.run1,
-          source: path,
-          consumed: 1,
-        },
-      },
-      line(1, ago(9), {
-        entity: { eid: 'l1' },
-        content: { body: 'go' },
-        imported: { source: path, line: 1 },
-      }),
-    )
-    let answer = await runs({ vocab: pages }).session_check!(
-      { entity: { eid: 'c1' }, call: { args: {} } },
-      locked(s),
-    ) as Bundle[]
-    assertEquals(answer.length, 1)
-    assertEquals(comp(answer[0], 'finding').level, 'warn')
-  } finally {
-    Deno.removeSync(path)
-  }
+  let answer = await check(partial)
+  assertEquals(answer.length, 1)
+  assertEquals(comp(answer[0], 'finding').level, 'warn')
 })
 
 // The prompt event is read-only and needs no session lookup or claim read.
