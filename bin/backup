@@ -21,7 +21,7 @@
 # from 1Password's "yak-graph-backups R2 S3 creds" first; on the box the
 # supervisor reads them out of the vault.
 #
-# NIGHTLY SNAPSHOTS, not continuous WAL replication (T-95322). Every process
+# Nightly snapshots, not continuous WAL replication (T-95322). Every process
 # on the box writes yak.db and checkpoints it: measured 2026-10-07, 4 commits
 # and 100 WAL pages a second, 35 GB of WAL a day. Litestream 0.5.17 adds
 # its own tables to the database, holds a read transaction on it for good, and
@@ -30,21 +30,24 @@
 # integrity_check. A backup that can be quietly incomplete is worse than one a
 # night old.
 #
-# A PAGE COPY inside one read transaction, not VACUUM INTO. VACUUM INTO
+# A page copy inside one read transaction, not VACUUM INTO. VACUUM INTO
 # rebuilds every table and index: on the 10 GB graph it had written 3 GB in 11
-# minutes, keeping the WAL from resetting the whole time. The page copy took 5.
-# `.backup` alone releases its read lock every 100 pages and starts over when
-# another process commits, which here is several times a second, so it runs
-# inside BEGIN, and the copy is the database at that one moment. A page copy
-# also keeps damage where quick_check finds it: VACUUM INTO rebuilt a torn
-# freelist into a clean snapshot (T-34578) and hid it for two days.
+# minutes, keeping the WAL from resetting the whole time. The same transaction
+# runs quick_check, counts the rows and streams every page (sqlite_dbpage)
+# into zstd, so the night is exactly the database that passed, and no
+# uncompressed copy ever lands on disk: the disk holds one compressed database
+# at a time (4.1 GB for the 14.3 GB graph, in 8 minutes from its first read to
+# its last page). A page copy also keeps damage where quick_check finds it:
+# VACUUM INTO rebuilt a torn freelist into a clean snapshot (T-34578) and hid
+# it for two days.
 #
 # Cron-safe: explicit PATH, no interactivity, and every failure exits nonzero,
 # which the supervisor reports to the tracker.
 set -eu
+set -o pipefail
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
 
-# BOUNDED, or it is not a backup but an outage: a run that outlives the night
+# Bounded, or it is not a backup but an outage: a run that outlives the night
 # stacks the next on top of it. So the whole run re-execs under a supervisor
 # (bin/backup-run.ts) that kills it at YAK_BACKUP_TIMEOUT, an hour unless set
 # (a night took 25 minutes, the first 37 with every image to upload), and
@@ -58,6 +61,8 @@ fi
 data="${YAK_DATA:-$HOME/.yak}"
 remote="${YAK_BACKUP_REMOTE:-r2:yak-graph-backups}"
 keep=7
+# KiB the live graph keeps free to grow into, whatever a night writes.
+reserve=${YAK_BACKUP_RESERVE:-5242880}
 databases="yak.db tracker.db"
 files="frozen migration roles"
 tab=$(printf '\t')
@@ -99,24 +104,80 @@ completed() {
   printf '%s\n' "$found" | sed -n 's#/counts$##p' | sort
 }
 
-# Rows per ordinary table, as `<database> <table> <rows>` lines, in one query.
-# Virtual tables and their shadows are left out: the page copy carries them,
-# and the tables they index are counted.
-counts() {
-  sql=$(sq "$2" "select group_concat(
+# The query that writes the query counting database $1's rows per ordinary
+# table, as `<database> <table> <rows>` lines. Virtual tables and their
+# shadows are left out: the page copy carries them, and the tables they index
+# are counted.
+counter() {
+  echo "select group_concat(
       printf('select %Q, %Q, count(*) from \"%w\"', '$1', name, name),
       ' union all ' order by name)
     from pragma_table_list
-    where schema = 'main' and type = 'table' and name not glob 'sqlite_*'")
+    where schema = 'main' and type = 'table' and name not glob 'sqlite_*'"
+}
+counts() {
+  sql=$(sq "$2" "$(counter "$1")")
   sq -separator "$tab" "$2" "$sql"
 }
 
-# quick_check walks every page's structure: 8 to 16 minutes on the 10 GB
-# graph. integrity_check also matches every index against its table, and took
-# 26 minutes for nothing a backup needs.
-checked() {
-  [ "$(sq "$1" 'PRAGMA quick_check')" = ok ] ||
+# Database $1 as one read transaction sees it, its pages compressed on
+# stdout. The transaction's first read fixes the moment; the same moment is
+# checked into $work/$1.check, counted into $work/$1.counts, and measured in
+# bytes into $work/$1.bytes. quick_check walks every page's structure: with
+# the counts, 5 minutes on the 14.3 GB graph. integrity_check also matches
+# every index against its table, and took 26 minutes on 10 GB for nothing a
+# backup needs.
+pages() {
+  w="$work/$1"
+  sq -readonly -separator "$tab" "$data/$1" ".output /dev/null" "BEGIN" \
+    ".once '$w.sql'" "$(counter "$1")" \
+    ".output '$w.check'" "PRAGMA quick_check" \
+    ".output '$w.counts'" ".read '$w.sql'" \
+    ".output '$w.bytes'" \
+    "select page_count * page_size from pragma_page_count, pragma_page_size" \
+    ".output /dev/null" \
+    "select writefile('/dev/stdout', data) from sqlite_dbpage" \
+    "COMMIT" | zstd -q -T0 -c
+}
+
+# KiB free in the snapshot directory above the reserve. With none, the run
+# is refused.
+room() {
+  free=$(df -Pk "$dir" | awk 'NR == 2 { print $4 }')
+  case "$free" in
+    '' | *[!0-9]*) die "cannot measure snapshot space" ;;
+  esac
+  [ "$free" -gt "$reserve" ] ||
+    die "snapshot directory has $free KiB, within the $reserve KiB kept free"
+  echo $(( free - reserve ))
+}
+
+# What "$@" writes, kept at file $1 in no more than the room there is as it
+# starts: a copy that reaches that bound stops there and fails the night,
+# rather than take the space the live graph grows into. False when the
+# command failed.
+kept() {
+  file=$1
+  shift
+  left=$(room) || exit 1
+  "$@" | head -c $(( left * 1024 )) > "$file" && return
+  [ "$(stat -c %s "$file")" -lt $(( left * 1024 )) ] ||
+    die "$file outgrew the $left KiB free above the reserve"
+  return 1
+}
+
+# A database's night: refused when the copy failed or the database is
+# damaged, and proved whole (every page decompresses back) before it counts.
+snapshot() {
+  z="$work/night/$1.zst"
+  copied=yes
+  kept "$z" pages "$1" || copied=no
+  [ "$(cat "$work/$1.check" 2>/dev/null)" = ok ] ||
     die "$1 failed quick_check: the database is damaged"
+  [ "$copied" = yes ] || die "$1: the page copy failed"
+  [ "$(zstd -dcq "$z" | wc -c)" -eq "$(cat "$work/$1.bytes")" ] ||
+    die "$1: the compressed copy is missing pages"
+  cat "$work/$1.counts" >> "$work/counts"
 }
 
 restore() {
@@ -169,11 +230,9 @@ backup() {
   exec 9>"$data/backup.lock"
   flock -w 60 -x 9 || die "another backup holds the lock"
 
-  # The copies go where YAK_BACKUP_SNAPSHOT_DIR says, by default the system's
-  # temporary directory: not /dev/shm, where a 10 GB snapshot would take
-  # nearly half this box's memory. A snapshot and its compressed copy are on
-  # disk together. Each database is uploaded and released before the next,
-  # and the live graph keeps 5 GiB to grow into.
+  # The compressed copies go where YAK_BACKUP_SNAPSHOT_DIR says, by default
+  # the system's temporary directory, one at a time: each is uploaded and
+  # released before the next is taken. None may reach into the reserve.
   dir=${YAK_BACKUP_SNAPSHOT_DIR:-${TMPDIR:-/tmp}}
   case "$dir" in
     /*) ;;
@@ -184,21 +243,7 @@ backup() {
   # directory before measuring space, not after refusing the next run.
   find "$dir" -maxdepth 1 -type d -name 'yak-backup.*' -mmin +120 \
     -exec rm -rf {} + 2>/dev/null || true
-  largest=0
-  for db in $databases; do
-    size=0
-    for f in "$data/$db" "$data/$db-wal"; do
-      [ ! -f "$f" ] || size=$(( size + ($(stat -c %s "$f") + 1023) / 1024 ))
-    done
-    [ "$size" -le "$largest" ] || largest=$size
-  done
-  need=$(( 5242880 + 2 * largest ))
-  free=$(df -Pk "$dir" | awk 'NR == 2 { print $4 }')
-  case "$free" in
-    '' | *[!0-9]*) die "cannot measure snapshot space" ;;
-  esac
-  [ "$free" -ge "$need" ] ||
-    die "snapshot directory needs $need KiB, has $free KiB"
+  room > /dev/null
 
   # Every copy belongs to this run's private directory and goes with it.
   work=$(mktemp -d "$dir/yak-backup.XXXXXXXX")
@@ -214,18 +259,14 @@ backup() {
 
   for db in $databases; do
     [ -f "$data/$db" ] || die "no $data/$db"
-    copy="$work/$db"
-    sq -readonly "$data/$db" "BEGIN" "SELECT count(*) FROM sqlite_schema" \
-      ".backup '$copy'" "COMMIT" > /dev/null
-    checked "$copy"
-    counts "$db" "$copy" >> "$work/counts"
-    zstd -q -T0 --rm "$copy" -o "$work/night/$db.zst"
+    snapshot "$db"
     uploaded
   done
   set --
   for f in $files; do [ ! -e "$data/$f" ] || set -- "$@" "$f"; done
   if [ $# != 0 ]; then
-    tar -C "$data" --zstd -cf "$work/night/files.tar.zst" "$@"
+    kept "$work/night/files.tar.zst" tar -C "$data" --zstd -cf - "$@" ||
+      die "files.tar.zst: tar failed"
     uploaded
   fi
   [ ! -d "$data/images" ] ||

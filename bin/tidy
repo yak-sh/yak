@@ -1,18 +1,24 @@
 #!/bin/sh
 # Tidy the box: reap headless browsers that outlived their probes, remove the
-# profile directories nothing uses, and collect agent worktrees that can lose
+# profile directories nothing uses, and collect worktrees that can lose
 # nothing. Cron runs it every 15 minutes (T-40652, T-40654); each thing removed
 # is one line on stdout, anything that went wrong is on stderr.
 #
-# A worktree under <repo>/.claude/worktrees is collected only when all hold:
+# A linked worktree of the repository, wherever it was made (.claude/worktrees,
+# @yaks/spawn's ~/.yak/worktrees, a scratch directory), is collected only when
+# all hold:
 # - it is not locked (Claude Code locks an agent's worktree while it runs);
-# - its git index is untouched for 3 hours;
-# - its HEAD is on origin/main;
-# - it has no changes and no untracked files.
+# - Git has not written its HEAD, index or HEAD reflog for 3 hours;
+# - no process of ours has its directory, a file inside it, or its path on
+#   the command line;
+# - it has no changes and no untracked files;
+# - nothing in it is unlanded: HEAD is on main, or every commit main lacks
+#   has its patch on main already (`git cherry`, which sees a rebase or a
+#   cherry-pick).
 # Then `git worktree remove` (which re-checks for changes itself) and
-# `git branch -d` on its branch, which refuses a branch main lacks. A worktree
-# whose agent comes back can be recreated; a lost commit cannot, so every doubt
-# keeps it.
+# `git branch -D` on its branch, whose commits were just found on main. A
+# worktree whose agent comes back can be recreated (@yaks/git restores the
+# ones it manages); a lost commit cannot, so every doubt keeps it.
 #
 # A browser is the processes naming one `--user-data-dir` under /tmp, headless
 # when any of them says `--headless`. One older than an hour is a leftover: a
@@ -112,12 +118,13 @@ find "$tmp" -mindepth 1 -maxdepth 2 -type d -name 'cdp-*' -user "$(id -u)" \
     say "removed profile $dir"
 done
 
-# Worktrees under .claude/worktrees that are neither locked nor missing, as
-# "path<TAB>branch" (an empty branch is a detached HEAD).
+# The linked worktrees that are neither locked nor missing, as
+# "path<TAB>branch" (an empty branch is a detached HEAD). The first one Git
+# lists is the primary checkout, which is never a candidate.
 worktrees() {
-  git -C "$repo" worktree list --porcelain | awk -v root="$repo/.claude/worktrees/" '
+  git -C "$repo" worktree list --porcelain | awk '
     function out() {
-      if (index(path, root) == 1 && !held) print path "\t" branch
+      if (n++ && path != "" && !held) print path "\t" branch
       path = ""
     }
     /^worktree / { out(); path = substr($0, 10); branch = ""; held = 0 }
@@ -126,19 +133,47 @@ worktrees() {
     END { out() }'
 }
 
-# The index is read before any git command that could refresh it, and status
-# never writes it (--no-optional-locks), so looking does not make it busy.
+# Whether Git has left worktree $1 alone for $idle seconds: its HEAD, index
+# and HEAD reflog, which a commit, checkout, rebase or add rewrites. They are
+# read before any git command that could refresh them, and status never
+# writes the index (--no-optional-locks), so looking does not make it busy.
+untouched() {
+  dir=$(git -C "$1" rev-parse --path-format=absolute --git-dir) || return 1
+  for f in HEAD index logs/HEAD; do
+    [ ! -e "$dir/$f" ] || old "$dir/$f" "$idle" || return 1
+  done
+}
+
+# Every working directory and open file of our processes, one per line.
+opened=$(for p in /proc/[0-9]*; do
+  [ -O "$p" ] && readlink "$p/cwd" "$p"/fd/* 2>/dev/null
+done)
+
+# Whether a process of ours works in $1, holds a file inside it open, or
+# names it on its command line.
+used() {
+  printf '%s\n' "$opened" | awk -v p="$1" '
+    $0 == p || index($0, p "/") == 1 { found = 1; exit }
+    END { exit !found }' || named "$1"
+}
+
+# Whether everything committed in worktree $1 is on main: HEAD is, or each
+# commit main lacks has an equal patch there.
+landed() {
+  git -C "$1" merge-base --is-ancestor HEAD main 2>/dev/null && return
+  ahead=$(git -C "$1" cherry main HEAD) || return 1
+  ! printf '%s\n' "$ahead" | grep -q '^+'
+}
+
 collect() {
-  index=$(git -C "$1" rev-parse --path-format=absolute --git-path index) ||
-    return 0
-  old "$index" "$idle" || return 0
-  git -C "$1" merge-base --is-ancestor HEAD origin/main 2>/dev/null || return 0
-  [ -z "$(git -C "$1" --no-optional-locks status --porcelain \
-    --untracked-files=normal)" ] || return 0
+  untouched "$1" && ! used "$1" || return 0
+  changed=$(git -C "$1" --no-optional-locks status --porcelain \
+    --untracked-files=normal) && [ -z "$changed" ] || return 0
+  landed "$1" || return 0
   head=$(git -C "$1" rev-parse --short HEAD)
   git -C "$repo" worktree remove "$1" || return 0
   say "removed worktree $1 (${2:-detached HEAD} at $head)"
-  [ -z "$2" ] || git -C "$repo" branch -q -d "$2"
+  [ -z "$2" ] || git -C "$repo" branch -q -D "$2"
 }
 
 tab=$(printf '\t')

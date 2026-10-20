@@ -71,7 +71,7 @@ let template = () =>
     return `${d}/yak.db`
   })
 
-let fixture = async (live = true) => {
+let fixture = async () => {
   let dir = await Deno.makeTempDir({ prefix: 'yak-backup-' })
   let data = `${dir}/data`
   let remote = `${dir}/remote`
@@ -111,11 +111,6 @@ let fixture = async (live = true) => {
   let [db] = opened
   db.query(insert('entity', { id: 1 }))
   db.query(insert('note', { entity: 1, body: 'the words the index holds' }))
-  // Capacity refusals need a database workload, but no writer left in WAL.
-  if (!live) {
-    for (let o of opened) o.close()
-    opened = []
-  }
   let env = (more: Record<string, string> = {}) => ({
     YAK_DATA: data,
     YAK_CONFIG: configPath,
@@ -137,7 +132,8 @@ let fixture = async (live = true) => {
     // Straight to the bounded child, as the supervisor runs it.
     backup: (more = {}) => command([], more).output(),
     restore: (into: string) => command(['restore', into], {}).output(),
-    supervised: (args: string[] = []) => command(args, watched).output(),
+    supervised: (args: string[] = [], more = {}) =>
+      command(args, { ...watched, ...more }).output(),
     start: (more = {}) =>
       new Deno.Command(script, {
         env: env({ ...watched, ...more }),
@@ -222,19 +218,6 @@ test('the newest seven complete nights stay, and nothing else', async () => {
     let old = [1, 2, 3, 4, 5, 6, 7, 8].map((d) => `2026-01-0${d}T044200Z`)
     await seed(f.remote, old)
     await seed(f.remote, ['2026-01-01T000000Z', '2026-01-09T044200Z'], false)
-    // Two sparse files fit one at a time, but not together. SQLite copies
-    // only the pages in their headers, so this successful night also proves
-    // capacity is measured for one database at a time, not their sum.
-    let disk = await new Deno.Command('df', {
-      args: ['-Pk', f.scratch],
-    }).output()
-    ok(disk.success)
-    let free = Number(decode(disk.stdout).trim().split('\n')[1].split(/\s+/)[3])
-    let size = Math.floor((free - 5242880) / 3) * 1024
-    ok(size > 0)
-    for (let db of ['yak.db', 'tracker.db']) {
-      await Deno.truncate(`${f.data}/${db}`, size)
-    }
     // A killed run's scratch space is reclaimed before measuring capacity.
     let stale = `${f.scratch}/yak-backup.expired`
     await Deno.mkdir(stale)
@@ -273,25 +256,24 @@ test('a damaged database fails the night and drops nothing', async () => {
   }
 })
 
-// Prepare the refused workload outside its timed act. The sparse terabyte
-// costs no disk space; the real capacity gate must stop it before any copy.
-let insufficient = await Promise.all([fixture(false), fixture(false)])
-await Promise.all(
-  insufficient.map((f) => Deno.truncate(`${f.data}/yak.db`, 2 ** 40)),
-)
+// More than any disk holds: no room is left above it.
+let unreachable = { YAK_BACKUP_RESERVE: `${2 ** 50}` }
+
+// Prepared outside the timed act.
+let insufficient = await Promise.all([fixture(), fixture()])
 
 test('a snapshot directory without enough space is refused', async () => {
   try {
     // Named, and the default: the system's temporary directory. Independent
     // fixtures let both real processes measure and refuse concurrently.
     await Promise.all(insufficient.map(async (f, i) => {
-      equal((await Deno.stat(`${f.data}/yak.db`)).size, 2 ** 40)
       let out = await f.backup({
+        ...unreachable,
         YAK_BACKUP_SNAPSHOT_DIR: i === 0 ? f.scratch : '',
         TMPDIR: f.scratch,
       })
       equal(out.code, 1)
-      match(decode(out.stderr), /snapshot directory needs \d+ KiB/)
+      match(decode(out.stderr), /snapshot directory has \d+ KiB, within/)
       ok(!decode(out.stdout).includes('snapshots in'))
       equal(ls(f.scratch), [])
       ok(!ls(f.dir).includes('remote'))
@@ -366,19 +348,10 @@ test('a failed daily backup becomes a tracker bug', async () => {
   )
   try {
     await seed(f.remote, ['2026-01-01T044200Z'])
-    // A sparse scratch database forces the capacity gate before any copy.
-    // Its size comes back at once: never fill a disk.
-    let size = (await Deno.stat(`${f.data}/yak.db`)).size
-    await Deno.truncate(`${f.data}/yak.db`, 2 ** 40)
-    let out
-    try {
-      out = await f.supervised()
-    } finally {
-      await Deno.truncate(`${f.data}/yak.db`, size)
-    }
+    let out = await f.supervised([], unreachable)
     equal(out.code, 1)
     let stderr = decode(out.stderr)
-    ok(stderr.includes('snapshot directory needs'), stderr)
+    ok(stderr.includes('snapshot directory has'), stderr)
     equal(f.nights(), ['2026-01-01T044200Z'])
     let records = await f.spooled()
     equal(records.length, 1)
@@ -392,7 +365,7 @@ test('a failed daily backup becomes a tracker bug', async () => {
     })
     equal(comp(row, 'during').kind, 'backup')
     ok(
-      String(comp(row, 'exception').value).includes('snapshot directory needs'),
+      String(comp(row, 'exception').value).includes('snapshot directory has'),
     )
     equal(
       String(comp(row, 'error').at).slice(0, 10),
