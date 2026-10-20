@@ -79,6 +79,10 @@ export type Binding = {
 }
 export type Assembly = {
   words: Words
+  /** The plugins whose graph facet says, under its options, that a store this
+   * host writes requires it (GraphFacet `required`): what a writing host
+   * records in the store beside its schema. */
+  required: string[]
   /** Bind the loaded facets to the host's capabilities. Services are returned for its scheduler. */
   bind: (binding: Binding) => {
     host: Host
@@ -270,8 +274,16 @@ export let assemble = (
     )
   })
 
+  let required = [
+    ...new Set(
+      imported.graph.filter(([r, options]) => r.required?.(options))
+        .map(([, , plugin]) => plugin),
+    ),
+  ]
+
   return {
     words,
+    required,
     bind: (binding) => {
       let resources = new AsyncDisposableStack()
       let closing: Promise<void> | undefined

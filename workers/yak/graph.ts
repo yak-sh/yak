@@ -149,6 +149,8 @@ import {
   printed,
   printFor,
   printOf,
+  requirements,
+  requires,
   schema,
   storage as sqliteStorage,
 } from '@yaks/sqlite'
@@ -266,6 +268,7 @@ import {
   type Prepared,
 } from '@yaks/host/assembly'
 import { type Host as PluginHost, type Load } from '@yaks/host'
+import { meet } from '@yaks/host/config'
 import { configs } from './config.ts'
 import { load } from './load.ts'
 import { metering } from './meter.ts'
@@ -1329,6 +1332,7 @@ export class Store {
     // An unnamed object raises nothing yet. Its first named request selects
     // the store kind before boot, so an app's tables never land in a newborn
     // directory or Git store. `#learn` rebuilds when later metadata changes.
+    let stood = this.#stood(shape)
     for (let e of this.#schema(shape)) {
       defect(e, { request: 'schema fit', store: name })
     }
@@ -1398,6 +1402,24 @@ export class Store {
       },
     }
     let plan = assemblyOf(name, shape, this.#facets.get(kind)!, this.#load)
+    // A store refuses a composition that lacks a plugin its data requires
+    // (@yaks/host `meet`), and a named one records each plugin the rows this
+    // composition writes will need. Asked where the fit moved, since a fit
+    // this Worker made already did both.
+    if (!stood) {
+      let held = requirements(drive)
+      meet(config, held)
+      try {
+        if (name) {
+          requires(
+            drive,
+            plan.required.filter((p) => !held.includes(p)),
+          )
+        }
+      } catch (e) {
+        defect(e, { request: 'schema requirements', store: name })
+      }
+    }
     let composed = plan.bind({
       observed: observed.composition,
       options: (plugin, options) => {

@@ -28,7 +28,7 @@ equal(stopped(), true)
 | `@yaks/host/roles`                            | Role and facet selection data without loading the assembly runtime                                                                                                   |
 | `@yaks/host/senders`                          | `Message`, `Receipt`, `Sender`, `Unsent`                                                                                                                             |
 | `@yaks/host/words`                            | Vocabulary assembly, `wordsOf`, `taking`, `Words`, `Declared`, `Taken`                                                                                               |
-| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`                                                                                                                       |
+| `@yaks/host/config`                           | Configuration types, `used`, `given`, `chosen`, `meet`, `Unmet`                                                                                                      |
 | `@yaks/host/documents`, `@yaks/host/keywords` | Shared intrinsic declarations and vocabulary keywords                                                                                                                |
 | `@yaks/host/anatomy`                          | Composition evidence, projected when read                                                                                                                            |
 
@@ -113,6 +113,23 @@ Storage is bound before query extensions are asked for. The graph, request
 handler, tool runner and duties become available as composition builds each one.
 Factories retain the host reference and use those parts only after their factory
 returns.
+
+## Required plugins
+
+A plugin can shape a store so that only it reads and writes the store's rows
+correctly from then on: [@yaks/blob](../blob/README.md) keeps an address where a
+body's text was. Its graph facet says so with `required(options)`, which may
+depend on its options, so a plugin can require itself only under the option that
+shapes its rows. `Assembly.required` names every plugin of a composition that
+says so. A writing host records them in the store before it writes, and every
+host, reading or writing, refuses a store whose recorded requirements its config
+does not compose: `meet(config, requirements)` throws `Unmet`, a `CallError`
+naming each plugin missing. A plugin listed with its `graph` facet left out is
+not composed.
+
+A plugin removed from a store on purpose leaves the config and drops its
+requirement from the store, which for a SQLite store is one statement
+([@yaks/sqlite](../sqlite/README.md#the-plugins-a-store-requires)).
 
 ## Workspaces and sandboxes
 

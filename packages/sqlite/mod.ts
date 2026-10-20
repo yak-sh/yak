@@ -175,7 +175,17 @@ export {
   unfit,
   unresolved,
 } from './ddl.ts'
-export { EPOCH, epoch, epochAt, type Meta, meta, printed } from './meta.ts'
+export {
+  EPOCH,
+  epoch,
+  epochAt,
+  type Meta,
+  meta,
+  printed,
+  REQUIRED,
+  requirements,
+  requires,
+} from './meta.ts'
 export { decoded, isJsonb, jsonIn, jsonOut, projected } from './jsonb.ts'
 export {
   compSql,

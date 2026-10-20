@@ -6,9 +6,11 @@ import { reader as graph } from '@yaks/graph/read'
 import { ids } from '@yaks/id/graph'
 import { reader as storage } from '@yaks/sqlite/reader'
 import { open } from '@yaks/sqlite/read-db'
+import { requirements } from '@yaks/sqlite/meta'
 import { loadVocab } from '@yaks/vocab/runtime'
 import { type Config, dbOf, subpath } from './config.ts'
 import { understood } from '@yaks/host/keywords'
+import { meet } from '@yaks/host/config'
 import type { VocabFacet } from '@yaks/host'
 
 export type Reader = {
@@ -32,6 +34,9 @@ export let reader = async (
   )
   let sql = open(dbOf(config))
   try {
+    // Opened under `config`, so refused where `config` lacks a plugin the
+    // store requires, the way the host it reads beside would be.
+    meet(config, requirements(sql))
     let store = storage(sql, vocab, {
       derived: Object.assign({}, ...facets.map((f) => f?.derived?.(vocab))),
       backed: Object.assign({}, ...facets.map((f) => f?.backed?.(vocab))),

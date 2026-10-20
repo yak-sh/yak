@@ -57,7 +57,8 @@ test('the full page query accounts for stale installation and uses lookup', asyn
   for (let [name, value] of Object.entries(report)) {
     assertEquals(value.cost.written, 0)
     assert(
-      value.cost.read <= (name == 'cold' ? 60 : 40),
+      // A wake whose fit moved also reads the plugins the store requires.
+      value.cost.read <= (name == 'cold' ? 62 : 40),
       `${name}: ${value.cost.read} full-route billed rows`,
     )
   }

@@ -1,5 +1,6 @@
 // Composition configuration. A concrete host interprets its storage locator.
 import type { FacetName } from './facets.ts'
+import { CallError } from '@yaks/tools/errors'
 /** The options a config passes to one plugin, given to each of that plugin's
  * exported factories as the second argument, after the host. A value written
  * `{"secret": "NAME"}` is that secret's value, read every time it is accessed
@@ -106,3 +107,51 @@ export let chosen = (plug: Plug): string[] | undefined =>
 /** The facets selected for this host, or all when omitted. */
 export let facetsOf = (plug: Plug): FacetName[] | undefined =>
   typeof plug == 'string' ? undefined : plug.facets
+
+/**
+ * Refuse a store whose data requires a plugin this config does not compose:
+ * one it does not list, or lists with its graph facet left out, which is where
+ * a plugin's writes are shaped. `requirements` is what the store recorded
+ * (@yaks/sqlite `requirements`), and the error names every one missing.
+ *
+ * ```ts
+ * import { meet } from '@yaks/host/config'
+ * import { throws } from '@yaks/testing'
+ *
+ * meet({ plugins: ['@yaks/blob'] }, ['@yaks/blob'])
+ * await throws(
+ *   () => meet({ plugins: ['@yaks/doc'] }, ['@yaks/blob', '@yaks/journal']),
+ *   'requires @yaks/blob and @yaks/journal,',
+ * )
+ * ```
+ */
+export let meet = (config: Config, requirements: readonly string[]): void => {
+  let composed = new Set(
+    (config.plugins ?? []).filter((p) => facetsOf(p)?.includes('graph') ?? true)
+      .map(used),
+  )
+  let missing = requirements.filter((p) => !composed.has(p))
+  if (missing.length) throw new Unmet(missing)
+}
+
+// `a`, `a and b`, `a, b and c`.
+let listed = (names: string[]) =>
+  names.length == 1
+    ? names[0]
+    : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+
+/** A store requires plugins its opener's config does not compose. */
+export class Unmet extends CallError {
+  constructor(public plugins: string[]) {
+    let one = plugins.length == 1
+    super(
+      'config',
+      `this store requires ${listed(plugins)}, which this config does not ` +
+        `compose: list ${one ? 'it' : 'them'} in plugins or, if ` +
+        `${one ? 'it was' : 'they were'} removed on purpose, drop the ` +
+        `store's ${one ? 'requirement' : 'requirements'} (@yaks/sqlite ` +
+        'REQUIRED)',
+    )
+    this.name = 'Unmet'
+  }
+}

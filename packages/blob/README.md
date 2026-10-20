@@ -71,7 +71,10 @@ equal(
 ```
 
 The component table contains the address; `blob_text` contains the text. Both
-use the same driver so their writes participate in the same transaction.
+use the same driver so their writes participate in the same transaction. Since
+only this plugin reads an address back as text, a store it wrote requires it: a
+host records that, and refuses the store to a config without @yaks/blob
+([required plugins](../host/README.md#required-plugins)).
 
 ## Exports
 
@@ -95,11 +98,11 @@ use the same driver so their writes participate in the same transaction.
 | `Backend`, `backend`, `artifactsAt`                                                               | Configured and default artifact backends                 |
 | `valueTools`, `VALUE_LIMIT`, `ValueTool`                                                          | Bounded text-inspection tools                            |
 
-| Sub-module export   | Purpose                                                      |
-| ------------------- | ------------------------------------------------------------ |
-| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers   |
-| `@yaks/blob/graph`  | `plugins(host)`: the graph plugin over the host's blob store |
-| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings  |
+| Sub-module export   | Purpose                                                                                                    |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `@yaks/blob/vocab`  | `docs`, `keywords`, `derived` and declaration/read helpers                                                 |
+| `@yaks/blob/graph`  | `plugins(host)`: the graph plugin over the host's blob store, and `required`: a store it wrote requires it |
+| `@yaks/blob/routes` | `routes(host, options)`, backend helpers and route settings                                                |
 
 ## Addresses
 

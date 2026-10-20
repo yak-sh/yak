@@ -11,6 +11,7 @@
     "./physical": "./physical.ts",
     "./migration": "./migration.ts",
     "./follow": "./follow.ts",
+    "./meta": "./meta.ts",
     "./owe": "./owe.ts",
     "./read-store": "./read-store.ts"
   },

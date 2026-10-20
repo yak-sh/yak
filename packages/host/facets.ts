@@ -56,6 +56,11 @@ export type GraphFacet = {
   authenticate?: (host: Host, options: Options) => Authenticate
   /** the commits other hosts make to this store (@yaks/journal's feed) */
   feed?: (host: Host, options: Options) => Feed
+  /** Whether a store this plugin writes to, configured with `options`, is
+   * shaped so that only this plugin reads or writes it correctly from then
+   * on. A writing host records it in the store, and a host whose config leaves
+   * the plugin out refuses to open the store (./config.ts `meet`). */
+  required?: (options: Options) => boolean
 }
 
 /** A result from a plugin's meaning index, with an excerpt of its source. */

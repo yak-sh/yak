@@ -112,6 +112,7 @@ try {
 | `@yaks/sqlite/read-store` | Read-only storage with index, diagnostic and revision capabilities                                                                     |
 | `@yaks/sqlite/physical`   | Inspection of installed tables, columns and schema objects                                                                             |
 | `@yaks/sqlite/migration`  | Migration readiness, monitoring and explicit installation control                                                                      |
+| `@yaks/sqlite/meta`       | The store's own key/value and the plugins its data requires, without loading storage                                                   |
 | `@yaks/sqlite/vocab`      | `sqliteDoc` and `docs`, declaring storage and archetype diagnostic tools                                                               |
 | `@yaks/sqlite/tools`      | `runs({ storage: storage(sql, vocab) }, options?)`, implementing those checks on the application's connection                          |
 
@@ -771,6 +772,40 @@ can reuse an existing table with the expected shape.
 Whole-entity reads bind identity sets through `json_each(?)`, requiring SQLite
 JSON support. The selected ids are fixed before components are gathered, so a
 concurrent writer cannot change window membership partway through the read.
+
+### The plugins a store requires
+
+A **requirement** is a plugin a store's data needs: one that shaped how its rows
+are written, so a host without it would read or write them wrongly
+([@yaks/host](../host/README.md#required-plugins)). `requires(driver, plugins)`
+records each as the `server_meta` row `required:<plugin>`, and
+`requirements(driver)` reads them back in one read.
+
+```ts
+import { open } from '@yaks/sqlite/db'
+import { META, requirements, requires } from '@yaks/sqlite'
+import { equal } from '@yaks/testing'
+let sql = open(':memory:')
+try {
+  equal(requirements(sql), [])
+  sql.query({
+    t: 'create table',
+    name: META,
+    cols: [{ name: 'k', type: 'text', pk: true }, { name: 'v', type: 'text' }],
+  })
+  requires(sql, ['@yaks/blob'])
+  equal(requirements(sql), ['@yaks/blob'])
+} finally {
+  sql.close()
+}
+```
+
+A plugin removed from a store on purpose drops its requirement with one
+statement:
+
+```sh
+sqlite3 ~/.yak/yak.db "delete from server_meta where k = 'required:@yaks/journal'"
+```
 
 ### Archetype reads
 

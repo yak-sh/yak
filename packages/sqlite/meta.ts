@@ -1,7 +1,7 @@
 // The store's own key/value: the few facts a store keeps about itself rather
 // than about the entities in it — the sync epoch a returning client checks its
 // cursor against, a sweep's high-water mark, the marker recording that a
-// one-shot repair has already run.
+// one-shot repair has already run, the plugins its data requires.
 //
 // It sits beside the graph on purpose. A row here has no entity id and no
 // component, so nothing that walks the vocabulary can carry it: not a read, not
@@ -13,10 +13,13 @@
 // the rest of the spine, so a store that has installed already has it.
 
 import {
+  and,
   col,
   type Driver,
   effect,
   eq,
+  ge,
+  lt,
   select,
   table,
   val,
@@ -102,6 +105,41 @@ export let PRINTED = 'schema:'
 /** Whether this file has recorded the composed schema `print` names. */
 export let printed = (driver: Driver, print: string): boolean =>
   kept(driver, PRINTED + print) != null
+
+/** The prefix of the key a store records each plugin its data requires under:
+ * `required:<plugin>`, its value when it was recorded. A host that does not
+ * compose every one refuses to open the store (@yaks/host `meet`). A plugin
+ * removed on purpose drops its row:
+ * `delete from server_meta where k = 'required:@yaks/journal'`. */
+export let REQUIRED = 'required:'
+
+// The first key past every `required:` key.
+let AFTER = REQUIRED.slice(0, -1) + ';'
+
+/** The plugins this store's data requires: one range read of `server_meta`,
+ * and none where the table is not there yet. */
+export let requirements = (driver: Driver): string[] =>
+  driver.query({ t: 'pragma', name: 'table_info', arg: META }).length
+    ? driver.query(select({
+      cols: [col('k')],
+      from: table(META),
+      where: and(ge(col('k'), val(REQUIRED)), lt(col('k'), val(AFTER))),
+    })).map((r) => String(r.k).slice(REQUIRED.length))
+    : []
+
+/** Record that this store's data requires each of `plugins`, from now on. A
+ * plugin it already requires keeps the time it was first recorded. */
+export let requires = (driver: Driver, plugins: readonly string[]): void => {
+  if (!plugins.length) return
+  let at = new Date().toISOString()
+  effect(driver, {
+    t: 'insert',
+    or: 'ignore',
+    into: META,
+    cols: ['k', 'v'],
+    rows: plugins.map((p) => [val(REQUIRED + p), val(at)]),
+  })
+}
 
 // A key's value, read without assuming the table is there yet. The table is
 // asked after by name (`table_info`, empty for one that is not there) rather

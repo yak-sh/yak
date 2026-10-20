@@ -15,3 +15,8 @@ export let plugins = (host: { vocab: Vocab; blobs: Blobs }): Plugin[] => [
   blobs(host.vocab, host.blobs),
   representations(),
 ]
+
+/** A store this plugin wrote keeps an address where each body's text was,
+ * which only this plugin reads back as text and writes in its place: from
+ * then on the store requires it (@yaks/host `GraphFacet.required`). */
+export let required = (): boolean => true

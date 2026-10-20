@@ -31,6 +31,8 @@ import {
 import { type Facets, type Load } from '@yaks/host'
 import { sealed } from '@yaks/secrets'
 import { lit } from '@yaks/sql'
+import { open } from '@yaks/sqlite/db'
+import { meta, REQUIRED } from '@yaks/sqlite/meta'
 import { signer } from './local.ts'
 import { test, until } from '@yaks/testing'
 import { FakeTime } from '@std/testing/time'
@@ -2053,4 +2055,45 @@ let inertWriter = await (async () => {
 test('a graph writer never starts, works or stops its inert effects pool', () => {
   assertEquals(inertWriter.loaded, 0)
   assertEquals(inertWriter.calls, [])
+})
+
+// A store a writer opened with a plugin that requires itself, opened again by
+// configs without it: at file load, so the timed check sees outcomes only.
+let requirement = await (async () => {
+  let dir = Deno.makeTempDirSync()
+  let db = `${dir}/graph.db`
+  // One declaration, required only under the option that shapes the rows.
+  let history: Plugged = {
+    graph: { required: (options: Options) => options.versions === true },
+  }
+  let load = only({ shop, kept: history, lent: history })
+  let opening = async (plugins: Config['plugins']) => {
+    try {
+      await (await composing({ db, plugins }, ['graph'], load)).close()
+    } catch (error) {
+      return error
+    }
+  }
+  try {
+    await opening([
+      'shop',
+      { use: 'kept', with: { versions: true } },
+      { use: 'lent', with: { versions: false } },
+    ])
+    let refused = await opening(['shop'])
+    let sql = open(db)
+    meta(sql).del(`${REQUIRED}kept`)
+    sql.close()
+    return { refused, dropped: await opening(['shop']) }
+  } finally {
+    Deno.removeSync(dir, { recursive: true })
+  }
+})()
+test('a store refuses a config without a plugin its data requires, naming it, until the requirement is dropped', () => {
+  assert(requirement.refused instanceof CallError)
+  assertEquals(
+    requirement.refused.message.match(/requires (\S+),/)?.[1],
+    'kept',
+  )
+  assertEquals(requirement.dropped, undefined)
 })

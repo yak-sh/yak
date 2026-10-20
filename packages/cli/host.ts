@@ -70,6 +70,7 @@ import {
 import type { Store } from '@yaks/sqlite'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
 import { add, follow, printOf } from '@yaks/sqlite/follow'
+import { requirements, requires } from '@yaks/sqlite/meta'
 import { filler, SCHEMA_DUTY, tend } from '@yaks/sqlite/owe'
 import type { Opened } from '@yaks/sqlite/db'
 import {
@@ -93,7 +94,7 @@ import {
   sqliteBlobs,
 } from '@yaks/blob'
 import { type Config, dbOf, given, type Options, used } from './config.ts'
-import { chosen, type Configured, facetsOf } from '@yaks/host/config'
+import { chosen, type Configured, facetsOf, meet } from '@yaks/host/config'
 import { facet } from './words.ts'
 import { assembly, type Facets, type Load, type MeaningHit } from '@yaks/host'
 export { every } from '@yaks/host/roles'
@@ -423,11 +424,17 @@ let composed = async (
         if (!(error instanceof Deno.errors.NotFound)) throw error
       }
     }
+    // What the store's data requires (a plugin that shaped how its rows are
+    // written) this config must compose, or the store is refused: a host
+    // without it would read or write those rows wrongly.
+    let required: string[] = []
     if (exists) {
       part?.('sqlite')
       opened = await open()
       part?.('migrations')
       migrations(opened).ready()
+      required = requirements(opened)
+      meet(config, required)
     }
     // Where this graph's secrets are kept (./vault.ts), and each secret an
     // option names read once now, so the option has it the first time a factory
@@ -639,6 +646,13 @@ let composed = async (
             left.forEach(told)
             return !left.length
           })
+        } catch (error) {
+          told(error)
+        }
+        // Before this host writes a row, the store records each plugin this
+        // composition says the rows it writes will need.
+        try {
+          requires(sql, plan.required.filter((p) => !required.includes(p)))
         } catch (error) {
           told(error)
         }
