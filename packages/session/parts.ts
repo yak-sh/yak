@@ -102,7 +102,7 @@ export let fixedParts = (w: Walk): Part[] => {
  * equal(fixedParts(w), [['tool Bash', 7], ['skills', 7]])
  * ```
  */
-export let fix = (w: Walk, f: Fixed) => {
+export let fix = (w: Walk, f: Fixed): void => {
   w.fixed.set(f.source, [
     ...(f.add ? w.fixed.get(f.source) ?? [] : []),
     ...f.parts,
@@ -179,7 +179,11 @@ let sum = (ps: [string, number, ...unknown[]][]) =>
  * })
  * ```
  */
-export let contextParts = (fixed: Part[], lines: Line[], u: Usage) => {
+export let contextParts = (
+  fixed: Part[],
+  lines: Line[],
+  u: Usage,
+): { parts: Record<string, Paid>; entries?: Record<string, Paid> } => {
   let input = u.input_tokens ?? 0
   let whole = sum(fixed) + sum(lines)
   let scale = whole ? input / whole : 0
