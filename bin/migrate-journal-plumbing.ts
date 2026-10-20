@@ -99,9 +99,12 @@ db.exec(`insert into plumb select entity from journal_change
       and not (component = 'edge' and entity in (select entity from links))) = 0`)
 say('plumbing entities', one('select count(*) n from temp.plumb').n)
 
-let doomed = `(component in (select name from off)
-  or (component = 'edge' and entity in (select entity from links))
-  or (component = 'entity' and entity in (select entity from plumb)))`
+// The unary `+` keeps the batch's id range driving the scan: left to it, the
+// planner answers the OR by probing journal_change once per row of `links`
+// and `plumb` (millions), every batch, under the write lock.
+let doomed = `(+component in (select name from off)
+  or (+component = 'edge' and +entity in (select entity from links))
+  or (+component = 'entity' and +entity in (select entity from plumb)))`
 let tip = one('select max(id) n from journal_change').n ?? 0
 let txTip = one('select max(id) n from journal_tx').n ?? 0
 
@@ -122,27 +125,36 @@ let changes = db.prepare(
   `delete from journal_change where id > ? and id <= ? and ${doomed}`,
 )
 let gone = { change: 0, field: 0, tx: 0 }
+// The longest any batch held the write lock, in ms.
+let held = 0
+let locked = (work: () => void) => {
+  let t = performance.now()
+  db.exec('begin immediate')
+  work()
+  db.exec('commit')
+  held = Math.max(held, Math.round(performance.now() - t))
+  // A batch that held the lock this long would stall the live writers: stop.
+  if (held > 2000) throw new Error(`a batch held the write lock ${held}ms`)
+}
 for (let lo = 0; lo < tip; lo += batch) {
   let hi = Math.min(lo + batch, tip)
-  db.exec('begin immediate')
-  gone.field += Number(fields.run(lo, hi).changes)
-  gone.change += Number(changes.run(lo, hi).changes)
-  db.exec('commit')
-  if ((lo / batch) % 100 == 0) say('changes through', hi, gone)
+  locked(() => {
+    gone.field += Number(fields.run(lo, hi).changes)
+    gone.change += Number(changes.run(lo, hi).changes)
+  })
+  if ((lo / batch) % 100 == 0) say('changes through', hi, gone, { held })
   await sleep(rest)
 }
 let empty = db.prepare(`delete from journal_tx where id > ? and id <= ?
   and not exists (select 1 from journal_change c where c.tx = journal_tx.id)`)
 for (let lo = 0; lo < txTip; lo += batch) {
   let hi = Math.min(lo + batch, txTip)
-  db.exec('begin immediate')
-  gone.tx += Number(empty.run(lo, hi).changes)
-  db.exec('commit')
-  if ((lo / batch) % 100 == 0) say('transactions through', hi, gone)
+  locked(() => gone.tx += Number(empty.run(lo, hi).changes))
+  if ((lo / batch) % 100 == 0) say('transactions through', hi, gone, { held })
   await sleep(rest)
 }
 let after = count()
-say('deleted', gone)
+say('deleted', gone, { held })
 say('after', after)
 let size = one('pragma page_size').page_size
 let freed = after.free - before.free
