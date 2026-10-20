@@ -1424,3 +1424,24 @@ for (let [what, change, sent] of underfilled) {
     assertEquals([reads, e.take().map(sent)], [[], [[change.entity.eid]]])
   })
 }
+
+// A page lets go of watches faster than it asks for them again (each list it
+// shows names its rows). Closed answers stand for the newest few, however
+// empty, and an older one is read again when asked.
+let standing = (() => {
+  let g = shop(), reads = 0
+  let spy: Graph = { ...g, read: (q, o) => (reads++, g.read(q, o)) }
+  let s = subscriptions(spy, { keep: 2 }), page = ear()
+  let price = (n: number) => `.book.price=${n}`
+  for (let n of [1, 2, 3]) s.open(page.to, `p${n}`, price(n))
+  s.drop(page.to)
+  let read = (n: number) => {
+    let before = reads
+    s.open(ear().to, `again${n}`, price(n))
+    return reads > before
+  }
+  return { newest: read(3), oldest: read(1) }
+})()
+test('closed answers stand for the newest few, however empty', () => {
+  equal(standing, { newest: false, oldest: true })
+})

@@ -254,9 +254,10 @@ type Sub = {
 // share one, and the last to close leaves it standing, so a page that lets go
 // of a watch and asks for it again (a map walked back across, a reload) is
 // answered from memory. Answers hold at most HELD rows; closed ones KEPT rows
-// between them, the longest unasked let go first.
+// between them, and KEEP answers however few rows each holds (an empty answer
+// still holds its subscription), the longest unasked let go first.
 type Shared = { key: string; rows: Map<Eid, Bundle>; users: Set<Sub> }
-const HELD = 512, KEPT = 8192
+const HELD = 512, KEPT = 8192, KEEP = 256
 
 // Membership and projection use storage's vocabulary; delivery uses the caller's.
 let queryOf = (sub: Sub, q = sub.query): Query => {
@@ -441,6 +442,9 @@ export let subscriptions = (graph: Graph, opts: {
   timer?: Timer
   /** Clock used by pending save queries. */
   now?: () => number
+  /** How many closed answers stand at once for a page to ask again (default
+   * 256). */
+  keep?: number
 } = {}): Subs => {
   let base = graph
   let ending = new AbortController()
@@ -723,10 +727,11 @@ export let subscriptions = (graph: Graph, opts: {
       sub.kept = true
       share.users.add(sub)
       kept.set(share.key, sub)
-      let rows = 0
+      let rows = 0, answers = 0
       for (let k of [...kept.values()].reverse()) {
         rows += k.shared!.rows.size
-        if (rows > KEPT) unshare(k.shared!)
+        answers++
+        if (rows > KEPT || answers > (opts.keep ?? KEEP)) unshare(k.shared!)
       }
       return
     }
