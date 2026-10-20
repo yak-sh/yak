@@ -1,45 +1,47 @@
 ---
 name: design-docs
 description: >
-  Write, revise, file and decide a design (a D- entity) for the owner in the yaks
-  repo: a proposal he reads before anything is built, with where things live,
-  components and their properties, open questions and a task tree. Use it
+  Write, revise, file and decide a design (a D- entity) in the yaks repo: a
+  proposal he can skim, with where things live, components and their
+  properties, open questions and a task tree. Use it
   whenever you are asked to pitch, propose, draft, design, "write up" or "think
   through" a change bigger than a bug fix; when a change moves code between
-  packages or adds a package, a vocabulary keyword or a worker; when the owner
-  answers a design's open questions and it needs revising, deciding
-  (`yak design decide`) or turning into tasks; or when an agent's draft needs
+  packages or adds a package, a vocabulary keyword or a worker; when a design
+  needs revising, deciding (`yak design decide`) or turning into tasks; or when an agent's draft needs
   reviewing before it goes on a D- entity. Not for a bug fix or a small feature,
   which are just done. How each proposed component is shaped is `vocabulary`,
   and making and wiring a package is `packages-and-plugins`; this one is the
   document around them.
 ---
 
-# Writing a design for the owner
+# Writing a design
 
 A design is the graph's record of a proposed change (`design{}` + `doc{title,
-body}` + `proposed{}`), filed before the work and decided by the owner. The repo
-documents what is; the design holds what's proposed. It exists so the owner can
-change the shape while changing it is still cheap, the way walls on an
-architect's drawing move with an eraser and walls on a site move with a crew.
-Everything in it serves that: making the shape plain enough for him to see,
-true enough to trust, and open where it's still his to choose.
+body}` + `proposed{}`), filed before the work. The repo documents what is; the
+design holds what's proposed. It makes the shape plain enough to build from and
+for the owner to skim, true enough to trust, so the walls are drawn before the
+crew moves them.
+
+He doesn't read them all and never blocks on one. When it looks good, decide it
+yourself, build, and adapt afterwards. Only a refactor of something key the
+system relies on is flagged to him, in one line. Priority goes to yaks.app over
+local harness experiments (M-38025).
 
 It's the document around parts other skills shape: each component is shaped
 in `vocabulary`, each package and its boundary in `packages-and-plugins`, and
 moving stored rows is `data-migration`. Once the shape is settled, its task
 tree becomes work agents are briefed on (`agent-briefs`).
 
-## What the owner reads it for
+## What a design carries
 
 - **Where things live** (M-38025). Inside a package, mess is cheap to fix
-  later; the boundaries between packages are what he decides. So every design
+  later; the boundaries between packages are expensive to move. So every design
   has a section naming each package or worker it touches or adds, what each
   owns, what it offers others (verbs in words, not types), and what moves. An
   existing package that owns the idea comes first; a new one is for an idea
   nothing owns yet.
 - **What is in a component** (M-59030). He judges a component by its
-  properties, so each one is written out as `comp{prop, prop, …}`, in the
+  properties when he skims, so each one is written out as `comp{prop, prop, …}`, in the
   design and in what you tell him about it. The name alone gives him nothing
   to judge.
 - **His own words** (M-31946), quoted verbatim at the end: every message that
@@ -47,7 +49,7 @@ tree becomes work agents are briefed on (`agent-briefs`).
   what he said.
 - **Your recommendation.** Each open question carries the option you'd pick and
   why. A question any reasonable reader would answer the same way is a
-  decision, so make it (M-4492).
+  decision, so make it and go (M-4492).
 
 ## The pulls that make designs wrong
 
@@ -106,24 +108,21 @@ python3 -c "import json; json.dump([{'entity':{'eid':'D-…'},'doc':{'body':open
 yak graph apply --bundles @bundles.json
 ```
 
-When the owner answers questions, comment his words verbatim on the design
+When he comments, record his words verbatim on the design
 (`yak comment new D-… '<his words>'`), fold the answers into a "Decided"
 section of the body, and drop what he rejected.
 
 When his comment reshapes the design, the body changes in the same sitting as
-your reply, with whatever is still open in its Open questions. The pull is to
-wait for all his answers and revise once. Meanwhile the design tells every
-other agent, and him, the old shape, and the new one lives only in a chat reply
-that goes when your context does. A design with open questions is still the
-current picture, and it's only useful while it stays current.
+your reply. The design tells every other agent the old shape until it does, and
+the new one lives only in a chat reply that goes when your context does.
 
 ## Deciding it
 
-`yak design decide D-… approved` stamps the caller as the decider: the tool
-records the owner only when the owner is calling. So when he approves in
-conversation, record the decision as yourself and put his approval verbatim in
-a comment beside it. Downstream work you decide on your own (the task tree,
-follow-ups) is recorded as yours (M-31958).
+When a design looks good, `yak design decide D-… approved` it yourself and
+build: the tool stamps the caller as the decider, which is the agent's decision
+recorded as the agent's (M-31958). When he approves in conversation, put his
+approval verbatim in a comment beside it. The task tree and follow-ups are yours
+too.
 
 A design's verdict and the owner's comments on it outrank its body. A body is
 what was proposed; it reads as settled whether or not he agreed, and his later
@@ -159,10 +158,9 @@ its own task with `--assignee U-3709`.
 ## When an agent drafts it
 
 A long design is often drafted by an agent into a scratch file, and you read it
-before the owner does. Check its claims against the code wherever they decide
-anything, put it on the design, and tell the owner the gist with the components
-written out, where you disagree, and the questions that need him. The rest
-stays in the design.
+before it goes on the design. Check its claims against the code wherever they
+decide anything, then file it and build. Tell the owner only what he asked for,
+or a refactor of something key, with the components written out.
 
 The drafter takes its brief as the requirement. A shape you sketch there
 ("names are rows keyed by stable ids") comes back filled in, with new words
