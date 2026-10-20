@@ -183,11 +183,13 @@ export type Deps = {
   /** Choose the provider that serves the model, and what it calls the model. */
   resolveModel?: (using: Comp | undefined, model: Bundle) => Promise<Served>
   tools: Tool[]
-  /** Resolve a stable tool registry for one execution step. */
+  /** Resolve a stable tool registry for one execution step. `open` is every
+   * call of the transcript no result answers yet, as the step read it. */
   toolSnapshot?: (
     phase: 'ask' | 'call',
     session: Eid,
-    boundary?: Eid,
+    boundary: Eid | undefined,
+    open: Bundle[],
   ) => Promise<Tool[]>
   /** Tools offered only to a turn whose `sending.tools` names them, beside the
    * runner's own: the ones a host can run that every transcript need not
@@ -323,6 +325,19 @@ let turnEntries = async (
   let bodies = !!(deps.contextItems || deps.requestItems ||
     deps.compactModel)
   return { entries: await reach(g, session, { turn: true, bodies }), bodies }
+}
+
+// Whether a transcript may have stopped since a step read it, `seen` being
+// the newest of its own lines read. A stop lands as a newer line or as
+// `session.ended`, so with neither, the status the step read stands, and it
+// need not read every open call again to find out.
+let moved = async (g: Graph, session: Eid, seen: Bundle | undefined) => {
+  let [row] = await g.rows(`.entity.eid=${session}&.fields=session.ended`)
+  if (row?.['session.ended'] === true) return true
+  let [last] = await g.rows(
+    `.entry.session=${session}&.order=-entry.seq&.limit=1&.fields=entity.eid`,
+  )
+  return last?.['entity.eid'] != seen?.entity.eid
 }
 
 // A model failure may pass: the provider marked it `retry` (overloaded, rate
@@ -538,8 +553,10 @@ export let react = async (
   let status = statusOf(entries)
   let nothing: Step = { did: 'nothing', status, added: [] }
   let newest = entries.at(-1)
+  let seen = entries.findLast((b) => comp(b, ENTRY)?.session == session)
   let asked = newestAsk(entries)
-  let open = openCalls(entries)
+  let calls = openCalls(entries)
+  let open = calls
   if (deps.runCall) {
     open = open.filter((b) => b.entity.eid == deps.runCall)
     asked = entries.find((b) =>
@@ -903,6 +920,7 @@ export let react = async (
         open.length
           ? comp(asked ?? {} as Bundle, ASK)?.through as Eid | undefined
           : newest.entity.eid,
+        calls,
       )
       : deps.tools,
     deps.named ?? (() => []),
@@ -1405,7 +1423,10 @@ export let react = async (
   }
   // Graceful stop closes admission, not a request already admitted below.
   if (deps.stopping?.aborted) return nothing
-  if (await currentStatus(g, session) == 'stopped') return current()
+  if (
+    await moved(g, session, seen) &&
+    await currentStatus(g, session) == 'stopped'
+  ) return current()
   let pending = entries.filter((b) => b.provisional && b.ask).map((b) => ({
     entity: b.entity,
     provisional: null,

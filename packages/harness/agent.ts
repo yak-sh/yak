@@ -43,7 +43,6 @@ import {
   ENTRY,
   humanCaller,
   live,
-  openOf,
   passing,
   providerResolver,
   type Runner,
@@ -418,7 +417,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     answers: answers(h.g, implementations, opts.model),
     tools,
     named: opts.named,
-    toolSnapshot: async (phase, session, boundary) => {
+    toolSnapshot: async (phase, session, boundary, open) => {
       if (!name) {
         let using = await defaultUsing(h.g)
         let [row] = await h.g.get([String(using.model)])
@@ -440,9 +439,8 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
       // all of its calls have final results; a later catalogue refresh must
       // not redirect an in-progress call to a newly configured MCP server.
       if (phase === 'ask' && offered.size) {
-        const calls = await openOf(h.g, session)
         const asks = await h.g.get(
-          calls.flatMap((b) => {
+          open.flatMap((b) => {
             const source = (b.call as Comp)?.source
             return source == null ? [] : [String(source)]
           }),

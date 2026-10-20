@@ -395,15 +395,17 @@ test('a legacy unfinished-call exception recovers without replay', async () => {
 })
 
 test('a stop is obeyed: nothing is asked or run after it', async () => {
-  for (let during of ['model', 'tool']) {
-    let g = world(), asked = 0, called = 0
+  // A stop lands while the model answers, while a tool runs, or while a turn
+  // is prepared, before its ask: as a stop line, or as the session ending.
+  for (let during of ['model', 'tool', 'turn', 'end']) {
+    let g = world(), asked = 0, called = 0, prepared = 0
     let idle = 0
     let stop = async () => {
-      await g.apply([{
-        entity: { eid: 'stop1' },
-        entry: { session: ids.s },
-        stop: {},
-      }])
+      await g.apply([
+        during == 'end'
+          ? { entity: { eid: ids.s }, session: { ended: true } }
+          : { entity: { eid: 'stop1' }, entry: { session: ids.s }, stop: {} },
+      ])
       assertEquals(await runningAt(g, ids.s), true)
     }
     let model: Model = async () => {
@@ -413,16 +415,21 @@ test('a stop is obeyed: nothing is asked or run after it', async () => {
         ? calls(['c1', 'hi'], ['c2', 'bye'])
         : says('r2', 'done')
     }
+    let tools = [{
+      ...echo,
+      run: async () => {
+        called++
+        await stop()
+        return 'done'
+      },
+    }]
     let deps = {
       model,
-      tools: [{
-        ...echo,
-        run: async () => {
-          called++
-          await stop()
-          return 'done'
-        },
-      }],
+      tools,
+      toolSnapshot: async () => {
+        if ((during == 'turn' || during == 'end') && !prepared++) await stop()
+        return tools
+      },
       mint,
     }
     await settle(g, ids.s, {
@@ -435,7 +442,7 @@ test('a stop is obeyed: nothing is asked or run after it', async () => {
     })
     let step = await react(g, ids.s, deps)
     assertEquals([step.did, step.status], ['nothing', 'stopped'])
-    assertEquals(asked, 1)
+    assertEquals(asked, during == 'model' || during == 'tool' ? 1 : 0)
     assertEquals(called, during == 'tool' ? 1 : 0)
     assertEquals(idle, 1)
   }
