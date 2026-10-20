@@ -315,10 +315,13 @@ let indexes = (stmts: Stmt[]) =>
       : []
   )
 
-// Every component the vocabulary declares has a table in an app's store.
+// Every component the vocabulary declares has a table in an app's store. Each
+// vocabulary here is composed when the file loads, as a store composes it once
+// for its isolate, so a case times only what it reads of one.
+let cookbook = appVocab(says({ recipe: { serves: num }, cooked: {} }))
+let planted = schema(cookbook)
 test('the loaded app vocabulary plants its component tables', () => {
-  let vocab = appVocab(says({ recipe: { serves: num }, cooked: {} }))
-  let sql = schema(vocab)
+  let vocab = cookbook, sql = planted
   let tables = tablesOf(sql)
   assertEquals(
     vocab.all.filter((name) => tables.includes(name)),
@@ -363,25 +366,26 @@ test('none of the fleet vocabulary comes with it', () => {
 // @yaks/doc says it of `title` and `body` — the keyword rides the JSON Schema
 // document into the loaded vocabulary, which is what @yaks/fts cuts its index
 // from (graph.ts `searchable`).
-test('a searched property of an app reaches the index fields', () => {
-  let v = appVocab({
-    $defs: {
-      memo: {
-        component: true,
-        type: 'object',
-        properties: {
-          note: { type: 'string', search: true },
-          aside: { type: 'string' },
-        },
+let memos = appVocab({
+  $defs: {
+    memo: {
+      component: true,
+      type: 'object',
+      properties: {
+        note: { type: 'string', search: true },
+        aside: { type: 'string' },
       },
     },
-  })
+  },
+})
+let searched = fields(memos)
+test('a searched property of an app reaches the index fields', () => {
   assertEquals(
-    fields(v).filter((f) => f.comp == 'memo'),
+    searched.filter((f) => f.comp == 'memo'),
     [{ comp: 'memo', prop: 'note' }],
   )
   // And the platform's own words are declared, not assumed.
-  assertEquals(fields(v).filter((f) => f.comp == 'doc'), [
+  assertEquals(searched.filter((f) => f.comp == 'doc'), [
     { comp: 'doc', prop: 'title' },
     { comp: 'doc', prop: 'body' },
   ])
@@ -559,39 +563,40 @@ test('a manifest wears the component marker without saying it', () => {
 // did: `memory_recall` orders by `.order=-entity.num`, which is a property or
 // it is a refused filter — so the one place the plugin is loaded is the
 // platform's own two stores.
+let letters = appVocab(says({ book: { title: txt } }))
+let directoryWords = platformVocab(), gitWords = gitVocab()
 test("an app has no numbers; the platform's own stores do", () => {
-  let app = appVocab(says({ recipe: { serves: num } }))
-  assertEquals(app.prop('entity', 'num'), undefined)
-  assert(!numbered(app))
+  assertEquals(cookbook.prop('entity', 'num'), undefined)
+  assert(!numbered(cookbook))
   // And a prefix an app declares is a word nothing here reads, dropped on load
   // like any unregistered keyword.
-  let letters = appVocab(says({ book: { title: txt } }))
   assertEquals(letters.comp('book')?.keywords.prefix, undefined)
 
-  assert(numbered(platformVocab()), 'the directory numbers its own')
-  assert(numbered(gitVocab()), 'the object store numbers its own')
+  assert(numbered(directoryWords), 'the directory numbers its own')
+  assert(numbered(gitWords), 'the object store numbers its own')
 })
 
 // A bringer owns its page words in the app manifest, not in the platform.
-test('app vocab keeps external UX state page-only, including transient events', () => {
-  let source: VocabDoc = {
-    $defs: {
-      Toggle: {
-        component: true,
-        sync: 'none',
-        durable: 'connection',
-        properties: { open: { type: 'boolean' } },
-      },
-      Toggled: {
-        component: true,
-        sync: 'none',
-        durable: '0s',
-        properties: { open: { type: 'boolean' } },
-      },
+let toggles: VocabDoc = {
+  $defs: {
+    Toggle: {
+      component: true,
+      sync: 'none',
+      durable: 'connection',
+      properties: { open: { type: 'boolean' } },
     },
-  }
-  assertEquals(appDoc(source).$defs?.Toggle.sync, 'none')
-  let v = appVocab(source)
+    Toggled: {
+      component: true,
+      sync: 'none',
+      durable: '0s',
+      properties: { open: { type: 'boolean' } },
+    },
+  },
+}
+let toggled = appVocab(toggles)
+test('app vocab keeps external UX state page-only, including transient events', () => {
+  assertEquals(appDoc(toggles).$defs?.Toggle.sync, 'none')
+  let v = toggled
   assertEquals(v.comp('Toggle')?.sync, 'none')
   assertEquals(v.comp('Toggle')?.durable, 'connection')
   assertEquals(v.comp('Toggled')?.sync, 'none')
