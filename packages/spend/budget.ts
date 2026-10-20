@@ -21,11 +21,12 @@ let iso = (s?: string) =>
  *
  * ```ts
  * import { limits } from './budget.ts'
+ * import { identityEid } from '@yaks/graph/identity'
  * import { equal } from '@yaks/testing'
  *
  * let [, week] = limits('SEVEN_DAY_PCT=25\nSEVEN_DAY_RESET=1793098800\nUPDATED_AT=1792531227\n')
  * equal(week.rate_limit, {
- *   provider: week.rate_limit.provider,
+ *   provider: identityEid('provider', ['claude']),
  *   window: 10080,
  *   used: 25,
  *   resets: '2026-10-27T11:00:00.000Z',

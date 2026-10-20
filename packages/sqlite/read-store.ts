@@ -11,6 +11,7 @@ import { screened } from './read.ts'
 import { options, reader } from './reader.ts'
 import { unit } from './unit.ts'
 import { plan } from './plan.ts'
+import { burying } from './buried.ts'
 
 /** Bind every committed-store capability without admitting write callbacks.
  * Index plugins receive the same statement, revision and schema descriptions
@@ -22,6 +23,7 @@ export let storage = (
 ): Store => {
   let opts = options(driver, vocab, base)
   let sql = statements(driver)
+  let graves = burying(driver, vocab)
   let refuse = (): never => {
     throw new Refused('a read-only store cannot write')
   }
@@ -44,6 +46,7 @@ export let storage = (
     grown: () => grown(vocab, standing(driver, vocab)),
     print: () => plan(vocab, base.derived, !!driver.file).print,
     screen: (q, o) => screened(driver, vocab, q, { ...opts(), ...o }),
+    buried: (before, page) => unit(driver, () => graves(before, page), 'read'),
     install: refuse,
     analyze: refuse,
     tx: refuse,
