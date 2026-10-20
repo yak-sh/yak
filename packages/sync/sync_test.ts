@@ -9,6 +9,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, dead, Refused } from '@yaks/graph'
 import { at, boxGraph, client, comp, COOK, server } from './testing.ts'
+import { Dropped } from './socket.ts'
 
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
@@ -285,7 +286,7 @@ test('a dropped socket resubscribes and catches up on what it missed', async () 
   b.fire() // the one reconnect the backoff scheduled
   await b.idle()
   assert(b.wire.connected())
-  assertEquals(b.trouble.map((t) => t.error?.name), ['Dropped'])
+  assertEquals(b.trouble.map((t) => t.error instanceof Dropped), [true])
   // The set as it now stands: the new one arrived, the deleted one left.
   assertEquals(
     (b.graph.read('.recipe.course=dinner&*') as Bundle[]).map((x) =>
@@ -355,7 +356,10 @@ test('an oversized subscribe refuses once, never reopens, and does not erase pai
     c.fire()
     await c.idle()
     assertEquals(srv.sockets.length, 2)
-    assertEquals(c.trouble.slice(1).map((t) => t.error?.name), ['Dropped'])
+    assertEquals(
+      c.trouble.slice(1).map((t) => t.error instanceof Dropped),
+      [true],
+    )
     assertEquals(
       c.socket()?.sent.filter((m) => (m as { id?: string }).id == 'large'),
       [],
