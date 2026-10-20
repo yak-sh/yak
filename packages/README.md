@@ -48,6 +48,10 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/timing](./timing)** — Timing summaries, stored span-entity traces and
   trace views for insight into request time and rows in tracker stores.
 
+- **[@yaks/spend](./spend)** — Where model tokens go: each day's requests
+  tallied by part of the context, session, task, model and large entry, beside
+  each plan limit's pace, and a page that reads the tallies.
+
 - **[@yaks/trace](./trace)** — Subscriber-only, bounded, value-free runtime
   activity and causal spans, keyed by the observed graph. Unsubscribed producers
   allocate nothing and read no clock.

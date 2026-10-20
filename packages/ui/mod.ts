@@ -67,6 +67,7 @@ export { Tile } from './Tile.ts'
 export { Timeline } from './Timeline.ts'
 export { Turns } from './Turns.ts'
 export { Value } from './Value.ts'
+export { Meter } from './Meter.ts'
 export { everforest } from './everforest.ts'
 export { rosepine } from './rosepine.ts'
 export {

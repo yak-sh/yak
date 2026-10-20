@@ -1,0 +1,135 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "spend",
+  "$defs": {
+    "spend": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "embed": false,
+      "type": "object",
+      "description": "where one UTC day's model requests went, tallied from each request's `usage` and `context_parts`: by part of the context, session, task, model and large entry, each as tokens by how they were paid (read from the provider cache, written to it, sent fresh, generated) and dollars. Dollars are what the provider reported, else the tokens at the model's list `price`. The totals are measured; the split across parts, and across the tasks a session worked on, is estimated",
+      "properties": {
+        "day": {
+          "type": "string",
+          "identity": true,
+          "description": "the UTC day, `2026-10-20`"
+        },
+        "requests": {
+          "type": "integer",
+          "stamped": true,
+          "description": "how many model requests it tallies"
+        },
+        "tokens": {
+          "type": "array",
+          "items": { "type": "integer" },
+          "minItems": 4,
+          "maxItems": 4,
+          "stamped": true,
+          "description": "its tokens as [read, write, fresh, generated]"
+        },
+        "dollars": {
+          "type": "number",
+          "stamped": true,
+          "description": "what they cost"
+        },
+        "parts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 5,
+            "maxItems": 5
+          },
+          "stamped": true,
+          "description": "by part of the context (`persona <id>`, `tool <name>`, `skills`, `system`, `result <tool>`, `call <tool>`, `input`, `notice`, `output`, `reasoning`, `checkpoint`, and `unrecorded` for a request whose context was not recorded): [read, write, fresh, generated, dollars]"
+        },
+        "sessions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "stamped": true,
+          "description": "by session eid: [tokens, dollars, requests]"
+        },
+        "tasks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "stamped": true,
+          "description": "by task eid, each session's share split evenly across the tasks it worked on, a subagent's counted with the session that started it: [tokens, dollars]"
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 6,
+            "maxItems": 6
+          },
+          "stamped": true,
+          "description": "by model eid: [read, write, fresh, generated, dollars, requests]"
+        },
+        "entries": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "stamped": true,
+          "description": "the transcript entries that cost most as they were carried request after request, by eid: [tokens, dollars]"
+        }
+      }
+    },
+    "spend_show": {
+      "tool": true,
+      "noun": "spend",
+      "verb": "show",
+      "title": "Show where the tokens went",
+      "description": "Report where the model requests of a span of days went, from the tallies the duty keeps: each plan limit against its pace, then the parts of the context, sessions, tasks, models and large entries that cost most, by dollars. Reads tallies only; changes nothing.",
+      "input": {
+        "since": {
+          "type": "string",
+          "description": "the first UTC day, `2026-10-13` (default: the day the Claude plan's week began, else six days ago)"
+        },
+        "until": {
+          "type": "string",
+          "description": "the last UTC day (default: today)"
+        },
+        "top": {
+          "type": "integer",
+          "description": "how many rows each ranking shows (default 10)"
+        }
+      },
+      "readOnly": true,
+      "positional": ["since"]
+    },
+    "spend_backfill": {
+      "tool": true,
+      "surfaces": ["cli"],
+      "noun": "spend",
+      "verb": "backfill",
+      "title": "Measure past requests and tally their days",
+      "description": "Read every transcript and managed run's log written since a day again for its model requests (@yaks/session and @yaks/spawn `recounted`), walk the graph's own sessions for theirs, then tally each day since. Running it again leaves what is there alone.",
+      "input": {
+        "since": {
+          "type": "string",
+          "description": "the first UTC day, `2026-10-13`"
+        }
+      },
+      "required": ["since"],
+      "positional": ["since"]
+    }
+  }
+}

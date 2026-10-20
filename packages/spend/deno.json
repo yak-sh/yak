@@ -1,0 +1,23 @@
+{
+  "name": "@yaks/spend",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts",
+    "./service": "./service.ts",
+    "./views": "./views.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Where model tokens go: each day's requests tallied by part of the context, session, task, model and large entry, at the price paid, beside each plan limit's pace, and a page that reads the tallies so looking costs nothing.",
+  "imports": {
+    "lucide": "npm:lucide@1.31.0",
+    "preact": "npm:preact@^10.29.1"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

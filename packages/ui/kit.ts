@@ -23,6 +23,7 @@ import * as id from './Id.ts'
 import * as index from './Index.ts'
 import * as inbox from './Inbox.ts'
 import * as menu from './Menu.ts'
+import * as meter from './Meter.ts'
 import * as loading from './Loading.ts'
 import * as notes from './Notes.ts'
 import * as palette from './Palette.ts'
@@ -56,7 +57,15 @@ import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
  * the guide. */
 let modules = {
   Prose: { base, Body: body, Quote: quote },
-  Marks: { Dot: dot, Id: id, Stamp: stamp, Chip: chip, Value: value, Tip: tip },
+  Marks: {
+    Dot: dot,
+    Id: id,
+    Stamp: stamp,
+    Chip: chip,
+    Value: value,
+    Meter: meter,
+    Tip: tip,
+  },
   Controls: {
     Button: button,
     Field: field,

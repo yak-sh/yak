@@ -1,0 +1,21 @@
+/* A bar in characters: one cell per character, so it reads the same in a
+   terminal. */
+.Meter {
+  font-family: var(--mono);
+  white-space: pre;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.Meter_Fill {
+  color: var(--accent);
+}
+.Meter_Fill-over {
+  color: var(--caution);
+}
+.Meter_Mark {
+  color: var(--text);
+  font-weight: bold;
+}
+.Meter_Rest {
+  color: var(--dim);
+}

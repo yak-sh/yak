@@ -231,7 +231,7 @@ export let Page = ({ at }: { at: string }) => {
           : place
           ? (
             <>
-              {place.key == 'sessions' && <PagePart view='Sessions.Controls' />}
+              {place.view && <PagePart view={place.view} />}
               <QueryList
                 eid={filter!}
                 query={place.query}

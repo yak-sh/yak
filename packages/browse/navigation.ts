@@ -19,6 +19,8 @@ export type Destination = {
   icon: string
   /** the rows it lists */
   query: string
+  /** a page part drawn above its list, by the name of its view */
+  view?: string
 }
 
 /** A line in the sidebar. */
@@ -62,7 +64,13 @@ export let destinations = (
       : [],
     ...contributed,
     ...sessions
-      ? [{ key: 'sessions', name: 'Sessions', icon: 'bot', query: sessions }]
+      ? [{
+        key: 'sessions',
+        name: 'Sessions',
+        icon: 'bot',
+        query: sessions,
+        view: 'Sessions.Controls',
+      }]
       : [],
   ].filter((d) => !seen.has(d.key) && !!seen.add(d.key))
 }

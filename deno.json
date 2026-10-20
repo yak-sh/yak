@@ -209,6 +209,7 @@
     "./packages/logic",
     "./packages/tracker",
     "./packages/timing",
+    "./packages/spend",
     "./packages/inbox",
     "./packages/host",
     "./packages/game",

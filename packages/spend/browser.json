@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "dom",
+      "esnext"
+    ],
+    "strict": true
+  },
+  "entries": [
+    ".",
+    "./vocab",
+    "./views"
+  ],
+  "imports": {
+    "@yaks/spend": "./mod.ts",
+    "@yaks/spend/vocab": "./vocab.ts",
+    "@yaks/spend/views": "./views.ts",
+    "preact": "npm:preact@^10.29.1"
+  }
+}
