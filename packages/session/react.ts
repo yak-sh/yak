@@ -708,7 +708,9 @@ export let react = async (
       },
       attempt: { by: null },
     }
-    if (reply.usage && sent) {
+    // Like `fixed`, a word a host may leave out: a yaks.app store keeps
+    // usage, never its split.
+    if (reply.usage && sent && g.vocab.comp('context_parts')) {
       finalAsk.context_parts = contextParts(sent.fixed, sent.lines, reply.usage)
     }
     let added: Bundle[] = [finalAsk, ...await carried(g, session, sent)]
