@@ -1,5 +1,6 @@
-// A queued poll reads a child's place, not its computed session summary. The
-// transcript still supplies the result, including a stop overriding the queue.
+// A wait reads a child's place and parent, never its computed session summary.
+// The transcript still supplies the result, including a stop overriding the
+// queue.
 import { assert, assertEquals } from '@std/assert'
 import { clock, test } from '@yaks/testing'
 import { type Bundle, type Graph, graph } from '@yaks/graph'
@@ -78,7 +79,7 @@ for (
       status: expected,
       output: '',
     }])
-    assertEquals(computed, 3)
+    assertEquals(computed, 0)
   })
 }
 

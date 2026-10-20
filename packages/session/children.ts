@@ -413,7 +413,9 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
         )
       }
       for (let id of args.tasks == null ? ids : []) {
-        if (comp(await row(g, id), 'spawned')?.parent != ctx.session) {
+        if (
+          comp(await row(g, id, ['spawned']), 'spawned')?.parent != ctx.session
+        ) {
           throw new ToolError('children', `not your child: ${id}`)
         }
       }
