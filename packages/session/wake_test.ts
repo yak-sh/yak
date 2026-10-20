@@ -101,9 +101,8 @@ let world = (rows: Bundle[]) => {
   let fire = (name: string, kind: Event['kind'], e: Partial<Event>) =>
     h[name](
       { kind, name: '', ...e } as Event,
-      undefined!,
-      undefined!,
-      undefined!,
+      g.outside,
+      (b) => g.apply(b, { trusted: true }),
     )
   return {
     g,
