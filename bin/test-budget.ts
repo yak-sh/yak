@@ -73,11 +73,14 @@ export type Budget = {
 export type Slack = { times: number; ms: number }
 
 /** What a platform's runner wrote (packages/testing `--times`): its wall
- * clock, each test's time, and each file it remembered as passed, by key. */
+ * clock, each test's time, each file it remembered as passed, by key, and
+ * how many tests it skipped and files it left out as unchanged. */
 export type Times = {
   wall: number
   tests: { file: string; name: string; ms: number; ok: boolean }[]
   remembered?: Record<string, string>
+  ignored?: number
+  left?: number
 }
 
 export let LIST = new URL('../bench/test-budget.json', import.meta.url)
@@ -238,12 +241,13 @@ let said = (rows: Seen[], b: Budget) =>
   })
 
 /** What a run of the suite measured: each platform's times, the run's exit
- * code, and what kind of run it was. */
+ * code, what kind of run it was, and what it took in milliseconds. */
 export type Measured = {
   code: number
   runs: Record<string, Times>
   gate: boolean
   whole: boolean
+  ms?: number
 }
 
 /** A set of times kept in `dir`: bench/test-times/, or a gate's. */
@@ -283,15 +287,19 @@ export let measure = async (
   b: Budget,
   suite: Suite,
   whole: boolean,
+  verbose = false,
 ): Promise<Measured> => {
   let gate = Deno.env.get('CI') == 'true'
   let gated = gate && whole
+  let start = performance.now()
   let { code, stopped, runs } = await timed(suite, [])
   if (stopped) return { code, runs: {}, gate, whole }
   let slow = failing(judge(b, runs), gated)
   if (slow.length) {
     let files = [...new Set(slow.map((s) => s.file))]
-    console.log(`\n─── measuring ${files.length} file(s) again ───`)
+    if (verbose) {
+      console.log(`\n─── measuring ${files.length} file(s) again ───`)
+    }
     // One platform at a time: the first pass runs them all at once, so a test
     // measured again beside another platform's runtime meets the same load
     // that put it over. Each of them passed, so the runner remembered it:
@@ -318,76 +326,166 @@ export let measure = async (
     }
     await Deno.writeTextFile(`${KEPT}run.json`, JSON.stringify({ gate, whole }))
   }
-  return { code, runs, gate, whole }
+  return { code, runs, gate, whole, ms: performance.now() - start }
+}
+
+// A test on one line: what it took, its record, its name and file.
+let one = (s: Seen, b: Budget) => {
+  let r = b.tests[s.file]?.[s.key]
+  return `${s.ms.toFixed(1)}ms${
+    r == null ? '' : ` (record ${r}ms)`
+  } ${s.name} (${s.file})`
+}
+
+// The slowest few of `rows` on one line, and how many more there are.
+let worst = (rows: Seen[], b: Budget, few = 3) => {
+  let sorted = rows.toSorted((x, y) => y.ms - x.ms)
+  let more = sorted.length - few
+  return [
+    ...sorted.slice(0, few).map((s) => one(s, b)),
+    ...more > 0 ? [`${more} more`] : [],
+  ].join('; ')
+}
+
+let seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`
+
+/// closing(0, { deno: { wall: 9, tests: [{ file: 'a', name: 'x', ms: 1, ok: true }], ignored: 2, left: 3 } }, 0, 2300)
+///   -> 'ok | 1 passed | 0 failed | 2 ignored | 3 unchanged since they passed | 0 over budget (2.3s)'
+/// closing(1, { deno: { wall: 9, tests: [{ file: 'a', name: 'x', ms: 1, ok: false }] } }, 2)
+///   -> 'FAILED | 0 passed | 1 failed | 2 over budget'
+/**
+ * The run in one line: its verdict by its exit code, the tests that passed
+ * and failed on every platform, those skipped and the files left out as
+ * unchanged since they passed, the tests the budget flags, and what the run
+ * took.
+ */
+export let closing = (
+  exit: number,
+  runs: Record<string, Times>,
+  flagged: number,
+  ms?: number,
+) => {
+  let all = Object.values(runs)
+  let tests = all.flatMap((r) => r.tests)
+  let failed = tests.filter((t) => !t.ok).length
+  let sum = (k: 'ignored' | 'left') => all.reduce((n, r) => n + (r[k] ?? 0), 0)
+  return `${exit ? 'FAILED' : 'ok'} | ${
+    [
+      `${tests.length - failed} passed`,
+      `${failed} failed`,
+      ...sum('ignored') ? [`${sum('ignored')} ignored`] : [],
+      ...sum('left') ? [`${sum('left')} unchanged since they passed`] : [],
+      `${flagged} over budget`,
+    ].join(' | ')
+  }${ms == null ? '' : ` (${seconds(ms)})`}`
 }
 
 /** Says what a measured run comes to against the list, writes the list shrunk
- * on `--write`, and returns the command's exit code. */
+ * on `--write`, and returns the command's exit code. Each finding is a line
+ * naming the slowest few, then the run's closing line; `--verbose` says each
+ * finding whole, each platform's wall clock on a whole run, and how the list
+ * would shrink. */
 export let hold = async (
   b: Budget,
-  { code, runs, gate, whole }: Measured,
+  { code, runs, gate, whole, ms }: Measured,
   args: string[],
 ): Promise<number> => {
   let write = args.includes('--write')
   let report = args.includes('--report')
+  let verbose = args.includes('--verbose')
   let j = judge(b, runs)
   // Only a whole run knows which tests are gone, and the records are held on
   // the gate's, where they are taken.
   if (!whole) j.gone = []
   let gated = whole && gate
+  let slower = whole ? j.slower : []
   let wide = j.walls.filter((w) =>
     gated && w.record != null && w.ms > limit(b.slack.walls, w.record)
   )
+  let shrinking = j.within.length + j.gone.length + j.faster.length
   let lines: string[] = []
   let section = (title: string, rows: string[]) => {
     if (rows.length) lines.push(`\n─── ${title} ───`, ...rows)
   }
-  section(
-    `${j.over.length} test(s) over the ${b.budget}ms budget, not listed`,
-    j.over.length
-      ? [
-        ...said(j.over, b),
-        '  Each was over every time it ran, and the list takes no test on: make it faster.',
-      ]
-      : [],
-  )
-  section(
-    `${j.slower.length} listed test(s) slower than their record allows`,
-    !whole || !j.slower.length
-      ? []
-      : gated
-      ? said(j.slower, b)
-      : [...said(j.slower, b), '  Held on the gate, where records are taken.'],
-  )
-  section(
-    'platform wall clocks',
-    whole
-      ? j.walls.map((w) =>
-        `  ${w.platform}: ${(w.ms / 1000).toFixed(1)}s${
-          w.record == null
-            ? ''
-            : ` (record ${(w.record / 1000).toFixed(1)}s, allowed ${
-              (limit(b.slack.walls, w.record) / 1000).toFixed(1)
-            }s${gated ? '' : '; held on the gate'})`
-        }`
-      )
-      : [],
-  )
-  let shrinking = j.within.length + j.gone.length + j.faster.length
-  if (shrinking) {
-    lines.push(
-      `\n─── the list shrinks: ${j.within.length} within ${b.leave}ms, ${j.gone.length} gone, ${j.faster.length} faster than their record allows ───`,
-      write
-        ? `  written to ${LIST.pathname}`
-        : '  the same run with `--write` takes them off and lowers the records',
+  if (verbose) {
+    section(
+      `${j.over.length} test(s) over the ${b.budget}ms budget, not listed`,
+      j.over.length
+        ? [
+          ...said(j.over, b),
+          '  Each was over every time it ran, and the list takes no test on: make it faster.',
+        ]
+        : [],
     )
+    section(
+      `${j.slower.length} listed test(s) slower than their record allows`,
+      !slower.length
+        ? []
+        : gated
+        ? said(slower, b)
+        : [...said(slower, b), '  Held on the gate, where records are taken.'],
+    )
+    section(
+      'platform wall clocks',
+      whole
+        ? j.walls.map((w) =>
+          `  ${w.platform}: ${seconds(w.ms)}${
+            w.record == null
+              ? ''
+              : ` (record ${seconds(w.record)}, allowed ${
+                seconds(limit(b.slack.walls, w.record))
+              }${gated ? '' : '; held on the gate'})`
+          }`
+        )
+        : [],
+    )
+    if (shrinking) {
+      lines.push(
+        `\n─── the list shrinks: ${j.within.length} within ${b.leave}ms, ${j.gone.length} gone, ${j.faster.length} faster than their record allows ───`,
+        write
+          ? `  written to ${LIST.pathname}`
+          : '  the same run with `--write` takes them off and lowers the records',
+      )
+    }
+  } else {
+    if (j.over.length) {
+      lines.push(
+        `${j.over.length} test(s) over the ${b.budget}ms budget, not listed: ${
+          worst(j.over, b)
+        }`,
+      )
+    }
+    if (slower.length) {
+      lines.push(
+        `${slower.length} listed test(s) slower than their record allows${
+          gated ? '' : ', held on the gate'
+        }: ${worst(slower, b)}`,
+      )
+    }
+    for (let w of wide) {
+      lines.push(
+        `${w.platform}'s wall clock ${seconds(w.ms)}, past the ${
+          seconds(limit(b.slack.walls, w.record!))
+        } its record allows`,
+      )
+    }
+    if (write && shrinking) {
+      lines.push(
+        `the list shrinks by ${shrinking}: written to ${LIST.pathname}`,
+      )
+    }
   }
   if (write) {
     let next = shrunk(b, j, gated)
     await Deno.writeTextFile(LIST, JSON.stringify(next, null, 2) + '\n')
   }
+  let exit = code ||
+    (!report && (failing(j, gated).length || wide.length) ? 1 : 0)
+  // A run a signal stopped measured nothing to sum.
+  if (!code || Object.keys(runs).length) {
+    let line = closing(exit, runs, j.over.length + slower.length, ms)
+    lines.push(verbose ? `\n${line}` : line)
+  }
   if (lines.length) console.log(lines.join('\n'))
-  if (code) return code
-  if (report) return 0
-  return failing(j, gated).length || wide.length ? 1 : 0
+  return exit
 }

@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno run -A bench/run.ts command check deno task check:run",
+    "check": "deno run -A bench/run.ts command check deno run -A bin/check.ts",
     "check:fmt": "deno fmt --check",
     "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
@@ -76,7 +76,7 @@
     },
     "check:content": "deno task content --check",
     "content": "deno run --allow-read --allow-write --allow-run=deno workers/yak/gen.ts",
-    "gate": "deno task check && deno task test",
+    "gate": "deno run -A bin/gate.ts",
     "dev": "deno run -A --unstable-net --unstable-worker-options packages/cli/yak.ts serve --config $HOME/.yak/yak.json",
     "dev:yak": "deno run --allow-read --allow-write --allow-run=deno,npm,npx,pgrep,kill,env workers/yak/wrangler.ts dev --var LOCAL_DEV:1",
     "dev:yak-staging": "deno run --allow-read --allow-write --allow-run=deno,npm,npx,pgrep,kill,env workers/yak/wrangler.ts dev --env staging --var LOCAL_DEV:1",
@@ -91,7 +91,7 @@
     "install": "bin/install",
     "app-grep": "deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg bin/app-grep.ts",
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",
-    "test": "deno run -A bench/run.ts command test deno task test:run",
+    "test": "deno run -A bench/run.ts command test deno task -q test:run",
     "bench": "deno run -A bench/run.ts run",
     "bench:check": "deno run -A bench/run.ts check",
     "bench:ratchet": "deno run -A bench/run.ts accept",

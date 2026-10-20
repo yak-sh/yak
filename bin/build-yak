@@ -72,10 +72,11 @@ case "${1:-}" in
   *) echo "usage: bin/build-yak [install|deploy]" >&2; exit 2 ;;
 esac
 
+# Verbose: a build's log is read whole.
 echo "--- deno task check"
-deno task check
+deno task check --verbose
 
 echo "--- deno task test --all --tag=deno workers"
-deno task test --all --tag=deno workers
+deno task test --all --tag=deno --verbose workers
 
 echo "--- build ok; Workers Builds deploys from here"

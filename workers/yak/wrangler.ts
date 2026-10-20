@@ -96,19 +96,23 @@ export let aliased = (root = repo, to = TSCONFIG) => {
   Deno.renameSync(tmp, to)
 }
 
-let timed = async <T>(name: string, make: () => Promise<T>) => {
+// A prerequisite made, and what making it took; `quiet` says only a failure.
+let timed = async <T>(name: string, make: () => Promise<T>, quiet = false) => {
   let started = performance.now()
   let value = await make()
-  console.log(
-    `${name}: ready in ${((performance.now() - started) / 1000).toFixed(3)}s`,
-  )
+  if (!quiet) {
+    console.log(
+      `${name}: ready in ${((performance.now() - started) / 1000).toFixed(3)}s`,
+    )
+  }
   return value
 }
 
-let generated = async (name: string, args: string[]) => {
+let generated = async (name: string, args: string[], quiet = false) => {
   let result = await new Deno.Command('deno', {
     args: ['run', '--no-lock', '-A', ...args],
     stdin: 'null',
+    stdout: quiet ? 'null' : 'inherit',
   }).spawn().status
   if (!result.success) throw new Error(`${name} generation failed`)
 }
@@ -142,40 +146,53 @@ export let readiness = (
   return { dependencies, web, catalog, all }
 }
 
-let preparing = (root = dir, timeout = 600_000) =>
+let preparing = (root = dir, timeout = 600_000, quiet = false) =>
   readiness({
     dependencies: () =>
       timed('npm dependencies', async () => {
         let changed = await installed(root, { timeout })
         aliased()
         return changed
-      }),
+      }, quiet),
     web: () =>
       timed('Web assets', () =>
         generated('Web asset', [
           join(repo, 'packages/web/assets.ts'),
           join(root, 'public/_web'),
           '@yaks/browse/web',
-        ])),
+        ], quiet), quiet),
     draft: () =>
-      timed('Draft assets', () =>
-        generated('Draft asset', [join(root, 'draft-assets.ts')])),
+      timed(
+        'Draft assets',
+        () => generated('Draft asset', [join(root, 'draft-assets.ts')], quiet),
+        quiet,
+      ),
     outbox: () =>
-      timed('Outbox assets', () =>
-        generated('Outbox asset', [join(root, 'outbox-assets.ts')])),
+      timed(
+        'Outbox assets',
+        () =>
+          generated('Outbox asset', [join(root, 'outbox-assets.ts')], quiet),
+        quiet,
+      ),
     cli: () =>
       timed('Sandbox CLI', () =>
-        generated('Sandbox CLI', [join(root, 'sandbox/cli-assets.ts')])),
+        generated(
+          'Sandbox CLI',
+          [join(root, 'sandbox/cli-assets.ts')],
+          quiet,
+        ), quiet),
     catalog: () =>
       timed('Compiler catalog', () =>
         generated('Compiler catalog', [
           join(repo, 'bin/compiler-packages.ts'),
-        ])),
+        ], quiet), quiet),
   })
 
-/** Prepare every prerequisite before a probe reads it. Answers whether npm installed. */
-export let ready = async (root = dir, timeout = 600_000) => {
-  let made = preparing(root, timeout)
+/** Prepare every prerequisite before a probe reads it. Answers whether npm
+ * installed. `quiet` says only what failed: a test run's reader acts on
+ * nothing else. */
+export let ready = async (quiet = false, root = dir, timeout = 600_000) => {
+  let made = preparing(root, timeout, quiet)
   await made.all
   return await made.dependencies
 }

@@ -134,24 +134,28 @@ export let file = async (
 }
 
 /** What a run took, in milliseconds: the whole of it, its planning and its
- * loading, each file's load and each test that ran; and each file it
- * remembered as passed, by its key (./deps.ts), so a caller holding the run
- * to more than passing can take a pass back. */
+ * loading, each file's load and each test that ran; each file it remembered
+ * as passed, by its key (./deps.ts), so a caller holding the run to more than
+ * passing can take a pass back; and how many tests it skipped and files it
+ * left out as unchanged since they passed. */
 export type Times = {
   wall: number
   planned: number
   loading: number
   loads: Record<string, number>
   remembered: Record<string, string>
+  ignored: number
+  left: number
   tests: { file: string; name: string; ms: number; ok: boolean }[]
 }
 
 /** A run's times, as `--times` writes them: skipped tests took nothing. */
 export let timed = (
   outcomes: Outcome[],
-  run: Omit<Times, 'tests'>,
+  run: Omit<Times, 'tests' | 'ignored'>,
 ): Times => ({
   ...run,
+  ignored: outcomes.filter((o) => o.skipped).length,
   tests: outcomes.filter((o) => !o.skipped).map((o) => ({
     file: o.test.file,
     name: o.test.name,
@@ -163,29 +167,68 @@ export let timed = (
 let shown = (error: unknown) =>
   error instanceof Error ? error.stack ?? String(error) : Deno.inspect(error)
 
+// This package's own modules: the runner's frames sit under every test's,
+// and an assertion's or a wait's atop the line that called it.
+let RUNNER = ['run', 'suite', 'main', 'load', 'assert', 'wait']
+  .map((m) => new URL(`./${m}.ts`, import.meta.url).href)
+
+/** The most of one error the closing report says, unless `--verbose`. */
+export let LINES = 30
+
+/// brief('Error: no\n\n\n  at f (file:///r/a_test.ts:2:1)\n  at g (ext:core/x.js:1:1)', 'file:///r/') -> 'Error: no\n\n  at f (a_test.ts:2:1)'
+/// brief('a\nb\nc', 'file:///r/', 2) -> 'a\nb\n… 1 more line (--verbose says it whole)'
 /**
- * The closing report: every failure with its errors, then the counts, the
- * files left out as unchanged since they passed, and what the run spent
- * before its first test and loading its files.
+ * An error as the closing report says it: its stack holds only the frames in
+ * the checkout `root`, from it, and no more than one blank line in a row;
+ * then it is cut to `lines`. A frame in a dependency, the runtime or this
+ * package is never where a test failed, and its call site in the checkout
+ * stays.
+ */
+export let brief = (text: string, root: string, lines = LINES) => {
+  let kept = text.split('\n').filter((l, i, all) =>
+    /^\s+at /.test(l)
+      ? l.includes(root) && !RUNNER.some((m) => l.includes(m))
+      : l.trim() || all[i - 1]?.trim()
+  ).map((l) => l.replaceAll(root, ''))
+  let more = kept.length - lines
+  return more > 0
+    ? [
+      ...kept.slice(0, lines),
+      `… ${more} more line${more == 1 ? '' : 's'} (--verbose says it whole)`,
+    ].join('\n')
+    : kept.join('\n')
+}
+
+/**
+ * The closing report: every failure with its errors, then the counts and the
+ * files left out as unchanged since they passed. Each error is `brief`;
+ * `verbose` says each whole, then names the failures again and what the run
+ * spent before its first test and loading its files.
  */
 export let summary = (
   outcomes: Outcome[],
   ms: number,
   { left = 0, planned = 0, loading = 0 } = {},
+  verbose = false,
 ) => {
   let failed = outcomes.filter((o) => !o.ok)
   let passed = outcomes.filter((o) => o.ok && !o.skipped).length
   let ignored = outcomes.filter((o) => o.skipped).length
+  let root = `file://${Deno.cwd()}/`
   let text = ''
   if (failed.length) {
     text += `\n${paint(31, 'ERRORS')}\n\n`
     for (let o of failed) {
       text += `${o.test.name} => ${at(o.test.file)}\n`
-      for (let e of o.errors) text += `${shown(e)}\n`
+      for (let e of o.errors) {
+        text += `${verbose ? shown(e) : brief(shown(e), root)}\n`
+      }
       text += '\n'
     }
-    text += `${paint(31, 'FAILURES')}\n\n`
-    for (let o of failed) text += `${o.test.name} => ${at(o.test.file)}\n`
+    if (verbose) {
+      text += `${paint(31, 'FAILURES')}\n\n`
+      for (let o of failed) text += `${o.test.name} => ${at(o.test.file)}\n`
+    }
   }
   text += `\n${failed.length ? paint(31, 'FAILED') : paint(32, 'ok')} | ${
     [
@@ -194,8 +237,11 @@ export let summary = (
       ...ignored ? [`${ignored} ignored`] : [],
       ...left ? [`${left} unchanged since they passed`] : [],
     ].join(' | ')
-  } ${paint(90, `(${took(ms)})`)}\n${
-    paint(90, `planned in ${took(planned)}, loaded in ${took(loading)}`)
-  }\n`
+  } ${paint(90, `(${took(ms)})`)}\n`
+  if (verbose) {
+    text += `${
+      paint(90, `planned in ${took(planned)}, loaded in ${took(loading)}`)
+    }\n`
+  }
   say(text)
 }

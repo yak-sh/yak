@@ -89,10 +89,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: deno task deploy:time ${{ github.sha }}
 
+      # Verbose, here and below: the gate's log is read whole, so it keeps
+      # every check's output and every test's line.
       - name: deno task check
         env:
           SUITE_STEP: deno task check
-        run: deno task check
+        run: deno task check --verbose
 
       # Every platform's tests (bin/test.ts), workerd's included, held to the
       # budget (bin/test-budget.ts): a test over 1 ms that
@@ -112,7 +114,7 @@ jobs:
           TMPDIR: /tmp/yak-gate
         # All of it (`--all`): this machine keeps no record of what passed
         # before, and only a whole run holds the wall.
-        run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all'
+        run: 'XDG_RUNTIME_DIR=/run/user/$(id -u) DB_PATH=:memory: deno task test --all --verbose'
 
       # Reads the row `deploy time` wrote; needs no credentials. Until
       # T-35336 rows were only written when someone hand-ran deploy:time, so

@@ -148,29 +148,37 @@ export async function timed(command: string, args: string[]): Promise<Sample> {
  * handed past its own task. A run narrowed to a path or a platform times less
  * than the whole suite, so it is a suite of its own, and never banks its time
  * as the whole suite's floor nor is judged against it. What the budget does
- * with a run's times (`--write`, `--report`, bin/test-budget.ts) changes
- * nothing it runs.
+ * with a run's times (`--write`, `--report`, bin/test-budget.ts) and how much
+ * a run says (`--verbose`) change nothing it runs.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals(suiteOf('test', 'deno', ['task', 'test:run']), 'test')
+ * assertEquals(suiteOf('test', 'deno', ['task', '-q', 'test:run']), 'test')
  * assertEquals(
  *   suiteOf('test', 'deno', ['task', 'test:run', '--tag=deno', 'workers']),
  *   'test --tag=deno workers',
  * )
  * assertEquals(suiteOf('ci/tests', 'bash', ['-c', 'x']), 'ci/tests')
  * assertEquals(
- *   suiteOf('test', 'deno', ['task', 'test:run', '--all', '--write']),
+ *   suiteOf('test', 'deno', ['task', '-q', 'test:run', '--all', '--write']),
  *   'test --all',
+ * )
+ * assertEquals(
+ *   suiteOf('test', 'deno', ['task', 'test:run', '--verbose', 'bin']),
+ *   'test bin',
  * )
  * ```
  */
 export let suiteOf = (name: string, command: string, args: string[]) => {
-  let rest = args.slice(2).filter((a) => a != '--write' && a != '--report')
+  let task = args.findIndex((a, i) => i > 0 && !a.startsWith('-'))
+  let rest = args.slice(task + 1).filter((a) => !SAME.includes(a))
   return command == 'deno' && args[0] == 'task' && rest.length
     ? [name, ...rest].join(' ')
     : name
 }
+
+// The flags a suite is the same suite without.
+let SAME = ['--write', '--report', '--verbose']
 
 export let command = async (args: string[]) => {
   let [name, cmd, ...rest] = args
@@ -193,7 +201,11 @@ export let command = async (args: string[]) => {
     } — ${sample.seconds.toFixed(3)}s, ratio ${
       result.benches[0].median.toFixed(3)
     }${result.loaded ? ' (loaded)' : ''}`
-    console.log(message)
+    // Report-only, so said where a run is read whole: in CI, or on
+    // `--verbose`. An agent reads the rest of a run on every later turn.
+    if (name.startsWith('ci/') || rest.includes('--verbose')) {
+      console.log(message)
+    }
     let summary = Deno.env.get('GITHUB_STEP_SUMMARY')
     if (summary) {
       await Deno.writeTextFile(summary, message + '\n\n', { append: true })

@@ -79,7 +79,8 @@ test('a run started inside a run refuses at once', async () => {
 })
 
 // A failing platform does not cancel the others: each runs to its own end
-// and prints its own report, and the coordinator fails afterwards.
+// and prints its own report (whole, `--verbose`), and the coordinator fails
+// afterwards.
 for (let failure of [false, true]) {
   test(`every platform runs to its end${failure ? ' past a failing one' : ''}`, async () => {
     let dir = await Deno.makeTempDir({ prefix: 'test-platforms-' })
@@ -111,6 +112,7 @@ for (let failure of [false, true]) {
           '-A',
           runner,
           '--bulk',
+          '--verbose',
           `${dir}/a_test.ts`,
           `${dir}/packages/web/b_test.ts`,
         ],

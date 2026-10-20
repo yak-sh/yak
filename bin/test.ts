@@ -9,15 +9,20 @@
 // - workerd: every `*_workerd_test.ts`, against the one kernel
 //   workers/yak/probe-suite.ts starts for the run.
 //
-// `deno task test [--tag=t]... [--all] [path...]` runs what lies under the
-// paths given, or all of it, its platforms at once, and holds what each test
-// took to the budget (./test-budget.ts): a test over 1 ms that
+// `deno task test [--tag=t]... [--all] [--verbose] [path...]` runs what lies
+// under the paths given, or all of it, its platforms at once, and holds what
+// each test took to the budget (./test-budget.ts): a test over 1 ms that
 // bench/test-budget.json does not list fails the run, measured again first.
 // A platform's name is a tag every test on it carries, so `--tag=workerd`
 // runs that platform alone. A file whose tests all passed, with nothing it
 // depends on changed since, is left out unless `--all` is given
 // (packages/testing/deps.ts). `--write`, `--report` and `--from=dir` are the
 // budget's.
+//
+// A run says its failures, each error cut short, a line for what the budget
+// flags, and one closing line; an agent reads all of it on every later turn.
+// `--verbose` says each test as it ran, each error whole, and the budget's
+// findings in full: what the gate's log keeps.
 
 import { find, tested } from '@yaks/testing/find'
 import { runTestCommands, type TestCommand } from './phases.ts'
@@ -182,6 +187,26 @@ export let observe = async (
   read(pending + decoder.decode(), true)
 }
 
+/// failures('a ... ok (1ms)\n\nERRORS\n\nb => ./a_test.ts\nError: no\n\n\nFAILED | 1 passed | 1 failed (2ms)\n', '') -> 'ERRORS\n\nb => ./a_test.ts\nError: no\n\n'
+/// failures('', 'error: Module not found\n', 'test deno: 1') -> 'test deno: 1\nerror: Module not found\n'
+/**
+ * What a run says of a platform that failed, unless `--verbose`: its
+ * runner's report of the failures, without the counts that the run's own
+ * closing line sums (bin/test-budget.ts); or, from a runner that ended
+ * before it reported, `why` and the last `lines` it said. Nothing about a
+ * test that passed, nor what a test printed: `--verbose` says those.
+ */
+export let failures = (out: string, err: string, why = '', lines = 40) => {
+  let plain = out.replace(ansi, '')
+  let at = plain.lastIndexOf('\nERRORS\n')
+  if (at >= 0) {
+    return plain.slice(at + 1)
+      .replace(/\n+(?:ok|FAILED) \| \d+ passed \|[^\n]*\n*$/, '\n\n')
+  }
+  let all = (plain + err.replace(ansi, '')).trimEnd().split('\n')
+  return `${why}\n${all.slice(-lines).join('\n')}\n`
+}
+
 // Writes to a pipe may be short. Finish one report synchronously so another
 // platform cannot splice bytes into its test names and durations.
 function report(
@@ -212,6 +237,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   let args = Deno.args.slice(1)
   let flags = args.filter((a) => a.startsWith('--'))
   let paths = args.filter((a) => !a.startsWith('--'))
+  let verbose = flags.includes('--verbose')
   let idleLimit = Number(Deno.env.get('TASKS_TEST_IDLE_MS') ?? 60_000)
   if (!Number.isFinite(idleLimit) || idleLimit < 1) {
     throw new Error('invalid test idle limit')
@@ -290,7 +316,13 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       let name = runs[i][0]
       let idle = Date.now() - p.completed
       if (p.count > p.said && Date.now() - p.reported >= 15_000) {
-        console.error(`test ${name}: ${p.count} tests completed; now ${p.name}`)
+        // Progress is news to a person watching, not to an agent reading
+        // the run once it ends; a wait is news to both.
+        if (verbose) {
+          console.error(
+            `test ${name}: ${p.count} tests completed; now ${p.name}`,
+          )
+        }
         p.said = p.count
         p.reported = Date.now()
       } else if (idle >= 30_000 && Date.now() - p.reported >= 30_000) {
@@ -321,12 +353,18 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     let status = await child.status
     await followed
     progress[i].done = true
-    report(Deno.stdout, new Uint8Array(await output))
-    report(Deno.stderr, new Uint8Array(await error))
-    // Every platform runs to its own end and prints its own report.
-    if (!status.success) {
-      failed.push(`test ${runs[i][0]}: ${status.signal ?? status.code}`)
+    let why = `test ${runs[i][0]}: ${status.signal ?? status.code}`
+    // Every platform runs to its own end and prints its own report: whole
+    // when verbose, and otherwise only a red one's failures.
+    if (verbose) {
+      report(Deno.stdout, new Uint8Array(await output))
+      report(Deno.stderr, new Uint8Array(await error))
+    } else if (!status.success) {
+      let text = (b: ArrayBuffer) => new TextDecoder().decode(b)
+      let told = failures(text(await output), text(await error), why)
+      report(Deno.stdout, new TextEncoder().encode(told))
     }
+    if (!status.success) failed.push(why)
   }
   // The workerd platform, once the kernel it shares is up; the kernel stops
   // after its last test.
@@ -336,9 +374,11 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
       suite = await (await import('../workers/yak/probe-suite.ts'))
         .probeSuite()
     } catch (e) {
+      let why = 'test workerd: the kernel did not start'
+      if (!verbose) console.error(why)
       console.error(e)
       progress[i].done = true
-      failed.push('test workerd: the kernel did not start')
+      failed.push(why)
       return
     }
     try {
@@ -360,8 +400,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     clearInterval(watch)
   }
   // The closing word on a long run: which platforms were red, after every one
-  // of them has printed its own report.
-  if (failed.length) {
+  // of them has printed its own report. A short run said each as it ended.
+  if (verbose && failed.length) {
     console.error(`\n─── ${failed.length} failing platform(s) ───`)
     for (let line of failed) console.error(`  ${line}`)
   }
@@ -400,7 +440,8 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   // for the rest of its life, and each kernel in it answered its first
   // sign-in with a 500.
   let worker = files.some((f) => f.startsWith('workers/'))
-  if (worker) await (await import('../workers/yak/wrangler.ts')).ready()
+  let verbose = flags.includes('--verbose')
+  if (worker) await (await import('../workers/yak/wrangler.ts')).ready(!verbose)
   // The Stripe sandbox every kernel sells in, found once for a run that has
   // the Worker's tests and handed to every process by its environment
   // (probe.ts `vars`).
@@ -434,5 +475,5 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     return await runTestCommands([bulk])
   }
   let whole = !paths.length && !tags.length && flags.includes('--all')
-  Deno.exit(await hold(b, await measure(b, suite, whole), Deno.args))
+  Deno.exit(await hold(b, await measure(b, suite, whole, verbose), Deno.args))
 }

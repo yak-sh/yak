@@ -3,7 +3,7 @@
 // this one runtime a file at a time, each file's tests run as it loads.
 //
 //   main.ts [--tag=t]... [--platform=p] [--all] [--twice] [--also=path]...
-//     [--timeout=ms] [--times=dir] path...
+//     [--timeout=ms] [--times=dir] [--verbose] path...
 //
 // A path is a test module (`*_test.ts`), a page whose examples run (a module
 // or a Markdown page), or a directory holding them. `--tag` keeps the tests
@@ -17,14 +17,16 @@
 // every file a second time once all have run, as modules of their own, so a
 // test is also timed warm, the way it runs among the whole suite: for
 // measuring (bin/test-budget.ts), since a test that cannot run twice in one
-// runtime fails its second pass. The exit code is 1 when a test failed.
+// runtime fails its second pass. Each test is said as it runs; the closing
+// report cuts each failure's error short (./run.ts `brief`) unless
+// `--verbose`. The exit code is 1 when a test failed.
 import { keys, passed, remember } from './deps.ts'
 import { find } from './find.ts'
 import { examples, plan, sweep } from './load.ts'
 import { file, type Outcome, summary, timed } from './run.ts'
 import { collect, from, type Test, test } from './suite.ts'
 
-let FLAGS = /^--(tag|platform|also|timeout|times)=(.*)$|^--(all|twice)$/
+let FLAGS = /^--(tag|platform|also|timeout|times)=(.*)$|^--(all|twice|verbose)$/
 let odd = Deno.args.find((a) => a.startsWith('--') && !FLAGS.test(a))
 if (odd) {
   console.error(`main.ts: the runner has no flag ${odd}`)
@@ -119,14 +121,19 @@ let remembered = Object.fromEntries(
 )
 remember(Object.values(remembered))
 let wall = performance.now() - started
-summary(outcomes, wall, { left, planned, loading })
+summary(
+  outcomes,
+  wall,
+  { left, planned, loading },
+  Deno.args.includes('--verbose'),
+)
 let times = flag('times').at(-1)
 if (times) {
   await Deno.mkdir(times, { recursive: true })
   await Deno.writeTextFile(
     `${times}/${platform || 'tests'}.json`,
     JSON.stringify(
-      timed(outcomes, { wall, planned, loading, loads, remembered }),
+      timed(outcomes, { wall, planned, loading, loads, remembered, left }),
     ),
   )
 }

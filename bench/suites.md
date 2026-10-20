@@ -6,8 +6,9 @@ only when intentionally bypassing timing. Arguments and exit statuses pass
 through, and a run given arguments (`deno task test --tag=deno workers`) is a
 suite of its own, named with them, so a narrowed run never becomes the whole
 suite's floor. Timing is **report-only**, matching the performance steps in CI:
-a regression is printed as `REGRESSION`, not turned into a failing test or a
-deployment veto.
+the `benchmark:` line closing a run says its verdict (`REGRESSED` for a
+regression), and never turns it into a failing test or a deployment veto. The
+line is said in CI and on `--verbose`; a run an agent reads leaves it out.
 
 Each command is a suite in [@yaks/benchmark](../packages/benchmark/README.md).
 `check` writes `bench/suite-check.results.json` and checks the committed

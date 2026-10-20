@@ -87,6 +87,13 @@ stronger.
   one runtime of the runner (bin/test.ts). `--tag=deno` (or `browser`,
   `terminal`, `workerd`, or any tag a test carries) narrows it; `--all` runs
   files the skip would leave out.
+- A run says only what you act on, since its output is read again on every
+  later turn: each failure's name, file and error (its frames in the checkout,
+  cut to 30 lines), a line naming the slowest few tests the budget flags, and
+  one closing line, `ok | 394 passed | 0 failed | 0 over budget (1.8s)`.
+  `--verbose` says each test as it ran, each error whole and the budget's
+  findings in full; the gate and the Workers build pass it, since their logs
+  are read whole.
 - A file whose tests all passed is skipped while nothing it depends on has
   changed: its module graph as `deno info` sees it, files it names beside
   itself with `new URL(…, import.meta.url)`, the runner, config, lock and Deno
@@ -130,13 +137,16 @@ stronger.
   step short: read the job's whole log, `gh api
   repos/yak-sh/yak/actions/jobs/<job id>/logs`.
 - `deno task test` and `deno task check` are timed against a baseline
-  (bench/suites.md); the `benchmark:` line closing a run is that timing,
-  report-only, not a test result.
+  (bench/suites.md); with `--verbose` or in CI, the `benchmark:` line closing a
+  run is that timing, report-only, not a test result.
 - `deno task check` (fmt, lint, bytes, types, publish, browser, workers and
-  content) is separate from tests, and `deno task gate` runs both; run
-  `deno fmt` and `deno lint` on the files you changed before landing—the gate
-  refuses both—and run the other parts your change touches
-  (`deno task check:types`, …).
+  content) is separate from tests, and `deno task gate` runs both. Each check
+  says one line, and a failed one its output, cut to its first and last lines;
+  `deno task check:types` (or whichever failed) says it whole, and
+  `--verbose` says every check's output as it comes. Run `deno fmt` and
+  `deno lint` on the files you changed before landing—the gate refuses
+  both—and run the other parts your change touches (`deno task check:types`,
+  …).
 - Piping a run eats its exit code: read `${pipestatus[1]}` before acting.
 - A run doesn't type-check (`--no-check`); the gate does. `deno check` the files
   you changed, test files included, before landing.

@@ -231,7 +231,7 @@ try {
 
 ```sh
 deno run -A jsr:@yaks/testing/main [--tag=t]... [--platform=p] [--all] \
-  [--also=path]... [--timeout=ms] [--times=dir] path...
+  [--also=path]... [--timeout=ms] [--times=dir] [--verbose] path...
 ```
 
 A path names a test module, a page, or a directory holding them. Files load one
@@ -240,13 +240,20 @@ load fails as a test. A test that exceeds `--timeout` (default 50000 ms) fails
 and the runner continues; the timeout does not cancel its body. A failed test
 sets exit code 1; an unknown flag sets exit code 2.
 
+The runner says each test as it runs (`adds ... ok (120µs)`), then a closing
+report: each failed test's name and file with its errors, then the counts. An
+error keeps only the stack frames in the current directory, named from it, and
+none of this package's own, and is cut to 30 lines. `--verbose` says each error
+whole, names the failures again, and says what planning and loading took.
+
 `--tag` selects tests carrying every named tag; comma-separated tags are also
 accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
 all tests in the runtime. `--times` writes what the run took, in milliseconds,
 to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
 planning and loading, each file's load, each test that ran with its file, name
-and whether it passed, and each file the run remembered as passed, with its key
-in the pass record (`forget` from `@yaks/testing/deps` takes one back).
+and whether it passed, each file the run remembered as passed, with its key in
+the pass record (`forget` from `@yaks/testing/deps` takes one back), and how
+many tests it skipped and files it left out as unchanged.
 
 A file whose tests all passed is skipped while its dependencies are unchanged:
 its module dependencies resolved by `deno info`, files named with a literal
