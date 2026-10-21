@@ -21,6 +21,7 @@ import { sleep } from '@yaks/fp'
 import { WATCHED } from '../../workers/yak/wrangler.ts'
 import {
   BOUND,
+  firstShown,
   type Head,
   LATE,
   type Live,
@@ -59,7 +60,7 @@ export type Options = {
 /** Where the catch-up reads and acts: the box's own ({@link box}), or a
  * test's. */
 export type Doors = {
-  /** main's head at origin, and when it landed (ms) */
+  /** main's head at origin, and when origin first showed it (ms) */
   main: () => Promise<{ sha: string; at: number }>
   /** what yak serves */
   live: () => Promise<Omit<Live, 'has'>>
@@ -101,16 +102,19 @@ export let box = (
       sha,
     ])
   }
+  // A head's landing is its push, which git does not date: the commit's own
+  // time is when it was made, minutes before a land's gate lets it be pushed.
+  // Looked at each minute, the first look that shows a head is its push to
+  // within the look. A process that starts with a head already there starts
+  // its clock then.
+  let shown = firstShown()
   return {
     main: async () => {
       let sha = SHA.exec(await run(['ls-remote', 'origin', 'refs/heads/main']))
         ?.[0]
       if (!sha) throw new Error('origin has no main')
       await have(sha)
-      return {
-        sha,
-        at: Date.parse(await run(['show', '-s', '--format=%cI', sha])),
-      }
+      return shown(sha)
     },
     live: async () => {
       let now = serving(

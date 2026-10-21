@@ -7,7 +7,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { Interrupted } from '@yaks/tools/errors'
-import { BOUND, LATE, PENDING } from './catchup.ts'
+import { BOUND, firstShown, LATE, PENDING } from './catchup.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
 
@@ -205,4 +205,13 @@ test('a look cut off by shutdown is not reported', async () => {
     f.doors,
   )
   equal([passes, reports.length], [2, 0])
+})
+
+test("a head's clock starts when it is first shown and holds until the head moves", () => {
+  let t = 0
+  let shown = firstShown(() => t)
+  equal(shown('a'), { sha: 'a', at: 0 })
+  t = 60_000
+  equal(shown('a'), { sha: 'a', at: 0 })
+  equal(shown('b'), { sha: 'b', at: 60_000 })
 })

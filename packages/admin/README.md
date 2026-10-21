@@ -109,12 +109,13 @@ sometimes Builds starts no build for a push at all. The **deploy catch-up** is
 this plugin's service: it notices main's head is not live and starts main's
 build itself.
 
-Each minute it reads main's head from origin. Once the head has landed `LATE` (3
-minutes; Builds queues a build within seconds of a push) ago, it reads what
-`yak` serves with wrangler and compares the two commits through the build's
-watch paths (workers/yak/wrangler.ts `WATCHED`), so a push no build was meant
-for (a test, a README, an app) counts as live. A head that is not live asks
-main's deploy hook for a build, and the ask leaves a
+Each minute it reads main's head from origin. Once origin first showed the head
+(its push, to within a look, since a commit's own time is minutes before a
+land's gate lets it go) `LATE` (3 minutes; Builds queues a build within seconds
+of a push) ago, it reads what `yak` serves with wrangler and compares the two
+commits through the build's watch paths (workers/yak/wrangler.ts `WATCHED`), so
+a push no build was meant for (a test, a README, an app) counts as live. A head
+that is not live asks main's deploy hook for a build, and the ask leaves a
 `rebuilt{at, by, via,
 said}` mark on the commit's entity (its eid is its sha)
 with what Builds answered. The hook starts none while one is pending, so a slow

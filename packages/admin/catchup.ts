@@ -29,7 +29,7 @@ export let LATE = 3 * 60_000
  * the median, 640 s at most. */
 export let BOUND = 15 * 60_000
 
-/** main's head: its commit, when it landed (ms), and when the catch-up
+/** main's head: its commit, when origin first showed it (ms), and when the catch-up
  * started its build and gave up on it, if it has. */
 export type Head = {
   sha: string
@@ -42,6 +42,13 @@ export type Head = {
  * (ms), whether an operator rolled back to it, and whether it already has the
  * head's Worker source (wrangler.ts `WATCHED`). */
 export type Live = { sha: string; at: number; rollback: boolean; has: boolean }
+
+/** Dates each head by the first look that shows it (`now` in ms): the time of
+ * the head's push, to within a look. */
+export let firstShown = (now: () => number = Date.now) => {
+  let first: { sha: string; at: number } | undefined
+  return (sha: string) => first?.sha == sha ? first : first = { sha, at: now() }
+}
 
 /** What a pass does about the head: nothing yet (`wait`), read what is live
  * (`look`), nothing at all (`live`, `held`, `done`), start main's build
@@ -128,7 +135,7 @@ export let missed = (head: Head, live: Live, answer: string, late = LATE) =>
   new NotLive(
     `main's head ${short(head.sha)} is not live ${
       minutes(late)
-    } after it landed; yak serves ${short(live.sha)}. No Workers Build ` +
+    } after it was pushed; yak serves ${short(live.sha)}. No Workers Build ` +
       `deployed it, so the deploy catch-up started main's build through its ` +
       `deploy hook: ${answer}`,
   )
