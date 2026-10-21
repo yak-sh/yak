@@ -5,7 +5,6 @@ import { equal, ok, test, until } from '@yaks/testing'
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { machineDoc } from '@yaks/machine/vocab'
-import { fileDoc } from '@yaks/file/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc/vocab'
@@ -62,7 +61,6 @@ test('box role groups and enriches a spool occurrence through its configured cat
       gitDoc,
       codeDoc,
       machineDoc,
-      fileDoc,
     ], [
       kernelKeywords,
       edgeKeywords,
