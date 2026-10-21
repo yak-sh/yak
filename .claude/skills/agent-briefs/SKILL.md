@@ -83,6 +83,15 @@ works now" get built to preserve exactly what he may want gone. Before a
 constraint goes in, ask whether it came from him or from the code; if you can't
 say, check his words (M-37958).
 
+**A brief never designs.** For a data model or any design, it carries his words
+verbatim, the outcome he wants, and pointers to what exists; the agent
+researches and designs the components, properties and names (`vocabulary`,
+`design-docs`). Your own off-the-cuff model in a brief is one he has to
+contradict, and every correction sends you back to the agent with a paraphrase
+that can drift. His words: "let's not do data-modeling just off-the-cuff like
+that in briefs. let the agents research and design the data-model. that's their
+job".
+
 **The few constraints that bite here**: one shape after the change (M-17871), no
 yaks app brought down, fail closed, a package boundary it mustn't cross. The
 persona and the skills carry the rest, and repeating them buries what matters.
