@@ -67,7 +67,8 @@ let next = (resets: number, window: number, now: number) =>
  * import { paceOf } from './window.ts'
  * import { equal } from '@yaks/testing'
  *
- * let week = { provider: 'claude', window: 10080, used: 25, resets: '2026-10-27T11:00:00Z' }
+ * let week = { provider: 'claude', of: 'c', window: 10080, used: 25,
+ *   resets: '2026-10-27T11:00:00Z' }
  * equal(paceOf(week, Date.parse('2026-10-23T23:00:00Z')), 0.5)
  * ```
  */
@@ -91,7 +92,8 @@ export let current = (l: Limit, now: number): boolean =>
  * import { span } from './window.ts'
  * import { equal } from '@yaks/testing'
  *
- * let week = { provider: 'claude', window: 10080, used: 25, resets: '2026-10-27T11:00:00Z' }
+ * let week = { provider: 'claude', of: 'c', window: 10080, used: 25,
+ *   resets: '2026-10-27T11:00:00Z' }
  * let now = Date.parse('2026-10-21T12:00:00Z')
  * equal(span([week], now), ['2026-10-20', '2026-10-21'])
  * equal(span([], now), ['2026-10-15', '2026-10-21'])
