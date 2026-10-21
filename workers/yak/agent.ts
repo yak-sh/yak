@@ -68,6 +68,7 @@ import { bare, joined, lined } from './wire.ts'
 import { apex, type Host, hosted } from './host.ts'
 import { refuse, unavailable } from './tool.ts'
 import { inReach } from './declared.ts'
+import { caught } from './defects.ts'
 
 // One JSON Schema property as Zod. The tool table declares plain shapes — a
 // string, a number, a flag, a list, an object — and the MCP SDK takes Zod, so
@@ -164,15 +165,24 @@ export let answered = async (
     }
   }
   let c = ctx.clock ?? clock()
+  // The news rides on an answer the tool already earned. A door it is read
+  // from that fails (the space's tracker, the directory) is reported and the
+  // answer goes out without it: nothing was marked told, so the next write
+  // carries it.
+  let riding = (stage: string, read: () => Promise<string>) =>
+    c.time(stage, read).catch((e) => {
+      caught(e, { request: `reply ${stage}`, space: space!.slug })
+      return ''
+    })
   let text = !space || !ctx.person || readOnly
     ? out.text
     : out.text + (await Promise.all([
-      c.time('breaks', async () => {
+      riding('breaks', async () => {
         let who = currentWho ??
           { person: ctx.person, role: await ctx.dir.role(space, ctx.person) }
         return unseenBlock(await serve(ctx.env, space, who))
       }),
-      c.time('ceiling', () => ceiling(ctx.env, space)),
+      riding('ceiling', () => ceiling(ctx.env, space)),
     ])).join('')
   // A call to say it came from, where there is one: the builder runs these
   // same tools in its own loop (builder.ts), with nothing to point at.

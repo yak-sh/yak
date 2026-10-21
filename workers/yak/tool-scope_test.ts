@@ -325,6 +325,19 @@ test('tool scope: read only answers do not consume unseen details', async () => 
   equal(readOnly.reads, [])
 })
 
+let unreachable = fixture()
+unreachable.env.TRACKER_SECRET = 'tracker-secret'
+unreachable.env.TRACKER = {
+  fetch: () => Promise.resolve(Response.json({}, { status: 503 })),
+}
+test('tool scope: a write still answers when its unseen details cannot be read', async () => {
+  let result = await answered(
+    unreachable.ctx,
+    { text: 'saved', space: unreachable.space },
+  )
+  equal(result[0].content, { body: 'saved' })
+})
+
 let heldDoor = fixture()
 let oldDoor = appStore(heldDoor.env.STORE, heldDoor.space, {
   ...heldDoor.app,
