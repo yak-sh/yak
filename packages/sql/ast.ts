@@ -280,6 +280,8 @@ export type CreateTable = {
   ifNot?: boolean
   cols: Column[]
   keys?: Key[]
+  /** Its rows kept in its primary key's order, with no rowid beside it. */
+  withoutRowid?: boolean
 }
 
 export type CreateIndex = {

@@ -22,6 +22,20 @@ test('vacuum binds its destination as a value', () => {
   equal({ sql: bare.sql, params: bare.params }, { sql: 'vacuum', params: [] })
 })
 
+test('a table can keep its rows in its primary key, without a rowid', () => {
+  let { sql } = render({
+    t: 'create table',
+    name: 'v',
+    cols: [{ name: 'entity' }, { name: 'to' }],
+    keys: [{ pk: ['entity', 'to'] }],
+    withoutRowid: true,
+  })
+  equal(
+    sql,
+    'create table "v" ("entity", "to", primary key ("entity", "to")) without rowid',
+  )
+})
+
 test('a kept tree renders again around the values bound this time', () => {
   let label = as(
     when([[eq(col('kind'), lit('task')), lit('work')]], lit('other')),

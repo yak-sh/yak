@@ -384,7 +384,7 @@ let stmt = (s: Stmt, c: Ctx): string => {
           ...s.cols.map((k) => column(k, lit(c))),
           ...(s.keys ?? []).map((k) => key(k, lit(c))),
         ].join(', ')
-      })`
+      })${s.withoutRowid ? ' without rowid' : ''}`
     case 'create index':
       return `create ${s.unique ? 'unique ' : ''}index ${ifNot(s.ifNot)}${
         q(s.name)
