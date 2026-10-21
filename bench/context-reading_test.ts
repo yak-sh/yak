@@ -1,18 +1,14 @@
-import { loadTree } from '@yaks/oracle'
-import { compose } from '@yaks/cli/host'
 import { equal, test, throws } from '@yaks/testing'
 import {
   candidate,
   evidenceRows,
   finalCandidate,
-  measuredTree,
   readOnly,
   recording,
   score,
   totals,
-  treeRows,
 } from './context-reading.ts'
-import type { Item, Model, Request } from '@yaks/model'
+import type { Model, Request } from '@yaks/model'
 
 const c = {
   id: 'synthetic',
@@ -220,7 +216,7 @@ test('native evidence compares instants rather than timestamp spellings', async 
   await throws(() => evidenceRows([row], 'invalid'))
 })
 
-test('final candidate must consume completed tools, not oracle or pending prose', () => {
+test('final candidate must consume completed tools, not tool or pending prose', () => {
   let entries = [
     {
       entity: { eid: 'input' },
@@ -239,7 +235,7 @@ test('final candidate must consume completed tools, not oracle or pending prose'
       entity: { eid: 'result' },
       entry: { seq: 5 },
       result: { call: 'call' },
-      content: { body: 'Oracle prose' },
+      content: { body: 'Tool prose' },
     },
   ]
   equal(finalCandidate(entries), null)
@@ -266,273 +262,4 @@ test('final candidate must consume completed tools, not oracle or pending prose'
     }]),
     'Final interpretation',
   )
-})
-
-const treeEvidence = [{
-  entity: { eid: 'tree-evidence' },
-  created: { at: '2019-01-01T00:00:00Z' },
-  content: { body: 'Synthetic earlier blue rendering seam.' },
-  held_out: { answer: 'NEVER_TREE_LABEL' },
-  secret: { value: 'NEVER_TREE_KEY' },
-}]
-const treeCutoff = '2020-01-01T00:00:00Z'
-const treeContext = (title = 'Directory') => ({
-  advert: { title, description: 'Synthetic routing only.' },
-  self: 'Synthetic bounded context.',
-  shared: 'Synthetic shared context.',
-  evidence: ['tree-evidence'],
-})
-const treeCall = (name: string, args: unknown): Item => ({
-  kind: 'call',
-  id: crypto.randomUUID(),
-  name,
-  args: JSON.stringify(args),
-})
-let treeRequests: Request[] = []
-let treeResponder: (r: Request) => Item[] = (r) => {
-  if (r.tools.some((t) => t.name == 'publish_oracle')) {
-    let root = r.items[0].kind == 'instruction' &&
-      r.items[0].text.includes('The oracle directory:')
-    return [treeCall('publish_oracle', {
-      ...treeContext(),
-      children: root
-        ? [{
-          domain: 'Parent assigned blue seam, not the child advertisement.',
-          evidence: ['tree-evidence'],
-          tools: ['query_oracle', 'revise_oracle'],
-        }]
-        : [],
-    })]
-  }
-  return [{ kind: 'assistant', text: 'Synthetic blue seam.' }]
-}
-const treeModel: Model = (r) => {
-  treeRequests.push(structuredClone(r))
-  return Promise.resolve({ ...reply, model: r.model, items: treeResponder(r) })
-}
-let oracleHost = await compose(
-  {
-    db: ':memory:',
-    plugins: [
-      '@yaks/kernel',
-      '@yaks/doc',
-      '@yaks/edge',
-      '@yaks/session',
-      '@yaks/tools',
-      '@yaks/context',
-      '@yaks/oracle',
-    ],
-  },
-  ['graph'],
-  undefined,
-  { process: false },
-)
-const measured = await measuredTree({
-  graph: oracleHost.graph,
-  tree: crypto.randomUUID(),
-  prepare: true,
-  rows: treeEvidence,
-  cutoff: treeCutoff,
-  model: treeModel,
-  limits: { maxNodes: 2 },
-})
-const opened = JSON.parse(
-  await measured.tool.run({
-    message: 'Original message: Explain this. Context: blue seam.',
-  }) as string,
-)
-const continued = JSON.parse(
-  await measured.tool.run({
-    message: 'And what structure routes this?',
-    conversation: opened.conversation,
-  }) as string,
-)
-const separate = JSON.parse(
-  await measured.tool.run({ message: 'Other asker.' }) as string,
-)
-const converted = await measured.calls()
-const candidateCalls: Parameters<typeof recording>[1] = []
-await recording(treeModel, candidateCalls, true, 'candidate-answer')(req)
-
-let measuredSaved = await loadTree(oracleHost.graph, measured.evidence().tree)
-let measuredDialogues = await oracleHost.graph.read(
-  `.oracle_dialogue.tree=${measured.evidence().tree} *`,
-)
-let measuredEntries = await oracleHost.graph.read('.entry *')
-test('tree corpus is validated against each case cutoff before a run', async () => {
-  let packet = {
-    historical_cases: [c],
-    oracleTree: {
-      tree: measured.evidence().tree,
-      rows: treeEvidence,
-      limits: { maxNodes: 100 },
-    },
-  }
-  treeRows(packet, true)
-  await throws(() => treeRows(packet, false))
-  await throws(() => treeRows({ ...packet, ownerOracle: true }, true))
-  await throws(() =>
-    treeRows({
-      ...packet,
-      historical_cases: [c, {
-        ...c,
-        id: 'earlier',
-        input: {
-          original_message: {
-            exact_words: 'Earlier',
-            timestamp: '2018-01-01T00:00:00Z',
-          },
-        },
-      }],
-    }, true)
-  )
-})
-
-test('native oracle tool opens and continues receiving forks without a fake asker', () => {
-  equal(opened.conversation, continued.conversation)
-  equal(opened.conversation == separate.conversation, false)
-  equal(measured.consulted(), true)
-  equal(measuredDialogues.length, 2)
-  equal(converted.filter((call) => call.role == 'oracle-tree-growth').length, 2)
-  equal(
-    converted.filter((call) => call.role == 'oracle-tree-routing-answer')
-      .length,
-    3,
-  )
-  equal(converted.some((call) => call.role == 'oracle-tree-asker'), false)
-  equal(
-    treeRequests.every((r) =>
-      r.model == 'gpt-6.1-sol' || r.model == 'synthetic'
-    ),
-    true,
-  )
-  equal(
-    measuredEntries.filter((b) =>
-      b.content && !b.output && !b.call && !b.result && !b.prompt
-    ).length >= 3,
-    true,
-  )
-})
-
-test('tree artifacts retain nodes and revisions while counting engine and candidate once', () => {
-  let artifact = measured.evidence()
-  equal(measuredSaved.nodes.length, 2)
-  equal(measuredSaved.nodes.find((n) => n.parent)?.revisions.length, 1)
-  equal(
-    measuredSaved.nodes.some((n) => n.domain.includes('Parent assigned')),
-    true,
-  )
-  equal(artifact.limits.requestTokens, 100_000)
-  equal(artifact.limits.evidencePageTokens, 20_000)
-  equal(artifact.limits.ownTokens, 5000)
-  equal(artifact.counter, 'utf8-bytes')
-  equal(JSON.stringify(artifact).includes('NEVER_TREE'), false)
-  equal(converted.length, artifact.trace.length)
-  equal(converted.every((call) => call.contextHash.length == 64), true)
-  equal(
-    totals([...converted, ...candidateCalls]).calls,
-    artifact.trace.length + 1,
-  )
-  equal(totals([...converted, ...candidateCalls]).inputTokens, 60)
-  measured.assertReady()
-})
-
-const failedTree = await measuredTree({
-  graph: oracleHost.graph,
-  tree: crypto.randomUUID(),
-  prepare: true,
-  rows: treeEvidence,
-  cutoff: treeCutoff,
-  model: () => Promise.reject(new Error('synthetic root failure')),
-  limits: { maxNodes: 100 },
-})
-const failedCalls = await failedTree.calls()
-let childrenFailedModel: Model = (r) => {
-  if (
-    r.items[0].kind == 'instruction' &&
-    r.items[0].text.includes('The oracle directory:')
-  ) return treeModel(r)
-  return Promise.reject(new Error('synthetic child failure'))
-}
-const partialTree = await measuredTree({
-  graph: oracleHost.graph,
-  tree: crypto.randomUUID(),
-  prepare: true,
-  rows: treeEvidence,
-  cutoff: treeCutoff,
-  model: childrenFailedModel,
-  limits: { maxNodes: 100 },
-})
-
-let partialSaved = await loadTree(oracleHost.graph, partialTree.evidence().tree)
-
-test('failed growth retains serializable trace and partial nodes instead of disappearing', async () => {
-  await throws(() => failedTree.assertReady())
-  equal(failedCalls.length, 1)
-  equal(failedCalls[0].error?.includes('synthetic root failure'), true)
-  equal(totals(failedCalls).inputTokens, null)
-  equal(failedTree.evidence().growthError?.includes('Root failed'), true)
-  equal(JSON.parse(JSON.stringify(failedTree.evidence())).trace.length, 1)
-  partialTree.assertReady()
-  equal(partialSaved.nodes.length, 2)
-  equal(partialTree.evidence().stats.readyNodes, 1)
-  equal(partialTree.evidence().stats.partialErrors.length, 1)
-})
-
-let growthOnly = true
-let reviewTurn = 0
-const hundred = await measuredTree({
-  graph: oracleHost.graph,
-  tree: crypto.randomUUID(),
-  prepare: true,
-  rows: treeEvidence,
-  cutoff: treeCutoff,
-  limits: { maxNodes: 100 },
-  model: (r) => {
-    let items: Item[]
-    if (growthOnly) {
-      items = [treeCall('publish_oracle', {
-        ...treeContext(),
-        children: Array.from({ length: 9 }, (_, i) => ({
-          domain: `Synthetic assigned domain ${i}`,
-          evidence: ['tree-evidence'],
-          tools: ['revise_oracle'],
-        })),
-      })]
-    } else if (reviewTurn++ == 0) {
-      items = [treeCall('decline', { reason: 'Wrong synthetic domain.' })]
-    } else if (
-      reviewTurn == 2 && r.tools.some((t) => t.name == 'revise_oracle')
-    ) {
-      items = [
-        treeCall('revise_oracle', treeContext('Narrower routing advert')),
-      ]
-    } else {items = [{
-        kind: 'assistant',
-        text: 'Declined; advertisement corrected.',
-      }]}
-    return Promise.resolve({ ...reply, model: r.model, items })
-  },
-})
-growthOnly = false
-await hundred.tool.run({ message: 'Synthetic off-domain structural question.' })
-const hundredCalls = await hundred.calls()
-
-const hundredArtifact = JSON.parse(JSON.stringify(hundred.evidence()))
-const hundredTotals = totals(hundredCalls)
-let hundredSaved = await loadTree(oracleHost.graph, hundred.evidence().tree)
-test('hundred ready nodes answer without revising the tree during a decline', () => {
-  hundred.assertReady()
-  let artifact = hundredArtifact
-  equal(artifact.stats.readyNodes, 100)
-  equal(hundredSaved.nodes.length, 100)
-  equal(artifact.trace.length, 102)
-  equal(artifact.declines[0].reason, 'Wrong synthetic domain.')
-  equal(artifact.changes.length, 0)
-  equal(hundredSaved.nodes.find((n) => !n.parent)?.revisions.length, 1)
-  equal(
-    hundredCalls.filter((c) => c.role == 'oracle-tree-decline-review').length,
-    1,
-  )
-  equal(Math.round(hundredTotals.dollars! * 10), 102)
 })

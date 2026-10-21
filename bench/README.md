@@ -426,11 +426,3 @@ To inspect one directly while holding the shared measurement lock:
 flock /tmp/yaks-throughput-bench.lock deno run -A bench/paired.ts \
   platform-waits /tmp/platform-paired.json
 ```
-
-## Manual oracle experiments
-
-[Oracle experiments](oracle-tree.md) separate historical interpretation from
-query-driven topic cultivation. The topic workload starts with only a root, then
-records research, context revisions, typed placements and reuse during ordinary
-native conversations. It runs manually; scripted checks exercise the measurement
-path without calling an external model.

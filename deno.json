@@ -215,8 +215,7 @@
     "./packages/inbox",
     "./packages/host",
     "./packages/game",
-    "./packages/claude",
-    "./packages/oracle"
+    "./packages/claude"
   ],
   "exclude": [
     "packages/workerd/conform.ts",

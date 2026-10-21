@@ -15,14 +15,6 @@
     "reversed": {
       "description": "How the relation reads from its far end: `cited by` for `cites`, so a post that another cites says it is cited by that one. A reader drawing the links that point at an entity shows this phrase; without one it can only show the relation's own name.",
       "type": "string"
-    },
-    "parent": {
-      "description": "Which endpoint is the parent in this relation: from for a container pointing to a member, to for a child pointing to its parent. This annotates the relation\u2019s meaning without changing edge direction. Omit it when the relation has no parent/child meaning.",
-      "type": "string",
-      "enum": [
-        "from",
-        "to"
-      ]
     }
   }
 }

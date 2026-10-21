@@ -4,18 +4,9 @@
  * schemas but executes only isolated graph reads. Output contains private context.
  */
 import { agent } from '@yaks/harness'
-import { ownerOracle, ownerWords } from './owner-oracle.ts'
-import {
-  conservativeTokens,
-  graphTree,
-  growOracleTree,
-  type OracleCall,
-  type OracleLimits,
-} from '@yaks/oracle'
 import { harnessTools } from '../packages/harness/tools.ts'
 import { skillItems, skillTools } from '../packages/harness/skills.ts'
 import { machines } from '../packages/harness/session_machines.ts'
-import type { Graph } from '@yaks/graph'
 import type { Tool } from '@yaks/session'
 import { compose } from '@yaks/cli/host'
 import { configPath, read } from '../packages/cli/config.ts'
@@ -53,15 +44,6 @@ export type Packet = {
   /** Audited candidate-only frozen graph rows, never auth or grading rows. */
   evidence?: Record<string, Bundle[]>
   skills?: Bundle[]
-  /** Opt-in single-node oracle grown only from per-case audited evidence. */
-  ownerOracle?: boolean
-  /** Audited earlier tree corpus, distinct from native per-case evidence. */
-  oracleTree?: {
-    rows: Bundle[]
-    limits: OracleLimits
-    tree: string
-    adjustment?: string
-  }
 }
 
 /** Explicit projection: held_out, answers and rubric never enter a request. */
@@ -80,7 +62,6 @@ export function candidate(c: Case, condition: Condition) {
 }
 
 export type Call = {
-  role?: string
   request: unknown
   contextHash: string
   response: Reply | null
@@ -91,7 +72,6 @@ export function recording(
   model: Model,
   calls: Call[],
   native = false,
-  role?: string,
 ): Model {
   let wrapped: Model = async (req: Request) => {
     if (!native && req.tools.length) {
@@ -111,7 +91,6 @@ export function recording(
       conversation: req.conversation,
     }))
     let call: Call = {
-      ...(role ? { role } : {}),
       request,
       contextHash:
         (await snapshot(JSON.stringify(request), 'request')).revision,
@@ -185,171 +164,9 @@ export function evidenceRows(rows: Bundle[], cutoff: string): Bundle[] {
   })
 }
 
-/** Validate the whole tree corpus independently for every historical cutoff.
- * Never silently filter a shared corpus into a different measurement per case.
- */
-export function treeRows(packet: Packet, native: boolean) {
-  if (!packet.oracleTree) return
-  if (!native) throw new Error('Oracle tree requires isolated native mode')
-  if (packet.ownerOracle) throw new Error('Choose ownerOracle or oracleTree')
-  for (let c of packet.historical_cases) {
-    evidenceRows(
-      packet.oracleTree.rows,
-      c.input.original_message.timestamp ?? '',
-    )
-    ownerWords(packet.oracleTree.rows, c.input.original_message.timestamp ?? '')
-  }
-}
-
-/** The engine is the sole recorder for tree calls. Convert its frozen trace,
- * including failed attempts, once; candidate calls use recording() separately.
- */
-export async function treeCalls(trace: readonly OracleCall[]): Promise<Call[]> {
-  return await Promise.all(trace.map(async (call) => ({
-    role: 'oracle-tree-' + call.role,
-    request: call.request,
-    contextHash:
-      (await snapshot(JSON.stringify(call.request), 'request')).revision,
-    response: call.reply ?? null,
-    error: call.error ?? null,
-    wallMs: call.wallMs,
-  })))
-}
-
-/** Native candidate is the real asker; no synthetic converse()/asker model.
- * Keep diagnostics accessible even when growth fails before returning a tree.
- */
-export async function measuredTree(options: {
-  rows: Bundle[]
-  cutoff: string
-  model: Model
-  limits: OracleLimits
-  graph: Graph
-  tree: string
-  title?: string
-  prepare?: boolean
-  adjustment?: string
-}) {
-  let trace: OracleCall[] = []
-  let tree: Awaited<ReturnType<typeof growOracleTree>> | undefined
-  let growthError: string | null = null
-  let consultations: {
-    message: string
-    conversation?: string
-    result?: unknown
-    error?: string
-  }[] = []
-  let limits = {
-    ownTokens: 5000,
-    requestTokens: 100_000,
-    evidencePageTokens: 20_000,
-    ...options.limits,
-  }
-  try {
-    // The injected model is recorded by the engine, with its exact per-call role.
-    tree = await graphTree(options.graph, {
-      title: options.title ?? 'Oracle tree',
-      retained: !options.prepare,
-      ...options,
-      rows: evidenceRows(options.rows, options.cutoff),
-      limits,
-      modelName: 'gpt-6.1-sol',
-      measureTokens: conservativeTokens,
-      onCall: (call) => {
-        trace.push(call)
-      },
-    })
-  } catch (e) {
-    growthError = String(e)
-  }
-  if (tree && options.adjustment) {
-    try {
-      await tree.query({ message: options.adjustment, maintenance: true })
-    } catch (e) {
-      growthError = String(e)
-    }
-  }
-  let assertReady = () => {
-    if (growthError) throw new Error(growthError)
-    let stats = tree!.stats()
-    if (stats.readyNodes < 1) {
-      throw new Error(
-        `Oracle tree shortfall: ${stats.readyNodes} ready nodes; need a ready root`,
-      )
-    }
-  }
-  let ask = tree?.question()
-  let tool: Tool = {
-    name: 'ask_oracle',
-    description:
-      'Consult the oracle tree with the original owner message and relevant context or uncertainty. Omit conversation to open a receiving fork; continue its returned conversation handle for follow-ups, including structural questions.',
-    parameters: {
-      type: 'object',
-      properties: {
-        message: { type: 'string' },
-        conversation: { type: 'string' },
-      },
-      required: ['message'],
-      additionalProperties: false,
-    },
-    run: async (args) => {
-      let { message, conversation } = args as {
-        message?: unknown
-        conversation?: unknown
-      }
-      if (
-        typeof message != 'string' || !message.trim() ||
-        (conversation !== undefined &&
-          (typeof conversation != 'string' || !conversation.trim()))
-      ) {
-        throw new Error(
-          'ask_oracle needs message and optional conversation text',
-        )
-      }
-      if (!tree) throw new Error(growthError ?? 'Tree unavailable')
-      let q: typeof consultations[number] = {
-        message,
-        ...(conversation === undefined
-          ? {}
-          : { conversation: conversation as string }),
-      }
-      consultations.push(q)
-      try {
-        q.result = await ask!({
-          message,
-          conversation: conversation as string | undefined,
-        })
-        return JSON.stringify(q.result)
-      } catch (e) {
-        q.error = String(e)
-        throw e
-      }
-    },
-  }
-  return {
-    tool,
-    assertReady,
-    calls: () => treeCalls(tree?.trace ?? trace),
-    consulted: () => consultations.some((q) => q.result !== undefined),
-    evidence: () => ({
-      root: tree?.root ?? trace[0]?.node ?? null,
-      // A root failure has no published revisions; retain its requests/errors.
-      tree: options.tree,
-      trace: tree?.trace ?? trace,
-      declines: tree?.declines ?? [],
-      changes: tree?.changes ?? [],
-      stats: tree?.stats() ??
-        { readyNodes: 0, calls: trace.length, partialErrors: [growthError] },
-      limits,
-      counter: 'utf8-bytes',
-      growthError,
-      consultations,
-    }),
-  }
-}
-
 /** A final interpretation must belong to the candidate transcript and consume
- * every completed tool result. Oracle prose and pre-result outputs do not count.
+ * every completed tool result. Tool-result prose and pre-result outputs do not
+ * count.
  */
 export function finalCandidate(entries: Bundle[]): string | null {
   let seq = (b: Bundle | undefined) =>
@@ -436,7 +253,6 @@ export function score(points: Point[], grades: Grade[], failed = false) {
 const plugins = [
   '@yaks/kernel',
   '@yaks/provenance',
-  '@yaks/oracle',
   '@yaks/id',
   '@yaks/key',
   '@yaks/alias',
@@ -506,21 +322,6 @@ export async function run(packet: Packet, options: {
       throw new Error('Frozen instruction revision mismatch: ' + file.source)
     }
   }
-  if (packet.ownerOracle) {
-    if (!options.native) {
-      throw new Error('Owner oracle requires isolated native mode')
-    }
-    for (let c of packet.historical_cases) {
-      if (!packet.evidence?.[c.id]) {
-        throw new Error('Oracle needs audited owner evidence')
-      }
-      ownerWords(
-        packet.evidence[c.id],
-        c.input.original_message.timestamp ?? '',
-      )
-    }
-  }
-  treeRows(packet, options.native ?? false)
   // Host-only reads, before any candidate exists. Never lend this CLI to it.
   let config = read(configPath()!)
   // Current native graph vocabulary, without plugin runtime configuration.
@@ -602,9 +403,6 @@ export async function run(packet: Packet, options: {
     { process: false },
   )
   await authHost.graph.apply(source, { trusted: true })
-  let oracleHost = packet.oracleTree
-    ? await compose(config, ['graph'], undefined, { process: false })
-    : undefined
   let results: unknown[] = []
   let allCalls: Call[] = []
   try {
@@ -621,8 +419,6 @@ export async function run(packet: Packet, options: {
         )
         let calls: Call[] = []
         let transcript: Bundle[] = []
-        let oracle: Awaited<ReturnType<typeof ownerOracle>> | undefined
-        let tree: Awaited<ReturnType<typeof measuredTree>> | undefined
         let error: string | null = null
         let session: string | null = null
         let a: ReturnType<typeof agent> | undefined
@@ -664,14 +460,10 @@ export async function run(packet: Packet, options: {
             vault: vaultOf(config.db!),
             person: config.person,
           }, () => undefined)
-          let transport = responses({ ...auth, web: false })
           let model = recording(
-            transport,
+            responses({ ...auth, web: false }),
             calls,
             options.native,
-            packet.ownerOracle || packet.oracleTree
-              ? 'candidate-answer'
-              : undefined,
           )
           let modelId = source.find((b) =>
             (b.model as { name?: string } | undefined)?.name == 'gpt-6.1-sol'
@@ -686,31 +478,6 @@ export async function run(packet: Packet, options: {
               ...skillTools(host.graph),
             ])
             : []
-          if (packet.ownerOracle) {
-            oracle = await ownerOracle({
-              rows: packet.evidence![c.id],
-              cutoff: c.input.original_message.timestamp ?? '',
-              grow: recording(transport, calls, true, 'owner-context-growth'),
-              query: recording(transport, calls, true, 'owner-query-fork'),
-            })
-            nativeTools.push(oracle.tool)
-          }
-          if (packet.oracleTree) {
-            if (!packet.oracleTree.tree) {
-              throw new Error('Answer runs require a retained graph tree')
-            }
-            tree = await measuredTree({
-              rows: packet.oracleTree.rows,
-              cutoff: c.input.original_message.timestamp ?? '',
-              model: transport,
-              limits: packet.oracleTree.limits,
-              graph: oracleHost!.graph,
-              tree: packet.oracleTree.tree,
-              adjustment: packet.oracleTree.adjustment,
-            })
-            tree.assertReady()
-            nativeTools.push(tree.tool)
-          }
           a = agent({
             h: { g: host.graph, fx: host.fx, vocab: host.vocab, me: host.me },
             providers: { openai: model },
@@ -724,24 +491,7 @@ export async function run(packet: Packet, options: {
             named: () => [],
             opening: () => Promise.resolve({ files }),
           })
-          let context = condition.contexts?.[c.id] ?? condition.text
-          let consultation = tree
-            ? '\nBefore your final interpretation, consult ask_oracle at least once. Supply the original owner message and relevant context or uncertainty. Continue the returned conversation handle as useful; you are the real asker. This is a measured historical oracle tree, not contact with the live owner.'
-            : oracle
-            ? '\nYou may consult ask_owner in plain words about the owner and earlier context. ' +
-              'Before your final interpretation, consult it at least once with the original message ' +
-              'and any context or uncertainty you need it to interpret. This is a measured oracle condition, not contact with the live owner.'
-            : ''
-          session = await a.start(
-            candidate(c, {
-              ...condition,
-              text: context + consultation,
-              contexts: undefined,
-            }),
-            {
-              model: modelId,
-            },
-          )
+          session = await a.start(candidate(c, condition), { model: modelId })
           await a.idle(session)
           transcript = await a.transcript(session)
           if (
@@ -751,12 +501,6 @@ export async function run(packet: Packet, options: {
             )
           ) {
             error = 'Missing or failed model call'
-          }
-          if (tree && !tree.consulted()) {
-            error = 'Required oracle tree consultation missing'
-          }
-          if (oracle && !oracle.evidence.queries.length) {
-            error = 'Required oracle consultation missing'
           }
           if (
             calls.some((call) =>
@@ -770,19 +514,6 @@ export async function run(packet: Packet, options: {
         } finally {
           await a?.close()
           await host.close()
-        }
-        // Engine trace includes growth, routing, decline reviews and failures.
-        // Append once, never wrap growth in a second totals recorder.
-        if (tree) calls.push(...await tree.calls())
-        if (calls.some((call) => call.error || !call.response)) {
-          error ??= 'Missing or failed model call'
-        }
-        if (
-          calls.some((call) =>
-            call.response && call.response.model != 'gpt-6.1-sol'
-          )
-        ) {
-          error = 'Returned model differs from required gpt-6.1-sol'
         }
         allCalls.push(...calls)
         results.push({
@@ -800,8 +531,6 @@ export async function run(packet: Packet, options: {
           suppliedContext: files,
           calls,
           transcript,
-          oracle: oracle?.evidence,
-          oracleTree: tree?.evidence(),
           error,
           totals: totals(calls),
           wallMs: performance.now() - start,
@@ -822,7 +551,6 @@ export async function run(packet: Packet, options: {
       }
     }
   } finally {
-    await oracleHost?.close()
     await authHost.close()
   }
 }

@@ -27,6 +27,6 @@ export let EDGE_URI = 'https://yak.sh/vocab/edge'
  */
 export let edgeKeywords: Keywords = {
   uri: EDGE_URI,
-  comp: ['edge', 'reversed', 'parent'],
+  comp: ['edge', 'reversed'],
   doc,
 }

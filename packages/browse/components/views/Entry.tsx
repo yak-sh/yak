@@ -90,11 +90,7 @@ let source = (e: Ent) => {
   if (e.checkpoint) return 'checkpoint'
   if (e.output) return e.reasoning ? 'reasoning' : 'model'
   let session = e.entry?.session ? ent(e.entry.session) : undefined
-  return session?.session?.operator
-    ? 'person'
-    : session?.oracle_dialogue
-    ? 'caller'
-    : 'input'
+  return session?.session?.operator ? 'person' : 'input'
 }
 let failed = (e: Ent) =>
   (e.exit?.code != null && e.exit.code != 0) || !!e.refusal || !!e.error ||

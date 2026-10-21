@@ -135,7 +135,7 @@ export let specimens = (): Specimen[] => [
     'Tile, Title-wrap, Sub-wrap',
     h(
       Tile,
-      { href: '#oracle' },
+      { href: '#topic' },
       h(Title, { mod: 'wrap' }, 'Vehicle maintenance'),
       h(
         Sub,

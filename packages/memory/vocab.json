@@ -316,32 +316,6 @@
       "positional": [
         "id"
       ]
-    },
-    "topic_context": {
-      "component": true,
-      "journal": false,
-      "type": "object",
-      "properties": {
-        "parent": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "description": "Immutable context shared with immediate parent topics."
-        },
-        "self": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "description": "Immutable context kept for the topic’s own oracle."
-        },
-        "children": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "description": "Immutable context shared with immediate child topics."
-        }
-      },
-      "description": "The three deliberately cultivated contexts attached to a topic, each pointing to an immutable prompt and content record."
     }
   }
 }
