@@ -80,7 +80,7 @@ then answer wrong; where SQL can't be avoided, `reclassify(driver, eids)`
 inside its transaction sets them right (packages/sqlite/README.md).
 
 Prove it on a copy first. This copies the pages as one read transaction saw
-them, in about five minutes:
+them, in about six and a half minutes for the 14 GB file:
 
 ```sh
 sqlite3 -readonly ~/.yak/yak.db BEGIN "select count(*) from sqlite_schema" \
@@ -88,8 +88,9 @@ sqlite3 -readonly ~/.yak/yak.db BEGIN "select count(*) from sqlite_schema" \
 ```
 
 Without the BEGIN, `.backup` starts over each time another process commits,
-which on the box is several times a second; `VACUUM INTO` rebuilds every index
-and takes over half an hour on the 10 GB graph. Point a scratch config at the
+which on the box is several times a second; `VACUUM INTO` takes about as long
+(425 s) and writes a compacted copy, not the pages as they stood. Point a
+scratch config at the
 copy (`end-to-end-checks` has how a probe stays apart from the live graph),
 run the script, compare counts before and after, and run it again to show the
 second run changes nothing. A script that parses sqlite3's output names its
@@ -102,7 +103,7 @@ the proof is done.
 `bin/backup` puts a snapshot of the box's databases in R2 every night and
 keeps the newest seven; `bin/backup restore <new dir>` brings the newest back
 (the script's header has the rest). Cron runs it at 04:42, and it takes about
-25 minutes under a lock; each run is in ~/.tasks-backup.log, ending
+ten minutes under a lock; each run is in ~/.tasks-backup.log, ending
 `backup: <night>: <n> entities, done in <s>s`. When one finished recently, it
 will do; otherwise run `bin/backup` before the migration.
 
@@ -116,6 +117,17 @@ table. Back-to-back migration and restart commands leave a window where a
 pinned worker still asks for a column that no longer exists. If the replacement
 cannot serve before contraction, stop and drain the affected roles, migrate,
 then start them. A short planned pause preserves the graph's contract.
+
+A pause is held, not just begun. `lsof ~/.yak/yak.db` names every process
+holding the file, and `ps -o uunit= -p <pid>` tells a unit's own from a
+session's, which needs handling before the stop. Stopping the units fences
+nothing: any `yak restart` starts fresh ones from the templates (T-131297). A
+drop-in on each, `yak-{work,web,mail}@.service.d/<name>.conf` holding
+`[Unit]` `ConditionPathExists=!<file>`, keeps a started unit down until the
+file and the drop-in go (then `systemctl --user daemon-reload` and
+`yak restart`). bench-monitor probes the web at :00, :15, :30 and :45, so a
+pause between those ticks files no false regression. Letters wait at the edge
+and are pulled after it; one that waited past a minute is reported as late.
 
 The script is deleted in the next commit. Its commit is the record, and the
 message says what moved, with counts.
