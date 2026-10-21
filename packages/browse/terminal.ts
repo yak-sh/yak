@@ -169,7 +169,6 @@ export let open = async (url: string, opts: {
         // runs apart, as that layout's global `spaced` kept them.
         Debug: { spaced: true },
         Debug_Item: { spaced: true },
-        Debug_Props: { spaced: true },
         Debug_Claim: { fg: c.special },
         Debug_Prio: { fg: c.dim },
         Debug_Kind: { fg: c.dim },

@@ -3004,12 +3004,6 @@ a[data-ref]:hover {
   color: var(--muted);
   font-size: var(--small);
 }
-.Debug_Props {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 2px var(--gap);
-  align-items: baseline;
-}
 .Debug_Key {
   color: var(--muted);
   font-size: var(--small);

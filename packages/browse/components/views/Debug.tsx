@@ -41,7 +41,6 @@ let browser = typeof Deno == 'undefined'
 let Frame = ui.block('div', 'Debug', {
   Lens: 'div',
   Head: 'div',
-  Props: 'div',
   Tabs: 'div',
   Key: 'span',
   Comp: 'span',
@@ -64,7 +63,6 @@ let Frame = ui.block('div', 'Debug', {
 let {
   Lens,
   Head,
-  Props: Grid,
   Tabs,
   Key,
   Comp,
@@ -159,10 +157,14 @@ let comps = (e: Ent) => {
 // debug hides nothing, including absence.
 let leaf = (v: unknown) => <Val mod={shape(v)}>{face(v)}</Val>
 
-let Row = ({ k, v }: { k: string; v: unknown }) => (
+// One key → value row of the kit's Pairs: a browser lines the values up in a
+// column, a terminal writes `key: value` a line each.
+let pair = (key: ComponentChildren, value: ComponentChildren) => (
   <>
-    <Key>{k}</Key>
-    {leaf(v)}
+    <ui.Pairs.Key>
+      <Key>{key}</Key>
+    </ui.Pairs.Key>
+    <ui.Pairs.Value>{value}</ui.Pairs.Value>
   </>
 )
 
@@ -179,7 +181,7 @@ let refFace = (v: unknown) =>
     </>
   )
 
-// EVERY prop as a key → value grid row — the spine (eid, num), then each
+// EVERY prop as a key → value row — the spine (eid, num), then each
 // component whole ('pin.x  664'). kind is NOT here: it's derived, not
 // data, and the summary line above already says it. Wire-writable props
 // render through <Edit editable> — the typed vocabulary picks each one's
@@ -212,47 +214,48 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
     let assoc = isRef(name, k)
     let editable = k in (vocab[name] ?? {})
     let key = (path: string[] = []) => (
-      <Key>
+      <>
         <Comp mod={compTone(name)}>{name}.</Comp>
         {[k, ...path].join('.')}
         {path.length == 0 && rm}
-      </Key>
+      </>
     )
     // A value the reader can't edit opens into a row per leaf, so a
     // structure reads as keys and values: `spend.parts.input  [3,0,0,0,0.01]`.
     if (!assoc && !editable) {
       return leaves(v).map(([path, x]) => (
         <Fragment key={[name, k, ...path].join('.')}>
-          {key(path)}
-          {leaf(x)}
+          {pair(key(path), leaf(x))}
         </Fragment>
       ))
     }
     return (
       <Fragment key={`${name}.${k}`}>
-        {key()}
-        {assoc
-          ? (
-            <Edit
-              e={bundle(e)}
-              comp={name}
-              prop={k}
-              editable={editable}
-              show={(_, val) => refFace(val)}
-            />
-          )
-          : <Edit e={bundle(e)} comp={name} prop={k} editable />}
+        {pair(
+          key(),
+          assoc
+            ? (
+              <Edit
+                e={bundle(e)}
+                comp={name}
+                prop={k}
+                editable={editable}
+                show={(_, val) => refFace(val)}
+              />
+            )
+            : <Edit e={bundle(e)} comp={name} prop={k} editable />,
+        )}
       </Fragment>
     )
   })
 }
 
 let AllProps = ({ e }: { e: Ent }) => (
-  <Grid>
-    <Row k='eid' v={e.eid} />
-    <Row k='num' v={e.num} />
+  <ui.Pairs class='Debug_Props'>
+    {pair('eid', leaf(e.eid))}
+    {pair('num', leaf(e.num))}
     {comps(e).flatMap(([name, comp]) => cells(e, name, comp))}
-  </Grid>
+  </ui.Pairs>
 )
 
 // The add-comp picker — a `+ component` toggle listing wire-writable

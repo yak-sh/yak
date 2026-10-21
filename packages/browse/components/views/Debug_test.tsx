@@ -145,7 +145,10 @@ test('a reference reads as one association row, a structure as a row per leaf', 
     assertEquals(root.textContent.includes('Owner'), true)
     let input = [...root.querySelectorAll('.Debug_Key')]
       .find((k) => k.textContent == 'spend.parts.input')
-    assertEquals(input?.nextElementSibling?.textContent, '[3,0,0,0,0.01]')
+    assertEquals(
+      input?.closest('.Pairs_Key')?.nextElementSibling?.textContent,
+      '[3,0,0,0,0.01]',
+    )
   } finally {
     act(() => render(null, root))
     useRoute(priorRoute)
