@@ -15,7 +15,7 @@ import type { Wake } from './wake.ts'
 import type { Load } from '@yaks/host'
 import { directoryConfig } from './config.ts'
 import { load } from './load.ts'
-import { GRAPHQL } from './analytics.ts'
+import { API } from './analytics.ts'
 import { GIT_STORE, PLATFORM_STORE, storeOf } from './door.ts'
 import { KERNEL, metaOf } from './meta.ts'
 import type { Env } from './env.ts'
@@ -222,7 +222,7 @@ test('the meter wake runs its job at the supplied hour', async () => {
   let asked: Record<string, unknown>[] = []
   let fetch = globalThis.fetch
   globalThis.fetch = (url, init) => {
-    assertEquals(url, GRAPHQL)
+    assertEquals(url, `${API}/graphql`)
     asked.push(JSON.parse(String(init?.body)).variables)
     return Promise.resolve(
       Response.json({ data: { viewer: { accounts: [] } } }),

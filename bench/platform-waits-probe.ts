@@ -16,7 +16,9 @@ Deno.env.delete('STRIPE_PRICE')
 let scratch = await Deno.makeTempDir({ prefix: 'T-127095-platform-waits-' })
 Deno.env.set('TMPDIR', scratch)
 // Outside calls are denied before a byte can leave this process. Only exact
-// local payment fixtures and populated analytics answers are admitted.
+// local payment fixtures and analytics answers are admitted: populated visits,
+// and a GraphQL answer of nothing used and nothing killed for the directory's
+// meter and kill sweep, whose wakes fire when a run crosses one.
 const network = globalThis.fetch
 const denied: string[] = []
 globalThis.fetch = async (input, init) => {
@@ -27,10 +29,12 @@ globalThis.fetch = async (input, init) => {
   }
   const fixture = external(req)
   if (fixture) return fixture
-  if (
-    u.origin == 'https://analytics.benchmark.invalid' &&
-    u.pathname == '/accounts/local/analytics_engine/sql' && req.method == 'POST'
-  ) {
+  const analytics = u.origin == 'https://analytics.benchmark.invalid' &&
+    req.method == 'POST'
+  if (analytics && u.pathname == '/graphql') {
+    return Response.json({ data: { viewer: { accounts: [] } } })
+  }
+  if (analytics && u.pathname == '/accounts/local/analytics_engine/sql') {
     const sql = await req.text()
     const row = sql.includes(' AS day')
       ? { day: new Date().toISOString().slice(0, 10), views: 42 }

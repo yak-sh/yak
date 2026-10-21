@@ -306,7 +306,7 @@ export let sweep = async (env: Env, now = new Date()) => {
   let month = monthOf(now)
   let at = now.toISOString()
   let answer = env.CF_ANALYTICS_TOKEN
-    ? await ask<Data>(env.CF_ANALYTICS_TOKEN, QUERY, {
+    ? await ask<Data>(env, QUERY, {
       account: env.CF_ACCOUNT ?? '',
       since: `${month}-01T00:00:00Z`,
       until: at,

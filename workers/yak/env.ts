@@ -119,10 +119,13 @@ export type Env = {
   // platform's own sign-in codes go out from bot.yak.sh rather than an app's
   // address.
   MAIL?: Binding
-  // Account Analytics Read serves both usage.ts (the meter) and views.ts
-  // (page visits). CF_ACCOUNT is public and configured in wrangler.toml.
+  // Account Analytics Read serves every analytics read (analytics.ts): the
+  // meter (usage.ts), the kill sweep (kills.ts) and page visits (views.ts).
+  // CF_ACCOUNT is public and configured in wrangler.toml. ANALYTICS_API aims
+  // all of them somewhere other than Cloudflare, for a probe.
   CF_ANALYTICS_TOKEN?: string
   CF_ACCOUNT?: string
+  ANALYTICS_API?: string
   // REST APIs name these resources explicitly; bindings alone cannot keep
   // app uploads and analytics reads on this deployment.
   WORKER_NAME?: string
@@ -141,7 +144,6 @@ export type Env = {
       doubles?: number[]
     }): void
   }
-  ANALYTICS_API?: string
   // The per-source ceilings on the doors a stranger can knock on (rate.ts,
   // wrangler.toml `[[ratelimits]]`): sign-in code requests, OAuth client
   // registration, anonymous connector calls, anonymous feedback, and anonymous

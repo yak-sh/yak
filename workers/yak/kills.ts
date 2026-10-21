@@ -126,7 +126,7 @@ export let swept = async (
 ): Promise<string | null> => {
   let window = span(through, now)
   if (!window || !env.CF_ANALYTICS_TOKEN) return null
-  let answer = await ask<Data>(env.CF_ANALYTICS_TOKEN, QUERY, {
+  let answer = await ask<Data>(env, QUERY, {
     account: env.CF_ACCOUNT ?? '',
     script: env.WORKER_NAME ?? 'yak',
     ...window,

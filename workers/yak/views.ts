@@ -34,6 +34,7 @@
 // that row stands for, so a plain `count()` under-reports a busy app by
 // exactly the factor that made it busy, and nothing would say so.
 import type { Env } from './env.ts'
+import { api } from './analytics.ts'
 import type { Answer } from './apps.ts'
 import { APP, inApp, type Row, SPACE as SPACE_ARG, worded } from './tool.ts'
 import { url as appUrl } from './directory.ts'
@@ -182,13 +183,10 @@ export let TOP = 10
  */
 export let FRESH = 5 * 60_000
 
-/** Cloudflare's API, and the one endpoint on it that answers SQL. The account
- * is CF_ACCOUNT, which is not a secret; ANALYTICS_API is a probe's door to
- * somewhere other than Cloudflare, the way MAIL_API is. */
-export let API = 'https://api.cloudflare.com/client/v4'
-
+/** The one endpoint on the analytics API (analytics.ts) that answers SQL. The
+ * account is CF_ACCOUNT, which is not a secret. */
 export let sqlAt = (env: Env) =>
-  `${env.ANALYTICS_API ?? API}/accounts/${env.CF_ACCOUNT}/analytics_engine/sql`
+  `${api(env)}/accounts/${env.CF_ACCOUNT}/analytics_engine/sql`
 
 // There are no bound parameters in the SQL API — a query is a string of text —
 // so the shapes are the guard. An eid comes out of our own directory and a day

@@ -1,8 +1,23 @@
-// Cloudflare's GraphQL analytics, the one call the readings built on it share:
-// the meter (usage.ts) and the kill sweep (kills.ts). Each brings its own
+// Cloudflare's analytics, read with the account's analytics token: its GraphQL
+// API, the one call the meter (usage.ts) and the kill sweep (kills.ts) share,
+// and the Analytics Engine SQL the views read (views.ts). Each brings its own
 // query and reads its own answer. A token that cannot read analytics answers
 // 200 with `errors`, which `said` turns into the same throw as a refused call.
-export let GRAPHQL = 'https://api.cloudflare.com/client/v4/graphql'
+import type { Env } from './env.ts'
+
+/** Cloudflare's API. */
+export let API = 'https://api.cloudflare.com/client/v4'
+
+/** Where every analytics read goes: Cloudflare, unless ANALYTICS_API aims a
+ * probe somewhere else, the way MAIL_API is aimed.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * assertEquals(api({}), 'https://api.cloudflare.com/client/v4')
+ * assertEquals(api({ ANALYTICS_API: 'http://127.0.0.1:9' }), 'http://127.0.0.1:9')
+ * ```
+ */
+export let api = (env: Pick<Env, 'ANALYTICS_API'>) => env.ANALYTICS_API ?? API
 
 export type Answer<T> = {
   data?: T
@@ -10,15 +25,14 @@ export type Answer<T> = {
 }
 
 export let ask = async <T>(
-  token: string,
+  env: Pick<Env, 'CF_ANALYTICS_TOKEN' | 'ANALYTICS_API'>,
   query: string,
   variables: Record<string, string>,
-  api = GRAPHQL,
 ): Promise<Answer<T>> => {
-  let r = await fetch(api, {
+  let r = await fetch(`${api(env)}/graphql`, {
     method: 'POST',
     headers: {
-      authorization: `Bearer ${token}`,
+      authorization: `Bearer ${env.CF_ANALYTICS_TOKEN}`,
       'content-type': 'application/json',
     },
     body: JSON.stringify({ query, variables }),

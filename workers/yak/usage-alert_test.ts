@@ -7,7 +7,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { type Usage, warning } from './usage-alert.ts'
-import { GRAPHQL } from './analytics.ts'
+import { API } from './analytics.ts'
 import { sweep } from './usage.ts'
 import { platform } from './testing.ts'
 import { meta } from './meta.ts'
@@ -76,7 +76,7 @@ test('hourly account alert is mailed once and kept on the wake row', async () =>
   let fail = true
   let was = globalThis.fetch
   globalThis.fetch = (url, init) => {
-    if (url == GRAPHQL) {
+    if (url == `${API}/graphql`) {
       return Promise.resolve(Response.json({
         data: {
           viewer: {
