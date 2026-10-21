@@ -543,13 +543,16 @@ let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
 
 // Which tables hold a row for any owner. VALUES has no compound-SELECT arm
 // limit, so a wide sparse vocabulary still takes one presence statement.
-// Globally empty tables short-circuit before the owners are walked. Every
-// table names the owners, so they are one array: written out, they would be
-// prepared again for each table and for each different set of owners. Each
-// table is asked about one owner at a time, so a mode's view over two tables
-// (a branch's exempt components, @yaks/sqlite mode.ts) takes the owner into
-// each of its arms; joined to the owners, a statement this wide would read
-// every row of it.
+// Globally empty tables short-circuit before the owners are walked: the test
+// is a constant term of the walk's own WHERE, which SQLite checks before the
+// loop. Beside it, as an AND outside the walk, SQLite 3.46 ran every table's
+// walk at once and a wide sparse read took seconds. Every table names the
+// owners, so they are one array: written out, they would be prepared again
+// for each table and for each different set of owners. Each table is asked
+// about one owner at a time, so a mode's view over two tables (a branch's
+// exempt components, @yaks/sqlite mode.ts) takes the owner into each of its
+// arms; joined to the owners, a statement this wide would read every row of
+// it.
 let worn = new WeakMap<Vocab, Map<string, Source>>()
 let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
   select({
@@ -563,20 +566,20 @@ let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
           t: 'values',
           rows: names.map((c) => [
             lit(c),
-            and(
-              ...(owners.length > 1
-                ? [exists(select({ cols: [lit(1)], from: table(c) }))]
-                : []),
-              exists(select({
-                cols: [lit(1)],
-                from: table('owners'),
-                where: exists(select({
+            exists(select({
+              cols: [lit(1)],
+              from: table('owners'),
+              where: and(
+                ...(owners.length > 1
+                  ? [exists(select({ cols: [lit(1)], from: table(c) }))]
+                  : []),
+                exists(select({
                   cols: [lit(1)],
                   from: table(c),
                   where: eq(col('entity', c), col('value', 'owners')),
                 })),
-              })),
-            ),
+              ),
+            })),
           ]),
         }, 'worn'),
     ),
