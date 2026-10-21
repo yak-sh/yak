@@ -14,10 +14,17 @@ import { and, ge, lt, parse, stringify } from '@yaks/query'
 import { partQuery } from '@yaks/session/parts'
 import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
-import { after } from './day.ts'
-import { merged, ranked, type Spend, spendOf } from './tally.ts'
-import { current, type Limit, limitsOf, paceOf, span } from './window.ts'
-import { dollars, tokens } from './words.ts'
+import { merged, ranked, type Rows, type Spend, spendOf } from './tally.ts'
+import {
+  after,
+  current,
+  type Limit,
+  limitsOf,
+  paceOf,
+  rates,
+  span,
+} from './window.ts'
+import { dollars, percent, tokens } from './words.ts'
 
 let { Body, Cell, Heading, Row } = Table
 let TOP = 15
@@ -32,7 +39,13 @@ let waiting = (got: Props['got'][string] | undefined, what: string) =>
     : null
 
 // A plan limit and its pace, on one line.
-let Limits = ({ limits, now }: { limits: Limit[]; now: number }) =>
+let Limits = (
+  { limits, now, rate }: {
+    limits: Limit[]
+    now: number
+    rate: Map<string, number>
+  },
+) =>
   h(
     Section,
     {},
@@ -40,7 +53,7 @@ let Limits = ({ limits, now }: { limits: Limit[]; now: number }) =>
     h(
       Section.Sub,
       {},
-      'Each bar is what is used; the mark is how much of its window is gone, which is what an even spend would have used by now.',
+      'Each bar is what is used; the mark is how much of its window is gone, which is what an even spend would have used by now. The week % beside each row below is an estimate of its share of its plan’s weekly limit: the week’s used % over the dollars, at list price, its requests ran up since the week began. A request paid per token uses no plan.',
     ),
     h(
       Table,
@@ -68,6 +81,12 @@ let Limits = ({ limits, now }: { limits: Limit[]; now: number }) =>
                 l.resets
                   ? `, resets ${l.resets.slice(0, 16).replace('T', ' ')} UTC`
                   : ''
+              }${
+                l.window == 10080 && rate.get(l.of)
+                  ? `; 1% of it is about ${
+                    dollars(1 / rate.get(l.of)!)
+                  } at list price`
+                  : ''
               }`,
             ),
           )
@@ -76,20 +95,49 @@ let Limits = ({ limits, now }: { limits: Limit[]; now: number }) =>
     ),
   )
 
+// What share of each plan's weekly limit a row used, in words, from the
+// dollars it billed each plan and what a dollar of that plan is worth. Shares
+// of two plans don't add, so each is said apart, by its plan's name where
+// more than one plan is measured.
+type Share = (row: Rows, key: string, dollars: number) => string
+
+let shareOf = (
+  s: Spend,
+  rate: Map<string, number>,
+  names: Map<string, string>,
+): Share =>
+(row, key, spent) => {
+  let billed = Object.entries(s.plans).map(([p, plan]) =>
+    [p, plan[row]?.[key] ?? 0] as const
+  )
+  let rated = billed.filter(([p, n]) => n && rate.has(p))
+  let named = (p: string) => rate.size > 1 ? ` ${names.get(p) ?? p}` : ''
+  return rated.length
+    ? rated.map(([p, d]) => percent(d * rate.get(p)!) + named(p)).join(' · ')
+    : billed.some(([, n]) => n)
+    ? 'no reading'
+    : spent
+    ? 'per token'
+    : ''
+}
+
 // A ranking: each row's name, a bar of its share of the costliest, its
 // dollars and what else the caller says about it.
 let Ranking = (
-  { title, sub, rows, at, name, more, heads }: {
+  { title, sub, row, rows, at, name, more, heads, share }: {
     title: string
     sub: string
+    row: Rows
     rows: [string, number[]][]
     at: number
     name: (key: string) => ComponentChildren
     more: (ns: number[], key: string) => string[]
     heads: string[]
+    share?: Share
   },
 ) => {
   let most = rows[0]?.[1][at] || 1
+  let shared = share ? ['num'] : []
   return h(
     Section,
     {},
@@ -97,7 +145,7 @@ let Ranking = (
     h(Section.Sub, {}, sub),
     h(
       Table,
-      { cols: [null, null, 'num', ...heads.map(() => 'num')] },
+      { cols: [null, null, 'num', ...shared, ...heads.map(() => 'num')] },
       h(
         Table.Head,
         {},
@@ -107,6 +155,7 @@ let Ranking = (
           h(Heading, {}, ''),
           h(Heading, {}, ''),
           h(Heading, { mod: ['num', 'desc'] }, 'dollars'),
+          share ? h(Heading, { mod: 'num' }, 'week %') : null,
           ...heads.map((k) => h(Heading, { key: k, mod: 'num' }, k)),
         ),
       ),
@@ -120,6 +169,7 @@ let Ranking = (
             h(Cell, {}, name(k)),
             h(Cell, {}, h(Meter, { value: ns[at] / most, width: 10 })),
             h(Cell, { mod: 'num' }, dollars(ns[at])),
+            share ? h(Cell, { mod: 'num' }, share(row, k, ns[at])) : null,
             ...more(ns, k).map((s, i) => h(Cell, { key: i, mod: 'num' }, s)),
           )
         ),
@@ -146,11 +196,12 @@ let part = (io: Props['io'], [from, to]: [string, string]) => (k: string) => {
 /** A tally of the days from one to another, ranked, beside an earlier one to
  * read it against. */
 let Breakdown = (
-  { io, s, span, before }: {
+  { io, s, span, before, share }: {
     io: Props['io']
     s: Spend
     span: [string, string]
     before?: Spend
+    share?: Share
   },
 ) => {
   let top = <T>(rows: T[]) => rows.slice(0, TOP)
@@ -166,6 +217,8 @@ let Breakdown = (
     {},
     h(Ranking, {
       title: 'What the context was made of',
+      row: 'parts',
+      share,
       sub:
         'Each part of what the requests carried, at what it cost as it was paid: read from the cache, written to it, sent fresh, or generated. A part is paid for on every request it rides in. The totals are measured; the split across parts is estimated from their sizes.',
       rows: ranked(s.parts, 4).slice(0, 30),
@@ -188,6 +241,8 @@ let Breakdown = (
     }),
     h(Ranking, {
       title: 'Sessions',
+      row: 'sessions',
+      share,
       sub:
         'Each session by what its requests cost; a subagent is a session of its own.',
       rows: sessions,
@@ -198,6 +253,8 @@ let Breakdown = (
     }),
     h(Ranking, {
       title: 'Tasks',
+      row: 'tasks',
+      share,
       sub:
         'Each session split evenly across the tasks it claimed, commented on, filed or finished, and a subagent across the tasks its brief names, else as the session that started it.',
       rows: tasks,
@@ -208,6 +265,8 @@ let Breakdown = (
     }),
     h(Ranking, {
       title: 'Entries carried most',
+      row: 'entries',
+      share,
       sub:
         'What one entry of a transcript cost as it was carried, request after request.',
       rows: entries,
@@ -218,6 +277,8 @@ let Breakdown = (
     }),
     h(Ranking, {
       title: 'Models',
+      row: 'models',
+      share,
       sub:
         'At the price the provider reported, else at the model’s list price.',
       rows: models,
@@ -252,6 +313,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
     days.filter((d) => d.day >= a && d.day <= b)
   let week = merged(within(from, to))
   let before = merged(within(after(from, -7), after(from, -1)))
+  let rate = rates(limits, days, now)
   return h(
     'article',
     {},
@@ -271,9 +333,15 @@ export let Page = ({ io, got }: Props): JSX.Element => {
         `the week before ${dollars(before.dollars)}`,
       ),
     ),
-    waiting(got.limits, 'the plan limits') ?? h(Limits, { limits, now }),
+    waiting(got.limits, 'the plan limits') ?? h(Limits, { limits, now, rate }),
     waiting(got.days, 'the tallies') ??
-      h(Breakdown, { io, s: week, span: [from, to], before }),
+      h(Breakdown, {
+        io,
+        s: week,
+        span: [from, to],
+        before,
+        share: rate.size ? shareOf(week, rate, names) : undefined,
+      }),
   )
 }
 

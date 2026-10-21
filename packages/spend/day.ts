@@ -12,24 +12,65 @@
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import type { Price } from '@yaks/model'
+import { claudeProjects, codexSessions } from '@yaks/session/files'
+import { after } from './window.ts'
 import { type Known, type Spend, tally } from './tally.ts'
 
 /** The row that keeps a day's tally. */
 export let dayEid = (day: string): Eid => identityEid('spend', [day])
 
-/** The UTC day after `day`, and `n` days from it. */
-export let after = (day: string, n = 1): string =>
-  new Date(Date.parse(`${day}T00:00:00Z`) + n * 864e5).toISOString()
-    .slice(0, 10)
-
-/** The UTC day a moment falls on. */
-export let dayOf = (at: number | string): string =>
-  new Date(at).toISOString().slice(0, 10)
-
 let PAGE = 2000
 let comp = (b: Bundle | undefined, name: string) => (b?.[name] ?? {}) as Comp
 let str = (v: unknown) => v == null ? '' : String(v)
 let quoted = (s: string) => JSON.stringify(s)
+
+let provider = (name: string) => identityEid('provider', [name])
+
+/** Which plan each provider that serves models bills against, by the name of
+ * the provider whose limits measure it (`rate_limit`): the Claude and Codex
+ * CLIs their own subscriptions, and OpenAI's API the ChatGPT sign-in's, which
+ * is Codex's, unless an API key pays for it by the token (the harness takes a
+ * key first). Any other provider bills no plan. */
+export let PLANS = (key = false): Map<Eid, Eid> =>
+  new Map(
+    Object.entries({
+      claude: 'claude',
+      codex: 'codex',
+      'codex-cli': 'codex',
+      ...key ? {} : { openai: 'codex' },
+    }).map(([from, to]) => [provider(from), provider(to)]),
+  )
+
+/**
+ * The provider whose plan a request billed against: by the provider that
+ * served it, as the native harness records it in `using`, else by the CLI
+ * whose transcript it was read from. A request that billed no plan was paid
+ * by the token.
+ *
+ * ```ts
+ * import { planOf, PLANS } from './day.ts'
+ * import { claudeProjects } from '@yaks/session/files'
+ * import { identityEid } from '@yaks/graph/identity'
+ * import { equal } from '@yaks/testing'
+ *
+ * let p = (name: string) => identityEid('provider', [name])
+ * let plan = planOf(PLANS())
+ * let r = { entity: { eid: 'r' } }
+ * equal(plan({ ...r, imported: { source: `${claudeProjects()}/p/s.jsonl` } }), p('claude'))
+ * equal(plan({ ...r, using: { provider: p('openai') } }), p('codex'))
+ * equal(planOf(PLANS(true))({ ...r, using: { provider: p('openai') } }), undefined)
+ * equal(plan({ ...r, using: { provider: p('openrouter') } }), undefined)
+ * ```
+ */
+export let planOf = (plans: Map<Eid, Eid>) => (b: Bundle): Eid | undefined => {
+  let served = str(comp(b, 'using').provider)
+  if (served) return plans.get(served)
+  let source = str(comp(b, 'imported').source)
+  let cli =
+    ([['claude', claudeProjects()], ['codex', codexSessions()]] as const)
+      .find(([, root]) => root && source.startsWith(`${root}/`))?.[0]
+  return cli && provider(cli)
+}
 
 // Every row a query finds, a page at a time.
 let every = async (g: Graph, q: string): Promise<Bundle[]> => {
@@ -169,7 +210,14 @@ export let known = async (
     return byRoot.get(root(s)) ?? []
   }
   let tasks = new Map(sessions.map((s) => [s, of(s)]))
-  return { prices, fixed, tasks }
+  let plan = planOf(PLANS(!!globalThis.Deno?.env.get('OPENAI_API_KEY')))
+  let plans = new Map(
+    rows.flatMap((b): [Eid, Eid][] => {
+      let at = plan(b)
+      return at ? [[b.entity.eid, at]] : []
+    }),
+  )
+  return { prices, fixed, tasks, plans }
 }
 
 /** A day's requests: every entry with usage that asked a model. */

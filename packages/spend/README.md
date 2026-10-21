@@ -31,6 +31,13 @@ A day's tally is a `spend` row on an eid derived from its `day`, holding its
 - `models`: `[read, written, fresh, generated, dollars, requests]` by model;
 - `entries`: `[tokens, dollars]` for the fifty transcript entries that cost most
   as they were carried request after request.
+- `plans`: by the provider whose plan the requests billed against, the dollars
+  they ran up on it, in all and by part, session, task, model and entry. A
+  request the native harness sent bills its `using` provider's plan (Claude's
+  CLI Claude's; Codex's CLI, and OpenAI signed in with ChatGPT, Codex's); one
+  read from a Claude Code transcript or a Codex rollout bills that CLI's; a
+  request paid by the token (OpenRouter, OpenAI with an API key) bills none
+  (`PLANS`, `planOf` in ./day.ts).
 
 Dollars are what the provider reported, else the tokens at the model row's
 `price`. The totals are measured; the split across parts, and across a session's
@@ -75,3 +82,12 @@ its sessions. Options: `every` (milliseconds) and `usage` (the cache directory).
 each plan limit against its pace, then the week's tally beside the week before,
 ranked by dollars, over the list of days. A day's row opens to that day's tally.
 The bars are @yaks/ui's `Meter`.
+
+Beside each row's dollars, its **week %** estimates what it cost on a
+subscription: its share of each plan's weekly limit. `rates` measures a plan's
+dollar from its newest weekly reading (`rate_limit`, the percent Claude's
+claude-status and Codex's rollouts report) over the dollars, at list price, its
+requests ran up from the day the week began to the day of the reading. A row
+that billed two plans says each share apart; one paid by the token says so. A
+`call <tool>` or `result <tool>` part links to the calls or results it was made
+of in the span (`partQuery`, @yaks/session/parts).

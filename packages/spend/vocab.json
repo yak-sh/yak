@@ -79,6 +79,37 @@
           "stamped": true,
           "description": "by model eid: [read, write, fresh, generated, dollars, requests]"
         },
+        "plans": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "dollars": { "type": "number" },
+              "parts": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              },
+              "sessions": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              },
+              "tasks": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              },
+              "models": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              },
+              "entries": {
+                "type": "object",
+                "additionalProperties": { "type": "number" }
+              }
+            }
+          },
+          "stamped": true,
+          "description": "by the provider whose plan its requests billed against (a Claude Code request Claude's, a Codex one Codex's; a request paid per token bills none): the dollars they ran up on it, in all and by part, session, task, model and entry. Against a plan's weekly limit, its dollars say what share of the week each row used"
+        },
         "entries": {
           "type": "object",
           "additionalProperties": {

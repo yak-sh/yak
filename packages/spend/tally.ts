@@ -31,7 +31,18 @@ export type Spend = {
   models: Record<Eid, number[]>
   /** by entry: [tokens, dollars] */
   entries: Record<Eid, number[]>
+  /** by the provider whose plan the requests billed against: what they ran
+   * up on it */
+  plans: Record<Eid, Plan>
 }
+
+/** The rows a tally ranks. */
+export type Rows = 'parts' | 'sessions' | 'tasks' | 'models' | 'entries'
+
+/** What one plan's requests ran up: their dollars, and each row's. */
+export type Plan = { dollars: number } & Record<Rows, Record<string, number>>
+
+let ROWS: Rows[] = ['parts', 'sessions', 'tasks', 'models', 'entries']
 
 /** What a tally reads beside its requests. */
 export type Known = {
@@ -41,6 +52,8 @@ export type Known = {
   fixed: Map<Eid, Record<string, number>>
   /** the tasks each session worked on */
   tasks: Map<Eid, Eid[]>
+  /** the provider whose plan each request billed against, where one did */
+  plans?: Map<Eid, Eid>
 }
 
 /** How many entries a tally names. */
@@ -60,7 +73,22 @@ export let empty = (day: string): Spend => ({
   tasks: {},
   models: {},
   entries: {},
+  plans: {},
 })
+
+let unbilled = (): Plan => ({
+  dollars: 0,
+  parts: {},
+  sessions: {},
+  tasks: {},
+  models: {},
+  entries: {},
+})
+
+// Add `dollars` to what a plan's `row` holds under `key`.
+let bill = (plan: Plan | undefined, row: Rows, key: string, n: number) => {
+  if (plan) plan[row][key] = (plan[row][key] ?? 0) + n
+}
 
 // Add `more` into the tally `to` keeps under `key`.
 let add = (to: Record<string, number[]>, key: string, more: number[]) => {
@@ -119,8 +147,10 @@ let partsOf = (b: Bundle, known: Known): [string, Paid][] => {
  *   prices: new Map([['m', { input: 4, cached: 0.2, output: 20 }]]),
  *   fixed: new Map([['s', { 'tool Read': 3, skills: 1 }]]),
  *   tasks: new Map([['s', ['T-1', 'T-2']]]),
+ *   plans: new Map([['a', 'claude']]),
  * })
  * equal(t.dollars, 4.2)
+ * equal([t.plans.claude.dollars, t.plans.claude.tasks], [4.2, { 'T-1': 2.1, 'T-2': 2.1 }])
  * equal(t.parts, {
  *   'tool Read': [750000, 0, 0, 0, 0.15],
  *   skills: [250000, 0, 0, 0, 0.05],
@@ -152,23 +182,31 @@ export let tally = (day: string, rows: Bundle[], known: Known): Spend => {
         : tokens
         ? sum(p) * spent / tokens
         : 0
+    let at = known.plans?.get(b.entity.eid)
+    let plan = at ? out.plans[at] ??= unbilled() : undefined
     let all: Paid = [0, 0, 0, 0]
     for (let [k, p] of parts) {
       add(out.parts, k, [...p, share(p)])
+      bill(plan, 'parts', k, share(p))
       p.forEach((n, i) => all[i] += n)
     }
     let entries = (comp(b, 'context_parts').entries ?? {}) as Record<Eid, Paid>
     for (let [eid, p] of Object.entries(entries)) {
       add(out.entries, eid, [sum(p), share(p)])
+      bill(plan, 'entries', eid, share(p))
     }
     let session = String(comp(b, 'entry').session ?? '')
     let total = sum(all)
     add(out.sessions, session, [total, spent, 1])
+    bill(plan, 'sessions', session, spent)
     let tasks = known.tasks.get(session) ?? []
     for (let t of tasks) {
       add(out.tasks, t, [total / tasks.length, spent / tasks.length])
+      bill(plan, 'tasks', t, spent / tasks.length)
     }
     add(out.models, model, [...all, spent, 1])
+    bill(plan, 'models', model, spent)
+    if (plan) plan.dollars += spent
     out.tokens = out.tokens.map((n, i) => n + all[i])
     out.dollars += spent
     out.requests++
@@ -187,6 +225,22 @@ export let settled = (s: Spend): Spend => {
     Object.fromEntries(
       Object.entries(m).map(([k, ns]) => [k, whole(ns, money)]),
     )
+  let entries = each(
+    Object.fromEntries(ranked(s.entries, 1).slice(0, ENTRIES)),
+    [1],
+  )
+  let cents = (n: number) => Math.round(n * 1e4) / 1e4
+  let plan = (p: Plan): Plan => ({
+    dollars: cents(p.dollars),
+    ...Object.fromEntries(ROWS.map((row) => [
+      row,
+      Object.fromEntries(
+        Object.entries(p[row])
+          .filter(([k]) => row != 'entries' || k in entries)
+          .map(([k, n]) => [k, cents(n)]),
+      ),
+    ])) as Record<Rows, Record<string, number>>,
+  })
   return {
     ...s,
     tokens: whole(s.tokens, []),
@@ -195,9 +249,9 @@ export let settled = (s: Spend): Spend => {
     sessions: each(s.sessions, [1]),
     tasks: each(s.tasks, [1]),
     models: each(s.models, [4]),
-    entries: each(
-      Object.fromEntries(ranked(s.entries, 1).slice(0, ENTRIES)),
-      [1],
+    entries,
+    plans: Object.fromEntries(
+      Object.entries(s.plans ?? {}).map(([k, p]) => [k, plan(p)]),
     ),
   }
 }
@@ -221,10 +275,15 @@ export let merged = (days: Spend[]): Spend => {
     out.requests += d.requests
     out.dollars += d.dollars
     out.tokens = out.tokens.map((n, i) => n + (d.tokens[i] ?? 0))
-    for (
-      let k of ['parts', 'sessions', 'tasks', 'models', 'entries'] as const
-    ) {
+    for (let k of ROWS) {
       for (let [key, ns] of Object.entries(d[k] ?? {})) add(out[k], key, ns)
+    }
+    for (let [at, p] of Object.entries(d.plans ?? {})) {
+      let plan = out.plans[at] ??= unbilled()
+      plan.dollars += p.dollars
+      for (let row of ROWS) {
+        for (let [k, n] of Object.entries(p[row] ?? {})) bill(plan, row, k, n)
+      }
     }
   }
   return settled(out)

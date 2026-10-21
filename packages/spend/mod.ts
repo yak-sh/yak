@@ -11,10 +11,21 @@ export {
   ENTRIES,
   type Known,
   merged,
+  type Plan,
   ranked,
+  type Rows,
   type Spend,
   spendOf,
   tally,
 } from './tally.ts'
-export { current, type Limit, limitsOf, paceOf, span } from './window.ts'
-export { dollars, label, tokens } from './words.ts'
+export {
+  after,
+  current,
+  dayOf,
+  type Limit,
+  limitsOf,
+  paceOf,
+  rates,
+  span,
+} from './window.ts'
+export { dollars, label, percent, tokens } from './words.ts'

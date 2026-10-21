@@ -14,7 +14,8 @@
  */
 import type { Graph } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
-import { after, dayOf, recompute } from './day.ts'
+import { recompute } from './day.ts'
+import { after, dayOf } from './window.ts'
 import { read } from './budget.ts'
 
 /** What a config can set for this duty. */
@@ -44,6 +45,15 @@ export let pass = async (
     await recompute(g, after(today, -1))
   }
   await recompute(g, today)
+  // A day of the past week tallied before tallies kept their plans is
+  // tallied again, so its week reads in plan shares too.
+  let kept = await g.read(
+    `.spend .spend.day>=${after(today, -8)} .fields=spend.day,spend.plans`,
+  )
+  for (let b of kept) {
+    let s = b.spend as { day: string; plans?: unknown }
+    if (!s.plans && s.day != today) await recompute(g, s.day)
+  }
   await read(g, o.usage)
 }
 

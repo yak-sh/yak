@@ -6,10 +6,13 @@
  * @module
  */
 import type { Bundle, Eid } from '@yaks/graph'
+import type { Spend } from './tally.ts'
 
 /** A plan limit, as its `rate_limit` row reads, its provider named. */
 export type Limit = {
   provider: string
+  /** the provider's eid */
+  of: Eid
   /** minutes: 10080 a week, 300 five hours */
   window: number
   /** percent used */
@@ -21,7 +24,15 @@ export type Limit = {
 let WEEK = 7 * 864e5
 
 let str = (v: unknown) => v == null ? '' : String(v)
-let dayOf = (at: number) => new Date(at).toISOString().slice(0, 10)
+
+/** The UTC day after `day`, and `n` days from it. */
+export let after = (day: string, n = 1): string =>
+  new Date(Date.parse(`${day}T00:00:00Z`) + n * 864e5).toISOString()
+    .slice(0, 10)
+
+/** The UTC day a moment falls on. */
+export let dayOf = (at: number | string): string =>
+  new Date(at).toISOString().slice(0, 10)
 
 /** The limits `rate_limit` rows hold, each provider's longest window first. */
 export let limitsOf = (rows: Bundle[], names: Map<Eid, string>): Limit[] =>
@@ -30,6 +41,7 @@ export let limitsOf = (rows: Bundle[], names: Map<Eid, string>): Limit[] =>
     if (!r) return []
     return [{
       provider: names.get(str(r.provider)) ?? str(r.provider),
+      of: str(r.provider),
       window: Number(r.window),
       used: Number(r.used ?? 0),
       ...r.resets ? { resets: str(r.resets) } : {},
@@ -101,3 +113,39 @@ export let span = (
     : Date.parse(`${to}T00:00:00Z`) - 6 * 864e5
   return [dayOf(start), to]
 }
+
+/**
+ * What a dollar of each plan is worth in its weekly limit: the percent of
+ * the week its latest reading says is used, over the dollars its requests
+ * ran up at list price from the day the week began to the day of the
+ * reading, by the provider's eid. An estimate: the days are whole UTC days,
+ * and the dollars are what the tokens would cost bought one by one. A plan
+ * with no reading of this week, or no dollars in it, has none.
+ *
+ * ```ts
+ * import { rates } from './window.ts'
+ * import { empty } from './tally.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let week = { provider: 'claude', of: 'c', window: 10080, used: 30,
+ *   resets: '2026-10-27T11:00:00Z', at: '2026-10-21T12:00:00Z' }
+ * let day = (d: string, dollars: number) => ({ ...empty(d),
+ *   plans: { c: { dollars, parts: {}, sessions: {}, tasks: {}, models: {}, entries: {} } } })
+ * let days = [day('2026-10-19', 900), day('2026-10-20', 100), day('2026-10-21', 200)]
+ * equal(rates([week], days, Date.parse('2026-10-21T13:00:00Z')).get('c'), 0.1)
+ * ```
+ */
+export let rates = (
+  limits: Limit[],
+  days: Spend[],
+  now: number,
+): Map<Eid, number> =>
+  new Map(limits.flatMap((l): [Eid, number][] => {
+    if (l.window != 10080 || !l.resets || !current(l, now)) return []
+    let from = dayOf(Date.parse(l.resets) - WEEK)
+    let to = l.at ? l.at.slice(0, 10) : dayOf(now)
+    let dollars = days
+      .filter((d) => d.day >= from && d.day <= to)
+      .reduce((n, d) => n + (d.plans?.[l.of]?.dollars ?? 0), 0)
+    return dollars ? [[l.of, l.used / dollars]] : []
+  }))

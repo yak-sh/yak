@@ -20,6 +20,19 @@ export let dollars = (n = 0): string =>
   n >= 100 ? `$${Math.round(n).toLocaleString('en-US')}` : `$${n.toFixed(2)}`
 
 /**
+ * A percent, to a tenth, and a share too small to show as less than that.
+ *
+ * ```ts
+ * import { percent } from './words.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal([percent(12.345), percent(0.04), percent(0)], ['12.3%', '<0.1%', '0%'])
+ * ```
+ */
+export let percent = (n = 0): string =>
+  !n ? '0%' : n < 0.05 ? '<0.1%' : `${n.toFixed(1)}%`
+
+/**
  * A count of tokens, to three figures.
  *
  * ```ts
