@@ -6,7 +6,8 @@
  * (`reads`, `references`) and its sources (`cites`), the beliefs about it
  * (`belief.about`), and the comments on it, with a line to write one, where
  * the host draws a thread (`Comments`); last, the parts any page has
- * (`io.show`: the facts, the links, the history).
+ * (`io.show`: the facts, the links, the history). Its head says what holds it,
+ * where it holds, and who tends it (`tends`, its oracle).
  *
  * Whatever a topic holds or cites is drawn by its own renderer, asked for as
  * `Topic.List.Tile`: a subtopic as its cover (`TopicTile`), a belief as what
@@ -33,7 +34,7 @@ import {
   type Props,
   usePageNotes,
 } from '@yaks/inspect'
-import { title, TOPIC } from './topic.ts'
+import { TENDS, title, TOPIC } from './topic.ts'
 
 /** How many edges from a topic its page reads. */
 export let EDGES = 500
@@ -51,10 +52,11 @@ export let PARTS: [string, string[]][] = [
 ]
 
 // What the links part leaves to the parts above: each relation read from the
-// topic's end, the topic holding it, and the beliefs about it.
+// topic's end, the topic holding it, who tends it, and the beliefs about it.
 let DRAWN = [
   ...PARTS.flatMap(([, rels]) => rels),
   'contained by',
+  'tended by',
   'belief.about',
 ]
 
@@ -67,15 +69,17 @@ let str = (b: Bundle | undefined, name: string, prop: string): string => {
 }
 let rows = (a?: Answer): Bundle[] => a?.rows ?? []
 
-/** What a topic's page asks: its edges, what holds it, the project it holds
- * for, and the beliefs about it where the graph keeps beliefs. What holds it
- * and its project come whole, so the head names them as it first paints. */
+/** What a topic's page asks: its edges, what holds it, who tends it, the
+ * project it holds for, and the beliefs about it where the graph keeps
+ * beliefs. What holds it, who tends it and its project come whole, so the head
+ * names them as it first paints. */
 export let asks = (e: Bundle, io: Io): Asks => {
   let eid = e.entity.eid
   let scope = str(e, TOPIC, 'scope')
   return {
     out: `.edge.from=${eid}&*&.order=edge.ord&.limit=${EDGES}`,
     within: `.contains[<=1]->${eid}&?doc&?${TOPIC}&.limit=${EDGES}`,
+    tended: `.${TENDS}[<=1]->${eid}&?doc&.limit=${EDGES}`,
     ...scope ? { scope: `.entity.eid=${scope}` } : {},
     ...io.vocab.comp('belief')
       ? {
@@ -94,22 +98,29 @@ let byTitle = (a: Bundle, b: Bundle) =>
 // while its name is on the way.
 let named = (io: Io, b: Bundle) => io.show(b, 'Inspect.Reference.Inline')
 
-// Where it sits: what holds it, and the project it holds for once it has come.
+// Each of some entities by name, a comma between them.
+let listed = (io: Io, said: string, all: Bundle[]): ComponentChildren =>
+  all.length
+    ? [said, ...all.flatMap((b, i) => [i ? ', ' : null, named(io, b)])]
+    : null
+
+// Where it sits: what holds it, the project it holds for once it has come, and
+// who tends it.
 let where = (
   io: Io,
   within: Bundle[],
   scope: string,
-  project?: Bundle,
+  project: Bundle | undefined,
+  tended: Bundle[],
 ): ComponentChildren[] =>
   [
-    within.length
-      ? ['in ', ...within.flatMap((b, i) => [i ? ', ' : null, named(io, b)])]
-      : null,
+    listed(io, 'in ', within),
     !scope
       ? 'holds everywhere'
       : project
       ? ['holds for ', named(io, project)]
       : null,
+    listed(io, 'tended by ', tended),
   ].filter(Boolean).flatMap((said, i) => [i ? ' · ' : null, said])
 
 /** Its cover's words: what belongs under it. */
@@ -273,7 +284,13 @@ export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
     'div',
     { 'data-inspect': eid },
     io.show(e, 'Inspect.Head', {
-      sub: where(io, within, scope, rows(got.scope)[0]),
+      sub: where(
+        io,
+        within,
+        scope,
+        rows(got.scope)[0],
+        rows(got.tended).toSorted(byTitle),
+      ),
       notes: notes.get(''),
     }),
     h(Cover, { e, io }),

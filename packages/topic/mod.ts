@@ -28,6 +28,7 @@ export {
   found,
   named,
   overlaps,
+  TENDS,
   TOPIC,
   topicEid,
   TOPICS,

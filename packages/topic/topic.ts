@@ -21,6 +21,9 @@ import { stemmer } from 'stemmer'
 /** The component this package is about. */
 export let TOPIC = 'topic'
 
+/** The relation from a persona to the topic it looks after, its oracle. */
+export let TENDS = 'tends'
+
 /** How many topics a find returns when the caller gave no limit. */
 export let FIND = 12
 

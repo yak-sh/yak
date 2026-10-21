@@ -26,6 +26,13 @@ Its edges are relations that already exist, never new ones:
 | `reads`, `references` | [@yaks/kernel](../kernel) | related things, listed but not held                                   |
 | `cites{hash}`         | [@yaks/kernel](../kernel) | its sources: verbatim words, sessions, entries, memories              |
 
+One relation is this package's own, and it arrives at a topic: `tends{}`, a link
+from a [persona](../persona) to the topic it looks after, its **oracle**. The
+oracle keeps the topic's cover, contents and edges true and answers what is
+asked about it. `tends` puts nothing in the persona's context; what the persona
+contains does, so an oracle also contains its topic. A topic's oracle is
+`.tends->` the topic, and the topic page's head names it ("tended by").
+
 Beliefs ([@yaks/memory](../memory)) are about topics (`belief{scope, about}`): a
 memory marks what was said, a belief concludes something from memories and cites
 them, and a topic's contents are written from its beliefs and cite them. So a

@@ -2,7 +2,8 @@
   "$vocabulary": {
     "https://yak.sh/vocab/core": true,
     "https://yak.sh/vocab/id": true,
-    "https://yak.sh/vocab/kernel": true
+    "https://yak.sh/vocab/kernel": true,
+    "https://yak.sh/vocab/edge": true
   },
   "title": "topic",
   "$defs": {
@@ -28,6 +29,14 @@
           "description": "the project it holds for; absent for a topic that holds everywhere, as world or fleet knowledge"
         }
       }
+    },
+    "tends": {
+      "component": true,
+      "type": "object",
+      "edge": "tends",
+      "reversed": "tended by",
+      "description": "the relation on a link from a persona to the topic it looks after, its oracle: it keeps the topic's cover, contents and edges true and answers what is asked about it. It puts nothing in the persona's context; what the persona contains does",
+      "properties": {}
     },
     "topic_new": {
       "tool": true,

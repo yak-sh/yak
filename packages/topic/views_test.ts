@@ -79,6 +79,8 @@ store.tx((tx) =>
     doc('guide', 'The guide'),
     doc('spec', 'The spec'),
     doc('said', 'what Jeff said'),
+    doc('farmer', 'Data oracle'),
+    link('farmer', 'tends', 'data'),
     link('world', 'contains', 'data'),
     link('data', 'contains', 'model', 1),
     link('data', 'contains', 'fleet', 2),
@@ -213,10 +215,10 @@ test('what it holds, needs, relates to and cites, each by its own face', () => {
   equal(part(data, 'Links'), null)
 })
 
-test('the head says what holds it and where it holds', () => {
+test('the head says what holds it, where it holds and who tends it', () => {
   let sub = data.querySelector('.Head_Sub')?.textContent ?? ''
-  ok(sub.startsWith('in Ids, World · '), sub)
-  ok(sub.includes('holds everywhere'), sub)
+  equal(sub, 'in Ids, World · holds everywhere · tended by Data oracle')
+  ok(!naming.querySelector('.Head_Sub')?.textContent?.includes('tended'))
   ok(
     scoped.querySelector('.Head_Sub')?.textContent?.includes('holds for Fleet'),
   )
