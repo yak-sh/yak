@@ -7,7 +7,7 @@ import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { Interrupted } from '@yaks/tools/errors'
-import { BOUND } from './catchup.ts'
+import { BOUND, LATE, PENDING } from './catchup.ts'
 import { adminDoc } from './vocab.ts'
 import { type Doors, pass, service } from './service.ts'
 
@@ -79,21 +79,21 @@ let fixture = (
 }
 
 let beforeBound = fixture()
-beforeBound.at.now = landed + BOUND - MIN
+beforeBound.at.now = landed + LATE - MIN
 let atBound = fixture()
-atBound.at.now = landed + BOUND
-test('before its bound, a head does not look for a live build', async () => {
+atBound.at.now = landed + LATE
+test('before it is late, a head does not look for a live build', async () => {
   equal((await beforeBound.look()).step, 'wait')
   equal(beforeBound.looked, 0)
 })
 
-test('past its bound, a head no build deployed gets one start', async () => {
+test('a late head no build deployed gets one start', async () => {
   let f = atBound
   equal((await f.look()).step, 'rebuild')
   let [row] = await f.g.get([HEAD])
   equal((row.rebuilt as { said: string }).said, 'build aa194fb5 queued')
   let [error, context] = f.reports[0]
-  match(error.message, /739f56b2 is not live 15 min .* build aa194fb5 queued/)
+  match(error.message, /739f56b2 is not live 3 min .* build aa194fb5 queued/)
   equal(context.commit, HEAD)
   equal(context.tags, {
     worker: 'yak',
@@ -105,7 +105,7 @@ test('past its bound, a head no build deployed gets one start', async () => {
 
 test('a bound after its start, the catch-up gives up on it once', async () => {
   let f = fixture()
-  f.at.now = landed + BOUND
+  f.at.now = landed + LATE
   await f.g.apply([{
     entity: { eid: HEAD },
     rebuilt: { said: 'build aa194fb5 queued' },
@@ -123,6 +123,16 @@ test('a bound after its start, the catch-up gives up on it once', async () => {
   equal([f.started, f.reports.length], [0, 1])
 })
 
+test('a pending build answers the start and is not reported', async () => {
+  let f = fixture()
+  f.doors.start = () => Promise.resolve(PENDING)
+  f.at.now = landed + LATE
+  equal((await f.look()).step, 'rebuild')
+  equal(f.reports.length, 0)
+  f.at.now += BOUND - MIN
+  equal((await f.look()).step, 'wait')
+})
+
 test('a live head, the same source or a newer rollback starts nothing', async () => {
   for (
     let [f, want] of [
@@ -131,14 +141,14 @@ test('a live head, the same source or a newer rollback starts nothing', async ()
       [fixture({ at: landed + MIN, rollback: true }), 'held'],
     ] as const
   ) {
-    f.at.now = landed + BOUND
+    f.at.now = landed + LATE
     equal((await f.look()).step, want)
     equal([f.started, f.reports.length], [0, 0])
   }
 })
 
 let unmarked = fixture()
-unmarked.at.now = landed + BOUND
+unmarked.at.now = landed + LATE
 await unmarked.look()
 await unmarked.g.apply([{ entity: { eid: HEAD }, rebuilt: null }])
 unmarked.at.now += MIN
@@ -151,7 +161,7 @@ test('removing the marks asks for another start', async () => {
 
 test('the service reads a settled head no more, and a failing look once', async () => {
   let f = fixture({ sha: HEAD })
-  f.at.now = landed + BOUND
+  f.at.now = landed + LATE
   let passes = 0
   let stop = new AbortController()
   let reports: unknown[] = []

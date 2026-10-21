@@ -87,10 +87,11 @@ READMEs). Nothing gates it; the gate reports. So the safety lives in recovery,
 and recovery is quick:
 
 - A push Builds starts no build for is caught by the box's deploy catch-up
-  (@yaks/admin's service): 15 minutes after main's head landed, not live, it
-  starts main's build through a deploy hook, marks the commit `rebuilt`, and
-  reports to the tracker; a commit whose build still doesn't go live is marked
-  `failed`, reported, and not built again.
+  (@yaks/admin's service): 3 minutes after main's head landed, not live, it
+  asks main's deploy hook for a build (none starts while one is pending), marks
+  the commit `rebuilt`, and reports a build it started to the tracker; a commit
+  whose build still doesn't go live 15 minutes later is marked `failed`,
+  reported, and not built again.
 - `yak admin revert <sha>` reverts a main commit in a fresh worktree, lands it
   and waits for Workers Builds to serve the revert. Since main deploys on every
   push, this is the usual way back.

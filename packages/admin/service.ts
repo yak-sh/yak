@@ -1,10 +1,10 @@
 // The deploy catch-up as a service (catchup.ts decides; this looks and acts).
 // One process takes it, under the `@yaks/admin` lease. Each minute it reads
-// main's head from origin; once that head has had its bound, it reads what
+// main's head from origin; once that head is late, it reads what
 // yak serves from wrangler, and compares the two in this checkout's git
-// through the build's watch paths. Wrangler is asked once per head, not once a
-// minute: its OAuth refresh rewrites one shared file without a lock
-// (deploys.ts `deploymentLists`), so its readers stay rare.
+// through the build's watch paths. Wrangler is asked only about a late head
+// that is not yet live: its OAuth refresh rewrites one shared file without a
+// lock (deploys.ts `deploymentLists`), so its readers stay rare.
 //
 // The build is started through main's deploy hook, a URL that can do nothing
 // but start that build, kept in the vault and named by the config. The
@@ -22,8 +22,10 @@ import { WATCHED } from '../../workers/yak/wrangler.ts'
 import {
   BOUND,
   type Head,
+  LATE,
   type Live,
   missed,
+  PENDING,
   said,
   type Step,
   step,
@@ -47,7 +49,10 @@ export type Options = {
   hook?: string
   /** ms between looks at main (default {@link EVERY}) */
   every?: number
-  /** ms main's head may take to go live (default {@link BOUND}) */
+  /** ms a push may go with no build under way (default {@link LATE}) */
+  late?: number
+  /** ms main's head may take to go live once its build was asked for
+   * (default {@link BOUND}) */
   bound?: number
 }
 
@@ -165,7 +170,7 @@ export let pass = async (
   g: Graph,
   doors: Doors,
   report: Report,
-  bound: number = BOUND,
+  { late = LATE, bound = BOUND }: Pick<Options, 'late' | 'bound'> = {},
   settled?: string,
 ): Promise<{ sha: string; step: Step }> => {
   let tip = await doors.main()
@@ -173,14 +178,14 @@ export let pass = async (
   let [row] = await g.get([tip.sha])
   let mark = row?.rebuilt as Comp | undefined
   let head: Head = { ...tip, rebuilt: time(mark), failed: !!row?.failed }
-  let next = step(head, doors.now(), undefined, bound)
+  let next = step(head, doors.now(), undefined, late, bound)
   if (next != 'look') return { sha: tip.sha, step: next }
   let served = await doors.live()
   let live: Live = {
     ...served,
     has: served.sha == tip.sha || await doors.same(served.sha, tip.sha),
   }
-  next = step(head, doors.now(), live, bound)
+  next = step(head, doors.now(), live, late, bound)
   let context = (fault: string, answer: string) => ({
     fault: `${fault}:yak`,
     commit: tip.sha,
@@ -200,10 +205,13 @@ export let pass = async (
     }
     let answer = await doors.start()
     await g.apply([{ entity: { eid: tip.sha }, rebuilt: { said: answer } }])
-    await report(
-      missed(head, live, answer, bound),
-      context('deploy missed', answer),
-    )
+    // A pending build is a slow one, not a miss.
+    if (answer != PENDING) {
+      await report(
+        missed(head, live, answer, late),
+        context('deploy missed', answer),
+      )
+    }
   }
   if (next == 'fail') {
     let answer = String(mark?.said ?? 'unsaid')
@@ -241,7 +249,7 @@ export let service = async (
         host.graph,
         doors,
         report,
-        options.bound,
+        options,
         settled,
       )
       if (SETTLED.includes(done.step)) settled = done.sha

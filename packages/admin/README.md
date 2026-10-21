@@ -109,17 +109,21 @@ sometimes Builds starts no build for a push at all. The **deploy catch-up** is
 this plugin's service: it notices main's head is not live and starts main's
 build itself.
 
-Each minute it reads main's head from origin. Once the head has landed `BOUND`
-(15 minutes, longer than any build measured) ago, it reads what `yak` serves
-with wrangler and compares the two commits through the build's watch paths
-(workers/yak/wrangler.ts `WATCHED`), so a push no build was meant for (a test, a
-README, an app) counts as live. A head that is not live gets one build through
-main's deploy hook, a `rebuilt{at, by, via, said}` mark on the commit's entity
-(its eid is its sha) with what Builds answered, and a tracker report tagged with
-the commit, what is live and what Builds said. A bound after that start, still
-not live, it gets the kernel's `failed{reason}` mark and a second report, and no
-other build: its log says why. A rollback newer than the head is an operator's
-choice and is left alone. Removing the marks asks for another start.
+Each minute it reads main's head from origin. Once the head has landed `LATE` (3
+minutes; Builds queues a build within seconds of a push) ago, it reads what
+`yak` serves with wrangler and compares the two commits through the build's
+watch paths (workers/yak/wrangler.ts `WATCHED`), so a push no build was meant
+for (a test, a README, an app) counts as live. A head that is not live asks
+main's deploy hook for a build, and the ask leaves a
+`rebuilt{at, by, via,
+said}` mark on the commit's entity (its eid is its sha)
+with what Builds answered. The hook starts none while one is pending, so a slow
+build is neither duplicated nor reported; a build it did start is reported to
+the tracker, tagged with the commit, what is live and what Builds said. A
+`BOUND` (15 minutes, longer than any build measured) after the ask, still not
+live, the commit gets the kernel's `failed{reason}` mark and a second report,
+and no other build: its log says why. A rollback newer than the head is an
+operator's choice and is left alone. Removing the marks asks for another start.
 
 ```json
 { "use": "@yaks/admin", "with": { "hook": { "secret": "BUILD_HOOK" } } }

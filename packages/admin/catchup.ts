@@ -4,20 +4,29 @@
 // failure, because nothing failed: main and production quietly disagree until
 // the next push. So the box looks (service.ts), and this decides.
 //
-// A head gets `BOUND` to go live. Past it, the catch-up starts main's build
-// through its deploy hook once, marking the commit `rebuilt{said}` with what
-// Builds answered, and reports it. A bound later, still not live, it marks the
+// A head gets `LATE` to have its build under way, since Builds starts one
+// within seconds of a push. Past it, the catch-up asks main's deploy hook for
+// a build once, marking the commit `rebuilt{said}` with what Builds answered.
+// The hook starts none while one is pending, so a build that is merely slow
+// costs nothing and is not reported; a build the hook did start is. A `BOUND`
+// later, still not live, the catch-up marks the
 // commit `failed{reason}`, reports that, and starts nothing more for it: the
 // build's own log says why, and the next push starts over. A rollback newer
 // than the head is an operator's choice and is left alone. Removing the marks
 // asks for another try.
 
-/** How long main's head may take to go live: longer than any build measured.
- * Of 248 successful builds of `yak` from 2026-10-11 to 13, start to finish
- * took 78 s at the median, 277 s at the 99th percentile and 789 s at most;
- * push to live in bench/deploys.jsonl is 50 s at the median, 640 s at most. A
- * start that comes too early costs one more build of the same commit (or none:
- * the hook answers `already_exists` while one is pending). */
+/** How long a push may go with no build under way. Builds queues one within
+ * seconds of the push, and a build of `yak` takes 78 s at the median (248
+ * successful ones, 2026-10-11 to 13). Asking early costs one more build of the
+ * same commit at worst, and none while one is pending (the hook answers
+ * `already_exists`). On 2026-10-21 two pushes got no build at all, during and
+ * after a GitHub webhook delay, and waited 15 minutes for the catch-up. */
+export let LATE = 3 * 60_000
+
+/** How long main's head may take to go live once its build was asked for:
+ * longer than any build measured. Of those 248 builds, 277 s at the 99th
+ * percentile and 789 s at most; push to live in bench/deploys.jsonl is 50 s at
+ * the median, 640 s at most. */
 export let BOUND = 15 * 60_000
 
 /** main's head: its commit, when it landed (ms), and when the catch-up
@@ -49,11 +58,11 @@ export type Step =
 /// let h = { sha: 'b', at: 0 }
 /// let l = { sha: 'a', at: -60_000, rollback: false, has: false }
 /// step(h, 60_000) -> 'wait'
-/// step(h, BOUND) -> 'look'
-/// step(h, BOUND, { ...l, has: true }) -> 'live'
-/// step(h, BOUND, l) -> 'rebuild'
-/// step(h, BOUND, { ...l, at: 1, rollback: true }) -> 'held'
-/// step({ ...h, rebuilt: BOUND }, BOUND + 60_000) -> 'wait'
+/// step(h, LATE) -> 'look'
+/// step(h, LATE, { ...l, has: true }) -> 'live'
+/// step(h, LATE, l) -> 'rebuild'
+/// step(h, LATE, { ...l, at: 1, rollback: true }) -> 'held'
+/// step({ ...h, rebuilt: BOUND }, BOUND + LATE) -> 'wait'
 /// step({ ...h, rebuilt: BOUND }, 2 * BOUND, l) -> 'fail'
 /// step({ ...h, rebuilt: BOUND, failed: true }, 9 * BOUND, l) -> 'done'
 /** What to do about main's head at `now`, given what is live once read. */
@@ -61,11 +70,12 @@ export let step = (
   head: Head,
   now: number,
   live?: Live,
+  late: number = LATE,
   bound: number = BOUND,
 ): Step =>
   head.failed
     ? 'done'
-    : now - Math.max(head.at, head.rebuilt ?? 0) < bound
+    : now - Math.max(head.at, head.rebuilt ?? 0) < (head.rebuilt ? bound : late)
     ? 'wait'
     : !live
     ? 'look'
@@ -73,7 +83,7 @@ export let step = (
     ? 'live'
     : live.rollback && live.at > head.at
     ? 'held'
-    : now - live.at < bound
+    : now - live.at < (head.rebuilt ? bound : late)
     ? 'wait'
     : head.rebuilt
     ? 'fail'
@@ -86,8 +96,12 @@ type Answer = {
 }
 
 /// said(200, { success: true, result: { build_uuid: 'aa194fb5-5e63', status: 'queued' } }) -> 'build aa194fb5 queued'
-/// said(200, { success: true, result: { already_exists: true } }) -> 'a pending build of main already exists'
+/// said(200, { success: true, result: { already_exists: true } }) -> PENDING
 /// said(404, { success: false, errors: [{ message: 'Not found' }] }) -> 'refused 404: Not found'
+/** What the deploy hook says when a build of main is already queued or
+ * running: the head's build exists and is only slow. */
+export let PENDING = 'a pending build of main already exists'
+
 /** What Workers Builds answered a deploy hook, in words. */
 export let said = (status: number, body: unknown): string => {
   let a = (body && typeof body == 'object' ? body : {}) as Answer
@@ -95,7 +109,7 @@ export let said = (status: number, body: unknown): string => {
   return status >= 300 || !a.success
     ? `refused ${status}${why ? `: ${why}` : ''}`
     : a.result?.already_exists
-    ? 'a pending build of main already exists'
+    ? PENDING
     : `build ${a.result?.build_uuid?.slice(0, 8) ?? '(no id)'} ${
       a.result?.status ?? 'started'
     }`
@@ -110,10 +124,10 @@ let short = (sha: string) => sha.slice(0, 8)
 let minutes = (ms: number) => `${Math.round(ms / 60_000)} min`
 
 /** Why the catch-up started main's build, with what Builds answered. */
-export let missed = (head: Head, live: Live, answer: string, bound = BOUND) =>
+export let missed = (head: Head, live: Live, answer: string, late = LATE) =>
   new NotLive(
     `main's head ${short(head.sha)} is not live ${
-      minutes(bound)
+      minutes(late)
     } after it landed; yak serves ${short(live.sha)}. No Workers Build ` +
       `deployed it, so the deploy catch-up started main's build through its ` +
       `deploy hook: ${answer}`,
