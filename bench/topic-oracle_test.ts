@@ -25,6 +25,7 @@ import { memoryDoc } from '@yaks/memory/vocab'
 import { taskDoc } from '@yaks/task/vocab'
 import { topicEid, topics } from '../packages/memory/topic.ts'
 import { token } from '@yaks/graph/guard'
+import { HARNESS } from '@yaks/harness/default'
 import { oracleDoc } from '@yaks/oracle/vocab'
 import { runs } from '@yaks/oracle/tools'
 import {
@@ -72,7 +73,8 @@ await g.apply([
   ...corpus,
   { entity: { eid: actor }, session: { ended: true } },
   { entity: { eid: model }, model: { name: 'fixture' } },
-  { entity: { eid: provider }, provider: { name: 'openai' }, using: { model } },
+  { entity: { eid: provider }, provider: { name: 'openai' } },
+  { entity: { eid: HARNESS }, using: { provider, model } },
   { ...link(provider, 'serves', model), serves: { name: 'fixture' } },
   {
     entity: { eid: root },
