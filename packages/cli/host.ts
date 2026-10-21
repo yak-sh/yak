@@ -416,9 +416,13 @@ let composed = async (
       await report(error, { tags: { step } })
     }
   }
+  let mode = opts.mode ?? moding()
   let opened: Opened | undefined
+  // A store as of a transaction or on a branch reads through temporary views
+  // of its own connection (@yaks/sqlite `moded`), which the read-only door
+  // cannot make, so a reader in a mode takes the writer's.
   let open = async (): Promise<Opened> => {
-    let driver = opts.readOnly
+    let driver = opts.readOnly && !mode
       ? await import('@yaks/sqlite/read-db')
       : await import('@yaks/sqlite/db')
     return driver.open(path)
@@ -513,7 +517,6 @@ let composed = async (
     let { storage } = opts.readOnly
       ? await import('@yaks/sqlite/read-store')
       : await import('@yaks/sqlite')
-    let mode = opts.mode ?? moding()
     // A store as of a transaction or on a branch reads through a connection
     // of its own: this one, which opened for nothing else.
     let moded = mode && await import('@yaks/sqlite')
