@@ -33,15 +33,20 @@ import { cast, unknownComps, unknownProps, type Vocab } from '@yaks/vocab'
 import type { Bundle, Comp } from './bundle.ts'
 import { comps, dead, formed as shaped, reserved } from './bundle.ts'
 
-import { Misfit } from './errors.ts'
+import { Misfit, type Where } from './errors.ts'
 import { prunable } from './prune.ts'
 export { Misfit, misfit, Refused } from './errors.ts'
 
-let serverOwned = (name: string, prop: string): never => {
+let serverOwned = (at: Required<Where>): never => {
   throw new Misfit(
-    `${name}.${prop} is server-owned (stamped); only trusted writers may write it`,
+    `${at.comp}.${at.prop} is server-owned (stamped); only trusted writers may write it`,
+    at,
   )
 }
+
+// The entity as its batch named it: the alias a created one was written
+// under, which is the only name its writer knows it by.
+let named = (b: Bundle) => b.$alias ?? b.entity.eid
 
 /** Check what an untrusted caller named before normalization can remove or
  * replace it. The identity is not checked: it is the row's address, which no
@@ -51,7 +56,9 @@ export let unstamped = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
   for (let b of bundles) {
     for (let [name, patch] of comps(b)) {
       for (let k of Object.keys(patch ?? {})) {
-        if (vocab.prop(name, k)?.stamped) serverOwned(name, k)
+        if (vocab.prop(name, k)?.stamped) {
+          serverOwned({ eid: named(b), comp: name, prop: k })
+        }
       }
     }
   }
@@ -73,6 +80,7 @@ export let formed = (bundles: unknown): Bundle[] => {
 // replica, which keeps the value the graph it copies derived.
 let admitComp = (
   v: Vocab,
+  eid: string,
   name: string,
   patch: Comp,
   trusted: boolean,
@@ -106,11 +114,23 @@ let admitComp = (
   // The refusal lists the vocabulary, not just the mistake: a caller writing a
   // property that does not exist has the wrong idea of this component, and the
   // properties it actually has are the shortest way to correct that.
-  if (alien.length) throw new Misfit(unknownProps(v, name, alien))
+  if (alien.length) {
+    throw new Misfit(unknownProps(v, name, alien), {
+      eid,
+      comp: name,
+      prop: alien[0],
+    })
+  }
   if (ignored && !Object.keys(kept).length) return undefined
   let cut = cast(v, name, kept)
   let errs = v.check(name, cut, { stamped: trusted })
-  if (errs.length) throw new Misfit(errs.join('; '))
+  if (errs.length) {
+    // Which property is at fault, asked one at a time only once refused.
+    let prop = Object.keys(cut).find((k) =>
+      v.check(name, { [k]: cut[k] }, { stamped: trusted }).length
+    )
+    throw new Misfit(errs.join('; '), { eid, comp: name, prop })
+  }
   return { ...cut, ...derived }
 }
 
@@ -184,6 +204,7 @@ export let admit = (
       }
       let admitted = admitComp(
         vocab,
+        named(b),
         name,
         patch,
         trusted,

@@ -206,6 +206,23 @@ test('outbox retains explicit refusals without automatic resubmission', async ()
   }
 })
 
+// A caller that shows a refusal itself forgets it as soon as it hears of it,
+// and nothing of it stays queued or on disk.
+let ownedDisk = disk()
+let later = ownedDisk.store.put
+ownedDisk.store.put = (entry) =>
+  new Promise((done) => setTimeout(() => later(entry).then(done), 0))
+let owned = await fixture(() => Promise.reject(refusal), ownedDisk.store)
+await owned.box.submit(intent(), 'owned-key').catch(() =>
+  owned.box.forget('owned-key')
+)
+await owned.box.ready
+owned.box.close()
+test('a refusal is kept before its caller hears it, so forgetting it leaves nothing', () => {
+  equal(owned.box.pending(), [])
+  equal([...ownedDisk.rows.values()], [])
+})
+
 let replayDisk = disk()
 let first = await fixture(() => Promise.reject(lostAnswer), replayDisk.store)
 await throws(() => first.box.submit(intent(), 'reopen-key'))

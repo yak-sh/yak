@@ -19,6 +19,29 @@ its words, and a session its work—not a search-specific untitled placeholder.
 The arrow beside the query opens an inspector table at `/?q=…`; that address is
 also a draggable link for keeping or sharing a query.
 
+## New
+
+The sidebar's **New** line, the `n` key and `/?new` open a form to make an
+entity: Debug on an empty one. Search the vocabulary to add a component (each
+answer reads `comp{prop, …}` and what it is); each property gets a field for
+its type, a closed set its choices, and a reference a search of the graph.
+Below them, an **outline** makes more entities like it, one a line: indenting
+a line puts it in the one above (`contains`), Enter keeps the indent and Tab
+and Shift+Tab move a line in and out. When the form names an entity (a title,
+or what identifies it) the outline goes inside it.
+
+Any entity's menu offers **new like this** (`/?new&like=T-9`: the same
+components, blank) and **add child** (`/?new&in=T-9`: made inside it, like
+it); the command line says them as `:like` and `:child`, which is how a
+terminal reaches them.
+
+What it will write shows as it is typed, and Create (Enter in a field,
+Ctrl+Enter or Alt+Enter anywhere) writes it as one batch, held until the
+server takes it: nothing half-made shows, and a refusal appears beside the
+field it names (@yaks/graph's refusals carry `eid`, `comp` and `prop`). What is
+typed is the person's draft, one per address, so it is kept until it is
+created or discarded.
+
 ## An app store on yaks.app
 
 Open `https://<space>.yaks.app/<app>/_web` while signed in to that space. The

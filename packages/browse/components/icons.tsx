@@ -40,6 +40,7 @@ import Map from 'lucide/dist/esm/icons/map.mjs'
 import Menu from 'lucide/dist/esm/icons/menu.mjs'
 import MessageCircle from 'lucide/dist/esm/icons/message-circle.mjs'
 import ScanSearch from 'lucide/dist/esm/icons/scan-search.mjs'
+import Plus from 'lucide/dist/esm/icons/plus.mjs'
 import Search from 'lucide/dist/esm/icons/search.mjs'
 import Settings from 'lucide/dist/esm/icons/settings.mjs'
 import Shapes from 'lucide/dist/esm/icons/shapes.mjs'
@@ -89,6 +90,7 @@ let glyphs: Record<string, IconNode> = {
   database: Database,
   folder: Folder,
   house: House,
+  plus: Plus,
   star: Star,
 }
 

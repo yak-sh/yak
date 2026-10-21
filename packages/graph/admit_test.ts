@@ -68,6 +68,34 @@ test('a server-owned property is refused, and admitted when trusted', () => {
   }
 })
 
+// Where a refusal points, as [eid, comp, prop]: the entity as its batch
+// named it, a created one by its alias.
+let where = (b: Record<string, unknown>) => {
+  try {
+    one(b)
+  } catch (e) {
+    let { eid, comp, prop } = e as Refused
+    return [eid, comp, prop]
+  }
+}
+
+test('a refusal names the entity and field it is about', () => {
+  assertEquals(where({ entity: { eid: '$b' }, book: { pagez: 3 } }), [
+    '$b',
+    'book',
+    'pagez',
+  ])
+  assertEquals(
+    where({ entity: { eid: 'b1' }, $alias: '$b', book: { pages: 'x' } }),
+    ['$b', 'book', 'pages'],
+  )
+  assertEquals(where({ entity: { eid: 'b1' }, created: { at: 'now' } }), [
+    'b1',
+    'created',
+    'at',
+  ])
+})
+
 test('an identity copied from a read is the address, and its stamps are dropped', () => {
   let sent = [{ entity: { eid: 'b1', num: 7 }, book: { pages: 3 } }]
   assertEquals(admit(sent, books), [{

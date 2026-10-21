@@ -83,7 +83,10 @@ export let admitSchema = (vocab: Vocab): Plugin => {
   ]))
   let check: WriteHook = (bundles, tx) => {
     let touched = new Map<string, Set<string>>()
+    // Each entity as its batch named it: a created one by its alias.
+    let called = new Map<string, string>()
     for (let b of bundles) {
+      if (b.$alias) called.set(b.entity.eid, b.$alias)
       for (let [comp] of comps(b)) {
         if (!names.has(comp)) continue
         let held = touched.get(b.entity.eid) ?? new Set<string>()
@@ -109,12 +112,17 @@ export let admitSchema = (vocab: Vocab): Plugin => {
       for (let [eid, affected] of touched) {
         let row = rows.get(eid)
         if (!row) continue
+        let at = (comp: string, prop: string) => ({
+          eid: called.get(eid) ?? eid,
+          comp,
+          prop,
+        })
         for (let comp of affected) {
           let value = row[comp] as Comp | undefined
           if (!value) continue
           for (let prop of required.get(comp) ?? []) {
             if (value[prop] == null) {
-              throw new Refused(`${comp}.${prop} is required`)
+              throw new Refused(`${comp}.${prop} is required`, at(comp, prop))
             }
           }
           for (let [prop, verify] of said.get(comp) ?? []) {
@@ -129,13 +137,17 @@ export let admitSchema = (vocab: Vocab): Plugin => {
               : propValue
             let errors = verify(input)
             if (errors.length) {
-              throw new Refused(`${comp}.${prop}: ${errorsText(errors)}`)
+              throw new Refused(
+                `${comp}.${prop}: ${errorsText(errors)}`,
+                at(comp, prop),
+              )
             }
             let shape = vocab.def(comp)?.properties?.[prop]?.tree
             if (shape && !tree(value[prop], shape.key, shape.parent)) {
               throw new Refused(
                 `${comp}.${prop}: names must be unique and ` +
                   'parents must precede their children',
+                at(comp, prop),
               )
             }
           }
@@ -144,12 +156,16 @@ export let admitSchema = (vocab: Vocab): Plugin => {
             try {
               amount = numberOf(limit.value, value)
             } catch (error) {
-              throw new Refused(`${comp}.${limit.name}: ${error}`)
+              throw new Refused(
+                `${comp}.${limit.name}: ${error}`,
+                at(comp, limit.name),
+              )
             }
             if (amount > limit.maximum) {
               throw new Refused(
                 `${comp}.${limit.name}: ${limit.message} ` +
                   `(${amount} > ${limit.maximum})`,
+                at(comp, limit.name),
               )
             }
           }

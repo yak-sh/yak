@@ -45,6 +45,7 @@ import {
 import { matchQuery, parseQuery, selected } from './query.ts'
 import { adopt, parse, timeInstant } from '@yaks/query'
 import { type Arg, id, slotsOf, text } from './verb.ts'
+import { newPath } from './navigation.ts'
 
 // A `:` command's argument, built terse: `a('id', 'T-42', { kind: id })`. The
 // default kind is free text; `eg` is the concrete sample the palette ghosts,
@@ -155,6 +156,7 @@ export let focusFor = (g: Reader, session?: string): string | undefined => {
 export type Result = {
   changes?: Change[]
   go?: string // an eid to open — the platform picks the form (url, trail)
+  page?: string // a page of the app to open, by its address (New's form)
   card?: string // a minted entity to place on a canvas, or open elsewhere
   spawn?: string | SpawnIntent // a launch platforms spend with their catalog
   msg?: string
@@ -978,6 +980,26 @@ export let commands: Record<string, Command> = {
     ],
     about: 'tombstone a memory (delete, said for memories)',
     run: del,
+  },
+  // New, started from where you stand, as the entity menu starts it: a
+  // blank one of the same components, or one made inside this.
+  like: {
+    args: [],
+    about: 'start a new entity made of the same components as this one',
+    words: [0, 0],
+    run: (_, ctx) => {
+      let r = here(ctx)
+      return { page: newPath({ like: idOf(r) }), msg: `new like ${idOf(r)}` }
+    },
+  },
+  child: {
+    args: [],
+    about: 'start a new entity inside this one, or an outline of them',
+    words: [0, 0],
+    run: (_, ctx) => {
+      let r = here(ctx)
+      return { page: newPath({ in: idOf(r) }), msg: `new in ${idOf(r)}` }
+    },
   },
   task: card('task'),
   session: card('session'),

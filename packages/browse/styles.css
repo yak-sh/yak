@@ -2963,6 +2963,48 @@ a[data-ref]:hover {
   color: var(--text);
 }
 
+/* New: a form to jot in, one column at reading width; what it will write
+   sits below in the mono face, as text a person could copy. */
+.New {
+  display: grid;
+  gap: var(--gap);
+  max-width: var(--measure);
+}
+.New_Context {
+  margin: 0;
+  color: var(--muted);
+}
+.New_None {
+  color: var(--dim);
+}
+.New_Said {
+  margin: 0;
+  color: var(--negative);
+  font-size: var(--small);
+}
+.New_Writes {
+  margin: 0;
+  color: var(--muted);
+  font: var(--small) var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.New_Bar {
+  display: flex;
+  gap: var(--gap);
+  align-items: center;
+}
+.New textarea.Field {
+  min-height: 6lh;
+}
+.New .Pairs_Value > .Field {
+  width: 100%;
+  box-sizing: border-box;
+}
+.New .Pairs_Value > textarea.Field {
+  min-height: 3lh;
+}
+
 /* Debug: one full inspector; children are one linked ListTile row each. */
 .Debug {
   display: grid;

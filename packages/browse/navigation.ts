@@ -102,7 +102,27 @@ export let schemaAt = (at: string): boolean => {
   return url.pathname == '/' && url.searchParams.has('map')
 }
 
-/** Every line in the sidebar: home, the destinations, the schema. */
+/** New entities: `/?new`, made in an entity (`&in=`) or like one
+ * (`&like=`), each named as the address writes it, a human id or an eid. */
+/// newAt('/?new') -> {}
+/// newAt('/?new&in=T-1&like=T-2') -> {in: 'T-1', like: 'T-2'}
+/// newAt('/?map') -> undefined
+export let newAt = (at: string): { in?: string; like?: string } | undefined => {
+  let url = new URL(at, 'http://x')
+  if (url.pathname != '/' || !url.searchParams.has('new')) return undefined
+  let named = (k: string) => url.searchParams.get(k) || undefined
+  return Object.fromEntries(
+    ['in', 'like'].flatMap((k) => named(k) ? [[k, named(k)]] : []),
+  )
+}
+/// newPath({in: 'T-1', like: undefined}) -> '/?new&in=T-1'
+export let newPath = (at: { in?: string; like?: string } = {}): string =>
+  `/?${new URLSearchParams([
+    ['new', ''],
+    ...Object.entries(at).filter(([, v]) => v) as [string, string][],
+  ])}`.replace('new=', 'new')
+
+/** Every line in the sidebar: home, new, the destinations, the schema. */
 export let places = (
   home: Place,
   all: Destination[],
@@ -110,6 +130,7 @@ export let places = (
   configuration = false,
 ): Place[] => [
   home,
+  { name: 'New', icon: 'plus', path: newPath() },
   ...all.map((d) => ({ name: d.name, icon: d.icon, path: `/?${d.key}` })),
   ...schema ? [{ name: 'Schema', icon: 'database', path: schemaPath }] : [],
   ...configuration

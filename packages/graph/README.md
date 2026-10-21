@@ -678,7 +678,9 @@ writes themselves, and the observers that run after the commit. In particular:
   state before any write is accepted. Admission refuses a component or property
   the vocabulary does not declare, naming it, and casts a string property's
   value to a string, so a number written to one is stored and returned as its
-  text.
+  text. A refusal about one entity's field says where as well as why: its
+  `eid` (the `$alias` when the batch made the entity), `comp` and `prop`, so a
+  form can show it beside that field.
 - Reference handling, writing, and journaling all run inside the storage
   transaction.
 - `effect` observers run after the commit. One failing cannot undo a committed

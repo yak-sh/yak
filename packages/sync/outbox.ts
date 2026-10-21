@@ -142,9 +142,11 @@ export let durableOutbox = <T, R>(opts: {
           waiting.delete(key)
           notify()
         } catch (error) {
-          waiting.get(key)?.reject(error)
-          waiting.delete(key)
-          if ((error as { outcome?: string })?.outcome === 'refused') {
+          let refused = (error as { outcome?: string })?.outcome === 'refused'
+          // A refusal is recorded before its caller hears of it, so a caller
+          // that forgets or retries it acts on the kept entry, and nothing
+          // written after puts it back.
+          if (refused) {
             entry.state = 'refused'
             entry.refusal = {
               name: (error as Error).name,
@@ -152,7 +154,10 @@ export let durableOutbox = <T, R>(opts: {
             }
             await disk?.put(entry)
             notify()
-          } else {
+          }
+          waiting.get(key)?.reject(error)
+          waiting.delete(key)
+          if (!refused) {
             report(error)
             arm()
             break

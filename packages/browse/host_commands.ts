@@ -20,6 +20,7 @@ let needs: Record<string, string[]> = {
   reply: ['comment', 'doc'],
   claim: ['claim', 'session'],
   forget: ['memory'],
+  child: ['contains', 'edge'],
   task: ['task', 'doc'],
   session: ['session.id'],
   doc: ['doc'],

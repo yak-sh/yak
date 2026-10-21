@@ -6,6 +6,7 @@ export type Keybinding = { keys: string[]; about: string; plugin?: string }
 export let webKeys: Keybinding[] = [
   { keys: ['?'], about: 'show or close keybindings' },
   { keys: ['/'], about: 'search the graph' },
+  { keys: ['n'], about: 'new entity' },
   { keys: [':'], about: 'open the command line' },
   { keys: ['i'], about: 'enter insert mode' },
   { keys: ['Esc'], about: 'return to normal mode' },
@@ -30,6 +31,7 @@ export let tuiKeys: Keybinding[] = [
   },
   { keys: ['/'], about: 'search the graph' },
   { keys: ['f'], about: 'search' },
+  { keys: ['n'], about: 'new entity' },
   { keys: ['Esc'], about: 'finish editing or return to normal mode' },
   { keys: ['y'], about: 'yank' },
   { keys: [':'], about: 'open the command line' },

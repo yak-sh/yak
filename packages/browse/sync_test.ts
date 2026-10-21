@@ -90,10 +90,12 @@ test('a refused write persists under a stable id and survives a reload', () => {
     assertEquals(live.refused.value.length, 1)
     assertEquals(live.refused.value[0].id, id)
 
-    // The user dismisses it, gone from both halves.
+    // The user dismisses it, gone from both halves and from the status line.
+    live.problem.value = 'doc T-1 has moved'
     live.clearRefusal(id)
     assertEquals(live.refused.value.length, 0)
     assertEquals(store.disk.size, 0)
+    assertEquals(live.problem.value, '')
   } finally {
     live.useRefusalStore(prev)
   }

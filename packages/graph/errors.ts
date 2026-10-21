@@ -3,12 +3,35 @@ import type { Eid } from './bundle.ts'
 import { token } from './sha256.ts'
 export { STATUS, status } from './status.ts'
 
-/** A refused graph operation: its message says what prevented it. */
+/** Where a refusal points: the entity as the batch named it (its `$alias`
+ * when the batch made it), and the component and property at fault. A form
+ * shows the refusal beside the field it is about. */
+export type Where = { eid?: Eid; comp?: string; prop?: string }
+
+/** A refused graph operation: its message says what prevented it, and
+ * `eid`, `comp` and `prop` say where, when one entity's field is at fault.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * let no = new Refused('doc.title is required', { eid: '$1', comp: 'doc', prop: 'title' })
+ * equal([no.eid, no.comp, no.prop], ['$1', 'doc', 'title'])
+ * equal('eid' in new Refused('the name is held'), false)
+ * ```
+ */
 export class Refused extends Error {
-  /** @param message what prevented the requested operation */
-  constructor(message: string) {
+  declare eid?: Eid
+  declare comp?: string
+  declare prop?: string
+  /**
+   * @param message what prevented the requested operation
+   * @param at the field it is about, when one is
+   */
+  constructor(message: string, at: Where = {}) {
     super(message)
     this.name = 'Refused'
+    for (let [k, v] of Object.entries(at)) {
+      if (v != null) Object.assign(this, { [k]: v })
+    }
   }
 }
 

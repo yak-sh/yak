@@ -47,6 +47,7 @@ test('the sidebar lists its places, lights the one you are on, and goes where yo
   try {
     assertEquals(lines(), [
       ['Home', '/'],
+      ['New', '/?new'],
       ['Favorites', '/?favorites'],
       ['Recent', '/?recent'],
       ['Bugs', '/?bugs'],

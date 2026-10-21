@@ -1,7 +1,13 @@
 import { InspectPage, PagePart } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { left, scrolledTo } from '../history.ts'
-import { configAt, destinationAt, schemaAt } from '../navigation.ts'
+import {
+  configAt,
+  destinationAt,
+  newAt,
+  newPath,
+  schemaAt,
+} from '../navigation.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
 import { useEffect, useLayoutEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
@@ -39,6 +45,7 @@ import { QueryList } from './views/List.tsx'
 import { Id } from './views/Inline.tsx'
 import { SubscriptionFailure } from './SubscriptionFailure.tsx'
 import { Configuration } from './Configuration.tsx'
+import { New } from './New.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -89,6 +96,7 @@ export let Page = ({ at }: { at: string }) => {
   // what loads it; a no-op under a whole-graph cache.
   let url = new URL(at, 'http://x')
   let search = searchAt(at)
+  let making = newAt(at)
   let place = destinationAt(at, allDestinations())
   let t = screenTarget(at)
   let home = url.pathname == '/' && !url.search
@@ -158,6 +166,15 @@ export let Page = ({ at }: { at: string }) => {
                 Search
               </>
             )
+            : making
+            ? (
+              <>
+                <Shell.Icon>
+                  <Icon name='plus' size={16} />
+                </Shell.Icon>
+                New
+              </>
+            )
             : named && (
               <>
                 <Shell.Icon>
@@ -224,6 +241,8 @@ export let Page = ({ at }: { at: string }) => {
       >
         {configAt(at)
           ? <Configuration />
+          : making
+          ? <New at={making} />
           : schemaAt(at)
           ? <InspectPage map />
           : search != null
@@ -295,14 +314,17 @@ export let App = () => {
   // The shell owns the hotkey and the one <Search> mount so any page can
   // search; a pick opens the hit as the page in its default view.
   useEffect(() => {
+    // `n` opens New the same way, unmodified, so a shortcut keeps its own.
     let key = (e: KeyboardEvent) => {
-      if (mode.value != 'normal' || e.repeat || e.key != '/') return
+      let n = e.key == 'n' && !e.ctrlKey && !e.metaKey && !e.altKey
+      if (mode.value != 'normal' || e.repeat || e.key != '/' && !n) return
       if (
         e.target instanceof HTMLElement &&
         e.target.matches('input, textarea, select, [contenteditable]')
       ) return
       e.preventDefault()
-      searchOpen.value = true
+      if (n) navigate(newPath())
+      else searchOpen.value = true
     }
     addEventListener('keydown', key)
     return () => removeEventListener('keydown', key)

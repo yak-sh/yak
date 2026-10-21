@@ -21,7 +21,8 @@ import {
   rows,
   shown,
 } from '../live.ts'
-import { type Ent, statusOf, vocab } from '../types.ts'
+import { type Ent, idOf, statusOf, vocab } from '../types.ts'
+import { navigate } from './nav.tsx'
 import {
   type Action,
   define,
@@ -100,7 +101,7 @@ import { openRun } from './Run.tsx'
 import { viaName } from '@yaks/kernel/Comments'
 import { block } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
-import { favoriteChange, favoriteLabel } from '../navigation.ts'
+import { favoriteChange, favoriteLabel, newPath } from '../navigation.ts'
 import { TitleText } from './title.tsx'
 
 // Convenience re-exports: Entity.tsx is the front door, registry.ts the
@@ -516,6 +517,23 @@ defineActions([
             },
         ]
         : [],
+  },
+  {
+    // New, started from here: a blank one made of the same components, or
+    // one made inside this (`contains`), so a tree is that, repeated.
+    match: and(),
+    acts: (e) => [
+      {
+        label: 'new like this',
+        run: () => navigate(newPath({ like: idOf(e) })),
+      },
+      ...vocab.comp('contains')
+        ? [{
+          label: 'add child',
+          run: () => navigate(newPath({ in: idOf(e) })),
+        }]
+        : [],
+    ],
   },
   {
     match: and(),

@@ -223,6 +223,7 @@ let exec = async (line: string) => {
     if (task) changes = [...changes, ...scene(task)]
     if (changes.length) mutate(...changes)
     if (r.go) navigate(entityPath(idOf(ent(r.go))))
+    if (r.page) navigate(r.page)
     if (r.card) {
       let root = screenTarget()
       if (capable('canvas') && root && ent(root.eid).canvas) {

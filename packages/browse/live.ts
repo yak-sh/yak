@@ -1469,10 +1469,13 @@ export let refuse = (id: string, reason: string, changes: Change[] = []) => {
   syncRefused()
   problem.value = reason
 }
+// Dismissed, a refusal takes the message it raised with it.
 export let clearRefusal = (id: string) => {
+  let said = refused.peek().find((r) => r.id == id)?.reason
   void replica?.box.wire?.forget(id)
   refusalStore.clear(id)
   syncRefused()
+  if (said && problem.peek() == said) problem.value = ''
 }
 // Surface at boot what a prior life left refused — the post-reload half of the
 // durability guarantee.
@@ -1503,6 +1506,22 @@ export let apply = (bundles: Bundle[]): Promise<Bundle[]> => {
     problem.value = error instanceof Error ? error.message : String(error)
     throw error
   })
+}
+
+/** A held write: nothing shows until the server takes it, so it may name
+ * what it makes by `$alias` and the answer says each eid. A refusal is the
+ * caller's to show, where it belongs, so it stays out of the ledger. */
+export let submit = async (bundles: Bundle[]): Promise<Bundle[]> => {
+  let key = `outbox:${uuid()}`
+  try {
+    return await ensureClient().box.mutate(bundles, {
+      optimistic: false,
+      key,
+    })
+  } catch (error) {
+    clearRefusal(key)
+    throw error
+  }
 }
 
 // Land a local edit: cache first (instant render), then the acked wire.

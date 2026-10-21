@@ -49,6 +49,7 @@ export let open = async (url: string, opts: {
   let { ux } = await import('./components/registry.ts')
   let { contribute } = await import('./components/inspect.tsx')
   let { navigate } = await import('./components/nav.tsx')
+  let { newPath } = await import('./navigation.ts')
   let { Ux } = await import('@yaks/ux')
   let { lone } = await import('@yaks/draft/input')
   let { Md } = await import('./tui/md.tsx')
@@ -123,6 +124,10 @@ export let open = async (url: string, opts: {
         }
       }
       if (keys.press(k)) return true
+      if (k.name == 'char' && !k.ctrl && !k.alt && k.text == 'n') {
+        navigate(newPath())
+        return true
+      }
       if (k.name == 'char' && k.text == 'q') {
         quit()
         return true
@@ -187,6 +192,11 @@ export let open = async (url: string, opts: {
         'Debug_Status-cancelled': { fg: c.dim },
         Debug_Kids: { indent: 2 },
         Debug_More: { fg: c.dim },
+        New: { spaced: true },
+        New_Context: { fg: c.muted },
+        New_None: { fg: c.dim },
+        New_Said: { fg: c.negative },
+        New_Writes: { fg: c.muted },
       },
     })
   } finally {

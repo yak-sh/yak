@@ -55,7 +55,7 @@ test('a document-only vocabulary browses without task, session or box-only reads
     assertEquals(seen.root.textContent?.includes('App document'), true)
     assertEquals(
       [...seen.root.querySelectorAll('.Shell_Label')].map((l) => l.textContent),
-      ['Home', 'Recent'],
+      ['Home', 'New', 'Recent'],
     )
     assertEquals(wire.asked().length, 0)
     // Its page holds the entity, and asks for no edges the store can't keep.
@@ -67,11 +67,20 @@ test('a document-only vocabulary browses without task, session or box-only reads
     assertEquals(seen.root.textContent?.includes('ReferenceError'), false)
     let offered = hostCommands(vocab)
     for (
-      let name of ['new', 'fix', 'chat', 'task', 'session', 'claim', 'mail']
+      let name of [
+        'new',
+        'fix',
+        'chat',
+        'task',
+        'session',
+        'claim',
+        'mail',
+        'child',
+      ]
     ) {
       assertEquals(name in offered, false, name)
     }
-    for (let name of ['open', 'set', 'delete', 'doc']) {
+    for (let name of ['open', 'set', 'delete', 'doc', 'like']) {
       assertEquals(name in offered, true, name)
     }
     assertEquals(

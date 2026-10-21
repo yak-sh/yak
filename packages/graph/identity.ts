@@ -159,6 +159,7 @@ export let identified = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
           `${b.$alias} writes ${name} without ${
             props.join(', ')
           }, which is what identifies it`,
+          { eid: b.$alias, comp: name, prop: props[0] },
         )
       }
       let eid = identityEid(name, values)
@@ -168,6 +169,7 @@ export let identified = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
             values.join('+')
           }, which identifies ${eid} — an identity names the entity, so a ` +
             'value is claimed by writing it, never moved onto another id',
+          { eid: b.$alias ?? b.entity.eid, comp: name, prop: props[0] },
         )
       }
     }
