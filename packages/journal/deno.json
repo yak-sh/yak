@@ -5,12 +5,17 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./graph": "./graph.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./service": "./service.ts",
+    "./views": "./views.ts",
+    "./kept": "./kept.ts"
   },
   "license": "Apache-2.0",
   "description": "Records every committed graph transaction, and who wrote it, inside that same transaction: entity history and undo, and a short-lived feed that carries every commit to the other processes on the store.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "lucide": "npm:lucide@1.31.0",
+    "preact": "npm:preact@^10.29.1"
   },
   "compilerOptions": {
     "lib": [

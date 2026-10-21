@@ -6,7 +6,7 @@ import { derivedEid } from '@yaks/graph/identity'
  * through reference properties and through edges, each relation with how many
  * edges state it and what is at their far end; and the entities carrying it,
  * a row each and a column per property, a page at a time, sorted by any column
- * that sorts.
+ * that sorts; and its recent writes, where the journal keeps its history.
  *
  * How many carry it, and the sets it is found in, are read off the census
  * every map page shares (./census.ts); the edges, off a tally of the edges
@@ -23,6 +23,7 @@ import { type Census, useCensus, within } from './census.ts'
 import { type Column, Grid, paged } from './grid.ts'
 import { chip, chips, relations } from './schema.ts'
 import { Part, useNamed, useSets } from './notes.ts'
+import { History } from './History.ts'
 import { usePageNotes } from './Entity.ts'
 import { comp, count, flags, line, str, tables, typed } from './read.ts'
 import { rows, waiting } from './rows.ts'
@@ -32,7 +33,13 @@ import { Cell, reads } from './value.ts'
 /** A component's name, off its `_comp` bundle. */
 export let nameOf = (e: Bundle): string => str(e, '_comp', 'name')
 
-let HEADINGS = ['Properties', 'Found with', 'Refers to', 'Entities']
+let HEADINGS = [
+  'Properties',
+  'Found with',
+  'Refers to',
+  'Entities',
+  'Recent writes',
+]
 
 type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 
@@ -49,6 +56,7 @@ let kept = (io: Io, name: string): string[] => {
     c.computed && 'computed',
     c.sync != 'server' && `sync ${c.sync}`,
     c.durable != 'forever' && `kept ${c.durable}`,
+    !c.journal && 'keeps no history',
     c.keywords.edge != null && 'an edge relation',
   ].filter((f): f is string => !!f)
 }
@@ -416,6 +424,16 @@ export let CompPage = ({ e, io }: Props): JSX.Element => {
     h(Found, { e, io, notes, census }),
     h(Refers, { e, io, notes, props: got.props, census }),
     h(Entities, { e, io, notes, census }),
+    io.vocab.comp('_change') && io.vocab.comp(name)?.journal
+      ? h(History, {
+        e,
+        io,
+        notes,
+        heading: 'Recent writes',
+        where: `comp=${e.entity.eid}`,
+        once: true,
+      })
+      : null,
   )
 }
 

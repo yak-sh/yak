@@ -220,6 +220,10 @@ offers the graves a sweep may prune through `outside.buried(before, page)`: up
 to `page.limit` tombstones laid before `before` that nothing names, resuming the
 walk at `page.after`, the `next` the page before answered.
 
+A store that keeps a file of pages says what it keeps through
+`storage.measure(signal)`: the file's bytes, its free bytes and each table's
+bytes and rows (`Measure`).
+
 ```ts
 import { graph } from '@yaks/graph'
 import { ram } from '@yaks/ram'

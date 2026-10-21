@@ -73,6 +73,50 @@
         }
       }
     },
+    "kept": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "embed": false,
+      "type": "object",
+      "description": "what the store's file kept on one UTC day, measured once that day from its page statistics, so history can be read against the rest of the file: the file's bytes, how many of them were free, and each table's bytes with its indexes and its rows. History is the journal's tables (`journal_*`) and each component's versions (`<comp>$versions`)",
+      "properties": {
+        "day": {
+          "type": "string",
+          "identity": true,
+          "description": "the UTC day, `2026-10-21`"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was measured"
+        },
+        "bytes": {
+          "type": "integer",
+          "stamped": true,
+          "description": "the file's bytes"
+        },
+        "free": {
+          "type": "integer",
+          "stamped": true,
+          "description": "how many of them were free pages"
+        },
+        "tables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "stamped": true,
+          "description": "by table: [bytes, rows], its indexes' bytes folded into its own"
+        }
+      }
+    },
     "history": {
       "tool": true,
       "noun": "history",

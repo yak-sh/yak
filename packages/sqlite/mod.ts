@@ -68,6 +68,7 @@ import type {
   Eid,
   Entity,
   Graves,
+  Measure,
   Match,
   ReadOpts,
 } from '@yaks/graph'
@@ -111,6 +112,7 @@ import { build, forgo, reshape, type Sizes } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { burying } from './buried.ts'
+import { measure } from './measure.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
@@ -342,6 +344,8 @@ export type Store = {
    * that nothing in the file names (./buried.ts), a page of them from `after`,
    * read as one snapshot */
   buried: (before: string, page: { after?: string; limit: number }) => Graves
+  /** what the file keeps, a b-tree at a time (./measure.ts) */
+  measure: (signal?: AbortSignal) => Promise<Measure | undefined>
   /** a query → a statement selecting the ids of the entities it admits, as
    * this store compiles its reads (./read.ts `screened`); null for a query
    * with nothing to narrow by */
@@ -1163,6 +1167,7 @@ export let storage = (
       ensure()
       return unit(driver, () => graves(before, page), 'read')
     },
+    measure: (signal) => measure(driver, signal),
     get: (eids, comps, o) => {
       if (!eids.length) return []
       ensure()

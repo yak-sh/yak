@@ -182,6 +182,12 @@ has every component table cleared. The transaction points each one no tracker
 has pointed at the tombstone set as it closes (`entomb`), so a presence lookup
 passes the dead by however they were removed.
 
+`store.measure(signal)` says what the file keeps (./measure.ts), as SQLite's
+page statistics (`dbstat`) count it: the file's bytes and free bytes, and each
+table's bytes with its indexes folded in, and its rows. It reads one b-tree at a
+time in a read unit and lets its thread's other work run between them, since a
+file of gigabytes takes a minute to read through.
+
 `store.buried(before, { after, limit })` offers the graves a retention sweep may
 prune (./buried.ts): tombstones laid before `before` that no column in the file
 names, whichever package keyed it to `entity` (the journal's, an embedding's)

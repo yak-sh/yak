@@ -211,6 +211,39 @@ set false:
 Naming neither is the journal before versions: attribution, with every value as
 a `journal_field` row.
 
+## What it keeps
+
+Once a UTC day, the duty `@yaks/journal/service` measures the store's file and
+keeps the day in a `kept{day, at, bytes, free, tables}` row: the file's bytes,
+how many of them are free pages, and each table's `[bytes, rows]` with its
+indexes' bytes folded into its own. A store whose storage has no `measure` (one
+that keeps no file of pages) is not measured. History is the journal's tables
+(`journal_*`) and each component's versions (`<comp>$versions`).
+
+The browsing app's sidebar offers the History page (`@yaks/journal/views`),
+which reads only those rows and a count of the changes held per component: what
+history keeps against the whole file, what it kept per change written and per
+day between measurements, the changes the journal holds for each component
+beside what the component keeps in its own table and its versions, and every
+table, largest first. A component opens its page, which lists its recent writes.
+
+```ts
+import { changes, history, perChange } from '@yaks/journal/kept'
+import { equal } from '@yaks/testing'
+
+let day = (at: string, journal: number, held: number) => ({
+  day: at.slice(0, 10),
+  at,
+  bytes: 1e9,
+  free: 0,
+  tables: { doc: [5e8, 1e6], journal_change: [journal, held] },
+})
+let monday = day('2026-10-19T04:00:00Z', 1_000_000, 10_000)
+let tuesday = day('2026-10-20T04:00:00Z', 2_470_000, 20_000)
+equal([history(tuesday), changes(tuesday)], [2_470_000, 20_000])
+equal(perChange(monday, tuesday), 147)
+```
+
 ## What it returns
 
 Here the host lends the journal a statement capability over the same storage as
@@ -380,11 +413,14 @@ The root exports `ddl`, `log`, `journal`, `backed`, `applied`, `undone`, `undo`,
 `Final`, value encoding helpers, and types including `Log`, `LogOpts`, `Batch`,
 `Entry`, `Patch`, `Delta` and `Cas`.
 
-| Sub-module export     | Purpose                                                                |
-| --------------------- | ---------------------------------------------------------------------- |
-| `@yaks/journal/vocab` | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `history`         |
-| `@yaks/journal/graph` | `schema()` its tables; `plugins(host)` the hooks; `logFor(host)` a log |
-| `@yaks/journal/tools` | `runs(host)` implements the history tool                               |
+| Sub-module export       | Purpose                                                                |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `@yaks/journal/vocab`   | `journalDoc`, `docs` and `backed`: `_tx`, `_change`, `kept`, `history` |
+| `@yaks/journal/graph`   | `schema()` its tables; `plugins(host)` the hooks; `logFor(host)` a log |
+| `@yaks/journal/tools`   | `runs(host)` implements the history tool                               |
+| `@yaks/journal/service` | the daily duty that keeps a `kept` row                                 |
+| `@yaks/journal/views`   | the History page and its place in the sidebar                          |
+| `@yaks/journal/kept`    | reading a `kept` row: history's bytes, changes, per change and per day |
 
 ## Compatibility
 

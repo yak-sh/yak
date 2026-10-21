@@ -172,6 +172,14 @@ export type Tx = {
 /** A page of graves, and where the walk resumes after them. */
 export type Graves = { eids: Eid[]; next?: string }
 
+/** What a store's file keeps: its bytes, how many of them are free, and each
+ * table's bytes with its indexes and its rows. */
+export type Measure = {
+  bytes: number
+  free: number
+  tables: Record<string, [bytes: number, rows: number]>
+}
+
 /** Reads against committed data outside a write transaction. Writes go
  * through the graph's `apply()` so its admission, rules and effects run. */
 export type ReadTx = Pick<
@@ -224,6 +232,10 @@ export type Storage = {
     before: string,
     page: { after?: string; limit: number },
   ) => Graves | Promise<Graves>
+  /** What the file keeps, read a table at a time without a write transaction,
+   * so the work around it goes on; undefined once `signal` aborts. A store
+   * that keeps no file of pages leaves it out. */
+  measure?: (signal?: AbortSignal) => Promise<Measure | undefined>
   /** run `body` in a transaction: commit on return, roll back on throw. Like
    * every other member it is async or sync — an embedded adapter returns
    * whatever the body returned, an adapter over a network returns a promise
