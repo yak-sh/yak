@@ -113,12 +113,18 @@ await on.apply([
 await on.apply([{ entity: { eid: 'b2' }, $delete: true }])
 await g.apply([{ entity: { eid: 'b1' }, page: { title: 'main moved' } }])
 
+let pages = async (on: ReturnType<typeof graph>) =>
+  (await on.get(['b1', 'b2', 'b3'])).map((b) => b.page ?? Object.keys(b))
+
 // Each mode's connection reads before any test does, so none of them pays
 // for preparing the statements they share.
 for (let eids of [['b1', 'b2'], ['b1']]) {
   await on.get(eids)
   await seen(life[0]).get(eids)
 }
+await pages(seen(fork))
+await pages(g)
+await seen(life[0]).read('.page')
 
 for (let { write, at, then } of life) {
   test(`as of ${write}, a store with history holds what it held then`, async () =>
@@ -144,9 +150,6 @@ test('as of a transaction, the graph refuses a write', async () => {
   )
   equal((await g.get(['p3']))[0].page, { title: 'three' })
 })
-
-let pages = async (on: ReturnType<typeof graph>) =>
-  (await on.get(['b1', 'b2', 'b3'])).map((b) => b.page ?? Object.keys(b))
 
 test('a branch reads main as of its fork under its own writes', async () =>
   equal(await pages(seen(fork)), [

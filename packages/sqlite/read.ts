@@ -545,7 +545,11 @@ let kinded = (driver: Driver, vocab: Vocab, rows: Row[]): Row[] => {
 // limit, so a wide sparse vocabulary still takes one presence statement.
 // Globally empty tables short-circuit before the owners are walked. Every
 // table names the owners, so they are one array: written out, they would be
-// prepared again for each table and for each different set of owners.
+// prepared again for each table and for each different set of owners. Each
+// table is asked about one owner at a time, so a mode's view over two tables
+// (a branch's exempt components, @yaks/sqlite mode.ts) takes the owner into
+// each of its arms; joined to the owners, a statement this wide would read
+// every row of it.
 let worn = new WeakMap<Vocab, Map<string, Source>>()
 let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
   select({
@@ -566,8 +570,11 @@ let probe = (vocab: Vocab, names: string[], owners: number[]): Select =>
               exists(select({
                 cols: [lit(1)],
                 from: table('owners'),
-                joins: [cross(table(c))],
-                where: eq(col('entity', c), col('value', 'owners')),
+                where: exists(select({
+                  cols: [lit(1)],
+                  from: table(c),
+                  where: eq(col('entity', c), col('value', 'owners')),
+                })),
               })),
             ),
           ]),
