@@ -131,7 +131,8 @@ export let boxGraph = (adopt = false): Graph =>
 export type Fake = Socket & {
   /** every message this side sent, parsed */
   sent: unknown[]
-  /** fire an event at the listeners registered on this side */
+  /** fire an event at the listeners registered on this side; a close's data
+   * is its close code */
   emit: (type: string, data?: unknown) => void
 }
 
@@ -143,10 +144,10 @@ let fake = (): Fake => {
     send: (data) => {
       f.sent.push(JSON.parse(data))
     },
-    close: () => {
+    close: (code) => {
       if (f.readyState == 3) return
       f.readyState = 3
-      f.emit('close')
+      f.emit('close', code)
     },
     addEventListener: (type, listener) => {
       ;(at[type] ??= []).push(listener)
@@ -155,6 +156,8 @@ let fake = (): Fake => {
       if (type == 'open') f.readyState = 1
       let event = type == 'message'
         ? new MessageEvent('message', { data })
+        : type == 'close'
+        ? new CloseEvent('close', { code: data as number | undefined })
         : new Event(type)
       for (let l of at[type] ?? []) l(event)
     },
@@ -174,10 +177,10 @@ export let pair = (): { client: Fake; server: Fake } => {
       send(data)
       if (to.readyState == 1) to.emit('message', data)
     }
-    from.close = () => {
+    from.close = (code) => {
       if (from.readyState == 3) return
-      close()
-      to.close()
+      close(code)
+      to.close(code)
     }
   }
   join(client, server)

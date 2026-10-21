@@ -350,11 +350,13 @@ when its server hands over to a replacement, is reopened at once. A failed
 attempt is retried after a delay doubling from `wait` to `most` (default 30
 seconds), resetting on open. Once an open socket that closed opens again,
 `report` receives a `Dropped` error naming its close code and how long it was
-down; an outage still going at `most` is reported once as it lasts. `timer`
-supplies reconnect and pace timers. Refused subscriptions are not reopened
-automatically; explicitly subscribe on their id to retry. The first successful
-frame after reconnecting replaces prior membership, adding missing entities to
-`gone`. Cached data alone never makes a subscription ready on a new connection.
+down, unless the server went away on purpose (close code 1001, a restart) and
+was back within five seconds; an outage still going at `most` is reported once
+as it lasts. `timer` supplies reconnect and pace timers. Refused subscriptions
+are not reopened automatically; explicitly subscribe on their id to retry. The
+first successful frame after reconnecting replaces prior membership, adding
+missing entities to `gone`. Cached data alone never makes a subscription ready
+on a new connection.
 
 ### The store's clock
 

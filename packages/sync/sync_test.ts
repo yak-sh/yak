@@ -353,6 +353,31 @@ test('a subscription refused by the server is reported, not applied', async () =
   c.wire.close()
 })
 
+// A server going away on purpose (1001) and back at once is a restart working;
+// an abnormal close, or a going-away that lasts, is a failure.
+for (
+  let [code, ms, said] of [
+    [1001, 250, false],
+    [1001, 6000, true],
+    [1006, 250, true],
+  ] as const
+) {
+  test(`a drop closed ${code} and back after ${ms} ms ${said ? 'is' : 'is not'} reported`, async () => {
+    let c = client(server())
+    c.wire.subscribe('.recipe', 'all')
+    await c.idle()
+    c.socket()!.close(code)
+    c.pass(ms) // the one reconnect the backoff scheduled, and the time down
+    await c.idle()
+    assert(c.wire.connected())
+    assertEquals(
+      c.trouble.map((t) => t.error instanceof Dropped),
+      said ? [true] : [],
+    )
+    c.wire.close()
+  })
+}
+
 test('an oversized subscribe refuses once, never reopens, and does not erase painted rows', async () => {
   let srv = server()
   srv.graph.apply([{ entity: { eid: 'r1' }, recipe: { serves: 2 } }])

@@ -32,8 +32,8 @@ export type Socket = {
   bufferedAmount?: number
   /** send one frame, already serialized */
   send(data: string): void
-  /** close the connection */
-  close(): void
+  /** close the connection, saying why with a close code */
+  close(code?: number): void
   /** listen for `open`, `message`, `close` and `error` */
   addEventListener(
     type: string,
@@ -157,7 +157,9 @@ export type Wire = {
 
 /** An open socket that closed under this wire and opened again: what closed
  * it (its close code, when it gave one) and how long it was down. Said once it
- * reopens, so a report about it reaches a server that is back. */
+ * reopens, so a report about it reaches a server that is back. A server going
+ * away on purpose (`1001`: a restart, a proxy reloading) that is back within
+ * five seconds is the system working, and is never said. */
 export class Dropped extends Error {
   constructor(url: string, code: number | undefined, ms: number) {
     super(
@@ -168,6 +170,13 @@ export class Dropped extends Error {
     this.name = 'Dropped'
   }
 }
+
+// Whether a drop is the system working rather than failing: the far side went
+// away on purpose (close code 1001: a restart, a proxy reloading) and was back
+// within five seconds. An abnormal close, or an outage that lasts, is a
+// failure.
+let expected = (code: number | undefined, ms: number): boolean =>
+  code == 1001 && ms <= 5000
 
 /** The next reconnect delay: double it, but never past the ceiling. */
 export let backoff = (wait: number, most: number): number =>
@@ -205,9 +214,9 @@ export let wire = (opts: WireOpts): Wire => {
   let wait = first
   let retrying = false // the one timer — never a second
   let closed = false
-  // Every drop is reported once the socket opens again (`Dropped`), and an
-  // outage the backoff reaches its ceiling in is reported as it goes on,
-  // once, until a connection opens again.
+  // Every unexpected drop is reported once the socket opens again
+  // (`Dropped`), and an outage the backoff reaches its ceiling in is reported
+  // as it goes on, once, until a connection opens again.
   let told = false
   let down: { at: number; code?: number } | undefined
   let n = 0
@@ -326,9 +335,10 @@ export let wire = (opts: WireOpts): Wire => {
       wait = first // the server is reachable: retry promptly after the next drop
       told = false
       if (down) {
-        opts.report(
-          new Dropped(wsUrl(opts.url), down.code, agreed.read() - down.at),
-        )
+        let ms = agreed.read() - down.at
+        if (!expected(down.code, ms)) {
+          opts.report(new Dropped(wsUrl(opts.url), down.code, ms))
+        }
         down = undefined
       }
       agreed.reset()
