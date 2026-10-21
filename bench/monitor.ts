@@ -333,11 +333,21 @@ export let measurement = (suite: string): string[] => [
   HOURLY.includes(suite) ? '600' : '10800',
 ]
 
+/** The share of a few idle seconds some work on the box waited for a CPU.
+ * Sampled while the monitor sleeps, since the last ten seconds' average would
+ * count its own start-up and the suite before it. */
+let stalled = async (ms = 2000): Promise<number | null> => {
+  let before = pressure()
+  await new Promise((done) => setTimeout(done, ms))
+  let after = pressure()
+  return before && after ? (after.total - before.total) / (ms * 1000) : null
+}
+
 /** `deno task bench:check <suite>` in this checkout, read back from the run
  * it writes. A loaded box is not measured at all: the bench would add to the
  * load and its figures could tell nothing. */
 let check = async (suite: string, runs?: number): Promise<Outcome> => {
-  if (loaded({ stall: pressure()?.now ?? null })) {
+  if (loaded({ stall: await stalled() })) {
     return { verdict: 'loaded' }
   }
   if (MEASURE[suite]) {
