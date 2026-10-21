@@ -564,7 +564,7 @@ These are the names, all of them:
     gallery gitobj grant home hook hostname image inference installed
     integration integration_install interrupted invite inviting key lease
     lines mail mail_post member memory meter model
-    notice notified notify_trash openai opened openrouter order output output_of
+    notice notified notify_trash occupancy openai opened openrouter order output output_of
     parent pending person plan price product project provider provisional
     published quarantined questions reads recalled ref referenced
     refusal register_writes report repository representation requires
