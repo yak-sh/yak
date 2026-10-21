@@ -414,9 +414,10 @@ reversible changes returns `[]`.
 
 ## Exports
 
-The root exports `ddl`, `log`, `journal`, `backed`, `applied`, `undone`, `undo`,
-`Final`, value encoding helpers, and types including `Log`, `LogOpts`, `Batch`,
-`Entry`, `Patch`, `Delta` and `Cas`.
+The root exports `ddl`, `dropDdl`, `log`, `journal`, `backed`, `applied`,
+`undone`, `undo`, `Final`, value encoding helpers, and types including `Log`,
+`LogOpts`, `Batch`, `Entry`, `Patch`, `Delta` and `Cas`. `dropDdl()` drops what
+`ddl()` created, for a store that stops keeping a journal.
 
 | Sub-module export       | Purpose                                                                |
 | ----------------------- | ---------------------------------------------------------------------- |

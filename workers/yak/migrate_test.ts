@@ -12,6 +12,7 @@ import { at, by, col, erect, fn, insert, lit, scan, type Stmt } from '@yaks/sql'
 import { DIRTY, OWED, TABLE } from '@yaks/embedding'
 import { columns, objects as catalogue, reclassify, schema } from '@yaks/sqlite'
 import { mem } from '../../packages/sqlite/testing.ts'
+import { ddl as journalDdl } from '@yaks/journal'
 import { Store } from './graph.ts'
 import { loadVocab } from '@yaks/vocab'
 import {
@@ -910,4 +911,51 @@ let deployedOmission = await (async () => {
 test('an app deploy omitting a populated component and a rollback preserve its data', () => {
   equal(deployedOmission.omitted[0].precious, { value: 'owner data' })
   equal(deployedOmission.rolled[0].precious, { value: 'owner data' })
+})
+
+// An app store as cac5e3065 left it until T-65227: the journal's tables beside
+// the app's own, holding a transaction and its change. This app also declares
+// a word of the journal's table names as its own.
+let unjournaled = await (async () => {
+  let ctx = state(), old = newer(ctx, 'ada/ledger')
+  let text = { component: true, properties: { text: { type: 'string' } } }
+  let words = { $defs: { note: text, journal_field: text } }
+  await old.door('/vocab', { method: 'POST', body: JSON.stringify(words) }, APP)
+  await old.apply([
+    {
+      entity: { eid: ONE },
+      note: { text: 'kept' },
+      journal_field: { text: 'mine' },
+    },
+  ], APP)
+  let d = db(ctx)
+  let on = (s: Stmt) =>
+    s.t == 'create table' ? s.name : s.t == 'create index' ? s.on : ''
+  run(ctx, ...journalDdl().filter((s) => on(s) != 'journal_field'))
+  let [one] = scan(d, 'entity', by({ eid: ONE }), ['id'])
+  run(
+    ctx,
+    insert('journal_tx', { ts: '2026-10-03T00:00:00.000Z' }),
+    insert('journal_change', {
+      tx: 1,
+      ordinal: 0,
+      entity: Number(one.id),
+      component: 'note',
+      operation: 'upsert',
+    }),
+  )
+  keep(ctx, 'schema', 'before the journal left')
+  let [note] = await newer(ctx, 'ada/ledger').query('.note&*', APP)
+  return {
+    journal: catalogue(d).map((o) => o.name).filter((n) =>
+      n.startsWith('journal_')
+    ),
+    note,
+  }
+})()
+
+test('an app wake drops the journal its store kept and keeps what its words declare', () => {
+  equal(unjournaled.journal, ['journal_field'])
+  equal(unjournaled.note.note, { text: 'kept' })
+  equal(unjournaled.note.journal_field, { text: 'mine' })
 })

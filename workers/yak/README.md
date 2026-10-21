@@ -724,7 +724,8 @@ for it and is served at an ordinary wake's cost. Planner statistics a pass owes,
 in any store, are analyzed a table at a time from the alarm (@yaks/sqlite
 `analyze`). Schema changes retain unchanged FTS indexes and writers.
 Classification audits are explicit repairs, not release installation work. The
-inspector omits history when its vocabulary has no `_change`. Standing journal
-tables and their rows are left untouched: removing them would incur billed
-writes. Schema rows are excluded from ordinary page listings unless named
-explicitly, like other platform-owned rows.
+inspector omits history when its vocabulary has no `_change`. A store whose
+words keep no journal drops the journal's tables, with their rows, in its next
+schema pass (migrate.ts `unjournaled`); a table its words declare stays. Schema
+rows are excluded from ordinary page listings unless named explicitly, like
+other platform-owned rows.

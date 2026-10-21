@@ -206,9 +206,9 @@ not use of those apps, and adds no activity hop to those reads.
   vocabulary, never to what it holds.
 - **App stores keep no journal** (T-65227). They don't load @yaks/journal, and
   declaring journal names in an app manifest doesn't turn it on; their
-  inspector reads schema and entities without history. Journal tables and rows
-  already standing stay as they are, since deleting them would itself be billed
-  writes.
+  inspector reads schema and entities without history. A store still holding
+  the journal's tables from that window drops them in its next schema pass
+  (migrate.ts `unjournaled`, T-131164).
 - **A trashed store sleeps.** Trashing or restoring an app or its space commits
   a `notify_trash` effect in the directory beside the mark (`trash.ts`). It
   tells every affected store, retries until acknowledged, and reads the present

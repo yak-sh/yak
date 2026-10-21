@@ -853,6 +853,10 @@ let populated = (driver: Driver, name: string) =>
   driver.query(select({ cols: [lit(1)], from: table(name), limit: lit(1) }))
     .length > 0
 
+// Whether a table remembered by name is still there: a catalogue read, no rows.
+let extant = (driver: Driver, name: string) =>
+  driver.query({ t: 'pragma', name: 'table_list', arg: name }).length > 0
+
 // Whether a table expected to hold rows does: one billed row at most.
 let holds = (driver: Driver, name: string) =>
   driver.query(select({ cols: [lit(1)], from: table(name), limit: lit(1) }))
@@ -868,7 +872,8 @@ let joined = (owed: string[] = [], more: string[]) => [
  * the store holds nothing to analyze. Deciding reads no rows of any table that
  * holds some: the stored bytes, zero-billed counts of the tables remembered
  * empty, and after a schema change the catalogue and the statistics standing.
- * A table owed stays owed until {@link analyzing} reaches it.
+ * A table owed stays owed until {@link analyzing} reaches it, and one
+ * remembered empty that has been dropped since is forgotten.
  */
 let owing = (
   driver: Driver,
@@ -878,11 +883,12 @@ let owing = (
 ): Statistics | undefined => {
   let owed = previous?.owed ?? []
   if (previous && unchanged && bytes < previous.bytes * 10) {
-    let filled = previous.empty.filter((name) => populated(driver, name))
-    if (!filled.length) return
+    let empty = previous.empty.filter((name) => extant(driver, name))
+    let filled = empty.filter((name) => populated(driver, name))
+    if (!filled.length && empty.length == previous.empty.length) return
     return {
       bytes: previous.bytes,
-      empty: previous.empty.filter((name) => !filled.includes(name)),
+      empty: empty.filter((name) => !filled.includes(name)),
       owed: joined(owed, filled),
     }
   }
@@ -949,8 +955,7 @@ export let analyzing = (
   let taken = owed.slice(0, n)
   let empty = statistics.empty.filter((name) => !taken.includes(name))
   for (let name of taken) {
-    let standing = driver.query({ t: 'pragma', name: 'table_list', arg: name })
-    if (!standing.length) continue
+    if (!extant(driver, name)) continue
     driver.query({ t: 'analyze', table: name })
     if (!holds(driver, name)) empty.push(name)
   }

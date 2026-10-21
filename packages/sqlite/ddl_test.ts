@@ -25,7 +25,7 @@ import {
 import memberDoc from '../member/vocab.json' with { type: 'json' }
 import { schema, tables } from './ddl.ts'
 import { open } from './db.ts'
-import { columns as cols, objects, storage } from './mod.ts'
+import { analyzed, columns as cols, objects, storage } from './mod.ts'
 import { mem, shop, spy } from './testing.ts'
 
 let text = (stmts: Stmt[]) => stmts.map((s) => render(s).sql)
@@ -966,4 +966,22 @@ test('explicit installation repairs a column; reading does not', () => {
     b.close()
     Deno.removeSync(dir, { recursive: true })
   }
+})
+
+// A receipt names tables by name, and one may be dropped before the next
+// installation reads it: the journal an app store stopped keeping (T-131164).
+test('statistics forget a table remembered empty once it is dropped', () => {
+  let d = Object.assign(mem(), { statistics: { bytes: () => 1 } })
+  d.query({
+    t: 'create table',
+    name: 'kept',
+    cols: [{ name: 'id', type: 'integer', pk: true }],
+  })
+  let previous = { bytes: 1, empty: ['kept', 'gone'], owed: [] }
+  assertEquals(analyzed(d, previous, true), {
+    bytes: 1,
+    empty: ['kept'],
+    owed: [],
+  })
+  assertEquals(analyzed(d, { ...previous, empty: ['kept'] }, true), undefined)
 })

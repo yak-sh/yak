@@ -1,13 +1,15 @@
 // What a Store's own storage is brought to at each wake (graph.ts): the schema
 // its vocabulary implies, raised over whatever the object holds ({@link
 // install}), changed definitions installed when that schema moves, a column
-// its vocabulary stopped naming dropped ({@link shed}), and each slot the object remembers rewritten into the one shape a
-// deploy takes now ({@link documented}, {@link unholed}, {@link unworded},
-// {@link respelled}). {@link BOUNDARIES} names the stored shapes this code
-// reads, for `yak admin deploys`.
+// its vocabulary stopped naming dropped ({@link shed}), a journal its words no
+// longer keep dropped ({@link unjournaled}), and each slot the object
+// remembers rewritten into the one shape a deploy takes now ({@link
+// documented}, {@link unholed}, {@link unworded}, {@link respelled}).
+// {@link BOUNDARIES} names the stored shapes this code reads, for `yak admin
+// deploys`.
 import { adopt, fields } from '@yaks/fts'
 import { blobRead, blobSchema } from '@yaks/blob'
-import { ddl as journalDdl } from '@yaks/journal'
+import { ddl as journalDdl, dropDdl as journalDrop } from '@yaks/journal'
 import {
   rekey,
   schema as vectorSchema,
@@ -524,16 +526,37 @@ export let raised = (d: Driver, vocab: Vocab, own = false): Error[] => {
   lifecycleColumns(d, vocab)
   erect(d, blobSchema())
   if (vocab.comp('_tx')) erect(d, journalDdl())
-  let left = install(d, vocab, blobRead(vocab), own)
+  let left = [
+    ...unjournaled(d, vocab),
+    ...install(d, vocab, blobRead(vocab), own),
+  ]
   if (!left.length) {
     watchEmbedding(statements(d), texts(vocab, blobRead(vocab)))
   }
   return left
 }
 
+/** The journal's tables dropped from a store whose words keep no journal:
+ * every app store raised them from cac5e3065 to T-65227, and nothing has read
+ * them since (T-131164). A table its words declare as a component stays. A
+ * drop that fails comes back for the caller to report, and the store serves
+ * what it holds. */
+export let unjournaled = (d: Driver, vocab: Vocab): Error[] =>
+  vocab.comp('_tx') ? [] : journalDrop()
+    .filter((s) => !vocab.comp(s.name))
+    .flatMap((s) => {
+      try {
+        d.query(s)
+        return []
+      } catch (e) {
+        return [e as Error]
+      }
+    })
+
 // Installation semantics participate in the Store print even when its words
-// did not change (for example, a component removed by an earlier release).
-export let INSTALL = 3
+// did not change (for example, a component removed by an earlier release, or
+// the journal an app store no longer keeps).
+export let INSTALL = 4
 
 /** One wake's schema pass, for the print a vocabulary renders to and the
  * stamp an older release kept. The stamp decides when the pass (`raise`) runs

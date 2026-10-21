@@ -31,6 +31,7 @@ import {
   val,
 } from '@yaks/sql'
 import { objects } from '@yaks/sqlite'
+import { dropDdl } from '@yaks/journal'
 import { memoryMultipart } from '@yaks/blob'
 import { contentType } from '@std/media-types'
 import { durable as raw } from '../../packages/durable-object/testing.ts'
@@ -282,9 +283,7 @@ export let unclassified = (held: Held, stamp: string) => {
   d.query({ t: 'update', table: 'entity', set: { archetype: lit(null) } })
   // A pre-archetype store predates the journal as well; remove its
   // append-only references before deleting descriptor spine rows.
-  for (let name of ['journal_field', 'journal_change', 'journal_tx']) {
-    d.query({ t: 'drop', kind: 'table', name, ifExists: true })
-  }
+  for (let stmt of dropDdl()) d.query(stmt)
   let descriptors = scan(d, 'archetype', undefined, ['entity'])
     .map((r) => val(Number(r.entity)))
   for (let name of ['retired', 'archetype']) {

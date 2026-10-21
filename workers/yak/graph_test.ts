@@ -1898,11 +1898,15 @@ test('a Store anatomy supplier observes its own conditional composition without 
   assertEquals(app.comps.length, store.anatomy().comps.length)
 })
 
-test('app schema reads and writes leave old journal tables untouched across boot', async () => {
+// An app store still holding the journal's tables, as every app store did from
+// cac5e3065 to T-65227: its schema pages read, two writes, then a boot under an
+// earlier deploy's stamp, a write and a deploy that adds a property.
+let journaled = await (async () => {
   let ctx = state()
   using _db = ctx.storage
   let store = await cookbook(ctx)
   let drive = db(ctx)
+  let rows = (name: string) => drive.query(select({ from: table(name) }))
   for (let stmt of journalDdl()) drive.query(stmt)
   drive.query({
     t: 'insert',
@@ -1910,8 +1914,7 @@ test('app schema reads and writes leave old journal tables untouched across boot
     cols: ['ts'],
     rows: [[lit('2026-10-04T00:00:00Z')]],
   })
-  let before = drive.query(select({ from: table('journal_tx') }))
-  // A prior deploy's schema stamp forces the actual fitting path on wake.
+  let before = rows('journal_tx')
   keep(ctx, 'schema', 'journal-enabled-deploy')
   let query = async (line: string) =>
     await (await get(
@@ -1920,18 +1923,9 @@ test('app schema reads and writes leave old journal tables untouched across boot
       owner,
     )).json() as Bundle[]
   let [schema] = await query('._comp.name=recipe&?doc')
-  assertEquals((schema.doc as Comp).title, 'recipe')
   let props = await query(`._prop.comp=${schema.entity.eid}`)
-  assert(props.some((b) => (b._prop as Comp).name == 'serves'))
-  // App schema pages are derived when read; only the core session package's
-  // version manifest is retained for its sending migration.
-  assertEquals(
-    drive.query(select({ from: table('_package') })).map((row) => row.name),
-    ['@yaks/session'],
-  )
-  for (let rows of ['_comp', '_prop', '_vocab']) {
-    assertEquals(drive.query(select({ from: table(rows) })), [])
-  }
+  let packages = rows('_package').map((row) => row.name)
+  let described = ['_comp', '_prop', '_vocab'].flatMap(rows)
   for (let serves of [2, 7]) {
     await post(
       store,
@@ -1940,22 +1934,19 @@ test('app schema reads and writes leave old journal tables untouched across boot
       owner,
     )
   }
-  assertEquals(drive.query(select({ from: table('journal_tx') })), before)
-  assertEquals(drive.query(select({ from: table('journal_change') })), [])
-  assertEquals(drive.query(select({ from: table('journal_field') })), [])
+  let journal = ['journal_tx', 'journal_change', 'journal_field'].map(rows)
   store = new Store(ctx)
   let [cake] = await query(`.recipe&.entity.eid=${CAKE}`)
-  assertEquals((cake.recipe as Comp).serves, 7)
-  await post(store, '/apply', [{
+  let wrote = (await post(store, '/apply', [{
     entity: { eid: CAKE },
     recipe: { serves: 8 },
-  }], owner)
-  assertEquals(drive.query(select({ from: table('journal_tx') })), before)
-  assertEquals(drive.query(select({ from: table('journal_change') })), [])
-  assertEquals(drive.query(select({ from: table('journal_field') })), [])
-  assertEquals((await query('._comp.name=_tx')).length, 0)
-  assertEquals((await query('._comp.name=_change')).length, 0)
-  // A deploy adding a property serves its page immediately.
+  }], owner)).status
+  let standing = drive.query({ t: 'pragma', name: 'table_list' })
+    .map((t) => String(t.name)).filter((name) => name.startsWith('journal_'))
+  let pages = [
+    ...await query('._comp.name=_tx'),
+    ...await query('._comp.name=_change'),
+  ]
   await post(
     store,
     '/vocab',
@@ -1969,10 +1960,44 @@ test('app schema reads and writes leave old journal tables untouched across boot
     }),
     owner,
   )
-  assertEquals(
-    (await query(`._prop.comp=${schema.entity.eid}&._prop.name=spice`)).length,
-    1,
-  )
+  let spice = await query(`._prop.comp=${schema.entity.eid}&._prop.name=spice`)
+  return {
+    schema,
+    props,
+    packages,
+    described,
+    before,
+    journal,
+    cake,
+    wrote,
+    standing,
+    pages,
+    spice,
+  }
+})()
+
+test('an app store derives its schema pages when read and stores none', () => {
+  equal((journaled.schema.doc as Comp).title, 'recipe')
+  ok(journaled.props.some((b) => (b._prop as Comp).name == 'serves'))
+  // Only the core session package's version manifest is retained, for its
+  // sending migration.
+  equal(journaled.packages, ['@yaks/session'])
+  equal(journaled.described, [])
+})
+
+test("an app store's writes journal nothing", () => {
+  equal(journaled.journal, [journaled.before, [], []])
+})
+
+test("an app store's next boot drops an old journal and serves what it holds", () => {
+  equal(journaled.standing, [])
+  equal((journaled.cake.recipe as Comp).serves, 7)
+  equal(journaled.wrote, 200)
+  equal(journaled.pages, [])
+})
+
+test('an app deploy adding a property serves its page at once', () => {
+  equal(journaled.spice.length, 1)
 })
 
 test(

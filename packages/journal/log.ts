@@ -48,6 +48,7 @@ import {
   type CreateTable,
   type Derived,
   desc,
+  type Drop,
   eq,
   type Expr,
   fn,
@@ -218,6 +219,18 @@ export let ddl = (spine = 'entity'): Stmt[] => {
     index('journal_field_ref', 'journal_field', ['ref'], notNull(col('ref'))),
   ]
 }
+
+/** What {@link ddl} raised, dropped, for a store that keeps no journal: its
+ * tables in the reverse of the order they were raised, so each goes before the
+ * one it refers to (SQLite drops a table still referred to by deleting its
+ * rows one at a time, and refuses where a reference holds one), and each
+ * table's indexes with it. */
+export let dropDdl = (): Drop[] =>
+  ddl().flatMap((s): Drop[] =>
+    s.t == 'create table'
+      ? [{ t: 'drop', kind: 'table', name: s.name, ifExists: true }]
+      : []
+  ).reverse()
 
 // The properties an after-image records: everything but `eid`, which is the
 // row's own identity and already the change's entity.
