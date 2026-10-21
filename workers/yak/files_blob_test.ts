@@ -44,6 +44,18 @@ test('the cached blob door streams bytes and bounds uncached seeks', async () =>
   assertEquals(calls[1].headers.get('range'), 'bytes=2-4')
 })
 
+test('a blob is read in-process when the cache in front of the door fails', async () => {
+  let failing = {
+    ...env,
+    FILES: {
+      fetch: () => Promise.resolve(new Response(null, { status: 520 })),
+    },
+  }
+  let got = await blobBytes(failing, { eid }, prefix, sha)
+  assertEquals(got.status, 200)
+  assertEquals(new Uint8Array(await got.arrayBuffer()), bytes)
+})
+
 test('the blob door reads no bytes for HEAD and keeps missing blobs private', async () => {
   let before = files.gets.length
   let head = await get('HEAD')

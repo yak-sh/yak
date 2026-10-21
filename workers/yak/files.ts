@@ -29,6 +29,7 @@ import { servable } from './blob-key.ts'
 import { at, blobAt, immutable, servableAt } from './cache.ts'
 import { type Served, storeOf } from './door.ts'
 import { answered, metaOf } from './meta.ts'
+import { caught } from './defects.ts'
 import { seedy } from './seed.ts'
 import type { Env, Fetcher } from './env.ts'
 import { BUILT } from './versions.ts'
@@ -257,15 +258,25 @@ export let nearest = (path: string) => {
 // header the gateway reads is sure to say it is in one: app code holds the
 // binding itself. So the refusal is the answer: the same bytes, read
 // in-process, uncached.
+//
+// The cache can also fail on its own: a status from 520 to 530 is Cloudflare
+// saying it got no answer from the entrypoint behind it, which this module
+// never answers with itself. That failure is reported, and the bytes are read
+// in-process the same way, so a person's image still loads.
 export let door = (env: Env): Fetcher => ({
   fetch: async (req) => {
     if (!env.FILES) return fetch(req, env)
     try {
-      return await env.FILES.fetch(req)
+      let cached = await env.FILES.fetch(req)
+      if (cached.status < 520 || cached.status > 530) return cached
+      await cached.body?.cancel()
+      caught(new Error(`the files cache answered ${cached.status}`), {
+        request: `${req.method} files`,
+      })
     } catch (e) {
       if ((e as Error | null)?.name != 'DataCloneError') throw e
-      return fetch(req, env)
     }
+    return fetch(req, env)
   },
 })
 
