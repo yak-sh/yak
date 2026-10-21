@@ -15,6 +15,15 @@
 //   Its writes are the view's.
 // - `keyed`: the view's layout with the versions kept without a rowid, in
 //   `(entity, $branch, $to)` order, as a live table is kept in entity order.
+// - `partial`: the view's table with one more index, a partial one over
+//   main's open rows, `(entity) where $branch = 0 and $to = 0`.
+// - `open-first`: the view's layout without a rowid, keyed
+//   `($branch, $to, entity)` so main's open rows sit together, with
+//   `(entity, $branch, $to)` beside it for as-of and branch reads.
+//
+// A count of a component is also read as the graph answers `.<comp> .count`,
+// from the populations it keeps (packages/sqlite/population.ts), in a host
+// composed as ~/.yak/yak.json says over the copy.
 //
 // The view and the keyed layout are each a connection whose temporary views
 // stand in front of the live tables, as a mode's do (packages/sqlite/mode.ts);
@@ -55,6 +64,8 @@ import {
 } from '@yaks/sql'
 import { beside, BRANCH, FROM, TO } from '@yaks/sqlite'
 import { open } from '@yaks/sqlite/db'
+import { compose, facet } from '@yaks/cli/host'
+import { read as config } from '@yaks/cli'
 
 let [db, roundsArg] = Deno.args
 if (!db) throw new Error('usage: history-layouts.ts <copy.db> [rounds]')
@@ -67,8 +78,6 @@ type W = Extract<Stmt, { t: 'insert' | 'update' | 'delete' }>
 
 // ---- what the copy holds ----
 
-let KEYED = '$keyed'
-let keyed = (comp: string) => `${comp}${KEYED}`
 let main = (name: string, as?: string): Source => ({
   t: 'table',
   name,
@@ -117,14 +126,36 @@ let busy = tally.filter((t) => t.open >= 1000 && stored(t.comp).length)
 out({ m: 'busiest', ...busy, per: +(busy.closed / busy.open).toFixed(1) })
 let COMPS = ['doc', 'task', 'completed', 'cancelled', busy.comp]
 
-// ---- the keyed copies ----
+// ---- the copies ----
 
-// `comp`'s versions without a rowid, keyed `(entity, $branch, $to)`, with the
-// closed-version index and each plain index the versions carry.
-let keyedDdl = (comp: string): Stmt[] => {
-  let from = beside(comp), to = keyed(comp)
+let OPEN = (a?: string) =>
+  and(eq(col(BRANCH, a), lit(0)), eq(col(TO, a), lit(0)))
+
+// A shape for a table of versions: the key of one kept without a rowid (a
+// rowid table gets a unique index on `(entity, $branch, $to)` instead), and
+// the indexes it carries beyond the closed-version index and each plain index
+// the versions carry.
+type Shape = {
+  key?: string[]
+  indexes: { name: string; cols: string[]; where?: Expr }[]
+}
+let KEY = ['entity', BRANCH, TO]
+let SHAPES: Record<string, Shape> = {
+  keyed: { key: KEY, indexes: [] },
+  partial: { indexes: [{ name: 'open', cols: ['entity'], where: OPEN() }] },
+  'open-first': {
+    key: [BRANCH, TO, 'entity'],
+    indexes: [{ name: 'entity', cols: KEY }],
+  },
+}
+let shaped = (shape: string) => (comp: string) => `${comp}$${shape}`
+
+// `comp`'s versions copied into a table of `shape`.
+let copied = (shape: string, comp: string): Stmt[] => {
+  let { key, indexes } = SHAPES[shape]
+  let from = beside(comp), to = shaped(shape)(comp)
   let cols = columns(from)
-  let indexes = pragma('index_list', from)
+  let mirrored = pragma('index_list', from)
     .map((r) => String(r.name))
     .filter((n) => !n.endsWith('.key') && !n.endsWith('.to'))
   return [
@@ -141,8 +172,7 @@ let keyedDdl = (comp: string): Stmt[] => {
           ? { default: lit(0) }
           : {},
       })),
-      keys: [{ pk: ['entity', BRANCH, TO] }],
-      withoutRowid: true,
+      ...key ? { keys: [{ pk: key }], withoutRowid: true } : {},
     },
     {
       t: 'insert',
@@ -151,9 +181,16 @@ let keyedDdl = (comp: string): Stmt[] => {
       q: select({
         cols: cols.map((r) => col(String(r.name))),
         from: table(from),
-        order: [col('entity'), col(BRANCH), col(TO)],
+        order: (key ?? KEY).map((c) => col(c)),
       }),
     },
+    ...key ? [] : [{
+      t: 'create index' as const,
+      name: `${to}.key`,
+      on: to,
+      cols: KEY.map((c) => col(c)),
+      unique: true,
+    }],
     {
       t: 'create index',
       name: `${to}.to`,
@@ -161,26 +198,33 @@ let keyedDdl = (comp: string): Stmt[] => {
       cols: [col(TO)],
       where: ne(col(TO), lit(0)),
     },
-    ...indexes.map((n): Stmt => ({
+    ...mirrored.map((n): Stmt => ({
       t: 'create index',
-      name: n.replace('$versions', KEYED),
+      name: n.replace('$versions', `$${shape}`),
       on: to,
       cols: pragma('index_info', n).map((r) => col(String(r.name))),
     })),
+    ...indexes.map((i): Stmt => ({
+      t: 'create index',
+      name: `${to}.${i.name}`,
+      on: to,
+      cols: i.cols.map((c) => col(c)),
+      ...i.where ? { where: i.where } : {},
+    })),
   ]
 }
-for (let comp of COMPS) {
-  let s = performance.now()
-  q({ t: 'begin' })
-  for (let st of keyedDdl(comp)) q(st)
-  q({ t: 'commit' })
-  out({ m: 'keyed:made', comp, ms: Math.round(performance.now() - s) })
+for (let shape of Object.keys(SHAPES)) {
+  for (let comp of COMPS) {
+    let s = performance.now()
+    q({ t: 'begin' })
+    for (let st of copied(shape, comp)) q(st)
+    q({ t: 'commit' })
+    out({ m: 'copied', shape, comp, ms: Math.round(performance.now() - s) })
+  }
 }
 
 // ---- the layouts' connections ----
 
-let OPEN = (a?: string) =>
-  and(eq(col(BRANCH, a), lit(0)), eq(col(TO, a), lit(0)))
 let viewed = (of: (comp: string) => string) => {
   let c = open(db)
   for (let comp of COMPS) {
@@ -215,7 +259,12 @@ let layouts: Layout[] = [
     src: (c, a) => ({ src: table(beside(c), a), on: OPEN(a) }),
     keeps: (c) => [beside(c)],
   },
-  { name: 'keyed', on: viewed(keyed), src: plain, keeps: (c) => [keyed(c)] },
+  ...Object.keys(SHAPES).map((shape) => ({
+    name: shape,
+    on: viewed(shaped(shape)),
+    src: plain,
+    keeps: (c: string) => [shaped(shape)(c)],
+  })),
 ]
 
 // ---- timing ----
@@ -237,13 +286,18 @@ let stats = (xs: number[]) => {
 }
 // Each call's own time after three untimed; a cold one follows another
 // writer's commit, so it reads from SQLite rather than from memory.
-let time = (l: string, m: string, f: (i: number) => unknown, cold = false) => {
-  for (let i = 0; i < 3; i++) f(-1 - i)
+let time = async (
+  l: string,
+  m: string,
+  f: (i: number) => unknown,
+  cold = false,
+) => {
+  for (let i = 0; i < 3; i++) await f(-1 - i)
   let xs: number[] = []
   for (let i = 0; i < rounds; i++) {
     if (cold) commit()
     let s = performance.now()
-    f(i)
+    await f(i)
     xs.push(performance.now() - s)
   }
   out({ layout: l, m, ...stats(xs) })
@@ -332,20 +386,27 @@ let asOf = (of: (c: string) => string): Src => (c, a) => ({
 for (let l of layouts) {
   for (let [m, r] of Object.entries(reads)) {
     let st = r(l.src)
-    time(l.name, `read:${m}`, () => l.on.query(st), true)
+    await time(l.name, `read:${m}`, () => l.on.query(st), true)
   }
 }
-for (let [name, of] of [['versions', beside], ['keyed', keyed]] as const) {
+for (
+  let [name, of] of [
+    ['versions', beside] as const,
+    ...Object.keys(SHAPES).map((x) => [x, shaped(x)] as const),
+  ]
+) {
   for (let m of ['get', 'page'] as const) {
     let st = reads[m](asOf(of))
-    time(name, `as-of:${m}`, () => sql.query(st), true)
+    await time(name, `as-of:${m}`, () => sql.query(st), true)
   }
 }
 // The plans, to see that a view folds into a read as the written condition
-// does.
+// does, and which index each layout counts through.
 for (let l of layouts) {
-  let plan = l.on.query({ t: 'explain query plan', of: reads.page(l.src) })
-  out({ layout: l.name, m: 'plan:page', plan: plan.map((r) => r.detail) })
+  for (let m of ['page', 'busiest:count'] as const) {
+    let plan = l.on.query({ t: 'explain query plan', of: reads[m](l.src) })
+    out({ layout: l.name, m: `plan:${m}`, plan: plan.map((r) => r.detail) })
+  }
 }
 
 // ---- writes ----
@@ -576,12 +637,12 @@ let writers = [
     keeps: [beside('doc')],
     v: beside('doc'),
   },
-  {
-    name: 'keyed',
-    edit: inPlace(keyed('doc')),
-    keeps: [keyed('doc')],
-    v: keyed('doc'),
-  },
+  ...Object.keys(SHAPES).map((shape) => ({
+    name: shape,
+    edit: inPlace(shaped(shape)('doc')),
+    keeps: [shaped(shape)('doc')],
+    v: shaped(shape)('doc'),
+  })),
 ]
 let run = Math.floor(Math.random() * 1e6)
 for (let w of writers) {
@@ -592,12 +653,12 @@ for (let w of writers) {
     for (let e of es) for (let s of w.edit(e, `${label} ${run} ${tx}`, tx)) q(s)
     q({ t: 'commit' })
   }
-  time(
+  await time(
     w.name,
     'write:title-edit',
     (i) => unit([tasks[(i + 4) % tasks.length]], 'edit'),
   )
-  time(w.name, 'write:batch-100-edits', () => unit(tasks, 'batch'))
+  await time(w.name, 'write:batch-100-edits', () => unit(tasks, 'batch'))
   let start = size(w.keeps)
   for (let i = 0; i < 20; i++) unit(tasks, 'bytes')
   out({
@@ -728,7 +789,28 @@ out({
   live_kept: size(keeping),
   live_exempt: size(tables.filter((t) => !keeping.includes(t))),
 })
-for (let comp of COMPS) {
-  q({ t: 'drop', kind: 'table', name: keyed(comp) })
+for (let shape of Object.keys(SHAPES)) {
+  for (let comp of COMPS) {
+    q({ t: 'drop', kind: 'table', name: shaped(shape)(comp) })
+  }
 }
+
+// The count as the graph answers it: from the populations it keeps, whatever
+// the layout of the component's rows.
+let cfg = config(`${Deno.env.get('HOME')}/.yak/yak.json`)
+let h = await compose(
+  { ...cfg, db, tracker: undefined, duties: false },
+  ['graph'],
+  facet,
+  { process: false },
+)
+let counted = `.${busy.comp} .count`
+await time('graph', `count:${counted}`, () => h.graph.rows(counted), true)
+await time('graph', `count:${counted}:warm`, () => h.graph.rows(counted))
+out({
+  layout: 'graph',
+  m: `answer:${counted}`,
+  rows: await h.graph.rows(counted),
+})
+await h.close()
 Deno.exit(0)
