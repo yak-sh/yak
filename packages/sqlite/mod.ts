@@ -106,7 +106,7 @@ import {
   type Ledger,
   ledger,
 } from './archetype.ts'
-import { componentTables, shape } from './physical.ts'
+import { componentTables, objects, shape } from './physical.ts'
 import { build, forgo, reshape, type Sizes } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
@@ -121,6 +121,8 @@ import {
   historySchema,
   keep,
   type Mode,
+  seeds,
+  type Typed,
   within,
 } from './history.ts'
 import { add } from './follow.ts'
@@ -453,6 +455,21 @@ let lastly = <R>(body: () => R, last: () => void): R => {
     return out
   }
   return out.finally(last) as R
+}
+
+// The tables of versions a store with history keeps (./history.ts), made where
+// missing and typed as the live tables stand now, and each one just made
+// given the live rows as the versions they are so far.
+let versioned = (driver: Driver, vocab: Vocab): Error[] => {
+  let had = new Set(objects(driver, { type: 'table' }).map((o) => o.name))
+  let stood = standing(driver, vocab)
+  let typed: Typed = (comp, c) => {
+    let found = stood[comp]?.cols.find((r) => r.name == c)
+    return found ? String(found.type ?? '') : undefined
+  }
+  let left = add(driver, historySchema(vocab, typed))
+  for (let s of seeds(vocab, (name) => !had.has(name))) driver.query(s)
+  return left
 }
 
 /**
@@ -1023,7 +1040,7 @@ export let storage = (
           left = [
             ...unfit,
             ...build(driver, indexed(vocab), base.sizes),
-            ...besides.length ? add(driver, besides) : [],
+            ...besides.length ? versioned(driver, vocab) : [],
           ]
           left.forEach(report)
           clean = !left.length

@@ -1211,13 +1211,16 @@ performed via this API.
 ## History
 
 A store opened with `history` (`storage(driver, vocab, { history })`) keeps
-every version a write replaces. Its live tables are the ones a store without
-history has, plus a `$from` column naming the transaction that wrote each row;
-each version a write replaces is copied, once, into the table beside it,
-`<comp>$versions`, closed at the transaction that replaced it: `[$from, $to)`.
-Current reads, their plans and every trigger on a live table are unchanged. A
-component declared `journal: false` keeps no versions, and the tombstones always
-do.
+every version of every component row. Its live tables are exactly the ones a
+store without history has. Beside each one, `<comp>$versions` holds its
+versions, each the span of transactions it was true for, `[$from, $to)`: the
+open one (`$to = 0`) is a copy of the live row, and a write closes it and opens
+the next. The table beside keeps the live table's column types and its
+vocabulary indexes, none of them unique. Current reads, their plans and every
+trigger on a live table are unchanged. A component declared `journal: false`
+keeps no versions on main, and the tombstones always do. A store that begins to
+keep history takes its live rows as their first versions, open from no
+transaction.
 
 The store does not mint transaction ids. `History` is two statements its history
 plugin hands it (@yaks/journal's `history(options)`): `clock` takes the id of
@@ -1227,15 +1230,18 @@ and `tip` reads the newest. So a unit writing only exempt components takes none.
 A **mode** reads the past or a branch, on a connection of its own:
 `moded(driver, vocab, { history }, mode)` with `{ at }`, main as of a
 transaction, which refuses every write; or a branch from
-`branch(driver,
-history)`, main as of its fork under the branch's own rows,
+`branch(driver, history)`, main as of its fork under the branch's own rows,
 whose writes go to `<comp>$versions` rows of that branch and never reach main.
 The connection's temporary views stand in front of each table and read the mode
-from a one-row dial, so binding the same connection to another mode turns the
-dial and answers the same store. The archetype pointers say what an entity holds
-now, so a mode reads presence from the tables themselves. An entity's spine is
-not versioned: one minted after the transaction a mode reads reads as an empty
-identity. [history_test.ts](./history_test.ts) shows each.
+from a one-row dial, so binding the same connection to another mode of the same
+kind turns the dial and answers the same store. Each view is one select over one
+table, which SQLite folds into any read that names it; a compound one it would
+materialize whole for a left join. A branch's exempt components are the
+exception, a compound of its rows and the live ones. The archetype pointers say
+what an entity holds now, so a mode reads presence from the tables themselves,
+and text search reads the live text. An entity's spine is not versioned: one
+minted after the transaction a mode reads reads as an empty identity.
+[history_test.ts](./history_test.ts) shows each.
 
 ## Limits
 

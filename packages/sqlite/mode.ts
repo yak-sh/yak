@@ -5,13 +5,14 @@
 // (./history.ts `seen`). Every statement this package builds, the compiler's
 // and every other, then reads that mode without knowing it.
 //
-// The views are made once per connection and read their mode from a one-row
-// temporary table, the dial (./history.ts `DIAL`). Binding the connection to
-// another mode turns the dial: the views stand, the statements already
-// prepared over them stay prepared, and the connection's memory (./memo.ts)
-// lets go of everything, as it does when the schema moves. A connection reads
-// one mode at a time, so every store over it reads the one it was last bound
-// to.
+// The views read their mode from a one-row temporary table, the dial
+// (./history.ts `DIAL`). Binding the connection to another mode turns the
+// dial: the views stand, the statements already prepared over them stay
+// prepared, and the connection's memory (./memo.ts) lets go of everything, as
+// it does when the schema moves. Turning it from a transaction to a branch, or
+// back, makes the views again, since each kind reads its own way. A
+// connection reads one mode at a time, so every store over it reads the one it
+// was last bound to.
 //
 // What the views cannot carry is turned off: the archetype pointers say what
 // an entity holds now, so the descriptors read as none and presence is read
@@ -39,14 +40,16 @@ import {
   DIAL,
   type History,
   keep,
+  type Kind,
+  kind,
   type Mode,
   seen,
   stored,
 } from './history.ts'
 import { type Opts, storage, type Store } from './mod.ts'
 
-// The dial, and the temporary views a mode's connection reads through.
-let views = (vocab: Vocab, derived: Derived): Stmt[] => [
+// The dial, set to read nothing until a mode turns it.
+let DIAL_DDL: Stmt[] = [
   {
     t: 'create table',
     temp: true,
@@ -62,6 +65,10 @@ let views = (vocab: Vocab, derived: Derived): Stmt[] => [
     cols: ['at', 'branch'],
     rows: [[lit(0), lit(null)]],
   },
+]
+
+// The temporary views a mode's connection reads through, of one kind.
+let views = (vocab: Vocab, derived: Derived, k: Kind): Stmt[] => [
   ...[...covered(vocab)].map((comp): Stmt => ({
     t: 'create view',
     temp: true,
@@ -72,17 +79,27 @@ let views = (vocab: Vocab, derived: Derived): Stmt[] => [
         from: { t: 'table', name: comp, schema: 'main' },
         where: lit(false),
       })
-      : seen(vocab, comp),
+      : seen(vocab, comp, k),
   })),
   ...docDdl(vocab, derived).flatMap((s) =>
     s.t == 'create view' ? [{ ...s, temp: true }] : []
   ),
 ]
 
-// A mode's connection: its vocabulary, its one store, and the options that
-// store reads its mode from.
+// The views of one kind gone, to make the other's.
+let unviewed = (vocab: Vocab): Stmt[] =>
+  [...covered(vocab), 'doc_value'].map((name) => ({
+    t: 'drop',
+    kind: 'view',
+    name,
+    ifExists: true,
+  }))
+
+// A mode's connection: its vocabulary, the kind of views it holds, its one
+// store, and the options that store reads its mode from.
 type Dialed = {
   vocab: Vocab
+  kind: Kind
   opts: Opts & { history: History; mode: Mode }
   store: Store
 }
@@ -91,9 +108,9 @@ let dialed = new WeakMap<Driver, Dialed>()
 /**
  * The store over `driver`, a connection of its own to a database a store with
  * history keeps, reading `mode`: main as of a transaction, or a branch. The
- * first binding makes its views and its store; binding it again turns its
- * dial and answers the same store. The database's schema is its own writer's
- * to keep, never this connection's.
+ * first binding makes its dial, its views and its store; binding it again
+ * turns its dial and answers the same store. The database's schema is its own
+ * writer's to keep, never this connection's.
  */
 export let moded = (
   driver: Driver,
@@ -105,9 +122,14 @@ export let moded = (
   if (on && on.vocab != vocab) {
     throw new Error('a mode connection is bound to one vocabulary')
   }
-  if (!on) {
-    for (let s of views(vocab, base.derived ?? {})) driver.query(s)
-  }
+  let k = kind(mode)
+  let derived = base.derived ?? {}
+  let made = !on
+    ? [...DIAL_DDL, ...views(vocab, derived, k)]
+    : on.kind != k
+    ? [...unviewed(vocab), ...views(vocab, derived, k)]
+    : []
+  for (let s of made) driver.query(s)
   driver.query({
     t: 'update',
     table: DIAL,
@@ -116,6 +138,7 @@ export let moded = (
       : { at: val(mode.fork), branch: val(mode.branch) },
   })
   if (on) {
+    on.kind = k
     on.opts.mode = mode
     keep(driver, vocab, on.opts.history, mode)
     return on.store
@@ -127,7 +150,7 @@ export let moded = (
     missingIndexes: indexed(vocab).map((i) => i.name),
   }
   let store = storage(driver, vocab, opts)
-  dialed.set(driver, { vocab, opts, store })
+  dialed.set(driver, { vocab, kind: k, opts, store })
   return store
 }
 

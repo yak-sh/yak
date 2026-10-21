@@ -1,6 +1,15 @@
 import { equal, test, throws } from '@yaks/testing'
 import { type Bundle, graph } from '@yaks/graph'
-import { as, col, fn, type History, NOW, select, table } from '@yaks/sql'
+import {
+  as,
+  col,
+  fn,
+  type History,
+  NOW,
+  select,
+  type Stmt,
+  table,
+} from '@yaks/sql'
 import { loadVocab } from '@yaks/vocab'
 import { open } from './db.ts'
 import { branch, type Mode, moded, storage } from './mod.ts'
@@ -32,24 +41,29 @@ let history: History = {
   tip: select({ cols: [as(fn('max', col('id')), 'id')], from: table('clock') }),
 }
 
-// One database with history for the file, its graph, and a second connection
-// that reads it in a mode, since a mode's views are its connection's own.
-let path = `file:${crypto.randomUUID()}?mode=memory&cache=shared`
-let d = open(path)
-d.query({
+// One database with history for the file, its graph, and a connection for
+// each kind of mode that reads it, since a mode's views are its connection's
+// own.
+let CLOCK: Stmt = {
   t: 'create table',
   name: 'clock',
   cols: [{ name: 'id', type: 'integer', pk: true }, {
     name: 'at',
     type: 'text',
   }],
-})
+}
+let path = `file:${crypto.randomUUID()}?mode=memory&cache=shared`
+let d = open(path)
+d.query(CLOCK)
 let store = storage(d, vocab, { history })
 store.install()
 let g = graph({ storage: store, vocab })
-let o = open(path)
+let past = open(path), branched = open(path)
 let seen = (mode: Mode) =>
-  graph({ storage: moded(o, vocab, { history }, mode), vocab })
+  graph({
+    storage: moded('at' in mode ? past : branched, vocab, { history }, mode),
+    vocab,
+  })
 let tx = () => Number(d.query(history.tip)[0].id)
 let step = async (bundles: Bundle[]) => (await g.apply(bundles), tx())
 
@@ -99,10 +113,12 @@ await on.apply([
 await on.apply([{ entity: { eid: 'b2' }, $delete: true }])
 await g.apply([{ entity: { eid: 'b1' }, page: { title: 'main moved' } }])
 
-// The mode's connection reads before any test does, so none of them pays for
-// preparing the statements they share.
-await on.get(['b1', 'b2'])
-await on.get(['b1'])
+// Each mode's connection reads before any test does, so none of them pays
+// for preparing the statements they share.
+for (let eids of [['b1', 'b2'], ['b1']]) {
+  await on.get(eids)
+  await seen(life[0]).get(eids)
+}
 
 for (let { write, at, then } of life) {
   test(`as of ${write}, a store with history holds what it held then`, async () =>
@@ -145,3 +161,25 @@ test('main never sees a branch’s writes', async () =>
     { title: 'two' },
     ['entity'],
   ]))
+
+// A store that kept no history, then begins to: what it held, changed once.
+let later = `file:${crypto.randomUUID()}?mode=memory&cache=shared`
+let plain = open(later)
+plain.query(CLOCK)
+storage(plain, vocab).install()
+await graph({ storage: storage(plain, vocab), vocab }).apply([
+  { entity: { eid: 'q1' }, page: { title: 'before' } },
+])
+let begun = storage(plain, vocab, { history })
+begun.install()
+await graph({ storage: begun, vocab }).apply([
+  { entity: { eid: 'q1' }, page: { title: 'after' } },
+])
+let looking = graph({
+  storage: moded(open(later), vocab, { history }, { at: 0 }),
+  vocab,
+})
+await looking.get(['q1'])
+
+test('a store that begins to keep history keeps what it held as its past', async () =>
+  equal((await looking.get(['q1']))[0].page, { title: 'before' }))

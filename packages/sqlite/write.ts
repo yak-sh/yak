@@ -818,20 +818,36 @@ export let patch = (
 }
 
 // How many rows a write changed: the driver's own count where it keeps one,
-// else the rows the statement returns. On a store with history a write is the
-// statements that keep what it replaces, then itself (./history.ts), and the
-// count is its own.
+// else the rows the statement returns. On a store with history a write runs
+// between the statements that keep its versions (./history.ts), those after it
+// made from the owners of the rows it returns, and the count is its own.
 let ran = (driver: Driver, w: Insert | Update | Delete): number => {
-  let all = kept(driver, w)
-  for (let s of all.slice(0, -1)) effect(driver, s)
-  let last = all.at(-1)!
-  return driver.run?.(last) ??
-    driver.query({ ...last, returning: [col('entity')] }).length
+  let { before, write: one, after } = kept(driver, w)
+  for (let s of before) effect(driver, s)
+  if (after) return owned(driver, one, after)
+  return driver.run?.(one) ??
+    driver.query({ ...one, returning: [col('entity')] }).length
 }
 
 // A write whose count nobody reads, kept the same way.
 let write = (driver: Driver, w: Write): void => {
-  for (let s of w.t == 'select' ? [w] : kept(driver, w)) effect(driver, s)
+  if (w.t == 'select') return void effect(driver, w)
+  let { before, write: one, after } = kept(driver, w)
+  for (let s of before) effect(driver, s)
+  if (after) owned(driver, one, after)
+  else effect(driver, one)
+}
+
+// A write whose versions follow the rows it wrote: run returning their
+// owners, then what those owners need. Answers how many it wrote.
+let owned = (
+  driver: Driver,
+  one: Insert | Update | Delete,
+  after: (owners: number[]) => Write[],
+): number => {
+  let rows = driver.query({ ...one, returning: [col('entity')] })
+  for (let s of after(rows.map((r) => Number(r.entity)))) effect(driver, s)
+  return rows.length
 }
 
 /** What memory says an entity holds of a component, read or written before:

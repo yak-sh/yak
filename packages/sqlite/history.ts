@@ -1,36 +1,39 @@
-// Versions: a store with history never changes a component row in place
-// without keeping the values it replaced (D-130964). The live table stays the
-// table a store without history has, plus one column, `$from`, the transaction
-// that wrote its row. Each version a write replaces goes, once and never edited
-// again, to the table beside it, `<comp>$versions`, closed at the transaction
-// that replaced it: `[$from, $to)`. Current reads, their plans and every
-// trigger on a live table (text and vector indexes, archetypes, numbering) are
-// untouched; only a read as of a transaction or on a branch pays for history.
+// Versions: a store with history keeps every version of every component row
+// (D-130964). The live tables stay exactly the tables a store without history
+// has. Beside each one, `<comp>$versions` holds its versions, each the span of
+// transactions it was true for, `[$from, $to)`: the open one, `$to = 0`, is a
+// copy of the live row, and a write closes it and opens the next. Current
+// reads, their plans and every trigger on a live table (text and vector
+// indexes, archetypes, numbering) are untouched; a write pays for its versions,
+// and a read as of a transaction or on a branch reads them alone.
 //
 // A transaction id is an integer local to the store, in commit order. The
 // store does not mint it: the history plugin hands the store a statement that
 // takes one (`History.clock`, @yaks/journal's row of `journal_tx`), and the
 // first versioned write of a unit runs it, so a unit that writes only exempt
-// components takes none.
+// components takes none. A version kept from before the store kept history has
+// no `$from`, and stands for every transaction before its `$to`.
 //
-// A component its vocabulary declares `journal: false` keeps no versions, and
-// its live table no `$from`. `tombstone` keeps them always: presence and death
-// are what an as-of read is about first.
+// A component its vocabulary declares `journal: false` keeps no versions on
+// main. `tombstone` keeps them always: presence and death are what an as-of
+// read is about first.
 //
 // A branch lives entirely beside: its rows are `<comp>$versions` rows of that
-// branch, open at `$to = 0`, for every component table, exempt ones included,
-// since a branch's writes must never reach main. The first write to an
-// entity's component on a branch copies main's version as of the fork, then
-// changes the copy. A removal on a branch closes its row, which hides main's.
+// branch, for every component table, exempt ones included, since a branch's
+// writes must never reach main. The first write to an entity's component on a
+// branch copies what the branch sees of it, then changes the copy. A removal on
+// a branch closes its row, which goes on hiding main's.
 //
 // Reading the past is a connection of its own (./mode.ts): its temporary views
 // stand in front of each table, so every statement this package builds reads
-// the mode's rows without knowing it.
+// the mode's rows without knowing it. Each view is one select over one table,
+// which SQLite folds into any read, a join's right side included; a compound
+// one it would materialize whole wherever a read left-joins it.
 
 import {
+  among,
   and,
   col,
-  type Column,
   type CreateIndex,
   type CreateTable,
   type Driver,
@@ -58,7 +61,7 @@ import {
 import type { Vocab } from '@yaks/vocab'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { tables } from './layout.ts'
-import { tableDdl } from './ddl.ts'
+import { indexed } from './ddl.ts'
 
 export type { History } from '@yaks/sql'
 
@@ -71,14 +74,14 @@ export let FROM = '$from', TO = '$to', BRANCH = '$branch'
 /** What the table beside a component's is named after it. */
 export let BESIDE = '$versions'
 
-/** The table of every version of `comp` but main's open one. */
+/** The table of every version of `comp`. */
 export let beside = (comp: string): string => `${comp}${BESIDE}`
 
 /** The table of branches. */
 export let BRANCHES = '$branch'
 
-/** Whether a component's live rows carry `$from` and its replaced rows are
- * kept: every component table but those declared `journal: false`. */
+/** Whether main keeps a component's versions: every component table but those
+ * declared `journal: false`. */
 export let keeps = (vocab: Vocab, comp: string): boolean =>
   comp == TOMBSTONE || vocab.comp(comp)?.journal !== false
 
@@ -108,15 +111,24 @@ export let covered = (vocab: Vocab): Set<string> => {
   return found
 }
 
-/** The column a live table with versions gains. */
-export let FROM_COLUMN: Column = { name: FROM, type: 'integer' }
+/** A column's declared type as its live table holds it, where it stands. */
+export type Typed = (comp: string, column: string) => string | undefined
 
-/** The tables beside each component table, with their keys: unconstrained
- * copies of its columns, since a version holds what was true then, and the
- * three store-reserved ones. Keyed `(entity, $branch, $to)`; `$to` is indexed
- * over closed rows for the retention floor and reads of the past. */
-export let besideDdl = (vocab: Vocab): Stmt[] =>
-  [...covered(vocab)].flatMap((comp): Stmt[] => {
+/**
+ * The tables beside each component table: copies of its columns, typed as the
+ * live table declares them (`typed`, else the vocabulary), so a version holds
+ * a value exactly as its live row did, and the three store-reserved ones.
+ * Keyed `(entity, $branch, $to)`, `$to` indexed over closed rows for the
+ * retention floor, and each of the live table's vocabulary indexes kept over
+ * its versions too, none of them unique, so a read of the past seeks as a read
+ * of the present does.
+ */
+export let besideDdl = (
+  vocab: Vocab,
+  typed: Typed = () => undefined,
+): Stmt[] => {
+  let indexes = indexed(vocab)
+  return [...covered(vocab)].flatMap((comp): Stmt[] => {
     let name = beside(comp)
     let made: CreateTable = {
       t: 'create table',
@@ -131,7 +143,7 @@ export let besideDdl = (vocab: Vocab): Stmt[] =>
         },
         ...stored(vocab, comp).map((c) => ({
           name: c,
-          type: affinity(vocab, comp, c),
+          type: typed(comp, c) ?? affinity(vocab, comp, c),
         })),
         { name: BRANCH, type: 'integer', notNull: true, default: lit(0) },
         { name: FROM, type: 'integer' },
@@ -154,34 +166,50 @@ export let besideDdl = (vocab: Vocab): Stmt[] =>
       ifNot: true,
       where: ne(col(TO), lit(0)),
     }
-    return [made, key, closed]
+    let mirrored = indexes.filter((i) => i.on == comp).map((
+      i,
+    ): CreateIndex => ({
+      ...i,
+      name: `${i.name}${BESIDE}`,
+      on: name,
+      unique: false,
+    }))
+    return [made, key, closed, ...mirrored]
   })
+}
 
-/** Everything a store with history needs beside its own schema: `$from` on
- * each live table that keeps versions (stated as the table with it, which the
- * host's schema pass grows a standing table to, @yaks/sqlite `add`), the
- * tables beside every component table, and the branch table. */
-export let historySchema = (vocab: Vocab): Stmt[] => [
-  ...tables(vocab).filter((c) => c != TOMBSTONE && keeps(vocab, c))
-    .map((c) => tableDdl(vocab, c, c, [FROM_COLUMN])),
-  {
-    t: 'create table',
-    name: TOMBSTONE,
-    ifNot: true,
-    cols: [
-      {
-        name: 'entity',
-        type: 'integer',
-        pk: true,
-        ref: { table: 'entity', cols: ['id'] },
-      },
-      { name: 'deleted_at', type: 'text', notNull: true },
-      FROM_COLUMN,
-    ],
-  },
-  ...besideDdl(vocab),
+/** Everything a store with history needs beside its own schema: the tables of
+ * versions, typed as `typed` says the live ones stand, and the branch table.
+ * The live tables are not restated: history changes none of them. */
+export let historySchema = (vocab: Vocab, typed?: Typed): Stmt[] => [
+  ...besideDdl(vocab, typed),
   BRANCH_DDL,
 ]
+
+/** The versions of what main holds as history begins: each live row of every
+ * component that keeps versions, whose table of versions `made` says was just
+ * made, as its open version from no transaction. */
+export let seeds = (vocab: Vocab, made: (table: string) => boolean): Stmt[] =>
+  [...covered(vocab)]
+    .filter((comp) => keeps(vocab, comp) && made(beside(comp)))
+    .map((comp) => {
+      let cols = stored(vocab, comp)
+      return {
+        t: 'insert',
+        into: beside(comp),
+        cols: ['entity', ...cols, BRANCH, FROM, TO],
+        q: select({
+          cols: [
+            col('entity'),
+            ...cols.map((c) => col(c)),
+            lit(0),
+            lit(null),
+            lit(0),
+          ],
+          from: table(comp),
+        }),
+      }
+    })
 
 /** The branch table: a branch's parent (0 is main), the transaction it forked
  * at, and when. Making one writes a row and copies nothing. */
@@ -257,38 +285,66 @@ export let ticked = (driver: Driver): number | undefined =>
 // ---- versioned writes ----
 
 type W = Extract<Stmt, { t: 'insert' | 'update' | 'delete' }>
+type Insert = Extract<W, { t: 'insert' }>
 
-// The live table a write names, where it is one this driver versions.
+/** One write as the statements that run it on a driver with history: those
+ * that keep its versions before it, itself, whose count a caller reads, and,
+ * where it has any, those after it, made from the owners of the rows it wrote
+ * (the write's own `returning`). */
+export type Kept = {
+  before: W[]
+  write: W
+  after?: (owners: number[]) => W[]
+}
+
+// The live table a write names.
 let target = (w: W): string =>
   w.t == 'insert' ? w.into : w.t == 'update' ? w.table : w.from
 
 /**
- * The statements one write becomes on a driver with history: itself where its
- * table keeps no versions, else the copy that closes what it replaces, then
- * the write stamped with its transaction. On a branch, the write goes to the
- * branch's rows instead (`branched`). The last statement is the write itself,
- * whose count a caller reads.
+ * One write, kept: on main, the write itself, with the versions of the rows it
+ * changes closed and opened beside it; on a branch, a write to the branch's
+ * rows instead (`branched`). A write to a table history does not cover, or on
+ * main to an exempt component, is itself alone.
  */
-export let kept = (driver: Driver, w: W): W[] => {
+export let kept = (driver: Driver, w: W): Kept => {
   let k = keeping.get(driver)
-  if (!k) return [w]
+  let alone = { before: [], write: w }
+  if (!k) return alone
   let comp = target(w)
   let { vocab } = k
-  if (!covered(vocab).has(comp)) return [w]
+  if (!covered(vocab).has(comp)) return alone
   if (k.mode && 'at' in k.mode) {
     throw new Error(`a read as of transaction ${k.mode.at} cannot write`)
   }
   if (k.mode && 'branch' in k.mode) {
     return branched(vocab, comp, w, k.mode.branch, clockOf(driver, k))
   }
-  if (!keeps(vocab, comp)) return [w]
+  if (!keeps(vocab, comp)) return alone
   let tx = clockOf(driver, k)
-  if (w.t == 'insert') return [stamped(w, tx)]
+  let cols = stored(vocab, comp)
+  if (w.t == 'insert') {
+    return {
+      before: [],
+      write: w,
+      after: (owners) => synced(comp, cols, owners.map((o) => val(o)), tx),
+    }
+  }
   let where = w.where ?? lit(true)
-  let close = closing(vocab, comp, where, tx)
-  return w.t == 'update'
-    ? [close, { ...w, set: { ...w.set, [FROM]: val(tx) } }]
-    : [close, w]
+  if (w.t == 'delete') {
+    return { before: closed(comp, owned(comp, where), tx), write: w }
+  }
+  if (w.from) throw new Error('a versioned update from another table')
+  // Only the rows the update changes get a version.
+  let set = Object.entries(w.set).filter(([c]) => cols.includes(c))
+  let changes = and(where, or(...set.map(([c, e]) => op('is not', col(c), e))))
+  return {
+    before: [
+      ...closed(comp, owned(comp, changes), tx),
+      opened(comp, cols, changes, tx, Object.fromEntries(set)),
+    ],
+    write: w,
+  }
 }
 
 let clockOf = (driver: Driver, k: Keeping): number => {
@@ -299,52 +355,99 @@ let clockOf = (driver: Driver, k: Keeping): number => {
   return unit.id ??= taken(driver, k)
 }
 
-// An insert writing its transaction as `$from`, in its rows or its query, and
-// in the update an upsert falls back to.
-let stamped = (w: Extract<W, { t: 'insert' }>, tx: number): W => ({
-  ...w,
-  cols: [...w.cols ?? [], FROM],
-  ...w.rows ? { rows: w.rows.map((r) => [...r, val(tx)]) } : {},
-  ...w.q ? { q: withCol(w.q, val(tx)) } : {},
-  ...w.upsert
-    ? {
-      upsert: w.upsert.map((u) =>
-        u.set ? { ...u, set: { ...u.set, [FROM]: col(FROM, 'excluded') } } : u
-      ),
-    }
-    : {},
-})
+// Main's open version.
+let MAIN_OPEN = and(eq(col(BRANCH), lit(0)), eq(col(TO), lit(0)))
 
-let withCol = (q: Query, e: Expr): Query => {
+// The entities whose rows of `comp` match `where`.
+let owned = (comp: string, where: Expr): Query =>
+  select({ cols: [col('entity')], from: table(comp), where })
+
+// An insert's query with more columns after its own.
+let appended = (q: Query, es: Expr[]): Query => {
   if (q.t != 'select') throw new Error('a versioned insert from a compound')
-  return { ...q, cols: [...q.cols ?? [], e] }
+  return { ...q, cols: [...q.cols ?? [], ...es] }
 }
 
-// The live rows `where` names, copied beside as closed at `tx`: every one this
-// same transaction did not write, since nobody else ever saw that one.
-let closing = (
-  vocab: Vocab,
+// The entities an insert names: its rows' owners, or its query's.
+let entities = (w: Insert): Expr[] | Query => {
+  let at = w.cols?.indexOf('entity') ?? -1
+  if (at < 0) {
+    throw new Error(`a versioned insert into ${w.into} names no owner`)
+  }
+  if (w.rows) return w.rows.map((r) => r[at])
+  if (w.q?.t != 'select') throw new Error('a versioned insert from a compound')
+  return { ...w.q, with: w.q.with ?? w.with, cols: [w.q.cols![at]] }
+}
+
+// Main's open versions of `owners`, ended at `tx`: one this same transaction
+// opened goes, since nobody else ever saw it; any other is closed.
+let closed = (comp: string, owners: Expr[] | Query, tx: number): W[] => {
+  let to = beside(comp)
+  let mine = and(MAIN_OPEN, among(col('entity'), owners))
+  return [
+    { t: 'delete', from: to, where: and(mine, eq(col(FROM), val(tx))) },
+    { t: 'update', table: to, set: { [TO]: val(tx) }, where: mine },
+  ]
+}
+
+// A version opened at `tx` for each live row `where` matches, holding what the
+// row holds with `set` applied: an update's values, read before it runs.
+let opened = (
   comp: string,
+  cols: string[],
   where: Expr,
   tx: number,
-): W => {
-  let cols = stored(vocab, comp)
-  return {
-    t: 'insert',
-    into: beside(comp),
-    cols: ['entity', ...cols, BRANCH, FROM, TO],
-    q: select({
-      cols: [
-        col('entity'),
-        ...cols.map((c) => col(c)),
-        lit(0),
-        col(FROM),
-        val(tx),
-      ],
-      from: table(comp),
-      where: and(where, op('is not', col(FROM), val(tx))),
-    }),
-  }
+  set: Record<string, Expr> = {},
+): W => ({
+  t: 'insert',
+  into: beside(comp),
+  cols: ['entity', ...cols, BRANCH, FROM, TO],
+  q: select({
+    cols: [
+      col('entity'),
+      ...cols.map((c) => set[c] ?? col(c)),
+      lit(0),
+      val(tx),
+      lit(0),
+    ],
+    from: table(comp),
+    where,
+  }),
+})
+
+// After an insert, main's open versions of the `owners` it wrote made to match
+// their live rows again: one that no longer does is ended, and a live row
+// without one gets one. An upsert that changed nothing keeps none.
+let synced = (
+  comp: string,
+  cols: string[],
+  owners: Expr[],
+  tx: number,
+): W[] => {
+  let to = beside(comp)
+  let same = exists(select({
+    cols: [lit(1)],
+    from: table(comp, '__live'),
+    where: and(
+      eq(col('entity', '__live'), col('entity', to)),
+      ...cols.map((c) => op('is', col(c, '__live'), col(c, to))),
+    ),
+  }))
+  let stale = and(MAIN_OPEN, among(col('entity'), owners), not(same))
+  let none = not(exists(select({
+    cols: [lit(1)],
+    from: table(to, '__open'),
+    where: and(
+      eq(col('entity', '__open'), col('entity', comp)),
+      eq(col(BRANCH, '__open'), lit(0)),
+      eq(col(TO, '__open'), lit(0)),
+    ),
+  })))
+  return [
+    { t: 'delete', from: to, where: and(stale, eq(col(FROM), val(tx))) },
+    { t: 'update', table: to, set: { [TO]: val(tx) }, where: stale },
+    opened(comp, cols, and(among(col('entity'), owners), none), tx),
+  ]
 }
 
 // ---- writes on a branch ----
@@ -354,15 +457,15 @@ let open = (branch: number) =>
   and(eq(col(BRANCH), val(branch)), eq(col(TO), lit(0)))
 
 /**
- * A write on branch `b`, as writes to the branch's rows beside. Every read in
- * it (an absent insert's `not exists`, the copy below) names the live table,
- * which on a branch's connection is the branch's view of it (./mode.ts), so
- * it sees the branch.
+ * A write on branch `b`, as a write to the branch's rows beside. Every read in
+ * it names the live table, which on a branch's connection is the branch's view
+ * of it (./mode.ts), so it sees the branch.
  *
- * Before an update or a removal, the entity's component as the branch sees it
- * is copied into a row of the branch's own, if the branch has none yet; an
- * update then closes the branch's row this transaction did not write, and
- * changes the open one; a removal closes it, so it goes on hiding main's.
+ * Before any write, each entity's component as the branch sees it is copied
+ * into an open row of the branch's own, where it has none: an insert then
+ * lands on that row as it would on main's, an update changes it, and a removal
+ * closes it, so it goes on hiding main's. A branch keeps no versions of its
+ * own: its rows are what it holds now, and what it removed.
  */
 let branched = (
   vocab: Vocab,
@@ -370,30 +473,10 @@ let branched = (
   w: W,
   b: number,
   tx: number,
-): W[] => {
+): Kept => {
   let cols = stored(vocab, comp)
   let to = beside(comp)
-  if (w.t == 'insert') {
-    let i = stamped(w, tx) as Extract<W, { t: 'insert' }>
-    return [{
-      ...i,
-      into: to,
-      cols: [...i.cols!, BRANCH, TO],
-      ...i.rows ? { rows: i.rows.map((r) => [...r, val(b), lit(0)]) } : {},
-      ...i.q ? { q: withCol(withCol(i.q, val(b)), lit(0)) } : {},
-      ...i.upsert
-        ? {
-          upsert: i.upsert.map((u) => ({
-            ...u,
-            on: [col('entity'), col(BRANCH), col(TO)],
-          })),
-        }
-        : {},
-    }]
-  }
-  let where = w.where ?? lit(true)
-  // The entity's component as the branch sees it, made the branch's own.
-  let seed: W = {
+  let seed = (where: Expr): W => ({
     t: 'insert',
     or: 'ignore',
     into: to,
@@ -407,44 +490,45 @@ let branched = (
         lit(0),
       ],
       from: table(comp),
-      where: and(
-        where,
-        not(exists(select({
-          cols: [lit(1)],
-          from: table(to, '__mine'),
-          where: and(
-            eq(col('entity', '__mine'), col('entity', comp)),
-            eq(col(BRANCH, '__mine'), val(b)),
-          ),
-        }))),
-      ),
+      where,
     }),
+  })
+  if (w.t == 'insert') {
+    let e = entities(w)
+    return {
+      before: [seed(among(col('entity'), e))],
+      write: {
+        ...w,
+        into: to,
+        cols: [...w.cols!, BRANCH, FROM, TO],
+        ...w.rows
+          ? { rows: w.rows.map((r) => [...r, val(b), val(tx), lit(0)]) }
+          : {},
+        ...w.q ? { q: appended(w.q, [val(b), val(tx), lit(0)]) } : {},
+        ...w.upsert
+          ? {
+            upsert: w.upsert.map((u) => ({
+              ...u,
+              on: [col('entity'), col(BRANCH), col(TO)],
+            })),
+          }
+          : {},
+      },
+    }
   }
+  let where = w.where ?? lit(true)
   let mine = and(where, open(b))
   if (w.t == 'update') {
-    let close: W = {
-      t: 'insert',
-      into: to,
-      cols: ['entity', ...cols, BRANCH, FROM, TO],
-      q: select({
-        cols: [
-          col('entity'),
-          ...cols.map((c) => col(c)),
-          val(b),
-          col(FROM),
-          val(tx),
-        ],
-        from: table(to),
-        where: and(mine, op('is not', col(FROM), val(tx))),
-      }),
+    return {
+      before: [seed(where)],
+      write: {
+        t: 'update',
+        table: to,
+        set: { ...w.set, [FROM]: val(tx) },
+        where: mine,
+        ...w.returning ? { returning: w.returning } : {},
+      },
     }
-    return [seed, close, {
-      t: 'update',
-      table: to,
-      set: { ...w.set, [FROM]: val(tx) },
-      where: mine,
-      ...w.returning ? { returning: w.returning } : {},
-    }]
   }
   // A row this transaction both opened and closed already has its closed
   // twin at `tx`; it goes. Any other open row is closed where it stands.
@@ -457,13 +541,16 @@ let branched = (
       eq(col(TO, '__twin'), val(tx)),
     ),
   }))
-  return [seed, { t: 'delete', from: to, where: and(mine, twin) }, {
-    t: 'update',
-    table: to,
-    set: { [TO]: val(tx) },
-    where: mine,
-    ...w.returning ? { returning: w.returning } : {},
-  }]
+  return {
+    before: [seed(where), { t: 'delete', from: to, where: and(mine, twin) }],
+    write: {
+      t: 'update',
+      table: to,
+      set: { [TO]: val(tx) },
+      where: mine,
+      ...w.returning ? { returning: w.returning } : {},
+    },
+  }
 }
 
 // ---- what a mode reads ----
@@ -473,6 +560,13 @@ let branched = (
  * the branch whose rows lie over it, or null. Turning it is a write, so the
  * views stand and their statements stay prepared (./mode.ts `moded`). */
 export let DIAL = '$mode'
+
+/** Which views a mode's connection reads through: as of a transaction, or on
+ * a branch. Turning the dial between them makes the views again. */
+export type Kind = 'at' | 'branch'
+
+/** The kind of views a mode reads through. */
+export let kind = (mode: Mode): Kind => 'at' in mode ? 'at' : 'branch'
 
 // A table in the file itself, past any temporary view of the same name.
 let main = (name: string, as?: string): Source => ({
@@ -485,54 +579,54 @@ let main = (name: string, as?: string): Source => ({
 let dial = (c: 'at' | 'branch'): Expr =>
   sub(select({ cols: [col(c)], from: table(DIAL) }))
 
-let visible = (): Expr => or(isNull(col(FROM)), op('<=', col(FROM), dial('at')))
+// No row of the dial's branch for the entity a row of `of` belongs to.
+let unshadowed = (comp: string, of: string): Expr =>
+  not(exists(select({
+    cols: [lit(1)],
+    from: main(beside(comp), '__mine'),
+    where: and(
+      eq(col('entity', '__mine'), col('entity', of)),
+      eq(col(BRANCH, '__mine'), dial('branch')),
+    ),
+  })))
 
-// Main as it stood at the dial's transaction: the live rows written by then,
-// and the closed ones open at it. A component that keeps no versions reads as
-// it stands now.
-let asOf = (vocab: Vocab, comp: string): Query => {
-  let cols = [col('entity'), ...stored(vocab, comp).map((c) => col(c))]
-  let live = main(comp)
-  if (!keeps(vocab, comp)) return select({ cols, from: live })
-  return unionAll(
-    select({ cols, from: live, where: visible() }),
-    select({
-      cols,
-      from: main(beside(comp)),
-      where: and(
-        eq(col(BRANCH), lit(0)),
-        visible(),
-        op('>', col(TO), dial('at')),
-      ),
-    }),
-  )
-}
-
-/** What a mode reads `comp` as: the dial's branch's open rows over main as of
- * the dial's transaction, for every entity the branch has not written; with
- * no branch, main as of that transaction. */
-export let seen = (vocab: Vocab, comp: string): Query => {
+/**
+ * What a mode reads `comp` as. Where main keeps its versions, one select over
+ * them: main's as of the dial's transaction and, on a branch, the branch's
+ * open rows over main's for every entity the branch has not written. Where it
+ * keeps none, as of a transaction, the live table as it stands; on a branch,
+ * the branch's open rows and the live rows it has not written.
+ */
+export let seen = (vocab: Vocab, comp: string, k: Kind): Query => {
   let names = ['entity', ...stored(vocab, comp)]
+  let v = '__v'
+  let picked = (of?: string) => names.map((c) => col(c, of))
+  if (keeps(vocab, comp)) {
+    let then = and(
+      eq(col(BRANCH, v), lit(0)),
+      or(isNull(col(FROM, v)), op('<=', col(FROM, v), dial('at'))),
+      or(eq(col(TO, v), lit(0)), op('>', col(TO, v), dial('at'))),
+    )
+    return select({
+      cols: picked(v),
+      from: main(beside(comp), v),
+      where: k == 'at' ? then : or(
+        and(eq(col(BRANCH, v), dial('branch')), eq(col(TO, v), lit(0))),
+        and(then, unshadowed(comp, v)),
+      ),
+    })
+  }
+  if (k == 'at') return select({ cols: picked(), from: main(comp) })
   return unionAll(
     select({
-      cols: names.map((c) => col(c)),
+      cols: picked(),
       from: main(beside(comp)),
       where: and(eq(col(BRANCH), dial('branch')), eq(col(TO), lit(0))),
     }),
     select({
-      cols: names.map((c) => col(c, '__main')),
-      from: { t: 'from', q: asOf(vocab, comp), as: '__main' },
-      where: or(
-        isNull(dial('branch')),
-        not(exists(select({
-          cols: [lit(1)],
-          from: main(beside(comp), '__mine'),
-          where: and(
-            eq(col('entity', '__mine'), col('entity', '__main')),
-            eq(col(BRANCH, '__mine'), dial('branch')),
-          ),
-        }))),
-      ),
+      cols: picked('__live'),
+      from: main(comp, '__live'),
+      where: unshadowed(comp, '__live'),
     }),
   )
 }
