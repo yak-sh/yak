@@ -338,6 +338,7 @@ export let BOUNDARIES = [
   // The directory's `written` rows, which drafts and file histories became
   // (written.ts).
   'yak/store/written/1',
+  'yak/store/session-imported/1',
 ]
 
 /** A column dropped from a table. */

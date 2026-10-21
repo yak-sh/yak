@@ -27,6 +27,7 @@ export let importedRule: Rule = {
   // An app that declares `imported` itself, now the platform has let it go,
   // keeps its rows.
   core: ['imported'],
+  live: 'apps',
   find: '.imported',
   source: importedSource,
   move: (row) => [{ entity: { eid: row.entity.eid }, imported: null }],

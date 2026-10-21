@@ -1044,7 +1044,7 @@ await proof(
     ])
     equal(await s.query('*'), before)
     ok(s.columns('imported').includes('source'))
-    s.wake({ ...importedRule, live: 'apps' })
+    s.wake(importedRule)
     await s.alarm()
     let [moved] = await s.moves()
     equal([moved.moved, moved.failed, !!moved.done], [2, undefined, true])
@@ -1052,7 +1052,7 @@ await proof(
     equal((await s.query('.entity.eid=read&*'))[0].doc, { title: 'kept' })
     equal((await s.rehearse())[0].rows, 0)
 
-    let fresh = await store(0, { ...importedRule, live: 'apps' })
+    let fresh = await store(0, importedRule)
     let [none] = await fresh.rehearse()
     equal([none.rows, none.failed, none.unspoken], [0, undefined, 'imported'])
     await fresh.alarm()
