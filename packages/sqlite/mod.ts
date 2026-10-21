@@ -68,8 +68,8 @@ import type {
   Eid,
   Entity,
   Graves,
-  Measure,
   Match,
+  Measure,
   ReadOpts,
 } from '@yaks/graph'
 import { after, isPromise } from '@yaks/fp'
