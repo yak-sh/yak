@@ -25,10 +25,11 @@ test('a closed database refuses cached and new statements', () => {
 let dir = Deno.makeTempDirSync()
 let file = open(`${dir}/nested/graph.db`)
 
-test('a file opens in WAL with NORMAL sync and a bounded journal', () => {
+test('a file opens in WAL with NORMAL sync, a bounded journal and incremental auto-vacuum', () => {
   let sql = file
   try {
     let pragma = (name: string) => sql.query({ t: 'pragma', name })[0]
+    assertEquals(pragma('auto_vacuum'), { auto_vacuum: 2 })
     assertEquals(pragma('journal_mode'), { journal_mode: 'wal' })
     assertEquals(pragma('synchronous'), { synchronous: 1 })
     let limit = pragma('journal_size_limit')?.journal_size_limit

@@ -30,6 +30,7 @@ import {
   DAY,
   filler as fillerAt,
   owed,
+  RECLAIMING,
   RETRY,
   type Sizes,
   statistics,
@@ -71,7 +72,14 @@ let keyed = (name: string): CreateTable => ({
 
 // A table is big at three rows and a window is two or three: the same rules as
 // the box's thousands, without building them.
-let tiny: Sizes = { big: 3, fill: 2, copy: 3, clear: 3 }
+let tiny: Sizes = {
+  big: 3,
+  fill: 2,
+  copy: 3,
+  clear: 3,
+  slack: 4,
+  reclaim: 10,
+}
 let build = (db: Driver, stmts: Stmt[]) => buildAt(db, stmts, tiny)
 let filler = (db: Driver) => fillerAt(db, tiny)
 let work = (db: Driver, now?: number, daily?: Daily[]) =>
@@ -555,4 +563,66 @@ test('a rebuild is given up once the table fits its vocabulary again', () => {
   assertEquals(building.includes('_yaks_refit_creature'), true)
   using db = copy(refitted)
   assertEquals([aside(db), owed(db)], [[], []])
+})
+
+// A file whose forty rows, a page each, were all deleted, in `mode`.
+let freed = (mode: string) =>
+  imaged((db) => {
+    db.query({ t: 'pragma', name: 'page_size', value: 512 })
+    db.query({ t: 'pragma', name: 'auto_vacuum', value: mode })
+    db.query({
+      t: 'create table',
+      name: META,
+      cols: [{ name: 'k', type: 'text', pk: true }, { name: 'v' }],
+    })
+    db.query(keyed('note'))
+    rows(db, 'note', 40, fn('printf', lit('%400d'), col('i')))
+    db.query({ t: 'delete', from: 'note' })
+  })
+let incremental = freed('incremental')
+let free = (db: Driver) =>
+  Number(db.query({ t: 'pragma', name: 'freelist_count' })[0].freelist_count)
+
+// What `work` did, each time asked, and the free pages before and after.
+let reclaiming = (db: Driver, ats: number[]) => {
+  let was = free(db)
+  return { was, did: ats.map((at) => did(db, at, [])), left: free(db) }
+}
+let [, reclaimed] = stage((db) => reclaiming(db, [NOW]), incremental)
+let [, kept] = stage((db) => reclaiming(db, [NOW]), freed('none'))
+// A window refused once, then asked again a moment on and an hour on.
+let [, refused] = stage((db) => {
+  let refusing: Driver = {
+    ...db,
+    query: (s) => {
+      if (s.t == 'pragma' && s.name == 'incremental_vacuum') {
+        throw new Error('busy')
+      }
+      return db.query(s)
+    },
+  }
+  return [
+    did(refusing, NOW, []),
+    reclaiming(db, [NOW + 1, NOW + RETRY]),
+  ] as const
+}, incremental)
+
+test('the free pages past the slack are given back, a window at a time', () => {
+  let { was, did: [names], left } = reclaimed
+  let windows = Math.ceil((was - tiny.slack) / tiny.reclaim)
+  assertEquals([names, left], [Array(windows).fill(RECLAIMING), tiny.slack])
+})
+
+test('a file not in incremental mode has nothing to give back', () => {
+  assertEquals(kept, { was: kept.was, did: [[]], left: kept.was })
+})
+
+test('a window that fails to give pages back waits an hour', () => {
+  let [failed, { did: [soon, later], left }] = refused
+  assertEquals([failed, soon, later.length > 0, left], [
+    [`${RECLAIMING} failed`],
+    [],
+    true,
+    tiny.slack,
+  ])
 })

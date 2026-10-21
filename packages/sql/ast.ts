@@ -344,13 +344,14 @@ export type Drop = {
 }
 
 /** `pragma name`, `pragma name = value` or `pragma name(arg)`. A string value
- * is a keyword (`wal`, `on`). */
+ * is a keyword (`wal`, `on`); a string arg is a name (`table_info("book")`),
+ * a number a count (`incremental_vacuum(100)`). */
 export type Pragma = {
   t: 'pragma'
   name: string
   schema?: string
   value?: string | number
-  arg?: string
+  arg?: string | number
 }
 
 /** Rebuild the database, optionally into another file. */

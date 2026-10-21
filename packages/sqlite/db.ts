@@ -31,8 +31,9 @@ export type Opened = Driver & { close: () => void }
  * Every connection runs with foreign keys on. A file is one other processes
  * may have open too, so it also runs in WAL mode, with WAL's crash-safe pairing
  * `synchronous = normal`, a 64 MiB retained WAL limit, and a one-minute busy
- * timeout; a database in memory belongs to this process alone and needs none
- * of that. A graph batch may be large, so contention gives
+ * timeout, and a new file starts in incremental auto-vacuum mode, so the pages
+ * a delete frees can be given back (./owe.ts `reclaim`); a database in memory
+ * belongs to this process alone and needs none of that. A graph batch may be large, so contention gives
  * the one writer that bounded minute to finish. A writer held longer is a
  * performance failure, not a reason for every other process to wait forever.
  *
@@ -63,6 +64,13 @@ export let open = (path: string, opts: { readOnly?: boolean } = {}): Opened => {
     d.query({ t: 'pragma', name, value })
   set('foreign_keys', 'on')
   if (path != ':memory:') {
+    // A new file's, before WAL, whose header write fixes the mode: the free
+    // pages a delete leaves can then go back (./owe.ts `reclaim`). Only while
+    // the file is empty, since on one in this mode the pragma takes the write
+    // lock to rewrite the header, and one made without it keeps its mode until
+    // a VACUUM.
+    let [{ page_count }] = d.query({ t: 'pragma', name: 'page_count' })
+    if (!page_count) set('auto_vacuum', 'incremental')
     set('journal_mode', 'wal')
     set('synchronous', 'normal')
     set('journal_size_limit', 64 * 1024 * 1024)

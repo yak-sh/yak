@@ -159,6 +159,24 @@ test('native integer values round-trip beyond 32 bits', () => {
   }
 })
 
+test('a statement that answers no columns runs every step it has', () => {
+  let sql = open(':memory:')
+  try {
+    let free = () => sql.query({ t: 'pragma', name: 'freelist_count' })[0]
+    sql.query({ t: 'pragma', name: 'page_size', value: 512 })
+    sql.query({ t: 'pragma', name: 'auto_vacuum', value: 'incremental' })
+    sql.query({ t: 'create table', name: 't', cols: [{ name: 'x' }] })
+    let rows = Array.from({ length: 20 }, () => [val('x'.repeat(400))])
+    sql.query({ t: 'insert', into: 't', cols: ['x'], rows })
+    sql.query({ t: 'delete', from: 't' })
+    let { freelist_count: was } = free()
+    sql.query({ t: 'pragma', name: 'incremental_vacuum', arg: 5 })
+    assertEquals(free(), { freelist_count: Number(was) - 5 })
+  } finally {
+    sql.close()
+  }
+})
+
 test('cached native row metadata follows external schema edits and rollback', () => {
   let db = new Database(':memory:')
   try {

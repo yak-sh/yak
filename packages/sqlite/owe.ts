@@ -16,8 +16,9 @@
 //
 // The same process does a file's upkeep ({@link Daily}): planner statistics
 // once a day and as soon as an index or a rebuilt table is in place, and
-// whatever a host adds, such as the box's check of its text indexes. Opening
-// does neither.
+// whatever a host adds, such as the box's check of its text indexes. It also
+// gives back the pages a bulk delete freed ({@link reclaim}), so the file
+// shrinks without a VACUUM. Opening does none of it.
 //
 // A file in memory belongs to one process, which has nobody to owe: its work
 // is done at once, as it was before any of this.
@@ -75,10 +76,31 @@ export let COPY = 20_000
 /** The rows one window deletes from a rebuilt table's old rows: about 65 ms
  * on the box's copy. */
 export let CLEAR = 10_000
+/** The free pages a file keeps for its next writes to reuse; past these,
+ * {@link reclaim} gives the rest back. 64 MiB of the box's 4 KiB pages. */
+export let SLACK = 16_384
+/** The pages one window gives back: on a 660 MB file of 4 KiB pages with a
+ * third of its rows deleted in runs, 1,000 pages took 28 ms a window, and up
+ * to 176 ms with the checkpoint that followed. */
+export let RECLAIM = 1_000
 /** The sizes above as one value, which what chooses by them takes, so a
  * test can shrink them instead of building the rows. */
-export type Sizes = { big: number; fill: number; copy: number; clear: number }
-export let SIZES: Sizes = { big: BIG, fill: FILL, copy: COPY, clear: CLEAR }
+export type Sizes = {
+  big: number
+  fill: number
+  copy: number
+  clear: number
+  slack: number
+  reclaim: number
+}
+export let SIZES: Sizes = {
+  big: BIG,
+  fill: FILL,
+  copy: COPY,
+  clear: CLEAR,
+  slack: SLACK,
+  reclaim: RECLAIM,
+}
 /** How long a window that failed waits before it is tried again. */
 export let RETRY = 3_600_000
 /** How often a file's upkeep ({@link Daily}) is done. */
@@ -229,9 +251,9 @@ export let statistics: Daily = {
 
 /**
  * Do one window, in one unit: of the first owed work that is due, else of
- * the first of `daily` that is due. Undefined when nothing is. A window that
- * throws leaves its work as it was, marked to be tried again in an hour, and
- * says why.
+ * giving free pages back ({@link reclaim}), else of the first of `daily` that
+ * is due. Undefined when nothing is. A window that throws leaves its work as
+ * it was, marked to be tried again in an hour, and says why.
  */
 export let work = (
   driver: Driver,
@@ -240,7 +262,9 @@ export let work = (
   sizes: Sizes = SIZES,
 ): Worked | undefined => {
   let due = owed(driver).find((w) => !w.next || Date.parse(w.next) <= now)
-  if (!due) return upkeep(driver, daily, now)
+  if (!due) {
+    return reclaim(driver, now, sizes) ?? upkeep(driver, daily, now)
+  }
   try {
     return unit(
       driver,
@@ -254,6 +278,45 @@ export let work = (
         next: new Date(now + RETRY).toISOString(),
       }))
     return { name: key(due), error }
+  }
+}
+
+let pragma = (driver: Driver, name: string) =>
+  Number(Object.values(driver.query({ t: 'pragma', name })[0] ?? {})[0] ?? 0)
+
+/** The `server_meta` key of {@link reclaim}: when it is next tried, after a
+ * window that failed. */
+export let RECLAIMING = 'reclaim'
+
+/**
+ * Give back the free pages past {@link SLACK}, at most {@link RECLAIM} a
+ * window: SQLite moves pages from the end of the file into the free ones and
+ * cuts the end off, which the next checkpoint writes to the file. Only a file
+ * in incremental mode can (./db.ts `open`); one in another mode, or in
+ * memory, has nothing to give. Undefined when nothing is past the slack; one
+ * that throws is put off an hour.
+ */
+export let reclaim = (
+  driver: Driver,
+  now: number = Date.now(),
+  sizes: Sizes = SIZES,
+): Worked | undefined => {
+  if (!driver.file || pragma(driver, 'auto_vacuum') != 2) return
+  let past = pragma(driver, 'freelist_count') - sizes.slack
+  if (past <= 0) return
+  let m = meta(driver)
+  let at = m.get(RECLAIMING)
+  if (at && Date.parse(at) > now) return
+  let n = Math.min(past, sizes.reclaim)
+  try {
+    unit(
+      driver,
+      () => driver.query({ t: 'pragma', name: 'incremental_vacuum', arg: n }),
+    )
+    return { name: RECLAIMING, done: n == past }
+  } catch (error) {
+    unit(driver, () => m.set(RECLAIMING, new Date(now + RETRY).toISOString()))
+    return { name: RECLAIMING, error }
   }
 }
 

@@ -248,6 +248,10 @@ equal(render({ t: 'savepoint', name: 'write' }).sql, 'savepoint "write"')
 equal(render({ t: 'rollback', to: 'write' }).sql, 'rollback to "write"')
 equal(render({ t: 'release', name: 'write' }).sql, 'release "write"')
 equal(render({ t: 'commit' }).sql, 'commit')
+equal(
+  render({ t: 'pragma', name: 'incremental_vacuum', arg: 100 }).sql,
+  'pragma incremental_vacuum(100)',
+)
 ```
 
 Identifiers are quoted. Function, type, pragma and module names are checked;

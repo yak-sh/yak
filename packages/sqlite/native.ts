@@ -101,6 +101,8 @@ export let deserialize = (db: Database, bytes: Uint8Array): void => {
 // projection can share its compiled function across statements and databases.
 type Decoder = ReturnType<Statement['getRowObject']>
 let decoders = new Map<string, Decoder>()
+// The reader of a statement that answers no columns.
+let nothing: Decoder = () => undefined
 // What a kept statement asks of SQLite that @db/sqlite does not bind.
 let steps: ReturnType<typeof bindSteps> | undefined
 let bindSteps = () =>
@@ -135,9 +137,13 @@ export let prepared = (db: Database) => {
   let prepare = (sql: string) => {
     let statement = db.prepare(sql)
     // DDL, transaction boundaries and writes without RETURNING have no row
-    // shape. Running them needs no decoder or repeated column-name reads.
+    // shape. Running them needs no decoder or repeated column-name reads. One
+    // may still step more than once, as `pragma incremental_vacuum(n)` gives
+    // back a page a step, so each is stepped to its end through a reader that
+    // builds nothing.
     let names = statement.columnNames()
     if (!names.length) {
+      statement.getRowObject = () => nothing
       commands.add(statement)
       return statement
     }
@@ -197,7 +203,7 @@ export let prepared = (db: Database) => {
     cache.set(sql, statement)
     try {
       if (commands.has(statement)) {
-        statement.run(...params)
+        statement.all(...params)
         return []
       }
       return statement.all(...params)

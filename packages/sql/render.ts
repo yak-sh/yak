@@ -426,7 +426,9 @@ let stmt = (s: Stmt, c: Ctx): string => {
       return `pragma ${s.schema ? `${q(s.schema)}.` : ''}${
         word(s.name, 'pragma')
       }` +
-        (s.arg != null ? `(${q(s.arg)})` : '') +
+        (s.arg == null
+          ? ''
+          : `(${typeof s.arg == 'number' ? literal(s.arg) : q(s.arg)})`) +
         (s.value == null
           ? ''
           : ` = ${

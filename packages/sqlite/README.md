@@ -490,9 +490,12 @@ size, defaulting to `@yaks/sql`'s conservative `ARMS`; the embedded driver uses
 itself, so a driver swap touches only this package. `open` creates a missing
 directory and turns on foreign keys; a file also runs in WAL mode with
 `synchronous = normal`, a 64 MiB retained WAL limit, and a one-minute busy
-timeout. It honors `DENO_SQLITE_PATH`, otherwise selecting the platform's system
-library. This module uses Deno environment/FFI APIs. The root adapter can
-instead receive another runtime's synchronous SQLite driver.
+timeout, and a new file starts in incremental auto-vacuum mode, so the pages a
+delete frees can be given back (`reclaim`, under Owed work). A file made before
+keeps its mode until a `VACUUM`. It honors `DENO_SQLITE_PATH`, otherwise
+selecting the platform's system library. This module uses Deno environment/FFI
+APIs. The root adapter can instead receive another runtime's synchronous SQLite
+driver.
 
 A file driver also has `watch`: every 5 ms it reads the file's `data_version`,
 which moves when another connection commits, and calls back when it moved. A
@@ -1069,21 +1072,29 @@ while the schema pass holds the write lock (`@yaks/sqlite/owe`):
   `after`, and a pass that no longer needs a rebuild gives it up (`forgo`).
   `_yaks_` names no component table.
 
-`BIG`, `FILL`, `COPY` and `CLEAR` are one value, `SIZES`, which `build`,
-`filler`, `reshape`, `work` and the store's `sizes` option take in their place,
-so a test shrinks them to a few rows instead of building thousands.
+`BIG`, `FILL`, `COPY`, `CLEAR`, `SLACK` and `RECLAIM` are one value, `SIZES`,
+which `build`, `filler`, `reshape`, `work` and the store's `sizes` option take
+in their place, so a test shrinks them to a few rows instead of building
+thousands.
 
 Owed work sits in `server_meta` as `owed:<kind>:<name>`, its statements as data,
 so any process can finish it. `work(driver, now?, daily?)` does one window of
 the first that is due (indexes, then fills, then refits, then clearing); a
 window that throws is kept with its error and tried again an hour later.
 
-With nothing owed, `work` does the first **upkeep** (`Daily`, `{name, run}`) in
-`daily` that is due: each runs in one unit once a day, and one that throws is
-tried again an hour later; `server_meta` keeps when each is next due as
-`daily:<name>`. `statistics` (sampled planner statistics) is one, and is due
-again as soon as an owed index or a rebuilt table is in place. Opening a file
-whose print is recorded does neither.
+With nothing owed, `work` **reclaims**: on a file in incremental mode whose free
+pages pass `SLACK` (16,384, 64 MiB of 4 KiB pages), one window gives back up to
+`RECLAIM` (1,000) of the rest with `pragma incremental_vacuum(n)`, and the next
+checkpoint shortens the file. So a bulk delete, such as the daily expiration's,
+gives its space back within minutes, without a `VACUUM`. A window that throws
+waits an hour, kept in `server_meta` as `reclaim`.
+
+With nothing owed or to reclaim, `work` does the first **upkeep** (`Daily`,
+`{name, run}`) in `daily` that is due: each runs in one unit once a day, and one
+that throws is tried again an hour later; `server_meta` keeps when each is next
+due as `daily:<name>`. `statistics` (sampled planner statistics) is one, and is
+due again as soon as an owed index or a rebuilt table is in place. Opening a
+file whose print is recorded does neither.
 
 `tend(driver, {signal, daily?})` works windows and the statistics, with the
 host's `daily` beside them, until the signal aborts; on the box the process
