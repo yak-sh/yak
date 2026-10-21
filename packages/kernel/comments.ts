@@ -46,3 +46,14 @@ export let branches = (rows: CommentRow[]): Branch[] => {
   }
   return roots
 }
+
+/** Who a thread names in its bylines: each note's writer and the instrument
+ * it came through, once each, so a host can ask for them by name. */
+/// writers([{ entity: { eid: 'c1' }, created: { by: 'u1', via: 's1' } }, { entity: { eid: 'c2' }, created: { by: 'u1' } }])
+///   -> ['u1', 's1']
+export let writers = (rows: CommentRow[]): string[] => [
+  ...new Set(
+    rows.flatMap((b) => [b.created?.by, b.created?.via])
+      .filter((id): id is string => !!id),
+  ),
+]

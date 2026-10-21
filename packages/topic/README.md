@@ -40,14 +40,20 @@ deno add jsr:@yaks/topic
 ## Use
 
 ```ts
-import { named, overlaps, topicEid } from '@yaks/topic'
+import { fits, named, overlaps, topicEid } from '@yaks/topic'
 import { equal } from '@yaks/testing'
 
 equal(named('  Data   Model '), 'data model')
 equal(topicEid('Data Model'), topicEid('data model'))
 equal(overlaps('economic market design', 'market design'), true)
 equal(overlaps('ui design', 'cover design'), false)
+equal(fits('Data Modeling', 'data model'), true)
 ```
+
+A topic is **found** by what somebody says (`fits`): each word said starts one
+of the topic's words (its name's, title's and cover's), as it is typed, or
+shares its stem with one, so "data modeling" finds data model and "tests" finds
+testing.
 
 ## The tools
 
@@ -61,9 +67,8 @@ yak topic new testing --body 'what a test checks, and how fast a suite runs'
 yak topic new billing --body 'plans, prices and invoices' --scope P-19
 ```
 
-`topic find` answers topics whole: those whose name or cover holds a word
-starting with each word of `said` (`query` finds `querying`), ranked by meaning
-to `near` where the server has embeddings, or with neither, in order of name.
+`topic find` answers topics whole: those `said` finds (`fits`), ranked by
+meaning to `near` where the server has embeddings, or else in order of name.
 
 `topic new` makes a topic from a name, a cover and an optional scope. One name
 is one topic, so it refuses a name that is taken, or whose words hold another
@@ -74,16 +79,31 @@ at once.
 
 ## The views
 
-`@yaks/topic/views` draws a topic wherever the browsing app
-([@yaks/browse](../browse)) does, in a browser and a terminal alike. A topic
-opens on its page, the `Topic` tab, which is also its `Inspect.Page`:
+`@yaks/topic/views` draws the topics wherever the browsing app
+([@yaks/browse](../browse)) does, in a browser and a terminal alike, as a
+library's catalogue: the shelves on one side, the topic opened on the other.
 
-- the head: its title, the topics that contain it, and where it holds (the
-  project its scope names, or everywhere);
+The **shelves** are every topic as a tree: the topics no topic contains at the
+top, each over the topics it contains, each level by title (`shelves`, pure).
+Over them a field finds a topic by what is typed, narrowing the shelves to the
+topics it finds under the topics holding them; Enter opens the first, and Escape
+clears it. What is typed there is the person's draft, through the UX host's
+`drafts` (@yaks/ux).
+
+The sidebar offers them as **Topics** (`destinations`), at `/?topics`: every
+topic with its cover (`Topics.Page`). A topic opens on its page, the `Topic`
+tab, beside the shelves, titles only, the topic lit and the shelves holding it
+open; stacked, as on a phone, the page comes first. The page alone is its
+`Inspect.Page`, and a card's face (`Card.Topic`):
+
+- the head: its title, what contains it, and where it holds (the project its
+  scope names, or everywhere), each named from the answer that brought it;
 - the cover's words, then the contents, as markdown;
 - what it contains, what to understand first, what is related and its sources,
   each in edge order;
 - the beliefs about it, newest first, and the archived ones on a press, muted;
+- the comments on it, with a line to write one, where the host draws a thread
+  (`Comments`; @yaks/kernel's in browse), each stamped as its writer's;
 - then the facts, links and history any page has.
 
 Whatever it holds or cites is drawn by that entity's own renderer, asked for as
@@ -98,11 +118,15 @@ its own path without walking it, and links to the rest past `DEPTH` levels.
 
 The root exports `topicDoc`, `named` (a title folded to a topic's name),
 `topicEid` (the id a title names, whether or not it exists yet), `overlaps`
-(whether two names share a subject by their words), `found` (the query
-`topic find` reads), and the constants `TOPIC` and `FIND`. `@yaks/topic/vocab`
-exports `topicDoc` and `docs: [topicDoc]` for schema loaders.
-`@yaks/topic/views` exports `inspectViews()`, which loads the page, the tree and
-the tile, and `tabs`, the two tabs a topic wears.
+(whether two names share a subject by their words), `fits` (whether what was
+said finds a topic's words), `about` (a topic's words: name, title and cover),
+`found` (the query that reads every topic), `shelves` and `within` (the topics
+as a tree, and that tree narrowed to what was said), and the constants `TOPIC`,
+`FIND` and `TOPICS`. `@yaks/topic/vocab` exports `topicDoc` and
+`docs: [topicDoc]` for schema loaders. `@yaks/topic/views` exports
+`inspectViews()`, which loads the shelves, the page, the tree and the tile;
+`tabs`, the two tabs a topic wears; `destinations`, the Topics page the sidebar
+offers; and `icons`, the glyph it wears.
 
 ## Compatibility
 

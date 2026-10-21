@@ -261,6 +261,7 @@
     "three": "npm:three@^0.186.1",
     "es-module-lexer": "npm:es-module-lexer@1.7.0",
     "lucide": "npm:lucide@1.31.0",
+    "stemmer": "npm:stemmer@2.0.1",
     "preact": "npm:preact@^10.29.1",
     "@preact/signals": "npm:@preact/signals@^2.9.0",
     "@preact/signals-core": "npm:@preact/signals-core@^1.14.0",

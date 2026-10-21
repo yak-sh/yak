@@ -7,7 +7,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { Button, Choices, Field, Notes, Say, Stamp } from '@yaks/ui'
 import { drafts, useDraft } from '@yaks/draft/input'
 import { commentHost } from './comment-host.ts'
-import { type Branch, branches, type CommentRow } from './comments.ts'
+import { type Branch, branches, type CommentRow, writers } from './comments.ts'
 
 let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
 export let viaName = (eid?: string | null): string => {
@@ -279,6 +279,9 @@ export let Comments = ({ eid }: { eid: string }): JSX.Element => {
   let landed = host.useRows(
     host.has('commit') ? `.commit.target=${eid}&*&.order=created.at` : '',
   )
+  // Each byline names its writer and instrument, so the thread asks for them.
+  let named = writers([...said, ...landed])
+  host.useRows(named.length ? `.entity.eid=${named.join(',')}` : '')
   return (
     <Notes>
       <Branches rows={[...said, ...landed]} />

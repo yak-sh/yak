@@ -1,5 +1,6 @@
 // The places the sidebar offers, as data: home, the destinations, and the
-// schema. A destination is a page listing what a query finds, at `/?<key>`.
+// schema. A destination is a page at `/?<key>`: a list of what a query
+// finds, a package's page part above it, or that part alone.
 // Browse offers the ones that read its own words (favorites, recent edits,
 // sessions); a package offers its own from its `./views` facet as
 // `destinations`, so a tracker lists its bugs without Browse knowing a bug.
@@ -9,7 +10,8 @@ import type { Vocab } from '@yaks/vocab'
 import type { Change, Ent } from './types.ts'
 import { searchAt } from './url.ts'
 
-/** A page the sidebar lists: what `query` finds, at `/?<key>`. */
+/** A page the sidebar lists, at `/?<key>`: what `query` finds, under the
+ * page part `view` draws, or that part alone. */
 export type Destination = {
   /** its address, `/?<key>` */
   key: string
@@ -17,8 +19,9 @@ export type Destination = {
   name: string
   /** a Lucide icon's name */
   icon: string
-  /** the rows it lists */
-  query: string
+  /** the rows it lists, filtered from the page's bar; none where its view
+   * is the whole page */
+  query?: string
   /** a page part drawn above its list, by the name of its view */
   view?: string
 }

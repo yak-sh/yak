@@ -64,11 +64,11 @@
       "noun": "topic",
       "verb": "find",
       "title": "Find topics",
-      "description": "Find existing topics: those whose name or cover holds a word starting with each word in said (\"query\" finds \"querying\"; ask one word at a time), ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it before making a topic, with near set to what you are filing under one, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
+      "description": "Find existing topics: those whose name, title or cover holds each word in said, as the start of a word or by its stem (\"data modeling\" finds \"data model\", \"tests\" finds \"testing\"), ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it before making a topic, with near set to what you are filing under one, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
       "input": {
         "said": {
           "type": "string",
-          "description": "a word or two the topic's name or cover holds words starting with"
+          "description": "words the topic's name, title or cover holds, as the start of a word or by its stem"
         },
         "near": {
           "type": "string",

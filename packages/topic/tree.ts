@@ -19,8 +19,8 @@ import {
   mention,
   type Props,
 } from '@yaks/inspect'
-import { EDGES, title } from './page.ts'
-import { TOPIC } from './topic.ts'
+import { EDGES } from './page.ts'
+import { title, TOPIC } from './topic.ts'
 
 /** How many levels a tree draws before a branch links to its own tree. */
 export let DEPTH = 8

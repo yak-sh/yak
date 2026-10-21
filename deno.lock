@@ -74,6 +74,7 @@
     "npm:preact@^10.29.1": "10.29.7_preact-render-to-string@6.7.0",
     "npm:resolve.exports@2.0.3": "2.0.3",
     "npm:semver@7.8.5": "7.8.5",
+    "npm:stemmer@2.0.1": "2.0.1",
     "npm:sucrase@3.35.1": "3.35.1",
     "npm:sucrase@^3.35.0": "3.35.1",
     "npm:three@~0.186.1": "0.186.1",
@@ -1722,6 +1723,10 @@
     "statuses@2.0.2": {
       "integrity": "sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw=="
     },
+    "stemmer@2.0.1": {
+      "integrity": "sha512-bkWvSX2JR4nSZFfs113kd4C6X13bBBrg4fBKv2pVdzpdQI2LA5pZcWzTFNdkYsiUNl13E4EzymSRjZ0D55jBYg==",
+      "bin": true
+    },
     "strtok3@10.3.5": {
       "integrity": "sha512-ki4hZQfh5rX0QDLLkOCj+h+CVNkqmp/CMf8v8kZpkNVK6jGQooMytqzLZYUVYIZcFZ6yDB70EfD8POcFXiF5oA==",
       "dependencies": [
@@ -1987,6 +1992,7 @@
       "npm:postal-mime@3.0.0",
       "npm:preact-render-to-string@6.7.0",
       "npm:preact@^10.29.1",
+      "npm:stemmer@2.0.1",
       "npm:sucrase@^3.35.0",
       "npm:three@~0.186.1",
       "npm:tree-sitter-wasms@0.1.13",
@@ -2454,7 +2460,10 @@
       },
       "packages/topic": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "npm:lucide@1.31.0",
+          "npm:preact@^10.29.1",
+          "npm:stemmer@2.0.1"
         ]
       },
       "packages/tracker": {

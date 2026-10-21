@@ -103,6 +103,7 @@ import {
   provenance,
   signed,
   type StampPolicy,
+  stated,
 } from './stamp.ts'
 import {
   fire,
@@ -565,10 +566,15 @@ export let graph = (opts: Options): Graph => {
   // program rather than to nobody, so every write has an author and the
   // journal has a name to record. A server that authenticated somebody
   // overrides this (`signed`) before the batch gets here.
+  // A half an actor leaves undefined is one it does not name (`stated`).
   let owned = (bundles: Bundle[]): Bundle[] =>
     opts.actor && !bundles.some((b) => b.$actor)
       ? signed(bundles, opts.actor)
-      : bundles
+      : bundles.map((b) =>
+        b.$actor && Object.values(b.$actor).some((id) => !id)
+          ? { ...b, $actor: stated(b.$actor) }
+          : b
+      )
 
   // Synchronous phases use plain loops. A continuation is needed only when a
   // core, rule or hook yields; all registrations still come from the moment

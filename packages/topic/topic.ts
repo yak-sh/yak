@@ -13,14 +13,20 @@
 // or whose words hold another topic's or are held by them ("economic market
 // design" beside "market design"), and says which topic to use.
 
+import type { Bundle } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { tokens } from '@yaks/match'
+import { stemmer } from 'stemmer'
 
 /** The component this package is about. */
 export let TOPIC = 'topic'
 
 /** How many topics a find returns when the caller gave no limit. */
 export let FIND = 12
+
+/** How many topics a reading of every one reads at most: they are few and
+ * broad, so a find reads them all and matches the words here. */
+export let TOPICS = 100000
 
 /**
  * A topic's name: its title in lowercase, the spaces single.
@@ -36,10 +42,15 @@ export let named = (title: string): string =>
 export let topicEid = (title: string): string =>
   identityEid(TOPIC, [named(title)])
 
-// Each word as the start of a word: a topic is found by what it is about, and
-// "query" should find "querying" and "query grammar" alike.
-let starts = (said: string): string =>
-  tokens(said).map((w) => `${w}*`).join(' ')
+let prop = (t: Bundle, comp: string, name: string): string => {
+  let v = (t[comp] as Record<string, unknown> | undefined)?.[name]
+  return typeof v == 'string' ? v : ''
+}
+
+/** What a topic is called: its cover's title, else its name. */
+/// title({ entity: { eid: 'q' }, topic: { name: 'data model' } }) -> 'data model'
+export let title = (t: Bundle): string =>
+  prop(t, 'doc', 'title') || prop(t, TOPIC, 'name')
 
 /**
  * Whether two names name one subject by their words: every word of one starts
@@ -59,22 +70,48 @@ export let overlaps = (a: string, b: string): boolean => {
 }
 
 /**
- * The query string that finds topics: those holding a word starting with each
- * word given, ranked by meaning to `near`, or else in order of name.
+ * Whether what was said finds a topic's words: each word said starts one of
+ * them, as it is typed ("dat" finds "data"), or shares its stem ("data
+ * modeling" finds "data model", "tests" finds "testing"). Nothing said finds
+ * every topic.
+ */
+/// fits('data modeling', 'data model') -> true
+/// fits('Tests', 'what a test checks') -> true
+/// fits('dat mod', 'data model') -> true
+/// fits('data storage', 'data model') -> false
+/// fits('', 'anything') -> true
+export let fits = (said: string, text: string): boolean => {
+  let have = tokens(text)
+  let stems = have.map((t) => stemmer(t))
+  return tokens(said).every((w) => {
+    let stem = stemmer(w)
+    return have.some((t, i) => t.startsWith(w) || stems[i].startsWith(stem))
+  })
+}
+
+/** The words a topic is found by: its name, its title and its cover. */
+/// about({ entity: { eid: 'q' }, topic: { name: 'data model' }, doc: { title: 'Data model', body: 'How data is shaped.' } })
+///   -> 'data model Data model How data is shaped.'
+export let about = (t: Bundle): string =>
+  [prop(t, TOPIC, 'name'), prop(t, 'doc', 'title'), prop(t, 'doc', 'body')]
+    .filter(Boolean).join(' ')
+
+/**
+ * The query string that reads every topic with its name and cover, ranked by
+ * meaning to `near`, or else in order of name. A find keeps those whose words
+ * fit what was said (`fits`).
  *
  * ```ts
- * found({ said: 'ui?', limit: 5 })
- * // 'ui*&.topic&*&.order=topic.name&.limit=5'
+ * found({}) // '.topic&?doc&.order=topic.name&.limit=100000'
+ * found({ near: 'T-9' })
+ * // '.near=T-9&.topic&?doc&.order=similar&.limit=100000'
  * ```
  */
-export let found = (
-  o: { said?: string; near?: string; limit: number },
-): string =>
+export let found = (o: { near?: string }): string =>
   [
-    ...(starts(o.said ?? '') ? [starts(o.said ?? '')] : []),
     ...(o.near ? [`.near=${o.near}`] : []),
     `.${TOPIC}`,
-    '*',
+    '?doc',
     o.near ? '.order=similar' : `.order=${TOPIC}.name`,
-    `.limit=${o.limit}`,
+    `.limit=${TOPICS}`,
   ].join('&')

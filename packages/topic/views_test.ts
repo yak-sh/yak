@@ -1,6 +1,7 @@
 // A topic's page and tree over a small graph, mounted through the inspector
 // contract browse uses: cover, contents, what it holds and cites, where it
-// sits, the beliefs about it, and the tree with its cycle cut.
+// sits, the beliefs about it, the comments on it, the tree with its cycle cut,
+// and the shelves every topic stands on, found by what is typed.
 import { h } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
@@ -17,7 +18,7 @@ import { taskDoc } from '@yaks/task/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
-import { disclosed, disclosureAt } from '@yaks/ux'
+import { disclosed, disclosureAt, type Host as UxHost, Ux } from '@yaks/ux'
 import {
   all,
   type Answer,
@@ -28,6 +29,7 @@ import {
 } from '@yaks/inspect'
 import { topicDoc } from './vocab.ts'
 import { inspectViews } from './inspect.ts'
+import { FINDING } from './catalogue.ts'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -104,8 +106,15 @@ let tile: View = {
   Render: ({ e }) => h('span', { 'data-tile': e.entity.eid }, title(e)),
 }
 let registry = define<View>([...inspectViews, ...all, tile])
+// A host that draws a comment thread, as browse does (@yaks/kernel's).
+let thread: View = {
+  view: 'Comments',
+  match: and(),
+  Render: ({ e }) => h('form', { 'data-thread': e.entity.eid }),
+}
+let talking = define<View>([...inspectViews, ...all, tile, thread])
 
-let host = (state: Bundle[] = [], ready = true): Io => {
+let host = (state: Bundle[] = [], ready = true, views = registry): Io => {
   let answers = (asks: Asks) =>
     Object.fromEntries(
       Object.entries(asks).map(([key, ask]) => [
@@ -120,12 +129,12 @@ let host = (state: Bundle[] = [], ready = true): Io => {
     ask: answers,
     get: (id) => store.get([id])[0],
     show: (e, view, ctx = {}) => {
-      let r = resolve(registry, e, view, vocab)
+      let r = resolve(views, e, view, vocab)
       return r
         ? h(r.Render, { e, got: answers(r.asks?.(e, io, ctx) ?? {}), io, ctx })
         : null
     },
-    can: (e, view) => !!resolve(registry, e, view, vocab),
+    can: (e, view) => !!resolve(views, e, view, vocab),
     state: (eid) => state.find((b) => b.entity.eid == eid),
     set: () => {},
     apply: () => {},
@@ -140,9 +149,28 @@ let host = (state: Bundle[] = [], ready = true): Io => {
   }
   return io
 }
-let drawn = (eid: string, view: string, io = host()) =>
+// What the person typed to find a topic is their draft, kept by the UX host.
+let typing = (said: string) =>
+  ({
+    drafts: {
+      text: (at: string) => at == FINDING ? said : '',
+      type: () => {},
+      spend: () => {},
+    },
+  }) as unknown as UxHost
+let drawn = (eid: string, view: string, io = host(), said = '') =>
   parseHTML(
-    renderToString(h('main', {}, io.show(store.get([eid])[0], view))),
+    renderToString(
+      h(
+        Ux,
+        { host: typing(said) },
+        h(
+          'main',
+          {},
+          io.show(store.get([eid])[0] ?? { entity: { eid } }, view),
+        ),
+      ),
+    ),
   ).document.querySelector('main')!
 let part = (page: Element, heading: string) =>
   page.querySelector(`[data-section="${heading}"]`)
@@ -209,4 +237,53 @@ test('the tree nests subtopics, leaves the rest as leaves, and ends a cycle', ()
   equal(at('spec'), 0)
   ok(tree.querySelector('[data-held="model"] .Rows-nested [data-held="ids"]'))
   ok(bare.textContent?.includes('it holds nothing yet'))
+})
+
+let talked = drawn('data', 'Topic', host([], true, talking))
+
+test('a topic is commented on where the host draws a thread', () => {
+  ok(part(talked, 'Comments')?.querySelector('[data-thread="data"]'))
+  equal(part(data, 'Comments'), null)
+})
+
+// The shelves as drawn: each topic's id, and the shelves open under it.
+let shelved = (rows?: Element | null): unknown[] =>
+  [...rows?.children ?? []].map((item) => {
+    let id = item.getAttribute('data-shelf')
+    let under = [...item.children].find((c) =>
+      c.classList.contains('Rows-nested')
+    )
+    return under ? [id, shelved(under)] : id
+  })
+let shelves = (page: Element) => shelved(page.querySelector('[data-shelves]'))
+let page = (said = '') => drawn('topics', 'Topics.Page', host(), said)
+let catalogue = page()
+let found = page('modelling')
+let none = page('zzz')
+
+test('every topic stands on a shelf, under the topics holding it', () => {
+  equal(shelves(catalogue), [
+    'naming',
+    'scoped',
+    ['world', [['data', [['model', [['ids', ['data']]]]]]]],
+  ])
+  ok(catalogue.textContent?.includes('What belongs under Naming.'))
+  ok(catalogue.querySelector('.Head_Facts')?.textContent?.includes('6 topics'))
+})
+
+test('a topic opens beside the shelves, lit, the shelves holding it open', () => {
+  let lit = data.querySelector('[data-shelf="data"] > .Tile')
+  equal(lit?.getAttribute('aria-current'), 'page')
+  equal(shelves(naming), ['naming', 'scoped', 'world'])
+  equal(
+    naming.querySelector('[data-shelf="world"] .Tile_Count')?.textContent,
+    '1',
+  )
+  ok(!naming.textContent?.includes('What belongs under World.'))
+})
+
+test('what is typed finds a topic by its words, under what holds it', () => {
+  equal(shelves(found), [['world', [['data', ['model']]]]])
+  ok(found.querySelector('.Head_Facts')?.textContent?.includes('1 fit'))
+  ok(none.textContent?.includes('no topic fits “zzz”'))
 })

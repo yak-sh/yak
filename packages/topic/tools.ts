@@ -9,7 +9,16 @@ import type { Bundle, Graph } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
-import { FIND, found, named, overlaps, TOPIC, topicEid } from './topic.ts'
+import {
+  about,
+  FIND,
+  fits,
+  found,
+  named,
+  overlaps,
+  TOPIC,
+  topicEid,
+} from './topic.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
@@ -38,7 +47,7 @@ export let runs = (): Runs => ({
     }
     // Every topic, by name: they are few and broad, and a word longer than
     // theirs ("markets" for "market design") no prefix search finds.
-    let same = (await graph.read(`.${TOPIC}&*&.limit=100000`)).filter((t) =>
+    let same = (await graph.read(found({}))).filter((t) =>
       overlaps(title, str((t[TOPIC] as { name?: unknown })?.name))
     )
     if (same.length) {
@@ -57,12 +66,17 @@ export let runs = (): Runs => ({
     }]
   },
 
+  // Every topic, its words matched here (`fits`), the ones that fit answered
+  // whole, in the order they were read.
   topic_find: async (call, graph: Graph): Promise<Bundle[]> => {
     let args = argsOf(call)
-    return await graph.read(found({
-      said: str(args.said),
-      near: str(args.near),
-      limit: Number(args.limit ?? FIND),
-    }))
+    let hits = (await graph.read(found({ near: str(args.near) })))
+      .filter((t) => fits(str(args.said), about(t)))
+      .slice(0, Number(args.limit ?? FIND))
+      .map((t) => t.entity.eid)
+    let whole = new Map(
+      (hits.length ? await graph.get(hits) : []).map((b) => [b.entity.eid, b]),
+    )
+    return hits.flatMap((eid) => whole.get(eid) ?? [])
   },
 })

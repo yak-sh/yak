@@ -168,9 +168,11 @@ The sidebar is a short fixed list of places: search, then home (named for the
 offered home page, or Home), Favorites, Recent, each package's destinations,
 Sessions, and the Schema when the host serves its packages. Each is a plain
 link, and the one you are on is lit. Narrower than a tablet, it folds behind the
-bar's menu. A destination is a page at `/?<key>` listing what its query finds. A
-package offers its own from its `./views` facet beside its renderers, so Browse
-lists a tracker's bugs without knowing a bug:
+bar's menu. A destination is a page at `/?<key>` listing what its query finds,
+under a page part its `view` draws, or that part alone where it names no query
+(the topics' shelves, @yaks/topic). A package offers its own from its `./views`
+facet beside its renderers, so Browse lists a tracker's bugs without knowing a
+bug:
 
 ```ts
 import { destinations } from '@yaks/tracker/views'

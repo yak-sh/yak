@@ -138,6 +138,19 @@ test('actor aliases resolve before stamps and a missing actor is refused', async
   ok(!(await g.get(['record'])).length)
 })
 
+// A browser's door names the person and, when it knows none, no instrument.
+let unaided = make()
+await unaided.apply([{ entity: { eid: target }, doc: { title: 'Ada' } }])
+
+test('an actor with no instrument stamps who wrote it', async () => {
+  let [out] = await unaided.apply([{
+    entity: { eid: 'note' },
+    doc: { title: 'said' },
+    $actor: { by: target, via: undefined },
+  }])
+  equal((out.created as Comp).by, target)
+})
+
 test('stamps follow numeric timestamp declarations', async () => {
   let vocab = loadVocab({
     $defs: {

@@ -131,7 +131,7 @@ export let Page = ({ at }: { at: string }) => {
   let named = titleAt(at)
   let page = home ? undefined : e
   let filter = place
-    ? `destination:${place.key}`
+    ? place.query ? `destination:${place.key}` : undefined
     : list
     ? 'app-browse'
     : page && filterable.has(view ?? '')
@@ -232,11 +232,13 @@ export let Page = ({ at }: { at: string }) => {
           ? (
             <>
               {place.view && <PagePart view={place.view} />}
-              <QueryList
-                eid={filter!}
-                query={place.query}
-                edges={place.key != 'sessions'}
-              />
+              {place.query && (
+                <QueryList
+                  eid={filter!}
+                  query={place.query}
+                  edges={place.key != 'sessions'}
+                />
+              )}
             </>
           )
           : read?.state.status == 'failed'

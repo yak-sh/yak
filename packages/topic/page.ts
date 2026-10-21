@@ -3,9 +3,10 @@
  * title and a line or two saying what belongs under it), its contents
  * (`content.body`, what is understood about it), then what it holds
  * (`contains`), what to understand first (`requires`), what is related
- * (`reads`, `references`) and its sources (`cites`), and the beliefs about it
- * (`belief.about`); last, the parts any page has (`io.show`: the facts, the
- * links, the history).
+ * (`reads`, `references`) and its sources (`cites`), the beliefs about it
+ * (`belief.about`), and the comments on it, with a line to write one, where
+ * the host draws a thread (`Comments`); last, the parts any page has
+ * (`io.show`: the facts, the links, the history).
  *
  * Whatever a topic holds or cites is drawn by its own renderer, asked for as
  * `Topic.List.Tile`: a subtopic as its cover (`TopicTile`), a belief as what
@@ -30,10 +31,9 @@ import {
   mention,
   Part,
   type Props,
-  useNamed,
   usePageNotes,
 } from '@yaks/inspect'
-import { TOPIC } from './topic.ts'
+import { title, TOPIC } from './topic.ts'
 
 /** How many edges from a topic its page reads. */
 export let EDGES = 500
@@ -67,17 +67,16 @@ let str = (b: Bundle | undefined, name: string, prop: string): string => {
 }
 let rows = (a?: Answer): Bundle[] => a?.rows ?? []
 
-/** What a topic is called: its cover's title, else its name. */
-export let title = (e: Bundle): string =>
-  str(e, 'doc', 'title') || str(e, TOPIC, 'name')
-
-/** What a topic's page asks: its edges, what holds it, and the beliefs about
- * it where the graph keeps beliefs. */
+/** What a topic's page asks: its edges, what holds it, the project it holds
+ * for, and the beliefs about it where the graph keeps beliefs. What holds it
+ * and its project come whole, so the head names them as it first paints. */
 export let asks = (e: Bundle, io: Io): Asks => {
   let eid = e.entity.eid
+  let scope = str(e, TOPIC, 'scope')
   return {
     out: `.edge.from=${eid}&*&.order=edge.ord&.limit=${EDGES}`,
-    within: `.contains&.edge.to=${eid}&?edge&.limit=${EDGES}`,
+    within: `.contains[<=1]->${eid}&?doc&?${TOPIC}&.limit=${EDGES}`,
+    ...scope ? { scope: `.entity.eid=${scope}` } : {},
     ...io.vocab.comp('belief')
       ? {
         beliefs: `.belief.about=${eid}&!archived&*` +
@@ -88,14 +87,30 @@ export let asks = (e: Bundle, io: Io): Asks => {
   }
 }
 
-// Where it sits: the topics holding it, and the project it holds for.
-let where = (io: Io, within: string[], scope: string): ComponentChildren[] => [
-  within.length
-    ? ['in ', ...within.flatMap((p, i) => [i ? ', ' : null, mention(io, p)])]
-    : null,
-  within.length ? ' · ' : null,
-  scope ? ['holds for ', mention(io, scope)] : 'holds everywhere',
-]
+let byTitle = (a: Bundle, b: Bundle) =>
+  title(a).localeCompare(title(b), undefined, { sensitivity: 'base' })
+
+// An entity by name, drawn from the answer that brought it, so no id shows
+// while its name is on the way.
+let named = (io: Io, b: Bundle) => io.show(b, 'Inspect.Reference.Inline')
+
+// Where it sits: what holds it, and the project it holds for once it has come.
+let where = (
+  io: Io,
+  within: Bundle[],
+  scope: string,
+  project?: Bundle,
+): ComponentChildren[] =>
+  [
+    within.length
+      ? ['in ', ...within.flatMap((b, i) => [i ? ', ' : null, named(io, b)])]
+      : null,
+    !scope
+      ? 'holds everywhere'
+      : project
+      ? ['holds for ', named(io, project)]
+      : null,
+  ].filter(Boolean).flatMap((said, i) => [i ? ' · ' : null, said])
 
 /** Its cover's words: what belongs under it. */
 let Cover = ({ e, io }: { e: Bundle; io: Io }): JSX.Element | null => {
@@ -227,6 +242,18 @@ let Beliefs = (
   )
 }
 
+/** What people said about it: the comment thread, with a line to say more,
+ * wherever the host draws one (`Comments`); a host without one has no part. */
+let Comments = ({ e, io }: { e: Bundle; io: Io }): JSX.Element | null =>
+  io.can(e, 'Comments')
+    ? h(
+      ui.Section,
+      { 'data-section': 'Comments' },
+      h(ui.Section.Title, {}, 'Comments'),
+      io.show(e, 'Comments', {}),
+    )
+    : null
+
 /** A topic's page. */
 export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
   let eid = e.entity.eid
@@ -240,15 +267,13 @@ export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
   let ends = io.ask(
     ids.length ? { ends: `.entity.eid=${ids.join(',')}&*` } : {},
   ).ends
-  let within = rows(got.within).map((b) => str(b, 'edge', 'from'))
-    .filter(Boolean)
+  let within = rows(got.within).toSorted(byTitle)
   let scope = str(e, TOPIC, 'scope')
-  useNamed(io, [...within, scope])
   return h(
     'div',
     { 'data-inspect': eid },
     io.show(e, 'Inspect.Head', {
-      sub: where(io, within, scope),
+      sub: where(io, within, scope, rows(got.scope)[0]),
       notes: notes.get(''),
     }),
     h(Cover, { e, io }),
@@ -266,6 +291,7 @@ export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
       })
     ),
     h(Beliefs, { e, io, notes, got }),
+    h(Comments, { e, io }),
     io.show(e, 'Inspect.Facts', { notes, skip: [TOPIC] }),
     io.show(e, 'Inspect.Links', { notes, skip: DRAWN }),
     io.show(e, 'Inspect.History', { notes }),

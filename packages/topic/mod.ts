@@ -13,6 +13,7 @@
  * named('Data  Model') // 'data model'
  * topicEid('Data Model') == topicEid('data model') // true
  * overlaps('economic market design', 'market design') // true
+ * fits('data modeling', 'data model') // true
  * ```
  *
  * The tools, `topic_find` and `topic_new`, are `@yaks/topic/tools`.
@@ -20,5 +21,16 @@
  * @module
  */
 
-export { FIND, found, named, overlaps, TOPIC, topicEid } from './topic.ts'
+export {
+  about,
+  FIND,
+  fits,
+  found,
+  named,
+  overlaps,
+  TOPIC,
+  topicEid,
+  TOPICS,
+} from './topic.ts'
+export { type Shelf, shelves, within } from './shelves.ts'
 export { topicDoc } from './vocab.ts'

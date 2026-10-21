@@ -95,4 +95,9 @@ test('find answers the topics holding the words, else every one by name', async 
   assertEquals(names(await ask('topic_find', { said: 'check' }, g)), [
     'testing',
   ])
+  assertEquals(names(await ask('topic_find', { said: 'tests named' }, g)), [])
+  assertEquals(names(await ask('topic_find', { said: 'named' }, g)), [
+    'naming',
+  ])
+  assertEquals(names(await ask('topic_find', { limit: 1 }, g)), ['naming'])
 })

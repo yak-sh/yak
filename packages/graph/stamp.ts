@@ -51,9 +51,16 @@ export let signed = (bundles: Bundle[], who: Actor | null): Bundle[] =>
   bundles.map((b) => {
     let out: Bundle = { ...b }
     delete out.$actor
-    if (who && (who.by || who.via)) out.$actor = { ...who }
+    if (who && (who.by || who.via)) out.$actor = stated(who)
     return out
   })
+
+/** The halves of an actor it names: one it does not know (`via: undefined`,
+ * where a door could name no instrument) is left off, as if never given. */
+/// stated({ by: 'm1', via: undefined }) -> { by: 'm1' }
+/// stated({ by: 'm1', via: 's1' }) -> { by: 'm1', via: 's1' }
+export let stated = (who: Actor): Actor =>
+  Object.fromEntries(Object.entries(who).filter(([, id]) => id)) as Actor
 
 /** The batch's writer: the first `$actor` in it. It writes whatever entity
  * names no writer of its own (`writers`). */

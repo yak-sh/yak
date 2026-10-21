@@ -5,7 +5,10 @@
  * beneath. `Pane-on` is the pane that has the keyboard.
  *
  * A browser fills the window with the columns, and a phone-width one stacks
- * them. A terminal makes each pane a framed column of the screen, by its
+ * them in the order they are written, but for a `Pane-aside`: a way on from
+ * the page rather than to it (the other topics beside the one being read),
+ * which goes after the page there. A terminal makes each pane a framed column
+ * of the screen, by its
  * sheet (@yaks/tui's `row`, `col`, `width`, `grow` and `border`): the nav as
  * wide as it needs, the main pane the rest, the frame of the pane with the
  * keyboard in the accent.
@@ -49,8 +52,27 @@ export let sheet = (c: Colors): Sheet => ({
 let { Pane, Top, Body } = Panes
 let words = (...lines: string[]) => lines.map((l, i) => h('p', { key: i }, l))
 
-/** A nav and the page, the page with the keyboard. */
+/** A nav and the page, the page with the keyboard; and a nav that is an
+ * aside, after the page where they stack. */
 export let specimens = (): Specimen[] => [
+  [
+    'Panes, Pane-nav, Pane-aside, Pane-main',
+    h(
+      Panes,
+      { style: 'height: 12rem; width: 40rem; max-width: 100%' },
+      h(
+        Pane,
+        { mod: ['nav', 'aside'] },
+        h(Top, {}, 'find a topic…'),
+        h(Body, {}, words('data model', 'naming', 'testing')),
+      ),
+      h(
+        Pane,
+        { mod: 'main' },
+        h(Body, {}, words('data model', 'How data is shaped in the graph.')),
+      ),
+    ),
+  ],
   [
     'Panes, Pane-nav, Pane-main, Pane-on, Top, Body',
     h(

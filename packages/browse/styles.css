@@ -65,8 +65,8 @@ html {
 }
 
 /* Ordinary pages just get breathing room; every page fills the floor —
-   a board or canvas paints its own. */
-.Shell_Body > :not(.Canvas, .Board, .Split) {
+   a board, a canvas or panes (@yaks/ui's Panes, filling it) paint their own. */
+.Shell_Body > :not(.Canvas, .Board, .Split, .Panes) {
   padding: var(--gap);
 }
 /* The two-pane Split paints its own floor, like a board or canvas. */

@@ -1,9 +1,13 @@
 /* The window in columns: a narrow nav on the surface, the page on the floor
    beside it (or whatever column follows), a hairline
    between each two. Each pane keeps its top where it is and scrolls its
-   body. A phone-width window stacks them, and the page scrolls as one. */
+   body. A phone-width window stacks them, and the page scrolls as one; a
+   nav that is an aside goes after the page there. Set on an app's floor (a
+   column that scrolls, such as a Shell's body) the columns fill the floor
+   rather than the window. */
 .Panes {
   display: flex;
+  flex: 1;
   height: 100dvh;
   min-height: 0;
 }
@@ -35,12 +39,23 @@
 }
 @media (max-width: 56rem) {
   .Panes {
-    display: block;
+    flex: none;
+    flex-direction: column;
     height: auto;
   }
   .Panes > * + * {
     border-left: 0;
     border-top: 1px solid var(--border);
+  }
+  .Panes > .Panes_Pane-aside {
+    order: 1;
+    border-top: 1px solid var(--border);
+  }
+  .Panes > .Panes_Pane-aside + * {
+    border-top: 0;
+  }
+  .Panes > .Panes_Pane {
+    flex: none;
   }
   .Panes_Body {
     overflow: visible;
