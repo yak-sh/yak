@@ -216,6 +216,9 @@ let ownership = await (async () => {
     receipts: dir + '/receipts',
   })
   let stranger = new Deno.Command('sleep', { args: ['30'] }).spawn()
+  // A birth is a start time in clock ticks (10 ms): a command begun in the
+  // stranger's tick would pass for it.
+  await new Promise((done) => setTimeout(done, 50))
   try {
     let id = await m.start('sleep 30')
     let running = await m.look(id)
