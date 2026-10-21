@@ -25,7 +25,7 @@ test('unfinished screens carry across ticks rather than restarting the first sui
   equal(seen, ['a', 'b', 'c'])
   equal(q.jobs, [])
 })
-test('busy box retains the exact owed job and unknown measurements finish without a false failure', async () => {
+test('a busy lock or a loaded box retains the exact owed job, and unknown measurements finish without a false failure', async () => {
   let q: Queue = { jobs: [], screened: {} }, settled: string[] = []
   enqueue(q, ['a', 'b'], 0)
   let io = {
@@ -39,6 +39,10 @@ test('busy box retains the exact owed job and unknown measurements finish withou
     },
   }
   await drain(q, io)
+  await drain(q, {
+    ...io,
+    check: () => Promise.resolve({ verdict: 'loaded' } as Outcome),
+  })
   equal(q.jobs.map((j) => j.suite), ['a', 'b'])
   equal(settled, [])
   await drain(q, {

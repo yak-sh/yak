@@ -20,7 +20,8 @@ export let enqueue = (q: Queue, suites: string[], now: number) => {
       : 1
   q.jobs.sort((a, b) => priority(a) - priority(b) || a.due - b.due)
 }
-/** A check has its original active timeout. Lock contention consumes no job;
+/** A check has its original active timeout. Lock contention or a loaded box
+ * consumes no job: the tick stops, and the job waits at the head of the queue;
  * an interrupted job remains at the head because persistence precedes work. */
 export let drain = async (q: Queue, io: {
   now: () => number
@@ -41,7 +42,7 @@ export let drain = async (q: Queue, io: {
         error: error instanceof Error ? error.message : String(error),
       }
     }
-    if (outcome.verdict == 'deferred') return
+    if (outcome.verdict == 'deferred' || outcome.verdict == 'loaded') return
     if (!(job.phase == 'screen' && outcome.verdict == 'regressed')) {
       await io.settle(job, outcome)
     }

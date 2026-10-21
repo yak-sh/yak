@@ -27,6 +27,7 @@ export {
   compare,
   type Coverage,
   limit,
+  loaded,
   spread,
 } from './ratchet.ts'
 export {

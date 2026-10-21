@@ -22,6 +22,9 @@ import {
   type Coverage,
   covered,
   incomparable,
+  loaded,
+  quiet,
+  spread,
   tolerance,
   validate,
 } from './ratchet.ts'
@@ -59,13 +62,14 @@ export type Options = {
    * Checks use the baseline's own. */
   tolerance?: number
   /** Measure the suite this many times over, keeping each bench's best median
-   * (ratchet.ts `best`). Acceptance banks it with the slack its spread
-   * between runs asks for (ratchet.ts `baseline`), and a check compares it, so
-   * a check taken as its baseline was banked measures what it banked. One run
-   * banks the suite's tolerance alone. */
+   * and the spread of every round between them (ratchet.ts `best`).
+   * Acceptance banks it with the slack that spread asks for (ratchet.ts
+   * `baseline`), and a check compares it, allowing that spread as well, so a
+   * check taken as its baseline was banked measures what it banked. */
   runs?: number
-  /** Bank a worse median than the baseline's. Without it acceptance only ever
-   * moves a bench toward better. */
+  /** Bank the measurement as it is, even a worse median than the baseline's.
+   * Without it acceptance only moves a bench toward better, by more than the
+   * noise. */
   slower?: boolean
   host?: () => Host | Promise<Host>
   reporters?: Reporters
@@ -181,6 +185,8 @@ let execute = async (
   }
   await readBase()
   let context = await (options.host ?? host)()
+  // A loaded box measures its other work: refuse before spending the time.
+  if (mode == 'accept') quiet(suite.name, context)
   let runs: Run[] = []
   for (let i = 0; i < repeats; i++) {
     runs.push(await measure(suite, rounds, context, exclusive))
@@ -197,7 +203,7 @@ let execute = async (
     if (base && mode == 'check') {
       current.regressions = compare(base, current, options.coverage)
       current.verdict = current.regressions.length
-        ? 'regressed'
+        ? loaded(current) ? 'loaded' : 'regressed'
         : covered(base, current)
         ? 'passed'
         : 'measured'
@@ -263,6 +269,7 @@ let measure = async (
     samples: [],
     rounds: [],
     median: 0,
+    spread: 0,
     spans: null,
   }))
   for (let round = 0; round < rounds; round++) {
@@ -298,6 +305,7 @@ let measure = async (
   }
   for (let b of benches) {
     b.median = median(b.rounds.map((r) => r.median))
+    b.spread = spread(b.rounds.map((r) => r.median), b.better)
     let middle = [...b.rounds].sort((a, b) =>
       a.median - b.median
     )[Math.floor(rounds / 2)]
@@ -313,6 +321,7 @@ let measure = async (
     runtime: context.runtime,
     cpu: context.cpu,
     load: [...context.load],
+    cpus: context.cpus,
     rounds,
     benches,
     tolerance: null,

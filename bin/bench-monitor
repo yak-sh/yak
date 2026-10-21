@@ -14,9 +14,8 @@
 # a measurement taken at low priority measures the box's other work.
 set -u
 export PATH="$HOME/.deno/bin:/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin"
-# The hourly scheduler owns one bounded queue. It must not sit behind a lane
-# lock or silently skip a tick: box-lock wait consumes its absolute deadline,
-# and every suite still gets a result or a missed-measurement tracker report.
+# The hourly lane owns one queue. A tick that finds the box loaded or the
+# benchmark lock busy measures nothing more and leaves the rest owed to the next.
 if [ "${1:-}" = "--hourly" ]; then
   cd "$(dirname "$0")/.." || exit 1
   export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"

@@ -97,6 +97,7 @@ let options = (base: Baseline) => ({
     runtime: 'test',
     cpu: 'test',
     load: [],
+    cpus: 4,
   }),
   files: {
     read: () => Promise.resolve(JSON.stringify(base)),

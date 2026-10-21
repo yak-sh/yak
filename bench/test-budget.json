@@ -700,8 +700,7 @@
       "archetype admission gathers warmed descriptors with their owners": 1.2
     },
     "packages/benchmark/README.md": {
-      "packages/benchmark/README.md: c74a43de4521": 8.2,
-      "packages/benchmark/README.md: 92bceefba6d8": 35.2
+      "packages/benchmark/README.md: c74a43de4521": 8.2
     },
     "packages/benchmark/benchmark_test.ts": {
       "a symlinked output directory cannot overwrite the baseline": 3.1

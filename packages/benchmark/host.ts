@@ -12,6 +12,7 @@ export type Host = {
   runtime: string
   cpu: string
   load: readonly number[]
+  cpus: number
 }
 type Immutable<T> = T extends object
   ? { readonly [K in keyof T]: Immutable<T[K]> }
@@ -70,5 +71,6 @@ export let host = async (): Promise<Host> => {
     runtime: `Deno/${Deno.version.deno} ${Deno.build.target}`,
     cpu: cpus()[0]?.model ?? 'unknown',
     load: loadavg(),
+    cpus: cpus().length,
   }
 }

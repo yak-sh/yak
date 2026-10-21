@@ -13,22 +13,32 @@ retain raw samples, round medians, commit, runtime, CPU and load average in
 ## Banking a baseline
 
 `bench:ratchet <suite>` measures the suite three times over (`--runs=<n>` for
-another count) and banks each bench's best median. `bench:check` measures the
-same way and compares each bench's best median, so a check measures what its
-baseline banked; `--runs=1` is a quicker, noisier look. Acceptance uses zero
-tolerance: no slack, including the spread between runs. A baseline only moves
-toward faster, and existing tolerance never grows. Banking a slower one is a
-separate explicit operation (`--slower`), not monitoring. Repeated checks use
-the best median to distinguish contention from a slowdown.
+another count) and banks each bench's best median, with the noise those runs
+measured as its slack: twice the spread of every round median they took
+(@yaks/benchmark's ratchet). `bench:check` measures the same way and compares
+each bench's best median, so a check measures what its baseline banked;
+`--runs=1` is a quicker, noisier look. A bench regressed when its figure is past
+its median by more than the noise of both the baseline and the check. A baseline
+moves only toward faster, and only by more than that noise, so a lucky run never
+tightens it. Banking a slower one is a separate explicit operation (`--slower`),
+not monitoring.
+
+Nothing banks on a loaded box: one whose one-minute load average is over three
+quarters of its CPUs as the run begins. `bench:ratchet` refuses one before
+measuring, and a check there past its limit says `loaded`, not `regressed`.
 
 ## The monitor
 
-Nothing gates on a bench; bench/monitor.ts watches them instead. It checks every
-suite the box measures itself (`SUITES`) with one run, confirms a regression
-with a check of three runs before it counts, and reports a confirmed one to the
-tracker as a bug: each figure over its limit, the run's load, and the commits
-since the suite's last good run. A suite that cannot run (no baseline, a crash,
-a page that never paints) is reported as a failure. @yaks/heal sends both to an
+Nothing gates on a bench; bench/monitor.ts watches them instead, and a "got
+slower" bug it files means the code got slower. It checks every suite the box
+measures itself (`SUITES`) with one run, confirms a regression with a check of
+three runs before it counts, and reports a confirmed one to the tracker as a
+bug: each figure over its limit, the run's load, and the commits since the
+suite's last good run. It measures nothing while the box is loaded, so it never
+adds to a busy box's load, and a check the box became loaded for confirms
+nothing and banks nothing; the check is owed to a later run. A suite that cannot
+run (no baseline, a crash, a page that never paints, a run past its time cap) is
+reported as a failure, since its bench is broken. @yaks/heal sends both to an
 agent like any other bug. Cron runs it from the main checkout through
 bin/bench-monitor: every suite at 02:23, user-facing suites every 30 minutes
 (`--hourly`), and pages after each web-unit change (`--restarted`, checked every
@@ -36,30 +46,27 @@ bin/bench-monitor: every suite at 02:23, user-facing suites every 30 minutes
 fixtures never measure one another. The hourly lane holds a persistent queue in
 `~/.cache/yak/bench/hourly-queue.json`, with one lane lock around loading,
 collecting and saving it. Each tick stops admitting work after 25 minutes; an
-admitted collection keeps its unchanged ten-minute active limit. A busy box lock
-leaves the exact job owed and spends no collection allowance.
+admitted collection keeps its ten-minute limit. A busy box lock or a loaded box
+leaves the exact job owed and ends the tick.
 
 All screens in a cohort precede their confirmations. An hour-old confirmation
 gets priority over fresh arrivals so repeated screens cannot starve it.
 Completed screens are not duplicated within an hour; unfinished screens and
 confirmations carry to the next tick rather than restarting the queue at pages.
-A crash may repeat the in-flight job, but cannot silently discard it. This is
-bounded carry-over, not a promise that an overloaded box has enough capacity to
-finish all suites within an hour. Raw latency failures remain strict.
-Unconfirmed and inconclusive paired measurements are neither scheduling failures
-nor passes. Missing baselines, crashes and unpainted content remain tracker
-failures.
+A crash may repeat the in-flight job, but cannot silently discard it.
+Unconfirmed and inconclusive paired measurements are neither failures nor
+passes.
 
 Run the scheduled queue with `bin/bench-monitor --hourly`. It never starts
 parallel collectors, extends measurement limits or interrupts another lock
 holder.
 
-The monitor keeps its best measurements in `~/.cache/yak/bench/best/`. Each
-confirmed run banks faster figures with zero slack, even when a different figure
-regressed. A committed reference and the local best both bind the next check;
-neither slower observations nor a checkout raise the reference. Normal checks
-never rewrite the committed baseline. Last good commits and the web unit are
-kept in `~/.cache/yak/bench/monitor.json`.
+The monitor keeps its best measurements in `~/.cache/yak/bench/best/`: each
+bench's committed median, or a better one a quiet run of the monitor's found
+past the noise, held to the slack the committed baseline measured. Neither
+slower observations nor a checkout raise it, and normal checks never rewrite the
+committed baseline. Last good commits and the web unit are kept in
+`~/.cache/yak/bench/monitor.json`.
 
 ## Inbox content
 
@@ -68,8 +75,9 @@ It times cold/warm person Inbox, project Inbox and an expanded person thread
 through loaded content, not a heading or Show fallback. See
 [the wait inventory](waits.md#inbox-on-an-isolated-host) for its fixed corpus,
 isolation and timed boundary. `deno task bench inbox-content accept` banks
-best-of-three without slack; `deno task bench inbox-content check` checks the
-same workload. It participates in daily and half-hour unattended monitoring.
+best-of-three with the noise it measured; `deno task bench inbox-content check`
+checks the same workload. It participates in daily and half-hour unattended
+monitoring.
 
 ## Pages
 
@@ -80,10 +88,9 @@ a blank page on another origin first, so a cold figure times the page and not
 the browser starting its network stack, which a person's running browser never
 pays. A figure is the time from navigation to the frame where the page shows
 what it is for: home's first rows (or the owner's inbox, its threads loaded) or
-the task's title. A page that has not painted in 30 s fails the run. Its banked
-reference has no slack. It only reads: the browser refuses every request but
-GET, HEAD and OPTIONS before it leaves. `--url=` and `--task=` after `--` point
-it elsewhere.
+the task's title. A page that has not painted in 30 s fails the run. It only
+reads: the browser refuses every request but GET, HEAD and OPTIONS before it
+leaves. `--url=` and `--task=` after `--` point it elsewhere.
 
 Benches run separately from `deno task test` and `deno task check`. The fast
 suite checks fixture correctness and the ratchet's comparison logic. The
@@ -120,10 +127,7 @@ The suites are `client-frame`, `client-rules`, `harness-startup`,
 checks `bench/<suite>.baseline.json` (`harness-steps` shares its reference at
 `packages/harness/steps.baseline.json` with the live overhead observer). A suite
 without a banked baseline can run; a check refuses until its baseline has been
-explicitly accepted. Take that measurement on an idle box, then review and
-commit its baseline. A bank taken under load is recorded as such; monitoring
-immediately ratchets drops when later checks are faster. Never replace a faster
-reference with it.
+explicitly accepted, which takes a quiet box; review and commit its baseline.
 
 `harness-steps` measures native session overhead with an instantly answered
 scripted model on an isolated in-memory harness graph. `no-tools` is one

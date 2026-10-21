@@ -53,11 +53,11 @@ deno task bench inbox-content accept
 deno task bench inbox-content check
 ```
 
-Acceptance uses the shared best-of-three runner with zero slack and a separate
-`inbox-content.baseline.json`; existing page workloads and references do not
-change. Daily and half-hour monitor lanes include this suite, including the
-monitor’s bounded failure reporting and local no-slack moving best. This is
-local fixture coverage, not a claim that the live host offers Inbox or that a
+Acceptance uses the shared best-of-three runner, banking the noise it measured,
+and a separate `inbox-content.baseline.json`; existing page workloads and
+references do not change. Daily and half-hour monitor lanes include this suite,
+including the monitor’s failure reporting and local moving best. This is local
+fixture coverage, not a claim that the live host offers Inbox or that a
 100-thread fixture represents every owner inbox.
 
 ## CLI, connector, hook and terminal operation families
@@ -99,9 +99,9 @@ deno task bench hook-waits check
 deno task bench terminal-interactions check
 ```
 
-These suites each have a half-hour monitor entry and no slack. The hourly shell
-dispatch reads `HOURLY` from `monitor.ts`, so adding a suite there also
-schedules it rather than leaving a second hard-coded list behind.
+These suites each have a half-hour monitor entry. The hourly shell dispatch
+reads `HOURLY` from `monitor.ts`, so adding a suite there also schedules it
+rather than leaving a second hard-coded list behind.
 
 ### Remaining local operation families
 
@@ -112,8 +112,7 @@ installation, persona sync, search, entity citation verify/check, connection
 need/list, mail send/reply/show/check, visualize anatomy/activity; code sync is
 CLI-only. Preparation and readback are outside the complete production response
 clock. Three samples per collection, three rounds per run and three runs per
-acceptance bank the best run with zero slack. No existing baseline, budget or
-floor rises.
+acceptance bank the best run with the noise the runs measured.
 
 The fixture has 2,000 tasks, a real three-entry transcript, a comment thread, an
 independent tracked two-file checkout, owned persona files and received mail.
@@ -138,7 +137,7 @@ verifies the created person through a fresh CLI read. Land creates an
 independent primary checkout and branch with no upstream or remote, then
 verifies the exact base SHA and contents. Trace arming verifies its private
 sidecar; it is not operation-capture latency. Listener delivery verifies the
-pending item is marked. The suite has its own zero-slack measured baseline.
+pending item is marked. The suite has its own measured baseline.
 
 ```sh
 deno run -A bench/run.ts operation-controls check
@@ -232,8 +231,8 @@ fallback detail page is never accepted as an Inbox measurement.
 
 The half-hour monitor screens user-facing suites and confirms slower figures
 with a three-run check. A check is bounded at ten minutes, so a hang itself is
-reported rather than hiding later suites. The local moving best banks drops
-without changing source baselines or allowing any slack.
+reported rather than hiding later suites. The local moving best banks drops past
+the noise without changing source baselines.
 
 The registered-door gaps above, external provider latency and remote Cloudflare
 timings remain outside these isolated fixture measurements. Platform management
@@ -270,9 +269,9 @@ Preparation and resets run outside each timed submission. Each HTTP operation
 has seven samples per collection. Chrome owns one profile per collection; `cold`
 is the first navigation to that view, not a claim that the kernel or Cloudflare
 cache is cold. Three collections make a round-median run; acceptance banks the
-best of three runs with zero slack. Existing records can only fall. The
-unchanged suite workload key identifies the retained app/connector/original HTML
-fixture; added metric names identify the separate populated fixture.
+best of three runs with the noise they measured. Existing records can only fall.
+The unchanged suite workload key identifies the retained app/connector/original
+HTML fixture; added metric names identify the separate populated fixture.
 
 Global fetch permits loopback and only exact authenticated local Stripe
 responses and an explicitly named local analytics response. Every other external

@@ -49,6 +49,10 @@ export type Result = Workload & {
   samples: (Sample & { round: number })[]
   rounds: Round[]
   median: number
+  /** How far apart its round medians fell, across every run of the
+   * measurement, as a fraction of the best (ratchet.ts `spread`): the noise
+   * this figure carries. */
+  spread: number
   /** The median round's recorded span tree. */
   spans: readonly Event[] | null
 }
@@ -71,11 +75,16 @@ export type Run = {
   commit: string | null
   runtime: string
   cpu: string
+  /** The box's one, five and fifteen minute load averages as the run began. */
   load: readonly number[]
+  /** The box's CPUs, which its load is read against (ratchet.ts `loaded`). */
+  cpus: number
   rounds: number
   benches: Result[]
   tolerance: number | null
-  verdict: 'measured' | 'passed' | 'regressed' | 'accepted'
+  /** `loaded`: a figure was past its limit, but the box was loaded, so the
+   * run can tell nothing either way. */
+  verdict: 'measured' | 'passed' | 'regressed' | 'loaded' | 'accepted'
   regressions: Regression[]
 }
 export type Baseline =

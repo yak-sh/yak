@@ -43,6 +43,7 @@ let fixture = (
     runtime: 'test',
     cpu: 'test',
     load: [1, 2, 3],
+    cpus: 4,
   }
   let suite: Suite = {
     name: 'suite',
@@ -91,6 +92,7 @@ test('runs retain raw samples, round medians, counts and host metadata', async (
   match(JSON.parse(f.saved.get('result')!), {
     commit: 'abc',
     load: [1, 2, 3],
+    cpus: 4,
     rounds: 3,
     verdict: 'measured',
   })
@@ -170,24 +172,28 @@ let costs = (...values: number[]) => {
   return () => values[at++ % values.length]
 }
 
-test('acceptance only moves a baseline toward better, unless told slower', async () => {
+test('acceptance moves a baseline only toward better, past the noise, unless told slower', async () => {
   let f = fixture()
   let options = { ...f.options, rounds: 1, mode: 'accept' as const }
   await run(f.suite, { ...options, tolerance: .2 })
   f.suite.benches[0].sample = () => 150
   await run(f.suite, { ...options, tolerance: .2 })
-  equal(banked(f), { work: [100, undefined] })
+  equal(banked(f), { work: [100, .2] })
+  // A lucky run inside the noise is the same figure, not a new best.
+  f.suite.benches[0].sample = () => 90
+  await run(f.suite, { ...options, tolerance: .2 })
+  equal(banked(f), { work: [100, .2] })
   f.suite.benches[0].sample = () => 80
   await run(f.suite, { ...options, tolerance: .2 })
-  equal(banked(f), { work: [80, undefined] })
+  equal(banked(f), { work: [80, .2] })
   f.suite.benches[0].sample = () => 150
   await run(f.suite, { ...options, tolerance: .2, slower: true })
-  equal(banked(f), { work: [150, undefined] })
+  equal(banked(f), { work: [150, .2] })
   // A baseline from another runtime is no reference: it banks as measured.
   f.context.runtime = 'upgraded'
   f.suite.benches[0].sample = () => 170
   await run(f.suite, { ...options, tolerance: .2 })
-  equal(banked(f), { work: [170, undefined] })
+  equal(banked(f), { work: [170, .2] })
 })
 
 test('repeated runs bank the best median and the slack their spread asks for', async () => {
@@ -315,7 +321,7 @@ test('scoped observations compare banked work and retain other workloads on acce
   let f = fixture([work('production'), work('staging', 200)])
   await run(f.suite, { ...f.options, mode: 'accept', tolerance: .2 })
   let scoped = { ...f.options, coverage: 'subset' as const }
-  let production = { ...f.suite, benches: [work('production', 90)] }
+  let production = { ...f.suite, benches: [work('production', 70)] }
   await throws(
     () => run(production, { ...f.options, mode: 'check' }),
     'Benchmark set changed',
@@ -340,7 +346,7 @@ test('scoped observations compare banked work and retain other workloads on acce
         median: number
       }) => [b.name, b.median]),
     ),
-    { production: 90, staging: 200, development: 300 },
+    { production: 70, staging: 200, development: 300 },
   )
   equal((await run(newWork, { ...scoped, mode: 'check' })).verdict, 'passed')
   await throws(
@@ -651,17 +657,51 @@ test('a symlinked output directory cannot overwrite the baseline', async () => {
   }
 })
 
-test('zero slack stays strict through noisy repeated banking and later acceptance', async () => {
+test('with no floor asked, a bench banks the noise its runs showed', async () => {
+  let f = fixture([
+    { name: 'timed', unit: 'ms', sample: costs(100, 140, 120) },
+    { name: 'counted', unit: 'statements', sample: () => 7 },
+  ])
+  let options = { ...f.options, rounds: 1 }
+  await run(f.suite, { ...options, mode: 'accept', tolerance: 0, runs: 3 })
+  equal(banked(f), { timed: [100, .8], counted: [7, 0] })
+  f.suite.benches[0].sample = () => 180
+  f.suite.benches[1].sample = () => 8
+  let error = await throws(() => run(f.suite, { ...options, mode: 'check' }))
+  let regressed = ok(error instanceof Regressed ? error : null)
+  equal(regressed.result.regressions.map((r) => r.name), ['counted'])
+})
+
+test('a check allows the noise it measured itself', async () => {
   let f = fixture()
   let options = { ...f.options, rounds: 1 }
-  f.suite.benches[0].sample = costs(100, 140, 120)
-  await run(f.suite, { ...options, mode: 'accept', tolerance: 0, runs: 3 })
-  equal(banked(f), { work: [100, 0] })
-  f.suite.benches[0].sample = () => 101
-  let error = await throws(() => run(f.suite, { ...options, mode: 'check' }))
-  ok(error instanceof Regressed)
-  await run(f.suite, { ...options, mode: 'accept', tolerance: .5 })
-  equal(banked(f), { work: [100, 0] })
+  await run(f.suite, { ...options, mode: 'accept', tolerance: 0 })
+  f.suite.benches[0].sample = costs(112, 104, 110)
+  equal(
+    (await run(f.suite, { ...options, mode: 'check', runs: 3 })).verdict,
+    'passed',
+  )
+  f.suite.benches[0].sample = () => 104
+  await throws(() => run(f.suite, { ...options, mode: 'check', runs: 3 }))
+})
+
+test('a loaded box confirms no regression and banks no baseline', async () => {
+  let f = fixture(), calls = 0
+  let options = { ...f.options, rounds: 1 }
+  await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
+  f.context.load = [3.5, 1, 1]
+  f.suite.benches[0].sample = () => 130
+  let checked = await run(f.suite, { ...options, mode: 'check' })
+  equal(checked.verdict, 'loaded')
+  equal(checked.regressions.map((r) => r.name), ['work'])
+  f.suite.benches[0].sample = () => (calls++, 50)
+  await throws(
+    () => run(f.suite, { ...options, mode: 'accept', tolerance: .2 }),
+    'loaded box',
+  )
+  equal([calls, banked(f)], [0, { work: [100, .2] }])
+  f.context.load = [3, 1, 1]
+  equal((await run(f.suite, { ...options, mode: 'check' })).verdict, 'passed')
 })
 
 test('queued suites measure between rounds without losing a faster acceptance', async () => {

@@ -47,7 +47,7 @@ export let main = async (args = Deno.args): Promise<number> => {
     let suite = name == 'deploy'
       ? await import('./deploy.ts')
       : await import('./app-deploy.ts')
-    // Deploys use their recorded observations; acceptance still has no slack.
+    // Deploys use their recorded observations, one round each.
     let current = await suite.run({
       ...options(name, action, 1, 0),
       ...(reference || registeredBaseline
@@ -118,8 +118,8 @@ export let main = async (args = Deno.args): Promise<number> => {
   console.log(`${name}: ${current.verdict}; load ${current.load.join(', ')}`)
   return 0
 }
-/** Acceptance banks today's best without slack. Repeated checks, rather than
- * a wider limit, distinguish contention from a persistent slowdown. */
+/** The least slack acceptance banks. Above it, each bench banks the noise its
+ * runs measured (@yaks/benchmark `baseline`). */
 export let FLOOR = 0
 
 let options = (

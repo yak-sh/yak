@@ -17,6 +17,7 @@ let context: Host = {
   runtime: bank.runtime,
   cpu: bank.cpu,
   load: [0, 0, 0],
+  cpus: 4,
 }
 test('throughput refuses synthetic 30% timing and statement regressions without banking them', async () => {
   let suite = throughput()

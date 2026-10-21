@@ -18,6 +18,7 @@ let result = (verdict: 'passed' | 'regressed'): Outcome => ({
     runtime: 'fixture',
     cpu: 'fixture',
     load: [0, 0, 0],
+    cpus: 4,
     rounds: 3,
     verdict,
     tolerance: 0,

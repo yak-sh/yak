@@ -127,21 +127,33 @@ a baseline only when explicitly requested, with an explicit tolerance. Commit
 and review that file. A missing or malformed baseline fails a check before any
 work runs. A check never changes the baseline or overrides its tolerance.
 
-A baseline only moves toward better. `accept` banks a bench's new median only
-where it beats the banked one; `slower: true` banks a worse one, which is a
-decision about the product, not a measurement. A baseline banked on another
-runtime, CPU or workload version is no reference, and an exact acceptance banks
-the suite as measured. With `runs: n`, a run measures the suite n times over and
-keeps each bench's `best()` median. Acceptance banks it with a **slack** of its
-own: `NOISE` (2) times the `spread()` of its n medians, never under the explicit
-tolerance and never over `CAP` (0.95). An explicit zero tolerance banks no
-slack, regardless of the spread; acceptance never increases existing slack. A
-check compares it, so a check of as many runs as banked its baseline measures
-what was banked. A check holds each bench to its own slack, else the baseline's
-tolerance, and each regression carries the `limit()` it passed.
+A figure counts only where it clears the noise. A bench's **spread** is how far
+apart its round medians fell, across every run of the measurement, as a fraction
+of the best (`spread()`). With `runs: n`, a run measures the suite n times over
+and keeps each bench's `best()` median and the spread of all its rounds.
+Acceptance banks each bench with a **slack** of its own: `NOISE` (2) times its
+spread, never under the explicit tolerance and never over `CAP` (0.95). A count
+that never varies banks no slack, so any change to it counts. A check holds each
+bench to its banked slack, or to `NOISE` times the spread the check itself
+measured where that is wider, so a regression is a figure past the noise of both
+measurements; each regression carries the `limit()` it passed.
+
+A baseline moves only toward better, and only past the noise: `accept` banks a
+bench's new median where the banked one would have regressed against it, and
+otherwise keeps the banked median with the wider of the two slacks.
+`slower: true` banks the measurement as it is, which is a decision about the
+product, not a measurement. A baseline banked on another runtime, CPU or
+workload version is no reference, and an exact acceptance banks the suite as
+measured.
+
+A run is **loaded** when the box's one-minute load average as it began was over
+`LOAD` (0.75) of its CPUs (`loaded()`): other work shared the cores it timed. A
+loaded box banks nothing, and acceptance refuses one before measuring. A loaded
+check past its limit is `loaded`, not `regressed`: it can tell nothing either
+way.
 
 ```ts
-import { Regressed, run } from '@yaks/benchmark'
+import { type Files, type Host, Regressed, run } from '@yaks/benchmark'
 import { equal, ok, throws } from '@yaks/testing'
 
 let cost = 100
@@ -151,62 +163,69 @@ let suite = {
   workload: 1,
   benches: [{ name: 'write', unit: 'ms', sample: () => cost }],
 }
-let directory = await Deno.makeTempDir()
+let saved = new Map<string, string>()
+let files: Files = {
+  read: async (path) => {
+    if (!saved.has(path)) throw new Deno.errors.NotFound(path)
+    return saved.get(path)!
+  },
+  write: async (path, value) => void saved.set(path, JSON.stringify(value)),
+}
+let read = (path: string) => JSON.parse(saved.get(path)!)
 let options = {
-  output: directory + '/cost.results.json',
-  baseline: directory + '/cost.baseline.json',
+  output: 'cost.results.json',
+  baseline: 'cost.baseline.json',
+  files,
+  // An idle box, so the example never depends on what else this one runs.
+  host: (): Host => ({
+    config: {},
+    configURL: null,
+    commit: null,
+    runtime: 'example',
+    cpu: 'example',
+    load: [0, 0, 0],
+    cpus: 1,
+  }),
 }
-try {
-  await run(suite, { ...options, mode: 'accept', tolerance: 0.2 })
-  equal((await run(suite, { ...options, mode: 'check' })).verdict, 'passed')
-  cost = 130
-  let error = await throws(() => run(suite, { ...options, mode: 'check' }))
-  ok(error instanceof Regressed)
-  equal(
-    JSON.parse(await Deno.readTextFile(options.output)).verdict,
-    'regressed',
-  )
-  equal(
-    JSON.parse(await Deno.readTextFile(options.baseline)).benches[0].median,
-    100,
-  )
-  let scoped = {
-    ...suite,
-    benches: [{ name: 'read', unit: 'ms', sample: () => 50 }],
-  }
-  let subset = { ...options, coverage: 'subset' as const }
-  equal((await run(scoped, { ...subset, mode: 'check' })).verdict, 'measured')
-  await run(scoped, { ...subset, mode: 'accept', tolerance: 0.2 })
-  equal(
-    JSON.parse(await Deno.readTextFile(options.baseline)).benches.map((b: {
-      name: string
-    }) => b.name),
-    ['write', 'read'],
-  )
-  let duration = 2106
-  let rounded = {
-    ...suite,
-    benches: [{
-      name: 'deploy',
-      unit: 'ms',
-      resolution: 1,
-      sample: () => duration,
-    }],
-  }
-  let precise = { ...options, baseline: directory + '/rounded.baseline.json' }
-  await run(rounded, { ...precise, mode: 'accept', tolerance: 0.25 })
-  duration = 2633
-  equal((await run(rounded, { ...precise, mode: 'check' })).verdict, 'passed')
-} finally {
-  await Deno.remove(directory, { recursive: true })
+await run(suite, { ...options, mode: 'accept', tolerance: 0.2 })
+equal((await run(suite, { ...options, mode: 'check' })).verdict, 'passed')
+cost = 130
+let error = await throws(() => run(suite, { ...options, mode: 'check' }))
+ok(error instanceof Regressed)
+equal(read(options.output).verdict, 'regressed')
+equal(read(options.baseline).benches[0].median, 100)
+let scoped = {
+  ...suite,
+  benches: [{ name: 'read', unit: 'ms', sample: () => 50 }],
 }
+let subset = { ...options, coverage: 'subset' as const }
+equal((await run(scoped, { ...subset, mode: 'check' })).verdict, 'measured')
+await run(scoped, { ...subset, mode: 'accept', tolerance: 0.2 })
+equal(
+  read(options.baseline).benches.map((b: { name: string }) => b.name),
+  ['write', 'read'],
+)
+let duration = 2106
+let rounded = {
+  ...suite,
+  benches: [{
+    name: 'deploy',
+    unit: 'ms',
+    resolution: 1,
+    sample: () => duration,
+  }],
+}
+let precise = { ...options, baseline: 'rounded.baseline.json' }
+await run(rounded, { ...precise, mode: 'accept', tolerance: 0.25 })
+duration = 2633
+equal((await run(rounded, { ...precise, mode: 'check' })).verdict, 'passed')
 ```
 
 Compatibility includes suite, metric, workload version, runtime, CPU, bench
 names, units, directions and resolution. Equality at the tolerance boundary
 passes. Change the workload version when the corpus or timed boundary changes.
-`baseline()`, `compare()`, `limit()` and `spread()` expose the same ratchet as
-pure functions.
+`baseline()`, `best()`, `compare()`, `limit()`, `loaded()` and `spread()` expose
+the same ratchet as pure functions.
 
 A bench's optional **resolution** declares its sample precision in the bench's
 unit. It must be finite and positive. The ratchet rounds the tolerance boundary
@@ -293,11 +312,11 @@ let context: Host = {
   runtime: 'test',
   cpu: 'test',
   load: [0, 0, 0],
+  cpus: 4,
 }
 let undo = configure((host) => [() => {
   delivered.push(String(host.config.destination))
 }])
-let directory = await Deno.makeTempDir()
 try {
   let suite = {
     name: 'delivery',
@@ -305,14 +324,18 @@ try {
     workload: 1,
     benches: [{ name: 'read', unit: 'ms', sample: () => 1 }],
   }
-  let options = { output: directory + '/delivery.json', host: () => context }
+  // Runs are kept nowhere: the example is about delivery, not files.
+  let files = {
+    read: () => Promise.reject(new Deno.errors.NotFound('delivery.json')),
+    write: () => Promise.resolve(),
+  }
+  let options = { output: 'delivery.json', files, host: () => context }
   await run(suite, options)
   context.config.destination = 'second'
   await run(suite, options)
   equal(delivered, ['first', 'second'])
 } finally {
   undo()
-  await Deno.remove(directory, { recursive: true })
 }
 ```
 
@@ -321,7 +344,7 @@ try {
 | Subpath  | Exports                                                                                                                                                                                                                                         | Purpose                                            |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `.`      | `bench`, `run`, `Regressed`                                                                                                                                                                                                                     | Timed callbacks and JSON runner.                   |
-| `.`      | `median`, `baseline`, `compare`, `limit`, `spread`, `Coverage`                                                                                                                                                                                  | Pure aggregation and ratchet.                      |
+| `.`      | `median`, `baseline`, `best`, `compare`, `limit`, `loaded`, `spread`, `Coverage`                                                                                                                                                                | Pure aggregation and ratchet.                      |
 | `.`      | `configure`, `host`                                                                                                                                                                                                                             | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |
