@@ -129,12 +129,15 @@ import { add } from './follow.ts'
 import { sha256 } from '@yaks/graph/sha256'
 export {
   beside,
+  BRANCH,
   BRANCHES,
+  FROM,
   type History,
   historySchema,
   keeps,
   type Mode,
   ticked,
+  TO,
 } from './history.ts'
 
 export {
