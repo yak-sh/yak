@@ -222,3 +222,21 @@ test('value and component visibility retain ordinary scoped cardinalities', () =
   assertEquals(valueScoped, [{ value: '', n: 1 }])
   assertEquals(componentScoped, [{ value: '', n: 1 }])
 })
+
+// A clause that doesn't narrow a count (`?comp`, `?comp.prop`, `.order`,
+// `.limit`, `.after`) keeps it on the buckets.
+let idle = (line: string) => {
+  bucketReads = ownerReads = 0
+  let n = scopedStore.rows(line, { visibility })[0].n
+  return { n, bucketReads: Math.sign(bucketReads), ownerReads }
+}
+test('optional and row-shaping clauses keep a count on the populations', () => {
+  let all = idle('.count'), notes = idle('.note&.count')
+  assertEquals([all, notes].map((r) => r.bucketReads), [1, 1])
+  for (let line of ['?note&.count', '?note.text&.count', '.count&.limit=1']) {
+    assertEquals(idle(line), all)
+  }
+  for (let line of ['.note&?mark&.count', '.note&.order=-note.text&.count']) {
+    assertEquals(idle(line), notes)
+  }
+})

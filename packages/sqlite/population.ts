@@ -276,6 +276,17 @@ let visible = (vocab: Vocab, opts: BindOpts) => {
     none.every((c) => !tables.includes(c))
 }
 
+// A clause that leaves a count's matches as they are: a declared component or
+// property asked for with `?`, which carries it without filtering, and the
+// row-shaping directives an aggregate ignores. An undeclared name is left to
+// the compiler, which reads or refuses it.
+let idle = (vocab: Vocab, c: And['clauses'][number]): boolean =>
+  c.kind == 'order' || c.kind == 'limit' || c.kind == 'after' ||
+  c.kind == 'pred' && c.op == '?' && !c.value && !c.not && !c.where &&
+    !!vocab.comp(c.path[0]) &&
+    (c.path.length == 1 ||
+      c.path.length == 2 && !!vocab.prop(c.path[0], c.path[1]))
+
 /** Only plain aggregates whose policy selects whole buckets use populations.
  * Shared by lazy activation and reads; value-scoped counts stay on SQL. */
 export let cardinality = (
@@ -297,13 +308,13 @@ export let cardinality = (
   let tally = cs.length == 1 && cs[0].kind == 'tally' &&
     cs[0].path.join('.') == 'entity.archetype'
   let count = cs.some((c) => c.kind == 'count')
-  let filters = cs.filter((c) => c.kind != 'count')
+  let filters = cs.filter((c) => c.kind != 'count' && !idle(vocab, c))
   let f = filters[0]
   let comp = filters.length == 1 && f.kind == 'pred' && !f.not &&
       f.op == '!' && !f.value && f.path.length == 1
     ? f.path[0]
     : undefined
-  let plain = count && (cs.length == 1 || !!comp && cs.length == 2)
+  let plain = count && (!filters.length || !!comp)
   if (
     !(tally || plain) || comp && (!vocab.comp(comp) || opts.backed?.[comp] ||
         vocab.comp(comp)?.computed || derivedOf(vocab, opts.derived)[comp])
