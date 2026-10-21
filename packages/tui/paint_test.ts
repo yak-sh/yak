@@ -558,14 +558,49 @@ test('full-width pre background is stable on warm paints', () => {
   assertEquals(backend.draw(root).written, 0)
 })
 
-test('terminal focus reporting is saved, enabled, and restored', () => {
-  let out: string[] = []
-  let back = ansiBackend({ write: (s) => void out.push(s) })
+// What a terminal has on after `out`: its DEC private modes, modifyOtherKeys
+// and kitty keyboard flags. `restores` is whether it keeps saved modes
+// (XTSAVE and XTRESTORE); tmux does not.
+let terminal = (out: string, restores: boolean, on = ['?25']) => {
+  let modes = new Set(on)
+  let saved = new Map<string, boolean>()
+  let kitty: string[] = []
+  let keys = '0'
+  // deno-lint-ignore no-control-regex
+  let pattern = /\x1b\[([?>]|<)([\d;]*)([hlsrmu])/g
+  for (let [, kind, n, op] of out.matchAll(pattern)) {
+    let mode = kind + n
+    if (op == 'h') modes.add(mode)
+    if (op == 'l') modes.delete(mode)
+    if (op == 's' && restores) saved.set(mode, modes.has(mode))
+    if (op == 'r' && saved.has(mode)) {
+      saved.get(mode) ? modes.add(mode) : modes.delete(mode)
+    }
+    if (op == 'm') keys = n.split(';')[1] ?? '0'
+    if (op == 'u') kind == '>' ? kitty.push(n) : kitty.pop()
+  }
+  return [...modes].sort().concat(`keys ${keys}`, `kitty ${kitty}`)
+}
+let session = (restores: boolean, on?: string[]) => {
+  let out = ''
+  let back = ansiBackend({ write: (s) => void (out += s) })
   back.start()
-  assert(out.join('').includes('\x1b[?1004s\x1b[?1004h'))
-  out.length = 0
+  let during = terminal(out, restores, on)
   back.stop()
-  assert(out.join('').includes('\x1b[?1004r'))
+  return [during, terminal(out, restores, on)]
+}
+
+test('the backend gives the terminal back as it found it', () => {
+  let found = ['?25', 'keys 0', 'kitty ']
+  for (let restores of [true, false]) {
+    let [during, after] = session(restores)
+    for (let mode of ['?1000', '?1004', '?1006', '?1007', '?1049', '?2004']) {
+      assert(during.includes(mode), mode)
+    }
+    assertEquals(after, found)
+  }
+  let parent = ['?1000', '?1006', '?25']
+  assertEquals(session(true, parent)[1], [...parent, 'keys 0', 'kitty '])
 })
 
 test('maximum height bounds wrapped previews and emits overflow only when needed', () => {

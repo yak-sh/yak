@@ -84,25 +84,17 @@ test('paint ownership scopes siblings, bubbles, consumes and clips after resize'
   assertEquals(hit(lines, 6, 0), undefined)
   assertEquals(hit(lines, 1, 1), undefined)
 })
-test('scroll clips hidden descendants and terminal reporting restores saved modes', () => {
+test('scroll clips hidden descendants', () => {
   let root = el(), hidden = el('hidden'), visible = el('visible')
   root.setAttribute('scroll', '1')
   root.setAttribute('height', '1')
   root.appendChild(hidden)
   root.appendChild(visible)
-  let output = ''
   let backend = ansiBackend({
     size: () => ({ columns: 10, rows: 1 }),
-    write: (s) => {
-      output += s
-    },
+    write: () => {},
   })
   assertEquals(hit(backend.draw(root).lines!, 0, 0), visible)
-  backend.start()
-  backend.stop()
-  assert(output.includes('\x1b[?1000h\x1b[?1006h'))
-  assert(output.includes('\x1b[?1006r\x1b[?1000r'))
-  assert(output.includes('\x1b[?1007h'))
 })
 test('Preact onWheel scrolls only the pointed sibling, not keyboard focus', async () => {
   let ui = await mount(

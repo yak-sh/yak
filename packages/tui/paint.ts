@@ -895,6 +895,34 @@ export let clipboard = (text: string): string =>
     btoa(Array.from(enc.encode(text), (b) => String.fromCharCode(b)).join(''))
   }\x07`
 
+// A DEC private mode the terminal may already have set (a parent app's mouse,
+// its focus reports): saved before it is set, and on the way out reset and
+// then restored. A terminal that keeps saved modes gets back what it had; one
+// that ignores save and restore (tmux among them) is left with it off, never
+// still on.
+let saved = (n: number): [string, string] => [
+  `\x1b[?${n}s\x1b[?${n}h`,
+  `\x1b[?${n}l\x1b[?${n}r`,
+]
+
+/**
+ * Every mode the ANSI backend turns on, as `[on, off]`: `start` writes each
+ * `on` in order and `stop` each `off` in reverse, so the terminal is given
+ * back as it was found.
+ */
+export let MODES: [on: string, off: string][] = [
+  ['\x1b[?1049h', '\x1b[?1049l'], // alt screen
+  ['\x1b[?25l', '\x1b[?25h'], // hidden cursor
+  ['\x1b[?2004h', '\x1b[?2004l'], // bracketed paste
+  ['\x1b[?1007h', '\x1b[?1007l'], // alternate scroll: the wheel as arrow keys
+  saved(1004), // focus reports
+  saved(1000), // mouse clicks and wheel
+  saved(1006), // mouse reported as SGR
+  ['\x1b[>4;2m', '\x1b[>4;0m'], // modifyOtherKeys
+  // kitty disambiguate: without it the terminal collapses Shift+Enter to CR
+  ['\x1b[>1u', '\x1b[<u'],
+]
+
 /**
  * The ANSI backend. Paints only the lines that changed since the last frame:
  * a keystroke moves one line, so a keystroke writes one line. `size` and
@@ -923,18 +951,9 @@ export let ansiBackend = (opts: {
     size,
     copy: (text) => write(osc52(text)),
     control: pictures.reply,
-    // Alt screen, hidden cursor, bracketed paste, alternate scroll (the wheel
-    // arrives as arrow keys), and the kitty disambiguate flag — without it the
-    // terminal collapses Shift+Enter to a bare CR.
-    start: () =>
-      write(
-        '\x1b[?1049h\x1b[?25l\x1b[?2004h\x1b[?1007h\x1b[?1000s\x1b[?1004s\x1b[?1004h\x1b[?1006s\x1b[?1000h\x1b[?1006h\x1b[>4;2m\x1b[>1u',
-      ),
+    start: () => write(MODES.map(([on]) => on).join('')),
     stop: () =>
-      write(
-        pictures.close() +
-          '\x1b[<u\x1b[>4;0m\x1b[?1004r\x1b[?1006r\x1b[?1000r\x1b[?1007l\x1b[?2004l\x1b[?25h\x1b[?1049l',
-      ),
+      write(pictures.close() + MODES.map(([, off]) => off).reverse().join('')),
     reset: () => {
       last = []
       pictures.reset()

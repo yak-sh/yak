@@ -1,10 +1,10 @@
-import { setClipboard } from './visual.ts'
 /**
  * The entry point: take the terminal, mount the app, and give the terminal
  * back. Raw mode and the alt screen go up, the fake document is installed, a
  * dirty tree repaints on the next microtask (so a burst of keys costs one
  * paint), SIGWINCH is a resize and a full repaint, and every exit — a clean
- * quit, an interrupt, or a throw — runs the restore exactly once.
+ * quit, an interrupt, a throw, an uncaught error or rejection anywhere, or a
+ * Deno.exit — gives the terminal back exactly once.
  *
  * Ctrl-C is the process's interrupt, the same one a signal is
  * (@yaks/process/wind): the terminal holds the process open while it winds
@@ -24,6 +24,7 @@ import type { Line } from './paint.ts'
 import { feed } from './input.ts'
 import { clear, measured, press, size } from './screen.ts'
 import type { Sheet } from './theme.ts'
+import { setClipboard } from './visual.ts'
 
 let stop = { fn: () => {} }
 
@@ -42,6 +43,36 @@ export let useHold = (
     holds.add(hold)
     return () => void holds.delete(hold)
   }, [drain, force])
+
+let attempt = (fn: () => unknown) => {
+  try {
+    fn()
+  } catch { /* the rest still runs */ }
+}
+
+let once = (fn: () => void) => {
+  let done = false
+  return () => {
+    if (done) return
+    done = true
+    fn()
+  }
+}
+
+/**
+ * Call `release` when the process ends without unwinding: an uncaught error,
+ * an unhandled rejection, or `unload` (Deno.exit, or the event loop running
+ * dry). An event a listener prevented does not end the process, so it
+ * releases nothing. Returns the function that stops listening.
+ */
+export let fatal = (target: EventTarget, release: () => void): () => void => {
+  let on = (event: Event) => event.defaultPrevented || release()
+  let types = ['error', 'unhandledrejection', 'unload']
+  for (let type of types) target.addEventListener(type, on)
+  return () => {
+    for (let type of types) target.removeEventListener(type, on)
+  }
+}
 
 /** Ask the running app to exit; the terminal is restored on the way out. */
 export let quit = (): void => stop.fn()
@@ -112,10 +143,22 @@ export let run = async (
     touch()
   }
   let painted: Line[] = []
+  // The terminal given back, once: every mode the backend turned on, then
+  // cooked input. Each step runs even when one before it throws (a terminal
+  // gone after SIGHUP refuses the write).
+  let release = once(() => {
+    attempt(() => setClipboard())
+    attempt(() => backend.stop())
+    attempt(() => Deno.stdin.setRaw(false))
+  })
+  // A throw nobody caught (a render that crashes), a rejection nobody
+  // handled, or a Deno.exit from anywhere ends the process without reaching
+  // the finally below: the terminal is given back on the way out all the same.
+  let unguard = fatal(globalThis, release)
   let bye = () => {
     clearTimeout(escapeTimer)
     painted = []
-    render(null, host)
+    attempt(() => render(null, host))
     onPaint(() => {})
     clearMouse()
     clear()
@@ -123,11 +166,8 @@ export let run = async (
     try {
       Deno.removeSignalListener('SIGWINCH', resize)
     } catch { /* never added */ }
-    setClipboard()
-    backend.stop()
-    try {
-      Deno.stdin.setRaw(false)
-    } catch { /* not a tty */ }
+    release()
+    unguard()
   }
 
   try {
