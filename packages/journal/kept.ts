@@ -50,10 +50,10 @@ export let versioned = (table: string): string | undefined =>
  * The bytes history kept, and the changes the journal held.
  *
  * ```ts
- * import { changes, history } from './kept.ts'
+ * import { changes, history, type Kept } from './kept.ts'
  * import { equal } from '@yaks/testing'
  *
- * let k = { day: '2026-10-21', at: '', bytes: 100, free: 0, tables: { doc: [10, 2], journal_change: [30, 3], doc$versions: [20, 4] } }
+ * let k: Kept = { day: '2026-10-21', at: '', bytes: 100, free: 0, tables: { doc: [10, 2], journal_change: [30, 3], doc$versions: [20, 4] } }
  * equal([history(k), changes(k)], [50, 3])
  * ```
  */
@@ -72,11 +72,11 @@ export let changes = (k: Kept): number => k.tables[CHANGES]?.[1] ?? 0
  * nothing was written between them.
  *
  * ```ts
- * import { perChange, perDay, history } from './kept.ts'
+ * import { history, type Kept, perChange, perDay } from './kept.ts'
  * import { equal } from '@yaks/testing'
  *
- * let a = { day: '2026-10-20', at: '2026-10-20T04:00:00Z', bytes: 1000, free: 0, tables: { journal_change: [100, 10] } }
- * let b = { day: '2026-10-22', at: '2026-10-22T04:00:00Z', bytes: 3000, free: 0, tables: { journal_change: [1570, 20] } }
+ * let a: Kept = { day: '2026-10-20', at: '2026-10-20T04:00:00Z', bytes: 1000, free: 0, tables: { journal_change: [100, 10] } }
+ * let b: Kept = { day: '2026-10-22', at: '2026-10-22T04:00:00Z', bytes: 3000, free: 0, tables: { journal_change: [1570, 20] } }
  * equal(perChange(a, b), 147)
  * equal(perDay(a, b, history), 735)
  * equal(perChange(a, a), undefined)
