@@ -11,9 +11,28 @@
 // host wrote itself.
 
 import type { Bundle, Plugin } from '@yaks/graph'
-import { type Derived, type Statements, statements, type Stmt } from '@yaks/sql'
+import {
+  as,
+  col,
+  type Derived,
+  fn,
+  type History,
+  NOW,
+  select,
+  type Statements,
+  statements,
+  type Stmt,
+  table,
+} from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { ddl, journal, type Log, log, type Rows } from './mod.ts'
+import {
+  ddl,
+  journal,
+  type Log,
+  log,
+  type Recording,
+  type Rows,
+} from './mod.ts'
 import {
   type Feed,
   feedDdl,
@@ -62,13 +81,81 @@ export let feedFor = (host: Bound): Feed => {
  * it predates there (@yaks/sqlite `grow`). */
 export let schema = (): Stmt[] => [...ddl(), ...feedDdl()]
 
+/**
+ * Which aspects of history a config switches on (D-130964), each covering the
+ * components not declared `journal: false`:
+ *
+ * - `attribution`: a `journal_change` row per component each transaction
+ *   wrote or removed, under its `journal_tx` row (when, by whom, through what).
+ * - `versions`: the store keeps every version a write replaces (@yaks/sqlite
+ *   `History`), each naming its transaction.
+ *
+ * Naming either turns history to them, each on unless set false:
+ * `{"use": "@yaks/journal", "with": {"versions": true}}`. Naming neither is
+ * the journal before versions, attribution with every value as a
+ * `journal_field` row, until the box's journal moves into versions.
+ */
+export type Aspects = {
+  attribution: boolean
+  versions: boolean
+  values: boolean
+}
+
+export let aspects = (options: Record<string, unknown> = {}): Aspects =>
+  'attribution' in options || 'versions' in options
+    ? {
+      attribution: options.attribution !== false,
+      versions: options.versions !== false,
+      values: false,
+    }
+    : { attribution: true, versions: false, values: true }
+
+/** What a store keeps versions with, where `versions` is on: the statement
+ * that takes a transaction's id, as a `journal_tx` row whose writer the
+ * journal fills in as it records the transaction, and the newest one's. */
+export let history = (options?: Record<string, unknown>): History | undefined =>
+  aspects(options).versions
+    ? {
+      clock: {
+        t: 'insert',
+        into: 'journal_tx',
+        cols: ['ts'],
+        rows: [[NOW]],
+        returning: [col('id')],
+      },
+      tip: select({
+        cols: [as(fn('max', col('id')), 'id')],
+        from: table('journal_tx'),
+      }),
+    }
+    : undefined
+
+/** A store keeping versions requires the journal from then on: a writer
+ * without it would change live rows and keep nothing they replaced. */
+export let required = (options?: Record<string, unknown>): boolean =>
+  aspects(options).versions
+
 /** Bind the hooks over the tables the installer prepared: the journal,
- * recording what the host's vocabulary keeps as history, and the feed,
- * carrying every commit to the other hosts. */
-export let plugins = (host: Bound & { vocab: Vocab }): Plugin[] => [
-  journal(logFor(host), host.vocab),
-  feeder(feedFor(host)),
-]
+ * recording what the host's vocabulary keeps as history, as its aspects say,
+ * and the feed, carrying every commit to the other hosts. */
+export let plugins = (
+  host: Bound & { vocab: Vocab },
+  options?: Record<string, unknown>,
+): Plugin[] => {
+  let a = aspects(options)
+  // A branch's commits are recorded as its own, and reach no other host: the
+  // feed carries main's.
+  let mode = host.storage.statements?.mode
+  let record: Recording = {
+    changes: a.attribution,
+    values: a.values,
+    ...mode && 'branch' in mode ? { branch: mode.branch } : {},
+  }
+  return [
+    journal(logFor(host), host.vocab, { record }),
+    ...mode ? [] : [feeder(feedFor(host))],
+  ]
+}
 
 /** How often a host looks for what other hosts committed, in ms, unless the
  * config says (`{"use": "@yaks/journal", "with": {"every": 50}}`). */

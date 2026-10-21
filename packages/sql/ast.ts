@@ -171,6 +171,9 @@ export type Source =
   | {
     t: 'table'
     name: string
+    /** The database it is in, where an unqualified name would find another:
+     * `main` beside a temporary view of the same name. */
+    schema?: string
     args?: Expr[]
     as?: string
     /** Require a named index, or disable secondary indexes when false. */
@@ -272,6 +275,8 @@ export type Key =
 export type CreateTable = {
   t: 'create table'
   name: string
+  /** This connection's alone, gone when it closes. */
+  temp?: boolean
   ifNot?: boolean
   cols: Column[]
   keys?: Key[]
@@ -290,6 +295,8 @@ export type CreateIndex = {
 export type CreateView = {
   t: 'create view'
   name: string
+  /** Seen by this connection alone, ahead of a table of the same name. */
+  temp?: boolean
   ifNot?: boolean
   cols?: string[]
   q: Query

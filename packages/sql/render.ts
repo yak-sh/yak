@@ -214,7 +214,8 @@ let source: (s: Source, c: Ctx) => string = kept((s: Source, c: Ctx) => {
   if (s.t == 'raw') return expr(s, c)
   let as = s.as ? ` as ${q(s.as)}` : ''
   if (s.t == 'from') return `(${query(s.q, c)})${as}`
-  return `${q(s.name)}${s.args ? `(${list(s.args, c)})` : ''}${as}` +
+  let schema = s.schema ? `${q(s.schema)}.` : ''
+  return `${schema}${q(s.name)}${s.args ? `(${list(s.args, c)})` : ''}${as}` +
     (s.indexed === false
       ? ' not indexed'
       : s.indexed
@@ -376,7 +377,9 @@ let stmt = (s: Stmt, c: Ctx): string => {
         (s.where ? ` where ${expr(s.where, c)}` : '') +
         returning(s.returning, c)
     case 'create table':
-      return `create table ${ifNot(s.ifNot)}${q(s.name)} (${
+      return `create ${s.temp ? 'temp ' : ''}table ${ifNot(s.ifNot)}${
+        q(s.name)
+      } (${
         [
           ...s.cols.map((k) => column(k, lit(c))),
           ...(s.keys ?? []).map((k) => key(k, lit(c))),
@@ -388,7 +391,9 @@ let stmt = (s: Stmt, c: Ctx): string => {
       } on ${q(s.on)} (${list(s.cols, lit(c))})` +
         (s.where ? ` where ${expr(s.where, lit(c))}` : '')
     case 'create view':
-      return `create view ${ifNot(s.ifNot)}${q(s.name)}` +
+      return `create ${s.temp ? 'temp ' : ''}view ${ifNot(s.ifNot)}${
+        q(s.name)
+      }` +
         (s.cols ? ` (${names(s.cols)})` : '') + ` as ${query(s.q, lit(c))}`
     case 'create virtual table':
       return `create virtual table ${ifNot(s.ifNot)}${q(s.name)} using ${

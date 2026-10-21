@@ -221,10 +221,11 @@ let stored = (v: Vocab, comp: string): Prop[] =>
     .map((prop) => v.prop(comp, prop)!)
     .filter((c) => !c.computed)
 
-// One component's table. The `entity` owner is the primary key, so a component
-// is stored at most once per entity. A tag component (no stored properties) is
-// just the owner column — its row's existence is the whole fact.
-let tableDdl = (
+/** One component's table. The `entity` owner is the primary key, so a
+ * component is stored at most once per entity. A tag component (no stored
+ * properties) is just the owner column — its row's existence is the whole
+ * fact. `extra` columns follow the vocabulary's. */
+export let tableDdl = (
   v: Vocab,
   comp: string,
   name = comp,
@@ -255,11 +256,11 @@ let indexDdl = (v: Vocab, comp: string, i: Index): CreateIndex => ({
   where: i.present ? and(...i.present.map((p) => notNull(col(p)))) : undefined,
 })
 
-// The `doc` view: each property read as text — through its registered `text`
-// expression where the stored value is not the text itself (@yaks/blob keeps
-// an address) — plus a `rowid` alias. Search indexes are composed separately
-// by the application using @yaks/fts.
-let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
+/** The `doc` view: each property read as text — through its registered `text`
+ * expression where the stored value is not the text itself (@yaks/blob keeps
+ * an address) — plus a `rowid` alias. Search indexes are composed separately
+ * by the application using @yaks/fts. */
+export let docDdl = (v: Vocab, derived: Derived): Stmt[] => {
   if (!v.all.includes('doc')) return []
   let read = (prop: string) =>
     derived[`doc.${prop}`]?.text?.(col(prop)) ?? col(prop)

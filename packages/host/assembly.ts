@@ -9,7 +9,7 @@ import { toolsIn } from '@yaks/vocab/tools'
 import { effectsIn } from '@yaks/vocab'
 import type { VocabDoc } from '@yaks/vocab'
 import type { Effects, Handlers } from '@yaks/effects'
-import type { Extension, Stmt } from '@yaks/sql'
+import type { Extension, History, Stmt } from '@yaks/sql'
 import { gather } from '@yaks/ui/contributions'
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Host, Role } from './mod.ts'
@@ -54,7 +54,12 @@ type Built =
 /** Storage and runtime capabilities; the assembly owns neither their IO nor lifetime. */
 export type Binding = {
   host: Omit<Host, Built>
-  storage: (host: Host, extend: Extension[], words: Words) => Host['storage']
+  storage: (
+    host: Host,
+    extend: Extension[],
+    words: Words,
+    history?: History,
+  ) => Host['storage']
   effects: (host: Host, disabled: string[]) => Effects
   /** Host clause compilers follow the plugins' compilers. */
   extend?: (host: Host) => Extension[]
@@ -421,7 +426,9 @@ export let assemble = (
       let authenticate = doorman(graphs, host, self ?? null)
       part?.('storage')
       let extend: Extension[] = []
-      store = binding.storage(host, extend, words)
+      let history = graphs.map(([r, options]) => r.history?.(options))
+        .find((h) => h)
+      store = binding.storage(host, extend, words, history)
       part?.('extensions')
       extend.push(
         ...graphs.flatMap(([r, options]) => r.extend?.(host, options) ?? []),

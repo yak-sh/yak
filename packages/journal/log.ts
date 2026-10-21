@@ -188,6 +188,8 @@ export let ddl = (spine = 'entity'): Stmt[] => {
       { name: 'via', ...to(spine) },
       text('trace'),
       text('host'),
+      // the branch it wrote to, where it wrote to one (@yaks/sqlite `moded`)
+      { name: 'branch', type: 'integer' },
     ]),
     created('journal_change', [
       id,
@@ -222,13 +224,28 @@ export let ddl = (spine = 'entity'): Stmt[] => {
 let written = (value: Comp): [string, unknown][] =>
   Object.entries(value).filter(([prop]) => prop != 'eid')
 
+/** Which rows a transaction is written down as, beside its own row: a
+ * `journal_change` row per component it wrote or removed (`changes`, the
+ * attribution aspect), and a `journal_field` row per value (`values`, the
+ * journal before versions). `seq` is the id the store's history took for it,
+ * whose row is already there to fill in. */
+export type Recording = {
+  seq?: number
+  changes?: boolean
+  values?: boolean
+  /** the branch the transaction wrote to, where it wrote to one */
+  branch?: number
+}
+
 /** The log bound to one store: the writer, and the questions a journal is kept
  * in order to answer. */
 export type Log = {
   /** the host this log writes as ({@link LogOpts.host}) */
   host: string
   /** write one transaction down inside the caller's own transaction; returns
-   * its seq */
+   * its seq. `as` writes it under the transaction id the store's history
+   * already took for it ({@link Recording.seq}); `record` says which of its
+   * rows to write. */
   write: (
     meta: {
       at: string
@@ -237,6 +254,7 @@ export type Log = {
       note?: string | null
     },
     applied: Patch[],
+    record?: Recording,
   ) => number
   /** one transaction's operations, whole or cut to one entity, in applied
    * order */
@@ -461,22 +479,35 @@ export let log = (opts: LogOpts): Log => {
       note?: string | null
     },
     applied: Patch[],
+    record: Recording = {},
   ): number => {
-    let seq = num(
+    let said = {
+      ts: val(meta.at),
+      actor: idOf(meta.by),
+      via: idOf(meta.via),
+      trace: val(meta.note ?? null),
+      host: val(host),
+      ...record.branch == null ? {} : { branch: val(record.branch) },
+    }
+    let seq = record.seq ?? num(
       one({
         t: 'insert',
         into: 'journal_tx',
-        cols: ['ts', 'actor', 'via', 'trace', 'host'],
-        rows: [[
-          val(meta.at),
-          idOf(meta.by),
-          idOf(meta.via),
-          val(meta.note ?? null),
-          val(host),
-        ]],
+        cols: Object.keys(said),
+        rows: [Object.values(said)],
         returning: [col('id')],
       })?.id,
     )
+    if (record.seq != null) {
+      rows({
+        t: 'update',
+        table: 'journal_tx',
+        set: said,
+        where: eq(col('id'), val(record.seq)),
+      })
+    }
+    if (record.changes === false) return seq
+    let values = record.values !== false
     // The properties a component still holds, newest after-image per property:
     // the field id is monotonic, so the highest-id row per property is the
     // latest in total order — and it reads this transaction's earlier upserts,
@@ -540,6 +571,7 @@ export let log = (opts: LogOpts): Log => {
             val(ref),
           ]],
         })
+      if (!values) return
       if (value == null) {
         // A removal tombstones every property the component still had, so
         // property history stays self-contained across a removal and a later
@@ -948,7 +980,7 @@ let UNRECORDED = '$unrecorded'
 export let journal = (
   n: Log,
   vocab: Vocab,
-  opts: { now?: () => string; name?: string } = {},
+  opts: { now?: () => string; name?: string; record?: Recording } = {},
 ): Plugin => {
   let clock = opts.now ?? (() => new Date().toISOString())
   let kept = (comp: string) => vocab.comp(comp)?.journal !== false
@@ -1026,7 +1058,7 @@ export let journal = (
         }
         return bundles
       },
-      journal: (bundles: Bundle[], _tx: Tx) => {
+      journal: (bundles: Bundle[], tx: Tx) => {
         let writer = writers(bundles)
         let by = new Map<string, { actor: Actor; applied: Patch[] }>()
         let put = (actor: Actor, patch: Patch) => {
@@ -1047,10 +1079,16 @@ export let journal = (
           }
         }
         let at = clock()
+        // Where the store keeps versions, the transaction its versions name
+        // is the first writer's: the batch's own (@yaks/graph `writers`).
+        let first = true
         for (let { actor, applied } of by.values()) {
+          let seq = first && tx.clock ? tx.clock() : undefined
+          first = false
           n.write(
             { at, by: actor.by ?? null, via: actor.via ?? null },
             applied,
+            { ...opts.record, seq },
           )
         }
         return bundles.map((b) => {

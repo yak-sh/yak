@@ -47,4 +47,9 @@
 export * from './query.ts'
 export * from './cascade.ts'
 export { type At, type Gone, type On, type Plan, rule } from './match.ts'
-export { type Statements, statements } from './statements.ts'
+export {
+  type History,
+  type Mode,
+  type Statements,
+  statements,
+} from './statements.ts'

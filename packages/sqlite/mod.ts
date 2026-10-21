@@ -115,6 +115,25 @@ import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
 import { watch } from './watch.ts'
+import { Refused } from '@yaks/graph/errors'
+import {
+  type History,
+  historySchema,
+  keep,
+  type Mode,
+  within,
+} from './history.ts'
+import { add } from './follow.ts'
+import { sha256 } from '@yaks/graph/sha256'
+export {
+  beside,
+  BRANCHES,
+  type History,
+  historySchema,
+  keeps,
+  type Mode,
+  ticked,
+} from './history.ts'
 
 export {
   type Backfill,
@@ -226,6 +245,9 @@ export type { Storage } from '@yaks/graph'
  * and lets a caller of this package read a bundle without awaiting one.
  */
 export type Tx = {
+  /** the id of the transaction this unit's versions name, where the store
+   * keeps history (./history.ts) */
+  clock?: () => number
   /** a query → whole bundles, or only `comps` when named */
   read: (query: Query, opts?: ReadOpts, comps?: string[]) => Bundle[]
   /** identity, not search: these entities as they stand, carrying the
@@ -369,6 +391,13 @@ export type Opts = BindOpts & {
    * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
    * line on the console, by default (ddl.ts `logged`). */
   report?: (error: Error) => void
+  /** Keep every version a write replaces (./history.ts), naming the
+   * transactions this statement takes, one per unit that writes a component
+   * with history. From the history plugin (@yaks/journal). */
+  history?: History
+  /** Read main as of a transaction, or a branch, and write only to the branch:
+   * what a connection opened for a mode is bound with (./mode.ts). */
+  mode?: Mode
 }
 
 // The read options a statement is the same under (@yaks/graph `ReadOpts`).
@@ -437,6 +466,14 @@ export let storage = (
   base: Opts = {},
 ): Store => {
   let opts = options(driver, vocab, base)
+  if (base.history) keep(driver, vocab, base.history, base.mode)
+  // What a store with history adds beside its own schema, run and printed
+  // with it.
+  let besides = base.history ? historySchema(vocab) : []
+  let printed = () => {
+    let own = plan(vocab, base.derived, !!driver.file).print
+    return besides.length ? sha256(`${own};history`) : own
+  }
   let owing = () => [
     ...new Set((ledgers.get(driver) ?? []).flatMap((u) => u.ledger.owed())),
   ]
@@ -445,7 +482,9 @@ export let storage = (
   let report = base.report ?? logged
   // Whether this store keeps archetypes, and whether their descriptors are
   // numbered like any other entity.
-  let classified = !!vocab.comp('archetype')
+  // A mode's connection reads what an entity held then, which no pointer
+  // says (./mode.ts).
+  let classified = !!vocab.comp('archetype') && !base.mode
   let numbered = typeof base.number == 'object'
     ? !base.number.except.includes('archetype')
     : !!base.number
@@ -932,7 +971,8 @@ export let storage = (
   let ready = false
   let install = (beside: Stmt[] = []): Error[] => {
     let left: Error[] = []
-    let { print, made } = plan(vocab, base.derived, !!driver.file)
+    let { made } = plan(vocab, base.derived, !!driver.file)
+    let print = printed()
     let mark = (strays: string[]) =>
       [print, shape(driver, [...made, ...strays]), ...strays].join(' ')
     let receipt: ReturnType<typeof installation>
@@ -980,7 +1020,11 @@ export let storage = (
             return owes
           })
           forgo(driver, kept)
-          left = [...unfit, ...build(driver, indexed(vocab), base.sizes)]
+          left = [
+            ...unfit,
+            ...build(driver, indexed(vocab), base.sizes),
+            ...besides.length ? add(driver, besides) : [],
+          ]
           left.forEach(report)
           clean = !left.length
           // Memory templates keep schema, never a store's lineage identity.
@@ -1030,6 +1074,15 @@ export let storage = (
   return {
     statements: classified
       ? { ...statements(driver), archetypes: true }
+      : base.mode
+      ? {
+        ...statements(driver),
+        archetypes: false,
+        // A mode's connection turns its dial under the store (./mode.ts).
+        get mode() {
+          return base.mode
+        },
+      }
       : statements(driver),
     checks: diagnostics(driver),
     migrations: migrations(driver),
@@ -1050,7 +1103,7 @@ export let storage = (
       ...indexed(vocab),
     ],
     grown: () => grown(vocab, standing(driver, vocab)),
-    print: () => plan(vocab, base.derived, !!driver.file).print,
+    print: printed,
     install,
     analyze: (tables = Infinity) => {
       let left = installation(driver)?.statistics?.owed?.length ?? 0
@@ -1100,27 +1153,34 @@ export let storage = (
       )
     },
     tx: <R>(body: (tx: Tx) => R, _mode?: { admission?: boolean }): R => {
-      ensure()
-      return unit(driver, (): R => {
-        let cached = (t: Tx): Tx => ({
-          ...t,
-          get: (eids, comps) => kept(t.get, eids, comps),
-        })
-        if (!classified) return body(cached(tx))
-        let { tx: t, settle, close } = tracked()
-        let tracing = context()
-        // An async body settles what it owes before the unit closes, as the
-        // unit waits for it (./unit.ts).
-        return lastly(
-          () =>
-            after(body(t), (out) => {
-              if (tracing) scope(tracing, settle)
-              else settle()
-              return out
-            }) as R,
-          close,
+      if (base.mode && 'at' in base.mode) {
+        throw new Refused(
+          `as of transaction ${base.mode.at} the graph is read only`,
         )
-      })
+      }
+      ensure()
+      return unit(driver, (): R =>
+        within(driver, (clock) => {
+          let cached = (t: Tx): Tx => ({
+            ...t,
+            get: (eids, comps) => kept(t.get, eids, comps),
+            ...base.history ? { clock } : {},
+          })
+          if (!classified) return body(cached(tx))
+          let { tx: t, settle, close } = tracked()
+          let tracing = context()
+          // An async body settles what it owes before the unit closes, as the
+          // unit waits for it (./unit.ts).
+          return lastly(
+            () =>
+              after(body(base.history ? { ...t, clock } : t), (out) => {
+                if (tracing) scope(tracing, settle)
+                else settle()
+                return out
+              }) as R,
+            close,
+          )
+        }))
     },
   }
 }
@@ -1137,3 +1197,4 @@ export {
 } from './follow.ts'
 
 export { doom } from './doom.ts'
+export { branch, branchOf, moded } from './mode.ts'

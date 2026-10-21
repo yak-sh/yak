@@ -20,7 +20,21 @@ export type Statements = {
   atomic: <R>(body: () => R) => R
   /** Named engine facilities; only the adapter knows how to load them. */
   facilities?: { vector?: () => void }
+  /** What this connection reads, where it is not main as it stands: main as
+   * of a transaction, or a branch, whose writes reach no other host. */
+  mode?: Mode
 }
+
+/** What a store keeps history with, as statements its history plugin hands
+ * it (@yaks/journal over @yaks/sqlite): `clock` takes the id of the
+ * transaction a unit's versions name, and `tip` reads the newest one's; each
+ * answers it as `id`. */
+export type History = { clock: Stmt; tip: Stmt }
+
+/** What a connection to a store with history reads: main as of a
+ * transaction, or a branch, which reads main as it stood at its fork under
+ * its own rows. */
+export type Mode = { at: number } | { branch: number; fork: number }
 
 /** Require the SQL capability rather than guessing where the host stores data. */
 export let statements = (storage: { statements?: Statements }): Statements => {

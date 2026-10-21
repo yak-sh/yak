@@ -77,6 +77,7 @@ import {
 import { derivedOf, storedOnly, tablesOf } from '@yaks/sql/query'
 import { type Filter, filter } from '@yaks/match'
 import { tables } from './layout.ts'
+import { BESIDE, DIAL } from './history.ts'
 import { type Answer as Packed, copied, packed } from './answer.ts'
 import type { Known, Spine } from './write.ts'
 
@@ -495,6 +496,23 @@ let tell = (driver: Driver, c: Connection) => {
     }
     if (held && c.depth) c.blind = true
   }
+  let held = <W extends Stmt>(w: W): W =>
+    w.t == 'insert' && w.into.endsWith(BESIDE)
+      ? { ...w, into: w.into.slice(0, -BESIDE.length) }
+      : w.t == 'update' && w.table.endsWith(BESIDE)
+      ? { ...w, table: w.table.slice(0, -BESIDE.length) }
+      : w.t == 'delete' && w.from.endsWith(BESIDE)
+      ? { ...w, from: w.from.slice(0, -BESIDE.length) }
+      : w
+  // Everything read may read otherwise now: the schema moved, or a mode's
+  // dial turned (./mode.ts).
+  let moved = () => {
+    forget()
+    unspine()
+    c.classes.clear()
+    c.learned.clear()
+    for (let k of c.kept) k.answers.clear()
+  }
   let observe = (s: Stmt): void => {
     if (s.t == 'raw') return s.origin && observe(s.origin)
     if (s.t == 'begin' || s.t == 'savepoint') c.depth++
@@ -502,7 +520,11 @@ let tell = (driver: Driver, c: Connection) => {
     else if (s.t == 'rollback') s.to ? undone() : ended(false)
     else if (s.t == 'release' && --c.depth <= 0) ended(true)
     else if (s.t == 'insert' || s.t == 'update' || s.t == 'delete') {
+      // A write beside a component's table (./history.ts) is, to what memory
+      // holds, a write of it: on a branch it is the component's whole state.
+      s = held(s)
       let table = s.t == 'insert' ? s.into : s.t == 'update' ? s.table : s.from
+      if (table == DIAL) return moved()
       bump(table)
       if (moves(s)) {
         c.shifts++
@@ -516,13 +538,7 @@ let tell = (driver: Driver, c: Connection) => {
       if (!c.writing && !adds(s)) forget(table)
     } else if (
       s.t.startsWith('create ') || s.t == 'alter table' || s.t == 'drop'
-    ) {
-      forget()
-      unspine()
-      c.classes.clear()
-      c.learned.clear()
-      for (let k of c.kept) k.answers.clear()
-    }
+    ) moved()
   }
   let query = driver.query.bind(driver)
   driver.query = (s) => {

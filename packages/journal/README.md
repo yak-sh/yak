@@ -190,6 +190,27 @@ deletion appears as `$delete`. A transaction that changed other entities
 includes only the requested entity's changes in this response. The low-level
 `history()` method instead returns transactions oldest first.
 
+## Attribution and versions
+
+Naming an aspect in the plugin's options turns its history to those aspects,
+each covering every component not declared `journal: false`, and each on unless
+set false:
+
+```json
+{ "use": "@yaks/journal", "with": { "attribution": true, "versions": true } }
+```
+
+- `attribution` keeps the `journal_tx` row of each transaction and a
+  `journal_change` row for each component it wrote or removed, and no values.
+- `versions` has the store keep every version a write replaces
+  ([@yaks/sqlite's history](../sqlite/README.md#history)), each naming its
+  `journal_tx` row's id. A store keeping versions requires the journal from then
+  on (`required`), and can be read as of a transaction or on a branch:
+  `YAK_AT=<id>` or `YAK_BRANCH=<id>` opens a `yak` command's graph that way.
+
+Naming neither is the journal before versions: attribution, with every value as
+a `journal_field` row.
+
 ## What it returns
 
 Here the host lends the journal a statement capability over the same storage as

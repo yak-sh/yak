@@ -1,7 +1,7 @@
 /** The subpaths a plugin contributes to a composed graph. */
 import type { Authenticate, Filter, Handler, Route } from '@yaks/api'
 import type { Eid, Plugin } from '@yaks/graph'
-import type { Backings, Derived, Extension, Stmt } from '@yaks/sql'
+import type { Backings, Derived, Extension, History, Stmt } from '@yaks/sql'
 import type { Handlers } from '@yaks/effects'
 import type { Reply } from '@yaks/tools'
 import type { Runs } from '@yaks/graph/tools'
@@ -61,6 +61,10 @@ export type GraphFacet = {
    * on. A writing host records it in the store, and a host whose config leaves
    * the plugin out refuses to open the store (./config.ts `meet`). */
   required?: (options: Options) => boolean
+  /** What the store keeps every version a write replaces with, where this
+   * plugin's options ask it to (@yaks/journal's versions). Asked before the
+   * store is opened; at most one plugin answers. */
+  history?: (options: Options) => History | undefined
 }
 
 /** A result from a plugin's meaning index, with an excerpt of its source. */

@@ -67,7 +67,7 @@ import {
   store as machine,
   vanished,
 } from '@yaks/process'
-import type { Store } from '@yaks/sqlite'
+import type { History, Store } from '@yaks/sqlite'
 import { migrations, migrationSchema } from '@yaks/sqlite/migration'
 import { add, follow, printOf } from '@yaks/sqlite/follow'
 import { requirements, requires } from '@yaks/sqlite/meta'
@@ -245,6 +245,20 @@ export type ComposeOpts = {
   }
   /** a reader beside a host records no process of its own */
   process?: boolean
+  /** Open the graph as of a transaction, or on a branch, where its store
+   * keeps history (D-130964): read only as of a transaction, writing only to
+   * the branch on one. Default: `$YAK_AT` or `$YAK_BRANCH`, else main. */
+  mode?: { at: number } | { branch: number }
+}
+
+// The mode a process opens its graph in, as its environment says.
+let moding = (): ComposeOpts['mode'] => {
+  let at = Deno.env.get('YAK_AT'), branch = Deno.env.get('YAK_BRANCH')
+  return at
+    ? { at: Number(at) }
+    : branch
+    ? { branch: Number(branch) }
+    : undefined
 }
 
 export { dbOf } from './config.ts'
@@ -499,6 +513,26 @@ let composed = async (
     let { storage } = opts.readOnly
       ? await import('@yaks/sqlite/read-store')
       : await import('@yaks/sqlite')
+    let mode = opts.mode ?? moding()
+    // A store as of a transaction or on a branch reads through a connection
+    // of its own: this one, which opened for nothing else.
+    let moded = mode && await import('@yaks/sqlite')
+    let opening = (
+      o: Parameters<typeof storage>[2] & { history?: History },
+    ) => {
+      if (!mode || !moded) return storage(sql, vocab, o)
+      let { history } = o
+      if (!history) {
+        throw new Error(
+          'this graph keeps no history to read as of a transaction or branch: ' +
+            'list @yaks/journal with versions on',
+        )
+      }
+      if ('at' in mode) return moded.moded(sql, vocab, { ...o, history }, mode)
+      let m = moded.branchOf(sql, mode.branch)
+      if (!m) throw new Error(`no branch ${mode.branch}`)
+      return moded.moded(sql, vocab, { ...o, history }, m)
+    }
     let { vocab, derived, backed } = plan.words
 
     if (!opened) {
@@ -594,9 +628,9 @@ let composed = async (
       actor: self,
       process: started({ roles: [...roles] })[PROCESS] as Comp,
       readOnly: opts.readOnly,
-      storage: (built, extend) => {
+      storage: (built, extend, _words, history) => {
         host = built
-        store = storage(sql, vocab, {
+        let o = {
           derived,
           backed,
           extend,
@@ -613,7 +647,9 @@ let composed = async (
             }
             : false,
           adopt: config.adopt ?? false,
-        })
+          history,
+        }
+        store = opening(o)
         return store
       },
       // The text index follows plugin compilers, preserving their precedence.
@@ -625,7 +661,8 @@ let composed = async (
       // index they break) or a pass that fails is reported, and the graph
       // opens with the shape it holds; the print stays unrecorded, so the
       // next opener tries again.
-      schema: opts.readOnly ? undefined : (_built, stmts) => {
+      // A mode's connection reads the file its writers keep in shape.
+      schema: opts.readOnly || mode ? undefined : (_built, stmts) => {
         let beside = [...migrationSchema(), ...blobSchema(), ...stmts]
         let indexes = textSchema(text, derived)
         let print = printOf(store!.print(), [...beside, ...indexes])

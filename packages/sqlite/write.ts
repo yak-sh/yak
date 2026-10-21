@@ -83,6 +83,7 @@ import { required } from './physical.ts'
 import { classed, spined } from './memo.ts'
 import { isJsonb, jsonb, jsonIn } from './jsonb.ts'
 import { described, get, grave } from './read.ts'
+import { kept } from './history.ts'
 
 // The owner's integer id, as a subquery. Every write keys to it, so an entity
 // minted earlier in the same unit of work resolves without a second question.
@@ -772,7 +773,7 @@ export let patch = (
       let comp = given && news(eid, name, given)
       wrote.add(`${eid}\0${name}`)
       if (given != null && lacks(eid, name) && full(name, given)) {
-        effect(driver, upsertSql(vocab, eid, name, given, false, resolve))
+        write(driver, upsertSql(vocab, eid, name, given, false, resolve))
         moved?.(eid, name, true)
         continue
       }
@@ -817,9 +818,21 @@ export let patch = (
 }
 
 // How many rows a write changed: the driver's own count where it keeps one,
-// else the rows the statement returns.
-let ran = (driver: Driver, w: Insert | Update | Delete): number =>
-  driver.run?.(w) ?? driver.query({ ...w, returning: [col('entity')] }).length
+// else the rows the statement returns. On a store with history a write is the
+// statements that keep what it replaces, then itself (./history.ts), and the
+// count is its own.
+let ran = (driver: Driver, w: Insert | Update | Delete): number => {
+  let all = kept(driver, w)
+  for (let s of all.slice(0, -1)) effect(driver, s)
+  let last = all.at(-1)!
+  return driver.run?.(last) ??
+    driver.query({ ...last, returning: [col('entity')] }).length
+}
+
+// A write whose count nobody reads, kept the same way.
+let write = (driver: Driver, w: Write): void => {
+  for (let s of w.t == 'select' ? [w] : kept(driver, w)) effect(driver, s)
+}
 
 /** What memory says an entity holds of a component, read or written before:
  * its row, with the values memory can vouch for as a read returns them,
@@ -860,5 +873,5 @@ export let remove = (
   held: string[] = tables(vocab),
   at: string = new Date().toISOString(),
 ): void => {
-  for (let s of removeSql(held, entities, at)) effect(driver, s)
+  for (let s of removeSql(held, entities, at)) write(driver, s)
 }

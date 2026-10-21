@@ -82,6 +82,10 @@ export type Doom = { gone: Gone[]; loose: Loose[] }
  * throws.
  */
 export type Tx = {
+  /** The id of the transaction this unit's kept versions name, taken on the
+   * first ask; only a store that keeps history has one (@yaks/sqlite
+   * `History`). Its history plugin writes the transaction's row under it. */
+  clock?: () => number
   /** a query → whole bundles, or only `comps` when named */
   read: (
     query: Query,
