@@ -230,13 +230,19 @@ let idle = (line: string) => {
   let n = scopedStore.rows(line, { visibility })[0].n
   return { n, bucketReads: Math.sign(bucketReads), ownerReads }
 }
-test('optional and row-shaping clauses keep a count on the populations', () => {
-  let all = idle('.count'), notes = idle('.note&.count')
+let all = idle('.count'), notes = idle('.note&.count')
+test('a plain count reads the populations', () => {
   assertEquals([all, notes].map((r) => r.bucketReads), [1, 1])
-  for (let line of ['?note&.count', '?note.text&.count', '.count&.limit=1']) {
-    assertEquals(idle(line), all)
-  }
-  for (let line of ['.note&?mark&.count', '.note&.order=-note.text&.count']) {
-    assertEquals(idle(line), notes)
-  }
 })
+let clauses = {
+  '?note&.count': all,
+  '?note.text&.count': all,
+  '.count&.limit=1': all,
+  '.note&?mark&.count': notes,
+  '.note&.order=-note.text&.count': notes,
+}
+for (let [line, want] of Object.entries(clauses)) {
+  test(`${line} keeps its plain count on the populations`, () => {
+    assertEquals(idle(line), want)
+  })
+}

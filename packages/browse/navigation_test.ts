@@ -46,8 +46,8 @@ test('recent lists actual edits, independent of who opened a page', () => {
     { entity: { eid: 'kept' }, favorite: {} },
   ]
   let all = destinations(vocab, actor, '', [])
-  let read = (key: string) =>
-    reader(rows)(all.find((d) => d.key == key)!.query).map((b) => b.entity.eid)
+  let query = (key: string) => all.find((d) => d.key == key)?.query ?? ''
+  let read = (key: string) => reader(rows)(query(key)).map((b) => b.entity.eid)
   assertEquals(read('recent'), ['theirs', 'new', 'old'])
   assertEquals(read('favorites'), ['kept'])
   assertEquals(
