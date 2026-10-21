@@ -14,6 +14,7 @@ import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { identityEid } from '@yaks/graph/identity'
 import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
+import { size } from '@yaks/file'
 import {
   changes,
   historic,
@@ -22,7 +23,6 @@ import {
   keptOf,
   perChange,
   perDay,
-  size,
   versioned,
 } from './kept.ts'
 

@@ -77,6 +77,10 @@
 .Table_Row-picks {
   cursor: pointer;
 }
+/* A row telling of the rest, not naming a thing: its words muted. */
+.Table_Row-quiet {
+  color: var(--muted);
+}
 .Table_Row-picks:hover,
 .Table_Row-hover {
   background: var(--soft);

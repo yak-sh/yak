@@ -1,6 +1,6 @@
 // The duty measures the file once a day: the day's row holds what the store
 // measured, a second look that day measures nothing, and a store with no
-// file of pages is left alone.
+// file of pages is left alone. The row naming the file is `measured`'s.
 import { equal, test } from '@yaks/testing'
 import { graph, type Measure } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'

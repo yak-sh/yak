@@ -1,7 +1,8 @@
 {
   "entries": [
     ".",
-    "./vocab"
+    "./vocab",
+    "./occupancy"
   ],
   "compilerOptions": {
     "lib": [
@@ -9,5 +10,12 @@
       "esnext"
     ],
     "strict": true
+  },
+  "imports": {
+    "@yaks/inspect": "../inspect/mod.ts",
+    "@yaks/query": "../query/mod.ts",
+    "@yaks/ui": "../ui/mod.ts",
+    "@yaks/ux": "../ux/mod.ts",
+    "@yaks/vocab": "../vocab/mod.ts"
   }
 }

@@ -102,6 +102,13 @@
           "stamped": true,
           "description": "how many of them were free pages"
         },
+        "file": {
+          "type": "string",
+          "ref": "file",
+          "death": "keep",
+          "stamped": true,
+          "description": "the file it measured, where the store keeps one on a disk"
+        },
         "tables": {
           "type": "object",
           "additionalProperties": {

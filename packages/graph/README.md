@@ -222,7 +222,8 @@ walk at `page.after`, the `next` the page before answered.
 
 A store that keeps a file of pages says what it keeps through
 `storage.measure(signal)`: the file's bytes, its free bytes and each table's
-bytes and rows (`Measure`).
+bytes and rows (`Measure`). Where the file is a path on this computer,
+`storage.file` is that absolute path.
 
 ```ts
 import { graph } from '@yaks/graph'

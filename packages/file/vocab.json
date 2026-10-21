@@ -72,6 +72,64 @@
           "description": "the absolute directory the machine mounts it at, such as `/`"
         }
       }
+    },
+    "occupancy": {
+      "component": true,
+      "journal": false,
+      "wire": false,
+      "embed": false,
+      "type": "object",
+      "identity": [
+        "volume",
+        "day"
+      ],
+      "description": "how full a volume was on one UTC day and what filled it, from that day's latest look: the filesystem's bytes, used and free, the bytes a walk of it could read, and the bytes each directory and file on it that takes at least a thousandth of it holds. A later look that day replaces the earlier, so a run of days is how it is trending",
+      "properties": {
+        "volume": {
+          "type": "string",
+          "ref": "volume",
+          "death": "cascade",
+          "description": "the volume looked at"
+        },
+        "day": {
+          "type": "string",
+          "description": "the UTC day, `2026-10-21`"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was looked at"
+        },
+        "size": {
+          "type": "integer",
+          "stamped": true,
+          "description": "the filesystem's bytes"
+        },
+        "used": {
+          "type": "integer",
+          "stamped": true,
+          "description": "the bytes in use"
+        },
+        "free": {
+          "type": "integer",
+          "stamped": true,
+          "description": "the bytes still free to write; a filesystem may keep more back for its administrator"
+        },
+        "counted": {
+          "type": "integer",
+          "stamped": true,
+          "description": "the bytes the walk could read under the mount; the rest of `used` is in directories it could not read, or kept by the filesystem itself"
+        },
+        "paths": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "stamped": true,
+          "description": "the bytes each directory and file taking at least a thousandth of the volume holds, by its path from the mount; a directory's path ends in `/`. A directory listed holds everything listed under it"
+        }
+      }
     }
   }
 }

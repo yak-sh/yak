@@ -232,6 +232,9 @@ export type Storage = {
     before: string,
     page: { after?: string; limit: number },
   ) => Graves | Promise<Graves>
+  /** The absolute path of the file it keeps its pages in, on the computer
+   * that opened it. A store kept in memory or elsewhere leaves it out. */
+  file?: string
   /** What the file keeps, read a table at a time without a write transaction,
    * so the work around it goes on; undefined once `signal` aborts. A store
    * that keeps no file of pages leaves it out. */

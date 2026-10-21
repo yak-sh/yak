@@ -112,7 +112,7 @@ import { build, forgo, reshape, type Sizes } from './owe.ts'
 import { plan } from './plan.ts'
 import { births, patch, prune, remove, revive, spines } from './write.ts'
 import { burying } from './buried.ts'
-import { measure } from './measure.ts'
+import { located, measure } from './measure.ts'
 import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
@@ -1166,6 +1166,9 @@ export let storage = (
     buried: (before, page) => {
       ensure()
       return unit(driver, () => graves(before, page), 'read')
+    },
+    get file() {
+      return located(driver)
     },
     measure: (signal) => measure(driver, signal),
     get: (eids, comps, o) => {

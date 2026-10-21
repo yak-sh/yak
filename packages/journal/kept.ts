@@ -96,26 +96,3 @@ export let perDay = (
   let days = (Date.parse(newer.at) - Date.parse(older.at)) / 864e5
   return days > 0 ? (of(newer) - of(older)) / days : undefined
 }
-
-/**
- * Bytes as a reader takes them in, to three figures.
- *
- * ```ts
- * import { size } from './kept.ts'
- * import { equal } from '@yaks/testing'
- *
- * equal([size(147), size(41_300_000), size(14_341_947_392), size(-2_000)], ['147 B', '41.3 MB', '14.3 GB', '−2 kB'])
- * ```
- */
-export let size = (n = 0): string => {
-  let a = Math.abs(n)
-  let [d, unit] = a >= 1e9
-    ? [1e9, 'GB']
-    : a >= 1e6
-    ? [1e6, 'MB']
-    : a >= 1e3
-    ? [1e3, 'kB']
-    : [1, 'B']
-  let figure = Number((a / d).toPrecision(3)).toString()
-  return `${n < 0 ? '−' : ''}${d == 1 ? Math.round(a) : figure} ${unit}`
-}

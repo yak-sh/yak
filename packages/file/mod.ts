@@ -3,11 +3,36 @@
 // filesystem a machine mounts, whose files are bytes on a disk. A place in a
 // file is `lines{file, start, end}` on whatever entity sits there.
 //
-// Everything here is pure: the eids the words derive, and where a machine's
-// path sits among its mounts. Reading this computer is ./local.ts.
+// Everything here is pure: the eids the words derive, where a machine's path
+// sits among its mounts, and bytes as a reader takes them in. Reading this
+// computer is ./local.ts; what fills a volume is ./occupancy.ts.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
+
+let UNITS: [number, string][] = [
+  [1e12, 'TB'],
+  [1e9, 'GB'],
+  [1e6, 'MB'],
+  [1e3, 'kB'],
+]
+
+/**
+ * Bytes as a reader takes them in, to three figures.
+ *
+ * ```ts
+ * import { size } from '@yaks/file'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal([size(147), size(41_300_000), size(14_341_947_392), size(-2_000)], ['147 B', '41.3 MB', '14.3 GB', '−2 kB'])
+ * ```
+ */
+export let size = (n = 0): string => {
+  let a = Math.abs(n)
+  let [d, unit] = UNITS.find(([d]) => a >= d) ?? [1, 'B']
+  let figure = Number((a / d).toPrecision(3)).toString()
+  return `${n < 0 ? '−' : ''}${d == 1 ? Math.round(a) : figure} ${unit}`
+}
 
 /// fileOf('r', 'a/b.ts') == fileOf('r', 'a/b.ts') -> true
 /// fileOf('r', 'a/b.ts') == fileOf('s', 'a/b.ts') -> false

@@ -221,7 +221,9 @@ grouped approximately by function, **not** by dependency order.
   in a root (a repository's tree, abstract, or a `volume{machine, mount}`, a
   filesystem a machine mounts), and `lines{file, start, end}`, where in a file
   an entity sits. `@yaks/file/local` is this computer and the files on its
-  disks.
+  disks; its duty keeps what fills each disk a day,
+  `occupancy{volume, day, at, size, used, free, counted, paths}`, which the
+  Disks page and a machine's Disks tab draw.
 - **[@yaks/git](./git)** — git objects as entities: an object's eid is its SHA-1
   object id, with its SHA-256 name beside it as a key, its body in a @yaks/blob
   store, and the two traversals a pack supports (`entry`, `parent`) as edges —

@@ -186,7 +186,8 @@ passes the dead by however they were removed.
 page statistics (`dbstat`) count it: the file's bytes and free bytes, and each
 table's bytes with its indexes folded in, and its rows. It reads one b-tree at a
 time in a read unit and lets its thread's other work run between them, since a
-file of gigabytes takes a minute to read through.
+file of gigabytes takes a minute to read through. `store.file` is where the file
+is, as SQLite opened it (`PRAGMA database_list`), and absent for one in memory.
 
 `store.buried(before, { after, limit })` offers the graves a retention sweep may
 prune (./buried.ts): tombstones laid before `before` that no column in the file

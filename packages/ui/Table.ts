@@ -8,7 +8,9 @@
  *
  * A row a press picks wears `Row-picks`, and is raised while the keyboard
  * is on it (`Row-focus` shows that); `Row-hover` is the one under the
- * pointer. A heading a press sorts by wears `Heading-sorts`, and
+ * pointer; a row that tells of the rest rather than naming a thing (what is
+ * too small to list) is `Row-quiet`, its words muted. A heading a press sorts
+ * by wears `Heading-sorts`, and
  * `Heading-asc` or `Heading-desc` once the rows run by it, which its arrow
  * says; `Heading-num` heads a column of numbers. A cell
  * is `Cell-num` for a number, set right and never cut; `Cell-key` for the
@@ -97,6 +99,7 @@ export let sheet = (c: Colors): Sheet => ({
   'Table_Heading-num': { align: 'right' },
   'Table_Row-focus': { bg: c.card, fg: c.text },
   'Table_Row-hover': { bg: c.surface },
+  'Table_Row-quiet': { fg: c.muted },
   Table_Cell: { spaced: true, ellipsis: true },
   'Table_Cell-num': { fg: c.number, align: 'right' },
   'Table_Cell-key': { fg: c.muted },
@@ -131,7 +134,7 @@ let narrow: Props = { style: 'max-width: 22rem' }
 export let specimens = (): Specimen[] => [
   [
     'Table, Heading-sorts, Heading-desc, Heading-num, Row-picks, Row-focus, ' +
-    'Row-hover, Cell-prose, Cell-num',
+    'Row-hover, Row-quiet, Cell-prose, Cell-num',
     h(
       Table,
       { cols: [null, null, 'prose', 'num'] },
@@ -157,6 +160,14 @@ export let specimens = (): Specimen[] => [
           'string',
           'when it was last read, by whom, and through which session: ' +
             'prose wraps where a column of text would cut short',
+        ),
+        h(
+          Row,
+          { key: 'rest', mod: 'quiet' },
+          h(Cell, {}, '3 more'),
+          h(Cell, {}, ''),
+          h(Cell, { mod: 'prose' }, 'what the rows above leave out'),
+          h(Cell, { mod: 'num' }, '41'),
         ),
       ),
     ),

@@ -219,11 +219,13 @@ a `journal_field` row.
 ## What it keeps
 
 Once a UTC day, the duty `@yaks/journal/service` measures the store's file and
-keeps the day in a `kept{day, at, bytes, free, tables}` row: the file's bytes,
-how many of them are free pages, and each table's `[bytes, rows]` with its
-indexes' bytes folded into its own. A store whose storage has no `measure` (one
-that keeps no file of pages) is not measured. History is the journal's tables
-(`journal_*`) and each component's versions (`<comp>$versions`).
+keeps the day in a `kept{day, at, bytes, free, tables, file}` row: the file's
+bytes, how many of them are free pages, each table's `[bytes, rows]` with its
+indexes' bytes folded into its own, and the file it measured (@yaks/file's
+`file{path, root}`, from the storage's `file`), so a machine's Disks tab marks
+the graph's own file with its free pages. A store whose storage has no `measure`
+(one that keeps no file of pages) is not measured. History is the journal's
+tables (`journal_*`) and each component's versions (`<comp>$versions`).
 
 The browsing app's sidebar offers the History page (`@yaks/journal/views`),
 which reads only those rows and a count of the changes held per component: what

@@ -6,8 +6,10 @@ import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
 import manifest from './deno.json' with { type: 'json' }
 
-/** The file vocabulary: `file{path, root}`, `lines{file, start, end}` and
- * `volume{machine, mount}`, in the form `loadVocab` accepts. */
+/** The file vocabulary: `file{path, root}`, `lines{file, start, end}`,
+ * `volume{machine, mount}` and
+ * `occupancy{volume, day, at, size, used, free, counted, paths}`, in the form
+ * `loadVocab` accepts. */
 export let fileDoc: VocabDoc = doc as VocabDoc
 
 /** What this package is: its manifest's description, the one place it is
