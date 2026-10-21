@@ -31,10 +31,10 @@ export {
   spread,
 } from './ratchet.ts'
 export {
+  busy,
   configure,
   type Host,
   host,
-  pressure,
   type ReportedRun,
   type Reporter,
   type Reporters,

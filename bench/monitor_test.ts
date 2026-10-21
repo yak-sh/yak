@@ -17,7 +17,7 @@ test('the monitor reads a suite baseline outside bench', () => {
 let run = (
   verdict: Run['verdict'],
   commit = 'c2',
-  stall: number | null = null,
+  busy: number | null = null,
 ): Run => ({
   version: 1,
   suite: 's',
@@ -28,7 +28,7 @@ let run = (
   runtime: 'r',
   cpu: 'c',
   load: [1, 1, 1],
-  stall,
+  busy,
   rounds: 3,
   benches: [],
   tolerance: .1,
@@ -184,7 +184,7 @@ test('a pass on a box that grew loaded marks the suite good but banks nothing', 
   let state: State = { good: {} }, banked: string[] = []
   await watch(['s'], state, {
     check: () =>
-      Promise.resolve({ verdict: 'passed', run: run('passed', 'c3', .3) }),
+      Promise.resolve({ verdict: 'passed', run: run('passed', 'c3', .5) }),
     since: () => Promise.resolve([]),
     report: () => Promise.resolve(),
     bank: (suite) => {

@@ -6,9 +6,9 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import {
   type Baseline,
+  busy,
   limit as benchmarkLimit,
   loaded,
-  pressure,
 } from '@yaks/benchmark'
 import type { Runner, Step } from '@yaks/session'
 import { applied } from '@yaks/journal'
@@ -92,26 +92,27 @@ export const overheadSamples = (
 export const overheadExcess = (samples: Overhead[], limit = overheadLimit) =>
   samples.filter((s) => s.ms > limit)
 
-/// overheadDue(new Map([['dispatch', 1]]), 'dispatch') -> true
-/// overheadDue(new Map(), 'dispatch') -> false
-/// overheadDue(new Map([['dispatch', 1]]), 'dispatch', true) -> false
+/// overheadDue(new Map([['dispatch', 1]]), 'dispatch') ~> true
+/// overheadDue(new Map(), 'dispatch') ~> false
+/// overheadDue(new Map([['dispatch', 1]]), 'dispatch', async () => true) ~> false
 /** Whether a metric's excess reports now: once, on its second excess in a
- * worker, never while the box is loaded. One slow step is noise until another
- * repeats it, and a loaded box times its other work. Counts the excess. */
-export const overheadDue = (
+ * worker, and not while the box is loaded, when the excess is not counted and
+ * the next one is judged again. One slow step is noise until another repeats
+ * it, and a loaded box times its other work. `crowded` is asked only then. */
+export const overheadDue = async (
   seen: Map<string, number>,
   metric: string,
-  busy = false,
-): boolean => {
-  if (busy) return false
+  crowded: () => Promise<boolean> = () => Promise.resolve(false),
+): Promise<boolean> => {
   const n = (seen.get(metric) ?? 0) + 1
+  if (n == 2 && await crowded()) return false
   seen.set(metric, n)
   return n == 2
 }
 
-/** Whether work on the box is waiting for a CPU now, where the box says
- * (@yaks/benchmark `loaded`). */
-const busy = () => loaded({ stall: pressure()?.now ?? null })
+/** Whether other work keeps the box loaded, from a second of its CPU use
+ * (@yaks/benchmark `busy` and `loaded`). */
+const crowded = async () => loaded({ busy: await busy() ?? null })
 
 /** Read only a bounded scalar tail. One report per metric per worker; the fixed
  * message groups recurrence in the tracker, not one bug per observation. */
@@ -163,7 +164,7 @@ export const overheadEach = (
       ) {
         if (
           (!added.has(sample.step) && !needed.has(sample.step)) ||
-          !overheadDue(seen, sample.metric, busy())
+          !(await overheadDue(seen, sample.metric, crowded))
         ) continue
         await host.report?.(
           new Error(

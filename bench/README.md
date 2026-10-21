@@ -23,11 +23,13 @@ moves only toward faster, and only by more than that noise, so a lucky run never
 tightens it. Banking a slower one is a separate explicit operation (`--slower`),
 not monitoring.
 
-Nothing banks on a loaded box: one where some work waited for a CPU more than a
-tenth of the time the run measured (Linux's CPU pressure, the container's own
-here; the load average in `/proc/loadavg` is the Proxmox host's and says little
-about this box). `bench:ratchet` refuses to bank such a run, and a check there
-past its limit says `loaded`, not `regressed`.
+Nothing banks on a loaded box: one where other work used more than a quarter of
+its CPUs in a second sampled before a round while the bench rested (the
+container's own CPU use; the load average in `/proc/loadavg` is the Proxmox
+host's and says little about this box). On these four hyperthreads, one CPU of
+other work costs a CPU-bound bench a few percent and two about a tenth, through
+shared cores, before anything waits for a CPU. `bench:ratchet` refuses to bank
+such a run, and a check there past its limit says `loaded`, not `regressed`.
 
 ## The monitor
 
@@ -35,22 +37,22 @@ Nothing gates on a bench; bench/monitor.ts watches them instead, and a "got
 slower" bug it files means the code got slower. It checks every suite the box
 measures itself (`SUITES`) with one run, confirms a regression with a check of
 three runs before it counts, and reports a confirmed one to the tracker as a
-bug: each figure over its limit, the run's CPU stall, and the commits since the
-suite's last good run. It measures nothing while the box is loaded (judged from
-two seconds it samples while idle), so it never adds to a busy box's load, and a
-check the box became loaded for confirms nothing and banks nothing; the check is
-owed to a later run. A suite that cannot run (no baseline, a crash, a page that
-never paints, a run past its time cap) is reported as a failure, since its bench
-is broken. @yaks/heal sends both to an agent like any other bug. Cron runs it
-from the main checkout through bin/bench-monitor: every suite at 02:23,
-user-facing suites every 30 minutes (`--hourly`), and pages after each web-unit
-change (`--restarted`, checked every 15 minutes). The user-facing suites collect
-serially under the box-wide lock, so fixtures never measure one another. The
-hourly lane holds a persistent queue in `~/.cache/yak/bench/hourly-queue.json`,
-with one lane lock around loading, collecting and saving it. Each tick stops
-admitting work after 25 minutes; an admitted collection keeps its ten-minute
-limit. A busy box lock or a loaded box leaves the exact job owed and ends the
-tick.
+bug: each figure over its limit, how busy other work kept the box, and the
+commits since the suite's last good run. It measures nothing while the box is
+loaded (judged from two seconds it samples while idle), so it never adds to a
+busy box's load, and a check the box became loaded for confirms nothing and
+banks nothing; the check is owed to a later run. A suite that cannot run (no
+baseline, a crash, a page that never paints, a run past its time cap) is
+reported as a failure, since its bench is broken. @yaks/heal sends both to an
+agent like any other bug. Cron runs it from the main checkout through
+bin/bench-monitor: every suite at 02:23, user-facing suites every 30 minutes
+(`--hourly`), and pages after each web-unit change (`--restarted`, checked every
+15 minutes). The user-facing suites collect serially under the box-wide lock, so
+fixtures never measure one another. The hourly lane holds a persistent queue in
+`~/.cache/yak/bench/hourly-queue.json`, with one lane lock around loading,
+collecting and saving it. Each tick stops admitting work after 25 minutes; an
+admitted collection keeps its ten-minute limit. A busy box lock or a loaded box
+leaves the exact job owed and ends the tick.
 
 All screens in a cohort precede their confirmations. An hour-old confirmation
 gets priority over fresh arrivals so repeated screens cannot starve it.
@@ -277,7 +279,7 @@ Missing or renamed cases, failed runs, invalid timings or counts, and different
 runtime/CPU/workload metadata fail closed. Changes to a workload or timed
 boundary need an explicit fresh baseline. `commit` records HEAD; uncommitted
 source changes are included, so retain the diff when comparing revisions.
-Inspect the raw samples and the run's `stall` when investigating a noisy result.
+Inspect the raw samples and the run's `busy` when investigating a noisy result.
 
 ## Box bench
 

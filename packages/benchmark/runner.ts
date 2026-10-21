@@ -184,9 +184,11 @@ let execute = async (
   }
   await readBase()
   let context = await (options.host ?? host)()
+  // Only a check or an acceptance is judged, so only they sample the box.
+  let sampled = mode == 'run' ? { ...context, busy: undefined } : context
   let runs: Run[] = []
   for (let i = 0; i < repeats; i++) {
-    runs.push(await measure(suite, rounds, context, exclusive))
+    runs.push(await measure(suite, rounds, sampled, exclusive))
   }
   // A different acceptance may have banked while our rounds yielded. Read its
   // baseline under the publication lock before comparing or moving the best.
@@ -274,11 +276,13 @@ let measure = async (
     spread: 0,
     spans: null,
   }))
-  // Stall is read around each round's work, not the wait for the lock.
-  let stalled: number | null = 0, timed = 0
+  // The box is sampled at rest before each round, inside the lock: the
+  // bench's own work, and what it asks of a server, never counts against it.
+  let busy: number[] = []
   for (let round = 0; round < rounds; round++) {
     await exclusive(async () => {
-      let before = context.stall?.(), start = performance.now()
+      let use = await context.busy?.()
+      if (use !== undefined) busy.push(use)
       let collected = 'collect' in suite
         ? await suite.collect(round)
         : undefined
@@ -306,11 +310,6 @@ let measure = async (
           spans: middle.spans ?? null,
         })
       }
-      let after = context.stall?.()
-      timed += (performance.now() - start) * 1000
-      stalled = before === undefined || after === undefined || stalled === null
-        ? null
-        : stalled + after - before
     })
   }
   for (let b of benches) {
@@ -331,7 +330,7 @@ let measure = async (
     runtime: context.runtime,
     cpu: context.cpu,
     load: [...context.load],
-    stall: stalled === null || !timed ? null : stalled / timed,
+    busy: busy.length ? Math.max(...busy) : null,
     rounds,
     benches,
     tolerance: null,

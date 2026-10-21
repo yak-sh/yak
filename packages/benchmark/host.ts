@@ -12,10 +12,10 @@ export type Host = {
   runtime: string
   cpu: string
   load: readonly number[]
-  /** The microseconds work on the box has waited for a CPU in all, read at
-   * each call; absent where the box does not say. The runner reads it around
-   * each run (`Run.stall`). */
-  stall?: () => number | undefined
+  /** The share of the box's CPUs in use over a second the bench rests; absent
+   * or undefined where the box does not say. The runner samples it before
+   * each round (`Run.busy`). */
+  busy?: () => Promise<number | undefined>
 }
 type Immutable<T> = T extends object
   ? { readonly [K in keyof T]: Immutable<T[K]> }
@@ -74,22 +74,31 @@ export let host = async (): Promise<Host> => {
     runtime: `Deno/${Deno.version.deno} ${Deno.build.target}`,
     cpu: cpus()[0]?.model ?? 'unknown',
     load: loadavg(),
-    stall: () => pressure()?.total,
+    busy: () => busy(),
   }
 }
 
-/** The box's CPU pressure, from Linux's pressure stall information: `now`,
- * the share of the last ten seconds some work waited for a CPU, and `total`,
- * the microseconds it has waited in all. Undefined where the box does not say.
- * In a container it is the container's own. */
-export let pressure = (): { now: number; total: number } | undefined => {
+/** The CPU time the box has used in all, in microseconds, from its cgroup (a
+ * container's own); undefined where the box does not say. */
+let used = (): number | undefined => {
   try {
-    let some = Deno.readTextFileSync('/proc/pressure/cpu')
-      .match(/^some avg10=([\d.]+) .*total=(\d+)/m)
-    return some
-      ? { now: Number(some[1]) / 100, total: Number(some[2]) }
-      : undefined
+    let n = Deno.readTextFileSync('/sys/fs/cgroup/cpu.stat')
+      .match(/^usage_usec (\d+)/m)
+    return n ? Number(n[1]) : undefined
   } catch {
     return undefined
   }
+}
+
+/** The share of the box's CPUs in use over the next `ms` while the caller
+ * waits: the other work on the box. It is use, not CPU pressure, because a
+ * busy hyperthread slows the work on its sibling without making anything wait
+ * for a CPU: two of four busy cost a CPU-bound bench about a tenth. */
+export let busy = async (ms = 1000): Promise<number | undefined> => {
+  let before = used(), start = performance.now()
+  await new Promise((done) => setTimeout(done, ms))
+  let after = used(), took = performance.now() - start
+  return before === undefined || after === undefined
+    ? undefined
+    : (after - before) / (took * 1000 * navigator.hardwareConcurrency)
 }

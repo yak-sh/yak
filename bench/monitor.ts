@@ -10,7 +10,7 @@
  * ratchet). Nothing is measured while the box is loaded, and a run the box
  * became loaded for can confirm nothing and bank nothing: it is owed to a
  * later tick. A confirmed regression is reported with every figure over its
- * limit, how long work waited for a CPU while it ran, and the commits since
+ * limit, how busy other work kept the box, and the commits since
  * the suite's last good run; a suite that cannot run (no baseline, a crash, a
  * page that never paints, a run over its time cap) is reported as a failure,
  * since that bench is broken.
@@ -32,8 +32,8 @@
 import {
   type Baseline,
   baseline,
+  busy,
   loaded,
-  pressure,
   type Regression,
   type Run,
 } from '@yaks/benchmark'
@@ -143,9 +143,11 @@ export let regressed = (
     `${suite} got slower: ${over(run.regressions[0])}`,
     ...run.regressions.slice(1).map((r) => `also ${over(r)}`),
     `confirmed at ${run.commit?.slice(0, 9)} on ${run.at}, ${
-      run.stall == null
-        ? 'CPU stall unknown'
-        : `work waited for a CPU ${Math.round(run.stall * 100)}% of the time`
+      run.busy == null
+        ? 'how busy the box was is unknown'
+        : `other work used at most ${
+          Math.round(run.busy * 100)
+        }% of the box's CPUs`
     }`,
     good
       ? `commits since its last good run at ${
@@ -333,21 +335,12 @@ export let measurement = (suite: string): string[] => [
   HOURLY.includes(suite) ? '600' : '10800',
 ]
 
-/** The share of a few idle seconds some work on the box waited for a CPU.
- * Sampled while the monitor sleeps, since the last ten seconds' average would
- * count its own start-up and the suite before it. */
-let stalled = async (ms = 2000): Promise<number | null> => {
-  let before = pressure()
-  await new Promise((done) => setTimeout(done, ms))
-  let after = pressure()
-  return before && after ? (after.total - before.total) / (ms * 1000) : null
-}
-
 /** `deno task bench:check <suite>` in this checkout, read back from the run
  * it writes. A loaded box is not measured at all: the bench would add to the
  * load and its figures could tell nothing. */
 let check = async (suite: string, runs?: number): Promise<Outcome> => {
-  if (loaded({ stall: await stalled() })) {
+  // Sampled while the monitor sleeps, past its own start-up.
+  if (loaded({ busy: await busy(2000) ?? null })) {
     return { verdict: 'loaded' }
   }
   if (MEASURE[suite]) {
@@ -400,6 +393,8 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
         (said.trim() ? `\n${diagnostic(said, child.code)}` : ''),
     }
   }
+  // The run's file is read once and deleted, unless a failure names it.
+  let keep = false
   try {
     let run: Run = JSON.parse(await Deno.readTextFile(results))
     if (run.verdict == 'loaded') return { verdict: 'loaded' }
@@ -435,6 +430,7 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
         }).output()
         if (paired.code == 75) return { verdict: 'deferred' }
         if (!paired.success) {
+          keep = true
           return {
             verdict: 'failed',
             error: 'Paired measurement failed; raw result retained at ' +
@@ -454,7 +450,11 @@ let check = async (suite: string, runs?: number): Promise<Outcome> => {
       }
       return { verdict: run.verdict as 'passed', run }
     }
-  } catch { /* no run was written: the check failed before measuring */ }
+  } catch {
+    /* no run was written: the check failed before measuring */
+  } finally {
+    if (!keep) await Deno.remove(results).catch(() => {})
+  }
   return {
     verdict: 'failed',
     error: diagnostic(said, child.code),

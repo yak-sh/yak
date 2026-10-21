@@ -310,7 +310,7 @@ test('ratchets reject incompatible comparisons and support both directions', asy
   }
 })
 
-test('scoped observations compare banked work and retain other workloads on acceptance', async () => {
+let scope = async () => {
   let work = (name: string, cost = 100): Bench => ({
     name,
     unit: 'ms',
@@ -320,6 +320,12 @@ test('scoped observations compare banked work and retain other workloads on acce
   await run(f.suite, { ...f.options, mode: 'accept', tolerance: .2 })
   let scoped = { ...f.options, coverage: 'subset' as const }
   let production = { ...f.suite, benches: [work('production', 70)] }
+  let newWork = { ...f.suite, benches: [work('development', 300)] }
+  return { f, work, scoped, production, newWork }
+}
+
+test('a scoped observation checks only the work it measured', async () => {
+  let { f, work, scoped, production, newWork } = await scope()
   await throws(
     () => run(production, { ...f.options, mode: 'check' }),
     'Benchmark set changed',
@@ -333,8 +339,11 @@ test('scoped observations compare banked work and retain other workloads on acce
       }),
     'exceeded tolerance',
   )
-  let newWork = { ...f.suite, benches: [work('development', 300)] }
   equal((await run(newWork, { ...scoped, mode: 'check' })).verdict, 'measured')
+})
+
+test('a scoped acceptance retains the workloads it did not measure', async () => {
+  let { f, scoped, production, newWork } = await scope()
   await run(production, { ...scoped, mode: 'accept', tolerance: .2 })
   await run(newWork, { ...scoped, mode: 'accept', tolerance: .2 })
   equal(
@@ -684,11 +693,11 @@ test('a check allows the noise it measured itself', async () => {
 })
 
 test('a loaded box confirms no regression and banks no baseline', async () => {
-  let f = fixture(), waited = 0
+  let f = fixture()
   let options = { ...f.options, rounds: 1 }
   await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
-  // Work waits for a CPU all the while the box measures.
-  f.context.stall = () => waited += 1e9
+  // Other work keeps half the box busy while the bench rests.
+  f.context.busy = () => Promise.resolve(.5)
   f.suite.benches[0].sample = () => 130
   let checked = await run(f.suite, { ...options, mode: 'check' })
   equal(checked.verdict, 'loaded')
@@ -699,7 +708,7 @@ test('a loaded box confirms no regression and banks no baseline', async () => {
     'loaded box',
   )
   equal(banked(f), { work: [100, .2] })
-  f.context.stall = () => waited
+  f.context.busy = () => Promise.resolve(.1)
   f.suite.benches[0].sample = () => 130
   let error = await throws(() => run(f.suite, { ...options, mode: 'check' }))
   ok(error instanceof Regressed)

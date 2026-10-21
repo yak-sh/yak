@@ -12,7 +12,7 @@ let run = (values: number[], better: 'lower' | 'higher' = 'lower'): Run => ({
   runtime: 'test',
   cpu: 'test',
   load: [],
-  stall: null,
+  busy: null,
   rounds: 3,
   tolerance: 0,
   verdict: 'regressed',

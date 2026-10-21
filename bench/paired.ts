@@ -245,7 +245,7 @@ export let collect = async (
           runtime: `Deno/${Deno.version.deno} ${Deno.build.target}`,
           cpu: context.cpu,
           load: context.load,
-          stall: context.stall,
+          busy: context.busy,
         }),
       })
     }

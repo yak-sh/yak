@@ -116,8 +116,8 @@ export let main = async (args = Deno.args): Promise<number> => {
   })
   for (let b of current.benches) console.log(`${b.name}: ${b.median} ${b.unit}`)
   console.log(
-    `${name}: ${current.verdict}; CPU stall ${
-      current.stall == null ? 'unknown' : `${Math.round(current.stall * 100)}%`
+    `${name}: ${current.verdict}; box busy ${
+      current.busy == null ? 'unknown' : `${Math.round(current.busy * 100)}%`
     }`,
   )
   return 0

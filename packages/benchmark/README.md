@@ -8,9 +8,9 @@ A **bench** is a named workload with a unit, such as `apply` in `ns/op`. A
 **round** collects samples from every bench. A **suite** names a set of benches,
 its aggregation metric and its workload version. A **run** keeps the samples,
 round medians, median of round medians, commit, runtime, CPU, load average and
-stall. A **baseline** is a committed JSON file for one suite, with a tolerance:
-`0.2` allows a 20% deterioration. A **reporter** receives a completed run after
-its JSON has been written.
+how busy the box was. A **baseline** is a committed JSON file for one suite,
+with a tolerance: `0.2` allows a 20% deterioration. A **reporter** receives a
+completed run after its JSON has been written.
 
 ## Writing a bench
 
@@ -146,15 +146,16 @@ product, not a measurement. A baseline banked on another runtime, CPU or
 workload version is no reference, and an exact acceptance banks the suite as
 measured.
 
-A run is **loaded** when, while it measured, some work on the box waited for a
-CPU more than `STALL` (a tenth) of the time (`loaded()`): the box had more to
-run than CPUs to run it, so the figures timed the queue. The runner reads it
-around each round from Linux's pressure stall information (`pressure()`, the
-container's own in a container) and keeps the share as the run's `stall`; where
-the box does not say, it is null and nothing is loaded. A loaded run banks
-nothing, and a loaded check past its limit is `loaded`, not `regressed`: it can
-tell nothing either way. A box's load average says less: a container's often
-reads its host's.
+A run is **loaded** when other work used more than `BUSY` (a quarter) of the
+box's CPUs (`loaded()`). Before each round of a check or an acceptance, inside
+the lock, the runner samples a second of the box while the bench rests
+(`busy()`, from the cgroup's CPU use, a container's own) and keeps the most as
+the run's `busy`, so the bench's own work, and what it asks of a server, never
+counts against it; where the box does not say, it is null and nothing is loaded.
+It is use, not CPU pressure: a busy hyperthread slows the work on its sibling
+without making anything wait for a CPU. A loaded run banks nothing, and a loaded
+check past its limit is `loaded`, not `regressed`: it can tell nothing either
+way. A box's load average says less: a container's often reads its host's.
 
 ```ts
 import { type Files, type Host, Regressed, run } from '@yaks/benchmark'
@@ -180,6 +181,7 @@ let options = {
   output: 'cost.results.json',
   baseline: 'cost.baseline.json',
   files,
+  rounds: 1,
   // An idle box, so the example never depends on what else this one runs.
   host: (): Host => ({
     config: {},
@@ -197,28 +199,57 @@ let error = await throws(() => run(suite, { ...options, mode: 'check' }))
 ok(error instanceof Regressed)
 equal(read(options.output).verdict, 'regressed')
 equal(read(options.baseline).benches[0].median, 100)
-let scoped = {
-  ...suite,
-  benches: [{ name: 'read', unit: 'ms', sample: () => 50 }],
+```
+
+A scoped run measures part of a suite, and a resolution rounds the limit:
+
+```ts
+import { type Files, run } from '@yaks/benchmark'
+import { equal } from '@yaks/testing'
+
+let saved = new Map<string, string>()
+let files: Files = {
+  read: async (path) => {
+    if (!saved.has(path)) throw new Deno.errors.NotFound(path)
+    return saved.get(path)!
+  },
+  write: async (path, value) => void saved.set(path, JSON.stringify(value)),
 }
-let subset = { ...options, coverage: 'subset' as const }
+let suite = (name: string, sample: () => number, resolution?: number) => ({
+  name: 'cost',
+  metric: 'median-of-round-medians',
+  workload: 1,
+  benches: [{ name, unit: 'ms', resolution, sample }],
+})
+let options = (baseline: string) => ({
+  output: 'cost.results.json',
+  baseline,
+  files,
+  rounds: 1,
+  host: () => ({
+    config: {},
+    configURL: null,
+    commit: null,
+    runtime: 'example',
+    cpu: 'example',
+    load: [0, 0, 0],
+  }),
+})
+let base = options('cost.baseline.json')
+await run(suite('write', () => 100), { ...base, mode: 'accept', tolerance: .2 })
+let subset = { ...base, coverage: 'subset' as const }
+let scoped = suite('read', () => 50)
 equal((await run(scoped, { ...subset, mode: 'check' })).verdict, 'measured')
 await run(scoped, { ...subset, mode: 'accept', tolerance: 0.2 })
 equal(
-  read(options.baseline).benches.map((b: { name: string }) => b.name),
+  JSON.parse(saved.get(base.baseline)!).benches.map((b: { name: string }) =>
+    b.name
+  ),
   ['write', 'read'],
 )
 let duration = 2106
-let rounded = {
-  ...suite,
-  benches: [{
-    name: 'deploy',
-    unit: 'ms',
-    resolution: 1,
-    sample: () => duration,
-  }],
-}
-let precise = { ...options, baseline: 'rounded.baseline.json' }
+let rounded = suite('deploy', () => duration, 1)
+let precise = options('rounded.baseline.json')
 await run(rounded, { ...precise, mode: 'accept', tolerance: 0.25 })
 duration = 2633
 equal((await run(rounded, { ...precise, mode: 'check' })).verdict, 'passed')
@@ -347,7 +378,7 @@ try {
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | `.`      | `bench`, `run`, `Regressed`                                                                                                                                                                                                                     | Timed callbacks and JSON runner.                   |
 | `.`      | `median`, `baseline`, `best`, `compare`, `limit`, `loaded`, `spread`, `Coverage`                                                                                                                                                                | Pure aggregation and ratchet.                      |
-| `.`      | `configure`, `host`                                                                                                                                                                                                                             | Process reporter factory and current host context. |
+| `.`      | `busy`, `configure`, `host`                                                                                                                                                                                                                     | Process reporter factory and current host context. |
 | `.`      | `Bench`, `TimedBench`, `Iteration`, `TimeUnit`, `Suite`, `CollectedSuite`, `Workload`, `Direction`, `Sample`, `Samples`, `Round`, `Result`, `Run`, `Baseline`, `Regression`, `Host`, `Reporter`, `ReportedRun`, `Reporters`, `Options`, `Files` | Authoring, result, host and effect-boundary types. |
 | `./deno` | `extract`, `DenoReport`                                                                                                                                                                                                                         | Deno JSON import with provenance.                  |
 
