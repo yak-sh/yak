@@ -17,6 +17,12 @@
   color: var(--muted);
 }
 
+/* What is kept but no longer live: every word in it muted, links too. */
+.Rows-quiet,
+.Rows-quiet :is(a, .Tile_Title, .Body) {
+  color: var(--muted);
+}
+
 /* A feed of unlike things: each entry has its own edge and breathing room. */
 .Rows-ruled > .Rows_Item {
   padding: var(--half-gap) 0;

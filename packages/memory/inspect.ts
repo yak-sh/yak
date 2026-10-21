@@ -1,9 +1,9 @@
 /**
- * How a belief and a topic read in the inspector (@yaks/inspect): the
- * `/views` facet's `inspectViews`, `Inspect.Page` for each, drawn ahead of
- * the page any entity has, most specific match first. Each draws what is its own and asks the
- * inspector for the parts any page has (`io.show`: the head, the body, the
- * facts, the links, the history).
+ * How a belief reads in the inspector (@yaks/inspect): the `/views` facet's
+ * `inspectViews`, `Inspect.Page`, drawn ahead of the page any entity has,
+ * most specific match first. It draws what is its own and asks the inspector
+ * for the parts any page has (`io.show`: the head, the body, the facts, the
+ * links, the history).
  *
  * - A belief says what it says in full, what it is about and where it holds,
  *   then what it was built from: each memory it cites (`cites` edges), the
@@ -11,8 +11,8 @@
  *   somebody wrote about them, and the conversation around them where they
  *   were said in one, as the package that keeps conversations draws it
  *   (`Inspect.Conversation`, @yaks/session).
- * - A topic says its brief, then the beliefs about it, each by what it says,
- *   newest first.
+ * - In a topic's lists (`Topic.List.Tile`, @yaks/topic), a belief reads as
+ *   what it states, and where it holds.
  *
  * @module
  */
@@ -33,7 +33,7 @@ import {
 } from '@yaks/inspect'
 import { words } from './recall.ts'
 
-import { AROUND, BELIEFS, statement } from './views.ts'
+import { AROUND, statement } from './views.ts'
 
 type Comp = Record<string, unknown>
 let comp = (b: Bundle | undefined, name: string): Comp =>
@@ -147,42 +147,8 @@ export let BeliefPage = ({ e, io }: Props): JSX.Element => {
   )
 }
 
-/** The beliefs about a topic, newest first, each by what it says. */
-let Beliefs = (
-  { e, io, notes }: { e: Bundle; io: Io; notes: Map<string, Bundle[]> },
-): JSX.Element => {
-  let eid = e.entity.eid
-  let got = io.ask({
-    beliefs: `.belief.about=${eid}&?doc&?belief&?created` +
-      `&.order=-created.at&.limit=${BELIEFS}`,
-  })
-  let all = rows(got.beliefs)
-  useNamed(io, all.map((b) => str(b, 'belief', 'scope')))
-  return h(
-    Part,
-    {
-      io,
-      eid,
-      subject: io.id(e),
-      heading: 'Beliefs',
-      count: got.beliefs?.ready ? all.length : undefined,
-      notes,
-    },
-    got.beliefs?.error
-      ? h(ui.Rows.More, {}, got.beliefs.error)
-      : !got.beliefs?.ready && !all.length
-      ? h(ui.Loading, {})
-      : !all.length
-      ? h(ui.Rows.More, {}, 'nothing is believed about it yet')
-      : h(
-        ui.Rows,
-        {},
-        all.map((b) => io.show(b, 'Topic.Belief.Tile', {})),
-      ),
-  )
-}
-
-/** A belief's reading in a topic's list, reusable wherever that view is needed. */
+/** A belief's reading in a topic's lists: what it states, and where it
+ * holds. */
 export let BeliefTile = ({ e: b, io }: Props): JSX.Element => {
   let scope = str(b, 'belief', 'scope')
   useNamed(io, [scope])
@@ -195,27 +161,9 @@ export let BeliefTile = ({ e: b, io }: Props): JSX.Element => {
   )
 }
 
-/** A topic's page. */
-export let TopicPage = ({ e, io }: Props): JSX.Element => {
-  let notes = usePageNotes(io, e, ['Beliefs'])
-  return h(
-    'div',
-    { 'data-inspect': e.entity.eid },
-    io.show(e, 'Inspect.Head', {
-      sub: str(e, 'doc', 'body'),
-      notes: notes.get(''),
-    }),
-    h(Beliefs, { e, io, notes }),
-    io.show(e, 'Inspect.Facts', { notes, skip: ['topic'] }),
-    io.show(e, 'Inspect.Links', { notes, skip: ['belief.about'] }),
-    io.show(e, 'Inspect.History', { notes }),
-  )
-}
-
 /** The pages this package draws in the inspector. */
 export let inspectViews: View[] = [
   { view: 'Belief.Cited', match: parse('.memory'), Render: Cited },
-  { view: 'Topic.Belief.Tile', match: parse('.belief'), Render: BeliefTile },
+  { view: 'Topic.List.Tile', match: parse('.belief'), Render: BeliefTile },
   { view: 'Inspect.Page', match: parse('.belief'), Render: BeliefPage },
-  { view: 'Inspect.Page', match: parse('.topic'), Render: TopicPage },
 ]

@@ -72,6 +72,28 @@ and says which topic to use. Whoever makes a topic finds first, so a subject
 already named is reused, and the refusal catches two writers that found nothing
 at once.
 
+## The views
+
+`@yaks/topic/views` draws a topic wherever the browsing app
+([@yaks/browse](../browse)) does, in a browser and a terminal alike. A topic
+opens on its page, the `Topic` tab, which is also its `Inspect.Page`:
+
+- the head: its title, the topics that contain it, and where it holds (the
+  project its scope names, or everywhere);
+- the cover's words, then the contents, as markdown;
+- what it contains, what to understand first, what is related and its sources,
+  each in edge order;
+- the beliefs about it, newest first, and the archived ones on a press, muted;
+- then the facts, links and history any page has.
+
+Whatever it holds or cites is drawn by that entity's own renderer, asked for as
+`Topic.List.Tile`: a subtopic as its cover, a belief as what it states
+(@yaks/memory), anything else as it reads in any list.
+
+The `Tree` tab draws what a topic contains all the way down, each subtopic's
+holdings nested under it. It walks only into topics, draws a topic met again on
+its own path without walking it, and links to the rest past `DEPTH` levels.
+
 ## Exports
 
 The root exports `topicDoc`, `named` (a title folded to a topic's name),
@@ -79,11 +101,14 @@ The root exports `topicDoc`, `named` (a title folded to a topic's name),
 (whether two names share a subject by their words), `found` (the query
 `topic find` reads), and the constants `TOPIC` and `FIND`. `@yaks/topic/vocab`
 exports `topicDoc` and `docs: [topicDoc]` for schema loaders.
+`@yaks/topic/views` exports `inspectViews()`, which loads the page, the tree and
+the tile, and `tabs`, the two tabs a topic wears.
 
 ## Compatibility
 
 Pure TypeScript with no platform API, so it runs in a browser, on Deno and on
-Node. The tools need a configured graph, and `near` a vector index.
+Node. The tools need a configured graph, and `near` a vector index. The views
+are Preact components a host mounts through @yaks/inspect's contract.
 
 ## License
 

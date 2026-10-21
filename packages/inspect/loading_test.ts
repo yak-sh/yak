@@ -10,7 +10,7 @@ import { CompPage } from './Comp.ts'
 import { PackagePage } from './Package.ts'
 import { TaskPage } from '../task/inspect.ts'
 import { Conversation, SessionPage, SessionTile } from '../session/inspect.ts'
-import { BeliefPage, TopicPage } from '../memory/inspect.ts'
+import { BeliefPage } from '../memory/inspect.ts'
 
 let vocab = loadVocab([{
   package: '@test/loading',
@@ -202,25 +202,18 @@ let conversationPending = loading(
     }),
   ),
 )
-let topicPending = section(
-  h(TopicPage, props(io({ beliefs: { ready: false } }))),
-  'Beliefs',
-)
-let topicEmpty = section(h(TopicPage, props(io())), 'Beliefs')
 let beliefPending = section(
   h(BeliefPage, props(io({ cites: { ready: false } }))),
   'Built from',
 )
 
-test('domain inspectors show loading before comments, turns, beliefs and evidence arrive', () => {
-  for (let part of [taskPending, sessionPending, topicPending, beliefPending]) {
+test('domain inspectors show loading before comments, turns and evidence arrive', () => {
+  for (let part of [taskPending, sessionPending, beliefPending]) {
     ok(part.querySelector('[role="status"]'))
   }
   ok(conversationPending)
   equal(sessionPending.textContent?.includes('nothing said yet'), false)
   ok(sessionEmpty.textContent?.includes('nothing said yet'))
-  equal(topicPending.textContent?.includes('nothing is believed'), false)
-  ok(topicEmpty.textContent?.includes('nothing is believed'))
 })
 
 test('domain inspectors retain populated comments and turns during refresh', () => {

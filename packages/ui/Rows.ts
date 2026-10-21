@@ -2,7 +2,8 @@
  * A list of rows, one `Rows.Item` each, and a `Rows.More` saying what was
  * left out. A list of things to pick from holds its `Tile`s directly, each
  * pressed to pick it, the one picked `on`. `Rows-nested` hangs the list off
- * what it belongs to, indented under a rule.
+ * what it belongs to, indented under a rule. `Rows-quiet` is a list of what
+ * is kept but no longer live (archived), muted, its links too.
  *
  * @module
  */
@@ -35,6 +36,7 @@ export let sheet = (c: Colors): Sheet => ({
   Rows_More: { fg: c.muted },
   Rows_Kind: { fg: c.muted },
   'Rows-ruled': { gap: true },
+  'Rows-quiet': { fg: c.muted },
 })
 
 let { Item, More } = Rows
@@ -77,6 +79,7 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   ['Rows-nested', h(Rows, { mod: 'nested' }, row('C-3', 'a comment'))],
+  ['Rows-quiet', h(Rows, { mod: 'quiet' }, row('I-4', 'an archived belief'))],
   [
     'Rows of tiles to pick from: Tile-on, Tile-hover, Tile-dim',
     h(

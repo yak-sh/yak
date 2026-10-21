@@ -35,7 +35,8 @@ export let LINKS = 200
 export let NAMED = 12
 
 /** What the links are drawn with besides the entity: what the page shows in a
- * part of its own, by relation (`cites`) or by the property that names it
+ * part of its own, by the phrase an edge reads as from this end (`cites`, or
+ * `contained by` for one aimed at it) or by the property that names it
  * (`belief.about`), and the notes by heading. */
 export type LinksCtx = { skip?: string[]; notes?: Map<string, Bundle[]> }
 
@@ -163,7 +164,7 @@ export let Links = ({ e, io, ctx }: Props): JSX.Element | null => {
   )
   let shown = (b: Bundle) =>
     b.edge
-      ? !skip.includes(relation(b, rels) ?? '')
+      ? !skip.includes(phrase(io, b, eid, rels))
       : !noted.has(b.entity.eid) &&
         !naming(b, eid).some((n) => skip.includes(n))
   let all = rows(got.refs).filter(shown)

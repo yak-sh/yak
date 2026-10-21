@@ -4,7 +4,8 @@
   "exports": {
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
-    "./tools": "./tools.ts"
+    "./tools": "./tools.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "A knowledge graph of topics: each a cover, contents and edges to what it holds, needs, reads and cites, found and made under one name per subject.",
