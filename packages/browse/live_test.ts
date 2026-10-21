@@ -1857,15 +1857,17 @@ test('pinned sleeps through an unrelated row patch', () => {
 // queryEids call can open a server subscription. It must round-trip the shapes
 // queryEids actually builds (has/eq/contains/refs) and REFUSE anything else, so a
 // shape the grammar can't spell exactly falls back to the local resolver instead
-// of putting a divergent query on the wire.
-test('predsToQuery round-trips membership shapes, refuses the rest', () => {
+// of putting a divergent query on the wire. Each shape is a case of its own.
+{
   let E = 'abcdef10-0000-4000-8000-000000000001'
   let F = 'abcdef10-0000-4000-8000-000000000002'
-  cache.value = {
-    [E]: { entity: { eid: E, num: 51 } },
-    [F]: { entity: { eid: F, num: 52 } },
+  let seeded = () => {
+    cache.value = {
+      [E]: { entity: { eid: E, num: 51 } },
+      [F]: { entity: { eid: F, num: 52 } },
+    }
+    resetSignals()
   }
-  resetSignals()
   // These are live.ts's own builders, verbatim: a pred built by hand carries no
   // `tag` (the binder stamps that, and it is no part of what a query selects),
   // and the round-trip must still spell each one.
@@ -1889,64 +1891,66 @@ test('predsToQuery round-trips membership shapes, refuses the rest', () => {
     value,
     refs: true,
   })
-  assertEquals(predsToQuery([has('project')]), '.project')
-  assertEquals(
-    predsToQuery([eq('comment', 'target', E)]),
-    `.comment.target=${E}`,
-  )
-  assertEquals(
-    predsToQuery([contains('board', 'query', E)]),
-    `.board.query~=${E}`,
-  )
-  assertEquals(predsToQuery([refsTo(E)]), `.refs=${E}`)
-  assertEquals(predsToQuery(parseQuery('widget')), 'widget')
-  assertEquals(predsToQuery(parseQuery('wid*')), 'wid*')
-  for (
-    let line of ['.doc.title="a,b"', '.doc.title="a..b"', '.doc.title="a,b",a']
-  ) {
-    assertEquals(parseQuery(predsToQuery(parseQuery(line))!), parseQuery(line))
-  }
-  assertEquals(
-    predsToQuery(parseQuery('"widget alpha" .task')),
-    '"widget alpha"&.task',
-  )
-  assertEquals(
-    predsToQuery([
-      eq('fold', 'client', E),
-      eq('fold', 'board', F),
-    ]),
+  let project = (fields: { comp: string; prop: string; wake: boolean }[]) => ({
+    comp: '',
+    prop: '',
+    op: PROJECT,
+    value: '',
+    fields,
+  })
+  let spells = (
+    preds: () => Parameters<typeof predsToQuery>[0],
+    line: string | undefined,
+  ) =>
+    test(`predsToQuery spells ${line ?? 'no line for an empty query'}`, () => {
+      // An entity a query names is in the cache, as queryEids finds it.
+      if (line?.includes(E)) seeded()
+      assertEquals(predsToQuery(preds()), line)
+    })
+  spells(() => [has('project')], '.project')
+  spells(() => [eq('comment', 'target', E)], `.comment.target=${E}`)
+  spells(() => [contains('board', 'query', E)], `.board.query~=${E}`)
+  spells(() => [refsTo(E)], `.refs=${E}`)
+  spells(() => parseQuery('"widget alpha" .task'), '"widget alpha"&.task')
+  spells(
+    () => [eq('fold', 'client', E), eq('fold', 'board', F)],
     `.fold.client=${E}&.fold.board=${F}`,
   )
   // A PROJECTION rides the wire now (D-22567 §3): the eids-only form, and named
   // columns with `~` back on the volatile ones — so the server answers only
   // those columns and the sub's identity includes which.
-  assertEquals(
-    predsToQuery([{ comp: '', prop: '', op: PROJECT, value: '', fields: [] }]),
-    '.fields=entity.eid',
-  )
-  assertEquals(
-    predsToQuery([
+  spells(() => [project([])], '.fields=entity.eid')
+  spells(
+    () => [
       eq('pin', 'canvas', E),
-      {
-        comp: '',
-        prop: '',
-        op: PROJECT,
-        value: '',
-        fields: [
-          { comp: 'pin', prop: 'x', wake: true },
-          { comp: 'pin', prop: 'z', wake: false },
-        ],
-      },
-    ]),
+      project([
+        { comp: 'pin', prop: 'x', wake: true },
+        { comp: 'pin', prop: 'z', wake: false },
+      ]),
+    ],
     `.pin.canvas=${E}&.fields=pin.x,pin.z~`,
   )
   // A column through references spells back whole: the row carries the
   // reference, the far column rides as a peer.
-  let through = '.comment&.fields=comment.target.doc.title,doc.title~'
-  assertEquals(predsToQuery(parseQuery(through)), through)
-  // An empty query has no line.
-  assertEquals(predsToQuery([]), undefined)
-})
+  for (
+    let line of [
+      'widget',
+      'wid*',
+      '.comment&.fields=comment.target.doc.title,doc.title~',
+    ]
+  ) spells(() => parseQuery(line), line)
+  spells(() => [], undefined)
+  for (
+    let line of ['.doc.title="a,b"', '.doc.title="a..b"', '.doc.title="a,b",a']
+  ) {
+    test(`predsToQuery spells ${line} as the same query`, () => {
+      assertEquals(
+        parseQuery(predsToQuery(parseQuery(line))!),
+        parseQuery(line),
+      )
+    })
+  }
+}
 
 // The canvas asks for its pins with a query it BUILDS (live.ts pinsOn), where a
 // board asks with one it parsed. bindClause stamps a `tag` on a parsed pred and
