@@ -71,7 +71,7 @@ All exports are available from `@yaks/sql`; the table groups them by purpose.
 | Numeric lookup        | `lookup`                                                                                                                    |
 | Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
 | Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
-| Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`                                                                             |
+| Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`, `visibleBacked`                                                            |
 | Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`, `claimed`                                                     |
 | Presence optimization | `ArchetypeSet`, `Matching`, `archetypeSet`                                                                                  |
 | Rule compilation      | `rule`, `Plan`, `On`, `At`, `Gone`                                                                                          |
@@ -512,6 +512,15 @@ into backings follow their integer ids. A backed spine has no numbers,
 archetypes or tombstones; its entities carry only its computed component. Other
 components' predicates are answered without joining across the two id spaces.
 Missing backings or tags are refused.
+
+A backing's entities have no row a visibility policy can test, so a backing says
+what each row tells of: `about` is a select of `entity` (the row's id), `about`
+(an entity-table id) and `component` (the name of the component whose values the
+row tells, or null). Under a scope, a row is seen when the scope admits an
+entity it tells of, under that component's own scope where it has one, and a
+deleted entity is admitted by no scope. A backing without `about` has no row any
+scoped read sees. `visibleBacked(vocab, opts)` is the backings as the read's
+`visibility` sees them; a scoped query and a scoped gather both read through it.
 
 ## Clause compilation
 

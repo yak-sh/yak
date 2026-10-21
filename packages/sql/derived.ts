@@ -274,6 +274,14 @@ export type Backing = {
   rows: Select
   /** what its eids end with ({@link eidOf}): 32 hex characters */
   tag?: string
+  /** The entities each row tells of, so that a scoped read sees only rows
+   * about entities it may see: one row per pair, the backed row's id as
+   * `entity`, an entity-table id as `about`, and as `component` the name of
+   * the component whose values the row tells, or null. A scoped read sees a
+   * row when its scope admits an entity the row tells of, under that
+   * component's own scope where it has one. A backing without `about` has no
+   * row any scoped read sees. */
+  about?: Select
 }
 
 /** Every computed component a store reads, keyed by component name. */

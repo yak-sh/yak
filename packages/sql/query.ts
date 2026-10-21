@@ -11,6 +11,7 @@ export {
   screen,
   sourceScreen,
   tallied,
+  visibleBacked,
   visibleDerived,
 } from './bind.ts'
 

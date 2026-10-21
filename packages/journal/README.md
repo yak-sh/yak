@@ -120,6 +120,11 @@ describes no such component (no @yaks/vocab, or a component since renamed) a
 change has no `comp`. `tx` refers to the `_tx` entity, and `target`, `by` and
 `via` to entities of the graph.
 
+A scoped read (a person's on yaks.app, or the API's on the box) sees a change
+when its scope admits the change's target and the component it wrote, and a
+transaction when it sees one of its changes. A deleted entity's history is no
+scoped reader's (@yaks/sql `Backing.about`).
+
 So history is asked in the query grammar, at every door: `._change.target=T-5`
 is an entity's history, oldest first, and `._change.target=T-5&.limit=20` its
 latest twenty; `._change.comp=<its _comp>&.limit=20` is a component's latest

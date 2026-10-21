@@ -8,6 +8,7 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
+import type { Visibility } from '@yaks/graph/storage'
 import { ram } from '@yaks/ram'
 import { loadVocab, metaDoc } from '@yaks/vocab'
 import { mem } from '../sqlite/testing.ts'
@@ -54,6 +55,13 @@ let build = () => {
   apply([{ entity: { eid: 'n1' }, note: { text: 'aside' } }])
   let read = (q: string) => sync(g.read(q))
   let rows = (q: string) => sync(g.rows(q))
+  // The same store as a reader under `visibility` reads it.
+  let seen = (visibility: Visibility) =>
+    graph({
+      storage: store,
+      vocab,
+      plugins: [{ name: 'scope', scope: () => visibility }],
+    })
   // What a change says, on one line, its component by the name its `_comp`
   // gives it: `page p1 {"title":"Retro"}`.
   let name = new Map(
@@ -66,7 +74,7 @@ let build = () => {
       return `${comp} ${c.target} ${JSON.stringify(c.value ?? null)}`
     })
   }
-  return { g, read, rows, apply, said }
+  return { g, read, rows, apply, said, seen }
 }
 
 // The wiki as every reading test sees it, built once: they only read. A test
@@ -201,6 +209,39 @@ test('the journal is no part of any other answer', () => {
   assertEquals(ordinary[2], [])
 })
 
+// A scoped reader sees the changes to what it may see, and the transactions
+// that made one of them. Here the note n1 is private, and p2 is deleted, which
+// no scope admits; a component's own scope hides that component's changes.
+// Each scope's answers are read once, beside the wiki's; the test compares.
+// A query and a gather by eid each decide what is seen, so each is asked.
+let every = changes.concat(built.read('._change.target=p2,n1'))
+  .map((b) => b.entity.eid)
+let sees = (visibility: Visibility) => {
+  let g = built.seen(visibility)
+  let column = (q: string, f: string) => sync(g.rows(q)).map((r) => r[f])
+  return {
+    got: built.said(sync(g.get(every))),
+    targets: column('._change&.fields=_change.target', '_change.target'),
+    txs: column('._tx&.fields=_tx.seq', '_tx.seq'),
+  }
+}
+let scoped = [
+  sees({ entity: '!note' }),
+  sees({ components: { note: '!entity' } }),
+]
+test('a scoped read sees only the history of what it may see', () => {
+  let p1 = ['page p1 {"title":"Kickoff"}', 'page p1 {"title":"Retro"}']
+  let p2 = ['page p2 {"title":"Notes"}', 'entity p2 null']
+  assertEquals(scoped, [
+    { got: p1, targets: ['p1', 'p1'], txs: [1, 2] },
+    {
+      got: [...p1, ...p2],
+      targets: ['p1', 'p1', 'p2', 'p2'],
+      txs: [1, 2, 3],
+    },
+  ])
+})
+
 test('nothing writes the journal’s components', () => {
   let { apply, g } = build()
   let change = { tx: null, target: 'p1', value: {} }
@@ -215,10 +256,10 @@ test('nothing writes the journal’s components', () => {
   )
 })
 
+// A replica given p2's history, made once beside the wiki.
+let replica = graph({ storage: ram(vocab), vocab })
+let p2 = built.read('._change.target=p2')
+sync(replica.apply(p2, { trusted: true, replica: true }))
 test('a replica answers a history query the same way', () => {
-  let { read } = fixture()
-  let copy = graph({ storage: ram(vocab), vocab })
-  let rows = read('._change.target=p2')
-  sync(copy.apply(rows, { trusted: true, replica: true }))
-  assertEquals(sync(copy.read('._change.target=p2')), rows)
+  assertEquals(sync(replica.read('._change.target=p2')), p2)
 })

@@ -64,6 +64,7 @@ import {
   sub,
   table,
   val,
+  visibleBacked,
   visibleDerived,
 } from '@yaks/sql/query'
 import type { Bundle, Comp } from './bundle.ts'
@@ -828,14 +829,33 @@ export let get = (
   if (!eids.length) return []
   if (opts.visibility) {
     let { visibility, ...plain } = opts
+    // A backed entity has no entity row: it is seen when its backing, as the
+    // scope sees it, holds its row, whatever components are asked about.
+    let backings = Object.values(plain.backed ?? {})
+    let tagged = (eid: string) =>
+      backings.some((b) => b.tag && idOf(b.tag, eid) != null)
+    let seen = (ids: string[]) =>
+      backedGet(
+        driver,
+        vocab,
+        ids,
+        { ...plain, backed: visibleBacked(vocab, opts) },
+        [],
+      ).map((b) => b.entity.eid)
     // A getter's eids are physical identities. Query addressing may interpret
     // a human id such as history-1 as number 1, which cannot decide ownership.
-    let permitted = (ids: string[], components: string[] = []): Set<string> => {
-      if (!ids.length) return new Set()
+    let permitted = (all: string[], components: string[] = []): Set<string> => {
+      let backed = backings.length ? all.filter(tagged) : []
+      let ids = backed.length ? all.filter((eid) => !tagged(eid)) : all
+      let out = new Set(seen(backed))
+      if (!ids.length) return out
       if (
         !visibility.entity &&
         !components.some((name) => visibility.components?.[name])
-      ) return new Set(ids)
+      ) {
+        for (let eid of ids) out.add(eid)
+        return out
+      }
       let run = () => {
         let screen = sourceScreen(vocab, opts, components)
         return driver.query(select({
@@ -853,11 +873,10 @@ export let get = (
           ),
         }))
       }
-      return new Set(
-        (cache ? cache.permit(ids, components, run) : run()).map((r) =>
-          String(r.eid)
-        ),
-      )
+      for (let r of cache ? cache.permit(ids, components, run) : run()) {
+        out.add(String(r.eid))
+      }
+      return out
     }
     let allowed = permitted(eids)
     let ids = eids.filter((eid) => allowed.has(eid))
@@ -1153,8 +1172,10 @@ let backedGet = (
       ? eids.map((e) => idOf(tag, e)).filter((id) => id != null)
       : []
     if (!tag || !ids.length) return []
-    let { sel, joins } = project(vocab, comp, opts.derived, opts.backed)
     let asked = !comps || comps.includes(comp)
+    let { sel, joins } = asked
+      ? project(vocab, comp, opts.derived, opts.backed)
+      : { sel: [], joins: [] }
     return driver.query(select({
       cols: [as(col('entity', comp), '@id'), ...sel],
       from: from(b.rows, comp),

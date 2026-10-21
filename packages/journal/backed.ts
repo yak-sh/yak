@@ -59,11 +59,26 @@ let value = when([[
   })),
 ]])
 
+// What each record tells of, by the record's own id (`id` for a change, `tx`
+// for a transaction): every change's entity and component. A scoped read sees
+// a change when it may see that component of that entity, and a transaction
+// when it may see one of its changes.
+let tells = (id: string) =>
+  select({
+    cols: [
+      as(jc(id), 'entity'),
+      as(jc('entity'), 'about'),
+      as(jc('component'), 'component'),
+    ],
+    from: table('journal_change', 'jc'),
+  })
+
 /** The rows `_tx` and `_change` are read from: the journal's tables. */
 export let backed = (vocab: Vocab): Backings => {
   let { comp, joins } = described(vocab)
   return {
     _tx: {
+      about: tells('tx'),
       rows: select({
         cols: [
           as(col('id'), 'entity'),
@@ -78,6 +93,7 @@ export let backed = (vocab: Vocab): Backings => {
       }),
     },
     _change: {
+      about: tells('id'),
       rows: select({
         cols: [
           as(jc('id'), 'entity'),

@@ -110,6 +110,7 @@ import {
   tallied,
 } from './sqlite.ts'
 import {
+  type Backing,
   type Backings,
   type Derived,
   derivedOf,
@@ -3611,6 +3612,68 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
   return made
 }
 
+/** Each backing as a scoped read sees it (./derived.ts `Backing`). A row is
+ * seen when the scope admits an entity the row tells of, under the scope of
+ * the component it tells where that component has one; a deleted entity is
+ * admitted by no scope. A backing that tells of no entity is seen by no
+ * scoped read. Its rows are bound when first read, so a scoped read that
+ * reads no backing never binds the screens. */
+export let visibleBacked = (vocab: Vocab, opts: BindOpts): Backings => {
+  let backed = opts.backed ?? {}
+  let names = Object.keys(opts.visibility?.components ?? {})
+  if (
+    !Object.keys(backed).length || !opts.visibility?.entity && !names.length
+  ) return backed
+  let sees: Cond | undefined
+  let seen = () => {
+    let about = col('about', '__about')
+    let within = (screen: Raw | null) =>
+      screen
+        ? exists(select({
+          cols: [lit(1)],
+          from: from(screen, '__seen'),
+          where: eq(col('id', '__seen'), about),
+        }))
+        : TRUE
+    let entity = within(sourceScreen(vocab, opts))
+    return names.length
+      ? when(
+        names.map((name) => [
+          eq(col('component', '__about'), lit(name)),
+          within(sourceScreen(vocab, opts, [name])),
+        ]),
+        entity,
+      )
+      : entity
+  }
+  let rows = (b: Backing): Select =>
+    select({
+      cols: [star('__backed')],
+      from: from(b.rows, '__backed'),
+      where: b.about
+        ? exists(select({
+          cols: [lit(1)],
+          from: from(b.about, '__about'),
+          where: and(
+            eq(col('entity', '__about'), col('entity', '__backed')),
+            sees ??= seen(),
+          ),
+        }))
+        : FALSE,
+    })
+  return Object.fromEntries(
+    Object.entries(backed).map(([comp, b]) => {
+      let held: Select | undefined
+      return [comp, {
+        ...b,
+        get rows() {
+          return held ??= rows(b)
+        },
+      }]
+    }),
+  )
+}
+
 let scopedTally = (
   ast: And,
   vocab: Vocab,
@@ -3800,7 +3863,11 @@ let visible = (
   heard: Heard = opts,
 ): Prepared => {
   let visibility = opts.visibility!
-  let plain = { ...opts, visibility: undefined }
+  let plain = {
+    ...opts,
+    visibility: undefined,
+    backed: opts.backed && visibleBacked(vocab, opts),
+  }
   // Each scoped relation is named as the dialect asks for it and written when
   // the statement is lowered: a caller that keeps the statement (./kept.ts)
   // never writes them again.
