@@ -251,8 +251,10 @@ export async function measure(
     return results
   } finally {
     if (started) {
-      await keys('Escape').catch(() => {})
-      await keys('q').catch(() => {})
+      // Ctrl-C quits from any focus in one byte. Escape then q does not: the
+      // terminal holds a bare Escape for 25 ms to tell it from Alt
+      // (packages/tui/run.ts), so the pair reads as Alt-q in the composer.
+      await keys('C-c').catch(() => {})
       await until('terminal shutdown', async () => {
         try {
           await tmux('list-sessions')
@@ -260,7 +262,7 @@ export async function measure(
         } catch {
           return true
         }
-      }).catch(() => {})
+      }).catch((e) => console.error(e.message))
       await tmux('kill-server').catch(() => {})
     }
     try {
