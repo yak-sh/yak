@@ -1,5 +1,6 @@
 // Real directory Store mutations, with a separate durable serving-copy core
 // behind an asynchronous RPC-shaped door. No Store state is shared with it.
+import { backoff } from '@yaks/durable-object'
 import { select, table } from '@yaks/sql'
 import { equal, ok, test } from '@yaks/testing'
 import { doorOf, PLATFORM_STORE } from './door.ts'
@@ -430,6 +431,51 @@ await proof(
       equal(f.finishes, f.begins)
       equal(epoch, String(f.initial + 1))
       equal(cleared, true)
+      equal(f.saved().blocked, false)
+    }
+  },
+)
+
+// A deploy moves the copy, and the runtime fails a call into it for a moment,
+// the answer to a begin it carried out included (T-131234).
+let moving =
+  (times: number, error = 'internal error; reference = moving') => () =>
+    times-- > 0 ? Promise.reject(new Error(error)) : Promise.resolve()
+let instantly = async <T>(run: () => Promise<T>) => {
+  let wait = backoff.wait
+  backoff.wait = () => Promise.resolve()
+  try {
+    return await run()
+  } finally {
+    backoff.wait = wait
+  }
+}
+
+await proof('a write waits out a copy that moves under it', async () => {
+  let f = await fixture()
+  f.onBegin(moving(1))
+  f.onFinish(moving(1, 'Network connection lost.'))
+  let error = await instantly(() => refusal(() => f.at.apply(patch, KERNEL)))
+  return () => {
+    equal(error, '')
+    equal(f.committed(), { access: 'private', epoch: String(f.initial + 2) })
+    equal([f.begins, f.finishes], [[f.initial + 1, f.initial + 2], [
+      f.initial + 2,
+    ]])
+    equal(f.saved().blocked, false)
+  }
+})
+
+await proof(
+  'a copy still moving after the pauses fails the write, which commits nothing',
+  async () => {
+    let f = await fixture()
+    f.onBegin(moving(Infinity))
+    let error = await instantly(() => refusal(() => f.at.apply(patch, KERNEL)))
+    return () => {
+      ok(error.includes('internal error'), error)
+      equal(f.committed(), { access: 'public', epoch: String(f.initial) })
+      equal(f.begins.length, backoff.pauses.length + 1)
       equal(f.saved().blocked, false)
     }
   },

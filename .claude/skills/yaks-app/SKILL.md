@@ -56,7 +56,8 @@ and setup; this is the map and the feel.
   copy (`directory-copy.ts`, `serving-copy.ts`) until it commits, and every
   signed read and every store's check of a caller waits it out, at most
   `FENCE_WAIT`. A directory or copy that can't answer for a moment is waited
-  out the same way, never refused. A write of what no authorization reads
+  out the same way, never refused, and a write resends its fence calls while
+  a deploy moves the copy (`fenced`). A write of what no authorization reads
   raises none (graph.ts `unfenced`: use receipts), so a new bookkeeping word
   written often belongs there, or each write of it holds back every check on
   the platform.

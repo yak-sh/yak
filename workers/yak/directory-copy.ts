@@ -7,6 +7,7 @@ import { cookieValue } from './lib/token.ts'
 import type { Fetcher } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
+import { evicted, lost, opaque, retried } from '@yaks/durable-object'
 export type DirectoryCopyTimer = {
   now(): number
   after(ms: number, callback: () => void): () => void
@@ -68,10 +69,10 @@ export let fenced = async <T>(
   let failed = true
   try {
     for (;; tries--) {
-      let revision = await copy.begin()
+      let revision = await retried(() => copy.begin(), true, moving)
       try {
         let out = await write(revision)
-        await copy.finish(revision)
+        await retried(() => copy.finish(revision), true, moving)
         failed = false
         return out
       } catch (e) {
@@ -80,9 +81,20 @@ export let fenced = async <T>(
     }
   } finally {
     open--
-    if (failed) await mend(copy, committed).catch(() => {})
+    if (failed) {
+      await mend(copy, committed).catch((e) => {
+        if (!moving(e)) defect(e, { request: 'serving fence mend' })
+      })
+    }
   }
 }
+
+// What the runtime fails a call into the copy with while a deploy moves it.
+// `begin` is sent again too: one whose answer was lost leaves a fence the
+// next one supersedes, and the write commits under the newer revision. A
+// copy still moving after `backoff`'s pauses fails the write, which commits
+// nothing without its fence.
+let moving = (e: unknown) => evicted(e) || lost(e) || opaque(e)
 
 export let EPOCH = 'x-yak-directory-revision'
 /** A signed read still fenced asks the directory to mend an orphaned fence. */
