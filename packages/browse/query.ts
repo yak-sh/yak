@@ -57,15 +57,7 @@
 // arbitrarily deep.
 import { IdError } from './types.ts'
 import { anyRef, isRef, parseProp, type Prop, typed } from './props.ts'
-import {
-  edges,
-  kindOrder,
-  kindWord,
-  lazy,
-  resultComps,
-  statusOf,
-  vocab,
-} from './types.ts'
+import { edges, kindOrder, kindWord, lazy, statusOf, vocab } from './types.ts'
 import { Unknown } from '@yaks/vocab'
 import { term as ftsTerm } from '@yaks/fts'
 import { type Check, check } from '@yaks/match'
@@ -840,12 +832,11 @@ let bindClause = (c: Clause): Pred[] => {
 }
 
 // A clause's path as the hops it names (@yaks/vocab `aim`). A presence test
-// naming a component nothing declares is refused, as @yaks/sql refuses it,
-// unless it is a component a query answers beside a row (resultComps).
+// naming a component nothing declares is refused, as @yaks/sql refuses it.
 let aimed = (c: Clause & { kind: 'pred' }): Hop[] => {
   let hops = vocab.aim(c.path.join('.'), bare(c))
   let leaf = hops[hops.length - 1]
-  if (!leaf.prop && !vocab.comp(leaf.comp) && !(leaf.comp in resultComps)) {
+  if (!leaf.prop && !vocab.comp(leaf.comp)) {
     throw new Unknown(leaf.comp)
   }
   return hops

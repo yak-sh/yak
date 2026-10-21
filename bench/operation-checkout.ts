@@ -38,11 +38,11 @@ export let checkoutOperations = async (
   if (!repository) throw new Error('missing owned repository')
   let file = identities(graph.vocab).file({
     path: 'mod.ts',
-    repository: repository.entity.eid,
+    root: repository.entity.eid,
   }, { entity: { eid: '' } })
   await graph.apply([{
     entity: { eid: file },
-    file: { path: 'mod.ts', repository: repository.entity.eid },
+    file: { path: 'mod.ts', root: repository.entity.eid },
   }])
   let citation = link(PERSONA, 'cites', file)
   await graph.apply([citation])

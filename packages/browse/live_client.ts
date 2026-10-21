@@ -6,7 +6,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import type { Coverage, Frame, Socket } from '@yaks/sync'
 import { loadVocab } from '@yaks/vocab'
-import { type Change, keywords, resultComps, vocab } from './types.ts'
+import { type Change, keywords, vocab } from './types.ts'
 import type { Sub } from './live.ts'
 import { storageKey } from './hosting.ts'
 export { entire, quiet }
@@ -75,7 +75,6 @@ export let liveClient = (opts: {
   let bundles = (changes: Change[], reset = false): Bundle[] => {
     let rows = new Map<string, Bundle>()
     for (let { eid, name, comp } of changes) {
-      if (name in resultComps) continue
       let row = rows.get(eid)
       if (!row) {
         row = reset ? { entity: { eid } } : {

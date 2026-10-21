@@ -1,18 +1,13 @@
-import { Loading } from '@yaks/ui'
 import { type Ent, idOf, statusOf } from '../../types.ts'
 import { ent, pending } from '../../live.ts'
 import { el } from '@yaks/ui'
 import { highlight } from '../../highlight.ts'
-import { type Materialized, useResultComponent } from '../useQuery.ts'
 
 // A doc as markdown with frontmatter — the file a dragged Markdown tab drops on
 // the desktop, shown raw by the Markdown view. Any entity with a doc qualifies;
-// workflow lines (status) appear only where the entity carries them.
-// A PERSONA's file is its materialization — the same bytes sync writes to
-// .tasks/ (header, core text, preloaded bodies, index) — so what you see
-// raw is exactly what a spawned session reads. The query-result materialized
-// component computes those bytes from the spawn path's bounded personaGraph closure;
-// rendering from the partial browser cache would miss tier rows and edges.
+// workflow lines (status) appear only where the entity carries them. A
+// persona shows its own doc too: what an agent reads, with every included
+// document, is `yak persona read`.
 export let mdText = (e: Ent) => {
   let refs = e.refs
     .map((r) => `${r.type}: ${idOf(ent(r.child))}`)
@@ -35,14 +30,7 @@ export let mdText = (e: Ent) => {
 let Pre = el('pre', 'Md')
 
 export let Md = ({ e }: { e: Ent }) => {
-  let materialized = useResultComponent(
-    e.eid,
-    'materialized',
-    !!e.persona,
-  ) as Materialized | undefined
-  if (e.persona && materialized === undefined) return <Loading />
-  let text = e.persona ? (materialized?.text ?? '…\n') : mdText(e)
-  let lit = highlight(text, 'markdown')
+  let lit = highlight(mdText(e), 'markdown')
   return (
     <Pre>
       <code

@@ -28,12 +28,10 @@ import {
   querySubscription,
   type References,
   references,
-  resultComponent,
-  resultSub,
   type SubscriptionRead,
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
-import { type Ent, type ResultComp, vocab } from '../types.ts'
+import { type Ent, vocab } from '../types.ts'
 import { dotFields } from '../tray_query.ts'
 
 // A query that does not parse fails where it was asked, never in the render
@@ -233,24 +231,4 @@ export let useReferences = (eid: string): References => {
   let query = referenceQuery()
   useLayoutEffect(() => query ? edgeSub(eid, query) : undefined, [eid, query])
   return references(eid)
-}
-
-export type Materialized = { text: string; scoped: string[] }
-
-// A transient result component is requested through the ordinary component
-// grammar. The server supplies its declared inputs; the browser owns no graph
-// walk and the returned value never enters the writable component cache.
-export let useResultComponent = (
-  eid: string,
-  name: ResultComp,
-  enabled = true,
-): Record<string, unknown> | null | undefined => {
-  let value = resultComponent(eid, name).value
-  useLayoutEffect(
-    () => enabled ? resultSub(eid, name) : undefined,
-    [eid, name, enabled],
-  )
-  return enabled
-    ? value as Record<string, unknown> | null | undefined
-    : undefined
 }

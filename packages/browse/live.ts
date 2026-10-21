@@ -28,8 +28,6 @@ import {
   type EntCore,
   idOf,
   type Pinned,
-  type ResultComp,
-  resultComps,
   settled,
   shortHex,
   type Snapshot,
@@ -931,8 +929,6 @@ export let clearForTest = () => {
   boardEntrySubs.clear()
   entryUses.clear()
   edgeUses.clear()
-  resultUses.clear()
-  resultSignals.clear()
   routeUses.clear()
   rowsSub.clear()
   oneShots.clear()
@@ -1910,18 +1906,6 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
     }
     return { eids: [], edges: [] }
   }
-  let resultChanges = f.changes.filter((c) => c.name in resultComps)
-  let found = resultSignals.get(f.sub)
-  if (found && (f.replace || resultChanges.length)) {
-    let next = f.replace ? {} : { ...found.peek() }
-    for (let { eid, name, comp } of resultChanges) {
-      let row = { ...next[eid] }
-      if (comp == null) delete row[name]
-      else row[name] = comp
-      Object.keys(row).length ? next[eid] = row : delete next[eid]
-    }
-    found.value = next
-  }
   // A window rides any frame that has one to state; a REPLACE with none is the
   // server saying this answer is whole, which must clear a bound left by the
   // query this frame replaced.
@@ -2070,11 +2054,6 @@ let subFailures = new Map<
   { reason: string; reference: string }
 >()
 let edgeUses = new Map<string, number>()
-let resultUses = new Map<string, number>()
-let resultSignals = new Map<
-  string,
-  Signal<Record<string, Record<string, unknown>>>
->()
 // A board whose query NAMES the lazy partition (`.entry.session=S-3`) can't be
 // answered from the root cache — entries are omitted from the snapshot. So the
 // board holds an entry subscription per scoped session (the same door a Session
@@ -2102,32 +2081,6 @@ export let edgeSub = (eid: string, rider: string) => {
     let held = (edgeUses.get(sub) ?? 1) - 1
     if (held > 0) return void edgeUses.set(sub, held)
     edgeUses.delete(sub)
-    dropBoard(sub)
-  }
-}
-
-let resultKey = (eid: string, name: ResultComp) => `result:${eid}:${name}`
-
-// A query-result component uses the same addressed subscription transport as
-// stored components. Its signal is sub-owned and transient: neither the graph
-// cache nor IndexedDB can mistake it for writable graph data.
-export let resultComponent = (eid: string, name: ResultComp) => {
-  let key = resultKey(eid, name)
-  let found = resultSignals.get(key)
-  if (!found) resultSignals.set(key, found = signal({}))
-  return computed(() => found!.value[eid]?.[name])
-}
-
-export let resultSub = (eid: string, name: ResultComp) => {
-  let sub = resultKey(eid, name)
-  let n = resultUses.get(sub) ?? 0
-  resultUses.set(sub, n + 1)
-  if (!n) ownBoard(sub, `id=${eid}&.${name}`)
-  return () => {
-    let held = (resultUses.get(sub) ?? 1) - 1
-    if (held > 0) return void resultUses.set(sub, held)
-    resultUses.delete(sub)
-    resultSignals.delete(sub)
     dropBoard(sub)
   }
 }

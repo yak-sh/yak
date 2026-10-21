@@ -4,7 +4,7 @@ import { link, unlink } from '../../edge.ts'
 import { block } from '@yaks/ui'
 import { dragData } from '../drag.ts'
 import { Entity } from '../Entity.tsx'
-import { type Materialized, useQuery, useResultComponent } from '../useQuery.ts'
+import { useQuery } from '../useQuery.ts'
 
 let Frame = block('div', 'Persona', {
   Sec: 'div',
@@ -40,17 +40,12 @@ export let Persona = ({ e }: { e: Ent }) => {
   let pre = linked('contains')
   let idx = linked('reads')
   let tiered = new Set([...pre, ...idx].map((r) => r.eid))
-  // The materialized result component discovers the exact scoped-memory eid set through
-  // an indexed memory.scope query. A second ordinary addressed sub loads only
-  // those rows, so neither discovery nor rendering scans the partial cache.
-  let materialized = useResultComponent(e.eid, 'materialized') as
-    | Materialized
-    | undefined
-  let scoped = new Set(materialized?.scoped ?? [])
-  let scopedRows = useQuery(
+  // The memories in the persona's scope, through the indexed memory.scope
+  // query, so the Untiered section never scans the partial cache.
+  let scoped = useQuery(
     e.persona?.home ? `.memory.scope=${e.persona.home}` : '!memory.scope',
   )
-  let loose = scopedRows.filter((r) => scoped.has(r.eid))
+  let loose = scoped
     .filter((r) => r.memory && r.doc && !tiered.has(r.eid))
     .toSorted(byWarmth(now))
   let both = pre.filter((r) => idx.some((x) => x.eid == r.eid))
