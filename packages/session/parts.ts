@@ -24,6 +24,7 @@
 // the native runner) or after it (Codex).
 
 import type { Bundle, Comp, Eid } from '@yaks/graph'
+import { and, type Clause, eq, present } from '@yaks/query/core'
 import {
   attribute,
   type Item,
@@ -137,6 +138,34 @@ let kind = (w: Walk, b: Bundle): string | undefined =>
     : b.notice
     ? text(b).startsWith('# AGENTS.md') ? 'instructions AGENTS.md' : 'notice'
     : 'input'
+
+/**
+ * The entries a part is made of, as a query, where one names them: a
+ * `call <tool>` part is the calls to that tool and a `result <tool>` part
+ * their results. Every other part is no set of entries a query names, so it
+ * has none.
+ *
+ * ```ts
+ * import { partQuery } from './parts.ts'
+ * import { stringify } from '@yaks/query'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(stringify(partQuery('result Bash')!),
+ *   '.result&.result.call.call.to.tool.name=Bash')
+ * equal(stringify(partQuery('call mcp__tasks__task_new')!),
+ *   '.call&.call.to.tool.name=mcp__tasks__task_new')
+ * equal(partQuery('input'), undefined)
+ * equal(partQuery('tool Bash'), undefined)
+ * ```
+ */
+export let partQuery = (key: string): Clause | undefined => {
+  let [, line, tool] = key.match(/^(call|result) (.+)$/) ?? []
+  return line == 'call'
+    ? and(present('call'), eq('call.to.tool.name', tool))
+    : line == 'result'
+    ? and(present('result'), eq('result.call.call.to.tool.name', tool))
+    : undefined
+}
 
 let generating = (key: string) =>
   key == 'output' || key == 'reasoning' || key.startsWith('call ')

@@ -10,9 +10,11 @@
  * @module
  */
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
-import { parse } from '@yaks/query'
+import { and, ge, lt, parse, stringify } from '@yaks/query'
+import { partQuery } from '@yaks/session/parts'
 import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
+import { after } from './day.ts'
 import { merged, ranked, type Spend, spendOf } from './tally.ts'
 import { current, type Limit, limitsOf, paceOf, span } from './window.ts'
 import { dollars, tokens } from './words.ts'
@@ -21,9 +23,6 @@ let { Body, Cell, Heading, Row } = Table
 let TOP = 15
 
 let sum = (ns: number[]) => ns.slice(0, 4).reduce((a, b) => a + b, 0)
-let back = (day: string, n: number) =>
-  new Date(Date.parse(`${day}T00:00:00Z`) - n * 864e5).toISOString()
-    .slice(0, 10)
 
 let waiting = (got: Props['got'][string] | undefined, what: string) =>
   got?.error
@@ -129,9 +128,30 @@ let Ranking = (
   )
 }
 
-/** A tally, ranked, beside an earlier one to read it against. */
+// A part's name, linked to the entries it is made of that were written in
+// the span the tally covers, where a query names them.
+let part = (io: Props['io'], [from, to]: [string, string]) => (k: string) => {
+  let q = partQuery(k)
+  return q
+    ? h('a', {
+      href: io.find(
+        stringify(
+          and(q, ge('created.at', from), lt('created.at', after(to))),
+        ),
+      ),
+    }, k)
+    : h('span', {}, k)
+}
+
+/** A tally of the days from one to another, ranked, beside an earlier one to
+ * read it against. */
 let Breakdown = (
-  { io, s, before }: { io: Props['io']; s: Spend; before?: Spend },
+  { io, s, span, before }: {
+    io: Props['io']
+    s: Spend
+    span: [string, string]
+    before?: Spend
+  },
 ) => {
   let top = <T>(rows: T[]) => rows.slice(0, TOP)
   let sessions = top(ranked(s.sessions, 1))
@@ -150,7 +170,7 @@ let Breakdown = (
         'Each part of what the requests carried, at what it cost as it was paid: read from the cache, written to it, sent fresh, or generated. A part is paid for on every request it rides in. The totals are measured; the split across parts is estimated from their sizes.',
       rows: ranked(s.parts, 4).slice(0, 30),
       at: 4,
-      name: (k) => h('span', {}, k),
+      name: part(io, span),
       more: (ns, k) => [
         tokens(ns[0]),
         tokens(ns[1]),
@@ -231,7 +251,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
   let within = (a: string, b: string) =>
     days.filter((d) => d.day >= a && d.day <= b)
   let week = merged(within(from, to))
-  let before = merged(within(back(from, 7), back(from, 1)))
+  let before = merged(within(after(from, -7), after(from, -1)))
   return h(
     'article',
     {},
@@ -253,7 +273,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
     ),
     waiting(got.limits, 'the plan limits') ?? h(Limits, { limits, now }),
     waiting(got.days, 'the tallies') ??
-      h(Breakdown, { io, s: week, before }),
+      h(Breakdown, { io, s: week, span: [from, to], before }),
   )
 }
 
@@ -270,7 +290,7 @@ export let DayPage = ({ e, io }: Props): JSX.Element => {
       h(Head.Sub, {}, 'One UTC day, tallied from its model requests.'),
       s ? h(Head.Facts, {}, ...facts(s)) : null,
     ),
-    s ? h(Breakdown, { io, s }) : null,
+    s ? h(Breakdown, { io, s, span: [s.day, s.day] }) : null,
   )
 }
 
