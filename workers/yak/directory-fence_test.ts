@@ -103,6 +103,8 @@ let fixture = async (rules: Rule[] = []) => {
         }),
       ),
     move: () => store.alarm(),
+    // The fenced graph itself, for writes no door serializes.
+    graph: async () => (await store.door).graph,
     offer: (fn: typeof offered) => {
       offered = fn
     },
@@ -146,6 +148,34 @@ let refusal = async (run: () => Promise<unknown>) => {
   }
 }
 let patch = [{ entity: { eid: 'app' }, app: { access: 'private' } }]
+
+// Each hour's first use of every app writes a receipt (used.ts); a fence for
+// each would hold back every serving check on the platform (T-131212).
+await proof(
+  'a receipt leaves serving checks standing, and a seat still fences them',
+  async () => {
+    let f = await fixture()
+    let answers = [
+      (await f.ask('/used', { eid: 'app' })).status,
+      (await f.ask('/translated', { eid: 'app', spelling: '.drill!' })).status,
+    ]
+    let receipts = {
+      fences: f.begins.length,
+      current: f.core().valid(f.initial),
+    }
+    await f.at.apply([{ entity: { eid: 'ada' }, person: {} }, {
+      entity: { eid: 'seat' },
+      member: { space: 'space', person: 'ada', role: 'viewer' },
+    }], KERNEL)
+    let seat = { fences: f.begins.length, current: f.core().valid(f.initial) }
+    return () =>
+      equal({ answers, receipts, seat }, {
+        answers: [200, 200],
+        receipts: { fences: 0, current: true },
+        seat: { fences: 1, current: false },
+      })
+  },
+)
 
 await proof(
   'begin precedes mutation and finish sees its committed epoch',
@@ -285,13 +315,17 @@ await proof(
       return held
     })
     f.onFinish(() => Promise.resolve(release()))
-    let used = (eid: string) => f.ask('/used', { eid })
-    let first = used('app'), second = used('space')
-    let statuses = [(await first).status, (await second).status]
-    let rows = await f.at.query('.used')
+    let g = await f.graph()
+    let titled = (eid: string, title: string) =>
+      g.apply([{ entity: { eid }, doc: { title } }])
+    await Promise.all([titled('app', 'One'), titled('space', 'Two')])
+    let rows = await f.at.query('.doc')
     return () => {
-      equal(statuses, [200, 200])
-      equal(rows.map((r) => r.entity.eid).sort(), ['app', 'space'])
+      equal(
+        rows.map((r) => [r.entity.eid, (r.doc as { title: string }).title])
+          .sort(),
+        [['app', 'One'], ['space', 'Two']],
+      )
       ok(f.begins.length > f.finishes.length, 'a fence was lost and retaken')
       equal(f.committed().epoch, String(f.saved().revision))
       equal(f.saved().blocked, false)

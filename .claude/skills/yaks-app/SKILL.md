@@ -52,6 +52,14 @@ and setup; this is the map and the feel.
   What its writes owe (a release's commit, a trash notice) is an effect its
   pool works after the write answers, so a test that reads one awaits the
   platform's `settled()` first.
+- **The serving fence**: a directory write raises a fence on the serving
+  copy (`directory-copy.ts`, `serving-copy.ts`) until it commits, and every
+  signed read and every store's check of a caller waits it out, at most
+  `FENCE_WAIT`. A directory or copy that can't answer for a moment is waited
+  out the same way, never refused. A write of what no authorization reads
+  raises none (graph.ts `unfenced`: use receipts), so a new bookkeeping word
+  written often belongs there, or each write of it holds back every check on
+  the platform.
 - **Serving an app**: `apps.ts` serves its files and `./api/*`; `door.ts`
   hands the store the caller's standing, including its access mode
   (`x-yak-access`). Every HTML page leaving for a browser is woven the

@@ -119,6 +119,10 @@ export let scheduleBy = (
 export let recordUse = (ns: Namespace, eid: string): Promise<string | null> =>
   receipt(ns, used(eid))
 
+/** What a receipt writes: when something was last used, and which retired
+ * spellings an app still sends. No authorization reads either. */
+export let RECEIPTS = ['used', 'translated']
+
 /// isRetired('.drill!') -> true
 /// isRetired('.drill') -> false
 /// isRetired('.a! .b?') -> false

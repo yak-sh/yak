@@ -213,7 +213,7 @@ import type {
   ReadOpts,
 } from '@yaks/graph'
 import { argsOf, who } from '@yaks/graph/call'
-import { comps } from '@yaks/graph/bundle'
+import { comps, dead as deleted } from '@yaks/graph/bundle'
 import { graph, identityEid } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { sha256 } from '@yaks/graph/sha256'
@@ -322,6 +322,7 @@ import { embedder, ranking, SPACE, texts } from './embedding.ts'
 import { directory, fetch as directoryFetch } from './directory.ts'
 import {
   isRetired,
+  RECEIPTS,
   scheduleRetired,
   scheduleUse,
   useUntil,
@@ -916,6 +917,18 @@ installContext({
   run: (ctx, work) => traceContext.run(ctx, work),
 })
 
+// A directory write that changes nothing an authorization reads raises no
+// serving fence: use receipts (used.ts), and the archetype descriptor a
+// receipt's new set of components mints (@yaks/sqlite archetype.ts). So the
+// receipts each hour's first use writes hold back no serving check
+// (T-131212). A delete, or any other component, fences.
+let UNFENCED = new Set([...RECEIPTS, 'archetype'])
+let UNREAD = -2
+let unfenced = (bundles: Bundle[]): boolean =>
+  bundles.every((b) =>
+    !deleted(b) && comps(b).every(([name]) => UNFENCED.has(name))
+  )
+
 export class Store {
   #load: Load
   #ctx: State
@@ -943,6 +956,8 @@ export class Store {
   #route!: Handler
   #auth!: Authenticate
   #meta!: Meta
+  // The serving fence a directory write commits under: its revision, -1 for
+  // none, or UNREAD for a write no authorization reads (`unfenced`).
   #copyWrite = new AsyncLocalStorage<number>()
   #copyBatch = new AsyncLocalStorage<number>()
   #bind: Bindings
@@ -1528,6 +1543,15 @@ export class Store {
                   commit: (bundles: Bundle[]) => {
                     let revision = this.#copyWrite.getStore()
                     if (revision === -1) return bundles
+                    if (revision === UNREAD) {
+                      if (unfenced(bundles)) return bundles
+                      let named = bundles.flatMap((b) =>
+                        comps(b).map(([name]) => name)
+                      )
+                      throw new Error(
+                        `An unfenced write committed ${named}`,
+                      )
+                    }
                     if (
                       revision == null ||
                       revision < Number(this.#get('directory-revision') ?? 0)
@@ -1601,27 +1625,20 @@ export class Store {
         }
         let apply = g.apply, admit = g.admit
         g.apply = (bundles, opts) => {
-          let batch = meta ? this.#copyBatch.getStore() : undefined
-          if (batch != null) {
-            return this.#copyWrite.run(
-              batch,
-              () => trusted(opts, () => apply(bundles, opts)),
-            )
-          }
-          let copy = meta && !opts?.check ? copyOf(this.#bind) : undefined
-          if (!copy) {
-            return this.#copyWrite.run(
-              -1,
-              () => trusted(opts, () => apply(bundles, opts)),
-            )
-          }
-          // Effects may themselves write the directory and acquire a newer
-          // fence. Only explicit synchronous mover batches reuse an epoch.
-          return fenced(copy, (revision) =>
+          let under = (revision: number) =>
             this.#copyWrite.run(
               revision,
               () => trusted(opts, () => apply(bundles, opts)),
-            ), this.#committed)
+            )
+          let batch = meta ? this.#copyBatch.getStore() : undefined
+          if (batch != null) return under(batch)
+          let copy = meta && !opts?.check ? copyOf(this.#bind) : undefined
+          if (!copy) return under(-1)
+          // A write no authorization reads raises no fence (`unfenced`).
+          if (unfenced(bundles)) return under(UNREAD)
+          // Effects may themselves write the directory and acquire a newer
+          // fence. Only explicit synchronous mover batches reuse an epoch.
+          return fenced(copy, under, this.#committed)
         }
         g.admit = (bundles, opts) =>
           this.#copyWrite.run(
