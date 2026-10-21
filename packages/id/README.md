@@ -102,10 +102,12 @@ allocator runs inside the write transaction and must return the same number
 whenever it is asked for the same eid.
 
 `ids(vocab)` is a [plugin](../graph/README.md#data-model) whose `address`
-resolves human ids and short handles. A bare number resolves too. A supplied
-prefix must agree with one of the entity's kinds; an entity without a kind uses
-`E`. An unknown human id or a short handle shared by several entities is
-refused. Eids and other strings are left to the graph's other addressing.
+resolves human ids and short handles. The number is the identity: a human id
+names the entity carrying its number, whatever letter it is written with, and a
+bare number does too. An entity's letter follows its components, so an id
+printed before a component came or went keeps naming it. A number no entity
+carries, or a short handle shared by several entities, is refused. Eids and
+other strings are left to the graph's other addressing.
 
 ```ts
 import { graph } from '@yaks/graph'

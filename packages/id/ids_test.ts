@@ -52,25 +52,21 @@ test('a human id is the entity wearing that number', async () => {
   assertEquals(await at('M-9'), { 'M-9': 'b' })
 })
 
-test('the number is the identity; the letter only has to agree', async () => {
-  assertEquals(await at('7'), { '7': 'a' })
-  assertEquals(await at('t-7'), { 't-7': 'a' })
-  // Every kind it wears answers for it: entity 7 is a task and a doc.
-  assertEquals(await at('D-7'), { 'D-7': 'a' })
-  // M-7 names nothing: entity 7 is neither a memory nor anything else with an
-  // M. T-9 names nothing either: entity 9 is a memory.
-  assertEquals(await at('M-7', 'T-9'), { 'M-7': null, 'T-9': null })
-})
-
-test('an entity without a kind answers to its displayed E id', async () => {
-  let id = human(vocab)(rows[2])
-  assertEquals(id, 'E-11')
-  assertEquals(await at(id, 'e-11', '11'), {
-    'E-11': 'bare',
-    'e-11': 'bare',
-    '11': 'bare',
+test('the number is the identity, whatever letter it was printed with', async () => {
+  assertEquals(await at('7', 't-7', 'D-7'), {
+    '7': 'a',
+    't-7': 'a',
+    'D-7': 'a',
   })
-  assertEquals(await at('T-11', 'E-7'), { 'T-11': null, 'E-7': null })
+  // An id printed while entity 9 wore a component it no longer wears still
+  // names it, as does one printed for entity 11 before it had a kind.
+  assertEquals(await at('R-9', 'T-9', 'E-11'), {
+    'R-9': 'b',
+    'T-9': 'b',
+    'E-11': 'bare',
+  })
+  assertEquals(human(vocab)(rows[2]), 'E-11')
+  assertEquals(await at('T-12', '12'), { 'T-12': null, '12': null })
 })
 
 test("an eid and a name are not this plugin's to answer", async () => {
