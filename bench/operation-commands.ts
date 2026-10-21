@@ -5,6 +5,7 @@
  */
 import { remainingFixtures } from './operation-fixtures.ts'
 import type { Sample, Samples } from '@yaks/benchmark'
+import { sessionEnv } from '@yaks/session'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
 import { starter } from '../packages/cli/init.ts'
@@ -169,14 +170,16 @@ async function collect(
     Deno.chdir(`${dir}/checkout`)
   }
   let configPath = `${dir}/yak.json`
+  // A command's whole environment, as a managed run of SESSION has it
+  // (@yaks/spawn): the harness id of whoever launched the bench is gone, or
+  // the command would speak for that session instead.
   let env = {
+    ...sessionEnv(remaining ? SESSION : '', Deno.env.toObject()),
     TASKS_HOME: `${dir}/tasks`,
     HARNESS_HOME: `${dir}/harness`,
     HARNESS_WORKTREE_DIR: `${dir}/worktrees`,
     PROCESS_DIR: `${dir}/process`,
     YAK_RUNTIME_CACHE: `${dir}/runtime`,
-    TASKS_SESSION: remaining ? SESSION : '',
-    CLAUDE_SESSION_ID: '',
   }
   let host: Awaited<ReturnType<typeof compose>> | undefined
   let server: Deno.HttpServer<Deno.NetAddr> | undefined
@@ -313,6 +316,7 @@ async function collect(
           ? operation.cwd()
           : operation.cwd ?? root,
         env,
+        clearEnv: true,
         stdin: 'null',
         stdout: 'piped',
         stderr: 'piped',

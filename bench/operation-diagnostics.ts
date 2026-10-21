@@ -155,7 +155,7 @@ export let measure = async (
       PROCESS_DIR: `${dir}/process`,
       YAK_RUNTIME_CACHE: `${dir}/runtime`,
       TASKS_SESSION: '',
-      CLAUDE_SESSION_ID: '',
+      CLAUDE_CODE_SESSION_ID: '',
       OPENAI_API_KEY: 'local-catalogue-placeholder',
     }
     for (let name of DIAGNOSTIC_NAMES) {

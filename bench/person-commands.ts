@@ -66,7 +66,7 @@ export async function measure(
     TASKS_TUI_STATE: `${dir}/tui.json`,
     YAK_RUNTIME_CACHE: `${dir}/runtime`,
     TASKS_SESSION: '',
-    CLAUDE_SESSION_ID: '',
+    CLAUDE_CODE_SESSION_ID: '',
   }
   let command = [
     Deno.execPath(),

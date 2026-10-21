@@ -182,7 +182,7 @@ export let measure = async (
         HARNESS_HOME: `${dir}/harness`,
         PROCESS_DIR: `${dir}/process`,
         TASKS_SESSION: '',
-        CLAUDE_SESSION_ID: '',
+        CLAUDE_CODE_SESSION_ID: '',
         PATH: Deno.env.get('PATH') ?? '/usr/bin:/bin',
       }
       await Deno.writeTextFile(

@@ -38,7 +38,7 @@ export async function measure(
     PROCESS_DIR: `${dir}/process`,
     YAK_RUNTIME_CACHE: `${dir}/runtime`,
     TASKS_SESSION: '',
-    CLAUDE_SESSION_ID: '',
+    CLAUDE_CODE_SESSION_ID: '',
   }
   let cli = async (argv: string[], hook: object) => {
     let child = new Deno.Command(Deno.execPath(), {
