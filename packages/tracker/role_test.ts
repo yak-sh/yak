@@ -9,6 +9,7 @@ import { loadVocab } from '@yaks/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { fileDoc } from '@yaks/file/vocab'
 import { gitDoc } from '@yaks/git'
 import { run } from '@yaks/git/land'
 import { codeDoc } from '@yaks/code/vocab'
@@ -56,6 +57,7 @@ test('box role groups and enriches a spool occurrence through its configured cat
       kernelDoc,
       docDoc,
       edgeDoc,
+      fileDoc,
       gitDoc,
       codeDoc,
       machineDoc,
