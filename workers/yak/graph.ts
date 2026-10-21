@@ -1,4 +1,5 @@
 import {
+  confirms,
   copyOf,
   EPOCH,
   FENCE_WAIT,
@@ -1828,7 +1829,7 @@ export class Store {
       }
       let began = Date.now()
       while (
-        !await copy.valid?.(revision) ||
+        !await confirms(copy, revision) ||
         revision < Number(this.#get('policy') ?? 0)
       ) {
         if (!this.#bind.STORE || Date.now() - began >= FENCE_WAIT) {

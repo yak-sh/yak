@@ -223,29 +223,90 @@ await proof(
   },
 )
 
-await proof(
-  'a fence that never clears is refused after the bounded wait',
-  async () => {
+// A deploy moves the directory and the copy, and the runtime fails a call into
+// either while it moves (T-127751).
+let moving = () => Promise.reject(new Error('Network connection lost.'))
+
+for (
+  let [what, fenced, fetch] of [
+    ['a fence that never clears', true, () =>
+      Promise.resolve(
+        new Response('page', { headers: { [EPOCH]: '0' } }),
+      )],
+    ['a directory that never answers', false, moving],
+  ] as const
+) {
+  await proof(`${what} is refused after the bounded wait`, async () => {
     let f = independent(), time = clock()
-    f.core().begin()
-    let transport = signedDirectory(
-      {
-        fetch: () =>
-          Promise.resolve(
-            new Response('page', { headers: { [EPOCH]: '0' } }),
-          ),
-      },
-      f.door,
-      time,
-    )
+    if (fenced) f.core().begin()
+    let transport = signedDirectory({ fetch }, f.door, time)
     let answer = observing(transport.fetch(query('page')))
     for (let n = 0; n < 80; n++) {
       await time.advance(250)
       await flush()
     }
     return () => equal(answer.answer().status, 503)
-  },
-)
+  })
+}
+
+// Each look fails once the way a moving object fails it, then answers.
+let blip = async (at: string) => {
+  let f = independent(), time = clock(), tripped = false
+  let trip = (here: string) => here == at && !tripped && (tripped = true)
+  let { publish, valid } = f.door
+  f.door.publish = (...a) => trip('publish') ? moving() : publish!(...a)
+  f.door.valid = (n) => trip('valid') ? moving() : valid!(n)
+  let transport = signedDirectory(
+    {
+      fetch: () => {
+        if (trip('fetch')) return moving()
+        if (trip('503')) {
+          return Promise.resolve(new Response('moving', { status: 503 }))
+        }
+        let epoch = trip('epoch') ? {} : { [EPOCH]: String(f.core().revision) }
+        return Promise.resolve(new Response('page', { headers: epoch }))
+      },
+    },
+    f.door,
+    time,
+  )
+  let answer = observing(transport.fetch(query('page')))
+  await flush()
+  await time.advance(10)
+  await flush()
+  if (answer.pending()) return 'pending'
+  let out = answer.answer()
+  return [out.status, await out.text()]
+}
+
+for (
+  let [at, what] of [
+    ['fetch', 'a directory call that throws'],
+    ['503', 'a directory answering 503'],
+    ['epoch', 'a directory answer with no revision'],
+    ['publish', 'a copy that cannot be filled'],
+    ['valid', 'a copy that cannot say what is current'],
+  ]
+) {
+  await proof(`${what} for a moment is waited out`, async () => {
+    let answer = await blip(at)
+    return () => equal(answer, [200, 'page'])
+  })
+}
+
+await proof('a directory refusal is answered at once', async () => {
+  let f = independent(), time = clock()
+  let transport = signedDirectory(
+    {
+      fetch: () => Promise.resolve(new Response('no', { status: 404 })),
+    },
+    f.door,
+    time,
+  )
+  let answer = observing(transport.fetch(query('page')))
+  await flush()
+  return () => equal(answer.answer().status, 404)
+})
 
 // Apps and MCP must install signedDirectory themselves. Their production timer
 // uses the runtime globals; replace that boundary only while a stalled call is

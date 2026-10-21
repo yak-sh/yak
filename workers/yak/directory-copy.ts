@@ -6,7 +6,7 @@ import { cookieValue } from './lib/token.ts'
 // Cold/fenced copies still wait for the directory; no TTL grants standing.
 import type { Fetcher } from './door.ts'
 import type { Env } from './env.ts'
-import { background } from './defects.ts'
+import { background, defect } from './defects.ts'
 export type DirectoryCopyTimer = {
   now(): number
   after(ms: number, callback: () => void): () => void
@@ -199,10 +199,10 @@ export let signedDirectory = (
   let began = time.now()
   let unavailable = () =>
     new Response('Serving authority unavailable', { status: 503 })
-  let accept = async (revision: number, body: string) => {
-    if (!await copy.valid?.(revision)) return unavailable()
-    return new Response(body, { headers: { [EPOCH]: String(revision) } })
-  }
+  let accept = async (revision: number, body: string) =>
+    await confirms(copy, revision)
+      ? new Response(body, { headers: { [EPOCH]: String(revision) } })
+      : null
   return {
     signed: true,
     fetch: (req) => {
@@ -226,8 +226,8 @@ export let signedDirectory = (
             // a fenced copy is no answer: the directory read keeps waiting.
             if (!answer) return false
             let accepted = await accept(answer.revision, answer.body)
-            if (accepted.ok) done(accepted)
-            return accepted.ok
+            if (accepted) done(accepted)
+            return !!accepted
           } catch { /* Wait for the directory on a cold or fenced miss. */ }
           return false
         }
@@ -237,6 +237,35 @@ export let signedDirectory = (
         let headers = new Headers(req.headers)
         headers.set(EPOCH, '1')
         let from = time.now()
+        // One read of the directory: an answer that stands, a refusal
+        // included, or null while nothing can be confirmed yet.
+        let look = async (): Promise<Response | null> => {
+          let answer: Response
+          try {
+            answer = await via.fetch(new Request(req, { headers }))
+          } catch {
+            await fallback()
+            return null
+          }
+          if (answer.status == 503) {
+            void answer.body?.cancel()
+            return null
+          }
+          if (!answer.ok) return answer
+          let epoch = answer.headers.get(EPOCH)
+          if (epoch == null || !/^\d+$/.test(epoch)) {
+            void answer.body?.cancel()
+            return null
+          }
+          let revision = Number(epoch)
+          let body = await answer.text()
+          try {
+            await copy.publish?.(revision, key, body)
+          } catch { /* The copy is filled again by the next read. */ }
+          let accepted = await accept(revision, body)
+          if (!accepted) headers.set(MEND, '1')
+          return accepted
+        }
         void (async () => {
           // Nothing has escaped before the first accepted answer. A directory
           // write holds the fence until it commits, and until then no copied
@@ -245,36 +274,34 @@ export let signedDirectory = (
           // FENCE_WAIT. Each body stands on being current when accepted, so a
           // write landing between a request's reads fences the next one for
           // the write's duration and no longer.
+          //
+          // A directory or copy that cannot answer for a moment is waited out
+          // the same way, since it has said nothing: a deploy moves both
+          // objects, and the runtime fails a call into one while it moves.
           for (let pause = 10; !settled; pause = Math.min(pause * 2, 250)) {
-            let answer: Response
-            try {
-              answer = await via.fetch(new Request(req, { headers }))
-            } catch {
-              if (!await fallback()) done(unavailable())
+            let answer = await look()
+            if (settled) return
+            if (answer || time.now() - from >= FENCE_WAIT) {
+              done(answer ?? unavailable())
               return
             }
-            if (!answer.ok) {
-              done(answer)
-              return
-            }
-            let epoch = answer.headers.get(EPOCH)
-            if (epoch == null || !/^\d+$/.test(epoch)) {
-              done(unavailable())
-              return
-            }
-            let revision = Number(epoch)
-            let body = await answer.text()
-            await copy.publish?.(revision, key, body)
-            let accepted = await accept(revision, body)
-            if (accepted.ok || time.now() - from >= FENCE_WAIT) {
-              done(accepted)
-              return
-            }
-            headers.set(MEND, '1')
             await new Promise<void>((resume) => time.after(pause, resume))
           }
-        })().catch(() => done(unavailable()))
+        })().catch((e) => {
+          defect(e, { request: 'signed directory read' })
+          done(unavailable())
+        })
       })
     },
+  }
+}
+
+/** Whether the copy says a revision is current. A copy that cannot answer,
+ * moving with a deploy, has not said so. */
+export let confirms = async (copy: ServingCopyDoor, revision: number) => {
+  try {
+    return !!await copy.valid?.(revision)
+  } catch {
+    return false
   }
 }

@@ -2296,6 +2296,70 @@ for (let revoked of [false, true]) {
   })
 }
 
+// The kernel read revision 10 and a write has moved it to 11, so the store
+// asks the directory itself, and a deploy moving the directory or the copy
+// fails one call into it on the way (T-127751).
+let movingAuthority = async (at: 'directory' | 'copy', revoked: boolean) => {
+  let ctx = state()
+  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy: 10 })
+  let tripped = false
+  let trip = (here: string) => here == at && !tripped && (tripped = true)
+  let moving = () => Promise.reject(new Error('Network connection lost.'))
+  let copy = {
+    valid: (v: number) => trip('copy') ? moving() : Promise.resolve(v == 11),
+    publish: () => Promise.resolve(true),
+    begin: () => Promise.resolve(11),
+    finish: () => Promise.resolve(true),
+    put: () => Promise.resolve(false),
+    get: () => Promise.resolve(null),
+  }
+  let rows: Bundle[] = [
+    { entity: { eid: APP }, app: { space: 'space', access: 'private' } },
+    ...revoked ? [] : [{
+      entity: { eid: 'seat' },
+      member: { space: 'space', person: ADA, role: 'owner' },
+    }],
+  ]
+  let store = new Store(
+    ctx,
+    {
+      SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
+      STORE: {
+        idFromName: (name: string) => name,
+        get: () => ({
+          fetch: () =>
+            trip('directory') ? moving() : Promise.resolve(
+              new Response(JSON.stringify(rows), {
+                headers: { 'x-yak-directory-revision': '11' },
+              }),
+            ),
+        }),
+      },
+    },
+    undefined,
+    undefined,
+    fixtureLoad,
+  )
+  await store.door
+  return (await get(store, '/query?q=.entity.eid=missing', {
+    ...owner,
+    access: 'private',
+    policy: 10,
+  })).status
+}
+for (
+  let [at, revoked, status] of [
+    ['directory', false, 200],
+    ['directory', true, 403],
+    ['copy', false, 200],
+  ] as const
+) {
+  let answer = await movingAuthority(at, revoked)
+  test(`Store waits out a ${at} it cannot reach for a moment${revoked ? ' and still refuses a revoked role' : ''}`, () => {
+    equal(answer, status)
+  })
+}
+
 let acceptedAuthority = await authorityFixture(10)
 // Learn the private metadata and owner before timing the authorized read.
 let currentOwner = { ...owner, access: 'private', policy: 10 }
