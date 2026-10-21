@@ -101,13 +101,19 @@ let marked = async (failures: Error[]) => {
   return [response.status, bodies, sent.length]
 }
 // What a send to the object meets: its connection lost, the object reset,
-// and a failure no resend mends.
+// the runtime's opaque refusal while it moves the object, and a failure no
+// resend mends.
 let lost = Error('Network connection lost.')
 let reset = Object.assign(Error('reset'), { retryable: true })
+let refused = Error('internal error; reference = c7hprk25808kaqd3nagvsed3')
 let broken = Error('boot failed')
 
-test('a mark lost or reset on its way to the object is sent again', async () => {
-  equal(await marked([lost, reset]), [200, Array(3).fill('{"bug":"b"}'), 0])
+test('a mark lost, reset or refused on its way to the object is sent again', async () => {
+  equal(await marked([lost, refused, reset]), [
+    200,
+    Array(4).fill('{"bug":"b"}'),
+    0,
+  ])
   equal((await marked(Array(backoff.pauses.length + 1).fill(lost)))[0], 503)
   equal(await marked([broken]), [503, ['{"bug":"b"}'], 1])
 })

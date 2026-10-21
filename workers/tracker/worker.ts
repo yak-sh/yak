@@ -7,7 +7,7 @@ import { sha256 } from '@yaks/graph/sha256'
 import { bugEid } from '@yaks/tracker'
 import { sign } from './auth.ts'
 import { capture, caught, origin, queue } from '@yaks/tracker/report'
-import { evicted, lost, retried } from '@yaks/durable-object'
+import { evicted, lost, opaque, retried } from '@yaks/durable-object'
 import { platform } from './core.ts'
 import { consume, type Message } from './queue.ts'
 import { json } from './door.ts'
@@ -284,9 +284,10 @@ export let worker = (
           await env.ERRORS.send(rows)
           return json({ eid: rows[0].entity.eid })
         }
-        // The object can be reset, or the connection to it lost, under a
-        // call; each send takes a fresh stub and the same body. Every door is
-        // a read or a write keyed by its eids, so a send that landed before
+        // The object can be reset, the connection to it lost, or the runtime
+        // can refuse it with its own opaque internal error while it moves the
+        // object; each send takes a fresh stub and the same body. Every door
+        // is a read or a write keyed by its eids, so a send that landed before
         // its answer was lost lands the same way again. Only GET and HEAD
         // carry no body; asking `request.body` instead makes a stream to read.
         let body = request.method == 'GET' || request.method == 'HEAD'
@@ -296,7 +297,7 @@ export let worker = (
           () =>
             env.TRACKERS.getByName(scope).fetch(new Request(request, { body })),
           true,
-          (error) => evicted(error) || lost(error),
+          (error) => evicted(error) || lost(error) || opaque(error),
         )
       } catch (error) {
         await report(error, 'fetch', request)
