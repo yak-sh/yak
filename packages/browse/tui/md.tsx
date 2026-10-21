@@ -2,7 +2,7 @@ import { type JSX } from 'preact'
 import { highlight, type Token } from '../highlight.ts'
 import { commitUrl } from '../md.ts'
 import { SHORT } from '@yaks/id'
-import { EID, prefix } from '../types.ts'
+import { EID } from '../types.ts'
 
 // Markdown for the terminal: the tiny common subset parsed into spans the
 // sheet knows how to dress — ANSI bold/italic/strike, colored code, and
@@ -12,10 +12,9 @@ import { EID, prefix } from '../types.ts'
 // a [written link](T-123) both dress as Md_Ref — recognizable, and the
 // id stays visible for the keyboard (no mouse to follow it with).
 // Index keys are honest here: the whole frame repaints on any change.
-let LETTERS = [...new Set([...Object.values(prefix), 'D'])].join('|')
 let RE = new RegExp(
   `(\\*\\*|__)(.+?)\\1|(\\*|_)(.+?)\\3|\`([^\`]+)\`|~~(.+?)~~|` +
-    `\\[([^\\]]+)\\]\\(([^)]+)\\)|(?<![\\w])((?:${LETTERS})-\\d+|#[0-9a-fA-F]{6,64})\\b`,
+    `\\[([^\\]]+)\\]\\(([^)]+)\\)|(?<![\\w])([A-Z]-\\d+|#[0-9a-fA-F]{6,64})\\b`,
 )
 
 let inline = (t: string, repo?: string): (string | JSX.Element)[] => {

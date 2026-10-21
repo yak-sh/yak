@@ -4,7 +4,6 @@ import { test } from '@yaks/testing'
 import './testing.ts'
 import { assertEquals, assertStringIncludes } from '@std/assert'
 import { md, mdAbs, mdInline, mdMentions } from './md.ts'
-import { prefix } from './types.ts'
 
 test('mdInline: title markup has no block wrapper or nested links', () => {
   assertEquals(
@@ -113,15 +112,17 @@ test('mdMentions refuses quote and escape debris in URLs', () => {
 
 // The fence's highlighting is a separate contract; prepare this fixed drawing once.
 let literalFence = md('```\nT-123\n```')
-let known = new Set([...Object.values(prefix), 'D'])
-let unknown = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].find((p) => !known.has(p))!
 
 test('md: ids in code stay literal; mid-word letters stay words', () => {
   assertEquals(md('`T-123`').includes('data-ref'), false)
   assertEquals(literalFence.includes('data-ref'), false)
   assertEquals(md('UTF-8 and SHA-256').includes('data-ref'), false)
-  // Derive an unknown instead of reserving one a future kind may claim.
-  assertEquals(md(`${unknown}-123`).includes('data-ref'), false)
+})
+
+test('md: an id links whatever letter it was printed with', () => {
+  for (let id of ['R-131280', 'J-7', 'N-131280']) {
+    assertStringIncludes(md(id), 'data-ref')
+  }
 })
 
 test('md: a code-span commit links through its project repo', () => {

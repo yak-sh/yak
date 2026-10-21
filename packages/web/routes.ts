@@ -26,7 +26,7 @@ import { type Authenticate, type Route, write } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
-import { addressId, prefixOf } from '@yaks/id'
+import { addressId } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
 import { type Body, bundle, kept } from '@yaks/cli/page'
@@ -52,12 +52,11 @@ export type Hosting = {
   report?: (error: unknown, context?: Partial<Context>) => unknown
 }
 
-/** Every letter an id in this vocabulary can start with, in both cases. */
-export let letters = (vocab: Vocab): string[] => {
-  let letter = prefixOf(vocab)
-  let upper = new Set(vocab.all.map((comp) => letter(comp)))
-  return [...upper].flatMap((l) => [l, l.toLowerCase()]).sort()
-}
+/** Every letter an id's page path can start with, in both cases. Any letter:
+ * the number names the entity, and an id keeps the letter it was printed with
+ * after its entity's components change. */
+export let letters: string[] = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ']
+  .flatMap((l) => [l, l.toLowerCase()])
 
 let here = (path: string) => new URL(path, import.meta.url)
 let text = (path: string) => () => fetch(here(path)).then((r) => r.text())
@@ -198,7 +197,7 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       },
     },
     { method: 'GET', path: '/%23*', handle: page },
-    ...letters(host.vocab).flatMap((l): Route[] => [
+    ...letters.flatMap((l): Route[] => [
       { method: 'GET', path: `/${l}-*`, handle: page },
       { method: 'GET', path: `/${l}`, handle: page },
     ]),

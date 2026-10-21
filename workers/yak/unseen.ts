@@ -10,7 +10,7 @@
 // never SQL; the apps of a space come from the directory part. The same
 // rows are the `app_errors` answer, one line each.
 import type { Bundle } from '@yaks/graph'
-import { short } from '@yaks/id'
+import { parse, short } from '@yaks/id'
 import * as dirPart from './directory.ts'
 import {
   type App,
@@ -318,6 +318,15 @@ let idOf = (h: Hit) =>
   h.entity.num && !h.tracked
     ? `${h.kind.slice(0, 1).toUpperCase()}-${h.entity.num}`
     : short(h.entity.eid)
+
+// Whether a word names a break: its eid, or the handle it is read by. A
+// numbered break is its number, whatever letter it is written with (`E-12`,
+// `X-12`, `12`); the letter is only how it was printed.
+let names = (word: string, h: Hit) =>
+  word == h.entity.eid ||
+  (h.entity.num && !h.tracked
+    ? parse(word)?.num == h.entity.num
+    : word == short(h.entity.eid))
 
 // One open item and the app it broke in — what serve() hands back, so a
 // caller can write the line or archive by id from the one read.
@@ -667,8 +676,7 @@ export let named = (word: string, h: Hit) => {
     let at = Date.parse(broke(h).at ?? '')
     return !Number.isFinite(at) || at <= moment(word)
   }
-  return word == h.entity.eid ||
-    word == idOf(h)
+  return names(word, h)
 }
 
 /** The open occurrences these words close. An id names its break, and the
@@ -676,7 +684,7 @@ export let named = (word: string, h: Hit) => {
  * occurrence of that break goes with it. A bound stays a bound. */
 export let closing = (open: Seen['hit'][], words: string[]) => {
   let ids = new Set(
-    open.filter((h) => words.some((w) => w == h.entity.eid || w == idOf(h)))
+    open.filter((h) => words.some((w) => names(w, h)))
       .map(same),
   )
   return open.filter((h) => ids.has(same(h)) || words.some((w) => named(w, h)))

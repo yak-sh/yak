@@ -11,6 +11,7 @@
  */
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
+import { parse } from '@yaks/id'
 import type { Price } from '@yaks/model'
 import { claudeProjects, codexSessions } from '@yaks/session/files'
 import { absolute } from '@yaks/file/local'
@@ -132,31 +133,34 @@ let roots = async (g: Graph, sessions: Eid[]) => {
 }
 
 // The tasks a subagent was started on: those its brief, the first thing its
-// transcript says, names. Its writes are its parent's, so they cannot say.
+// transcript says, names. Its writes are its parent's, so they cannot say. An
+// id is its number, whatever its letter, and it names a task when the entity
+// carrying that number is one; a number nothing carries names nothing.
 let briefed = async (
   g: Graph,
   subagents: Eid[],
 ): Promise<Map<Eid, Eid[]>> => {
-  let named = new Map<Eid, string[]>()
+  let named = new Map<Eid, number[]>()
   for (let s of subagents) {
     let [first] = await g.rows(
       `.entry.session=${s} .content .order=entry.seq .limit=1 .fields=content.body`,
     ) as Record<string, unknown>[]
-    let ids = str(first?.['content.body']).match(/\bT-\d+\b/g) ?? []
-    if (ids.length) named.set(s, [...new Set(ids)])
+    let nums = (str(first?.['content.body']).match(/\b[A-Z]-\d+\b/g) ?? [])
+      .map((id) => parse(id)?.num).filter((n): n is number => n != null)
+    if (nums.length) named.set(s, [...new Set(nums)])
   }
-  // A brief can name a task that is gone or never was: it names nothing.
-  let at = new Map<string, Eid>()
-  for (let id of new Set([...named.values()].flat())) {
-    let found = await Promise.resolve()
-      .then(() => g.address([id]))
-      .catch(() => undefined)
-    if (found?.get(id)) at.set(id, found.get(id)!)
+  let all = [...new Set([...named.values()].flat())]
+  let tasks = new Map<number, Eid>()
+  if (all.length) {
+    let found = await g.read(
+      `.task .entity.num=${all.join(',')} .fields=entity.num`,
+    )
+    for (let b of found) tasks.set(Number(b.entity.num), b.entity.eid)
   }
   return new Map(
     [...named].map((
       [s, ns],
-    ) => [s, ns.map((n) => at.get(n)).filter((e): e is Eid => !!e)]),
+    ) => [s, ns.map((n) => tasks.get(n)).filter((e): e is Eid => !!e)]),
   )
 }
 

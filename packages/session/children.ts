@@ -10,6 +10,7 @@ import { aside, dispatchStatus, tail } from './admission.ts'
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import { link } from '@yaks/edge'
+import { parse } from '@yaks/id'
 import { done, statusComps, statusOf as taskStatus } from '@yaks/task'
 import { type Tool, type ToolContext, ToolError, transcript } from './react.ts'
 import { entryStatus, newestOf, openOf, usingOf } from './reach.ts'
@@ -52,8 +53,8 @@ let taskRow = async (
   comps?: string[],
 ): Promise<Bundle> => {
   let b = await row(g, id, comps)
-  let num = /^T-(\d+)$/i.exec(id)?.[1]
-  if (!b && num) [b] = await g.read(`.task .entity.num=${Number(num)} *`)
+  let num = parse(id)?.num
+  if (!b && num != null) [b] = await g.read(`.task .entity.num=${num} *`)
   if (!b?.task) throw new ToolError('task', `not a task: ${id}`)
   return b
 }

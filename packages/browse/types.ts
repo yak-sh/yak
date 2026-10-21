@@ -19,7 +19,7 @@ import {
   type Vocab,
   type VocabDoc,
 } from '@yaks/vocab'
-import { idOf as idsOf, prefixes, SHORT } from '@yaks/id'
+import { idOf as idsOf, SHORT } from '@yaks/id'
 import { idKeywords } from '@yaks/id/vocab'
 import { nameKeywords } from '@yaks/names'
 import { edgeKeywords } from '@yaks/edge/vocab'
@@ -92,9 +92,6 @@ export let kindOrder: string[] = []
 
 // Kinds whose doc title is a NAME a caller can type (near.ts).
 export let byName = new Set<string>()
-
-// The letter each component's ids wear (@yaks/id `prefixes`): `T` for a task.
-export let prefix: Record<string, string> = {}
 
 // An entity's id as a person reads it: `T-9` once the store numbers it, its
 // short handle `#3b5bc70420` until then. @yaks/id's, the one every door reads
@@ -189,7 +186,6 @@ export let learn = (docs: VocabDoc[], hostKeywords?: Keywords[]): Vocab => {
   comps = c
   stamped = st
   indexes = ix
-  prefix = prefixes(v)
   idOf = idsOf(v)
   byName = names
   edges = Object.keys(edgeRelations(v))

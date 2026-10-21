@@ -75,9 +75,8 @@ let [kindless] = await graph.get(['kindless'])
 let kindlessId = human(vocab)(kindless)
 let kindlessRequest = new Request(`http://x/${kindlessId}`)
 
-test('every id letter the vocabulary uses has a route, in both cases', () => {
-  let ls = letters(vocab)
-  for (let l of ['T', 't', 'D', 'd']) assertEquals(ls.includes(l), true, l)
+test('an id of any letter has a route, in both cases', () => {
+  for (let l of ['T', 't', 'J', 'j']) assertEquals(letters.includes(l), true, l)
   for (
     let path of [
       '/',
@@ -86,6 +85,7 @@ test('every id letter the vocabulary uses has a route, in both cases', () => {
       '/T',
       '/%23abc123',
       '/D-3',
+      '/J-3',
     ]
   ) {
     assertEquals(reached(path)?.method, 'GET', path)

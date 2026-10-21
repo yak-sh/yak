@@ -21,8 +21,10 @@ let broke = (
 // The words a caller may say, against a break on v2 at noon on the 14th.
 let hit = broke({ at: '2026-08-14T12:00:00.000Z', version: 2 })
 
-test('named: an id, either form', () => {
+test('named: an id, either form, by its number whatever its letter', () => {
   assert(named('E-84', hit))
+  assert(named('x-84', hit))
+  assert(named('84', hit))
   assert(named(E, hit))
   assert(!named('E-85', hit))
   // A uuid is not a moment, and neither is a human id: the shapes cannot

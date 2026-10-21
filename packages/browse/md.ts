@@ -34,7 +34,6 @@ import { SHORT } from '@yaks/id'
 import { EID } from './types.ts'
 import { Marked, type RendererThis, type Tokens } from 'marked'
 import { highlight } from './highlight.ts'
-import { prefix } from './types.ts'
 import { entityPath, entityUrl } from './url.ts'
 
 export type Mention =
@@ -53,26 +52,12 @@ let esc = (s: string) =>
 // which is already what marked does for a url it cannot clean.
 let LINKABLE = /^(?:https?:\/\/|mailto:|tel:|[/#?]|[\w.-]+(?:[/#?]|$))/i
 
-// Known prefixes only (plus D for docs, the fallback most written
-// about) — a boundary-anchored T-123 is a reference, but UTF-8 and
-// SHA-256 stay words because their letters sit mid-word. The prefixes arrive
-// with the vocabulary, after this module loads, so the patterns are read
-// through the current ones and rebuilt when a new vocabulary replaces them.
-let patterns = (() => {
-  let seen: typeof prefix | undefined
-  let built: { start: RegExp; ref: RegExp }
-  return () => {
-    if (seen != prefix) {
-      seen = prefix
-      let letters = [...new Set([...Object.values(prefix), 'D'])].join('|')
-      built = {
-        start: new RegExp(`(?<![\\w])(?:(?:${letters})-\\d|#[0-9a-fA-F]{6})`),
-        ref: new RegExp(`^(?:(?:${letters})-\\d+|#[0-9a-fA-F]{6,64})\\b`),
-      }
-    }
-    return built
-  }
-})()
+// A boundary-anchored T-123 is a reference, whatever its letter: the number
+// names the entity, and the letter is only how it was printed, so an id written
+// before its entity's components changed still links. UTF-8 and SHA-256 stay
+// words because their letters sit mid-word.
+let START = /(?<![\w])(?:[A-Z]-\d|#[0-9a-fA-F]{6})/
+let REF = /^(?:[A-Z]-\d+|#[0-9a-fA-F]{6,64})\b/
 
 type Ref = (id: string, text: string) => string
 
@@ -97,9 +82,9 @@ let door = (ref: Ref, repo?: string | null, links = true) =>
     extensions: [{
       name: 'ref',
       level: 'inline',
-      start: (src: string) => src.match(patterns().start)?.index,
+      start: (src: string) => src.match(START)?.index,
       tokenizer(src: string) {
-        let m = patterns().ref.exec(src)
+        let m = REF.exec(src)
         if (m) return { type: 'ref', raw: m[0], id: m[0] }
       },
       renderer: (t: Tokens.Generic) => ref(String(t.id), String(t.id)),
