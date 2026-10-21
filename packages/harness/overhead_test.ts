@@ -55,7 +55,7 @@ test('a result during model wait excludes the remaining provider time', () =>
     metric: 'preflight',
     ms: 5,
   }))
-test('fixed no-slack reference never changes to match session variance', () => {
+test('the fixed reference never changes to match session variance', () => {
   equal(
     overheadExcess([{ step: 'x', metric: 'dispatch', ms: overheadLimit }]),
     [],

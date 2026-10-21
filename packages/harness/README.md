@@ -93,13 +93,14 @@ preflight is final result to next model claim, excluding remaining provider wait
 and intervening owner input. Neither inference latency nor command runtime
 produces an overhead alert.
 
-Each phase uses the committed `steps.baseline.json` `tool-step` reference with
-zero slack. A whole benchmark step conservatively bounds each constituent phase.
-A session's own median never changes that fixed limit. Only samples for the
-current step are considered; one fixed-message report per metric per worker
-reaches the tracker, with numbers in tags. Missing journal marks are omitted,
-not guessed. Bounded scalar transcript reads keep observation independent of
-transcript age.
+Each phase uses the committed `steps.baseline.json` `tool-step` reference and
+the slack its noise measured. A whole benchmark step conservatively bounds each
+constituent phase. A session's own median never changes that fixed limit. Only
+samples for the current step are considered. A metric reports once per worker,
+on its second excess and never while the box is loaded (as a bench regression
+counts); the fixed-message report reaches the tracker, with numbers in tags.
+Missing journal marks are omitted, not guessed. Bounded scalar transcript reads
+keep observation independent of transcript age.
 
 ```sh
 deno task bench harness-steps

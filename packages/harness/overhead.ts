@@ -1,8 +1,10 @@
 // Native harness overhead, excluding provider latency and the command itself.
-// Fixed bounds come from the same committed zero-slack reference as the bench.
+// Fixed bounds come from the same committed reference as the bench, with the
+// noise it measured, and an excess counts as the bench's does: repeated, on a
+// box that was not loaded.
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Host } from '@yaks/host'
-import { type Baseline, limit as benchmarkLimit } from '@yaks/benchmark'
+import { type Baseline, limit as benchmarkLimit, loaded } from '@yaks/benchmark'
 import type { Runner, Step } from '@yaks/session'
 import { applied } from '@yaks/journal'
 import { logFor } from '@yaks/journal/graph'
@@ -85,13 +87,40 @@ export const overheadSamples = (
 export const overheadExcess = (samples: Overhead[], limit = overheadLimit) =>
   samples.filter((s) => s.ms > limit)
 
+/// overheadDue(new Map([['dispatch', 1]]), 'dispatch') -> true
+/// overheadDue(new Map(), 'dispatch') -> false
+/// overheadDue(new Map([['dispatch', 1]]), 'dispatch', true) -> false
+/** Whether a metric's excess reports now: once, on its second excess in a
+ * worker, never while the box is loaded. One slow step is noise until another
+ * repeats it, and a loaded box times its other work. Counts the excess. */
+export const overheadDue = (
+  seen: Map<string, number>,
+  metric: string,
+  busy = false,
+): boolean => {
+  if (busy) return false
+  const n = (seen.get(metric) ?? 0) + 1
+  seen.set(metric, n)
+  return n == 2
+}
+
+/** The box's load where the runtime can read it (@yaks/benchmark `loaded`). */
+const busy = () => {
+  try {
+    return typeof Deno != 'undefined' &&
+      loaded({ load: Deno.loadavg(), cpus: navigator.hardwareConcurrency })
+  } catch {
+    return false
+  }
+}
+
 /** Read only a bounded scalar tail. One report per metric per worker; the fixed
  * message groups recurrence in the tracker, not one bug per observation. */
 export const overheadEach = (
   host: Host,
   each?: Runner['each'],
 ): NonNullable<Runner['each']> => {
-  const reported = new Set<string>()
+  const seen = new Map<string, number>()
   return async (step: Step, session?: string) => {
     await each?.(step, session)
     if (!session || step.did == 'nothing') return
@@ -135,9 +164,8 @@ export const overheadEach = (
       ) {
         if (
           (!added.has(sample.step) && !needed.has(sample.step)) ||
-          reported.has(sample.metric)
+          !overheadDue(seen, sample.metric, busy())
         ) continue
-        reported.add(sample.metric)
         await host.report?.(
           new Error(
             `Native ${sample.metric} overhead exceeded its benchmark reference`,
