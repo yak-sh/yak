@@ -80,6 +80,9 @@
 :where(h4, h5, h6) {
   font-size: var(--size);
 }
+:where(small) {
+  font-size: var(--small);
+}
 :where(p, ul, ol, pre, blockquote, table, h1, h2, h3):first-child,
 :where(h4, h5, h6):first-child {
   margin-top: 0;

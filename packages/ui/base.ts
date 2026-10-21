@@ -54,6 +54,19 @@ let hl = (kind: string, text: string) =>
 /** Prose, as the defaults dress it. */
 export let specimens = (): Specimen[] => [
   [
+    'type scale',
+    h(
+      'div',
+      null,
+      h('h1', null, 'Heading one'),
+      h('h2', null, 'Heading two'),
+      h('h3', null, 'Heading three'),
+      h('h4', null, 'Heading four'),
+      h('p', null, 'What a thing says, at --size.'),
+      h('p', null, h('small', null, 'What describes it, at --small.')),
+    ),
+  ],
+  [
     'text',
     h(
       'p',
