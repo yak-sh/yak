@@ -12,7 +12,7 @@
  *
  * @module
  */
-import type { Graph } from '@yaks/graph'
+import type { Eid, Graph } from '@yaks/graph'
 import { sleep } from '@yaks/fp'
 import { recompute } from './day.ts'
 import { after, dayOf } from './window.ts'
@@ -34,17 +34,23 @@ export let EVERY = 10 * 60 * 1000
 /** How long into a day yesterday is tallied again. */
 export let LATE = 3 * 60 * 60 * 1000
 
-/** One pass: today, yesterday while it may still be arriving, the limits. */
+/** One pass: today, yesterday while it may still be arriving, the limits.
+ * Returns the models its tallies met with no price, which are missing from
+ * the dollars, not zero in them. */
 export let pass = async (
   g: Graph,
   now: number = Date.now(),
   o: Options = {},
-): Promise<void> => {
+): Promise<Eid[]> => {
   let today = dayOf(now)
-  if (now - Date.parse(`${today}T00:00:00Z`) < LATE) {
-    await recompute(g, after(today, -1))
+  let unpriced = new Set<Eid>()
+  let tally = async (day: string) => {
+    for (let m of (await recompute(g, day)).unpriced) unpriced.add(m)
   }
-  await recompute(g, today)
+  if (now - Date.parse(`${today}T00:00:00Z`) < LATE) {
+    await tally(after(today, -1))
+  }
+  await tally(today)
   // A day of the past week tallied before tallies kept their plans is
   // tallied again, so its week reads in plan shares too.
   let kept = await g.read(
@@ -52,9 +58,10 @@ export let pass = async (
   )
   for (let b of kept) {
     let s = b.spend as { day: string; plans?: unknown }
-    if (!s.plans && s.day != today) await recompute(g, s.day)
+    if (!s.plans && s.day != today) await tally(s.day)
   }
   await read(g, o.usage)
+  return [...unpriced]
 }
 
 /** Tally, then again every `every`, until the signal aborts. An already
@@ -70,9 +77,22 @@ export let service = async (
   options: Options = {},
   signal: AbortSignal = AbortSignal.abort(),
 ): Promise<void> => {
+  let told = new Set<Eid>()
   for (;;) {
     try {
-      await pass(host.graph, Date.now(), options)
+      for (let m of await pass(host.graph, Date.now(), options)) {
+        if (told.has(m)) continue
+        told.add(m)
+        // A model with no price counts as nothing: a failure, fixed with a
+        // `price` on its row, told once while this server runs.
+        let row = (await host.graph.get([m], ['model']))[0]?.model as
+          | { name?: string }
+          | undefined
+        ;(host.report ?? console.error)(
+          new Error(`model ${row?.name ?? m} has no price`),
+          { tags: { step: 'spend unpriced', model: m } },
+        )
+      }
     } catch (e) {
       // A pass that failed is told, and the next one tallies again.
       ;(host.report ?? console.error)(e, { tags: { step: 'spend pass' } })

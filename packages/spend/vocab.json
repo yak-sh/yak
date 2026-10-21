@@ -85,6 +85,7 @@
             "type": "object",
             "properties": {
               "dollars": { "type": "number" },
+              "unpriced": { "type": "array", "items": { "type": "string" } },
               "parts": {
                 "type": "object",
                 "additionalProperties": { "type": "number" }
@@ -109,6 +110,12 @@
           },
           "stamped": true,
           "description": "by the provider whose plan its requests billed against (a Claude Code request Claude's, a Codex one Codex's; a request paid per token bills none): the dollars they ran up on it, in all and by part, session, task, model and entry. Against a plan's weekly limit, its dollars say what share of the week each row used"
+        },
+        "unpriced": {
+          "type": "array",
+          "items": { "type": "string" },
+          "stamped": true,
+          "description": "the model eids a request was tallied for that had no `price` and reported no dollars: what they cost is missing from the dollars, not zero. Also kept per plan, so a plan's rate is known incomplete"
         },
         "entries": {
           "type": "object",

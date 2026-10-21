@@ -23,6 +23,7 @@ import {
   paceOf,
   rates,
   span,
+  unpricedRates,
 } from './window.ts'
 import { dollars, percent, tokens } from './words.ts'
 
@@ -38,12 +39,26 @@ let waiting = (got: Props['got'][string] | undefined, what: string) =>
     ? h(Loading, {}, `Loading ${what}…`)
     : null
 
+// The models a figure was built without a price for: it is missing them, not
+// zero, so it says so in place of a number.
+let Unpriced = ({ io, models }: { io: Props['io']; models: string[] }) => {
+  useNamed(io, models)
+  return h(
+    Fragment,
+    {},
+    'unpriced: ',
+    ...models.flatMap((m, i) => [i ? ', ' : '', mention(io, m)]),
+  )
+}
+
 // A plan limit and its pace, on one line.
 let Limits = (
-  { limits, now, rate }: {
+  { io, limits, now, rate, unpriced }: {
+    io: Props['io']
     limits: Limit[]
     now: number
     rate: Map<string, number>
+    unpriced: Map<string, string[]>
   },
 ) =>
   h(
@@ -81,13 +96,19 @@ let Limits = (
                 l.resets
                   ? `, resets ${l.resets.slice(0, 16).replace('T', ' ')} UTC`
                   : ''
-              }${
-                l.window == 10080 && rate.get(l.of)
-                  ? `; 1% of it is about ${
-                    dollars(1 / rate.get(l.of)!)
-                  } at list price`
-                  : ''
               }`,
+              l.window == 10080 && unpriced.has(l.of)
+                ? h(
+                  Fragment,
+                  {},
+                  '; 1% of it is ',
+                  h(Unpriced, { io, models: unpriced.get(l.of)! }),
+                )
+                : l.window == 10080 && rate.get(l.of)
+                ? `; 1% of it is about ${
+                  dollars(1 / rate.get(l.of)!)
+                } at list price`
+                : '',
             ),
           )
         }),
@@ -99,11 +120,13 @@ let Limits = (
 // dollars it billed each plan and what a dollar of that plan is worth. Shares
 // of two plans don't add, so each is said apart, by its plan's name where
 // more than one plan is measured.
-type Share = (row: Rows, key: string, dollars: number) => string
+type Share = (row: Rows, key: string, dollars: number) => ComponentChildren
 
 let shareOf = (
+  io: Props['io'],
   s: Spend,
   rate: Map<string, number>,
+  unpriced: Map<string, string[]>,
   names: Map<string, string>,
 ): Share =>
 (row, key, spent) => {
@@ -113,7 +136,13 @@ let shareOf = (
   let rated = billed.filter(([p, n]) => n && rate.has(p))
   let named = (p: string) => rate.size > 1 ? ` ${names.get(p) ?? p}` : ''
   return rated.length
-    ? rated.map(([p, d]) => percent(d * rate.get(p)!) + named(p)).join(' · ')
+    ? rated.flatMap(([p, d], i) => [
+      i ? ' · ' : '',
+      unpriced.has(p)
+        ? h(Unpriced, { io, models: unpriced.get(p)! })
+        : percent(d * rate.get(p)!),
+      named(p),
+    ])
     : billed.some(([, n]) => n)
     ? 'no reading'
     : spent
@@ -124,7 +153,18 @@ let shareOf = (
 // A ranking: each row's name, a bar of its share of the costliest, its
 // dollars and what else the caller says about it.
 let Ranking = (
-  { title, sub, row, rows, at, name, more, heads, share }: {
+  {
+    title,
+    sub,
+    row,
+    rows,
+    at,
+    name,
+    more,
+    heads,
+    share,
+    paid = (_, n) => dollars(n),
+  }: {
     title: string
     sub: string
     row: Rows
@@ -134,6 +174,8 @@ let Ranking = (
     more: (ns: number[], key: string) => string[]
     heads: string[]
     share?: Share
+    /** what a row's dollars say (default: the dollars) */
+    paid?: (key: string, n: number) => ComponentChildren
   },
 ) => {
   let most = rows[0]?.[1][at] || 1
@@ -168,7 +210,7 @@ let Ranking = (
             { key: k },
             h(Cell, {}, name(k)),
             h(Cell, {}, h(Meter, { value: ns[at] / most, width: 10 })),
-            h(Cell, { mod: 'num' }, dollars(ns[at])),
+            h(Cell, { mod: 'num' }, paid(k, ns[at])),
             share ? h(Cell, { mod: 'num' }, share(row, k, ns[at])) : null,
             ...more(ns, k).map((s, i) => h(Cell, { key: i, mod: 'num' }, s)),
           )
@@ -283,6 +325,8 @@ let Breakdown = (
         'At the price the provider reported, else at the model’s list price.',
       rows: models,
       at: 4,
+      paid: (k, n) =>
+        s.unpriced.includes(k) ? h(Unpriced, { io, models: [k] }) : dollars(n),
       name: named,
       more: (ns) => [String(ns[5]), tokens(sum(ns))],
       heads: ['requests', 'tokens'],
@@ -314,6 +358,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
   let week = merged(within(from, to))
   let before = merged(within(after(from, -7), after(from, -1)))
   let rate = rates(limits, days, now)
+  let unpriced = unpricedRates(limits, days, now)
   return h(
     'article',
     {},
@@ -333,14 +378,15 @@ export let Page = ({ io, got }: Props): JSX.Element => {
         `the week before ${dollars(before.dollars)}`,
       ),
     ),
-    waiting(got.limits, 'the plan limits') ?? h(Limits, { limits, now, rate }),
+    waiting(got.limits, 'the plan limits') ??
+      h(Limits, { io, limits, now, rate, unpriced }),
     waiting(got.days, 'the tallies') ??
       h(Breakdown, {
         io,
         s: week,
         span: [from, to],
         before,
-        share: rate.size ? shareOf(week, rate, names) : undefined,
+        share: rate.size ? shareOf(io, week, rate, unpriced, names) : undefined,
       }),
   )
 }

@@ -62,6 +62,13 @@ let day = tally('2026-10-20', [ask], {
 equal(merged([day, day]).parts.input, [0, 0, 2000, 0, 0.008])
 ```
 
+A request whose model has no `price` and which reported no dollars is weighed at
+nothing, and its model is named in the tally's `unpriced` (and its plan's): what
+it cost is missing, not zero. The duty tells the tracker of each such model once
+while the server runs. The page says `unpriced: <model>` in place of that
+model's dollars and of any week % or "1% of it is about" built on a plan whose
+week holds one. Give the model a `price` row and the next tally heals it.
+
 ## The duty and the tools
 
 `@yaks/spend/service` is a duty: every ten minutes it tallies today again (and

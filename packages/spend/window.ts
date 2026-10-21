@@ -141,11 +141,48 @@ export let rates = (
   now: number,
 ): Map<Eid, number> =>
   new Map(limits.flatMap((l): [Eid, number][] => {
-    if (l.window != 10080 || !l.resets || !current(l, now)) return []
-    let from = dayOf(Date.parse(l.resets) - WEEK)
-    let to = l.at ? l.at.slice(0, 10) : dayOf(now)
-    let dollars = days
-      .filter((d) => d.day >= from && d.day <= to)
-      .reduce((n, d) => n + (d.plans?.[l.of]?.dollars ?? 0), 0)
+    let dollars = weekDays(l, days, now)?.reduce(
+      (n, d) => n + (d.plans?.[l.of]?.dollars ?? 0),
+      0,
+    )
     return dollars ? [[l.of, l.used / dollars]] : []
+  }))
+
+// The days a plan's weekly reading counts, where it has a current one.
+let weekDays = (l: Limit, days: Spend[], now: number): Spend[] | undefined => {
+  if (l.window != 10080 || !l.resets || !current(l, now)) return
+  let from = dayOf(Date.parse(l.resets) - WEEK)
+  let to = l.at ? l.at.slice(0, 10) : dayOf(now)
+  return days.filter((d) => d.day >= from && d.day <= to)
+}
+
+/**
+ * The models a plan's weekly rate was built without a price for, by the
+ * provider's eid: their requests are in the week's dollars as nothing, so the
+ * rate reads too low. A plan whose week holds none has no entry.
+ *
+ * ```ts
+ * import { unpricedRates } from './window.ts'
+ * import { empty } from './tally.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let week = { provider: 'codex', of: 'c', window: 10080, used: 30,
+ *   resets: '2026-10-27T11:00:00Z', at: '2026-10-21T12:00:00Z' }
+ * let plan = { dollars: 1, unpriced: ['m'], parts: {}, sessions: {}, tasks: {}, models: {}, entries: {} }
+ * let days = [{ ...empty('2026-10-20'), plans: { c: plan } }]
+ * equal(unpricedRates([week], days, Date.parse('2026-10-21T13:00:00Z')).get('c'), ['m'])
+ * ```
+ */
+export let unpricedRates = (
+  limits: Limit[],
+  days: Spend[],
+  now: number,
+): Map<Eid, Eid[]> =>
+  new Map(limits.flatMap((l): [Eid, Eid[]][] => {
+    let models = [
+      ...new Set(
+        weekDays(l, days, now)?.flatMap((d) => d.plans?.[l.of]?.unpriced ?? []),
+      ),
+    ]
+    return models.length ? [[l.of, models]] : []
   }))

@@ -34,13 +34,21 @@ export type Spend = {
   /** by the provider whose plan the requests billed against: what they ran
    * up on it */
   plans: Record<Eid, Plan>
+  /** the models a request was weighed with no price for, and reported no
+   * dollars: their dollars are missing, not zero */
+  unpriced: Eid[]
 }
 
 /** The rows a tally ranks. */
 export type Rows = 'parts' | 'sessions' | 'tasks' | 'models' | 'entries'
 
 /** What one plan's requests ran up: their dollars, and each row's. */
-export type Plan = { dollars: number } & Record<Rows, Record<string, number>>
+export type Plan =
+  & { dollars: number; unpriced?: Eid[] }
+  & Record<
+    Rows,
+    Record<string, number>
+  >
 
 let ROWS: Rows[] = ['parts', 'sessions', 'tasks', 'models', 'entries']
 
@@ -74,16 +82,22 @@ export let empty = (day: string): Spend => ({
   models: {},
   entries: {},
   plans: {},
+  unpriced: [],
 })
 
 let unbilled = (): Plan => ({
   dollars: 0,
+  unpriced: [],
   parts: {},
   sessions: {},
   tasks: {},
   models: {},
   entries: {},
 })
+
+// Name a model once in a list.
+let name = (to: Eid[] | undefined, model: Eid): Eid[] =>
+  [...new Set([...to ?? [], model])].sort()
 
 // Add `dollars` to what a plan's `row` holds under `key`.
 let bill = (plan: Plan | undefined, row: Rows, key: string, n: number) => {
@@ -158,6 +172,28 @@ let partsOf = (b: Bundle, known: Known): [string, Paid][] => {
  * })
  * equal(t.tasks, { 'T-1': [1e6, 2.1], 'T-2': [1e6, 2.1] })
  * ```
+ *
+ * A model with no price, whose request reported no dollars, is named as
+ * unpriced, on the day and on its plan:
+ *
+ * ```ts
+ * import { tally } from './tally.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * let ask = {
+ *   entity: { eid: 'a' },
+ *   entry: { session: 's' },
+ *   ask: { to: 'free' },
+ *   usage: { input_tokens: 10, output_tokens: 5 },
+ * }
+ * let t = tally('2026-10-20', [ask], {
+ *   prices: new Map(),
+ *   fixed: new Map(),
+ *   tasks: new Map(),
+ *   plans: new Map([['a', 'codex']]),
+ * })
+ * equal([t.dollars, t.unpriced, t.plans.codex.unpriced], [0, ['free'], ['free']])
+ * ```
  */
 export let tally = (day: string, rows: Bundle[], known: Known): Spend => {
   let out = empty(day)
@@ -170,9 +206,8 @@ export let tally = (day: string, rows: Bundle[], known: Known): Spend => {
     let parts = partsOf(b, known)
     let weighed = sum(parts.map(([, p]) => weigh(p)))
     let cost = comp(b, 'cost')
-    let spent = cost.reported && typeof cost.dollars == 'number'
-      ? cost.dollars
-      : weighed
+    let reported = cost.reported && typeof cost.dollars == 'number'
+    let spent = reported ? cost.dollars as number : weighed
     // Dollars per part: weighed, scaled to what was reported; where nothing
     // weighs (no price), by tokens.
     let tokens = sum(parts.map(([, p]) => sum(p)))
@@ -189,6 +224,10 @@ export let tally = (day: string, rows: Bundle[], known: Known): Spend => {
       add(out.parts, k, [...p, share(p)])
       bill(plan, 'parts', k, share(p))
       p.forEach((n, i) => all[i] += n)
+    }
+    if (!price && !reported && sum(all)) {
+      out.unpriced = name(out.unpriced, model)
+      if (plan) plan.unpriced = name(plan.unpriced, model)
     }
     let entries = (comp(b, 'context_parts').entries ?? {}) as Record<Eid, Paid>
     for (let [eid, p] of Object.entries(entries)) {
@@ -232,6 +271,7 @@ export let settled = (s: Spend): Spend => {
   let cents = (n: number) => Math.round(n * 1e4) / 1e4
   let plan = (p: Plan): Plan => ({
     dollars: cents(p.dollars),
+    unpriced: p.unpriced ?? [],
     ...Object.fromEntries(ROWS.map((row) => [
       row,
       Object.fromEntries(
@@ -273,6 +313,7 @@ export let merged = (days: Spend[]): Spend => {
   let out = empty(days[0]?.day ?? '')
   for (let d of days) {
     out.requests += d.requests
+    for (let m of d.unpriced ?? []) out.unpriced = name(out.unpriced, m)
     out.dollars += d.dollars
     out.tokens = out.tokens.map((n, i) => n + (d.tokens[i] ?? 0))
     for (let k of ROWS) {
@@ -281,6 +322,7 @@ export let merged = (days: Spend[]): Spend => {
     for (let [at, p] of Object.entries(d.plans ?? {})) {
       let plan = out.plans[at] ??= unbilled()
       plan.dollars += p.dollars
+      for (let m of p.unpriced ?? []) plan.unpriced = name(plan.unpriced, m)
       for (let row of ROWS) {
         for (let [k, n] of Object.entries(p[row] ?? {})) bill(plan, row, k, n)
       }
