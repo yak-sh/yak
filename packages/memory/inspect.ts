@@ -32,7 +32,6 @@ import {
   type View,
 } from '@yaks/inspect'
 import { words } from './recall.ts'
-import { TOPIC } from './topic.ts'
 
 import { AROUND, BELIEFS, statement } from './views.ts'
 
@@ -207,7 +206,7 @@ export let TopicPage = ({ e, io }: Props): JSX.Element => {
       notes: notes.get(''),
     }),
     h(Beliefs, { e, io, notes }),
-    io.show(e, 'Inspect.Facts', { notes, skip: [TOPIC] }),
+    io.show(e, 'Inspect.Facts', { notes, skip: ['topic'] }),
     io.show(e, 'Inspect.Links', { notes, skip: ['belief.about'] }),
     io.show(e, 'Inspect.History', { notes }),
   )
@@ -218,5 +217,5 @@ export let inspectViews: View[] = [
   { view: 'Belief.Cited', match: parse('.memory'), Render: Cited },
   { view: 'Topic.Belief.Tile', match: parse('.belief'), Render: BeliefTile },
   { view: 'Inspect.Page', match: parse('.belief'), Render: BeliefPage },
-  { view: 'Inspect.Page', match: parse(`.${TOPIC}`), Render: TopicPage },
+  { view: 'Inspect.Page', match: parse('.topic'), Render: TopicPage },
 ]

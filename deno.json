@@ -172,6 +172,7 @@
     "./packages/mirror",
     "./packages/alias",
     "./packages/memory",
+    "./packages/topic",
     "./packages/yaml",
     "./packages/harness",
     "./packages/tui",

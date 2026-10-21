@@ -23,7 +23,8 @@ import { contextDoc } from '@yaks/context'
 import { docDoc } from '@yaks/doc/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { taskDoc } from '@yaks/task/vocab'
-import { topicEid, topics } from '../packages/memory/topic.ts'
+import { topicDoc, topicEid } from '@yaks/topic'
+import { runs as topics } from '@yaks/topic/tools'
 import { token } from '@yaks/graph/guard'
 import { HARNESS } from '@yaks/harness/default'
 import { oracleDoc } from '@yaks/oracle/vocab'
@@ -47,6 +48,7 @@ let vocab = loadVocab([
   contextDoc,
   docDoc,
   memoryDoc,
+  topicDoc,
   {
     $defs: {
       contains: taskDoc.$defs!.contains,

@@ -10,7 +10,8 @@ import { contextDoc } from '@yaks/context'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { docDoc } from '@yaks/doc/vocab'
 import { taskDoc } from '@yaks/task/vocab'
-import { memoryDoc, topicEid } from '@yaks/memory'
+import { memoryDoc } from '@yaks/memory'
+import { topicDoc, topicEid } from '@yaks/topic'
 import { sha256 } from '@yaks/graph/sha256'
 import { neighborhood } from './context.ts'
 
@@ -21,6 +22,7 @@ let vocab = loadVocab([
   contextDoc,
   docDoc,
   memoryDoc,
+  topicDoc,
   taskDoc,
   {
     $defs: {

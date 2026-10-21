@@ -18,7 +18,8 @@ import { contextDoc } from '@yaks/context'
 import { docDoc } from '@yaks/doc/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc, type Request } from '@yaks/model'
-import { memoryDoc, topicEid } from '@yaks/memory'
+import { memoryDoc } from '@yaks/memory'
+import { topicDoc, topicEid } from '@yaks/topic'
 import { identityEid } from '@yaks/graph/identity'
 import { oracleDoc } from './vocab.ts'
 import { part } from './learn.ts'
@@ -33,6 +34,7 @@ let vocab = loadVocab([
   toolsDoc,
   modelDoc,
   memoryDoc,
+  topicDoc,
   oracleDoc,
 ], [kernelKeywords, edgeKeywords])
 let g = graph({

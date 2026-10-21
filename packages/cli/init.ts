@@ -30,6 +30,7 @@ export let STARTER = [
   '@yaks/project',
   '@yaks/persona',
   '@yaks/memory',
+  '@yaks/topic',
   '@yaks/process',
   '@yaks/session',
   '@yaks/api',

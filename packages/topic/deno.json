@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/topic",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./tools": "./tools.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "A knowledge graph of topics: each a cover, contents and edges to what it holds, needs, reads and cites, found and made under one name per subject.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

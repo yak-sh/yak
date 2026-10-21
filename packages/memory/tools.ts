@@ -2,8 +2,8 @@
 // implementations behind the `tool: true` declarations in ./vocab.json. Two of
 // them are one loop: keep what somebody said, and get it back the next time it
 // matters. A third finds where somebody said words, the place a save marks;
-// the rest read around a memory (./around.ts), and two find and make the topics
-// beliefs are about (./topic.ts).
+// the rest read around a memory (./around.ts). Finding and making the topics
+// beliefs are about is @yaks/topic's.
 //
 // Keeping marks. What somebody said is usually in the graph already — what they
 // typed is a transcript entry, what they wrote is a comment or a doc — so a
@@ -43,7 +43,6 @@ import { MEMORY } from './comp.ts'
 import { EMPTY, FEEDBACK, marked, type Marking, saved } from './save.ts'
 import { type Asked, line, ordered, terms, words } from './recall.ts'
 import { around } from './around.ts'
-import { topics } from './topic.ts'
 
 /** How many memories a recall returns when the caller gave no limit. */
 export let LIMIT = 8
@@ -232,5 +231,4 @@ export let runs = (
   },
 
   ...around,
-  ...topics(),
 })

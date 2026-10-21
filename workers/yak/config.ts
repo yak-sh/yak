@@ -192,6 +192,7 @@ export let directoryConfig: Config = {
         entry.tool !== true || ['memory_save', 'memory_recall'].includes(name)
       ).map(([name]) => name),
     },
+    { use: '@yaks/topic', facets: ['vocab'], words: ['topic'] },
     { use: '@yaks/connections', facets: toolFacets },
     '@yaks/secrets',
     // The pool's rows: the directory's effects (a deploy's Git commit, trash

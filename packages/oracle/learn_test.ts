@@ -10,7 +10,8 @@ import { sessionDoc } from '@yaks/session'
 import { contextDoc } from '@yaks/context'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { docDoc } from '@yaks/doc/vocab'
-import { memoryDoc, topicEid } from '@yaks/memory'
+import { memoryDoc } from '@yaks/memory'
+import { topicDoc, topicEid } from '@yaks/topic'
 import { oracleDoc } from './vocab.ts'
 import { part } from './learn.ts'
 import { runs } from './tools.ts'
@@ -23,6 +24,7 @@ let vocab = loadVocab([
   contextDoc,
   docDoc,
   memoryDoc,
+  topicDoc,
   oracleDoc,
 ], [kernelKeywords, edgeKeywords])
 let fresh = async (name: string) => {

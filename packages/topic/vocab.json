@@ -1,0 +1,90 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true,
+    "https://yak.sh/vocab/id": true,
+    "https://yak.sh/vocab/kernel": true
+  },
+  "title": "topic",
+  "$defs": {
+    "topic": {
+      "component": true,
+      "type": "object",
+      "kind": true,
+      "before": [
+        "doc"
+      ],
+      "prefix": "Q",
+      "description": "a subject in the knowledge graph that no project, package, component or design already is. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains, a subtopic or any other entity), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about)",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "the title in lowercase, its spaces single; the topic's id is derived from it, so one name is one topic and naming it again finds the same one"
+        },
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "death": "keep",
+          "description": "the project it holds for; absent for a topic that holds everywhere, as world or fleet knowledge"
+        }
+      }
+    },
+    "topic_new": {
+      "tool": true,
+      "noun": "topic",
+      "verb": "new",
+      "title": "Make a topic",
+      "description": "Make a topic, where no existing topic, project, package, component or design fits. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its cover, a line or two saying what belongs under it, never a point anybody made. scope names the project it holds for; leave it out for a topic that holds everywhere. One name is one topic: a name that is taken is refused with the topic that has it, to use instead, and so is a name whose words hold another topic's or are held by them (\"economic market design\" beside \"market design\"). Returns the applied bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
+      "input": {
+        "name": {
+          "type": "string",
+          "description": "what the topic is called, a few plain words"
+        },
+        "body": {
+          "type": "string",
+          "description": "a line or two saying what belongs under it"
+        },
+        "scope": {
+          "type": "string",
+          "ref": "project",
+          "description": "project id or name it holds for; omit for a topic that holds everywhere",
+          "short": "s"
+        }
+      },
+      "required": [
+        "name",
+        "body"
+      ],
+      "positional": [
+        "name"
+      ]
+    },
+    "topic_find": {
+      "tool": true,
+      "noun": "topic",
+      "verb": "find",
+      "title": "Find topics",
+      "description": "Find existing topics: those whose name or cover holds a word starting with each word in said (\"query\" finds \"querying\"; ask one word at a time), ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it before making a topic, with near set to what you are filing under one, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
+      "input": {
+        "said": {
+          "type": "string",
+          "description": "a word or two the topic's name or cover holds words starting with"
+        },
+        "near": {
+          "type": "string",
+          "ref": "entity",
+          "description": "an entity id or name whose meaning ranks the topics"
+        },
+        "limit": {
+          "type": "number",
+          "description": "return at most this many (default 12)",
+          "short": "n"
+        }
+      },
+      "readOnly": true,
+      "positional": [
+        "said"
+      ]
+    }
+  }
+}

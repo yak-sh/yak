@@ -20,7 +20,6 @@ import { memoryDoc } from './comp.ts'
 import { type Asked, heard, line } from './recall.ts'
 import { saved } from './save.ts'
 import { runs, unread, witnessed } from './tools.ts'
-import { topicEid } from './topic.ts'
 
 // What a memory lives among: the portfolio it is scoped to, the people and
 // sessions that write, transcripts, comments and tasks that hold words, and
@@ -123,63 +122,6 @@ test('every memory tool is declared and implemented', () => {
     Object.keys(tools).filter((name) => !declared.includes(name)),
     [],
   )
-})
-
-test('a topic is its name, and a name said twice is one topic', async () => {
-  let g = fresh()
-  let answer = await ask('topic_new', {
-    name: 'UI  Components',
-    body: 'how the interface is built from display-only parts',
-  }, g)
-  // The answer names the id itself, for whoever asked to use.
-  assertEquals(eids(answer), [topicEid('ui components')])
-  await write(g, answer)
-  let [made] = await g.read('.topic&*')
-  assertEquals(made.entity.eid, topicEid('ui components'))
-  assertEquals(part(made, 'doc').title, 'UI Components')
-  await assertRejects(
-    () => ask('topic_new', { name: 'ui components', body: 'again' }, g),
-    Refused,
-    made.entity.eid,
-  )
-})
-
-// Graphs of topics, each written once at load: the cases below only ask.
-let topical = async (briefs: [string, string][]) => {
-  let g = fresh()
-  for (let [name, body] of briefs) {
-    await write(g, await ask('topic_new', { name, body }, g))
-  }
-  return g
-}
-let market = await topical([['market design', 'the market']])
-let subjects = await topical([
-  ['testing', 'what a test checks'],
-  ['naming', 'one thing, one name'],
-])
-
-test("a name holding another topic's words, or held by them, is refused", async () => {
-  let g = market
-  for (let name of ['economic market design', 'markets', 'design']) {
-    await assertRejects(
-      () => ask('topic_new', { name, body: 'the same' }, g),
-      Refused,
-      topicEid('market design'),
-    )
-  }
-  assertEquals(
-    eids(await ask('topic_new', { name: 'ui design', body: 'screens' }, g)),
-    [topicEid('ui design')],
-  )
-})
-
-test('find answers the topics holding the words, else every one by name', async () => {
-  let g = subjects
-  let names = (bs: Bundle[]) => bs.map((b) => part(b, 'topic').name)
-  assertEquals(names(await ask('topic_find', {}, g)), ['naming', 'testing'])
-  assertEquals(names(await ask('topic_find', { said: 'check' }, g)), [
-    'testing',
-  ])
 })
 
 test('words the graph already holds are marked where they are', async () => {

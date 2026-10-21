@@ -56,7 +56,7 @@ The same holds for anything a model or agent names at run time: two builds
 looking for a topic at once minted "market design" and "economic market design"
 for one subject. Whatever mints a named entity looks up the existing ones first
 (by words and by meaning) and refuses a name that overlaps one, as `topic_new`
-does (`overlaps` in packages/memory/topic.ts).
+does (`overlaps` in packages/topic/topic.ts).
 
 A word also has a meaning outside this repo, and the field's meaning wins.
 "Exception" names the throw-and-catch mechanism and "error" names the mistake;

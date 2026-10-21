@@ -1,7 +1,6 @@
 // The component this package is about: `memory`, a mark on something a person
 // said. Beside it, ./vocab.json declares what is built from memories: `belief`,
-// a conclusion a builder drew, and `topic`, a subject beliefs are about
-// (./topic.ts).
+// a conclusion a builder drew about a subject, often a topic (@yaks/topic).
 //
 // A memory is NOT a note an agent took. It is the person's own sentence, kept
 // as they said it, because a paraphrase is strictly less than what was said —

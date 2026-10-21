@@ -418,6 +418,11 @@ grouped approximately by function, **not** by dependency order.
   `memory` component on a `doc` whose body is what they said plus a few lines of
   context, the query that recalls them, and the text handed to an agent at the
   start of its next conversation.
+
+- **[@yaks/topic](./topic)** — A knowledge graph of topics: each a cover,
+  contents and edges to what it holds, needs, reads and cites, found and made
+  under one name per subject.
+
 - **[@yaks/persona](./persona)** — Declare human identities, agent instruction
   sets and assigned roles. Read a persona's own document and its
   included/reference documents, then render one Markdown string. The caller

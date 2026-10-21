@@ -9,6 +9,7 @@ import { ram } from '@yaks/ram'
 import { define, resolve } from '@yaks/render'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { memoryDoc } from '@yaks/memory/vocab'
+import { topicDoc } from '@yaks/topic/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance'
 import { contextDoc } from '@yaks/context'
@@ -22,6 +23,7 @@ import { inspectViews } from './views.ts'
 let vocab = loadVocab([
   toolsDoc,
   memoryDoc,
+  topicDoc,
   kernelDoc,
   provenanceDoc,
   contextDoc,
