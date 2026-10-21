@@ -161,7 +161,9 @@ export let natives = async (
       ...clauses,
       present(SESSION),
       ...graph.vocab.comp('process') ? [absent('process')] : [],
-      ...graph.vocab.prop(SESSION, 'log') ? [absent(`${SESSION}.log`)] : [],
+      ...graph.vocab.prop(SESSION, 'transcript')
+        ? [absent(`${SESSION}.transcript`)]
+        : [],
       fields('entity.eid'),
     )),
   )

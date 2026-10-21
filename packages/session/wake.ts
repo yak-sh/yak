@@ -97,7 +97,7 @@ export let unanswered = async (g: Graph, session: Eid): Promise<Bundle[]> =>
   await g.read(
     `.entry.session=${session}&.entry.seq>${await given(g, session)}` +
       `&.content&!output&!${STOP_ENTRY}&!notice` +
-      (g.vocab.comp('imported') ? '&!imported' : '') +
+      (g.vocab.comp('lines') ? '&!lines' : '') +
       '&.order=entry.seq&*',
   )
 

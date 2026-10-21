@@ -1,7 +1,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { and, eq, every, present } from '@yaks/query'
-import { type Comp, derivedEid, type Graph, identityEid } from '@yaks/graph'
+import { type Comp, derivedEid, type Graph } from '@yaks/graph'
+import { fileOf } from '@yaks/file'
 import { run } from '@yaks/git/land'
 import { localFilesystem, repositoryEid } from '@yaks/git/host'
 import { caught } from '@yaks/tracker/report'
@@ -47,7 +48,7 @@ let setup = async () => {
   return { dir, root, repository, g, memory }
 }
 let files = async (g: Graph, repository: string) =>
-  await g.read(and(present('file'), eq('file.repository', repository), every()))
+  await g.read(and(present('file'), eq('file.root', repository), every()))
 
 let master = await (async () => {
   let { dir, root, repository, g, memory } = await setup()
@@ -92,10 +93,10 @@ test('skills mirror lands from a dedicated worktree onto primary branch master',
 test('skill mirror imports documents and tracked support without canonical oscillation', async () => {
   let { dir, root, repository, g, memory } = await setup()
   try {
-    let unrelated = identityEid('file', ['src/large.ts', repository])
+    let unrelated = fileOf(repository, 'src/large.ts')
     await g.apply([{
       entity: { eid: unrelated },
-      file: { path: 'src/large.ts', repository },
+      file: { path: 'src/large.ts', root: repository },
       content: { body: 'Unrelated repository content' },
     }, {
       entity: { eid: 'other-reference' },
@@ -120,7 +121,7 @@ test('skill mirror imports documents and tracked support without canonical oscil
     assertEquals(skills.length, 1)
     assert(
       skills[0].entity.eid !=
-        identityEid('file', ['.claude/skills/sample/SKILL.md', repository]),
+        fileOf(repository, '.claude/skills/sample/SKILL.md'),
     )
     assertEquals((await files(g, repository)).length, 3)
     extras = []
@@ -238,7 +239,8 @@ test('skill mirror graph-only skill and companion creation lands safely', async 
     await syncSkills(g, root, memory)
     let eid = crypto.randomUUID()
     let path = '.claude/skills/new-skill/SKILL.md'
-    let fid = identityEid('file', [path, repository])
+    let fid = fileOf(repository, path)
+    let dom = '.claude/skills/new-skill/dom.ts'
     await g.apply([
       {
         entity: { eid },
@@ -246,20 +248,15 @@ test('skill mirror graph-only skill and companion creation lands safely', async 
         doc: { title: 'new-skill', body: 'New description' },
         content: { body: 'New instructions\n' },
       },
-      { entity: { eid: fid }, file: { path, repository } },
+      { entity: { eid: fid }, file: { path, root: repository } },
       {
         entity: { eid: derivedEid(`skill-file|${eid}|${fid}`) },
         edge: { from: eid, to: fid },
         references: {},
       },
       {
-        entity: {
-          eid: identityEid('file', [
-            '.claude/skills/new-skill/dom.ts',
-            repository,
-          ]),
-        },
-        file: { path: '.claude/skills/new-skill/dom.ts', repository },
+        entity: { eid: fileOf(repository, dom) },
+        file: { path: dom, root: repository },
         content: { body: 'export let dom = 2\n' },
       },
     ])
@@ -293,7 +290,7 @@ test('skill mirror title rename retains UUID and relocates companion identities'
     let locator = await skillLocation(g, current)
     assertEquals(locator?.file, {
       path: '.claude/skills/renamed/SKILL.md',
-      repository,
+      root: repository,
     })
     assertEquals(
       (await skillFiles(g, repository)).get('.claude/skills/renamed/dom.ts'),
@@ -792,10 +789,7 @@ let movedReference = await (async () => {
       eq('edge.from', skill.entity.eid),
       every(),
     ))
-    let companion = identityEid('file', [
-      '.claude/skills/sample/dom.ts',
-      repository,
-    ])
+    let companion = fileOf(repository, '.claude/skills/sample/dom.ts')
     await git(root, 'rm', '.claude/skills/sample/SKILL.md')
     let apply = g.apply
     g.apply = async (...args) => {

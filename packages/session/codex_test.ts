@@ -5,7 +5,7 @@ import { assertEquals } from '@std/assert'
 import { type Bundle, type Comp, identityEid } from '@yaks/graph'
 import { codexRollout } from './readers.ts'
 import { look, type Seen } from './service.ts'
-import { logOf } from './tail.ts'
+import { transcriptOf } from './tail.ts'
 import { ids, locked, store } from './testing.ts'
 
 let id = '4f19e945-0430-4570-9f94-43b07b7eddd0'
@@ -127,7 +127,7 @@ test('Codex rollout messages retain roles, calls, timestamps and runner identity
 
 await look(resumed, '', seen(), { codex: dir, person: ids.ada })
 let resumedRows = await rows(resumed)
-let [log] = await resumed.get([logOf(path(id))])
+let read = await transcriptOf(resumed, path(id))
 await look(resumed, '', seen(), { codex: dir, person: ids.ada })
 let replayed = await rows(resumed)
 await look(managedGraph, '', seen(), { codex: dir })
@@ -143,7 +143,7 @@ test('Codex rollout resumes partial consumption across importer restart without 
     replayed.map((b) => b.entity.eid),
     imported.map((b) => b.entity.eid),
   )
-  assertEquals((log.log as Comp)?.consumed, 12)
+  assertEquals(read?.consumed, 12)
 })
 
 test('Codex rollout of a managed thread leaves its stdout transcript alone', () => {

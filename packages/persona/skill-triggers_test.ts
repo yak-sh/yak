@@ -1,7 +1,7 @@
 // The declaration owes work for skill inputs, including their disappearance,
 // and leaves the fleet's unrelated content and links alone.
 import { equal, test } from '@yaks/testing'
-import { identityEid } from '@yaks/graph'
+import { fileOf } from '@yaks/file'
 import { owing } from './testing.ts'
 
 let locator = '11111111-1111-4111-8111-111111111111'
@@ -36,16 +36,11 @@ test('tool content owes no skill reconciliation; skill text and companion files 
     entity: { eid: 'repository' },
     repository: { common: '/repo/.git' },
   }])
-  let eid = identityEid('file', [
-    '.claude/skills/example/helper.ts',
-    'repository',
-  ])
+  let path = '.claude/skills/example/helper.ts'
+  let eid = fileOf('repository', path)
   await g.apply([{
     entity: { eid },
-    file: {
-      path: '.claude/skills/example/helper.ts',
-      repository: 'repository',
-    },
+    file: { path, root: 'repository' },
     content: { body: 'helper' },
   }])
   await clear()
@@ -63,11 +58,11 @@ test('scope includes metadata, skill locators and root changes but excludes othe
     { entity: { eid: 'skill' }, skill: {} },
     { entity: { eid: 'other' }, doc: { title: 'Other' } },
   ])
-  let file = identityEid('file', ['README.md', 'repository'])
+  let file = fileOf('repository', 'README.md')
   await clear()
   await g.apply([{
     entity: { eid: file },
-    file: { path: 'README.md', repository: 'repository' },
+    file: { path: 'README.md', root: 'repository' },
     content: { body: 'readme' },
   }])
   equal(await queued(), [])

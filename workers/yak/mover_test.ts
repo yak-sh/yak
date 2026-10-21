@@ -24,6 +24,7 @@ import { keyed } from '@yaks/key'
 import { buildOf, inputKey } from '@yaks/builders'
 import { toolEid } from '@yaks/tools'
 import { deadMailInboxMove, deadMailInboxRule } from './migrate.ts'
+import { importedRule, importedSource } from './imported-move.ts'
 import { type Rehearsal, type Rule, type Standing } from './mover.ts'
 import { state } from './testing.ts'
 import { driver } from '@yaks/durable-object'
@@ -1019,5 +1020,48 @@ await proof(
         unspoken: 'using.input',
       }],
     )
+  },
+)
+
+await proof(
+  'retired imported rows are cleared and shed, and a store without them is done',
+  async (equal, ok) => {
+    let s = await store(0, importedRule)
+    await s.source([
+      {
+        entity: { eid: 'read' },
+        doc: { title: 'kept' },
+        imported: { source: '/a.jsonl', line: 3 },
+      },
+      { entity: { eid: 'bare' }, imported: {} },
+    ], importedSource)
+    let before = await s.query('*')
+    let [rehearsed] = await s.rehearse()
+    equal([rehearsed.rows, rehearsed.moved, rehearsed.failed], [
+      2,
+      2,
+      undefined,
+    ])
+    equal(await s.query('*'), before)
+    ok(s.columns('imported').includes('source'))
+    s.wake({ ...importedRule, live: 'apps' })
+    await s.alarm()
+    let [moved] = await s.moves()
+    equal([moved.moved, moved.failed, !!moved.done], [2, undefined, true])
+    equal(s.columns('imported'), ['entity'])
+    equal((await s.query('.entity.eid=read&*'))[0].doc, { title: 'kept' })
+    equal((await s.rehearse())[0].rows, 0)
+
+    let fresh = await store(0, { ...importedRule, live: 'apps' })
+    let [none] = await fresh.rehearse()
+    equal([none.rows, none.failed, none.unspoken], [0, undefined, 'imported'])
+    await fresh.alarm()
+    let [done] = await fresh.moves()
+    equal([done.moved, done.failed, !!done.done, done.unspoken], [
+      0,
+      undefined,
+      true,
+      'imported',
+    ])
   },
 )

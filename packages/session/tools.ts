@@ -53,6 +53,7 @@ import { TOMBSTONE } from '@yaks/graph/bundle'
 import type { Runs } from '@yaks/graph/tools'
 import { human } from '@yaks/id'
 import { and, eq, every, present } from '@yaks/query'
+import { absolute } from '@yaks/file/local'
 import type { Finding } from '@yaks/tools'
 import { checked } from '@yaks/tools/check'
 import { carried } from '@yaks/persona'
@@ -446,12 +447,19 @@ export let runs = (
           'stalled cannot be told from one that is merely quiet — UNVERIFIED',
       }])
     }
-    let logs = await graph.get(
+    let files = await graph.get(
       sessions.flatMap((s) =>
-        comp(s, SESSION).log ? [str(comp(s, SESSION).log)] : []
+        comp(s, SESSION).transcript ? [str(comp(s, SESSION).transcript)] : []
       ),
     )
-    let byLog = new Map(logs.map((b) => [b.entity.eid, b]))
+    let byFile = new Map(files.map((b) => [b.entity.eid, b]))
+    let paths = new Map(
+      await Promise.all(
+        files.map(async (b) =>
+          [b.entity.eid, await absolute(graph, b)] as const
+        ),
+      ),
+    )
     let repairs: Bundle[] = []
     let found = sessions.flatMap((s): Finding[] => {
       let entries = lines.get(s.entity.eid) ?? []
@@ -460,13 +468,14 @@ export let runs = (
       let newest = ordered(entries).at(-1)
       let at = newest ? writtenAt(newest) : NaN
       if (isNaN(at) || at > cutoff) return []
-      let log = byLog.get(str(comp(s, SESSION).log))
-      let source = str(comp(log, 'log').source)
-      let imported = str(comp(newest, 'imported').source)
+      let file = byFile.get(str(comp(s, SESSION).transcript))
+      let path = file && paths.get(file.entity.eid)
+      let read = str(comp(newest, 'lines').file)
       if (
         s.exit ||
-        (comp(s, SESSION).operator == true && source && source == imported &&
-          endedFile(source, Number(comp(log, 'log').consumed), cutoff))
+        (comp(s, SESSION).operator == true && path &&
+          file!.entity.eid == read &&
+          endedFile(path, Number(comp(file, 'transcript').consumed), cutoff))
       ) {
         repairs.push({
           entity: { eid: s.entity.eid },

@@ -36,15 +36,15 @@ all reported counts; the paired `reported_*` totals explain the share.
 `unknown_cache_input_tokens`, `unknown_input_requests` and
 `unknown_cache_requests` expose missing coverage; `zero_cache_requests` counts
 explicitly reported zeros. Requests not yet reporting usage remain unknown.
-Imported CLI entries can carry `ask{to, through}` too; `session{log}` or
-`imported{source, line}` on their session still identifies them as imported.
-Imported entries can be cumulative turn totals rather than individual requests.
-They are excluded from `total` and the session, provider and model groups, so
-these never mix cumulative imports with per-request usage.
-`imported_observations` counts the excluded entries; `groups.path.imported`
-keeps their totals separately, and `--requests` retains the individual
-observations. An endpoint that omits cached usage (or reports null) is unknown,
-not a cache miss; it does not enter the share denominator.
+Imported CLI entries can carry `ask{to, through}` too; `session{transcript}` on
+their session still identifies them as imported. Imported entries can be
+cumulative turn totals rather than individual requests. They are excluded from
+`total` and the session, provider and model groups, so these never mix
+cumulative imports with per-request usage. `imported_observations` counts the
+excluded entries; `groups.path.imported` keeps their totals separately, and
+`--requests` retains the individual observations. An endpoint that omits cached
+usage (or reports null) is unknown, not a cache miss; it does not enter the
+share denominator.
 
 Paths come from existing provenance: a session without `session{source}` is
 `native`; `session.source` → `call{source}` → `build{}` is `builder`; a source
@@ -167,10 +167,10 @@ records any. Whole session reads omit this transcript-wide sum; name
 Applications that run a session add components from other packages:
 `process{pid, command, cwd}` and `exit{code}` describe its program;
 `worktree{repository, path}` describes its checkout; `spawned{parent, call}`
-describes delegation; and `imported{source, line}` records imported log entries.
-Start, latest-input, and finish times are entry `created.at` values. The last
-`content` and `usage` record what the run produced. Persona and role remain
-referenced entities.
+describes delegation; and @yaks/file's `lines{file, start}` records the line of
+the file an imported entry was read from. Start, latest-input, and finish times
+are entry `created.at` values. The last `content` and `usage` record what the
+run produced. Persona and role remain referenced entities.
 
 `archived{at}` is the general `@yaks/kernel` visibility marker. Archiving a
 session does not stop its runner, release claims, remove entries, or change
@@ -525,14 +525,16 @@ by the session (`execution{state, by}`), so no tool runner here runs it again.
 Tool arguments and output pass through `scrub()`, which redacts the shapes a
 credential takes.
 
-Every entry carries `imported{source, line}`, and each file read is an entity of
-its own, `log{session, source, consumed}`, that says how many of its lines have
-been read, which is where a resume starts: a line that made no entry, or whose
-entries were deleted since, is not read again. Entry IDs are derived from the
-session, the line and the place in it, so a line read twice writes nothing new.
-A harness can write one session's id into two files; the session's first log
-(`session.log`) keeps those IDs, and an entry of any other log names its file
-too, so the two never collide. Each entry is dated when the harness wrote it.
+Each file read is a @yaks/file `file{path, root}` on the volume that holds it,
+and every entry read from it wears the line it came from, `lines{file, start}`.
+The file carries `transcript{session, consumed, version, finished}`, which says
+how many of its lines have been read, which is where a resume starts: a line
+that made no entry, or whose entries were deleted since, is not read again.
+Entry IDs are derived from the session, the line and the place in it, so a line
+read twice writes nothing new. A harness can write one session's id into two
+files; the session's first file (`session.transcript`) keeps those IDs, and an
+entry of any other file names that file's path too, so the two never collide.
+Each entry is dated when the harness wrote it.
 
 `@yaks/spawn` follows a managed run's stdout with it. The
 `@yaks/session/service` duty follows Claude Code's transcript files,
@@ -563,13 +565,15 @@ its parent with `spawned{parent}`. Imported model selections name the Codex CLI
 provider through `using{provider, model, effort}`. The rollout file is the
 source record. Compressed `.jsonl.zst` archives stream through the same
 importer; `zstd` must be installed on the host. Each pull reads one decoded
-chunk and shares the duty's time budget. `log{version, finished}` records the
-source file's size and modification time and the version whose decoder reached
-successful EOF. A restart resumes incomplete archives by skipping consumed
-lines; completed unchanged archives do no decoding. Changed source versions
-restart their cursor, and compressing a plain rollout retains its log and entry
-identities. A failed archive retries after a minute while the other files
-progress.
+chunk and shares the duty's time budget. `transcript{version, finished}` records
+the source file's size and modification time and the version whose decoder
+reached successful EOF. A restart resumes incomplete archives by skipping
+consumed lines; completed unchanged archives do no decoding. Changed source
+versions restart their cursor. Compressing a plain rollout makes another file,
+`X.jsonl.zst` beside `X.jsonl`: the first tail on it takes over the plain file's
+transcript, and the session's `session.transcript` where it named the plain
+file, so reading resumes at the same line and entry identities hold. A failed
+archive retries after a minute while the other files progress.
 
 The duty scans sessions one at a time, starting another scan an hour after the
 last finishes. `stale()` yields pages of at most 50 imported entry identities

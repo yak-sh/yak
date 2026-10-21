@@ -5,6 +5,7 @@
 // never a second copy.
 import { description as toolsAbout, toolsDoc } from '@yaks/tools/vocab'
 import { docs as machineDocs } from '@yaks/machine/vocab'
+import { docs as fileDocs } from '@yaks/file/vocab'
 import { gitDoc } from '@yaks/git/vocab'
 import type { VocabDoc } from '@yaks/vocab/runtime'
 
@@ -63,9 +64,10 @@ export let beneath = (docs: VocabDoc[], own: VocabDoc[]): VocabDoc[] => {
 
 export let docsOf = (docs: VocabDoc[]): VocabDoc[] => {
   let supplied = new Set(docs.flatMap((d) => Object.keys(d.$defs ?? {})))
-  // Hosts lend machines; their durable records and commit references are host words,
-  // even when no plugin separately contributes these vocabulary facets.
-  let intrinsic = [...machineDocs, gitDoc].map((doc) => ({
+  // Hosts lend machines and the files on them; their durable records and commit
+  // references are host words, even when no plugin separately contributes
+  // these vocabulary facets.
+  let intrinsic = [...machineDocs, ...fileDocs, gitDoc].map((doc) => ({
     ...doc,
     $defs: Object.fromEntries(
       Object.entries(doc.$defs ?? {}).filter(([name]) => !supplied.has(name)),

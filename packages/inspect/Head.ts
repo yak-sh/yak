@@ -82,9 +82,6 @@ let Edit = ({ io, eid }: { io: Io; eid: string }) => {
   }, on ? 'done' : 'edit')
 }
 
-/** The file a path ends in: `/a/b/c.jsonl` reads `c.jsonl`. */
-let file = (path: string) => path.slice(path.lastIndexOf('/') + 1)
-
 /**
  * Where an entity came from, in one quiet line: what built it (a builder's
  * output, @yaks/builders), who made it and when, and through which session;
@@ -105,7 +102,8 @@ export let Provenance = ({ e, io }: { e: Bundle; io: Io }): JSX.Element => {
   let by = who(made.by)
   let via = who(made.via) != by ? who(made.via) : ''
   let other = who(changed.by) != by ? who(changed.by) : ''
-  useNamed(io, [by, via, other, build, builder, str(e, 'built', 'call')])
+  let read = str(e, 'lines', 'file')
+  useNamed(io, [by, via, other, build, builder, str(e, 'built', 'call'), read])
   let parts: ComponentChildren[] = [
     build
       ? h(
@@ -146,13 +144,13 @@ export let Provenance = ({ e, io }: { e: Bundle; io: Io }): JSX.Element => {
     built.call
       ? h('a', { key: 'call', href: io.link(String(built.call)) }, 'the call')
       : null,
-    e.imported
+    read
       ? h(
         'span',
         { key: 'from' },
         'read from ',
-        file(str(e, 'imported', 'source')),
-        comp(e, 'imported').line != null ? `:${comp(e, 'imported').line}` : '',
+        mention(io, read),
+        comp(e, 'lines').start != null ? `:${comp(e, 'lines').start}` : '',
       )
       : null,
   ]

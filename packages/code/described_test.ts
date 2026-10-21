@@ -7,6 +7,7 @@ import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Comp, type Graph, graph, identityEid } from '@yaks/graph'
 import { gitDoc } from '@yaks/git'
+import { fileDoc } from '@yaks/file/vocab'
 import { ram } from '@yaks/ram'
 import { loadVocab, metaDoc, type PropSchema, type VocabDoc } from '@yaks/vocab'
 import { codeDoc } from './vocab.ts'
@@ -22,7 +23,7 @@ let entity = {
     },
   },
 }
-let base = [entity, edgeDoc, gitDoc, docDoc, codeDoc, metaDoc]
+let base = [entity, edgeDoc, fileDoc, gitDoc, docDoc, codeDoc, metaDoc]
 
 let note = (properties: Record<string, PropSchema>, before = ['doc']) => ({
   component: true,

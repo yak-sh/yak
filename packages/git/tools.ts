@@ -31,11 +31,14 @@ import type { Runs } from '@yaks/graph/tools'
 import { and, present, want } from '@yaks/query'
 import { human } from '@yaks/id'
 import { verify as entityVerify } from '@yaks/kernel'
+import { once } from '@yaks/fp'
 import type { Finding, Level } from '@yaks/tools'
 import { CallError } from '@yaks/tools/errors'
 import { checked } from '@yaks/tools/check'
 import { land, run as git } from './land.ts'
+import { localFilesystem, locate, repositoryEid } from './host.ts'
 import {
+  type Checkout,
   CITES,
   FILE,
   LINES,
@@ -43,34 +46,33 @@ import {
   type Status,
   status,
   SYMBOL,
+  tracked,
   VERIFIED,
+  within,
 } from './cites.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
-let comp = (b: Bundle, name: string) => b[name] as Comp | undefined
+let comp = (b: Bundle | undefined, name: string) =>
+  b?.[name] as Comp | undefined
 let count = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined
 
-let places = async (graph: Graph, cites: Bundle[]) => {
-  let ends = [
-    ...new Set(
-      cites.flatMap((b) => [
-        comp(b, 'edge')?.from,
-        comp(b, 'edge')?.to,
-      ]).filter((eid): eid is string => typeof eid == 'string' && !!eid),
-    ),
-  ]
-  let at = new Map((await graph.get(ends)).map((b) => [b.entity.eid, b]))
-  let modules = [...at.values()].map((b) => str(comp(b, SYMBOL)?.module))
-    .filter((eid) => eid && !at.has(eid))
-  for (let b of await graph.get([...new Set(modules)])) at.set(b.entity.eid, b)
+// Every entity the citations reach: both ends, the file a cited symbol or
+// place is in, and the root each file is read in.
+let reach = async (graph: Graph, cites: Bundle[]) => {
+  let at = new Map<string, Bundle>()
+  let add = async (eids: unknown[]) => {
+    let more = [...new Set(eids.map(str))].filter((eid) => eid && !at.has(eid))
+    if (!more.length) return
+    for (let b of await graph.get(more)) at.set(b.entity.eid, b)
+  }
+  await add(cites.flatMap((b) => [comp(b, 'edge')?.from, comp(b, 'edge')?.to]))
+  await add([...at.values()].map(within))
+  await add([...at.values()].map((b) => comp(b, FILE)?.root))
   return at
 }
 
-let fileOf = (at: Map<string, Bundle>, to: Bundle) =>
-  comp(to, SYMBOL) ? at.get(str(comp(to, SYMBOL)?.module)) ?? to : to
-
-let checkout = (call: Bundle, verb: string): string => {
+let cwdOf = (call: Bundle, verb: string): string => {
   let cwd = comp(call, 'process')?.cwd
   if (!cwd) {
     throw new CallError(
@@ -81,21 +83,32 @@ let checkout = (call: Bundle, verb: string): string => {
   return String(cwd)
 }
 
+// The checkout holding `cwd`, at its top, and the repository it is a checkout
+// of on this computer's filesystem. Nothing when `cwd` is in no checkout.
+let checkoutOf = async (
+  graph: Graph,
+  cwd: string,
+): Promise<Checkout | undefined> => {
+  let found = await locate(cwd)
+  if (!found) return undefined
+  let workspace = (await localFilesystem(graph)).entity.eid
+  return { cwd: found.path, repository: repositoryEid(found.common, workspace) }
+}
+
 // Where a citation points, in one phrase: the file and the place in it, or the
 // entity it names.
 let where = (
-  cite: Bundle,
   to: Bundle,
-  file: Bundle,
+  file: Bundle | undefined,
   id: (b: Bundle) => string,
 ): string => {
   let path = str(comp(file, FILE)?.path)
   if (!path) return id(to)
   let name = str(comp(to, SYMBOL)?.name)
   if (name) return `${path}:${name}`
-  let start = count(comp(cite, LINES)?.start)
+  let start = count(comp(to, LINES)?.start)
   if (start == null) return path
-  return `${path}:${start}-${count(comp(cite, LINES)?.end) ?? start}`
+  return `${path}:${start}-${count(comp(to, LINES)?.end) ?? start}`
 }
 
 // How a state reads in a report. A citation that moved is a measured fact, so
@@ -119,7 +132,7 @@ let verdict = (
 export let runs = (): Runs => ({
   land: async (call): Promise<Bundle[]> => {
     let args = argsOf(call)
-    let cwd = checkout(call, 'land')
+    let cwd = cwdOf(call, 'land')
     // Git's output, exactly as Git wrote it, collected in the order it
     // arrived: what the caller reads is Git's own account, not a summary of
     // it.
@@ -149,7 +162,16 @@ export let runs = (): Runs => ({
     let scope = of || undefined
     let path = str(args.path)
     let cites = await graph.read(and(present(CITES), want('edge')))
-    let at = await places(graph, cites)
+    let at = await reach(graph, cites)
+    // The checkout the call was made in: asked once, and only when a citation
+    // of a file needs it.
+    let ours = once(async () => cwd ? await checkoutOf(graph, cwd) : undefined)
+    // The path names a file of this checkout's repository, when there is one.
+    let named = async (file: Bundle | undefined) => {
+      if (str(comp(file, FILE)?.path) != path) return false
+      let repository = (await ours())?.repository
+      return !repository || str(comp(file, FILE)?.root) == repository
+    }
     let found: Finding[] = []
     for (let cite of cites) {
       let edge = comp(cite, 'edge')
@@ -165,14 +187,15 @@ export let runs = (): Runs => ({
         })
         continue
       }
-      let file = fileOf(at, to)
-      if (path && str(comp(file, FILE)?.path) != path) continue
-      let got = await status(cite, to, { cwd, vocab: graph.vocab }, file)
+      let file = tracked(to, (eid) => at.get(eid))
+      if (path && !await named(file)) continue
+      let checkout = file ? await ours() : undefined
+      let got = await status(cite, to, { checkout, vocab: graph.vocab }, file)
       if (got.state == 'current') continue
       let [level, why] = verdict(got)
       found.push({
         level,
-        text: `${id(from)} cites ${where(cite, to, file, id)} — ${why}`,
+        text: `${id(from)} cites ${where(to, file, id)} — ${why}`,
       })
     }
     return checked(call.entity.eid, 'every citation still holds', found)
@@ -199,23 +222,38 @@ export let runs = (): Runs => ({
           : `${of} makes no citations to verify`,
       )
     }
-    let at = await places(graph, found)
-    let files = found.some((b) => {
-      let to = at.get(str(comp(b, 'edge')?.to))
-      return to && comp(fileOf(at, to), FILE)?.path
-    })
+    let at = await reach(graph, found)
+    let toOf = (b: Bundle) => at.get(str(comp(b, 'edge')?.to))
+    // The file of a repository a citation is checked against in Git, if any.
+    let gitFile = (b: Bundle) => {
+      let to = toOf(b)
+      return to && tracked(to, (eid) => at.get(eid))
+    }
     for (let b of found) {
-      let to = at.get(str(comp(b, 'edge')?.to))
-      if (to && comp(to, SYMBOL) && !comp(fileOf(at, to), FILE)?.path) {
+      let to = toOf(b)
+      if (to && comp(to, SYMBOL) && !gitFile(b)) {
         throw new Refused(
           `the cited symbol ${to.entity.eid} has no file to check`,
         )
       }
     }
+    let files = found.map(gitFile).filter((f): f is Bundle => !!f)
     let commit = ''
-    if (files) {
-      let cwd = checkout(call, 'verifying a file citation')
-      let head = await git(['rev-parse', 'HEAD'], cwd)
+    if (files.length) {
+      let cwd = cwdOf(call, 'verifying a file citation')
+      let checkout = await checkoutOf(graph, cwd)
+      if (!checkout) throw new CallError('cwd', `${cwd} is in no checkout`)
+      let other = files.find((f) =>
+        str(comp(f, FILE)?.root) != checkout.repository
+      )
+      if (other) {
+        throw new CallError(
+          'cwd',
+          `${str(comp(other, FILE)?.path)} is a file of another repository ` +
+            'than this checkout; verify it in a checkout of its own',
+        )
+      }
+      let head = await git(['rev-parse', 'HEAD'], checkout.cwd)
       if (!head.ok) {
         throw new CallError(
           'head',
@@ -225,9 +263,9 @@ export let runs = (): Runs => ({
       commit = head.out.trim()
     }
     return found.map((b) => {
-      let to = at.get(str(comp(b, 'edge')?.to))
+      let to = toOf(b)
       if (!to) throw new Refused(`citation ${b.entity.eid} names no entity`)
-      return comp(fileOf(at, to), FILE)?.path
+      return gitFile(b)
         ? {
           entity: { eid: b.entity.eid },
           [VERIFIED]: {},

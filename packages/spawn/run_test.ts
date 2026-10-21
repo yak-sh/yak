@@ -2,6 +2,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, type Comp, type Graph, graph } from '@yaks/graph'
 import { processes } from '@yaks/process'
+import { onDisk } from '@yaks/file/local'
 import { sessionDerived, sessions } from '@yaks/session'
 import { storage } from '@yaks/sqlite'
 import { stepping } from '../sqlite/testing.ts'
@@ -84,8 +85,8 @@ test('the log becomes the transcript: one entry per line that says something', a
     assertEquals(comp(said[1], 'content').body, 'hi')
     // Everything a provider prints is output, and the run is the session.
     assertEquals(comp(said[1], 'output').source, 'S1')
-    assertEquals(comp(said[1], 'imported').line, 2)
-    assertEquals(comp(said[1], 'imported').source, `${dir}/S1.out`)
+    let [file] = await onDisk(g, `${dir}/S1.out`)
+    assertEquals(comp(said[1], 'lines'), { file: file.entity.eid, start: 2 })
     assertEquals(comp(said[2], 'usage').output_tokens, 3)
     assertEquals(comp(said[3], 'stop'), {})
     // The line that says what the provider calls its own thread patches the

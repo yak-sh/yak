@@ -98,7 +98,7 @@ let skillSites = async (
   let index = new Map(
     files.filter((b) => {
       let path = text(b, 'file', 'path')
-      return !!text(b, 'file', 'repository') &&
+      return !!text(b, 'file', 'root') &&
         !!path &&
         primary(path)
     }).map((b) => [b.entity.eid, b]),
@@ -147,7 +147,7 @@ let inRepo = async (
   let files = targets.length ? await g.get([...new Set(targets)], ['file']) : []
   let locations = new Set(
     files.filter((b) =>
-      text(b, 'file', 'repository') == repository &&
+      text(b, 'file', 'root') == repository &&
       primary(
         text(b, 'file', 'path') ?? '',
       )
@@ -227,13 +227,13 @@ export let skillScope = async (
   let rows = companions
     ? await g.read(and(
       present('file'),
-      eq('file.repository', repository),
+      eq('file.root', repository),
       contains('file.path', '.claude/skills/'),
-      fields('file.path', 'file.repository', 'content.body'),
+      fields('file.path', 'file.root', 'content.body'),
     ))
     : await g.read(and(
       present('references'),
-      eq('edge.to.file.repository', repository),
+      eq('edge.to.file.root', repository),
       contains('edge.to.file.path', '.claude/skills/'),
       fields('edge.from', 'edge.to', 'edge.to.file.path'),
     ))
@@ -281,7 +281,7 @@ export let skillScope = async (
   places = sites.places
   skills = sorted(skills.filter((b) => {
     let location = places.get(b.entity.eid)
-    return location && text(location, 'file', 'repository') == repository
+    return location && text(location, 'file', 'root') == repository
   }))
   return {
     skills,

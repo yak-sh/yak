@@ -11,6 +11,7 @@ import { provenanceDoc } from '@yaks/provenance'
 import { sessionDoc } from './comp.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
+import { fileDoc } from '@yaks/file/vocab'
 import { sessionDerived } from './status.ts'
 import { staleLeases } from './reap.ts'
 import { stale } from './service.ts'
@@ -19,6 +20,7 @@ let vocab = loadVocab([
   sessionDoc,
   toolsDoc,
   modelDoc,
+  fileDoc,
   kernelDoc,
   provenanceDoc,
 ], [

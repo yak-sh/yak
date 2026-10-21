@@ -104,7 +104,6 @@ export let appConfig: Config = {
       words: [
         'session',
         'entry',
-        'imported',
         'ask',
         'using',
         'sending',
@@ -248,6 +247,8 @@ export let gitConfig: Config = {
     '@yaks/id',
     ...addressed,
     { use: '@yaks/blob', words: [] },
+    // A path in a repository is a `file` rooted in it.
+    '@yaks/file',
     // This store's blob is a Git object's bytes, not an app upload.
     '@yaks/git',
     { use: 'yak/app', words: ['archetype', 'retired', 'exception'] },

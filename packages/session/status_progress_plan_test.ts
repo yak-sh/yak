@@ -11,6 +11,7 @@ import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model'
+import { fileDoc } from '@yaks/file/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { effectDoc } from '@yaks/effects'
 import { archetypeDoc } from '@yaks/archetype/vocab'
@@ -18,6 +19,7 @@ let vocab = loadVocab([
   sessionDoc,
   toolsDoc,
   modelDoc,
+  fileDoc,
   kernelDoc,
   effectDoc,
   archetypeDoc,
@@ -96,8 +98,9 @@ for (let size of [100, 1000]) {
       if (kind == 'settled') {
         write('entity', { id: 5, eid: 'other' })
         write('session', { entity: 5, id: 'other' })
+        write('entity', { id: 6, eid: 'other-file' })
         shape(15, ['entry', 'stop', 'hidden'])
-        shape(16, ['entry', 'notice', 'content', 'imported', 'hidden'])
+        shape(16, ['entry', 'notice', 'content', 'lines', 'hidden'])
         for (let i = 0; i < size; i++) {
           let id = 100_000 + i
           write('entity', {
@@ -114,7 +117,7 @@ for (let size of [100, 1000]) {
               entity: id,
               body: '[Request interrupted by user]',
             })
-            write('imported', { entity: id, source: 'other', line: i + 1 })
+            write('lines', { entity: id, file: 6, start: i + 1 })
           }
         }
       }

@@ -10,12 +10,15 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { sessionDoc } from './comp.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
 import { sessionDerived } from './status.ts'
 import { tail } from './tail.ts'
 
-let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, kernelDoc], [
-  kernelKeywords,
-])
+let vocab = loadVocab(
+  [sessionDoc, toolsDoc, modelDoc, fileDoc, machineDoc, kernelDoc],
+  [kernelKeywords],
+)
 let derived = sessionDerived(vocab)
 let status = derived['session.status'].expr
 // COALESCE preserves the real status expression; its fallback marks its AST.

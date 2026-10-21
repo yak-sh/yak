@@ -8,18 +8,20 @@ import { assert, assertEquals } from '@std/assert'
 import type { Bundle } from '@yaks/graph'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
+import { fileDoc } from '@yaks/file/vocab'
 import { kernelDoc, verify } from '@yaks/kernel'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { loadVocab } from '@yaks/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
 import { gitDoc } from './comp.ts'
 import type { Ran, Run } from './land.ts'
-import { status } from './cites.ts'
+import { type Checkout, status, tracked } from './cites.ts'
 import { git, template } from './testing.ts'
 
-let vocab = loadVocab([kernelDoc, docDoc, edgeDoc, keyDoc, gitDoc], [
-  edgeKeywords,
-  keyKeywords,
-])
+let vocab = loadVocab(
+  [kernelDoc, docDoc, edgeDoc, keyDoc, machineDoc, fileDoc, gitDoc],
+  [edgeKeywords, keyKeywords],
+)
 
 // A git that answers whatever the case wants and remembers what it was asked.
 let fake = (answer: (args: string[]) => Partial<Ran> = () => ({})) => {
@@ -51,10 +53,18 @@ let cite = (extra: Partial<Bundle> = {}): Bundle => ({
   ...extra,
 })
 
+let repo: Bundle = { entity: { eid: 'repo-1' }, repository: {} }
+
 let file: Bundle = {
   entity: { eid: 'file-1' },
-  file: { path: 'src/db.ts', repository: 'repo-1' },
+  file: { path: 'src/db.ts', root: 'repo-1' },
 }
+
+// The checkout of repo-1 a stubbed git answers for.
+let ops = (
+  run: Run,
+  checkout: Checkout = { cwd: '.', repository: 'repo-1' },
+) => ({ checkout, vocab, run })
 
 let design: Bundle = { entity: { eid: 'design-1' }, doc: { title: 'D' } }
 
@@ -63,6 +73,13 @@ let design: Bundle = { entity: { eid: 'design-1' }, doc: { title: 'D' } }
 let def = (name: string): Bundle => ({
   entity: { eid: `sym-${name}` },
   symbol: { module: 'file-1', name },
+})
+
+// Some lines of that file: a citation of them points at the place.
+let place = (start: number, end?: number): Bundle => ({
+  entity: { eid: `place-${start}` },
+  lines: { file: 'file-1', start, ...end ? { end } : {} },
+  content: { body: 'let cap = 1' },
 })
 
 let logArgs = (asked: string[][]) => asked.find((a) => a[0] == 'log') ?? []
@@ -78,11 +95,36 @@ let stirred = (narrowed = '') =>
     }
   )
 
+test('a citation is checked in Git against the file of a repository it names', () => {
+  let volume = { entity: { eid: 'volume-1' }, volume: { mount: '/' } }
+  let disk = {
+    entity: { eid: 'file-2' },
+    file: { path: 'a.md', root: 'volume-1' },
+  }
+  let rows = new Map([repo, file, volume, disk].map((b) => [b.entity.eid, b]))
+  let get = (eid: string) => rows.get(eid)
+  let entry = {
+    entity: { eid: 'entry-1' },
+    lines: { file: 'file-2', start: 9 },
+  }
+  for (
+    let [to, want] of [
+      [file, 'file-1'],
+      [def('open'), 'file-1'],
+      [place(3, 9), 'file-1'],
+      [disk, undefined],
+      [entry, undefined],
+      [design, undefined],
+      [{ ...def('lost'), symbol: { module: 'gone' } }, undefined],
+    ] as const
+  ) assertEquals(tracked(to, get)?.entity.eid, want, to.entity.eid)
+})
+
 test('a citation nobody has checked is unverified, and asks git nothing', async () => {
   let git = fake()
   let cited = cite()
   delete cited.verified
-  assertEquals(await status(cited, file, { cwd: '.', vocab, run: git.run }), {
+  assertEquals(await status(cited, file, ops(git.run), file), {
     state: 'unverified',
   })
   assertEquals(git.asked, [])
@@ -90,11 +132,7 @@ test('a citation nobody has checked is unverified, and asks git nothing', async 
 
 test('a file nothing touched is current, and the place is never asked about', async () => {
   let git = fake()
-  let got = await status(cite(), def('open'), {
-    cwd: '.',
-    vocab,
-    run: git.run,
-  }, file)
+  let got = await status(cite(), def('open'), ops(git.run), file)
   assertEquals(got, { state: 'current' })
   // The coarse question only, as a pathspec: `-L` refuses an empty range.
   assertEquals(logArgs(git.asked), [
@@ -109,11 +147,7 @@ test('a file nothing touched is current, and the place is never asked about', as
 
 test('a definition narrows a file that moved to the commits that touched it', async () => {
   let git = stirred()
-  let got = await status(cite(), def('open'), {
-    cwd: '.',
-    vocab,
-    run: git.run,
-  }, file)
+  let got = await status(cite(), def('open'), ops(git.run), file)
   assertEquals(got, { state: 'current' })
   assertEquals(placeArgs(git.asked), [
     'log',
@@ -125,26 +159,22 @@ test('a definition narrows a file that moved to the commits that touched it', as
   ])
 })
 
-test('a line range narrows to those lines, and one line is a range of itself', async () => {
-  let git = stirred()
-  await status(cite({ lines: { start: 3, end: 9 } }), file, {
-    cwd: '.',
-    vocab,
-    run: git.run,
-  })
-  assert(placeArgs(git.asked).includes('3,9:src/db.ts'))
-  let one = stirred()
-  await status(cite({ lines: { start: 4 } }), file, {
-    cwd: '.',
-    vocab,
-    run: one.run,
-  })
-  assert(placeArgs(one.asked).includes('4,4:src/db.ts'))
+test('a place narrows to its lines, and one line is a range of itself', async () => {
+  for (
+    let [at, range] of [
+      [place(3, 9), '3,9:src/db.ts'],
+      [place(4), '4,4:src/db.ts'],
+    ] as const
+  ) {
+    let git = stirred()
+    await status(cite(), at, ops(git.run), file)
+    assert(placeArgs(git.asked).includes(range), range)
+  }
 })
 
 test('a citation naming no place moves with the whole file', async () => {
   let git = stirred()
-  assertEquals(await status(cite(), file, { cwd: '.', vocab, run: git.run }), {
+  assertEquals(await status(cite(), file, ops(git.run), file), {
     state: 'moved',
     changes: ['b8b0f89'],
   })
@@ -153,19 +183,34 @@ test('a citation naming no place moves with the whole file', async () => {
 
 test('commits touching the place mean the citation moved, and name themselves', async () => {
   let git = stirred('b8b0f89\n0c9c68a\n')
-  assertEquals(
-    await status(cite(), def('open'), {
-      cwd: '.',
-      vocab,
-      run: git.run,
-    }, file),
-    { state: 'moved', changes: ['b8b0f89', '0c9c68a'] },
-  )
+  assertEquals(await status(cite(), def('open'), ops(git.run), file), {
+    state: 'moved',
+    changes: ['b8b0f89', '0c9c68a'],
+  })
+})
+
+test('a file read nowhere it can be checked reads unknown, and asks git nothing', async () => {
+  for (
+    let [checkout, why] of [
+      [undefined, 'this citation names a file, and no checkout was given'],
+      [
+        { cwd: '.', repository: 'repo-2' },
+        'the cited file is in another repository than this checkout',
+      ],
+    ] as const
+  ) {
+    let git = fake()
+    assertEquals(
+      await status(cite(), file, { checkout, vocab, run: git.run }, file),
+      { state: 'unknown', why },
+    )
+    assertEquals(git.asked, [])
+  }
 })
 
 test('a commit this checkout does not have reads unknown, never current', async () => {
   let git = fake((args) => args[0] == 'cat-file' ? { ok: false } : {})
-  assertEquals(await status(cite(), file, { cwd: '.', vocab, run: git.run }), {
+  assertEquals(await status(cite(), file, ops(git.run), file), {
     state: 'unknown',
     why: 'commit aaaaaaaa is not in this checkout',
   })
@@ -177,7 +222,7 @@ test('a mark with no commit beside it reads unknown', async () => {
   let git = fake()
   let cited = cite()
   delete cited.revision
-  assertEquals(await status(cited, file, { cwd: '.', vocab, run: git.run }), {
+  assertEquals(await status(cited, file, ops(git.run), file), {
     state: 'unknown',
     why: 'verified against no commit',
   })
@@ -191,27 +236,23 @@ test('git failing to answer reads unknown, in git own words', async () => {
       ? { ok: false, err: "fatal: -L parameter 'gone': no match\nusage: …" }
       : { out: 'b8b0f89\n' }
   )
-  assertEquals(
-    await status(cite(), def('gone'), {
-      cwd: '.',
-      vocab,
-      run: git.run,
-    }, file),
-    { state: 'unknown', why: "fatal: -L parameter 'gone': no match" },
-  )
+  assertEquals(await status(cite(), def('gone'), ops(git.run), file), {
+    state: 'unknown',
+    why: "fatal: -L parameter 'gone': no match",
+  })
 })
 
 test('a citation of an entity compares its verified content', async () => {
   let git = fake()
   let checked = { ...cite(), ...verify(cite(), design, vocab) }
-  assertEquals(await status(checked, design, { vocab, run: git.run }), {
+  assertEquals(await status(checked, design, ops(git.run)), {
     state: 'current',
   })
   assertEquals(
     await status(checked, {
       ...design,
       doc: { title: 'changed' },
-    }, { vocab, run: git.run }),
+    }, ops(git.run)),
     { state: 'moved' },
   )
   assertEquals(git.asked, [])
@@ -244,43 +285,40 @@ let made = template(async (cwd) => {
 
 let setup = async () => {
   let cwd = await made()
-  return { cwd, at: await git(cwd, 'rev-parse', 'HEAD~') }
+  return {
+    cwd,
+    at: await git(cwd, 'rev-parse', 'HEAD~'),
+    ops: { checkout: { cwd, repository: 'repo-1' }, vocab },
+  }
 }
+
+let f = { ...file, file: { path: 'f.js', root: 'repo-1' } }
 
 test(
   'a definition somebody edited moved; the line above it did not',
   async () => {
-    let { cwd, at } = await setup()
-    let f = { ...file, file: { path: 'f.js' } }
-    let of = (extra: Partial<Bundle>) =>
-      status(cite({ revision: { commit: at }, ...extra }), f, { cwd, vocab })
+    let { cwd, at, ops } = await setup()
+    let of = (to: Bundle) =>
+      status(cite({ revision: { commit: at } }), to, ops, f)
 
-    let moved = await status(
-      cite({ revision: { commit: at } }),
-      { entity: { eid: 's' }, symbol: { module: 'file-1', name: 'greet' } },
-      { cwd, vocab },
-      f,
-    )
+    let moved = await of({
+      entity: { eid: 's' },
+      symbol: { module: 'file-1', name: 'greet' },
+    })
     assertEquals(moved.state, 'moved')
     assertEquals((moved as { changes: string[] }).changes.length, 1)
     // The line the second commit did not touch is still where it was said to be.
-    assertEquals(await of({ lines: { start: 1, end: 1 } }), {
-      state: 'current',
-    })
+    assertEquals(await of(place(1, 1)), { state: 'current' })
     // With no place named, the whole file is the place, and it moved.
-    assertEquals((await of({})).state, 'moved')
+    assertEquals((await of(f)).state, 'moved')
     await Deno.remove(cwd, { recursive: true })
   },
 )
 
 test('a commit rebased out of the repository reads unknown', async () => {
-  let { cwd } = await setup()
+  let { cwd, ops } = await setup()
   let gone = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
-  let got = await status(
-    cite({ revision: { commit: gone } }),
-    { ...file, file: { path: 'f.js' } },
-    { cwd, vocab },
-  )
+  let got = await status(cite({ revision: { commit: gone } }), f, ops, f)
   assertEquals(got, {
     state: 'unknown',
     why: 'commit deadbeef is not in this checkout',

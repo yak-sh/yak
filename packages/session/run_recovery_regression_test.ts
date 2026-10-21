@@ -17,6 +17,8 @@ import { loadVocab, pick } from '@yaks/vocab'
 import { kernelDoc } from '@yaks/kernel/vocab'
 import { type Model, modelDoc, type Request } from '@yaks/model'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { fileOf } from '@yaks/file'
 import { toolEid } from '@yaks/tools'
 import { test } from '@yaks/testing'
 import { sessionDoc } from './comp.ts'
@@ -30,11 +32,13 @@ let vocab = loadVocab([
   sessionDoc,
   toolsDoc,
   modelDoc,
+  fileDoc,
   effectDoc,
   pick(kernelDoc, ['admitted', 'waiting', 'interrupted', 'failed']),
 ])
 let P = identityEid('provider', ['fake'])
 let M = identityEid('model', ['fake-recovery'])
+let external = fileOf('disk', 'external-transcript.jsonl')
 
 let fixture = (bundles: Bundle[], watch?: Plugin) => {
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
@@ -301,7 +305,7 @@ for (let canonical of [false, true]) {
           ? {
             ...b,
             entity: { eid: canonical ? 'imported:input' : 'external:message' },
-            imported: { source: 'external-transcript', line: 1 },
+            lines: { file: external, start: 1 },
           }
           : b
       ),
@@ -409,7 +413,7 @@ test('a native continuation whose input becomes imported before requeue loses ad
       raced = true
       await apply([{
         entity: { eid: 'native:input' },
-        imported: { source: 'external-transcript', line: 1 },
+        lines: { file: external, start: 1 },
       }], { trusted: true })
     }
     return apply(bundles, opts)
@@ -429,7 +433,7 @@ test('a native continuation whose input becomes imported before requeue loses ad
   let [native, input] = await p.g.get(['native', 'native:input'])
   assertEquals(native.dispatch, undefined)
   assertEquals(native.admitted, undefined)
-  assertEquals(input.imported, { source: 'external-transcript', line: 1 })
+  assertEquals(input.lines, { file: external, start: 1 })
   assertEquals(input.content, { body: 'native' })
   assertEquals(p.asked.length, 0)
   assertEquals(prepared, 0)

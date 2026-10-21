@@ -3,7 +3,9 @@ import { assertEquals } from '@std/assert'
 import { type Comp, type Graph, identityEid } from '@yaks/graph'
 import { ids, locked, lockOn, seed, store } from './testing.ts'
 import { BATCH, look, type Seen, service, stale, strip } from './service.ts'
-import { callOf, logOf } from './tail.ts'
+import { fileOf } from '@yaks/file'
+import { onDisk } from '@yaks/file/local'
+import { callOf } from './tail.ts'
 import { sessionEid } from './who.ts'
 
 let lines = (...texts: string[]) =>
@@ -333,13 +335,13 @@ test('stripping old imports removes refusals but keeps cost-bearing refusals', a
   seed(s, {
     entity: { eid: 'refused' },
     entry: { session: ids.run1 },
-    imported: { source: 'one.jsonl', line: 1 },
+    lines: { file: fileOf('disk', 'one.jsonl'), start: 1 },
     refusal: { code: 'http_400' },
     content: { body: 'invalid request' },
   }, {
     entity: { eid: 'spent-refusal' },
     entry: { session: ids.run1 },
-    imported: { source: 'one.jsonl', line: 2 },
+    lines: { file: fileOf('disk', 'one.jsonl'), start: 2 },
     refusal: { code: 'limit' },
     content: { body: 'at the limit' },
     cost: { dollars: 0.25, reported: true },
@@ -359,7 +361,7 @@ for (let revived of [false, true]) {
     let entries = Array.from({ length: BATCH + 2 }, (_, seq) => ({
       entity: { eid: `old-${String(seq).padStart(3, '0')}` },
       entry: { session: ids.run1, seq },
-      imported: { source: 'old.jsonl', line: seq + 1 },
+      lines: { file: fileOf('disk', 'old.jsonl'), start: seq + 1 },
       result: {},
       content: { body: 'old tool output' },
       created: { at: old },
@@ -387,7 +389,7 @@ for (let revived of [false, true]) {
       revived ? [] : entries.slice(BATCH).map((b) => b.entity.eid),
     )
     assertEquals(
-      (await g.rows('.imported .entry.session=run1')).length,
+      (await g.rows('.lines .entry.session=run1')).length,
       revived ? 2 : 0,
     )
   })
@@ -399,9 +401,9 @@ await projects(
   { old: { text: lines('a', 'b', 'c'), ago: 30 * DAY } },
   async (dir) => {
     let g = locked(store()), get = g.get.bind(g)
-    let log = logOf(`${dir}/-home-me-code/old.jsonl`)
+    let [file] = await onDisk(g, `${dir}/-home-me-code/old.jsonl`)
     g.get = (ids, comps) => {
-      if (ids.includes(log)) reopened++
+      if (ids.includes(file.entity.eid)) reopened++
       return get(ids, comps)
     }
     let seen: Seen = { tails: new Map(), done: new Set() }

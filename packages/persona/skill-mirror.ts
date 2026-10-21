@@ -1,7 +1,8 @@
 // Skills import from the primary checkout. Graph exports are proposals in a
 // dedicated linked worktree: no mirror write is allowed to touch main.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
-import { derivedEid, identityEid } from '@yaks/graph/identity'
+import { derivedEid } from '@yaks/graph/identity'
+import { fileOf } from '@yaks/file'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { land, LandError, type Run, run } from '@yaks/git/land'
@@ -28,8 +29,6 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
 let str = (b: Bundle | undefined, name: string, prop: string): string =>
   String(comp(b, name)[prop] ?? '')
-let fileId = (path: string, repository: string) =>
-  identityEid('file', [path, repository])
 let linkId = (skill: string, file: string) =>
   derivedEid(`skill-file|${skill}|${file}`)
 let skillPath = (title: string) => `.claude/skills/${title}/SKILL.md`
@@ -45,7 +44,7 @@ let owned: Record<string, string[]> = {
   skill: ['invoke', 'arguments', 'paths', 'fork', 'options'],
   doc: ['title', 'body'],
   content: ['body'],
-  file: ['path', 'repository'],
+  file: ['path', 'root'],
   edge: ['from', 'to'],
   references: [],
 }
@@ -278,10 +277,10 @@ let syncRepository = async (
         }
         let eid = skill?.entity.eid ?? crypto.randomUUID()
         bundles.push(guarded(skill, { entity: { eid }, ...parsed }))
-        let fid = fileId(path, repository)
+        let fid = fileOf(repository, path)
         bundles.push(guarded(file, {
           entity: { eid: fid },
-          file: { path, repository },
+          file: { path, root: repository },
         }))
         bundles.push(guarded(before.get(linkId(eid, fid)), {
           entity: { eid: linkId(eid, fid) },
@@ -294,8 +293,8 @@ let syncRepository = async (
         })
       } else if (text != undefined) {
         bundles.push(guarded(file, {
-          entity: { eid: fileId(path, repository) },
-          file: { path, repository },
+          entity: { eid: fileOf(repository, path) },
+          file: { path, root: repository },
           content: { body: text },
         }))
         pending.set(d.path, {
@@ -515,7 +514,7 @@ let syncRepository = async (
       ) {
         let path = str(file, 'file', 'path')
         let destination = next.slice(0, -8) + path.slice(old.length - 8)
-        let fid = fileId(destination, repository)
+        let fid = fileOf(repository, destination)
         let body = comp(file, 'content').body
         moves.push(
           guarded(file, {
@@ -526,7 +525,7 @@ let syncRepository = async (
         )
         moves.push(guarded(before.get(fid), {
           entity: { eid: fid },
-          file: { path: destination, repository },
+          file: { path: destination, root: repository },
           ...(body == undefined ? {} : { content: { body } }),
         }))
         if (path == old) {

@@ -132,14 +132,14 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
       'entry',
       'content',
       'using',
-      'imported',
+      'lines',
       'output',
       'call',
       'result',
     ])
     if (
       comp(input, 'entry')?.session != session || !input?.using ||
-      !input.content || input.imported || input.output || input.call ||
+      !input.content || input.lines || input.output || input.call ||
       input.result
     ) return true
     try {
@@ -157,7 +157,7 @@ let admitted = async (g: Graph, session: Eid, r: Runner) => {
       }, {
         entity: input.entity,
         $was: Object.fromEntries(
-          ['entry', 'content', 'using', 'imported', 'output', 'call', 'result']
+          ['entry', 'content', 'using', 'lines', 'output', 'call', 'result']
             .filter((name) => g.vocab.comps.includes(name))
             .map((name) => [
               name,

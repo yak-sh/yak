@@ -52,7 +52,7 @@ export let sessionFields = [
   'doc.title',
   'session.source',
   'session.operator',
-  'session.log',
+  'session.transcript',
   'native',
 ]
 

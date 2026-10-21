@@ -143,12 +143,13 @@ Skills are reusable instructions, not tools. A skill has a stable minted id and
 description, and the content body is the instructions. Unknown Claude YAML
 fields survive in `options`; parsing does not run or expand them.
 
-A `references` edge from the skill to a separate `file{path, repository}`
-locates its `.claude/skills/<title>/SKILL.md`. The locator uses the existing
-file identity and has no content. Companion files use `file` plus `content`.
-Renaming a title keeps the skill id, moves its companions, and changes the
-locator only after the repository change lands. An unlinked skill remains
-readable in the graph but cannot be exported into a repository.
+A `references` edge from the skill to a separate `file{path, root}`
+([@yaks/file](../file)), rooted in the repository, locates its
+`.claude/skills/<title>/SKILL.md`. The locator uses the existing file identity
+and has no content. Companion files use `file` plus `content`. Renaming a title
+keeps the skill id, moves its companions, and changes the locator only after the
+repository change lands. An unlinked skill remains readable in the graph but
+cannot be exported into a repository.
 
 ```ts ignore
 import { loadSkill, skillsAt } from '@yaks/persona/skills'

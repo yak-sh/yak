@@ -89,7 +89,7 @@ let totals = (rows: CacheRequest[]): CacheTotals => {
 
 /** Source call -> build identifies builders without storing a second label. */
 let pathOf = (s: Bundle | undefined, byId: Map<string, Bundle>): string => {
-  if (s?.imported || comp(s, 'session').log) return 'imported'
+  if (comp(s, 'session').transcript) return 'imported'
   let sourceId = str(comp(s, 'session').source)
   let source = byId.get(sourceId)
   let origin = byId.get(str(comp(source, 'call').source))
@@ -202,7 +202,6 @@ export let cacheRead = async (
     keys.length ? await g.get(ids(keys), comps) : []
   let sessions = await get(rows.map((b) => str(comp(b, 'entry').session)), [
     'session',
-    'imported',
   ])
   let calls = await get(sessions.map((s) => str(comp(s, 'session').source)), [
     'call',

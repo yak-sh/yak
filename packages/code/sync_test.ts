@@ -8,6 +8,7 @@ import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import { gitDoc } from '@yaks/git'
+import { fileDoc } from '@yaks/file/vocab'
 import { sync } from '@yaks/mirror'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
@@ -27,7 +28,7 @@ let entity = {
 
 let fixture = () => {
   let vocab = loadVocab(
-    [machineDoc, entity, edgeDoc, gitDoc, docDoc, codeDoc],
+    [machineDoc, entity, edgeDoc, fileDoc, gitDoc, docDoc, codeDoc],
     [
       edgeKeywords,
     ],

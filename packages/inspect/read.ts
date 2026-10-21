@@ -242,17 +242,19 @@ export let cut = (text: string, n: number): string =>
  * called(e({ topic: { name: 'naming' } }), '#e1', 'topic') // 'naming'
  * called(e({ content: { body: '\nuse grams' } }), '#e1', 'entry') // 'use grams'
  * called(e({ process: { pid: 1 } }), '#e1', 'process') // 'process #e1'
+ * called(e({ file: { path: 'a/b/c.jsonl' } }), '#e1', 'file') // 'c.jsonl'
  * ```
  */
 export let called = (b: Bundle, id: string, kind: string): string =>
   str(b, 'doc', 'title') || str(b, kind, 'name') ||
+  str(b, kind, 'path').split('/').at(-1) ||
   (b.entity.num != null ? id : '') || line(bodyOf(b), 80) ||
   (kind && kind != 'entity' ? `${kind} ${id}` : id)
 
 /** Where an entity came from, said once in a quiet line rather than stated
  * as a fact: who made and changed it and when, what built it, where it was
  * imported from, when it was checked. */
-export let PROVENANCE = ['created', 'updated', 'built', 'imported', 'verified']
+export let PROVENANCE = ['created', 'updated', 'built', 'lines', 'verified']
 
 /** What a page says in its head and its body rather than as facts. */
 let SAID = new Set(['entity', 'doc', 'content', ...PROVENANCE])

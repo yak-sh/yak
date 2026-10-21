@@ -14,6 +14,7 @@ import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { ram } from '@yaks/ram'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { machineDoc } from '@yaks/machine/vocab'
+import { fileDoc } from '@yaks/file/vocab'
 import { gitDoc } from './comp.ts'
 import { type Index, index } from './index.ts'
 
@@ -28,17 +29,12 @@ let entity: VocabDoc = {
   },
 }
 
+// This package's components, and the words they lean on: the machine a
+// checkout is on, and the files a repository is the root of.
+let docs = [entity, edgeDoc, keyDoc, gitDoc, machineDoc, fileDoc]
+
 /** This package's components, loaded the way a store would load them. */
-export let vocab: Vocab = loadVocab([
-  entity,
-  edgeDoc,
-  keyDoc,
-  gitDoc,
-  machineDoc,
-], [
-  edgeKeywords,
-  keyKeywords,
-])
+export let vocab: Vocab = loadVocab(docs, [edgeKeywords, keyKeywords])
 
 /** A byte store over a Map, counting the reads so that a test can prove an
  * object whose id is already known is never read again. */
@@ -80,10 +76,7 @@ export let fixture = (
   git: Index
 } => {
   let v = more.docs?.length
-    ? loadVocab([entity, edgeDoc, keyDoc, gitDoc, machineDoc, ...more.docs], [
-      edgeKeywords,
-      keyKeywords,
-    ])
+    ? loadVocab([...docs, ...more.docs], [edgeKeywords, keyKeywords])
     : vocab
   let g = graph({
     storage: ram(v, { number: more.number }),

@@ -73,6 +73,7 @@ export let UNNUMBERED = [
   'subscription',
   'symbol',
   'tool',
+  'volume',
 ]
 
 /** The config a new graph starts from, its database beside it on disk, worked

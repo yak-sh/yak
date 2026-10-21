@@ -48,11 +48,11 @@ import { reapLeases } from './reap.ts'
 import {
   behind,
   callOf,
-  logOf,
   pull,
   recount,
   type Tail,
   tail,
+  transcriptOf,
 } from './tail.ts'
 import { sessionEid, sessionFor } from './who.ts'
 import { step, walker } from './parts.ts'
@@ -107,7 +107,7 @@ export type Seen = {
  * one, which is the request @yaks/spawn answers. */
 export let managed = async (g: Graph, session: Eid): Promise<boolean> =>
   (await g.read(
-    `.entry.session=${session}&.using.provider&!imported&.limit=1`,
+    `.entry.session=${session}&.using.provider&!lines&.limit=1`,
   )).length > 0
 
 // What the harness says of a subagent in the meta file beside its
@@ -168,10 +168,8 @@ let opened = async (
     let s = await sessionFor(g, f.id, ['session.id'])
     if (s && await managed(g, s.entity.eid)) return null
     let version = f.path.endsWith('.zst') ? versionOf(stat(f.path)) : undefined
-    let [log] = version ? await g.get([logOf(f.path)]) : []
-    if (version && (log?.log as Comp | undefined)?.finished == version) {
-      return null
-    }
+    let read = version ? await transcriptOf(g, f.path) : undefined
+    if (version && read?.finished == version) return null
     let stream = version ? archive(f.path, signal) : undefined
     let prefix = ''
     let meta: Record<string, unknown>
@@ -432,7 +430,7 @@ let STRIPPED = [
   'usage',
 ]
 let stripped = (g: Graph) =>
-  `.imported&!using${g.vocab.comp('cost') ? '&!cost' : ''}&(${
+  `.lines&!using${g.vocab.comp('cost') ? '&!cost' : ''}&(${
     ['!content', ...STRIPPED.filter((c) => g.vocab.comp(c)).map((c) => `.${c}`)]
       .join('|')
   })`
@@ -580,9 +578,8 @@ export let recounted = async (
   let wrote = 0
   for (let f of found) {
     if (o.signal?.aborted) break
-    let [log] = await g.get([logOf(f.path)])
-    let session = (log?.log as Comp | undefined)?.session
-    if (!session || log![TOMBSTONE] != null) continue
+    let session = (await transcriptOf(g, f.path))?.session
+    if (!session) continue
     if (await managed(g, String(session))) continue
     // A subagent read before sessions were titled is titled now.
     if (f.runner != 'codex' && f.parent) {
@@ -641,7 +638,7 @@ let natives = async (
   signal?: AbortSignal,
 ): Promise<number> => {
   let owed = await g.rows(
-    `.ask .usage !imported !context_parts .created.at>=${
+    `.ask .usage !lines !context_parts .created.at>=${
       JSON.stringify(since)
     } .fields=entry.session`,
   ) as { 'entry.session'?: Eid }[]

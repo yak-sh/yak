@@ -229,29 +229,6 @@
       },
       "description": "a commit that landed, attached to the work it is about; the commit sha is the entity id, so recording the same commit twice gives one entity"
     },
-    "file": {
-      "component": true,
-      "journal": false,
-      "type": "object",
-      "kind": true,
-      "identity": [
-        "path",
-        "repository"
-      ],
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "the path from the repository root, as Git spells it"
-        },
-        "repository": {
-          "type": "string",
-          "ref": "entity",
-          "death": "keep",
-          "description": "the repository entity the path is read in"
-        }
-      },
-      "description": "a file in a repository, as an entity, so anything in the graph can refer to one; its entity id is derived from the path and the repository"
-    },
     "revision": {
       "component": true,
       "journal": false,
@@ -266,39 +243,12 @@
       },
       "description": "the commit a citation was last checked against; the verify step moves it to the commit checked out then"
     },
-    "lines": {
-      "component": true,
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "number",
-          "description": "first line, counting from 1"
-        },
-        "end": {
-          "type": "number",
-          "description": "last line, inclusive"
-        }
-      },
-      "description": "the line range a citation names, when no definition fits"
-    },
-    "quote": {
-      "component": true,
-      "type": "object",
-      "properties": {
-        "text": {
-          "type": "string",
-          "store": "blob",
-          "description": "the quoted text, stored by content address"
-        }
-      },
-      "description": "what the citing side quoted, so a reader sees what it saw without opening the file"
-    },
     "cites_check": {
       "tool": true,
       "noun": "cites",
       "verb": "check",
       "title": "Check citations",
-      "description": "Report citations that moved or were never checked. A `cites` edge can point to a file or symbol in this checkout, or any other graph entity. For a file, Git answers which commits after `revision.commit` touched the named place. For another entity, its current content hash is compared with `cites.hash`, recorded when verified; this needs no journal or checkout. A citation nobody checked is unverified, and one without enough evidence is unknown. Scope with `of` (only citations one entity makes) or `path` (only citations of one file). Returns a report in content.body with warning or failure findings. It writes nothing and enforces nothing.",
+      "description": "Report citations that moved or were never checked. A `cites` edge points to a `file`, to some lines of one (an entity wearing `lines{file, start, end}`), to a symbol, or to any other graph entity. For a file of a repository, its lines or a symbol in it, Git answers in this checkout, which must be of that repository, which commits after `revision.commit` touched the cited place. For anything else, its current content hash is compared with `cites.hash`, recorded when verified; this needs no journal or checkout. A citation nobody checked is unverified, and one without enough evidence is unknown. Scope with `of` (only citations one entity makes) or `path` (only citations of one file of this checkout's repository: the file, lines of it, or a symbol in it). Returns a report in content.body with warning or failure findings. It writes nothing and enforces nothing.",
       "input": {
         "of": {
           "type": "string",
@@ -307,7 +257,7 @@
         },
         "path": {
           "type": "string",
-          "description": "only citations of this file path, as Git spells it"
+          "description": "only citations of this file of this checkout's repository, lines of it or a symbol in it; the path as Git spells it"
         }
       },
       "readOnly": true,
@@ -320,7 +270,7 @@
       "noun": "cites",
       "verb": "verify",
       "title": "Verify a citation",
-      "description": "Record that a citation was checked and holds. For a file or symbol, write the `verified` mark and move its `revision` to this checkout's commit. For another entity, write the mark and its current content hash in `cites.hash`, without needing a checkout. Takes the citation edge itself, or an entity, meaning every citation it makes. Returns the citations as written.",
+      "description": "Record that a citation was checked and holds. For a file of a repository, lines of one or a symbol, write the `verified` mark and move its `revision` to this checkout's commit; the checkout must be of that repository. For another entity, write the mark and its current content hash in `cites.hash`, without needing a checkout. Takes the citation edge itself, or an entity, meaning every citation it makes. Returns the citations as written.",
       "input": {
         "cite": {
           "type": "string",

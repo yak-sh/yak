@@ -6,6 +6,8 @@ import { sessionDoc } from '@yaks/session'
 import { sessionDerived } from '../session/status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { fileOf } from '@yaks/file'
 import { archetypeDoc } from '@yaks/archetype/vocab'
 import { loadVocab } from '@yaks/vocab'
 import { compile, fn, val } from '@yaks/sql'
@@ -20,6 +22,7 @@ let vocab = loadVocab([
   sessionDoc,
   toolsDoc,
   modelDoc,
+  fileDoc,
   archetypeDoc,
   { $defs: { apply_receipt: { component: true, type: 'object' } } },
 ], [kernelKeywords])
@@ -37,10 +40,11 @@ d.query = (q) => {
 }
 let s = storage(d, vocab, { derived })
 s.install()
+let file = fileOf('disk', 'fixture.jsonl')
 let line = (eid: string, owner: string, seq: number): Bundle => ({
   entity: { eid },
   entry: { session: owner, seq },
-  imported: { source: 'fixture', line: seq },
+  lines: { file, start: seq },
   content: { body: 'precious prose' },
 })
 s.tx((tx) =>
@@ -59,7 +63,7 @@ s.tx((tx) =>
     {
       entity: { eid: 'call' },
       entry: { session: 'quiet', seq: 3003 },
-      imported: { source: 'fixture', line: 3003 },
+      lines: { file, start: 3003 },
     },
   ])
 )
@@ -68,7 +72,7 @@ let g = graph({
   vocab,
   plugins: [{ name: 'scope', scope: () => ({ entity: '!apply_receipt' }) }],
 })
-let selector = '.imported !using !cost ' +
+let selector = '.lines !using !cost ' +
   '(!content|.reasoning|.notice|.result|.refusal|.exception|.stop|.usage) ' +
   '.entry.session=quiet .fields=entity.eid .order=entity.eid .limit=50'
 let costs = []

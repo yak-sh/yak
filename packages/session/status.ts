@@ -159,13 +159,13 @@ export let sessionStatus = {
         )
         : lit(false)
     let cancelled = (entry: Expr) =>
-      ['notice', 'content', 'imported'].every(declared)
+      ['notice', 'content', 'lines'].every(declared)
         ? exists(select({
           cols: [lit(1)],
           from: table('content', 'prose'),
           joins: [
             join(
-              table('imported', 'origin'),
+              table('lines', 'origin'),
               eq(col('entity', 'origin'), col('entity', 'prose')),
             ),
           ],
@@ -495,13 +495,13 @@ export let sessionStatus = {
     // Interpret that format here without rewriting the owner's transcripts:
     // whether the entry `alias` holds the prose such an import recorded.
     let cancellation = (alias: string) =>
-      ['notice', 'content', 'imported'].every(declared)
+      ['notice', 'content', 'lines'].every(declared)
         ? exists(select({
           cols: [lit(1)],
           from: table('content', 'text'),
           joins: [
             join(
-              table('imported', 'origin'),
+              table('lines', 'origin'),
               eq(col('entity', 'origin'), col('entity', 'text')),
             ),
           ],

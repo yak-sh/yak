@@ -26,6 +26,8 @@ import {
 } from '@yaks/blob'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { modelDoc } from '@yaks/model'
+import { fileDoc } from '@yaks/file/vocab'
+import { fileOf } from '@yaks/file'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { toolEid } from '@yaks/tools'
 import { sessionDoc } from './comp.ts'
@@ -42,13 +44,15 @@ import {
   usingBefore,
 } from './status.ts'
 
-let vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, kernelDoc, effectDoc], [
-  kernelKeywords,
-])
+let vocab = loadVocab(
+  [sessionDoc, toolsDoc, modelDoc, fileDoc, kernelDoc, effectDoc],
+  [kernelKeywords],
+)
 let M = identityEid('model', ['fake'])
 let T = toolEid('echo')
 
 let S = 'sess'
+let child = fileOf('disk', 'child.jsonl')
 let entry = (n: number, kind: Record<string, unknown>): Bundle => ({
   entity: { eid: `e${n}` },
   entry: { session: S, seq: n },
@@ -201,7 +205,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     let cancelled = entry(4, {
       content: { body },
       notice: {},
-      imported: { source: 'child.jsonl', line: 4 },
+      lines: { file: child, start: 4 },
     })
     let decoded = imported(
       subagent({
@@ -209,7 +213,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
         isSidechain: true,
         message: { content: body },
       }),
-      { session: S, source: 'child.jsonl', line: 4 },
+      { session: S, file: child, path: 'child.jsonl', line: 4 },
     )[0]
     return [
       [
@@ -693,6 +697,7 @@ for (let typed of [false, true]) {
       sessionDoc,
       toolsDoc,
       modelDoc,
+      fileDoc,
       kernelDoc,
       effectDoc,
       archetypeDoc,
@@ -1104,6 +1109,7 @@ for (let typed of [false, true]) {
         sessionDoc,
         toolsDoc,
         modelDoc,
+        fileDoc,
         kernelDoc,
         effectDoc,
         archetypeDoc,

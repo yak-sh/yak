@@ -16,6 +16,8 @@ import { executionComputed } from '@yaks/tools'
 import { attemptComputed } from './attempt.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
 import { sessionDoc } from './comp.ts'
 import { type SessionOpts, sessions } from './plugin.ts'
 import { statusComputed } from './state.ts'
@@ -65,7 +67,14 @@ let doc: VocabDoc = {
 
 /** The editor's vocabulary: people, pages, and the session domain loaded
  * beside them. */
-export let pages: Vocab = loadVocab([sessionDoc, toolsDoc, modelDoc, doc])
+export let pages: Vocab = loadVocab([
+  sessionDoc,
+  toolsDoc,
+  modelDoc,
+  fileDoc,
+  machineDoc,
+  doc,
+])
 
 /** The ids the tests share: two people, two of their runs, a run the graph
  * never saw, two pages. */

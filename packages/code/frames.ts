@@ -3,6 +3,7 @@
 
 import type { Bundle, Comp } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
+import { fileOf } from '@yaks/file'
 
 export type Place = { path: string; function?: string; line?: number }
 export type Catalog = { get: (ids: string[]) => Promise<Bundle[]> }
@@ -18,7 +19,7 @@ export let resolveFrames = async (
   blobs: Map<string, string>,
   places: Place[],
 ): Promise<Resolved[]> => {
-  let ids = places.map((p) => identityEid('file', [p.path, repository]))
+  let ids = places.map((p) => fileOf(repository, p.path))
   let symbols = places.map((p, i) =>
     p.function ? identityEid('symbol', [ids[i], p.function]) : ''
   )
@@ -35,7 +36,7 @@ export let resolveFrames = async (
     let row = known.get(ids[i])
     let file = comp(row, 'file')
     if (
-      !app || file.path != p.path || file.repository != repository ||
+      !app || file.path != p.path || file.root != repository ||
       comp(row, 'module').blob != blobs.get(p.path)
     ) return { app }
     let symbol = comp(known.get(symbols[i]), 'symbol')

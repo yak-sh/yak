@@ -7,8 +7,8 @@
 // read of an unchanged tree writes nothing.
 //
 // Every id is derived from the vocabulary's declared identities (@yaks/graph
-// `identities`): a module is its `file{path, repository}`, a symbol its module
-// and name, a package its name. So reading the same tree twice is one set of
+// `identities`): a module is its `file{path, root}` (@yaks/file), rooted in the
+// repository, a symbol its module and name, a package its name. So reading the same tree twice is one set of
 // entities, and nothing here invents an id.
 //
 // Nothing is ever deleted. A path or an export name comes back often, so what
@@ -169,7 +169,7 @@ export let codeMirror = async (
       return []
     }
   })
-  let moduleOf = (path: string): Eid => ids('file', { path, repository })
+  let moduleOf = (path: string): Eid => ids('file', { path, root: repository })
   let packageOf = (name: string): Eid => ids('package', { name })
 
   // What the graph read last time, kept for the read below: every module of
@@ -241,7 +241,7 @@ export let codeMirror = async (
       said.modules++
       bundles.push({
         entity: { eid: m },
-        file: { path, repository },
+        file: { path, root: repository },
         module: { blob: await blobOf(body), package: pkgOf(path) },
         doc: md ?? { title: path, body: header(body) || null },
       })
@@ -301,7 +301,7 @@ export let codeMirror = async (
     read,
     agreed: async () => {
       known.clear()
-      for (let b of await g.read(`.file.repository=${repository}&?module`)) {
+      for (let b of await g.read(`.file.root=${repository}&?module`)) {
         let path = str(comp(b, 'file')?.path)
         if (path && comp(b, 'module')) known.set(path, b)
       }

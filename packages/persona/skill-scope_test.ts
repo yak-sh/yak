@@ -7,10 +7,10 @@ import {
   type Comp,
   derivedEid,
   type Graph,
-  identityEid,
   Refused,
   type Visibility,
 } from '@yaks/graph'
+import { fileOf } from '@yaks/file'
 import { and, ne } from '@yaks/query'
 import { repoSkills, skillScope } from './skills.ts'
 import { world } from './testing.ts'
@@ -21,8 +21,8 @@ let id = (name: string) => derivedEid(`scope skill ${name}`)
 let file = (name: string, repository: string): Bundle => {
   let path = `.claude/skills/${name}/SKILL.md`
   return {
-    entity: { eid: identityEid('file', [path, repository]) },
-    file: { path, repository },
+    entity: { eid: fileOf(repository, path) },
+    file: { path, root: repository },
   }
 }
 let link = (name: string, target: Bundle): Bundle => ({

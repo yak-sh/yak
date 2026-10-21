@@ -165,7 +165,7 @@ export let spelling = async (
 /** An entry that asks for a managed turn. Imported selections and served
  * asks describe history; neither requests another process. */
 export let requestOf = (b: Bundle | undefined): Bundle | undefined =>
-  b?.entry && b.using && !b.imported && !b.ask ? b : undefined
+  b?.entry && b.using && !b.lines && !b.ask ? b : undefined
 
 /**
  * Read a session's request out of its transcript: the `using` component on the
@@ -214,7 +214,7 @@ export let asked = async (
   // The instruction is the prose the request came with; a request stated on an
   // entry of its own takes the transcript's first input instead.
   let input = entries.find((b) =>
-    b.content && !b.output && !b.imported && !b.notice
+    b.content && !b.output && !b.lines && !b.notice
   )
   let said = comp(request, 'content') ?? comp(input, 'content')
   return {

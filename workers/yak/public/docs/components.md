@@ -569,18 +569,18 @@ These are the names, all of them:
     connection contains content cost created delegates delete_upload deliver
     delivered deploy dispatch doc draft edge effect email entity entry error exception
     execution failed favorite fee feedback file filed finding fired former
-    gallery gitobj grant home hook hostname image imported inference installed
+    gallery gitobj grant home hook hostname image inference installed
     integration integration_install interrupted invite inviting key lease
     lines mail mail_post member memory meter model
     notice notified notify_trash openai opened openrouter order output output_of
     parent pending person plan price product project provider provisional
-    published quarantined questions quote reads recalled ref referenced
+    published quarantined questions reads recalled ref referenced
     refusal register_writes report repository representation requires
     restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded
     sending serves session session_run sfu signed_in signin space spend staged stop
     stripe submitted subscription supersedes supervises sweep switched task theme tool
     topic trashed tree_entry tunnel typed updated usage uses using
-    verified wake wants web worked worktree written
+    verified volume wake wants web worked worktree written
 
 When your first choice is taken, ask what the component is _for_ and name that:
 the taken name is the general one, yours is the specific one. Not `comment` but

@@ -2,27 +2,21 @@
 // Only explicitly host-local entry points may select this computer.
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
-import { mint } from '@yaks/graph'
+import { here } from '@yaks/file/local'
 
 /** One canonical root workspace per computer filesystem. */
 export let filesystemEid = (machine: string): string =>
   derivedEid('computer filesystem|' + machine)
 
-/** Select the explicitly local computer, creating its inventory once. A
- * directory is never a computer identity. Remote APIs never call this helper. */
+/** Select this computer (@yaks/file's `here`) and its filesystem workspace,
+ * creating the workspace once. A directory is never a computer identity.
+ * Remote APIs never call this helper. */
 let select = async (g: Graph): Promise<Bundle> => {
-  let found = await g.read('.machine.address=local://')
-  if (found.length > 1) throw Error('Multiple computers claim local://')
-  let machine = found[0]?.entity.eid ?? mint()
+  let machine = await here(g)
   let eid = filesystemEid(machine)
   let [known] = await g.get([eid])
   if (!known?.workspace) {
-    await g.apply([
-      ...found.length
-        ? []
-        : [{ entity: { eid: machine }, machine: { address: 'local://' } }],
-      { entity: { eid }, workspace: { machine, root: '/' } },
-    ])
+    await g.apply([{ entity: { eid }, workspace: { machine, root: '/' } }])
     ;[known] = await g.get([eid])
   }
   let place = known!.workspace as Comp

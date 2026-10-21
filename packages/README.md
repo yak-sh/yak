@@ -217,15 +217,20 @@ grouped approximately by function, **not** by dependency order.
   an entity, expanded into a separate key entity, so seed data written twice
   updates one entity rather than creating two — and a name can be used anywhere
   an eid can, in a reference property and in an API request.
+- **[@yaks/file](./file)** — files as entities: `file{path, root}`, a path read
+  in a root (a repository's tree, abstract, or a `volume{machine, mount}`, a
+  filesystem a machine mounts), and `lines{file, start, end}`, where in a file
+  an entity sits. `@yaks/file/local` is this computer and the files on its
+  disks.
 - **[@yaks/git](./git)** — git objects as entities: an object's eid is its SHA-1
   object id, with its SHA-256 name beside it as a key, its body in a @yaks/blob
   store, and the two traversals a pack supports (`entry`, `parent`) as edges —
   plus the builders that turn a `path → sha256` manifest into trees and a
   commit. It also models the working copy: the `repository` and `worktree` a
-  checkout consists of, the landed `commit` attached to the work it is about,
-  the `file` a path in a repository is, and the `cites` edge that ties a
-  document to a place in one — with `revision`, `symbol`, `lines` and `quote`
-  beside it, and staleness re-derived from Git. `cites check` reports the
+  checkout consists of (a repository is the root of its @yaks/file files), the
+  landed `commit` attached to the work it is about, and the `cites` edge that
+  ties a document to a file, a symbol or a place in a file, with `revision`
+  beside it and staleness re-derived from Git. `cites check` reports the
   citations that moved or were never checked, and `cites verify` records that
   somebody looked. Its `land` tool operates on the checkout at the calling
   process's `cwd` (the CLI working directory), fast-forwarding its branch into
@@ -233,7 +238,7 @@ grouped approximately by function, **not** by dependency order.
   without landing; rerun tests and land again.
 
 - **[@yaks/code](./code)** — a codebase read into the graph: a `package` per
-  manifest, a `module` per file (wearing @yaks/git's `file`), a `symbol` per
+  manifest, a `module` per file (wearing @yaks/file's `file`), a `symbol` per
   export and an `imports` link per import, each with its doc comment in `doc`
   for search. `code sync` reads only the files whose Git blob moved. Each
   process starting describes the vocabulary the graph is served with as

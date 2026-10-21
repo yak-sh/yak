@@ -11,6 +11,7 @@ import { ids, locked, pages, seed, store } from './testing.ts'
 import { hooked, type Options, runs } from './tools.ts'
 import { fleet, said as personas } from '../persona/testing.ts'
 import { edgeKeywords } from '@yaks/edge'
+import { onDisk } from '@yaks/file/local'
 
 let vocab = loadVocab([docDoc, taskDoc, sessionDoc], [idKeywords])
 
@@ -419,29 +420,27 @@ test('a settled transcript is never stalled, however old', async () => {
 // A harness log last written nine minutes ago, its first line imported into
 // an operator's transcript: made when the file loads, so a case times only
 // the check.
-let quiet = (text: string) => {
+let quiet = async (text: string) => {
   let path = Deno.makeTempFileSync()
   Deno.writeTextFileSync(path, text)
   let at = new Date(ago(9))
   Deno.utimeSync(path, at, at)
-  let s = store()
+  let s = store(), g = locked(s)
+  let [file] = await onDisk(g, path), { eid } = file.entity
   seed(
     s,
-    { entity: { eid: ids.run1 }, session: { operator: true, log: 'log1' } },
-    {
-      entity: { eid: 'log1' },
-      log: { session: ids.run1, source: path, consumed: 1 },
-    },
+    { entity: { eid: ids.run1 }, session: { operator: true, transcript: eid } },
+    { ...file, transcript: { session: ids.run1, consumed: 1 } },
     line(1, ago(9), {
       entity: { eid: 'l1' },
       content: { body: 'go' },
-      imported: { source: path, line: 1 },
+      lines: { file: eid, start: 1 },
     }),
   )
-  return locked(s)
+  return g
 }
-let whole = quiet('{"type":"user"}\n')
-let partial = quiet('{"type":"user"}\nmore\n')
+let whole = await quiet('{"type":"user"}\n')
+let partial = await quiet('{"type":"user"}\nmore\n')
 let check = (g: Graph) =>
   runs({ vocab: pages }).session_check!(
     { entity: { eid: 'c1' }, call: { args: {} } },

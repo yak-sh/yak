@@ -2,9 +2,10 @@
 // browser page imports at `@yaks/code/vocab`. It reaches no storage and runs
 // no subprocess.
 //
-// A module is identified by the `file{path, repository}` it wears, which
-// @yaks/git declares, so a graph loading this document loads @yaks/git's
-// beside it, and @yaks/edge's for the `imports` relation.
+// A module is identified by the `file{path, root}` it wears, which @yaks/file
+// declares, rooted in a @yaks/git `repository`, so a graph loading this
+// document loads @yaks/file's and @yaks/git's beside it, and @yaks/edge's for
+// the `imports` relation.
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }

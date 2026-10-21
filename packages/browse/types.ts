@@ -740,9 +740,10 @@ export type Tokens = {
 // One ordered Session-log entity. Every other log shape is a facet on this
 // entity; seq is minted by the server within the Session partition.
 export type Entry = { eid: string; session: string; seq: number }
-// The ingest coordinate (D-16704): where an imported entry came from. `line`
-// is the 1-based SOURCE line, distinct from entry.seq. Server-owned/immutable.
-export type Imported = { eid: string; source: string; line: number }
+// Where in a file an entity sits (@yaks/file): for an entry read from a
+// transcript, the file and the 1-based line it came from, distinct from
+// entry.seq.
+export type Lines = { eid: string; file: string; start: number; end?: number }
 export type Content = { eid: string; body: string }
 export type Message = { eid: string; role: typeof messageRoles[number] }
 export type Generation = {
@@ -1231,7 +1232,7 @@ export type EntCore = {
   process?: Process
   brief?: Brief
   entry?: Entry
-  imported?: Imported
+  lines?: Lines
   content?: Content
   message?: Message
   attention?: { eid: string }

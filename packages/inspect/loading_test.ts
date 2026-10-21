@@ -98,13 +98,13 @@ let managedTile = sessionTile({ process: { pid: 42 } }, [{
   entity: { eid: 'input' },
   using: { provider: 'codex' },
 }])
-let importedTile = sessionTile({ session: { log: 'log', status: 'stopped' } }, [
-  {
-    entity: { eid: 'imported-input' },
-    using: { provider: 'claude' },
-    imported: {},
-  },
-])
+let importedTile = sessionTile({
+  session: { transcript: 'file', status: 'stopped' },
+}, [{
+  entity: { eid: 'imported-input' },
+  using: { provider: 'claude' },
+  lines: { file: 'file', start: 1 },
+}])
 let unknownTile = sessionTile({})
 let apiTile = sessionTile({}, [{
   entity: { eid: 'api-ask' },

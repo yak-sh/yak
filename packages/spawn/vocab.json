@@ -131,7 +131,7 @@
     },
     "spawn_start": {
       "effect": true,
-      "target": ".entry !ask !imported",
+      "target": ".entry !ask !lines",
       "created": [
         "using"
       ],

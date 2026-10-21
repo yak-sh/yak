@@ -1,0 +1,20 @@
+{
+  "name": "@yaks/file",
+  "version": "0.2.10",
+  "exports": {
+    ".": "./mod.ts",
+    "./vocab": "./vocab.ts",
+    "./local": "./local.ts"
+  },
+  "license": "Apache-2.0",
+  "description": "Files as entities: a path read in a root (a repository's tree, or a volume a machine mounts), and the lines of a file an entity sits at.",
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1.0.0"
+  },
+  "publish": {
+    "exclude": [
+      "**/*_test.ts",
+      "./browser.json"
+    ]
+  }
+}

@@ -251,13 +251,9 @@ test('imported cumulative asks are excluded by session provenance, not ask prese
     { entity: { eid: 'n' }, session: {} },
     {
       entity: { eid: 'cli' },
-      session: { log: '/outside/transcript.jsonl', source: 'c' },
+      session: { transcript: 'cli-file', source: 'c' },
     },
-    {
-      entity: { eid: 'side' },
-      session: {},
-      imported: { source: 'transcript', line: 1 },
-    },
+    { entity: { eid: 'side' }, session: { transcript: 'side-file' } },
   ]
   let report = cacheOf(rows, meta)
   equal(report.total.requests, 1)

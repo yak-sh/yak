@@ -9,6 +9,7 @@ import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model'
+import { fileDoc } from '@yaks/file/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { effectDoc } from '@yaks/effects'
 import { archetypeDoc } from '@yaks/archetype/vocab'
@@ -17,6 +18,7 @@ let vocab = loadVocab([
   sessionDoc,
   toolsDoc,
   modelDoc,
+  fileDoc,
   kernelDoc,
   effectDoc,
   archetypeDoc,
@@ -34,7 +36,7 @@ for (let size of [100, 1000]) {
   }
   shape(10001, ['session'])
   shape(10002, ['content', 'entry'])
-  shape(10003, ['content', 'entry', 'imported', 'output'])
+  shape(10003, ['content', 'entry', 'lines', 'output'])
   shape(10004, ['ask', 'attempt', 'entry'])
   d.query(
     insert(
@@ -43,6 +45,7 @@ for (let size of [100, 1000]) {
       { id: 2, eid: 'other', archetype: 10001 },
       { id: 3, eid: 'input', archetype: 10002 },
       { id: 4, eid: 'other-ask', archetype: 10004 },
+      { id: 5, eid: 'fixture' },
     ),
   )
   d.query(
@@ -81,12 +84,8 @@ for (let size of [100, 1000]) {
       insert('content', ...ids.map((entity) => ({ entity, body: 'prose' }))),
     )
     d.query(insert(
-      'imported',
-      ...ids.map((entity, i) => ({
-        entity,
-        source: 'fixture',
-        line: start + i + 1,
-      })),
+      'lines',
+      ...ids.map((entity, i) => ({ entity, file: 5, start: start + i + 1 })),
     ))
   }
   // Execute once warm, counting engine work through the public named get.

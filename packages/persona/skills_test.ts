@@ -12,6 +12,8 @@ import { ram } from '@yaks/ram'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { gitDoc } from '@yaks/git'
+import { fileOf } from '@yaks/file'
+import { fileDoc } from '@yaks/file/vocab'
 import { repositoryEid } from '@yaks/git/host'
 import { loadVocab } from '@yaks/vocab'
 import { personaDoc } from './comp.ts'
@@ -32,7 +34,7 @@ let repo = repositoryEid('/repo/.git', 'test-filesystem')
 let elsewhere = repositoryEid('/elsewhere/.git', 'test-filesystem')
 let another = repositoryEid('/another/.git', 'test-filesystem')
 
-let vocab = loadVocab([docDoc, edgeDoc, gitDoc, personaDoc, {
+let vocab = loadVocab([docDoc, edgeDoc, fileDoc, gitDoc, personaDoc, {
   $defs: {
     content: {
       component: true,
@@ -46,8 +48,8 @@ let vocab = loadVocab([docDoc, edgeDoc, gitDoc, personaDoc, {
 let world = (): Graph => graph({ vocab, storage: ram(vocab, { number: true }) })
 
 let file = (repository: string, path: string): Bundle => ({
-  entity: { eid: identityEid('file', [path, repository]) },
-  file: { repository, path },
+  entity: { eid: fileOf(repository, path) },
+  file: { root: repository, path },
 })
 
 let skill = (eid: string, title: string, repository = repo): Bundle[] => {
@@ -199,7 +201,7 @@ test('skill locations accept identity or bundle and never put file on the skill'
   let location = await skillLocation(g, held)
   assertEquals(
     location?.entity.eid,
-    identityEid('file', ['.claude/skills/review/SKILL.md', repo]),
+    fileOf(repo, '.claude/skills/review/SKILL.md'),
   )
   assertEquals(await skillLocation(g, 'held'), location)
   assertEquals(location?.content, undefined)
@@ -301,7 +303,7 @@ test('graph title renames move companion suffixes before the locator changes', a
     'new-name',
   )
   assertEquals((await skillLocation(g, 'held'))?.file, {
-    repository: repo,
+    root: repo,
     path: '.claude/skills/old-name/SKILL.md',
   })
   assertEquals((await repoSkills(g, repo))[0].entity.eid, 'held')
@@ -620,7 +622,7 @@ test('a skill scope respects hidden locators and masked companion bodies', async
     undefined,
   )
   assert(
-    files.every((b) => (b.file as { repository: string }).repository == repo),
+    files.every((b) => (b.file as { root: string }).root == repo),
   )
   let rendered = await skillFiles(restricted, repo)
   assertEquals([...rendered.keys()], ['.claude/skills/visible/SKILL.md'])

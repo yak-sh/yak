@@ -84,7 +84,7 @@ await scoped.g.apply([
   {
     entity: { eid: '$location' },
     file: {
-      repository: 'repository',
+      root: 'repository',
       path: '.claude/skills/checking/SKILL.md',
     },
   },

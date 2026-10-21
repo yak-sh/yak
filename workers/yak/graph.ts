@@ -3193,20 +3193,23 @@ export class Store {
       let source = {
         ...rule.source,
         $defs: Object.fromEntries(
-          Object.entries(rule.source.$defs ?? {}).map(([comp, schema]) => {
+          Object.entries(rule.source.$defs ?? {}).flatMap(([comp, schema]) => {
             let columns = this.#sql.query({
               t: 'pragma',
               name: 'table_info',
               arg: comp,
             }).map((c) => c.name)
-            return [comp, {
+            // A retired word this store never raised a table for holds
+            // nothing: left undeclared, the rule finds it unspoken here.
+            if (!columns.length) return []
+            return [[comp, {
               ...schema,
               properties: Object.fromEntries(
                 Object.entries(schema.properties ?? {}).filter(([prop]) =>
                   !this.#vocab.prop(comp, prop) && columns.includes(prop)
                 ),
               ),
-            }]
+            }]]
           }),
         ),
       }

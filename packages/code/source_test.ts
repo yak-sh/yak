@@ -11,6 +11,7 @@ import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { docDoc } from '@yaks/doc/vocab'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { gitDoc } from '@yaks/git'
+import { fileDoc } from '@yaks/file/vocab'
 import { run } from '@yaks/git/land'
 import { codeDoc } from './vocab.ts'
 import { codeMirror } from './sync.ts'
@@ -104,6 +105,7 @@ test('frames resolve only cataloged exports of the exact failing commit', async 
       kernelDoc,
       docDoc,
       edgeDoc,
+      fileDoc,
       gitDoc,
       codeDoc,
     ], [

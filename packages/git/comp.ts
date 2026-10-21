@@ -7,11 +7,8 @@
 //   parent                  an @yaks/edge relation: a commit follows a commit
 //   compat                  an @yaks/key kind: the same object's SHA-256 id
 //   ref{app, name, commit}  where one branch of one repository points
-//   file{path, repository}  a file in a repository, as an entity
 //   cites                   @yaks/kernel's relation: a citation of a place
 //   revision{commit}        the commit a citation was last checked against
-//   lines{start, end}       the line range a citation names
-//   quote{text}             what the citing side quoted
 //
 // The document itself is ./vocab.json — plain JSON Schema, readable by
 // anything that reads JSON. This file re-exports it under the names callers
@@ -38,19 +35,17 @@
 // and its objects in a store of their own, loads one document in each.
 //
 // A citation is an edge, and each fact about it is a component of its own on
-// that edge: @yaks/kernel's `cites` says the link is a citation,
-// `revision{commit}` says which
-// commit it was last checked against, `lines{start, end}` narrows it to one
-// place in the cited file, and `quote{text}` keeps what was quoted. They are
-// separate because they are independent: a citation may name a line range or
-// not, and the commit moves under both. A definition is not a property here: it
-// is a @yaks/code `symbol` entity, and a citation of one points at it. Whether
-// a citation is still current is derived from Git for a file, and from the
+// that edge: @yaks/kernel's `cites` says the link is a citation, and
+// `revision{commit}` says which commit it was last checked against. The place
+// it names is what it points at: a @yaks/file `file{path, root}` whose root is
+// the repository, an entity wearing @yaks/file's `lines{file, start, end}` for
+// some lines of one (with what was quoted as its `content.body`), or a
+// @yaks/code `symbol` for a definition. So a citation is an ordinary link
+// between two entities rather than a path property somewhere. Whether it is
+// still current is derived from Git for a file of a repository, and from the
 // kernel's content hash for any other entity (./cites.ts). A verified citation
 // also carries the kernel's `verified{at, by, via}` mark, written by the act
-// of checking. The cited file is an entity of its own, `file{path,
-// repository}`, so a citation is an ordinary link between two entities rather
-// than a path property somewhere.
+// of checking.
 //
 // `compat` Is A key, not a property on `gitobj`, so the reverse lookup — a
 // SHA-256 `want` arriving at a SHA-1 graph — is a lookup by derived id rather

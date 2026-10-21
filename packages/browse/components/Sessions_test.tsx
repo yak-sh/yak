@@ -297,7 +297,7 @@ async function origins() {
       ...names.map((title, i) => ({
         entity: { eid: `origin-${i}` },
         doc: { title },
-        session: { id: `origin-${i}`, ...i == 2 ? { log: 'log' } : {} },
+        session: { id: `origin-${i}`, ...i == 2 ? { transcript: 'log' } : {} },
         created: { at: new Date(2026, 0, 4 - i).toISOString() },
         ...i == 0 ? { native: {} } : i == 1 ? { process: { pid: 42 } } : {},
       })),

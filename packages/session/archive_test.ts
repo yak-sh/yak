@@ -1,11 +1,12 @@
 // Synthetic compressed rollouts prove bounded import, restart recovery and
 // decoder failure isolation. Their plaintext exists only in this fixture.
 import { test } from '@yaks/testing'
+import { onDisk } from '@yaks/file/local'
 import { assertEquals, assertExists } from '@std/assert'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { archive } from './archive.ts'
 import { look, type Seen } from './service.ts'
-import { logOf } from './tail.ts'
+import { transcriptOf } from './tail.ts'
 import { locked, store } from './testing.ts'
 
 let id = 'bbdd36d9-10ae-4677-8264-e5011bba746f'
@@ -52,7 +53,9 @@ let bodies = async (g: Graph, thread = id) =>
   (await entries(g, thread)).map((b) => (b.content as Comp | undefined)?.body)
     .filter(Boolean)
 let completed = async (g: Graph, file: string) =>
-  ((await g.get([logOf(file)]))[0]?.log as Comp | undefined)?.finished
+  (await transcriptOf(g, file))?.finished
+let fileEid = async (g: Graph, file: string) =>
+  (await onDisk(g, file))[0].entity.eid
 let drain = async (g: Graph, dir: string, s: Seen) => {
   for (let n = 0; n < 100; n++) {
     await look(g, '', s, { codex: dir, full: 0, slice: 0 })
@@ -64,7 +67,7 @@ let drain = async (g: Graph, dir: string, s: Seen) => {
 let dir = fixture(), file = path(dir), g = locked(store()), s = seen()
 zip(file, log('first'))
 await look(g, '', s, { codex: dir, full: 0, slice: 0 })
-let consumed = ((await g.get([logOf(file)]))[0].log as Comp).consumed
+let consumed = (await transcriptOf(g, file))?.consumed
 await close(s)
 let resumed = seen()
 await drain(g, dir, resumed)
@@ -171,9 +174,38 @@ await drain(plainGraph, plainDir, plainSeen)
 let after = await entries(plainGraph)
 await close(plainSeen)
 
-test('compressing an already imported rollout keeps its log and message identities', () => {
+test('compressing an already imported rollout keeps its message identities', () => {
   assertEquals(after.map((b) => b.entity.eid), before.map((b) => b.entity.eid))
-  assertEquals(logOf(zipped), logOf(plain))
+})
+
+let movedDir = fixture(), movedGraph = locked(store()), movedSeen = seen()
+let movedZip = path(movedDir), movedPlain = movedZip.slice(0, -4)
+Deno.writeTextFileSync(movedPlain, log('plain'))
+for (let n = 0; n < 2; n++) {
+  await look(movedGraph, '', movedSeen, { codex: movedDir, full: 0, slice: 0 })
+}
+let partly = (await transcriptOf(movedGraph, movedPlain))?.consumed
+await close(movedSeen)
+zip(movedZip, log('plain'))
+Deno.removeSync(movedPlain)
+let zipSeen = seen()
+await drain(movedGraph, movedDir, zipSeen)
+await close(zipSeen)
+let read = (await entries(movedGraph)).map((b) => {
+  let { file, start } = b.lines as Comp
+  return [file, start]
+})
+let [moved] = await movedGraph.get([id], ['session'])
+let [from, to] = await Promise.all(
+  [movedPlain, movedZip].map((f) => fileEid(movedGraph, f)),
+)
+
+test('a rollout compressed partway through its read resumes where the plain file stopped', async () => {
+  assertEquals(partly, 2)
+  assertEquals(read, [[from, 1], [from, 2], [to, 3]])
+  assertEquals((moved.session as Comp).transcript, to)
+  assertEquals(await transcriptOf(movedGraph, movedPlain), undefined)
+  assertEquals((await transcriptOf(movedGraph, movedZip))?.consumed, 3)
 })
 
 let truncatedDir = fixture(),

@@ -167,6 +167,7 @@
     "./packages/draft",
     "./packages/lens",
     "./packages/key",
+    "./packages/file",
     "./packages/git",
     "./packages/code",
     "./packages/mirror",

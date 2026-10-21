@@ -9,6 +9,8 @@ import { sessionDoc } from '@yaks/session'
 import { sessionDerived } from '../session/status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { fileOf } from '@yaks/file'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { archetypeDoc, archetypes } from '@yaks/archetype'
 import { as, eidOf, fn, lit, select } from '@yaks/sql'
@@ -20,6 +22,7 @@ let vocab = loadVocab([
   sessionDoc,
   modelDoc,
   toolsDoc,
+  fileDoc,
   archetypeDoc,
   apiDoc,
   {
@@ -185,7 +188,7 @@ await g.apply([
     entity: { eid: 'notice' },
     entry: { session: 'owner', seq: 1 },
     notice: {},
-    imported: { source: 'test', line: 1 },
+    lines: { file: fileOf('disk', 'test.jsonl'), start: 1 },
     content: { body: 'stored' },
   },
 ], { trusted: true })

@@ -22,6 +22,8 @@ import { modelDoc } from '@yaks/model'
 import { personaDoc } from '@yaks/persona'
 import { sessionDoc, sessions, statusOf } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
 import {
   answerOf,
   CallError,
@@ -51,6 +53,8 @@ let host = () => {
       sessionDoc,
       toolsDoc,
       modelDoc,
+      fileDoc,
+      machineDoc,
       personaDoc,
       processDoc,
       docDoc,

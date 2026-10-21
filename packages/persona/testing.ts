@@ -8,6 +8,7 @@
 // loads the packages that own them; this declares the same two components.
 
 import { machineDoc } from '@yaks/machine/vocab'
+import { fileDoc } from '@yaks/file/vocab'
 import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import {
   type Bundle,
@@ -38,15 +39,6 @@ let doc: VocabDoc = {
       component: true,
       type: 'object',
       properties: { body: { type: 'string' } },
-    },
-    file: {
-      component: true,
-      type: 'object',
-      identity: ['path', 'repository'],
-      properties: {
-        path: { type: 'string' },
-        repository: { type: 'string', ref: 'entity', death: 'keep' },
-      },
     },
     memory: { component: true, type: 'object', kind: true, prefix: 'M' },
     proposed: { component: true, type: 'object' },
@@ -94,7 +86,7 @@ let doc: VocabDoc = {
 
 /** A vocabulary with the persona components, both relations, and ids. */
 export let said: Vocab = loadVocab(
-  [machineDoc, edgeDoc, docDoc, personaDoc, doc],
+  [machineDoc, fileDoc, edgeDoc, docDoc, personaDoc, doc],
   [edgeKeywords, idKeywords],
 )
 
@@ -103,7 +95,7 @@ let { contains: _carries, ...rest } = doc.$defs ?? {}
 /** The same vocabulary without `contains` — a server that did not compose
  * @yaks/task. */
 export let thin: Vocab = loadVocab(
-  [machineDoc, edgeDoc, docDoc, personaDoc, { $defs: rest }],
+  [machineDoc, fileDoc, edgeDoc, docDoc, personaDoc, { $defs: rest }],
   [edgeKeywords, idKeywords],
 )
 

@@ -6,22 +6,27 @@
 // this decides which entities it becomes, and writes them.
 //
 // The log is the durable record, and the graph holds the transcript read out
-// of it. Each entry carries `imported{source, line}`: the file and the line it
-// came from. The log is an entity of its own (`log{session, source,
-// consumed}`, named by its file) that says how many of its lines have been
-// read, written in the transaction that writes each line's entries, and on its
-// own once lines that make none are read past. A resume begins there, whatever
-// has become of the entries since: a line that made none, or one whose entries
-// a strip deleted, is never read again.
+// of it. The log is a file (@yaks/file's `file{path, root}`, on the volume that
+// holds it), and each entry wears the line it came from, `lines{file, start}`.
+// The file carries `transcript{session, consumed, version, finished}`: how many
+// of its lines have been read, written in the transaction that writes each
+// line's entries, and on its own once lines that make none are read past. A
+// resume begins there, whatever has become of the entries since: a line that
+// made none, or one whose entries a strip deleted, is never read again.
+//
+// Codex compresses a finished rollout from `X.jsonl` to `X.jsonl.zst`. That is
+// another file holding the same lines, so its reading moves with it: the
+// transcript, and the session's `session.transcript` where it named the old
+// file.
 //
 // Each entry's eid is derived from its session, its line and its place in the
 // line, and a call's from the harness's own id for it, which is what its result
 // names. Reading a line twice writes the same entities twice, which changes
 // nothing, and a result finds its call without a lookup. A harness can write
 // one session's id into two files (two processes under one id), and their
-// lines would collide: the session's first log (`session.log`) names its
-// entries by session and line alone, and an entry of any other log names the
-// file too.
+// lines would collide: the session's first file (`session.transcript`) names
+// its entries by session and line alone, and an entry of any other file names
+// that file's path too.
 //
 // A call arrives already running, held by the session itself
 // (`execution{state, by}`): the harness ran it in its own process, and a tool
@@ -33,6 +38,7 @@
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { derivedEid, identityEid } from '@yaks/graph/identity'
+import { onDisk } from '@yaks/file/local'
 import { status } from '@yaks/graph/errors'
 import { TOMBSTONE } from '@yaks/graph/bundle'
 import { who } from '@yaks/graph/call'
@@ -57,13 +63,14 @@ export type Tail = {
   session?: Eid
   /** the harness's own id for the session, which a created one carries */
   id?: string
-  /** the log's own entity, which keeps how far it has been read */
-  log: Eid
-  /** whether this is the log the session was first read from, whose entries
+  /** the file, as the bundle that makes it one; its entity keeps how far it
+   * has been read */
+  file: Bundle
+  /** whether this is the file the session was first read from, whose entries
    * are named by session and line alone */
   own: boolean
-  /** whether the log's entity is written yet: its first write says whose log
-   * it is, and which file */
+  /** whether the file's transcript is written yet: its first write says whose
+   * transcript it is */
   known: boolean
   /** whether a person drives it; false preserves an automatic opening */
   operator?: boolean
@@ -84,8 +91,8 @@ export type Tail = {
 export type Pull = {
   /** who a prompt typed into this transcript is signed by */
   person?: Eid
-  /** whether the line is of the session's first log; an entry of any other
-   * log names its file in its eid too (default true) */
+  /** whether the line is of the session's first file; an entry of any other
+   * file names its path in its eid too (default true) */
   own?: boolean
   /** keep only the prose: what was typed and what the model said */
   prose?: boolean
@@ -156,23 +163,28 @@ let merge = (a: Bundle, b: Bundle): Bundle => {
 }
 
 /**
- * One line, as the bundles it becomes: an entry for each thing it says, a row
- * for each tool it names, the answered call's state, and what it says about
- * the session. A prompt a person typed is signed by `person`.
+ * One line, as the bundles it becomes: an entry for each thing it says, each
+ * sitting at the line of the file it was read from, a row for each tool it
+ * names, the answered call's state, and what it says about the session. A
+ * prompt a person typed is signed by `person`.
  */
 export let imported = (
   said: Said,
   o: {
     session: Eid
-    source: string
+    /** the file the line is read from */
+    file: Eid
+    /** the path it was opened at, which names the entries of a file other
+     * than the session's first */
+    path: string
     line: number
     person?: Eid
     prose?: boolean
     own?: boolean
   },
 ): Bundle[] => {
-  let { session, source, line } = o
-  let key = o.own === false ? `${session} ${source}` : session
+  let { session, file, path, line } = o
+  let key = o.own === false ? `${session} ${path}` : session
   let out = new Map<Eid, Bundle>()
   let put = (b: Bundle) => {
     let was = out.get(b.entity.eid)
@@ -193,7 +205,7 @@ export let imported = (
       }
       rest.using = refs
     }
-    let at = { entry: { session }, imported: { source, line } }
+    let at = { entry: { session }, lines: { file, start: line } }
     if (ask && ask.id == null) rest.ask = ask
     else if (ask) {
       let { id, to, ...asked } = ask
@@ -280,20 +292,63 @@ let settled = async (g: Graph, bundles: Bundle[]): Promise<Bundle[]> => {
   )
 }
 
-/** The entity that keeps how far a log has been read, named by its file. */
-export let logOf = (source: string): Eid =>
-  derivedEid(`log ${source.replace(/\.jsonl\.zst$/, '.jsonl')}`)
+let live = (b: Bundle | undefined) => b && b[TOMBSTONE] == null ? b : undefined
 
-// Whether a log is its session's first: the one the session names, or any log
-// of a session that names none yet.
-let owns = async (g: Graph, t: Pick<Tail, 'session' | 'log'>) => {
-  if (!t.session) return true
+/** How far the file at `path` has been read, and into which session: its
+ * `transcript`, if it has one. */
+export let transcriptOf = async (
+  g: Graph,
+  path: string,
+): Promise<Comp | undefined> => {
+  let [file] = await onDisk(g, path)
+  let [row] = await g.get([file.entity.eid], ['transcript'])
+  return comp(live(row), 'transcript')
+}
+
+// Whether a file is its session's first: the one the session names, or any
+// file of a session that names none yet.
+let owns = async (g: Graph, session: Eid | undefined, file: Eid) => {
+  if (!session) return true
   // Ownership needs one stored reference, not the derived transcript status.
   let [s] = await g.read(
-    `.entity.eid=${JSON.stringify(t.session)} .fields=session.log`,
+    `.entity.eid=${JSON.stringify(session)} .fields=session.transcript`,
   )
-  let first = comp(s, 'session')?.log
-  return !first || first == t.log
+  let first = comp(s, 'session')?.transcript
+  return !first || first == file
+}
+
+// Codex compresses a finished rollout from `X.jsonl` to `X.jsonl.zst`: another
+// file, holding the same lines. A compressed file not read yet takes over the
+// reading of the one it was compressed from, and the session's first file
+// moves with it.
+let compressed = async (
+  g: Graph,
+  file: Bundle,
+  path: string,
+): Promise<Comp | undefined> => {
+  if (!path.endsWith('.zst')) return undefined
+  let [was] = await onDisk(g, path.slice(0, -'.zst'.length))
+  let from = was.entity.eid
+  let [row] = await g.get([from], ['transcript'])
+  let held = comp(live(row), 'transcript')
+  if (!held) return undefined
+  let session = held.session as Eid | undefined
+  let [s] = session
+    ? await g.read(
+      `.entity.eid=${JSON.stringify(session)} .fields=session.transcript`,
+    )
+    : []
+  await g.apply([
+    { ...file, transcript: held },
+    { entity: { eid: from }, transcript: null },
+    ...comp(s, 'session')?.transcript == from
+      ? [{
+        entity: { eid: session! },
+        session: { transcript: file.entity.eid },
+      }]
+      : [],
+  ], { trusted: true })
+  return held
 }
 
 // The byte the line after `lines` starts at. Read once, when a tail begins:
@@ -322,7 +377,7 @@ let after = (path: string, lines: number): number => {
 }
 
 /**
- * A tail on `path`, placed after the lines its log says were read.
+ * A tail on `path`, placed after the lines its transcript says were read.
  *
  * ```ts
  * import { tail } from '@yaks/session/tail'
@@ -341,22 +396,17 @@ export let tail = async (
     version?: string
   } = {},
 ): Promise<Tail> => {
-  let log = logOf(path)
-  let [row] = await g.get([log])
-  let held = row && row[TOMBSTONE] == null ? comp(row, 'log') : undefined
+  let [file] = await onDisk(g, path)
+  let [row] = await g.get([file.entity.eid], ['transcript'])
+  let held = comp(live(row), 'transcript') ??
+    await compressed(g, file, path)
   let previous = held?.version ?? held?.finished
   let changed = o.version && previous && previous != o.version
   let line = changed ? 0 : Number(held?.consumed ?? 0)
-  if (held?.source && held.source != path) {
-    await g.apply([{
-      entity: { eid: log },
-      log: { source: path },
-    }], { trusted: true })
-  }
   if (changed) {
     await g.apply([{
-      entity: { eid: log },
-      log: { consumed: 0, finished: null, version: o.version },
+      entity: { eid: file.entity.eid },
+      transcript: { consumed: 0, finished: null, version: o.version },
     }], { trusted: true })
   }
   let fields = [
@@ -387,8 +437,8 @@ export let tail = async (
     ...o,
     operator: automatic ? false : operatorStored,
     operatorStored,
-    log,
-    own: await owns(g, { ...o, log }),
+    file,
+    own: await owns(g, o.session, file.entity.eid),
     known: !!held,
     line,
     at: o.stream ? 0 : after(path, line),
@@ -446,24 +496,24 @@ let parsed = (text: string): Record<string, unknown> | undefined => {
 }
 
 // What reading to `line` writes beside the line's own entities: how far the
-// log is read, and, the first time, whose log it is and which file; the
-// session learns its first log, and that a person typed into it.
+// file is read, and, the first time, the file itself and whose transcript it
+// holds; the session learns its first file, and that a person typed into it.
 let marks = (t: Tail, line: number, typed = false): Bundle[] => {
   let operator = typed && t.operator == null ? true : t.operator
   return [
     {
-      entity: { eid: t.log },
-      log: {
+      ...(t.known ? { entity: t.file.entity } : t.file),
+      transcript: {
         consumed: line,
         ...(t.version ? { version: t.version } : {}),
-        ...(t.known ? {} : { session: t.session, source: t.path }),
+        ...(t.known ? {} : { session: t.session }),
       },
     },
     ...(t.own && !t.known || operator != t.operatorStored
       ? [{
         entity: { eid: t.session! },
         session: {
-          ...(t.own && !t.known ? { log: t.log } : {}),
+          ...(t.own && !t.known ? { transcript: t.file.entity.eid } : {}),
           ...(operator != t.operatorStored ? { operator } : {}),
         },
       }]
@@ -478,10 +528,11 @@ let fold = (list: Bundle[], more: Bundle[]): Bundle[] =>
     return i < 0 ? [...out, b] : out.with(i, merge(out[i], b))
   }, list)
 
-// A log's first write learns again whether it is its session's first: another
-// log of the session may have been written first since the tail was opened.
+// A file's first write learns again whether it is its session's first:
+// another file of the session may have been written first since the tail was
+// opened.
 let settle = async (g: Graph, t: Tail) => {
-  if (!t.known) t.own = await owns(g, t)
+  if (!t.known) t.own = await owns(g, t.session, t.file.entity.eid)
 }
 
 // The session a file names, created now that it has said something, as the
@@ -523,7 +574,8 @@ let follow = async (t: Tail, read: Reader, o: Pull) => {
       imported(said, {
         ...o,
         session: t.session,
-        source: t.path,
+        file: t.file.entity.eid,
+        path: t.path,
         line,
         own: t.own,
       }),
@@ -581,7 +633,8 @@ export let pull = async (
     let made = imported(said, {
       ...o,
       session: t.session,
-      source: t.path,
+      file: t.file.entity.eid,
+      path: t.path,
       line,
       own: t.own,
     })
@@ -589,7 +642,7 @@ export let pull = async (
       fold(made, t.walk ? walked(t.walk, made) : []),
       marks(t, line, person),
     )
-    // Trusted: `imported` is server-owned, and this is the server reading a
+    // Trusted: `transcript` is server-owned, and this is the server reading a
     // file on its own machine. A line the graph refuses would be refused
     // again: it is reported and left in the file. Any other failure ends the
     // read, past lines this tail has already taken, so the caller opens a new
@@ -618,8 +671,8 @@ export let pull = async (
   }
   if (t.stream?.done && !behind(t) && !t.skip && t.version) {
     await g.apply([{
-      entity: { eid: t.log },
-      log: { finished: t.version },
+      entity: t.file.entity,
+      transcript: { finished: t.version },
     }], { trusted: true })
   }
   return t.line - from
@@ -641,7 +694,7 @@ let unspent = async (
   let now = new Map(made.map((b) => [b.entity.eid, b]))
   let plumbing = [
     'entry',
-    'imported',
+    'lines',
     'usage',
     'cost',
     'ask',
@@ -700,10 +753,11 @@ export let recount = async (
   } catch {
     return 0 // gone: nothing to read again
   }
-  let own = await owns(g, { session: o.session, log: logOf(path) })
+  let [file] = await onDisk(g, path)
+  let own = await owns(g, o.session, file.entity.eid)
   let key = own ? o.session : `${o.session} ${path}`
   let w = walker()
-  let line = 0, wrote = 0
+  let line = 0, wrote = 0, placed = false
   for (let raw of text.split('\n')) {
     if (o.signal?.aborted) break
     line++
@@ -711,7 +765,13 @@ export let recount = async (
     if (!event) continue
     let said = read(event)
     for (let f of said.fixed ?? []) fix(w, f)
-    let made = imported(said, { session: o.session, source: path, line, own })
+    let made = imported(said, {
+      session: o.session,
+      file: file.entity.eid,
+      path,
+      line,
+      own,
+    })
     let owed = walked(w, made)
     let asked = made.filter((b) =>
       b.entry ? b.ask && b.usage : b.provider || b.model || b.rate_limit
@@ -724,10 +784,13 @@ export let recount = async (
     ) {
       continue
     }
-    await g.apply([...bundles, ...gone], {
+    // The entries it writes sit at lines of the file: the first write makes
+    // the file an entity too.
+    await g.apply([...placed ? [] : [file], ...bundles, ...gone], {
       trusted: true,
       ...(said.at ? { now: said.at } : {}),
     })
+    placed = true
     wrote += fresh
   }
   let over = await ended(g, o.session)

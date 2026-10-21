@@ -307,7 +307,7 @@ export let SessionTile = ({ e, io, got = {} }: Props): JSX.Element => {
     ? 'native'
     : e.process
     ? 'managed'
-    : comp(e, SESSION).log
+    : comp(e, SESSION).transcript
     ? 'imported'
     : 'unknown harness'
   let work = str(rows(got.work)[0], 'edge', 'to') || str(e, SESSION, 'source')
@@ -368,7 +368,7 @@ let sessionTile: View = {
       claim: `.claim.session=${eid}&.fields=doc.title&.limit=1`,
       work: `.worked&.edge.from=${eid}&.fields=edge.to&.limit=1`,
       first:
-        `.entry.session=${eid}&.order=entry.seq&.limit=12&?content&?output&?notice&?prompt&?call&?result&?reasoning&?stop&?exception&?refusal&?ask&?interrupted&?using&?imported`,
+        `.entry.session=${eid}&.order=entry.seq&.limit=12&?content&?output&?notice&?prompt&?call&?result&?reasoning&?stop&?exception&?refusal&?ask&?interrupted&?using&?lines`,
       last:
         `.entry.session=${eid}&.order=-entry.seq&.limit=1&.fields=entry.session,entry.seq,created.at`,
     }

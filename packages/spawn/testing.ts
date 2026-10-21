@@ -19,6 +19,8 @@ import { kernelDoc } from '@yaks/kernel/vocab'
 import { taskDoc } from '@yaks/task'
 import { sessionDoc, sessions } from '@yaks/session'
 import { toolsDoc } from '@yaks/tools/vocab'
+import { fileDoc } from '@yaks/file/vocab'
+import { machineDoc } from '@yaks/machine/vocab'
 import { type launch, processDoc, processes } from '@yaks/process'
 import { claude } from './adapters.ts'
 import { spawnDoc } from './vocab.ts'
@@ -31,6 +33,8 @@ export let host: Vocab = loadVocab(
     sessionDoc,
     toolsDoc,
     modelDoc,
+    fileDoc,
+    machineDoc,
     processDoc,
     edgeDoc,
     docDoc,

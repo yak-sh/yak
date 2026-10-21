@@ -3,6 +3,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
+import { fileOf } from '@yaks/file'
 import { spawning } from './effects.ts'
 import { asked, start } from './run.ts'
 import { asking, fake, tracked } from './testing.ts'
@@ -40,7 +41,7 @@ let rows: Bundle[] = asking(
   'old input',
 )
 let source = rows.at(-1)!
-source.imported = { source: '/logs/rollout.jsonl', line: 1 }
+source.lines = { file: fileOf('disk', 'logs/rollout.jsonl'), start: 1 }
 source.notice = {}
 await g.apply(rows, { trusted: true })
 await fx.idle()

@@ -2126,6 +2126,11 @@
           "npm:sucrase@3.35.1"
         ]
       },
+      "packages/file": {
+        "dependencies": [
+          "jsr:@std/assert@1"
+        ]
+      },
       "packages/filter": {
         "dependencies": [
           "jsr:@std/assert@1",

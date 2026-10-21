@@ -138,8 +138,11 @@ Components for source code, as the rest of a graph refers to it:
 repository{common, origin}             a local object database, and its remote
 worktree{repository, path, branch,…}   a checkout: where it is, what it is on
 commit{target, repo, message}          a landed commit, attached to its work
-file{path, repository}                 a file in a repository, identified by both
 ```
+
+A repository is the root of its files: a file in one is [@yaks/file](../file)'s
+`file{path, root}` with the repository as its root, a path in its tree at any
+commit, identified by both.
 
 A `commit` stores the whole commit message, not just its first line, and its
 entity id is the commit sha — so recording the same commit twice produces one
@@ -148,34 +151,36 @@ entity, and it carries no `sha` property that could disagree with its own id.
 ## Citations
 
 A document that quotes code goes out of date when the code moves, and nothing
-says so. A **citation** is that reference written down: an edge `A cites B`,
-where `B` is a `file` entity for a place in code, a [@yaks/code](../code)
-`symbol` for a definition, and any entity at all otherwise.
+says so. A **citation** is that reference written down: an edge `A cites B`.
+What `B` is names the place: a `file` for a whole file, a **place** for some
+lines of one (an entity wearing @yaks/file's `lines{file, start, end}`, with the
+text it quoted as its `content{body}`), a [@yaks/code](../code) `symbol` for a
+definition, and any entity at all otherwise.
 
 ```
 cites{hash?}               @yaks/kernel relation: A refers to B; a graph
                            target's verified content hash
 revision{commit}           the commit it was last checked against
-lines{start, end}          the line range it names, when it names one
-quote{text}                what the citing side quoted
 verified{at, by, via}      @yaks/kernel's mark: somebody checked and it holds
 ```
 
-Each fact is a component of its own because each is independent: a citation may
-name a line range or not, and the commit moves under all of them. A definition
-is cited by pointing at its `symbol` entity, which survives the file moving
-around it. Writing the same citation twice writes one entity, because an edge's
-id is derived from `from | cites | to` ([@yaks/edge](../edge)).
+Each fact is a component of its own because each is independent: the commit
+moves whatever the citation points at. A definition is cited by pointing at its
+`symbol` entity, which survives the file moving around it. Writing the same
+citation twice writes one entity, because an edge's id is derived from
+`from | cites | to` ([@yaks/edge](../edge)).
 
-For a file or symbol, currentness is derived from Git by asking which commits
-after `revision.commit` touched the place the citation names. For any other
-entity, [@yaks/kernel](../kernel) compares its content with the hash recorded
-when the citation was verified. Server stamps do not affect that hash. Editing
-the cited content leaves the old mark and hash in place, so the citation reads
-moved until checked again.
+For a file of a repository, a place in one or a symbol, currentness is derived
+from Git, in a checkout of that repository, by asking which commits after
+`revision.commit` touched the place the citation names. For any other entity, a
+file on a volume or the lines of one included, [@yaks/kernel](../kernel)
+compares its content with the hash recorded when the citation was verified.
+Server stamps do not affect that hash. Editing the cited content leaves the old
+mark and hash in place, so the citation reads moved until checked again.
 
-`@yaks/git/cites` derives that answer: `status(cite, file, { cwd })` reads the
-checkout at `cwd` and says one of
+`@yaks/git/cites` derives that answer:
+`status(cite, to, { checkout: { cwd, repository }, vocab }, file)` reads the
+checkout at `cwd`, when `repository` is the root of `file`, and says one of
 
 ```
 { state: 'current' }
@@ -186,10 +191,12 @@ checkout at `cwd` and says one of
 
 The question put to Git is `git log <revision.commit>..HEAD`, narrowed to
 `-L :<symbol.name>:<path>` when it points at a definition (the path is its
-module's) or `-L <lines.start>,<lines.end>:<path>` when it names lines, so a
-commit elsewhere in the same file is not reported. The commit is checked with
+module's) or `-L <lines.start>,<lines.end>:<path>` when it points at a place, so
+a commit elsewhere in the same file is not reported. The commit is checked with
 `cat-file` first: one this checkout does not have — rebased away, or from
-another clone — reads `unknown`, never `current`.
+another clone — reads `unknown`, never `current`. So does a file of another
+repository than the checkout's. `tracked(to, get)` answers which file of a
+repository, if any, a citation of `to` is checked against.
 
 A citation of an entity uses the kernel's `status(cite, target, vocab)` and
 needs no checkout or journal. An older verified edge without a content hash
@@ -203,10 +210,13 @@ the command runs in:
 ```sh
 yak cites check                  # every citation that moved or was never checked
 yak cites check D-37775          # …only the ones that record makes
-yak cites check --path=src/db.ts # …only citations of one file
+yak cites check --path=src/db.ts # …only citations of one file, its lines or symbols
 yak cites verify <citation>      # checked and it holds: mark it, at this commit
 yak cites verify --of=D-37775    # …every citation that record makes
 ```
+
+`--path` names a file of the repository the command runs in, so the same path in
+another repository is not reported.
 
 `check` is a health check — a tool whose verb is `check`
 ([@yaks/tools](../tools/README.md#health-checks)) — so a citation that moved is
@@ -215,12 +225,13 @@ answer for are `warn`, and a run with nothing to report still answers. It
 enforces nothing: a document whose code moved is work somebody has to do, not a
 transaction to reject.
 
-`verify` writes `verified{}` and, for a file or symbol, `revision{commit}` for
-the commit the checkout is on. For another entity it records `cites.hash` from
-the cited content. The mark is written empty because `at`, `by` and `via` are
-the graph's to stamp.
+`verify` writes `verified{}` and, for a file of a repository, a place in one or
+a symbol, `revision{commit}` for the commit the checkout is on; it refuses a
+file of another repository than the checkout's. For another entity it records
+`cites.hash` from the cited content. The mark is written empty because `at`,
+`by` and `via` are the graph's to stamp.
 
-Load the components beside the two packages whose mechanisms they use:
+Load the components beside the packages whose mechanisms and words they use:
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -229,9 +240,10 @@ import { loadVocab } from '@yaks/vocab'
 import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { keyDoc, keyKeywords, keys } from '@yaks/key'
 import { kernelDoc } from '@yaks/kernel'
+import { fileDoc } from '@yaks/file/vocab'
 import { gitDoc } from '@yaks/git'
 
-let vocab = loadVocab([kernelDoc, edgeDoc, keyDoc, gitDoc], [
+let vocab = loadVocab([kernelDoc, edgeDoc, keyDoc, fileDoc, gitDoc], [
   edgeKeywords,
   keyKeywords,
 ])

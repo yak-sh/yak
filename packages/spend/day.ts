@@ -13,6 +13,7 @@ import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { identityEid } from '@yaks/graph/identity'
 import type { Price } from '@yaks/model'
 import { claudeProjects, codexSessions } from '@yaks/session/files'
+import { absolute } from '@yaks/file/local'
 import { after } from './window.ts'
 import { type Known, type Spend, tally } from './tally.ts'
 
@@ -44,8 +45,8 @@ export let PLANS = (key = false): Map<Eid, Eid> =>
 /**
  * The provider whose plan a request billed against: by the provider that
  * served it, as the native harness records it in `using`, else by the CLI
- * whose transcript it was read from. A request that billed no plan was paid
- * by the token.
+ * whose transcript it was read from, which `paths` says where each file of
+ * this computer is. A request that billed no plan was paid by the token.
  *
  * ```ts
  * import { planOf, PLANS } from './day.ts'
@@ -54,22 +55,40 @@ export let PLANS = (key = false): Map<Eid, Eid> =>
  * import { equal } from '@yaks/testing'
  *
  * let p = (name: string) => identityEid('provider', [name])
- * let plan = planOf(PLANS())
+ * let paths = new Map([['f', `${claudeProjects()}/p/s.jsonl`]])
+ * let plan = planOf(PLANS(), paths)
  * let r = { entity: { eid: 'r' } }
- * equal(plan({ ...r, imported: { source: `${claudeProjects()}/p/s.jsonl` } }), p('claude'))
+ * equal(plan({ ...r, lines: { file: 'f', start: 3 } }), p('claude'))
  * equal(plan({ ...r, using: { provider: p('openai') } }), p('codex'))
  * equal(planOf(PLANS(true))({ ...r, using: { provider: p('openai') } }), undefined)
  * equal(plan({ ...r, using: { provider: p('openrouter') } }), undefined)
  * ```
  */
-export let planOf = (plans: Map<Eid, Eid>) => (b: Bundle): Eid | undefined => {
+export let planOf = (
+  plans: Map<Eid, Eid>,
+  paths: Map<Eid, string> = new Map(),
+) =>
+(b: Bundle): Eid | undefined => {
   let served = str(comp(b, 'using').provider)
   if (served) return plans.get(served)
-  let source = str(comp(b, 'imported').source)
+  let source = paths.get(str(comp(b, 'lines').file)) ?? ''
   let cli =
     ([['claude', claudeProjects()], ['codex', codexSessions()]] as const)
       .find(([, root]) => root && source.startsWith(`${root}/`))?.[0]
   return cli && provider(cli)
+}
+
+// Where each transcript the rows were read from is on this computer's disks.
+let located = async (g: Graph, rows: Bundle[]): Promise<Map<Eid, string>> => {
+  let files = [
+    ...new Set(rows.map((b) => str(comp(b, 'lines').file)).filter(Boolean)),
+  ]
+  let found = await Promise.all(
+    (files.length ? await g.get(files, ['file']) : []).map(async (f) =>
+      [f.entity.eid, await absolute(g, f)] as const
+    ),
+  )
+  return new Map(found.flatMap(([eid, path]) => path ? [[eid, path]] : []))
 }
 
 // Every row a query finds, a page at a time.
@@ -210,7 +229,10 @@ export let known = async (
     return byRoot.get(root(s)) ?? []
   }
   let tasks = new Map(sessions.map((s) => [s, of(s)]))
-  let plan = planOf(PLANS(!!globalThis.Deno?.env.get('OPENAI_API_KEY')))
+  let plan = planOf(
+    PLANS(!!globalThis.Deno?.env.get('OPENAI_API_KEY')),
+    await located(g, rows),
+  )
   let plans = new Map(
     rows.flatMap((b): [Eid, Eid][] => {
       let at = plan(b)

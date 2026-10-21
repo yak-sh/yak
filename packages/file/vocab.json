@@ -1,0 +1,77 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "file",
+  "$defs": {
+    "file": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "kind": true,
+      "identity": [
+        "path",
+        "root"
+      ],
+      "description": "a file, as a path read in a root, so anything in the graph can refer to one; its entity id is derived from the path and the root. It carries its contents as `content.body` where the graph keeps them, and goes without where the bytes are kept elsewhere",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "the path from the root, `/`-separated and with no leading `/`: as Git spells it in a repository, from the mount on a volume"
+        },
+        "root": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "description": "what the path is read in: a `repository`, whose files are a path in its tree at any commit and on no disk, or a `volume`, whose files are bytes on a filesystem a machine mounts"
+        }
+      }
+    },
+    "lines": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "where in a file this entity sits: lines `start` through `end`. An entry read from a transcript wears the line it was read from; a citation of some lines is a `cites` edge to an entity wearing them, with the text it quoted as `content.body`",
+      "properties": {
+        "file": {
+          "type": "string",
+          "ref": "file",
+          "death": "keep",
+          "description": "the file"
+        },
+        "start": {
+          "type": "number",
+          "description": "the first line, counting from 1"
+        },
+        "end": {
+          "type": "number",
+          "description": "the last line, inclusive; absent when it is the first line alone"
+        }
+      }
+    },
+    "volume": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "kind": true,
+      "embed": false,
+      "identity": [
+        "machine",
+        "mount"
+      ],
+      "description": "a filesystem as a machine mounts it, and the root of the files on it; a path on the machine sits on the volume with the longest mount that contains it. Its entity id is derived from the machine and the mount, so the same disk mounted by another machine is another volume",
+      "properties": {
+        "machine": {
+          "type": "string",
+          "ref": "machine",
+          "death": "keep",
+          "description": "the computer that mounts it"
+        },
+        "mount": {
+          "type": "string",
+          "description": "the absolute directory the machine mounts it at, such as `/`"
+        }
+      }
+    }
+  }
+}

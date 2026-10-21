@@ -1,4 +1,5 @@
 import { machineDoc } from '@yaks/machine/vocab'
+import { fileDoc } from '@yaks/file/vocab'
 // A real child, because a spawn that only ever launched a fake one would
 // prove nothing: the two escapes, the pidfile, the detached log and the
 // ending are the thing under test. The provider is a shell script, so the
@@ -149,7 +150,17 @@ test("a run on a sub-project's task hears each common persona above it", async (
 
 test('a request made beside a server is started by the server, not the command', async () => {
   let vocab = loadVocab(
-    [sessionDoc, toolsDoc, modelDoc, processDoc, edgeDoc, effectDoc, spawnDoc],
+    [
+      sessionDoc,
+      toolsDoc,
+      modelDoc,
+      fileDoc,
+      machineDoc,
+      processDoc,
+      edgeDoc,
+      effectDoc,
+      spawnDoc,
+    ],
     [edgeKeywords],
   )
   let storage = ram(vocab, { number: true })
@@ -199,6 +210,7 @@ test('a run works in a checkout of its own, taken back when it ends', async () =
       sessionDoc,
       toolsDoc,
       modelDoc,
+      fileDoc,
       processDoc,
       edgeDoc,
       checkoutDoc,

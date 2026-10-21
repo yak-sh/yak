@@ -359,23 +359,7 @@
         }
       }
     },
-    "imported": {
-      "component": true,
-      "journal": false,
-      "type": "object",
-      "properties": {
-        "source": {
-          "type": "string",
-          "stamped": true
-        },
-        "line": {
-          "type": "number",
-          "stamped": true
-        }
-      },
-      "description": "an entry imported from somewhere else \u2014 which source, and which line of it"
-    },
-    "log": {
+    "transcript": {
       "component": true,
       "journal": false,
       "type": "object",
@@ -383,14 +367,9 @@
         "session": {
           "type": "string",
           "ref": "session",
-          "death": "cascade",
+          "death": "release",
           "stamped": true,
-          "description": "the session it is read into"
-        },
-        "source": {
-          "type": "string",
-          "stamped": true,
-          "description": "the file, as its entries' `imported.source` names it"
+          "description": "the session it is read into; when that session dies its transcript goes and the file stays"
         },
         "consumed": {
           "type": "number",
@@ -408,7 +387,7 @@
           "description": "the immutable source version fully consumed after successful decoder EOF; its file size and modification time, so changed bytes reopen it"
         }
       },
-      "description": "a file a session is read from, and how far it has been read"
+      "description": "a file that holds a session's transcript, as the harness that ran it wrote it, and how far the importer has read it into the session. It sits on the file (@yaks/file), and each entry read from it wears the line it came from as `lines{file, start}`"
     },
     "notice": {
       "component": true,
@@ -468,7 +447,7 @@
         "id": {
           "type": "string",
           "index": true,
-          "description": "the runner’s own id for it"
+          "description": "the runner\u2019s own id for it"
         },
         "actor": {
           "type": "string",
@@ -488,12 +467,12 @@
           "death": "keep",
           "description": "the instructions chosen when this session began"
         },
-        "log": {
+        "transcript": {
           "type": "string",
-          "ref": "log",
+          "ref": "transcript",
           "death": "detach",
           "stamped": true,
-          "description": "the log it was first read from, whose entries are named by session and line alone; an entry of any other log also names the file"
+          "description": "the file it was first read from, whose entries are named by session and line alone; an entry read from any other file also names that file's path"
         },
         "operator": {
           "type": "boolean",
@@ -837,7 +816,7 @@
       "removed": [
         "edge"
       ],
-      "target": ".entry !imported|.session|.task|.requires|.contains",
+      "target": ".entry !lines|.session|.task|.requires|.contains",
       "tries": 8,
       "description": "advance a transcript by one independently owed step: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency (a `requires` or `contains` link going, read by the ends it had). A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },

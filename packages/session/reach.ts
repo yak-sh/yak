@@ -333,7 +333,7 @@ let floor = async (n: Needs, turn: boolean): Promise<number | undefined> => {
   // The newest input or stop says whether the transcript is stopped. An
   // imported stop is a notice among the lines, found only by reading them.
   let control = all.findLast((b) => ['input', 'stop'].includes(kindOf(b)!))
-  if (rows.some((b) => b.imported)) {
+  if (rows.some((b) => b.lines)) {
     if (!control) return undefined
     seqs.push(seqOf(control))
   } else if (!control) {

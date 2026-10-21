@@ -82,8 +82,9 @@ later as a migration.
   one on another kind is the loudest sign it belongs in a component of its own.
 - **A fact lives in one place; everything else points at it by eid.** A copy
   is right only when its source sits in another store, or when it must stay as
-  it was at a moment, and its description says which: @yaks/git's
-  `quote{text}` keeps a file's lines as they read at `revision{commit}`, and
+  it was at a moment, and its description says which: a cited place, an entity
+  wearing @yaks/file's `lines{file, start, end}`, keeps the lines it quoted as
+  its `content{body}`, as they read at the citation's `revision{commit}`, and
   `cites{hash}` keeps the hash of what was cited when it was cited. Any other
   copy drifts from its source.
 - **Point at the entity that already exists, not at text about it.** A commit

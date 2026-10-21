@@ -8,16 +8,17 @@ yak --config yak.json code sync          # read what moved since the last sync
 yak --config yak.json code sync --full   # read every file again
 ```
 
-A config that lists `@yaks/code` needs `@yaks/git` (the `file` a module wears),
-`@yaks/edge` (the `imports` relation) and `@yaks/doc` (the searchable text)
-beside it.
+A config that lists `@yaks/code` needs `@yaks/file` (the `file` a module wears),
+`@yaks/git` (the `repository` that file is rooted in), `@yaks/edge` (the
+`imports` relation) and `@yaks/doc` (the searchable text) beside it.
 
 ## What it writes
 
 ```
 package{name, version, manifest}   one per deno.json with a name; id from name
-module{blob, package}              one per file, wearing @yaks/git's
-                                   file{path, repository}; id from the file
+module{blob, package}              one per file, wearing @yaks/file's
+                                   file{path, root}, rooted in the
+                                   repository; id from the file
 symbol{module, name, kind, line}   one per export; id from module + name
 imports                            @yaks/edge relation: module → module
 ```

@@ -11,13 +11,8 @@ import {
   Client,
   StreamableHTTPClientTransport,
 } from '@modelcontextprotocol/client'
-import {
-  type Bundle,
-  derivedEid,
-  type Graph,
-  identityEid,
-  Refused,
-} from '@yaks/graph'
+import { type Bundle, derivedEid, type Graph, Refused } from '@yaks/graph'
+import { fileOf } from '@yaks/file'
 import { world } from '../persona/testing.ts'
 import { pinned } from './testing.ts'
 import { attachSkills, type SkillOptions } from './skills.ts'
@@ -34,7 +29,8 @@ type Manifest = {
 }
 let seed = (repository = 'repo', title = 'testing'): Bundle[] => {
   let path = `.claude/skills/${title}/SKILL.md`
-  let fid = identityEid('file', [path, repository])
+  let fid = fileOf(repository, path)
+  let dom = `.claude/skills/${title}/scripts/dom.ts`
   let eid = `skill-${repository}-${title}`
   return [
     {
@@ -47,20 +43,15 @@ let seed = (repository = 'repo', title = 'testing'): Bundle[] => {
       doc: { title, body: 'Check a system’s behavior' },
       content: { body: 'Use this only when behavior needs checking.\n' },
     },
-    { entity: { eid: fid }, file: { path, repository } },
+    { entity: { eid: fid }, file: { path, root: repository } },
     {
       entity: { eid: derivedEid(`skill-file|${eid}|${fid}`) },
       references: {},
       edge: { from: eid, to: fid },
     },
     {
-      entity: {
-        eid: identityEid('file', [
-          `.claude/skills/${title}/scripts/dom.ts`,
-          repository,
-        ]),
-      },
-      file: { path: `.claude/skills/${title}/scripts/dom.ts`, repository },
+      entity: { eid: fileOf(repository, dom) },
+      file: { path: dom, root: repository },
       content: { body: 'export let dom = "✓"\n' },
     },
   ]

@@ -12,6 +12,7 @@ import { sessionDoc } from './comp.ts'
 import { sessionDerived } from './status.ts'
 import { toolsDoc } from '@yaks/tools/vocab'
 import { modelDoc } from '@yaks/model'
+import { fileDoc } from '@yaks/file/vocab'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { effectDoc } from '@yaks/effects'
 import { archetypeDoc } from '@yaks/archetype/vocab'
@@ -28,6 +29,7 @@ test(
       sessionDoc,
       toolsDoc,
       modelDoc,
+      fileDoc,
       kernelDoc,
       effectDoc,
       archetypeDoc,

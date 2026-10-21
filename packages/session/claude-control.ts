@@ -8,5 +8,5 @@ export let claudeStops = [
 
 // Consumed logs do not replay. Older imports kept these controls as notices.
 export let stoppedNotice = (b: Bundle): boolean =>
-  !!b.imported && !!b.notice &&
+  !!b.lines && !!b.notice &&
   claudeStops.includes(String((b.content as Comp | undefined)?.body ?? ''))

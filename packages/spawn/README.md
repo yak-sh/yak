@@ -57,12 +57,12 @@ The package does not reap child processes.
 
 Standard output is stored in the process directory as `<session-eid>.out`, and
 `@yaks/session`'s importer reads it into the transcript: each recognized line
-becomes entries with `imported{source, line}`, tool calls and their results
-included. The log's `consumed` (@yaks/session `log`) is the durable read
-position, so monitoring resumes after a restart where it stopped. A pass that
-fails (a store locked past its busy timeout) is reported, and the next takes the
-log up where the transcript stands. Unrecognized and invalid JSON lines remain
-in the file and are not entries.
+becomes entries with `lines{file, start}` (@yaks/file), tool calls and their
+results included. The file's `transcript.consumed` (@yaks/session) is the
+durable read position, so monitoring resumes after a restart where it stopped. A
+pass that fails (a store locked past its busy timeout) is reported, and the next
+takes the log up where the transcript stands. Unrecognized and invalid JSON
+lines remain in the file and are not entries.
 
 When the process exits, the follower appends a transcript `stop` entry unless
 the provider printed one after the request it answered. A nonzero exit is
