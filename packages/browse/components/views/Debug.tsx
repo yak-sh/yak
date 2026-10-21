@@ -24,6 +24,7 @@ import { Icon } from '../icons.tsx'
 import { dragData } from '../drag.ts'
 import { Md } from './Md.tsx'
 import { Json } from './Json.tsx'
+import { face, leaves, shape } from '@yaks/inspect'
 
 // Adding/removing comps is a browser power tool — the TUI paints Debug as
 // static lines with no live events, so the controls stay web-only. typeof
@@ -154,24 +155,14 @@ let comps = (e: Ent) => {
   ][]
 }
 
-// Values color by shape: numbers, uuids, everything else.
-let shape = (v: unknown) =>
-  typeof v == 'number'
-    ? 'num'
-    : typeof v == 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}/.test(v)
-    ? 'id'
-    : false
+// A value colored by its shape (@yaks/inspect). null and '' still show —
+// debug hides nothing, including absence.
+let leaf = (v: unknown) => <Val mod={shape(v)}>{face(v)}</Val>
 
-// null and '' still get a row — debug hides nothing, including absence.
-let Row = ({ comp, k, v }: { comp?: string; k: string; v: unknown }) => (
+let Row = ({ k, v }: { k: string; v: unknown }) => (
   <>
-    <Key>
-      {comp && <Comp mod={compTone(comp)}>{comp}.</Comp>}
-      {k}
-    </Key>
-    {v == null || v === ''
-      ? <Val mod='nil'>{v === '' ? '""' : 'null'}</Val>
-      : <Val mod={shape(v)}>{String(v)}</Val>}
+    <Key>{k}</Key>
+    {leaf(v)}
   </>
 )
 
@@ -205,7 +196,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
   let keys = [
     ...new Set([...Object.keys(comp), ...Object.keys(vocab[name] ?? {})]),
   ]
-  return keys.map((k, i) => {
+  return keys.flatMap((k, i) => {
     let v = comp[k]
     let rm = browser && i == 0 && name in vocab && (
       <Rm
@@ -220,13 +211,26 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
     // `project` are associations without a second naming convention.
     let assoc = isRef(name, k)
     let editable = k in (vocab[name] ?? {})
+    let key = (path: string[] = []) => (
+      <Key>
+        <Comp mod={compTone(name)}>{name}.</Comp>
+        {[k, ...path].join('.')}
+        {path.length == 0 && rm}
+      </Key>
+    )
+    // A value the reader can't edit opens into a row per leaf, so a
+    // structure reads as keys and values: `spend.parts.input  [3,0,0,0,0.01]`.
+    if (!assoc && !editable) {
+      return leaves(v).map(([path, x]) => (
+        <Fragment key={[name, k, ...path].join('.')}>
+          {key(path)}
+          {leaf(x)}
+        </Fragment>
+      ))
+    }
     return (
       <Fragment key={`${name}.${k}`}>
-        <Key>
-          <Comp mod={compTone(name)}>{name}.</Comp>
-          {k}
-          {rm}
-        </Key>
+        {key()}
         {assoc
           ? (
             <Edit
@@ -237,11 +241,7 @@ let cells = (e: Ent, name: string, comp: Record<string, unknown>) => {
               show={(_, val) => refFace(val)}
             />
           )
-          : editable
-          ? <Edit e={bundle(e)} comp={name} prop={k} editable />
-          : v == null || v === ''
-          ? <Val mod='nil'>{v === '' ? '""' : 'null'}</Val>
-          : <Val mod={shape(v)}>{String(v)}</Val>}
+          : <Edit e={bundle(e)} comp={name} prop={k} editable />}
       </Fragment>
     )
   })

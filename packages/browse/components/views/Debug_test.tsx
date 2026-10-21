@@ -105,7 +105,7 @@ test('addable components keep their component tones', async () => {
   }
 })
 
-test('a reference reads as one association row, eid and all', () => {
+test('a reference reads as one association row, a structure as a row per leaf', () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   let { document } = parseHTML('<main></main>')
   Object.defineProperty(globalThis, 'document', {
@@ -124,6 +124,7 @@ test('a reference reads as one association row, eid and all', () => {
       doc: { eid: job, title: 'Job', body: '' },
       task: { eid: job, status: 'open' },
       filed: { eid: job, priority: 1, assignee: owner },
+      spend: { eid: job, parts: { input: [3, 0, 0, 0, 0.01] } },
     },
   }
   let root = document.querySelector('main')!
@@ -142,6 +143,9 @@ test('a reference reads as one association row, eid and all', () => {
     )
     assertEquals(ids.includes(owner), true)
     assertEquals(root.textContent.includes('Owner'), true)
+    let input = [...root.querySelectorAll('.Debug_Key')]
+      .find((k) => k.textContent == 'spend.parts.input')
+    assertEquals(input?.nextElementSibling?.textContent, '[3,0,0,0,0.01]')
   } finally {
     act(() => render(null, root))
     useRoute(priorRoute)

@@ -27,6 +27,6 @@ export type {
 export { edited, editing, INSPECT } from './state.ts'
 export { all, composed, schemaPages, views } from './registry.ts'
 
-export { called } from './read.ts'
+export { called, face, leaves, shape } from './read.ts'
 
 export { type Census, useCensus } from './census.ts'

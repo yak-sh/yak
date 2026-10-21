@@ -862,7 +862,7 @@
       "quick-add previews empty facets and ordinary properties": 4.6
     },
     "packages/browse/components/views/Debug_test.tsx": {
-      "a reference reads as one association row, eid and all": 11.6,
+      "a reference reads as one association row, a structure as a row per leaf": 11.6,
       "addable components keep their component tones": 9.1,
       "project backlinks omit attribution and cap associations": 20.7,
       "raw formats are nested under Debug": 14.2

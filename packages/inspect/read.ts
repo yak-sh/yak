@@ -82,6 +82,29 @@ export let face = (v: unknown): string =>
     ? JSON.stringify(v)
     : String(v)
 
+/**
+ * A stored value as its leaves, each with the keys that lead to it: an object
+ * opens into its keys, a list of structures into its places, and a scalar or
+ * a list of scalars is a leaf. So a structure reads as rows, never as one
+ * line of JSON or `[object Object]`.
+ *
+ * ```ts
+ * import { leaves } from './read.ts'
+ * leaves(3) // [[[], 3]]
+ * leaves({ a: { b: 1 }, c: [1, 2] }) // [[['a', 'b'], 1], [['c'], [1, 2]]]
+ * leaves([{ a: 1 }]) // [[['0', 'a'], 1]]
+ * leaves({}) // [[[], {}]]
+ * ```
+ */
+export let leaves = (v: unknown, at: string[] = []): [string[], unknown][] => {
+  let open = !!v && typeof v == 'object' &&
+    !(Array.isArray(v) && v.every((x) => x == null || typeof x != 'object'))
+  let kids = open ? Object.entries(v as object) : []
+  return kids.length
+    ? kids.flatMap(([k, x]) => leaves(x, [...at, k]))
+    : [[at, v]]
+}
+
 /** Whether a client may write this component, or this property of it,
  * here: never where the host's controls take no input (a terminal), nor a
  * component that is not on the wire or is computed, nor a property that is
