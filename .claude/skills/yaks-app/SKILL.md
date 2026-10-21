@@ -337,9 +337,13 @@ through the connector's graph tier (tool.ts `roleIn`).
   through the store's own apply (`--check` rehearses and keeps nothing). Both
   go through `graph_query` and `graph_apply` with `space` and `app`.
 - `yak admin errors` reads platform bugs through the independent tracker's
-  signed door (`--since`, 10m by default). Every unexpected caught failure
-  reports to the tracker with its catch location (M-37965); a new platform
-  bug mails the owner through workers/tracker's delivery.
+  signed door (every unresolved one; `--since` narrows by last seen). Every
+  unexpected caught failure reports to the tracker with its catch location
+  (M-37965); a new platform bug mails the owner through workers/tracker's
+  delivery. `yak --config ~/.yak/tracker.json bug show <bug> --source
+  yaks.app` reads one bug with its kept occurrences (tags, stack, request),
+  and `bug resolve` with the same flags marks it with its explanation; a long
+  `--broke`, `--cause` or `--recur` reads a file as `@path`.
 - `yak admin tail` follows live events. It streams local Wrangler stdout, not
   the MCP door; its account check runs once before the stream, so following
   logs is not app traffic.
