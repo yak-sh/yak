@@ -6,12 +6,14 @@
 // write is unsent it shows how many wait and how long the oldest has waited, and
 // a write the server REFUSED persists as a returnable error the user can read and
 // dismiss (M-16612) — durable under its delivery id, surfaced again after a
-// reload, never ephemeral or opaque.
+// reload, never ephemeral or opaque. While the server is away it says, calmly,
+// that the page is reconnecting, until the socket opens again.
 import { useEffect, useState } from 'preact/hooks'
-import { clearRefusal, outboxWrites, refused } from '../live.ts'
+import { away, clearRefusal, outboxWrites, refused } from '../live.ts'
 import { block } from '@yaks/ui'
 
 let Frame = block('div', 'Sync', {
+  Away: 'span',
   Pending: 'button',
   Refused: 'button',
   Dot: 'span',
@@ -26,6 +28,7 @@ let Frame = block('div', 'Sync', {
   Dismiss: 'button',
 })
 let {
+  Away,
   Pending,
   Refused,
   Dot,
@@ -54,6 +57,7 @@ let brief = (since: number, now: number) => {
 export let Sync = () => {
   let writes = outboxWrites.value
   let errs = refused.value
+  let gone = away.value
   let [open, setOpen] = useState(false)
   let [now, setNow] = useState(Date.now())
 
@@ -66,7 +70,7 @@ export let Sync = () => {
     return () => clearInterval(t)
   }, [writes.length > 0, open])
 
-  if (!writes.length && !errs.length) return null
+  if (!writes.length && !errs.length && !gone) return null
 
   let oldest = writes.reduce((m, w) => Math.min(m, w.since), Infinity)
   let sends = writes.length
@@ -74,6 +78,15 @@ export let Sync = () => {
 
   return (
     <Frame>
+      {gone && (
+        <Away
+          role='status'
+          title='the server is away; this page reconnects on its own'
+        >
+          <Dot mod='pending' />
+          reconnecting
+        </Away>
+      )}
       {writes.length > 0 && (
         <Pending
           title={`${edits} edit${edits > 1 ? 's' : ''} in ${sends} write${

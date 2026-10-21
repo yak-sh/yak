@@ -151,10 +151,25 @@
     })
   }, true)
 
+  // What the fetch below already answered for: a rejection it judged (no
+  // answer, or one the page gave up on, said there). The caller hears it
+  // either way, and one it leaves uncaught, as itself or as another's cause,
+  // was decided once: a page losing its server is not a break, and a timeout
+  // is said once.
+  let judged = new WeakSet()
+  let decided = (reason) => {
+    for (let r = reason, n = 0; r && typeof r == 'object' && n < 5; n++) {
+      if (judged.has(r)) return true
+      r = r.cause
+    }
+    return false
+  }
+
   // A refusal from ./api/client.js that the page never caught carries the
   // answer's status, and goes to the door as the fetch below sends it: the door
   // judges a no somebody meant, and only a break draws over the page.
   addEventListener('unhandledrejection', (e) => {
+    if (decided(e.reason)) return
     let status = e.reason && e.reason.status
     ;(status < 500 ? send : broke)({
       message: `unhandled rejection: ${said(e.reason)}`,
@@ -219,8 +234,9 @@
       // for is a door too slow, and news. Any other is the connection
       // dropping, the person leaving, or the page's own abort, none of them
       // the app's fault or ours (release.js checks again later). The caller
-      // hears it either way, and one it leaves uncaught reaches
-      // `unhandledrejection` above.
+      // hears it either way, and one it leaves uncaught is let go at
+      // `unhandledrejection` above, since it is decided here.
+      if (mine(where) && e && typeof e == 'object') judged.add(e)
       if (mine(where) && e?.name == 'TimeoutError') {
         broke({
           message: `${asked(where)}: ${said(e)}`,

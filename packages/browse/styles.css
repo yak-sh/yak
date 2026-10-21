@@ -1620,6 +1620,7 @@ html {
   gap: var(--half-gap);
   position: relative; /* the refusal panel anchors to the pill */
 }
+.Sync_Away,
 .Sync_Pending,
 .Sync_Refused {
   --sync: var(--muted);

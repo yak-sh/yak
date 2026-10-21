@@ -128,6 +128,9 @@ export type Sync = {
   now: () => number
   /** whether the socket is open right now */
   connected: () => boolean
+  /** be called with true each time the socket opens, and with false each
+   * time an open one closes; not called immediately */
+  onConnection: (fn: (open: boolean) => void) => () => void
   /** whether this subscription has successfully applied an answer on the
    * current connection. Cached rows alone never make it ready. */
   ready: (id: string) => boolean
@@ -493,6 +496,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
     },
     now: w.now,
     connected: w.connected,
+    onConnection: w.onConnection,
     ready: (id) => states.get(id)?.ready ?? false,
     onReady: (fn) => {
       listeners.add(fn)

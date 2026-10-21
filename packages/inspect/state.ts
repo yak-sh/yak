@@ -69,7 +69,8 @@ export let refusal = (io: Pick<Io, 'state'>, at: string): string =>
   me(io).at == at && me(io).said ? String(me(io).said) : ''
 
 /** Write `bundles` to the graph from `at`: a refusal is said there until a
- * write from anywhere lands. */
+ * write from anywhere lands. A write whose outcome is unknown (the server
+ * away) is not refused: it waits to be sent again, and says nothing here. */
 export let write = (
   io: Pick<Io, 'apply' | 'set'>,
   at: string,
@@ -80,10 +81,14 @@ export let write = (
     .then(
       () => io.set(put({ said: null, at: null })),
       (err) =>
-        io.set(put({
-          said: err instanceof Error ? err.message : String(err),
-          at,
-        })),
+        io.set(
+          (err as { outcome?: string })?.outcome == 'unknown'
+            ? put({ said: null, at: null })
+            : put({
+              said: err instanceof Error ? err.message : String(err),
+              at,
+            }),
+        ),
     )
 
 /** The UX components' host (@yaks/ux) over the inspector's: a value changed

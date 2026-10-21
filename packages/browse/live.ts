@@ -257,10 +257,13 @@ let ensureClient = (): LiveClient => {
   let rows = cache.peek()
   replacing = true
   stopPending?.()
+  stopAway?.()
+  away.value = false
   replica?.box.close()
   let client = makeClient()
   replica = client
   stopPending = client.box.wire?.onPending(() => syncOutbox(client))
+  stopAway = client.box.wire?.onConnection((open) => (away.value = !open))
   syncOutbox(client)
   liveGraph = rows
   let changes = Object.entries(rows).flatMap(([eid, row]) =>
@@ -1372,6 +1375,10 @@ export let pending = (e: Ent, comp = 'doc', prop = 'body') => {
 // Delivery belongs to the shared client: browse only projects its queue for
 // the standing sync indicator. Neither rendering nor reconnect sends a retry.
 let stopPending: (() => void) | undefined
+let stopAway: (() => void) | undefined
+// Whether the page lost its server and is reconnecting, from the socket's
+// drop until it opens again: the sync indicator says so.
+export let away = signal(false)
 export let unsent = () => outboxWrites.peek().map((w) => w.id)
 export let outboxWrites = signal<
   { id: string; since: number; count: number }[]
@@ -1492,7 +1499,9 @@ let deliver = (changes: Change[]) => {
 }
 
 /** Optimistic visibility through the shared client, with its server receipt
- * or a refusal/unknown outcome. Drafts retain their own recovery copy. */
+ * or a refusal/unknown outcome. Drafts retain their own recovery copy. A write
+ * whose outcome is unknown (the server away) is no problem to show: the
+ * outbox keeps and resends it, and the sync indicator says it waits. */
 export let apply = (bundles: Bundle[]): Promise<Bundle[]> => {
   problem.value = ''
   if (!bundles.length) return Promise.resolve([])
@@ -1503,7 +1512,9 @@ export let apply = (bundles: Bundle[]): Promise<Bundle[]> => {
     result = Promise.reject(error)
   }
   return result.catch((error) => {
-    problem.value = error instanceof Error ? error.message : String(error)
+    if ((error as { outcome?: string })?.outcome != 'unknown') {
+      problem.value = error instanceof Error ? error.message : String(error)
+    }
     throw error
   })
 }

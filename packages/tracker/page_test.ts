@@ -158,3 +158,38 @@ test('a fetch the page aborted is not a report', async () =>
     heard: 'stale',
     said: [],
   }))
+
+// The page fetches `url` and leaves what rejects uncaught, as itself or
+// wrapped by `wrap`: what was filed.
+let uncaught = async (
+  url: string,
+  signal?: AbortSignal,
+  wrap = (e: unknown) => e,
+) => {
+  let p = page({})
+  let reason = await p.win.fetch(url, { signal }).then(() => null, wrap)
+  p.heard.get('unhandledrejection')!({ reason })
+  return await p.said()
+}
+
+test('an uncaught fetch that never had an answer is not filed', async () =>
+  equal(await uncaught(release), []))
+
+test('an uncaught error caused by a fetch with no answer is not filed', async () =>
+  equal(
+    await uncaught(release, undefined, (e) => Error('no data', { cause: e })),
+    [],
+  ))
+
+test('an uncaught fetch the page gave up waiting for is filed once', async () => {
+  let late = new DOMException('timed out', 'TimeoutError')
+  equal(await uncaught(release, AbortSignal.abort(late)), [
+    '/cookbook/api/release: timed out',
+  ])
+})
+
+test('any other uncaught rejection is filed', async () => {
+  let p = page({})
+  p.heard.get('unhandledrejection')!({ reason: Error('boom') })
+  equal(await p.said(), ['unhandled rejection: boom'])
+})

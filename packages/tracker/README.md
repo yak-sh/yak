@@ -247,11 +247,14 @@ serves (workers/yak/page-script.ts) and into the box's web page (@yaks/web). It
 reads its door off its tag's `data-yak-at` and the page's release off
 `data-yak-version`, and posts each uncaught error, unhandled rejection, failed
 fetch and `console.error` to `<at>api/report`, tagged with the `mechanism` that
-caught it and the breadcrumbs before it. `broken(body, refusal)` in `./report`
-reads either door's body, the reporter's or the browser's Reporting API's, into
-breaks, leaving out an answer `refusal` calls a no somebody meant (default: a
-4xx). The platform admits captured failures into the tracker; the box hands them
-to the host's reporter, which spools them like any other.
+caught it and the breadcrumbs before it. A fetch of the page's own origin that
+never had an answer (the server away, the person leaving) is no break, and a
+caller leaving its rejection uncaught, as itself or as another error's cause,
+does not make it one. `broken(body, refusal)` in `./report` reads either door's
+body, the reporter's or the browser's Reporting API's, into breaks, leaving out
+an answer `refusal` calls a no somebody meant (default: a 4xx). The platform
+admits captured failures into the tracker; the box hands them to the host's
+reporter, which spools them like any other.
 
 [@yaks/tools](../tools/README.md) declares `exception{type, value}` for what was
 thrown in an answer or transcript entry. Tracker extends it with `stack`,

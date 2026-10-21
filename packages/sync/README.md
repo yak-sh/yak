@@ -298,7 +298,9 @@ requests committed patches. Query syntax belongs to
 
 The injected socket below shows readiness without network access. `onReady`
 reports changes and refusals, including empty first answers; it does not call
-the listener immediately.
+the listener immediately. `onConnection` hears `true` each time the socket opens
+and `false` each time an open one closes under it, so a page can say it is
+reconnecting while its server is away.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -320,9 +322,15 @@ const socket = {
   },
   addEventListener: events.addEventListener.bind(events),
 }
-const link = sync(g, { url: 'https://books.example', connect: () => socket })
+const link = sync(g, {
+  url: 'https://books.example',
+  connect: () => socket,
+  timer: () => {}, // the reconnect waits, which this example never runs
+})
 const readiness: boolean[] = []
 const remove = link.onReady((_id, ready) => readiness.push(ready))
+const connection: boolean[] = []
+link.onConnection((open) => connection.push(open))
 const id = link.subscribe(true, 'all')
 equal(link.ready(id), false)
 socket.readyState = 1
@@ -335,6 +343,9 @@ equal(link.ready(id), true)
 equal(readiness, [true])
 link.refresh(id)
 equal(link.ready(id), false)
+socket.readyState = 3
+events.dispatchEvent(new Event('close'))
+equal(connection, [true, false])
 link.unsubscribe(id)
 remove()
 link.close()

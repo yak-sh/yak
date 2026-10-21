@@ -151,6 +151,10 @@ export type Wire = {
   now: () => number
   /** whether the socket is open right now */
   connected: () => boolean
+  /** be called with true each time the socket opens, and with false each
+   * time an open one closes under it; not called immediately. The returned
+   * function removes the listener. */
+  onConnection: (fn: (open: boolean) => void) => () => void
   /** close the socket and stop reconnecting */
   close: () => void
 }
@@ -219,6 +223,10 @@ export let wire = (opts: WireOpts): Wire => {
   // as it goes on, once, until a connection opens again.
   let told = false
   let down: { at: number; code?: number } | undefined
+  let hearing = new Set<(open: boolean) => void>()
+  let heard = (open: boolean) => {
+    for (let fn of hearing) fn(open)
+  }
   let n = 0
   let waiting: Bundle[] = []
   let draining = false
@@ -354,6 +362,7 @@ export let wire = (opts: WireOpts): Wire => {
           stringify({ subscribe: query, id, acks: true, frames: true }),
         )
       }
+      heard(true)
     })
     let inbox: Frame[] = []
     let landing = false
@@ -454,6 +463,7 @@ export let wire = (opts: WireOpts): Wire => {
       for (let id of asks.keys()) {
         if (!refused.has(id)) opts.pending?.(id)
       }
+      if (opened !== undefined) heard(false)
     })
   }
 
@@ -492,8 +502,13 @@ export let wire = (opts: WireOpts): Wire => {
       return agreed.now()
     },
     connected: () => socket?.readyState == OPEN,
+    onConnection: (fn) => {
+      hearing.add(fn)
+      return () => hearing.delete(fn)
+    },
     close: () => {
       closed = true
+      hearing.clear()
       stopClock()
       waiting = []
       let s = socket
