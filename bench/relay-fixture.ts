@@ -245,10 +245,15 @@ export async function relayFixture(
       root + '/packages/member/mod.ts'
     )
     const { kernelDoc } = await import(root + '/packages/kernel/mod.ts')
+    const { provenanceDoc } = await import(
+      root + '/packages/provenance/mod.ts'
+    )
     const { admitSchema } = await import(
       root + '/packages/graph/admit_schema.ts'
     )
-    const vocab = loadVocab([kernelDoc, memberDoc, schema], [memberKeywords])
+    const vocab = loadVocab([kernelDoc, provenanceDoc, memberDoc, schema], [
+      memberKeywords,
+    ])
     const g = graph({ storage: storage(m.db, vocab), vocab })
     await g.install()
     await g.apply([{ entity: { eid: APP }, access: { mode: 'private' } }, {

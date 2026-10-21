@@ -81,6 +81,7 @@ export let measure = async (
   let person = crypto.randomUUID()
   let plugins = [
     '@yaks/kernel',
+    '@yaks/provenance',
     '@yaks/id',
     '@yaks/doc',
     '@yaks/alias',

@@ -435,6 +435,7 @@ export function score(points: Point[], grades: Grade[], failed = false) {
 
 const plugins = [
   '@yaks/kernel',
+  '@yaks/provenance',
   '@yaks/oracle',
   '@yaks/id',
   '@yaks/key',
