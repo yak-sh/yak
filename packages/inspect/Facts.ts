@@ -13,7 +13,7 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { Fragment, h, type JSX } from 'preact'
 import { Button, Pairs, Rows, Section, Value } from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'
 import { Cell, reads } from './value.ts'
@@ -133,7 +133,7 @@ export let Facts = ({ e, io, ctx }: Props): JSX.Element | null => {
   if (!names.length) return null
   return editing
     ? h(
-      'div',
+      Fragment,
       {},
       names.map((name) => h(CompTable, { key: name, e, io, name, notes })),
     )

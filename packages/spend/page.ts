@@ -9,7 +9,7 @@
  *
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
 import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
@@ -142,7 +142,7 @@ let Breakdown = (
   let named = (k: string) => k ? mention(io, k) : h('span', {}, 'none')
   let was = (k: string) => before ? [dollars(before.parts[k]?.[4] ?? 0)] : []
   return h(
-    'div',
+    Fragment,
     {},
     h(Ranking, {
       title: 'What the context was made of',

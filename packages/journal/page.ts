@@ -10,7 +10,7 @@
  *
  * @module
  */
-import { type ComponentChildren, h, type JSX } from 'preact'
+import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { identityEid } from '@yaks/graph/identity'
 import { mention, type Props, useNamed, type View } from '@yaks/inspect'
 import { Head, Loading, Meter, Section, Table } from '@yaks/ui'
@@ -216,7 +216,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
         'Not measured yet: the duty measures the file once a day.',
       )
       : h(
-        'div',
+        Fragment,
         {},
         h(Days, { days: days.slice(0, 14) }),
         waiting(tally, 'the changes per component') ??
