@@ -1,5 +1,6 @@
-import { equal, test } from '@yaks/testing'
-import { scopedOutbox } from './outbox.ts'
+import { equal, ok, test } from '@yaks/testing'
+import { Refused } from '@yaks/graph/errors'
+import { NOBODY, scopedOutbox } from './outbox.ts'
 import type { Bundle } from '@yaks/graph'
 import type { OutboxStore, Pending } from '@yaks/sync'
 
@@ -63,7 +64,7 @@ test('browse reopens only the same endpoint, mount and authenticated owner queue
   )
 })
 
-test('browse does not open a durable queue for an unknown owner', async () => {
+test('a page whose host names no person loads no queue and refuses writes', async () => {
   let called = false
   let queue = scopedOutbox({
     endpoint: 'https://box.test/web/apply',
@@ -73,8 +74,12 @@ test('browse does not open a durable queue for an unknown owner', async () => {
       return open(scope)
     },
   })
-  let error = await queue.load().then(() => undefined, (error) => error)
-  equal(error?.message, 'Cannot save writes without an authenticated owner')
+  equal(await queue.load(), [])
+  for (let write of [() => queue.put(row), () => queue.assertOwner()]) {
+    let error = await write().then(() => undefined, (error) => error)
+    ok(error instanceof Refused)
+    equal(error.message, NOBODY)
+  }
   equal(called, false)
 })
 

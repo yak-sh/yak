@@ -25,6 +25,7 @@ import { type Application, application } from './app.ts'
 import { type Authenticate, type Route, write } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
 import { dead } from '@yaks/graph/bundle'
+import { Refused } from '@yaks/graph/errors'
 import { addressId, prefixOf } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
 import type { Vocab } from '@yaks/vocab'
@@ -152,14 +153,16 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
       path: '/web/apply',
       handle: async (request) => {
         let by = await owner()
-        let via = await host.who?.(request)
         // This door is the configured person's keyboard, in both web and TUI.
         // The API owns admission, stamps and writes; the page owns attribution.
-        return write(
-          host.graph,
-          request,
-          by ? { by, via: via?.via ?? via?.by } : via ?? null,
-        )
+        // A graph that names no person has no keyboard here to write as.
+        if (!by) {
+          throw new Refused(
+            'This graph names no person for its page to write as',
+          )
+        }
+        let via = await host.who?.(request)
+        return write(host.graph, request, { by, via: via?.via ?? via?.by })
       },
     },
     {

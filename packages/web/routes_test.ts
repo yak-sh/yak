@@ -6,6 +6,7 @@ import { handler } from '@yaks/api/routes'
 import { aliasDoc, aliases } from '@yaks/alias'
 import { docDoc } from '@yaks/doc'
 import { type Comp, graph as open } from '@yaks/graph'
+import { Refused } from '@yaks/graph/errors'
 import { human } from '@yaks/id'
 import { ids } from '@yaks/id/graph'
 import { idDoc } from '@yaks/id/vocab'
@@ -188,6 +189,31 @@ test('the page learns the configured owner by the graph address interface', asyn
   let response = await owner.handle(new Request('http://x/web/owner'))
   let [row] = await graph.read('.doc.title=x')
   assertEquals(await response.json(), { owner: row.entity.eid })
+})
+
+test('a graph that names no person answers no owner and refuses page writes', async () => {
+  let rs = routes({
+    vocab,
+    graph,
+    config: { db: ':memory:', plugins: ['@yaks/browse'] },
+    who: () => ({ by: 'server' }),
+  })
+  let at = (path: string) => rs.find((r) => r.path == path)!
+  let owner = await at('/web/owner').handle(new Request('http://x/web/owner'))
+  assertEquals(await owner.json(), {})
+  await assertRejects(
+    async () =>
+      await at('/web/apply').handle(
+        new Request('http://x/web/apply', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify([{ entity: { eid: 'nobody' }, doc: {} }]),
+        }),
+      ),
+    Refused,
+    'This graph names no person for its page to write as',
+  )
+  assertEquals(await graph.get(['nobody']), [])
 })
 
 // Resolve the owner and prepare its admitted write once, then inspect the

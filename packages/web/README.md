@@ -38,8 +38,9 @@ box whose config names a tracker spool files them as bugs.
 
 `POST /web/apply` attributes writes to the configured person using the API's
 admission and write handler. `/web/owner` resolves that person through the
-graph's address interface. The generic `/apply`, `/query` and `/ws` doors stay
-with @yaks/api.
+graph's address interface. A config that names no person makes the page
+read-only: `/web/owner` answers no owner and `/web/apply` refuses. The generic
+`/apply`, `/query` and `/ws` doors stay with @yaks/api.
 
 With secrets and connections configured, Browse's sidebar opens Configuration at
 `/?config`: replace a secret with a masked value or `op://` reference, or sign

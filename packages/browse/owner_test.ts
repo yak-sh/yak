@@ -46,8 +46,16 @@ test('a different mount cannot consume the prefetched owner of another door', as
   equal(urls, [url, other])
 })
 
+test('a host that names no person answers no owner, and boot proceeds', async () => {
+  for (let res of [new Response('{}'), response(null)]) {
+    let reads = ownerReads(() => Promise.resolve(res))
+    reads.begin(url)
+    equal(await reads.initial(url), undefined)
+  }
+})
+
 test('startup rejects refused and malformed identities before boot proceeds', async () => {
-  for (let res of [response('alice', 403), response(null), response('')]) {
+  for (let res of [response('alice', 403), response(''), response(42)]) {
     let reads = ownerReads(() => Promise.resolve(res))
     reads.begin(url)
     let error: unknown

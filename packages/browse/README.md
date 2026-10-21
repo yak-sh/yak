@@ -89,14 +89,14 @@ page:
 ```
 
 Set `person` to the owner's id: `/web/owner` resolves it for the home page at
-`/`. Reply, decision and search drafts stay shared across web and terminal.
-`yak browse` opens the same App in a terminal. Tab/Shift+Tab and j/k focus
-controls; Enter follows links or uses buttons, typing changes a focused field,
-Enter submits and Shift+Enter adds a line. Escape leaves a field without
-spending its draft. `f` focuses the sidebar query and `i` the first page field.
-Ctrl-O goes back, Ctrl-F forward, and q quits. `TASKS_TUI_STATE` names the
-terminal history file; the configured server supplies the graph, never a guessed
-host.
+`/`. Without one the page reads and refuses writes. Reply, decision and search
+drafts stay shared across web and terminal. `yak browse` opens the same App in a
+terminal. Tab/Shift+Tab and j/k focus controls; Enter follows links or uses
+buttons, typing changes a focused field, Enter submits and Shift+Enter adds a
+line. Escape leaves a field without spending its draft. `f` focuses the sidebar
+query and `i` the first page field. Ctrl-O goes back, Ctrl-F forward, and q
+quits. `TASKS_TUI_STATE` names the terminal history file; the configured server
+supplies the graph, never a guessed host.
 
 ```sh
 yak browse --config /path/to/yak.json
