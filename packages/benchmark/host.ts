@@ -12,7 +12,10 @@ export type Host = {
   runtime: string
   cpu: string
   load: readonly number[]
-  cpus: number
+  /** The microseconds work on the box has waited for a CPU in all, read at
+   * each call; absent where the box does not say. The runner reads it around
+   * each run (`Run.stall`). */
+  stall?: () => number | undefined
 }
 type Immutable<T> = T extends object
   ? { readonly [K in keyof T]: Immutable<T[K]> }
@@ -71,6 +74,22 @@ export let host = async (): Promise<Host> => {
     runtime: `Deno/${Deno.version.deno} ${Deno.build.target}`,
     cpu: cpus()[0]?.model ?? 'unknown',
     load: loadavg(),
-    cpus: cpus().length,
+    stall: () => pressure()?.total,
+  }
+}
+
+/** The box's CPU pressure, from Linux's pressure stall information: `now`,
+ * the share of the last ten seconds some work waited for a CPU, and `total`,
+ * the microseconds it has waited in all. Undefined where the box does not say.
+ * In a container it is the container's own. */
+export let pressure = (): { now: number; total: number } | undefined => {
+  try {
+    let some = Deno.readTextFileSync('/proc/pressure/cpu')
+      .match(/^some avg10=([\d.]+) .*total=(\d+)/m)
+    return some
+      ? { now: Number(some[1]) / 100, total: Number(some[2]) }
+      : undefined
+  } catch {
+    return undefined
   }
 }

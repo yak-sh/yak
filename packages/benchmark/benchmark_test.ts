@@ -43,7 +43,6 @@ let fixture = (
     runtime: 'test',
     cpu: 'test',
     load: [1, 2, 3],
-    cpus: 4,
   }
   let suite: Suite = {
     name: 'suite',
@@ -92,7 +91,6 @@ test('runs retain raw samples, round medians, counts and host metadata', async (
   match(JSON.parse(f.saved.get('result')!), {
     commit: 'abc',
     load: [1, 2, 3],
-    cpus: 4,
     rounds: 3,
     verdict: 'measured',
   })
@@ -686,22 +684,25 @@ test('a check allows the noise it measured itself', async () => {
 })
 
 test('a loaded box confirms no regression and banks no baseline', async () => {
-  let f = fixture(), calls = 0
+  let f = fixture(), waited = 0
   let options = { ...f.options, rounds: 1 }
   await run(f.suite, { ...options, mode: 'accept', tolerance: .2 })
-  f.context.load = [3.5, 1, 1]
+  // Work waits for a CPU all the while the box measures.
+  f.context.stall = () => waited += 1e9
   f.suite.benches[0].sample = () => 130
   let checked = await run(f.suite, { ...options, mode: 'check' })
   equal(checked.verdict, 'loaded')
   equal(checked.regressions.map((r) => r.name), ['work'])
-  f.suite.benches[0].sample = () => (calls++, 50)
+  f.suite.benches[0].sample = () => 50
   await throws(
     () => run(f.suite, { ...options, mode: 'accept', tolerance: .2 }),
     'loaded box',
   )
-  equal([calls, banked(f)], [0, { work: [100, .2] }])
-  f.context.load = [3, 1, 1]
-  equal((await run(f.suite, { ...options, mode: 'check' })).verdict, 'passed')
+  equal(banked(f), { work: [100, .2] })
+  f.context.stall = () => waited
+  f.suite.benches[0].sample = () => 130
+  let error = await throws(() => run(f.suite, { ...options, mode: 'check' }))
+  ok(error instanceof Regressed)
 })
 
 test('queued suites measure between rounds without losing a faster acceptance', async () => {

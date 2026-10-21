@@ -26,24 +26,26 @@ export let tolerance = (n: number): number => {
 export let NOISE = 2
 /** The most slack noise can earn a bench; a tolerance stays under one. */
 export let CAP = .95
-/** A run is loaded when the box's one-minute load average as it began is
- * over this share of its CPUs: other work then shares the cores it times. */
-export let LOAD = .75
+/** A run is loaded when some work on the box waited for a CPU more than this
+ * share of the time it ran: the box had more to run than CPUs to run it, so
+ * the figures time the queue. */
+export let STALL = .1
 
-/// loaded({ load: [3.1, 2, 1], cpus: 4 }) -> true
-/// loaded({ load: [3, 5, 9], cpus: 4 }) -> false
-/** Whether the box was loaded as a run began. A loaded run confirms no
+/// loaded({ stall: .3 }) -> true
+/// loaded({ stall: .1 }) -> false
+/// loaded({ stall: null }) -> false
+/** Whether the box was loaded while a run measured. A loaded run confirms no
  * regression and banks no baseline: what it timed was the other work. */
-export let loaded = (run: Pick<Run, 'load' | 'cpus'>): boolean =>
-  run.load[0] > run.cpus * LOAD
+export let loaded = (run: Pick<Run, 'stall'>): boolean =>
+  (run.stall ?? 0) > STALL
 
 /** Refuses to bank what a loaded box measured. */
-export let quiet = (suite: string, run: Pick<Run, 'load' | 'cpus'>): void => {
+export let quiet = (suite: string, run: Pick<Run, 'stall'>): void => {
   if (loaded(run)) {
     throw new Error(
-      `${suite} cannot bank on a loaded box: load ${
-        run.load[0]
-      } on ${run.cpus} CPUs`,
+      `${suite} cannot bank on a loaded box: work waited for a CPU ${
+        Math.round(run.stall! * 100)
+      }% of the time it ran`,
     )
   }
 }
@@ -68,7 +70,8 @@ export let spread = (medians: readonly number[], better: Direction): number => {
 
 /** Repeated runs of one suite as one run: each bench as the run that measured
  * it best, the median acceptance banks, so a check compares like for like,
- * with the spread of every round median the runs took between them.
+ * with the spread of every round median the runs took between them, and the
+ * most stall any of them saw.
  *
  * ```ts
  * import { best, type Run } from '@yaks/benchmark'
@@ -88,8 +91,10 @@ export let spread = (medians: readonly number[], better: Direction): number => {
 export let best = (runs: readonly Run[]): Run => {
   let last = runs.at(-1)
   if (!last) throw new Error('Expected at least one run')
+  let stalls = runs.flatMap((r) => r.stall ?? [])
   return {
     ...last,
+    stall: stalls.length ? Math.max(...stalls) : null,
     benches: last.benches.map((b) => {
       let all = runs.map((r) => r.benches.find((c) => c.name == b.name)!)
       let top = all.reduce((a, c) =>

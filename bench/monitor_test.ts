@@ -14,7 +14,11 @@ test('the monitor reads a suite baseline outside bench', () => {
   equal(steps, expected)
 })
 
-let run = (verdict: Run['verdict'], commit = 'c2', load = 1): Run => ({
+let run = (
+  verdict: Run['verdict'],
+  commit = 'c2',
+  stall: number | null = null,
+): Run => ({
   version: 1,
   suite: 's',
   metric: 'm',
@@ -23,8 +27,8 @@ let run = (verdict: Run['verdict'], commit = 'c2', load = 1): Run => ({
   commit,
   runtime: 'r',
   cpu: 'c',
-  load: [load, 1, 1],
-  cpus: 4,
+  load: [1, 1, 1],
+  stall,
   rounds: 3,
   benches: [],
   tolerance: .1,
@@ -180,7 +184,7 @@ test('a pass on a box that grew loaded marks the suite good but banks nothing', 
   let state: State = { good: {} }, banked: string[] = []
   await watch(['s'], state, {
     check: () =>
-      Promise.resolve({ verdict: 'passed', run: run('passed', 'c3', 3.5) }),
+      Promise.resolve({ verdict: 'passed', run: run('passed', 'c3', .3) }),
     since: () => Promise.resolve([]),
     report: () => Promise.resolve(),
     bank: (suite) => {

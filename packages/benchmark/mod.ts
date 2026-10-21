@@ -34,6 +34,7 @@ export {
   configure,
   type Host,
   host,
+  pressure,
   type ReportedRun,
   type Reporter,
   type Reporters,

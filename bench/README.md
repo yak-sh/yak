@@ -23,9 +23,11 @@ moves only toward faster, and only by more than that noise, so a lucky run never
 tightens it. Banking a slower one is a separate explicit operation (`--slower`),
 not monitoring.
 
-Nothing banks on a loaded box: one whose one-minute load average is over three
-quarters of its CPUs as the run begins. `bench:ratchet` refuses one before
-measuring, and a check there past its limit says `loaded`, not `regressed`.
+Nothing banks on a loaded box: one where some work waited for a CPU more than a
+tenth of the time the run measured (Linux's CPU pressure, the container's own
+here; the load average in `/proc/loadavg` is the Proxmox host's and says little
+about this box). `bench:ratchet` refuses to bank such a run, and a check there
+past its limit says `loaded`, not `regressed`.
 
 ## The monitor
 
@@ -274,7 +276,7 @@ Missing or renamed cases, failed runs, invalid timings or counts, and different
 runtime/CPU/workload metadata fail closed. Changes to a workload or timed
 boundary need an explicit fresh baseline. `commit` records HEAD; uncommitted
 source changes are included, so retain the diff when comparing revisions.
-Inspect the raw samples and load averages when investigating a noisy result.
+Inspect the raw samples and the run's `stall` when investigating a noisy result.
 
 ## Box bench
 

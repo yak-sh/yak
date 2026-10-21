@@ -7,10 +7,10 @@ A **bench** is a named workload with a unit, such as `apply` in `ns/op`. A
 **sample** is one measured value, with optional counts and provenance. A
 **round** collects samples from every bench. A **suite** names a set of benches,
 its aggregation metric and its workload version. A **run** keeps the samples,
-round medians, median of round medians, commit, runtime, CPU and load average. A
-**baseline** is a committed JSON file for one suite, with a tolerance: `0.2`
-allows a 20% deterioration. A **reporter** receives a completed run after its
-JSON has been written.
+round medians, median of round medians, commit, runtime, CPU, load average and
+stall. A **baseline** is a committed JSON file for one suite, with a tolerance:
+`0.2` allows a 20% deterioration. A **reporter** receives a completed run after
+its JSON has been written.
 
 ## Writing a bench
 
@@ -146,11 +146,15 @@ product, not a measurement. A baseline banked on another runtime, CPU or
 workload version is no reference, and an exact acceptance banks the suite as
 measured.
 
-A run is **loaded** when the box's one-minute load average as it began was over
-`LOAD` (0.75) of its CPUs (`loaded()`): other work shared the cores it timed. A
-loaded box banks nothing, and acceptance refuses one before measuring. A loaded
-check past its limit is `loaded`, not `regressed`: it can tell nothing either
-way.
+A run is **loaded** when, while it measured, some work on the box waited for a
+CPU more than `STALL` (a tenth) of the time (`loaded()`): the box had more to
+run than CPUs to run it, so the figures timed the queue. The runner reads it
+around each round from Linux's pressure stall information (`pressure()`, the
+container's own in a container) and keeps the share as the run's `stall`; where
+the box does not say, it is null and nothing is loaded. A loaded run banks
+nothing, and a loaded check past its limit is `loaded`, not `regressed`: it can
+tell nothing either way. A box's load average says less: a container's often
+reads its host's.
 
 ```ts
 import { type Files, type Host, Regressed, run } from '@yaks/benchmark'
@@ -184,7 +188,6 @@ let options = {
     runtime: 'example',
     cpu: 'example',
     load: [0, 0, 0],
-    cpus: 1,
   }),
 }
 await run(suite, { ...options, mode: 'accept', tolerance: 0.2 })
@@ -312,7 +315,6 @@ let context: Host = {
   runtime: 'test',
   cpu: 'test',
   load: [0, 0, 0],
-  cpus: 4,
 }
 let undo = configure((host) => [() => {
   delivered.push(String(host.config.destination))

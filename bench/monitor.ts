@@ -10,9 +10,10 @@
  * ratchet). Nothing is measured while the box is loaded, and a run the box
  * became loaded for can confirm nothing and bank nothing: it is owed to a
  * later tick. A confirmed regression is reported with every figure over its
- * limit, the run's load, and the commits since the suite's last good run; a
- * suite that cannot run (no baseline, a crash, a page that never paints, a run
- * over its time cap) is reported as a failure, since that bench is broken.
+ * limit, how long work waited for a CPU while it ran, and the commits since
+ * the suite's last good run; a suite that cannot run (no baseline, a crash, a
+ * page that never paints, a run over its time cap) is reported as a failure,
+ * since that bench is broken.
  * Each suite reports under one fault, so a suite that stays slow adds hits to
  * its open bug, and one that turns slow again after its bug was resolved
  * reopens it.
@@ -32,10 +33,10 @@ import {
   type Baseline,
   baseline,
   loaded,
+  pressure,
   type Regression,
   type Run,
 } from '@yaks/benchmark'
-import { cpus, loadavg } from 'node:os'
 import { diagnostic } from './diagnostic.ts'
 import { drain, enqueue, type Queue } from './queue.ts'
 import { configPath, read } from '../packages/cli/config.ts'
@@ -141,8 +142,10 @@ export let regressed = (
   [
     `${suite} got slower: ${over(run.regressions[0])}`,
     ...run.regressions.slice(1).map((r) => `also ${over(r)}`),
-    `confirmed at ${run.commit?.slice(0, 9)} on ${run.at}, load ${
-      run.load.map((n) => n.toFixed(1)).join(' ')
+    `confirmed at ${run.commit?.slice(0, 9)} on ${run.at}, ${
+      run.stall == null
+        ? 'CPU stall unknown'
+        : `work waited for a CPU ${Math.round(run.stall * 100)}% of the time`
     }`,
     good
       ? `commits since its last good run at ${
@@ -334,7 +337,7 @@ export let measurement = (suite: string): string[] => [
  * it writes. A loaded box is not measured at all: the bench would add to the
  * load and its figures could tell nothing. */
 let check = async (suite: string, runs?: number): Promise<Outcome> => {
-  if (loaded({ load: loadavg(), cpus: cpus().length })) {
+  if (loaded({ stall: pressure()?.now ?? null })) {
     return { verdict: 'loaded' }
   }
   if (MEASURE[suite]) {

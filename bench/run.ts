@@ -115,7 +115,11 @@ export let main = async (args = Deno.args): Promise<number> => {
     lock: locked ? undefined : '/tmp/yaks-throughput-bench.lock',
   })
   for (let b of current.benches) console.log(`${b.name}: ${b.median} ${b.unit}`)
-  console.log(`${name}: ${current.verdict}; load ${current.load.join(', ')}`)
+  console.log(
+    `${name}: ${current.verdict}; CPU stall ${
+      current.stall == null ? 'unknown' : `${Math.round(current.stall * 100)}%`
+    }`,
+  )
   return 0
 }
 /** The least slack acceptance banks. Above it, each bench banks the noise its

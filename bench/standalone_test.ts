@@ -28,7 +28,6 @@ for (let registration of standalone) {
         runtime: 'fixture-runtime',
         cpu: 'fixture-cpu',
         load: [0, 0, 0],
-        cpus: 4,
       }),
       reporters: () => [],
       files: {

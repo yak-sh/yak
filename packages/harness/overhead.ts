@@ -4,7 +4,12 @@
 // box that was not loaded.
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Host } from '@yaks/host'
-import { type Baseline, limit as benchmarkLimit, loaded } from '@yaks/benchmark'
+import {
+  type Baseline,
+  limit as benchmarkLimit,
+  loaded,
+  pressure,
+} from '@yaks/benchmark'
 import type { Runner, Step } from '@yaks/session'
 import { applied } from '@yaks/journal'
 import { logFor } from '@yaks/journal/graph'
@@ -104,15 +109,9 @@ export const overheadDue = (
   return n == 2
 }
 
-/** The box's load where the runtime can read it (@yaks/benchmark `loaded`). */
-const busy = () => {
-  try {
-    return typeof Deno != 'undefined' &&
-      loaded({ load: Deno.loadavg(), cpus: navigator.hardwareConcurrency })
-  } catch {
-    return false
-  }
-}
+/** Whether work on the box is waiting for a CPU now, where the box says
+ * (@yaks/benchmark `loaded`). */
+const busy = () => loaded({ stall: pressure()?.now ?? null })
 
 /** Read only a bounded scalar tail. One report per metric per worker; the fixed
  * message groups recurrence in the tracker, not one bug per observation. */

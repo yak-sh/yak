@@ -77,8 +77,10 @@ export type Run = {
   cpu: string
   /** The box's one, five and fifteen minute load averages as the run began. */
   load: readonly number[]
-  /** The box's CPUs, which its load is read against (ratchet.ts `loaded`). */
-  cpus: number
+  /** The share of the run's time some work on the box waited for a CPU
+   * (Linux's pressure stall information, host.ts `pressure`), or null where
+   * the box does not say. Over it, the run is loaded (ratchet.ts `loaded`). */
+  stall: number | null
   rounds: number
   benches: Result[]
   tolerance: number | null

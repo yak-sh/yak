@@ -20,7 +20,7 @@ for (
     at: 'isolated-proof',
     commit: 'proof',
     load: [0, 0, 0],
-    cpus: 4,
+    stall: null,
     ...bank,
     benches: bank.benches.map((b: { name: string; median: number }) => ({
       ...b,

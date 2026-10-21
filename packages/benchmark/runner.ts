@@ -23,7 +23,6 @@ import {
   covered,
   incomparable,
   loaded,
-  quiet,
   spread,
   tolerance,
   validate,
@@ -185,8 +184,6 @@ let execute = async (
   }
   await readBase()
   let context = await (options.host ?? host)()
-  // A loaded box measures its other work: refuse before spending the time.
-  if (mode == 'accept') quiet(suite.name, context)
   let runs: Run[] = []
   for (let i = 0; i < repeats; i++) {
     runs.push(await measure(suite, rounds, context, exclusive))
@@ -199,7 +196,9 @@ let execute = async (
     current.tolerance = mode == 'accept'
       ? options.tolerance!
       : base?.tolerance ?? null
-    if (mode == 'accept') current.verdict = 'accepted'
+    if (mode == 'accept') {
+      current.verdict = loaded(current) ? 'loaded' : 'accepted'
+    }
     if (base && mode == 'check') {
       current.regressions = compare(base, current, options.coverage)
       current.verdict = current.regressions.length
@@ -223,11 +222,14 @@ let execute = async (
           current.benches.some((c) => c.name == b.name)
         ),
       }
-    let accepted = mode == 'accept'
-      ? baseline(runs, options.tolerance!, previous, options.slower)
-      : undefined
     await store.write(options.output, current)
-    if (accepted) await store.write(options.baseline!, accepted)
+    // A loaded run is kept as measured; baseline() refuses to bank it.
+    if (mode == 'accept') {
+      await store.write(
+        options.baseline!,
+        baseline(runs, options.tolerance!, previous, options.slower),
+      )
+    }
     return current
   })
   let report: Awaited<ReturnType<Reporters>> = []
@@ -272,8 +274,11 @@ let measure = async (
     spread: 0,
     spans: null,
   }))
+  // Stall is read around each round's work, not the wait for the lock.
+  let stalled: number | null = 0, timed = 0
   for (let round = 0; round < rounds; round++) {
     await exclusive(async () => {
+      let before = context.stall?.(), start = performance.now()
       let collected = 'collect' in suite
         ? await suite.collect(round)
         : undefined
@@ -301,6 +306,11 @@ let measure = async (
           spans: middle.spans ?? null,
         })
       }
+      let after = context.stall?.()
+      timed += (performance.now() - start) * 1000
+      stalled = before === undefined || after === undefined || stalled === null
+        ? null
+        : stalled + after - before
     })
   }
   for (let b of benches) {
@@ -321,7 +331,7 @@ let measure = async (
     runtime: context.runtime,
     cpu: context.cpu,
     load: [...context.load],
-    cpus: context.cpus,
+    stall: stalled === null || !timed ? null : stalled / timed,
     rounds,
     benches,
     tolerance: null,
