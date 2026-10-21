@@ -15,7 +15,7 @@
   align-items: baseline;
   gap: var(--half-gap);
   min-width: 0;
-  font-size: 0.95rem;
+  font-size: var(--h2);
   font-weight: 600;
   color: var(--heading);
 }

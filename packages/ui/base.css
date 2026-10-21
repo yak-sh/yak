@@ -9,6 +9,9 @@
 
    And the type every part reads, which a theme may set: --size for what a
    thing says, --small for the line that describes it, and nothing smaller.
+   Headings climb from --size by one ratio, --scale, a step each: --h3, --h2,
+   --h1. Every heading reads them, prose or part, so a page's h1 is the same
+   size wherever it is drawn.
    Text comes in three inks. --text is what a thing says; --muted is what
    describes it (a key, a heading over a column, a fact, a stamp, an id, a
    count), and reads on every floor; --dim is only for what is not there (a
@@ -22,6 +25,10 @@
   --tap: 0px;
   --size: 14px;
   --small: 12px;
+  --scale: 1.2;
+  --h3: calc(var(--size) * var(--scale));
+  --h2: calc(var(--h3) * var(--scale));
+  --h1: calc(var(--h2) * var(--scale));
 }
 @media (pointer: coarse) {
   :where(:root) {
@@ -62,16 +69,16 @@
   line-height: 1.25;
 }
 :where(h1) {
-  font-size: 1.35rem;
+  font-size: var(--h1);
 }
 :where(h2) {
-  font-size: 1.2rem;
+  font-size: var(--h2);
 }
 :where(h3) {
-  font-size: 1.05rem;
+  font-size: var(--h3);
 }
 :where(h4, h5, h6) {
-  font-size: 1rem;
+  font-size: var(--size);
 }
 :where(p, ul, ol, pre, blockquote, table, h1, h2, h3):first-child,
 :where(h4, h5, h6):first-child {
