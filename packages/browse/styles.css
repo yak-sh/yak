@@ -1259,44 +1259,6 @@ html {
   margin: 0;
 }
 
-/* A role is desired state first, prose second. Its small configuration grid
-   uses the ordinary typed Prop controls; the server-stamped receipt stays
-   read-only and compact above it. */
-.Role_Head {
-  display: flex;
-  align-items: baseline;
-  gap: var(--gap);
-  margin: 0;
-  font-size: 1.75rem;
-  line-height: 1.15;
-}
-.Role_Title {
-  flex: 1;
-  min-width: 0;
-}
-.Role_Meta {
-  display: flex;
-  align-items: center;
-  gap: var(--half-gap);
-  margin-top: var(--half-gap);
-  color: var(--muted);
-  font-size: var(--small);
-}
-.Role_Grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
-  gap: var(--half-gap) var(--gap);
-  margin: var(--gap) 0;
-}
-.Role_Field {
-  min-width: 0;
-}
-.Role_Label {
-  display: block;
-  color: var(--muted);
-  font-size: var(--small);
-  text-transform: uppercase;
-}
 .Show_Body {
   margin: var(--half-gap) 0 0;
   cursor: text; /* double-click edits the markdown source */
@@ -2790,7 +2752,7 @@ a[data-ref]:hover {
 }
 
 /* The Project Cockpit (views/Dashboard.tsx): the facet vocabulary in a
-   fixed grid — Boards, each offered tab, Roles · Sessions · Lately. Every cell is a
+   fixed grid — Boards, each offered tab, Sessions · Lately. Every cell is a
    live query rendered through the shared rows at summary density; a long
    facet scrolls inside its cell rather than stretching the grid. */
 .Dash {

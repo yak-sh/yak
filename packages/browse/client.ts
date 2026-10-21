@@ -487,7 +487,6 @@ export let sessionFor = (
     actor?: string
     pane?: string | null
     turn?: string
-    role?: string
     parent?: string
   },
 ) => {
@@ -503,9 +502,6 @@ export let sessionFor = (
   if (pid && s?.comps.session.pid != pid) comp.pid = pid
   for (let k of ['agent_type', 'source', 'transcript', 'turn'] as const) {
     if (self?.[k] && s?.comps.session[k] != self[k]) comp[k] = self[k]
-  }
-  if (self?.role && s?.comps.session.role != self.role) {
-    comp.role = self.role
   }
   if (self?.pane !== undefined && s?.comps.session.pane != self.pane) {
     comp.pane = self.pane

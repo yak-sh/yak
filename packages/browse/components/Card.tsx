@@ -34,7 +34,6 @@ export let icons: Record<string, string> = {
   Layout: 'columns-3',
   Persona: 'drama',
   Dashboard: 'layout-dashboard',
-  Role: 'bot',
   Web: 'globe',
   Media: 'image',
   Session: 'bot',

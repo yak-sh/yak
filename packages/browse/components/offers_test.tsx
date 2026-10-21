@@ -203,7 +203,7 @@ test('without the offering package, nothing is offered on what it would draw', a
   try {
     assertEquals(
       text(cockpit.root, '.Dash_Name').map((n) => n?.replace(/\d+$/, '')),
-      ['boards', 'roles', 'sessions', 'lately'],
+      ['boards', 'sessions', 'lately'],
     )
   } finally {
     cockpit.free()

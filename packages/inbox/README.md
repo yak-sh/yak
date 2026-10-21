@@ -241,7 +241,7 @@ first line as `doc.title`. Its `created.by` is the sender, never the mailbox's
 operator. Empty text, unverified senders, unknown senders and other people
 remain mail only, and a repeated Message-ID creates nothing.
 
-Provenance is checked first, independently of the person: a known session, role,
+Provenance is checked first, independently of the person: a known session,
 effect, call, output or transcript entry as sender, the inbox address as sender,
 or `Auto-Submitted` other than `no` is kept as mail only. DKIM authenticates a
 sending domain, not whether a person or an automation typed the words. Keep the

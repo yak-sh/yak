@@ -37,15 +37,6 @@ export let BoardTitle = ({ e }: { e: Ent }) => (
   </Frame>
 )
 
-export let RoleTitle = ({ e }: { e: Ent }) => (
-  <Frame>
-    <Id e={e} />
-    <Text>
-      <TitleEdit eid={e.eid} />
-    </Text>
-  </Frame>
-)
-
 export let WebTitle = ({ e }: { e: Ent }) => {
   let host
   try {

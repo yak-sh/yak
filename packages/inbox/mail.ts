@@ -11,8 +11,7 @@
 // or words answering its open decision answer it.
 //
 // Provenance is checked first, independently of the person: a sender that is a
-// session, role, effect, call, output or transcript entry, the inbox address
-// itself, or `Auto-Submitted` other than `no` is kept as mail only. DKIM
+// session, effect, call, output or transcript entry, the inbox address itself, or `Auto-Submitted` other than `no` is kept as mail only. DKIM
 // authenticates a sending domain, not whether a person or an automation typed
 // the words.
 
@@ -97,8 +96,8 @@ let one = async (graph: Book, eid: Eid): Promise<Bundle | undefined> =>
   (await graph.read(`.entity.eid=${JSON.stringify(eid)}`))[0]
 
 /** Whether a letter is a person's own words from outside: not a known
- * session, role, effect, call, output or transcript entry, not the inbox
- * address writing to itself, and not a letter that says it was automatic. */
+ * session, effect, call, output or transcript entry, not the inbox address
+ * writing to itself, and not a letter that says it was automatic. */
 let external = async (
   { graph, message, letter, by, canonical }: Read,
   from?: string,
@@ -106,8 +105,8 @@ let external = async (
   let writer = by ? await one(graph, by) : undefined
   let automatic = message.headers.get('auto-submitted')?.trim().toLowerCase()
   return !(
-    writer?.session || writer?.role || writer?.effect || writer?.call ||
-    writer?.output || writer?.entry ||
+    writer?.session || writer?.effect || writer?.call || writer?.output ||
+    writer?.entry ||
     (automatic && automatic != 'no') ||
     (from && canonical(str(comp(letter, 'mail').from)) == canonical(from))
   )

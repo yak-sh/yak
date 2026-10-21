@@ -2450,9 +2450,9 @@ export let ent = (eid: string): Ent => {
 }
 
 // Markdown belongs to the project its entity speaks for. Follow only the
-// graph's explicit ownership/reference columns: task/memory/role → project,
-// comment → target, session → requested task or its actor, entry → its
-// session. A seen set makes malformed cycles inert.
+// graph's explicit ownership/reference columns: task/memory → project,
+// comment → target, session → its actor, entry → its session. A seen set
+// makes malformed cycles inert.
 export let repoTrace = (start: Ent): { eids: string[]; url?: string } => {
   let seen = new Set<string>()
   let todo = [start]
@@ -2465,7 +2465,6 @@ export let repoTrace = (start: Ent): { eids: string[]; url?: string } => {
       e.filed?.project,
       e.comment?.target,
       e.session?.actor,
-      e.role?.scope,
       e.memory?.scope,
       e.entry?.session,
     ].filter((eid): eid is string => !!eid)

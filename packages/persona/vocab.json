@@ -42,36 +42,6 @@
       },
       "description": "instructions an agent runs with: the doc body on the same entity is the instruction text"
     },
-    "role": {
-      "component": true,
-      "type": "object",
-      "kind": true,
-      "before": [
-        "alias",
-        "claim",
-        "doc",
-        "persona"
-      ],
-      "prefix": "R",
-      "by_name": true,
-      "properties": {
-        "surface": {
-          "type": "string",
-          "enum": [
-            "native",
-            "managed"
-          ],
-          "description": "native: it runs in this process. managed: another process runs it"
-        },
-        "scope": {
-          "type": "string",
-          "ref": "entity",
-          "death": "detach",
-          "description": "what it is responsible for"
-        }
-      },
-      "description": "a persona assigned to standing work: what it is responsible for, and whether it runs here or elsewhere. When it next runs is a @yaks/wake `wake` pointing at it, where it works is a @yaks/git `worktree`, and what it last decided is kernel `decided`"
-    },
     "persona_read": {
       "tool": true,
       "noun": "persona",

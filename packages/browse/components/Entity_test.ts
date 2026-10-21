@@ -179,16 +179,3 @@ test('a pending proposal keeps deletion named as deletion', () => {
   assertEquals(labels().includes('decline'), false)
   assertEquals(labels().includes('delete'), true)
 })
-
-test('a role keeps its face without lifecycle actions', () => {
-  let role = fixture(
-    {
-      doc: { eid: 'role', title: 'Coordinator', body: '' },
-      role: { eid: 'role', surface: 'native', scope: null },
-    },
-    'role',
-    7,
-  )
-  assertEquals(resolve(role).view, 'Role')
-  assertEquals(actionsFor(role).some((a) => a.label.includes('role')), false)
-})

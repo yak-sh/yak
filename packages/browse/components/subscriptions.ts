@@ -110,7 +110,7 @@ export let useModel = (e: Ent): { name?: string; effort?: string } => {
 // held while discovering the next ones, and release only hops no longer used.
 // Replacing the whole hold on each discovery would repeatedly unload its root.
 let repoFields = 'repo.url,filed.project,comment.target,' +
-  'session.actor,role.scope,memory.scope,entry.session'
+  'session.actor,memory.scope,entry.session'
 export let useRepoUrl = (e: Ent): string | undefined => {
   let fields = repoFields.split(',').filter((field) => {
     let [comp, prop] = field.split('.')

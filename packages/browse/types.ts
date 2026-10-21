@@ -799,14 +799,6 @@ export type Usage = {
   reasoning_tokens?: number
 }
 
-// A persona assigned to standing work (@yaks/persona): what it is responsible
-// for, and whether it runs here or elsewhere. Sessions point back through role.
-export type Role = {
-  eid: string
-  surface: string
-  scope: string | null
-}
-
 // What a session's life is read from: its own row, and the process behind
 // it, which has an `exit` once it is gone.
 export type Life = {
@@ -1192,7 +1184,6 @@ export type EntCore = {
   accept?: Accept
   project?: ProjectTag
   venture?: Venture
-  role?: Role
   person?: { eid: string }
   repo?: Repo
   canvas?: { eid: string }

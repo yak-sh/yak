@@ -4,16 +4,16 @@
 //   person{}          a human being, as this graph knows them
 //   persona{home}     instructions an agent runs with — the `doc` body on the
 //                     same entity is the instruction text
-//   role{surface, scope}  a persona assigned to standing work
+//   skill{invoke, arguments, paths, fork, options}
+//                     instructions loaded on demand
 //
 // The declarations themselves are in `./vocab.json` — plain JSON Schema,
 // readable by anything that reads JSON. This file re-exports that document
 // under the name callers import, and keeps the explanation of why it is shaped
 // the way it is.
 //
-// An agent is not a person, and a role is neither: it is a job a persona is
-// assigned to. Keeping the three apart is what makes an author stamp worth
-// reading.
+// An agent is not a person: a persona is what an agent runs with. Keeping the
+// two apart is what makes an author stamp worth reading.
 
 import type { VocabDoc } from '@yaks/vocab'
 import doc from './vocab.json' with { type: 'json' }
@@ -25,9 +25,6 @@ export let PERSON = 'person'
  * the instruction text. */
 export let PERSONA = 'persona'
 
-/** The component that marks a standing job. */
-export let ROLE = 'role'
-
 /** The component that marks instructions loaded on demand. */
 export let SKILL = 'skill'
 
@@ -35,7 +32,7 @@ export let SKILL = 'skill'
  * The persona vocabulary, loaded beside {@link https://jsr.io/@yaks/doc |
  * @yaks/doc}'s and your own: `loadVocab([docDoc, personaDoc, ...mine])`. Every
  * component here is used together with a `doc` — a person has a name, a
- * persona has its instruction text, a role has a description of what it is for
- * — which is why this document is never loaded without that one.
+ * persona and a skill their instruction text — which is why this document is
+ * never loaded without that one.
  */
 export let personaDoc: VocabDoc = doc as VocabDoc

@@ -11,8 +11,8 @@ import { SubscriptionFailure } from '../SubscriptionFailure.tsx'
 import type { QueryResult } from '../useQuery.ts'
 
 // The Project Cockpit (D-14587): a project's facets in a fixed grid —
-// Boards, a cell for each tab a package offers on it, then Roles · Sessions ·
-// Lately — the same vocabulary in the same order on every project, so the eye
+// Boards, a cell for each tab a package offers on it, then Sessions · Lately —
+// the same vocabulary in the same order on every project, so the eye
 // learns one layout. Every cell is a LIVE QUERY rendered through the shared
 // rows at summary density (--density, styles.css): membership is never
 // stored, exactly as a board's isn't, and each row keeps List.Tile's click
@@ -91,9 +91,6 @@ export let sessionsOf = (
     .sort((a, b) => Number(awake(b)) - Number(awake(a)) || b.num - a.num)
 }
 
-// The roles scoped here, oldest first.
-let rolesOf = (roles: Ent[]) => roles.toSorted((a, b) => a.num - b.num)
-
 export let Dashboard = ({ e }: { e: Ent }) => {
   // The sessions facet screens EVERY session down to the few serving this
   // project, then renders them as rows — so it asks for the row columns and
@@ -104,7 +101,6 @@ export let Dashboard = ({ e }: { e: Ent }) => {
   let claims = useQueryResult(
     '.claim&.fields=task.status,claim.session,claim.at,filed.project',
   )
-  let roles = useQueryResult(`.role.scope=${e.eid}`)
   // This facet paints eight rows, so stream only its eight warmest. Fetching
   // every task in every project card made the root canvas discard megabytes.
   // Its sub-projects' tasks are its own.
@@ -125,11 +121,6 @@ export let Dashboard = ({ e }: { e: Ent }) => {
           <Entity eid={e.eid} view={t.view} limit={CAP} />
         </Cell>
       ))}
-      <Facet
-        name='roles'
-        reads={[roles]}
-        ids={rolesOf(roles.eids.map(ent)).map((r) => r.eid)}
-      />
       <Facet
         name='sessions'
         reads={[sessions, claims]}

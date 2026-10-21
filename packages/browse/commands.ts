@@ -340,7 +340,6 @@ let sessionDefaults = (ctx: Ctx) => {
     'model',
     'effort',
     'requested_task',
-    'role',
     'persona',
     'actor',
   ]

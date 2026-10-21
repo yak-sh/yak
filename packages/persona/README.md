@@ -1,10 +1,10 @@
 # @yaks/persona
 
-Define human identities, agent instructions and agent roles in a graph, and
-assemble an agent's instructions into Markdown. The graph stores `person`,
-`persona` and `role` components alongside document text and relationships. This
-package supplies their schemas and read/render functions, and writes each
-project's personas into its checkout; it opens no database and starts no agent.
+Define human identities and agent instructions in a graph, and assemble an
+agent's instructions into Markdown. The graph stores `person`, `persona` and
+`skill` components alongside document text and relationships. This package
+supplies their schemas and read/render functions, and writes each project's
+personas and skills into its checkout; it opens no database and starts no agent.
 
 ```sh
 deno add jsr:@yaks/persona
@@ -16,18 +16,14 @@ deno add jsr:@yaks/persona
   for. The component declares `governed`, meaning it should be associated with a
   project, so [@yaks/project](../project)'s check reports a persona no project
   can reach.
-- `role{surface, scope}` — what an agent running a persona is responsible for,
-  and whether it runs in this process or another. When it next runs is a
-  [@yaks/wake](../wake) `wake` pointing at it, where it works is a
-  [@yaks/git](../git) `worktree`, and what it last decided is
-  [@yaks/kernel](../kernel)'s `decided` — the role does not keep a second copy
-  of any of them.
+- `skill{invoke, arguments, paths, fork, options}` — instructions an agent loads
+  on demand ([Repository skills](#repository-skills)).
 
-This package does not implement the legacy server's review-and-repair pipeline.
-It does not declare `verifier`, `fixer`, `finding`, `bug`, `nofix` or
-`noverify`. A person identifies a human, a persona contains agent instructions,
-and a role represents an assigned job. Keeping these separate lets provenance
-fields such as `created.by` identify the actual author rather than the job.
+A person identifies a human and a persona contains agent instructions. Keeping
+them apart lets provenance fields such as `created.by` identify the actual
+author. What a persona looks after is a relation of the thing it looks after,
+such as a topic's oracle (`tends`, [@yaks/topic](../topic)), not a component of
+the persona.
 
 ## Rendering a persona
 

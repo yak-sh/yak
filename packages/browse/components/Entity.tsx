@@ -52,7 +52,6 @@ import {
   AnyTitle,
   BoardTitle,
   DocTitle,
-  RoleTitle,
   SessionBarTitle,
   SessionTitle,
   TaskTitle,
@@ -95,7 +94,6 @@ import {
   ResultFull,
   ResultSummary,
 } from './views/Entry.tsx'
-import { Role } from './views/Role.tsx'
 import { Wake, WakeTitle } from './views/Wake.tsx'
 import { openRun } from './Run.tsx'
 import { viaName } from '@yaks/kernel/Comments'
@@ -210,13 +208,6 @@ define([
     Render: (props) => <Dashboard {...props} />,
   },
   { view: 'Persona', match: parse('.doc .persona'), Render: Persona },
-  // Role's linked-session sections walk back through Entity, so defer the
-  // binding like Canvas's cycle above.
-  {
-    view: 'Role',
-    match: parse('.doc .role'),
-    Render: (props) => <Role {...props} />,
-  },
   { view: 'Web', match: parse('.web'), Render: Web },
   // An attachment shares the artifact's face. A doc carrying one still opens
   // on Full and offers Media as a tab.
@@ -283,7 +274,6 @@ define([
   { view: 'Card.Title', match: parse('.wake .deliver'), Render: WakeTitle },
   { view: 'Card.Title', match: parse('.doc .task'), Render: TaskTitle },
   { view: 'Card.Title', match: parse('.doc .board'), Render: BoardTitle },
-  { view: 'Card.Title', match: parse('.doc .role'), Render: RoleTitle },
   { view: 'Card.Title', match: parse('.web'), Render: WebTitle },
   { view: 'Card.Title', match: parse('.session'), Render: SessionTitle },
   { view: 'Bar.Title', match: parse('.session'), Render: SessionBarTitle },
@@ -326,7 +316,6 @@ define([
   // first: the fullscreen bar opens a bare URL on tabs[0] (App.tsx), and the
   // cockpit is a chosen tab, never a changed default.
   'Dashboard',
-  'Role',
   'Session',
   'Full',
   'Web',
