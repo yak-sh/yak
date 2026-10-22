@@ -7,6 +7,8 @@ import { run } from '@yaks/git/land'
 import { localFilesystem, repositoryEid } from '@yaks/git/host'
 import { caught } from '@yaks/tracker/report'
 import { syncSkills } from './skill-mirror.ts'
+import { stamp } from './skill-mirror-io.ts'
+import { dirname } from 'node:path'
 import { repoSkills, skillFiles, skillLocation } from './skills.ts'
 import { world } from './testing.ts'
 import { template } from '../git/testing.ts'
@@ -820,4 +822,27 @@ test('skill deletion refuses a reference retargeted after its scope was read', (
   assertEquals(movedReference.read, [])
   assertEquals(movedReference.kept, { body: 'Instructions\n' })
   assertEquals(movedReference.to, movedReference.companion)
+})
+
+test('a skill stamp moves with skill files and the index, not other files', async () => {
+  let root = await Deno.makeTempDir()
+  try {
+    await git(root, 'init', '-q')
+    let skill = `${root}/.claude/skills/sample/SKILL.md`
+    await Deno.mkdir(dirname(skill), { recursive: true })
+    await Deno.writeTextFile(skill, text())
+    await git(root, 'add', '.')
+    let moves = async (change: () => Promise<unknown>) => {
+      let before = await stamp(root)
+      await change()
+      return before != await stamp(root)
+    }
+    assertEquals(await moves(() => Promise.resolve()), false)
+    assertEquals(await moves(() => Deno.writeTextFile(`${root}/x`, '')), false)
+    assertEquals(await moves(() => Deno.writeTextFile(skill, text('b'))), true)
+    assertEquals(await moves(() => git(root, 'add', '.')), true)
+    assertEquals(await moves(() => Deno.remove(skill)), true)
+  } finally {
+    await Deno.remove(root, { recursive: true })
+  }
 })

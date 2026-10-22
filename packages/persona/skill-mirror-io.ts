@@ -134,3 +134,46 @@ export let exact = async (
     throw error
   }
 }
+
+let gone = (error: unknown) =>
+  error instanceof Deno.errors.NotFound ||
+  error instanceof Deno.errors.NotADirectory
+
+// One line per path: its kind, inode, size and change times, or its absence.
+let mark = async (path: string): Promise<string> => {
+  try {
+    let i = await Deno.lstat(path)
+    let kind = i.isSymlink ? 'l' : i.isDirectory ? 'd' : 'f'
+    let times = `${i.mtime?.getTime()} ${i.ctime?.getTime()}`
+    return `${path} ${kind} ${i.ino} ${i.size} ${times}`
+  } catch (error) {
+    if (gone(error)) return `${path} -`
+    throw error
+  }
+}
+let walk = async (dir: string, out: string[]): Promise<void> => {
+  out.push(await mark(dir))
+  let entries: Deno.DirEntry[] = []
+  try {
+    for await (let entry of Deno.readDir(dir)) entries.push(entry)
+  } catch (error) {
+    if (gone(error)) return
+    throw error
+  }
+  for (let entry of entries.sort((a, b) => a.name < b.name ? -1 : 1)) {
+    if (entry.isDirectory) await walk(`${dir}/${entry.name}`, out)
+    else out.push(await mark(`${dir}/${entry.name}`))
+  }
+}
+
+/** What a sync of `root` reads from disk, as stats: the checkout's index and
+ * HEAD (the tracked set, staged blobs and branch) and every path under
+ * .claude/skills. Equal stamps mean a sync would read the same files, so a
+ * watcher compares these instead of syncing. No Git process runs. */
+export let stamp = async (root: string): Promise<string> => {
+  let out = await Promise.all(
+    ['.git/index', '.git/HEAD'].map((p) => mark(`${root}/${p}`)),
+  )
+  await walk(`${root}/.claude/skills`, out)
+  return out.join('\n')
+}

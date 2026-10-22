@@ -191,13 +191,16 @@ The host enables this independently of persona files:
 ```
 
 The awaited `skill_files` effect reconciles graph edits; `skill_watch` polls the
-files continuously with a singleton watcher lease. Per-root agreements are
-stored under `mirror/skills` beside the configured database. Without a database
-(or with `:memory:`), effects retain agreement bytes in instance memory and
-materialize an owned temporary directory for each awaited handler batch. A live
-watcher keeps that directory until shutdown or failure; cleanup is awaited. They
-never fall back to another host's database environment. This option is off by
-default because repository paths come from the graph.
+files continuously with a singleton watcher lease. A poll only stats what a sync
+would read (each root's Git index and HEAD and everything under
+`.claude/skills`) and syncs when that moved, or when the last sync of a root
+left a conflict or refusal. Per-root agreements are stored under `mirror/skills`
+beside the configured database. Without a database (or with `:memory:`), effects
+retain agreement bytes in instance memory and materialize an owned temporary
+directory for each awaited handler batch. A live watcher keeps that directory
+until shutdown or failure; cleanup is awaited. They never fall back to another
+host's database environment. This option is off by default because repository
+paths come from the graph.
 
 ## What an agent is owed
 

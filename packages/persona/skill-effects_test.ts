@@ -361,12 +361,15 @@ test('skill watcher reconciles at startup, polls, and cleans on shutdown', async
   let sleeping: (() => void)[] = []
   let paths: string[] = []
   let polls: number[] = []
+  let version = 0
+  let conflicted = false
   let fx = fixture({
     poll: 17,
+    stamp: () => Promise.resolve(String(version)),
     sync: async (_g, _root, memory) => {
       paths.push(memory)
       await Deno.writeTextFile(memory, '{}')
-      return report()
+      return conflicted ? { ...report(), conflicts: ['x'] } : report()
     },
     pause: (ms, signal) => {
       polls.push(ms)
@@ -375,21 +378,34 @@ test('skill watcher reconciles at startup, polls, and cleans on shutdown', async
       return Promise.race([wake.promise, stopped(signal!)])
     },
   }, stop.signal)
+  let poll = async () => {
+    sleeping.at(-1)!()
+    let n = sleeping.length + 1
+    await until(() => sleeping.length == n)
+    return paths.length
+  }
   let watcher = invoke(fx, 'skill_watch')
   assert(watcher == invoke(fx, 'skill_watch'))
   await until(() => sleeping.length == 1)
   assertEquals(paths.length, 1)
   assert(await exists(dirname(paths[0])))
-  sleeping[0]()
-  await until(() => sleeping.length == 2)
-  assertEquals(paths.length, 2)
+  assertEquals(await poll(), 1)
+  version++
+  assertEquals(await poll(), 2)
   assertEquals(paths[0], paths[1])
-  assertEquals(polls, [17, 17])
+  conflicted = true
+  version++
+  assertEquals(await poll(), 3)
+  assertEquals(await poll(), 4)
+  conflicted = false
+  assertEquals(await poll(), 5)
+  assertEquals(await poll(), 5)
+  assertEquals(polls, [17, 17, 17, 17, 17, 17, 17])
   stop.abort()
   await watcher
   assert(!await exists(dirname(paths[0])))
   await invoke(fx)
-  assertEquals(paths.length, 2)
+  assertEquals(paths.length, 5)
 })
 
 // Prepare the completed failed startup and retry; assertions inspect both

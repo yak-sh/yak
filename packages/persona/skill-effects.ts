@@ -2,13 +2,15 @@
 // opt-in: persona files:true must never enable bidirectional repository writes.
 // The pool owns these promises, including polling and shutdown cleanup. Imports
 // and exports share a bounded queue and a per-pass lease; the watcher has its
-// own lease so graph edits need not wait for the polling duty to finish.
+// own lease so graph edits need not wait for the polling duty to finish. A
+// poll stats the files a sync would read and syncs only when they moved.
 
 import { type Handlers, holding, sleep } from '@yaks/effects'
 import type { Eid, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { dirname, join, resolve } from 'node:path'
 import { skillRoots, syncSkills } from './skill-mirror.ts'
+import { stamp as stampOf } from './skill-mirror-io.ts'
 
 /** The explicit bidirectional mirror opt-in in the plugin config. */
 export type SkillOptions = { skills?: boolean }
@@ -26,12 +28,15 @@ export type SkillHost = {
 export type SkillRuntime = {
   roots?: typeof skillRoots
   sync?: typeof syncSkills
+  stamp?: typeof stampOf
   pause?: typeof sleep
   poll?: number
 }
 
 /** Continuous polling is intentional: filesystem watches miss renames and
- * index-only changes. Each pass reconciles the present, not a stale event. */
+ * index-only changes. Each pass reconciles the present, not a stale event.
+ * A poll is only stats: it compares each root's stamp with the one its last
+ * clean sync started from, and passes when any moved or never settled. */
 export let skillEffects = (
   host: SkillHost,
   options: SkillOptions = {},
@@ -40,6 +45,7 @@ export let skillEffects = (
   if (!options.skills) return {}
   let roots = runtime.roots ?? skillRoots
   let sync = runtime.sync ?? syncSkills
+  let stamp = runtime.stamp ?? stampOf
   let pause = runtime.pause ?? sleep
   let stopping = host.stopping ?? AbortSignal.abort()
   let db = host.config?.db
@@ -118,15 +124,39 @@ export let skillEffects = (
     }, work)
     if (failed) throw error
   }
+  // The roots the last pass found, and the stamp each one's last clean sync
+  // started from. Graph edits arrive as skill_files passes, which refresh both.
+  let seen: string[] | undefined
+  let settled = new Map<string, string>()
+  let moved = async (): Promise<boolean> => {
+    if (!seen) return true
+    for (let root of seen) {
+      let was = settled.get(root)
+      if (was == undefined || was != await stamp(root)) return true
+    }
+    return false
+  }
   let pass = async (): Promise<void> => {
     if (host.stopping?.aborted) return
     await leased(
       '@yaks/persona/skill_files',
       host.stopping ?? new AbortController().signal,
       async (signal) => {
-        for (let root of await roots(host.graph)) {
+        seen = await roots(host.graph)
+        for (let root of settled.keys()) {
+          if (!seen.includes(root)) settled.delete(root)
+        }
+        for (let root of seen) {
           if (signal.aborted) break
+          settled.delete(root)
+          // Stamped before the sync reads, so a change during it moves it.
+          let before = await stamp(root)
           let result = await sync(host.graph, root, await memory(root))
+          // Conflicts and refusals (a dirty checkout, a diverged main) may
+          // clear without touching these files, so they keep being retried.
+          if (!result.conflicts.length && !result.failed.length) {
+            settled.set(root, before)
+          }
           for (let path of result.conflicts) {
             console.warn(`@yaks/persona skills — conflict: ${path}`)
           }
@@ -184,9 +214,11 @@ export let skillEffects = (
       try {
         await leased('@yaks/persona/skill_watch', stopping, async (signal) => {
           // A minimal one-shot host reconciles once. Live hosts poll until
-          // shutdown or loss of the singleton watcher lease.
+          // shutdown or loss of the singleton watcher lease. Every start
+          // reconciles, whatever an earlier watcher settled.
+          seen = undefined
           do {
-            await reconcile()
+            if (await moved()) await reconcile()
             if (signal.aborted) break
             await pause(runtime.poll ?? 2_000, signal)
           } while (!signal.aborted)
