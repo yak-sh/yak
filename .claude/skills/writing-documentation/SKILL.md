@@ -10,8 +10,9 @@ description: >
   "explain how X works" or "update the README". Terms are defined where they
   are first used and then used exactly, never a synonym, and every major
   feature has a short example that runs. A skill is `skill-writing`, a design
-  is `design-docs`, naming a component is `vocabulary`, and which files a
-  package carries is `packages-and-plugins`.
+  is `design-docs`, naming a component is `vocabulary`, which files a package
+  carries is `packages-and-plugins`, and what the marketing site promises and
+  to whom is `business-model`.
 ---
 
 # Writing documentation

@@ -44,9 +44,18 @@ looking is worth more than many drawn in by a discount, which "*actively*
 select[s] for customers who don't really want your product". We don't grow by
 discounting.
 
-The personas we serve are in D-131886: people who organize a family or a group,
-and people who run something small. They're hypotheses until the people who
-come on their own confirm them.
+Start from a literal person. Jeff's first personas are people he knows who use
+yaks.app (M-131884). One gets value and would pay, yet pays nothing because
+she has never hit a limit. The other is a developer with more ideas than he
+builds. Each is "just *one* persona among multiple". D-131886 models several,
+says which one is the wedge, and marks the personas that are guesses. A
+persona that no one on yaks.app resembles stays a guess until someone who came
+on their own fits it.
+
+These principles aren't only for us. Jeff wants an operator on yaks.app that
+"takes the ideas, a smart set of principles like we're building now and it
+just comes up with something". When that operator builds someone's business,
+it brings this way of thinking to their idea too.
 
 ## Sharing is the marketing; value is what gets paid for
 
@@ -72,11 +81,17 @@ limit sits on is what holds those two pulls together:
   apps, their data and the people in it. It's the space that gets upgraded,
   not a person, and what one space uses never counts against another. Today
   meter.ts still pools emails, builds and the model budget across each owner's
-  spaces. D-131886's task tree moves all of it onto the space.
+  spaces. T-131890 moves all of it onto the space.
 - **A limit lands on whoever can act on it.** *(An agent's addition.)* When a
   space runs out of something, its owner hears about it, in a sentence that
   names the space, the limit and the one thing to do. A guest who finds an app
   paused is a recommendation we won't get.
+- **Upgrades come by pull, not by limits alone.** Someone getting value may
+  never hit a limit, and "sometimes you really do just have to wait a bit for
+  users to get to the point where they upgrade." So the Plus plan carries what
+  a maker wants next, and the product helps them get there. That's the
+  custom domain that's their next step, or the features already on their
+  list, built sooner. "i'm not talking a salesman."
 
 "a business is a flywheel. everything must contribute to the cycle and not
 detract." Here's ours. Someone asks their assistant for an app, and it's live at
@@ -86,6 +101,14 @@ outgrow free and pay. The money makes the product better, and the first minute
 gets more magical. Before you ship a limit, a price or a line of copy, find
 where it sits in that cycle. If it slows any turn, it's wrong, whatever revenue
 it promises.
+
+At its best, the cycle runs through a maker. She makes a tool for herself,
+shares it with her team, publishes it, and then sells it, and the people who
+buy it become yaks.app's users. In Jeff's words: "if we could organically grow
+her little tools for herself into a business where she makes money from
+sharing them with others, that'd be amazing for her and us." Each step should
+be a small, obvious move from the one before. What yaks.app gives at each
+step, and what's still missing, is in D-131886.
 
 ## Blow their minds
 
@@ -118,10 +141,13 @@ How a sentence reads in general is `writing-documentation`.
 A price tells each visitor whether the product is for them before they've read
 a word: "no corporate CTO is going to find $9/mo product and think it's for
 them. they are expecting 6-7 figures." So a price is set by who it should draw
-in. A flat price per space, with every member free, says *for a family, a club,
-a small business*. Per-seat pricing, "Contact sales" and an enterprise tier say
+in. A flat price per space, with every member free, says *for a person, their
+team and the things they run*. Per-seat pricing, "Contact sales" and an enterprise tier say
 something else. They wait until a customer we want asks for something only
 they would buy.
+
+The people we want already pay for an assistant: "if they aren't paying for
+claude, they probably just don't need our product."
 
 ## Trust, and where to look
 

@@ -9,12 +9,12 @@ description: >
   rows, add or rename a platform word, change a connector tool, its prompts or
   the guide, spend money on an account's behalf, or debug a yaks app that is
   broken, slow, refusing or showing the wrong thing, even if the request only
-  names an app ("jill's app", "yourname/trip"). Not for the box's own server
-  (`yak serve`). Designing words is `vocabulary`, moving stored rows is
-  `data-migration`, a platform page's parts are `ui-building`, vectors and
-  `.near` in a store are `search-and-embeddings`, an app's builders are
-  `builders-and-builds`, its tests are `testing`, and a key it calls out with is
-  `secrets-and-connections`.
+  names an app ("jill's app"). Not for the box's own server (`yak serve`).
+  Designing words is `vocabulary`, moving stored rows is `data-migration`, a
+  platform page's parts are `ui-building`, vectors and `.near` in a store are
+  `search-and-embeddings`, an app's builders are `builders-and-builds`, its
+  tests are `testing`, a key it calls out with is `secrets-and-connections`,
+  and pricing is `business-model`.
 ---
 
 # The yaks.app platform
