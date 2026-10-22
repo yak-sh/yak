@@ -339,6 +339,8 @@ export let BOUNDARIES = [
   // (written.ts).
   'yak/store/written/1',
   'yak/store/session-imported/1',
+  // Every space's handle (space-move.ts, D-131924).
+  'yak/store/space-store/1',
 ]
 
 /** A column dropped from a table. */

@@ -10,6 +10,7 @@ import type { Rule } from './mover.ts'
 export let spaceStoreRule: Rule = {
   mark: 'yak/store/space-store/1',
   stores: [PLATFORM_STORE],
+  live: 'all',
   find: '.space !space.store *',
   move: (row) => [{
     entity: { eid: row.entity.eid },
