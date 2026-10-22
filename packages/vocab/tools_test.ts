@@ -345,10 +345,6 @@ test('a refusal says which argument wants what, in plain words', () => {
     let [args, said] of [
       [{}, 'missing bundles'],
       [{ bundles: 'many' }, 'bundles: wants an array, not a string'],
-      [
-        { bundles: '[{"entity": {}}' },
-        'bundles: wants an array, not a string that is not valid JSON',
-      ],
       [{ bundles: [{}] }, 'bundles.0: missing entity'],
       [{ bundles: [], check: 'yes' }, 'check: wants a boolean, not a string'],
       [{ bundles: [], mode: 'c' }, 'mode: wants one of "a", "b", not "c"'],
@@ -361,8 +357,30 @@ test('a refusal says which argument wants what, in plain words', () => {
         'nope: not one of bundles, component, body, mode, check',
       ],
     ] as const
-  ) {
-    assertEquals(String(argued(args)).replace(/ \(.*\)$/, ''), said)
-  }
+  ) assertEquals(argued(args), said)
   assertEquals(argued({}, wait), 'wants exactly one of process or tasks')
+})
+
+// The engine's words for why are its own; where, and what to send, are ours.
+test('text that is not the JSON it means to be is shown around where it broke', () => {
+  let one = '{"entity": {"eid": "a"}}'
+  for (
+    let [bundles, near] of [
+      [
+        `[${one}, ${one}}, ${one}]`,
+        `51, here: … {"eid": "a"}}, {"entity": {"eid": "a"}}<here>}, ` +
+        `{"entity": {"eid"…`,
+      ],
+      [
+        `[${one}, ${one}`,
+        `51, here: … {"eid": "a"}}, {"entity": {"eid": "a"}}<here>`,
+      ],
+    ]
+  ) {
+    assertEquals(
+      String(argued({ bundles })).replace(/JSON: .* at character/, 'JSON: at'),
+      `bundles: wants an array, not a string that is not valid JSON: at ` +
+        `${near}. Send an array itself, not text that spells one`,
+    )
+  }
 })

@@ -751,12 +751,15 @@ argument constructs the error for invalid arguments; tool callers supply
 `CallError` and declaration readers use the default `Error`. The refusal says,
 for each argument at fault, what it wants and what it was given:
 `Invalid tool arguments: bundles: wants an array,
-not a string`. Invalid schemas
-still throw `Error`. `validateToolOutput` checks without applying defaults.
-`toolCheck(schema)` returns a reusable check whose empty error list means valid;
-`errorsText(errors, schema?, value?)` says its errors in those words, or in the
-validator's own when the schema and value are not given. Validators are cached
-by schema object, so registered schemas must remain immutable.
+not a string`. A string that
+meant to be JSON and is not says why, at which character, with the text around
+it marked `<here>`, and that the array or object itself can be sent instead.
+Invalid schemas still throw `Error`. `validateToolOutput` checks without
+applying defaults. `toolCheck(schema)` returns a reusable check whose empty
+error list means valid; `errorsText(errors, schema?, value?)` says its errors in
+those words, or in the validator's own when the schema and value are not given.
+Validators are cached by schema object, so registered schemas must remain
+immutable.
 
 ```ts
 import { validateToolInput } from '@yaks/vocab/tools'

@@ -130,17 +130,42 @@ const either = (words: string[]) =>
     ? words.join('')
     : `${words.slice(0, -1).join(', ')} or ${words.at(-1)}`
 
-// What was given, in words, and why a string that looked like JSON was not
-// read as the value it spells.
-const given = (value: unknown): string => {
+// What a place wants, and what it was given instead. A string that looked like
+// JSON and did not parse says why and where, with the text around that place,
+// and that the value itself is what to send.
+const instead = (wants: string[], value: unknown): string => {
+  let kinds = [...new Set(wants)]
+  let wanted = `wants ${either(kinds.map(article))}`
   if (typeof value != 'string' || !/^\s*[[{]/.test(value)) {
-    return article(typeOf(value))
+    return `${wanted}, not ${article(typeOf(value))}`
   }
+  let broken = unparsed(value)
+  if (!broken) return `${wanted}, not a string`
+  let whole = kinds.filter((t) => t == 'array' || t == 'object').map(article)
+  let send = whole.length
+    ? `. Send ${either(whole)} itself, not text that spells one`
+    : ''
+  return `${wanted}, not a string that is not valid JSON: ${broken}${send}`
+}
+
+// Why text is not JSON, and the text around the place it stopped parsing,
+// marked `<here>`.
+const unparsed = (text: string): string | undefined => {
   try {
-    JSON.parse(value)
-    return 'a string'
+    JSON.parse(text)
+    return undefined
   } catch (e) {
-    return `a string that is not valid JSON (${(e as Error).message})`
+    let said = (e as Error).message
+    let why = said.replace(/ in JSON at position.*$/s, '')
+    let at = Number(
+      said.match(/at position (\d+)/)?.[1] ??
+        (/end of JSON input/.test(said) ? text.length : NaN),
+    )
+    if (!Number.isInteger(at)) return why
+    let from = Math.max(0, at - 40), to = Math.min(text.length, at + 20)
+    let near = (from ? '…' : '') + text.slice(from, at) + '<here>' +
+      text.slice(at, to) + (to < text.length ? '…' : '')
+    return `${why} at character ${at}, here: ${near.replaceAll('\n', '\\n')}`
   }
 }
 
@@ -160,10 +185,9 @@ const fault = (keyword: string, node: unknown, v: unknown) => {
       : ''
   )
   let types = branches.map(admits)
-  let not = `not ${given(v)}`
   switch (keyword) {
     case 'type':
-      return `wants ${either([node].flat().map(String).map(article))}, ${not}`
+      return instead([node].flat().map(String), v)
     case 'enum':
       return `wants one of ${listed}, not ${JSON.stringify(v)}`
     case 'const':
@@ -178,9 +202,7 @@ const fault = (keyword: string, node: unknown, v: unknown) => {
         let some = keyword == 'oneOf' ? 'exactly one' : 'at least one'
         return `wants ${some} of ${either(names)}`
       }
-      return types.every((t) => t.length)
-        ? `wants ${either([...new Set(types.flat())].map(article))}, ${not}`
-        : undefined
+      return types.every((t) => t.length) ? instead(types.flat(), v) : undefined
   }
 }
 
