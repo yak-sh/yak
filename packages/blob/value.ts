@@ -30,6 +30,34 @@ const integer = (v: unknown, fallback: number, max: number) => {
   return n
 }
 
+/**
+ * Why a revision passed is not the value's: a hash of changed text shares
+ * almost none of its digits with the old one, so one a few digits off is the
+ * current revision copied wrong, and anything else is text that changed since,
+ * or a revision copied far wrong. Either way the refusal names the current
+ * revision, which is the next call that reads.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { address } from './store.ts'
+ * import { stale } from './value.ts'
+ *
+ * let now = address('text'), was = address('text, before')
+ * let typo = now.slice(0, 9) + (now[9] == '0' ? '1' : '0') + now.slice(10)
+ * equal(stale(typo, now), `revision ${typo} is ${now} copied wrong: pass ${now}`)
+ * equal(stale(was, now).startsWith(`revision ${was} is not this value's`), true)
+ * ```
+ */
+export const stale = (passed: string, revision: string): string => {
+  const off = [...revision].filter((c, i) => c != passed[i]).length
+  return passed.length == revision.length && off <= 4
+    ? `revision ${passed} is ${revision} copied wrong: pass ${revision}`
+    : `revision ${passed} is not this value's, which is ${revision}: the ` +
+      'text changed since the read that gave it, or the revision was copied ' +
+      `wrong. Pass ${revision} to read the text as it is now; an offset ` +
+      'from an older read may have moved'
+}
+
 /** A provider-neutral tool declaration: JSON Schema arguments in, text out. */
 export type ValueTool = {
   name: string
@@ -50,7 +78,7 @@ export const valueTools = (
     revision: {
       type: 'string',
       description:
-        'Optional SHA-256 of expected UTF-8 text; mismatches fail instead of reading newer content',
+        'The revision an earlier read returned, copied exactly; if the text changed since, the read is refused, naming the current revision',
     },
     start: { type: 'integer', minimum: 0 },
   }
@@ -73,7 +101,7 @@ export const valueTools = (
     }
     const revision = address(value)
     if (args.revision != null && args.revision !== revision) {
-      throw new CallError('revision', 'Value revision changed')
+      throw new CallError('revision', stale(String(args.revision), revision))
     }
     return { revision, text: chars(value) }
   }

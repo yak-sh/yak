@@ -755,7 +755,9 @@ tools accept entity/component/property names, not filesystem paths or raw blob
 addresses, and work with any string property.
 
 Both take `entity`, `component` and `property`. Optional `revision` must match
-the SHA-256 of the current UTF-8 text. Missing, denied or non-text values fail.
+the SHA-256 of the current UTF-8 text; a mismatch is refused with the current
+revision, and says whether the one passed is that revision copied wrong or text
+that changed since. Missing, denied or non-text values fail.
 
 - Read uses a zero-based Unicode code-point `start`. `count` defaults to 2048,
   with a maximum of 8192 (`VALUE_LIMIT`). Results contain `start`, `end`,
