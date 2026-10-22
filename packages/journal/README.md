@@ -219,18 +219,21 @@ a `journal_field` row.
 ## What it keeps
 
 Once a UTC day, the duty `@yaks/journal/service` measures the store's file and
-keeps the day in a `kept{day, at, bytes, free, tables, file}` row: the file's
-bytes, how many of them are free pages, each table's `[bytes, rows]` with its
-indexes' bytes folded into its own, and the file it measured (@yaks/file's
+keeps the day in a `kept{day, at, bytes, free, tables, changes, file}` row: the
+file's bytes, how many of them are free pages, each table's `[bytes, rows]` with
+its indexes' bytes folded into its own, the changes the journal held per
+component name (the log's `held()`, one pass over the index on `component`; a
+deletion counts under `entity`), and the file it measured (@yaks/file's
 `file{path, root}`, from the storage's `file`), so a machine's Disks tab marks
 the graph's own file with its free pages. A store whose storage has no `measure`
-(one that keeps no file of pages) is not measured. History is the journal's
+(one that keeps no file of pages) is not measured, and a day's row measured
+before it counted the changes is measured again. History is the journal's
 tables (`journal_*`) and each component's versions (`<comp>$versions`).
 
 The browsing app's sidebar offers the History page (`@yaks/journal/views`),
-which reads only those rows and a count of the changes held per component: what
+which reads only those rows, a month of them, and counts nothing itself: what
 history keeps against the whole file, what it kept per change written and per
-day between measurements, the changes the journal holds for each component
+day between measurements, the changes the journal held for each component
 beside what the component keeps in its own table and its versions, and every
 table, largest first. A component opens its page, which lists its recent writes.
 

@@ -17,7 +17,7 @@ import { col, notNull, tally, val } from '@yaks/sql'
 import { mem, raised } from '../sqlite/testing.ts'
 import { storage } from '../sqlite/mod.ts'
 import { graph } from '@yaks/graph'
-import { NOW, sync, wiki, wikiGraph, wikiLog } from './testing.ts'
+import { bareLog, NOW, sync, wiki, wikiGraph, wikiLog } from './testing.ts'
 
 let ada = { by: 'ada' }
 let bob = { by: 'bob', via: 'cli' }
@@ -255,6 +255,16 @@ test('the before-side is derived, and the state before a batch with it', () => {
   assertEquals(f.j.tip(), 2)
   assert(f.j.touchedSince('p1', 1))
   assert(!f.j.touchedSince('p1', 2))
+})
+
+test('the changes held, per component', () => {
+  let j = bareLog()
+  j.write({ at: NOW }, [
+    { target: 'ada', comp: 'page', value: { title: 'One' } },
+    { target: 'bob', comp: 'page', value: null },
+    { target: 'bob', comp: 'entity', value: null },
+  ])
+  assertEquals(j.held(), { page: 2, entity: 1 })
 })
 
 test('every write of one property, anywhere, oldest first', () => {

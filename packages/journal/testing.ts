@@ -27,7 +27,7 @@ import { loadVocab, type Vocab, type VocabDoc } from '@yaks/vocab'
 import { preparedDriver, snapshot } from '../sqlite/testing.ts'
 import { statements, storage } from '@yaks/sqlite'
 import { lit, type Statements } from '@yaks/sql'
-import { ddl, journal, type Log } from './log.ts'
+import { ddl, journal, type Log, log } from './log.ts'
 import { type Feed, feedDdl, feeder } from './feed.ts'
 import { feedFor, logFor } from './graph.ts'
 
@@ -139,6 +139,14 @@ export let actors = (g: Graph) =>
     ACTORS.map((eid) => ({ entity: { eid }, render: { state: 'actor' } })),
     { now: NOW },
   )
+
+/** A log over a fresh copy of the wiki's tables, with nothing in front of it:
+ * what a test of the log's own reads writes to directly, with `write`. Its
+ * actors (`ada`, `bob`, `cli`) are already entities. */
+export let bareLog = (): Log => {
+  let db = preparedDriver(empty)
+  return log({ rows: (s) => db.query(s) })
+}
 
 /** An embedded database with the wiki's tables, the journal's and the feed's,
  * and a log and a feed bound to it — what a graph and a test both read

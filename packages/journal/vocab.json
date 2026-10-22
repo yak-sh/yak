@@ -79,7 +79,7 @@
       "wire": false,
       "embed": false,
       "type": "object",
-      "description": "what the store's file kept on one UTC day, measured once that day from its page statistics, so history can be read against the rest of the file: the file's bytes, how many of them were free, and each table's bytes with its indexes and its rows. History is the journal's tables (`journal_*`) and each component's versions (`<comp>$versions`)",
+      "description": "what the store's file kept on one UTC day, measured once that day from its page statistics, so history can be read against the rest of the file: the file's bytes, how many of them were free, each table's bytes with its indexes and its rows, and the changes the journal held per component. History is the journal's tables (`journal_*`) and each component's versions (`<comp>$versions`)",
       "properties": {
         "day": {
           "type": "string",
@@ -121,6 +121,14 @@
           },
           "stamped": true,
           "description": "by table: [bytes, rows], its indexes' bytes folded into its own"
+        },
+        "changes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "stamped": true,
+          "description": "by component name: the changes the journal held for it, a deletion's under entity; absent where the store keeps no journal"
         }
       }
     },

@@ -18,6 +18,8 @@ export type Kept = {
   bytes: number
   free: number
   tables: Record<string, [bytes: number, rows: number]>
+  /** the changes the journal held, by component name */
+  changes?: Record<string, number>
 }
 
 /** The table the journal keeps a row in per change. */

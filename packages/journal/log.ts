@@ -293,6 +293,8 @@ export type Log = {
   ) => { target: Eid; value: unknown; seq: number }[]
   /** the highest seq the log holds, or 0 */
   tip: () => number
+  /** the changes the log holds, by the component each wrote or removed */
+  held: () => Record<string, number>
   /** has anything touched this entity since a given transaction? */
   touchedSince: (target: Eid, seq: number) => boolean
   /** does the log still read its text through this content? */
@@ -856,6 +858,17 @@ export let log = (opts: LogOpts): Log => {
         ?.m,
     )
 
+  /** The changes the log holds per component: one pass over the index on
+   * `component`, reading no change row. A deletion counts under `entity`. */
+  let held = (): Record<string, number> =>
+    Object.fromEntries(
+      rows(select({
+        cols: [as(col('component'), 'c'), as(fn('count', lit('*')), 'n')],
+        from: table('journal_change'),
+        group: [col('component')],
+      })).map((r) => [String(r.c), num(r.n)]),
+    )
+
   /** Has anything touched this entity since `seq`? The coarse "something
    * changed" question an undo asks where there is no property to put a
    * precondition on. */
@@ -954,6 +967,7 @@ export let log = (opts: LogOpts): Log => {
     latest,
     wrote,
     tip,
+    held,
     touchedSince,
     holds,
     seek,

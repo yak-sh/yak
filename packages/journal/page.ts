@@ -3,10 +3,10 @@
  * and what it kept per change and per day, day by day; the changes the
  * journal holds for each component, beside what that component keeps in its
  * own table and its versions; and every table in the file, largest first.
- * The sizes come from the `kept` rows the duty writes once a day
- * (./service.ts); the changes per component are counted once when the page
- * opens. A component is drawn by name and opens its page, where its recent
- * writes are.
+ * Everything comes from the `kept` rows the duty writes once a day
+ * (./service.ts), the changes per component among them, so opening the page
+ * reads a month of rows and counts nothing. A component is drawn by name and
+ * opens its page, where its recent writes are.
  *
  * @module
  */
@@ -116,26 +116,21 @@ let Days = ({ days }: { days: Kept[] }) =>
     }),
   })
 
-// The changes the journal holds for each component, beside what the
+// The changes the journal held for each component, beside what the
 // component keeps in its table and its versions.
-let Components = (
-  { io, k, tally }: {
-    io: Props['io']
-    k: Kept
-    tally: Record<string, number>
-  },
-) => {
-  let rows = io.vocab.all.map((c) => {
-    let eid = identityEid('_comp', [c])
-    return { c, eid, n: tally[eid] ?? 0 }
-  }).filter((r) => r.n || k.tables[`${r.c}$versions`])
+let Components = ({ io, k }: { io: Props['io']; k: Kept }) => {
+  let rows = io.vocab.all.map((c) => ({
+    c,
+    eid: identityEid('_comp', [c]),
+    n: k.changes?.[c] ?? 0,
+  })).filter((r) => r.n || k.tables[`${r.c}$versions`])
     .toSorted((a, b) => b.n - a.n).slice(0, COMPONENTS)
   useNamed(io, rows.map((r) => r.eid))
   let most = rows[0]?.n || 1
   return h(Ranked, {
     title: 'By component',
     sub:
-      'The changes the journal holds for each component, and what the component keeps in its own table and in its versions. A component marked as keeping no history has none.',
+      'The changes the journal held for each component, and what the component keeps in its own table and in its versions. A component marked as keeping no history has none.',
     heads: ['changes', 'table', 'versions'],
     rows: rows.map(({ c, eid, n }) => ({
       key: c,
@@ -177,9 +172,6 @@ let Tables = ({ k, before }: { k: Kept; before?: Kept }) => {
  * table. */
 export let Page = ({ io, got }: Props): JSX.Element => {
   let days = (got.days?.rows ?? []).map(keptOf).filter((k): k is Kept => !!k)
-  let tally = io.ask({
-    tally: { query: '._change .tally=_change.comp', once: true },
-  }).tally
   let [k, before] = days
   let each = before && perChange(before, k)
   let daily = before && perDay(before, k, history)
@@ -219,8 +211,7 @@ export let Page = ({ io, got }: Props): JSX.Element => {
         Fragment,
         {},
         h(Days, { days: days.slice(0, 14) }),
-        waiting(tally, 'the changes per component') ??
-          h(Components, { io, k, tally: tally?.tally ?? {} }),
+        h(Components, { io, k }),
         h(Tables, { k, before }),
       )),
   )
