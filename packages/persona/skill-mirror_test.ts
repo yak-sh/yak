@@ -834,15 +834,19 @@ test('a skill stamp moves with skill files and the index, not other files', () =
     Deno.writeTextFileSync(`${root}/.git/HEAD`, 'ref: refs/heads/main\n')
     Deno.writeTextFileSync(`${root}/.git/index`, 'a')
     Deno.writeTextFileSync(skill, text())
-    let last = stamp(root)
+    // Just written, every path is racy: its stamp equals no other.
+    assert(stamp(root) != stamp(root))
+    // A minute on, nothing is, and only what a sync reads moves the stamp.
+    let later = Date.now() + 60_000
+    let last = stamp(root, later)
     let moves = (change: () => void) => {
       change()
       let was = last
-      last = stamp(root)
+      last = stamp(root, later)
       return was != last
     }
     let write = (...paths: string[]) => () =>
-      paths.forEach((p) => Deno.writeTextFileSync(`${root}/${p}`, 'b'))
+      paths.forEach((p) => Deno.writeTextFileSync(`${root}/${p}`, 'bb'))
     assertEquals(moves(() => {}), false)
     assertEquals(moves(write('x', '.git/config')), false)
     assertEquals(moves(write('.claude/skills/sample/SKILL.md')), true)

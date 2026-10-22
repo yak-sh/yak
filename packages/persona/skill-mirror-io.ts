@@ -139,11 +139,19 @@ let gone = (error: unknown) =>
   error instanceof Deno.errors.NotFound ||
   error instanceof Deno.errors.NotADirectory
 
+/** How long a change time stays racy: past the coarsest timestamp tick a
+ * filesystem keeps, so a rewrite of equal size can no longer share it. */
+export let RACY = 2_000
+
 // One line per path: its kind, inode, size and change times, or its absence.
-let mark = (path: string): string => {
+// A path changed within RACY of `now` is racy, as Git calls it: a rewrite in
+// the same tick would leave every stat equal, so its line equals no other.
+let mark = (path: string, now: number): string => {
   try {
     let i = Deno.lstatSync(path)
     let kind = i.isSymlink ? 'l' : i.isDirectory ? 'd' : 'f'
+    let changed = i.ctime?.getTime() ?? i.mtime?.getTime() ?? now
+    if (changed > now - RACY) return `${path} racy ${crypto.randomUUID()}`
     let times = `${i.mtime?.getTime()} ${i.ctime?.getTime()}`
     return `${path} ${kind} ${i.ino} ${i.size} ${times}`
   } catch (error) {
@@ -151,8 +159,8 @@ let mark = (path: string): string => {
     throw error
   }
 }
-let walk = (dir: string, out: string[]): void => {
-  out.push(mark(dir))
+let walk = (dir: string, out: string[], now: number): void => {
+  out.push(mark(dir, now))
   let entries: Deno.DirEntry[]
   try {
     entries = [...Deno.readDirSync(dir)]
@@ -161,18 +169,23 @@ let walk = (dir: string, out: string[]): void => {
     throw error
   }
   for (let entry of entries.sort((a, b) => a.name < b.name ? -1 : 1)) {
-    if (entry.isDirectory) walk(`${dir}/${entry.name}`, out)
-    else out.push(mark(`${dir}/${entry.name}`))
+    let path = `${dir}/${entry.name}`
+    if (entry.isDirectory) walk(path, out, now)
+    else out.push(mark(path, now))
   }
 }
 
 /** What a sync of `root` reads from disk, as stats: the checkout's index and
  * HEAD (the tracked set, staged blobs and branch) and every path under
  * .claude/skills. Equal stamps mean a sync would read the same files, so a
- * watcher compares these instead of syncing. No Git process runs, and the
- * few stats are synchronous: cheaper than a thread-pool hop each. */
-export let stamp = (root: string): string => {
-  let out = [mark(`${root}/.git/index`), mark(`${root}/.git/HEAD`)]
-  walk(`${root}/.claude/skills`, out)
+ * watcher compares these instead of syncing; a racy path keeps it syncing
+ * until its change is RACY old. No Git process runs, and the few stats are
+ * synchronous: cheaper than a thread-pool hop each. */
+export let stamp = (root: string, now: number = Date.now()): string => {
+  let out = [
+    mark(`${root}/.git/index`, now),
+    mark(`${root}/.git/HEAD`, now),
+  ]
+  walk(`${root}/.claude/skills`, out, now)
   return out.join('\n')
 }
