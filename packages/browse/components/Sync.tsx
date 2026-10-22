@@ -6,13 +6,17 @@
 // write is unsent it shows how many wait and how long the oldest has waited, and
 // a write the server REFUSED persists as a returnable error the user can read and
 // dismiss (M-16612) — durable under its delivery id, surfaced again after a
-// reload, never ephemeral or opaque. While the server is away it says, calmly,
-// that the page is reconnecting, until the socket opens again.
+// reload, never ephemeral or opaque. A write is mentioned only once it has
+// waited LATE, so a save that settles in a few frames never flashes the badge.
+// While the server is away it says, calmly, that the page is reconnecting,
+// until the socket opens again.
 import { useEffect, useState } from 'preact/hooks'
 import { away, clearRefusal, outboxWrites, refused } from '../live.ts'
 import { block } from '@yaks/ui'
 
-let Frame = block('div', 'Sync', {
+// A span, so a terminal runs the badges into the bar's line rather than
+// giving them a row of their own.
+let Frame = block('span', 'Sync', {
   Away: 'span',
   Pending: 'button',
   Refused: 'button',
@@ -54,6 +58,23 @@ let brief = (since: number, now: number) => {
   return `${Math.floor(s / 86400)}d`
 }
 
+// How long a write may wait before the bar mentions it. A save normally
+// settles in a few frames, and a badge that flashes for those frames is noise
+// that catches the eye on every keystroke; past two seconds the wait is one a
+// person would want to know about.
+export let LATE = 2000
+
+// The oldest write still unsent, or Infinity when none is.
+let oldestOf = (writes: { since: number }[]) =>
+  writes.reduce((m, w) => Math.min(m, w.since), Infinity)
+
+// Whether any write has waited long enough to show.
+/// late([{since: 0}], 1999) -> false
+/// late([{since: 5000}, {since: 0}], 2000) -> true
+/// late([], 9e9) -> false
+export let late = (writes: { since: number }[], now: number) =>
+  now - oldestOf(writes) >= LATE
+
 export let Sync = () => {
   let writes = outboxWrites.value
   let errs = refused.value
@@ -70,9 +91,20 @@ export let Sync = () => {
     return () => clearInterval(t)
   }, [writes.length > 0, open])
 
-  if (!writes.length && !errs.length && !gone) return null
+  // Wake exactly when the oldest write turns late, so it shows on time
+  // rather than on the next tick.
+  let oldest = oldestOf(writes)
+  useEffect(() => {
+    if (oldest == Infinity) return
+    let wait = oldest + LATE - Date.now()
+    if (wait <= 0) return // late already, and the tick keeps its age moving
+    let t = setTimeout(() => setNow(Date.now()), wait)
+    return () => clearTimeout(t)
+  }, [oldest])
 
-  let oldest = writes.reduce((m, w) => Math.min(m, w.since), Infinity)
+  let slow = late(writes, now)
+  if (!slow && !errs.length && !gone) return null
+
   let sends = writes.length
   let edits = writes.reduce((n, w) => n + w.count, 0)
 
@@ -87,7 +119,7 @@ export let Sync = () => {
           reconnecting
         </Away>
       )}
-      {writes.length > 0 && (
+      {slow && (
         <Pending
           title={`${edits} edit${edits > 1 ? 's' : ''} in ${sends} write${
             sends > 1 ? 's' : ''

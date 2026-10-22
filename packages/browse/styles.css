@@ -1401,7 +1401,10 @@ html {
 }
 
 /* The vim statusbar: NORMAL / -- INSERT -- / the : command line. The side
-   insets keep its text clear of the landscape notch. */
+   insets keep its text clear of the landscape notch. It holds one height
+   whatever it shows: the page above it must not move when a badge comes and
+   goes, so its sides are one line tall and what sits in them fits that line.
+   Only the command line grows it, for the lines a person types. */
 .Status {
   display: flex;
   align-items: center;
@@ -1417,8 +1420,10 @@ html {
   position: relative; /* the hints panel anchors to the bar */
   z-index: 2; /* shell chrome clears sticky content (z1) */
 }
+/* The left side takes what the right leaves it, so a long message cuts off
+   rather than crowding the badges onto a second line. */
 .Status_Left {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   align-self: stretch;
   display: flex;
@@ -1429,12 +1434,15 @@ html {
 .Status_Right {
   flex: 0 1 auto;
   min-width: 0;
+  height: 1lh;
   display: flex;
   align-items: center;
   gap: var(--half-gap);
 }
+/* Taller than the line it sits in under a thumb, it overflows the bar's
+   row rather than growing it. */
 .Status_Close {
-  align-self: stretch;
+  height: max(var(--tap), 1lh);
   min-width: 1.5rem;
   padding: 0 var(--half-gap);
   border: 0;
@@ -1557,6 +1565,10 @@ html {
 }
 .Status_Msg {
   color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 /* "you are …?" — the bar asks once, each candidate a quiet button. */
 .Status_You {
@@ -1597,9 +1609,13 @@ html {
   font: inherit;
   color: var(--sync);
   background: color-mix(in srgb, var(--sync) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--sync) 35%, transparent);
+  /* An inset ring, not a border, and no padding above or below: the pill is
+     exactly the bar's line tall. */
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sync) 35%, transparent);
+  border: 0;
   border-radius: 999px;
-  padding: 1px var(--half-gap);
+  padding: 0 var(--half-gap);
+  white-space: nowrap;
   cursor: default;
 }
 .Sync_Pending {

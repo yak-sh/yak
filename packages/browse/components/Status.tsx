@@ -492,7 +492,11 @@ export let Status = () => {
                   : 'NORMAL'}
               </Mode>
               {(msg.value || problem.value) && (
-                <Msg>
+                <Msg
+                  title={typeof msg.value == 'string'
+                    ? msg.value || problem.value
+                    : undefined}
+                >
                   {typeof msg.value == 'string'
                     ? msg.value || problem.value
                     : <FixMessage {...msg.value} />}
