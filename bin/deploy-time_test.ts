@@ -202,6 +202,32 @@ test('deploy time: a later successful probe stamps its own clock', async () => {
   assertEquals(result, { live: version(31).metadata.created_on, problem: null })
 })
 
+test('deploy time: a recorder that began after the deployment times it by the deployment', async () => {
+  let uploaded = { ...version(20), id: ID }
+  let deployed = version(25).metadata.created_on
+  let clock = Date.parse(PUSHED) + 300_000
+  let attempts = 0
+  let result = await observe(uploaded, false, {
+    check: (id) => probe(id, fake(200, attempts++ ? ID : 'old')),
+    now: () => clock,
+    wait: () => {
+      clock += 1000
+      return Promise.resolve()
+    },
+    history: () =>
+      Promise.resolve({
+        result: {
+          deployments: [{
+            id: 'live',
+            created_on: deployed,
+            versions: [{ version_id: ID, percentage: 100 }],
+          }],
+        },
+      }),
+  })
+  assertEquals(result, { live: deployed, problem: null })
+})
+
 test('deploy time: slow discovery cannot delay target verification or rewrite its timestamp', async () => {
   let time = clock(Date.parse(PUSHED) + 30_000)
   let discovery = Promise.withResolvers<Version[]>()

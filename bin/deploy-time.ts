@@ -216,6 +216,7 @@ export let observe = async (
     wait = pause,
   } = {},
 ) => {
+  let began = now()
   let siblings: Version[] = []
   let discovering = false
   let refreshAt = -Infinity
@@ -267,6 +268,18 @@ export let observe = async (
       Date.parse(first),
     )).toISOString()
   }
+  // A recorder that starts after its version went live (the gate's one runner
+  // was busy with the push before) saw only the probes catch up: the version
+  // was live when Cloudflare deployed it, not when the first probe answered.
+  // A version that deployed while the recorder watched is timed by its probe.
+  let stamped = async (observed: string) => {
+    try {
+      let first = await activation()
+      return Date.parse(first) <= began ? first : observed
+    } catch {
+      return observed
+    }
+  }
   try {
     let result = await serving()
     if (!result.problem) return { live: await activation(), problem: null }
@@ -280,7 +293,7 @@ export let observe = async (
         ? null
         : result.sibling
         ? await activation()
-        : result.observed,
+        : await stamped(result.observed),
       problem: result.problem,
     }
   } finally {
