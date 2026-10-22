@@ -1,6 +1,7 @@
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import {
+  CEILING,
   type Deploy,
   latest,
   records,
@@ -111,27 +112,28 @@ let bank = (): Promise<Baseline> =>
 
 test('deploy suite: banked build-to-live floor refuses a synthetic regression', async () => {
   let base = await bank()
-  let floor = base.benches[0].median
+  let { median: floor } = base.benches[0]
+  let limit = floor * (1 + base.tolerance)
   let check = options(base)
-  assertEquals(
-    (await run(check, history(floor, floor * 1.25)))?.verdict,
-    'passed',
-  )
+  assertEquals((await run(check, history(floor, limit)))?.verdict, 'passed')
   await assertRejects(
-    () => run(check, history(floor, floor * 1.251)),
+    () => run(check, history(floor, limit * 1.001)),
     Regressed,
   )
   assertEquals(base.benches[0].median, floor)
 })
 
-test('deploy suite: the strict 60s ceiling uses the same ratchet', async () => {
+test('deploy suite: the ceiling uses the same ratchet', async () => {
   let base = await bank()
-  base.benches[0].median = 50
+  base.benches[0].median = CEILING
   let check = options(base)
-  assertEquals((await run(check, history(50, 59.999)))?.verdict, 'passed')
-  let error = await assertRejects(() => run(check, history(50, 60)), Regressed)
+  assertEquals(
+    (await run(check, history(CEILING - 0.001)))?.verdict,
+    'passed',
+  )
+  let error = await assertRejects(() => run(check, history(CEILING)), Regressed)
   assertEquals((error as Regressed).result.regressions.map((r) => r.name), [
-    '60s budget exceeded',
+    'deploy ceiling exceeded',
   ])
 })
 
@@ -142,14 +144,15 @@ test('deploy suite: a build waiting its turn behind a burst of pushes is not the
   let base = structuredClone(banked)
   base.benches[0].median = 50
   let check = options(base)
-  assertEquals((await run(check, [waited(80, 30)]))?.verdict, 'passed')
+  let late = CEILING + 30
+  assertEquals((await run(check, [waited(late, late - 50)]))?.verdict, 'passed')
   let error = await assertRejects(
-    () => run(check, [waited(80, 10)]),
+    () => run(check, [waited(late, 10)]),
     Regressed,
   )
   assertEquals((error as Regressed).result.regressions.map((r) => r.name), [
     'build → live',
-    '60s budget exceeded',
+    'deploy ceiling exceeded',
   ])
 })
 
@@ -167,11 +170,14 @@ test('deploy suite: upload order, completed observations and backfills choose th
   assertEquals(latest([...measured, failed, row(40, 4)])?.seconds, 40)
 })
 
-test('deploy acceptance cannot weaken the strict 60s budget', async () => {
+test('deploy acceptance cannot weaken the ceiling', async () => {
   let base = await bank()
   await assertRejects(
     () =>
-      run({ ...options(base), mode: 'accept', tolerance: .25 }, history(60)),
+      run(
+        { ...options(base), mode: 'accept', tolerance: .25 },
+        history(CEILING),
+      ),
     Error,
     'Cannot accept',
   )

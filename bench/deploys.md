@@ -90,11 +90,11 @@ row's stamps; nothing derived is stored.
 
 The gate judges the deploy's own time, `build → live` (`own()`:
 `live - started`), so a build waiting its turn behind a burst of pushes is not
-counted against it. The baseline preserves the minimum recorded prospective live
-time. Its 25% tolerance permits up to `floor × 1.25`; an independent strict
-60-second ceiling also applies, so exactly 60 seconds fails. Both comparisons
-use the same benchmark ratchet. Explicit acceptance can lower the floor from
-reviewed observations; a check only compares and writes its result to
+counted against it. The baseline holds the median of the recorded prospective
+live times. Its 50% tolerance permits up to `median × 1.5`; an independent
+120-second ceiling (`CEILING`) also applies, so exactly 120 seconds fails. Both
+comparisons use the same benchmark ratchet. Explicit acceptance can lower the
+floor from reviewed observations; a check only compares and writes its result to
 `bench/deploy.results.json`. No recorded rows pass as bootstrap. Corrupt rows
 and an unverified latest deploy fail. Historical backfills stay outside the
 ratchet.
@@ -367,3 +367,17 @@ while keeping runtime behavior fixed. Builds queue stamps remain unavailable
 with the current credential; the removed Docker path and the preceding Build's
 completion establish that the second push cannot wait behind its sandbox image
 build.
+
+## The limit follows Cloudflare's spread (T-131399)
+
+The gate failed on most pushes on 2026-10-21 because one push is one sample, and
+Cloudflare's build varies more than the limit allowed. Push to live in the
+gate's own runs that day: 56.7, 78.1, 72.0, 62.8, 77.0, 49.4, 60.1 and 68.2
+seconds, with 26.7 to 95.8 since 2026-10-10: a median near 63 against a floor of
+47.478 taken from four lucky September rows and a 60-second ceiling. Of those,
+upload (the build) was 48 to 77 seconds and propagation 0 to 15; the Builds API
+refuses the runner's token (HTTP 401), so the queue cannot be told from the
+build and counts as the build's. Nothing in the repo changed between the green
+and red pushes. The baseline is now the median, 63 seconds, with 50% tolerance,
+and the ceiling is 120 seconds: a gate for a deploy that got twice as slow, not
+for the day's weather.

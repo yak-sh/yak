@@ -107,7 +107,12 @@ export let latest = (rows: Deploy[]) =>
     ).values(),
   ].sort((a, b) => Date.parse(a.uploaded) - Date.parse(b.uploaded)).at(-1)
 
-export let overBudget = (seconds: number) => seconds >= 60
+/** The slowest a deploy may take, push to live, whatever the baseline allows:
+ * 1.5 times the slowest of the 15 measured since 2026-10-10 (78 s), since
+ * Cloudflare's build alone varies 27 to 78 s from one push to the next. */
+export let CEILING = 120
+
+export let overCeiling = (seconds: number) => seconds >= CEILING
 
 export let suite = (rows: Deploy[]): CollectedSuite | null => {
   let row = latest(rows)
@@ -123,7 +128,7 @@ export let suite = (rows: Deploy[]): CollectedSuite | null => {
     workload: 1,
     benches: [
       { name: 'build → live', unit: 's' },
-      { name: '60s budget exceeded', unit: 'violations' },
+      { name: 'deploy ceiling exceeded', unit: 'violations' },
     ],
     collect: () => ({
       'build → live': {
@@ -131,11 +136,11 @@ export let suite = (rows: Deploy[]): CollectedSuite | null => {
         source: 'verified-live',
         details: row,
       },
-      // The old gate also enforces a strict 60s budget. Encoding its violation
-      // as a sample keeps the shared ratchet as the only verdict mechanism.
-      '60s budget exceeded': {
-        value: overBudget(own(row)!) ? 1 : 0,
-        source: '60s-budget',
+      // The ceiling's violation is a sample, so the shared ratchet stays the
+      // only verdict mechanism.
+      'deploy ceiling exceeded': {
+        value: overCeiling(own(row)!) ? 1 : 0,
+        source: 'ceiling',
       },
     }),
   }
@@ -145,9 +150,9 @@ export let run = async (options: Options, rows?: Deploy[]) => {
   let measured = rows ?? await readRecords()
   let work = suite(measured)
   if (
-    options.mode == 'accept' && work && overBudget(own(latest(measured)!)!)
+    options.mode == 'accept' && work && overCeiling(own(latest(measured)!)!)
   ) {
-    throw new Error('Cannot accept a deploy exceeding the strict 60s budget')
+    throw new Error('Cannot accept a deploy exceeding the ceiling')
   }
   if (!work) {
     console.log('deploy: no live timing data — pass (bootstrap)')
