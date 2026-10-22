@@ -381,3 +381,10 @@ build and counts as the build's. Nothing in the repo changed between the green
 and red pushes. The baseline is now the median, 63 seconds, with 50% tolerance,
 and the ceiling is 120 seconds: a gate for a deploy that got twice as slow, not
 for the day's weather.
+
+A second source of false red is the gate's single runner: a push that lands
+while the runner is busy with the previous one has its recorder start minutes
+late (d819878f: deployed 00:26:57, recorder began 00:31:34, recorded 334.8 s). A
+recorder that began after the version's first deployment now times it by that
+deployment, as one that finds the version already serving always did; a version
+deployed while the recorder watched is still timed by its first answering probe.
