@@ -15,8 +15,10 @@ let comp = (b: Bundle | undefined, name: string) =>
 
 /** What a background call (`tool_async`) answers while it runs: its interim
  * result, paired with the call like any other, and saying what it means where
- * the model reads it. It is no entry: a request derives it from the call. The
- * final arrives later, naming its call ({@link project}). */
+ * the model reads it. A request derives it from the call; a call that outlasts
+ * its patience is also given it as an entry (`tool_progress`, ./react.ts), the
+ * new line that lets the model take a turn while it runs. The final arrives
+ * later, naming its call ({@link project}). */
 export let PENDING = 'Pending; its result will follow.'
 
 // The call an entry answers: a final's or a Pending's.
@@ -173,8 +175,9 @@ export let project = (
   let finals = new Set(
     window.flatMap((b) => b.result ? [String(comp(b, RESULT)?.call)] : []),
   )
-  // Each call's final, and the seqs of the progress entries it reported
-  // (written for background calls before their Pending was derived).
+  // Each call's final, and the seqs of its Pending entries: one written when
+  // it outlasted its patience, or, in older transcripts, beside every
+  // background call.
   let landed = new Map<string, number>()
   let progress = new Map<string, number[]>()
   for (let b of transcript) {
@@ -190,13 +193,13 @@ export let project = (
   // sent the final alone. Keep a sent Pending: that immutable prefix cannot be
   // rewritten afterwards, and a Pending no request sent is never sent late.
   // The first boundary at or past the Pending decides it. A background call's
-  // Pending stands at the call, or at the progress entries it once reported.
+  // Pending stands at the call, and at each Pending entry it has.
   let sent = (call: string, seq: number) =>
     (bounds[reaching(bounds, seq)] ?? Infinity) <
       (landed.get(call) ?? Infinity)
   let pendings = (call: string): number[] => {
     let b = byId.get(call)
-    return progress.get(call) ?? (b?.tool_async ? [seqOf(b)] : [])
+    return [...progress.get(call) ?? [], ...b?.tool_async ? [seqOf(b)] : []]
   }
   let logical = replied(
     asks,
@@ -211,10 +214,10 @@ export let project = (
   let late = (b: Bundle, call: string) =>
     !!b.result &&
     pendings(call).some((seq) => seq < seqOf(b) && sent(call, seq))
-  // A background call no progress entry answers: its derived Pending travels
-  // where a request sent it, or while its final has not landed.
+  // A background call nothing in the window answers: its derived Pending
+  // travels where a request sent it, or while its final has not landed.
   let pending = (call: Bundle) =>
-    !!call.tool_async && !progress.has(call.entity.eid) &&
+    !!call.tool_async &&
     (sent(call.entity.eid, seqOf(call)) || !finals.has(call.entity.eid))
   let spelled = (call: Bundle) => {
     let c = comp(call, CALL)!

@@ -39,13 +39,15 @@ current turn without more calls to execute and can accept new input.
 
 Native tool calls run as independent `session_tool` effects, not under the
 transcript's lease. The completed model response writes each `call` with a
-`tool_async` mark, and the next request answers it with a Pending derived from
-that mark (@yaks/session's `PENDING`), not an entry. The Pending is a
-model-facing result, not `result{call}`: only the ordinary tools runner's final
-result completes execution. Calls overlap and a person can steer while they run.
-Final results wake `session_run`; there is no model polling loop. If nothing
-independent remains, the model ends its current response and the graph asks it
-again when a result arrives.
+`tool_async` mark, and a request answers it with a Pending derived from that
+mark (@yaks/session's `PENDING`). The Pending is a model-facing result, not
+`result{call}`: only the ordinary tools runner's final result completes
+execution. Calls overlap and a person can steer while they run. A final result,
+an input, or the Pending entry of a call that outlasted its patience
+(`patience`, default @yaks/session's `PATIENCE`) wakes `session_run`; there is
+no model polling loop, and a call that answers sooner starts no turn of its own.
+If nothing independent remains, the model ends its current response and the
+graph asks it again when a result arrives.
 
 The transcript stays running while tool finals are outstanding, even after
 assistant prose. Stop prevents unstarted calls; already admitted tool effects

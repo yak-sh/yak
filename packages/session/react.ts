@@ -6,7 +6,7 @@ import { CallError } from '@yaks/tools/errors'
 import { toolEid } from '@yaks/tools/result'
 export { CallError as ToolError } from '@yaks/tools/errors'
 import { argsOf } from '@yaks/graph/call'
-import { identityEid } from '@yaks/graph/identity'
+import { derivedEid, identityEid } from '@yaks/graph/identity'
 import { Refused, Stale } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { transient } from '@yaks/graph/read'
@@ -127,7 +127,7 @@ export type ToolContext = {
  * `refusal{code}`. */
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
-import { project } from './project.ts'
+import { PENDING, project } from './project.ts'
 export { PENDING, project } from './project.ts'
 import {
   contextParts,
@@ -149,7 +149,19 @@ export type Tool = Declared & {
     args: Record<string, unknown>,
     ctx: ToolContext,
   ) => Promise<string | undefined> | string | undefined
+  /** A call to it is the model waiting (on a process, a child, a task): it
+   * never outlasts its patience, however long it runs, so only its result or
+   * something else new starts the model's next turn ({@link PATIENCE}). */
+  waits?: boolean
 }
+
+/** How long a background call (`tool_async`) runs before it is given a
+ * Pending entry (`tool_progress`), in milliseconds. A model turn starts when
+ * there is something new to read: an input, a result, or that Pending, which
+ * says a call has run long enough that other work is worth doing. A call that
+ * answers sooner costs no turn of its own, and a tool that `waits` never gets
+ * one. */
+export let PATIENCE = 10_000
 
 /** A model as one provider serves it: the adapter that asks, and the name
  * that provider knows the model by (`serves.name`). */
@@ -168,6 +180,9 @@ export type Deps = {
   asyncTools?: boolean
   /** Internal effect execution of one recorded call (never a model request). */
   runCall?: Eid
+  /** How long a background call runs before it is given a Pending entry
+   * ({@link PATIENCE} where absent). */
+  patience?: number
   streaming?: boolean
   /** Minimum interval between durable stream checkpoints; zero disables. */
   checkpointMs?: number
@@ -595,7 +610,7 @@ export let react = async (
     if (!open.length) return nothing
   }
   // Async calls are executed by session_tool, not by the transcript's lease.
-  // A progress entry answers the wire protocol without completing the tool.
+  // Their Pending answers the wire protocol without completing the tool.
   if (deps.asyncTools && !deps.runCall) {
     open = open.filter((b) => !b.tool_async)
   }
@@ -738,7 +753,8 @@ export let react = async (
         // spells. Text that spells no object is kept as the model wrote it, so
         // the transcript resends it verbatim, and the call is refused (`served`).
         // A background call (`tool_async`) is answered by a Pending the
-        // request derives from it (./project.ts), so it costs no entry.
+        // request derives from it (./project.ts), and starts no turn until it
+        // answers or outlasts its patience (`patient`).
         let args = objectIn(item.args)
         added.push(line(
           {
@@ -951,9 +967,9 @@ export let react = async (
     deps.named ?? (() => []),
     sending?.tools,
   )
-  // Legacy synchronous calls are run here. Native async calls have already
-  // been given progress and are owned by their separate session_tool effect;
-  // only that effect enters this branch with runCall naming one invocation.
+  // Legacy synchronous calls are run here. Native async calls are owned by
+  // their separate session_tool effect; only that effect enters this branch
+  // with runCall naming one invocation.
   // Resolve the finite offered/called identities, not every tool in the
   // store. Canonical tools are named by their declaration; retained calls
   // may name an older stored identity and still resolve from that row.
@@ -1004,12 +1020,13 @@ export let react = async (
           entity: { eid: '$said' },
           [CONTENT]: {
             body: String(
-              await tool.run(argsOf(call), {
-                session,
-                call,
-                entries,
-                signal: deps.stopping,
-              }),
+              await patient(call, tool, () =>
+                tool.run(argsOf(call), {
+                  session,
+                  call,
+                  entries,
+                  signal: deps.stopping,
+                })),
             ),
           },
           [OUTPUT]: { source: call.entity.eid },
@@ -1026,6 +1043,40 @@ export let react = async (
       run: (call) => {
         throw new CallError('tool', 'no such tool: ' + comp(call, CALL)?.to)
       },
+    }
+    // A background call still running when its patience runs out is given a
+    // Pending entry, something new for the model to read. Only while the call
+    // is the newest reply's: a later request already sent it as pending. The
+    // call's answer waits for that write, so its Pending always comes first.
+    const patient = async (
+      call: Bundle,
+      tool: Tool,
+      work: () => Promise<string> | string,
+    ): Promise<string> => {
+      if (!call.tool_async || tool.waits) return work()
+      let wrote: Promise<unknown> | undefined
+      let timer = setTimeout(() => {
+        wrote = outlasted(call).catch((error) =>
+          deps.report?.(error, session, 'pending')
+        )
+      }, deps.patience ?? PATIENCE)
+      try {
+        return await work()
+      } finally {
+        clearTimeout(timer)
+        await wrote
+      }
+    }
+    const outlasted = async (call: Bundle) => {
+      let [newest] = await g.read(
+        `.ask&.entry.session=${session} .order=-entry.seq .limit=1 ` +
+          '.fields=entity.eid',
+      )
+      if (newest?.entity.eid != comp(call, CALL)?.source) return
+      await g.apply([{
+        ...line({ tool_progress: { call: call.entity.eid } }, PENDING),
+        entity: { eid: derivedEid(`pending ${call.entity.eid}`) },
+      }], { trusted: true })
     }
     const { runner } = await import('@yaks/tools')
     const run = runner(g, {

@@ -377,6 +377,7 @@ export let sessionTools = (g: Graph, limits: ChildLimits = {}): Tool[] => {
     },
   }, {
     name: 'wait',
+    waits: true,
     description:
       'Wait on direct children or tasks. Tasks wait until settled with no open dependencies; returns status when complete or the timeout passes.',
     parameters: {

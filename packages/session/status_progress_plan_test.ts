@@ -32,7 +32,9 @@ let counters = Deno.dlopen(sqlitePath, {
 })
 for (let size of [100, 1000]) {
   for (let scoped of [false, true]) {
-    for (let kind of ['inflight', 'async', 'resolved', 'settled']) {
+    for (
+      let kind of ['inflight', 'waiting', 'async', 'resolved', 'settled']
+    ) {
       let db = new Database(':memory:')
       let d = driver(db)
       let derived = sessionDerived(vocab)
@@ -47,6 +49,7 @@ for (let size of [100, 1000]) {
       }
       shape(10, ['entry', 'ask', 'attempt'])
       shape(11, ['entry', 'call', 'tool_async'])
+      shape(12, ['entry', 'content', 'tool_progress'])
       shape(13, ['entry', 'result'])
       shape(14, ['entry', 'content', 'output'])
       write('entity', { id: 1, eid: 'owner' })
@@ -84,6 +87,11 @@ for (let size of [100, 1000]) {
         if (kind == 'resolved' || kind == 'settled') {
           entry(latest + 2, seq + 2, 13)
           write('result', { entity: latest + 2, call: latest + 1 })
+        }
+        if (kind == 'async') {
+          entry(latest + 2, seq + 2, 12)
+          write('tool_progress', { entity: latest + 2, call: latest + 1 })
+          write('content', { entity: latest + 2, body: 'Pending' })
         }
       }
       if (kind == 'settled') {
@@ -144,8 +152,12 @@ for (let size of [100, 1000]) {
         let scan = counters.symbols.sqlite3_stmt_status(st.unsafeHandle, 1, 1)
         equal(
           kind == 'settled' ? rows : rows[0]['session.status'],
-          // A current-reply background call permits continuation while it runs.
-          kind == 'settled' ? [] : kind == 'inflight' ? 'running' : 'pending',
+          // A background call runs alone until its Pending or its result.
+          kind == 'settled'
+            ? []
+            : ['inflight', 'waiting'].includes(kind)
+            ? 'running'
+            : 'pending',
         )
         ok(scan <= (kind == 'settled' ? 1 : 0), `${scan} full-scan steps`)
         ok(

@@ -261,18 +261,19 @@ export let sessionStatus = {
         gt(col('seq', 'qi'), col('boundary', 'qa')),
         or(
           wears('result', col('entity', 'qi')),
-          declared('tool_async') && declared('call')
-            ? and(
-              wears('tool_async', col('entity', 'qi')),
-              exists(select({
-                cols: [lit(1)],
-                from: table('call', 'qc'),
-                where: and(
-                  eq(col('entity', 'qc'), col('entity', 'qi')),
-                  eq(col('source', 'qc'), col('entity', 'qa')),
-                ),
-              })),
-            )
+          declared('tool_progress') && declared('call')
+            ? exists(select({
+              cols: [lit(1)],
+              from: table('tool_progress', 'qp'),
+              joins: [join(
+                table('call', 'qc'),
+                eq(col('entity', 'qc'), col('call', 'qp')),
+              )],
+              where: and(
+                eq(col('entity', 'qp'), col('entity', 'qi')),
+                eq(col('source', 'qc'), col('entity', 'qa')),
+              ),
+            }))
             : lit(false),
           and(
             wears('content', col('entity', 'qi')),
@@ -847,8 +848,8 @@ export let sessionStatus = {
         ),
         prop('attempt', 'by'),
         prop('execution', 'by'),
-        // Final results close work; a background call permits the model to
-        // continue.
+        // Final results close work; a Pending entry of the newest reply's
+        // background call permits the model to continue.
         as(
           declared('call')
             ? iff(
@@ -864,7 +865,6 @@ export let sessionStatus = {
             : lit(null),
           'answered',
         ),
-        prop('call', 'source'),
         col('boundary_seq', 'span'),
         as(col('asked', 'span'), 'ask_id'),
         col('refused_source', 'span'),
@@ -982,10 +982,23 @@ export let sessionStatus = {
               or(
                 row.input,
                 has('result'),
-                and(
-                  has('tool_async'),
-                  eq(col('call_source', 't'), col('ask_id', 't')),
-                ),
+                declared('tool_progress') && declared('call')
+                  ? and(
+                    has('tool_progress'),
+                    exists(select({
+                      cols: [lit(1)],
+                      from: table('tool_progress', 'rp'),
+                      joins: [join(
+                        table('call', 'rc'),
+                        eq(col('entity', 'rc'), col('call', 'rp')),
+                      )],
+                      where: and(
+                        eq(col('entity', 'rp'), col('entity', 't')),
+                        eq(col('source', 'rc'), col('ask_id', 't')),
+                      ),
+                    })),
+                  )
+                  : lit(false),
               ),
               col('seq', 't'),
               lit(null),

@@ -143,6 +143,7 @@ export let harnessTools = (
   let childWait = session.find((t) => t.name == 'wait')!
   let wait: Tool = {
     name: 'wait',
+    waits: true,
     description:
       'Wait for a process OR named child sessions OR tasks, with a timeout in milliseconds.',
     parameters: {

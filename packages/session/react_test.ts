@@ -2248,7 +2248,7 @@ await react(pendingSession, ids.s, {
 const pendingEntries = await transcript(pendingSession, ids.s)
 
 test('an async call is answered by a Pending paired with it', () => {
-  // The Pending is derived from the call: it costs no entry.
+  // A call within its patience has no Pending entry: the request derives it.
   assertEquals(pendingEntries.filter((b) => b.tool_progress), [])
   let req = pendingModel.asked[1]
   assertEquals(req.items.filter((item) => item.kind == 'result'), [{

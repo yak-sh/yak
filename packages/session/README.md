@@ -247,11 +247,16 @@ With a durable pool, each `session_run` effect performs one leased step. Inputs,
 completed requests, context checkpoints and final tool results owe subsequent
 steps in the transaction that records them. Each `session_tool` effect claims
 and executes one call independently, so several calls can run together. A
-background call (`tool_async`) is answered at once by `PENDING` ("Pending; its
-result will follow."), which a request derives from the call and no entry
-records, so the reply that made it may continue once while it runs; a final
-result or new input asks again. Transcripts written before then hold a
-`tool_progress` entry per call, which still answers it.
+background call (`tool_async`) is answered by `PENDING` ("Pending; its result
+will follow."), which a request derives from the call. A model turn starts while
+calls run only when there is something new to read: an input, a result, or the
+Pending entry (`tool_progress`) a call is given when it outlasts its patience
+(`PATIENCE`, 10 seconds; `Deps.patience`), since a call that has run that long
+leaves other work worth doing. A call that answers sooner costs two entries, the
+call and its result, and no turn of its own. A tool that `waits` (on a process,
+a child, a task) is never given one: the model chose to wait. Older transcripts
+hold a `tool_progress` entry beside every background call, which still answers
+it.
 
 A request carries each call's answer right after the reply's last call, in the
 order of the calls, since many models pair a result with its call by position

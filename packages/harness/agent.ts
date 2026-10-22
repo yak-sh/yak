@@ -206,6 +206,9 @@ export type Opts<H extends Host = Host> = ChildLimits & {
   /** how long a transcript's lease stands between renewals, so how long a
    * process that died running it holds it up (ms; default @yaks/effects') */
   hold?: number
+  /** how long a background call runs before the model may take a turn while
+   * it runs (ms; default @yaks/session `PATIENCE`) */
+  patience?: number
 }
 
 /** A running agent. */
@@ -424,6 +427,7 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
   return {
     holder: h.me,
     asyncTools: true,
+    ...opts.patience == null ? {} : { patience: opts.patience },
     gone: h.gone,
     taskDefaults,
     maxChildren,

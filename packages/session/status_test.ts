@@ -198,11 +198,11 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
       content: { body: 'no such tool' },
     }),
   ], 'pending'],
-  ['a background call alone permits one continuation', [
+  ['a background call alone waits for its result', [
     request(1),
     entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
     entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
-  ], 'pending'],
+  ], 'running'],
   ['a reply waits for an older background call', [
     request(1),
     entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),

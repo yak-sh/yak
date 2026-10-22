@@ -110,11 +110,13 @@ let callsIn = (all: Bundle[]): Bundle[] => {
 export let openCalls = (entries: Bundle[]): Bundle[] =>
   callsIn(ordered(entries))
 
-/** Whether input or a tool answer has arrived beyond the newest request's
- * context boundary. A call running in the background (`tool_async`) is
- * answered at once by a Pending, not a final result: the current reply's
- * background calls permit one continuation; older ones never ask again. This
- * says the model owes work independently of tools running. */
+/** Whether something new has arrived beyond the newest request's context
+ * boundary: an input, a result, or the Pending entry of one of the newest
+ * reply's background calls, written when it outlasted its patience
+ * (./react.ts `PATIENCE`). A background call alone asks nothing more of the
+ * model, and the Pending of an older reply's call never asks again: a later
+ * request already sent it as pending. This says the model owes work
+ * independently of tools running. */
 export let modelReady = (entries: Bundle[]): boolean => {
   let all = ordered(entries).filter((b) => !b.notice)
   let ask = newestAsk(all)
@@ -122,11 +124,15 @@ export let modelReady = (entries: Bundle[]): boolean => {
     b.entity.eid == (ask?.ask as Comp | undefined)?.through
   )
   let boundary = through ? seqOf(through) : ask ? seqOf(ask) : 0
+  let calls = new Set(
+    all.filter((b) =>
+      ask && (b.call as Comp | undefined)?.source == ask.entity.eid
+    ).map((b) => b.entity.eid),
+  )
   return all.some((b) =>
     seqOf(b) > boundary && (
       kindOf(b) == 'input' || !!b.result ||
-      !!ask && !!b.tool_async &&
-        (b.call as Comp | undefined)?.source == ask.entity.eid
+      !!b.tool_progress && calls.has(String((b.tool_progress as Comp).call))
     )
   )
 }
@@ -168,7 +174,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   let turn = all.filter((b) => !asked || seqOf(b) >= seqOf(asked))
   // A background call's Pending answers the provider protocol, but only its
   // result answers the work. Unlike legacy synchronous calls, background calls
-  // can outlive many asks.
+  // can outlive many asks, and asks while they run only for something new.
   let calls = callsIn(turn).filter((b) => !b.tool_async)
   let pending = callsIn(all).some((b) => b.tool_async)
   let background = all.some((b) => b.call && b.tool_async)

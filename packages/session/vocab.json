@@ -798,6 +798,7 @@
       "effect": true,
       "created": [
         "using",
+        "tool_progress",
         "attention",
         "cancel",
         "stop",
@@ -818,7 +819,7 @@
       ],
       "target": ".entry !lines|.session|.task|.requires|.contains",
       "tries": 8,
-      "description": "advance a transcript by one independently owed step: a `using` on an entry asks for a turn, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency (a `requires` or `contains` link going, read by the ends it had). A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
+      "description": "advance a transcript by one independently owed step: a `using` on an entry asks for a turn, a result or a Pending entry (a background call that outlasted its patience) is something new for the model to read, a cancel withdraws the request in flight, a stop ends it (and gives up a child's place), a child is admitted, or a task a transcript holds completes, is cancelled or loses a dependency (a `requires` or `contains` link going, read by the ends it had). A model request the provider failed but may yet answer is asked again after the pool's backoff, eight tries in a row at most"
     },
     "session_release": {
       "effect": true,
@@ -866,7 +867,7 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "an immutable in-progress tool result, written for a background call before its Pending was derived from the call's `tool_async`; transcripts that hold one still read it, and none is written now",
+      "description": "the Pending entry of a background call that outlasted its patience: an immutable interim result that is something new for the model to read, so it may take a turn while the call runs; older transcripts hold one beside every background call",
       "properties": {
         "call": {
           "type": "string",

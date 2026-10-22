@@ -1,7 +1,7 @@
 import { assert, assertEquals } from '@std/assert'
 import type { Bundle, Comp } from '@yaks/graph'
 import type { Item, Model, Request } from '@yaks/model'
-import { react, statusOf } from '@yaks/session'
+import { PENDING, react, statusOf } from '@yaks/session'
 import { test, until } from '@yaks/testing'
 import { agent, lend, seed } from './agent.ts'
 import { harness } from './testing.ts'
@@ -94,6 +94,8 @@ await observed(
       name: 'fake',
       tools,
       model,
+      // Each call outlasts its patience at once: the model goes on.
+      patience: 0,
       report: (e: unknown) => {
         failures.push(e)
       },
@@ -109,8 +111,13 @@ await observed(
       let calls = progress.filter((b) => b.call)
       equal(calls.length, 2)
       ok(calls.every((b) => b.tool_async))
-      // Each call's Pending is derived from the call: no entry of its own.
-      equal(progress.filter((b) => b.tool_progress).length, 0)
+      // A call that outlasted its patience was given a Pending entry, which
+      // asked the model again; that request answered both calls as pending.
+      ok(progress.some((b) => b.tool_progress))
+      equal(requests[1].items.filter((item) => item.kind == 'result'), [
+        { kind: 'result', id: 'slow', output: PENDING },
+        { kind: 'result', id: 'fast', output: PENDING },
+      ])
       equal(progress.filter((b) => b.result).length, 0)
 
       // A runner pass while both calls are held must yield, not ask the model
@@ -181,6 +188,7 @@ await observed(
     let opts = {
       h: heldHost,
       name: 'held-model',
+      patience: 0,
       tools: [{
         name: 'held-tool',
         description: 'Deferred tool',
@@ -247,6 +255,7 @@ await observed(
     let a = agent({
       h: stoppedHost,
       name: 'stop-model',
+      patience: 0,
       tools: [{
         name: 'stop-tool',
         description: 'Deferred tool',

@@ -20,6 +20,9 @@ export type Tool = {
     args: Record<string, unknown>,
     ctx: ToolContext,
   ) => Promise<string | undefined> | string | undefined
+  /** A call to it is the model waiting: a transcript starts no turn for it
+   * while it runs (@yaks/session `PATIENCE`). */
+  waits?: boolean
 }
 import type { Comp, Graph } from '@yaks/graph'
 import { token } from '@yaks/graph/guard'
@@ -94,6 +97,7 @@ export let machineDeclared = (o: MachineOpts = {}): MachineTool[] => [{
   },
 }, {
   name: 'wait',
+  waits: true,
   description:
     'Wait for a process to exit. Returns its exit code and the last lines ' +
     'of its output, or reports that it is still running when the timeout ' +
