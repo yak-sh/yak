@@ -22,6 +22,7 @@ import { parseQuery, resolveRefs } from '../../query.ts'
 import { type Ent } from '../../types.ts'
 import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
+import { route } from '../../history.ts'
 import {
   mentionSig,
   resolveMentions,
@@ -632,6 +633,32 @@ test('session lifecycle shares the task summary lane', () => {
     cache.value = {}
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+test('an embedded Session links its id to its own page, which names it already', () => {
+  let priorRoute = useRoute(() => {})
+  let prior = route.value
+  cache.value = {
+    s: { entity: { eid: 's', num: 7105 }, session: { eid: 's', id: 's' } },
+  }
+  resetSignals()
+  let head = (at: string) => {
+    route.value = at
+    let mounted = mount(<Session e={ent('s')} />)
+    let id = mounted.root.querySelector('.Session_Head > .Id')
+    let got = id && [id.textContent, id.getAttribute('href')]
+    mounted.free()
+    return got
+  }
+  try {
+    assertEquals(head('/T-1'), ['S-7105', '/S-7105'])
+    assertEquals(head('/S-7105'), null)
+  } finally {
+    route.value = prior
+    useRoute(priorRoute)
+    cache.value = {}
+    resetSignals()
   }
 })
 

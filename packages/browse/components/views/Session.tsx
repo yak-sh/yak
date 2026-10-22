@@ -18,7 +18,8 @@ import {
 } from '../../live.ts'
 import { graphLog } from '../../entry_log.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
-import { linkProps } from '../nav.tsx'
+import { linkProps, screenTarget } from '../nav.tsx'
+import { Id } from './Inline.tsx'
 import { block } from '@yaks/ui'
 import { ago, Stamp } from '../Stamp.tsx'
 import { pretty } from '../../time.ts'
@@ -643,10 +644,14 @@ export let Session = (
         !started,
       )
   let showActivity = live || status == 'idle'
+  // Drawn inside another page (a document's chat, a persona's), it names
+  // itself by its id, a link to its own page; there the titlebar names it.
+  let embedded = screenTarget()?.eid != e.eid
   return (
     <Frame>
       <Head>
         <Dot status={status} />
+        {embedded && <Id e={e} />}
         <SessionSummary e={e} gist={gist} />
         <SessionContext tokens={context} />
         {live && (
