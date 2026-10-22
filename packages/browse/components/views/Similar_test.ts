@@ -91,6 +91,16 @@ let answer = (score: number) => {
   return response
 }
 
+// The first mount, re-render and answer of Similar cost milliseconds and the
+// rest a tenth of one: code loading, which no case is about. Pay it before the
+// cases run.
+{
+  let warm = fixture('a')
+  warm.show('b')
+  await settle(() => warm.calls[1].resolve(answer(0.99)))
+  warm.free()
+}
+
 // A test of Similar shown for `eid`, freed after.
 let similar = (
   check: (f: ReturnType<typeof fixture>) => Promise<void> | void,
