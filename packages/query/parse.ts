@@ -192,6 +192,14 @@ let cap = (word: string, quals: Qual[]): number => {
 
 let path = (raw: string): string[] => raw.split('.')
 
+// A property path written as a directive's value names each step: a stray dot
+// (`.order=.num`, `.tally=filed.`) leaves an empty one, which no vocabulary
+// can read, so the directive refuses it with what it takes.
+let whole = (raw: string): boolean => path(raw).every(Boolean)
+let ORDER = '.order takes a property as comp.prop with no leading dot, ' +
+  '- first for descending (.order=-created.at, .order=entity.num), ' +
+  'or a ranking (hot; search with words; similar with .near)'
+
 // The reserved names whose whole meaning is presence: `.count` counts, `.edges`
 // carries edges back, `.refs` references anything.
 let PRESENCE: Record<string, Clause> = {
@@ -408,7 +416,12 @@ export let parseDot = (token: string): Clause[] | null => {
   refuse(pathStr, quals, bracket)
 
   // Rankings and the reverse-union: a value or presence, never a filter.
-  if (pathStr == 'order' && op == '=') return [{ kind: 'order', value: val }]
+  if (pathStr == 'order' && op == '=') {
+    if (!whole(val.replace(/^-/, ''))) {
+      throw new SyntaxError(`${token}: ${ORDER}`)
+    }
+    return [{ kind: 'order', value: val }]
+  }
   if (pathStr == 'near' && op == '=') return [{ kind: 'near', value: val }]
   if (pathStr == 'refs') {
     if (op == '=' && !rawValue) throw spelled(token, '!refs')
@@ -421,21 +434,27 @@ export let parseDot = (token: string): Clause[] | null => {
   // property stays raw segments; whether it is a single property or an invalid
   // path is schema.
   if (pathStr == 'distinct' || pathStr == 'tally') {
-    if (op != '=' || !val) {
-      throw new SyntaxError(`.${pathStr} names a property: .${pathStr}=domain`)
+    if (op != '=' || !whole(val)) {
+      throw new SyntaxError(
+        `.${pathStr} names a property as comp.prop, with no leading dot: ` +
+          `.${pathStr}=filed.project`,
+      )
     }
     return [{ kind: pathStr, path: path(val) }]
   }
   // `.fields=pin.x,pin.z~` — the projection; a trailing `~` keeps a property
   // from waking a subscription. Each property stays raw segments.
   if (pathStr == 'fields') {
-    if (op != '=' || !val) {
-      throw new SyntaxError('.fields names properties: .fields=pin.x,pin.y')
-    }
     let fields = val.split(',').map((seg) => {
       let wake = !seg.endsWith('~')
       return { path: path(wake ? seg : seg.slice(0, -1)), wake }
     })
+    if (op != '=' || fields.some((f) => !f.path.every(Boolean))) {
+      throw new SyntaxError(
+        '.fields names properties as comp.prop, with no leading dot: ' +
+          '.fields=pin.x,pin.y',
+      )
+    }
     return [{ kind: 'fields', fields }]
   }
   // `.limit=200` — how many rows at most. A bound that was guessed is worse

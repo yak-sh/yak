@@ -35,7 +35,12 @@ export let OPERATORS: Taught[] = [
 // The reserved names that sit in a clause list and rank, project, aggregate or
 // bound the answer rather than filter it.
 export let DIRECTIVES: Taught[] = [
-  { spell: '.order=', word: 'rank', means: 'the order the answer comes in' },
+  {
+    spell: '.order=',
+    word: 'rank',
+    means: 'the order the answer comes in: a property, - first for ' +
+      'descending (.order=-created.at), or a ranking (hot, search, similar)',
+  },
   { spell: '.near=', word: 'rank', means: 'the entity whose likeness ranks' },
   {
     spell: '.refs=',

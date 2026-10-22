@@ -237,6 +237,13 @@ let refused = (rows: [string, string][]) => {
 refused([
   ['.a=1|', 'empty alternative'],
   ['(.a=1', 'unclosed group'],
+  // a directive's property path takes no stray dot, and says what it takes
+  ['?app .order=.num', '.order=.num: .order takes a property as comp.prop'],
+  ['.order=-.num', '(.order=-created.at, .order=entity.num)'],
+  ['.order=', 'or a ranking (hot; search with words; similar with .near)'],
+  ['.tally=.filed.project', 'with no leading dot: .tally=filed.project'],
+  ['.distinct=filed.', '.distinct=filed.project'],
+  ['.fields=doc.title,.doc.body', 'with no leading dot: .fields=pin.x,pin.y'],
 ])
 
 test('a directive shapes the whole query, wherever it is written', () => {
