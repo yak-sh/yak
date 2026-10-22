@@ -2,7 +2,7 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   append,
-  build,
+  finished,
   observe,
   probe,
   pushTime,
@@ -425,12 +425,26 @@ test('deploy timing: the commit under test is judged, not the last hand-recorded
   assertEquals(latest([...stale, deploy(3, 47)])?.seconds, 47)
 })
 
-test("deploy timing: a build is finished once the kernel Worker's check run is posted", () => {
-  let yak = { name: 'Workers Builds: yak' }
-  assertEquals(build([{ name: 'gate' }, { name: 'dry-run' }]), undefined)
-  assertEquals(build([]), undefined)
-  assertEquals(build([{ name: 'gate' }, yak]), yak)
-  assertEquals(build([{ name: 'Workers Builds: yak-tracker' }]), undefined)
+test("deploy timing: a build is finished once the kernel Worker's check run completes", () => {
+  let run = (name: string, status = 'completed', conclusion = 'success') => ({
+    name,
+    status,
+    conclusion,
+  })
+  let yak = run('Workers Builds: yak')
+  assertEquals(finished([run('gate'), run('dry-run')]), undefined)
+  assertEquals(finished([]), undefined)
+  assertEquals(finished([run('gate'), yak]), yak)
+  assertEquals(finished([run('Workers Builds: yak-tracker')]), undefined)
+  // 63f4a372's build was posted in progress, with no conclusion yet.
+  assertEquals(
+    finished([{
+      name: 'Workers Builds: yak',
+      status: 'in_progress',
+      conclusion: null,
+    }]),
+    undefined,
+  )
 })
 
 test('deploy timing: the job summary carries the row the record accepts', () => {

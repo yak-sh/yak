@@ -36,7 +36,11 @@ type Run = {
   head_branch: string
 }
 type Push = { pushed: string; pushSource: string }
-type Check = { name: string; conclusion: string | null }
+export type Check = {
+  name: string
+  status: string
+  conclusion: string | null
+}
 
 let commit = (v: Version) =>
   v.annotations?.['workers/message']?.match(
@@ -92,10 +96,11 @@ export let versionFor = (sha: string, pushed: string, versions: Version[]) => {
   return nearest ? { version: nearest, estimated: true } : null
 }
 
-// Cloudflare's check run for its build of the kernel Worker. It is posted when
-// the build finishes, so until then a commit shows none.
-export let build = <R extends { name: string }>(runs: R[]): R | undefined =>
-  runs.find((r) => r.name == 'Workers Builds: yak')
+// Cloudflare's check run for its finished build of the kernel Worker. It is
+// posted `in_progress` as the build starts and `completed` with its
+// conclusion once it ends; until then there is none.
+export let finished = (runs: Check[]): Check | undefined =>
+  runs.find((r) => r.name == 'Workers Builds: yak' && r.status == 'completed')
 
 /** Where the wait for a commit's uploaded version stands: whether the version
  * is found, whether the commit changes the watched source (wrangler.ts
@@ -432,7 +437,7 @@ let awaited = async (
       let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
         check_runs: [],
       }))
-      let run = build(checks.check_runs as Check[])
+      let run = finished(checks.check_runs)
       if (run) done = { conclusion: run.conclusion, at: now }
     }
     let next = verdict({
