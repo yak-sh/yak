@@ -24,8 +24,10 @@
 // order is then each entity's place in it, spelled over integer ids: the one
 // value an ORDER BY here can carry. A window of a query with words that states
 // no order is ranked the same way (`ranks`): a page of a search is its best
-// rows, as a search box's are, never its newest. A search composed without a
-// connection selects but does not rank.
+// rows, as a search box's are, never its newest. Its first page ranks only as
+// many as it shows and reads only those (`reach`), so a broad word costs a
+// page, not every match. A search composed without a connection selects but
+// does not rank.
 
 import {
   among,
@@ -49,7 +51,7 @@ import {
 import { permitted, ranked, screens } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
 import { named, term } from './term.ts'
-import { words as wordsIn } from '@yaks/query/core'
+import { type And, map, words as wordsIn } from '@yaks/query/core'
 
 // The ranking `.order=` names.
 export let SEARCH = 'search'
@@ -57,6 +59,34 @@ export let SEARCH = 'search'
 // How many of the best matches `.order=search` puts in order; any past them
 // follow, newest first.
 export let RANKED = 1000
+
+// How many of a query's best rows its answer reaches, when those are all it
+// reaches: the first page (no `.after`) of a window of at most `RANKED` rows
+// ordered by search, whose words are all clauses of its own. A word in a group
+// or a child filter selects rows the ranking of all the words never sees.
+///
+/// let { parse } = await import('@yaks/query')
+/// reach(parse('dragon .limit=5 .order=search')) -> 5
+/// reach(parse('dragon .limit=5 .order=-search')) -> null
+/// reach(parse('dragon .limit=5 .order=search .after=7')) -> null
+/// reach(parse('(dragon|scale) .limit=5 .order=search')) -> null
+/// reach(parse('dragon .limit=5000 .order=search')) -> null
+export let reach = (q: And): number | null => {
+  let limit = q.clauses.find((c) => c.kind == 'limit')
+  let orders = q.clauses.filter((c) => c.kind == 'order')
+  if (
+    !limit || limit.n < 1 || limit.n > RANKED ||
+    orders.length != 1 || orders[0].value != SEARCH ||
+    q.clauses.some((c) => c.kind == 'after')
+  ) return null
+  let all = 0
+  map(q, (c) => {
+    if (c.kind == 'text') all++
+    return c
+  })
+  let own = q.clauses.filter((c) => c.kind == 'text').length
+  return all == own ? limit.n : null
+}
 
 // MATCH opens a cursor per keyed candidate. Keep seeks to a handful of owners;
 // larger screens retain the single walk through a term's postings.
@@ -77,27 +107,45 @@ export let search = (fields: Field[], db?: Driver): Extension => {
   let sources: ReturnType<typeof screens> = {}
   let membership = new Map<Screen, Raw | null>()
   let shared = new Map<Screen, Source>()
+  // How many of the best rows this query's answer reaches, when that is all
+  // it reaches (`reach`), and whether the ranking is being read.
+  let page: number | null = null
+  let ranking = false
   let rank = (): number[] => {
     if (held) return held
     let stmt = ranked(fields, words.join(' '), {
       screen: asked?.() ?? undefined,
       screens: sources,
-      limit: RANKED,
+      limit: page ?? RANKED,
       name: named(said.join(' ')),
     })
-    held = stmt ? db!.query(stmt).map((r) => Number(r.owner)) : []
+    ranking = true
+    try {
+      held = stmt ? db!.query(stmt).map((r) => Number(r.owner)) : []
+    } finally {
+      ranking = false
+    }
     return held
   }
   return {
     name: 'fts',
-    begin: (screen) => {
-      words = []
-      said = []
+    begin: (screen, q) => {
       asked = screen
       held = null
       sources = {}
       membership.clear()
       shared.clear()
+      page = db ? reach(q) : null
+      // A page's words are all the query's own, so they are known now.
+      words = []
+      said = []
+      for (let w of page == null ? [] : wordsIn(q)) {
+        let t = term(w)
+        if (t && !words.includes(t)) {
+          words.push(t)
+          said.push(w)
+        }
+      }
     },
     compile: {
       text: (clause, site) => {
@@ -107,6 +155,18 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         // constant false keeps the query away from the index rather than
         // widening the result set.
         if (!t) return FALSE
+        // A first page of a search is its best rows and no others, so when the
+        // ranking fills it, its words select just those, ranked once among
+        // what the rest of the query admits, rather than every match. A page
+        // the ranking leaves short reads every match: words found in different
+        // indexes match where no one index ranks them, and follow the ranked.
+        if (page != null && !ranking) {
+          sources = screens(fields, site.vocab, { visibility: site.visibility })
+          let ids = rank()
+          if (ids.length == page) {
+            return among(site.owner, ids.map((id) => lit(id)))
+          }
+        }
         // A screen compiled for another extension reads this clause again.
         if (!words.includes(t)) {
           words.push(t)

@@ -66,10 +66,15 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
     eid: 'later-1000001',
   }])
   assertEquals(report.broad.written, 0)
-  // A window of a search is its best rows (@yaks/fts `ranks`), and here every
-  // comment's text is the two words: ranking reads each hit's postings and
-  // size, and each one is a name to compare. Membership alone read 18,027.
-  assert(report.broad.read <= 52000, `${report.broad.read} broad billed rows`)
+  // A first page of a search is its best rows (@yaks/fts `ranks`, `reach`),
+  // and here every comment's text is the two words. Ranking stops at each
+  // index's best two, and the page reads only those: 64 rows to rank, and the
+  // rest a pass over the comments the binder drives from (T-131859).
+  // Membership alone read 18,027; ranking every match on top of it, 51,075.
+  assert(
+    report.broad.read <= report.history * 2 + 100,
+    `${report.broad.read} broad billed rows`,
+  )
   assertEquals(report.all, [{ value: '', n: report.history * 2 + 3 }])
   assertEquals(
     report.wide.rows.map((r) => String(r.eid)).sort(),

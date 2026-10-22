@@ -2252,7 +2252,7 @@ let beginning = (
       return selected
     }
     if (!screening) (ctx.screens ??= new Map()).set(e, view(candidates))
-    e.begin?.(view(screen))
+    e.begin?.(view(screen), ast)
   }
 }
 

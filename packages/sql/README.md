@@ -577,7 +577,8 @@ literals, and the hook runs again for an `.after` anchor's owner.
 
 A **screen** (`Screen`) is a lazy statement selecting the integer `id` of each
 entity admitted by the other filters, without ordering, limits or projections.
-`begin(screen)` runs once per bind and lets a reused Extension reset its state.
+`begin(screen, q)` runs once per bind, with the query being bound, and lets a
+reused Extension reset its state.
 The screen excludes that Extension's clauses and returns `null` when there are
 no remaining filters. Ranking among these ids before limiting preserves the
 other filters. A clause's `Site.screen` supplies candidates for its own root

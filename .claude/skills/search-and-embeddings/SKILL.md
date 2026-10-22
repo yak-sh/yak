@@ -144,6 +144,13 @@ a caller may read. The `search` tool merges it with full-text hits.
   is built and every search reads every vector; in a store, `.near` answers
   only from what is done until the sweep finishes. Back up ~/.yak/yak.json
   first and prove it on a `VACUUM INTO` copy.
+- **A page of a search reads a page.** A store bills each row a cursor hands
+  back, not FTS5's own reads, so `order by rank limit N` inside the index
+  costs about N where materializing every hit's bm25 costs every hit. Ranking
+  all matches for a 2-row window took a broad fixture search from 18,027 rows
+  to 51,075; ranking each index's best N and reading only those took it to
+  2,073 (T-131858, workers/yak/fts_cost_workerd_test.ts). Measure a ranking
+  change there, before and after.
 - **Open:** 1-bit codes for the box's scan (T-59519), `.near` on D1 (T-59333),
   embedding calls spending from an account's budget (T-59279).
 

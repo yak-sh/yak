@@ -220,8 +220,10 @@ export let claimed = (exts: readonly Extension[], q: Clause): boolean => {
 // is a ranking of the wrong set: the eight nearest entities of any kind,
 // intersected with "and is a memory", is usually nothing. The screen is what
 // the rest of the query selects, so the extension ranks among those rows and
-// cuts afterwards.
-export type Begin = (screen: Screen) => void
+// cuts afterwards. It is given the query too, directives and all, so one that
+// ranks knows how much of its ranking the answer can reach: the first page of
+// a window ordered by it is that many of its best rows and no others.
+export type Begin = (screen: Screen, q: And) => void
 
 // What the rest of the query selects: a statement over the same database
 // returning, as `id`, the integer ids of the entities every other clause

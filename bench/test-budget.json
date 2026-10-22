@@ -1766,16 +1766,22 @@
       "an entry is found by its text, whichever row lands first": 3.2,
       "the index follows the text and the membership": 6.9
     },
+    "packages/fts/screen_cost_test.ts": {
+      "a screened ranking reads its neighborhood despite unrelated matching history": 1.5
+    },
     "packages/fts/search_test.ts": {
       "a deleted entity is not a hit": 1.7,
       "a one-letter word matches exactly unless explicitly starred": 5.4,
+      "a page of a search is the start of its whole ranking": 7,
       "a screen narrows the hits to what the filters allow": 1.9,
       "a search that cannot be asked finds nothing": 1.3,
       "a snippet marks each hit with control characters, never markup": 1.6,
       "a word reaches the longer word it starts": 2,
       "common words still narrow a search but are not highlighted": 2,
       "distinctive words of a search are marked in the snippet": 2.1,
+      "equal matches go newest first, past the edge of a page too": 3,
       "hits come back closest first, one row per entity": 1.9,
+      "the entity a search names comes first, whatever its case": 1.5,
       "the limit bounds the answer": 1.6,
       "the snippet comes from whichever property matched": 1.7,
       "words are terms, so they need not be adjacent or in order": 1.9

@@ -148,3 +148,31 @@ let byName = compile(parse('dragon .order=search'), shop, {
 test('a query ranked by search puts the entity it names first', () => {
   assertEquals(named.query(byName)[0].eid, 'book-5')
 })
+
+// Books alike but for their age, beneath one that says the word more often.
+let alike = shelf()
+for (let id of [5, 6, 7, 8, 9, 10]) {
+  entity(alike, id, `book-${id}`)
+  let title = id == 10 ? 'Wyvern wyvern lore' : 'Wyvern lore'
+  alike.query(insert('book', { entity: id, title, blurb: 'Old.', price: 1 }))
+}
+let found = (q: string, limit: number) =>
+  find(alike, text, q, { limit }).map((h) => h.entity)
+let read = (q: string) =>
+  alike.query(compile(parse(q), shop, { extend: [search(text, alike)] }))
+    .map((r) => r.eid)
+
+test('equal matches go newest first, past the edge of a page too', () => {
+  let books = (...ids: number[]) => ids.map((id) => `book-${id}`)
+  assertEquals(found('wyvern', 2), books(10, 9))
+  assertEquals(found('wyvern', 3), books(10, 9, 8))
+  assertEquals(found('wyvern', 6), books(10, 9, 8, 7, 6, 5))
+})
+
+test('a page of a search is the start of its whole ranking', () => {
+  let whole = read('wyvern .order=search')
+  for (let n of [2, 7]) {
+    assertEquals(read(`wyvern .limit=${n}`), whole.slice(0, n))
+  }
+  assertEquals(read('lore wyvern .book.price=1 .limit=2'), whole.slice(0, 2))
+})
