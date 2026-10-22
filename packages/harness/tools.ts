@@ -70,6 +70,7 @@ export let graphTools = (
     name: toolName(t),
     description: t.description,
     parameters: inputSchemaOf(t),
+    ...t.readOnly ? { readOnly: true } : {},
     // A call, signed as the session that asked: the runner runs the function
     // and lands what it answered in that session's name.
     run: async (args: Record<string, unknown>, call) => {

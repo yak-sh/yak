@@ -198,7 +198,9 @@ succeeded.
 optional `filters` joined with `&`, and a `limit`. `graph_show` returns the
 entities asked for and nothing else; references remain in their component
 properties, and what references an entity is a query of its own (`.refs=<id>`),
-where edge entities are ordinary bundles.
+where edge entities are ordinary bundles. An id that names nothing is said after
+the rest, in a line naming it, so one miscopied id does not cost the others; a
+call whose ids all name nothing is refused.
 
 `graph_schema` answers markdown to read and, as `structuredContent`, one JSON
 Schema document with each component's entry under `$defs`, the shape of a

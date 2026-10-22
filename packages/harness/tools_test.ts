@@ -2,7 +2,7 @@ import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools } from './tools.ts'
 import { core, inputSchemaOf } from '@yaks/mcp/tools'
-import { type Bundle, type Comp, identityEid } from '@yaks/graph'
+import { type Bundle, type Comp, identityEid, mint } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { harness, repo } from './testing.ts'
 import { local } from './local.ts'
@@ -235,4 +235,57 @@ let checked = await (async () => {
 
 test('a session’s graph check reads as a check once, its $name beside the eid it became', () => {
   assertEquals(checked, { alias: '$t', minted: true, checked: 1, kept: 0 })
+})
+
+// A session reading two ids through graph_show, one of them miscopied: what
+// its transcript records for the call.
+let gone = mint()
+let shown = await (async () => {
+  let h = await harness()
+  let [held] = await h.g.apply([{
+    entity: { eid: '$t' },
+    doc: { title: 'a topic' },
+  }])
+  let asked = 0
+  let a = agent({
+    h,
+    name: 'fake',
+    tools: graphTools(h.g),
+    model: (req) =>
+      Promise.resolve({
+        id: `r${++asked}`,
+        model: req.model,
+        items: asked == 1
+          ? [{
+            kind: 'call',
+            id: 'c1',
+            name: 'graph_show',
+            args: JSON.stringify({ ids: [held.entity.eid, gone] }),
+          }]
+          : [{ kind: 'assistant', text: 'done' }],
+      }),
+  })
+  let s = await a.start('show them')
+  await until(async () =>
+    (await a.transcript(s)).some((b) => body(b) == 'done')
+  )
+  let result = (await a.transcript(s)).find((b) => b.result)!
+  let said = String(body(result))
+  let cut = said.lastIndexOf('\n]') + 2
+  h.close()
+  return {
+    shown: JSON.parse(said.slice(0, cut)).map((b: Bundle) => b.entity.eid),
+    held: held.entity.eid,
+    words: said.slice(cut).trim(),
+    refused: !!result.refusal,
+  }
+})()
+
+test('a session’s graph_show of an id that names nothing answers the rest', () => {
+  assertEquals(shown, {
+    shown: [shown.held],
+    held: shown.held,
+    words: `${gone} names nothing: no entity has that id; the other is shown`,
+    refused: false,
+  })
 })

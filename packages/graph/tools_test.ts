@@ -198,3 +198,33 @@ test('a search that names a component answers what it names', async () => {
   let [row] = await found({ q: 'dragon 7 ?book' })
   assertEquals(Object.keys(row).sort(), ['book', 'entity'])
 })
+
+// Two books, and an identity a malformed writer left holding nothing.
+let kept = ram(titled)
+let books = graph({ storage: kept, vocab: titled })
+books.apply([
+  { entity: { eid: 'b1' }, book: { title: 'Dune' } },
+  { entity: { eid: 'b2' }, book: { title: 'Emma' } },
+])
+kept.tx((tx) => tx.patch([{ entity: { eid: 'empty' } }]))
+let show = tier().find((t) => t.name == 'graph_show')!
+let shown = (...ids: string[]) =>
+  show.run({ entity: { eid: 'c' }, call: { args: { ids } } }, books) as Promise<
+    Bundle[]
+  >
+
+test('graph_show answers the ids that name something and says which do not', async () => {
+  assertEquals((await shown('b1', 'b2')).map((b) => b.entity.eid), ['b1', 'b2'])
+  let out = await shown('b1', 'gone', 'empty', 'b2')
+  assertEquals(out.map((b) => b.entity.eid), ['b1', 'b2', '$said'])
+  assertEquals(out[2].content, {
+    body: 'gone, empty name nothing: no entity has those ids; the other 2 ' +
+      'are shown',
+  })
+  assertEquals(out[2].output, { source: 'c' })
+  await assertRejects(
+    () => shown('gone'),
+    Refused,
+    'gone names nothing: no entity has that id',
+  )
+})

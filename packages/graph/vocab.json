@@ -76,7 +76,7 @@
       "noun": "graph",
       "verb": "show",
       "title": "Show entities",
-      "description": "Read one or more stored records (entities) by their unique string id (eid), each returned whole as its own bundle: a JSON object with entity: {eid} and every named group of fields (component) it has. When a bundle shows doc.body, $was.doc.body carries its SHA-256 read token; pass it back on a graph_apply bundle to refuse a concurrent body change (yak graph show prints was:). Only the entities asked for come back; what references one is a query of its own, graph_query with .refs=<id>, and a relationship is an edge entity found the same way. This is lookup by identity, not search: pass eids, or the names entities are addressed by where this store keeps names (an eid wins over a name spelled the same way).",
+      "description": "Read one or more stored records (entities) by their unique string id (eid), each returned whole as its own bundle: a JSON object with entity: {eid} and every named group of fields (component) it has. When a bundle shows doc.body, $was.doc.body carries its SHA-256 read token; pass it back on a graph_apply bundle to refuse a concurrent body change (yak graph show prints was:). Only the entities asked for come back, and an id that names nothing is said after them by a line naming it (a call whose ids all name nothing is refused); what references one is a query of its own, graph_query with .refs=<id>, and a relationship is an edge entity found the same way. This is lookup by identity, not search: pass eids, or the names entities are addressed by where this store keeps names (an eid wins over a name spelled the same way).",
       "input": {
         "ids": {
           "type": "array",

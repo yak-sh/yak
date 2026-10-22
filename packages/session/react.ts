@@ -153,6 +153,11 @@ export type Tool = Declared & {
    * never outlasts its patience, however long it runs, so only its result or
    * something else new starts the model's next turn ({@link PATIENCE}). */
   waits?: boolean
+  /** It only reads, as the graph tool it serves declares (`readOnly`): an id
+   * it is handed that names nothing is its own to answer about rather than a
+   * refusal of the call, and its answer is the result's words, not an entity
+   * of their own (@yaks/tools `keeps`). */
+  readOnly?: boolean
 }
 
 /** How long a background call (`tool_async`) runs before it is given a
@@ -1009,6 +1014,7 @@ export let react = async (
       name: tool.name,
       description: tool.description ?? '',
       inputSchema: tool.parameters,
+      ...tool.readOnly ? { readOnly: true } : {},
       run: async (call) => {
         if (textOf(call)) {
           throw new CallError(

@@ -47,7 +47,7 @@ import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { aggregate, reduced } from './aggregate.ts'
 import { hit } from './hit.ts'
 import { named } from './projection.ts'
-import type { Bundle } from './bundle.ts'
+import { type Bundle, comps, TOMBSTONE } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
 import { argsOf, type NamedTool, toolName } from './tool.ts'
@@ -129,6 +129,10 @@ export let BEST = 20
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let num = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined
+// Whether a row read by id is an entity: it holds a component, or is the
+// tombstone of one that was deleted. An identity holding nothing names nothing.
+let held = (b: Bundle): boolean => b[TOMBSTONE] != null || comps(b).length > 0
+
 let strings = (v: unknown): string[] =>
   Array.isArray(v) ? v.filter((x) => typeof x == 'string') : []
 
@@ -262,10 +266,29 @@ export let runs = (seams: Seams = {}): Runs => {
       // The entities asked for, each one whole and each one once, and nothing
       // else: what points at them is a query of its own (`.refs=<id>`). The
       // ids arrive as the eids they name (@yaks/tools resolves every
-      // declared reference).
+      // declared reference). An id that names nothing is said after the rest
+      // rather than refusing them, so one miscopied id costs no second call;
+      // only a call naming nothing at all is refused.
       let ids = strings(args.ids)
       if (!ids.length) throw new Refused('graph_show needs at least one id')
-      return await graph.get([...new Set(ids)])
+      let asked = [...new Set(ids)]
+      let rows = (await graph.get(asked)).filter(held)
+      let found = new Set(rows.map((b) => b.entity.eid))
+      let nothing = asked.filter((id) => !found.has(id))
+      if (!nothing.length) return rows
+      let one = nothing.length == 1
+      let missing = `${nothing.join(', ')} ${one ? 'names' : 'name'} ` +
+        `nothing: no entity has ${one ? 'that id' : 'those ids'}`
+      if (!rows.length) throw new Refused(missing)
+      return [...rows, {
+        entity: { eid: '$said' },
+        content: {
+          body: `${missing}; ${
+            rows.length == 1 ? 'the other is' : `the other ${rows.length} are`
+          } shown`,
+        },
+        output: { source: call.entity.eid },
+      }]
     },
     graph_schema: (call, graph) => {
       let args = argsOf(call)
