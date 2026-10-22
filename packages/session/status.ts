@@ -865,6 +865,21 @@ export let sessionStatus = {
             : lit(null),
           'answered',
         ),
+        prop('call', 'source'),
+        as(
+          declared('tool_progress')
+            ? iff(
+              wears('call'),
+              exists(select({
+                cols: [lit(1)],
+                from: table('tool_progress', 'p'),
+                where: eq(col('call', 'p'), col('entity', 'span')),
+              })),
+              lit(false),
+            )
+            : lit(false),
+          'progressed',
+        ),
         col('boundary_seq', 'span'),
         as(col('asked', 'span'), 'ask_id'),
         col('refused_source', 'span'),
@@ -975,12 +990,23 @@ export let sessionStatus = {
           ),
         ),
         flag('inflight', inflight),
+        // A call of the newest reply still running within its patience: the
+        // reply's other answers wait for it.
+        flag(
+          'unheard',
+          and(
+            current,
+            has('tool_async'),
+            eq(col('call_source', 't'), col('ask_id', 't')),
+            lacks('answered'),
+            not(col('progressed', 't')),
+          ),
+        ),
         as(
           fn(
             'max',
             iff(
               or(
-                row.input,
                 has('result'),
                 declared('tool_progress') && declared('call')
                   ? and(
@@ -1037,6 +1063,7 @@ export let sessionStatus = {
     let a = (name: string) => notNull(col('a_' + name, 'f'))
     let after = (seq: Expr) =>
       fn('coalesce', gt(f('input_seq'), seq), lit(false))
+    let boundary = fn('coalesce', f('n_boundary_seq'), f('a_seq'), lit(0))
     // Two bounded historical facts remain: a refusal can explicitly name an
     // older ask, and the retry limit covers at most RETRIES consecutive asks.
     // Neither is an open-work scan.
@@ -1108,9 +1135,9 @@ export let sessionStatus = {
         [f('open'), lit('running')],
         [
           and(
-            gt(
-              f('ready_seq'),
-              fn('coalesce', f('n_boundary_seq'), f('a_seq'), lit(0)),
+            or(
+              after(boundary),
+              and(eq(f('unheard'), lit(0)), gt(f('ready_seq'), boundary)),
             ),
             notNull(background(false)),
           ),

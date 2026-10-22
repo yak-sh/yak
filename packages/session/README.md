@@ -252,11 +252,13 @@ will follow."), which a request derives from the call. A model turn starts while
 calls run only when there is something new to read: an input, a result, or the
 Pending entry (`tool_progress`) a call is given when it outlasts its patience
 (`PATIENCE`, 10 seconds; `Deps.patience`), since a call that has run that long
-leaves other work worth doing. A call that answers sooner costs two entries, the
-call and its result, and no turn of its own. A tool that `waits` (on a process,
-a child, a task) is never given one: the model chose to wait. Older transcripts
-hold a `tool_progress` entry beside every background call, which still answers
-it.
+leaves other work worth doing. An input asks at once; a result or a Pending
+waits until each call of its reply has answered or outlasted its patience, since
+the model asked for them together. A call that answers sooner costs two entries,
+the call and its result, and no turn of its own. A tool that `waits` (on a
+process, a child, a task) is never given one: the model chose to wait. Older
+transcripts hold a `tool_progress` entry beside every background call, which
+still answers it.
 
 A request carries each call's answer right after the reply's last call, in the
 order of the calls, since many models pair a result with its call by position

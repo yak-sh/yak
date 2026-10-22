@@ -203,6 +203,27 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
     entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
   ], 'running'],
+  ['an input does not wait for a running call', [
+    request(1),
+    entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
+    input(4),
+  ], 'pending'],
+  ['a result waits for its reply’s other running call', [
+    request(1),
+    entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
+    entry(4, { call: { to: T, id: 'c2', source: 'e2' }, tool_async: {} }),
+    entry(5, { result: { call: 'e3' }, content: { body: 'one' } }),
+  ], 'running'],
+  ['a result and a Pending answer their reply together', [
+    request(1),
+    entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
+    entry(4, { call: { to: T, id: 'c2', source: 'e2' }, tool_async: {} }),
+    entry(5, { result: { call: 'e3' }, content: { body: 'one' } }),
+    entry(6, { tool_progress: { call: 'e4' }, content: { body: 'Pending' } }),
+  ], 'pending'],
   ['a reply waits for an older background call', [
     request(1),
     entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),

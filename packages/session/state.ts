@@ -111,12 +111,13 @@ export let openCalls = (entries: Bundle[]): Bundle[] =>
   callsIn(ordered(entries))
 
 /** Whether something new has arrived beyond the newest request's context
- * boundary: an input, a result, or the Pending entry of one of the newest
- * reply's background calls, written when it outlasted its patience
- * (./react.ts `PATIENCE`). A background call alone asks nothing more of the
- * model, and the Pending of an older reply's call never asks again: a later
- * request already sent it as pending. This says the model owes work
- * independently of tools running. */
+ * boundary for the model to take a turn on. An input asks at once. A result,
+ * or the Pending entry a call of the newest reply is given when it outlasts
+ * its patience (./react.ts `PATIENCE`), asks once each background call of that
+ * reply has answered or outlasted it: the model asked for them together. A
+ * background call alone asks nothing more of the model, and the Pending of an
+ * older reply's call never asks again: a later request already sent it as
+ * pending. This says the model owes work independently of tools running. */
 export let modelReady = (entries: Bundle[]): boolean => {
   let all = ordered(entries).filter((b) => !b.notice)
   let ask = newestAsk(all)
@@ -124,15 +125,23 @@ export let modelReady = (entries: Bundle[]): boolean => {
     b.entity.eid == (ask?.ask as Comp | undefined)?.through
   )
   let boundary = through ? seqOf(through) : ask ? seqOf(ask) : 0
-  let calls = new Set(
-    all.filter((b) =>
-      ask && (b.call as Comp | undefined)?.source == ask.entity.eid
-    ).map((b) => b.entity.eid),
+  let reply = all.filter((b) =>
+    !!ask && !!b.tool_async &&
+    (b.call as Comp | undefined)?.source == ask.entity.eid
   )
+  let calls = new Set(reply.map((b) => b.entity.eid))
+  let heard = new Set(all.flatMap((b) => {
+    let call = (b.result as Comp | undefined)?.call ??
+      (b.tool_progress as Comp | undefined)?.call
+    return call == null ? [] : [String(call)]
+  }))
+  let together = reply.every((b) => heard.has(b.entity.eid))
   return all.some((b) =>
     seqOf(b) > boundary && (
-      kindOf(b) == 'input' || !!b.result ||
-      !!b.tool_progress && calls.has(String((b.tool_progress as Comp).call))
+      kindOf(b) == 'input' || together && (
+          !!b.result ||
+          !!b.tool_progress && calls.has(String((b.tool_progress as Comp).call))
+        )
     )
   )
 }
