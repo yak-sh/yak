@@ -444,13 +444,17 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
   if (worker) await (await import('../workers/yak/wrangler.ts')).ready(!verbose)
   // The Stripe sandbox every kernel sells in, found once for a run that has
   // the Worker's tests and handed to every process by its environment
-  // (probe.ts `vars`).
+  // (probe.ts `vars`). The same run cancels what an earlier one left renewing
+  // there (probe.ts `swept`).
   if (worker) {
-    let { plusPrice, sandboxKey } = await import('../workers/yak/probe.ts')
+    let { plusPrice, sandboxKey, swept } = await import(
+      '../workers/yak/probe.ts'
+    )
     let stripe = await sandboxKey()
     if (stripe) {
       Deno.env.set('STRIPE_KEY', stripe)
-      Deno.env.set('STRIPE_PRICE', await plusPrice(stripe))
+      let [price] = await Promise.all([plusPrice(stripe), swept()])
+      Deno.env.set('STRIPE_PRICE', price)
     }
   }
   let suite: Suite = async (more, over = files) => {

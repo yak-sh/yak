@@ -1,6 +1,27 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { letters, mailed } from './probe.ts'
+import { leftover, letters, mailed } from './probe.ts'
+
+test('a run sweeps only a probe subscription an earlier run left renewing', () => {
+  let now = 1_800_000_000
+  let left = {
+    livemode: false,
+    status: 'active',
+    created: now - 2 * 60 * 60,
+    metadata: { apex: 'yaks.app' },
+  }
+  let swept = (over: Record<string, unknown>) =>
+    leftover({ ...left, ...over }, now)
+  assertEquals(swept({}), true)
+  assertEquals(swept({ status: 'past_due' }), true)
+  // A run going on beside this one still holds what it made a minute ago.
+  assertEquals(swept({ created: now - 60 }), false)
+  // Staging's own, one from before the stamp, and anything in live mode.
+  assertEquals(swept({ metadata: { apex: 'yaks.fyi' } }), false)
+  assertEquals(swept({ metadata: {} }), false)
+  assertEquals(swept({ livemode: true }), false)
+  assertEquals(swept({ status: 'canceled' }), false)
+})
 
 test('mailed waits for a new delivery rather than returning a spent code', async () => {
   let log = Deno.makeTempFileSync()

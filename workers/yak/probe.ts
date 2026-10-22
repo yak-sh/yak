@@ -114,7 +114,8 @@ let want = (name: string) => {
 // staging, and every leftover customer and account is one more row in the
 // dashboard the owner reads — so every test stops its kernel in a `finally`,
 // and the stop deletes each one (a subscription's DELETE is its cancelling),
-// then `close`s what the kernel holds.
+// then `close`s what the kernel holds. A run killed before its stops leaves its
+// subscriptions renewing, and the next run cancels them (`swept`).
 let owning = <K extends Door>(k: K, close = () => Promise.resolve()) => {
   let made = new Set<string>()
   let stop = async () => {
@@ -1556,6 +1557,62 @@ export let subscribed = async (
   })
   k.made.add(`/v1/subscriptions/${sub.id}`)
   return sub
+}
+
+// The statuses a subscription renews from, and longer than any run takes.
+let RENEWING = ['active', 'trialing', 'past_due']
+let RUN = 60 * 60
+
+type Held = {
+  id?: string
+  livemode?: boolean
+  status?: string
+  created?: number
+  metadata?: Record<string, string>
+}
+
+/**
+ * Whether a sandbox subscription is one an earlier run left renewing at
+ * `now` (unix seconds): bought by a probe kernel, which stamps the probe's
+ * apex (`subscribed`) where staging stamps its own and live mode is
+ * production's, still able to renew, and older than any run, so a run going on
+ * beside this one keeps what it holds.
+ */
+export let leftover = (sub: Held, now: number) =>
+  sub.livemode === false && sub.metadata?.apex == apex() &&
+  RENEWING.includes(sub.status ?? '') && (sub.created ?? now) < now - RUN
+
+// Every object a list answers, page after page.
+let listed = async (key: string, path: string) => {
+  let all: Held[] = []
+  for (let after = '';;) {
+    let page = await charged(key, `${path}${after}`) as {
+      data: Held[]
+      has_more: boolean
+    }
+    all.push(...page.data)
+    if (!page.has_more || !page.data.length) return all
+    after = `&starting_after=${page.data.at(-1)!.id}`
+  }
+}
+
+/**
+ * Cancel what earlier runs left renewing in the sandbox ({@link leftover}). A
+ * test deletes what it made in its kernel's `stop`, which a run killed
+ * mid-test never reaches, so the next run that holds the key sweeps it, long
+ * before a month's renewal. Answers the ids it cancelled.
+ */
+export let swept = async (now = Math.floor(Date.now() / 1000)) => {
+  let key = stripeKey()
+  let held = await Promise.all(RENEWING.map((status) =>
+    listed(
+      key,
+      `/v1/subscriptions?status=${status}&created[lt]=${now - RUN}&limit=100`,
+    )
+  ))
+  let gone = held.flat().filter((sub) => leftover(sub, now))
+  await Promise.all(gone.map((sub) => deleted(`/v1/subscriptions/${sub.id}`)))
+  return gone.map((sub) => sub.id!)
 }
 
 /**

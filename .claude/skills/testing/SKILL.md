@@ -200,7 +200,9 @@ charge somebody.
   subscription Stripe never held, so nothing is spent or left behind.
 - `subscribed()` makes a sandbox subscription, and the kernel's `stop` cancels
   it; `lapsed()` expires one unpaid by moving a test clock. A test that makes
-  something in the sandbox deletes it.
+  something in the sandbox deletes it. A run killed before `stop` leaves its
+  subscription renewing, so every run that finds the key cancels the
+  probe-stamped ones older than an hour (`swept` in workers/yak/probe.ts).
 
 ## A red test that isn't yours
 
