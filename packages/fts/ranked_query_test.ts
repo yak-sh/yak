@@ -1,5 +1,5 @@
 // Relevance orders remain ordinary pageable orders through the query door.
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertNotEquals } from '@std/assert'
 import { test } from '@yaks/testing'
 import { compile } from '@yaks/sql'
 import { parse } from '@yaks/query'
@@ -28,4 +28,13 @@ test('a text ranking pages through its ordinary eid cursor', () => {
 test('a text ranking reverses and pages in that direction', () => {
   assertEquals(ids(down), reverse)
   assertEquals(ids(previous), reverse.slice(1))
+})
+// Composed without a connection, a search selects newest first.
+let unranked = db.query(compile(parse('dragon'), shop, {
+  extend: [search(fields(shop))],
+})).map((r) => r.eid)
+let window = compiled('dragon .limit=3')
+test('a window of words with no order answers best match first', () => {
+  assertEquals(ids(window), all)
+  assertNotEquals(unranked, all)
 })

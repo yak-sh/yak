@@ -99,7 +99,7 @@ test('search sends only the settled query while typing', async () => {
     await until(() => asked.length ? asked : undefined, {
       label: 'the settled query to be sent',
     })
-    assertEquals(asked, ['type .order=search'])
+    assertEquals(asked, ['type'])
     assertEquals(root.querySelector('[role=status]')?.textContent, 'Searching…')
     assertEquals(root.textContent?.includes('No results.'), false)
     finish(Response.json([]))

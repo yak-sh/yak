@@ -7,7 +7,7 @@ import { applyLocal, base } from '../live.ts'
 import { hitOf, rowOf } from '../client.ts'
 import { type Hit, vocab } from '../types.ts'
 import type { Bundle } from '@yaks/graph'
-import { type Clause, parse } from '@yaks/query'
+import { parse } from '@yaks/query'
 
 // One server search. A malformed filter answers 400 — the typist's news in
 // the palette, but a picker has no error slot, so a bad line simply yields no
@@ -50,19 +50,12 @@ export let hits = async (
   limit = 20,
   signal?: AbortSignal,
 ): Promise<Hit[]> => {
-  // Words are a search, not a newest-first listing. Respect an explicit
-  // order, including one written inside a group; pure filters stay listings.
-  let kinds = new Set<string>()
-  let visit = (c: Clause) => {
-    kinds.add(c.kind)
-    if (c.kind == 'and' || c.kind == 'or') c.clauses.forEach(visit)
-  }
-  visit(parse(q))
-  let line = kinds.has('text') && !kinds.has('order') ? `${q} .order=search` : q
   // Aggregate answers are values, not entities a picker can navigate to.
   // The addressed query page renders them; the palette still offers that link.
-  if (['count', 'tally', 'distinct'].some((kind) => kinds.has(kind))) return []
-  let found = await rows(line, limit, signal)
+  // Words need no order of their own: the server answers a window of a search
+  // best match first (@yaks/fts).
+  if (aggregate(q)) return []
+  let found = await rows(q, limit, signal)
   // Keep the actual bundles: every picker draws the hit through the registry,
   // not from a private title-only search shape.
   applyLocal(

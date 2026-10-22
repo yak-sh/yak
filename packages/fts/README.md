@@ -105,7 +105,9 @@ The pieces can be used independently:
   ordinary storage reads. Given the database's driver it also orders by
   relevance: `.order=search` puts the closest match first and `.order=-search`
   the weakest, ranking once per query among the rows the rest of it admits. The
-  best `RANKED` (1000) are put in order and any past them follow.
+  best `RANKED` (1000) are put in order and any past them follow. A window
+  (`.limit`, `.after`) of a query with words that states no order is ranked the
+  same way: a page of a search is its best rows, never its newest.
 - `find(db, fields, text, options?)` executes a ranked search. `hits()` returns
   the same `{ sql, params }` statement without executing it, for use with an
   asynchronous database. It returns `null` when there are no search terms or
@@ -123,12 +125,17 @@ all terms to match within one component index. Results across indexes are
 merged, with one result per entity using its best index score and corresponding
 snippet.
 
-FTS5 `bm25` supplies the rank, where lower numbers are better matches. No
-recency or popularity weighting is added. `limit` defaults to 20 and snippet
-`context` defaults to 10 words. An optional `screen` is SQL selecting the ids of
-the permitted entities, such as the statement `screen()` returns above. Ranking
-reads only the index; a snippet is cut afterwards, for the rows returned,
-because FTS5 reads a row's whole text back to cut one.
+FTS5 `bm25` supplies the rank, where lower numbers are better matches. One tier
+sits above it: a hit whose stored text is exactly the words, ignoring case
+(`hobbit` for a book titled "The Hobbit" does not; `the hobbit` does), comes
+before every other, so searching a thing's name finds the thing first. bm25
+alone would put a title saying the word twice ahead of a title that is the word.
+Text kept outside its row is compared as stored, so a blob-backed body never
+ranks this way. No recency or popularity weighting is added. `limit` defaults to
+20 and snippet `context` defaults to 10 words. An optional `screen` is SQL
+selecting the ids of the permitted entities, such as the statement `screen()`
+returns above. Ranking reads only the index; a snippet is cut afterwards, for
+the rows returned, because FTS5 reads a row's whole text back to cut one.
 
 Snippets mark matches with `OPEN` (`\x01`) and `CLOSE` (`\x02`), not HTML.
 Renderers must escape the text and add their own highlighting.

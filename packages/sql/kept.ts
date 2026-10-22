@@ -36,7 +36,7 @@ import { type Param, type Raw, raw, type Stmt } from './ast.ts'
 import { type BindOpts, type Prepared, prepared } from './bind.ts'
 import type { ArchetypeSet } from './archetype.ts'
 import { idOf } from './derived.ts'
-import type { Extension, Site } from './extend.ts'
+import { type Extension, ranking, type Site } from './extend.ts'
 import { render } from './render.ts'
 
 // The values one call binds into a kept statement.
@@ -448,9 +448,11 @@ let proven = (
  * `render(bind(ast, vocab, opts))` would. `opts.derived` supplies
  * computed-property expressions, `opts.extend` registers other packages'
  * clause compilers, and `opts.now` fixes the moment a relative time phrase
- * resolves against. Throws `Unsupported` for a clause outside the common path
- * that no extension claims. A shape asked again binds its new values into the
- * statement it lowered to before.
+ * resolves against. A window that states no order takes the one an extension
+ * ranks it by (./extend.ts `ranking`), unless the caller takes rows in any
+ * order (`unordered`, `storageOrder`). Throws `Unsupported` for a clause
+ * outside the common path that no extension claims. A shape asked again binds
+ * its new values into the statement it lowered to before.
  *
  * ```ts
  * import { compile } from '@yaks/sql'
@@ -478,6 +480,9 @@ export let compile = (
   vocab: Vocab,
   opts: BindOpts = {},
 ): Raw => {
+  if (!opts.unordered && !opts.storageOrder) {
+    ast = ranking(opts.extend ?? [], ast)
+  }
   let asked: Asked[] = [], touched = { any: false }
   let p = within(
     touched,

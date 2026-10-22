@@ -40,7 +40,7 @@
 //   }
 //   compile(ast, vocab, { extend: [shelves] })
 
-import { type Clause, map } from '@yaks/query/core'
+import { type And, type Clause, map } from '@yaks/query/core'
 import type { Vocab } from '@yaks/vocab'
 import {
   as,
@@ -114,14 +114,70 @@ export type Compile = (clause: Clause, site: Site) => Expr | null
 // condition as well as the ordering.
 export type OrderBy = (value: string, site: Site) => Expr | null
 
+// The order a window of a query that states none is answered in, as an
+// `.order=` value this extension ranks by, or null to leave it newest first. A
+// window of a search is its best rows, not its newest: @yaks/fts ranks a query
+// with words in it by how well each row matches. Only a read's own query is
+// asked (./kept.ts `compile`, through `ranking`), never a rule's patterns or a
+// screen, and only by the extension that compiles the clauses it ranks.
+export type Ranks = (q: And) => string | null
+
 // A named contribution: which clause kinds it claims, how each of them
-// compiles, and optionally how it writes an ORDER BY. A kind that is not in the
-// map is left entirely to the binder.
+// compiles, and optionally how it writes an ORDER BY and which order a window
+// that states none takes. A kind that is not in the map is left entirely to
+// the binder.
 export type Extension = {
   name: string
   compile: Partial<Record<Clause['kind'], Compile>>
   order?: OrderBy
+  ranks?: Ranks
   begin?: Begin
+}
+
+// Directives after which a query's rows take no order of an extension's: an
+// order already stated, and the aggregates, which answer values, not rows.
+let SETTLED = new Set(['order', 'count', 'tally', 'distinct'])
+
+/** `q` with the order an extension ranks it by (`Ranks`), when `q` is a window
+ * (`.limit`, `.after`) that states no order: a window says how much of a
+ * sequence to answer, and the sequence of a search is best match first. `q`
+ * itself when it states an order, aggregates, answers whole (a complete answer
+ * keeps its order, and its reader pays no ranking), or no extension ranks it.
+ * An extension ranks only clauses no extension before it compiles.
+ *
+ * ```ts
+ * import { parse, stringify } from '@yaks/query'
+ * import { ranking } from '@yaks/sql'
+ * import { equal } from '@yaks/testing'
+ *
+ * let fts = { name: 'fts', compile: { text: () => null }, ranks: () => 'search' }
+ * let ranked = (q: string) => stringify(ranking([fts], parse(q)))
+ * equal(ranked('hobbit .limit=5'), 'hobbit&.limit=5&.order=search')
+ * equal(ranked('hobbit'), 'hobbit')
+ * equal(ranked('hobbit&.count'), 'hobbit&.count')
+ * equal(ranked('hobbit .limit=5 .order=book.price'), 'hobbit&.limit=5&.order=book.price')
+ * let first = { name: 'shelf', compile: { text: () => null } }
+ * equal(stringify(ranking([first, fts], parse('hobbit .limit=5'))), 'hobbit&.limit=5')
+ * ```
+ */
+export let ranking = (exts: readonly Extension[], q: And): And => {
+  if (!q.clauses.some((c) => c.kind == 'limit' || c.kind == 'after')) return q
+  let settled = false
+  map(q, (c) => {
+    settled ||= SETTLED.has(c.kind)
+    return c
+  })
+  if (settled) return q
+  let taken = new Set<string>()
+  for (let e of exts) {
+    let kinds = Object.keys(e.compile)
+    let value = !kinds.some((k) => taken.has(k)) && e.ranks?.(q)
+    if (value) {
+      return { ...q, clauses: [...q.clauses, { kind: 'order', value }] }
+    }
+    for (let k of kinds) taken.add(k)
+  }
+  return q
 }
 
 /** Whether any of `exts` compiles a clause of `q`, its order among them: the

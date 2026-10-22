@@ -34,8 +34,11 @@ another.
 
 - **Words:** a bare word in any query is a text match over @yaks/fts's FTS5
   indexes, one index per component (packages/fts/README.md). Words match by
-  prefix, unstemmed; `bm25` ranks (lower is better); `.order=search` orders by
-  it. Hits carry a computed `rank` and snippets marked `\x01…\x02`, never HTML.
+  prefix, unstemmed; `bm25` ranks (lower is better), below one tier: a hit
+  whose stored text is exactly the words (a title that is the name searched)
+  comes first. `.order=search` orders by it, and so does a window (`.limit`,
+  `.after`) of any query with words that states no other order. Hits carry a computed `rank` and snippets marked
+  `\x01…\x02`, never HTML.
 - **Meaning:** `.near=<entity>` ranks entities by cosine similarity of stored
   vectors to that entity's vector, among whatever the rest of the query admits;
   `.order=similar` orders by it (packages/embedding/README.md, "How `.near`

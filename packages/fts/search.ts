@@ -14,11 +14,13 @@
 
 import type { Eid } from '@yaks/graph'
 import {
+  among,
   and,
   as,
   at,
   type BindOpts,
   col,
+  desc,
   type Driver,
   eq,
   exists,
@@ -28,6 +30,8 @@ import {
   lit,
   not,
   op,
+  or,
+  type Query,
   type Raw,
   render,
   type Select,
@@ -40,8 +44,8 @@ import {
   when,
 } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
-import { type Field, indexes, indexName } from './fields.ts'
-import { CLOSE, excerpt, match, OPEN } from './term.ts'
+import { type Field, type Index, indexes, indexName } from './fields.ts'
+import { CLOSE, excerpt, match, named, OPEN } from './term.ts'
 
 // One search hit: the entity, its rank, and a snippet marking the matches.
 export type Hit = {
@@ -64,6 +68,10 @@ export type SearchOpts = {
   screens?: Record<string, Raw>
   // how many words of context a snippet carries (default 10)
   context?: number
+  // the words as a name is written (./term.ts `named`): a hit whose stored
+  // text is exactly this ranks before every other. `hits()` reads it off its
+  // text; `ranked()` is handed it beside the match it ranks by
+  name?: string
 }
 
 // Each index has one text source and may be gated by another component.
@@ -110,7 +118,7 @@ export let hits = (
   opts: SearchOpts = {},
 ): Raw | null => {
   let t = match(text)
-  let best = chosen(fields, t, opts)
+  let best = chosen(fields, t, { name: named(text), ...opts })
   if (!best) return null
   let context = opts.context ?? 10
   // Membership and rank still use the full match; the excerpt leaves common
@@ -166,6 +174,16 @@ export let ranked = (
 // selected next to a single `min()` from the row the minimum came from, which
 // is exactly the pairing wanted here.
 //
+// A name comes first. bm25 rewards a word said often in a short text, so a
+// task saying "Mossvale" twice in its title outranks the project whose title
+// is the one word, which sat past a hundred others for `mossvale`. So the
+// matches whose stored text is exactly the words, ignoring case (`named`),
+// rank before every other, bm25 orders each tier, and equal matches go newest
+// first, as a listing does. They are found through the index, as rows whose
+// text begins with the words (FTS5's `^`), and only those rows are read to
+// compare. A property kept elsewhere is compared as stored: a body @yaks/blob
+// holds is its address, never its words.
+//
 // Both are materialized, and it is not decoration: FTS5's `bm25` and `snippet`
 // may only be used in a statement that matches the index, and SQLite's query
 // flattener would fold a plain subquery into the join above it, moving them
@@ -187,6 +205,17 @@ let chosen = (
       from: table('__fts_screen'),
       where: eq(col('id', '__fts_screen'), owner),
     }))
+  // An index's rows matching `expr`, among the owners the caller admits.
+  let admitted: Admitted = (name, expr) => {
+    let fts = indexName(name)
+    return and(
+      op('match', col(fts), val(expr)),
+      permitted(name, col('rowid', fts), opts.screens),
+      // Rank only admitted owners: materializing every text match first
+      // reads excluded content and leaves the outer join a broad hit set.
+      ...opts.screen ? [eligible(col('rowid', fts))] : [],
+    )
+  }
   let hits = unionAll(...arms.map(({ name }, i) => {
     let fts = indexName(name)
     return select({
@@ -196,13 +225,7 @@ let chosen = (
         as(lit(i), 'arm'),
       ],
       from: table(fts),
-      where: and(
-        op('match', col(fts), val(t)),
-        permitted(name, col('rowid', fts), opts.screens),
-        // Rank only admitted owners: materializing every text match first
-        // reads excluded content and leaves the outer join a broad hit set.
-        ...opts.screen ? [eligible(col('rowid', fts))] : [],
-      ),
+      where: admitted(name, t),
     })
   }))
   let alive = not(exists(select({
@@ -210,19 +233,31 @@ let chosen = (
     from: table('tombstone', 't'),
     where: eq(col('entity', 't'), e('id')),
   })))
+  let name = opts.name ? exactly(arms, opts.name, admitted) : null
   let best = select({
     cols: [
       as(e('eid'), 'entity'),
       as(hit('owner'), 'owner'),
       as(fn('min', hit('rank')), 'rank'),
       as(hit('arm'), 'arm'),
+      as(
+        // `in` keys the named owners once; a correlated probe would scan
+        // them for every hit.
+        name
+          ? among(
+            hit('owner'),
+            select({ cols: [col('owner')], from: table('named') }),
+          )
+          : lit(0),
+        'named',
+      ),
     ],
     from: table('hit'),
     // The ranked hit set drives owner lookups even with small stale statistics.
     joins: [{ how: 'cross', src: table('entity') }],
     where: and(alive, eq(e('id'), hit('owner'))),
     group: [hit('owner')],
-    order: [col('rank')],
+    order: [desc(col('named')), col('rank'), desc(hit('owner'))],
     limit: val(opts.limit ?? 20),
   })
   return select({
@@ -236,6 +271,7 @@ let chosen = (
         }]
         : [],
       { name: 'hit', q: hits, materialized: true },
+      ...name ? [{ name: 'named', q: name, materialized: true }] : [],
       { name: 'best', q: best, materialized: true },
     ],
     cols: [
@@ -244,9 +280,37 @@ let chosen = (
       as(b('rank'), 'rank'),
     ],
     from: table('best'),
-    order: [b('rank')],
+    order: [desc(b('named')), b('rank'), desc(b('owner'))],
   })
 }
+
+type Admitted = (name: string, expr: string) => Expr
+
+// The admitted owners whose stored text, in any column of an index, is
+// exactly `name`: the rows whose text begins with it (`^`), each read once to
+// compare.
+let exactly = (arms: Index[], name: string, admitted: Admitted): Query =>
+  unionAll(...arms.map(({ name: index, comp, props }) => {
+    let fts = indexName(index)
+    let n = at('__named')
+    let same = (p: string) =>
+      eq(fn('lower', fn('trim', n(p))), fn('lower', val(name)))
+    return select({
+      cols: [as(col('rowid'), 'owner')],
+      from: table(fts),
+      where: and(
+        admitted(index, `^"${name.replaceAll('"', '')}"`),
+        exists(select({
+          cols: [lit(1)],
+          from: table(comp, '__named'),
+          where: and(
+            eq(n('entity'), col('rowid', fts)),
+            or(...props.map(same)),
+          ),
+        })),
+      ),
+    })
+  }))
 
 // The hits for a search, closest first. Returns [] for text containing no word
 // and for a vocabulary with nothing indexed — a search that cannot be run finds

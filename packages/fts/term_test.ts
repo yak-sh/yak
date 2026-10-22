@@ -2,7 +2,7 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { excerpt, match, term } from './term.ts'
+import { excerpt, match, named, term } from './term.ts'
 
 test('a word is quoted, so every character in it is literal', () => {
   assertEquals(term('dragon'), '"dragon"*')
@@ -54,6 +54,12 @@ test('a quoted run stays one phrase, beside the loose words', () => {
   )
   // Half a phrase is still a phrase — somebody is mid-sentence.
   assertEquals(match('"entropy purge'), '"entropy purge"')
+})
+
+test('the words a name is written in drop their grammar', () => {
+  assertEquals(named('  Mossvale  '), 'Mossvale')
+  assertEquals(named('"the hobbit" drag*'), 'the hobbit drag')
+  assertEquals(named(' "" * '), '')
 })
 
 test('excerpt retains useful terms without discarding search words', () => {

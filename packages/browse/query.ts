@@ -256,8 +256,8 @@ let OPS: Record<string, string> = {
 
 // `.order=hot`, `.order=search`, and `.order=similar` are rankings, not
 // filters: matchQuery lets them through, adopt() ignores them, and orderOf()
-// hands the value to whoever sorts. Search is explicit so a filter-only picker
-// can request recent-first results without changing ordinary query order.
+// hands the value to whoever sorts. The server answers a window of words best
+// match first (@yaks/fts); a filter with no words stays newest first.
 // Similar asks the evaluator that owns the embedding service for
 // vector-neighbor rank.
 export let ORDER = 'order'

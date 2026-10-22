@@ -22,8 +22,10 @@
 // whole search per row, so the ranking runs once, through the server's own
 // connection, among the rows the rest of the query admits (./search.ts). The
 // order is then each entity's place in it, spelled over integer ids: the one
-// value an ORDER BY here can carry. A search composed without a connection
-// selects but does not rank.
+// value an ORDER BY here can carry. A window of a query with words that states
+// no order is ranked the same way (`ranks`): a page of a search is its best
+// rows, as a search box's are, never its newest. A search composed without a
+// connection selects but does not rank.
 
 import {
   among,
@@ -46,7 +48,8 @@ import {
 } from '@yaks/sql'
 import { permitted, ranked, screens } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
-import { term } from './term.ts'
+import { named, term } from './term.ts'
+import type { Clause } from '@yaks/query/core'
 
 // The ranking `.order=` names.
 export let SEARCH = 'search'
@@ -59,14 +62,23 @@ export let RANKED = 1000
 // larger screens retain the single walk through a term's postings.
 let FEW = 4
 
+// Whether a clause searches for a word among the rows it selects: a text
+// clause with a word in it, alone or in a group (not a walk's, whose words
+// are about other entities).
+let worded = (c: Clause): boolean =>
+  c.kind == 'text'
+    ? !!term(c.value)
+    : (c.kind == 'and' || c.kind == 'or') && c.clauses.some(worded)
+
 // The @yaks/sql extension that resolves bare words against the search indexes.
 // It handles the `text` clause, covering every indexed field, and orders by
 // relevance to those words. Without this extension @yaks/sql rejects bare
 // words rather than assuming an index exists.
 export let search = (fields: Field[], db?: Driver): Extension => {
-  // The words this query searched for, and what the rest of it selects,
-  // remembered for its `.order=search`.
+  // The words this query searched for (as terms, and as typed), and what the
+  // rest of it selects, remembered for its `.order=search`.
   let words: string[] = []
+  let said: string[] = []
   let asked: Screen | null = null
   // The owners in relevance order, resolved once a query.
   let held: number[] | null = null
@@ -79,6 +91,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
       screen: asked?.() ?? undefined,
       screens: sources,
       limit: RANKED,
+      name: named(said.join(' ')),
     })
     held = stmt ? db!.query(stmt).map((r) => Number(r.owner)) : []
     return held
@@ -87,6 +100,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
     name: 'fts',
     begin: (screen) => {
       words = []
+      said = []
       asked = screen
       held = null
       sources = {}
@@ -102,7 +116,10 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         // widening the result set.
         if (!t) return FALSE
         // A screen compiled for another extension reads this clause again.
-        if (!words.includes(t)) words.push(t)
+        if (!words.includes(t)) {
+          words.push(t)
+          said.push(clause.value)
+        }
         sources = screens(fields, site.vocab, { visibility: site.visibility })
         let screen = site.screen
         let allowed: Source | undefined
@@ -138,6 +155,9 @@ export let search = (fields: Field[], db?: Driver): Extension => {
         )
       },
     },
+    // A window of a query with words in it is a search's best rows unless it
+    // says otherwise, where there is a connection to rank through.
+    ranks: (q) => db && worded(q) ? SEARCH : null,
     order: (value, site) => {
       if (value != SEARCH) return null
       if (!words.length || !db) {

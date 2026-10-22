@@ -3,7 +3,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
-import { insert, screen as screenOf } from '@yaks/sql'
+import { compile, insert, screen as screenOf } from '@yaks/sql'
 import { fields } from './fields.ts'
 import { search } from './compile.ts'
 import { find, hits } from './search.ts'
@@ -119,4 +119,32 @@ test('common words still narrow a search but are not highlighted', () => {
     phrase.snippet.includes(`${OPEN}A burglar leaves${CLOSE}`),
     phrase.snippet,
   )
+})
+
+// Books called by the word, among one that says it more often.
+let named = shelf()
+for (
+  let [id, title, blurb] of [
+    [5, 'Dragon', 'Wings over a valley.'],
+    [6, 'Dragon riders and dragon eggs', 'Dragon after dragon.'],
+    [7, 'The Hobbit, read and The Hobbit, seen', 'The hobbit again.'],
+  ] as const
+) {
+  entity(named, id, `book-${id}`)
+  named.query(insert('book', { entity: id, title, blurb, price: 1 }))
+}
+
+test('the entity a search names comes first, whatever its case', () => {
+  assertEquals(find(named, text, 'DRAGON')[0].entity, 'book-5')
+})
+
+test('a phrase names an entity as a word does', () => {
+  assertEquals(find(named, text, '"the hobbit"')[0].entity, 'book-1')
+})
+
+let byName = compile(parse('dragon .order=search'), shop, {
+  extend: [search(text, named)],
+})
+test('a query ranked by search puts the entity it names first', () => {
+  assertEquals(named.query(byName)[0].eid, 'book-5')
 })

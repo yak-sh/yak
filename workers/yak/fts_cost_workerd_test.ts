@@ -66,7 +66,10 @@ test('a screened text ranking bounds work beyond its term statistics', async () 
     eid: 'later-1000001',
   }])
   assertEquals(report.broad.written, 0)
-  assert(report.broad.read <= 18027, `${report.broad.read} broad billed rows`)
+  // A window of a search is its best rows (@yaks/fts `ranks`), and here every
+  // comment's text is the two words: ranking reads each hit's postings and
+  // size, and each one is a name to compare. Membership alone read 18,027.
+  assert(report.broad.read <= 52000, `${report.broad.read} broad billed rows`)
   assertEquals(report.all, [{ value: '', n: report.history * 2 + 3 }])
   assertEquals(
     report.wide.rows.map((r) => String(r.eid)).sort(),

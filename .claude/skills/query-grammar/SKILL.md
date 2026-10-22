@@ -153,8 +153,12 @@ A directive belongs to the whole line wherever it is written.
 | `.edges`            | `.edges[requires]`                          | asks for the edges touching the answer; it doesn't filter, and the caller fetches them (packages/edge/README.md) |
 
 `.order`, `.limit` and `.after` shape rows, so an aggregate ignores them:
-`.count&.limit=20` counts every match. A trailing `~` in `.fields` mutes that
-property from a subscription's change signal.
+`.count&.limit=20` counts every match. With no `.order`, a window (`.limit`,
+`.after`) of a query with words is ranked by `search` (best match first, a
+title that is exactly the words before all); any other window is newest first,
+and a whole answer oldest first.
+A trailing `~` in `.fields` mutes that property from a subscription's change
+signal.
 
 ## Rules and matches
 

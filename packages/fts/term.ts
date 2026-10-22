@@ -55,6 +55,14 @@ let WORDS = /"[^"]*"?|\S+/g
 export let match = (text: string): string =>
   (text.match(WORDS) ?? []).map(term).filter(Boolean).join(' ')
 
+// The words as a name is written: quotes and stars gone, one space between
+// them. A hit whose whole text is this is the thing searched for by name
+// (./search.ts ranks it first). Returns '' for text containing no word.
+export let named = (text: string): string =>
+  (text.match(WORDS) ?? [])
+    .map((word) => word.replace(/\*+$/, '').replaceAll('"', '').trim())
+    .filter(Boolean).join(' ')
+
 // Grammatical words still participate in matching and ranking. In an excerpt
 // they obscure the useful words and make FTS5 scan large matches just to cut
 // the display text. This list affects display only, never search membership.
