@@ -114,7 +114,7 @@
               }
             }
           ],
-          "description": "a component to read in full, or a list of them"
+          "description": "a component name, to read it in full; several at once as an array of names, such as [\"task\", \"doc\"]"
         },
         "kind": {
           "type": "string",

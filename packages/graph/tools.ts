@@ -233,16 +233,18 @@ export let runs = (seams: Seams = {}): Runs => {
     graph_schema: (call, graph) => {
       let args = argsOf(call)
       let v = graph.vocab
-      let named = [
-        ...(typeof args.component == 'string' ? [args.component] : []),
-        ...strings(args.component),
-      ]
+      // A component's name is one word, so a string of several, however they
+      // are set apart (`topic persona`, `topic, persona`), is those names.
+      let named = strings([args.component].flat())
+        .flatMap((s) => s.split(/[\s,]+/).filter(Boolean))
       let kind = str(args.kind)
-      for (let name of [...named, ...(kind ? [kind] : [])]) {
-        if (v.comp(name)) continue
+      let unknown = [...named, ...(kind ? [kind] : [])]
+        .filter((name) => !v.comp(name))
+      if (unknown.length) {
         throw new Refused(
-          `no component '${name}' — call graph_schema with no arguments ` +
-            `for the index of every word this graph knows`,
+          `no component ${unknown.map((n) => `'${n}'`).join(', ')} — call ` +
+            `graph_schema with no arguments for the index of every word ` +
+            `this graph knows`,
         )
       }
       if (kind && !v.comp(kind)!.kind) {

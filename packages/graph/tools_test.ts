@@ -5,7 +5,14 @@ import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
 import { loadTools, tier } from './tools.ts'
 import { declared } from './vocab.ts'
+import { Refused } from './errors.ts'
+import type { Bundle } from './bundle.ts'
+import type { Graph } from './graph.ts'
 import { toolRow } from '@yaks/tools'
+import { loadVocab } from '@yaks/vocab'
+import { validateToolInput } from '@yaks/vocab/tools'
+
+type Answer = { $defs: Record<string, unknown> }
 
 let doc = {
   $defs: {
@@ -61,6 +68,38 @@ test('a declaration nobody implements is a load error', () => {
     () => loadTools(doc, {}),
     Error,
     "tool 'book_shelve' is declared and not implemented",
+  )
+})
+
+// However a model sends several names, they are several: an array, the array
+// as JSON text (read at the argument boundary), or one string of names.
+let shelves = loadVocab({
+  $defs: {
+    book: { component: true, type: 'object', properties: {} },
+    shelf: { component: true, type: 'object', properties: {} },
+  },
+})
+let schema = tier().find((t) => t.name == 'graph_schema')!
+let read = (component: unknown) => {
+  let args = validateToolInput(schema, { component })
+  let call = { entity: { eid: 'c' }, call: { args } }
+  let [said] = schema.run(call, { vocab: shelves } as Graph) as Bundle[]
+  return Object.keys((said.output as { value: Answer }).value.$defs)
+}
+test('graph_schema reads several components however the names are sent', () => {
+  for (
+    let names of [
+      ['book', 'shelf'],
+      '["book", "shelf"]',
+      'book, shelf',
+      'book shelf',
+    ]
+  ) assertEquals(read(names), ['book', 'shelf'])
+  assertEquals(read('book'), ['book'])
+  assertThrows(
+    () => read(['bok', 'book', 'shelv']),
+    Refused,
+    "no component 'bok', 'shelv' — call graph_schema with no arguments",
   )
 })
 

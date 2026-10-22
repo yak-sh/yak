@@ -204,10 +204,12 @@ where edge entities are ordinary bundles.
 Schema document with each component's entry under `$defs`, the shape of a
 vocab.json. With no arguments it is the index: every component's description,
 whether it names a kind, and each property's type. `component` selects one or
-more components as declared, each with an example value; the markdown adds what
-references it and an example bundle. `kind` is a declared kind in full beside
-the index entries of the components it is shown with. An application-supplied
-`guide` callback adds documentation links to the markdown.
+more components as declared, each with an example value: a name, an array of
+names, or one string of names set apart by spaces or commas. The markdown adds
+what references it and an example bundle. A name nobody declared is refused,
+every such name said at once. `kind` is a declared kind in full beside the index
+entries of the components it is shown with. An application-supplied `guide`
+callback adds documentation links to the markdown.
 
 ## What a call returns
 
