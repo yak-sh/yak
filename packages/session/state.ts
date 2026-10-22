@@ -56,14 +56,16 @@ export let RETRIES = 3
  * ceiling. The transcript is `failed` until something new is said to it. */
 export let LIMIT = 'limit'
 
+// A result is a result even when it carries the refusal that answered its
+// call.
 let KINDS: [string, Kind][] = [
   [STOP_ENTRY, 'stop'],
+  [RESULT, 'result'],
+  ['tool_progress', 'result'],
   [EXCEPTION, 'exception'],
   [REFUSAL, 'refusal'],
   [ASK, 'ask'],
   [CALL, 'call'],
-  [RESULT, 'result'],
-  ['tool_progress', 'result'],
   ['interrupted', 'interrupted'],
 ]
 

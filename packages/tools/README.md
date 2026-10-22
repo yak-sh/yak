@@ -147,9 +147,12 @@ to a tool that writes: every write phase runs, the write rolls back, and the
 proposed answer is returned. The runner still records completion.
 
 Throw `CallError(code, message)` for an expected refusal. Other thrown values
-produce an `exception` answer. `report` receives the original thrown value once,
-with its stack, whether or not recording the answer succeeds. Reporting skips
-known provider transients through `actionable`. Invalid arguments, failed schema
+produce an `exception` answer. Each is an entity of its own beside the result,
+unless the runner is built with `refusalOnResult`: then a refusal is recorded on
+the result itself, `refusal{code}` beside `result{call}`, as a transcript keeps
+it (@yaks/session). `report` receives the original thrown value once, with its
+stack, whether or not recording the answer succeeds. Reporting skips known
+provider transients through `actionable`. Invalid arguments, failed schema
 validation, and refused graph writes also produce failed calls. The runner
 resolves schema-declared [references](../vocab/README.md#routing-and-references)
 through `g.address` before invocation. A tool that writes is refused if such an

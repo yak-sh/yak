@@ -901,9 +901,12 @@ export let sessionStatus = {
     let newest = col('newest', 't')
     let asked = col('asked', 't')
     let row = marks((comp) => has(comp), col('cancelled', 't'))
+    // A result carrying its call's refusal is a result, as `kindOf` reads it.
     let value = (name: string) =>
       name == 'stop'
         ? iff(row.halted, col('entity', 't'), lit(null))
+        : name == 'exception' || name == 'refusal'
+        ? iff(has('result'), lit(null), col(name, 't'))
         : col(name, 't')
     let names = [
       'stop',

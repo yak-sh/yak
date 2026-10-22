@@ -77,7 +77,8 @@ let shown = (
   let c = row.comps
   let b = bundle(row)
   let kind = kindOf(b)
-  if (kind == 'exception' || kind == 'refusal') {
+  // A result carrying its call's refusal is shown as the refusal it is.
+  if (kind == 'exception' || kind == 'refusal' || c.refusal) {
     return { kind: 'error', text: failure(c)! }
   }
   if (kind == 'stop') return { kind: 'sys', tag: 'stop' }

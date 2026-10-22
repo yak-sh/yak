@@ -900,6 +900,28 @@ test('a refused argument is a refusal code, not an exception', async () => {
   )
 })
 
+// Run once before the case is timed: the case checks what landed.
+let riding = await (async () => {
+  let { g } = world()
+  let r = runner(g, { tools: [echo], report: () => {}, refusalOnResult: true })
+  await r.ensure()
+  let call = called('example_echo')
+  let answer = await r.call(call)
+  return {
+    refusal: (await g.read(`.result.call=${call.entity.eid}&*`))[0]?.refusal,
+    beside: await g.read(`.output.source=${call.entity.eid}&*`),
+    failed: faulted(answer, call.entity.eid),
+  }
+})()
+
+test('a refusal rides on its result where the runner is asked to', () => {
+  assertEquals(riding, {
+    refusal: { code: 'arguments' },
+    beside: [],
+    failed: true,
+  })
+})
+
 // A tool whose argument names a person, and whose answer says which eid it
 // was handed. `readOnly` makes it a read of the same shape.
 let mark = (readOnly = false): Tool => ({

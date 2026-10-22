@@ -416,12 +416,14 @@ runner for each step, executes transcript calls serially, and writes returned
 text as `content{body}` plus `output{source}` beside a `result` entry with its
 `call` and `ms` fields. A precommit rule adds `entry.session` to results before
 sequence allocation. The general tool-runner plugin is not registered because
-its effect-phase execution would race the session loop. An unknown tool is
-handled by a refusing tool, producing a `refusal{code}` result. A durable
-`execution.state=running` without a result is not replayed. On restart, a tool
-may recover its outcome from durable state; otherwise the runner records an
-interrupted result so the model can inspect the state before taking another
-action. The session then continues.
+its effect-phase execution would race the session loop. A refused call is one
+entry, its result carrying `refusal{code}` (the runner's `refusalOnResult`), and
+the model reads it as that call's result. An unknown tool is handled by a
+refusing tool, producing such a result. A durable `execution.state=running`
+without a result is not replayed. On restart, a tool may recover its outcome
+from durable state; otherwise the runner records an interrupted result so the
+model can inspect the state before taking another action. The session then
+continues.
 
 ## Reading transcripts
 

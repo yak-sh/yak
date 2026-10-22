@@ -126,6 +126,11 @@ export type Opts = {
   /** Extra bundles a direct caller is owed beside a tool's answer. A plugin
    * may supply them without the tool or its transport knowing about them. */
   reply?: Reply
+  /** record a refusal on the call's result, `refusal{code}` beside
+   * `result{call}` and its words, rather than as an entity of its own: what a
+   * transcript keeps, one entry per answer (@yaks/session). A defect keeps its
+   * own `exception` entity either way. */
+  refusalOnResult?: boolean
 }
 
 /** What a direct caller is owed beside a tool's answer: the call, what the
@@ -411,6 +416,14 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       code?: string,
     ): Promise<Bundle[]> => {
       let ended = ending(call, started, state, made)
+      let [refused] = made
+      if (
+        opts.refusalOnResult && state == 'failed' && made.length == 1 &&
+        refused.refusal && !refused.exception
+      ) {
+        ended = [{ ...ended[0], refusal: refused.refusal }, ...ended.slice(1)]
+        made = []
+      }
       if (unrecorded) return [...made, ...ended]
       let bundles = [
         ...(keep ? made : []),

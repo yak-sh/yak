@@ -123,7 +123,8 @@ export type ToolContext = {
   signal?: AbortSignal
 }
 
-/** A refused tool invocation: expected, recorded as a refusal and a result. */
+/** A refused tool invocation: expected, recorded as its result carrying
+ * `refusal{code}`. */
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
 import { project } from './project.ts'
@@ -1032,6 +1033,8 @@ export let react = async (
       otherwise: unserved,
       owner: deps.owner ?? session,
       report: (error) => deps.report?.(error, session, 'tool'),
+      // A refusal is the call's answer: one entry, its result.
+      refusalOnResult: true,
     })
     let older = deps.runCall
       ? []

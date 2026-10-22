@@ -188,6 +188,16 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
       content: { body: 'still working' },
     }),
   ], 'running'],
+  ['a refusal riding on its result owes the model a turn', [
+    request(1),
+    entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' } }),
+    entry(4, {
+      result: { call: 'e3' },
+      refusal: { code: 'tool' },
+      content: { body: 'no such tool' },
+    }),
+  ], 'pending'],
   ['a background call alone permits one continuation', [
     request(1),
     entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
@@ -844,9 +854,10 @@ for (let typed of [false, true]) {
     )
   })
   test(`terminal predicates match every transcript shape (archetypes: ${typed})`, () => {
+    // The shapes whose terminal predicate disagrees with their word.
     assertEquals(
-      terminal.map(([name, got]) => [name, got]),
-      terminal.map(([name, , want]) => [name, want]),
+      terminal.filter(([, got, want]) => got != want).map(([name]) => name),
+      [],
     )
   })
   test(`the SQL view answers the same word as the rule (archetypes: ${typed})`, () => {

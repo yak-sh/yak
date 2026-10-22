@@ -34,7 +34,9 @@ export let runtimeRows = async (
       ...waiting ? { call: call.call } : {},
       ...tail?.interrupted ? { interrupted: tail.interrupted } : {},
       ...tail?.failed ? { failed: tail.failed } : {},
-      ...tail?.refusal ? { refusal: tail.refusal } : {},
+      // A result carrying its call's refusal answered the call; the turn
+      // goes on.
+      ...tail?.refusal && !tail.result ? { refusal: tail.refusal } : {},
       ...(attempt ?? tail)?.created
         ? { updated: (attempt ?? tail)!.created }
         : {},
@@ -96,8 +98,8 @@ export let runtimeAction = async (
     '.entry.session=' + session +
       '&.ask&.order=-entry.seq&.limit=1&*',
   )
-  let interrupted = ask?.interrupted != null && !tail?.refusal &&
-    !tail?.exception
+  let interrupted = ask?.interrupted != null &&
+    !(tail?.refusal && !tail.result) && !tail?.exception
   if ((row.session as Comp).status != 'settled' && !interrupted) {
     throw new Error(
       'Continue requires idle or interrupted work; other failures and stopped work are not replayed',

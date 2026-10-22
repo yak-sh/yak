@@ -1352,18 +1352,18 @@ test('a call for a tool this session does not serve is refused, not left open', 
   // The tool row is in the graph and the session serves no function for it.
   assertEquals(await rest(g, ids.s, { model, tools: [], mint }), 'settled')
   let entries = await transcript(g, ids.s)
-  // The refusal is beside the result, which is what any expected
-  // failure lands — the model hears it and the transcript goes on.
+  // The refusal is the call's result, as any expected failure lands — one
+  // entry: the model hears it and the transcript goes on.
   assertEquals(entries.map(kindOf), [
     'input',
     'ask',
     'call',
-    'refusal',
     'result',
     'ask',
     'output',
   ])
   let refused = entries.find((b) => kindOf(b) == 'result')!
+  assertEquals(refused.refusal, { code: 'tool' })
   assertEquals(
     String((refused.content as Comp).body).includes('no such tool'),
     true,
