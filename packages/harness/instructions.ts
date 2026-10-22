@@ -6,7 +6,7 @@ import type { Comp, Graph } from '@yaks/graph'
 import { type Snapshot, snapshot } from '@yaks/context'
 import type { Machine } from '@yaks/machine'
 import { owing } from './session_machines.ts'
-import type { As } from '@yaks/persona'
+import { type As, offer, wearing } from '@yaks/persona'
 
 /** Each directory from the root down to `dir`, an absolute path. */
 let ancestors = (dir: string): string[] =>
@@ -96,4 +96,21 @@ export let instructionsFor = async (
     )
   }
   return admitted(g, undefined, home, context)
+}
+
+/** What a session opening here begins with: its instruction files, and the
+ * names of the tools the persona it wears offers (@yaks/persona `offer`),
+ * which are then all a turn is offered. No `tools` where that persona offers
+ * none, which leaves the runner's own set. */
+export let openingFor = async (
+  g: Graph,
+  home: Comp,
+  workspaces?: Workspaces,
+  context: As = {},
+): Promise<{ files: Snapshot[]; tools?: string[] }> => {
+  let files = await instructionsFor(g, home, workspaces, context)
+  let tools = home.cwd || context.persona || context.work
+    ? offer(await wearing(g, String(home.cwd ?? ''), context))
+    : undefined
+  return { files, ...tools ? { tools } : {} }
 }

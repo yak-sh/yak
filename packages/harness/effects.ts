@@ -7,12 +7,12 @@
 
 import { promptEntry } from '@yaks/context'
 import { type Comp, derivedEid, Refused } from '@yaks/graph'
-import { instructionsFor } from './instructions.ts'
+import { openingFor } from './instructions.ts'
 import type { Handlers } from '@yaks/effects'
 import type { Host } from '@yaks/host'
 
 import { running } from '@yaks/session'
-import { lend } from './agent.ts'
+import { lend, offering } from './agent.ts'
 import { here } from './local.ts'
 import { hosted } from './store.ts'
 import { unfinishedEach } from './unfinished.ts'
@@ -47,8 +47,9 @@ export let effects = (
   // answered, when whoever began it wrote none: an HTTP fixer's (its home,
   // its claimed task or project), or the persona a session wears, as any door
   // writes it (a browser's chat names the persona and its first message, no
-  // more). A persona is admitted only before the first turn, so a session
-  // whose persona owes nothing beside its files is not asked again.
+  // more), with the tools that persona offers. A persona is admitted only
+  // before the first turn, so a session whose persona owes nothing beside its
+  // files is not asked again.
   let opening = async (session: string) => {
     let [owner] = await g.get([session])
     let s = owner?.session as Comp | undefined
@@ -77,7 +78,7 @@ export let effects = (
         ? (await g.read(`.claim.session=${session}&.task&.limit=1`))[0]
           ?.entity.eid ?? (owner.filed as Comp | undefined)?.project
         : undefined
-      let files = await instructionsFor(
+      let { files, tools } = await openingFor(
         g,
         { ...owner.home as Comp | undefined },
         host.workspaces,
@@ -85,15 +86,18 @@ export let effects = (
       )
       if (files.length) {
         await g.apply(
-          files.map((file) =>
-            promptEntry(
-              session,
-              undefined,
-              file.body,
-              file.source,
-              'shared',
-              file.revision,
-            )
+          offering(
+            files.map((file) =>
+              promptEntry(
+                session,
+                undefined,
+                file.body,
+                file.source,
+                'shared',
+                file.revision,
+              )
+            ),
+            tools,
           ),
           { trusted: true },
         )

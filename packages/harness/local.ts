@@ -23,7 +23,7 @@ import { configuredImages, type ImageOptions } from './images.ts'
 import { diagnostics, type FailureContext } from './diagnostics.ts'
 import { homeAt, machines } from './session_machines.ts'
 import { homeAt as checkoutHome } from './workspace.ts'
-import { instructionsFor } from './instructions.ts'
+import { openingFor } from './instructions.ts'
 import { transcriptViews } from './transcript.ts'
 import type { Harness } from './store.ts'
 import { graphTools, harnessTools } from './tools.ts'
@@ -248,15 +248,14 @@ export let here = (h: Harness, opts: Omit<Opts, 'h'> = {}): Here => {
         : opts.cwd
         ? await checkoutHome(h.g, opts.cwd)
         : homeAt()
-      let files = await instructionsFor(
-        h.g,
-        home,
-        opts.workspaces ?? h.workspaces,
-        { persona },
-      )
       return {
         home,
-        files,
+        ...await openingFor(
+          h.g,
+          home,
+          opts.workspaces ?? h.workspaces,
+          { persona },
+        ),
       }
     },
     context: (window, entries) =>

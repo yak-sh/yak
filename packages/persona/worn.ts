@@ -20,6 +20,8 @@
 // persona links to, which is how a base persona reaches every persona built on
 // top of it without anybody copying its text. A persona reached by `reads` is
 // only listed: the edge records where it is, not that its text belongs here.
+// A registered tool it contains is offered to whoever wears it rather than
+// said, and an included persona's tools are offered with its own.
 // This walks level by level rather than recursing, so an embedded store
 // answers the whole read synchronously and a remote one needs exactly one
 // chain of calls (@yaks/edge's `reach` walks the same way).
@@ -43,6 +45,9 @@ export let CARRIES = 'contains'
 
 /** The relation whose far end is only listed by id. */
 export let READS = 'reads'
+
+/** A registered tool (@yaks/tools): contained, it is offered, not said. */
+export let TOOL = 'tool'
 
 // How deep personas may be nested. A base under a base under a base is a graph
 // somebody drew by hand; deeper than this means a cycle, and a cycle is what
@@ -112,6 +117,7 @@ export let wear = (
       if (!persona?.[PERSONA]) return undefined
       let carries = new Map<Eid, Bundle>()
       let names = new Map<Eid, Bundle>()
+      let tools = new Map<Eid, Bundle>()
       let seen = new Set<Eid>([eid])
       let level = [eid]
       return after(
@@ -126,6 +132,10 @@ export let wear = (
                   let next: Eid[] = []
                   for (let id of held) {
                     let b = by.get(id)
+                    if (b?.[TOOL]) {
+                      tools.set(id, b)
+                      continue
+                    }
                     // `seen` holds the persona itself, so a cycle of
                     // personas never includes the text it started from
                     // twice.
@@ -170,6 +180,7 @@ export let wear = (
             persona,
             carries: [...carries.values()],
             names: [...names.values()],
+            tools: [...tools.values()],
           }
         },
       )
@@ -181,32 +192,37 @@ let eidOf = (b: Bundle): Eid => b.entity.eid
 /**
  * Several personas said as one: the first leads, and each after it is
  * included the way a persona it contained would be — its text as a document,
- * then the documents it includes — with nothing said twice. How a sub-project's
- * agents hear the common persona of every project above theirs.
+ * then the documents it includes, its tools offered with the rest — with
+ * nothing said twice. How a sub-project's agents hear the common persona of
+ * every project above theirs.
  */
 export let fold = (head: Worn, ...more: Worn[]): Worn => {
   let lead = eidOf(head.persona)
   let carries = new Map(head.carries.map((b) => [eidOf(b), b]))
   let names = new Map(head.names.map((b) => [eidOf(b), b]))
+  let tools = new Map(head.tools.map((b) => [eidOf(b), b]))
   for (let w of more) {
     for (let b of [w.persona, ...w.carries]) {
       if (eidOf(b) != lead && !carries.has(eidOf(b))) carries.set(eidOf(b), b)
     }
     for (let b of w.names) if (!names.has(eidOf(b))) names.set(eidOf(b), b)
+    for (let b of w.tools) if (!tools.has(eidOf(b))) tools.set(eidOf(b), b)
   }
   for (let id of [lead, ...carries.keys()]) names.delete(id)
   return {
     persona: head.persona,
     carries: [...carries.values()],
     names: [...names.values()],
+    tools: [...tools.values()],
   }
 }
 
 /**
  * What `w` says that `said` does not: a document `said` includes is dropped in
  * both forms, and one it only names loses only its name, since including it in
- * full still earns its place. `w` keeps its own lead. How a file read beside
- * another avoids saying anything twice.
+ * full still earns its place. `w` keeps its own lead and its tools, which are
+ * offered, not said. How a file read beside another avoids saying anything
+ * twice.
  */
 export let beside = (w: Worn, said: Worn): Worn => {
   let carried = new Set([said.persona, ...said.carries].map(eidOf))
@@ -215,5 +231,16 @@ export let beside = (w: Worn, said: Worn): Worn => {
     persona: w.persona,
     carries: w.carries.filter((b) => !carried.has(eidOf(b))),
     names: w.names.filter((b) => !named.has(eidOf(b))),
+    tools: w.tools,
   }
+}
+
+/** The names of the tools a session wearing `w` is offered: nothing where it
+ * contains none, which leaves its runner's own set. */
+export let offer = (w: Worn | undefined): string[] | undefined => {
+  let names = (w?.tools ?? []).flatMap((b) => {
+    let name = (b[TOOL] as { name?: unknown }).name
+    return typeof name == 'string' && name ? [name] : []
+  })
+  return names.length ? names : undefined
 }

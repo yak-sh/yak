@@ -3,6 +3,8 @@ import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools } from './tools.ts'
 import { core, inputSchemaOf } from '@yaks/mcp/tools'
 import { identityEid } from '@yaks/graph'
+import { link } from '@yaks/edge'
+import type { Model } from '@yaks/model'
 import { toolEid } from '@yaks/tools'
 import { harness, repo } from './testing.ts'
 import { local } from './local.ts'
@@ -134,6 +136,53 @@ test('the merged wait preserves process output and child status alongside task w
   }
 })
 
+// A model that files task x on its first ask and then says so, keeping the
+// names of the tools each ask offered it.
+let filer = (offered: string[][]): Model => (req) => {
+  offered.push(req.tools?.map((t) => t.name) ?? [])
+  return Promise.resolve({
+    id: `r${offered.length}`,
+    model: 'fake',
+    items: offered.length == 1
+      ? [{ kind: 'call', id: 'c1', name: 'task_new', args: '{"title":"x"}' }]
+      : [{ kind: 'assistant', text: 'filed' }],
+  })
+}
+
+// What a serving host writes for each of its tools at start-up.
+let registered = (name: string) => ({
+  entity: { eid: toolEid(name) },
+  tool: { name },
+})
+
+test('a session wearing a persona is offered the tools it contains alone, and they run', async () => {
+  let offered: string[][] = []
+  let a = local({
+    name: 'gpt-6-astra',
+    h: await harness(),
+    tools: [],
+    model: filer(offered),
+  })
+  try {
+    await a.h.g.apply([
+      {
+        entity: { eid: 'farmer' },
+        persona: {},
+        doc: { title: 'Farmer', body: 'File what you are asked to.' },
+      },
+      registered('task_new'),
+      link('farmer', 'contains', toolEid('task_new')),
+    ])
+    let s = await a.start('file x', { persona: 'farmer' })
+    await a.idle(s)
+    assert(offered.length >= 2)
+    for (let tools of offered) assertEquals(tools, ['task_new'])
+    assertEquals((await a.h.g.read('.task&.doc.title=x')).length, 1)
+  } finally {
+    await a.close()
+  }
+})
+
 test('a transcript naming a plugin’s tool is offered it alone, and it runs', async () => {
   let offered: string[][] = []
   let worktrees = Deno.makeTempDirSync({ prefix: 'yaks-named-' })
@@ -142,22 +191,7 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
     cwd: repo(),
     h: await harness(),
     tools: [],
-
-    model: (req) => {
-      offered.push(req.tools?.map((t) => t.name) ?? [])
-      return Promise.resolve({
-        id: `r${offered.length}`,
-        model: 'fake',
-        items: offered.length == 1
-          ? [{
-            kind: 'call',
-            id: 'c1',
-            name: 'task_new',
-            args: '{"title":"x"}',
-          }]
-          : [{ kind: 'assistant', text: 'filed' }],
-      })
-    },
+    model: filer(offered),
   })
   try {
     let [s] = await a.h.g.apply([
@@ -174,8 +208,7 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
           tools: ['task_new'],
         },
       },
-      // What a serving host writes for each of its tools at start-up.
-      { entity: { eid: toolEid('task_new') }, tool: { name: 'task_new' } },
+      registered('task_new'),
     ])
     await a.idle(s.entity.eid)
     assert(offered.length == 2 || offered.length == 3)

@@ -65,7 +65,7 @@ use those relationships. The minimal example has no linked documents.
 
 Rendering behavior:
 
-Four things this shape decides:
+Five things this shape decides:
 
 - **It returns text.** Where the document goes — `AGENTS.md` in a repo, the
   system prompt of a spawned agent, a card in a browser — is the caller's
@@ -84,6 +84,13 @@ Four things this shape decides:
   added to the ones this persona links to, so a base persona reaches every
   persona built on top of it and nobody copies its text. A persona linked by
   `reads` is only listed by id.
+- **A contained tool is offered, not said.** A registered tool
+  ([@yaks/tools](../tools)' `tool{name}`) that a persona contains, or that a
+  persona it includes contains, is in `worn.tools` and never in its text.
+  `offer(worn)` names them, and a native session wearing the persona is offered
+  those tools and no others ([@yaks/harness](../harness)). A persona containing
+  none leaves a session its runner's own tools. `wearing(g, path, as)` is the
+  persona an agent wears, chosen or common, whatever its files already say.
 
 At each nesting level, documents are ordered by their edge's `ord` property,
 then by the target entity id. Missing `ord` values sort last. Nested personas
@@ -247,15 +254,15 @@ specialists, each saying its home's common persona beside the checkout's
 
 ## Exports
 
-| subpath          | what it provides                                                                    |
-| ---------------- | ----------------------------------------------------------------------------------- |
-| `.`              | `wear`, `voice`, `owed`, `common`, the component names, and the vocabulary document |
-| `./vocab`        | the component declarations alone                                                    |
-| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes           |
-| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills   |
-| `./skills`       | Graph skill reads and read-only checkout views                                      |
-| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                   |
-| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                 |
+| subpath          | what it provides                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------- |
+| `.`              | `wear`, `voice`, `owed`, `wearing`, `offer`, `common`, the component names, and the vocabulary document |
+| `./vocab`        | the component declarations alone                                                                        |
+| `./tools`        | `runs(host)` — `persona_read` returns the Markdown, `persona_sync` writes                               |
+| `./effects`      | `effects(host, {files, skills})` — independently enables persona files and skills                       |
+| `./skills`       | Graph skill reads and read-only checkout views                                                          |
+| `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                       |
+| `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                     |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation

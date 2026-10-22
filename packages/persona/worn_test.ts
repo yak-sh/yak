@@ -1,13 +1,14 @@
 // What a persona holds, gathered off the graph: which tier a doc lands in, the
-// order they arrive in, and how a carried persona folds in.
+// order they arrive in, how a carried persona folds in, and the tools it
+// offers.
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { isPromise } from '@yaks/fp'
 import { type Bundle, type Graph } from '@yaks/graph'
 import { held, link, memory, said, thin, voiced, world } from './testing.ts'
-import { wear } from './worn.ts'
-import type { Worn } from './voice.ts'
+import { offer, wear } from './worn.ts'
+import { voice, type Worn } from './voice.ts'
 
 // Sync in, sync out: @yaks/ram answers immediately, so a test that had to
 // await would be saying the gather went somewhere it should not have.
@@ -135,4 +136,26 @@ test('a relation this vocabulary never declares contributes nothing', () => {
   let worn = now(g, 'n1', thin)!
   assertEquals(ids(worn.carries), [])
   assertEquals(ids(worn.names), ['m1'])
+})
+
+test('a contained tool is offered, never said, and a carried persona offers its own', () => {
+  let tool = (eid: string, name: string) => ({
+    entity: { eid },
+    tool: { name },
+  })
+  let g = graph(
+    voiced('n2', 'base', 'the floor'),
+    tool('t1', 'topic_find'),
+    tool('t2', 'search'),
+    link('n1', 'contains', 't1'),
+    link('n1', 'contains', 'n2'),
+    link('n2', 'contains', 't2'),
+    link('n2', 'contains', 'm1'),
+  )
+  let worn = now(g, 'n1')!
+  assertEquals(offer(worn), ['topic_find', 'search'])
+  assertEquals(ids(worn.carries), ['n2', 'm1'])
+  assert(!voice(said)(worn).includes('topic_find'))
+  assertEquals(offer(now(g, 'n2')), ['search'])
+  assertEquals(offer(now(graph(), 'n1')), undefined)
 })

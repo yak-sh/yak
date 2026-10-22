@@ -81,6 +81,12 @@ let doc: VocabDoc = {
       properties: { of: { type: 'string' }, value: { type: 'string' } },
     },
     alias: { component: true, type: 'object' },
+    // @yaks/tools' registered tool, which a persona offers by containing it.
+    tool: {
+      component: true,
+      type: 'object',
+      properties: { name: { type: 'string' } },
+    },
   },
 }
 

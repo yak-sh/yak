@@ -30,7 +30,7 @@ import { openaiCredential } from './openai_auth.ts'
 import { hosted } from './store.ts'
 import { homeAt } from './session_machines.ts'
 import { conversations } from './conversations.ts'
-import { instructionsFor } from './instructions.ts'
+import { openingFor } from './instructions.ts'
 import { sessionHome } from '@yaks/machine/targets'
 
 type Args = Record<string, unknown>
@@ -166,7 +166,7 @@ export let runs = (host?: Host): Runs => ({
       }
       : homeAt(undefined, word(args, 'cwd'))
     let id = crypto.randomUUID()
-    let files = await instructionsFor(
+    let opened = await openingFor(
       graph,
       home,
       host?.workspaces,
@@ -175,7 +175,7 @@ export let runs = (host?: Host): Runs => ({
     let s = await begin(graph, prompt || undefined, {
       eid: id,
       home,
-      files,
+      ...opened,
       work,
       ...persona ? { persona } : {},
       by: caller(call),

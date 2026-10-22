@@ -160,6 +160,43 @@ export let carried = async (
   }
 }
 
+// Who an agent is: the persona chosen for it; else the common persona of its
+// work, else the one its checkout carries (`here`, which a file in that
+// checkout may already say).
+let resolved = async (
+  g: Graph,
+  path: string,
+  as: As,
+): Promise<{ worn?: Worn; here?: Worn }> => {
+  if (as.persona) {
+    let found = await g.address([as.persona])
+    let worn = await wear(g.storage, g.vocab)(
+      found.get(as.persona) ?? as.persona,
+    )
+    if (!worn) throw new Refused(`no persona called ${as.persona}`)
+    return { worn }
+  }
+  let here = await carried(g, path)
+  return { worn: (as.work && await common(g, as.work)) || here, here }
+}
+
+/**
+ * The persona an agent working in the checkout at `path` wears, whole,
+ * whatever its instruction files already say of it: the one `as.persona`
+ * chooses, else the common persona of `as.work`'s lineage, else the one the
+ * checkout carries. Nothing when none of them has one. {@link offer} reads the
+ * tools it offers from it.
+ *
+ * ```ts ignore
+ * let tools = offer(await wearing(g, '', { persona: 'N-7' }))
+ * ```
+ */
+export let wearing = async (
+  g: Graph,
+  path: string,
+  as: As = {},
+): Promise<Worn | undefined> => (await resolved(g, path, as)).worn
+
 /**
  * What an agent working in the checkout at `path` is owed of its persona,
  * given the text of each instruction file its provider reads there. By
@@ -182,20 +219,8 @@ export let owed = async (
   as: As = {},
 ): Promise<Owed | undefined> => {
   let says = (w: Worn) => files.includes(projection(g.vocab)(w))
-  let owes = (w: Worn): Owed => ({
-    source: human(g.vocab)(w.persona),
-    text: voice(g.vocab)(w),
-  })
-  if (as.persona) {
-    let found = await g.address([as.persona])
-    let worn = await wear(g.storage, g.vocab)(
-      found.get(as.persona) ?? as.persona,
-    )
-    if (!worn) throw new Refused(`no persona called ${as.persona}`)
-    return says(worn) ? undefined : owes(worn)
-  }
-  let here = await carried(g, path)
-  let worn = (as.work && await common(g, as.work)) || here
+  let { worn, here } = await resolved(g, path, as)
   if (!worn || says(worn)) return
-  return owes(here && says(here) ? beside(worn, here) : worn)
+  let w = here && says(here) ? beside(worn, here) : worn
+  return { source: human(g.vocab)(w.persona), text: voice(g.vocab)(w) }
 }

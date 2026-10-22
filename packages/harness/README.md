@@ -178,6 +178,16 @@ newline). On a new session, NORMAL `P` chooses a persona from the graph for that
 session. `--persona` accepts a persona id or registered name; the session keeps
 that choice and snapshots its instructions before its first message.
 
+What a session is offered is its work's to say: a persona that contains
+registered tools, itself or through a persona it includes (@yaks/persona
+`offer`), offers exactly those tools to every session wearing it, chosen or
+common, from whatever door opened it. The opening records them as the
+`sending.tools` of its last instruction entry, so each turn is offered those and
+nothing else, and no skill catalogue unless `skill_read` is among them. A
+persona containing no tool leaves the runner's own set. A tool is the
+`tool{name}` row its host registers (`.tool.name=topic_find`), and a persona
+offers it by a `contains` edge to that row.
+
 The local host also serves `--provider claude --model haiku|sonnet|opus` through
 `@yaks/claude`: a signed-in `claude -p` supplies one model turn while this
 harness alone executes tools and records calls/results. Compose `@yaks/claude`

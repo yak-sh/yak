@@ -141,10 +141,26 @@ export type Host = {
 /** Where a defect happened: what was running, and in which transcript. */
 export type Where = { phase: string; session?: Eid }
 
-/** What a new session opens with: where it lives, and the instruction files
+/** What a new session opens with: where it lives, the instruction files
  * found there, each snapshotted into the transcript ahead of the first
- * message. */
-export type Opening = { home?: Comp; files?: Snapshot[]; persona?: Eid }
+ * message, and the names of the tools its persona offers, all a turn is then
+ * offered. */
+export type Opening = {
+  home?: Comp
+  files?: Snapshot[]
+  persona?: Eid
+  tools?: string[]
+}
+
+/** An opening's entries, the last carrying the tools its persona offers as
+ * its `sending.tools`: what every turn after it is offered (@yaks/session). */
+export let offering = <B extends Bundle>(
+  entries: B[],
+  tools?: string[],
+): B[] =>
+  tools && entries.length
+    ? [...entries.slice(0, -1), { ...entries.at(-1)!, sending: { tools } }]
+    : entries
 
 /** How an agent is started: the graph it runs over, what serves it, what it
  * may do, and what its host lends it. */
@@ -300,10 +316,13 @@ export let begin = async (
       ? (await lineage(g, o.work)).find((b) => b.project)?.entity.eid
       : undefined)
   let session = o.eid ?? crypto.randomUUID() as Eid
-  let context = (o.files ?? []).map((f, i) => ({
-    ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
-    $actor: through(session),
-  }))
+  let context = offering(
+    (o.files ?? []).map((f, i) => ({
+      ...promptEntry(session, i + 1, f.body, f.source, 'shared', f.revision),
+      $actor: through(session),
+    })),
+    o.tools,
+  )
   await g.apply([
     {
       entity: { eid: session },

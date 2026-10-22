@@ -39,7 +39,7 @@ import { safe } from '@yaks/text'
 import type { Vocab } from '@yaks/vocab'
 
 /** A persona and the documents it is built from: both sets, already resolved
- * and ordered. */
+ * and ordered, and the tools it offers. */
 export type Worn = {
   /** the persona itself — its `doc` body is the instruction text */
   persona: Bundle
@@ -47,6 +47,10 @@ export type Worn = {
   carries: Bundle[]
   /** the documents it only mentions: one line apiece */
   names: Bundle[]
+  /** the tools a session wearing it is offered: each registered tool
+   * (@yaks/tools' `tool{name}`) it or a persona it includes contains. Never
+   * part of its text. */
+  tools: Bundle[]
 }
 
 /** The heading over the documents a persona only mentions by id. */
