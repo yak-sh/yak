@@ -115,9 +115,12 @@ test('deploy suite: banked build-to-live floor refuses a synthetic regression', 
   let { median: floor } = base.benches[0]
   let limit = floor * (1 + base.tolerance)
   let check = options(base)
-  assertEquals((await run(check, history(floor, limit)))?.verdict, 'passed')
+  assertEquals(
+    (await run(check, history(floor, limit - 0.01)))?.verdict,
+    'passed',
+  )
   await assertRejects(
-    () => run(check, history(floor, limit * 1.001)),
+    () => run(check, history(floor, limit + 0.01)),
     Regressed,
   )
   assertEquals(base.benches[0].median, floor)

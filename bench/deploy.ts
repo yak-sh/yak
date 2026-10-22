@@ -108,9 +108,9 @@ export let latest = (rows: Deploy[]) =>
   ].sort((a, b) => Date.parse(a.uploaded) - Date.parse(b.uploaded)).at(-1)
 
 /** The slowest a deploy may take, push to live, whatever the baseline allows:
- * 1.5 times the slowest of the 15 measured since 2026-10-10 (78 s), since
- * Cloudflare's build alone varies 27 to 78 s from one push to the next. */
-export let CEILING = 120
+ * 1.5 times the slowest of the 17 measured since 2026-10-10 (96.5 s), since
+ * Cloudflare's build alone varies 27 to 97 s from one push to the next. */
+export let CEILING = 150
 
 export let overCeiling = (seconds: number) => seconds >= CEILING
 
