@@ -16,6 +16,12 @@
 //   browser several times slower, so a whole run elsewhere says them and
 //   holds neither, and a narrowed one says neither.
 //
+// A test is held to its own time: its wall clock less what its runtime
+// waited for a CPU another process held (`own`, packages/testing run.ts
+// `queued`). The shared runner's host, or a busy box, stretches every test's
+// wall clock by that wait; a test that got slower takes longer on the CPU or
+// waits longer on what it awaits, and that it still owns.
+//
 // A time over the line is measured again before it counts: the files holding
 // such tests run together in runtimes of their own, twice over in each
 // (`--twice`, packages/testing/main.ts), and a test fails only when it is over
@@ -73,11 +79,12 @@ export type Budget = {
 export type Slack = { times: number; ms: number }
 
 /** What a platform's runner wrote (packages/testing `--times`): its wall
- * clock, each test's time, each file it remembered as passed, by key, and
- * how many tests it skipped and files it left out as unchanged. */
+ * clock, each test's time and what of it the test waited for a CPU, each
+ * file it remembered as passed, by key, and how many tests it skipped and
+ * files it left out as unchanged. */
 export type Times = {
   wall: number
-  tests: { file: string; name: string; ms: number; ok: boolean }[]
+  tests: Timed[]
   remembered?: Record<string, string>
   ignored?: number
   left?: number
@@ -85,6 +92,20 @@ export type Times = {
 
 export let LIST = new URL('../bench/test-budget.json', import.meta.url)
 let KEPT = new URL('../bench/test-times/', import.meta.url).pathname
+
+/** A test as a runner timed it; a runner before `waited` said none. */
+export type Timed = {
+  file: string
+  name: string
+  ms: number
+  waited?: number
+  ok: boolean
+}
+
+/// own({ file: 'a', name: 'x', ms: 9, waited: 6, ok: true }) -> 3
+/// own({ file: 'a', name: 'x', ms: 9, ok: true }) -> 9
+/** What a test took of its own: its time, less what it waited for a CPU. */
+export let own = (t: Timed) => t.ms - (t.waited ?? 0)
 
 /** The committed list. */
 export let budget = async (): Promise<Budget> =>
@@ -140,8 +161,11 @@ export let judge = (b: Budget, runs: Record<string, Times>): Judged => {
       // A failed test is the run's news already; what it took is not.
       if (!t.ok) return
       let was = seen.get(at)
+      let ms = own(t)
       // Two tests of one name in one file are held as one: the slower.
-      if (!was || t.ms > was.ms) seen.set(at, { platform, ...t, key: keys[i] })
+      if (!was || ms > was.ms) {
+        seen.set(at, { platform, file: t.file, name: t.name, key: keys[i], ms })
+      }
     })
   }
   let record = (s: Seen) => b.tests[s.file]?.[s.key]
@@ -189,23 +213,25 @@ export let shrunk = (b: Budget, j: Judged, walls: boolean): Budget => {
 }
 
 /** The runs as measured again: each test held to the fastest of its own time
- * and the times it passed with in `again`. */
+ * and the own times it passed with in `again`. */
 export let fastest = (
   runs: Record<string, Times>,
   again: Record<string, Times>,
 ): Record<string, Times> => {
-  let best = new Map<string, number>()
+  let best = new Map<string, Timed>()
   for (let t of Object.values(again).flatMap((r) => r.tests)) {
     let at = JSON.stringify([t.file, t.name])
     let was = best.get(at)
-    if (t.ok && (was == null || t.ms < was)) best.set(at, t.ms)
+    if (t.ok && (was == null || own(t) < own(was))) best.set(at, t)
   }
   return Object.fromEntries(
     Object.entries(runs).map(([platform, run]) => [platform, {
       ...run,
       tests: run.tests.map((t) => {
-        let ms = best.get(JSON.stringify([t.file, t.name]))
-        return ms == null || ms >= t.ms ? t : { ...t, ms }
+        let b = best.get(JSON.stringify([t.file, t.name]))
+        return b == null || own(b) >= own(t)
+          ? t
+          : { ...t, ms: b.ms, waited: b.waited }
       }),
     }]),
   )

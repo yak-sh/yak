@@ -250,10 +250,12 @@ whole, names the failures again, and says what planning and loading took.
 accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps
 all tests in the runtime. `--times` writes what the run took, in milliseconds,
 to `<dir>/<platform>.json` (`tests.json` without a platform): the whole run, its
-planning and loading, each file's load, each test that ran with its file, name
-and whether it passed, each file the run remembered as passed, with its key in
-the pass record (`forget` from `@yaks/testing/deps` takes one back), and how
-many tests it skipped and files it left out as unchanged.
+planning and loading, each file's load, each test that ran with its file, name,
+time, whether it passed and how much of its time it `waited` for a CPU another
+process held (Linux's run-queue wait, `queued`; 0 elsewhere), each file the run
+remembered as passed, with its key in the pass record (`forget` from
+`@yaks/testing/deps` takes one back), and how many tests it skipped and files it
+left out as unchanged.
 
 A file whose tests all passed is skipped while its dependencies are unchanged:
 its module dependencies resolved by `deno info`, files named with a literal

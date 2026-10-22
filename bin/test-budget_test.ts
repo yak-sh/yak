@@ -5,6 +5,7 @@ import {
   fastest,
   judge,
   listed,
+  own,
   retracted,
   shrunk,
   type Times,
@@ -47,6 +48,36 @@ test('measured again, a test is held to the fastest time it passed with', () => 
   let j = judge(list, runs)
   equal([names(j.over), names(j.slower)], [['still'], ['slow']])
   equal(runs.deno.tests.map((t) => t.ms), [0.8, 1.5, 120, 0.2])
+})
+
+test('a test is held to its own time, not what it waited for a CPU', () => {
+  let loaded = (took: Record<string, [number, number]>): Times => ({
+    wall: 1000,
+    tests: Object.entries(took).map(([name, [ms, waited]]) => ({
+      file: 'a_test.ts',
+      name,
+      ms,
+      waited,
+      ok: true,
+    })),
+  })
+  let j = judge(list, {
+    deno: loaded({
+      bare: [4, 3.5],
+      over: [4, 2],
+      slow: [400, 300],
+      quick: [9, 0],
+    }),
+  })
+  equal([names(j.over), names(j.slower)], [['over', 'quick'], []])
+  let slowed = judge(list, { deno: loaded({ slow: [400, 200] }) })
+  equal(names(slowed.slower), ['slow'])
+  let again = fastest(
+    { deno: loaded({ over: [3, 0] }) },
+    { deno: loaded({ over: [9, 8.5] }) },
+  )
+  equal(own(again.deno.tests[0]), 0.5)
+  equal(judge(list, again).over, [])
 })
 
 test('a listed test past its record fails only where the records are held', () => {

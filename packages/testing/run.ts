@@ -9,6 +9,8 @@ export type Outcome = {
   ok: boolean
   skipped: boolean
   ms: number
+  /** Of `ms`, what the runtime waited for a CPU another process held. */
+  waited: number
   errors: unknown[]
 }
 
@@ -17,6 +19,21 @@ export type Outcome = {
 let now = performance.now.bind(performance)
 let later = setTimeout
 let cancel = clearTimeout
+
+/** What the calling thread has waited for a CPU, in milliseconds: runnable,
+ * and not running because another process held every CPU. Linux says it in
+ * /proc/thread-self/schedstat (on the CPU, waiting, slices; nanoseconds);
+ * where nothing says it, 0. A busy host stretches a test's wall clock by
+ * this, not by anything the test does. */
+export let queued = (): number => {
+  try {
+    let waiting = Deno.readTextFileSync('/proc/thread-self/schedstat')
+      .split(' ')[1]
+    return Number(waiting) / 1e6 || 0
+  } catch {
+    return 0
+  }
+}
 
 /// took(0.25) -> '250µs'
 /// took(12.4) -> '12ms'
@@ -50,7 +67,14 @@ globalThis.addEventListener?.('error', (e) => {
 export let one = async (test: Test, timeout: number): Promise<Outcome> => {
   let { body, ...reported } = test
   if (test.skip) {
-    return { test: reported, ok: true, skipped: true, ms: 0, errors: [] }
+    return {
+      test: reported,
+      ok: true,
+      skipped: true,
+      ms: 0,
+      waited: 0,
+      errors: [],
+    }
   }
   let timer: ReturnType<typeof later> | undefined
   let errors: unknown[] = []
@@ -63,12 +87,15 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
       timeout,
     )
   )
+  let waiting = queued()
   let start = now()
+  let ms = 0
   try {
     await Promise.race([closing(body), late])
   } catch (error) {
     errors.push(error)
   } finally {
+    ms = now() - start
     cancel(timer)
   }
   errors.push(...stray.splice(0))
@@ -76,7 +103,8 @@ export let one = async (test: Test, timeout: number): Promise<Outcome> => {
     test: reported,
     ok: !errors.length,
     skipped: false,
-    ms: now() - start,
+    ms,
+    waited: Math.min(ms, queued() - waiting),
     errors,
   }
 }
@@ -134,7 +162,8 @@ export let file = async (
 }
 
 /** What a run took, in milliseconds: the whole of it, its planning and its
- * loading, each file's load and each test that ran; each file it remembered
+ * loading, each file's load and each test that ran, with what of it the test
+ * waited for a CPU (`queued`); each file it remembered
  * as passed, by its key (./deps.ts), so a caller holding the run to more than
  * passing can take a pass back; and how many tests it skipped and files it
  * left out as unchanged since they passed. */
@@ -146,7 +175,13 @@ export type Times = {
   remembered: Record<string, string>
   ignored: number
   left: number
-  tests: { file: string; name: string; ms: number; ok: boolean }[]
+  tests: {
+    file: string
+    name: string
+    ms: number
+    waited: number
+    ok: boolean
+  }[]
 }
 
 /** A run's times, as `--times` writes them: skipped tests took nothing. */
@@ -160,6 +195,7 @@ export let timed = (
     file: o.test.file,
     name: o.test.name,
     ms: o.ms,
+    waited: o.waited,
     ok: o.ok,
   })),
 })

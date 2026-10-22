@@ -114,7 +114,11 @@ stronger.
   reads or writes depends on it, and its own tests can't see them. Run `deno task test` and
   `deno task test --tag=workerd workers/yak` once before landing it.
 - Every run is held to the budget (bin/test-budget.ts): a test case over 1 ms
-  fails it unless bench/test-budget.json lists it. A time over the line is
+  fails it unless bench/test-budget.json lists it. What is held is the test's
+  own time: its wall clock less what its runtime waited for a CPU another
+  process held (Linux's /proc/thread-self/schedstat), so a busy host or the
+  other platforms running beside it stretch the wall, not the verdict. A
+  test's own work, and anything it awaits, still counts. A time over the line is
   measured again first, in fresh runtimes with each file loaded twice, and
   fails only when it is over every time, so a loaded box doesn't fail it; a
   run with nothing over pays for no second pass. A file failed this way stays
