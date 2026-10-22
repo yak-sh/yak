@@ -49,7 +49,7 @@ export let validated = (tool: NamedTool, args: Args): Args => {
     return validateToolInput(
       tool,
       args,
-      (message) => new CallError('arguments', 'Error: ' + message),
+      (message) => new CallError('arguments', message),
     )
   }
   let out = { ...args }

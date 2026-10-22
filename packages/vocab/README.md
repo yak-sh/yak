@@ -741,13 +741,39 @@ equal(
 ```
 
 `toolDefinitionSchema` describes the metadata. `validateToolInput` clones
-arguments and supplies defaults before checking them. Its optional third
+arguments and supplies defaults before checking them. An argument sent as a
+string holding JSON (`"[…]"`, `"true"`, `"20"`) is read as the value it spells
+where the schema does not take a string and admits that value; where the schema
+also takes a string, only an array is read, since a list sent as one string is
+never one name while JSON text is a fair string. Models often send arguments
+that way, and this is the one place every tool reads them. Its optional third
 argument constructs the error for invalid arguments; tool callers supply
-`CallError` and declaration readers use the default `Error`. Invalid schemas
+`CallError` and declaration readers use the default `Error`. The refusal says,
+for each argument at fault, what it wants and what it was given:
+`Invalid tool arguments: bundles: wants an array,
+not a string`. Invalid schemas
 still throw `Error`. `validateToolOutput` checks without applying defaults.
 `toolCheck(schema)` returns a reusable check whose empty error list means valid;
-`errorsText` formats its errors. Validators are cached by schema object, so
-registered schemas must remain immutable.
+`errorsText(errors, schema?, value?)` says its errors in those words, or in the
+validator's own when the schema and value are not given. Validators are cached
+by schema object, so registered schemas must remain immutable.
+
+```ts
+import { validateToolInput } from '@yaks/vocab/tools'
+import { equal, throws } from '@yaks/testing'
+
+const tool = {
+  inputSchema: {
+    type: 'object',
+    properties: { ids: { type: 'array', items: { type: 'string' } } },
+  },
+}
+equal(validateToolInput(tool, { ids: '["a", "b"]' }), { ids: ['a', 'b'] })
+equal(
+  (await throws(() => validateToolInput(tool, { ids: 'a' }))).message,
+  'Invalid tool arguments: ids: wants an array, not a string',
+)
+```
 
 Schemas use 2020-12 by default; `$schema` can select draft-07, 2019-09 or
 2020-12. Other dialects are refused. Local references work; remote references

@@ -51,9 +51,213 @@ export const toolCheck = (schema: Record<string, unknown>): Check => {
   return check
 }
 
-/** Errors as one line: where in the value, and what is wrong there. */
-export const errorsText = (errors: OutputUnit[]): string =>
-  errors.map((e) => `${e.instanceLocation || '#'} ${e.error}`).join('; ')
+type Node = Record<string, unknown>
+const isNode = (v: unknown): v is Node =>
+  !!v && typeof v == 'object' && !Array.isArray(v)
+
+// The steps of a JSON pointer (`#/bundles/0`), and what it points at.
+const steps = (pointer: string): string[] =>
+  pointer.replace(/^#\/?/, '').split('/').filter(Boolean).map((s) =>
+    decodeURIComponent(s).replaceAll('~1', '/').replaceAll('~0', '~')
+  )
+const at = (root: unknown, pointer: string): unknown =>
+  steps(pointer).reduce<unknown>(
+    (v, step) => v && typeof v == 'object' ? Reflect.get(v, step) : undefined,
+    root,
+  )
+
+// Where in the arguments, the way a caller names it: `bundles.0.entity`.
+const pathOf = (pointer: string) => steps(pointer).join('.')
+
+// The JSON types a schema admits: its `type`, each branch of an `anyOf` or
+// `oneOf`, or the shape its `properties` or `items` imply. None at all is a
+// schema that says nothing, which admits anything.
+const admits = (schema: unknown): string[] => {
+  if (!isNode(schema)) return []
+  let said = [schema.type].flat().filter((t) => typeof t == 'string')
+  let branches = [schema.anyOf, schema.oneOf]
+    .flatMap((b) => Array.isArray(b) ? b.flatMap(admits) : [])
+  if (said.length || branches.length) return [...said, ...branches]
+  return [schema.properties && 'object', schema.items && 'array']
+    .filter((t): t is string => !!t)
+}
+
+const typeOf = (v: unknown) =>
+  v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v
+
+// A model often sends an argument as a string holding its JSON: `bundles:
+// "[{…}]"`, `check: "true"`, `limit: "20"`. Where the schema does not take a
+// string, such a string is the value it spells, when the schema admits that
+// value; where it takes a string too, only an array is read, since a list sent
+// as one string is never one name while JSON text is a fair string. One reading
+// at this boundary for every tool, rather than a refusal the caller misreads.
+// Read in place, in the copy `validateToolInput` made.
+const spelled = (schema: unknown, value: unknown): unknown => {
+  if (!isNode(schema)) return value
+  if (typeof value == 'string') value = unquoted(admits(schema), value)
+  if (Array.isArray(value) && isNode(schema.items)) {
+    value.forEach((v, i) => value[i] = spelled(schema.items, v))
+  } else if (
+    isNode(value) && Object.getPrototypeOf(value) == Object.prototype
+  ) {
+    let props = isNode(schema.properties) ? schema.properties : {}
+    for (let [k, v] of Object.entries(value)) {
+      value[k] = spelled(props[k] ?? schema.additionalProperties, v)
+    }
+  }
+  return value
+}
+
+const unquoted = (types: string[], text: string): unknown => {
+  let named = types.includes('string')
+  if (named ? !/^\s*\[/.test(text) : !types.length) return text
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return text
+  }
+  let type = typeOf(parsed)
+  let whole = type == 'number' && Number.isInteger(parsed)
+  let fits = types.includes(type) || (whole && types.includes('integer'))
+  return fits ? parsed : text
+}
+
+const article = (type: string) =>
+  /^[aeiou]/.test(type) ? `an ${type}` : `a ${type}`
+const either = (words: string[]) =>
+  words.length < 2
+    ? words.join('')
+    : `${words.slice(0, -1).join(', ')} or ${words.at(-1)}`
+
+// What was given, in words, and why a string that looked like JSON was not
+// read as the value it spells.
+const given = (value: unknown): string => {
+  if (typeof value != 'string' || !/^\s*[[{]/.test(value)) {
+    return article(typeOf(value))
+  }
+  try {
+    JSON.parse(value)
+    return 'a string'
+  } catch (e) {
+    return `a string that is not valid JSON (${(e as Error).message})`
+  }
+}
+
+// What one failed unit says is wrong at its place, in words, given the
+// schema node the keyword holds and the value there; undefined where the
+// validator's own words say it better.
+const fault = (keyword: string, node: unknown, v: unknown) => {
+  let branches = Array.isArray(node) ? node : []
+  let listed = branches.map((b) => JSON.stringify(b)).join(', ')
+  let missing = branches.map(String).filter((k) =>
+    isNode(v) && v[k] === undefined
+  )
+  // The branches that only name the arguments to give, as those names.
+  let names = branches.map((b) =>
+    isNode(b) && Array.isArray(b.required) && !admits(b).length
+      ? either(b.required.map(String))
+      : ''
+  )
+  let types = branches.map(admits)
+  let not = `not ${given(v)}`
+  switch (keyword) {
+    case 'type':
+      return `wants ${either([node].flat().map(String).map(article))}, ${not}`
+    case 'enum':
+      return `wants one of ${listed}, not ${JSON.stringify(v)}`
+    case 'const':
+      return `wants ${JSON.stringify(node)}, not ${JSON.stringify(v)}`
+    case 'required':
+      return missing.length ? `missing ${either(missing)}` : undefined
+    case 'false':
+      return 'not allowed here'
+    case 'anyOf':
+    case 'oneOf':
+      if (names.every(Boolean)) {
+        let some = keyword == 'oneOf' ? 'exactly one' : 'at least one'
+        return `wants ${some} of ${either(names)}`
+      }
+      return types.every((t) => t.length)
+        ? `wants ${either([...new Set(types.flat())].map(article))}, ${not}`
+        : undefined
+  }
+}
+
+// Validator units that only sum up the units after them.
+const SUMS = new Set([
+  'properties',
+  'items',
+  'prefixItems',
+  'additionalItems',
+  'patternProperties',
+  'unevaluatedProperties',
+  'unevaluatedItems',
+  'allOf',
+  '$ref',
+  '$recursiveRef',
+  'dependentSchemas',
+  'dependencies',
+  'if',
+  'then',
+  'else',
+  'contains',
+  'propertyNames',
+])
+
+/**
+ * Errors as one line, a clause per fault: where in the value, and what is
+ * wrong there in plain words, such as `bundles: wants an array, not a string`
+ * or `nope: not one of q, bundles, check`. Given the schema and the value
+ * that failed, a clause says what the schema wants and what was given;
+ * without them, the validator's own words. Units that only sum up the ones
+ * after them are left out, and so is the validator's report of a declared
+ * property that failed as an undeclared one.
+ */
+export const errorsText = (
+  errors: OutputUnit[],
+  schema?: unknown,
+  value?: unknown,
+): string => {
+  let said: string[] = []
+  let failed = new Set<string>()
+  let skip = (_: OutputUnit) => false
+  for (let [i, e] of errors.entries()) {
+    if (skip(e)) continue
+    skip = () => false
+    let next = errors[i + 1]?.instanceLocation ?? ''
+    let where = pathOf(e.instanceLocation)
+    let to = (words: string) => said.push(where ? `${where}: ${words}` : words)
+    if (e.keyword == 'properties') failed.add(next)
+    if (SUMS.has(e.keyword)) continue
+    if (e.keyword == 'additionalProperties') {
+      // The units after it are about the key at fault. The validator reports
+      // a declared key that failed its own schema here too; that is said once.
+      skip = (u) =>
+        u.instanceLocation == next || u.instanceLocation.startsWith(next + '/')
+      if (failed.has(next)) continue
+      let parent = at(schema, e.keywordLocation.replace(/\/[^/]*$/, ''))
+      let props = isNode(parent) && isNode(parent.properties)
+        ? Object.keys(parent.properties)
+        : []
+      let words = props.length
+        ? `not one of ${props.join(', ')}`
+        : 'not allowed here'
+      said.push(`${pathOf(next)}: ${words}`)
+      continue
+    }
+    if (e.keyword == 'anyOf' || e.keyword == 'oneOf') {
+      let branch = e.keywordLocation + '/'
+      skip = (u) => u.keywordLocation.startsWith(branch)
+    }
+    let node = at(schema, e.keywordLocation)
+    let words = node === undefined && e.keyword != 'false'
+      ? undefined
+      : fault(e.keyword, node, at(value, e.instanceLocation))
+    to(words ?? e.error.replace(/\.$/, ''))
+  }
+  return [...new Set(said)].join('; ')
+}
 
 // What `structuredClone` makes of a value, made here for the plain objects and
 // arrays arguments are: the platform's clone costs more than every other step
@@ -98,11 +302,17 @@ export const validateToolInput = (
     throw new Error('Tool cannot declare both input and inputSchema')
   }
   const check = toolCheck(tool.inputSchema)
-  const value = copied(args) as Record<string, unknown>
+  const value = spelled(tool.inputSchema, copied(args)) as Record<
+    string,
+    unknown
+  >
   filled(tool.inputSchema, value)
   const errors = check(value)
   if (errors.length) {
-    throw refuse('Invalid tool arguments: ' + errorsText(errors))
+    throw refuse(
+      'Invalid tool arguments: ' +
+        errorsText(errors, tool.inputSchema, value),
+    )
   }
   return value
 }

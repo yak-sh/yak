@@ -283,3 +283,86 @@ test('published input schemas omit short flags without changing declarations', (
     validateToolInput({ inputSchema: published }, { count: 0 })
   )
 })
+
+// A schema shaped like graph_apply's and graph_schema's arguments together.
+const apply = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['bundles'],
+  properties: {
+    bundles: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['entity'],
+        properties: { entity: { type: 'object' } },
+      },
+    },
+    component: {
+      anyOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
+    },
+    body: { anyOf: [{ type: 'string' }, { type: 'object' }] },
+    mode: { enum: ['a', 'b'] },
+    check: { type: 'boolean' },
+  },
+}
+// The harness's `wait`: one of several arguments, whichever is given.
+const wait = {
+  type: 'object',
+  properties: { process: { type: 'string' }, tasks: { type: 'array' } },
+  oneOf: [{ required: ['process'] }, { required: ['tasks'] }],
+}
+const argued = (
+  args: Record<string, unknown>,
+  inputSchema: Record<string, unknown> = apply,
+) => {
+  try {
+    return validateToolInput({ inputSchema }, args)
+  } catch (e) {
+    return (e as Error).message.replace('Invalid tool arguments: ', '')
+  }
+}
+
+test('an argument sent as a string holding its JSON is the value it spells', () => {
+  let bundles = [{ entity: { eid: 'a' } }]
+  for (
+    let [args, read] of [
+      [{ bundles: JSON.stringify(bundles) }, { bundles }],
+      [{ bundles: [JSON.stringify(bundles[0])] }, { bundles }],
+      [{ bundles, component: '["topic", "edge"]' }, {
+        bundles,
+        component: ['topic', 'edge'],
+      }],
+      [{ bundles, component: 'topic' }, { bundles, component: 'topic' }],
+      [{ bundles, body: '{"a": 1}' }, { bundles, body: '{"a": 1}' }],
+      [{ bundles, check: 'true' }, { bundles, check: true }],
+    ]
+  ) assertEquals(argued(args), read)
+})
+
+test('a refusal says which argument wants what, in plain words', () => {
+  for (
+    let [args, said] of [
+      [{}, 'missing bundles'],
+      [{ bundles: 'many' }, 'bundles: wants an array, not a string'],
+      [
+        { bundles: '[{"entity": {}}' },
+        'bundles: wants an array, not a string that is not valid JSON',
+      ],
+      [{ bundles: [{}] }, 'bundles.0: missing entity'],
+      [{ bundles: [], check: 'yes' }, 'check: wants a boolean, not a string'],
+      [{ bundles: [], mode: 'c' }, 'mode: wants one of "a", "b", not "c"'],
+      [
+        { bundles: [], component: 3 },
+        'component: wants a string or an array, not a number',
+      ],
+      [
+        { bundles: [], nope: 1 },
+        'nope: not one of bundles, component, body, mode, check',
+      ],
+    ] as const
+  ) {
+    assertEquals(String(argued(args)).replace(/ \(.*\)$/, ''), said)
+  }
+  assertEquals(argued({}, wait), 'wants exactly one of process or tasks')
+})
