@@ -45,6 +45,8 @@ import {
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { aggregate, reduced } from './aggregate.ts'
+import { hit } from './hit.ts'
+import { named } from './projection.ts'
 import type { Bundle } from './bundle.ts'
 import type { Graph } from './graph.ts'
 import type { Tool } from './plugin.ts'
@@ -220,6 +222,9 @@ export let runs = (seams: Seams = {}): Runs => {
     // the way graph_schema says its answer. A search with no window of its
     // own answers its best `BEST`: `mossvale` matched 13,065 entities, more
     // than one read may hold whole and more than anyone reads past the best.
+    // A search that names no component answers its rows whole, each wearing
+    // the `hit` the `search` tool answers, so a reader of the text reads a
+    // line a row instead of every body, and graph_show reads one whole.
     graph_query: async (call, graph) => {
       let args = argsOf(call)
       let n = num(args.limit)
@@ -234,9 +239,14 @@ export let runs = (seams: Seams = {}): Runs => {
       if (ask) throw new Refused(asksOnly(ast, ask))
       let op = aggregate(ast)
       if (!op) {
+        let said = words(ast)
         let windowed = ast.clauses.some((c) => c.kind == 'limit')
-        let searched = words(ast).length && !windowed
-        return await graph.read(searched ? conjoin(q, `.limit=${BEST}`) : q)
+        let rows = await graph.read(
+          said.length && !windowed ? conjoin(q, `.limit=${BEST}`) : q,
+        )
+        if (!said.length || named(graph.vocab, ast)) return rows
+        let line = hit(graph.vocab, said)
+        return rows.map((b) => ({ ...b, hit: line(b) }))
       }
       let value = reduced(op, await graph.rows(q))
       return [{

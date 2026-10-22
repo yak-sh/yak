@@ -167,8 +167,12 @@ shelf.apply(Array.from({ length: BEST + 1 }, (_, i) => ({
   entity: { eid: `book-${i}` },
   book: { title: `Dragon ${i}` },
 })))
+let found = (args: Record<string, unknown>) =>
+  query.run({ entity: { eid: 'c' }, call: { args } }, shelf) as Promise<
+    Bundle[]
+  >
 let searched = async (args: Record<string, unknown>) =>
-  (await query.run({ entity: { eid: 'c' }, call: { args } }, shelf)).length
+  (await found(args)).length
 
 test('a search that asks for no window answers its best twenty', async () => {
   assertEquals(await searched({ q: 'dragon' }), BEST)
@@ -176,4 +180,20 @@ test('a search that asks for no window answers its best twenty', async () => {
 
 test("a search's own window says how many it answers", async () => {
   assertEquals(await searched({ q: 'dragon', limit: BEST + 1 }), BEST + 1)
+})
+
+test('a search that names no component says each row as its hit', async () => {
+  let [row] = await found({ q: 'dragon 7' })
+  assertEquals(row.book, { title: 'Dragon 7' })
+  assertEquals(row.hit, {
+    kind: 'entity',
+    title: 'Dragon 7',
+    snippet: '',
+    source: 'text',
+  })
+})
+
+test('a search that names a component answers what it names', async () => {
+  let [row] = await found({ q: 'dragon 7 ?book' })
+  assertEquals(Object.keys(row).sort(), ['book', 'entity'])
 })

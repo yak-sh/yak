@@ -56,6 +56,7 @@ import { sandboxCapabilities } from './sandboxes.ts'
 import { UNNUMBERED } from './init.ts'
 import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
+import { titleOf } from '@yaks/graph/hit'
 import type { Vocab } from '@yaks/vocab'
 import {
   ended,
@@ -766,17 +767,11 @@ let composed = async (
             return hits.flatMap((h) => {
               let b = at.get(h.entity)
               if (!b) return []
-              let title = Object.values(b).flatMap((c) =>
-                c && typeof c == 'object' && 'title' in c &&
-                  typeof c.title == 'string'
-                  ? [c.title]
-                  : []
-              )[0] ?? ''
               return [{
                 entity: b.entity,
                 hit: {
                   kind: vocab.kindOf(b) || 'entity',
-                  title,
+                  title: titleOf(b),
                   snippet: h.snippet,
                   source: h.source,
                   ...(b.entry && typeof b.entry == 'object' &&

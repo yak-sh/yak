@@ -16,7 +16,8 @@
     "./storage": "./storage.ts",
     "./call": "./tool.ts",
     "./declared": "./declared.ts",
-    "./guard": "./guard.ts"
+    "./guard": "./guard.ts",
+    "./hit": "./hit.ts"
   },
   "license": "Apache-2.0",
   "description": "The entity-component data model, the bundle write format, and the phased, pluggable transaction pipeline the yaks packages share.",

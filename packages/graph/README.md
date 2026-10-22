@@ -134,6 +134,7 @@ across processes and does not implement every SQL query feature.
 | `@yaks/graph/schema`     | `admitSchema`, full checks for opted-in property schemas and numeric constraints                                                                                                                   |
 | `@yaks/graph/vocab`      | `graphDoc`, `docs`, `description`: built-in tool declarations                                                                                                                                      |
 | `@yaks/graph/tools`      | `loadTools`, `runs`, `tier`, `generic`, and their implementation types                                                                                                                             |
+| `@yaks/graph/hit`        | `hit`, `snippet`, `titleOf`: the one line a search row says itself as                                                                                                                              |
 
 ### Read-only graphs
 
