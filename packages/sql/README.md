@@ -408,9 +408,10 @@ the expression naming the entity's integer id. `tag` controls comparisons;
 `select(values)` optionally supplies the exact owner set for equality.
 `test(owner, values)` supplies the same predicate for one owner, used by bounded
 and correlated reads, and by a query that also filters a stored property by
-value, whose rows that filter narrows first (`.session.operator=true
-.session.status=running` tests 876 sessions instead of selecting among all
-18,503). Both receive typed literal operands and may return
+value, whose rows that filter narrows first
+(`.session.operator=true
+.session.status=running` tests 876 sessions instead of
+selecting among all 18,503). Both receive typed literal operands and may return
 `undefined` to retain `expr`; projection and other operators always use `expr`.
 Their table reads follow the caller's entity and component visibility. All three
 hooks receive an optional final `scope` argument: `scope.masked` names
