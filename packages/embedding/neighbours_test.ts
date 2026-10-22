@@ -85,6 +85,7 @@ test('a new task answers its nearest tasks, and not itself or a memory', async (
     assertEquals(found.map((h) => h.eid), ['old-0', 'old-1'])
     assertEquals(found[0], {
       eid: 'old-0',
+      id: 'old-0',
       kind: 'task',
       title: 'Fix the login page crash on submit',
       snippet: '',
@@ -141,7 +142,7 @@ test('a comment answers comments near it, shown by their words', async () => {
       target: 'old-1',
       body: 'Found the submit handler crash on the login form.',
     })
-    assertEquals(hits(answer).map(({ eid: _, ...h }) => h), [{
+    assertEquals(hits(answer).map(({ eid: _, id: __, ...h }) => h), [{
       kind: 'comment',
       snippet: 'The crash is in the submit handler of the login form.',
       source: 'meaning',

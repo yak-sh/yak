@@ -135,7 +135,7 @@ let query = tier().find((t) => t.name == 'graph_query')!
 let asked = async (q: string) =>
   await query.run(
     { entity: { eid: 'c' }, call: { args: { q } } },
-    { read: () => [] } as unknown as Graph,
+    { read: () => [], vocab: loadVocab({ $defs: {} }) } as unknown as Graph,
   )
 test('graph_query refuses a line that only asks, with the line it meant', async () => {
   await assertRejects(
@@ -186,6 +186,7 @@ test('a search that names no component says each row as its hit', async () => {
   let [row] = await found({ q: 'dragon 7' })
   assertEquals(row.book, { title: 'Dragon 7' })
   assertEquals(row.hit, {
+    id: 'book-7',
     kind: 'entity',
     title: 'Dragon 7',
     snippet: '',

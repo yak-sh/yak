@@ -1,19 +1,49 @@
-// What a row a search found says of itself in one line: its kind, its title,
-// and a snippet of its text around the words that found it, each match marked
-// `\x01`…`\x02` as @yaks/fts marks one. The `search` tool answers this `hit`
-// alone; `graph_query` paints it on the whole rows a search answers, so a
-// model reads one line a row (@yaks/tools `worded`) while `--json` and
+// What a row a search found says of itself in one line: its id, its kind, its
+// title, and a snippet of its text around the words that found it, each match
+// marked `\x01`…`\x02` as @yaks/fts marks one. The `search` tool answers this
+// `hit` alone; `graph_query` paints it on the whole rows a search answers, so
+// a model reads one line a row (@yaks/tools `worded`) while `--json` and
 // structured content keep every component.
 import type { Bundle, Comp } from './bundle.ts'
 import type { Vocab } from '@yaks/vocab'
+import { idOf } from '@yaks/id'
 
-/** A search row's line: what it is, what it is called, the words around the
- * match, and that words found it. */
+/** A search row's line: which row it is, what it is, what it is called, the
+ * words around the match, and that words found it. */
 export type Hit = {
+  id: string
   kind: string
   title: string
   snippet: string
   source: 'text'
+}
+
+// What a row is, as its line says: the kind its components make it, or
+// `entity` when they make it none.
+let kindOf = (vocab: Vocab, b: Bundle): string => vocab.kindOf(b) || 'entity'
+
+/** The id a line names a row by: its human id (`P-45602`) where it has a
+ * number, which a reader copies without slipping a digit, else its eid. Not
+ * the short handle a terminal shows (`#7e75052a20`): only @yaks/id's plugin
+ * resolves one, and the eid is the id every graph takes.
+ *
+ * ```ts
+ * import { called } from './hit.ts'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let project = { component: true, kind: true, properties: {} }
+ * let say = called(loadVocab({ $defs: { project } }))
+ * equal(say({ entity: { eid: 'e1', num: 45602 }, project: {} }), 'P-45602')
+ * equal(say({ entity: { eid: 'e1' }, project: {} }), 'e1')
+ * ```
+ */
+export let called = (vocab: Vocab): (b: Bundle) => string => {
+  let id = idOf(vocab)
+  return (b) =>
+    b.entity.num
+      ? id({ eid: b.entity.eid, kind: kindOf(vocab, b), num: b.entity.num })
+      : b.entity.eid
 }
 
 // How much of a text a snippet keeps before and after its first match.
@@ -90,7 +120,8 @@ export let snippet = (text: string, words: string[]): string => {
     (end < line.length ? '…' : '')
 }
 
-/** The hit a search row says itself as: its kind, its title, and a snippet of
+/** The hit a search row says itself as: the id it is {@link called}, its
+ * kind, its title, and a snippet of
  * the first text it is searched by, besides its title, that the words match,
  * or the start of the first such text when only the title matched: a line
  * that said its title twice would send its reader to read the row whole.
@@ -111,6 +142,7 @@ export let snippet = (text: string, words: string[]): string => {
  *   doc: { title: 'Mossvale', body: 'The vale app.' },
  * }
  * equal(hit(vocab, ['mossvale'])(row), {
+ *   id: 'p1',
  *   kind: 'doc',
  *   title: 'Mossvale',
  *   snippet: 'The vale app.',
@@ -122,13 +154,15 @@ export let snippet = (text: string, words: string[]): string => {
  * equal(hit(vocab, ['mossvale'])(bare, '\x01Mossvale\x02').snippet, '\x01Mossvale\x02')
  * ```
  */
-export let hit =
-  (vocab: Vocab, words: string[]) => (b: Bundle, cut?: string): Hit => {
+export let hit = (vocab: Vocab, words: string[]) => {
+  let id = called(vocab)
+  return (b: Bundle, cut?: string): Hit => {
     let title = titleOf(b)
     // deno-lint-ignore no-control-regex -- the marks @yaks/fts cuts with
     let plain = (cut ?? '').replace(/[\x01\x02…]/g, '').trim()
     return {
-      kind: vocab.kindOf(b) || 'entity',
+      id: id(b),
+      kind: kindOf(vocab, b),
       title,
       snippet: plain && plain != title.trim()
         ? cut!
@@ -136,6 +170,7 @@ export let hit =
       source: 'text',
     }
   }
+}
 
 // The snippet of the first text a row is searched by, other than its title,
 // that the words match, or of the first such text.

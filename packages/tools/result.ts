@@ -69,6 +69,7 @@ let inset = (b: Bundle) =>
   '  ' + JSON.stringify(b, null, 2).replaceAll('\n', '\n  ')
 
 // A search answer carries a query-only hit, not the entity's whole body: the
+// id it is called by (its human id where it has one, @yaks/graph/hit), the
 // kind, title and words that found it, and, for a neighbour of something a
 // call just made, the entity it is `near` and its `status`. Say that hit as one
 // line for an MCP reader; structuredContent keeps its fields.
@@ -87,16 +88,15 @@ let hitLine = (b: Bundle, hit: Comp): string => {
   let ctrl = /[\x00-\x1f\x7f-\x9f]/g
   let clean = (s: string) => s.replace(/\s+/g, ' ').replace(ctrl, '').trim()
   let said = (k: string) => typeof hit[k] == 'string' ? clean(hit[k]) : ''
+  let id = said('id') || b.entity.eid
   let title = said('title')
   let status = said('status')
   let near = said('near')
   let source = hit.source == 'meaning' ? ' (meaning)' : ''
   let snippet = clean(String(hit.snippet).replace(mark, '*$1*'))
-  return `${near ? `near ${near}: ` : ''}${b.entity.eid}${
-    title ? ` ${title}` : ''
-  } · ${clean(String(hit.kind))}${status ? ` ${status}` : ''}${source}${
-    snippet ? ` — ${snippet}` : ''
-  }`
+  return `${near ? `near ${near}: ` : ''}${id}${title ? ` ${title}` : ''} · ${
+    clean(String(hit.kind))
+  }${status ? ` ${status}` : ''}${source}${snippet ? ` — ${snippet}` : ''}`
 }
 
 // What a tool's text answer carries: the spine every row has (@yaks/kernel),

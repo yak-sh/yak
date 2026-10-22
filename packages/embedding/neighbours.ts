@@ -20,6 +20,7 @@
 // for, and a model out of reach only means fewer neighbours.
 
 import type { Bundle, Comp, Eid, Graph } from '@yaks/graph'
+import { called } from '@yaks/graph/hit'
 import type { Reply } from '@yaks/tools'
 import { and, every, limit, near, order, present, text } from '@yaks/query'
 import {
@@ -81,9 +82,10 @@ let textOf = (b: Bundle, prose: Field[]): string =>
     .join('\n')
 
 // One neighbour, as a search answers one (@yaks/cli, @yaks/tools `worded`): a
-// `hit` naming its kind, its title and its status where it has them, whether
-// meaning or words found it, and `near`, the new entity it was found near. An
-// entity with no title is shown by an excerpt of its text instead.
+// `hit` naming the id it is called by (@yaks/graph/hit `called`), its kind,
+// its title and its status where it has them, whether meaning or words found
+// it, and `near`, the new entity it was found near. An entity with no title is
+// shown by an excerpt of its text instead.
 let hit = (
   vocab: Vocab,
   b: Bundle,
@@ -96,6 +98,7 @@ let hit = (
   return {
     entity: b.entity,
     hit: {
+      id: called(vocab)(b),
       kind: vocab.kindOf(b),
       ...title ? { title } : {},
       snippet: title ? '' : excerpt(textOf(b, prose)),

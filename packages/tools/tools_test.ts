@@ -890,6 +890,14 @@ test('a search answer says its marked hit as text', () => {
   )
 })
 
+test('a hit line names its entity by the id the hit is called by', () => {
+  let found: Bundle[] = [{
+    entity: { eid: '7e75052a-a208-43a6-adc1-62083a212147', num: 45602 },
+    hit: { id: 'P-45602', kind: 'project', title: 'Mossvale', snippet: '' },
+  }]
+  assertEquals(worded(found), 'P-45602 Mossvale · project')
+})
+
 test('a refused argument is a refusal code, not an exception', async () => {
   let { r } = world()
   await r.ensure()
