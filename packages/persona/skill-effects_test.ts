@@ -363,9 +363,11 @@ test('skill watcher reconciles at startup, polls, and cleans on shutdown', async
   let polls: number[] = []
   let version = 0
   let conflicted = false
+  // Each pause settles `asleep`, so a poll awaits the watcher's next sleep.
+  let asleep = deferred()
   let fx = fixture({
     poll: 17,
-    stamp: () => Promise.resolve(String(version)),
+    stamp: () => String(version),
     sync: async (_g, _root, memory) => {
       paths.push(memory)
       await Deno.writeTextFile(memory, '{}')
@@ -375,18 +377,19 @@ test('skill watcher reconciles at startup, polls, and cleans on shutdown', async
       polls.push(ms)
       let wake = deferred()
       sleeping.push(wake.resolve)
+      asleep.resolve()
       return Promise.race([wake.promise, stopped(signal!)])
     },
   }, stop.signal)
   let poll = async () => {
+    asleep = deferred()
     sleeping.at(-1)!()
-    let n = sleeping.length + 1
-    await until(() => sleeping.length == n)
+    await asleep.promise
     return paths.length
   }
   let watcher = invoke(fx, 'skill_watch')
   assert(watcher == invoke(fx, 'skill_watch'))
-  await until(() => sleeping.length == 1)
+  await asleep.promise
   assertEquals(paths.length, 1)
   assert(await exists(dirname(paths[0])))
   assertEquals(await poll(), 1)

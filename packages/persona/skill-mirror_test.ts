@@ -824,25 +824,32 @@ test('skill deletion refuses a reference retargeted after its scope was read', (
   assertEquals(movedReference.to, movedReference.companion)
 })
 
-test('a skill stamp moves with skill files and the index, not other files', async () => {
-  let root = await Deno.makeTempDir()
+test('a skill stamp moves with skill files and the index, not other files', () => {
+  // A stamp only stats, so plain files stand in for Git's index and HEAD.
+  let root = Deno.makeTempDirSync()
   try {
-    await git(root, 'init', '-q')
     let skill = `${root}/.claude/skills/sample/SKILL.md`
-    await Deno.mkdir(dirname(skill), { recursive: true })
-    await Deno.writeTextFile(skill, text())
-    await git(root, 'add', '.')
-    let moves = async (change: () => Promise<unknown>) => {
-      let before = await stamp(root)
-      await change()
-      return before != await stamp(root)
+    Deno.mkdirSync(dirname(skill), { recursive: true })
+    Deno.mkdirSync(`${root}/.git`)
+    Deno.writeTextFileSync(`${root}/.git/HEAD`, 'ref: refs/heads/main\n')
+    Deno.writeTextFileSync(`${root}/.git/index`, 'a')
+    Deno.writeTextFileSync(skill, text())
+    let last = stamp(root)
+    let moves = (change: () => void) => {
+      change()
+      let was = last
+      last = stamp(root)
+      return was != last
     }
-    assertEquals(await moves(() => Promise.resolve()), false)
-    assertEquals(await moves(() => Deno.writeTextFile(`${root}/x`, '')), false)
-    assertEquals(await moves(() => Deno.writeTextFile(skill, text('b'))), true)
-    assertEquals(await moves(() => git(root, 'add', '.')), true)
-    assertEquals(await moves(() => Deno.remove(skill)), true)
+    let write = (...paths: string[]) => () =>
+      paths.forEach((p) => Deno.writeTextFileSync(`${root}/${p}`, 'b'))
+    assertEquals(moves(() => {}), false)
+    assertEquals(moves(write('x', '.git/config')), false)
+    assertEquals(moves(write('.claude/skills/sample/SKILL.md')), true)
+    assertEquals(moves(write('.git/index')), true)
+    assertEquals(moves(write('.git/HEAD')), true)
+    assertEquals(moves(() => Deno.removeSync(skill)), true)
   } finally {
-    await Deno.remove(root, { recursive: true })
+    Deno.removeSync(root, { recursive: true })
   }
 })
