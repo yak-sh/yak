@@ -289,14 +289,45 @@ test('a rehearsal keeps its answer in the call graph', async () => {
   let asked = called('example_echo', { value: 'hi', check: true })
   let answer = await r.call(asked)
   assertEquals(faulted(answer, asked.entity.eid), false)
-  let said = answerOf(answer, asked.entity.eid)
-  assertEquals(body(said[0]), 'hi 2')
-  // It says it wrote nothing, so it never reads as the write it rehearsed.
-  assertEquals(
-    body(said.at(-1)).startsWith('Checked: nothing was written'),
-    true,
-  )
+  assertEquals(body(answerOf(answer, asked.entity.eid)[0]), 'hi 2')
   assertEquals((await g.read('.output&*')).length, 0)
+})
+
+// Rehearsals, run before the cases are timed: a write, and a tool that
+// answers only its own words about the call.
+let rehearsals = await (async () => {
+  let check = { check: { type: 'boolean' } }
+  let enrol: Tool = {
+    name: 'enrol',
+    description: 'Write a person',
+    inputSchema: { type: 'object', properties: check },
+    run: () => [{ entity: { eid: '$ada' }, person: {} }],
+  }
+  let props = (echo.inputSchema as { properties: object }).properties
+  let reporting = {
+    ...echo,
+    inputSchema: { type: 'object', properties: { ...props, ...check } },
+  }
+  let { g, r } = world([enrol, reporting])
+  await r.ensure()
+  let ask = async (to: string, args: Record<string, unknown>) => {
+    let asked = called(to, { ...args, check: true })
+    return answerOf(await r.call(asked), asked.entity.eid).map(body)
+  }
+  let wrote = await ask('enrol', {})
+  return {
+    wrote: wrote.at(-1)?.split('.')[0],
+    kept: (await g.read('.person&*')).length,
+    reported: await ask('example_echo', { value: 'v' }),
+  }
+})()
+
+test('a rehearsed write says it wrote nothing; a tool that reports its own check is left to say so', () => {
+  assertEquals(rehearsals, {
+    wrote: 'Checked: nothing was written',
+    kept: 0,
+    reported: ['v 2'],
+  })
 })
 
 test('a reply is told what the call wrote: the write, never a read or a rehearsal', async () => {
@@ -1032,12 +1063,14 @@ test('a call this runner does not take is left alone', async () => {
   )
 })
 
-test('a call its writer runs by an effect of its own is left to that effect', async () => {
+// A native transcript's call, which its session runs with the tools it
+// offered: the results the ready rule, then recovery once a holder that died
+// left it claimed, gave it. Run before the cases are timed.
+let dispatched = await (async () => {
   let { g, r } = watched([echo], {
     tool_async: { component: true, properties: {} },
   })
   await r.ensure()
-  // A native transcript's call: its session runs it with the tools it offered.
   await g.apply([
     { entity: { eid: 'dead' }, exit: { code: 0 } },
     {
@@ -1046,11 +1079,14 @@ test('a call its writer runs by an effect of its own is left to that effect', as
       tool_async: {},
     },
   ])
-  assertEquals((await g.read('.result&*')).length, 0)
-  // Nor does recovery take it once a holder that died left it claimed.
+  let ready = (await g.read('.result&*')).length
   await g.apply([{ entity: { eid: 'theirs' }, execution: { by: 'dead' } }])
   await r.drive({ redrive: true })
-  assertEquals((await g.read('.result&*')).length, 0)
+  return [ready, (await g.read('.result&*')).length]
+})()
+
+test('a call its writer runs by an effect of its own is left to that effect', () => {
+  assertEquals(dispatched, [0, 0])
 })
 
 let clock = {

@@ -101,10 +101,17 @@ export let invoke = async (
     // write would have returned it, or the refusal it would have met. It
     // says so after the batch, since otherwise it reads as the write itself,
     // eids and stamps and all: a caller that took one for the other wrote
-    // twice, or never.
+    // twice, or never. A tool that answers only its own words about the call
+    // has those words to say instead: it handled `check` itself (a session's
+    // tool, whose graph call ran a rehearsal of its own and said so).
     if (!tool.readOnly && !tool.applied && args.check === true) {
+      let rehearsed = await g.apply(made, { check: true })
+      let reported = made.length > 0 &&
+        made.every((b) =>
+          b.entity.eid[0] == '$' && (b.output as Comp | undefined)?.source == id
+        )
       answered = await land(
-        [...await g.apply(made, { check: true }), said(call, CHECKED)],
+        reported ? rehearsed : [...rehearsed, said(call, CHECKED)],
         'done',
         false,
       )

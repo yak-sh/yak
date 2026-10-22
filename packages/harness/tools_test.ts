@@ -1,11 +1,14 @@
-import { test } from '@yaks/testing'
+import { test, until } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { graphTools, harnessTools } from './tools.ts'
 import { core, inputSchemaOf } from '@yaks/mcp/tools'
-import { identityEid } from '@yaks/graph'
+import { type Bundle, type Comp, identityEid } from '@yaks/graph'
 import { toolEid } from '@yaks/tools'
 import { harness, repo } from './testing.ts'
 import { local } from './local.ts'
+import { agent } from './agent.ts'
+
+let body = (b: Bundle | undefined) => (b?.content as Comp | undefined)?.body
 
 let schemas = async () => {
   let h = await harness()
@@ -185,4 +188,51 @@ test('a transcript naming a plugin’s tool is offered it alone, and it runs', a
     await a.close()
     Deno.removeSync(worktrees, { recursive: true })
   }
+})
+
+// A session checking a write through graph_apply, run before the cases are
+// timed: the result its transcript records, read as the model reads it.
+let checked = await (async () => {
+  let h = await harness()
+  let asked = 0
+  let a = agent({
+    h,
+    name: 'fake',
+    tools: graphTools(h.g),
+    model: (req) =>
+      Promise.resolve({
+        id: `r${++asked}`,
+        model: req.model,
+        items: asked == 1
+          ? [{
+            kind: 'call',
+            id: 'c1',
+            name: 'graph_apply',
+            args: JSON.stringify({
+              check: true,
+              bundles: [{ entity: { eid: '$t' }, doc: { title: 'a topic' } }],
+            }),
+          }]
+          : [{ kind: 'assistant', text: 'done' }],
+      }),
+  })
+  let s = await a.start('check it')
+  await until(async () =>
+    (await a.transcript(s)).some((b) => body(b) == 'done')
+  )
+  let said = String(body((await a.transcript(s)).find((b) => b.result)))
+  let cut = said.lastIndexOf('\n]') + 2
+  let [made] = JSON.parse(said.slice(0, cut))
+  let kept = (await h.g.read('.doc.title="a topic"')).length
+  h.close()
+  return {
+    alias: made.$alias,
+    minted: made.entity.eid[0] != '$',
+    checked: said.slice(cut).match(/Checked: nothing was written/g)?.length,
+    kept,
+  }
+})()
+
+test('a session’s graph check reads as a check once, its $name beside the eid it became', () => {
+  assertEquals(checked, { alias: '$t', minted: true, checked: 1, kept: 0 })
 })
