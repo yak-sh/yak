@@ -383,7 +383,10 @@ test('what the host owes a direct call rides after the answer, which is unchange
   let [made, near] = said.result.structuredContent.result as Bundle[]
   assertEquals([made.entity.eid, made.book], ['b1', { price: 12 }])
   assertEquals(near.entity.eid, 'b0')
-  assert(said.result.content[0].text.includes('near b1: b0 · book'))
+  // The data is the first block, whole JSON; the words owed ride after it.
+  let [data, words] = said.result.content.map((c: { text: string }) => c.text)
+  assertEquals(JSON.parse(data).map((b: Bundle) => b.entity.eid), ['b1'])
+  assert(words.includes('near b1: b0 · book'))
 })
 
 test('a call is answered while a subscriber is still reading what it wrote', async () => {

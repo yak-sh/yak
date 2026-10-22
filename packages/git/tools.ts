@@ -158,6 +158,7 @@ export let runs = (): Runs => ({
     return [{
       entity: { eid: '$landed' },
       content: { body: [...said, `landed ${outcome.landed}`].join('\n') },
+      output: { source: call.entity.eid },
     }]
   },
 

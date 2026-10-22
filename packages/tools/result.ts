@@ -15,8 +15,10 @@ export let RULES: Declared[] = effectsIn(toolsDoc)
   .flatMap((e) => e.match ? [{ name: e.name, match: e.match }] : [])
 
 /** Every call claimed and not yet answered: the identities explicit recovery
- * asks for beside the rules, which owe nothing for a claimed call. */
-export let HELD = '.call&.execution&!results'
+ * asks for beside the rules, which owe nothing for a claimed call. A call its
+ * writer runs by an effect of its own (`tool_async`, @yaks/session) is that
+ * effect's to recover, as it is that effect's to run (`call_ready`). */
+export let HELD = '$call .call, .execution, !results, !tool_async'
 
 /** The rule that selects a call due now — the one whose emit names the result
  * entity. */
@@ -61,32 +63,6 @@ export let WORDS = 256 * 1024
  * build, so a door that sends an answer whole (MCP, `/apply`, `--json`) never
  * fails to. */
 export let MOST = 64 * 1024 * 1024
-
-// Parts said one after another until `most` characters are spent, the last
-// cut where the budget ends, and a line counting the parts left unsaid. Each
-// part is said only when it is reached, so the cost is the budget's, never the
-// answer's.
-let spent = <T>(
-  parts: T[],
-  say: (part: T) => string,
-  sep: string,
-  most: number,
-): { text: string; left: number } => {
-  let text = ''
-  let said = 0
-  for (let part of parts) {
-    let s = (said ? sep : '') + say(part)
-    if (text.length + s.length > most) {
-      return {
-        text: text + s.slice(0, most - text.length),
-        left: parts.length - said,
-      }
-    }
-    text += s
-    said++
-  }
-  return { text, left: 0 }
-}
 
 // JSON.stringify(answer, null, 2), said one bundle at a time.
 let inset = (b: Bundle) =>
@@ -138,12 +114,15 @@ let SPOKEN = new Set([
   'exception',
 ])
 
-// A bundle said as a line of its own: the words a text answer carries, or its
-// hit. Null for one that is data, said whole.
+// A bundle said as a line of its own: the words a call said, or a hit. Words
+// are what a tool answered under a name of its own (`$said`) or aimed at the
+// call (`output{source}`, which a text answer keeps once it is written): a row
+// the answer read or wrote is data even when words are all it holds, since
+// its words alone would drop which entity it is. Null for data, said whole.
 let line = (b: Bundle): string | null => {
   let body = (b.content as Comp | undefined)?.body
   if (
-    typeof body == 'string' &&
+    typeof body == 'string' && (b.entity.eid[0] == '$' || !!b.output) &&
     Object.keys(b).every((k) => k[0] == '$' || SPOKEN.has(k))
   ) return body
   let hit = hitOf(b)
@@ -153,21 +132,29 @@ let line = (b: Bundle): string | null => {
 /**
  * A tool's answer as text: each bundle as a line where it is one — a text
  * answer's `content{body}`, or a compact `hit` line for a search result — and
- * as JSON where it is data, or the bundles as JSON where none is a line. An
- * entity that carries words among other components (a transcript entry, a
- * comment) is data: said whole, its eid and its writer with its words. It is
- * copied onto the result entity as `content{body}` so a model, a terminal and
- * a transcript all read the answer the same way. It says at most `most`
- * characters and counts the rest, so an answer of any size words in bounded
- * time and space.
+ * the rest as JSON, each run of data bundles one JSON array, so the data in an
+ * answer always parses and the lines between read as lines. An answer of data
+ * alone is one array, `JSON.stringify(answer, null, 2)`. An entity that
+ * carries words among other components (a transcript entry, a comment) is
+ * data: said whole, its eid and its writer with its words. It is copied onto
+ * the result entity as `content{body}` so a model, a terminal and a transcript
+ * all read the answer the same way. It says at most `most` characters, each
+ * bundle only once it is reached, and counts the rest, so an answer of any
+ * size words in bounded time and space.
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * let said = (body: string) => ({ entity: { eid: body }, content: { body } })
+ * let said = (body: string) => ({
+ *   entity: { eid: '$said' },
+ *   content: { body },
+ *   output: { source: 'c1' },
+ * })
  * assertEquals(worded([said('one'), said('two')]), 'one\ntwo')
  * let entry = { ...said('hi'), entry: { session: 's', seq: 2 } }
- * assertEquals(worded([said('one'), entry]), 'one\n' +
- *   '  ' + JSON.stringify(entry, null, 2).replaceAll('\n', '\n  '))
+ * assertEquals(
+ *   worded([said('one'), entry, said('two')]),
+ *   'one\n' + JSON.stringify([entry], null, 2) + '\ntwo',
+ * )
  * assertEquals(
  *   worded([said('one'), said('two'), said('three')], 5),
  *   'one\nt\n… 2 of 3 not said: an answer is worded in 5 characters',
@@ -175,19 +162,49 @@ let line = (b: Bundle): string | null => {
  * ```
  */
 export let worded = (answer: Bundle[], most = WORDS): string => {
-  let lines = answer.some((b) => line(b) != null)
-  let { text, left } = lines
-    ? spent(answer, (b) => line(b) ?? inset(b), '\n', most)
-    : spent(answer, inset, ',\n', most)
-  let open = lines ? '' : '[\n'
-  return left
-    ? `${open}${text}\n… ${left} of ${answer.length} ` +
-      `not said: an answer is worded in ${most} characters`
-    : lines
-    ? text
-    : answer.length
-    ? `[\n${text}\n]`
-    : '[]'
+  if (!answer.length) return '[]'
+  // A leading run's `[` is outside the budget, as the closing line is: the
+  // budget is the answer's own characters.
+  let open = ''
+  let text = ''
+  let run = false
+  for (let [i, b] of answer.entries()) {
+    let words = line(b)
+    let s = words != null
+      ? (run ? '\n]' : '') + (i ? '\n' : '') + words
+      : (run ? ',\n' : i ? '\n[\n' : '') + inset(b)
+    if (!i && words == null) open = '[\n'
+    run = words == null
+    if (text.length + s.length > most) {
+      return `${open}${text}${s.slice(0, most - text.length)}\n… ` +
+        `${answer.length - i} of ${answer.length} not said: an answer is ` +
+        `worded in ${most} characters`
+    }
+    text += s
+  }
+  return open + text + (run ? '\n]' : '')
+}
+
+/**
+ * A tool's answer as the texts a door that sends several sends (MCP's content
+ * blocks): its data first, as JSON, then the lines said beside it, so a reader
+ * that parses the first text finds the data whole and nothing glued onto it.
+ * An answer of one kind is one text, {@link worded}.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * let row = { entity: { eid: 't1' }, doc: { title: 'Mossvale' } }
+ * let note = { entity: { eid: '$said' }, content: { body: 'Checked.' } }
+ * assertEquals(texts([row, note]), [JSON.stringify([row], null, 2), 'Checked.'])
+ * assertEquals(texts([row]), [worded([row])])
+ * ```
+ */
+export let texts = (answer: Bundle[], most = WORDS): string[] => {
+  let words = answer.filter((b) => line(b) != null)
+  let data = answer.filter((b) => line(b) == null)
+  return words.length && data.length
+    ? [worded(data, most), worded(words, most)]
+    : [worded(answer, most)]
 }
 
 /**
@@ -237,6 +254,9 @@ export let results = (
   now: () => number,
 ): {
   rules: Ready[]
+  /** {@link HELD}, as this graph can query it, or nothing where a graph
+   * records no claims */
+  held?: Ready['plan']['patterns'][number]['filter']
   ending: (
     call: Bundle,
     started: number | undefined,
@@ -254,6 +274,10 @@ export let results = (
     .filter((p): p is Ready => !!p.plan)
   let answering = plans.find((p) => p.rule.name == READY)!
   let woken = plans.find((p) => p.rule.name == WOKEN)
+  // HELD as this graph can query it, the way the rules are asked.
+  // A graph that records no claims (no `execution`) holds none.
+  let held = asked(ready([{ name: 'held', match: HELD }])[0].plan, vocab)
+    ?.patterns[0].filter
   // The result entity, built the way the rule would write it: one match of
   // `call_ready`, emitted. Its id is derived from that match, so it is the
   // same entity however many times a call is run.
@@ -302,7 +326,7 @@ export let results = (
     },
   ]
 
-  return { rules: plans, ending }
+  return { rules: plans, held, ending }
 }
 
 export { said } from './said.ts'

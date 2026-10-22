@@ -90,15 +90,15 @@ is assigned a fresh eid first.
 
 ## Exports
 
-| Import                 | Exports                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/tools`          | `runner`, `Runner`, `Opts`, `Reply`; `toolEid`, `toolRow`, `answerOf`, `worded`, `structured`, `valueIn`, `display`, `faulted`, `parsed`; `reconcile`, `CallError`, `UnfinishedCall`, `Interrupted`; `executionState`, `executionComputed`, `executionDerived`; `RULES`, `READY`, `WOKEN`, `WORDS`, `MOST`; `CHECK`, `checks`, `checked`, `ailing`, `Finding`, `Level`; `toolsDoc`, `callDoc`, `toolDoc` |
-| `@yaks/tools/access`   | `mayCall`, `Floor`                                                                                                                                                                                                                                                                                                                                                                                       |
-| `@yaks/tools/declared` | `parseTools`, `filled`, `invoke`, `commands`, `schemaOf`, `viewsOf`, `mayCall`, `TOOLS_EXAMPLE`; `Arg`, `ToolDef`, `Tools`, `Context`                                                                                                                                                                                                                                                                    |
-| `@yaks/tools/routes`   | `routes`, `refused`                                                                                                                                                                                                                                                                                                                                                                                      |
-| `@yaks/tools/vocab`    | `toolsDoc`, `callDoc`, `toolDoc`, `docs`, `description`, `derived`                                                                                                                                                                                                                                                                                                                                       |
-| `@yaks/tools/value`    | `valueIn`                                                                                                                                                                                                                                                                                                                                                                                                |
-| `@yaks/tools/views`    | `views`                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Import                 | Exports                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/tools`          | `runner`, `Runner`, `Opts`, `Reply`; `toolEid`, `toolRow`, `answerOf`, `worded`, `texts`, `structured`, `valueIn`, `display`, `faulted`, `parsed`; `reconcile`, `CallError`, `UnfinishedCall`, `Interrupted`; `executionState`, `executionComputed`, `executionDerived`; `RULES`, `READY`, `WOKEN`, `WORDS`, `MOST`; `CHECK`, `checks`, `checked`, `ailing`, `Finding`, `Level`; `toolsDoc`, `callDoc`, `toolDoc` |
+| `@yaks/tools/access`   | `mayCall`, `Floor`                                                                                                                                                                                                                                                                                                                                                                                                |
+| `@yaks/tools/declared` | `parseTools`, `filled`, `invoke`, `commands`, `schemaOf`, `viewsOf`, `mayCall`, `TOOLS_EXAMPLE`; `Arg`, `ToolDef`, `Tools`, `Context`                                                                                                                                                                                                                                                                             |
+| `@yaks/tools/routes`   | `routes`, `refused`                                                                                                                                                                                                                                                                                                                                                                                               |
+| `@yaks/tools/vocab`    | `toolsDoc`, `callDoc`, `toolDoc`, `docs`, `description`, `derived`                                                                                                                                                                                                                                                                                                                                                |
+| `@yaks/tools/value`    | `valueIn`                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `@yaks/tools/views`    | `views`                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ## Stored data
 
@@ -222,11 +222,18 @@ preserves other calls and results when a tool returns them as data.
 `faulted(bundles, callId)` checks the named call's execution state, rather than
 mistaking failure data in its answer for a failed invocation.
 
-`worded(answer)` says text-only answers as `content.body`, search hits as one
-line, and other bundles whole as JSON. It limits text to `WORDS` characters by
-default and counts the bundles left unsaid. `most` in runner options limits the
-answer's JSON size to `MOST` characters by default; larger answers are refused
-with `too_large`.
+`worded(answer)` says what a call said as its `content.body`, search hits as one
+line, and other bundles whole as JSON, each run of them one JSON array, so the
+data in an answer parses with lines between. What a call said is words under a
+name of the tool's own (`$said`) or aimed at the call (`output{source}`); a row
+the answer read or wrote is data even when words are all it holds, since its
+words alone would drop which entity it is. A rehearsal (`check: true`) ends with
+a line saying nothing was written. `texts(answer)` is the same answer for a door
+that sends several texts, as MCP sends content blocks: the data as JSON first,
+then the lines beside it. It limits text to `WORDS` characters by default and
+counts the bundles left unsaid. `most` in runner options limits the answer's
+JSON size to `MOST` characters by default; larger answers are refused with
+`too_large`.
 
 `structured(tool, answer)` returns `{ result: answer }`, or `output.value` for a
 tool declaring `outputSchema`. `valueIn(answer)` reads that data directly.
@@ -475,7 +482,7 @@ const r = runner(records, {
   owner: 'server',
   reply: async (_call, _answer, wrote) => {
     equal(wrote, [])
-    return [{ entity: { eid: 'extra' }, content: { body: 'reply' } }]
+    return [{ entity: { eid: '$extra' }, content: { body: 'reply' } }]
   },
 })
 await r.ensure()
@@ -483,8 +490,17 @@ const bundles = await r.call({
   entity: { eid: 'read-host' },
   call: { to: toolEid('read'), args: {} },
 })
-equal(worded(answerOf(bundles, 'read-host')), 'hello\nreply')
-equal(await records.get(['source', 'extra']), [])
+// The row read is data, said whole; the reply is words.
+equal(
+  worded(answerOf(bundles, 'read-host')),
+  JSON.stringify(
+    [{ entity: { eid: 'source' }, content: { body: 'hello' } }],
+    null,
+    2,
+  ) +
+    '\nreply',
+)
+equal(await records.get(['source', '$extra']), [])
 ```
 
 ## Health checks

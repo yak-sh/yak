@@ -374,6 +374,7 @@ export let runs = (
           })
         }`,
       },
+      output: { source: call.entity.eid },
     }]
   },
 

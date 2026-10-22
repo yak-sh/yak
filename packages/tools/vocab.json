@@ -160,8 +160,8 @@
     },
     "call_ready": {
       "effect": true,
-      "match": "$call .call, !execution, !results, !wake; +result.call=$call",
-      "description": "a call nobody has claimed and nobody scheduled: run the tool it names and attach the result. A call written already claimed (the caller runs it) owes nothing"
+      "match": "$call .call, !execution, !results, !wake, !tool_async; +result.call=$call",
+      "description": "a call nobody has claimed and nobody scheduled: run the tool it names and attach the result. A call written already claimed (the caller runs it) owes nothing, and nor does one its writer runs by an effect of its own (`tool_async`, @yaks/session): that effect runs it with the tools its writer offered. In a graph that does not load the word, every unclaimed call is due"
     },
     "call_woken": {
       "effect": true,

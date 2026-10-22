@@ -34,6 +34,7 @@ export {
   READY,
   RULES,
   structured,
+  texts,
   toolEid,
   toolRow,
   WOKEN,

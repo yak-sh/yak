@@ -289,7 +289,13 @@ test('a rehearsal keeps its answer in the call graph', async () => {
   let asked = called('example_echo', { value: 'hi', check: true })
   let answer = await r.call(asked)
   assertEquals(faulted(answer, asked.entity.eid), false)
-  assertEquals(body(answerOf(answer, asked.entity.eid)[0]), 'hi 2')
+  let said = answerOf(answer, asked.entity.eid)
+  assertEquals(body(said[0]), 'hi 2')
+  // It says it wrote nothing, so it never reads as the write it rehearsed.
+  assertEquals(
+    body(said.at(-1)).startsWith('Checked: nothing was written'),
+    true,
+  )
   assertEquals((await g.read('.output&*')).length, 0)
 })
 
@@ -822,6 +828,21 @@ test('an answer is worded whole within its budget, and counted past it', () => {
   )
 })
 
+test('words between data leave the data parseable, and a row of words alone is data', () => {
+  let note = (body: string) => ({
+    entity: { eid: '$said' },
+    content: { body },
+    output: { source: 'c1' },
+  })
+  // A row a write patched holds only words, and its eid is the point.
+  let row = { entity: { eid: 't1' }, content: { body: 'understood' } }
+  let data = { entity: { eid: 't2' }, doc: { title: 'Mossvale' } }
+  assertEquals(
+    worded([data, row, note('Checked: nothing was written.')]),
+    JSON.stringify([data, row], null, 2) + '\nChecked: nothing was written.',
+  )
+})
+
 test('a search answer says its marked hit as text', () => {
   let found: Bundle[] = [{
     entity: { eid: 'book-1' },
@@ -1009,6 +1030,27 @@ test('a call this runner does not take is left alone', async () => {
     (await g.read('.execution&*')).map((b) => b.entity.eid),
     ['mine'],
   )
+})
+
+test('a call its writer runs by an effect of its own is left to that effect', async () => {
+  let { g, r } = watched([echo], {
+    tool_async: { component: true, properties: {} },
+  })
+  await r.ensure()
+  // A native transcript's call: its session runs it with the tools it offered.
+  await g.apply([
+    { entity: { eid: 'dead' }, exit: { code: 0 } },
+    {
+      entity: { eid: 'theirs' },
+      call: { to: toolEid('example_echo'), args: { value: 'x' } },
+      tool_async: {},
+    },
+  ])
+  assertEquals((await g.read('.result&*')).length, 0)
+  // Nor does recovery take it once a holder that died left it claimed.
+  await g.apply([{ entity: { eid: 'theirs' }, execution: { by: 'dead' } }])
+  await r.drive({ redrive: true })
+  assertEquals((await g.read('.result&*')).length, 0)
 })
 
 let clock = {

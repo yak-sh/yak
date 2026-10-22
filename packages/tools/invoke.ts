@@ -8,6 +8,12 @@ import { CallError, parsed, resolved, validated } from './args.ts'
 import { Interrupted } from './errors.ts'
 import { actionable, exceptionOf } from './fault.ts'
 import { MOST } from './result.ts'
+import { said } from './said.ts'
+
+/** What a rehearsal says after the batch it answers. */
+let CHECKED = 'Checked: nothing was written. Its eids were made for ' +
+  'this check alone; the same call without check writes it, under eids of ' +
+  'its own.'
 
 export type Land = (
   made: Bundle[],
@@ -92,10 +98,13 @@ export let invoke = async (
     measured(made, opts.most ?? MOST)
     // A rehearsal: `check: true` to a tool that writes runs the write's
     // every phase and rolls it back, so the answer is the batch as a kept
-    // write would have returned it, or the refusal it would have met.
+    // write would have returned it, or the refusal it would have met. It
+    // says so after the batch, since otherwise it reads as the write itself,
+    // eids and stamps and all: a caller that took one for the other wrote
+    // twice, or never.
     if (!tool.readOnly && !tool.applied && args.check === true) {
       answered = await land(
-        await g.apply(made, { check: true }),
+        [...await g.apply(made, { check: true }), said(call, CHECKED)],
         'done',
         false,
       )

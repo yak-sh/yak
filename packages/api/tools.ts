@@ -173,6 +173,7 @@ export let runs = (host: Serving): Runs => ({
         body: `served ${at} for ${seconds(Date.now() - began)}` +
           (cut ? `, cutting what was open after ${seconds(grace)}` : ''),
       },
+      output: { source: call.entity.eid },
     }]
   },
 })

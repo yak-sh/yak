@@ -75,7 +75,7 @@ import { CallError, UnfinishedCall } from './errors.ts'
 export { UnfinishedCall } from './errors.ts'
 import { persist } from './persist.ts'
 import { invoke } from './invoke.ts'
-import { answerOf, HELD, results, toolEid, toolRow } from './result.ts'
+import { answerOf, results, toolEid, toolRow } from './result.ts'
 
 // What each call is doing right now in this process, keyed per graph, not per
 // runner: a second runner over the same graph that is asked for a call in
@@ -226,7 +226,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
   let by = new Map(tools.map((t) => [toolEid(t.name), t]))
   let otherwise = opts.otherwise && namedTool(opts.otherwise)
   let now = opts.now ?? (() => performance.now())
-  let { rules: plans, ending } = results(g.vocab, now)
+  let { rules: plans, held: claimed, ending } = results(g.vocab, now)
   let inflight = running.get(g) ?? new Map<Eid, Promise<Bundle[]>>()
   running.set(g, inflight)
   // The calls this runner claimed and whose tool has not returned, with when
@@ -478,7 +478,7 @@ export let runner = (g: Graph, opts: Opts): Runner => {
       let { filter } = p.plan.patterns[0]
       for (let b of await g.rows(filter)) out.add(b.eid as Eid)
     }
-    for (let b of await g.rows(HELD)) out.add(b.eid as Eid)
+    for (let b of claimed ? await g.rows(claimed) : []) out.add(b.eid as Eid)
     return [...out]
   }
 
@@ -620,6 +620,7 @@ export {
   READY,
   RULES,
   structured,
+  texts,
   toolEid,
   toolRow,
   WOKEN,

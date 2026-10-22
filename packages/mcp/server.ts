@@ -30,6 +30,7 @@ import {
   answerOf,
   faulted,
   structured,
+  texts,
   toolEid,
   worded,
 } from '@yaks/tools/result'
@@ -264,10 +265,11 @@ let said = (t: Tool, answer: Bundle[], failed: boolean): CallToolResult => {
     // A refusal points at the tool that has the current answer: a client
     // holding a tool list from before a property was added or removed finds out
     // here and nowhere else.
-    content: [{
-      type: 'text',
-      text: failed ? pointing(worded(answer)) : worded(answer),
-    }],
+    // Data and the words beside it go in blocks of their own, data first, so
+    // a client parsing the first block finds JSON (@yaks/tools `texts`).
+    content: (failed ? [pointing(worded(answer))] : texts(answer)).map((
+      text,
+    ) => ({ type: 'text' as const, text })),
     ...(failed && t.outputSchema
       ? {}
       : { structuredContent: structured(t, answer) }),

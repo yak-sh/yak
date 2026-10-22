@@ -54,5 +54,6 @@ export let runs = (): Runs => ({
         { full: argsOf(call).full == true, actor: who(call) },
       ),
     },
+    output: { source: call.entity.eid },
   }],
 })

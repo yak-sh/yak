@@ -2695,6 +2695,7 @@ export class Store {
                   return [{
                     entity: { eid: '$answer' },
                     content: { body: answered.text },
+                    output: { source: call.entity.eid },
                   }]
                 },
               })),
