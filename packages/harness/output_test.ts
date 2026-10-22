@@ -1,7 +1,7 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { outputView } from '@yaks/context'
-import { valueTools } from '@yaks/blob'
+import { valueRange, valueSearch, valueTools } from '@yaks/blob'
 import { transcript } from '@yaks/session'
 import { local } from './local.ts'
 import { harnessTools } from './tools.ts'
@@ -25,9 +25,10 @@ test('large outputs snapshot transparently, survive reopen and source mutation',
     await h.g.apply([{ entity: { eid: 'result' }, content: { body: 'newer' } }])
     h.close()
     h = await harness(path)
-    const [read, search] = valueTools(async (id) =>
+    const reader = async (id: string) =>
       (await h.g.read('.entity.eid=' + JSON.stringify(id)))[0]
-    )
+    const read = valueRange(reader)
+    const search = valueSearch(reader)
     const args = {
       entity: handle,
       component: 'context_output',
@@ -36,23 +37,21 @@ test('large outputs snapshot transparently, survive reopen and source mutation',
     }
     let recovered = '', start = 0
     while (true) {
-      const slice = JSON.parse(await read.run({ ...args, start, count: 8192 }))
+      const slice = await read({ ...args, start, count: 8192 })
       recovered += slice.text
       if (slice.next == null) break
       start = slice.next
     }
     assertEquals(recovered, text)
-    const matches = JSON.parse(
-      await search.run({ ...args, query: 'needle', limit: 2 }),
-    )
+    const matches = await search({ ...args, query: 'needle', limit: 2 })
     assertEquals(matches.matches.map((m: { offset: number }) => m.offset), [
       7,
       21,
     ])
-    await assertRejects(() => read.run({ ...args, count: 8193 }))
-    await assertRejects(() => read.run({ ...args, start: -1 }))
-    await assertRejects(() => read.run({ ...args, revision: 'wrong' }))
-    await assertRejects(() => search.run({ ...args, query: '' }))
+    await assertRejects(() => read({ ...args, count: 8193 }))
+    await assertRejects(() => read({ ...args, start: -1 }))
+    await assertRejects(() => read({ ...args, revision: 'wrong' }))
+    await assertRejects(() => search({ ...args, query: '' }))
     assertEquals(
       await outputView(h.g, {
         entity: { eid: 'small' },
@@ -74,7 +73,7 @@ test('generic text inspection reads doc and content with reader authorization', 
       doc: { body: '😀hello\nworld' },
       content: { body: 'content' },
     }])
-    const [read] = valueTools(async (id) =>
+    const read = valueRange(async (id) =>
       id == 'note' ? (await h.g.read('.entity.eid=note&*'))[0] : undefined
     )
     const args = {
@@ -84,14 +83,13 @@ test('generic text inspection reads doc and content with reader authorization', 
       start: 1,
       count: 5,
     }
-    assertEquals(JSON.parse(await read.run(args)).text, 'hello')
+    assertEquals((await read(args)).text, 'hello')
     assertEquals(
-      JSON.parse(await read.run({ ...args, component: 'content', start: 0 }))
-        .text,
+      (await read({ ...args, component: 'content', start: 0 })).text,
       'conte',
     )
-    await assertRejects(() => read.run({ ...args, entity: 'forbidden' }))
-    await assertRejects(() => read.run({ ...args, property: '__proto__' }))
+    await assertRejects(() => read({ ...args, entity: 'forbidden' }))
+    await assertRejects(() => read({ ...args, property: '__proto__' }))
   } finally {
     h.close()
   }
@@ -195,8 +193,13 @@ test('fork projections reuse snapshots and escaped reads stay bounded', async ()
       property: 'body',
       count: 8192,
     })
+    // A page is the text itself, unescaped, and never spills again.
+    assertEquals(
+      reply.split('\n')[0].split(',')[0],
+      '[Code points 0 to 8192 of 20000',
+    )
+    assert(reply.endsWith('\t'.repeat(8192)))
     assert(reply.length < 16384)
-    assert(JSON.parse(reply).next > 0)
   } finally {
     h.close()
   }

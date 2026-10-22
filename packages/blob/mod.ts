@@ -96,7 +96,16 @@ export * from './content_type.ts'
 export * from './representation.ts'
 export * from './representation_rules.ts'
 
-export { VALUE_LIMIT, type ValueTool, valueTools } from './value.ts'
+export {
+  VALUE_LIMIT,
+  type ValueRange,
+  valueRange,
+  type ValueReader,
+  type ValueSearch,
+  valueSearch,
+  type ValueTool,
+  valueTools,
+} from './value.ts'
 export {
   addressOf,
   type Artifact,

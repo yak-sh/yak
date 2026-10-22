@@ -96,7 +96,7 @@ host records that, and refuses the store to a config without @yaks/blob
 | `Served`, `served`, `servedOpen`, `servedVia`, `ranged`, `rangedOpen`, `validator`                | HTTP responses, streaming and validators                 |
 | `Representation`, `representation`, `represents`, `addressed`, `representations`                  | Immutable representations and their graph plugin         |
 | `Backend`, `backend`, `artifactsAt`                                                               | Configured and default artifact backends                 |
-| `valueTools`, `VALUE_LIMIT`, `ValueTool`                                                          | Bounded text-inspection tools                            |
+| `valueTools`, `valueRange`, `valueSearch`, `VALUE_LIMIT`, `ValueTool`                             | Bounded text-inspection tools                            |
 
 | Sub-module export   | Purpose                                                                                                    |
 | ------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -752,7 +752,10 @@ equal(await (await read.handle(new Request(versioned))).text(), 'Hello')
 `graph_value_search` tool declarations with executable `run` functions. Supply
 the authorized entity reader used by the application's other graph tools. These
 tools accept entity/component/property names, not filesystem paths or raw blob
-addresses, and work with any string property.
+addresses, and work with any string property. Each `run` answers a model in
+text: a first line saying where the piece lies, then the piece itself, never
+escaped inside a JSON string. Code reads the same pieces as data through
+`valueRange(readEntity)` and `valueSearch(readEntity)`.
 
 Both take `entity`, `component` and `property`. Optional `revision` must match
 the SHA-256 of the current UTF-8 text; a mismatch is refused with the current
@@ -760,37 +763,38 @@ revision, and says whether the one passed is that revision copied wrong or text
 that changed since. Missing, denied or non-text values fail.
 
 - Read uses a zero-based Unicode code-point `start`. `count` defaults to 2048,
-  with a maximum of 8192 (`VALUE_LIMIT`). Results contain `start`, `end`,
-  `total`, `revision`, `text` and `next` (null at the end). An additional
-  escaped-JSON bound can shorten the returned text.
+  with a maximum of 8192 (`VALUE_LIMIT`). A range (`valueRange`) has `start`,
+  `end`, `total`, `revision`, `text` and `next` (null at the end); the tool says
+  `[Code points 0 to 2048 of 9000, revision …; next start=2048.]` and then the
+  text.
 - Search uses a nonempty, case-sensitive literal `query` of at most 256 UTF-16
   code units. `start` skips earlier characters; `limit` defaults to 10 and is at
-  most 20. Matches contain offsets and excerpts. `next` is a continuation offset
-  when the match limit was reached, even if no further match exists.
+  most 20. Matches (`valueSearch`) have offsets and excerpts; the tool says a
+  line for each, `at 4: A 🌳 tree`, its line breaks shown as spaces. `next` is a
+  continuation offset when the match limit was reached, even if no further match
+  exists.
 
 Offsets count code points, not grapheme clusters or terminal columns. Both tools
 read the entire value before slicing/searching; only the output is bounded.
 
 ```ts
 import { equal } from '@yaks/testing'
-import { address, valueTools } from '@yaks/blob'
+import { address, valueRange, valueSearch, valueTools } from '@yaks/blob'
 
-let tools = valueTools(async (eid) =>
+let reader = async (eid: string) =>
   eid == 'p1' ? { entity: { eid }, post: { body: 'A 🌳 tree' } } : undefined
-)
-let args = {
-  entity: 'p1',
-  component: 'post',
-  property: 'body',
-  revision: address('A 🌳 tree'),
-}
-let read = tools.find((tool) => tool.name == 'graph_value_read')!
-let slice = JSON.parse(await read.run({ ...args, start: 2, count: 1 }))
+let revision = address('A 🌳 tree')
+let args = { entity: 'p1', component: 'post', property: 'body', revision }
+let slice = await valueRange(reader)({ ...args, start: 2, count: 1 })
 equal(slice.text, '🌳')
 equal(slice.next, 3)
-let search = tools.find((tool) => tool.name == 'graph_value_search')!
-let result = JSON.parse(await search.run({ ...args, query: 'tree' }))
+let result = await valueSearch(reader)({ ...args, query: 'tree' })
 equal(result.matches[0].offset, 4)
+let read = valueTools(reader).find((tool) => tool.name == 'graph_value_read')!
+equal(
+  await read.run({ ...args, start: 2, count: 1 }),
+  `[Code points 2 to 3 of 8, revision ${revision}; next start=3.]\n🌳`,
+)
 ```
 
 ## Limits

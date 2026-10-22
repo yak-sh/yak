@@ -1,5 +1,5 @@
 /** Explicit source inspection, independent of transcript rendering and search. */
-import { valueTools } from '@yaks/blob'
+import { valueRange } from '@yaks/blob'
 import type { Bundle, Comp, Graph } from '@yaks/graph'
 import { transcriptSegments } from '@yaks/session'
 
@@ -19,7 +19,8 @@ export type EntrySource = {
 
 /** Authorize against only ancestry and entry positions before loading any body.
  * A fork can inspect its inherited prefix, never its ancestor's later entries.
- * Reuse the graph value tool so revisions and Unicode offsets have one meaning.
+ * Read the range graph_value_read reads (@yaks/blob `valueRange`) so revisions
+ * and Unicode offsets have one meaning.
  */
 export async function entrySource(
   g: Graph,
@@ -60,16 +61,15 @@ export async function entrySource(
   )
   if (!component) throw new Error('Entry has no text source')
   let property = component == 'call' ? 'args' : 'body'
-  let tool = valueTools((id) => Promise.resolve(id == eid ? row : undefined))[0]
-  let page = JSON.parse(
-    await tool.run({
-      entity: eid,
-      component,
-      property,
-      start: request.start,
-      revision: request.revision,
-      count: SOURCE_LIMIT,
-    }),
-  )
+  let page = await valueRange((id) =>
+    Promise.resolve(id == eid ? row : undefined)
+  )({
+    entity: eid,
+    component,
+    property,
+    start: request.start,
+    revision: request.revision,
+    count: SOURCE_LIMIT,
+  })
   return { eid, component, property, ...page }
 }
