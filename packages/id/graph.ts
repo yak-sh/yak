@@ -6,16 +6,19 @@
 //   numbers  the allocator behind `$num: true` (./number.ts), for a graph whose
 //            storage numbers on request rather than numbering everything
 //
+// and `starting`, the read that finds the eids a handle's hex starts, which
+// @yaks/graph uses for a handle copied without its `#`.
+//
 // `numbers` takes the allocator its storage offers, so it is constructed by the
 // program that opened the storage rather than by a config file; `ids` is the
 // one a config names.
 
 import type { Plugin } from './types.ts'
 import type { Vocab } from '@yaks/vocab'
-import { ids } from './ids.ts'
+import { ids, starting } from './ids.ts'
 import { numbers } from './number.ts'
 
-export { ids, numbers }
+export { ids, numbers, starting }
 
 /** Human ids accepted wherever this graph takes an id. */
 export let plugins = (host: { vocab: Vocab }): Plugin[] => [ids(host.vocab)]

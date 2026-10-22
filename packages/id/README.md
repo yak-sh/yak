@@ -58,21 +58,31 @@ deno add jsr:@yaks/id
 
 ## Exports
 
-| Import           | Exports                                                                                                                                     |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `prefixes`, `prefixOf`, `format`, `parse`, `idOf`, `human`; `Named`, `Parsed`, `Wearing`; `idDoc` |
-| `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                    |
-| `@yaks/id/graph` | `numbers`, `ids`, `plugins`                                                                                                                 |
+| Import           | Exports                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/id`       | `idKeywords`, `ID_URI`, `short`, `SHORT`, `BARE`, `prefixes`, `prefixOf`, `format`, `parse`, `idOf`, `human`; `Named`, `Parsed`, `Wearing`; `idDoc` |
+| `@yaks/id/vocab` | `idDoc`, `docs`, `idKeywords`, `keywords`, `description`                                                                                            |
+| `@yaks/id/graph` | `numbers`, `ids`, `starting`, `plugins`                                                                                                             |
 
 ## Prefixes and short handles
 
 `prefixes()` returns only declared prefixes; `prefixOf()` also supplies the
 initial for a component without one. `SHORT` recognizes typed short handles with
-6–64 hex characters. `short()` formats the eid without checking whether it is
-hex.
+6–64 hex characters. `BARE` recognizes a short handle copied without its `#`, as
+a shell or a sentence leaves it: hex at least as long as a handle is shown, so a
+word somebody chose (`facade`) is not taken for one. `short()` formats the eid
+without checking whether it is hex.
 
 ```ts
-import { format, idKeywords, prefixes, prefixOf, SHORT, short } from '@yaks/id'
+import {
+  BARE,
+  format,
+  idKeywords,
+  prefixes,
+  prefixOf,
+  SHORT,
+  short,
+} from '@yaks/id'
 import { loadVocab } from '@yaks/vocab'
 import { equal } from '@yaks/testing'
 
@@ -88,6 +98,8 @@ equal(format('B', 7), 'B-7')
 equal(short('ABCDEF01-2345-4000-8000-000000000001'), '#abcdef0123')
 equal(SHORT.test('#abcdef'), true)
 equal(SHORT.test('abcdef'), false)
+equal(BARE.test('abcdef0123'), true)
+equal(BARE.test('facade'), false)
 ```
 
 The keyword schema requires one uppercase letter. Formatting a prefix does not
@@ -106,8 +118,15 @@ resolves human ids and short handles. The number is the identity: a human id
 names the entity carrying its number, whatever letter it is written with, and a
 bare number does too. An entity's letter follows its components, so an id
 printed before a component came or went keeps naming it. A number no entity
-carries, or a short handle shared by several entities, is refused. Eids and
-other strings are left to the graph's other addressing.
+carries is refused. A short handle several entities share is answered with all
+of them, and the graph refuses it, naming them. Eids and other strings are left
+to the graph's other addressing.
+
+A handle copied without its `#` is the graph's to resolve
+([@yaks/graph](../graph/README.md) `address`): it is asked after every plugin,
+so a name, a number or a title of that spelling keeps what it names, and it
+reads the eids with `starting(tx, hex)`, which this plugin uses for its own
+handles.
 
 ```ts
 import { graph } from '@yaks/graph'
@@ -172,7 +191,8 @@ Allocation policy does not invalidate an address already given out. The CLI
 leaves existing numbers intact when excluding sessions, letters, knocks and
 internal records from new allocations. Old `S-…`, `E-…` and `K-…` references
 keep resolving; new unnumbered entities use the short handles above, including
-in `yak session peek '#…'` and web paths with `%23` in place of `#`.
+in `yak session peek '#…'`, the same hex without its `#`, and web paths with
+`%23` in place of `#`.
 
 Numbers are opt in. Without `numbers()`, a graph refuses `$num` unless another
 plugin declares it. A storage adapter can instead number every entity when
@@ -191,7 +211,9 @@ references.
 
 A short handle's `#` must be encoded as `%23` in a URL path. Quote a short
 handle in a shell (`yak graph show '#a3f19c024b'`) so a leading `#` is not read
-as a comment.
+as a comment, or leave the `#` off (`yak graph show a3f19c024b`). Without its
+`#`, a handle must be at least ten hex characters, and one of digits alone is
+read as a number first.
 
 The formatting exports are pure TypeScript and depend on @yaks/vocab. The
 plugins accept synchronous or asynchronous graph reads and allocators, and

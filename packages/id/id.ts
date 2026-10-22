@@ -16,9 +16,16 @@ import type { Vocab } from '@yaks/vocab'
 export let short = (eid: string): string =>
   `#${eid.replaceAll('-', '').slice(0, 10).toLowerCase()}`
 
-/** A short handle as typed: 6–64 hex characters after the `#`. Hex with no `#`
- * is never read as an eid fragment. */
+/** A short handle as typed: 6–64 hex characters after the `#`. */
 export let SHORT: RegExp = /^#[0-9a-f]{6,64}$/i
+
+/** A short handle copied without its `#`, as a shell or a sentence leaves it:
+ * hex at least as long as a handle is shown (`e854bf7dc0`). The `#` is what
+ * makes a shorter fragment a handle; without it, a word somebody chose
+ * (`facade`) must not be taken for one. A graph asks about it only after
+ * every name, number and eid of that spelling (@yaks/graph `address`), so
+ * digits alone are a handle only where no entity carries that number. */
+export let BARE: RegExp = /^[0-9a-f]{10,64}$/i
 
 /** What an id is built from: the entity's eid, the component that gives it its
  * prefix, and the number the store assigned (absent until the entity is first

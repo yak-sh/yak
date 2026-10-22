@@ -399,7 +399,10 @@ export type Plugin = {
    * answer: the id is written the way this plugin's ids are (`T-998`) and
    * names nothing, so it is no eid either — unless a later plugin resolves it,
    * the graph refuses it rather than let it fall through and be minted as an
-   * entity of that literal name. Called through {@link Graph.address}. It
+   * entity of that literal name. Several eids are an answer too: the id is
+   * written the way this plugin's ids are and fits more than one entity (a
+   * handle two eids start with), and the graph refuses it, naming them, so the
+   * caller can say which. Called through {@link Graph.address}. It
    * belongs to a plugin rather than the core because "what name refers to an
    * entity" is a question about a component —
    * {@link https://jsr.io/@yaks/alias | @yaks/alias}'s `alias{name}` is the
@@ -411,7 +414,9 @@ export type Plugin = {
     tx: ReadTx,
     ids: string[],
     kind?: string,
-  ) => Map<string, Eid | null> | Promise<Map<string, Eid | null>>
+  ) =>
+    | Map<string, Eid | Eid[] | null>
+    | Promise<Map<string, Eid | Eid[] | null>>
 }
 
 /** Every vocabulary document a set of plugins contributes, in plugin order —

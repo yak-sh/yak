@@ -3,6 +3,8 @@
 import { and, eq, list, mask, parse, want } from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
+import { BARE } from '@yaks/id'
+import { starting } from '@yaks/id/graph'
 import { type Context, context, during, live, peek, scope } from '@yaks/trace'
 import { after, each, isPromise } from '@yaks/fp'
 import type { Bundle, Eid } from './bundle.ts'
@@ -18,6 +20,7 @@ import { detached } from './storage.ts'
 import type { Plugin, ReadView } from './plugin.ts'
 import type { Graph, Options } from './graph.ts'
 import { Refused } from './errors.ts'
+import { minted } from './mint.ts'
 import { addressing } from './said.ts'
 import { flat, named, only, projection } from './projection.ts'
 
@@ -51,6 +54,12 @@ export let continuing = <A, B>(
   let at = context()
   return after(value, at ? (value) => scope(at, () => run(value)) : run)
 }
+
+/** What an id several entities fit is refused with: a few of their eids, so
+ * the caller can give enough of one to tell it apart. */
+let fits = (id: string, eids: Eid[]): string =>
+  `${id} names ${eids.length} entities (${eids.slice(0, 3).join(', ')}` +
+  `${eids.length > 3 ? ', …' : ''}); give more of it`
 
 /** Read through the graph's projection and addressing rules. An owning host
  * can supply its traced committed transaction; otherwise only reads are
@@ -123,41 +132,83 @@ export let reader = (opts: {
 
   // What a caller asks before reading by id: every plugin that knows how a
   // name becomes an eid, asked in turn, each about the ids no earlier plugin
-  // resolved. It runs outside any transaction — the caller is asking before it
-  // does anything. An id some plugin recognised and none resolved names
-  // nothing, and is refused here, once for every door: otherwise the caller
-  // reads it back as an eid and a write mints an entity whose eid is `T-998`.
+  // resolved, and then the handles copied without their `#` (`bare`). It runs
+  // outside any transaction — the caller is asking before it does anything.
+  // An id some plugin recognised and none resolved names nothing, and is
+  // refused here, once for every door: otherwise the caller reads it back as
+  // an eid and a write mints an entity whose eid is `T-998`. One several
+  // entities fit is refused too, naming them, so the caller can say which.
   let address = (
     ids: string[],
     kind?: string,
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     let asks = plugins.flatMap((p) => p.address ?? [])
-    if (!asks.length || !ids.length) return new Map<string, Eid>()
+    if (!ids.length || !asks.length && !ids.some(handled)) {
+      return new Map<string, Eid>()
+    }
     let outside = outsideRead()
     let asked = each(
       asks,
-      new Map<string, Eid | null>(),
+      new Map<string, Eid | Eid[] | null>(),
       (at, ask) =>
         continuing(
           ask(outside, ids.filter((id) => at.get(id) == null), kind),
           (more) => new Map([...at, ...more]),
         ),
     )
-    return continuing(asked, (at) => {
+    let all = continuing(asked, (at) =>
+      continuing(
+        bare(outside, ids.filter((id) => at.get(id) == null)),
+        (more) => new Map([...at, ...more]),
+      ))
+    return continuing(all, (at) => {
       let found = new Map<string, Eid>()
       let nothing: string[] = []
+      let refusals: string[] = []
       for (let [id, eid] of at) {
-        eid == null ? nothing.push(id) : found.set(id, eid)
+        if (eid == null) nothing.push(id)
+        else if (typeof eid != 'string') refusals.push(fits(id, eid))
+        else found.set(id, eid)
       }
       if (nothing.length) {
-        throw new Refused(
+        refusals.unshift(
           `${nothing.join(', ')} ${nothing.length == 1 ? 'names' : 'name'} ` +
             'nothing',
         )
       }
+      if (refusals.length) throw new Refused(refusals.join('; '))
       return found
     })
   }
+
+  // A handle as a person copies it is often its hex without the `#`
+  // (`e854bf7dc0`): a shell reads a leading `#` as a comment, and a handle
+  // quoted in a sentence loses it. Such an id that no plugin resolved names
+  // the entity whose eid starts that way, as the `#` form does (@yaks/id). It
+  // is asked last, as a later plugin would be, so a name, a number and an eid
+  // of that spelling keep what they name, and so does a title, which a tool's
+  // argument may name (tool.ts `referenced`). Digits alone are a number first,
+  // and a handle only when no entity carries that number. An id it fits
+  // nothing is left as it was.
+  let handled = (id: string) => BARE.test(id) && !minted(id)
+  let bare = (tx: ReadTx, ids: string[]) =>
+    each(
+      ids.filter(handled),
+      new Map<string, Eid | Eid[]>(),
+      (at, id) =>
+        after(starting(tx, id.toLowerCase()), (eids) =>
+          !eids.length || eids.includes(id) ? at : after(
+            titled(tx, id),
+            (held) =>
+              held ? at : at.set(id, eids.length == 1 ? eids[0] : eids),
+          )),
+    )
+  let titled = (tx: ReadTx, id: string) =>
+    !!vocab.prop('doc', 'title') &&
+    after(
+      tx.read(and(eq('doc.title', id), want('entity'))),
+      (rows) => rows.length > 0,
+    )
 
   let ask = (query: Query, readOpts?: ReadOpts): Query | Promise<Query> =>
     continuing(aim(query, address), (q) => {

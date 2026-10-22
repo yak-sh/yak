@@ -621,8 +621,12 @@ equal(minted(mint()), true)
 
 `g.address(ids, kind?)` asks plugins to resolve names to eids. An unrecognised
 name stays unchanged; a recognised name mapped to `null` is refused unless a
-later plugin resolves it. Addressing also runs on writes and on queries that
-name an eid or reference. Persistent names belong to
+later plugin resolves it, and one mapped to several eids is refused, naming
+them. Last, an id no plugin resolved that is a short handle copied without its
+`#` ([@yaks/id](../id/README.md) `BARE`, such as `e854bf7dc0`) names the entity
+whose eid starts that way, unless a document carries it as its exact title; one
+several eids start with is refused the same way. Addressing also runs on writes
+and on queries that name an eid or reference. Persistent names belong to
 [@yaks/alias](../alias/README.md) and [@yaks/key](../key/README.md).
 
 ```ts

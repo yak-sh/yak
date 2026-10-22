@@ -96,8 +96,16 @@ test('a short handle is the entity whose eid starts that way', async () => {
   assertEquals(await at('#c0ffee01'), { '#c0ffee01': 'c0ffee0123456789' })
 })
 
-test('a handle two entities share, or one with a letter, names nothing', async () => {
-  assertEquals(await at('#47e9678bdf'), { '#47e9678bdf': null })
+test('a handle two entities share is answered with both', async () => {
+  assertEquals(await at('#47e9678bdf'), {
+    '#47e9678bdf': [
+      '47e9678b-df12-4000-8000-000000000001',
+      '47e9678b-df99-4000-8000-000000000002',
+    ],
+  })
+})
+
+test('a handle with a letter, or one no eid starts, names nothing', async () => {
   assertEquals(await at('T#47e9678bdf1'), { 'T#47e9678bdf1': null })
   assertEquals(await at('#deadbeef00'), { '#deadbeef00': null })
 })

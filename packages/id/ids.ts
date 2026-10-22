@@ -21,10 +21,13 @@
 // ./id.ts `short`) resolves here too. It is the start of the eid with the
 // dashes taken out, and a uuid's dashes sit at fixed places, so the handle is
 // put back into the eid's own shape and read as a range: every eid that starts
-// that way. A content-addressed eid has no dashes, so the bare hex is asked
-// for as well. Two entities starting the same way are no answer. A handle
-// carries no letter, so one written with a letter (`T#47e9678bdf`) names
-// nothing and is refused, rather than taken for an eid of that spelling.
+// that way (`starting`). A content-addressed eid has no dashes, so the bare hex
+// is asked for as well. Two entities starting the same way are answered with
+// both, and the graph refuses the handle naming them. A handle carries no
+// letter, so one written with a letter (`T#47e9678bdf`) names nothing and is
+// refused, rather than taken for an eid of that spelling. The same handle
+// copied without its `#` is the graph's to resolve, after every other name
+// (./id.ts `BARE`).
 //
 // Every write asks about the ids it names, and most name none of these, so
 // that answer comes back without a promise and a synchronous store's writes
@@ -44,13 +47,29 @@ let dashed = (hex: string): string =>
   [...hex].map((c, i) => ([8, 12, 16, 20].includes(i) ? '-' : '') + c)
     .join('')
 
-/** The reads that find every entity whose eid starts as this hex does, in
- * either shape: the range from the prefix to just past it (`g` sorts after
- * every hex digit and the dash). */
-let starting = (tx: Tx, hex: string): (Bundle[] | Promise<Bundle[]>)[] =>
-  [...new Set([dashed(hex), hex])].map((p) =>
-    tx.read(`.entity.eid=${p}..${p}g`)
+/** Every eid that starts as this lowercase hex does, in either shape: a read
+ * of the range from the prefix to just past it (`g` sorts after every hex
+ * digit and the dash), once with a uuid's dashes put back and once as bare
+ * hex. A bound of digits alone reads as a number, which an eid is never
+ * ranged by, so such a range starts at the prefix and a dash instead: a dash
+ * sorts before every hex digit, and an eid goes on with one or the other. */
+export let starting = (
+  tx: Pick<Tx, 'read'>,
+  hex: string,
+): Eid[] | Promise<Eid[]> => {
+  let reads = [...new Set([dashed(hex), hex])].map((p) =>
+    tx.read(`.entity.eid=${p}${/^\d+$/.test(p) ? '-' : ''}..${p}g`)
   )
+  let held = (found: Bundle[][]) => [
+    ...new Set(
+      found.flat().map((b) => b.entity.eid)
+        .filter((eid) => eid.replaceAll('-', '').startsWith(hex)),
+    ),
+  ]
+  return reads.some((r) => r instanceof Promise)
+    ? Promise.all(reads).then(held)
+    : held(reads as Bundle[][])
+}
 
 /** Resolves human ids to eids, for a graph that numbers its entities. */
 export let ids = (vocab: Vocab): Plugin => ({
@@ -70,51 +89,28 @@ export let ids = (vocab: Vocab): Plugin => ({
       } else if (SHORT.test(id)) handles.push(id)
       else if (LETTERED.test(id)) lettered.push(id)
     }
-    let at = new Map<string, Eid | null>()
+    let at = new Map<string, Eid | Eid[] | null>()
     for (let id of lettered) at.set(id, null)
     if (!want.size && !handles.length) return at
     for (let id of [...want.values()].flat()) at.set(id, null)
-    let wore = (found: Bundle[]) => {
+    let numbered = want.size
+      ? tx.read(`.entity.num=${[...want.keys()].join(',')}`)
+      : []
+    let held = handles.map((id) => starting(tx, id.slice(1).toLowerCase()))
+    let done = (found: Bundle[], starts: Eid[][]) => {
       for (let b of found) {
         for (let id of want.get(Number(b.entity.num)) ?? []) {
           at.set(id, b.entity.eid)
         }
       }
-    }
-    let held = (id: string, found: Bundle[]) => {
-      let hex = id.slice(1).toLowerCase()
-      let hits = new Map<Eid, Bundle>()
-      for (let b of found) {
-        if (b.entity.eid.replaceAll('-', '').startsWith(hex)) {
-          hits.set(b.entity.eid, b)
-        }
-      }
-      let [only] = hits.values()
-      at.set(id, hits.size == 1 ? only.entity.eid : null)
-    }
-    // Each read, and the handle it answers for (none: the numbers).
-    let reads: [string | null, Bundle[] | Promise<Bundle[]>][] = []
-    if (want.size) {
-      reads.push([null, tx.read(`.entity.num=${[...want.keys()].join(',')}`)])
-    }
-    for (let id of handles) {
-      for (let r of starting(tx, id.slice(1).toLowerCase())) {
-        reads.push([id, r])
-      }
-    }
-    let done = (got: Bundle[][]) => {
-      let by = new Map<string, Bundle[]>()
-      got.forEach((found, i) => {
-        let id = reads[i][0]
-        if (id == null) wore(found)
-        else by.set(id, [...by.get(id) ?? [], ...found])
+      handles.forEach((id, i) => {
+        let eids = starts[i]
+        at.set(id, eids.length == 1 ? eids[0] : eids.length ? eids : null)
       })
-      for (let id of handles) held(id, by.get(id) ?? [])
       return at
     }
-    let answers = reads.map(([, r]) => r)
-    return answers.some((r) => r instanceof Promise)
-      ? Promise.all(answers).then(done)
-      : done(answers as Bundle[][])
+    return numbered instanceof Promise || held.some((r) => r instanceof Promise)
+      ? Promise.all([numbered, Promise.all(held)]).then(([f, e]) => done(f, e))
+      : done(numbered, held as Eid[][])
   },
 })

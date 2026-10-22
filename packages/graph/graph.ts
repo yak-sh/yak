@@ -302,9 +302,12 @@ export type Graph = {
   ) => Bundle[] | Promise<Bundle[]>
   /** the ids a caller passed → the eids they refer to, for the ones that are
    * not eids already (see {@link Plugin.address}). Only the ids that changed
-   * are in the returned map, so a caller reads it as `at.get(id) ?? id`; with
-   * no plugin resolving names, every id is itself and this costs nothing. An
-   * id a plugin recognised and found naming nothing is refused. `kind` is the
+   * are in the returned map, so a caller reads it as `at.get(id) ?? id`; an
+   * id no plugin resolves is itself, and costs nothing unless it is a handle
+   * copied without its `#` (`e854bf7dc0`, @yaks/id `BARE`), which is asked
+   * after every plugin for the entity its eid starts. An id a plugin
+   * recognised and found naming nothing is refused, and so is a handle several
+   * eids start with, naming them. `kind` is the
    * component the ids are meant to name, where the caller knows it (a tool
    * argument declared `ref: 'session'`): a plugin may answer to a key only
    * that kind has, such as a transcript's own id. */
