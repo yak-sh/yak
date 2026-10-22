@@ -53,6 +53,51 @@ test('terminal keyboard activates an anchor, edits its native field and submits 
     screen.free()
   }
 })
+test('j walks past a select and a checkbox to the text box, and arrows choose', async () => {
+  let screen = install()
+  let model = '', keys = interaction(screen.root, () => {})
+  let target = screen.root as unknown as Parameters<typeof render>[1]
+  let at = () => keys.active()?.localName ?? ''
+  try {
+    await act(() =>
+      render(
+        h(
+          'div',
+          {},
+          h(
+            'select',
+            {
+              value: '',
+              onChange: (e: Event) =>
+                model = (e.target as unknown as TElement).value,
+            },
+            h('option', { value: '' }, 'current'),
+            h('option', { value: 'opus' }, 'Opus'),
+          ),
+          h('input', { type: 'checkbox' }),
+          h('textarea', { value: '' }),
+        ),
+        target,
+      )
+    )
+    keys.press({ name: 'char', text: 'j' })
+    equal(at(), 'select')
+    keys.press({ name: 'right' })
+    keys.press({ name: 'right' })
+    equal(model, 'opus')
+    keys.press({ name: 'left' })
+    equal(model, '')
+    keys.press({ name: 'char', text: 'j' })
+    equal(at(), 'input')
+    keys.press({ name: 'char', text: 'j' })
+    equal(at(), 'textarea')
+    keys.press({ name: 'char', text: 'k' })
+    equal(at(), 'textarea')
+  } finally {
+    render(null, target)
+    screen.free()
+  }
+})
 test('fake DOM sends capture before target and bubble and supports listener removal', () => {
   let root = new TElement('div'), child = new TElement('button')
   root.appendChild(child)

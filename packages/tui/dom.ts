@@ -75,6 +75,7 @@ export class TElement extends TNode {
   onmouseup = null
   onmousemove = null
   oninput = null
+  onchange = null
   onkeydown = null
   onsubmit = null
   onfocus = null

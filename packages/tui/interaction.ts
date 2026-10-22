@@ -30,6 +30,35 @@ export let event = (
   return e
 }
 
+// Controls that take text keep every printable key, j and k included; any
+// other control (a select, a checkbox, a button) lets j and k move on.
+let entering = (node: TElement | null): boolean =>
+  !!node && (
+    node.matches('textarea,[contenteditable]') ||
+    node.matches('input') &&
+      !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color']
+        .includes(node.attr('type') ?? 'text')
+  )
+
+// A select's choices in order, as the values it can hold.
+let choices = (select: TElement): string[] =>
+  select.querySelectorAll('option')
+    .filter((o) => o.attr('disabled') == null)
+    .map((o) => o.attr('value') ?? o.textContent)
+
+// Step a select to its next or previous choice, as a browser's arrow keys do,
+// and tell its listeners the way a browser would.
+let step = (select: TElement, by: number) => {
+  let all = choices(select)
+  if (!all.length) return
+  let i = Math.max(all.indexOf(select.value), 0)
+  let next = all[Math.min(Math.max(i + by, 0), all.length - 1)]
+  if (next == select.value) return
+  select.value = next
+  event(select, 'input')
+  event(select, 'change')
+}
+
 export let interaction = (
   root: TElement,
   open: (href: string) => void,
@@ -89,7 +118,7 @@ export let interaction = (
       return true
     }
     let node = active()
-    let typing = !!node?.matches('input,textarea,select,[contenteditable]')
+    let typing = entering(node)
     if (
       k.name == 'tab' && !typing ||
       !typing && k.name == 'char' && (k.text == 'j' || k.text == 'k')
@@ -116,6 +145,10 @@ export let interaction = (
       return true
     }
     if (e.defaultPrevented) return true
+    if (node?.matches('select') && ['left', 'right'].includes(k.name)) {
+      step(node, k.name == 'left' ? -1 : 1)
+      return true
+    }
     if (typing && node) {
       if (k.name == 'tab') {
         let list = controls()
