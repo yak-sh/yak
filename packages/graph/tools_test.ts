@@ -2,7 +2,7 @@
 // The join: declarations out of the vocabulary, runs out of the module.
 
 import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import { loadTools, tier } from './tools.ts'
 import { declared } from './vocab.ts'
 import { Refused } from './errors.ts'
@@ -127,4 +127,25 @@ test('generic declarations describe the search capability and reported keywords'
   assertEquals(schema.$schema, undefined)
   let properties = schema.properties as Record<string, object>
   assertEquals('propertyNames' in properties.$defs, false)
+})
+
+let query = tier().find((t) => t.name == 'graph_query')!
+let asked = async (q: string) =>
+  await query.run(
+    { entity: { eid: 'c' }, call: { args: { q } } },
+    { read: () => [] } as unknown as Graph,
+  )
+test('graph_query refuses a line that only asks, with the line it meant', async () => {
+  await assertRejects(
+    () => asked('?topic ?content .limit=3'),
+    Refused,
+    '?topic ?content filters nothing: ?topic carries topic on the entities ' +
+      'a filter selects, so alone it answers the newest entities of every ' +
+      'kind — to select the entities that have topic, write ' +
+      '.topic&?content&.limit=3',
+  )
+  // A filter, a search word or a ranking by likeness beside the asks selects.
+  for (let q of ['?doc .topic', '?doc moss', '?doc .near=T-1', '* .limit=2']) {
+    assertEquals(await asked(q), [])
+  }
 })

@@ -29,7 +29,18 @@
 // declaration means validating it, which means a JSON Schema validator, which
 // has no business in a browser tab that only wants the graph. Import `@yaks/graph/tools` to get it.
 
-import { adopt, conjoin, eq, map, parse } from '@yaks/query/core'
+import {
+  adopt,
+  conjoin,
+  directive,
+  eq,
+  map,
+  parse,
+  type Pred,
+  present,
+  type Query,
+  stringify,
+} from '@yaks/query/core'
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import type { Keywords, VocabDoc } from '@yaks/vocab'
 import { aggregate, reduced } from './aggregate.ts'
@@ -211,7 +222,10 @@ export let runs = (seams: Seams = {}): Runs => {
         n == null ? '' : `.limit=${n}`,
       )
       if (!q) throw new Refused('graph_query needs a query line')
-      let op = aggregate(parse(q))
+      let ast = parse(q)
+      let ask = unfiltered(ast)
+      if (ask) throw new Refused(asksOnly(ast, ask))
+      let op = aggregate(ast)
       if (!op) return await graph.read(q)
       let value = reduced(op, await graph.rows(q))
       return [{
@@ -271,6 +285,33 @@ export let runs = (seams: Seams = {}): Runs => {
       }
       : {}),
   }
+}
+
+// The first component a line asks for (`?topic`) when nothing on it filters.
+// `?comp` carries a component on the entities a filter selects, so alone it
+// answers the newest entities of every kind, which a caller who wrote it never
+// meant: a model new to the grammar reads `?topic` as "has topic". `.near`
+// ranks the whole graph, so beside it nothing else need filter.
+let unfiltered = (ast: Query): Pred | undefined => {
+  let asks = ast.clauses.filter((c): c is Pred =>
+    c.kind == 'pred' && c.op == '?'
+  )
+  let filters = ast.clauses.some((c) =>
+    c.kind == 'near' || !directive(c) && !asks.includes(c as Pred)
+  )
+  return filters ? undefined : asks[0]
+}
+
+// The refusal of a line that only asks, with the line it probably meant: its
+// first ask made the filter.
+let asksOnly = (ast: Query, ask: Pred): string => {
+  let name = ask.path.join('.')
+  let asked = ast.clauses.filter((c) => c.kind == 'pred')
+    .map((c) => `?${(c as Pred).path.join('.')}`).join(' ')
+  let meant = stringify(map(ast, (c) => c === ask ? present(name) : c))
+  return `${asked} filters nothing: ?${name} carries ${name} on the ` +
+    `entities a filter selects, so alone it answers the newest entities of ` +
+    `every kind — to select the entities that have ${name}, write ${meant}`
 }
 
 /**

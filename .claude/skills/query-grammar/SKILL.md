@@ -70,7 +70,9 @@ filter. A malformed clause throws rather than becoming a search term.
   yaks.app records who still sends them (`yaks-app`, T-123000). Other old
   forms (`!.p`, `.p=`) are refused with a message naming the accepted one
   (`!.task is written !task`).
-- The empty query selects nothing, and `graph_query` refuses it.
+- The empty query selects nothing, and `graph_query` refuses it. It refuses a
+  line that only asks (`?topic .limit=3`) too, since that answers the newest
+  entities of every kind, naming the line it meant (`.topic&.limit=3`).
 
 ## What comes back
 
