@@ -200,6 +200,10 @@ let GOING = await image([
   { entity: { eid: 'x' }, claim: { session: 'm1' } },
 ])
 
+// A release run once on a world of its own, so the first case to release
+// times its release, not the handler's first run in this runtime.
+await (await image(managed('m1', 0))).release('m1:end')
+
 // What a transcript was last told, and how many entries it holds.
 let newest = async (g: ReturnType<typeof graph>, session: string) =>
   (await g.read(`.entry.session=${session}&.order=-entry.seq&.limit=1&*`))[0]
