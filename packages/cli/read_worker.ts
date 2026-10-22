@@ -5,7 +5,7 @@
 import { read } from './config.ts'
 import { record } from '@yaks/trace'
 import { compose, facet, type Served } from './host.ts'
-import type { Heard, Said } from './read_thread.ts'
+import { asked, type Heard, type Said } from './read_thread.ts'
 import { budget } from '@yaks/sqlite/budget'
 
 let host: Promise<Served> | undefined
@@ -47,7 +47,7 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
     try {
       if (!host) throw new Error('the reader was not started')
       let graph = (await host).graph
-      spent.reset()
+      spent.reset(asked(data))
       let query = () =>
         data.op == 'get'
           ? graph.get(data.eids, data.comps, data.opts)

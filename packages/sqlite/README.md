@@ -220,9 +220,9 @@ A read can ask for more than a process can hold. `open(path, {meter})` from
 (`@yaks/sqlite/budget`): `budget(limits?)` gives a `meter` and a `reset`, and a
 read past `LIMITS` (a million rows or 256 MiB, each row costing its text and
 blobs plus a little for the row and each value) is refused where it stands, as a
-`Refused` error its caller hears. The web's read worker resets one before each
-read, so a query that matches most of the graph is refused to its caller and the
-process stays up for everyone else.
+`Refused` error its caller hears, naming the read `reset(what)` was given. The
+web's read worker resets one before each read, so a query that matches most of
+the graph is refused to its caller and the process stays up for everyone else.
 
 ```ts ignore
 import { budget } from '@yaks/sqlite/budget'

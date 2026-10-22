@@ -20,8 +20,9 @@ export type Budget = {
   /** Count one decoded row of `values` values carrying `bytes` of text and
    * blobs; throws a refusal once the read passes its limits. */
   meter: (values: number, bytes: number) => void
-  /** Start the next read with nothing spent. */
-  reset: () => void
+  /** Start the next read with nothing spent; `what` names it in a refusal,
+   * so the caller and any report of it can tell which read it was. */
+  reset: (what?: string) => void
 }
 
 /** A budget for reads run one at a time.
@@ -35,20 +36,22 @@ export type Budget = {
  * b.meter(1, 10)
  * let refused = await throws(() => b.meter(1, 10)) as Error
  * equal(refused.name, 'Refused')
- * b.reset()
+ * b.reset('.task')
  * b.meter(1, 10)
+ * b.meter(1, 10)
+ * await throws(() => b.meter(1, 10), /^\.task answers more than 2 rows/)
  * await throws(() => budget({ rows: 9, bytes: 100 }).meter(2, 100), /MiB/)
  * ```
  */
 export let budget = (limits: Limits = LIMITS): Budget => {
-  let rows = 0, bytes = 0
+  let rows = 0, bytes = 0, named = 'this read'
   return {
     meter: (values, size) => {
       rows++
       bytes += ROW + values * VALUE + size
       if (rows <= limits.rows && bytes <= limits.bytes) return
       let error = new Error(
-        `this read answers more than ${limits.rows.toLocaleString('en')} ` +
+        `${named} answers more than ${limits.rows.toLocaleString('en')} ` +
           `rows or ${limits.bytes / 1024 / 1024} MiB, more than one read ` +
           'may hold: narrow it, or add a .limit',
       )
@@ -56,9 +59,10 @@ export let budget = (limits: Limits = LIMITS): Budget => {
       error.name = 'Refused'
       throw error
     },
-    reset: () => {
+    reset: (what) => {
       rows = 0
       bytes = 0
+      named = what ?? 'this read'
     },
   }
 }
