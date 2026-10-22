@@ -78,7 +78,7 @@ import type {
   WriteHook,
 } from './plugin.ts'
 import { type Derive, isAlias, resolve, substitute } from './alias.ts'
-import { identified, identities } from './identity.ts'
+import { deriving, identified } from './identity.ts'
 import { mint as fresh, minted } from './mint.ts'
 import { admit, formed, known, unstamped } from './admit.ts'
 import { Refused } from './errors.ts'
@@ -390,10 +390,6 @@ export let graph = (opts: Options): Graph => {
   let report = opts.report ?? failed
   let mint = opts.mint ?? (() => fresh() as Eid)
 
-  // What the vocabulary derives for itself: every component declaring an
-  // `identity` derives its entity's id from that value (identity.ts). Fixed
-  // for the life of this graph, because the vocabulary is.
-  let declared = identities(vocab)
   let phaseHooks = new Map<Phase, [string, Hook][]>()
   let phaseRules = new Map<Phase, Rule[]>()
   let declarations: Ready[] = []
@@ -402,14 +398,9 @@ export let graph = (opts: Options): Graph => {
   let declarationKey: string | undefined
 
   // Every content-addressed component's id-deriving function, by component
-  // name. Read once per apply, so a plugin registered later is included. A
-  // plugin's own `derive` takes precedence: @yaks/edge and @yaks/key derive an
-  // entity's id from the relation component it carries, which a list of
-  // properties cannot express.
-  let derives = (): Record<string, Derive> =>
-    plugins.some((p) => p.derive)
-      ? Object.assign({}, declared, ...plugins.map((p) => p.derive ?? {}))
-      : declared
+  // name (identity.ts). Read once per apply, so a plugin registered later is
+  // included.
+  let derives = (): Record<string, Derive> => deriving(vocab, plugins)
 
   // Every read this batch is going to need: the core's own — every entity the
   // batch names or references, which is what the `$was` check, `mutate` and
@@ -1346,7 +1337,7 @@ export let graph = (opts: Options): Graph => {
         inside,
         (b) => timed('compose', () => composed(b)),
       ],
-      owned(formed(bundles)),
+      owned(formed(bundles, (name) => name in derives())),
       (b, step) => step(b),
     )
   }

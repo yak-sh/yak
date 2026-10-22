@@ -4,9 +4,9 @@
 // of them mean nothing. A bundle holding an edge component with no relation
 // beside it would be stored as a row nothing can interpret; one missing an
 // endpoint would point nowhere. Both are caught here, in the `mint` phase,
-// which runs after the graph has resolved every `$alias` — so the error can
-// name the entity it is about, and an endpoint written as an alias is already
-// the id it resolved to.
+// which runs after the graph has resolved every `$alias`, so an endpoint
+// written as an alias is already the id it resolved to; an edge the batch
+// minted is named by its alias, the name its writer knows.
 //
 // A bundle naming neither endpoint is a patch of a link that already exists
 // (setting `ord`, say) and is left alone: it does not create a link, so it
@@ -29,6 +29,7 @@ let gathered = (bundles: Bundle[]): Map<Eid, Bundle> => {
   let out = new Map<Eid, Bundle>()
   for (let b of bundles) {
     let at = out.get(b.entity.eid) ?? { entity: b.entity }
+    if (b.$alias) at.$alias = b.$alias
     for (let [name, comp] of comps(b)) {
       let had = at[name] as Comp | null | undefined
       at[name] = comp == null ? null : { ...(had ?? {}), ...comp }
@@ -47,7 +48,9 @@ export let stated = (vocab: Vocab): Hook => {
   let tags = names(vocab)
   let known = Object.values(tags).sort()
   return (bundles) => {
-    for (let [eid, b] of gathered(bundles)) {
+    for (let [id, b] of gathered(bundles)) {
+      // An edge the batch minted is named as the batch named it.
+      let eid = b.$alias ?? id
       let edge = b[EDGE] as Record<string, unknown> | null | undefined
       // no link created here (a patch, or a bundle about something else)
       if (!edge || (edge.from == null && edge.to == null)) continue

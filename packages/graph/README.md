@@ -588,7 +588,11 @@ name lookup.
 [identity keyword](../vocab/README.md#identity-and-indexes) selects the values
 `identityEid(component, values)` uses. Writing them under an alias derives the
 eid; writing them onto a different eid is refused. A plugin's `derive` overrides
-the vocabulary's derivation for its component.
+the vocabulary's derivation for its component. A bundle holding a deriving
+component may leave out `entity` altogether, as a link from
+[@yaks/edge](../edge/README.md) may: it is written under the eid its values
+make, and its answer carries no `$alias`. Any other bundle without an entity is
+refused, by its place in the batch.
 
 ```ts
 import { graph, identityEid, mint, minted } from '@yaks/graph'

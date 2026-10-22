@@ -65,8 +65,11 @@ export let unstamped = (bundles: Bundle[], vocab: Vocab): Bundle[] => {
   return bundles
 }
 
-export let formed = (bundles: unknown): Bundle[] => {
-  let shapedBundles = shaped(bundles)
+export let formed = (
+  bundles: unknown,
+  derives?: (component: string) => boolean,
+): Bundle[] => {
+  let shapedBundles = shaped(bundles, derives)
   shapedBundles.forEach(prunable)
   return shapedBundles
 }

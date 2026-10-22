@@ -14,7 +14,9 @@ component name and `linked` the query name. Applications declare their own
 relations in their [vocabulary](../vocab/README.md#vocabulary).
 
 A link is an ordinary [bundle](../graph/README.md#data-model). It can carry
-application metadata and use the graph's write and sync interfaces. The optional
+application metadata and use the graph's write and sync interfaces. Its ends and
+relation make its eid, so a link's bundle need not name its entity:
+`{ edge: { from, to }, cites: {} }` is written under that eid. The optional
 `edge.ord` property records a position; the traversal helpers do not sort by it.
 
 ## Create and remove links

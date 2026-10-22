@@ -53,6 +53,7 @@ import type { Tool } from './plugin.ts'
 import { argsOf, type NamedTool, toolName } from './tool.ts'
 import { declared, graphDoc } from './vocab.ts'
 import { formed } from './admit.ts'
+import { deriving } from './identity.ts'
 import { Refused } from './errors.ts'
 import { type Guide, proseOf, schemaOf } from './schema.ts'
 
@@ -156,7 +157,8 @@ export let runs = (seams: Seams = {}): Runs => {
         if (bundles === undefined) {
           throw new Refused('graph_apply needs q or bundles')
         }
-        return formed(bundles)
+        let derives = deriving(graph.vocab, graph.plugins)
+        return formed(bundles, (name) => name in derives)
       }
       if (bundles !== undefined) {
         throw new Refused('graph_apply takes q or bundles, not both')

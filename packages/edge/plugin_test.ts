@@ -66,6 +66,28 @@ test('a link to an entity the same batch mints resolves first', () => {
   assertEquals(made.entity.eid, edgeEid('p1', 'cites', born))
 })
 
+// A link that names no entity, beside a post it points at: the ends make its
+// eid.
+let unnamed = posts(blogGraph())
+let written = sync(unnamed.apply([
+  { entity: { eid: '$new' }, post: { title: 'Fresh' } },
+  { edge: { from: 'p1', to: '$new' }, cites: {} } as unknown as Bundle,
+]))
+test('a link that names no entity is written under the eid its ends make', () => {
+  let born = written.find((b) => b.$alias == '$new')!.entity.eid
+  let made = written.find((b) => b.edge)!
+  assertEquals(made.entity.eid, edgeEid('p1', 'cites', born))
+  assertEquals(made.$alias, undefined)
+  assertEquals(read(unnamed, '.cites'), [made.entity.eid])
+  let e = assertThrows(() =>
+    sync(unnamed.apply([
+      { entity: { eid: '$x' }, post: { title: 'X' } },
+      { edge: { from: 'p1' }, cites: {} } as unknown as Bundle,
+    ]))
+  )
+  assertEquals((e as Error).message, 'edge $bundle 2 has no `to` end')
+})
+
 test('unlinking drops the sentence and keeps the identity', () => {
   let g = posts(blogGraph())
   sync(g.apply([link('p1', 'cites', 'p2')]))

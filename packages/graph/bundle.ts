@@ -228,7 +228,9 @@ let folded = (bundles: Bundle[]) => {
     if (b.entity.archetype !== undefined) {
       one.entity.archetype = b.entity.archetype
     }
-    if (typeof b.$alias == 'string') one.$alias = b.$alias
+    if (typeof b.$alias == 'string' && !b.$alias.startsWith(UNNAMED)) {
+      one.$alias = b.$alias
+    }
     if (dead(b)) gone.add(eid)
     for (let name of Object.keys(b)) {
       if (reserved(name)) continue
@@ -299,42 +301,63 @@ let places = (ns: number[]): string =>
     run.length > 2 ? `${run[0]}–${run.at(-1)}` : run.join(', ')
   ).join(', ')
 
+/** The alias a bundle that named no entity is written under when what it
+ * holds makes its eid (an edge, from its ends): its place in the batch,
+ * `$bundle 4`, so a refusal can point at it. It is the graph's, not the
+ * caller's, so the answer does not say it. */
+export let UNNAMED = '$bundle '
+
 /**
  * The bundles, refused unless they form a batch: an array whose every
  * member is an object whose `entity` names an eid. Every door hands `apply()`
  * what arrived, and the first phase reads each bundle's eid, so the shape is
- * refused here, before anything reads it. The refusal names every bundle
- * without one, counted from 1 as a reader counts them, and says what the
- * first holds, so a caller fixes them all at once rather than one per try,
- * and steers a new entity to a `$name`, never an eid made up by hand.
+ * refused here, before anything reads it. A bundle that names no entity but
+ * holds a component that `derives` its entity's id (an edge, whose eid is made
+ * from its ends) needs no name: it is written under {@link UNNAMED} and the
+ * graph makes its eid. The refusal names every other bundle without one,
+ * counted from 1 as a reader counts them, and says what the first holds, so a
+ * caller fixes them all at once rather than one per try, and steers a new
+ * entity to a `$name`, never an eid made up by hand.
  *
  * ```ts
- * import { assertThrows } from '@std/assert'
+ * import { assertEquals, assertThrows } from '@std/assert'
  * assertThrows(
- *   () => formed([{ entity: { eid: '$a' } }, { edge: {} }, { edge: {} }]),
+ *   () => formed([{ entity: { eid: '$a' } }, { doc: {} }, { doc: {} }]),
  *   Error,
- *   'bundles 2, 3 of 3 have no entity (bundle 2 holds edge)',
+ *   'bundles 2, 3 of 3 have no entity (bundle 2 holds doc)',
  * )
+ * let edge = { edge: { from: '$a', to: 'b' }, contains: {} }
+ * assertEquals(formed([edge], (name) => name == 'edge'), [
+ *   { ...edge, entity: { eid: '$bundle 1' } },
+ * ])
  * ```
  */
-export let formed = (bundles: unknown): Bundle[] => {
+export let formed = (
+  bundles: unknown,
+  derives?: (component: string) => boolean,
+): Bundle[] => {
   if (!Array.isArray(bundles)) {
     throw new Misfit('a batch is an array of bundles')
   }
-  let missing = bundles.flatMap((b, i) => {
-    let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
-    return typeof eid != 'string' || (!eid && b.$prune !== true) ? [i + 1] : []
-  })
+  let unnamed = (b: unknown): boolean => {
+    let eid = b && typeof b == 'object' ? (b as Bundle).entity?.eid : undefined
+    return typeof eid != 'string' || (!eid && (b as Bundle).$prune !== true)
+  }
+  let named = bundles.map((b, i) =>
+    unnamed(b) && derives && b && typeof b == 'object' &&
+      Object.keys(b).some((k) => k[0] != '$' && derives(k))
+      ? { ...b, entity: { ...b.entity, eid: UNNAMED + (i + 1) } }
+      : b
+  )
+  let missing = named.flatMap((b, i) => unnamed(b) ? [i + 1] : [])
   if (missing.length) {
-    let first = bundles[missing[0] - 1]
+    let first = named[missing[0] - 1]
     let holds = first && typeof first == 'object'
       ? Object.keys(first).filter((k) => k != 'entity')
       : []
     let many = missing.length > 1
     throw new Misfit(
-      `${many ? 'bundles' : 'bundle'} ${
-        places(missing)
-      } of ${bundles.length} ` +
+      `${many ? 'bundles' : 'bundle'} ${places(missing)} of ${named.length} ` +
         `${many ? 'have' : 'has'} no entity` +
         (holds.length
           ? ` (${many ? `bundle ${missing[0]}` : 'it'} holds ${
@@ -342,11 +365,11 @@ export let formed = (bundles: unknown): Bundle[] => {
           })`
           : '') +
         `: a new entity is {entity: {eid: '$name'}}, a name of your own, one ` +
-        `per entity, whose eid the graph makes (an edge's from its ends) and ` +
-        `the answer gives beside its $alias; an existing one is its eid or name`,
+        `per entity, whose eid the graph makes and the answer gives beside ` +
+        `its $alias; an existing one is its eid or name`,
     )
   }
-  return bundles
+  return named
 }
 
 /** The requests `apply()` answers itself. */

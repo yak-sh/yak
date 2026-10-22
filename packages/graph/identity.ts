@@ -32,6 +32,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Eid } from './bundle.ts'
 import { comps } from './bundle.ts'
 import type { Derive } from './alias.ts'
+import type { Plugin } from './plugin.ts'
 import { Refused } from './errors.ts'
 import { sha256 } from './sha256.ts'
 export { mint, minted } from './mint.ts'
@@ -132,6 +133,25 @@ export let identities = (vocab: Vocab): Record<string, Derive> => {
 
 // Each vocabulary's, read once: every graph over it asks as it is built.
 let derived = new WeakMap<Vocab, Record<string, Derive>>()
+
+/**
+ * Every component that derives its entity's id, by name: the vocabulary's
+ * {@link identities} and each plugin's own `derive`, which takes precedence
+ * (@yaks/edge and @yaks/key derive an id from the relation a bundle carries,
+ * which a list of properties cannot express). A bundle holding one names its
+ * entity by what it holds, so it needs no eid of its own.
+ */
+export let deriving = (
+  vocab: Vocab,
+  plugins: readonly Plugin[],
+): Record<string, Derive> =>
+  plugins.some((p) => p.derive)
+    ? Object.assign(
+      {},
+      identities(vocab),
+      ...plugins.map((p) => p.derive ?? {}),
+    )
+    : identities(vocab)
 
 /**
  * The other half: an id and the value it was derived from must agree.
