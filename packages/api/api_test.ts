@@ -308,6 +308,9 @@ test('/apply?check=1 keeps none of the checked batch', async () => {
 })
 
 let refusedCheck = shop()
+await refusedCheck(
+  post('/apply', [{ entity: { eid: 'b1' }, book: { price: 12 } }]),
+)
 
 test('/apply?check=1 refuses a conflicting batch at the commit status', async () => {
   let no = await refusedCheck(post('/apply?check=1', [{
