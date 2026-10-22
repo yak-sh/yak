@@ -104,7 +104,7 @@ import { storeOf } from './door.ts'
 import { answered } from './meta.ts'
 import { ending } from './billing.ts'
 import { own, type Pinner, versions } from './versions.ts'
-import { drafting, pruned } from './written.ts'
+import { holding, pruned } from './written.ts'
 import { refuse } from './tool.ts'
 
 // An hour to walk over to the inbox and read the letter. Longer than a
@@ -325,9 +325,7 @@ export let emptied = async (
   who: Who,
 ) => {
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let files = own(
-    Object.keys((await drafting(r2RawObjects(env.BLOBS), dir, app)).files),
-  )
+  let files = own(await holding(r2RawObjects(env.BLOBS), dir, app))
   // The app's own code, which is not in the bucket: a script left in the
   // dispatch namespace would still answer at an address nothing stands at.
   if (env.CF_WORKERS_TOKEN) {

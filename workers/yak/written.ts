@@ -29,7 +29,7 @@ import { Stale } from '@yaks/graph/errors'
 import { derivedEid, mint } from '@yaks/graph/identity'
 import { token } from '@yaks/graph/sha256'
 import type { App, Directory, Space } from './directory.ts'
-import { filesAt, viewOf } from './release.ts'
+import { filesAt, filesIn, viewOf } from './release.ts'
 import { vouched, type Who } from './session.ts'
 import { refuse } from './tool.ts'
 import { META } from './release_index.ts'
@@ -120,13 +120,32 @@ export let drafting = async (
   dir: Directory,
   app: App,
 ): Promise<Draft> => {
-  let [base, rows] = await Promise.all([
-    served(raw, app),
-    app.draft ? dir.written(app, app.draft) : Promise.resolve([]),
-  ])
-  let files = overlaid(base, rows)
+  let { files, rows } = await over(dir, app, served(raw, app))
   let root = draftRoot(app)
   return { root, files, rows, view: viewOf(raw, root, files) }
+}
+
+/** The paths an app's draft holds, for what an erasure says it took. A
+ * release an erasure that died partway already swept holds nothing now, so
+ * asking again finishes the erasure instead of refusing to read it. */
+export let holding = async (raw: Objects, dir: Directory, app: App) =>
+  Object.keys(
+    (await over(
+      dir,
+      app,
+      app.source
+        ? filesIn(raw, app.source).then((files) => files ?? {})
+        : Promise.resolve({}),
+    )).files,
+  )
+
+// The draft's own writes laid over `base`.
+let over = async (dir: Directory, app: App, base: Promise<Files>) => {
+  let [files, rows] = await Promise.all([
+    base,
+    app.draft ? dir.written(app, app.draft) : Promise.resolve([]),
+  ])
+  return { files: overlaid(files, rows), rows }
 }
 
 /** One path a write changes: to new bytes, to a sha already stored (a restore,

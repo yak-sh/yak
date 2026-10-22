@@ -1,9 +1,11 @@
 // A release names the shas its files are, and still serves a whole app once
 // the keys it was made from are gone.
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import type { Objects } from '@yaks/blob'
-import { releaseFiles, staged } from './release.ts'
+import { filesAt, releaseFiles, staged } from './release.ts'
+import { holding } from './written.ts'
+import type { App, Directory } from './directory.ts'
 import { addressed, sha256 } from './versions.ts'
 
 let memory = () => {
@@ -96,4 +98,20 @@ test('a release names the shas it is made of, and copies none', async () => {
     await served.list(`${next}/`),
     [`${next}/esbuild/keep.js`, `${next}/index.html`, `${next}/keep.js`],
   )
+})
+
+// An erasure counts an app's files, then sweeps its release. One that died
+// partway (an interrupted sweep, retried as a durable effect) finds the
+// release gone and must still finish, so its count reads a swept release as
+// holding nothing, where serving it is still refused (T-131465).
+test('an erasure asked again counts a release it already swept as empty', async () => {
+  let { files } = memory()
+  let source = 'alice/.releases/app/live'
+  await staged(files, { 'index.html': PAGE }, source).finish()
+  let app = { source, draft: null } as unknown as App
+  let dir = {} as Directory
+  assertEquals(await holding(files, dir, app), ['index.html'])
+  let swept = memory().files
+  assertEquals(await holding(swept, dir, app), [])
+  await assertRejects(() => filesAt(swept, source), Error, 'has no index')
 })

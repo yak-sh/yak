@@ -41,12 +41,22 @@ let indexAt = (raw: Objects, prefix: string) => {
   return read
 }
 
-/** The files a release names, path to sha, its index read once per isolate.
- * Refused for a source no deploy finished, which has none. */
-export let filesAt = async (raw: Objects, source: string): Promise<Files> => {
+/** The files a release names, path to sha, its index read once per isolate;
+ * null where it has none: a source no deploy finished, or one an erasure
+ * already swept. */
+export let filesIn = async (
+  raw: Objects,
+  source: string,
+): Promise<Files | null> => {
   let index = await indexAt(raw, `${source}/`)
-  if (!index) throw new Error(`release ${source} has no index`)
-  return filesOf(index)
+  return index && filesOf(index)
+}
+
+/** The files a release names, refused for one with no index. */
+export let filesAt = async (raw: Objects, source: string): Promise<Files> => {
+  let files = await filesIn(raw, source)
+  if (!files) throw new Error(`release ${source} has no index`)
+  return files
 }
 
 // The bucket's keys, with a key under a release read through that release's
