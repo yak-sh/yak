@@ -1,7 +1,18 @@
 import { test } from '@yaks/testing'
 import { Buffer } from 'node:buffer'
 import { assertEquals, assertThrows } from '@std/assert'
-import { as, fn, insert, lit, type Param, scan, select, val } from '@yaks/sql'
+import {
+  as,
+  call,
+  col,
+  fn,
+  insert,
+  lit,
+  type Param,
+  scan,
+  select,
+  val,
+} from '@yaks/sql'
 import { open as writer } from './db.ts'
 import { open } from './read-db.ts'
 import { type Limits, metered, ROW, VALUE } from './budget.ts'
@@ -135,32 +146,26 @@ test('the last read-only connection leaves its database and WAL untouched', () =
 
 // Both engines count each row they decode against the read running, so a read
 // past its budget is refused on the writer's connection as on the reader's.
+// Five rows, x of 1 to 5 characters, from no table: each engine in memory.
+let five = select({
+  cols: [as(col('value'), 'x')],
+  from: call('json_each', [
+    val(JSON.stringify(['x', 'xx', 'xxx', 'xxxx', 'xxxxx'])),
+  ]),
+})
+let engines = [writer(':memory:'), open(':memory:')]
+
 test('a read past its budget is refused on either engine, and the next answers', () => {
-  using s = scratch()
-  s.db.query({ t: 'create table', name: 'big', cols: [{ name: 'x' }] })
-  for (let x of [1, 2, 3, 4, 5]) s.db.query(insert('big', { x: 'x'.repeat(x) }))
-  let reader = open(s.path)
-  try {
-    for (let db of [s.db, reader]) {
-      let within = (limits: Limits) => () =>
-        metered(() => scan(db, 'big'), { limits })
-      assertThrows(
-        within({ rows: 3, bytes: 1e6 }),
-        Refused,
-        'one read may hold',
-      )
-      assertThrows(
-        within({ rows: 9, bytes: 5 * (ROW + VALUE) + 14 }),
-        Refused,
-        'MiB',
-      )
-      assertEquals(
-        within({ rows: 5, bytes: 5 * (ROW + VALUE) + 15 })().length,
-        5,
-      )
-    }
-  } finally {
-    reader.close()
+  for (let db of engines) {
+    let within = (limits: Limits) => () =>
+      metered(() => db.query(five), { limits })
+    assertThrows(within({ rows: 3, bytes: 1e6 }), Refused, 'one read may hold')
+    assertThrows(
+      within({ rows: 9, bytes: 5 * (ROW + VALUE) + 14 }),
+      Refused,
+      'MiB',
+    )
+    assertEquals(within({ rows: 5, bytes: 5 * (ROW + VALUE) + 15 })().length, 5)
   }
 })
 
