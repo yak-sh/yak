@@ -13,6 +13,18 @@ import { took } from './timing.ts'
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
+/** What an async call answers while it runs: its interim result, paired with
+ * the call like any other, and saying what it means where the model reads it.
+ * The final arrives later, naming its call ({@link project}). */
+export let PENDING = 'Pending; its result will follow.'
+
+// The call an entry answers: a final's or a Pending's.
+let answers = (b: Bundle) =>
+  comp(b, RESULT)?.call ?? comp(b, 'tool_progress')?.call
+
+let clip = (text: string, max = 120) =>
+  text.length > max ? text.slice(0, max) + '…' : text
+
 // The ask an entry answers: an output's or a call's source, or for a call's
 // progress, the source of that call.
 let sourceOf = (b: Bundle, byId: Map<Eid, Bundle>): unknown =>
@@ -99,7 +111,39 @@ export let replied = (
  * model expects. The full transcript resolves a result's call even when that
  * call is outside the window. Ask entries are our record, not the model's; a
  * tool call the anchored reply itself asked for is already in the provider's
- * state, so only its result travels. */
+ * state, so only its result travels.
+ *
+ * Each call's answer (its Pending where a request sent one, else its final)
+ * follows the reply's last call, in the order of the calls, whatever order
+ * they landed in: many models pair a result with its call by position, never
+ * by id (GLM's chat template renders `<tool_response>` blocks in order and
+ * no ids). A final whose Pending a request already sent stays where it
+ * landed, and names its call by tool, id and arguments.
+ *
+ * ```ts
+ * import { project } from './project.ts'
+ * let n = 0
+ * let e = (comps: Record<string, unknown>) =>
+ *   ({ entity: { eid: `e${++n}` }, entry: { session: 's', seq: n }, ...comps })
+ * let ask = (through: string) => e({ ask: { through } })
+ * let call = (id: string) =>
+ *   e({ call: { to: 'echo', id, args: { id }, source: 'e2' } })
+ * let tools = new Map([['echo', { name: 'echo', parameters: {} }]])
+ * let entries = [
+ *   e({ content: { body: 'go' } }), ask('e1'), call('a'), call('b'),
+ *   e({ tool_progress: { call: 'e3' }, content: { body: 'Pending.' } }),
+ *   e({ tool_progress: { call: 'e4' }, content: { body: 'Pending.' } }),
+ *   e({ result: { call: 'e4' }, content: { body: 'B' } }), // landed first
+ *   ask('e7'), // sent b's final and a's Pending
+ *   e({ result: { call: 'e3' }, content: { body: 'A' } }),
+ * ]
+ * project(entries, entries, tools).map((i) =>
+ *   i.kind == 'call' ? i.id : i.kind == 'result' ? i.output : i.text
+ * )
+ * // -> ['go', 'a', 'b', 'Pending.', 'B',
+ * //     'The pending echo call a {"id":"a"} finished:\nA']
+ * ```
+ */
 export let project = (
   transcript: Bundle[],
   window: Bundle[],
@@ -158,7 +202,36 @@ export let project = (
     }),
     byId,
   )
+  // A final that follows a Pending some request sent: the call was answered.
+  let late = (b: Bundle, call: string) =>
+    !!b.result &&
+    !!progress.get(call)?.some((seq) => seq < seqOf(b) && sent(call, seq))
+  let spelled = (call: Bundle) => {
+    let c = comp(call, CALL)!
+    return {
+      id: String(c.id ?? ''),
+      name: tools.get(String(c.to))?.name ?? 'tool',
+      args: c.args == null ? textOf(call) || '{}' : JSON.stringify(c.args),
+    }
+  }
+  // Each call's answer, and the calls of each reply that travel, in order.
+  let answer = new Map<string, Bundle>()
+  let replies = new Map<string, Bundle[]>()
   for (let b of logical) {
+    let call = answers(b)
+    if (call != null && !late(b, String(call)) && !answer.has(String(call))) {
+      answer.set(String(call), b)
+    }
+    let c = comp(b, CALL)
+    if (kindOf(b) != 'call' || c?.source == opts.anchor) continue
+    let reply = replies.get(String(c?.source))
+    if (reply) reply.push(b)
+    else replies.set(String(c?.source), [b])
+  }
+  let index = new Map(logical.map((b, at) => [b, at]))
+  let taken = new Set<Bundle>()
+  let emit = (b: Bundle) => {
+    taken.add(b)
     let kind = kindOf(b)
     let c = comp(b, CALL)
     if (b.prompt || b.checkpoint || b.task_context) {
@@ -179,14 +252,9 @@ export let project = (
     } else if (kind == 'output') {
       out.push({ kind: 'assistant', text: textOf(b) })
     } else if (kind == 'call' && c?.source != opts.anchor) {
-      out.push({
-        kind: 'call',
-        id: String(c!.id),
-        name: tools.get(String(c!.to))?.name ?? 'tool',
-        args: c!.args == null ? textOf(b) || '{}' : JSON.stringify(c!.args),
-      })
+      out.push({ kind: 'call', ...spelled(b) })
     } else if (kind == 'result') {
-      let eid = String(comp(b, RESULT)?.call ?? comp(b, 'tool_progress')?.call)
+      let eid = String(answers(b))
       let call = byId.get(eid)
       if (!call?.call) {
         throw new Error(
@@ -196,15 +264,29 @@ export let project = (
       let text = opts.results?.get(b.entity.eid) ?? textOf(b)
       let ms = comp(b, RESULT)?.ms
       const output = typeof ms == 'number' ? took(text, ms) : text
-      const id = String(comp(call, CALL)?.id ?? '')
-      if (
-        opts.resultUpdatesAsUser && b.result &&
-        progress.get(eid)?.some((seq) => seq < seqOf(b) && sent(eid, seq))
-      ) {
-        out.push({ kind: 'user', text: `Tool ${id} completed:\n${output}` })
+      let { id, name, args } = spelled(call)
+      if (late(b, eid)) {
+        // Strict routes take one tool output per call; the rest take it again.
+        let named = `The pending ${name} call ${id} ${clip(args)} finished:\n` +
+          output
+        out.push(
+          opts.resultUpdatesAsUser
+            ? { kind: 'user', text: named }
+            : { kind: 'result', id, output: named },
+        )
       } else out.push({ kind: 'result', id, output })
     }
     out.push(...opts.media?.get(b.entity.eid) ?? [])
   }
+  logical.forEach((b, at) => {
+    if (taken.has(b)) return
+    emit(b)
+    let reply = replies.get(String(comp(b, CALL)?.source))
+    if (reply?.at(-1) != b) return
+    for (let call of reply) {
+      let a = answer.get(call.entity.eid)
+      if (a && !taken.has(a) && index.get(a)! > at) emit(a)
+    }
+  })
   return out
 }

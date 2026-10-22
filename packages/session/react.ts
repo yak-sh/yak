@@ -127,8 +127,8 @@ export type ToolContext = {
 /** A refused tool invocation: expected, recorded as a refusal and a result. */
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
-import { project } from './project.ts'
-export { project } from './project.ts'
+import { PENDING, project } from './project.ts'
+export { PENDING, project } from './project.ts'
 import {
   contextParts,
   instructionParts,
@@ -756,7 +756,7 @@ export let react = async (
           progress.push({
             ...line(
               { tool_progress: { call: call.entity.eid } },
-              'Pending.',
+              PENDING,
             ),
             entity: { eid: derivedEid(call.entity.eid + ':progress') },
           })
@@ -1311,15 +1311,9 @@ export let react = async (
         },
       ),
     ],
-    tools: tools.map(({ name, description, parameters }, index) => ({
+    tools: tools.map(({ name, description, parameters }) => ({
       name,
-      description: deps.asyncTools && index == 0
-        ? description + '\n\n' +
-          'Tools may return "Pending." while still running. Their final results ' +
-          'arrive automatically and wake you again. Do independent work or end ' +
-          'your response; ending does not cancel pending calls. Do not poll, ' +
-          'wait for, repeat, or invent the results of pending calls.'
-        : description,
+      description,
       parameters,
     })),
     anchor: anchorId,

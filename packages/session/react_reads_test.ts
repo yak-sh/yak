@@ -311,8 +311,8 @@ for (let legacy of [false, true]) {
         name: 'echo',
         args: '{"text":"exact arguments"}',
       },
-      { kind: 'user', text: 'input during tool' },
       { kind: 'result', id: 'c', output: 'exact result' },
+      { kind: 'user', text: 'input during tool' },
       { kind: 'assistant', text: 'reply' },
       { kind: 'user', text: 'typed current request' },
     ])

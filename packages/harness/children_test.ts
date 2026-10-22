@@ -7,6 +7,7 @@ import type { Bundle, Comp } from '@yaks/graph'
 import type { Model, Reply, Request } from '@yaks/model'
 import {
   deliverChild,
+  PENDING,
   seqOf,
   sessionTools,
   statusOf,
@@ -141,22 +142,20 @@ test('wait resolves while child completion waits behind the parent tool', async 
       spawned = true
       return Promise.resolve(call('spawn', { prompt: 'child' }))
     }
-    // A progress result is not the child ID returned by spawn. Wait only
-    // after the real result (or its completion update) has arrived.
+    // A Pending is not the child ID returned by spawn. Wait only after the
+    // final has arrived, paired or (when late) naming its call first.
+    let late = 'The pending spawn call spawn '
     let result = req.items.findLast((i) =>
-      i.kind == 'result' && i.id == 'spawn' &&
-        i.output != 'Pending.' &&
-        !i.output.startsWith('Status: in_progress.') ||
-      i.kind == 'user' && i.text.startsWith('Tool spawn completed:\n')
+      i.kind == 'result' && i.id == 'spawn' && i.output != PENDING ||
+      i.kind == 'user' && i.text.startsWith(late)
     )
     if (!waited && result) {
       assert(result.kind == 'result' || result.kind == 'user')
-      let output = result.kind == 'result'
-        ? result.output
-        : result.text.replace(/^Tool spawn completed:\n/, '')
+      let lines = (result.kind == 'result' ? result.output : result.text)
+        .split('\n')
       waited = true
       return Promise.resolve(call('wait', {
-        children: [output.split('\n')[0]],
+        children: [lines[0].startsWith(late) ? lines[1] : lines[0]],
         timeout: 1000,
       }))
     }

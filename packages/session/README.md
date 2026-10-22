@@ -246,9 +246,18 @@ transcript at once.
 With a durable pool, each `session_run` effect performs one leased step. Inputs,
 completed requests, context checkpoints and final tool results owe subsequent
 steps in the transaction that records them. Each `session_tool` effect claims
-and executes one call independently, so several calls can run together. A
-pending progress record completes the provider protocol but does not ask the
-model again; a final result or new input does.
+and executes one call independently, so several calls can run together. Each
+call is answered at once by a `tool_progress` entry reading `PENDING` ("Pending;
+its result will follow."), so the reply that made it may continue once while it
+runs; a final result or new input asks again.
+
+A request carries each call's answer right after the reply's last call, in the
+order of the calls, since many models pair a result with its call by position
+rather than by id: its Pending where an earlier request sent one, else its
+final. A final whose Pending was sent stays where it landed and names its call
+by tool, id and arguments ("The pending shell call c1 {…} finished:"), as a
+second output for the call on OpenAI and as a user line on providers that take
+one output per call.
 
 Any process working the `@yaks/effects` pool takes an owed step.
 `running(g, runner)` is the handler a host registers, lent the models, tools and

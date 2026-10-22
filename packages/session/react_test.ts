@@ -37,6 +37,7 @@ import { type Deps, react, recent, transcript } from './react.ts'
 import { running, runningAt, settle } from './run.ts'
 import { took } from './timing.ts'
 import { GAP } from './compact.ts'
+import { PENDING } from './project.ts'
 
 // What the fake provider keeps about an ask: its own comp, the way @yaks/openai
 // keeps `openai{response_id}`.
@@ -571,8 +572,8 @@ test('a checkpoint keeps a call whose result followed an input', async () => {
   assertEquals(asked[0].items, [
     { kind: 'instruction', text: 'The user asked to echo hi.' },
     { kind: 'call', id: 'c1', name: 'echo', args: '{"text":"hi"}' },
-    { kind: 'user', text: 'One more thing.' },
     { kind: 'result', id: 'c1', output: 'echo: hi' },
+    { kind: 'user', text: 'One more thing.' },
   ])
 })
 
@@ -2163,7 +2164,8 @@ test('an anchored continuation includes a tool final committed during its preced
   assertEquals(asked[0].anchor, 'held-anchor')
   assertEquals(asked[0].items, [{
     kind: 'user',
-    text: 'Tool async-c1 completed:\nFINAL_DURING_ANCHORED_ASK',
+    text: 'The pending echo call async-c1 {"text":"hi"} finished:\n' +
+      'FINAL_DURING_ANCHORED_ASK',
   }, { kind: 'assistant', text: 'held reply' }])
 })
 
@@ -2245,21 +2247,15 @@ await react(pendingSession, ids.s, {
 
 const pendingEntries = await transcript(pendingSession, ids.s)
 
-test('async calls send a small pending result and teach its behavior once', () => {
+test('an async call is answered by a Pending paired with it', () => {
   let progress = pendingEntries.find((b) => b.tool_progress)!
   assertEquals(kindOf(progress), 'result')
-  assertEquals(textOf(progress), 'Pending.')
+  assertEquals(textOf(progress), PENDING)
   assertEquals(progress.result, undefined)
   let req = pendingModel.asked[1]
   assertEquals(req.items.filter((item) => item.kind == 'result'), [{
     kind: 'result',
     id: 'pending-c1',
-    output: 'Pending.',
+    output: PENDING,
   }])
-  assertEquals(req.tools[0].description.includes('Do not poll'), true)
-  assertEquals(
-    req.tools.map((tool) => tool.description).join('').split('Tools may return')
-      .length,
-    2,
-  )
 })
