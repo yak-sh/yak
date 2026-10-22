@@ -46,9 +46,9 @@ let asked = (call: Call): string =>
  * comes; only one still running `grace` ms after its caller left (a runaway
  * query) ends its worker, so it cannot hold a lane for good. A read still
  * running `slow` ms after it started is told to whoever `overrun` was given,
- * once, with its masked query, and so is one the worker cut off past its
- * budget (@yaks/sqlite/budget): either is a failure, and the query is what
- * names it. */
+ * once, with its masked query: one that runs on is a failure, and the query is
+ * what names it. One the worker cuts off past its budget
+ * (@yaks/sqlite/budget) is a refusal its caller hears, not a failure. */
 export let readThread = (
   config: string,
   { grace = 10_000, slow = 10_000, timer = later }: {
@@ -97,12 +97,6 @@ export let readThread = (
     lane.overdue?.()
     lane.long?.()
     job.off()
-    if ('error' in answer && (answer.error.details as { cut?: boolean }).cut) {
-      told(Object.assign(
-        new Error(`a read was cut off past its budget: ${asked(job.call)}`),
-        { name: 'CutRead' },
-      ))
-    }
     if (job.dropped) return drain()
     if (job.trace && answer.spans) {
       forward(job.trace, answer.spans, answer.origin)

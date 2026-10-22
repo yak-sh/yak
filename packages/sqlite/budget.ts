@@ -35,7 +35,6 @@ export type Budget = {
  * b.meter(1, 10)
  * let refused = await throws(() => b.meter(1, 10)) as Error
  * equal(refused.name, 'Refused')
- * equal((refused as Error & { cut?: boolean }).cut, true)
  * b.reset()
  * b.meter(1, 10)
  * await throws(() => budget({ rows: 9, bytes: 100 }).meter(2, 100), /MiB/)
@@ -53,9 +52,9 @@ export let budget = (limits: Limits = LIMITS): Budget => {
           `rows or ${limits.bytes / 1024 / 1024} MiB, more than one read ` +
           'may hold: narrow it, or add a .limit',
       )
-      // A refusal to its caller, marked cut so whoever runs the read can
-      // tell it from one the query itself earned.
-      throw Object.assign(error, { name: 'Refused', cut: true })
+      // A refusal its caller hears, as of any query it may not ask.
+      error.name = 'Refused'
+      throw error
     },
     reset: () => {
       rows = 0
