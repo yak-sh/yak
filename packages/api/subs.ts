@@ -59,7 +59,7 @@ import {
 import { comps } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
 import { matcher, net, rows as matchRows } from '@yaks/match'
-import { type And, bare, drifts, parse } from '@yaks/query'
+import { type And, bare, boundless, drifts, parse } from '@yaks/query'
 import { paceOf, saveOf, syncOf } from '@yaks/vocab'
 import { published } from './publish.ts'
 import { cares, type Interest, interest } from './interest.ts'
@@ -414,6 +414,26 @@ let affected = (
     }
   }
   return ids.size ? i.whole ? null : ids : undefined
+}
+
+// A subscription that names nothing its rows have and sets no bound asks for
+// nearly every entity, which one read cannot hold: refused before reading.
+// A query that does not parse is left to open's own refusal.
+let parsed = (query: string) => {
+  try {
+    return parse(query)
+  } catch {
+    return undefined
+  }
+}
+let vast = (query: unknown) => {
+  let ast = typeof query == 'string' ? parsed(query) : undefined
+  if (ast && boundless(ast)) {
+    throw new Refused(
+      `${query} names nothing its rows have and sets no .limit, ` +
+        'so it would answer nearly the whole graph',
+    )
+  }
 }
 
 /**
@@ -2396,6 +2416,7 @@ export let subscriptions = (graph: Graph, opts: {
       return () => void observers.delete(fn)
     },
     snapshot: (query, readOpts) => {
+      vast(query)
       flushPeers()
       checking()
       return after(
@@ -2405,6 +2426,7 @@ export let subscriptions = (graph: Graph, opts: {
     },
     enqueue,
     open: (sink, id, query, readOpts) => {
+      vast(query)
       ending.signal.throwIfAborted()
       flushPeers()
       checking()
