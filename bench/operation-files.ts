@@ -1,7 +1,8 @@
 /** Filesystem and text-search operations over owned paths only. Code sync
  * crosses the real process-cwd boundary; persona sync writes an owned checkout. */
 import { link } from '@yaks/edge'
-import { identities } from '@yaks/graph/identity'
+import type { Comp } from '@yaks/graph'
+import { discover } from '@yaks/git/host'
 import type { Operation } from './operation-commands.ts'
 import type { OperationContext } from './operation-local.ts'
 export let FILE_FAMILIES = [
@@ -45,21 +46,12 @@ export let fileOperations = async (
     '/** Operation exported module. */\nexport let operationValue = 42\n',
   )
   await new Deno.Command('git', { args: ['add', '.'], cwd: path }).output()
-  let workspace = crypto.randomUUID()
-  let repo = identities(graph.vocab).repository({
-    workspace,
-    common: `${path}/.git`,
-  }, { entity: { eid: '' } })
+  // The checkout and its repository as a host records them, under the ids the
+  // git tools derive from the checkout they run in.
+  let repo = String(
+    ((await discover(graph, path)).worktree as Comp).repository,
+  )
   await graph.apply([
-    {
-      entity: { eid: workspace },
-      workspace: { root: path },
-      worktree: { repository: repo, gitdir: `${path}/.git` },
-    },
-    {
-      entity: { eid: repo },
-      repository: { workspace, common: `${path}/.git` },
-    },
     {
       entity: { eid: PROJECT },
       repo: { repository: repo, base_branch: 'main' },

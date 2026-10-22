@@ -5,6 +5,7 @@
  */
 import { remainingFixtures } from './operation-fixtures.ts'
 import type { Sample, Samples } from '@yaks/benchmark'
+import type { Bundle } from '@yaks/graph'
 import { sessionEnv } from '@yaks/session'
 import { compose } from '../packages/cli/host.ts'
 import { read } from '../packages/cli/config.ts'
@@ -144,6 +145,20 @@ export type Operation = {
   prepare?: () => Promise<void>
   after?: () => void
   verify: (text: string, args: Record<string, unknown>) => Promise<void> | void
+}
+/// fault('{"result":[{"entity":{"eid":"$fault"},"content":{"body":"no"}}]}') -> 'no'
+/// fault('{"content":[{"type":"text","text":"no"}],"isError":true}') -> 'no'
+/// fault(' plain words\n') -> 'plain words'
+/** What a failed call said: the fault in a CLI's `--json` answer or a
+ * connector's text, else the words as they came. */
+export let fault = (text: string): string => {
+  let said: { result?: Bundle[]; content?: { text?: string }[] } = {}
+  try {
+    said = JSON.parse(text)
+  } catch { /* not JSON: the words are the account */ }
+  let body = said.result?.find((b) => b.entity.eid == '$fault' || b.refusal)
+    ?.content as { body?: string } | undefined
+  return (body?.body ?? said.content?.[0]?.text ?? text).trim()
 }
 let includes = (text: string, mark: string) => {
   if (!text.includes(mark)) {
@@ -323,8 +338,8 @@ async function collect(
       }).output()
       if (!out.success) {
         throw new Error(
-          `${operation.tool}: ${decode.decode(out.stderr)} ${
-            decode.decode(out.stdout)
+          `${operation.tool}: ${
+            fault(decode.decode(out.stdout)) || fault(decode.decode(out.stderr))
           }`,
         )
       }
@@ -690,7 +705,9 @@ async function collect(
               if (
                 Boolean(answer.isError) !== Boolean(operation.expectedError)
               ) {
-                throw new Error(`${operation.tool}: ${JSON.stringify(answer)}`)
+                throw new Error(
+                  `${operation.tool}: ${fault(JSON.stringify(answer))}`,
+                )
               }
               text = JSON.stringify(answer)
             }
@@ -699,7 +716,14 @@ async function collect(
             // timed, while read-back proves a saved change rather than an ack.
             await operation.verify(text, input)
           } catch (error) {
-            throw new Error(`${name} measurement failed`, { cause: error })
+            // The cause rides in the message: an uncaught error is reported by
+            // its message alone.
+            throw new Error(
+              `${name} measurement failed: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+              { cause: error },
+            )
           } finally {
             operation.after?.()
           }

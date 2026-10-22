@@ -5,6 +5,8 @@ import type { Operation } from './operation-commands.ts'
 import type { OperationContext } from './operation-local.ts'
 import { measureCheckout } from './operation-commands.ts'
 import { link } from '@yaks/edge'
+import type { Comp } from '@yaks/graph'
+import { discover } from '@yaks/git/host'
 import { identities } from '@yaks/graph/identity'
 export let CHECKOUT_NAMES = [
   'cli/file-cites-verify',
@@ -31,19 +33,11 @@ export let checkoutOperations = async (
   await git(['add', '.'])
   await git(['commit', '-qm', 'owned citation fixture'])
   let head = await git(['rev-parse', 'HEAD'])
-  let repositories = await graph.read('.repository *')
-  let repository = repositories.find((r) =>
-    (r.repository as { common?: string })?.common == `${path}/.git`
-  )
-  if (!repository) throw new Error('missing owned repository')
-  let file = identities(graph.vocab).file({
-    path: 'mod.ts',
-    root: repository.entity.eid,
-  }, { entity: { eid: '' } })
-  await graph.apply([{
-    entity: { eid: file },
-    file: { path: 'mod.ts', root: repository.entity.eid },
-  }])
+  let root = String(((await discover(graph, path)).worktree as Comp).repository)
+  let file = identities(graph.vocab).file({ path: 'mod.ts', root }, {
+    entity: { eid: '' },
+  })
+  await graph.apply([{ entity: { eid: file }, file: { path: 'mod.ts', root } }])
   let citation = link(PERSONA, 'cites', file)
   await graph.apply([citation])
   let prepare = async () => {

@@ -57,6 +57,13 @@ let comp = (b: Bundle | undefined, name: string) =>
 let count = (v: unknown): number | undefined =>
   typeof v == 'number' && Number.isFinite(v) ? v : undefined
 
+// Every citation, with the marks its state is derived from: a read names each
+// component it wants, so one left out reads as never written.
+let citations = async (graph: Graph): Promise<Bundle[]> =>
+  await graph.read(
+    and(present(CITES), want('edge'), want(VERIFIED), want(REVISION)),
+  )
+
 // Every entity the citations reach: both ends, the file a cited symbol or
 // place is in, and the root each file is read in.
 let reach = async (graph: Graph, cites: Bundle[]) => {
@@ -161,7 +168,7 @@ export let runs = (): Runs => ({
     let of = str(args.of)
     let scope = of || undefined
     let path = str(args.path)
-    let cites = await graph.read(and(present(CITES), want('edge')))
+    let cites = await citations(graph)
     let at = await reach(graph, cites)
     // The checkout the call was made in: asked once, and only when a citation
     // of a file needs it.
@@ -213,7 +220,7 @@ export let runs = (): Runs => ({
     let asked = cite || of
     let found = cite
       ? (await graph.get([asked])).filter((b) => b[CITES])
-      : (await graph.read(and(present(CITES), want('edge'))))
+      : (await citations(graph))
         .filter((b) => str(comp(b, 'edge')?.from) == asked)
     if (!found.length) {
       throw new Refused(

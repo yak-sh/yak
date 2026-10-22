@@ -7,12 +7,13 @@
 
 import { test } from '@yaks/testing'
 import { assert, assertEquals, assertRejects } from '@std/assert'
-import type { Bundle, Graph } from '@yaks/graph'
+import { type Bundle, type Graph, graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
 import { loadTools } from '@yaks/graph/tools'
 import { docDoc } from '@yaks/doc'
 import { edgeDoc, edgeKeywords } from '@yaks/edge'
 import { fileDoc } from '@yaks/file/vocab'
-import { content, kernelDoc } from '@yaks/kernel'
+import { content, kernel, kernelDoc } from '@yaks/kernel'
 import { keyDoc, keyKeywords } from '@yaks/key'
 import { machineDoc } from '@yaks/machine/vocab'
 import { loadVocab } from '@yaks/vocab'
@@ -203,6 +204,22 @@ test('a graph citation verifies without a checkout', async () => {
   )
   let answer = await tools.cites_check!(...asked({}, checked))
   assert(body(answer).includes('nothing to report'), body(answer))
+})
+
+// A graph holding a citation and a verify of it, so the check reads the marks
+// back through a query, the way a host's graph answers one.
+let held = graph({ storage: ram(vocab), vocab, plugins: [kernel()] })
+let ofDoc = asked({ of: 'doc-1' }, [])[0]
+await held.apply([
+  doc('doc-1', 1),
+  doc('design-1', 9),
+  cite('doc-1', 'design-1'),
+])
+await held.apply(await tools.cites_verify!(ofDoc, held))
+
+test('a citation verified in a graph reads as checked there', async () => {
+  let said = body(await tools.cites_check!(ofDoc, held))
+  assert(said.includes('nothing to report'), said)
 })
 
 test('verify refuses a symbol whose file is missing', async () => {
