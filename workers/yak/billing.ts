@@ -25,11 +25,10 @@
 //      wrote the row is dropped.
 //
 // Nothing here may fail quietly. A signature we cannot verify, a checkout we
-// cannot create, a subscription we cannot attribute to a space — each is
-// written as an exception in the meta store, where the platform's own breaks
-// go (unseen.ts `noted`, index.ts, V-32361), not a line on a log nobody opens.
-// The webhook door is public, so filing is capped per isolate (`FILED`): a
-// stranger posting garbage must not be able to write rows without end.
+// cannot create, a subscription of ours we cannot attribute to a space — each
+// is reported to the tracker (unseen.ts `fault`), not a line on a log nobody
+// opens. The webhook door is public, so filing is capped per isolate
+// (`FILED`): a stranger posting garbage must not be able to file without end.
 //
 // The kernel writes `plan` and no client ever can: every property is stamped in
 // the vocabulary, so `admitted()` drops them off any write that does not carry
@@ -181,18 +180,32 @@ let metaOf = (env: Host, space: Space) => ({
   apex: apex(env),
 })
 
-// Whether a Stripe object is another deployment's: it names an apex, and not
-// ours. The subscription says it in its own metadata, a checkout session in
-// its own, and an invoice in the copy of its subscription's under `parent`.
-// Something made before the apex was stamped names none and is ours.
-export let elsewhere = (o: Record<string, unknown>, here: string) => {
+// The apex a Stripe object was bought on. The subscription says it in its own
+// metadata, a checkout session in its own, and an invoice in the copy of its
+// subscription's under `parent`. Something made before the apex was stamped
+// (T-38060) names none.
+let apexOf = (o: Record<string, unknown>) => {
   let parent = o.parent as
     | { subscription_details?: { metadata?: Record<string, string> } }
     | undefined
-  let at = (o.metadata as Record<string, string> | undefined)?.apex ??
+  return (o.metadata as Record<string, string> | undefined)?.apex ??
     parent?.subscription_details?.metadata?.apex
+}
+
+// Whether a Stripe object is another deployment's: it names an apex, and not
+// ours. One that names none may be ours, and the webhook asks the directory.
+export let elsewhere = (o: Record<string, unknown>, here: string) => {
+  let at = apexOf(o)
   return !!at && at != here
 }
+
+// Whether a subscription no space here holds is still ours to answer for. In
+// live mode it is: only this deployment holds the live key, so it is money we
+// cannot place. In the sandbox it is only when it names our apex: one naming
+// none is from before the stamp, and every probe kernel bought in this sandbox
+// too, so a subscription none of our spaces holds is a probe's leftover.
+export let lost = (sub: Sub, livemode: boolean | undefined, here: string) =>
+  livemode !== false || apexOf(sub) == here
 
 // ---- the doors -----------------------------------------------------------
 
@@ -370,6 +383,7 @@ type Event = {
   id?: string
   type?: string
   created?: number
+  livemode?: boolean
   data?: { object?: Record<string, unknown> }
 }
 
@@ -401,8 +415,8 @@ let subjectOf = async (
   let sub = await ask(env, `/v1/subscriptions/${named}`) as Sub
   return {
     sub,
-    space: sub.metadata?.space ??
-      (typeof o.client_reference_id == 'string' ? o.client_reference_id : '') ??
+    space: sub.metadata?.space ||
+      (typeof o.client_reference_id == 'string' ? o.client_reference_id : '') ||
       (o.metadata as Record<string, string> | undefined)?.space,
   }
 }
@@ -426,6 +440,7 @@ export let apply = async (env: Env, event: Event) => {
     customer: next.customer,
   })
   if (!space) {
+    if (!lost(subject.sub, event.livemode, here)) return 'elsewhere'
     // Money changed hands and we cannot say whose it was. Nothing to retry —
     // a second delivery finds the same nothing — so it is filed where the
     // owner reads it and the door answers 200 rather than making Stripe repeat

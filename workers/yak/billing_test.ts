@@ -6,6 +6,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import {
   elsewhere,
+  lost,
   moved,
   periodEnd,
   planOf,
@@ -119,7 +120,7 @@ test('a first plan is never stale', () => {
 
 // --- whose purchase ------------------------------------------------------
 
-test('another apex is elsewhere; ours, or none, is ours', () => {
+test('another apex is elsewhere, and ours or none is not', () => {
   let bought = (apex?: string) => ({ metadata: apex ? { apex } : {} })
   assert(elsewhere(bought('yaks.app'), 'yaks.fyi'))
   assert(!elsewhere(bought('yaks.fyi'), 'yaks.fyi'))
@@ -131,4 +132,14 @@ test('another apex is elsewhere; ours, or none, is ours', () => {
   }
   assert(elsewhere(invoice, 'yaks.fyi'))
   assert(!elsewhere(invoice, 'yaks.app'))
+})
+
+test('a subscription no space holds is lost in live mode, and in the sandbox only when it names our apex', () => {
+  let bought = (apex?: string) =>
+    sub({ metadata: { space: 'space-eid', ...apex ? { apex } : {} } })
+  assert(lost(bought(), true, 'yaks.fyi'))
+  assert(lost(bought(), undefined, 'yaks.fyi'))
+  assert(lost(bought('yaks.fyi'), false, 'yaks.fyi'))
+  // A probe's, bought in the shared sandbox before the apex was stamped.
+  assert(!lost(bought(), false, 'yaks.fyi'))
 })

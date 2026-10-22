@@ -1641,6 +1641,9 @@ export let delivered = async (
     id: `evt_${crypto.randomUUID()}`,
     type,
     created: at,
+    // The envelope says the object's mode, which is the sandbox's unless the
+    // object says otherwise.
+    livemode: (object as { livemode?: boolean }).livemode ?? false,
     ...(on ? { account: on } : {}),
     data: { object },
   })
