@@ -209,10 +209,11 @@ test('socket subscribe awaits and subsequent refreshes have separate request tre
       (frame) => frames.push(frame),
       JSON.stringify({
         id: 'private-subscription',
-        subscribe: '.book',
+        subscribe: '.book.price>1',
       }),
     )
     let opening = request(events, 'ws subscribe')
+    equal(opening.query, '.book.price>?')
     let end = ok(events.find((e) => e.id == opening.id && e.stage == 'end'))
     ok(events.some((e) => e.kind == 'query' && e.parent == opening.id))
     equal(end.counts?.rowsRead, 7)

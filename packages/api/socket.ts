@@ -13,6 +13,7 @@ import { decode as fromWire, stringify, unpack } from '@yaks/vocab/wire'
 import { fault, refusal } from './refuse.ts'
 import { isPromise } from '@yaks/fp'
 import { during, peek, scope } from '@yaks/trace'
+import { mask } from '@yaks/query/core'
 import type { Bundle, ReadOpts } from '@yaks/graph'
 import { coalescer } from '@yaks/graph/bundle'
 import { admission } from './admission.ts'
@@ -312,10 +313,15 @@ export let receive = (
     : Array.isArray(msg?.relay)
     ? 'ws relay'
     : 'ws message'
+  // A subscription's span names its query, masked and bounded as a read's
+  // is, so one that never answers still says what it asked.
+  let query = typeof msg?.subscribe == 'string'
+    ? mask(msg.subscribe).slice(0, 512)
+    : undefined
   // A Store may already have begun its own message root. Keep that parent;
   // attach() clears only the upgrade's ambient context at the event boundary.
   return during(
-    c.begin({ kind: 'request', name, package: '@yaks/api' }),
+    c.begin({ kind: 'request', name, package: '@yaks/api', query }),
     () => dispatch(subs, to, now, input, opts, writer),
   )
 }

@@ -37,7 +37,8 @@ export type Event = {
   readonly counts?: Counts
   /** A `sql` span's statement as text, every value in it masked */
   readonly sql?: string
-  /** A `query` span's yaks query line, every value in it masked */
+  /** The yaks query line of a `query` span or a subscription's request, every
+   * value in it masked */
   readonly query?: string
 }
 
@@ -50,7 +51,8 @@ export type Activity = {
   /** A `sql` span's statement as text, every value in it masked (bound
    * parameters and literals read `?`) and its length bounded by the producer */
   sql?: string
-  /** A `query` span's yaks query line, every value in it masked and its
+  /** The yaks query line of a `query` span or a subscription's request, every
+   * value in it masked and its
    * length bounded by the producer */
   query?: string
 }
