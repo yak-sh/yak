@@ -34,7 +34,7 @@ export let seeded = async (env: Env, access = 'public') => {
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
       },
       {
         entity: { eid: '$seat' },

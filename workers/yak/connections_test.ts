@@ -57,7 +57,7 @@ let setup = async (vault = true) => {
     {
       entity: { eid: '$space' },
       doc: { title: 'ada' },
-      space: { slug: 'ada' },
+      space: { slug: 'ada', store: 'ada' },
     },
     {
       entity: { eid: '$seat' },

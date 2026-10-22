@@ -55,7 +55,7 @@ export let directoryLifecycleCost = async (
   let spaceId = crypto.randomUUID()
   await meta.apply([{
     entity: { eid: spaceId },
-    space: { slug },
+    space: { slug, store: slug },
     doc: { title: 'Directory lifecycle cost probe' },
   }, {
     entity: { eid: crypto.randomUUID() },

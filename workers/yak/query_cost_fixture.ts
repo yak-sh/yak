@@ -193,7 +193,7 @@ export let directoryCost = async (db: Storage) => {
       body: JSON.stringify([
         {
           entity: { eid: space },
-          space: { slug: 'cost' },
+          space: { slug: 'cost', store: 'cost' },
           doc: { title: 'Cost' },
         },
         ...Array.from({ length: 40 }, (_, i) => ({

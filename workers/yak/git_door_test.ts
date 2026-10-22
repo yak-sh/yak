@@ -37,7 +37,7 @@ let standing = async (env: Env, access: string, trashed = false) => {
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
       },
       {
         entity: { eid: '$seat' },

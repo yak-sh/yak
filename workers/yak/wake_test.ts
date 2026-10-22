@@ -265,7 +265,11 @@ test('a directory job reads and writes the directory in-process, never through i
     let p = platform('tick depth', { CF_ANALYTICS_TOKEN: 'test' })
     let store = await directory(p)
     await meta(p.env).apply([
-      { entity: { eid: '$s' }, doc: { title: 'ada' }, space: { slug: 'ada' } },
+      {
+        entity: { eid: '$s' },
+        doc: { title: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
+      },
       {
         entity: { eid: '$a' },
         doc: { title: 'app' },

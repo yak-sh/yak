@@ -65,7 +65,10 @@ let fixture = async () => {
         gallery: { listed_at: '2026-09-06T12:00:00.000Z' },
         screenshot: { blob: 'cookbook-shot' },
       },
-      { entity: { eid: '$demos' }, space: { slug: 'yourname' } },
+      {
+        entity: { eid: '$demos' },
+        space: { slug: 'yourname', store: 'yourname' },
+      },
       ...DEMOS.map((slug) => ({
         entity: { eid: `$${slug}` },
         doc: { title: `Demo ${slug}` },

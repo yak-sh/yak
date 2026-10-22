@@ -27,7 +27,10 @@ export let worldBindings = (app: string, person: string): Bindings => {
   let space = crypto.randomUUID()
   directory.apply([
     { entity: { eid: person }, person: {} },
-    { entity: { eid: space }, space: { slug: 'world-cost' } },
+    {
+      entity: { eid: space },
+      space: { slug: 'world-cost', store: 'world-cost' },
+    },
     { entity: { eid: app }, app: { space, slug: 'vale', access: 'private' } },
     {
       entity: { eid: crypto.randomUUID() },

@@ -100,7 +100,7 @@ let vale = async (
       {
         entity: { eid: '$space' },
         doc: { title: 'Ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
         ...(models ? { meter: { month: monthOf(new Date()), models } } : {}),
       },
       {

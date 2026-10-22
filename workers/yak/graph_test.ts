@@ -1623,7 +1623,7 @@ test("an app's store keeps its words apart from the directory's", async () => {
   ], owner)
   assertEquals(wrote.status, 200)
   let refused = await post(store, '/apply', [
-    { entity: { eid: CAKE }, space: { slug: 'ada' } },
+    { entity: { eid: CAKE }, space: { slug: 'ada', store: 'ada' } },
   ], owner)
   assertEquals(refused.status, 400)
   assertEquals(

@@ -85,7 +85,7 @@ let seeded = async (script: Turn[] = []) => {
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
       },
       {
         entity: { eid: '$seat' },

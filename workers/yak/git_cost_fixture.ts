@@ -83,7 +83,7 @@ export let gitPushCost = async (
   let spaceId = crypto.randomUUID()
   await meta(env).apply([{
     entity: { eid: spaceId },
-    space: { slug },
+    space: { slug, store: slug },
     doc: { title: 'Git cost probe' },
   }, {
     entity: { eid: crypto.randomUUID() },

@@ -61,7 +61,11 @@ let space = async (
   await dir.apply({
     entities: [
       { entity: { eid: person }, person: {} },
-      { entity: { eid: '$space' }, doc: { title: slug }, space: { slug } },
+      {
+        entity: { eid: '$space' },
+        doc: { title: slug },
+        space: { slug, store: slug },
+      },
       {
         entity: { eid: '$seat' },
         member: { space: '$space', person, role: 'owner' },
@@ -200,7 +204,7 @@ let planted = async (before: Bundle[]) => {
     entities: [{
       entity: { eid: '$s' },
       doc: { title: 'x' },
-      space: { slug: 'x' },
+      space: { slug: 'x', store: 'x' },
     }],
   })
   let admin = await p.dir.personAt(ADMIN)
@@ -221,7 +225,7 @@ test('the platform seeds an admin person, and completes a half-seeded store', as
     {
       entity: { eid: '$space' },
       doc: { title: META.space },
-      space: { slug: META.space },
+      space: { slug: META.space, store: META.space },
     },
   ])
   // And the admin's own sign-in, ahead of the first directory write.
@@ -432,7 +436,7 @@ test('a store that is not the directory is still an app', async () => {
       method: 'POST',
       headers: { 'x-store': 'ada/cookbook' },
       body: JSON.stringify(
-        [{ entity: { eid }, space: { slug: 'ada' } }],
+        [{ entity: { eid }, space: { slug: 'ada', store: 'ada' } }],
       ),
     }),
   )

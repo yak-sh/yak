@@ -105,7 +105,7 @@ export let directoryWake = async (
         let space = crypto.randomUUID()
         return [{
           entity: { eid: space },
-          space: { slug: `wake-${start + i}` },
+          space: { slug: `wake-${start + i}`, store: `wake-${start + i}` },
           doc: { title: `Space ${start + i}`, body: 'kept' },
         }, {
           entity: { eid: crypto.randomUUID() },

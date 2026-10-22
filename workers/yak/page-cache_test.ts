@@ -124,7 +124,7 @@ let owes = (b: Bundle) =>
   owed([b], () =>
     Promise.resolve([
       { entity: { eid: 'a' }, app: { slug: 'cookbook', space: 's' } },
-      { entity: { eid: 's' }, space: { slug: 'ada' } },
+      { entity: { eid: 's' }, space: { slug: 'ada', store: 'ada' } },
     ].filter((row) => row.entity.eid == b.entity.eid)))
 
 test('a deploy, a setting and a plan change are each seen at once', async () => {

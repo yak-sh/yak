@@ -147,7 +147,13 @@ test('a page is served with its base and its reporter', async () => {
 // wears it while its space is on the free plan and sheds it on the Plus plan.
 test('a free space wears the badge, and the Plus plan sheds it', async () => {
   let space = (plan: object) =>
-    spaceOf({ entity: { eid: 's' }, space: { slug: 'ada' }, ...plan } as Row)
+    spaceOf(
+      {
+        entity: { eid: 's' },
+        space: { slug: 'ada', store: 'ada' },
+        ...plan,
+      } as Row,
+    )
   let badged = async (plan: object) =>
     (await pageScript(ASSETS, '/cookbook/', 1, free(space(plan)))).tags
       .includes('Made with ')
@@ -1416,7 +1422,10 @@ test('monthly visit quota stops all app serving before dispatch or files', async
     assertEquals(await (await k.at('/')).text(), 'the router')
     await meter(limit)
     await stamp(k.env, {
-      entities: [{ entity: { eid: k.space.eid }, space: { slug: 'yourname' } }],
+      entities: [{
+        entity: { eid: k.space.eid },
+        space: { slug: 'yourname', store: 'yourname' },
+      }],
     })
     let comped = await apps.fetch(
       new Request('https://yourname.yaks.app/'),

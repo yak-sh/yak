@@ -282,7 +282,7 @@ let makes = async (
       {
         entity: { eid: '$space' },
         doc: { title: slug },
-        space: { slug },
+        space: { slug, store: slug },
         ...over,
       },
       {
@@ -315,7 +315,7 @@ let idlePreview = await (async () => {
       ...['quiet', 'used'].flatMap((slug) => [
         {
           entity: { eid: slug },
-          space: { slug },
+          space: { slug, store: slug },
           created: { at: old, by: person },
         },
         {

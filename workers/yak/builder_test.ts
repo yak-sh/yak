@@ -56,7 +56,7 @@ let seeded = async (vars: Partial<Env> = {}) => {
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
       },
       {
         entity: { eid: '$seat' },

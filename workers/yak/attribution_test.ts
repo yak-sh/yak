@@ -206,7 +206,7 @@ test('directory attribution recovery still fills unfinished signed-in receipts',
   let storage = ram(vocab)
   let writer = boot(vocab, storage, STORE, true)
   await writer.g.apply([
-    { entity: { eid: 'space' }, space: { slug: 'ada' } },
+    { entity: { eid: 'space' }, space: { slug: 'ada', store: 'ada' } },
     {
       entity: { eid: 'app' },
       app: { slug: 'guest', space: 'space', access: 'open', version: 1 },

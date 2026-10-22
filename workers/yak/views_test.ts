@@ -310,7 +310,7 @@ test('the /stats door only shares counts with app members', async () => {
       env: {} as Env,
       req: new Request('https://one.yaks.app/app/api' + path),
       path,
-      space: { slug: 'one' },
+      space: { slug: 'one', store: 'one' },
       app: { eid: 'e', slug: 'app' },
       who: { person: role ? 'p' : null, role },
       refuse: () => Promise.resolve(new Response(null, { status: 403 })),

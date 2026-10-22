@@ -133,7 +133,7 @@ test('a lease nobody renewed closes its call at Realtime and drops its row', asy
     })
     let app = crypto.randomUUID(), space = crypto.randomUUID()
     await platformMeta(p.env).apply([
-      { entity: { eid: space }, space: { slug: 'ada' } },
+      { entity: { eid: space }, space: { slug: 'ada', store: 'ada' } },
       {
         entity: { eid: app },
         app: { slug: 'room', space, access: 'public' },

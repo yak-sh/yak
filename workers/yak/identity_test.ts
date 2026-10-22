@@ -266,7 +266,7 @@ let customHandoff = async (k: Kernel, person: string, full: string) => {
   await meta(k).apply([slug, other].flatMap((name) => [
     {
       entity: { eid: them.eids[name] },
-      space: { slug: name },
+      space: { slug: name, store: name },
       doc: { title: name },
     },
     { member: { space: them.eids[name], person, role: 'owner' } },

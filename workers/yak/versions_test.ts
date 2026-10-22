@@ -577,7 +577,7 @@ let restartFixture = async (answer: () => Response) => {
   await dir.apply({
     entities: [
       { entity: { eid: ada }, person: {}, doc: { title: 'Ada' } },
-      { entity: { eid: '$space' }, space: { slug: 'ada' } },
+      { entity: { eid: '$space' }, space: { slug: 'ada', store: 'ada' } },
       {
         entity: { eid: '$app' },
         app: { slug: 'recipes', space: '$space', version: 0 },

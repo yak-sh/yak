@@ -105,7 +105,7 @@ let directory = state()
     {
       entity: { eid: '$space' },
       doc: { title: 'ada' },
-      space: { slug: 'ada' },
+      space: { slug: 'ada', store: 'ada' },
     },
   ]))
   await ok(

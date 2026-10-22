@@ -67,7 +67,7 @@ let app = async (
       { entity: { eid: ADA }, person: {} },
       {
         entity: { eid: '$space' },
-        space: { slug: 'builder-test' },
+        space: { slug: 'builder-test', store: 'builder-test' },
         ...(models ? { meter: { month: monthOf(new Date()), models } } : {}),
       },
       {

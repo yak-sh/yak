@@ -13,7 +13,7 @@ let vocab = loadVocab(platformDoc)
 let releases = async () => {
   let g = graph({ vocab, storage: ram(vocab) })
   await g.apply([
-    { entity: { eid: 'space' }, space: { slug: 'team' } },
+    { entity: { eid: 'space' }, space: { slug: 'team', store: 'team' } },
     {
       entity: { eid: 'app' },
       app: {

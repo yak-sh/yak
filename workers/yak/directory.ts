@@ -153,7 +153,7 @@ export type Space = {
   // ({@link spaceHandle}) and never derived from the slug again, so a rename
   // moves an address and never a byte, and a space that later takes the old
   // name roots elsewhere (D-131924). A space from before the word wears its
-  // slug, which is where its bytes already were (space-move.ts).
+  // slug, which is where its bytes already were (925e91572).
   store: string
   title: string
   // What this space pays (D-32751). Null for a space the sweep has not
@@ -595,8 +595,8 @@ let seed = async (store: Meta) => {
     bundles.push({
       entity: { eid: '$space' },
       doc: { title: META.space },
-      // Its handle is the bare slug, what the backfill gives every space
-      // that was here before handles (space-move.ts), since it never moves.
+      // Its handle is the bare slug, as every space from before handles
+      // wears its own (925e91572), since it never moves.
       space: { slug: META.space, store: META.space },
     }, {
       entity: { eid: '$app' },
@@ -868,10 +868,7 @@ let tunnelOf = (r: Row): Tunnel | null =>
 export let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
-  // The slug answers for a space the backfill has not reached yet: nothing
-  // has moved it since the word arrived, because a rename writes the handle
-  // it leaves behind (`rename` below).
-  store: r.space!.store ?? r.space!.slug,
+  store: r.space!.store ?? unrooted(r.entity.eid, r.space!.slug),
   title: r.doc?.title || r.space!.slug,
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
@@ -883,6 +880,18 @@ export let spaceOf = (r: Row): Space => ({
   slugs: slugsOf(r.former),
   tunnel: tunnelOf(r),
 })
+
+// A space row with no handle: nothing writes one (every space has worn one
+// since 925e91572 backfilled them), so it is a failure to report. It is read
+// as its slug, the handle the backfill gave every space from before the word,
+// which is where the bytes of a space that never moved are.
+let unrooted = (space: string, slug: string) => {
+  caught(new Error(`space ${space} has no handle; read as ${slug}`), {
+    request: 'space handle',
+    space,
+  })
+  return slug
+}
 
 // An app row with no access mode: nothing writes one (T-59268 stamped the six
 // born before the word), so it is a failure to report, and the app is read as
@@ -1392,11 +1401,10 @@ export let directory = (via: Fetcher | Part, now = false) => {
     // A space moved to another address, retitled, or made to forget one it
     // left: the one write behind both doors that do it (tools.ts `space_set`,
     // identity.ts `choose`). Nothing but directory rows change. The handle
-    // stays where it is — written down here for a space the backfill has not
-    // reached, since its bytes are under the slug it is leaving (D-131924) —
-    // the address left joins the space's history and redirects until another
-    // space takes it, and the address moved onto is taken from whichever
-    // space still redirected there. Answers the space as it now stands.
+    // stays where it is, so no byte moves (D-131924); the address left joins
+    // the space's history and redirects until another space takes it, and
+    // the address moved onto is taken from whichever space still redirected
+    // there. Answers the space as it now stands.
     rename: async (
       space: Space,
       change: {
@@ -1414,7 +1422,7 @@ export let directory = (via: Fetcher | Part, now = false) => {
         entities: [{
           entity: { eid: space.eid },
           ...(change.title == null ? {} : { doc: { title: change.title } }),
-          ...(moving ? { space: { slug: to, store: space.store } } : {}),
+          ...(moving ? { space: { slug: to } } : {}),
           ...(had ? { former: addresses(had.filter((s) => s != to)) } : {}),
         }, ...claims],
       }, headers)

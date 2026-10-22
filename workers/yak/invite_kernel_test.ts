@@ -377,7 +377,11 @@ let directoryWith = async () => {
       person: {},
       email: { address: `${eid}@x.test` },
     })),
-    { entity: { eid: 'sp' }, doc: { title: 'Jeff' }, space: { slug: 'jeff' } },
+    {
+      entity: { eid: 'sp' },
+      doc: { title: 'Jeff' },
+      space: { slug: 'jeff', store: 'jeff' },
+    },
     {
       entity: { eid: 'ap' },
       doc: { title: 'Diary' },

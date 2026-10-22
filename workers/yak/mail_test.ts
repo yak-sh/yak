@@ -280,7 +280,7 @@ let platform = async (meter?: Record<string, unknown>) => {
   let store = metaOf(storeOf(ns, PLATFORM_STORE))
   await store.apply([{
     entity: { eid: SPACE },
-    space: { slug: 'ada' },
+    space: { slug: 'ada', store: 'ada' },
     doc: { title: 'Ada' },
     ...(meter ? { meter: { month: monthOf(new Date()), ...meter } } : {}),
   }, {

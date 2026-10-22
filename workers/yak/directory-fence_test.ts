@@ -66,7 +66,7 @@ let fixture = async (rules: Rule[] = []) => {
       }),
     )
   await at.apply([
-    { entity: { eid: 'space' }, space: { slug: 'fence' } },
+    { entity: { eid: 'space' }, space: { slug: 'fence', store: 'fence' } },
     {
       entity: { eid: 'app' },
       app: {

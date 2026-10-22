@@ -64,7 +64,7 @@ let fixture = (access: 'public' | 'open' | 'private' = 'public') => {
   let time = clock()
   let f = copyFixture()
   let rows: Row[] = [
-    { entity: { eid: 's' }, space: { slug: 'ada' } },
+    { entity: { eid: 's' }, space: { slug: 'ada', store: 'ada' } },
     {
       entity: { eid: 'a' },
       app: {

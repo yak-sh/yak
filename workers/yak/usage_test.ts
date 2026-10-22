@@ -124,7 +124,7 @@ test('meter queries distinguish the same handle in two deployments', async () =>
       {
         entity: { eid: '$space' },
         doc: { title: 'Ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
       },
       {
         entity: { eid: '$app' },
@@ -520,7 +520,7 @@ let counting = async (meter?: Partial<Meter>, vars: Partial<Env> = {}) => {
   await dir.apply({
     entities: [{
       entity: { eid: '$space' },
-      space: { slug: 'jeff' },
+      space: { slug: 'jeff', store: 'jeff' },
       ...(meter ? { meter } : {}),
     }],
   }, { 'x-yak-role': 'owner' })
@@ -633,7 +633,7 @@ test('Plus byte writes use the 10 GB ceiling as the stores last told it; comped 
   let dir = directory({ fetch: (r) => dirPart.fetch(r, env) }, true)
   await dir.apply({
     entities: [
-      { entity: { eid: '$space' }, space: { slug: 'jeff' } },
+      { entity: { eid: '$space' }, space: { slug: 'jeff', store: 'jeff' } },
       {
         entity: { eid: '$app' },
         app: { space: '$space', slug: 'notes', store: 'jeff/notes' },
@@ -765,7 +765,7 @@ test('R2 accounting sweeps without analytics, follows deletion and survives the 
     entities: [
       {
         entity: { eid: '$space' },
-        space: { slug: 'jeff' },
+        space: { slug: 'jeff', store: 'jeff' },
         meter: { month: '2026-08', requests: 77, emails: 12 },
       },
       ...['a', 'b'].map((slug) => ({

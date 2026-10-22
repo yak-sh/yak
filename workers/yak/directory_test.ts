@@ -85,11 +85,14 @@ let stub = () => {
               at.reads++
               return Response.json([{
                 entity: { eid: 's1', num: 1 },
-                space: { slug: 'jeff' },
+                space: { slug: 'jeff', store: 'jeff' },
               }])
             }
             return Response.json([
-              { entity: { eid: 'm1', num: 1 }, space: { slug: 'yak' } },
+              {
+                entity: { eid: 'm1', num: 1 },
+                space: { slug: 'yak', store: 'yak' },
+              },
             ])
           }
           at.reads++
@@ -134,7 +137,7 @@ let hosts = () =>
         : q.includes('.entity.eid=s1')
         ? [{
           entity: { eid: 's1', num: 1 },
-          space: { slug: 'jeff' },
+          space: { slug: 'jeff', store: 'jeff' },
         }]
         : []
       return Promise.resolve(rows)
@@ -222,9 +225,12 @@ test('a release reaches consumer and home through stale isolate caches', async (
 let routingVocab = platformVocab()
 let routingGraph = graph({ storage: ram(routingVocab), vocab: routingVocab })
 await routingGraph.apply([
-  { entity: { eid: 's1' }, space: { slug: 'jeff' } },
-  { entity: { eid: 's2' }, space: { slug: 'other' } },
-  { entity: { eid: 's3' }, space: { slug: 'trashed-home' } },
+  { entity: { eid: 's1' }, space: { slug: 'jeff', store: 'jeff' } },
+  { entity: { eid: 's2' }, space: { slug: 'other', store: 'other' } },
+  {
+    entity: { eid: 's3' },
+    space: { slug: 'trashed-home', store: 'trashed-home' },
+  },
   ...[
     ['a1', 's1', 'recipes'],
     ['a2', 's1', 'front'],

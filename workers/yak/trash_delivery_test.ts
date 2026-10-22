@@ -59,7 +59,10 @@ let fixture = () => {
   }
   let seed = async (g: ReturnType<typeof boot>['g']) => {
     await g.apply([
-      { entity: { eid: 'space' }, space: { slug: 'trash-delivery' } },
+      {
+        entity: { eid: 'space' },
+        space: { slug: 'trash-delivery', store: 'trash-delivery' },
+      },
       ...['one', 'two'].map((eid) => ({
         entity: { eid },
         app: {

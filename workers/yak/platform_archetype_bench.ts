@@ -51,7 +51,10 @@ for (
             : n % 3 == 0
             ? { person: {}, doc: { title: 'Person ' + n } }
             : n % 3 == 1
-            ? { space: { slug: 'space' + n }, doc: { title: 'Space ' + n } }
+            ? {
+              space: { slug: 'space' + n, store: 'space' + n },
+              doc: { title: 'Space ' + n },
+            }
             : { app: { slug: 'app' + n }, doc: { title: 'App ' + n } }),
         }
       }))

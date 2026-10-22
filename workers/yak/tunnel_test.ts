@@ -60,7 +60,7 @@ let spaces = async (vars: Partial<Env> = TOKENS) => {
       {
         entity: { eid: '$space' },
         doc: { title: 'ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
       },
       {
         entity: { eid: '$seat' },

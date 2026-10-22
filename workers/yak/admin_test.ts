@@ -33,16 +33,16 @@ let census = (): Census => ({
   spaces: [
     {
       entity: { eid: 'home' },
-      space: { slug: 'ann' },
+      space: { slug: 'ann', store: 'ann' },
       meter: meter({ models: 0.25, realtime: 0.25, files: 20 }),
     },
     {
       entity: { eid: 'shop' },
-      space: { slug: 'shop' },
+      space: { slug: 'shop', store: 'shop' },
       plan: { tier: 'plus' },
       meter: meter({ models: 1, files: 3 }),
     },
-    { entity: { eid: 'lab' }, space: { slug: 'lab' } },
+    { entity: { eid: 'lab' }, space: { slug: 'lab', store: 'lab' } },
   ],
   // Each wears its access mode, as every stored app does: a row without one
   // is reported as a failure (directory.ts `unsaid`).

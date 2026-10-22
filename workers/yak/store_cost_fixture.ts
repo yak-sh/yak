@@ -126,7 +126,7 @@ export let storeCost = async (storage: Storage, kind: string) => {
     await post('/apply', [
       {
         entity: { eid: space },
-        space: { slug: 'cost' },
+        space: { slug: 'cost', store: 'cost' },
         doc: { title: 'Cost' },
       },
       {
@@ -152,7 +152,7 @@ export let storeCost = async (storage: Storage, kind: string) => {
         { entity: { eid: owner }, person: {}, doc: { title: `Owner ${i}` } },
         {
           entity: { eid: account },
-          space: { slug: `account${i}` },
+          space: { slug: `account${i}`, store: `account${i}` },
           plan: { tier: 'plus' },
         },
         {

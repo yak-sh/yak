@@ -14,7 +14,7 @@ export let directoryStanding = async (
   let { eid: appId, slug, access, store, version } = app
   await meta({ STORE: namespace }).apply([
     { entity: { eid: person }, person: {} },
-    { entity: { eid: spaceId }, space: { slug: spaceSlug } },
+    { entity: { eid: spaceId }, space: { slug: spaceSlug, store: spaceSlug } },
     {
       entity: { eid: appId },
       app: { space: spaceId, slug, access, store, version },

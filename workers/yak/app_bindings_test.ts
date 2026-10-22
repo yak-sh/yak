@@ -46,7 +46,7 @@ let fixture = async (active = true) => {
       {
         entity: { eid: '$space' },
         doc: { title: 'Ada' },
-        space: { slug: 'ada' },
+        space: { slug: 'ada', store: 'ada' },
       },
       {
         entity: { eid: '$seat' },
