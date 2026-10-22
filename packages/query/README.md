@@ -297,7 +297,7 @@ reserved name too, but it selects by references and is not a directive.
 | `.distinct=comp.prop`                | distinct property values                                                        |
 | `.tally=comp.prop`                   | each property value with its count                                              |
 | `.fields=pin.x,pin.z~`               | selected properties; `~` excludes that property from subscription notifications |
-| `*`                                  | every component of each selected entity                                         |
+| `*` / `?*`                           | every component of each selected entity                                         |
 | `.limit=200`                         | at most 200 entities; `0` requests none                                         |
 | `.after=13882`                       | continue past one entity, by number, human id, or eid                           |
 | `.edges`                             | edges touching the answer                                                       |

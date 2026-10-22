@@ -42,12 +42,12 @@ let value = (v: Value): string =>
     ? v.items.map((item) => plain(raw(item))).join(',')
     : plain(raw(v))
 
-// A bare word is a text term unless it reads as a clause, a group, `*` or a
-// list; then it is quoted.
+// A bare word is a text term unless it reads as a clause, a group, `*` (or
+// `?*`) or a list; then it is quoted.
 let word = (s: string): string => {
   let clause = true
   try {
-    clause = s == '*' || parseDot(s) != null
+    clause = s == '*' || s == '?*' || parseDot(s) != null
   } catch { /* a malformed clause is not a word either */ }
   return clause || /[\s&|(),"'[\]]|^$/.test(s) ? quoted(s) : s
 }

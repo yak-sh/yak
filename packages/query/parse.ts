@@ -598,9 +598,12 @@ export let valued = (tok: string): boolean => VALUED.test(tok)
 // `.p=a ,b`) or nothing (`.p=a,`) is neither: it is a list broken by a space,
 // and is refused. With a clause on the other side (`.p=a, .q=b`,
 // `.p=a, #Actor`) it is the optional separator it looks like.
+// The widest projection is `*`, and `?*`, which asks for every component the
+// way `?doc` asks for one.
+let EVERY = new Set(['*', '?*'])
 let clauseish = (tok: string): boolean => {
   let first = splitOutside(tok.replace(/^,+/, ''), ',', true)[0]
-  return first == '*' || /^["']/.test(first) || parseDot(first) != null
+  return EVERY.has(first) || /^["']/.test(first) || parseDot(first) != null
 }
 let parts = (tok: string, prev?: string, next?: string): string[] => {
   // A group is one term; its commas belong to the clauses inside it.
@@ -632,7 +635,7 @@ let suffixed = (tok: string): boolean => {
 // bare word is only ever a text term; to name the component instead, write the
 // leading dot (`.entity`).
 let read = (tok: string, opts: ParseOpts, old: string[]): Clause[] => {
-  if (tok == '*') return [every()]
+  if (EVERY.has(tok)) return [every()]
   if (tok.startsWith('(')) {
     let group = parse(tok.slice(1, -1), opts)
     old.push(...retired(group))
@@ -694,9 +697,9 @@ export let retired = (q: And): string[] => RETIRED.get(q) ?? []
  * value it means any-of.
  *
  * A `*` on its own is the widest projection, not a term: it asks for every
- * component of every row selected. Only the whole token means that — a trailing
- * `*` on a word (`lemo*`) is still the full-text prefix term it has always
- * been.
+ * component of every row selected, and so does `?*`, the way `?doc` asks for
+ * one. Only the whole token means that — a trailing `*` on a word (`lemo*`) is
+ * still the full-text prefix term it has always been.
  *
  * The empty query selects nothing: an empty string, or one with no clauses,
  * returns a single `never`, so a blank saved query does not load the whole

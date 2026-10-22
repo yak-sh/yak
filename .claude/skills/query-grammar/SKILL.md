@@ -138,7 +138,7 @@ A directive belongs to the whole line wherever it is written.
 | `.tally=`           | `.task .tally=filed.project`                | each value with its count (references come back as eids)                                                         |
 | `.distinct=`        | `.distinct=filed.priority`                  | the values                                                                                                       |
 | `.fields=`          | `.fields=doc.title,filed.project.doc.title` | those properties; a path through a reference brings what it reaches as its own row                               |
-| `*`                 | `.task *`                                   | every component of each row                                                                                      |
+| `*` / `?*`          | `.task *`                                   | every component of each row                                                                                      |
 | `.order=`           | `.order=-created.at`                        | `-` is descending; `similar` (with `.near`), `search` (with words) and `hot` are rankings                        |
 | `.limit=` `.after=` | `.limit=50&.after=T-13882`                  | a window; `.after` continues past an entity in any order                                                         |
 | `.refs=`            | `.refs=D-45640 .count`                      | what references it; `.refs` / `!refs` alone                                                                      |

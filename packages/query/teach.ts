@@ -53,7 +53,11 @@ export let DIRECTIVES: Taught[] = [
       'the properties each row carries (.fields=pin.x,pin.z~; a trailing ' +
       '~ mutes a property from the change signal)',
   },
-  { spell: '*', word: 'projection', means: 'every component of each row' },
+  {
+    spell: '*',
+    word: 'projection',
+    means: 'every component of each row (?* says the same)',
+  },
   { spell: '.limit=', word: 'window', means: 'at most N of the answer' },
   {
     spell: '.after=',

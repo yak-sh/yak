@@ -73,6 +73,7 @@ roundTrips('text and quoted-term query', [
   '"two words"',
   '"comp.prop=1"',
   '"*"',
+  '"?*"',
   '"(x"',
   '"a,b"',
 ])

@@ -139,6 +139,9 @@ let cases: [string, ReturnType<typeof and>][] = [
   // on a word stays the full-text prefix term.
   ['*', and(every())],
   ['.recipe&*', and(present('recipe'), every())],
+  // `?*` asks for every component, the way `?doc` asks for one
+  ['?topic ?* .limit=2', and(want('topic'), every(), limit(2))],
+  ['.recipe,?*', and(present('recipe'), every())],
   ['lemo*', and(text('lemo*'))],
   ['.limit=200', and(limit(200))],
   ['.after=13882', and(after(13882))],
