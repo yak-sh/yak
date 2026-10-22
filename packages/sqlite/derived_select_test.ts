@@ -91,6 +91,9 @@ for (
     '.entity.eid=two .entry.seq>1',
     '.entry.session.session.ended=true',
     '.session .entries.entry.seq=2',
+    '.session.id=yes .session.ended=true',
+    '.session.id=no,null .session.ended=true,false',
+    '.session.id>m .session.ended=false',
   ]
 ) {
   test(`derived owner selection preserves ${predicate}`, async () => {
@@ -114,6 +117,17 @@ test('derived owner selection is used for typed equality, not projection', async
   equal(
     await optimized.rows('.entity.eid=two .fields=entry.seq'),
     await scalar.rows('.entity.eid=two .fields=entry.seq'),
+  )
+  equal(calls, before)
+})
+test('a stored value filter beside it tests each row, never every owner', async () => {
+  let before = calls
+  equal(
+    (await optimized.rows(
+      '.session.id=yes,no .session.ended=true .fields=entity.eid',
+    ))
+      .map((b) => b.eid),
+    ['yes'],
   )
   equal(calls, before)
 })

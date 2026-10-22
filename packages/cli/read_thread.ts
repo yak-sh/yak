@@ -72,12 +72,16 @@ export let readThread = (
     off: () => void
     /** its caller left; the answer goes nowhere */
     dropped?: boolean
+    /** when its worker was given it (performance.now) */
+    sent?: number
   }
   type Lane = {
     worker: Worker
     job?: Job
     overdue?: () => void
     long?: () => void
+    /** its worker has answered a read: it is started, not still loading */
+    heard?: boolean
   }
   let told: (error: Error) => void = () => {}
   let lanes = new Set<Lane>()
@@ -94,6 +98,7 @@ export let readThread = (
     if ('closed' in answer || lane.job?.id != answer.id) return
     let job = lane.job
     lane.job = undefined
+    lane.heard = true
     lane.overdue?.()
     lane.long?.()
     job.off()
@@ -131,6 +136,31 @@ export let readThread = (
     worker.postMessage({ start: config } satisfies Said)
     return lane
   }
+  // What a read past `slow` waited on, as far as this thread can see: a main
+  // thread that ran the check late was blocked (the answer may have come and
+  // gone unheard), a worker that never answered was still loading, and the
+  // other lane's read and the queue are what it ran beside.
+  let waited = (lane: Lane, job: Job): string => {
+    let s = (ms: number) => `${(ms / 1000).toFixed(1)} s`
+    let late = performance.now() - job.sent! - slow
+    let others = [...lanes].flatMap((l) =>
+      l != lane && l.job
+        ? [
+          `the other lane ran ${asked(l.job.call)} for ${
+            s(performance.now() - l.job.sent!)
+          }`,
+        ]
+        : []
+    )
+    return [
+      late > 1000
+        ? `this check ran ${s(late)} late: the main thread was blocked`
+        : 'the main thread ran this check on time',
+      lane.heard ? '' : 'its worker had not answered a read yet',
+      ...others,
+      waiting.length ? `${waiting.length} reads waited behind it` : '',
+    ].filter(Boolean).join('; ')
+  }
   let drain = () => {
     while (waiting.length && !closed) {
       let lane = [...lanes].find((l) => !l.job)
@@ -138,12 +168,14 @@ export let readThread = (
       if (!lane) return
       let job = waiting.shift()!
       lane.job = job
+      job.sent = performance.now()
       lane.long = timer(() => {
         if (lane.job !== job) return
         told(Object.assign(
           new Error(
             `a read has run ${slow / 1000} s and is still running: ` +
               asked(job.call),
+            { cause: new Error(waited(lane, job)) },
           ),
           { name: 'SlowRead' },
         ))

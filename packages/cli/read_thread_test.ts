@@ -303,8 +303,8 @@ test('a cancelled read past its grace gives up its worker', async () => {
   }
 })
 
-// A read still running past `slow` is told once, by its masked query; one
-// answered in time is not.
+// A read still running past `slow` is told once, by its masked query, and its
+// cause says what it waited on; one answered in time is not told.
 test('a read that runs past slow is told with its masked query', async () => {
   let { workers, restore } = fakes()
   let due = new Map<number, () => void>()
@@ -317,7 +317,11 @@ test('a read that runs past slow is told with its masked query', async () => {
     },
   })
   let told: string[] = []
-  reader.overrun((error) => told.push(`${error.name}: ${error.message}`))
+  reader.overrun((error) =>
+    told.push(
+      `${error.name}: ${error.message} (${(error.cause as Error).message})`,
+    )
+  )
   try {
     let quick = reader.read('.quick')
     workers[0].answer()
@@ -328,7 +332,8 @@ test('a read that runs past slow is told with its masked query', async () => {
     await long
     for (let fn of [...due.values()]) fn()
     assertEquals(told, [
-      'SlowRead: a read has run 10 s and is still running: .memory.scope=?',
+      'SlowRead: a read has run 10 s and is still running: .memory.scope=? ' +
+      '(the main thread ran this check on time)',
     ])
   } finally {
     await reader.close()

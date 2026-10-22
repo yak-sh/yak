@@ -198,6 +198,8 @@ type Ctx = {
   paged?: boolean
   /** A mandatory finite root identity, known before presence is planned. */
   bounded?: boolean
+  /** A mandatory stored value filter narrows the root rows (`narrowed`). */
+  narrowed?: boolean
   screens?: Map<Extension, Screen>
   shared: Map<Query, { cte: Cte; source: Source }>
   identities: WeakMap<Pred, Cond>
@@ -707,11 +709,11 @@ let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
       return test
     }
   }
-  // A selector is an exact owner set, not a read expression. Bounded and
-  // correlated probes use an owner predicate or retain the keyed expression;
-  // they never build a global candidate set for one owner.
+  // A selector is an exact owner set, not a read expression. Bounded,
+  // narrowed and correlated probes use an owner predicate or retain the keyed
+  // expression; they never build a global candidate set for a few owners.
   let selected = ctx.derived[`${hop.comp}.${hop.prop}`]
-  let point = !!(ctx.bounded || ctx.correlated || ctx.owner)
+  let point = !!(ctx.bounded || ctx.narrowed || ctx.correlated || ctx.owner)
   let operands = op == '' ? literals(p.value) : undefined
   if ((point ? selected?.test : selected?.select) && operands?.length) {
     // Use the same typed equality lowering as the scalar expression.
@@ -1747,6 +1749,22 @@ let owners = (
   }
 }
 
+// A mandatory value filter on a stored property narrows the outer rows before
+// any derived one is read (`.session.operator=true` leaves 876 of 18,503
+// sessions), so a derived equality beside it tests each of those rows rather
+// than selecting every owner in the store.
+let narrowed = (ctx: Ctx, clauses: Clause[]): boolean =>
+  flattened(clauses).some((c) => {
+    if (
+      c.kind != 'pred' || c.not || c.where || c.path.length != 2 ||
+      blank(c.value) || !['', '<', '<=', '>', '>='].includes(opOf(c))
+    ) return false
+    let [comp, prop] = c.path
+    return comp != 'entity' && !computed(ctx.v, comp) &&
+      !ctx.v.prop(comp, prop)?.computed && !ctx.derived[`${comp}.${prop}`] &&
+      !!ctx.v.prop(comp, prop)
+  })
+
 // A stored reference presence test needs only its owner's key. Its root
 // lookup and every following hop remain scoped inside the compiled condition.
 let keyTest = (ctx: Ctx, c: Clause): boolean => {
@@ -2229,6 +2247,7 @@ let beginning = (
 ) => {
   let finite = owners(ctx, ast.clauses)
   ctx.bounded = finite != null
+  ctx.narrowed = narrowed(ctx, ast.clauses)
   for (let e of ctx.ext) {
     let preparing = false
     let view = (read: (e: Extension) => Raw | null): Screen => {
