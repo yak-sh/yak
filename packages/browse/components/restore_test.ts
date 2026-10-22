@@ -7,7 +7,7 @@ import { faked, tick, until } from '../testing.ts'
 import { assertEquals } from '@std/assert'
 import { cache, census, owner, useRoute } from '../live.ts'
 import { navigate, restore, route, screenTarget } from './nav.tsx'
-import { allSessionsPath } from '../tray_query.ts'
+import { allSessionsPath } from '../sessions.ts'
 import { offerPlaces } from './offers.ts'
 
 let place = { pathname: '/', search: '' }

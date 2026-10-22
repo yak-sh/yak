@@ -159,7 +159,7 @@ let b64 = (t: string) =>
 // happened, so the spawned card lands where the ghost was dropped), and,
 // when the view's renderer has a file form, the serialized file (for a
 // desktop drop) plus text for editors. `pin` rides only for an EXISTING
-// card being relocated (a Tray row dragged out): its presence says MOVE
+// card being relocated (a canvas List row dragged out): its presence says MOVE
 // this pin, not clone a new card — tab drags omit it, so they still clone.
 export let dragData = (
   ev: DragEvent,

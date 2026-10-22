@@ -28,8 +28,6 @@ import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { pickLine, useHits } from '@yaks/ux'
 import { spawnOf } from './Run.tsx'
-import { Tray } from './Tray.tsx'
-import { shelve } from './shelf.ts'
 import { block } from '@yaks/ui'
 import { Entity } from './Entity.tsx'
 import { Id } from './views/Inline.tsx'
@@ -235,7 +233,6 @@ let exec = async (line: string) => {
       msg.value = r.msg ?? ''
       let session = await launch(r.spawn)
       if (task) msg.value = { task, session }
-      else if (capable('canvas')) shelve(session, 'Session')
       else navigate(entityPath(idOf(ent(session))))
     } else {
       msg.value = r.msg ?? ''
@@ -508,13 +505,11 @@ export let Status = () => {
       <Right>
         <Sync />
         {capable('canvas') && <WhoAmI />}
-        {mode.value == 'command'
-          ? (
-            <Close type='button' aria-label='exit command mode' onClick={close}>
-              ×
-            </Close>
-          )
-          : capable('canvas') && <Tray />}
+        {mode.value == 'command' && (
+          <Close type='button' aria-label='exit command mode' onClick={close}>
+            ×
+          </Close>
+        )}
       </Right>
     </Frame>
   )

@@ -95,7 +95,7 @@ test('session row names the first ask and keeps the brief beneath it', async () 
       content: { eid: 'ask', body: 'Fix the tray\nplease' },
     },
   }
-  let mounted = mount(h(resolve(ent('asking'), 'Tray.List.Tile').Render, {
+  let mounted = mount(h(resolve(ent('asking'), 'Tile').Render, {
     e: ent('asking'),
   }))
   try {
@@ -543,7 +543,7 @@ test('session Tile names its work, model, and last activity without IDs', () => 
   ]
 
   let e = ent('session')
-  let mounted = mount(h(resolve(e, 'Tray.List.Tile').Render, { e }))
+  let mounted = mount(h(resolve(e, 'Tile').Render, { e }))
   try {
     let { root } = mounted
     let head = root.querySelector('.SessionRow_Head')!

@@ -3,7 +3,7 @@ import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import { learn, vocab } from './types.ts'
 import { cache, config, ent, myActor, owner } from './live.ts'
-import { actionsFor, applicable, resolve } from './components/registry.ts'
+import { applicable, resolve } from './components/registry.ts'
 import { screenTarget } from './components/nav.tsx'
 import { offerPlaces } from './components/offers.ts'
 import { held, host } from './host_testing.ts'
@@ -68,10 +68,6 @@ test('canvas contributions disappear without changing the stored entities', asyn
       assertEquals(applicable(ent('canvas')).includes('List'), installed)
       assertEquals(applicable(ent('canvas')).includes('Split'), installed)
       assertEquals(applicable(ent('layout')).includes('Layout'), installed)
-      assertEquals(
-        actionsFor(ent('task')).some((a) => a.label == 'open in tray'),
-        installed,
-      )
       assertEquals(resolve(ent('task')).view, 'Full')
       let free = held({ client: 'client' })
       if (installed) await until(() => wire.asked().length > 0)

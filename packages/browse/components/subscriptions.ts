@@ -62,8 +62,8 @@ export let useJob = (e: Ent): string | null => {
 export let useRows = (eids: string[]) =>
   useHold(eids.length > 0 && { rows: eids })
 
-// The canvas List face and the tray's shelf chips paint a pin's target without
-// mounting a Card, so they hold it here.
+// The canvas List face paints a pin's target without mounting a Card, so it
+// holds it here.
 export let usePinTargets = (ps: { target: string }[]) =>
   useRows(ps.map((p) => p.target))
 

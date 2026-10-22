@@ -13,13 +13,10 @@
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import {
   type Backlink,
-  dropLocal,
   ent,
   findEid,
-  holdLocal,
   linksVia,
   loaded,
-  localEids,
   problem,
   queryEids,
   querySubscription,
@@ -30,7 +27,7 @@ import {
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { type Ent, vocab } from '../types.ts'
-import { dotFields } from '../tray_query.ts'
+import { dotFields } from '../sessions.ts'
 
 // A query that does not parse fails where it was asked, never in the render
 // around it: the hook reports it once and answers a failed read, so the view
@@ -116,19 +113,6 @@ export let usePage = (
   return page.ready || !kept ? page : { ...page, eids: kept }
 }
 
-// The matching eids over the rows this tab holds, no server sub: for a query
-// evaluated PER RENDERED ROW whose defining sub the surface holds once (the
-// tray's session dots, live.ts holdLocal).
-export let useLocalEids = (query: string): string[] => {
-  let preds = usePreds(query)
-  useLayoutEffect(() => {
-    if (preds instanceof Error) return
-    holdLocal(preds)
-    return () => dropLocal(preds)
-  }, [preds])
-  return preds instanceof Error ? [] : localEids(preds).value
-}
-
 // The matching eids, as a live array. Prefer this when the caller only needs
 // ids (membership, a count); `useQuery` assembles the Ents.
 export let useQueryEids = (query: string, direct = false): string[] =>
@@ -187,7 +171,7 @@ export let useChatFor = (
   ).eids.map(ent)[0]
 
 // The far endpoints ride the citation answer as PEERS, cut to what a reference
-// row paints: a session's dot and its row line (tray_query dotFields plus the
+// row paints: a session's dot and its row line (sessions.ts dotFields plus the
 // model/effort/persona a SessionRow shows), a target's title and status. So the
 // referencing sessions of a task arrive in the edges frame itself, where they
 // were a second round trip of ten full rows, 27 KB and the last frame of the

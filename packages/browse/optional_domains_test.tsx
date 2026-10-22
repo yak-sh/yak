@@ -9,13 +9,12 @@ import { hostCommands } from './host_commands.ts'
 import { actionsFor } from './components/registry.ts'
 import { Entity } from './components/Entity.tsx'
 import { useCommentsOn, useReferences } from './components/useQuery.ts'
-import { useSessions } from './components/useSessions.ts'
 import { Navigation } from './components/Navigation.tsx'
 import { mount } from './components/mount.ts'
 import { held, host } from './host_testing.ts'
 import { Web } from './components/views/Web.tsx'
 import { pasted } from './paste.ts'
-import { sessionQueries } from './tray_query.ts'
+import { sessionQueries } from './sessions.ts'
 import './domain-host.tsx'
 import { lone } from '@yaks/draft/input'
 import { people } from './components/hits.ts'
@@ -44,7 +43,6 @@ test('a document-only vocabulary browses without task, session or box-only reads
   }
   let wire = host(() => ({ bundles: [] }))
   let View = () => {
-    useSessions()
     useCommentsOn('document')
     useReferences('document')
     return h('div', {}, h(Navigation, {}), h(Entity, { eid: 'document' }))
@@ -166,11 +164,10 @@ test('hosted transcript chrome omits box-only processes and projections', () => 
   })))
   try {
     let query = sessionQueries(vocab)
-    assertEquals(query.process, '')
-    for (let line of [query.active, query.recent, query.detail, query.all]) {
+    for (let line of [query.detail, query.all]) {
       assertEquals(/\.(process|exit|spawned|brief)\b/.test(line), false, line)
     }
-    assertEquals(query.recent.includes('.session'), true)
+    assertEquals(query.all.includes('.session'), true)
   } finally {
     learn(docs)
   }

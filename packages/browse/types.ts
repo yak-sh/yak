@@ -660,11 +660,6 @@ export type Fold = {
   statuses: string
 }
 
-// The Shelf: a per-client scratch canvas the Tray hangs cards on. A tag
-// like repo — it binds a client to their one shelf without naming the
-// entity (the entity stays a canvas), so it stays out of kindOrder.
-export type Shelf = { eid: string; client: string }
-
 // A cursor joins a client to where it is LOOKING — one row per client, the
 // per-client twin of camera (which is per client+canvas). target is the
 // fullscreened entity, view its ?v= tab. Navigation as graph data: the
@@ -1196,7 +1191,6 @@ export type EntCore = {
   client?: Client
   camera?: Camera
   fold?: Fold
-  shelf?: Shelf
   cursor?: Cursor
   favorite?: Favorite
   setting?: Setting

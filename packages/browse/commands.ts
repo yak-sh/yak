@@ -530,7 +530,7 @@ export let commands: Record<string, Command> = {
         },
       ),
     ],
-    about: 'start a taskless chat in the tray',
+    about: 'start a taskless chat',
     run: (rest, ctx) => {
       let { title, body, grouped } = spec(rest, ctx.read)
       for (let name of Object.keys(grouped)) {

@@ -527,7 +527,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
     let data = dt.getData('application/x-tasks-card')
     if (data) {
       let { target, view, w, ox, oy, pin } = JSON.parse(data)
-      // A Tray row carries its pin: MOVE that card here instead of cloning a
+      // A List row carries its pin: MOVE that card here instead of cloning a
       // new one — it lands under the ghost like a spawn does.
       if (pin && cache.value[pin]?.pin) {
         let at = toPlane(sx, sy, el.current!.getBoundingClientRect())

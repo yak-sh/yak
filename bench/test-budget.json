@@ -812,7 +812,7 @@
       "All sessions reuses the paged list and accepts words and query filters, newest first": 43.8,
       "a session exposes its spawned children through SessionRelated": 7.2,
       "personal lists prioritize live roots and drop expired leases without graph writes": 204.8,
-      "the sidebar and the tray both lead to every session, even with none of your own": 3
+      "the sidebar leads to every session, even with none of your own": 3
     },
     "packages/browse/components/Status_test.tsx": {
       "fix status links minted ids and follows the session lifecycle": 1.7
@@ -960,7 +960,7 @@
       "boardPost excludes chrome and self from the subscription members": 5.7,
       "boardsOver: awake only when a board names or drops the target": 7.8,
       "camera motion and card stacking stay off the graph signal": 8.1,
-      "client singletons: four tab subs, local reads, isolation (T-21490)": 7.2,
+      "client singletons: three tab subs, local reads, isolation (T-21490)": 7.2,
       "comments: reverse-ref set, awake only for its own thread": 8,
       "each aggregate frame replaces the whole tally": 5.2,
       "ent: refs put open work before settled work": 5.5,

@@ -37,7 +37,7 @@ import {
 } from './types.ts'
 import { moves, typeOf } from './edge.ts'
 import type { Row } from './client.ts'
-import { sessionQueries } from './tray_query.ts'
+import { sessionQueries } from './sessions.ts'
 import {
   distinctValues,
   EDGES,
@@ -690,14 +690,6 @@ let holdQuery = (preds: Pred[], source?: string): () => void => {
     dropBoard(s.sub)
   }
 }
-// A query resolved over the rows this tab already HOLDS, never the server: for
-// a per-row lookup keyed by the row's own eid (a strip of session dots each
-// asking "a wake pending for me?") whose DEFINING sub the surface holds once
-// for all of them (T-37445: 13 dots opened 13 server subs, one per session).
-// Held for the caller's life; reads through the same narrow signal queryEids
-// gives an unheld query.
-export let holdLocal = (preds: Pred[]): Signal<string[]> => mem.hold(preds)
-export let dropLocal = (preds: Pred[]) => mem.drop(preds)
 
 // A query that is evaluated PER RENDERED ROW — a reverse-lookup keyed by the
 // row's own eid (a tile's comment count on every entity in a list or tree) —
@@ -2718,18 +2710,14 @@ export let projects = (): Ent[] =>
     )
     .map(ent)
 // What a face that renders a session row needs on top of the dot's columns —
-// its short account of its work. Held only while such a face
-// is mounted (the Tray's panel while it is open, a project's Dashboard), so the
-// columns nobody is looking at stay off the wire. Same `.session` query as
-// above under a DIFFERENT projection, which makes it a different SUB with its
-// own member set: that is what "projection is part of sub identity" buys, and
-// the cache merges the two because the fuller one is a superset.
+// its short account of its work. Held only while such a face is mounted (a
+// project's Dashboard), so the columns nobody is looking at stay off the wire.
+// A different projection is a different SUB with its own member set: that is
+// what "projection is part of sub identity" buys, and the cache merges the two
+// because the fuller one is a superset.
 export let sessionDetail = sessionQueries(vocab).detail
 
-export let shelfFor = (client: string): string | undefined =>
-  localEids([eq('shelf', 'client', client)]).value[0]
-
-// THIS tab's own screen-state rows — cursor, camera, fold, shelf: the
+// THIS tab's own screen-state rows — cursor, camera, fold: the
 // components whose `client` names this browser — streamed by one small server
 // sub per component, held by the mounted app (App.tsx, `{client}` through
 // useHold). Named one by one, because another plugin declares a
@@ -2738,7 +2726,7 @@ export let shelfFor = (client: string): string | undefined =>
 // stay LOCAL lookups over the rows the subs stream in. A per-shape wire sub
 // here would accumulate (a fold sub per board visited); resolving locally
 // without the sub would under-report on a partial cache.
-let SCREEN = ['camera', 'cursor', 'fold', 'shelf']
+let SCREEN = ['camera', 'cursor', 'fold']
 let screenOf = (comp: string, client: string) =>
   resolveRefs(parseQuery(`.${comp}.client=${client}`), findEid)
 

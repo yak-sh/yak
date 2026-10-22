@@ -23,14 +23,7 @@ import {
 } from '../live.ts'
 import { type Ent, idOf, statusOf, vocab } from '../types.ts'
 import { navigate } from './nav.tsx'
-import {
-  type Action,
-  define,
-  defineActions,
-  renderView,
-  resolve,
-} from './registry.ts'
-import { shelve } from './shelf.ts'
+import { type Action, define, defineActions, renderView } from './registry.ts'
 import { memo } from './memo.ts'
 import {
   Acceptance,
@@ -164,7 +157,6 @@ define([
     Render: (props) => <TaskTile {...props} />,
   },
   { view: 'Tile', match: parse('.doc .board'), Render: BoardTile },
-  { view: 'Tray.List.Tile', match: parse('.session'), Render: SessionRow },
   { view: 'Tile', match: parse('.session'), Render: SessionRow },
   {
     view: 'Tile',
@@ -348,16 +340,6 @@ export let decisionActions = (e: Ent): Action[] => {
 }
 
 defineActions([
-  {
-    plugin: 'canvas',
-    // The Shelf is universal screen chrome: any entity may become the
-    // bottom-right popover, not only the chats that choose it by default.
-    match: and(),
-    acts: (e) => [{
-      label: 'open in tray',
-      run: () => shelve(e.eid, resolve(e).view),
-    }],
-  },
   {
     match: and(),
     acts: (e) =>

@@ -41,12 +41,10 @@ import {
   config,
   deps,
   domains,
-  dropLocal,
   ent,
   findEid,
   foldFor,
   gated,
-  holdLocal,
   hostFrom,
   jobOf,
   landSub,
@@ -70,7 +68,6 @@ import {
   row,
   serverEid,
   serverName,
-  shelfFor,
   shown,
   sieve,
   subEids,
@@ -597,7 +594,7 @@ test('facets: byComp derivation matches the whole-cache scan', () => {
       task: { eid: 't4' },
       filed: { eid: 't4', priority: 1, domain: null },
     },
-    // sessions + shelves + an unrelated doc that must touch no facet
+    // sessions + an unrelated doc that must touch no facet
     s1: {
       entity: { eid: 's1', num: 7 },
       session: { eid: 's1', id: 'r1' },
@@ -605,10 +602,6 @@ test('facets: byComp derivation matches the whole-cache scan', () => {
     s2: {
       entity: { eid: 's2', num: 8 },
       session: { eid: 's2', id: 'r2' },
-    },
-    sh1: {
-      entity: { eid: 'sh1', num: 10 },
-      shelf: { eid: 'sh1', client: 'c1' },
     },
     d1: {
       entity: { eid: 'd1', num: 11 },
@@ -629,8 +622,6 @@ test('facets: byComp derivation matches the whole-cache scan', () => {
   assertEquals(domains.value, ['Eng', 'Ops'])
   assertEquals(projects().map((e) => e.eid), refProjects)
   assertEquals(projects().map((e) => e.eid), ['pA', 'pB'])
-  assertEquals(shelfFor('c1'), 'sh1')
-  assertEquals(shelfFor('nope'), undefined)
 })
 
 test('agreement diagnostics are inert until explicitly enabled', () => {
@@ -995,9 +986,9 @@ test('foldFor: query membership, live statuses off the row', () => {
   }
 })
 
-// The presence/reference facets (projects/shelfFor) ride the query
-// door now (T-18099), so each wakes only when ITS membership changes — a project
-// born, a shelf claimed — never on a sibling facet or an unrelated row.
+// The presence facets (projects) ride the query door now (T-18099), so each
+// wakes only when ITS membership changes — a project born — never on a sibling
+// facet or an unrelated row.
 test('facet reads wake only their own membership', () => {
   cache.value = {
     proj: {
@@ -1015,34 +1006,25 @@ test('facet reads wake only their own membership', () => {
   }
   deps.value = []
   resetSignals()
-  let runs = { projects: 0, shelf: 0 }
+  let runs = { projects: 0 }
   let stops = [
     effect(() => {
       projects()
       runs.projects++
     }),
-    effect(() => {
-      shelfFor('client')
-      runs.shelf++
-    }),
   ]
   try {
     // an unrelated doc edit touches no facet — all stay asleep
     applyLocal([{ eid: 'plain', name: 'doc', comp: { title: 'changed' } }])
-    assertEquals(runs, { projects: 1, shelf: 1 })
+    assertEquals(runs, { projects: 1 })
 
-    // a project born wakes only the project census
+    // a project born wakes the project census
     applyLocal([{ eid: 'proj2', name: 'project', comp: {} }])
-    assertEquals(runs, { projects: 2, shelf: 1 })
+    assertEquals(runs, { projects: 2 })
 
-    // a session born wakes neither
+    // a session born does not
     applyLocal([{ eid: 'sess2', name: 'session', comp: { id: 'sess2' } }])
-    assertEquals(runs, { projects: 2, shelf: 1 })
-
-    // the client's shelf appears — only shelfFor wakes
-    applyLocal([{ eid: 'sh', name: 'shelf', comp: { client: 'client' } }])
-    assertEquals(runs, { projects: 2, shelf: 2 })
-    assertEquals(shelfFor('client'), 'sh')
+    assertEquals(runs, { projects: 2 })
   } finally {
     for (let stop of stops) stop()
   }
@@ -2283,7 +2265,7 @@ test('server query projections index member wakes and preserve server membership
 // server sub per component per tab (`.fold.client=<uuid>`, …), held for the
 // tab's life; the readers stay LOCAL lookups over the rows they stream, so
 // visiting boards or canvases opens no further wire subs.
-test('client singletons: four tab subs, local reads, isolation (T-21490)', () => {
+test('client singletons: three tab subs, local reads, isolation (T-21490)', () => {
   let RealWS = (globalThis as { WebSocket: unknown }).WebSocket
   ;(globalThis as { WebSocket: unknown }).WebSocket = class {
     readyState = 0
@@ -2315,7 +2297,6 @@ test('client singletons: four tab subs, local reads, isolation (T-21490)', () =>
         entity: { eid: 'fa', num: 4 },
         fold: { eid: 'fa', client: A, board: b1, statuses: 'open' },
       },
-      sa: { entity: { eid: 'sa', num: 5 }, shelf: { eid: 'sa', client: A } },
       ka: {
         entity: { eid: 'ka', num: 6 },
         camera: {
@@ -2342,17 +2323,16 @@ test('client singletons: four tab subs, local reads, isolation (T-21490)', () =>
     assertEquals(myCursor(A)?.target, T)
     assertEquals(probe.subN(), n0)
     holds.push(owned({ client: A }))
-    // Every singleton read for A answers A's rows through its four wire subs.
+    // Every singleton read for A answers A's rows through its three wire subs.
     assertEquals(myCursor(A)?.target, T)
     assertEquals(foldFor(A, b1)?.statuses, 'open')
     assertEquals(foldFor(A, b2), undefined) // a second board: no second sub
-    assertEquals(shelfFor(A), 'sa')
     assertEquals(myCamera(A, CV)?.x, 7)
-    assertEquals(probe.subN(), n0 + 4)
+    assertEquals(probe.subN(), n0 + 3)
     // Isolation: A's reads never surface B's rows; B's hold adds ITS subs.
     holds.push(owned({ client: B }))
     assertEquals(myCursor(B)?.target, CV)
-    assertEquals(probe.subN(), n0 + 8)
+    assertEquals(probe.subN(), n0 + 6)
     // The tab sub streams a new fold row for A — the local reader sees it.
     landSub({
       sub: `q:${JSON.stringify(preds)}`,
@@ -2366,7 +2346,7 @@ test('client singletons: four tab subs, local reads, isolation (T-21490)', () =>
       ],
     })
     assertEquals(foldFor(A, b2)?.statuses, 'wip')
-    assertEquals(probe.subN(), n0 + 8) // still no per-shape subs
+    assertEquals(probe.subN(), n0 + 6) // still no per-shape subs
   } finally {
     for (let free of holds) free()
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
@@ -2450,8 +2430,8 @@ test('comment badges share a target tally, refcount it, and reopen it', async ()
   let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
   let a = commentA, b = commentB
   let value = commentCount(a)
-  let off = holdCommentCount(a), duplicate = holdCommentCount(a)
-  let other = holdCommentCount(b)
+  let off = holdCommentCount(a)
+  let rest = owned({ comments: a }, { comments: b })
   try {
     await Promise.resolve()
     let asks = () =>
@@ -2469,8 +2449,7 @@ test('comment badges share a target tally, refcount it, and reopen it', async ()
     off()
     await Promise.resolve()
     assertEquals(asks().length, 1)
-    duplicate()
-    other()
+    rest()
     await Promise.resolve()
     assertEquals(sent.some((f) => f.unsubscribe == asks()[0].id), true)
     let again = holdCommentCount(a)
@@ -2682,33 +2661,6 @@ test('queryEids resolves pending wakes off the reverse index, narrowly', () => {
 // T-37445: a strip of session dots asks the same per-row question once per
 // session; each resolves over the rows the strip's ONE defining sub holds, so
 // no dot opens a server sub of its own.
-test('holdLocal answers a per-row query off held rows, opening no server sub', () => {
-  let probe =
-    (globalThis as unknown as { __probe: { subN: () => number } }).__probe
-  cache.value = {
-    s1: { entity: { eid: 's1', num: 1 }, session: { eid: 's1', id: 'a' } },
-    s2: { entity: { eid: 's2', num: 2 }, session: { eid: 's2', id: 'b' } },
-    w1: {
-      entity: { eid: 'w1', num: 3 },
-      wake: { eid: 'w1', at: SOON, target: 's1' },
-    },
-  }
-  deps.value = []
-  let n0 = probe.subN()
-  let mine = holdLocal(pendingWakeQ('s1'))
-  let theirs = holdLocal(pendingWakeQ('s2'))
-  try {
-    assertEquals(mine.value, ['w1'])
-    assertEquals(theirs.value, [])
-    assertEquals(probe.subN(), n0)
-    applyLocal([{ eid: 'w1', name: 'fired', comp: { at: NOW } }])
-    assertEquals(mine.value, [])
-  } finally {
-    dropLocal(pendingWakeQ('s1'))
-    dropLocal(pendingWakeQ('s2'))
-  }
-})
-
 test('subscription failures persist until a successful replacement', () => {
   let sub = 'entries:failure-state-test'
   landSub({

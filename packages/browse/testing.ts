@@ -53,7 +53,7 @@ import { docs as admin } from '@yaks/admin/vocab'
 // A test's localStorage is its own, and starts empty the way a new browser's
 // does. Deno's is one SQLite file for every test process in a checkout, so a
 // write in one process failed a read in another with "database is locked"
-// (Tray.tsx reads it as it loads), and what one run stored, the next read.
+// (a module may read it as it loads), and what one run stored, the next read.
 let kept = new Map<string, string>()
 let storage: Storage = {
   get length() {

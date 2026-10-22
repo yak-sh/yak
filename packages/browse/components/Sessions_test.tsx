@@ -6,18 +6,15 @@ import { ram } from '@yaks/ram'
 import { vocab } from '../types.ts'
 import { cache, config } from '../live.ts'
 import { host, reader } from '../host_testing.ts'
-import { allSessionsPath, allSessionsQuery } from '../tray_query.ts'
+import { allSessionsPath, allSessionsQuery } from '../sessions.ts'
 import { fields } from './fields.tsx'
 import { filterField, FilterInput } from './Filter.tsx'
 import { QueryList } from './views/List.tsx'
 import { Navigation } from './Navigation.tsx'
-import { Tray } from './Tray.tsx'
 import { mount } from './mount.ts'
 import { SessionRelated } from './views/SessionManage.tsx'
-import { useSessions } from './useSessions.ts'
 import { contribute } from './inspect.tsx'
 import * as sessionFacet from '@yaks/session/views'
-import { leaseEid } from '../../effects/lease.ts'
 
 // Resolve the package's lazy views once, before timing its consumers.
 let facet = { ...sessionFacet, inspectViews: await sessionFacet.inspectViews() }
@@ -106,24 +103,19 @@ test('All sessions reuses the paged list and accepts words and query filters, ne
   }
 })
 
-test('the sidebar and the tray both lead to every session, even with none of your own', () => {
+test('the sidebar leads to every session, even with none of your own', () => {
   using _ = faked({ addEventListener: () => {}, removeEventListener: () => {} })
   let prior = config.host
   config.host = 'browser.test'
   cache.value = {}
   let wire = host(() => ({ bundles: [] }))
-  let mounted = mount(
-    <>
-      <Navigation />
-      <Tray />
-    </>,
-  )
+  let mounted = mount(<Navigation />)
   try {
     assertEquals(
       [...mounted.root.querySelectorAll('a')].filter((a) =>
-        ['Sessions', 'All sessions'].includes(a.textContent!)
+        a.textContent == 'Sessions'
       ).map((a) => a.getAttribute('href')),
-      [allSessionsPath, allSessionsPath],
+      [allSessionsPath],
     )
   } finally {
     mounted.free()
@@ -153,51 +145,6 @@ test('a session exposes its spawned children through SessionRelated', async () =
       ),
       true,
     )
-  } finally {
-    mounted.free()
-    wire.free()
-    cache.value = {}
-    config.host = prior
-  }
-})
-
-test('personal lists prioritize live roots and drop expired leases without graph writes', async () => {
-  let prior = config.host
-  config.host = 'browser.test'
-  cache.value = {}
-  let old = sessions[13].entity.eid
-  let process = sessions[14].entity.eid
-  let rows = sessions.map((s, i) => ({
-    ...s,
-    session: { ...(s.session as Comp), operator: true },
-    ...(i == 14 ? { process: { pid: 123 } } : {}),
-  }))
-  let read = reader([...rows, {
-    entity: { eid: leaseEid(`@yaks/session/run/${old}`), num: 100 },
-    lease: {
-      holder: 'worker',
-      until: new Date(Date.now() + 200).toISOString(),
-    },
-  }], { computed: { 'session.status': (b) => (b.session as Comp)?.status } })
-  let wire = host((ask) => ({ bundles: read(ask.subscribe) }))
-  let Selection = () => (
-    <output>{useSessions().rows.map(([eid]) => eid).join(',')}</output>
-  )
-  let mounted = mount(<Selection />)
-  let selected = () =>
-    mounted.root.querySelector('output')?.textContent?.split(',')
-  try {
-    await until(() => selected()?.[0] == old)
-    assertEquals(selected(), [
-      old,
-      process,
-      ...sessions.slice(0, 6).map((s) => s.entity.eid),
-    ])
-    await until(() => selected()?.[0] == process)
-    assertEquals(selected(), [
-      process,
-      ...sessions.slice(0, 7).map((s) => s.entity.eid),
-    ])
   } finally {
     mounted.free()
     wire.free()

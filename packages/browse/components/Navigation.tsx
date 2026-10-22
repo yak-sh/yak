@@ -14,7 +14,7 @@ import {
   places,
 } from '../navigation.ts'
 import { owner, searchOpen } from '../live.ts'
-import { sessionQueries } from '../tray_query.ts'
+import { sessionQueries } from '../sessions.ts'
 import { vocab } from '../types.ts'
 import { front } from './fields.tsx'
 import { Icon } from './icons.tsx'

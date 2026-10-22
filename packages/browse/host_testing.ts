@@ -10,7 +10,6 @@ import type { Bundle } from '@yaks/graph'
 import { matcher, type MatchOpts } from '@yaks/match'
 import type { Frame, Socket } from '@yaks/sync'
 import { type ComponentChild, h, render } from 'preact'
-import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { cache, type Hold, useHold, useSocket } from './live.ts'
 import { tick } from './testing.ts'
@@ -31,7 +30,7 @@ export let held = (...holds: Hold[]): () => void => {
     let prior = g.document
     g.document ??= document
     try {
-      act(() => render(vnode, root))
+      render(vnode, root)
     } finally {
       g.document = prior
     }

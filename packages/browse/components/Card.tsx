@@ -17,7 +17,6 @@ import { Entity } from './Entity.tsx'
 import { filterable, FilterInput } from './Filter.tsx'
 import { Icon } from './icons.tsx'
 import { cardMenuAt } from './nav.tsx'
-import { overShelf, shelve } from './shelf.ts'
 import { useEntity } from './subscriptions.ts'
 import { tabOffers } from './offers.ts'
 import { Waiting } from './inspect.tsx'
@@ -148,15 +147,12 @@ export let Card = (
       el,
       () => camera.value.zoom,
       () => {},
-      (dx, dy, x, y) => {
-        if (overShelf(x, y)) shelve(p.target, p.view, p.eid)
-        else {
-          mutate({
-            eid: p.eid,
-            name: 'pin',
-            comp: moved(from.x, from.y, dx, dy),
-          })
-        }
+      (dx, dy) => {
+        mutate({
+          eid: p.eid,
+          name: 'pin',
+          comp: moved(from.x, from.y, dx, dy),
+        })
       },
     )
   }

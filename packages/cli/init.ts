@@ -6,7 +6,7 @@
 // The set is the graph, its tasks and projects, the people and sessions that
 // work on them and the processes a session runs in — so Claude Code or any MCP
 // agent can join through hooks and `/mcp` — and the web canvas `yak serve`
-// answers with, whose session tray reads those processes. Everything else is one
+// answers with, whose session pages read those processes. Everything else is one
 // line added to `plugins` later. Pure data: yak.ts writes it and opens the
 // graph it names.
 
