@@ -6,7 +6,7 @@ import { CallError } from '@yaks/tools/errors'
 import type { Comp, Graph } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { type Machine, settle } from '@yaks/machine'
-import { targetFor, type Workspaces } from '@yaks/machine/targets'
+import { targetFor, unlent, type Workspaces } from '@yaks/machine/targets'
 import type { ChildLimits } from '@yaks/session'
 import { type Snapshot, snapshot } from '@yaks/context'
 import { type As, owed } from '@yaks/persona'
@@ -55,9 +55,7 @@ export let machines = (
     if (prepared?.workspace) at = { ...at, ...prepared }
     else {
       if (!sandboxes) {
-        throw new Refused(
-          'This host lends no default sandbox provider; select a workspace or a configured sandbox provider',
-        )
+        throw await unlent(g)
       }
       at = {
         ...at,
@@ -137,9 +135,7 @@ export let machines = (
           throw new CallError('sandbox', 'sandbox must be a request object')
         }
         if (!sandboxes) {
-          throw new Refused(
-            'This host lends no default sandbox provider; select a workspace or a configured sandbox provider',
-          )
+          throw await unlent(g)
         }
         at = {
           workspace: await sandboxes.request(

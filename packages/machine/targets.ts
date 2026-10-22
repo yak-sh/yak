@@ -10,6 +10,33 @@ export type Workspaces = {
 export type Target = { workspace: string; cwd: string }
 let component = (value: unknown) => value as Comp | undefined
 
+/**
+ * How a call names a workspace, and some it could name: the second half of
+ * every refusal for a call that named none, or named something else. The
+ * newest workspaces, one per directory, since many share one.
+ */
+export let naming = async (g: Graph): Promise<string> => {
+  let newest = g.vocab.comp('created') ? '&.order=-created.at' : ''
+  let rows = await g.read(`.workspace${newest}&.limit=40&*`)
+  let roots = new Map<string, string>()
+  for (let row of rows) {
+    let root = component(row.workspace)?.root
+    if (row.released || typeof root != 'string' || roots.has(root)) continue
+    roots.set(root, row.entity.eid)
+  }
+  let some = [...roots].slice(0, 5).map(([root, eid]) => `${eid} (${root})`)
+  return "workspace takes a workspace entity's eid" +
+    (some.length ? `, such as ${some.join(', ')}` : '; this graph has none') +
+    ". graph_query '.workspace.root=<directory>' finds the one at a directory"
+}
+
+/** The refusal for a call left to a default sandbox the host does not lend. */
+export let unlent = async (g: Graph): Promise<Refused> =>
+  new Refused(
+    'This host lends no default sandbox provider, so name a workspace or a ' +
+      `sandbox provider it configures. ${await naming(g)}`,
+  )
+
 /** Resolve an explicit target or the session default, never a local fallback. */
 export let targetFor = async (
   g: Graph,
@@ -21,11 +48,15 @@ export let targetFor = async (
     : undefined
   let workspace = args.workspace ?? home?.workspace
   if (typeof workspace != 'string' || !workspace) {
-    throw new Refused('Select a workspace explicitly or set session home')
+    throw new Refused(
+      `No workspace named, and the session has no home: ${await naming(g)}`,
+    )
   }
   let row = (await g.get([workspace], ['workspace']))[0]
   let record = component(row?.workspace)
-  if (!record) throw new Refused('Not a workspace: ' + workspace)
+  if (!record) {
+    throw new Refused(`Not a workspace: ${workspace}. ${await naming(g)}`)
+  }
   let cwd = args.cwd ?? (args.workspace == null ? home?.cwd : undefined) ??
     record.root
   if (typeof cwd != 'string' || !cwd.startsWith('/') || cwd.includes('\0')) {

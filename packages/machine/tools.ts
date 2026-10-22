@@ -287,7 +287,11 @@ export let workspaceTools = (
           ...properties,
           ...!process
             ? {
-              workspace: str('Explicit workspace; otherwise the session home'),
+              workspace: str(
+                "A workspace entity's eid; otherwise the session home. " +
+                  "graph_query '.workspace.root=<directory>' finds the one " +
+                  'at a directory',
+              ),
               cwd: os(
                 'Absolute command directory; otherwise the selected workspace default',
               ),

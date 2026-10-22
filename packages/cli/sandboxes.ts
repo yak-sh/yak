@@ -1,5 +1,6 @@
 // Bind sandbox intentions separately from existing computer transports.
 import { Refused } from '@yaks/graph'
+import { unlent } from '@yaks/machine/targets'
 import type { Config, Host } from '@yaks/host'
 import { resolveOptions } from '@yaks/sandbox/configuration'
 import { sandboxNew } from '@yaks/sandbox/lifecycle'
@@ -11,9 +12,7 @@ export let sandboxCapabilities = (
   request: async (id, request = {}) => {
     let provider = request.provider ?? config.sandboxes?.defaultProvider
     if (!provider) {
-      throw new Refused(
-        'This host lends no default sandbox provider; select a workspace or a configured sandbox provider',
-      )
+      throw await unlent(host.graph)
     }
     let { providers } = await resolveOptions(host, config.sandboxes)
     let binding = providers[provider]

@@ -130,6 +130,26 @@ test('missing targets never fall back to local execution', async () => {
   await throws(() => by('wait').run({ process: mint() }))
 })
 
+test('a refusal for a workspace not named, or named wrong, says how to name one and which exist', async () => {
+  let { g, a, b } = missing
+  for (
+    let [args, said] of [
+      [{}, 'No workspace named, and the session has no home: workspace takes'],
+      [
+        { workspace: 'code' },
+        "Not a workspace: code. workspace takes a workspace entity's eid, such as",
+      ],
+    ]
+  ) {
+    let { message } = await throws(() => targetFor(g, undefined, args), said)
+    for (
+      let one of [`${a} (/a)`, `${b} (/b)`, "'.workspace.root=<directory>'"]
+    ) {
+      ok(message.includes(one), message)
+    }
+  }
+})
+
 test('an absent process is a caller refusal, never a local recovery guess', async () => {
   let error = await throws(
     () => processWorkspace(missing.g, mint()),
