@@ -290,11 +290,25 @@ let roleIn = async (ctx: Ctx, space: Space, over: boolean) => {
 
 // The space a call names, or the one it means.
 let spaceOf = async (ctx: Ctx, args: Args) => {
-  let space = args.space == null
-    ? await ownSpace(ctx, args.app)
-    : await ctx.dir.space(text(args.space, 'space'))
+  if (args.space != null) return await named(ctx, text(args.space, 'space'))
+  let space = await ownSpace(ctx, args.app)
   if (!space) throw refuse('missing', `no space ${args.space}`)
   return space
+}
+
+// The space a call names by its address. An assistant remembers a space by
+// the name it last used, and where that space went is what its old
+// hostname's redirect says to anybody, so the refusal says it too and the
+// next call names the space where it lives (D-131924).
+let named = async (ctx: Ctx, slug: string) => {
+  let space = await ctx.dir.space(slug)
+  if (space) return space
+  let moved = await ctx.dir.formerly(slug)
+  throw refuse(
+    'missing',
+    `no space ${slug}` +
+      (moved ? ` — it moved to ${moved.slug}; name it that` : ''),
+  )
 }
 
 // The caller in the space: a member reads, an owner or editor writes.
@@ -430,8 +444,7 @@ export let spaceBin = (ctx: Ctx, args: Args) =>
 // listing over one space and a listing over all of them read the same
 // (tools.ts `app_list`).
 export let seatIn = async (ctx: Ctx, slug: string) => {
-  let space = await ctx.dir.space(slug)
-  if (!space) throw refuse('missing', `no space ${slug}`)
+  let space = await named(ctx, slug)
   let role = await ctx.dir.role(space, ctx.person)
   if (!role) throw refuse('access', `not a member of ${space.slug}`)
   return [{ space, role }]

@@ -101,7 +101,6 @@ test('pages: staging space management and connector forms keep their host', asyn
     connect(
       {
         slug: 'ada',
-        fixed: false,
         plan: { plus: false, ends: '', known: false },
       },
       200,

@@ -161,9 +161,12 @@ export let answer = async (at: Arrived): Promise<Response | null> => {
   let [, slug, door] = asked
   let env = at.env
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
-  let space = await dir.space(at.space)
+  // A clone made before the space or the app moved keeps its remote, so an
+  // old address is served where it lands (directory.ts `answering`,
+  // D-131924); a fetch from it is the same repository, named by eid.
+  let space = await dir.answering(at.space)
   if (!space) return missing()
-  let app = await dir.app(space, slug)
+  let app = await dir.answeringApp(space, slug)
   // A trashed app is gone as far as every address is concerned (erase.ts);
   // its history comes back with it, or not at all.
   if (!app || app.trashed) return missing()

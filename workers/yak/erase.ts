@@ -307,11 +307,11 @@ let swept = async (env: Env, prefix: string) => {
   return keys
 }
 
-// The prefix an app's files live under (files.ts prefixOf), which is its
-// address, and therefore what a space's whole footprint in the bucket is
-// prefixed by.
+// The prefix an app's files live under (files.ts prefixOf): its space's
+// handle, then its slug, so the handle alone is what a space's whole
+// footprint in the bucket is prefixed by.
 let under = (space: Space, app?: App) =>
-  `${space.slug}/${app ? `${app.slug}/` : ''}`
+  `${space.store}/${app ? `${app.slug}/` : ''}`
 
 // One app's storage emptied — its bytes, the worker script that answers for
 // it, and the store that holds what it saved. Everything but the row, which
@@ -338,8 +338,8 @@ export let emptied = async (
   }
   await deleteBindings(env, app)
   await swept(env, under(space, app))
-  await swept(env, `${space.slug}/.releases/${app.eid}/`)
-  await swept(env, `${space.slug}/.declarations/${app.eid}/`)
+  await swept(env, `${space.store}/.releases/${app.eid}/`)
+  await swept(env, `${space.store}/.declarations/${app.eid}/`)
   await swept(env, receiptPrefix(app))
   await swept(env, uploadPrefix(app))
   // The store is named for where the app was born (directory.ts storeName),

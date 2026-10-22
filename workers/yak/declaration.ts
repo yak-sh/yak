@@ -10,7 +10,7 @@ import { r2RawObjects } from './lib/objects.ts'
 
 export type Declaration = { vocab: VocabDoc; tools: Tools }
 let key = (space: Space, app: App, release: string) =>
-  `${space.slug}/.declarations/${app.eid}/${
+  `${space.store}/.declarations/${app.eid}/${
     app.source?.split('/').pop() ?? 'legacy'
   }/${release}.json`
 

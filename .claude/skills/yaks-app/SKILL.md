@@ -52,6 +52,12 @@ and setup; this is the map and the feel.
   What its writes owe (a release's commit, a trash notice) is an effect its
   pool works after the write answers, so a test that reads one awaits the
   platform's `settled()` first.
+- **Names and handles**: what the platform keeps for a space or an app is
+  named by a handle written at birth, `space.store` (`ada.1f7c3e`, the root
+  of its keys in the bucket) and `app.store` (`ada/cookbook.385dac`, its
+  Durable Object and script), never by its address. A rename is a directory
+  write (directory.ts `rename`); the address left behind redirects until
+  another space takes it, which anyone may (D-131924).
 - **The serving fence**: a directory write raises a fence on the serving
   copy (`directory-copy.ts`, `serving-copy.ts`) until it commits, and every
   signed read and every store's check of a caller waits it out, at most
@@ -233,8 +239,8 @@ not use of those apps, and adds no activity hop to those reads.
   and commands are release metadata in R2 (`declaration.ts`), selected by the
   directory's source and declaration pointers. A deploy writes that snapshot
   before committing either pointer, including the retained words and
-  borrowed-home declarations the Store accepted; a space rename copies the
-  snapshots and app erasure sweeps them. `initialize`, `tools/list` and the
+  borrowed-home declarations the Store accepted; they sit under the space's
+  handle, so a space rename moves none, and app erasure sweeps them. `initialize`, `tools/list` and the
   schema preparation before a named tool call read no app Store. Every release
   a pointer selects has a snapshot, so a missing one is a defect the tracker
   hears about, never a reason to rebuild one from files.

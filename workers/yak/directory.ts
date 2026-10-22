@@ -148,6 +148,13 @@ export type Tunnel = { id: string; service: string; adopted: boolean }
 export type Space = {
   eid: string
   slug: string
+  // The space's handle: the root of every key it keeps in the bucket — its
+  // apps' files, uploads, releases and declarations. Written once at birth
+  // ({@link spaceHandle}) and never derived from the slug again, so a rename
+  // moves an address and never a byte, and a space that later takes the old
+  // name roots elsewhere (D-131924). A space from before the word wears its
+  // slug, which is where its bytes already were (space-move.ts).
+  store: string
   title: string
   // What this space pays (D-32751). Null for a space the sweep has not
   // reached yet, which means free — the terms every space is on today.
@@ -392,7 +399,7 @@ export type Row = {
     by?: Id | null
   }
   entity: { eid: string }
-  space?: { slug: string }
+  space?: { slug: string; store?: string | null }
   app?: {
     slug: string
     space: Id
@@ -588,7 +595,9 @@ let seed = async (store: Meta) => {
     bundles.push({
       entity: { eid: '$space' },
       doc: { title: META.space },
-      space: { slug: META.space },
+      // Its handle is the bare slug, what the backfill gives every space
+      // that was here before handles (space-move.ts), since it never moves.
+      space: { slug: META.space, store: META.space },
     }, {
       entity: { eid: '$app' },
       doc: { title: META.app },
@@ -596,8 +605,14 @@ let seed = async (store: Meta) => {
       // the object this very row is being written into, and it has been called
       // `yak/platform` since the platform's first day. Said outright rather
       // than left to the backfill, which would only ever arrive at the same
-      // string by a longer road.
-      app: { slug: META.app, space: '$space', store: META_STORE },
+      // string by a longer road. Private, as every app is born with its mode
+      // said (`appOf` reports one without) and as the live one stands.
+      app: {
+        slug: META.app,
+        space: '$space',
+        store: META_STORE,
+        access: 'private',
+      },
     })
   }
   if (!admin) {
@@ -853,6 +868,10 @@ let tunnelOf = (r: Row): Tunnel | null =>
 export let spaceOf = (r: Row): Space => ({
   eid: r.entity.eid,
   slug: r.space!.slug,
+  // The slug answers for a space the backfill has not reached yet: nothing
+  // has moved it since the word arrived, because a rename writes the handle
+  // it leaves behind (`rename` below).
+  store: r.space!.store ?? r.space!.slug,
   title: r.doc?.title || r.space!.slug,
   tier: tierOf(r.space!.slug, r.plan?.tier ?? null),
   plan: planOf(r),
@@ -1014,7 +1033,20 @@ export let storeName = (space: Space, app: App) =>
  * race in this directory is decided.
  */
 export let handle = (space: Pick<Space, 'slug'>, slug: string, eid: string) =>
-  `${space.slug}/${slug}.${eid.replaceAll('-', '').slice(-6)}`
+  tagged(`${space.slug}/${slug}`, eid)
+
+/**
+ * A space's handle, made the same way one level up: the slug it is born at and
+ * the same six hex off its eid, `ada.1f7c3e`. It roots every key the space
+ * keeps in the bucket (D-131924), so the bucket still reads as ada's, and a
+ * space born later at `ada` — after this one has moved — roots at a handle of
+ * its own. A slug is a hostname label with no dot in it, so no handle is ever
+ * a slug, the bare ones the backfill wrote included.
+ */
+export let spaceHandle = (slug: string, eid: string) => tagged(slug, eid)
+
+let tagged = (name: string, eid: string) =>
+  `${name}.${eid.replaceAll('-', '').slice(-6)}`
 
 // The door onto one app's store, told which app it holds and what this
 // directory says its access mode is (T-33813). A store keeps both (graph.ts
@@ -1146,6 +1178,24 @@ export let addresses = (had: string[]) => ({
   slugs: had.slice(1).join(' ') || null,
 })
 
+/** The address history a call leaves behind: the one it had, minus an
+ * address forgotten, plus the address a move is leaving. Null when neither
+ * happened, which is a call that must not write the property at all.
+ * app_set and a space's `rename` both keep theirs this way. */
+/// kept('ada', [], true, null) -> ['ada']
+/// kept('bob', ['ada'], false, 'ada') -> []
+/// kept('ada', ['ada'], false, null) -> null
+export let kept = (
+  live: string,
+  had: string[],
+  moving: boolean,
+  drop: string | null,
+) => {
+  if (!moving && drop == null) return null
+  let now = drop == null ? had : had.filter((s) => s != drop)
+  return moving && !now.includes(live) ? [...now, live] : now
+}
+
 // The typed client over the handler, in-process or across a binding.
 export type Directory = ReturnType<typeof directory>
 
@@ -1276,6 +1326,99 @@ export let directory = (via: Fetcher | Part, now = false) => {
         .map(spaceOf)
         .find((s) => s.slug != slug && s.slugs.includes(slug))
       return space ?? null
+    },
+    // The space an address reaches: the one living there, else the one that
+    // left it and still answers there. What a letter, a webhook and a clone
+    // aimed at an old address follow (inbox.ts, connections.ts `hook`,
+    // git_door.ts) and are served by where they land, since none of their
+    // senders follows a redirect — the hostname's pages redirect instead
+    // (apps.ts `served`). Asked in that order, so a space living at the name
+    // always wins it.
+    answering: async (slug: string) =>
+      await self.space(slug) ?? await self.formerly(slug),
+    // The same one level down: the app at an address in its space, else the
+    // app that left it.
+    answeringApp: async (space: Space, slug: string) =>
+      await self.app(space, slug) ?? await self.former(space, slug),
+    // What taking `slug` costs the space it still redirects for (D-131924).
+    // An address a space has left is anyone's to claim — Jeff: the old name is
+    // free for someone else — and the claim drops it from that space's
+    // history in the same write, so every door at the name (its hostname, its
+    // letters, its hooks) reaches the claimant alone, and no later move of
+    // the claimant can hand it back. Nothing for a name that redirects for
+    // nobody, or for `by` itself moving back to where it was.
+    claimed: async (slug: string, by?: string): Promise<Bundle[]> => {
+      let was = await self.formerly(slug)
+      if (!was || was.eid == by) return []
+      return [{
+        entity: { eid: was.eid },
+        former: addresses(was.slugs.filter((s) => s != slug)),
+      }]
+    },
+    // A space minted at `slug`, owned by `person`: the batch both doors that
+    // make one write (tools.ts `space_new`, `own` below) — the person's own
+    // row (they may have none yet), the space with its handle, their seat,
+    // and the name taken from a space it still redirected for. The eid is
+    // minted here rather than by a `$alias` the store resolves, because the
+    // handle is made out of it and there is no second moment to write it in
+    // (`spaceHandle`); a bundle mints at an eid its author chose (T-32455).
+    // Taking a name from another space is the platform's act, not the
+    // caller's, so a batch that does is the kernel's. Answers the eid.
+    mint: async (
+      person: string,
+      slug: string,
+      title: string,
+      headers: Record<string, string>,
+    ) => {
+      let eid = crypto.randomUUID()
+      let claims = await self.claimed(slug)
+      await (claims.length ? self.stamp : self.apply)({
+        entities: [
+          { entity: { eid: person }, person: {} },
+          {
+            entity: { eid },
+            doc: { title },
+            space: { slug, store: spaceHandle(slug, eid) },
+          },
+          {
+            entity: { eid: '$seat' },
+            member: { space: eid, person, role: 'owner' },
+          },
+          ...claims,
+        ],
+      }, headers)
+      return eid
+    },
+    // A space moved to another address, retitled, or made to forget one it
+    // left: the one write behind both doors that do it (tools.ts `space_set`,
+    // identity.ts `choose`). Nothing but directory rows change. The handle
+    // stays where it is — written down here for a space the backfill has not
+    // reached, since its bytes are under the slug it is leaving (D-131924) —
+    // the address left joins the space's history and redirects until another
+    // space takes it, and the address moved onto is taken from whichever
+    // space still redirected there. Answers the space as it now stands.
+    rename: async (
+      space: Space,
+      change: {
+        slug?: string | null
+        title?: string | null
+        forget?: string | null
+      },
+      headers: Record<string, string>,
+    ): Promise<Space> => {
+      let to = change.slug ?? space.slug
+      let moving = to != space.slug
+      let had = kept(space.slug, space.slugs, moving, change.forget ?? null)
+      let claims = moving ? await self.claimed(to, space.eid) : []
+      await (claims.length ? self.stamp : self.apply)({
+        entities: [{
+          entity: { eid: space.eid },
+          ...(change.title == null ? {} : { doc: { title: change.title } }),
+          ...(moving ? { space: { slug: to, store: space.store } } : {}),
+          ...(had ? { former: addresses(had.filter((s) => s != to)) } : {}),
+        }, ...claims],
+      }, headers)
+      return (await self.at(space.eid))!
     },
     app: async (space: Space, slug: string) => {
       let row = await one(
@@ -1440,21 +1583,14 @@ export let directory = (via: Fetcher | Part, now = false) => {
       (await query(`.deploy.app=${app.eid}&?created`, true))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
-    released: async (app: App, source: string) => {
-      let holds = async (at: string) =>
-        !!(await one(
-          `.deploy.app=${app.eid}&.deploy.source=${at}`,
-          true,
-        ))?.deploy
-      if (await holds(source)) return true
-      let row = await one(`.entity.eid=${app.space}`, true)
-      let space = row?.space ? spaceOf(row) : null
-      let path = source.slice(source.indexOf('/') + 1)
-      for (let slug of space?.slugs ?? []) {
-        if (await holds(`${slug}/${path}`)) return true
-      }
-      return false
-    },
+    // Whether `source` is one of the app's own releases. A release is kept
+    // under its space's handle, which no rename moves (D-131924), so the
+    // source a deploy wrote is the source asked for.
+    released: async (app: App, source: string) =>
+      !!(await one(
+        `.deploy.app=${app.eid}&.deploy.source=${source}`,
+        true,
+      ))?.deploy,
     // Every time this app's store was put back to a moment, newest first
     // (recover.ts, T-34507). Never cached, for the reason `deploys` is not: a
     // restore reads its own trail back the moment it writes to it.
@@ -1724,27 +1860,14 @@ export let directory = (via: Fetcher | Part, now = false) => {
       let chosen = !!want && SLUG.test(want) && !RESERVED.has(want) &&
         !await self.space(want)
       let slug = chosen ? want! : await self.free(wanted)
-      // The same batch space_new writes, for the same reasons: the person's
-      // own row (they may have none yet), the space, and their ownership of
-      // it — all bundles, since a bundle mints at an eid its author chose
-      // (T-32455).
+      // The same batch space_new writes (`mint`). A space nobody has named is
+      // known by the name it answers to, which is what `/connect` writes when
+      // one is chosen there too.
       try {
-        await self.apply({
-          entities: [
-            { entity: { eid: person }, person: {} },
-            // A space nobody has named is known by the name it answers to,
-            // which is what `/connect` writes when one is chosen there too.
-            {
-              entity: { eid: '$space' },
-              doc: { title: slug },
-              space: { slug },
-            },
-            {
-              entity: { eid: '$seat' },
-              member: { space: '$space', person, role: 'owner' },
-            },
-          ],
-        }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
+        await self.mint(person, slug, slug, {
+          'x-yak-person': person,
+          'x-yak-role': 'owner',
+        })
       } catch (e) {
         let [theirs] = await self.spaces(person, 'owner')
         if (!theirs) throw e

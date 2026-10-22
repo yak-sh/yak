@@ -1,9 +1,9 @@
 import { type Objects, type Representation, represents } from '@yaks/blob'
 import type { Bundle, Graph } from '@yaks/graph'
-// An app's bytes live beside its files, under its own address even if its
-// served files are borrowed from another app.
-export let blobPrefix = (space: { slug: string }, app: { slug: string }) =>
-  `${space.slug}/${app.slug}/blobs/`
+// An app's bytes live beside its files, under its space's handle and its own
+// slug even if its served files are borrowed from another app.
+export let blobPrefix = (space: { store: string }, app: { slug: string }) =>
+  `${space.store}/${app.slug}/blobs/`
 
 /** What in an app's store still names bytes it keeps at `sha`: the content
  * row while it carries them (an upload's `blob`, a model's `artifact`), and

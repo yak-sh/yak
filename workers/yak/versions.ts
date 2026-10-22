@@ -80,8 +80,8 @@ export let LANES = 6
  * served at the source's address (files.ts), and made again by every deploy. */
 export let BUILT = 'esbuild/'
 
-export let releaseOf = (space: { slug: string }, app: App) =>
-  `${space.slug}/.releases/${app.eid}/${crypto.randomUUID()}`
+export let releaseOf = (space: { store: string }, app: App) =>
+  `${space.store}/.releases/${app.eid}/${crypto.randomUUID()}`
 
 let latest = async (dir: Directory, space: Space, app: App) => {
   // Reuse the addressed app's request-local read until a directory write

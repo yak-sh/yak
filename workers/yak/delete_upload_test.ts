@@ -19,7 +19,7 @@ import { bucket } from './testing.ts'
 import { storeWords } from './vocab.ts'
 
 let vocab = storeWords('app').vocab
-let prefix = blobPrefix({ slug: 'ada' }, { slug: 'cookbook' })
+let prefix = blobPrefix({ store: 'ada' }, { slug: 'cookbook' })
 let sha = (n: number) => String(n).repeat(64)
 
 // The app's rows, as the uploads left them: sha(1) has none, sha(2) is

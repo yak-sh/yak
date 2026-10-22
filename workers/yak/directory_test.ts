@@ -16,6 +16,7 @@ import { Pending } from './writes.ts'
 let space: Space = {
   eid: 's1',
   slug: 'jeff',
+  store: 'jeff',
   title: 'jeff',
   tier: null,
   plan: null,
@@ -50,19 +51,11 @@ let an: App = {
 }
 
 test('a release is served only after its deploy records it', async () => {
-  let source = 'jeff/.releases/a1/'
+  let source = 'jeff.1f7c3e/.releases/a1/'
   let dir = directory({
     fetch: (req: Request) => {
       let q = new URL(req.url).searchParams.get('q') ?? ''
-      if (q == '.entity.eid=s1') {
-        return Promise.resolve(Response.json([{
-          entity: { eid: 's1' },
-          space: { slug: 'jeff' },
-          former: { slug: 'former' },
-        }]))
-      }
-      let found = q.endsWith(`.deploy.source=${source}live`) ||
-        q.endsWith('.deploy.source=former/.releases/a1/old')
+      let found = q.endsWith(`.deploy.source=${source}live`)
       return Promise.resolve(Response.json(
         found
           ? [{
@@ -74,7 +67,6 @@ test('a release is served only after its deploy records it', async () => {
     },
   })
   assertEquals(await dir.released(an, `${source}live`), true)
-  assertEquals(await dir.released(an, `${source}old`), true)
   assertEquals(await dir.released(an, `${source}failed`), false)
 })
 
@@ -450,14 +442,16 @@ test('signing in asks the directory a bounded number of questions', async () => 
   // What a later person's first sign-in costs: who they are (asked twice —
   // once by `spaces()` to know the person exists at all, once here for the
   // address their slug is derived from; the read cache answers the second on
-  // the deploy), what they own, whether that slug is free, the write, and the
-  // space read back afterwards.
+  // the deploy), what they own, whether that slug is free, whether it still
+  // redirects for a space that left it (which the mint takes from that space,
+  // D-131924: one read over the handful of spaces that ever moved), the
+  // write, and the space read back afterwards.
   let them = crypto.randomUUID()
   m.put(them, { person: {}, email: { address: 'dana@yaks.app' } })
   m.hops.length = 0
   let mine = await m.dir.own(them)
   assertEquals(mine.slug, 'dana')
-  assertEquals(m.hops.length, 6, m.hops.join('\n'))
+  assertEquals(m.hops.length, 7, m.hops.join('\n'))
 
   // And what it costs once they have one: the ordinary sign-in, which is
   // every sign-in after the first. Their memberships resolve to a space each,

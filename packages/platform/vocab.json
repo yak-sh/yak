@@ -392,6 +392,11 @@
         "slug": {
           "type": "string",
           "unique": true
+        },
+        "store": {
+          "type": "string",
+          "unique": true,
+          "description": "the immutable handle its storage uses, independent of its current address"
         }
       },
       "description": "one customer\u2019s area of the platform, at its own slug",

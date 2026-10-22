@@ -178,21 +178,24 @@ not have read themselves. Routing is not a way around another app's `access`.
 A title, the space's or an app's, is its name: one line, up to 80 characters. A
 newline in one is folded to a space, and a longer one is refused with the count.
 
-Only the space's owner may move it. Every app in the space moves with the
-address — files, data and all — and each keeps the path it had, so
+Only the space's owner may move it, and they may at any time, from here or from
+the address card on the space's settings page. Every app in the space moves with
+the address — files, data and all — and each keeps the path it had, so
 `ada.yaks.app/cookbook/` becomes `ada-cooks.yaks.app/cookbook/`.
 
-**The address it leaves keeps working.** It redirects to the new one with the
-path and the query kept, permanently, so a link somebody was given a year ago
-still opens the page it always did. Letters to `<old>.<app>@yaks.app` still
-arrive. And it stays reserved: nobody else can take it, and neither can the
-person who left it, until they say to forget it.
+**The address it leaves keeps working until someone else takes it.** It
+redirects to the new one with the path and the query kept, so a link somebody
+was given a year ago still opens the page it always did. Letters to
+`<old>.<app>@yaks.app` still arrive, and so do webhooks and `git` fetches aimed
+at it. The old name is free the moment the space leaves it: another space may
+take it, and from then on everything aimed at it reaches that space. Tell the
+people who hold the old address about the new one.
 
-    space_set(forget: 'ada')         the old address stops redirecting, and is free
+    space_set(forget: 'ada')         the old address stops redirecting now
 
-Forgetting is the one part that breaks something: every link and every letter
-still aimed at that address stops finding anything. Only do it when the person
-has said they are done with it — and then anyone, including them, can take it.
+Forgetting is the one part that breaks something at once: every link and every
+letter still aimed at that address stops finding anything. Only do it when the
+person has said they are done with it.
 
 `app_set(app, slug)` is the same move one level down, for one app's path within
 the space.

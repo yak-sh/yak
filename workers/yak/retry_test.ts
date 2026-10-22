@@ -19,6 +19,7 @@ import { listen, rostered, told } from './stream.ts'
 let space: Space = {
   eid: 'space-eid',
   slug: 'ada',
+  store: 'ada',
   title: 'Ada',
   tier: null,
   plan: null,

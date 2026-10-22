@@ -636,7 +636,6 @@ export type DeskPage = {
   trash?: { slug: string; title: string; days: number }[]
   name?: string
   agents?: Agent[]
-  fixed?: boolean
   views?: Visits[] | null
   viewDays?: number
   viewsOff?: string
@@ -903,22 +902,14 @@ let preferences = (at: DeskPage, env: Host) => {
     esc(at.name ?? '')
   }">
 </div></div><footer class="Card_Footer"><button class="Button" type="submit">Save name</button></footer></form>
-<section class="Card"><h2>App address</h2>${
-    at.fixed
-      ? `<p><a class="Address" href="https://${
-        esc(spaceHost(env, at.space))
-      }/" target="_blank" rel="noopener"><strong class="Address_Name">${
-        esc(at.space)
-      }</strong>.${
-        esc(apex(env))
-      }</a></p><p class="Note">To change it, ask your assistant to move your space. Every app goes with it, and old links keep working.</p>`
-      : `<form method="post" action="${managePath('settings', at.pick)}">
+<section class="Card"><h2>App address</h2><form method="post" action="${
+    managePath('settings', at.pick)
+  }">
 <label for="your-address">Your address</label>
 <span class="At"><input class="Field" id="your-address" name="space" maxlength="63" autocomplete="off" spellcheck="false" value="${
-        esc(at.space)
-      }"><span>.${apex(env)}</span></span>
-<p class="Note">Change it here before your first app. After that, your assistant can move your space.</p><button class="Button" type="submit">Save address</button></form>`
-  }</section>
+    esc(at.space)
+  }"><span>.${apex(env)}</span></span>
+<p class="Note">${MOVES}</p><button class="Button" type="submit">Save address</button></form></section>
 <section class="Card"><h2>Homepage</h2><p>${
     home
       ? `${esc(home.title || home.slug)} opens at your address.`
@@ -1814,9 +1805,6 @@ export let askAllow = (
 export type Yours = {
   slug: string
   agents?: Agent[]
-  // A space with apps in it keeps its address: an app's URL is this slug,
-  // and moving one wants the redirect a rename already wants (T-32576).
-  fixed: boolean
   said?: string
   say?: string
   no?: boolean
@@ -1836,24 +1824,25 @@ export type Yours = {
 // works with no script at all; the script below turns that into an inline
 // answer, which is what a person choosing a name expects.
 let mine = (y: Yours, env: Host) =>
-  y.fixed
-    ? `<section class="Card"><h2>Where your apps live</h2>
-<p>Your apps live at <b>${esc(spaceHost(env, y.slug))}</b>.</p>
-<p class="Note">This address cannot be changed after you build your first app.</p>
-</section>`
-    : `<section class="Card"><h2>Where your apps live</h2>
+  `<section class="Card"><h2>Where your apps live</h2>
 <p class="Now">Your apps live at <b>${
-      esc(spaceHost(env, y.slug))
-    }</b>. It's yours to
-change while nothing is built there.</p>
+    esc(spaceHost(env, y.slug))
+  }</b>. ${MOVES}</p>
 <form class="Addr" method="post" action="/connect">
 <span class="At"><input class="Field" name="space" maxlength="63" autocomplete="off" spellcheck="false" aria-label="The name your apps live at" value="${
-      esc(y.said ?? y.slug)
-    }"><span>.${apex(env)}</span></span>
+    esc(y.said ?? y.slug)
+  }"><span>.${apex(env)}</span></span>
 <button class="Button" type="submit">Save</button>
 <p class="Say${y.no ? ' Say-no' : ''}" role="status">${esc(y.say ?? '')}</p>
 </form>
 </section>`
+
+// What changing an address does, said on both cards that change it: the
+// apps go along, and the old address redirects only until somebody else takes
+// the name, which is free the moment it is left (D-131924).
+let MOVES = 'You can change it at any time. Every app moves with it, and ' +
+  'the old address sends people to the new one until someone else takes ' +
+  'that name.'
 
 // The plan card, for a person who is signed in (T-33125). One card with one
 // button: Plus when they are free, manage-billing when they are paying. The

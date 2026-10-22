@@ -714,7 +714,6 @@ let panel = (html: string, key: string) => {
 let page = () =>
   connect({
     slug: 'dana',
-    fixed: false,
     plan: { plus: false, ends: '', known: false },
   }).text()
 
@@ -741,7 +740,6 @@ test('the signed-in plan copy derives both tiers from the meter', async () => {
     let html = flat(
       await connect({
         slug: 'dana',
-        fixed: false,
         plan: { plus, ends: '', known: plus },
       }).text(),
     )

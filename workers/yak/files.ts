@@ -68,12 +68,13 @@ export let keyed = (prefix: string, path: string) =>
     decodeURIComponent(path.endsWith('/') ? `${path}index.html` : path)
   }`
 
-// The prefix an app's files live under, which is its address and therefore
-// moves when its slug does.
+// The prefix an app's files live under: its space's handle, which a space
+// rename leaves alone (D-131924), then its slug, which moves when the app's
+// does.
 export let prefixOf = (
-  space: { slug: string },
+  space: { store: string },
   app: { slug: string; source?: string | null },
-) => app.source ?? `${space.slug}/${app.slug}`
+) => app.source ?? `${space.store}/${app.slug}`
 
 // Which file answered, told back to the gateway: its path inside the served
 // folder (`about/index.html`, `404.html`), which is where the page's own

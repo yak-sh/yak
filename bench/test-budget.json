@@ -4367,7 +4367,7 @@
     },
     "workers/yak/mcp_spaces_test.ts": {
       "a space goes to the trash, and space_restore brings it back": 286.4,
-      "a space moves, and the subdomain it leaves points at it": 329.6,
+      "a space moves at any time, and the name it leaves is free to take": 470,
       "an address is forgotten, freed, and taken by another app": 254.8,
       "an address that reads as the platform is refused": 124.1,
       "an app goes to the trash, and app_restore brings it back": 426.1,

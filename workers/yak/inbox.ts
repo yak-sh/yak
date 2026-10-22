@@ -72,9 +72,9 @@ let opened = async (
   // A subdomain the space has left still finds it, as its old hostname does
   // (apps.ts `served`, T-34658): a rename moves `space.slug` and keeps the old
   // one in the space's `former`, so a letter to `<was>.<app>@yaks.app` lands
-  // where a link to `<was>.yaks.app/<app>/` lands. Asked second, so a live
-  // space always wins the name.
-  let space = await dir.space(box.space) ?? await dir.formerly(box.space)
+  // where a link to `<was>.yaks.app/<app>/` lands — until another space takes
+  // the name, which then wins it (directory.ts `answering`, D-131924).
+  let space = await dir.answering(box.space)
   // A space in the trash has no mailboxes at all (erase.ts, T-34431), for the
   // reason a trashed app has none: the address is spelled right and nothing
   // is behind it, and the sender is nobody we owe the news that somebody
@@ -87,7 +87,7 @@ let opened = async (
   // `<space>.<was>@yaks.app` lands in the store a link to `/<was>/` reaches.
   // A slug that was nobody's here has no such move to follow, and is refused.
   let app = box.app
-    ? await dir.app(space, box.app) ?? await dir.former(space, box.app)
+    ? await dir.answeringApp(space, box.app)
     : await dir.home(space)
   // An app in the trash has no mailbox (erase.ts, T-34430): a letter to it
   // bounces the way a letter to a slug nobody ever took does, and for the

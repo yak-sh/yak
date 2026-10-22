@@ -92,23 +92,12 @@ test('new app exposes separate build and upload forms below the agent route', as
   )
 })
 
-test('the fixed app address links to the displayed host and emphasizes its space name', async () => {
-  for (let env of [{}, { APEX: 'example.test' }]) {
-    let { document } = parseHTML(
-      await block({ view: 'settings', fixed: true }, env),
-    )
-    let address = document.querySelector('a.Address')!
-    assertEquals(
-      address.getAttribute('href'),
-      `https://${address.textContent}/`,
-    )
-    assertEquals(address.querySelector('.Address_Name')?.textContent, 'dana')
-    assertEquals(address.getAttribute('target'), '_blank')
-    assertEquals(address.querySelector('input'), null)
-  }
-  let { document } = parseHTML(await block({ view: 'settings', fixed: false }))
-  assertEquals(document.querySelector('a.Address'), null)
-  assert(document.querySelector('input[name=space]'))
+test('the app address can be changed from settings whatever the space holds', async () => {
+  let { document } = parseHTML(await block({ view: 'settings' }))
+  assertEquals(
+    document.querySelector('input[name=space]')?.getAttribute('value'),
+    'dana',
+  )
 })
 
 test('connected empty library offers a copyable request', async () => {

@@ -29,6 +29,7 @@ import { keepDeclaration } from './declaration.ts'
 let space = (slug: string): Space => ({
   eid: `space-${slug}`,
   slug,
+  store: slug,
   title: slug,
   tier: null,
   plan: null,

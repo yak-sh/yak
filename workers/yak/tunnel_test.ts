@@ -174,6 +174,7 @@ test('connect makes a pair and its gateway, answering the token once', async () 
 let tunneled: Space = {
   eid: 's1',
   slug: 'jeff',
+  store: 'jeff',
   title: 'jeff',
   tier: null,
   plan: null,

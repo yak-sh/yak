@@ -35,6 +35,7 @@ import type { Env } from './env.ts'
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
   slug: 'jeff',
+  store: 'jeff',
   title: 'jeff',
   tier: 'free',
   plan: null,

@@ -93,6 +93,7 @@ import {
   folded,
   handle,
   homing,
+  kept,
   mailbox,
   META,
   MODES,
@@ -1734,10 +1735,10 @@ let fileKey = (space: Space, app: App, path: string) =>
  * answers at while the move is in flight has the whole app behind it, and a
  * move that dies halfway leaves the app whole at the address it started from.
  *
- * A file's key carries the space's slug and the app's, so both renames move
- * bytes: app_set moves one app's files, space_set moves every app's (T-34658).
- * Keying them by the app's handle instead would move none, and is the follow-up
- * this helper exists to make obvious.
+ * A file's key carries the space's handle and the app's slug, so only an app
+ * rename moves bytes: space_set moves none (D-131924). Keying them by the
+ * app's handle too would move none at all, and is the follow-up this helper
+ * exists to make obvious (T-34690).
  */
 let laid = async (blobs: Objects, from: string, onto: string) => {
   let keys = await blobs.list(from)
@@ -1778,20 +1779,6 @@ let forgotten = (live: string, had: string[], drop: string) => {
       }`,
     )
   }
-}
-
-/** The address history this call leaves behind: the one it had, minus an
- * address forgotten, plus the address a move is leaving. Null when neither
- * happened, which is a call that must not write the property at all. */
-let kept = (
-  live: string,
-  had: string[],
-  moving: boolean,
-  drop: string | null,
-) => {
-  if (!moving && drop == null) return null
-  let now = drop == null ? had : had.filter((s) => s != drop)
-  return moving && !now.includes(live) ? [...now, live] : now
 }
 
 /** What forgetting an address costs, said in what stops working. The whole
@@ -2572,49 +2559,35 @@ let OURS: Row[] = [
             : `space ${s} is taken`,
         )
       }
-      // An address a space has left still points at it (space_set below), so it
-      // is not free for a new space either — the refusal app_new gives, one
-      // level up.
+      // An address another space has left is free (D-131924): it redirected
+      // there until now, and from this write on it is this space's alone
+      // (directory.ts `claimed`).
       let was = await ctx.dir.formerly(s)
-      if (was) {
-        throw refuse(
-          'conflict',
-          `${s} is where ${was.slug} used to be, and still points there — ` +
-            'pick another slug',
-        )
-      }
       await roomFor(ctx)
-      // The space, its owner, and the owner's person row in one batch. The
-      // person is keyed by the caller's sign-in, and a bundle mints at an eid
-      // its author chose (T-32455), so the whole batch is bundles. Once
-      // identity writes that row at sign-in (T-32327) it changes nothing and
-      // apply drops it.
-      let made = await ctx.dir.apply({
-        entities: [
-          { entity: { eid: ctx.person }, person: {} },
-          {
-            entity: { eid: '$space' },
-            doc: { title: titled(args.title) },
-            space: { slug: s },
-          },
-          {
-            entity: { eid: '$seat' },
-            member: { space: '$space', person: ctx.person, role: 'owner' },
-          },
-        ],
-      }, vouched(asCaller(ctx, 'owner')))
+      // The space with its handle, its owner, and the owner's person row in
+      // one batch (directory.ts `mint`). Once identity writes that row at
+      // sign-in (T-32327) it changes nothing and apply drops it.
+      let eid = await ctx.dir.mint(
+        ctx.person,
+        s,
+        titled(args.title),
+        vouched(asCaller(ctx, 'owner')),
+      )
       // The mint is committed; use its identity, not a slug that can be
       // renamed/reused while acquiring this new scope.
       renew(ctx)
-      let eid = made.find((row) => row.space)?.entity.eid
-      let space = eid ? await ctx.dir.at(eid) : null
+      let space = await ctx.dir.at(eid)
       if (!space) throw refuse('missing', 'the new space no longer exists')
       if (ctx.reopen) {
         space = (await reacquire(ctx, space, undefined, true)).space
       }
       let at = `https://${spaceHost(ctx.env, s)}/`
       return {
-        text: `space ${s} (${space.eid}): ${at}`,
+        text: `space ${s} (${space.eid}): ${at}` +
+          (was
+            ? ' — another space lived here before and moved away, so links ' +
+              'and letters still aimed at it arrive here now'
+            : ''),
         space,
         value: { eid: space.eid, url: at },
       }
@@ -2647,96 +2620,40 @@ let OURS: Row[] = [
       let moving = to != null && to != space.slug
       if (drop != null) forgotten(space.slug, space.slugs, drop)
       // The meta space is the platform. A space in the trash, whose address
-      // the trash holds, never gets here: `owns` refuses it.
-      let no = refused(space, ctx.env)
-      if (no) throw refuse('access', no)
+      // the trash holds, never gets here: `owns` refuses it. Anything else
+      // may move at any time, a paying one included — what stands in front of
+      // a delete (erase.ts `refused`) is no reason to keep an address.
+      if (space.slug == META.space) {
+        throw refuse('access', `${META.space} is the platform itself`)
+      }
       if (moving) {
         let taken = await ctx.dir.space(to!)
         if (taken) throw refuse('conflict', `space ${to} is taken`)
-        let was = await ctx.dir.formerly(to!)
-        if (was) {
-          throw refuse(
-            'conflict',
-            `${to} is where ${was.slug} used to be, and still points there ` +
-              '— pick another slug',
-          )
-        }
       }
-      // The address it leaves keeps answering, as a permanent redirect to the
-      // new subdomain with the path kept (apps.ts `served`), and letters to
-      // `<was>.<app>@yaks.app` still arrive (inbox.ts `opened`). A link
-      // someone was given is forever, and a space's address is on more of
-      // them than an app's — until the person says to forget one.
-      let had = kept(space.slug, space.slugs, moving, drop)
-      // Every app's files move with the space, because a file's key carries
-      // the space's slug (`laid`). Copied before anything is deleted, so the
-      // apps are whole at whichever address answers while the move is in
-      // flight. Nothing else moves: the store handles are the apps' own
-      // (directory.ts `handle`), a custom domain names an eid, and
-      // memberships, grants, gallery standing and analytics never held the
-      // slug at all.
-      let apps = moving ? await ctx.dir.apps(space) : []
-      let blobs = r2Objects(ctx.env.BLOBS)
-      let keys: string[] = []
-      for (let app of apps) {
-        keys.push(
-          ...await laid(
-            blobs,
-            `${space.slug}/${app.slug}/`,
-            `${to}/${app.slug}/`,
-          ),
-        )
-        keys.push(
-          ...await laid(
-            blobs,
-            `${space.slug}/.releases/${app.eid}/`,
-            `${to}/.releases/${app.eid}/`,
-          ),
-        )
-        keys.push(
-          ...await laid(
-            blobs,
-            `${space.slug}/.declarations/${app.eid}/`,
-            `${to}/.declarations/${app.eid}/`,
-          ),
-        )
-      }
-      let entities: Bundle[] = [{
-        entity: { eid: space.eid },
-        ...(title == null ? {} : { doc: { title } }),
-        ...(moving ? { space: { slug: to! } } : {}),
-        ...(had ? { former: addresses(had) } : {}),
-      }]
-      if (moving) {
-        entities.push(
-          // A draft is rows (written.ts), named by no address.
-          ...apps.filter((app) => app.source).map((app) => ({
-            entity: { eid: app.eid },
-            app: { source: app.source!.replace(`${space.slug}/`, `${to}/`) },
-          })),
-        )
-      }
-      await (entities.length > 1 ? ctx.dir.stamp : ctx.dir.apply)(
-        { entities },
+      // One directory write and nothing else (directory.ts `rename`): every
+      // key the space keeps in the bucket roots at its handle, which a move
+      // leaves alone (D-131924), as it leaves its apps' handles, a custom
+      // domain (which names an eid), memberships, grants and analytics. The
+      // address it leaves keeps answering, as a permanent redirect with the
+      // path kept (apps.ts `served`), letters to `<was>.<app>@yaks.app` still
+      // arrive (inbox.ts `opened`), and hooks and clones aimed there are
+      // served — until another space takes the name, which is anyone's to
+      // take, or the owner forgets it.
+      let now = await ctx.dir.rename(
+        space,
+        { slug: to, title, forget: drop },
         vouched(who),
       )
-      await blobs.delete(keys)
-      let now = (await ctx.dir.space(to ?? space.slug))!
       return {
         text: `space ${now.slug}${title == null ? '' : ` "${title}"`}: ` +
           `https://${spaceHost(ctx.env, now.slug)}/` +
           (moving
-            ? ` — moved from ${
-              spaceHost(ctx.env, space.slug)
-            }, which redirects here ` +
-              `and stays reserved; letters to ${
-                mailFrom(space.slug, '<app>', ctx.env)
-              } still arrive. Give people the new address` +
-              (apps.length
-                ? `, and every app of the space moved with it (${
-                  apps.map((a) => a.slug).join(', ')
-                })`
-                : '')
+            ? ` — moved from ${spaceHost(ctx.env, space.slug)}, which ` +
+              'redirects here, with letters to ' +
+              `${mailFrom(space.slug, '<app>', ctx.env)} still arriving, ` +
+              `until another space takes the name ${space.slug}: it is free ` +
+              'for anyone now. Give people the new address; every app moved ' +
+              'with the space'
             : '') +
           (drop == null ? '' : ` — ${lost(`${spaceHost(ctx.env, drop)}`)}`),
         space: now,
@@ -4219,6 +4136,17 @@ let OURS: Row[] = [
       if (moving && await ctx.dir.app(space, to!)) {
         throw refuse('conflict', `app ${to} exists in ${space.slug}`)
       }
+      // An address another app of the space has left still points at it, so
+      // it is not this app's to move onto either — app_new's refusal, which
+      // a rename skipped, cutting the other app's redirect in silence.
+      let left = moving ? await ctx.dir.former(space, to!) : null
+      if (left && left.eid != app.eid) {
+        throw refuse(
+          'conflict',
+          `${to} is where ${space.slug}/${left.slug} used to be, and still ` +
+            'points there — pick another slug, or forget it on that app first',
+        )
+      }
       // The address it leaves keeps answering, as a permanent redirect to the
       // new one: a page already open on a phone writes to the old address for
       // as long as it stays open, and a link someone was given is forever
@@ -4229,8 +4157,8 @@ let OURS: Row[] = [
       // store is untouched: it is named by the app's own handle, not by where
       // it lives (directory.ts storeName).
       let blobs = r2Objects(ctx.env.BLOBS)
-      let from = `${space.slug}/${app.slug}/`
-      let onto = moving ? `${space.slug}/${to}/` : from
+      let from = `${space.store}/${app.slug}/`
+      let onto = moving ? `${space.store}/${to}/` : from
       let keys = moving ? await laid(blobs, from, onto) : []
       let entities: Bundle[] = []
       if (

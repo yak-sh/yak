@@ -31,6 +31,7 @@ import {
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'space-eid',
   slug: 'shoplab',
+  store: 'shoplab',
   title: 'shoplab',
   tier: 'free',
   plan: null,

@@ -695,8 +695,11 @@ export let hook: Door = async ({ env, req, path, space: slug }) => {
   }
   let [name, eid, ...rest] = path.slice(HOOKS.length).split('/')
   let dir = dirOf(env)
-  let space = rest.length ? null : await dir.space(slug)
-  let app = space && name ? await dir.app(space, name) : null
+  // A hook keeps arriving at the address it was registered with after the
+  // space or the app moves, and its sender follows no redirect, so it is
+  // served where it lands (directory.ts `answering`, D-131924).
+  let space = rest.length ? null : await dir.answering(slug)
+  let app = space && name ? await dir.answeringApp(space, name) : null
   let b = space && app && !app.trashed
     ? await hookable(env, space, app, eid)
     : null

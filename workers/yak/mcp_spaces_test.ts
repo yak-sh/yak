@@ -8,7 +8,6 @@ import {
 import { test, until } from '@yaks/testing'
 import {
   accepted,
-  client,
   commandsOf,
   connector,
   kernel,
@@ -21,6 +20,7 @@ import {
   vocabFile,
 } from './probe.ts'
 import type { Listed } from './tools.ts'
+import { renamed } from './space_rename_fixture.ts'
 
 // Every app app_list answered as data, across its spaces.
 let appsIn = (said: { value: unknown }) =>
@@ -202,137 +202,15 @@ test('the front page moves, and only the owner moves it', async () => {
 // and stays reserved, and what the platform keeps for the space — the store
 // each app is named by, the domain somebody else owns, the roster — never
 // held the slug and so never moves.
-test('a space moves, and the subdomain it leaves points at it', async () => {
+test('a space moves at any time, and the name it leaves is free to take', async () => {
   let k = await kernel()
-  let ada46 = unique('ada46')
-  let adacooks46 = unique('ada-cooks46')
-  let ourbookclub106com = unique('ourbookclub106') + '.com'
   try {
-    let them = await seed(k, [{ slug: ada46, apps: ['cookbook', 'garden'] }])
-    let agent = connector(k, them.cookie)
-    let box = client(k, `${ada46}.yaks.app`, 'cookbook', them.cookie)
-    await box.put('/index.html', '<!doctype html><h1>Our recipe box</h1>')
-    await agent.tool('app_deploy', { space: ada46, app: 'cookbook' })
-    let cake = crypto.randomUUID()
-    await box.applied([{ entity: { eid: cake }, doc: { title: 'Lemon cake' } }])
-    // A domain somebody else owns, aimed at the space by its eid.
-    await meta(k).apply([{
-      hostname: {
-        name: ourbookclub106com,
-        serves: them.eids[ada46],
-        stage: 'active',
-      },
-    }])
-    let handle = async (host: string, app: string) =>
-      String((await (await k.at(host, `/${app}/api/graph`)).json()).db)
-    let was = await handle(`${ada46}.yaks.app`, 'cookbook')
-
-    let said = await agent.tool('space_set', {
-      space: ada46,
-      slug: adacooks46,
-    })
-    assertStringIncludes(said, `https://${adacooks46}.yaks.app/`)
-    assertStringIncludes(said, 'redirects here and stays reserved')
-    assertStringIncludes(said, 'cookbook, garden')
-
-    // Served at the new address, files and rows and all.
-    let now = await k.at(`${adacooks46}.yaks.app`, '/cookbook/')
-    assertEquals(now.status, 200)
-    assertStringIncludes(await now.text(), '<h1>Our recipe box</h1>')
-    let [kept] = await client(
-      k,
-      `${adacooks46}.yaks.app`,
-      'cookbook',
-      them.cookie,
-    )
-      .get(`id=${cake}`) as unknown as { doc: { title: string } }[]
-    assertEquals(kept.doc.title, 'Lemon cake')
-    // The store handle did not move: it is the app's own, not the address's.
-    assertEquals(await handle(`${adacooks46}.yaks.app`, 'cookbook'), was)
-
-    // The subdomain it left keeps answering, as the permanent move it was,
-    // with the path and the query kept.
-    let gone = await k.at(`${ada46}.yaks.app`, '/cookbook/?page=2', {
-      redirect: 'manual',
-    })
-    assertEquals(gone.status, 301)
-    assertEquals(
-      gone.headers.get('location'),
-      `https://${adacooks46}.yaks.app/cookbook/?page=2`,
-    )
-    // A write keeps its method, the way a renamed app's does.
-    let write = await k.at(`${ada46}.yaks.app`, '/cookbook/api/apply', {
-      method: 'POST',
-      body: '[]',
-      redirect: 'manual',
-    })
-    assertEquals(write.status, 308)
-    assertEquals(
-      write.headers.get('location'),
-      `https://${adacooks46}.yaks.app/cookbook/api/apply`,
-    )
-    // A dashboard link naming the space by the old name follows it.
-    let desk = await k.at(
-      'yaks.app',
-      `/manage/settings?space=${ada46}&saved=1`,
-      {
-        redirect: 'manual',
-        headers: { cookie: them.cookie },
-      },
-    )
-    assertEquals(desk.status, 301)
-    assertEquals(
-      desk.headers.get('location'),
-      `https://yaks.app/manage/settings?space=${adacooks46}&saved=1`,
-    )
-    // And the address is not free just because the space left it.
-    await assertRejects(
-      () => agent.tool('space_new', { slug: ada46, title: 'Ada again' }),
-      Error,
-      'used to be',
-    )
-
-    // The domain names an eid, so it opens the space wherever the space
-    // lives — nothing about it was touched.
-    let their = await k.at(ourbookclub106com, '/cookbook/')
-    assertEquals(their.status, 200)
-    assertStringIncludes(await their.text(), '<h1>Our recipe box</h1>')
-    // And the roster is the space's own: its owner is still its owner, which
-    // is what lets them move it a second time.
-    assertStringIncludes(
-      await agent.tool('space_set', {
-        space: adacooks46,
-        title: "Ada's kitchen",
-      }),
-      `${adacooks46} "Ada\'s kitchen"`,
-    )
-
-    // Forgotten (T-34659): the subdomain stops redirecting and goes back into
-    // circulation — a config change, and the answer names what it costs.
-    assertStringIncludes(
-      await agent.tool('space_set', { space: adacooks46, forget: ada46 }),
-      `${ada46}.yaks.app stops redirecting and is free for anyone to take`,
-    )
-    assertEquals(
-      (await k.at(`${ada46}.yaks.app`, '/cookbook/', { redirect: 'manual' }))
-        .status,
-      404,
-    )
-    assertStringIncludes(
-      await agent.tool('space_new', { slug: ada46, title: 'Ada again' }),
-      `https://${ada46}.yaks.app/`,
-    )
+    await renamed(k)
   } finally {
     await k.stop()
   }
 })
 
-// Forgetting an address (T-34659). Jeff, on T-34656: "whether the old domain
-// redirects should be a simple config change, not a infrastructure migration".
-// So it is one argument, and what it changes is the redirect and nothing else —
-// which is only true because the store is named by the app's own handle
-// (T-34657): a freed address can be taken by a new app, and the two are two
-// objects with two sets of data.
 test('an address is forgotten, freed, and taken by another app', async () => {
   let k = await kernel()
   let ada47 = unique('ada47')

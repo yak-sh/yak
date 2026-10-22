@@ -1804,7 +1804,7 @@ let api = async (
       })
     }
     if (!mayRead) return refused('not_a_reader')
-    let source = `${space.slug}/.releases/${app.eid}/${versioned.release}`
+    let source = `${space.store}/.releases/${app.eid}/${versioned.release}`
     if (source != app.source && !await dir.released(app, source)) {
       return json(404, 'no_such_file')
     }
@@ -2465,10 +2465,6 @@ let desk = async (
         enabled(req),
       )
       : undefined,
-    // Something is built here while an app sits in the trash: its store is
-    // named for this address and its files live under it, so the address
-    // stays put until the trash is empty (T-32576).
-    fixed: !!here.length,
     say: said?.say ?? returned(q)?.say ?? '',
     no: said?.no ?? returned(q)?.no,
   }, env)

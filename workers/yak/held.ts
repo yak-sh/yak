@@ -8,8 +8,9 @@
 // App data is what each app's store last told the directory it weighs
 // (meter.ts `weighed`). A trashed app's store keeps its rows until it is
 // erased, so it counts. Photos and files are the space's objects in the
-// bucket, everything under `<space>/`, each counted for the app whose prefix
-// `<space>/<app>/` holds it (blob-key.ts, files.ts `prefixOf`): its files,
+// bucket, everything under `<handle>/` (the space's own, directory.ts
+// `spaceHandle`), each counted for the app whose prefix
+// `<handle>/<app>/` holds it (blob-key.ts, files.ts `prefixOf`): its files,
 // uploads, kept versions and history. A key under no app's prefix still counts
 // for the space, so the apps' files can sum to less than the space's.
 import type { App, Space } from './directory.ts'
@@ -25,10 +26,13 @@ let sum = (ns: Iterable<number>) => [...ns].reduce((a, b) => a + b, 0)
 // The bucket's objects under a space, totalled by the app whose prefix holds
 // them.
 /// let sizes = new Map([['jeff/notes/a', 2], ['jeff/notes/blobs/f', 3], ['jeff/cart/b', 4], ['jeff/stray', 9]])
-/// split({ slug: 'jeff' }, sizes) -> new Map([['notes', 5], ['cart', 4]])
-export let split = (space: Pick<Space, 'slug'>, sizes: Map<string, number>) => {
+/// split({ store: 'jeff' }, sizes) -> new Map([['notes', 5], ['cart', 4]])
+export let split = (
+  space: Pick<Space, 'store'>,
+  sizes: Map<string, number>,
+) => {
   let by = new Map<string, number>()
-  let prefix = `${space.slug}/`
+  let prefix = `${space.store}/`
   for (let [key, n] of sizes) {
     let rest = key.startsWith(prefix) ? key.slice(prefix.length) : ''
     let slug = rest.includes('/') ? rest.slice(0, rest.indexOf('/')) : ''
@@ -41,12 +45,12 @@ export let split = (space: Pick<Space, 'slug'>, sizes: Map<string, number>) => {
 // photos and files from the bucket's objects when a door has just listed them
 // (`sizes`), and otherwise from the sweep's last reading on each row. An app
 // whose prefix holds objects but whose row is not given is counted by its slug.
-/// let jeff = { slug: 'jeff', meter: { files: 20 } }
+/// let jeff = { store: 'jeff', meter: { files: 20 } }
 /// let notes = { slug: 'notes', meter: { bytes: 7, files: 20 } }
 /// holding(jeff, [notes]) -> { bytes: 7, files: 20, apps: new Map([['notes', { bytes: 7, files: 20 }]]) }
 /// holding(jeff, [notes], new Map([['jeff/cart/a', 4]])) -> { bytes: 7, files: 4, apps: new Map([['notes', { bytes: 7, files: 0 }], ['cart', { bytes: 0, files: 4 }]]) }
 export let holding = (
-  space: Pick<Space, 'slug'> & { meter: Partial<Held> | null },
+  space: Pick<Space, 'store'> & { meter: Partial<Held> | null },
   apps: (Pick<App, 'slug'> & { meter: Partial<Held> | null })[],
   sizes?: Map<string, number>,
 ): Holding => {

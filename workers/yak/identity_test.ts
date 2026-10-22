@@ -1363,19 +1363,25 @@ test('the connector page, and the address chosen on it', async () => {
     assertMatch(again, new RegExp(`${want}.yaks.app is taken`))
     assertMatch(again, new RegExp(`name="space"[^>]*value="${want}"`))
 
-    // Once something is built there, the address stays put: moving an app's
-    // URL is a bigger job than this page does (T-32576).
+    // Built on or not, the address moves at any time, the move space_set
+    // makes (D-131924): the app goes along, and each address the space left
+    // is kept to send people on until another space takes it.
     let [mine] = await dir.query(`.space.slug=${want}`)
     await dir.apply([
       { doc: { title: 'box' }, app: { slug: 'box', space: mine.entity.eid } },
     ])
-    let [fixed, stays] = await asJson({ space: `dana-${uniq()}` }, cookie)
-    assertEquals(fixed, 400)
-    assertMatch(stays.error, /stays put/)
+    let next = `dana-${uniq()}`
+    assertEquals(await asJson({ space: next }, cookie), [
+      200,
+      { address: `${next}.yaks.app`, slug: next },
+    ])
+    let [moved] = await dir.query(`.space.slug=${next}&?former`)
+    assertEquals(moved.entity.eid, mine.entity.eid)
+    assertEquals(moved.former, { slug: derived, slugs: want })
     let built = await (await k.at('yaks.app', '/connect', {
       headers: { cookie },
     })).text()
-    assertEquals(/name="space"/.test(built), false)
+    assertMatch(built, new RegExp(`name="space"[^>]*value="${next}"`))
 
     // A stranger who posts one is sent to sign in, and nothing is answered
     // about the address they asked for.

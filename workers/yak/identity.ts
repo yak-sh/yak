@@ -517,7 +517,6 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
     {
       slug: space.slug,
       agents: await agents(env, who.person),
-      fixed: !!(await dir.apps(space)).length,
       said,
       say,
       no: !!say,
@@ -536,11 +535,11 @@ let theirs = async (env: Env, req: Request, said?: string, say?: string) => {
   )
 }
 
-// Taking an address: the space wears the slug its owner chose. It is theirs
-// to change while nothing is built there — an app's URL is this slug, so a
-// space with apps in it stays put until moving one is something we do
-// properly, with the redirect a rename wants (T-32576). Answers the address
-// or a sentence, never both; the card renders whichever it gets.
+// Taking an address: the space wears the slug its owner chose, at any time —
+// the same move space_set makes (directory.ts `rename`, D-131924), so the
+// apps go with it, the address it leaves redirects until another space takes
+// it, and nothing in the bucket moves. Answers the address or a sentence,
+// never both; the card renders whichever it gets.
 //
 // `at` names which space, for the owner block on a space's own page, where
 // the answer is the space being looked at rather than whichever one `own()`
@@ -568,24 +567,19 @@ export let choose = async (
       error: `${want}.${apex(env)} is kept for yaks.app itself. Try another?`,
     }
   }
-  if ((await dir.apps(space)).length) {
-    return {
-      error: `You've built something at ${space.slug}.${apex(env)}, so that ` +
-        'address stays put for now.',
-    }
+  if (space.slug == META.space) {
+    return { error: `${META.space} is the platform itself, and stays put.` }
   }
   if (await dir.space(want)) {
     return { error: `${want}.${apex(env)} is taken. Try another?` }
   }
   try {
-    // The title follows the address: a space nobody has named is known by
-    // the name it answers to (directory.ts `own`).
-    await dir.apply({
-      entities: [{
-        entity: { eid: space.eid },
-        doc: { title: want },
-        space: { slug: want },
-      }],
+    // The title follows the address for a space nobody has named, which is
+    // known by the name it answers to (directory.ts `own`); a name somebody
+    // gave it stays.
+    await dir.rename(space, {
+      slug: want,
+      title: space.title == space.slug ? want : null,
     }, { 'x-yak-person': person, 'x-yak-role': 'owner' })
   } catch {
     // Two people can want one name at once; the unique slug decides, and the

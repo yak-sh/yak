@@ -45,6 +45,7 @@ import type { Space } from './directory.ts'
 let space = (over: Partial<Space> = {}): Space => ({
   eid: 'e-space',
   slug: 'ada',
+  store: 'ada',
   title: 'Ada',
   tier: null,
   plan: null,
