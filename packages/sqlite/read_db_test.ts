@@ -4,7 +4,8 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { as, fn, insert, lit, type Param, scan, select, val } from '@yaks/sql'
 import { open as writer } from './db.ts'
 import { open } from './read-db.ts'
-import { budget, ROW, VALUE } from './budget.ts'
+import { type Limits, metered, ROW, VALUE } from './budget.ts'
+import { Refused } from '@yaks/graph/errors'
 
 let scratch = () => {
   let dir = Deno.makeTempDirSync(), path = `${dir}/read.db`
@@ -132,29 +133,34 @@ test('the last read-only connection leaves its database and WAL untouched', () =
   contents().forEach((bytes, i) => assertEquals(bytes.equals(before[i]), true))
 })
 
-test('a metered read past its budget is refused, and the next read answers', () => {
+// Both engines count each row they decode against the read running, so a read
+// past its budget is refused on the writer's connection as on the reader's.
+test('a read past its budget is refused on either engine, and the next answers', () => {
   using s = scratch()
   s.db.query({ t: 'create table', name: 'big', cols: [{ name: 'x' }] })
   for (let x of [1, 2, 3, 4, 5]) s.db.query(insert('big', { x: 'x'.repeat(x) }))
-  let spent = budget({ rows: 3, bytes: 1_000_000 })
-  let db = open(s.path, { meter: spent.meter })
+  let reader = open(s.path)
   try {
-    assertThrows(() => scan(db, 'big'), Error, 'more than one read may hold')
-    spent.reset()
-    assertEquals(
-      db.query(select({ cols: [as(val(5), 'n')] })),
-      [{ n: 5 }],
-    )
-    spent.reset()
-    let wide = budget({ rows: 99, bytes: 3 * (ROW + VALUE) + 6 })
-    let other = open(s.path, { meter: wide.meter })
-    try {
-      assertThrows(() => scan(other, 'big'), Error, 'MiB')
-    } finally {
-      other.close()
+    for (let db of [s.db, reader]) {
+      let within = (limits: Limits) => () =>
+        metered(() => scan(db, 'big'), { limits })
+      assertThrows(
+        within({ rows: 3, bytes: 1e6 }),
+        Refused,
+        'one read may hold',
+      )
+      assertThrows(
+        within({ rows: 9, bytes: 5 * (ROW + VALUE) + 14 }),
+        Refused,
+        'MiB',
+      )
+      assertEquals(
+        within({ rows: 5, bytes: 5 * (ROW + VALUE) + 15 })().length,
+        5,
+      )
     }
   } finally {
-    db.close()
+    reader.close()
   }
 })
 

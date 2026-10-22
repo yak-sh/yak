@@ -34,7 +34,7 @@ let later = (fn: () => void, ms: number) => {
 }
 
 /** What a read asked, as a trace keeps it: every value masked, bounded. */
-export let asked = (call: Call): string =>
+let asked = (call: Call): string =>
   call.op == 'get'
     ? `get of ${call.eids.length} entities`
     : mask(typeof call.query == 'string' ? call.query : stringify(call.query))

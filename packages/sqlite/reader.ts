@@ -7,6 +7,7 @@ import type { Store } from './mod.ts'
 import { EPOCH, meta } from './meta.ts'
 import { get, read, rows, tagOf } from './read.ts'
 import { unit } from './unit.ts'
+import { gotten, metered, named } from './budget.ts'
 import { lacking } from './follow.ts'
 import { indexed } from './ddl.ts'
 
@@ -66,20 +67,32 @@ export let reader = (
   base: BindOpts = {},
 ): Pick<Store, 'read' | 'rows' | 'get'> => {
   let opts = options(driver, vocab, base)
+  // Each read is refused past what one read may hold (./budget.ts).
   return {
     read: (q, o, comps) =>
-      unit(
-        driver,
-        () => read(driver, vocab, q, { ...opts(), ...o }, comps),
-        'read',
+      metered(
+        () =>
+          unit(
+            driver,
+            () => read(driver, vocab, q, { ...opts(), ...o }, comps),
+            'read',
+          ),
+        { what: named(q) },
       ),
-    rows: (q, o) => rows(driver, vocab, q, { ...opts(), ...o }),
+    rows: (q, o) =>
+      metered(() => rows(driver, vocab, q, { ...opts(), ...o }), {
+        what: named(q),
+      }),
     get: (ids, comps, o) =>
       ids.length
-        ? unit(
-          driver,
-          () => get(driver, vocab, ids, { ...opts(), ...o }, comps),
-          'read',
+        ? metered(
+          () =>
+            unit(
+              driver,
+              () => get(driver, vocab, ids, { ...opts(), ...o }, comps),
+              'read',
+            ),
+          { what: gotten(ids) },
         )
         : [],
   }

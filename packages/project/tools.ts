@@ -20,7 +20,7 @@
 // nobody's portfolio can see — it is on no board, in nobody's queue, and
 // nothing will ever report that it was dropped.
 
-import { and, every, present, want } from '@yaks/query'
+import { and, every, present } from '@yaks/query'
 import { human } from '@yaks/id'
 import type { Finding } from '@yaks/tools'
 import { checked } from '@yaks/tools/check'
@@ -63,8 +63,11 @@ let reached = async (
     ...await graph.read(and(present(PROJECT))),
     ...await graph.read(and(present(`${FILED}.project`))),
   ]
-  let links = (await graph.read(and(present('edge'), ...through.map(want))))
-    .filter((b) => through.some((tag) => tag in b))
+  // Only the edges a containment tag marks: reading every edge to keep these
+  // reads the whole edge table, more than one read may hold.
+  let links = (await Promise.all(
+    through.map((tag) => graph.read(and(present('edge'), present(tag)))),
+  )).flat()
   let out = new Map<string, string[]>()
   for (let b of links) {
     let e = comp(b, 'edge')

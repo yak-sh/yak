@@ -117,6 +117,7 @@ import { bindings } from './rules.ts'
 import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
 import { watch } from './watch.ts'
+import { gotten, metered, named } from './budget.ts'
 import { Refused } from '@yaks/graph/errors'
 import {
   type History,
@@ -794,15 +795,16 @@ export let storage = (
   let tx: Tx = {
     read: (query, signalled, comps) => {
       let o = asking(signalled)
-      return read(
-        driver,
-        vocab,
-        query,
-        { ...opts(), ...o },
-        comps,
-        (q) => asked(q, o),
-        fetched(o),
-      )
+      return metered(() =>
+        read(
+          driver,
+          vocab,
+          query,
+          { ...opts(), ...o },
+          comps,
+          (q) => asked(q, o),
+          fetched(o),
+        ), { what: named(query) })
     },
     get: identity,
     doom: (eids) => doom(driver, vocab, eids),
@@ -932,19 +934,20 @@ export let storage = (
         read: (query, signalled, comps) => {
           let o = asking(signalled)
           let direct = owed().length > 0
-          return read(
-            driver,
-            vocab,
-            query,
-            {
-              ...opts(),
-              ...o,
-              ...direct ? { archetypes: () => undefined } : {},
-            },
-            comps,
-            (q) => asked(q, o, direct),
-            fetched(o, getting, owed),
-          )
+          return metered(() =>
+            read(
+              driver,
+              vocab,
+              query,
+              {
+                ...opts(),
+                ...o,
+                ...direct ? { archetypes: () => undefined } : {},
+              },
+              comps,
+              (q) => asked(q, o, direct),
+              fetched(o, getting, owed),
+            ), { what: named(query) })
         },
         patch: (bundles) => {
           let minted = memo.patch(
@@ -1145,7 +1148,10 @@ export let storage = (
     },
     read: (query, o, comps) => {
       ensure()
-      return unit(driver, () => tx.read(query, o, comps), 'read')
+      return metered(
+        () => unit(driver, () => tx.read(query, o, comps), 'read'),
+        { what: named(query) },
+      )
     },
     rows: (query, signalled) => {
       ensure()
@@ -1157,7 +1163,7 @@ export let storage = (
       ) {
         unit(driver, () => population(driver))
       }
-      return asked(parsed, o)
+      return metered(() => asked(parsed, o), { what: named(query) })
     },
     screen: (query, o) => {
       ensure()
@@ -1174,10 +1180,9 @@ export let storage = (
     get: (eids, comps, o) => {
       if (!eids.length) return []
       ensure()
-      return unit(
-        driver,
-        () => viewed(eids, comps, asking(o) ?? {}),
-        'read',
+      return metered(
+        () => unit(driver, () => viewed(eids, comps, asking(o) ?? {}), 'read'),
+        { what: gotten(eids) },
       )
     },
     tx: <R>(body: (tx: Tx) => R, _mode?: { admission?: boolean }): R => {

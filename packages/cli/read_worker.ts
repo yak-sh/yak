@@ -5,13 +5,9 @@
 import { read } from './config.ts'
 import { record } from '@yaks/trace'
 import { compose, facet, type Served } from './host.ts'
-import { asked, type Heard, type Said } from './read_thread.ts'
-import { budget } from '@yaks/sqlite/budget'
+import type { Heard, Said } from './read_thread.ts'
 
 let host: Promise<Served> | undefined
-// One read at a time, so one budget: what this read may hold, refused past it
-// instead of the read growing until the process runs out of heap.
-let spent = budget()
 let tell = (heard: Heard) => self.postMessage(heard)
 let errorOf = (cause: unknown) => {
   let error = cause instanceof Error ? cause : new Error(String(cause))
@@ -30,7 +26,6 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
       compose(read(data.start), ['graph'], facet, {
         process: false,
         readOnly: true,
-        meter: spent.meter,
       })
     )
     host.catch(() => {})
@@ -47,7 +42,6 @@ self.onmessage = ({ data }: MessageEvent<Said>) => {
     try {
       if (!host) throw new Error('the reader was not started')
       let graph = (await host).graph
-      spent.reset(asked(data))
       let query = () =>
         data.op == 'get'
           ? graph.get(data.eids, data.comps, data.opts)

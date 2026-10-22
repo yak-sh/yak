@@ -247,9 +247,6 @@ export type ComposeOpts = {
   }
   /** a reader beside a host records no process of its own */
   process?: boolean
-  /** What a read-only host counts each decoded row against
-   * (@yaks/sqlite/budget), so one read cannot hold more than it may */
-  meter?: (values: number, bytes: number) => void
   /** Open the graph as of a transaction, or on a branch, where its store
    * keeps history (D-130964): read only as of a transaction, writing only to
    * the branch on one. Default: `$YAK_AT` or `$YAK_BRANCH`, else main. */
@@ -431,7 +428,7 @@ let composed = async (
   // cannot make, so a reader in a mode takes the writer's.
   let open = async (): Promise<Opened> =>
     opts.readOnly && !mode
-      ? (await import('@yaks/sqlite/read-db')).open(path, { meter: opts.meter })
+      ? (await import('@yaks/sqlite/read-db')).open(path)
       : (await import('@yaks/sqlite/db')).open(path)
   let recorded: Traces | undefined
   let captureControl: ReturnType<typeof traceControl> | undefined

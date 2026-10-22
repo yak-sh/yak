@@ -107,8 +107,8 @@ try {
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/sqlite`            | Storage, schema/read/write helpers, [overlays](#querying-pending-changes-with-an-overlay), archetype helpers, metadata, and migrations |
 | `@yaks/sqlite/db`         | `open(path)`: an embedded Deno database as a cached driver                                                                             |
-| `@yaks/sqlite/read-db`    | `open(path, {meter?})`: an existing file as a cached read-only driver, without loading the native writer, its rows metered             |
-| `@yaks/sqlite/budget`     | `budget(limits?)`: what one read may materialize, a `meter` the read-only driver counts rows against and a `reset` between reads       |
+| `@yaks/sqlite/read-db`    | `open(path)`: an existing file as a cached read-only driver, without loading the native writer                                         |
+| `@yaks/sqlite/budget`     | `metered(read, {what?, limits?})`: what one read may materialize, and the `meter` both engines count each decoded row against          |
 | `@yaks/sqlite/reader`     | Committed reads of an installed database                                                                                               |
 | `@yaks/sqlite/read-store` | Read-only storage with index, diagnostic and revision capabilities                                                                     |
 | `@yaks/sqlite/physical`   | Inspection of installed tables, columns and schema objects                                                                             |
@@ -215,22 +215,25 @@ extension-loading APIs. Extensions can read installed indexes; SQLite refuses
 metadata writes. Both readers leave the database and WAL untouched when they
 close.
 
-A read can ask for more than a process can hold. `open(path, {meter})` from
-`@yaks/sqlite/read-db` counts every row it decodes against a **budget**
-(`@yaks/sqlite/budget`): `budget(limits?)` gives a `meter` and a `reset`, and a
-read past `LIMITS` (a million rows or 256 MiB, each row costing its text and
-blobs plus a little for the row and each value) is refused where it stands, as a
-`Refused` error its caller hears, naming the read `reset(what)` was given. The
-web's read worker resets one before each read, so a query that matches most of
-the graph is refused to its caller and the process stays up for everyone else.
+A read can ask for more than a process can hold. Every read a store answers
+(`read`, `rows` and `get`, on the writer's connection and on the read-only one
+alike) runs under a **budget** (`@yaks/sqlite/budget`): both engines `meter`
+each row they decode against the read running, and a read past `LIMITS` (a
+million rows or 256 MiB, each row costing its text and blobs plus a little for
+the row and each value) is refused where it stands, as a `Refused` error its
+caller hears that names the read by its masked query. So a query that matches
+most of the graph is refused to whoever asked, through any door, and the process
+stays up for everyone else. Reads over SQLite are synchronous, so a thread runs
+one at a time: `metered` is the frame a read's rows count against, `what` names
+it, and a read inside another counts against the outer one.
 
 ```ts ignore
-import { budget } from '@yaks/sqlite/budget'
-import { open } from '@yaks/sqlite/read-db'
+import { metered, named } from '@yaks/sqlite/budget'
 
-let spent = budget()
-let db = open('graph.db', { meter: spent.meter })
-spent.reset() // before each read
+metered(() => sql.query(scan('big')), {
+  what: named('.big'),
+  limits: { rows: 1_000, bytes: 1024 * 1024 },
+})
 ```
 
 `read` accepts a query string or [query AST](../query/README.md#query-model) and

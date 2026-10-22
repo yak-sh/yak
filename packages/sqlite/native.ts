@@ -6,6 +6,7 @@
 import { sqlitePath } from './sqlitepath.ts'
 import { Database, Statement } from '@db/sqlite'
 import { driver as connection } from './driver.ts'
+import { meter } from './budget.ts'
 import { scope } from '@yaks/trace'
 import {
   call,
@@ -168,10 +169,15 @@ export let prepared = (db: Database) => {
     // statement the schema has moved under still describes its old plan; the
     // step recompiles it. So the decoder it is handed reads the columns at
     // the first row, after that step, and decodes every row of the read
-    // with what it found.
+    // with what it found, each counted against the read running
+    // (./budget.ts) before the next is made.
     statement.getRowObject = () => {
-      let row: Decoder | undefined
-      return (h, int64, json) => (row ??= current())(h, int64, json)
+      let decode: Decoder | undefined
+      return (h, int64, json) => {
+        let row = (decode ??= current())(h, int64, json)
+        meter(row)
+        return row
+      }
     }
     return statement
   }
