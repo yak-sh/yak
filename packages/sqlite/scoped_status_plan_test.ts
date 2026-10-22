@@ -19,8 +19,9 @@ let counters = Deno.dlopen(sqlitePath, {
   sqlite3_stmt_status: { parameters: ['pointer', 'i32', 'i32'], result: 'i32' },
 })
 
-// Each lookup has a complete local turn and a thousand unrelated progress
-// records. Resolved progress still counts as history; denied progress does not.
+// Each lookup has a complete local turn and a thousand unrelated background
+// calls. An answered background call still counts as history; a denied one
+// does not.
 for (let typed of [false, true]) {
   let vocab = loadVocab([
     sessionDoc,
@@ -53,23 +54,23 @@ for (let typed of [false, true]) {
     )
     if (state != 'empty') {
       rows.push(
-        e(3, { call: { to: 'tool', source: `${state}-2` }, tool_async: {} }),
-        e(4, {
-          tool_progress: { call: `${state}-3` },
-          output: { source: `${state}-3` },
+        e(3, {
+          call: { to: 'tool', source: `${state}-2` },
+          tool_async: {},
           ...state == 'hidden' ? { hidden: {} } : {},
         }),
-        e(5, { ask: { to: 'model', through: `${state}-4` }, attempt: {} }),
+        e(4, { ask: { to: 'model', through: `${state}-3` }, attempt: {} }),
       )
       if (state == 'completed') {
-        rows.push(e(6, { result: { call: `${state}-3` } }))
+        rows.push(e(5, { result: { call: `${state}-3` } }))
       }
     }
   }
   rows.push(...Array.from({ length: 1000 }, (_, n): Bundle => ({
     entity: { eid: `unrelated-${n}` },
     entry: { session: 'other', seq: n + 1 },
-    tool_progress: { call: 'tool' },
+    call: { to: 'tool' },
+    tool_async: {},
   })))
   g.apply(rows, { trusted: true })
   for (let scoped of [false, true]) {
@@ -90,7 +91,7 @@ for (let typed of [false, true]) {
         },
       ))
       let stmt = db.prepare(q.sql)
-      test(`${typed ? 'typed' : 'untyped'} ${scoped ? 'scoped' : 'plain'} ${state} status ignores unrelated progress`, () => {
+      test(`${typed ? 'typed' : 'untyped'} ${scoped ? 'scoped' : 'plain'} ${state} status ignores unrelated background calls`, () => {
         let row = stmt.get(...q.params)!
         equal(row['session.status'], expected)
         let scan = counters.symbols.sqlite3_stmt_status(stmt.unsafeHandle, 1, 1)

@@ -232,6 +232,7 @@ const STATUS = [
   CALL,
   RESULT,
   PROGRESS,
+  'tool_async',
   OUTPUT,
   USING,
   SENDING,

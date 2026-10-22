@@ -246,10 +246,12 @@ transcript at once.
 With a durable pool, each `session_run` effect performs one leased step. Inputs,
 completed requests, context checkpoints and final tool results owe subsequent
 steps in the transaction that records them. Each `session_tool` effect claims
-and executes one call independently, so several calls can run together. Each
-call is answered at once by a `tool_progress` entry reading `PENDING` ("Pending;
-its result will follow."), so the reply that made it may continue once while it
-runs; a final result or new input asks again.
+and executes one call independently, so several calls can run together. A
+background call (`tool_async`) is answered at once by `PENDING` ("Pending; its
+result will follow."), which a request derives from the call and no entry
+records, so the reply that made it may continue once while it runs; a final
+result or new input asks again. Transcripts written before then hold a
+`tool_progress` entry per call, which still answers it.
 
 A request carries each call's answer right after the reply's last call, in the
 order of the calls, since many models pair a result with its call by position

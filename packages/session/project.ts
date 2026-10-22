@@ -13,9 +13,10 @@ import { took } from './timing.ts'
 let comp = (b: Bundle | undefined, name: string) =>
   b?.[name] as Comp | undefined
 
-/** What an async call answers while it runs: its interim result, paired with
- * the call like any other, and saying what it means where the model reads it.
- * The final arrives later, naming its call ({@link project}). */
+/** What a background call (`tool_async`) answers while it runs: its interim
+ * result, paired with the call like any other, and saying what it means where
+ * the model reads it. It is no entry: a request derives it from the call. The
+ * final arrives later, naming its call ({@link project}). */
 export let PENDING = 'Pending; its result will follow.'
 
 // The call an entry answers: a final's or a Pending's.
@@ -127,20 +128,18 @@ export let replied = (
  *   ({ entity: { eid: `e${++n}` }, entry: { session: 's', seq: n }, ...comps })
  * let ask = (through: string) => e({ ask: { through } })
  * let call = (id: string) =>
- *   e({ call: { to: 'echo', id, args: { id }, source: 'e2' } })
+ *   e({ call: { to: 'echo', id, args: { id }, source: 'e2' }, tool_async: {} })
  * let tools = new Map([['echo', { name: 'echo', parameters: {} }]])
  * let entries = [
  *   e({ content: { body: 'go' } }), ask('e1'), call('a'), call('b'),
- *   e({ tool_progress: { call: 'e3' }, content: { body: 'Pending.' } }),
- *   e({ tool_progress: { call: 'e4' }, content: { body: 'Pending.' } }),
  *   e({ result: { call: 'e4' }, content: { body: 'B' } }), // landed first
- *   ask('e7'), // sent b's final and a's Pending
+ *   ask('e5'), // sent b's final and a's Pending
  *   e({ result: { call: 'e3' }, content: { body: 'A' } }),
  * ]
  * project(entries, entries, tools).map((i) =>
  *   i.kind == 'call' ? i.id : i.kind == 'result' ? i.output : i.text
  * )
- * // -> ['go', 'a', 'b', 'Pending.', 'B',
+ * // -> ['go', 'a', 'b', 'Pending; its result will follow.', 'B',
  * //     'The pending echo call a {"id":"a"} finished:\nA']
  * ```
  */
@@ -174,7 +173,8 @@ export let project = (
   let finals = new Set(
     window.flatMap((b) => b.result ? [String(comp(b, RESULT)?.call)] : []),
   )
-  // Each call's final, and the seqs of the progress it reported.
+  // Each call's final, and the seqs of the progress entries it reported
+  // (written for background calls before their Pending was derived).
   let landed = new Map<string, number>()
   let progress = new Map<string, number[]>()
   for (let b of transcript) {
@@ -189,10 +189,15 @@ export let project = (
   // boundary reached the Pending but not yet its final; one that reached both
   // sent the final alone. Keep a sent Pending: that immutable prefix cannot be
   // rewritten afterwards, and a Pending no request sent is never sent late.
-  // The first boundary at or past the Pending decides it.
+  // The first boundary at or past the Pending decides it. A background call's
+  // Pending stands at the call, or at the progress entries it once reported.
   let sent = (call: string, seq: number) =>
     (bounds[reaching(bounds, seq)] ?? Infinity) <
       (landed.get(call) ?? Infinity)
+  let pendings = (call: string): number[] => {
+    let b = byId.get(call)
+    return progress.get(call) ?? (b?.tool_async ? [seqOf(b)] : [])
+  }
   let logical = replied(
     asks,
     window.filter((b) => {
@@ -205,7 +210,12 @@ export let project = (
   // A final that follows a Pending some request sent: the call was answered.
   let late = (b: Bundle, call: string) =>
     !!b.result &&
-    !!progress.get(call)?.some((seq) => seq < seqOf(b) && sent(call, seq))
+    pendings(call).some((seq) => seq < seqOf(b) && sent(call, seq))
+  // A background call no progress entry answers: its derived Pending travels
+  // where a request sent it, or while its final has not landed.
+  let pending = (call: Bundle) =>
+    !!call.tool_async && !progress.has(call.entity.eid) &&
+    (sent(call.entity.eid, seqOf(call)) || !finals.has(call.entity.eid))
   let spelled = (call: Bundle) => {
     let c = comp(call, CALL)!
     return {
@@ -214,7 +224,8 @@ export let project = (
       args: c.args == null ? textOf(call) || '{}' : JSON.stringify(c.args),
     }
   }
-  // Each call's answer, and the calls of each reply that travel, in order.
+  // Each call's answer, and the calls of each reply, in order: an anchored
+  // reply's calls are the provider's already, yet their answers travel.
   let answer = new Map<string, Bundle>()
   let replies = new Map<string, Bundle[]>()
   for (let b of logical) {
@@ -223,7 +234,7 @@ export let project = (
       answer.set(String(call), b)
     }
     let c = comp(b, CALL)
-    if (kindOf(b) != 'call' || c?.source == opts.anchor) continue
+    if (kindOf(b) != 'call') continue
     let reply = replies.get(String(c?.source))
     if (reply) reply.push(b)
     else replies.set(String(c?.source), [b])
@@ -285,7 +296,11 @@ export let project = (
     if (reply?.at(-1) != b) return
     for (let call of reply) {
       let a = answer.get(call.entity.eid)
-      if (a && !taken.has(a) && index.get(a)! > at) emit(a)
+      if (a) {
+        if (!taken.has(a) && index.get(a)! > at) emit(a)
+      } else if (pending(call)) {
+        out.push({ kind: 'result', id: spelled(call).id, output: PENDING })
+      }
     }
   })
   return out

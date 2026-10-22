@@ -106,7 +106,7 @@ let round = async (steps: number) => {
     )
     check(asyncCalls.length == steps, 'did not dispatch real async tools')
     check(results.length == steps, 'wrong completed result count')
-    check(progress.length == steps, 'wrong tool progress count')
+    check(progress.length == 0, 'a background call wrote a progress entry')
     check(
       entries.some((entry) => !entry.output && textOf(entry) == PROMPT),
       'input lost',

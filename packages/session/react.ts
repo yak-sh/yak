@@ -1,4 +1,3 @@
-import { derivedEid } from '@yaks/graph/identity'
 import { compactAsk } from './compact_ask.ts'
 import { entryStatus, reach } from './reach.ts'
 import { actionable, exceptionOf } from '@yaks/tools/fault'
@@ -127,7 +126,7 @@ export type ToolContext = {
 /** A refused tool invocation: expected, recorded as a refusal and a result. */
 export { UnknownSession } from './unknown.ts'
 import { UnknownSession } from './unknown.ts'
-import { PENDING, project } from './project.ts'
+import { project } from './project.ts'
 export { PENDING, project } from './project.ts'
 import {
   contextParts,
@@ -716,7 +715,6 @@ export let react = async (
     }
     let added: Bundle[] = [finalAsk, ...await carried(g, session, sent)]
     let textIndex = 0
-    const progress: Bundle[] = []
     for (let item of reply.items) {
       if (item.kind == 'assistant') {
         const active = stream.get(item.id ?? String(textIndex))
@@ -738,8 +736,10 @@ export let react = async (
         // The model's arguments are JSON text; a call's are the object it
         // spells. Text that spells no object is kept as the model wrote it, so
         // the transcript resends it verbatim, and the call is refused (`served`).
+        // A background call (`tool_async`) is answered by a Pending the
+        // request derives from it (./project.ts), so it costs no entry.
         let args = objectIn(item.args)
-        const call = line(
+        added.push(line(
           {
             [CALL]: {
               to: toolEid(item.name),
@@ -750,20 +750,9 @@ export let react = async (
             ...deps.asyncTools ? { tool_async: {} } : {},
           },
           args ? undefined : item.args,
-        )
-        added.push(call)
-        if (deps.asyncTools) {
-          progress.push({
-            ...line(
-              { tool_progress: { call: call.entity.eid } },
-              PENDING,
-            ),
-            entity: { eid: derivedEid(call.entity.eid + ':progress') },
-          })
-        }
+        ))
       }
     }
-    added.push(...progress)
     // One entry per answer, said as a line too, so a person reading the
     // transcript sees what was decided and a query can match
     // `.answer.question=plan`. No later turn reads it (`lines`).

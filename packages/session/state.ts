@@ -109,9 +109,10 @@ export let openCalls = (entries: Bundle[]): Bundle[] =>
   callsIn(ordered(entries))
 
 /** Whether input or a tool answer has arrived beyond the newest request's
- * context boundary. Progress is a model-facing answer, not a final result.
- * The current reply's progress permits one continuation; older progress never
- * asks again. This says the model owes work independently of tools running. */
+ * context boundary. A call running in the background (`tool_async`) is
+ * answered at once by a Pending, not a final result: the current reply's
+ * background calls permit one continuation; older ones never ask again. This
+ * says the model owes work independently of tools running. */
 export let modelReady = (entries: Bundle[]): boolean => {
   let all = ordered(entries).filter((b) => !b.notice)
   let ask = newestAsk(all)
@@ -119,15 +120,11 @@ export let modelReady = (entries: Bundle[]): boolean => {
     b.entity.eid == (ask?.ask as Comp | undefined)?.through
   )
   let boundary = through ? seqOf(through) : ask ? seqOf(ask) : 0
-  let calls = new Set(
-    all.filter((b) =>
-      ask && (b.call as Comp | undefined)?.source == ask.entity.eid
-    ).map((b) => b.entity.eid),
-  )
   return all.some((b) =>
     seqOf(b) > boundary && (
       kindOf(b) == 'input' || !!b.result ||
-      !!b.tool_progress && calls.has(String((b.tool_progress as Comp).call))
+      !!ask && !!b.tool_async &&
+        (b.call as Comp | undefined)?.source == ask.entity.eid
     )
   )
 }
@@ -167,14 +164,12 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
   if (kindOf(control ?? newest) == 'stop') return 'stopped'
   let asked = all.findLast((b) => kindOf(b) == 'ask')
   let turn = all.filter((b) => !asked || seqOf(b) >= seqOf(asked))
-  let progressed = new Set(all.flatMap((b) => {
-    let call = (b.tool_progress as Comp | undefined)?.call
-    return call == null ? [] : [String(call)]
-  }))
-  // Progress answers the provider protocol, but only result answers the work.
-  // Unlike legacy synchronous calls, progressed calls can outlive many asks.
-  let calls = callsIn(turn).filter((b) => !progressed.has(b.entity.eid))
-  let pending = callsIn(all).some((b) => progressed.has(b.entity.eid))
+  // A background call's Pending answers the provider protocol, but only its
+  // result answers the work. Unlike legacy synchronous calls, background calls
+  // can outlive many asks.
+  let calls = callsIn(turn).filter((b) => !b.tool_async)
+  let pending = callsIn(all).some((b) => b.tool_async)
+  let background = all.some((b) => b.call && b.tool_async)
   if (abandoned(calls)) return 'running'
   if (kind == 'exception') return 'failed'
   if (kind == 'interrupted' && newest.failed && !newest.ask && !newest.call) {
@@ -211,7 +206,7 @@ export let statusOf = (entries: Bundle[], ended = false): TranscriptStatus => {
       : 'pending'
   }
   if (calls.length) return 'running'
-  if (progressed.size && modelReady(all)) return 'pending'
+  if (background && modelReady(all)) return 'pending'
   if (pending) return 'running'
   if (
     kind == 'ask' && attemptState(newest) == 'completed'

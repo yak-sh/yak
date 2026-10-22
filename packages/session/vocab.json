@@ -859,14 +859,14 @@
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "a native transcript call dispatched by its own durable effect; no session lease waits for it",
+      "description": "a native transcript call dispatched by its own durable effect; no session lease waits for it, and a request answers it with a derived Pending until its result lands",
       "properties": {}
     },
     "tool_progress": {
       "component": true,
       "journal": false,
       "type": "object",
-      "description": "an immutable in-progress tool result; the final result is a separate appended entry, never a replacement",
+      "description": "an immutable in-progress tool result, written for a background call before its Pending was derived from the call's `tool_async`; transcripts that hold one still read it, and none is written now",
       "properties": {
         "call": {
           "type": "string",

@@ -112,7 +112,10 @@ let script = (seed: number, size: number, forked = false): Bundle[] => {
           content: { body: '{}' },
         }, owner)
         let r = roll()
-        if (r < 0.15) {
+        // A background call left running: as written now, or with the
+        // progress entry it was once answered by.
+        if (r < 0.15) out.at(-1)!.tool_async = {}
+        if (r < 0.075) {
           last = line(
             { tool_progress: { call }, content: { body: '...' } },
             owner,

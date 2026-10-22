@@ -46,8 +46,7 @@ for (let size of [100, 1000]) {
         write('archetype', { entity: id, tables: JSON.stringify(names.sort()) })
       }
       shape(10, ['entry', 'ask', 'attempt'])
-      shape(11, ['entry', 'call', 'tool_progress'])
-      shape(12, ['entry', 'tool_progress'])
+      shape(11, ['entry', 'call', 'tool_async'])
       shape(13, ['entry', 'result'])
       shape(14, ['entry', 'content', 'output'])
       write('entity', { id: 1, eid: 'owner' })
@@ -63,7 +62,7 @@ for (let size of [100, 1000]) {
         write('attempt', { entity: id })
         entry(id + 1, seq + 1, 11)
         write('call', { entity: id + 1, source: id })
-        write('tool_progress', { entity: id + 1, call: id + 1 })
+        write('tool_async', { entity: id + 1 })
         entry(id + 2, seq + 2, 13)
         write('result', { entity: id + 2, call: id + 1 })
         entry(id + 3, seq + 3, 14)
@@ -81,7 +80,7 @@ for (let size of [100, 1000]) {
       if (kind != 'inflight') {
         entry(latest + 1, seq + 1, 11)
         write('call', { entity: latest + 1, source: latest })
-        write('tool_progress', { entity: latest + 1, call: latest + 1 })
+        write('tool_async', { entity: latest + 1 })
         if (kind == 'resolved' || kind == 'settled') {
           entry(latest + 2, seq + 2, 13)
           write('result', { entity: latest + 2, call: latest + 1 })
@@ -145,7 +144,7 @@ for (let size of [100, 1000]) {
         let scan = counters.symbols.sqlite3_stmt_status(st.unsafeHandle, 1, 1)
         equal(
           kind == 'settled' ? rows : rows[0]['session.status'],
-          // Current-reply progress permits continuation while the tool runs.
+          // A current-reply background call permits continuation while it runs.
           kind == 'settled' ? [] : kind == 'inflight' ? 'running' : 'pending',
         )
         ok(scan <= (kind == 'settled' ? 1 : 0), `${scan} full-scan steps`)

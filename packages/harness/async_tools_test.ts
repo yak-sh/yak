@@ -109,7 +109,8 @@ await observed(
       let calls = progress.filter((b) => b.call)
       equal(calls.length, 2)
       ok(calls.every((b) => b.tool_async))
-      equal(progress.filter((b) => b.tool_progress).length, 2)
+      // Each call's Pending is derived from the call: no entry of its own.
+      equal(progress.filter((b) => b.tool_progress).length, 0)
       equal(progress.filter((b) => b.result).length, 0)
 
       // A runner pass while both calls are held must yield, not ask the model
@@ -140,10 +141,6 @@ await observed(
       let entries = await a.transcript(s)
       equal(statusOf(entries), 'settled')
       equal(entries.filter((b) => b.result).length, 2)
-      equal(
-        entries.filter((b) => b.tool_progress),
-        progress.filter((b) => b.tool_progress),
-      )
       for (let call of calls) {
         equal(
           entries.filter((b) =>

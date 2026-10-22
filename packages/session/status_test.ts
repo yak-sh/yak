@@ -90,7 +90,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
   ], 'running'],
   ['askless unresolved progress beside output', [
     input(1),
-    entry(2, { call: { to: T } }),
+    entry(2, { call: { to: T }, tool_async: {} }),
     entry(3, { tool_progress: { call: 'e2' } }),
     said(4, S),
   ], 'pending'],
@@ -188,6 +188,26 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
       content: { body: 'still working' },
     }),
   ], 'running'],
+  ['a background call alone permits one continuation', [
+    request(1),
+    entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
+  ], 'pending'],
+  ['a reply waits for an older background call', [
+    request(1),
+    entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
+    entry(4, { ask: { to: M, through: 'e3' }, attempt: { by: null } }),
+    said(5, 'e4'),
+  ], 'running'],
+  ['the final of an older background call wakes the model', [
+    request(1),
+    entry(2, { ask: { to: M, through: 'e1' }, attempt: { by: null } }),
+    entry(3, { call: { to: T, id: 'c1', source: 'e2' }, tool_async: {} }),
+    entry(4, { ask: { to: M, through: 'e3' }, attempt: { by: null } }),
+    said(5, 'e4'),
+    entry(6, { result: { call: 'e3' }, content: { body: 'finished' } }),
+  ], 'pending'],
   ['an unanswered synchronous call still blocks beside async progress', [
     ...asyncTurn(),
     entry(5, { call: { to: T, id: 'c2', source: 'e2' } }),
@@ -447,7 +467,7 @@ let shapes: [string, Bundle[], TranscriptStatus][] = [
     input(4),
   ], 'running'],
   ['answered progress still supplies readiness metadata without a request', [
-    entry(1, { call: { to: T }, execution: {} }),
+    entry(1, { call: { to: T }, execution: {}, tool_async: {} }),
     entry(2, { tool_progress: { call: 'e1' } }),
     entry(3, { result: { call: 'e1' } }),
     said(4, 'e3'),
