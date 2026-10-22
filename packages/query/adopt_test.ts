@@ -83,3 +83,25 @@ test('strict adoption never silently takes a partial write', () => {
     ]
   ) assertThrows(() => write(q), Error)
 })
+
+test('a write refuses a bare word, saying how to quote a value with spaces', () => {
+  for (
+    let [q, said] of [
+      [
+        '.book.title=Dune by Herbert',
+        '.book.title=Dune ends at the space before "by": quote a value with ' +
+        'spaces, .book.title="Dune by …", or write text holding quotes with ' +
+        'bundles',
+      ],
+      [
+        'dune .tag',
+        '"dune" is a bare word, which writes nothing: quote a value with ' +
+        'spaces, .doc.title="two words", or write text holding quotes with ' +
+        'bundles',
+      ],
+    ]
+  ) assertThrows(() => write(q), TypeError, said)
+  assertEquals(write('.book.title="Dune by Herbert"'), {
+    book: { title: 'Dune by Herbert' },
+  })
+})

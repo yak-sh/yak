@@ -64,6 +64,9 @@ export function adopt(
     }
     values[prop] = value
   }
+  // The value written last, for a bare word after it: a value with spaces
+  // that was not quoted, cut at its first space.
+  let last: [path: string, raw: string] | undefined
   let visit = (c: Clause) => {
     if (c.kind == 'and') {
       c.clauses.forEach(visit)
@@ -71,6 +74,19 @@ export function adopt(
     }
     if (c.kind == 'walk' && c.dir == '->' && c.path.length == 2) {
       set(c.path[0], c.path[1], c.target)
+      return
+    }
+    if (c.kind == 'text') {
+      let cut = last
+        ? `.${last[0]}=${last[1]} ends at the space before "${c.value}"`
+        : `"${c.value}" is a bare word, which writes nothing`
+      let quoted = last
+        ? `.${last[0]}="${last[1]} ${c.value} …"`
+        : '.doc.title="two words"'
+      fail(
+        `${cut}: quote a value with spaces, ${quoted}, or write text ` +
+          'holding quotes with bundles',
+      )
       return
     }
     if (c.kind != 'pred' || c.not || c.where) {
@@ -94,6 +110,7 @@ export function adopt(
       (c.value?.kind == 'scalar' || c.value?.kind == 'time')
     ) {
       set(c.path[0], c.path[1], c.value.raw)
+      last = [c.path.join('.'), c.value.raw]
       return
     }
     fail(`not a scalar equality: ${c.path.join('.')}`)

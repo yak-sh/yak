@@ -20,9 +20,11 @@ reference walk (`.filed.project-><id>`). Lists, ranges, comparisons, reverse
 walks, and other filters pin down no single value and are ignored. With
 `{ strict: true }`, explicit writes reject these instead of silently applying a
 partial patch; they also reject unknown fields, invalid scalar types, duplicate
-assignments, and removal mixed with patching. `adopt` returns a grouped
-component patch; entity addressing and applying the patch remain the caller's
-job.
+assignments, and removal mixed with patching. A value with spaces is quoted
+(`.doc.title="two words"`); left bare, it ends at its first space, and the
+strict refusal for the word after it says so and shows the value quoted. `adopt`
+returns a grouped component patch; entity addressing and applying the patch
+remain the caller's job.
 
 ## Query model
 

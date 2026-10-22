@@ -14,7 +14,7 @@
       "input": {
         "q": {
           "type": "string",
-          "description": "one entity patch: '.entity.eid=<id> .book.pages=500' or '<id> .book.pages=500'; schema-typed values, null clears (also quoted null), !component removes; $name or a fresh UUID creates an entity"
+          "description": "one entity patch: '.entity.eid=<id> .book.pages=500' or '<id> .book.pages=500'; quote a value with spaces, .doc.title=\"two words\"; schema-typed values, null clears (also quoted null), !component removes; $name or a fresh UUID creates an entity"
         },
         "bundles": {
           "type": "array",
