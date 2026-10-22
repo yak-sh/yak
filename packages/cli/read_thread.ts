@@ -4,7 +4,7 @@
 // Deno 2.9), so a web that ended one per cancelled read grew by gigabytes a
 // day as tabs navigated (T-130803). A cancelled read is answered at once, and
 // its worker finishes the synchronous SQL unheard, then takes the next read.
-import { parse } from '@yaks/query'
+import { mask, parse, stringify } from '@yaks/query'
 import type { Bundle, Eid, Graph, Query, ReadOpts, Row } from '@yaks/graph'
 import { type Context, context, type Event, forward } from '@yaks/trace'
 
@@ -33,19 +33,35 @@ let later = (fn: () => void, ms: number) => {
   return () => clearTimeout(id)
 }
 
+/** What a read asked, as a trace keeps it: every value masked, bounded. */
+let asked = (call: Call): string =>
+  call.op == 'get'
+    ? `get of ${call.eids.length} entities`
+    : mask(typeof call.query == 'string' ? call.query : stringify(call.query))
+      .slice(0, 512)
+
 /** Independent reads share at most two workers, started only when needed and
  * kept for the reader's life. Each worker owns one read at a time. A read
  * cancelled while it runs is rejected at once and its answer dropped when it
  * comes; only one still running `grace` ms after its caller left (a runaway
- * query) ends its worker, so it cannot hold a lane for good. */
+ * query) ends its worker, so it cannot hold a lane for good. A read still
+ * running `slow` ms after it started is told to whoever `overrun` was given,
+ * once, with its masked query: one that runs on is a failure, and the query is
+ * what names it. */
 export let readThread = (
   config: string,
-  { grace = 10_000, timer = later }: {
+  { grace = 10_000, slow = 10_000, timer = later }: {
     grace?: number
+    slow?: number
     /** schedule `fn` after `ms` and return its cancellation */
     timer?: (fn: () => void, ms: number) => () => void
   } = {},
-): Reader & { ready: () => Promise<void>; close: () => Promise<void> } => {
+): Reader & {
+  ready: () => Promise<void>
+  close: () => Promise<void>
+  /** where a read that runs past `slow` is told */
+  overrun: (tell: (error: Error) => void) => void
+} => {
   type Job = {
     id: number
     call: Call
@@ -56,13 +72,20 @@ export let readThread = (
     /** its caller left; the answer goes nowhere */
     dropped?: boolean
   }
-  type Lane = { worker: Worker; job?: Job; overdue?: () => void }
+  type Lane = {
+    worker: Worker
+    job?: Job
+    overdue?: () => void
+    long?: () => void
+  }
+  let told: (error: Error) => void = () => {}
   let lanes = new Set<Lane>()
   let waiting: Job[] = []
   let next = 0
   let closed = false
   let stop = (lane: Lane) => {
     lane.overdue?.()
+    lane.long?.()
     lane.worker.terminate()
     lanes.delete(lane)
   }
@@ -71,6 +94,7 @@ export let readThread = (
     let job = lane.job
     lane.job = undefined
     lane.overdue?.()
+    lane.long?.()
     job.off()
     if (job.dropped) return drain()
     if (job.trace && answer.spans) {
@@ -113,6 +137,16 @@ export let readThread = (
       if (!lane) return
       let job = waiting.shift()!
       lane.job = job
+      lane.long = timer(() => {
+        if (lane.job !== job) return
+        told(Object.assign(
+          new Error(
+            `a read has run ${slow / 1000} s and is still running: ` +
+              asked(job.call),
+          ),
+          { name: 'SlowRead' },
+        ))
+      }, slow)
       lane.worker.postMessage({
         ...job.call,
         id: job.id,
@@ -159,6 +193,7 @@ export let readThread = (
     get: (eids, comps, opts) =>
       ask({ op: 'get', eids, comps, opts }).then((value) => value as Bundle[]),
     ready: () => ask({ op: 'read', query: parse('.limit=1') }).then(() => {}),
+    overrun: (tell) => void (told = tell),
     close: () => {
       closed = true
       let jobs = [

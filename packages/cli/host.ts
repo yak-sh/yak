@@ -242,6 +242,8 @@ export type ComposeOpts = {
   /** The web read door; this host closes an owned reader before telemetry. */
   reader?: Pick<Graph, 'read' | 'rows' | 'get'> & {
     close?: () => void | Promise<void>
+    /** where the reader tells of a read that runs on */
+    overrun?: (tell: (error: Error) => void) => void
   }
   /** a reader beside a host records no process of its own */
   process?: boolean
@@ -408,6 +410,9 @@ let composed = async (
     // a command that reports nothing does not wait on git to learn it.
     config.tracker && !opts.readOnly ? revision() : undefined,
     { command: command(Deno.args), roles: roles.join(',') },
+  )
+  opts.reader?.overrun?.((error) =>
+    void report(error, { tags: { step: 'read' } })
   )
   let cleanup = async (step: string, release: () => void | Promise<void>) => {
     try {

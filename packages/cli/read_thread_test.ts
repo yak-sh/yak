@@ -302,3 +302,36 @@ test('a cancelled read past its grace gives up its worker', async () => {
     restore()
   }
 })
+
+// A read still running past `slow` is told once, by its masked query; one
+// answered in time is not.
+test('a read that runs past slow is told with its masked query', async () => {
+  let { workers, restore } = fakes()
+  let due = new Map<number, () => void>()
+  let next = 0
+  let reader = readThread('unused.json', {
+    timer: (fn) => {
+      let key = next++
+      due.set(key, fn)
+      return () => due.delete(key)
+    },
+  })
+  let told: string[] = []
+  reader.overrun((error) => told.push(`${error.name}: ${error.message}`))
+  try {
+    let quick = reader.read('.quick')
+    workers[0].answer()
+    await quick
+    let long = reader.read('.memory.scope="secret"')
+    for (let fn of [...due.values()]) fn()
+    workers[0].answer()
+    await long
+    for (let fn of [...due.values()]) fn()
+    assertEquals(told, [
+      'SlowRead: a read has run 10 s and is still running: .memory.scope=?',
+    ])
+  } finally {
+    await reader.close()
+    restore()
+  }
+})
