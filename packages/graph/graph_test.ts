@@ -600,6 +600,22 @@ test('$was guards a property, and a moved value refuses the whole batch', () => 
   assertEquals(one.get(['b2']), [])
 })
 
+test('a guard on an id that names nothing says so, not that a value moved', () => {
+  let e = assertThrows(
+    () =>
+      sync(
+        g().apply([{
+          entity: { eid: 'R-8ebf-oracles' },
+          doc: { body: 'x' },
+          $was: { doc: { body: token('read') } },
+        }]),
+      ),
+    Refused,
+    'R-8ebf-oracles names nothing',
+  )
+  assert(!(e instanceof Stale))
+})
+
 test('a guard on an absent value is null, and on an unknown property refuses', () => {
   let one = g()
   sync(one.apply([{
@@ -831,6 +847,7 @@ test('a check runs every phase, writes nothing, and refuses what it must', () =>
   assertEquals(one.get(['b1']), [])
   // A batch that would be refused is refused just as loudly — which is the
   // whole reason to ask.
+  sync(one.apply([{ entity: { eid: 'b1' }, doc: { title: 'Dune' } }]))
   assertThrows(
     () =>
       sync(one.apply([{

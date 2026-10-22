@@ -16,7 +16,8 @@
 // An entity deleted since it was read is not stale but gone. Its `$was` is
 // still checked for names, then left to the mutate phase, which swallows a
 // write that raced a delete (./mutate.ts) rather than refusing the batch
-// around it.
+// around it. An id that names nothing at all held no value to read, so a
+// `$was` stating one is refused as naming nothing, not as a value that moved.
 
 import type { Vocab } from '@yaks/vocab'
 import { after } from '@yaks/fp'
@@ -58,9 +59,17 @@ export let guard = (
           }
           if (buried) continue
           let cur = (stored?.[comp] as Comp | undefined)?.[prop] ?? null
-          if (token(cur) != want) {
-            throw new Stale(b.entity.eid, comp, prop, cur)
+          if (token(cur) == want) continue
+          // A value read from an id that names nothing was never read: the
+          // id is mistyped or made up, which no re-read would merge onto.
+          if (!stored) {
+            throw new Refused(
+              `${b.entity.eid} names nothing: $was says its ${comp}.${prop} ` +
+                `was read, and no entity has that id or name`,
+              { eid: b.$alias ?? b.entity.eid, comp, prop },
+            )
           }
+          throw new Stale(b.entity.eid, comp, prop, cur)
         }
       }
     }
