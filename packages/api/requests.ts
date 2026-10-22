@@ -28,11 +28,13 @@ export let receive = async <T>(
     (request.headers.get('upgrade') ?? '').toLowerCase() == 'websocket'
   ) return await read()
   let signal = request.signal
-  let cancelled = new Cancelled('request was interrupted')
-  if (signal.aborted) throw cancelled
+  // Made only when the read is cut short: an error captures its stack, and
+  // nearly every read finishes.
+  let cancelled = () => new Cancelled('request was interrupted')
+  if (signal.aborted) throw cancelled()
   let abort!: () => void
   let stopped = new Promise<never>((_resolve, reject) => {
-    abort = () => reject(cancelled)
+    abort = () => reject(cancelled())
     signal.addEventListener('abort', abort, { once: true })
   })
   try {
