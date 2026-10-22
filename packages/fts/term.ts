@@ -48,18 +48,21 @@ export let term = (text: string): string => {
 // typing a phrase means by it.
 let WORDS = /"[^"]*"?|\S+/g
 
+// What somebody typed, as its words and quoted runs, each as typed.
+export let split = (text: string): string[] => text.match(WORDS) ?? []
+
 // A whole search string as an FTS5 match expression: each word becomes its own
 // {@link term}, each quoted run becomes one phrase, and they are ANDed together
 // (FTS5 treats a space that way). Order of results comes from the ranking, not
 // from here. Returns '' for text containing no word, just as `term` does.
 export let match = (text: string): string =>
-  (text.match(WORDS) ?? []).map(term).filter(Boolean).join(' ')
+  split(text).map(term).filter(Boolean).join(' ')
 
 // The words as a name is written: quotes and stars gone, one space between
 // them. A hit whose whole text is this is the thing searched for by name
 // (./search.ts ranks it first). Returns '' for text containing no word.
 export let named = (text: string): string =>
-  (text.match(WORDS) ?? [])
+  split(text)
     .map((word) => word.replace(/\*+$/, '').replaceAll('"', '').trim())
     .filter(Boolean).join(' ')
 
@@ -76,11 +79,11 @@ let COMMON = new Set(
 // query has nothing else, marking one word is better than a blank excerpt
 // or an expensive snippet of all common terms.
 export let excerpt = (text: string): string => {
-  let words = (text.match(WORDS) ?? []).filter((word) =>
+  let words = split(text).filter((word) =>
     word.startsWith('"') || word.endsWith('*') ||
     !COMMON.has(word.toLowerCase())
   )
   return words.length
     ? words.map(term).filter(Boolean).join(' ')
-    : term((text.match(WORDS) ?? []).find((word) => term(word)) ?? '')
+    : term(split(text).find((word) => term(word)) ?? '')
 }

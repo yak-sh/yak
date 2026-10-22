@@ -56,7 +56,7 @@ import { sandboxCapabilities } from './sandboxes.ts'
 import { UNNUMBERED } from './init.ts'
 import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
-import { titleOf } from '@yaks/graph/hit'
+import { hit } from '@yaks/graph/hit'
 import type { Vocab } from '@yaks/vocab'
 import {
   ended,
@@ -82,6 +82,7 @@ import {
   type Hit,
   schema as textSchema,
   search,
+  split,
 } from '@yaks/fts'
 import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
@@ -764,15 +765,16 @@ let composed = async (
             let hits = merged(literal, similar, limit)
             let found = await built.graph.get(hits.map((h) => h.entity))
             let at = new Map(found.map((b) => [b.entity.eid, b]))
+            // A snippet that says only the title says what the hit line
+            // already does; the row's other text says what it is.
+            let line = hit(vocab, split(words))
             return hits.flatMap((h) => {
               let b = at.get(h.entity)
               if (!b) return []
               return [{
                 entity: b.entity,
                 hit: {
-                  kind: vocab.kindOf(b) || 'entity',
-                  title: titleOf(b),
-                  snippet: h.snippet,
+                  ...line(b, h.snippet),
                   source: h.source,
                   ...(b.entry && typeof b.entry == 'object' &&
                       'session' in b.entry && typeof b.entry.session == 'string'

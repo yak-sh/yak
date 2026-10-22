@@ -92,7 +92,10 @@ export let snippet = (text: string, words: string[]): string => {
 
 /** The hit a search row says itself as: its kind, its title, and a snippet of
  * the first text it is searched by, besides its title, that the words match,
- * or of the first such text when only the title matched.
+ * or the start of the first such text when only the title matched: a line
+ * that said its title twice would send its reader to read the row whole.
+ * `cut` is a snippet already cut (@yaks/fts cuts one from its index), kept
+ * unless it says only the title and the row has other text to say.
  *
  * ```ts
  * import { hit } from './hit.ts'
@@ -113,17 +116,32 @@ export let snippet = (text: string, words: string[]): string => {
  *   snippet: 'The vale app.',
  *   source: 'text',
  * })
+ * equal(hit(vocab, ['mossvale'])(row, '\x01Mossvale\x02').snippet, 'The vale app.')
+ * equal(hit(vocab, ['vale'])(row, 'The \x01vale\x02 app.').snippet, 'The \x01vale\x02 app.')
+ * let bare = { entity: { eid: 'p2' }, doc: { title: 'Mossvale' } }
+ * equal(hit(vocab, ['mossvale'])(bare, '\x01Mossvale\x02').snippet, '\x01Mossvale\x02')
  * ```
  */
-export let hit = (vocab: Vocab, words: string[]) => (b: Bundle): Hit => {
-  let title = titleOf(b)
+export let hit =
+  (vocab: Vocab, words: string[]) => (b: Bundle, cut?: string): Hit => {
+    let title = titleOf(b)
+    // deno-lint-ignore no-control-regex -- the marks @yaks/fts cuts with
+    let plain = (cut ?? '').replace(/[\x01\x02…]/g, '').trim()
+    return {
+      kind: vocab.kindOf(b) || 'entity',
+      title,
+      snippet: plain && plain != title.trim()
+        ? cut!
+        : besides(vocab, words, b, title) || (cut ?? ''),
+      source: 'text',
+    }
+  }
+
+// The snippet of the first text a row is searched by, other than its title,
+// that the words match, or of the first such text.
+let besides = (vocab: Vocab, words: string[], b: Bundle, title: string) => {
   let said = texts(vocab, b).filter((t) => t != title)
   let match = matcher(words)
   let found = said.find((t) => match && t.search(match) >= 0) ?? said[0]
-  return {
-    kind: vocab.kindOf(b) || 'entity',
-    title,
-    snippet: found ? snippet(found, words) : '',
-    source: 'text',
-  }
+  return found ? snippet(found, words) : ''
 }
