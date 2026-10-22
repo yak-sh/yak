@@ -138,24 +138,29 @@ test('a relation this vocabulary never declares contributes nothing', () => {
   assertEquals(ids(worn.names), ['m1'])
 })
 
-test('a contained tool is offered, never said, and a carried persona offers its own', () => {
-  let tool = (eid: string, name: string) => ({
-    entity: { eid },
-    tool: { name },
-  })
-  let g = graph(
-    voiced('n2', 'base', 'the floor'),
-    tool('t1', 'topic_find'),
-    tool('t2', 'search'),
-    link('n1', 'contains', 't1'),
-    link('n1', 'contains', 'n2'),
-    link('n2', 'contains', 't2'),
-    link('n2', 'contains', 'm1'),
-  )
-  let worn = now(g, 'n1')!
-  assertEquals(offer(worn), ['topic_find', 'search'])
-  assertEquals(ids(worn.carries), ['n2', 'm1'])
-  assert(!voice(said)(worn).includes('topic_find'))
-  assertEquals(offer(now(g, 'n2')), ['search'])
-  assertEquals(offer(now(graph(), 'n1')), undefined)
+// n1 contains the tool topic_find and the persona n2, which contains search;
+// n3 contains no tool.
+let tooled = graph(
+  voiced('n2', 'base', 'the floor'),
+  voiced('n3', 'bare', 'no tools'),
+  { entity: { eid: 't1' }, tool: { name: 'topic_find' } },
+  { entity: { eid: 't2' }, tool: { name: 'search' } },
+  link('n1', 'contains', 't1'),
+  link('n1', 'contains', 'n2'),
+  link('n2', 'contains', 't2'),
+  link('n2', 'contains', 'm1'),
+)
+let toolsWorn = now(tooled, 'n1')!
+
+test('a persona offers the tools it contains, and those a persona it carries contains', () => {
+  assertEquals(offer(toolsWorn), ['topic_find', 'search'])
+})
+
+test('a contained tool is never carried or said', () => {
+  assertEquals(ids(toolsWorn.carries), ['n2', 'm1'])
+  assert(!voice(said)(toolsWorn).includes('topic_find'))
+})
+
+test('a persona containing no tool offers nothing, leaving the runner its own', () => {
+  assertEquals(offer(now(tooled, 'n3')), undefined)
 })

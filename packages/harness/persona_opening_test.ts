@@ -7,7 +7,9 @@ import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
 import { link } from '@yaks/edge'
 import { toolEid } from '@yaks/tools/result'
+import { begin } from './agent.ts'
 import { effects } from './effects.ts'
+import { openingFor } from './instructions.ts'
 import { at } from './testing.ts'
 
 let opened = await (async () => {
@@ -59,10 +61,17 @@ let opened = await (async () => {
           {} as never,
         ), 'Choose a model')
     }
+    // A command line's `session new --persona` opens the same way, by begin.
+    let command = await begin(g, undefined, {
+      ...await openingFor(g, {}, undefined, { persona: 'farmer' }),
+      persona: 'farmer',
+      using: { provider },
+    })
     let prompts = (s: string) => g.read(`.entry.session=${s}&.prompt&*`)
     return {
       worn: await prompts('worn'),
       tooled: await prompts('tooled'),
+      commanded: await prompts(command),
       plain: await prompts('plain'),
       session: (await g.get(['worn']))[0],
     }
@@ -86,6 +95,11 @@ test('a persona offering no tools leaves the runner its own', () => {
 test('a persona offers its sessions the tools it and the personas it contains contain', () => {
   equal(opened.tooled.length, 1)
   equal(offered(opened.tooled[0]), ['topic_find', 'search'])
+})
+
+test('a session begun wearing a persona is offered the same tools', () => {
+  equal(opened.commanded.length, 1)
+  equal(offered(opened.commanded[0]), ['topic_find', 'search'])
 })
 
 test('a session wearing no persona is opened with nothing', () => {
