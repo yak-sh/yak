@@ -94,6 +94,13 @@ test('file import snapshots bytes; attach is user-only; explicit view projects b
   }
 })
 
+// A tool's final output as the model reads it: one that follows a Pending
+// the model was sent names its call on a line before it.
+let finalOf = (item: Item) =>
+  item.kind == 'result'
+    ? item.output.replace(/^The pending [^\n]* finished:\n/, '')
+    : ''
+
 test('tool-driven vision reaches the next model request and survives database reopen', async () => {
   let dir = await Deno.makeTempDir()
   let h = await harness(dir + '/test.db')
@@ -131,9 +138,8 @@ test('tool-driven vision reaches the next model request and survives database re
         model: 'fake',
         // Progress-only turns have no observation to report yet.
         items: req.items.some((item) => item.kind == 'image') &&
-            req.items.filter((item) =>
-                item.kind == 'result' && item.output.startsWith('{')
-              ).length == 2
+            req.items.filter((item) => finalOf(item).startsWith('{')).length ==
+              2
           ? [{ kind: 'assistant', text: 'seen' }]
           : [],
       })
@@ -144,12 +150,10 @@ test('tool-driven vision reaches the next model request and survives database re
     await a.idle(session)
     // Independent tool progress can carry the image while attach is still
     // pending. Observe the ask that received both final results, not that
-    // earlier snapshot: replay replaces pending results with their finals.
+    // earlier snapshot: a final follows the Pending it was sent before.
     let completed = requests.findLast((items) =>
       items.some((item) => item.kind == 'image') &&
-      items.filter((item) =>
-          item.kind == 'result' && item.output.startsWith('{')
-        ).length == 2
+      items.filter((item) => finalOf(item).startsWith('{')).length == 2
     )
     assert(
       completed,
@@ -160,11 +164,9 @@ test('tool-driven vision reaches the next model request and survives database re
     assertEquals(images.length, 1)
     assertEquals(images[0].bytes, png)
     let finals = (items: Item[]) =>
-      items.filter((item) =>
-        item.kind == 'result' && item.output.startsWith('{')
-      ).map((item) => {
+      items.filter((item) => finalOf(item).startsWith('{')).map((item) => {
         assert(item.kind == 'result')
-        return { id: item.id, ...JSON.parse(item.output.split('\n')[0]) }
+        return { id: item.id, ...JSON.parse(finalOf(item).split('\n')[0]) }
       }).sort((a, b) => b.id.localeCompare(a.id))
     assertEquals(finals(completed), [
       {
