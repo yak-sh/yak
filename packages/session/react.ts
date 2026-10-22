@@ -212,9 +212,10 @@ export type Deps = {
   instructions?: string
   /** Resolve inherited base instructions for future asks without rewriting history. */
   resolveInstructions?: (inherited: string | undefined) => string | undefined
-  /** Host rendering of each input's prose in a transcript; stored content
-   * stays unchanged. */
-  inputText?: (transcript: Bundle[]) => (entry: Bundle) => string
+  /** Host rendering of each input's prose in a transcript, resolved once per
+   * step (it may read the graph, to name who sent each input); stored
+   * content stays unchanged. */
+  inputText?: (transcript: Bundle[]) => Promise<(entry: Bundle) => string>
   /** Optional bounded model-facing tool-result projection; storage stays unchanged. */
   resultText?: (entry: Bundle) => Promise<string>
   /** Resolve explicitly admitted multimodal context without storing bytes in entries. */
@@ -418,7 +419,7 @@ let compaction = async (o: {
   fixed: number
   share: number
   resultText?: (entry: Bundle) => Promise<string>
-  inputText?: Deps['inputText']
+  inputText?: (entry: Bundle) => string
   force?: boolean
 }): Promise<
   { chunk: Bundle[]; results?: Map<Eid, string> } | undefined
@@ -520,7 +521,7 @@ let summarize = async (
         project(entries, summaryLines(entries, chunk, tasks), tools, {
           results,
           history: true,
-          inputText: deps.inputText,
+          inputText: await deps.inputText?.(entries),
         }),
       ),
     }],
@@ -1243,6 +1244,7 @@ export let react = async (
       ),
     )
     : undefined
+  const inputs = await deps.inputText?.(entries)
   let questions = asking && comp(asking, QUESTIONS)!.asked as Questions
   let modalities = Array.isArray(served?.modalities)
     ? served.modalities.filter((v): v is 'text' | 'image' | 'audio' =>
@@ -1303,7 +1305,7 @@ export let react = async (
           anchor: anchorId ? asked!.entity.eid : undefined,
           results,
           media,
-          inputText: deps.inputText,
+          inputText: inputs,
           resultUpdatesAsUser: using?.provider != null &&
             using.provider != identityEid(PROVIDER, ['openai']),
         },
@@ -1351,7 +1353,7 @@ export let react = async (
           JSON.stringify(req.tools).length +
           JSON.stringify(
             project(entries, retained(entries), toolEntities, {
-              inputText: deps.inputText,
+              inputText: inputs,
             }),
           )
             .length +
@@ -1359,7 +1361,7 @@ export let react = async (
       ),
       share: deps.compactAt ?? SHARE,
       resultText: deps.resultText,
-      inputText: deps.inputText,
+      inputText: inputs,
     }
     : undefined
   let summarizing = cut && sending?.window == null
@@ -1436,7 +1438,7 @@ export let react = async (
         ? project(entries, window, toolEntities, {
           results,
           media,
-          inputText: deps.inputText,
+          inputText: inputs,
         })
         : req.items.slice(dynamic.length),
     ),

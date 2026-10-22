@@ -163,6 +163,33 @@ withDom((root) => {
 test('message summaries preserve who spoke', () =>
   assertEquals(messageSpeakers, ['input', 'model']))
 
+// A reply in a session wearing a persona is said by the persona, by name.
+let worn: (string | null | undefined)[] = []
+withDom((root) => {
+  cache.value = {
+    s: {
+      entity: { eid: 's' },
+      session: { eid: 's', id: 's', persona: 'oracle' },
+    },
+    oracle: {
+      entity: { eid: 'oracle' },
+      persona: { eid: 'oracle' },
+      doc: { eid: 'oracle', title: 'Oracle of yaks', body: '' },
+    },
+  }
+  let reply = {
+    eid: 'reply',
+    entry: { session: 's', seq: 2 },
+    content: { body: 'yaks' },
+    output: { source: 'ask' },
+  } as Ent
+  render(<MessageSummary e={reply} />, root)
+  worn.push(root.querySelector('.Entry_Speaker')?.textContent)
+  cache.value = {}
+})
+test('a reply is said by the persona its session wears', () =>
+  assertEquals(worn, ['Oracle of yaks']))
+
 // Build both message representations once; the case compares their speakers.
 let proseSpeakers: (string | null | undefined)[] = []
 withDom((root) => {

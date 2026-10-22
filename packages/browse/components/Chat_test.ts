@@ -28,6 +28,31 @@ test('a human chat opens a taskless session and rebinds the chat', () => {
   ])
 })
 
+test('a chat on a persona opens a native session wearing it', () => {
+  let got = chatChanges(
+    undefined,
+    'next',
+    'actor',
+    'oracle',
+    { provider: 'p' },
+    'What do you look after?',
+    'oracle',
+  )
+  assertEquals(got.slice(0, 2), [
+    {
+      eid: 'next',
+      name: 'session',
+      comp: { operator: true, persona: 'oracle' },
+    },
+    { eid: 'next', name: 'native', comp: {} },
+  ])
+  assertEquals(got.at(-1), {
+    eid: 'next',
+    name: 'chat',
+    comp: { actor: 'actor', target: 'oracle' },
+  })
+})
+
 test('chatPlan picks a graph-native provider', () => {
   let ps = [
     {
@@ -89,6 +114,28 @@ test('a new chat reuses the composer input with a terse prompt', () => {
     let box = mounted.root.querySelector('textarea.Field')
     assertEquals(box?.getAttribute('placeholder'), 'start a chat…')
     assertEquals(box?.getAttribute('class'), 'Field')
+  } finally {
+    mounted.free()
+    cache.value = {}
+  }
+})
+
+test('a chat on a persona messages it by name', () => {
+  cache.value = {
+    oracle: {
+      entity: { eid: 'oracle', num: 9 },
+      doc: { eid: 'oracle', title: 'Oracle of yaks', body: '' },
+      persona: { eid: 'oracle' },
+    },
+  }
+  let mounted = mount(
+    h(Starter, { e: ent('oracle'), actor: 'actor', done() {} }),
+  )
+  try {
+    assertEquals(
+      mounted.root.querySelector('textarea.Field')?.getAttribute('placeholder'),
+      'message Oracle of yaks…',
+    )
   } finally {
     mounted.free()
     cache.value = {}

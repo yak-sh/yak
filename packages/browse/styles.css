@@ -169,11 +169,13 @@ html {
   font-size: var(--small);
 }
 
-/* The persona editor: three tier sections, rows drag between them. */
-.Persona {
+/* The persona editor: three tier sections, rows drag between them, beside
+   the chat that messages the persona (laid out with .Show). */
+.Persona_Tiers {
   display: grid;
   gap: var(--gap);
   align-content: start;
+  min-width: 0;
 }
 .Persona_Sec {
   display: grid;
@@ -770,8 +772,10 @@ html {
 /* The document face (root Show): a real h1 owns the title at the
    column's measure — it wraps, never truncates. The pip pins to the
    FIRST line (the proven head trick); the named view-timeline is what
-   the App bar's compact title listens to. */
-.Show {
+   the App bar's compact title listens to. A persona's page lays its tiers
+   beside the chat the same way. */
+.Show,
+.Persona {
   display: grid;
   grid-template-columns: minmax(0, var(--measure)) minmax(18rem, 26rem);
   gap: calc(var(--gap) * 2);
@@ -836,7 +840,8 @@ html {
   border-radius: var(--radius);
 }
 @media (max-width: 900px) {
-  .Show {
+  .Show,
+  .Persona {
     grid-template-columns: minmax(0, 1fr);
   }
   .Chat {

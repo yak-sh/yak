@@ -44,7 +44,7 @@ export let SessionInput = ({ e }: { e: Ent }) => {
       model: pick.model,
       ...(tier ? { effort: tier } : {}),
     })
-    : undefined
+    : current.using
   return (
     <Input>
       <Label>

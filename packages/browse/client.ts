@@ -450,18 +450,31 @@ export let find = (all: Row[], id: string) => {
 
 // A spawn as @yaks/spawn writes it (packages/spawn/tools.ts session_spawn):
 // the session, its first entry carrying the instruction and the `using` it
-// runs on, and the claim on the task it works. The host reads the entry and
-// starts the run; anything it cannot honor shows on the session itself.
+// runs on, and the claim on the task it works. A native session (@yaks/harness,
+// as `yak session new` begins one) is marked so, with the persona it wears
+// where it was sent to one; the harness admits that persona's instructions
+// before its first turn (packages/harness/effects.ts). The host reads the
+// entry and starts the run; anything it cannot honor shows on the session.
 export let sessionFrames = (
   session: string,
   body: string,
   using: { provider: string; model?: string; effort?: string },
-  opening: { operator: boolean; task?: string },
+  opening: {
+    operator: boolean
+    task?: string
+    persona?: string
+    native?: boolean
+  },
 ): Change[] => {
-  let { operator, task } = opening
+  let { operator, task, persona, native } = opening
   let entry = uuid()
   return [
-    { eid: session, name: 'session', comp: { operator } },
+    {
+      eid: session,
+      name: 'session',
+      comp: { operator, ...(persona ? { persona } : {}) },
+    },
+    ...(native ? [{ eid: session, name: 'native', comp: {} }] : []),
     { eid: entry, name: 'entry', comp: { session } },
     { eid: entry, name: 'content', comp: { body } },
     { eid: entry, name: 'using', comp: using },

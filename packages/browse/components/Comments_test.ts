@@ -105,6 +105,25 @@ test('composer names an unnamed session by its chip id', () => {
   cache.value = {}
 })
 
+test('composer greets a session by the persona it wears', () => {
+  cache.value = {
+    session: {
+      entity: { eid: 'session', num: 31 },
+      session: { eid: 'session', id: 'raw', status: 'settled', persona: 'n' },
+    },
+    n: {
+      entity: { eid: 'n', num: 8 },
+      persona: { eid: 'n' },
+      doc: { eid: 'n', title: 'Oracle of yak herding', body: '' },
+    },
+  }
+  assertEquals(
+    prompt(domainBundle(ent('session')), true),
+    'send to Oracle of yak herding…',
+  )
+  cache.value = {}
+})
+
 test('a reply composer keeps its thread and its own draft place', () => {
   assertEquals(
     composerChanges('task', 'answer', false, 'reply', undefined, 'ask'),

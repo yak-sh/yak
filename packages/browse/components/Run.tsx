@@ -13,6 +13,7 @@ import {
 import { sessionFrames, type SpawnAsk, spawnPlan } from '../client.ts'
 import { type Change, idOf, vocab } from '../types.ts'
 import { block } from '@yaks/ui'
+import { HARNESS } from '@yaks/harness/default'
 import { menu, navigate, screenTarget } from './nav.tsx'
 import { usePlaceAt } from '@yaks/ui'
 
@@ -59,6 +60,25 @@ export let load = async () => {
     )
     providers.value = tableOf(found.flat())
   } catch { /* no table, no form — the verb simply does nothing yet */ }
+}
+
+// The model a native session asks when no one chose one: the using{provider,
+// model} on the harness's own row (@yaks/harness/default), which
+// `yak session new` asks too. Refused where the host names none.
+export let nativeUsing = async (): Promise<
+  { provider: string; model?: string }
+> => {
+  let [row] = vocab.comp('using')
+    ? await read(`.entity.eid=${HARNESS} ?using`)
+    : []
+  let using = row?.using as { provider?: string; model?: string } | undefined
+  if (!using?.provider) {
+    throw new Error('Choose a model: this host names no default for sessions')
+  }
+  return {
+    provider: using.provider,
+    ...(using.model ? { model: using.model } : {}),
+  }
 }
 
 // Every door's spawn (the Run form, :fix, :chat, the TUI): the plan

@@ -3,10 +3,12 @@ import { byWarmth, ent, mutate, relations } from '../../live.ts'
 import { link, unlink } from '../../edge.ts'
 import { block } from '@yaks/ui'
 import { dragData } from '../drag.ts'
+import { Chat } from '../Chat.tsx'
 import { Entity } from '../Entity.tsx'
 import { useQuery } from '../useQuery.ts'
 
 let Frame = block('div', 'Persona', {
+  Tiers: 'div',
   Sec: 'div',
   SecName: 'div',
   Count: 'span',
@@ -14,7 +16,7 @@ let Frame = block('div', 'Persona', {
   Empty: 'div',
   Lint: 'div',
 })
-let { Sec, SecName, Count, Row, Empty, Lint } = Frame
+let { Tiers, Sec, SecName, Count, Row, Empty, Lint } = Frame
 
 // The persona's tiers, editable by drag: three sections — Preload
 // (persona `contains` X: the whole body rides every materialization),
@@ -22,7 +24,8 @@ let { Sec, SecName, Count, Row, Empty, Lint } = Frame
 // not yet tiered (searchable only). A row dropped on another section
 // flips its edge; dropped on Untiered it sheds both; dragged out to the
 // canvas it spawns a card like any list row. A doc on BOTH tiers is a
-// lint line, not an error — preload wins at render, but say so.
+// lint line, not an error — preload wins at render, but say so. Beside the
+// tiers, as beside any document, is the chat: on a persona it messages it.
 let TIERS = [
   ['contains', 'Preload', 'whole body in every materialization'],
   ['reads', 'Index', 'one recall line'],
@@ -72,39 +75,43 @@ export let Persona = ({ e }: { e: Ent }) => {
     t == 'contains' ? pre : t == 'reads' ? idx : loose
   return (
     <Frame>
-      {both.length > 0 && (
-        <Lint>
-          ⚠ on both tiers (preload wins): {both.map((r, i) => (
-            <span key={r.eid}>
-              {i ? ', ' : ''}
-              <Entity eid={r.eid} view='Persona.Lint.Inline' />
-            </span>
-          ))} — drop each on one to settle
-        </Lint>
-      )}
-      {TIERS.map(([t, name, hint]) => (
-        <Sec
-          key={name}
-          // the drop target cancels dragover ITSELF (Board.tsx says why)
-          onDragOver={(ev: DragEvent) => ev.preventDefault()}
-          onDrop={(ev: DragEvent) => drop(ev, t)}
-        >
-          <SecName title={hint}>
-            {name}
-            <Count>{rows(t).length}</Count>
-          </SecName>
-          {rows(t).map((r) => (
-            <Row
-              key={r.eid}
-              draggable
-              onDragStart={(ev: DragEvent) => dragData(ev, r.eid, 'Full')}
-            >
-              <Entity eid={r.eid} view='List.Tile' />
-            </Row>
-          ))}
-          {!rows(t).length && <Empty>drop here — {hint}</Empty>}
-        </Sec>
-      ))}
+      <Tiers>
+        {both.length > 0 && (
+          <Lint>
+            ⚠ on both tiers (preload wins):{' '}
+            {both.map((r, i) => (
+              <span key={r.eid}>
+                {i ? ', ' : ''}
+                <Entity eid={r.eid} view='Persona.Lint.Inline' />
+              </span>
+            ))} — drop each on one to settle
+          </Lint>
+        )}
+        {TIERS.map(([t, name, hint]) => (
+          <Sec
+            key={name}
+            // the drop target cancels dragover ITSELF (Board.tsx says why)
+            onDragOver={(ev: DragEvent) => ev.preventDefault()}
+            onDrop={(ev: DragEvent) => drop(ev, t)}
+          >
+            <SecName title={hint}>
+              {name}
+              <Count>{rows(t).length}</Count>
+            </SecName>
+            {rows(t).map((r) => (
+              <Row
+                key={r.eid}
+                draggable
+                onDragStart={(ev: DragEvent) => dragData(ev, r.eid, 'Full')}
+              >
+                <Entity eid={r.eid} view='List.Tile' />
+              </Row>
+            ))}
+            {!rows(t).length && <Empty>drop here — {hint}</Empty>}
+          </Sec>
+        ))}
+      </Tiers>
+      <Chat e={e} />
     </Frame>
   )
 }

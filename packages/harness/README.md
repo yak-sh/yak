@@ -545,16 +545,22 @@ finishing a task does not dispose its workspace. Sandbox disposal is explicit.
 See [workspace tools](../machine/README.md#workspace-tools-and-session-defaults)
 and [sandbox lifecycle](../sandbox/README.md).
 
-### Input times
+### Who sent an input, and when
 
 The native runner renders each timed input as
-`[Sent <UTC time>; previous reply ended <UTC time>]` followed by its unchanged
-prose. The second time is the completion of the model reply to an earlier input,
-not its streaming start: a sent time before that end means the person may not
-have read the reply yet. The runner follows `output.source` → `ask.through`, so
-an input sent during a reply has the same comparison whether its entry precedes
-or follows the streamed output entry. Each input carries its own comparison,
-including in a fork or a bounded/anchored request.
+`[From <sender>; sent <UTC time>; previous reply ended <UTC time>]` followed by
+its unchanged prose, so a session knows who it is talking to. The sender comes
+from the input's `created{by, via}`: the session it came through when that is
+another session (`S-12 wearing Oracle of topics (N-8)`), else its writer, a
+person or a persona by title and id (`Jeff (U-3709)`). A transcript's own inputs
+come through itself, so they are named by their writer. An input whose writer is
+none of those starts `[Sent …`. The second time is the completion of the model
+reply to an earlier input, not its streaming start: a sent time before that end
+means the person may not have read the reply yet. The runner follows
+`output.source` → `ask.through`, so an input sent during a reply has the same
+comparison whether its entry precedes or follows the streamed output entry. Each
+input carries its own comparison, including in a fork or a bounded/anchored
+request.
 
 Times come from the input's `created.at` and the completed ask's `updated.at`;
 no clock is guessed for imported history. The first input says `none` for its
@@ -572,12 +578,17 @@ OpenAI receives ordered developer messages, including instructions added during
 the conversation.
 
 Root sessions record their explicitly selected persona through `@yaks/persona`
-and `@yaks/context`, along with any prompt snapshots their caller supplies.
-Starting one does not read the CLI host's instruction files. Reading a machine
-file through a tool does not make it instructions: the caller must explicitly
-admit it through the prompt channel. Existing `opts.instructions` and
-`sending.instructions` remain the base instruction channel; delegated
-`instructions` append local guidance rather than replacing that base.
+and `@yaks/context`, along with any prompt snapshots their caller supplies. A
+session any other door writes as data, wearing a persona and holding no
+instructions (browse's chat on a persona writes `session{operator, persona}`,
+`native{}` and its first entry), has that persona's instructions admitted by the
+runner before its first turn, on no machine unless its home names a workspace
+(./effects.ts). Starting one does not read the CLI host's instruction files.
+Reading a machine file through a tool does not make it instructions: the caller
+must explicitly admit it through the prompt channel. Existing
+`opts.instructions` and `sending.instructions` remain the base instruction
+channel; delegated `instructions` append local guidance rather than replacing
+that base.
 
 Fresh children copy shared prompt snapshots from their parent. Forks copy no
 files: their exact inherited prefix is followed by a local fork-execution note,

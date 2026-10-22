@@ -1,6 +1,6 @@
 import { after } from '@yaks/fp'
 import { edgeEid } from '@yaks/edge'
-import { inputText } from './input_times.ts'
+import { inputText, senders } from './input_text.ts'
 import { dispatchStatus } from '@yaks/session/admission'
 // The harness is its agent: the rows every transcript is read from, the runner
 // it lends them (@yaks/session run.ts), and the operations a caller needs —
@@ -483,7 +483,8 @@ export let lend = <H extends Host>(opts: Opts<H>): Runner => {
     instructions: opts.instructions,
     resolveInstructions: (inherited) =>
       inheritedInstructions(inherited, opts.instructions),
-    inputText,
+    inputText: async (transcript) =>
+      inputText(transcript, await senders(h.g, transcript)),
     contextItems: opts.context,
     requestItems: opts.requestItems,
     resultText: tools.some((t) => t.name == 'graph_value_read')

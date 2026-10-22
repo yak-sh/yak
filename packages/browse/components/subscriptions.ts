@@ -88,11 +88,19 @@ export let useReference = (eid?: string | null) => {
 
 // The newest input chooses the next model. An adopted session may hold its
 // starting choice itself; a spawned one's is on its first entry.
-export let useModel = (e: Ent): { name?: string; effort?: string } => {
+// The model a session asks now, by name, and the using{provider, model,
+// effort} in force: the newest line that asked for a turn. A line sent with
+// no choice of its own carries that using, as `yak session send` does, since
+// a line asks for a turn by carrying one (@yaks/session `session_run`).
+export let useModel = (e: Ent): {
+  name?: string
+  effort?: string
+  using?: { provider: string; model?: string; effort?: string }
+} => {
   let latest = useQueryResult(
     e.session && vocab.prop('entry', 'session') && vocab.comp('using') &&
       vocab.comp('ask')
-      ? `.entry.session=${e.eid}&.using&!ask&.order=-entry.seq&.limit=1&.fields=using.model,using.effort`
+      ? `.entry.session=${e.eid}&.using&!ask&.order=-entry.seq&.limit=1&.fields=using.provider,using.model,using.effort`
       : '',
     !!e.session,
     true,
@@ -103,6 +111,13 @@ export let useModel = (e: Ent): { name?: string; effort?: string } => {
   return {
     name: model ? ent(model).model?.name ?? undefined : undefined,
     effort: using?.effort ?? undefined,
+    using: using?.provider
+      ? {
+        provider: using.provider,
+        ...(model ? { model } : {}),
+        ...(using.effort ? { effort: using.effort } : {}),
+      }
+      : undefined,
   }
 }
 

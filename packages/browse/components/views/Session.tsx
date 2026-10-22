@@ -553,6 +553,8 @@ export let Session = (
 ) => {
   let s = e.session!
   let repo = useRepoUrl(e)
+  // Its replies are said by the persona it wears (Entry.tsx), by name.
+  useReference(s.persona)
   let web = typeof document != 'undefined' &&
     typeof document.querySelector == 'function'
   let [take, setTake] = useState(WINDOW)

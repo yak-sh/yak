@@ -82,14 +82,21 @@ let body = (e: Ent) => e.content?.body ?? ''
 // Who a prose entry is from: a model's output wears `output` (@yaks/tools).
 let said = (e: Ent) => e.output ? 'agent' : 'user'
 let speaker = (role: 'agent' | 'user') => role == 'agent' ? 'model' : 'input'
+// A model's reply is said by the persona its session wears, by name, once
+// that persona's row has come (the Session view holds it); else by 'model'.
 let source = (e: Ent) => {
   if (e.call) return 'tool call'
   if (e.result) return 'tool result'
   if (e.prompt) return 'instructions'
   if (e.notice) return 'context'
   if (e.checkpoint) return 'checkpoint'
-  if (e.output) return e.reasoning ? 'reasoning' : 'model'
   let session = e.entry?.session ? ent(e.entry.session) : undefined
+  let persona = session?.session?.persona
+  if (e.output) {
+    return e.reasoning
+      ? 'reasoning'
+      : (persona && ent(persona).doc?.title) || 'model'
+  }
   return session?.session?.operator ? 'person' : 'input'
 }
 let failed = (e: Ent) =>

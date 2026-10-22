@@ -28,7 +28,11 @@ export let byline = (b: Bundle): string => {
 export let prompt = (b: Bundle, entry = false, model?: string): string => {
   let host = commentHost(), s = comp(b, 'session')
   let settled = !!s && !['pending', 'running'].includes(String(s.status))
-  let who = s && (host.modelName(model) || host.id(b))
+  // A session wearing a persona is greeted by the persona's name.
+  let worn = s?.persona
+    ? comp(host.get(String(s.persona)), 'doc')?.title
+    : undefined
+  let who = s && (worn || host.modelName(model) || host.id(b))
   return entry
     ? `send to ${who || host.id(b)}…`
     : settled

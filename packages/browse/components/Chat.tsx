@@ -1,6 +1,9 @@
 // The document-side conversation: indexed cited-entity associations above one
-// actor's selected graph-native Session. The binding is graph data on the
-// session, so a reload or another browser finds the same transcript.
+// actor's selected Session. The binding is graph data on the session, so a
+// reload or another browser finds the same transcript. On a persona the
+// conversation is with it: a message to it begins a native session wearing it
+// on the host's default model (D-130780), as `yak session new --persona`
+// does. On any other document the chat plan picks a provider.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { sessionFrames } from '../client.ts'
 import { mutate, myActor, rowsSub, uuid } from '../live.ts'
@@ -9,7 +12,7 @@ import type { Change, Ent } from '../types.ts'
 import { block, Field } from '@yaks/ui'
 import { Entity } from './Entity.tsx'
 import { Rows } from '@yaks/ui'
-import { liveBlocked, load, providers } from './Run.tsx'
+import { liveBlocked, load, nativeUsing, providers } from './Run.tsx'
 import { useChatFor, useReferences } from './useQuery.ts'
 
 let Frame = block('aside', 'Chat', {
@@ -79,8 +82,14 @@ export let ReferenceList = (
     : null
 }
 
-// A chat is opened by the person typing its first ask,
-// bound to this actor and document; a new one unbinds the old.
+// Who a chat on `e` talks to: `e` itself when it is a persona, so a chat
+// there is a message to it (D-130780); no one in particular otherwise.
+export let voiceOf = (e: Ent): string | undefined =>
+  e.persona ? e.eid : undefined
+
+// A chat is opened by the person typing its first ask, bound to this actor
+// and document; one sent to a persona is native and wears it. A new one
+// unbinds the old.
 export let chatChanges = (
   old: string | undefined,
   session: string,
@@ -88,11 +97,25 @@ export let chatChanges = (
   target: string,
   using: { provider: string; model?: string; effort?: string },
   body: string,
+  persona?: string,
 ): Change[] => [
   ...(old ? [{ eid: old, name: 'chat', comp: null } as Change] : []),
-  ...sessionFrames(session, body, using, { operator: true }),
+  ...sessionFrames(session, body, using, {
+    operator: true,
+    persona,
+    native: !!persona,
+  }),
   { eid: session, name: 'chat', comp: { actor, target } },
 ]
+
+// The provider and model a document's chat runs on, by the chat plan.
+let planned = async () => {
+  if (!providers.value.length) await load()
+  return usingOf(
+    providers.value,
+    chatPlan(providers.value, await liveBlocked()),
+  )
+}
 
 export let Starter = (
   { e, actor, old, done }: {
@@ -109,16 +132,9 @@ export let Starter = (
     if (!body || state) return
     setState('Starting chat…')
     try {
-      if (!providers.value.length) await load()
-      let plan = chatPlan(providers.value, await liveBlocked())
-      mutate(...chatChanges(
-        old,
-        uuid(),
-        actor,
-        e.eid,
-        usingOf(providers.value, plan),
-        body,
-      ))
+      let persona = voiceOf(e)
+      let using = persona ? await nativeUsing() : await planned()
+      mutate(...chatChanges(old, uuid(), actor, e.eid, using, body, persona))
       done()
     } catch (error) {
       setState(error instanceof Error ? error.message : String(error))
@@ -130,7 +146,9 @@ export let Starter = (
         lines
         elRef={box}
         rows={3}
-        placeholder='start a chat…'
+        placeholder={voiceOf(e)
+          ? `message ${e.doc?.title || 'this persona'}…`
+          : 'start a chat…'}
         onKeyDown={(event: KeyboardEvent) => {
           if (event.key != 'Enter' || event.shiftKey) return
           event.preventDefault()

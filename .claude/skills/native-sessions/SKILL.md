@@ -44,7 +44,9 @@ select a workspace or provider; it never invents a process directory.
 
 Its persona comes from graph context: `--work <task-or-project>` admits the
 work's common persona and records its project; `--persona <id-or-name>` selects
-an explicit persona. A checkout can supply its projected instructions too.
+an explicit persona. In browse, the chat on a persona's page starts one wearing
+it on the harness's default model, and the runner admits the persona before its
+first turn (packages/harness/effects.ts). A checkout can supply its projected instructions too.
 Before each ask, an exact tool offer containing `skill_read` receives graph
 skill titles and descriptions, scoped to the session's project repository when
 known. `skill_read` loads the selected graph instructions. Neither discovery

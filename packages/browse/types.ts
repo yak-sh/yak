@@ -692,6 +692,7 @@ export type Session = {
   id: string
   actor?: string | null // who this run acts for
   operator?: boolean | null // receives project-wide attention
+  persona?: string | null // the persona it wears
   standing?: string | null // log-derived: busy|terminal|idle
   status?: typeof sessionStates[number] | null // derived by the host
 }

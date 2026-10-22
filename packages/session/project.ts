@@ -109,7 +109,9 @@ export let project = (
     results?: Map<Eid, string>
     media?: Map<Eid, Item[]>
     history?: boolean
-    inputText?: (transcript: Bundle[]) => (entry: Bundle) => string
+    /** Each input's prose as the model reads it, rendered for this
+     * transcript (react's `Deps.inputText`). */
+    inputText?: (entry: Bundle) => string
     /** Strict routes accept one tool output; append later updates as user text. */
     resultUpdatesAsUser?: boolean
   } = {},
@@ -147,7 +149,6 @@ export let project = (
   let sent = (call: string, seq: number) =>
     (bounds[reaching(bounds, seq)] ?? Infinity) <
       (landed.get(call) ?? Infinity)
-  let inputText = opts.inputText?.(transcript)
   let logical = replied(
     asks,
     window.filter((b) => {
@@ -173,7 +174,7 @@ export let project = (
     } else if (kind == 'input') {
       out.push({
         kind: 'user',
-        text: inputText?.(b) ?? textOf(b),
+        text: opts.inputText?.(b) ?? textOf(b),
       })
     } else if (kind == 'output') {
       out.push({ kind: 'assistant', text: textOf(b) })
