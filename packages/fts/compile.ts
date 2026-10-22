@@ -49,7 +49,7 @@ import {
 import { permitted, ranked, screens } from './search.ts'
 import { type Field, indexes, indexName } from './fields.ts'
 import { named, term } from './term.ts'
-import type { Clause } from '@yaks/query/core'
+import { words as wordsIn } from '@yaks/query/core'
 
 // The ranking `.order=` names.
 export let SEARCH = 'search'
@@ -61,14 +61,6 @@ export let RANKED = 1000
 // MATCH opens a cursor per keyed candidate. Keep seeks to a handful of owners;
 // larger screens retain the single walk through a term's postings.
 let FEW = 4
-
-// Whether a clause searches for a word among the rows it selects: a text
-// clause with a word in it, alone or in a group (not a walk's, whose words
-// are about other entities).
-let worded = (c: Clause): boolean =>
-  c.kind == 'text'
-    ? !!term(c.value)
-    : (c.kind == 'and' || c.kind == 'or') && c.clauses.some(worded)
 
 // The @yaks/sql extension that resolves bare words against the search indexes.
 // It handles the `text` clause, covering every indexed field, and orders by
@@ -157,7 +149,7 @@ export let search = (fields: Field[], db?: Driver): Extension => {
     },
     // A window of a query with words in it is a search's best rows unless it
     // says otherwise, where there is a connection to rank through.
-    ranks: (q) => db && worded(q) ? SEARCH : null,
+    ranks: (q) => db && wordsIn(q).some((w) => !!term(w)) ? SEARCH : null,
     order: (value, site) => {
       if (value != SEARCH) return null
       if (!words.length || !db) {

@@ -40,6 +40,7 @@ import {
   present,
   type Query,
   stringify,
+  words,
 } from '@yaks/query/core'
 import { toolsIn, toolsSaid } from '@yaks/vocab/tools'
 import type { Keywords, VocabDoc } from '@yaks/vocab'
@@ -117,6 +118,10 @@ export type Seams = {
    * `graph_schema`'s answer carries and its output schema admits */
   keywords?: Keywords[]
 }
+
+/** How many rows a search answers when it asks for no window of its own: its
+ * best, as the `search` tool's are. */
+export let BEST = 20
 
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 let num = (v: unknown): number | undefined =>
@@ -212,7 +217,9 @@ export let runs = (seams: Seams = {}): Runs => {
     // riders off the text and asks each store over HTTP. A line that asks for
     // a reduction (`.count`, `.tally=`, `.distinct=`) asks about the selection,
     // not its members, and is answered as `/query` answers it: the value, said
-    // the way graph_schema says its answer.
+    // the way graph_schema says its answer. A search with no window of its
+    // own answers its best `BEST`: `mossvale` matched 13,065 entities, more
+    // than one read may hold whole and more than anyone reads past the best.
     graph_query: async (call, graph) => {
       let args = argsOf(call)
       let n = num(args.limit)
@@ -226,7 +233,11 @@ export let runs = (seams: Seams = {}): Runs => {
       let ask = unfiltered(ast)
       if (ask) throw new Refused(asksOnly(ast, ask))
       let op = aggregate(ast)
-      if (!op) return await graph.read(q)
+      if (!op) {
+        let windowed = ast.clauses.some((c) => c.kind == 'limit')
+        let searched = words(ast).length && !windowed
+        return await graph.read(searched ? conjoin(q, `.limit=${BEST}`) : q)
+      }
       let value = reduced(op, await graph.rows(q))
       return [{
         entity: { eid: '$said' },

@@ -156,7 +156,8 @@ A directive belongs to the whole line wherever it is written.
 `.count&.limit=20` counts every match. With no `.order`, a window (`.limit`,
 `.after`) of a query with words is ranked by `search` (best match first, a
 title that is exactly the words before all); any other window is newest first,
-and a whole answer oldest first.
+and a whole answer oldest first. `graph_query` (and `yak graph query`) gives a
+search that asks for no window its best 20.
 A trailing `~` in `.fields` mutes that property from a subscription's change
 signal.
 

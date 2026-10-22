@@ -67,13 +67,28 @@ export let metered = <R>(
   }
 }
 
-/** A query read, named as a trace keeps it: every value masked, bounded. */
-export let named = (query: Query) => (): string =>
-  mask(typeof query == 'string' ? query : stringify(query)).slice(0, 512)
+/** A query read, named as a trace keeps it: every value masked, bounded, and
+ * said to be masked where it was, so a search for one word reads as a query
+ * whose word is hidden, not as a message with a blank left in it.
+ *
+ * ```ts
+ * import { named } from './budget.ts'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(named('mossvale')(), 'the query `?` (its values masked)')
+ * equal(named('.task')(), 'the query `.task`')
+ * ```
+ */
+export let named = (query: Query) => (): string => {
+  let line = typeof query == 'string' ? query : stringify(query)
+  let masked = mask(line)
+  return `the query \`${masked.slice(0, 512)}\`` +
+    (masked == line ? '' : ' (its values masked)')
+}
 
 /** A get, named by how many entities it asked for. */
 export let gotten = (eids: unknown[]) => (): string =>
-  `get of ${eids.length} entities`
+  `a get of ${eids.length} entities`
 
 /** Count one decoded row against the read running, if one is; throws a
  * refusal once the read passes its limits. */

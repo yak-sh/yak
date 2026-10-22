@@ -3,7 +3,9 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
-import { loadTools, tier } from './tools.ts'
+import { BEST, loadTools, tier } from './tools.ts'
+import { graph } from './graph.ts'
+import { ram } from '@yaks/ram'
 import { declared } from './vocab.ts'
 import { Refused } from './errors.ts'
 import type { Bundle } from './bundle.ts'
@@ -148,4 +150,30 @@ test('graph_query refuses a line that only asks, with the line it meant', async 
   for (let q of ['?doc .topic', '?doc moss', '?doc .near=T-1', '* .limit=2']) {
     assertEquals(await asked(q), [])
   }
+})
+
+// A shelf of books one word finds, one more than a search answers unasked.
+let titled = loadVocab({
+  $defs: {
+    book: {
+      component: true,
+      type: 'object',
+      properties: { title: { type: 'string', search: true } },
+    },
+  },
+})
+let shelf = graph({ storage: ram(titled), vocab: titled })
+shelf.apply(Array.from({ length: BEST + 1 }, (_, i) => ({
+  entity: { eid: `book-${i}` },
+  book: { title: `Dragon ${i}` },
+})))
+let searched = async (args: Record<string, unknown>) =>
+  (await query.run({ entity: { eid: 'c' }, call: { args } }, shelf)).length
+
+test('a search that asks for no window answers its best twenty', async () => {
+  assertEquals(await searched({ q: 'dragon' }), BEST)
+})
+
+test("a search's own window says how many it answers", async () => {
+  assertEquals(await searched({ q: 'dragon', limit: BEST + 1 }), BEST + 1)
 })

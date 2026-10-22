@@ -16,3 +16,26 @@ export let map = <C extends Clause>(clause: C, f: (c: Clause) => Clause): C => {
   }
   return f(next) as C
 }
+
+/** The words a query searches for among the rows it selects: its text
+ * clauses, alone or in groups, and not a reverse-association test's, whose
+ * words are about other entities.
+ *
+ * ```ts
+ * import { parse, words } from '@yaks/query'
+ * import { equal } from '@yaks/testing'
+ *
+ * equal(words(parse('moss "the vale" (.task | crash)')), [
+ *   'moss',
+ *   'the vale',
+ *   'crash',
+ * ])
+ * equal(words(parse('.task .limit=5')), [])
+ * ```
+ */
+export let words = (clause: Clause): string[] =>
+  clause.kind == 'text'
+    ? [clause.value]
+    : clause.kind == 'and' || clause.kind == 'or'
+    ? clause.clauses.flatMap(words)
+    : []
