@@ -29,6 +29,12 @@ let TIERS = [
   [null, 'Untiered', 'in scope, searchable only'],
 ] as const
 
+/** The query for the memories in a persona's scope, through the indexed
+ * memory.scope, so the Untiered section never scans the partial cache. A
+ * homeless persona's are the memories scoped to no project. */
+export let inScope = (persona?: { home?: string | null }): string =>
+  persona?.home ? `.memory.scope=${persona.home}` : '.memory !memory.scope'
+
 export let Persona = ({ e }: { e: Ent }) => {
   let now = Date.now()
   let mine = relations(e.eid).value
@@ -40,11 +46,7 @@ export let Persona = ({ e }: { e: Ent }) => {
   let pre = linked('contains')
   let idx = linked('reads')
   let tiered = new Set([...pre, ...idx].map((r) => r.eid))
-  // The memories in the persona's scope, through the indexed memory.scope
-  // query, so the Untiered section never scans the partial cache.
-  let scoped = useQuery(
-    e.persona?.home ? `.memory.scope=${e.persona.home}` : '!memory.scope',
-  )
+  let scoped = useQuery(inScope(e.persona))
   let loose = scoped
     .filter((r) => r.memory && r.doc && !tiered.has(r.eid))
     .toSorted(byWarmth(now))
