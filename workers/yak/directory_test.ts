@@ -220,9 +220,9 @@ test('a release reaches consumer and home through stale isolate caches', async (
       'home-2',
     ])
   })
-  // Routing seeks the address and front page separately; home's and the
-  // app's own reads also reach the directory.
-  assertEquals(reads, [3, 3])
+  // Every app read reaches the directory: routing's one, then home's and the
+  // app's own.
+  assertEquals(reads, [2, 3])
 })
 
 // Read real graph predicates so address/home filtering, not a stub's roster,
