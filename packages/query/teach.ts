@@ -101,8 +101,11 @@ RANGE: = within it, >= from its start, <= to its end
 ('.updated.at>="1 hour ago"'; glue with - where quoting is hard: 1-hour-ago).
 A component name alone tests presence: '.comp' wears it, '!comp' does not,
 and '?comp' selects it when worn without filtering on it. A path takes the same
-three: '.recipe.cuisine' has one, '!recipe.cuisine' has none.
-Whitespace separates terms; every term stands alone. Between terms '&' and
+three: '.recipe.cuisine' has one, '!recipe.cuisine' has none. Only a property
+holds a value, so a comparison names one ('.topic.name~=moss', never
+'.topic~=moss'); a bare word searches all indexed text.
+Whitespace separates terms; every term stands alone, so an operator takes no
+spaces around it ('.doc.title~=cake', never '.doc.title ~= cake'). Between terms '&' and
 ',' are aliases for whitespace ('&' is the same query as a URL string); '|'
 between terms is OR and binds looser than the AND of adjacent terms
 ('.a=1 .b=2|.c=3' is (a and b) or c), and parentheses group ('.a=1 (.b=2|.c=3)').

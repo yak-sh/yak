@@ -233,7 +233,6 @@ export let QUERIES: string[] = [
   '.book.author=a1',
   '!book.author',
   '.book.author',
-  '.book=b1',
   '.book.author.doc.title~=vale',
   '.book.author.doc.title=Ursula Vale',
   '.book.author.member',

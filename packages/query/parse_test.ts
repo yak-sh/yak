@@ -244,6 +244,15 @@ refused([
   ['.tally=.filed.project', 'with no leading dot: .tally=filed.project'],
   ['.distinct=filed.', '.distinct=filed.project'],
   ['.fields=doc.title,.doc.body', 'with no leading dot: .fields=pin.x,pin.y'],
+  // an operator with spaces around it is refused with the clause it was part of
+  [
+    '.entity ~= mossvale',
+    '~= stands alone: an operator joins a property and its value with no spaces (.entity~=mossvale)',
+  ],
+  ['.doc.title = "two words"', '(.doc.title="two words")'],
+  ['.task (.a=1 | .b >= 2)', '(.b>=2)'],
+  ['= open', '(.doc.title=cake)'],
+  ['.requires ->', '(.requires->T-42)'],
 ])
 
 test('a directive shapes the whole query, wherever it is written', () => {

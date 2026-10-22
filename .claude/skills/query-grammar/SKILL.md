@@ -88,7 +88,12 @@ silently wrong, so a property is always named with its component:
 named alone is refused with every form that names it: `.status=open` answers
 `.status is a property, not a component — name it .connection.status,
 .dispatch.status, .plan.status, .request.status, .session.status, .task.status
-or ._extends.status`. The refusal never picks one for you. A path through a
+or ._extends.status`. The refusal never picks one for you. The other way round,
+a value compared with a component is refused with the properties that hold one:
+`.topic~=moss` answers `.topic~=moss names a component, not a property: … write
+.topic.name~=moss, or the bare word moss to search all indexed text`. An
+operator written with spaces around it (`.doc.title ~= cake`) is refused with
+the clause it meant. A path through a
 reference goes on with the target's own `comp.prop`
 (`.filed.project.doc.title~=yak`), and the entity's id is `.entity.eid`.
 Completion offers the qualified forms of a name as it is typed: `.ti` offers

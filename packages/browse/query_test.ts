@@ -2,7 +2,8 @@ import { adopt, and, eq, parse } from '@yaks/query'
 import { vocab } from './types.ts'
 import { test } from '@yaks/testing'
 import './testing.ts'
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
+import { Unknown } from '@yaks/vocab'
 import { scalar } from '@yaks/query'
 import {
   edgeRider,
@@ -111,4 +112,12 @@ test('a drop on a board of everything under a project files it there', () => {
     filed: { project: 'p1', priority: 2 },
   })
   assertEquals(adopt(parse('.filed.project<-p1'), vocab), {})
+})
+
+test('the browser refuses a value compared with a component, as every door does', () => {
+  assertThrows(
+    () => parseQuery('.doc~=spring'),
+    Unknown,
+    'write .doc.title~=spring or .doc.body~=spring, or the bare word spring',
+  )
 })

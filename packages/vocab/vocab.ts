@@ -65,6 +65,84 @@ export let unqualified = (prop: string, comps: string[]): string => {
   }${last}`
 }
 
+// The scalar types a `~=` contains-test reads as text.
+let TEXT = ['text', 'url', 'query']
+
+/**
+ * The refusal for a value compared with a component. A name alone is a
+ * component, which an entity wears or not, and only a property holds a value,
+ * so `.topic~=moss` names no value to compare: the message gives the forms that
+ * do, the text properties for `~=`, beside the bare word that searches all
+ * indexed text. `path` is the clause's path, ending at the component
+ * (`topic`, or `filed.project.task` past references); `value` is as written.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab, valueless } from '@yaks/vocab'
+ *
+ * let v = loadVocab([{
+ *   $defs: {
+ *     topic: {
+ *       component: true,
+ *       type: 'object',
+ *       properties: { name: { type: 'string' }, rank: { type: 'number' } },
+ *     },
+ *   },
+ * }])
+ * assertEquals(
+ *   valueless(v, 'topic', '~=', 'moss'),
+ *   '.topic~=moss names a component, not a property: a component is ' +
+ *     'present or absent, and its properties hold values — write ' +
+ *     '.topic.name~=moss, or the bare word moss to search all indexed text',
+ * )
+ * assertEquals(
+ *   valueless(v, 'topic', '>', '2'),
+ *   '.topic>2 names a component, not a property: a component is present or ' +
+ *     'absent, and its properties hold values — write .topic.name>2 or ' +
+ *     '.topic.rank>2',
+ * )
+ * ```
+ */
+export let valueless = (
+  v: Vocab,
+  path: string,
+  op: string,
+  value: string,
+): string => {
+  let comp = path.split('.').at(-1)!
+  let said = `.${path}${op}${value} names a component, not a property:`
+  let props = v.props(comp)
+  if (!props.length) {
+    return `${said} ${comp} has no properties, so it is present (.${path}) ` +
+      `or absent (!${path})`
+  }
+  let text = op == '~='
+  // The spine's eid is no declared property, and it is what an entity is
+  // named by: `.entity=T-12` meant `.entity.eid=T-12`.
+  let named = comp == SPINE && (op == '=' || op == '!=') ? [EID] : []
+  let forms = [
+    ...named,
+    ...props.filter((p) => {
+      let c = v.prop(comp, p)!
+      return text
+        ? c.category == 'scalar' && TEXT.includes(c.scalar!)
+        : c.scalar != 'jsonb' && c.scalar != 'binary'
+    }),
+  ].map((p) => `.${path}.${p}${op}${value}`)
+  let word = /\s/.test(value) ? `"${value}"` : value
+  let search = `the bare word ${word} to search all indexed text`
+  let last = forms.pop()
+  let fix = last
+    ? `write ${forms.length ? `${forms.join(', ')} or ` : ''}${last}${
+      text ? `, or ${search}` : ''
+    }`
+    : text
+    ? `${comp} holds no text, so write ${search}`
+    : shapeOf(v, comp)
+  return `${said} a component is present or absent, and its properties hold ` +
+    `values — ${fix}`
+}
+
 // The keywords an extension entry may carry. Everything else about a component
 // — its kind, its prefix, its indexes, whether it reaches the wire — belongs to
 // the document that declares it, so an extension that states one of those is a

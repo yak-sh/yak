@@ -59,9 +59,16 @@ import type {
   Value,
   Walk,
 } from '@yaks/query/core'
-import { absent, bare, directive, parse, present } from '@yaks/query/core'
+import {
+  absent,
+  bare,
+  compares,
+  directive,
+  parse,
+  present,
+} from '@yaks/query/core'
 import type { Assoc, Hop, Presence, Vocab } from '@yaks/vocab/runtime'
-import { Unknown } from '@yaks/vocab/runtime'
+import { Unknown, valueless } from '@yaks/vocab/runtime'
 import {
   among,
   and,
@@ -635,7 +642,8 @@ let refEq = (
 
 // A predicate one hop long: either a property of a component, or a presence
 // test on the component itself (the leaf has no property name). `.task` and
-// `.task~=` test for presence; every other operator tests for absence.
+// `.task~=` test for presence, `!task` for absence; a value compared with a
+// component never reaches here (`clause`, `valueless`).
 let single = (ctx: Ctx, hop: Hop, p: Pred): Cond => {
   let op = opOf(p)
   if (op == 'want') return TRUE // a request to project the value, not a filter
@@ -2077,6 +2085,13 @@ let clause = (ctx: Ctx, c: Clause): Cond => {
     }
     if (ctx.owner && hops.some((h) => h.comp == 'entity')) {
       throw new Unsupported('a reverse hop through the spine')
+    }
+    let leaf = hops[hops.length - 1]
+    if (!leaf.prop && compares(c)) {
+      throw new Unknown(
+        leaf.comp,
+        valueless(ctx.v, c.path.join('.'), c.op, flat(c.value)),
+      )
     }
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }

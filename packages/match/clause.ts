@@ -12,6 +12,7 @@
 import {
   bare,
   type Clause,
+  compares,
   type Pred,
   type Range,
   type Refs,
@@ -21,6 +22,7 @@ import {
 } from '@yaks/query/core'
 import { identity, literals, Unsupported } from '@yaks/sql/core'
 import type { Assoc, Hop, Vocab } from '@yaks/vocab'
+import { Unknown, valueless } from '@yaks/vocab/runtime'
 import {
   type Bundle,
   comp,
@@ -210,8 +212,8 @@ let scalar = (
 
 // A single-hop predicate: a direct property, or a test for the component itself
 // (an empty leaf prop, which is the presence form). `.review` and `.review~=`
-// ask for entities that have the component, everything else for those that do
-// not.
+// ask for entities that have the component, `!review` for those that do not; a
+// value compared with a component never reaches here (`compile`, `valueless`).
 let single = (ctx: Ctx, hop: Hop, p: Pred): Arm => {
   let op = opOf(p)
   if (op == 'want') return arm(YES) // a projection request, not a filter
@@ -611,6 +613,13 @@ export let compile = (ctx: Ctx, c: Clause): Arm => {
       throw new Unsupported('a reverse association', c.path.join('.'), BY)
     }
     let hops = ctx.v.aim(c.path.join('.'), bare(c))
+    let leaf = hops[hops.length - 1]
+    if (!leaf.prop && compares(c)) {
+      throw new Unknown(
+        leaf.comp,
+        valueless(ctx.v, c.path.join('.'), c.op, flat(c.value)),
+      )
+    }
     return hops.length == 1 ? single(ctx, hops[0], c) : path(ctx, hops, c)
   }
   throw new Unsupported(`the ${(c as Clause).kind} directive`, '', BY)

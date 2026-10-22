@@ -282,6 +282,26 @@ export let bare = (p: Pred): boolean =>
     p.op == '?' && !p.value ||
     p.op == '=' && p.value?.kind == 'scalar' && p.value.raw == '')
 
+/**
+ * Does this predicate compare a value, rather than test presence (`.canvas`,
+ * `.canvas~=` with nothing to contain), absence (`!canvas`), or ask for the
+ * component (`?canvas`)? Only a property holds a value, so a comparison whose
+ * path ends at a component is refused (@yaks/vocab `valueless`).
+ *
+ * ```ts
+ * import { absent, compares, contains, eq, present, want } from '@yaks/query'
+ *
+ * compares(contains('topic', 'moss')) // true
+ * compares(eq('topic.name', 'moss')) // true
+ * compares(contains('topic', '')) // false
+ * compares(present('topic')) || compares(absent('topic')) // false
+ * compares(want('topic')) // false
+ * ```
+ */
+export let compares = (p: Pred): boolean =>
+  p.op != '!' && p.op != '?' && !!p.value &&
+  !((p.value.kind == 'scalar' || p.value.kind == 'time') && p.value.raw == '')
+
 export let and = (...clauses: Clause[]): And => ({ kind: 'and', clauses })
 export let or = (...clauses: Clause[]): Or => ({ kind: 'or', clauses })
 

@@ -11,6 +11,7 @@ import {
   loadVocab,
   metaSchema,
   Unknown,
+  valueless,
 } from './mod.ts'
 import type { PropSchema, VocabDoc } from './types.ts'
 import slice from './fleet/slice.schema.json' with { type: 'json' }
@@ -835,4 +836,59 @@ test('a component says which package declared it, or its document does', () => {
   assertEquals(one(book, { package: '@yaks/shelf' }), '@yaks/shelf')
   // A vocabulary reported out of several packages says it per component.
   assertEquals(one({ ...book, package: '@yaks/shop' }), '@yaks/shop')
+})
+
+// A value compared with a component is refused with the forms that compare
+// one. Each row: path, operator, value, and what the refusal says.
+test('a value compared with a component names the properties that hold one', () => {
+  let w = loadVocab({
+    $defs: {
+      entity: {
+        component: true,
+        type: 'object',
+        properties: { num: { type: 'number', stamped: true } },
+      },
+      book: {
+        component: true,
+        type: 'object',
+        properties: {
+          title: { type: 'string' },
+          price: { type: 'number' },
+          cover: { type: 'object' },
+          author: { type: 'string', ref: 'entity' },
+        },
+      },
+      signed: { component: true, type: 'object', properties: {} },
+    },
+  })
+  for (
+    let [path, op, value, said] of [
+      ['book', '~=', 'dune', 'write .book.title~=dune, or the bare word dune'],
+      [
+        'book',
+        '<',
+        '9',
+        'write .book.title<9, .book.price<9 or .book.author<9',
+      ],
+      [
+        'entity',
+        '~=',
+        'two words',
+        'entity holds no text, so write the bare word "two words" to search all indexed text',
+      ],
+      ['entity', '=', 'B-3', 'write .entity.eid=B-3 or .entity.num=B-3'],
+      [
+        'book.author.book',
+        '=',
+        'x',
+        '.book.author.book=x names a component, not a property',
+      ],
+      [
+        'signed',
+        '=',
+        'yes',
+        'signed has no properties, so it is present (.signed) or absent (!signed)',
+      ],
+    ]
+  ) assert(valueless(w, path, op, value).includes(said), `${path}${op}${value}`)
 })

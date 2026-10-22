@@ -103,7 +103,7 @@ All exports are available from `@yaks/query`.
 | Part                      | Exports                                                                                                                 |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | Parsing                   | `parse`, `stringify`, `parseDot`, `tokens`, `conjoin`, `valued`, `cursor`, `ParseOpts`                                  |
-| Predicates                | `eq`, `ne`, `contains`, `lt`, `le`, `gt`, `ge`, `present`, `absent`, `want`, `pred`, `bare`                             |
+| Predicates                | `eq`, `ne`, `contains`, `lt`, `le`, `gt`, `ge`, `present`, `absent`, `want`, `pred`, `bare`, `compares`                 |
 | Values and text           | `coerce`, `scalar`, `list`, `range`, `time`, `text`, `never`                                                            |
 | Composition               | `and`, `or`, `map`                                                                                                      |
 | Walks                     | `walk`, `WALK_LIMIT`, `WALK_DEPTH`                                                                                      |

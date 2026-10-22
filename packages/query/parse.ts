@@ -674,9 +674,29 @@ let read = (tok: string, opts: ParseOpts, old: string[]): Clause[] => {
 }
 
 let clauses = (toks: string[], opts: ParseOpts, old: string[]): Clause[] =>
-  toks.flatMap((tok, i) =>
-    parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) => read(p, opts, old))
+  toks.flatMap((tok, i) => {
+    if (ALONE.test(tok)) throw stray(toks, i)
+    return parts(tok, toks[i - 1], toks[i + 1]).flatMap((p) =>
+      read(p, opts, old)
+    )
+  })
+
+// An operator written with spaces around it (`.entity ~= mossvale`) is a token
+// of its own: read as a search word it matches nothing, and the clause beside
+// it reads as something else, so it is refused with the clause it was part of.
+let ALONE = new RegExp(`${OPS.source}$`)
+let stray = (toks: string[], i: number): SyntaxError => {
+  let [before, op, after] = [toks[i - 1], toks[i], toks[i + 1]]
+  let meant = before && after
+    ? before + op + after
+    : op.includes('-')
+    ? `.requires${op}T-42`
+    : `.doc.title${op}cake`
+  return new SyntaxError(
+    `${op} stands alone: an operator joins a property and its value with ` +
+      `no spaces (${meant})`,
   )
+}
 
 // The retired spellings each tree was read from, kept beside the frozen tree
 // rather than in it, so a translated query still deep-equals its current form.

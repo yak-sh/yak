@@ -58,11 +58,18 @@
 import { IdError } from './types.ts'
 import { anyRef, isRef, parseProp, type Prop, typed } from './props.ts'
 import { edges, kindOrder, kindWord, lazy, statusOf, vocab } from './types.ts'
-import { Unknown } from '@yaks/vocab'
+import { Unknown, valueless } from '@yaks/vocab'
 import { term as ftsTerm } from '@yaks/fts'
 import { type Check, check } from '@yaks/match'
 import { literals, type Tag, tagOf } from '@yaks/sql'
-import { bare, type Clause, parse, scalar, type Value } from '@yaks/query'
+import {
+  bare,
+  type Clause,
+  compares,
+  parse,
+  scalar,
+  type Value,
+} from '@yaks/query'
 import { frozen } from '@yaks/fp'
 export { ftsTerm }
 export { WALK_DEPTH, WALK_LIMIT } from '@yaks/query'
@@ -801,6 +808,9 @@ let bindClause = (c: Clause): Pred[] => {
   if (op == '?') return [{ ...wanted(c), op: WANT, value: '' }]
   let hops = aimed(c)
   let leaf = hops[hops.length - 1], derefs = hops.slice(0, -1)
+  if (!leaf.prop && compares(c)) {
+    throw new Unknown(leaf.comp, valueless(vocab, segs.join('.'), op, value))
+  }
   for (let d of derefs) {
     if (!isRef(d.comp, d.prop)) {
       throw new Error(

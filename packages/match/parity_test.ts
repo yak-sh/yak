@@ -13,12 +13,19 @@ import { open } from '@yaks/sqlite/db'
 import type { Bundle } from './read.ts'
 import { storage } from '@yaks/sqlite'
 import { fields, schema as ftsSchema, search } from '@yaks/fts'
-import { type Derived, type Extension, Unsupported } from '@yaks/sql'
+import { compile, type Derived, type Extension, Unsupported } from '@yaks/sql'
 import { taskDoc } from '@yaks/task'
 import { kernelDoc } from '@yaks/kernel'
 import { projectDoc } from '@yaks/project'
 import { edgeDoc, edgeKeywords, link, traverse } from '@yaks/edge'
-import { loadVocab, pick, type Vocab, type VocabDoc } from '@yaks/vocab'
+import {
+  loadVocab,
+  pick,
+  Unknown,
+  type Vocab,
+  type VocabDoc,
+} from '@yaks/vocab'
+import { parse } from '@yaks/query'
 import { matcher, rows } from './match.ts'
 import { bundles, corpus, DEAD, NOW, QUERIES, shop } from './testing.ts'
 
@@ -249,6 +256,27 @@ test('a query neither side can answer is declined by both', () => {
   ) {
     assertThrows(() => s.rows(q), Error, 'cannot compile', q)
     assertThrows(() => rows(q, shop)(bundles), Error, 'cannot compile', q)
+  }
+})
+
+// A component is worn or not, and only a property holds a value, so a value
+// compared with a component is refused by both sides with the forms that
+// compare one, rather than read as presence (`~=`) or absence (the rest).
+test('a value compared with a component is refused by both', () => {
+  for (
+    let [q, said] of [
+      [
+        '.doc~=spring',
+        '.doc~=spring names a component, not a property: a component is ' +
+        'present or absent, and its properties hold values — write ' +
+        '.doc.title~=spring or .doc.body~=spring, or the bare word spring ' +
+        'to search all indexed text',
+      ],
+      ['.book.author.member>3', 'write .book.author.member.joined>3'],
+    ]
+  ) {
+    assertThrows(() => compile(parse(q), shop), Unknown, said, q)
+    assertThrows(() => matcher(q, shop), Unknown, said, q)
   }
 })
 
