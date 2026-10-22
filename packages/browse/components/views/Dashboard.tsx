@@ -106,7 +106,7 @@ export let Dashboard = ({ e }: { e: Ent }) => {
     ...new Set(claims.eids.map((eid) => ent(eid).claim?.session)),
   ].filter((s): s is string => !!s)
   let sessions = useQueryResult(
-    `${sessionDetail}&.entity.eid=${holders.join(',')}`,
+    holders.length ? `${sessionDetail}&.entity.eid=${holders.join(',')}` : '',
     holders.length > 0,
   )
   // This facet paints eight rows, so stream only its eight warmest. Fetching

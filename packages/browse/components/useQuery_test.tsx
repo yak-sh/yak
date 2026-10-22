@@ -6,8 +6,20 @@ import { assertEquals } from '@std/assert'
 import { h, render } from 'preact'
 import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
-import { backlinks, boardsOver, cache, chatFor, useRoute } from '../live.ts'
-import { useBacklinks, useBoardsOver, useChatFor } from './useQuery.ts'
+import {
+  backlinks,
+  boardsOver,
+  cache,
+  chatFor,
+  problem,
+  useRoute,
+} from '../live.ts'
+import {
+  useBacklinks,
+  useBoardsOver,
+  useChatFor,
+  useQueryResult,
+} from './useQuery.ts'
 
 let A = 'dddd3703-0000-4000-8000-000000000001'
 let B = 'dddd3703-0000-4000-8000-000000000002'
@@ -75,6 +87,36 @@ test('eid-keyed view queries release on retarget and last unmount', () => {
     act(() => render(null, root))
     useRoute(restore)
     cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+// A disabled read asks nothing and reads nothing, so the line it would ask,
+// built from what is not there yet (an empty id list), never fails the view.
+test('a disabled query reads no line and opens nothing', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let root = document.querySelector('main')!
+  let frames: unknown[] = []
+  let restore = useRoute((frame) => frames.push(frame))
+  problem.value = ''
+  let read: ReturnType<typeof useQueryResult> | undefined
+  let View = () => {
+    read = useQueryResult('.session&.entity.eid=', false)
+    return null
+  }
+  try {
+    act(() => render(h(View, {}), root))
+    assertEquals([read?.eids, read?.ready, problem.value], [[], true, ''])
+    assertEquals(frames, [])
+  } finally {
+    act(() => render(null, root))
+    useRoute(restore)
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }

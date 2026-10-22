@@ -2,7 +2,14 @@ import { vocab } from '../../types.ts'
 import { type Ent } from '../../types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { unmime } from '../../rfc2047.ts'
-import { boardPost, byWarmth, capable, ent, subWindow } from '../../live.ts'
+import {
+  boardPost,
+  byWarmth,
+  capable,
+  ent,
+  type SubscriptionRead,
+  subWindow,
+} from '../../live.ts'
 import { orderOf, parseQuery, windowOf } from '../../query.ts'
 import { block, Button, Loading, Rows } from '@yaks/ui'
 import { menuAt } from '../nav.tsx'
@@ -87,6 +94,9 @@ export let QueryList = (
   useEffect(() => setLimit(0), [eid, query])
   let line = query
   let bound = Infinity
+  // A saved query that does not parse is refused here, before any window is
+  // measured or asked.
+  let refusal: SubscriptionRead | undefined
   try {
     let preds = parseQuery(query)
     bound = windowOf(preds).limit ?? Infinity
@@ -119,9 +129,18 @@ export let QueryList = (
       line += '&.edges.peers=' + peers.join(',') + '&.edges.limit=' +
         Math.max(size, limit) * 4
     }
-  } catch { /* the addressed query reports its refusal */ }
-  let page = usePage(query, line, !!query.trim() && size > 0)
-  let boardRead = page.subscription
+  } catch (error) {
+    refusal = {
+      sub: '',
+      state: {
+        status: 'failed',
+        reason: error instanceof Error ? error.message : String(error),
+        reference: query,
+      },
+    }
+  }
+  let page = usePage(query, line, !refusal && !!query.trim() && size > 0)
+  let boardRead = refusal ?? page.subscription
   let win = boardRead ? subWindow(boardRead.sub) : undefined
   let total = win?.total
   let more = Math.max(

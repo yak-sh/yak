@@ -83,7 +83,9 @@ export let useQueryResult = (
   enabled = true,
   direct = false,
 ): QueryResult => {
-  let preds = usePreds(query)
+  // A disabled read asks nothing, so its line is never read: one built from
+  // what is not there yet (an empty id list) must not fail the view.
+  let preds = usePreds(enabled ? query : '')
   let source = direct ? query : undefined
   useHold(enabled && !(preds instanceof Error) && { query: preds, source })
   if (preds instanceof Error) return refused(query, preds)
