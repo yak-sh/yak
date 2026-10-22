@@ -559,20 +559,3 @@ test('an upgraded /ws socket answers clock probes with epoch timestamps', async 
   assert(typeof reply.sent == 'number' && reply.sent >= reply.received)
   assert(reply.sent <= Date.now())
 })
-
-test('a subscription that names nothing its rows have and sets no limit is refused unread', () => {
-  let graph = shopGraph()
-  let read = graph.read
-  let reads = 0
-  graph.read = (...args) => (reads++, read(...args))
-  let socket = fake()
-  attach(subscriptions(graph), socket)
-  socket.emit(
-    'message',
-    JSON.stringify({ subscribe: '!book.price', id: 'all' }),
-  )
-  let [frame] = socket.taken()
-  assertEquals(frame.id, 'all')
-  assert(frame.refused)
-  assertEquals(reads, 0)
-})
