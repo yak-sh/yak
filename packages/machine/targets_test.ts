@@ -139,9 +139,12 @@ test('a refusal for a workspace not named, or named wrong, says how to name one 
         { workspace: 'code' },
         "Not a workspace: code. workspace takes a workspace entity's eid, such as",
       ],
-    ]
+    ] as [Record<string, unknown>, string][]
   ) {
-    let { message } = await throws(() => targetFor(g, undefined, args), said)
+    let { message } = await throws(
+      () => targetFor(g, undefined, args),
+      said,
+    ) as Error
     for (
       let one of [`${a} (/a)`, `${b} (/b)`, "'.workspace.root=<directory>'"]
     ) {

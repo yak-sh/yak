@@ -15,6 +15,7 @@ import { parse } from '@std/toml'
 import {
   aliased,
   bundled,
+  changed,
   command,
   images,
   members,
@@ -801,6 +802,21 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
     assert(superseded(blind))
     // A shallow clone fetches the live commit it lacks before it answers.
     assertEquals((await seen(thin, [c])).live, [{ sha: c, ahead: true }])
+    // A push starts a build when it changes the watched source since its
+    // parent: an app alone does not, Worker and package source does.
+    let thinnest = join(root, 'thinnest')
+    await run(
+      root,
+      'clone',
+      '-q',
+      '--no-checkout',
+      '--depth',
+      '1',
+      `file://${origin}`,
+      thinnest,
+    )
+    assertEquals(await changed(thinnest, a, b), false)
+    assertEquals(await changed(thinnest, b, c), true)
   } finally {
     Deno.removeSync(root, { recursive: true })
   }

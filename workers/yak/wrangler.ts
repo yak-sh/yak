@@ -1027,6 +1027,41 @@ export let WATCHED = [
   ':(exclude,glob)bench/**',
 ]
 
+// Fetches a commit a shallow clone lacks: its ancestry alone (`tree:0`), or
+// with its trees (`blob:none`) to compare it, never historical file contents.
+let fetched = async (
+  root: string,
+  sha: string,
+  filter: 'tree:0' | 'blob:none',
+  read = git,
+) => {
+  if (!(await read(root, 'cat-file', '-e', `${sha}^{commit}`)).code) return
+  await timed(`Git ${filter} ${short(sha)}`, () =>
+    read(
+      root,
+      'fetch',
+      '--quiet',
+      '--no-tags',
+      `--filter=${filter}`,
+      'origin',
+      sha,
+    ))
+}
+
+/** Whether the watched source differs between two commits, so the later one
+ * starts a build; fetches what `root`'s clone lacks, and is null when git
+ * cannot tell. */
+export let changed = async (
+  root: string,
+  from: string,
+  to: string,
+  read = git,
+): Promise<boolean | null> => {
+  for (let sha of [from, to]) await fetched(root, sha, 'blob:none', read)
+  let { code } = await read(root, 'diff', '--quiet', from, to, '--', ...WATCHED)
+  return code == 0 ? false : code == 1 ? true : null
+}
+
 /**
  * What a deploy from `root`'s checkout sees, given the commits live now. A
  * shallow clone can lack both older and newer live commits. Fetch their
@@ -1045,44 +1080,17 @@ export let seen = async (
   ])
   let head = checked.out
   let tip = asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
-  let include = async (sha: string, filter = 'tree:0') => {
-    if ((await read(root, 'cat-file', '-e', `${sha}^{commit}`)).code) {
-      await timed(`Git ${filter} ${short(sha)}`, () =>
-        read(
-          root,
-          'fetch',
-          '--quiet',
-          '--no-tags',
-          `--filter=${filter}`,
-          'origin',
-          sha,
-        ))
-    }
-  }
-  let changed: boolean | null = false
-  if (tip && tip != head) {
-    await include(tip, 'blob:none')
-    let { code } = await read(
-      root,
-      'diff',
-      '--quiet',
-      head,
-      tip,
-      '--',
-      ...WATCHED,
-    )
-    changed = code == 0 ? false : code == 1 ? true : null
-  }
+  let moved = tip && tip != head ? await changed(root, head, tip, read) : false
   let ahead = async (sha: string) => {
     if (sha == head) return false
-    await include(sha)
+    await fetched(root, sha, 'tree:0', read)
     let { code } = await read(root, 'merge-base', '--is-ancestor', head, sha)
     return code == 0 ? true : code == 1 ? false : null
   }
   return {
     head,
     tip,
-    changed,
+    changed: moved,
     live: await Promise.all(
       named.map(async (sha) => ({ sha, ahead: await ahead(sha) })),
     ),

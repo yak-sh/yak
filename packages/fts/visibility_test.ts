@@ -4,7 +4,8 @@ import { parse } from '@yaks/query'
 import { compile, insert } from '@yaks/sql'
 import { fields } from './fields.ts'
 import { search } from './compile.ts'
-import { find, screens } from './search.ts'
+import { find, ranked, screens } from './search.ts'
+import { named, term } from './term.ts'
 import { entity, shelf, shop } from './testing.ts'
 
 let text = fields(shop)
@@ -32,8 +33,16 @@ let extension = search(text, db)
 let ids = (q: string) =>
   db.query(compile(parse(q), shop, { ...opts, extend: [extension] }))
     .map((r) => r.eid).sort()
-// Open the ranker's statements alongside the fixture's search indexes.
-ids('privateword .order=search')
+let sources = screens(text, shop, opts)
+// The owners `.order=search` ranks for the words, as compile.ts asks.
+let rank = (words: string) =>
+  db.query(ranked(text, term(words), { screens: sources, name: named(words) })!)
+    .map((r) => r.owner)
+// Open the selection's, the ranker's and the standalone search's statements
+// beside the fixture's search indexes, so each case times only its search.
+ids('privateword')
+rank('privateword')
+find(db, text, 'privateword', { screens: sources })
 
 test('private indexed text cannot select a public entity', () =>
   assertEquals(ids('privateword'), []))
@@ -46,9 +55,7 @@ test('private indexed text cannot affect count', () =>
     [{ value: '', n: 0 }],
   ))
 test('search ranking excludes hidden entities and private matching arms', () =>
-  assertEquals(ids('privateword .order=search'), []))
-
-let sources = screens(text, shop, opts)
+  assertEquals(rank('privateword'), []))
 test('standalone search excludes private matching sources', () =>
   assertEquals(find(db, text, 'privateword', { screens: sources }), []))
 test('snippets come from a permitted matching source on a public entity', () => {

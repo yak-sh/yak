@@ -2,7 +2,7 @@ import { clock, test } from '@yaks/testing'
 import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   append,
-  built,
+  build,
   observe,
   probe,
   pushTime,
@@ -425,14 +425,12 @@ test('deploy timing: the commit under test is judged, not the last hand-recorded
   assertEquals(latest([...stale, deploy(3, 47)])?.seconds, 47)
 })
 
-test('deploy timing: a commit Cloudflare never built has nothing to time', () => {
-  // cdabdded touched only bin/ and .github/, outside the Worker's watch paths:
-  // Cloudflare skipped it, no version was ever minted, and waiting for one
-  // failed the gate. Only Cloudflare's own build check says a deploy is coming.
-  assertEquals(built([{ name: 'gate' }, { name: 'dry-run' }]), false)
-  assertEquals(built([]), false)
-  assertEquals(built([{ name: 'gate' }, { name: 'Workers Builds: yak' }]), true)
-  assertEquals(built([{ name: 'Workers Builds: yak-tracker' }]), false)
+test("deploy timing: a build is finished once the kernel Worker's check run is posted", () => {
+  let yak = { name: 'Workers Builds: yak' }
+  assertEquals(build([{ name: 'gate' }, { name: 'dry-run' }]), undefined)
+  assertEquals(build([]), undefined)
+  assertEquals(build([{ name: 'gate' }, yak]), yak)
+  assertEquals(build([{ name: 'Workers Builds: yak-tracker' }]), undefined)
 })
 
 test('deploy timing: the job summary carries the row the record accepts', () => {

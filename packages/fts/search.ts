@@ -28,7 +28,6 @@ import {
   fn,
   from,
   lit,
-  lt,
   not,
   op,
   or,

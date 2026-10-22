@@ -549,6 +549,11 @@ let useTranscript = (
   return { frame, start, older }
 }
 
+/** Whether a session is drawn inside another page (a document's chat, a
+ * persona's): there it names itself by its id, a link to its own page; on its
+ * own page the titlebar names it. */
+export let embedded = (e: Ent): boolean => screenTarget()?.eid != e.eid
+
 export let Session = (
   { e, talkback = true }: { e: Ent; talkback?: boolean },
 ) => {
@@ -644,14 +649,11 @@ export let Session = (
         !started,
       )
   let showActivity = live || status == 'idle'
-  // Drawn inside another page (a document's chat, a persona's), it names
-  // itself by its id, a link to its own page; there the titlebar names it.
-  let embedded = screenTarget()?.eid != e.eid
   return (
     <Frame>
       <Head>
         <Dot status={status} />
-        {embedded && <Id e={e} />}
+        {embedded(e) && <Id e={e} />}
         <SessionSummary e={e} gist={gist} />
         <SessionContext tokens={context} />
         {live && (

@@ -15,7 +15,7 @@ import {
   records,
   split,
 } from '../bench/deploy.ts'
-import { WRANGLER } from '../workers/yak/wrangler.ts'
+import { changed, WRANGLER } from '../workers/yak/wrangler.ts'
 import {
   type Deployment,
   deploymentsFor,
@@ -36,6 +36,7 @@ type Run = {
   head_branch: string
 }
 type Push = { pushed: string; pushSource: string }
+type Check = { name: string; conclusion: string | null }
 
 let commit = (v: Version) =>
   v.annotations?.['workers/message']?.match(
@@ -91,13 +92,55 @@ export let versionFor = (sha: string, pushed: string, versions: Version[]) => {
   return nearest ? { version: nearest, estimated: true } : null
 }
 
-// Cloudflare builds a push only when it touches the Worker's watch paths
-// (`workers/yak/*`, `packages/*` — workers/yak/README.md), so a commit can be
-// pushed and never deploy: waiting for its version would fail the gate on
-// every docs-or-CI commit. Cloudflare's own check run is the signal, asked for
-// only after the version wait expires, when a real build's check exists.
-export let built = (runs: { name: string }[]) =>
-  runs.some((r) => r.name == 'Workers Builds: yak')
+// Cloudflare's check run for its build of the kernel Worker. It is posted when
+// the build finishes, so until then a commit shows none.
+export let build = <R extends { name: string }>(runs: R[]): R | undefined =>
+  runs.find((r) => r.name == 'Workers Builds: yak')
+
+/** Where the wait for a commit's uploaded version stands: whether the version
+ * is found, whether the commit changes the watched source (wrangler.ts
+ * `WATCHED`; null when git could not tell), Cloudflare's finished build
+ * with how many seconds ago it was first seen, and the seconds waited. */
+export type Waiting = {
+  found: boolean
+  coming: boolean | null
+  finished?: { conclusion: string | null; ago: number }
+  waited: number
+}
+
+// Seconds a finished build's version may take to show in `versions list`,
+// and seconds a build may take at all, queue included (2026-10-22: 41–148s).
+export let SETTLE = 60
+export let LIMIT = 900
+
+/// verdict({ found: true, coming: true, waited: 5 }) -> 'found'
+/// verdict({ found: false, coming: false, waited: 0 }) -> 'skip'
+/// verdict({ found: false, coming: true, waited: 148 }) -> 'wait'
+/// verdict({ found: false, coming: null, waited: 148 }) -> 'wait'
+/// verdict({ found: false, coming: true, waited: 90, finished: { conclusion: 'success', ago: 10 } }) -> 'wait'
+/// verdict({ found: false, coming: true, waited: 90, finished: { conclusion: 'failure', ago: 0 } }) -> "Cloudflare's build failed: failure"
+/// verdict({ found: false, coming: true, waited: 150, finished: { conclusion: 'success', ago: 60 } }) -> 'Cloudflare built it but uploaded no version within 60s'
+/// verdict({ found: false, coming: true, waited: 900 }) -> "Cloudflare's build has not finished after 900s"
+/** What the wait does next. Cloudflare builds a push only when it changes the
+ * watched source, so a docs-or-CI commit has nothing to wait for; one that
+ * does is waited on until Cloudflare's own build finishes, however long its
+ * queue, never a guess at how long a build takes. */
+export let verdict = (
+  { found, coming, finished, waited }: Waiting,
+): 'found' | 'skip' | 'wait' | string => {
+  if (found) return 'found'
+  if (coming === false) return 'skip'
+  if (finished && finished.conclusion != 'success') {
+    return `Cloudflare's build failed: ${finished.conclusion}`
+  }
+  if (finished && finished.ago >= SETTLE) {
+    return `Cloudflare built it but uploaded no version within ${SETTLE}s`
+  }
+  if (!finished && waited >= LIMIT) {
+    return `Cloudflare's build has not finished after ${LIMIT}s`
+  }
+  return 'wait'
+}
 
 // Cloudflare silently ignores an override for a version outside the active
 // deployment. A 200 alone can therefore be the old code, even during rollout.
@@ -362,6 +405,55 @@ let writeRecord = async (row: Deploy, path: string | URL) => {
   return true
 }
 
+// Whether `sha` changes the watched source since its parent, so Cloudflare
+// builds it; null when that cannot be read.
+let starts = async (sha: string) => {
+  let parent = (await api(`commits/${sha}`).catch(() => null))?.parents?.[0]
+    ?.sha
+  return parent ? await changed(root.pathname, parent, sha) : null
+}
+
+// Waits for `sha`'s uploaded version as verdict() says: null when
+// Cloudflare builds nothing for it, and an error when its build cannot
+// upload one.
+let awaited = async (
+  sha: string,
+  pushed: string,
+  match: ReturnType<typeof versionFor>,
+) => {
+  let coming = match ? true : await starts(sha)
+  let begun = Date.now()
+  let asked = 0
+  let done: { conclusion: string | null; at: number } | undefined
+  for (;;) {
+    let now = Date.now()
+    if (!match && coming !== false && !done && now - asked >= 10_000) {
+      asked = now
+      let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
+        check_runs: [],
+      }))
+      let run = build(checks.check_runs as Check[])
+      if (run) done = { conclusion: run.conclusion, at: now }
+    }
+    let next = verdict({
+      found: !!match,
+      coming,
+      waited: (now - begun) / 1000,
+      finished: done && {
+        conclusion: done.conclusion,
+        ago: (now - done.at) / 1000,
+      },
+    })
+    if (next == 'found') return match
+    if (next == 'skip') return null
+    if (next != 'wait') {
+      throw new Error(`no uploaded version for ${sha}: ${next}`)
+    }
+    await pause()
+    match = versionFor(sha, pushed, await versions())
+  }
+}
+
 export let main = async (args = Deno.args) => {
   let backfill = args[0] == '--backfill'
   let count = backfill ? +(args[1] ?? '3') : 1
@@ -403,23 +495,13 @@ export let main = async (args = Deno.args) => {
     }
     let match = versionFor(sha, push.pushed, available)
     if (!backfill) {
-      let due = Date.now() + 120_000
-      while (!match && Date.now() < due) {
-        await pause()
-        match = versionFor(sha, push.pushed, await versions())
-      }
+      match = await awaited(sha, push.pushed, match)
       if (!match) {
-        let checks = await api(`commits/${sha}/check-runs`).catch(() => ({
-          check_runs: [],
-        }))
-        if (!built(checks.check_runs)) {
-          console.log(
-            `${sha.slice(0, 8)}: no kernel Workers Build — nothing to time`,
-          )
-          skipped = true
-          continue
-        }
-        throw new Error(`no uploaded version for ${sha} after 120s`)
+        console.log(
+          `${sha.slice(0, 8)}: no kernel Workers Build — nothing to time`,
+        )
+        skipped = true
+        continue
       }
     }
     if (match && !used.has(match.version.id)) {

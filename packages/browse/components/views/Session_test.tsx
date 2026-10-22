@@ -24,6 +24,7 @@ import { resolve } from '../Entity.tsx'
 import { mount } from '../mount.ts'
 import { route } from '../../history.ts'
 import {
+  embedded,
   mentionSig,
   resolveMentions,
   Session,
@@ -636,24 +637,20 @@ test('session lifecycle shares the task summary lane', () => {
   }
 })
 
-test('an embedded Session links its id to its own page, which names it already', () => {
+test('a session is embedded on every page but its own', () => {
   let priorRoute = useRoute(() => {})
   let prior = route.value
   cache.value = {
     s: { entity: { eid: 's', num: 7105 }, session: { eid: 's', id: 's' } },
   }
   resetSignals()
-  let head = (at: string) => {
-    route.value = at
-    let mounted = mount(<Session e={ent('s')} />)
-    let id = mounted.root.querySelector('.Session_Head > .Id')
-    let got = id && [id.textContent, id.getAttribute('href')]
-    mounted.free()
-    return got
+  let at = (path: string) => {
+    route.value = path
+    return embedded(ent('s'))
   }
   try {
-    assertEquals(head('/T-1'), ['S-7105', '/S-7105'])
-    assertEquals(head('/S-7105'), null)
+    assertEquals(at('/T-1'), true)
+    assertEquals(at('/S-7105'), false)
   } finally {
     route.value = prior
     useRoute(priorRoute)
@@ -681,10 +678,18 @@ test('Session explains loading, ready-empty, rows, and read failure', async () =
   let state = (m: ReturnType<typeof mount>) =>
     m.root.querySelector('.Session_EntryState')?.textContent
   let mounted: ReturnType<typeof mount> | undefined
+  let prior = route.value
   try {
     let e = session('session-loading-copy', 7101, 'running')
+    route.value = '/T-1'
     mounted = mount(<Session e={e} />)
     assertEquals(state(mounted), 'Loading entries for S-7101…')
+    // Drawn on another page, its head names it by a link to its own page.
+    let id = mounted.root.querySelector('.Session_Head > .Id')
+    assertEquals(
+      [id?.textContent, id?.getAttribute('href')],
+      ['S-7101', '/S-7101'],
+    )
 
     landSub({ sub: entryPage(e.eid), changes: [], replace: true })
     await Promise.resolve()
@@ -747,6 +752,7 @@ test('Session explains loading, ready-empty, rows, and read failure', async () =
     )
   } finally {
     mounted?.free()
+    route.value = prior
     useRoute(priorRoute)
     cache.value = {}
     resetSignals()

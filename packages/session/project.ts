@@ -131,7 +131,9 @@ export let replied = (
  * let ask = (through: string) => e({ ask: { through } })
  * let call = (id: string) =>
  *   e({ call: { to: 'echo', id, args: { id }, source: 'e2' }, tool_async: {} })
- * let tools = new Map([['echo', { name: 'echo', parameters: {} }]])
+ * let tools = new Map([
+ *   ['echo', { name: 'echo', description: 'Echoes its id.', parameters: {} }],
+ * ])
  * let entries = [
  *   e({ content: { body: 'go' } }), ask('e1'), call('a'), call('b'),
  *   e({ result: { call: 'e4' }, content: { body: 'B' } }), // landed first
@@ -139,7 +141,13 @@ export let replied = (
  *   e({ result: { call: 'e3' }, content: { body: 'A' } }),
  * ]
  * project(entries, entries, tools).map((i) =>
- *   i.kind == 'call' ? i.id : i.kind == 'result' ? i.output : i.text
+ *   i.kind == 'call'
+ *     ? i.id
+ *     : i.kind == 'result'
+ *     ? i.output
+ *     : 'text' in i
+ *     ? i.text
+ *     : i.label
  * )
  * // -> ['go', 'a', 'b', 'Pending; its result will follow.', 'B',
  * //     'The pending echo call a {"id":"a"} finished:\nA']

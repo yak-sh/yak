@@ -154,7 +154,10 @@ export let snippet = (text: string, words: string[]): string => {
  * equal(hit(vocab, ['mossvale'])(bare, '\x01Mossvale\x02').snippet, '\x01Mossvale\x02')
  * ```
  */
-export let hit = (vocab: Vocab, words: string[]) => {
+export let hit = (
+  vocab: Vocab,
+  words: string[],
+): (b: Bundle, cut?: string) => Hit => {
   let id = called(vocab)
   return (b: Bundle, cut?: string): Hit => {
     let title = titleOf(b)
