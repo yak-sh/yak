@@ -107,7 +107,8 @@ try {
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `@yaks/sqlite`            | Storage, schema/read/write helpers, [overlays](#querying-pending-changes-with-an-overlay), archetype helpers, metadata, and migrations |
 | `@yaks/sqlite/db`         | `open(path)`: an embedded Deno database as a cached driver                                                                             |
-| `@yaks/sqlite/read-db`    | `open(path)`: an existing file as a cached read-only driver, without loading the native writer                                         |
+| `@yaks/sqlite/read-db`    | `open(path, {meter?})`: an existing file as a cached read-only driver, without loading the native writer, its rows metered             |
+| `@yaks/sqlite/budget`     | `budget(limits?)`: what one read may materialize, a `meter` the read-only driver counts rows against and a `reset` between reads       |
 | `@yaks/sqlite/reader`     | Committed reads of an installed database                                                                                               |
 | `@yaks/sqlite/read-store` | Read-only storage with index, diagnostic and revision capabilities                                                                     |
 | `@yaks/sqlite/physical`   | Inspection of installed tables, columns and schema objects                                                                             |
@@ -213,6 +214,24 @@ prevented at the database boundary. The same read-only driver is available as
 extension-loading APIs. Extensions can read installed indexes; SQLite refuses
 metadata writes. Both readers leave the database and WAL untouched when they
 close.
+
+A read can ask for more than a process can hold. `open(path, {meter})` from
+`@yaks/sqlite/read-db` counts every row it decodes against a **budget**
+(`@yaks/sqlite/budget`): `budget(limits?)` gives a `meter` and a `reset`, and a
+read past `LIMITS` (a million rows or 256 MiB, each row costing its text and
+blobs plus a little for the row and each value) is refused where it stands, as a
+`Refused` error marked `cut`. The web's read worker resets one before each read,
+so a query that matches most of the graph is refused to its caller and the
+process stays up for everyone else.
+
+```ts ignore
+import { budget } from '@yaks/sqlite/budget'
+import { open } from '@yaks/sqlite/read-db'
+
+let spent = budget()
+let db = open('graph.db', { meter: spent.meter })
+spent.reset() // before each read
+```
 
 `read` accepts a query string or [query AST](../query/README.md#query-model) and
 returns whole bundles, resolving stored integer references back to public ids.

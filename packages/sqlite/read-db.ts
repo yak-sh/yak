@@ -6,6 +6,7 @@ import { sqlitePath } from './sqlitepath.ts'
 import type { Opened } from './db.ts'
 import type { Param, Row } from '@yaks/sql'
 import { driver } from './driver.ts'
+import type { Budget } from './budget.ts'
 
 let bind = () =>
   Deno.dlopen(
@@ -90,8 +91,13 @@ let empty = new Uint8Array(1)
 
 /** Open an existing SQLite file for reading, without changing journal
  * settings or attempting a checkpoint when its last reader closes. Queries
- * use the same SQL AST, snapshots and tracing as the writable driver. */
-export let open = (path: string): Opened => {
+ * use the same SQL AST, snapshots and tracing as the writable driver. Given a
+ * `meter` (./budget.ts), every row decoded is counted against it, and a read
+ * past its limits is refused before it holds more. */
+export let open = (
+  path: string,
+  { meter }: { meter?: Budget['meter'] } = {},
+): Opened => {
   let c = (api ??= bind()).symbols
   let handle = new BigUint64Array(1)
   let rc = c.sqlite3_open_v2(cstring(path), handle, 1, null) // SQLITE_OPEN_READONLY
@@ -168,6 +174,8 @@ export let open = (path: string): Opened => {
         transient,
       )
     }
+    // The text and blob bytes of the row being decoded, for the meter.
+    let size = 0
     let column = (stmt: Deno.PointerValue, i: number): unknown => {
       let type = c.sqlite3_column_type(stmt, i)
       switch (type) {
@@ -184,6 +192,7 @@ export let open = (path: string): Opened => {
             ? c.sqlite3_column_text(stmt, i)
             : c.sqlite3_column_blob(stmt, i)
           let n = c.sqlite3_column_bytes(stmt, i)
+          size += n
           if (!n || !p) return string ? '' : new Uint8Array()
           let bytes = new Uint8Array(
             new Deno.UnsafePointerView(p).getArrayBuffer(n),
@@ -228,11 +237,12 @@ export let open = (path: string): Opened => {
             }
             names = held.names
           }
-          rows.push(
-            Object.fromEntries(
-              names.map((name, i) => [name, column(stmt!, i)]),
-            ),
+          size = 0
+          let row = Object.fromEntries(
+            names.map((name, i) => [name, column(stmt!, i)]),
           )
+          meter?.(names.length, size)
+          rows.push(row)
         }
         if (code != 101) throw error() // SQLITE_DONE
         check(c.sqlite3_reset(stmt))

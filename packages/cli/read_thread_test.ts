@@ -335,3 +335,38 @@ test('a read that runs past slow is told with its masked query', async () => {
     restore()
   }
 })
+
+// A read the worker cut off past its budget is refused to its caller and told
+// by its masked query, even when its caller has left.
+test('a read cut off past its budget is refused and told', async () => {
+  let { workers, restore } = fakes()
+  let reader = readThread('unused.json')
+  let told: string[] = []
+  reader.overrun((error) => told.push(`${error.name}: ${error.message}`))
+  let cut = (worker: (typeof workers)[number]) =>
+    worker.onmessage?.({
+      data: {
+        id: worker.jobs.at(-1)!.id,
+        error: { name: 'Refused', message: 'too much', details: { cut: true } },
+      },
+    })
+  try {
+    let all = assertRejects(
+      () => Promise.resolve(reader.read('!a.b="x"')),
+      Error,
+    )
+    cut(workers[0])
+    assertEquals((await all).name, 'Refused')
+    let left = abandoned(reader, '!c.d="y"')
+    left.abort()
+    await left.refused
+    cut(workers[0])
+    assertEquals(told, [
+      'CutRead: a read was cut off past its budget: !a.b=?',
+      'CutRead: a read was cut off past its budget: !c.d=?',
+    ])
+  } finally {
+    await reader.close()
+    restore()
+  }
+})
