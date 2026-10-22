@@ -202,7 +202,7 @@ let Search = (
 // 'none' row clears.
 let WellEdit = (p: ControlProps) => {
   let host = useHost()
-  let all = host.values?.(wellOf(host.vocab, p.comp, p.prop)) ?? []
+  let all = host.useValues?.(wellOf(host.vocab, p.comp, p.prop)) ?? []
   let typed = (p.edit.row?.query ?? '').trim()
   let hits = all
     .filter((x) => !typed || x.toLowerCase().includes(typed.toLowerCase()))

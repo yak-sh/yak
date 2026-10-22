@@ -32,6 +32,8 @@ let { Cell, Name, Badge, Rows, More, Empty } = Frame
 
 // Enough to glance; the facet's own view holds the rest.
 let CAP = 8
+// The claims whose sessions the sessions facet may draw.
+let CLAIMS = 32
 
 let Facet = (
   { name, ids, badge, reads = [] }: {
@@ -92,14 +94,20 @@ export let sessionsOf = (
 }
 
 export let Dashboard = ({ e }: { e: Ent }) => {
-  // The sessions facet screens EVERY session down to the few serving this
-  // project, then renders them as rows — so it asks for the row columns and
-  // none of the history behind them (live.ts sessionDetail; unprojected this
-  // one query was 6.22 MB).
+  // The sessions facet asks only for what it draws: the newest claims on
+  // this project's tasks, then the sessions holding them, projected to the
+  // row columns and none of the history behind them (live.ts sessionDetail).
   let boards = useQueryResult(`.board.query~=${e.eid}`)
-  let sessions = useQueryResult(sessionDetail)
   let claims = useQueryResult(
-    '.claim&.fields=task.status,claim.session,claim.at,filed.project',
+    `.claim&.filed.project=${e.eid}&.order=-claim.at&.limit=${CLAIMS}` +
+      '&.fields=task.status,claim.session,claim.at,filed.project',
+  )
+  let holders = [
+    ...new Set(claims.eids.map((eid) => ent(eid).claim?.session)),
+  ].filter((s): s is string => !!s)
+  let sessions = useQueryResult(
+    `${sessionDetail}&.entity.eid=${holders.join(',')}`,
+    holders.length > 0,
   )
   // This facet paints eight rows, so stream only its eight warmest. Fetching
   // every task in every project card made the root canvas discard megabytes.

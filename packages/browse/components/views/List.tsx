@@ -2,20 +2,13 @@ import { vocab } from '../../types.ts'
 import { type Ent } from '../../types.ts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { unmime } from '../../rfc2047.ts'
-import {
-  boardPost,
-  byWarmth,
-  capable,
-  ent,
-  pinned,
-  subWindow,
-} from '../../live.ts'
+import { boardPost, byWarmth, capable, ent, subWindow } from '../../live.ts'
 import { orderOf, parseQuery, windowOf } from '../../query.ts'
 import { block, Button, Loading, Rows } from '@yaks/ui'
 import { menuAt } from '../nav.tsx'
 import { filteredQuery, usePassOf } from '../Filter.tsx'
 import { dragData } from '../drag.ts'
-import { usePinTargets } from '../subscriptions.ts'
+import { usePinned, usePinTargets } from '../subscriptions.ts'
 import { usePage } from '../useQuery.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
@@ -30,7 +23,7 @@ export let List = ({ e }: { e: Ent }) => {
   let pass = usePassOf(e.eid)
   // Each row paints a pin's TARGET with no Card around it, so this face holds
   // those rows itself — nothing else subscribes them (T-22371).
-  let ps = pinned(e.eid)
+  let ps = usePinned(e.eid)
   usePinTargets(ps)
   if (pass.subscription?.state.status == 'failed') {
     return (

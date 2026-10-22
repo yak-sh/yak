@@ -88,8 +88,9 @@ export type Host = {
   settle?: number
   /** how typed input is read (@yaks/render `edit`) */
   editing?: EditOptions
-  /** the values seen so far in a well (a property declared `well`) */
-  values?: (well: string) => string[]
+  /** the values seen so far in a well (a property declared `well`): a hook,
+   * so the host may hold what it reads while the picker is mounted */
+  useValues?: (well: string) => string[]
   /** the query fields (@yaks/filter) a saved query is typed in; without
    * them a query is typed as text */
   fields?: { Filter: FunctionComponent<FieldProps> }

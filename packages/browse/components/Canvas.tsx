@@ -23,6 +23,7 @@ import { pasted } from '../paste.ts'
 import { block } from '@yaks/ui'
 import { resolve } from './registry.ts'
 import { people } from './hits.ts'
+import { usePinned } from './subscriptions.ts'
 import { Card } from './Card.tsx'
 import { actionsAt } from './nav.tsx'
 
@@ -89,6 +90,7 @@ export let spawnHit = (canvas: string, target: string) => {
 // socket as pans, zooms, and resizes settle. x/y is the viewport center in
 // plane coords: translate = viewport/2 - center * zoom.
 export let Canvas = ({ eid }: { eid: string }) => {
+  usePinned(eid)
   let el = useRef<HTMLDivElement>(null)
   let plane = useRef<HTMLDivElement>(null)
   let mouse = useRef<{ x: number; y: number } | null>(null) // paste lands here

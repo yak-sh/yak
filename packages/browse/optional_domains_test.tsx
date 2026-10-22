@@ -4,7 +4,7 @@ import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import { h } from 'preact'
 import { learn, vocab } from './types.ts'
-import { cache, config, ent, problem, routeSub } from './live.ts'
+import { cache, config, ent, problem } from './live.ts'
 import { hostCommands } from './host_commands.ts'
 import { actionsFor } from './components/registry.ts'
 import { Entity } from './components/Entity.tsx'
@@ -12,7 +12,7 @@ import { useCommentsOn, useReferences } from './components/useQuery.ts'
 import { useSessions } from './components/useSessions.ts'
 import { Navigation } from './components/Navigation.tsx'
 import { mount } from './components/mount.ts'
-import { host } from './host_testing.ts'
+import { held, host } from './host_testing.ts'
 import { Web } from './components/views/Web.tsx'
 import { pasted } from './paste.ts'
 import { sessionQueries } from './tray_query.ts'
@@ -59,9 +59,9 @@ test('a document-only vocabulary browses without task, session or box-only reads
     )
     assertEquals(wire.asked().length, 0)
     // Its page holds the entity, and asks for no edges the store can't keep.
-    let held = routeSub('document')
+    let free = held({ entity: 'document' })
     await tick()
-    held()
+    free()
     assertEquals(wire.asked().some((a) => a.subscribe.includes('.edge')), false)
     assertEquals(problem.value, '')
     assertEquals(seen.root.textContent?.includes('ReferenceError'), false)

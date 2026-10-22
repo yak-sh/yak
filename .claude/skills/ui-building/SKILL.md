@@ -176,6 +176,12 @@ packages/render/views.ts, packages/browse/components/registry.ts).
 A screen adds only what's its own around that renderer: the inbox's lane,
 reason, unread dot and archive button, a board's drag handle.
 
+The server's live data is owned the same way: a subscription belongs to the
+component that draws its rows. In browse it is opened by `useHold`
+(packages/browse/live.ts) when that component mounts and closed when it
+unmounts; reads like `queryEids` only read what is held, so data nobody draws
+is never asked for.
+
 The nearest thing at hand is always `e.doc?.title` in a span. It looks right
 for every kind that carries a `doc` and draws everything else as an empty row.
 A kit part that lays out an entity's title, body and status is the same move

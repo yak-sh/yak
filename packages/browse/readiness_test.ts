@@ -4,22 +4,19 @@ import './testing.ts'
 import { assertEquals } from '@std/assert'
 import { effect } from '@preact/signals'
 import { FakeTime } from '@std/testing/time'
-import { host } from './host_testing.ts'
+import { held, host } from './host_testing.ts'
 import {
   aggValue,
   cache,
   clientSubscription,
-  dropAgg,
   ent,
   entityRead,
-  entrySub,
   foldFor,
-  holdAgg,
+  type Hold,
   landSub,
   loaded,
   repoTrace,
   routeName,
-  routeSub,
   subscriptionState,
   unsubscribe,
   useRoute,
@@ -114,8 +111,9 @@ test('entity holds share one line and close at the last release', () => {
   let sent: { subscribe?: string; unsubscribe?: string }[] = []
   let prior = useRoute((frame) => void sent.push(frame as typeof sent[number]))
   try {
-    let a = routeSub('reference', 'doc.title')
-    let b = routeSub('reference', 'doc.title')
+    let reference: Hold = { entity: 'reference', fields: 'doc.title' }
+    let a = held(reference)
+    let b = held(reference)
     assertEquals(sent.flatMap((f) => f.subscribe ?? []), [
       '.entity.eid=reference&.fields=doc.title',
     ])
@@ -145,11 +143,10 @@ test('a read keeps its answer through a lost socket until the next one', async (
       ? { tally: { open } }
       : undefined
   )
-  let off = entrySub(S)
-  holdAgg('tally:lost', TALLY)
+  let off = held({ entries: S }, { agg: 'tally:lost', line: TALLY })
   let reads = () => ({
     entries: subscriptionState(`entries:${S}`),
-    open: aggValue('tally:lost', TALLY, 'open'),
+    open: aggValue('tally:lost', 'open'),
   })
   let answered: ReturnType<typeof reads> = {
     entries: { status: 'ready', eids: new Set([E]) },
@@ -170,7 +167,6 @@ test('a read keeps its answer through a lost socket until the next one', async (
     assertEquals(reads().open, undefined)
   } finally {
     off()
-    dropAgg('tally:lost')
     wire.free()
   }
 })
@@ -181,8 +177,8 @@ let aliasObserved = (() => {
   let prior = useRoute(() => {})
   let alias = 'D-70123', canonical = 'alias-page-row'
   let sub = routeName(alias, 'doc.title')
-  let off = routeSub(alias, 'doc.title')
-  let retained = routeSub(canonical, 'doc.title')
+  let off = held({ entity: alias, fields: 'doc.title' })
+  let retained = held({ entity: canonical, fields: 'doc.title' })
   try {
     landSub({
       sub,

@@ -107,7 +107,7 @@ let page = (more: Partial<Host> = {}) => {
     when: (at) => `when ${at}`,
     find: (line) => (asked.push(line), Promise.resolve([person])),
     settle: 0,
-    values: (well) => well == 'domains' ? ['web', 'infra'] : [],
+    useValues: (well) => well == 'domains' ? ['web', 'infra'] : [],
     Float,
     ...more,
   }

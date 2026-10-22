@@ -10,6 +10,7 @@ import { hosting, legacyOutboxName, storageKey } from './hosting.ts'
 // upstream. Retention lets reopens paint; ready separates loading from absent.
 // Never restore whole-db sync or an unbounded cache.
 import { IdError } from './types.ts'
+import { useLayoutEffect, useRef } from 'preact/hooks'
 import {
   batch,
   computed,
@@ -298,7 +299,6 @@ export let reveal = (eid: string) => {
 }
 export let shown = (eid: string) =>
   !row(eid).value?.quarantined || revealed.value.has(eid)
-let canvasVersion = signal(0)
 let noRelations: Dep[] = []
 
 // Human ids are a hot lookup vocabulary, not a query. Keep them beside the
@@ -368,15 +368,14 @@ let resetQueries = () => {
   mem.reset()
 }
 
-// queryEids rides a genuine SERVER subscription (T-17126): the cache is
+// A held query rides a genuine SERVER subscription (T-17126): the cache is
 // partial (T-21491), so a local scan silently under-reports — a MEMBERSHIP
-// query opens the server sub boardSub installs, generalized to every useQuery
-// site (`q:<canonical line>`): the server maintains the complete set forward-
-// and-reverse (evalFast/matchQuery, scoped SQL) and streams it, and landSub
-// keeps a per-sub signal this returns. `mem` primes the signal synchronously
-// (no first-paint flash) and stays the fallback where there is no socket path
-// (the TUI). The subs are what stream rows in, and eviction on release is what
-// keeps the cache bounded.
+// query a mounted view holds (useHold, `q:<canonical line>`) has the server
+// maintain the complete set forward-and-reverse (evalFast/matchQuery, scoped
+// SQL) and stream it, and landSub keeps a per-sub signal queryEids returns.
+// `mem` primes the signal synchronously (no first-paint flash) and answers
+// where nothing holds the query. The subs are what stream rows in, and
+// eviction on release is what keeps the cache bounded.
 //
 // A PROJECTED query rides a server sub like any other (D-22567 §3): the line
 // carries its `.fields=`, so the server ships only those columns and only
@@ -621,16 +620,13 @@ let refreshServerSets = (eids: Set<string>) => {
   }
 }
 
-// Get-or-open the server set for a query. Opened ONCE on creation (a repeat
-// ownBoard would re-subscribe every render); the signal is primed from mem so
-// the first paint is populated, then landSub replaces it with the server's
-// answer. Unheld GLOBAL-shape readers (projects/…) keep it open —
-// bounded by the count of distinct shapes in the code. An EID-KEYED query
-// (comments-of X, refs-to X) has an unbounded key space, so its render path
-// must hold-and-release through the hook (useQueryEids/useCommentsOn/
-// useBacklinks — T-21489): the card's sub opens on mount, the last drop tears
-// it down, and an imperative read meanwhile reuses the held set.
-let serverSet = (preds: Pred[], line: string, key: string): ServerSet => {
+// Open the server set for a query, for an owner. Every live query is owned by
+// the mounted component that draws its rows (T-131877): a hook below holds it
+// from mount to unmount, and nothing else in the page can open one. The signal
+// is primed from mem so the first paint is populated, then landSub replaces it
+// with the server's answer. Identical lines share one set, counted by owners;
+// the last release closes it.
+let openSet = (preds: Pred[], line: string, key: string): ServerSet => {
   let client = ensureClient()
   let found = queryUses.get(key)
   if (!found) {
@@ -656,49 +652,52 @@ let serverSet = (preds: Pred[], line: string, key: string): ServerSet => {
     ) {
       found.ids.value = client.members(sub)
     }
+    ticked(sub)
   }
   // A replaced replica must own a retained query before it can answer it.
   if (!client.has(found.sub)) ownBoard(found.sub, found.line)
   return found
 }
 
-// Read a query's result signal (get-or-create; the render half of the hook).
-export let queryEids = (preds: Pred[], source?: string): Signal<string[]> => {
-  if (!config.host && !source) {
-    let held = queryUses.get(qkey(preds))
-    return held?.n ? held.ids : mem.subscribe(preds)
-  }
+let lineOf = (preds: Pred[], key: string, source?: string) =>
+  source?.trim() || serverLine(preds, key)
+
+// Read a query's result: the held server set when a mounted owner holds one,
+// else the local resolver over the rows this tab holds. A read never opens a
+// subscription; it wakes when an owner opens or closes the set.
+export let queryEids = (preds: Pred[]): Signal<string[]> => {
   let key = qkey(preds)
-  let line = source?.trim() || serverLine(preds, key)
-  return line ? serverSet(preds, line, key).ids : mem.subscribe(preds)
+  tick(`q:${key}`).value
+  let held = queryUses.get(key)
+  return held?.n ? held.ids : mem.subscribe(preds)
 }
-// Ref-count a query for a component's lifetime (the hook's effect half); the
-// last release drops the set so distinct queries don't accumulate.
-export let holdQuery = (preds: Pred[], source?: string): Signal<string[]> => {
+// Ref-count a query for an owner's lifetime; the last release drops the set
+// so distinct queries don't accumulate.
+let holdQuery = (preds: Pred[], source?: string): () => void => {
   let key = qkey(preds)
-  let line = source?.trim() || serverLine(preds, key)
-  if (!line) return mem.hold(preds)
-  let s = serverSet(preds, line, key)
+  let line = lineOf(preds, key, source)
+  if (!line) {
+    mem.hold(preds)
+    return () => mem.drop(preds)
+  }
+  let s = openSet(preds, line, key)
   s.n++
-  return s.ids
+  ticked(s.sub)
+  return () => {
+    if (--s.n > 0) return
+    queryUses.delete(key)
+    querySignals.delete(s.sub)
+    dropBoard(s.sub)
+  }
 }
 // A query resolved over the rows this tab already HOLDS, never the server: for
 // a per-row lookup keyed by the row's own eid (a strip of session dots each
 // asking "a wake pending for me?") whose DEFINING sub the surface holds once
 // for all of them (T-37445: 13 dots opened 13 server subs, one per session).
-// Held for the caller's life like holdQuery; reads through the same narrow
-// signal queryEids gives an unheld query.
+// Held for the caller's life; reads through the same narrow signal queryEids
+// gives an unheld query.
 export let holdLocal = (preds: Pred[]): Signal<string[]> => mem.hold(preds)
 export let dropLocal = (preds: Pred[]) => mem.drop(preds)
-export let dropQuery = (preds: Pred[]) => {
-  let key = qkey(preds)
-  let s = queryUses.get(key)
-  if (!s) return void mem.drop(preds)
-  if (--s.n > 0) return
-  queryUses.delete(key)
-  querySignals.delete(s.sub)
-  dropBoard(s.sub)
-}
 
 // A query that is evaluated PER RENDERED ROW — a reverse-lookup keyed by the
 // row's own eid (a tile's comment count on every entity in a list or tree) —
@@ -712,9 +711,10 @@ export let dropQuery = (preds: Pred[]) => {
 // mem is NOT a whole-graph resolver (T-21491): the cache it indexes is partial
 // by construction, so an answer from here covers only held rows. A caller must
 // either HOLD a sub that guarantees its rows are present (the client-singleton
-// reads behind ensureClientRows) or explicitly accept a best-effort working-set
-// answer (a tile badge before its aggregate sub goes live). Anything needing
-// the complete result goes through queryEids — the server answers.
+// reads over the screen rows the app holds) or explicitly accept a best-effort
+// working-set answer (a tile badge before its aggregate sub goes live).
+// Anything needing the complete result is held (useHold) and read through
+// queryEids — the server answers.
 export let localEids = (preds: Pred[]): Signal<string[]> => mem.subscribe(preds)
 
 // The reverse-reference reads phrased as the queries the vocabulary already
@@ -882,7 +882,6 @@ export let resetSignals = () =>
     ixGraph = paint.peek()
     ixDeps = deps.peek()
     census.value = Object.keys(paint.value)
-    canvasVersion.value++
     for (let [eid, found] of rowSignals) found.value = paint.value[eid]
     for (let [eid, found] of relationSignals) {
       found.value = ix.byParent.get(eid) ?? noRelations
@@ -910,7 +909,6 @@ export let clearForTest = () => {
   querySignals.clear()
   aggSets.clear()
   commentTargets.clear()
-  clientSubs = new WeakMap()
   pinZs.clear()
   rowSignals.clear()
   relationSignals.clear()
@@ -934,7 +932,6 @@ export let clearForTest = () => {
   oneShots.clear()
   mem = makeResolver()
   agreement = undefined
-  homeMade = false
   asked.clear()
   queue.clear()
   cache.value = {}
@@ -1165,7 +1162,6 @@ let publishLocal = (
   let changedRows = new Set<string>()
   let changedParents = new Set<string>()
   let changedChildren = new Set<string>()
-  let changedCanvas = false
   let depsMoved = false
   let changedCensus = false
   let changed = false
@@ -1203,7 +1199,6 @@ let publishLocal = (
         changed = true
         changedCensus = true
         changedRows.add(eid)
-        if (before.canvas) changedCanvas = true
       }
       // Only an authoritative tombstone cascades. Storage-only eviction of a
       // peer's payload says nothing about independently held edge sentences.
@@ -1225,9 +1220,6 @@ let publishLocal = (
       next[eid] = row as Comps
       changed = true
       changedRows.add(eid)
-      if (name == 'canvas' || (name == 'entity' && before?.canvas)) {
-        changedCanvas = true
-      }
       continue
     }
     let prior = before?.[name] as Record<string, unknown> | undefined
@@ -1238,9 +1230,6 @@ let publishLocal = (
     next[eid] = { ...before, [name]: after } as Comps
     if (!before) changedCensus = true
     if (name == 'pin' && after.z != null) zs.set(eid, Number(after.z))
-    if (name == 'canvas' || (name == 'entity' && before?.canvas)) {
-      changedCanvas = true
-    }
     changed = true
     changedRows.add(eid)
   }
@@ -1286,7 +1275,6 @@ let publishLocal = (
   ixDeps = deps.peek()
   batch(() => {
     if (changedCensus) census.value = Object.keys(paint.peek())
-    if (changedCanvas) canvasVersion.value++
     publish(changedRows, changedParents, changedChildren)
     refreshQueries(changedRows)
     refreshServerSets(changedRows)
@@ -1944,7 +1932,7 @@ let landSubFrame = (f: Sub & { changes: Change[] }) => {
 
 // A control frame is an OBJECT (design §1), distinct from the array batches
 // send() ships — a subscribe/replace or an unsubscribe.
-export let subscribe = (sub: string, q: string) => {
+let subscribe = (sub: string, q: string) => {
   primeSub(sub, q)
 }
 
@@ -1990,6 +1978,8 @@ let forget = (sub: string) => {
   ticked(sub)
   heldMoved(members)
 }
+// Close a line: what a released hold does, and how a test forgets a frame its
+// fake server landed. Closing never opens, so it needs no owner.
 export let unsubscribe = (sub: string) => forget(sub)
 export let subEids = (sub: string): Set<string> | undefined => {
   tick(sub).value
@@ -2072,7 +2062,7 @@ let dropBoard = (sub: string) => unsubscribe(sub)
 // query grammar, not a feature channel: callers may select any stored edge type
 // and endpoint projection the server understands, and the ordinary sub cache
 // owns/refcounts its triples exactly like every other `.edges` delivery.
-export let edgeSub = (eid: string, rider: string) => {
+let edgeSub = (eid: string, rider: string) => {
   let sub = `edges:${eid}:${rider}`
   let n = edgeUses.get(sub) ?? 0
   edgeUses.set(sub, n + 1)
@@ -2109,7 +2099,7 @@ export let boardWindow = (e: Ent): Window | undefined =>
   subWindow(`board:${e.eid}`)
 
 // Several views in one tab share one ownership entry.
-export let boardSub = (e: Ent) => {
+let boardSub = (e: Ent) => {
   let sub = `board:${e.eid}`
   let q = boardLine(String(e.board?.query ?? ''))
   let use = boardUses.get(sub)
@@ -2131,7 +2121,7 @@ export let boardSub = (e: Ent) => {
 // Entry entities are intentionally absent from the root snapshot. A Session
 // view asks for only its ordered partition; ownership is shared across views
 // and tabs just like a board subscription.
-export let entrySub = (session: string) => {
+let entrySub = (session: string) => {
   let sub = `entries:${session}`
   let n = entryUses.get(sub) ?? 0
   entryUses.set(sub, n + 1)
@@ -2162,44 +2152,33 @@ export let subscriptionState = (sub: string): SubscriptionState => {
 
 export type SubscriptionRead = { sub: string; state: SubscriptionState }
 
-// The addressed state beside a direct query's result signal. Server-backed
-// shapes share the exact ServerSet that queryEids reads; a shape with no line
-// to ride has no remote failure to report, but over a PARTIAL cache its local
-// answer is a miss (`unserved`), so it reads as loading rather than as the
-// server's own "nothing matches".
+// The addressed state beside a direct query's result signal. A held shape
+// reads the exact ServerSet that queryEids reads; a shape no owner holds yet
+// reads as loading under its name, and the hold's first frame answers it. A
+// shape with no line to ride has no remote failure to report, but over a
+// PARTIAL cache its local answer is a miss (`unserved`), so it reads as loading
+// rather than as the server's own "nothing matches". A read never opens.
 export let querySubscription = (
   preds: Pred[],
   source?: string,
 ): SubscriptionRead | undefined => {
   let key = qkey(preds)
-  let line = source?.trim() || serverLine(preds, key)
-  if (!line) {
+  if (!lineOf(preds, key, source)) {
     return unserved(preds)
       ? { sub: '', state: { status: 'loading' } }
       : undefined
   }
-  let set = serverSet(preds, line, key)
-  return { sub: set.sub, state: subscriptionState(set.sub) }
+  let sub = `q:${key}`
+  return { sub, state: subscriptionState(sub) }
 }
 
+// Ask again for a line an owner holds. A line nobody holds has nothing to
+// retry: asking would open a subscription with no owner.
 export let retrySubscription = (sub: string) => {
-  let direct = [...queryUses.values()].find((set) => set.sub == sub)
-  let q = boardUses.get(sub)?.q ?? direct?.line ??
-    (sub.startsWith('entries:')
-      ? `.entry.session=${sub.slice('entries:'.length)}`
-      : sub.startsWith('route:')
-      ? routeLine(...sub.slice(6).split(':') as [string, string?])
-      : sub.startsWith('rows:')
-      ? `id=${sub.slice(5)}`
-      : undefined)
-  if (!q) return false
-  if (replica?.has(sub)) replica.retry(sub)
-  else subscribe(sub, q)
+  if (!replica?.has(sub)) return false
+  replica.retry(sub)
   return true
 }
-
-export let retryEntrySub = (session: string) =>
-  retrySubscription(`entries:${session}`)
 
 // The fullscreen root a client reaches by direct URL (or a peek) is one entity
 // that no defining set holds and the query grammar can't name (`.entity.eid=` is
@@ -2240,7 +2219,7 @@ export let entityRead = (
   }
 }
 
-export let routeSub = (eid: string, fields?: string) => {
+let routeSub = (eid: string, fields?: string) => {
   let sub = routeName(eid, fields)
   let n = routeUses.get(sub) ?? 0
   routeUses.set(sub, n + 1)
@@ -2272,7 +2251,7 @@ export let routeSub = (eid: string, fields?: string) => {
 // entities, and N `route:<eid>:*` subs cost N serves and N frames where one
 // `id=a,b,c` line answers the same rows together. Concurrent readers share an
 // immutable bounded request; each still owns its lifetime independently.
-export let rowsSub = rowHolds(ownBoard, dropBoard)
+let rowsSub = rowHolds(ownBoard, dropBoard)
 
 // What an entity sub asks for BESIDE its row (T-22371): the edges incident to
 // it, and enough of each far endpoint to render the sentence — an id (the spine
@@ -2312,7 +2291,7 @@ let syncEntrySubs = (sub: string, q: string) => {
 }
 
 // Query edits replace the installed name without tearing down its ownership.
-export let boardQuery = (e: Ent) => {
+let boardQuery = (e: Ent) => {
   let sub = `board:${e.eid}`
   let q = boardLine(String(e.board?.query ?? ''))
   let use = boardUses.get(sub)
@@ -2355,15 +2334,12 @@ export let boot = async () => {
 // Probe hooks: subscription/membership/wire counters over the active adapter.
 // `store()` remains false: the legacy IDB resolver is no longer a live surface.
 // `resolve` is a diagnostic local lookup only, never an authoritative query.
-let probeHeld = new Map<string, Signal<string[]>>()
 let probe = globalThis as {
   __probe?: {
     store: () => boolean
     resolve: (
       line: string,
     ) => Promise<{ store: boolean; ms: number; n: number }>
-    hold: (line: string) => number
-    held: (line: string) => number
     served: (line: string) => boolean
     subN: () => number
     transportN: () => number
@@ -2385,12 +2361,6 @@ probe.__probe = {
       n: ids.length,
     })
   },
-  hold: (line) => {
-    let preds = resolveRefs(parseQuery(line), findEid)
-    probeHeld.set(line, holdQuery(preds))
-    return probeHeld.get(line)!.value.length
-  },
-  held: (line) => probeHeld.get(line)?.value.length ?? -1,
   // Whether THIS query opened a genuine server subscription (T-17126) — proof
   // the answer is server-authoritative, not a local cache scan; subN counts how
   // many are open across the tab.
@@ -2720,13 +2690,15 @@ export let rows = (): Row[] =>
 // from the index and re-answers when a task moves Eng→Ops, the same fact the
 // projection was there to catch.
 //
-// Until the server answers (and on the socketless paths — the TUI, a test), the
-// working set's own census serves: a suggestion well is best-effort by nature,
+// Until the server answers, while no mounted picker holds it (wells.ts), and on
+// the socketless paths (the TUI, a test), the working set's own census serves: a suggestion well is best-effort by nature,
 // which is why this one may read locally where a board's membership may not.
 export let domains = {
+  agg: 'agg:domains',
+  line: '.task&.distinct=filed.domain',
   get value() {
-    let t = aggQuery('agg:domains', '.task&.distinct=filed.domain')
-    return t.live.value ? Object.keys(t.map.value).sort() : distinctValues(
+    let t = aggRead(domains.agg)
+    return t?.live ? Object.keys(t.map).sort() : distinctValues(
       localEids([has('task')]).value.map((eid) => paint.peek()[eid] ?? {}),
       { comp: 'filed', prop: 'domain' },
     )
@@ -2754,22 +2726,18 @@ export let projects = (): Ent[] =>
 // the cache merges the two because the fuller one is a superset.
 export let sessionDetail = sessionQueries(vocab).detail
 
-export let shelfFor = (client: string): string | undefined => {
-  ensureClientRows(client)
-  return localEids([eq('shelf', 'client', client)]).value[0]
-}
+export let shelfFor = (client: string): string | undefined =>
+  localEids([eq('shelf', 'client', client)]).value[0]
 
 // THIS tab's own screen-state rows — cursor, camera, fold, shelf: the
 // components whose `client` names this browser — streamed by one small server
-// sub per component per tab (T-21490, step 3 of D-21486). Named one by one,
-// because another plugin declares a `client` that is not this reference
-// (@yaks/connections' integration). Held
-// for the tab's LIFE: the key space is exactly one value (this client's uuid),
-// so the eid-keyed teardown rule (T-21489) doesn't bite — O(tabs) wire subs,
-// not O(rows) — and the singleton readers stay LOCAL lookups over the rows the
-// subs stream in. A per-shape wire sub here would accumulate (a fold sub per
-// board visited); resolving locally without the sub would under-report on a
-// partial cache.
+// sub per component, held by the mounted app (App.tsx, `{client}` through
+// useHold). Named one by one, because another plugin declares a
+// `client` that is not this reference (@yaks/connections' integration). The
+// key space is exactly one value (this client's uuid), so the singleton readers
+// stay LOCAL lookups over the rows the subs stream in. A per-shape wire sub
+// here would accumulate (a fold sub per board visited); resolving locally
+// without the sub would under-report on a partial cache.
 let SCREEN = ['camera', 'cursor', 'fold', 'shelf']
 let screenOf = (comp: string, client: string) =>
   resolveRefs(parseQuery(`.${comp}.client=${client}`), findEid)
@@ -2778,21 +2746,13 @@ let screenOf = (comp: string, client: string) =>
 export let clientSubscription = (
   client: string,
   comp = 'fold',
-): SubscriptionRead | undefined => {
-  if (!capable('canvas')) return undefined
-  ensureClientRows(client)
-  return querySubscription(screenOf(comp, client))
-}
+): SubscriptionRead | undefined =>
+  capable('canvas') ? querySubscription(screenOf(comp, client)) : undefined
 
-let clientSubs = new WeakMap<object, Set<string>>()
-export let ensureClientRows = (client: string) => {
-  if (!capable('canvas') || !client) return
-  let owner = ensureClient()
-  let held = clientSubs.get(owner)
-  if (!held) clientSubs.set(owner, held = new Set())
-  if (held.has(client)) return
-  held.add(client)
-  for (let comp of SCREEN) holdQuery(screenOf(comp, client))
+let holdClientRows = (client: string): () => void => {
+  if (!capable('canvas') || !client) return () => {}
+  let drops = SCREEN.map((comp) => holdQuery(screenOf(comp, client)))
+  return () => drops.forEach((drop) => drop())
 }
 
 // The comments aimed HERE — every entity whose `comment.target` is this eid,
@@ -2888,7 +2848,7 @@ let scheduleCommentTally = () => {
 }
 // Effects hold badges; reads never dial during render. Batch adjacent mounts
 // into one subscription replacement rather than one round trip per row.
-export let holdCommentCount = (target: string) => {
+let holdCommentCount = (target: string) => {
   let n = commentTargets.get(target) ?? 0
   commentTargets.set(target, n + 1)
   if (!n) scheduleCommentTally()
@@ -2910,30 +2870,22 @@ export let commentCount = (target: string): Signal<number> =>
       localEids([eq('comment', 'target', target)]).value.length
   })
 
-// An aggregate held for a VIEW's lifetime. The comment tally above is one
-// shared shape held by mounted badges; an aggregate keyed by an
-// ENTITY (a board's status tally) has an unbounded key space, so its render
-// path holds and releases exactly like an eid-keyed query sub does (T-21489) —
-// the last drop closes the wire sub.
-export let holdAgg = (name: string, line: string): AggSet => {
-  let set = aggQuery(name, line)
-  set.n++
-  return set
-}
-export let dropAgg = (name: string) => {
-  let set = aggSets.get(name)
-  if (!set || --set.n > 0) return
-  aggSets.delete(name)
-  dropBoard(name)
-}
-
-// An aggregate asked once, for a view's lifetime: its answer lands in its set
-// and the line closes, so an aggregate that reads every entity (a census) is
-// not evaluated again after every commit. Released by dropAgg like any other.
-export let holdAggOnce = (name: string, line: string): AggSet => {
-  let set = aggSet(name, line)
-  if (!set.n++) oneShot(name, line, () => {}, () => {})
-  return set
+// An aggregate held for an owner's lifetime. The comment tally above is one
+// shared shape held by mounted badges; an aggregate keyed by an ENTITY (a
+// board's status tally) has an unbounded key space, so it holds and releases
+// exactly like an eid-keyed query sub does (T-21489): the last release closes
+// the wire sub. `once` asks a single time: its answer lands in its set and the
+// line closes, so an aggregate that reads every entity (a census) is not
+// evaluated again after every commit.
+let holdAgg = (name: string, line: string, once = false): () => void => {
+  let set = once ? aggSet(name, line) : aggQuery(name, line)
+  if (!set.n++ && once) oneShot(name, line, () => {}, () => {})
+  ticked(name)
+  return () => {
+    if (aggSets.get(name) != set || --set.n > 0) return
+    aggSets.delete(name)
+    dropBoard(name)
+  }
 }
 
 // A held aggregate's answer as it stands: whether it has landed, and each
@@ -2942,19 +2894,102 @@ export let holdAggOnce = (name: string, line: string): AggSet => {
 export let aggRead = (
   name: string,
 ): { live: boolean; map: Record<string, number> } | undefined => {
+  tick(name).value
   let set = aggSets.get(name)
-  return set && { live: set.live.value, map: set.map.value }
+  return set?.n ? { live: set.live.value, map: set.map.value } : undefined
 }
 
 // One aggregate value for a view that owns the corresponding hold. Undefined
 // until the server has answered; callers must not paint that as a confident 0.
-export let aggValue = (
-  name: string,
-  line: string,
-  value = '',
-): number | undefined => {
-  let set = aggQuery(name, line)
-  return set.live.value ? set.map.value[value] ?? 0 : undefined
+export let aggValue = (name: string, value = ''): number | undefined => {
+  let set = aggRead(name)
+  return set?.live ? set.map[value] ?? 0 : undefined
+}
+
+// What a mounted component holds open while it draws it: a query, a board's
+// members, an entity, a list's rows, a session's entries, an entity's edge
+// rider, an aggregate, a comment badge's tally, or this tab's screen rows.
+export type Hold =
+  | { query: Pred[]; source?: string }
+  | { board: Ent }
+  | { entity: string; fields?: string }
+  | { rows: string[] }
+  | { entries: string }
+  | { edges: string; rider: string }
+  | { agg: string; line: string; once?: boolean }
+  | { comments: string }
+  | { client: string }
+
+let holdKey = (h: Hold): string =>
+  'query' in h
+    ? `q:${qkey(h.query)}:${h.source?.trim() ?? ''}`
+    : 'board' in h
+    ? `board:${h.board.eid}`
+    : 'entity' in h
+    ? routeName(h.entity, h.fields)
+    : 'rows' in h
+    ? `rows:${[...new Set(h.rows)].join(',')}`
+    : 'entries' in h
+    ? `entries:${h.entries}`
+    : 'edges' in h
+    ? `edges:${h.edges}:${h.rider}`
+    : 'agg' in h
+    ? `agg:${h.agg}:${h.once ? 'once' : 'live'}:${h.line}`
+    : 'comments' in h
+    ? `comments:${h.comments}`
+    : `client:${h.client}`
+
+let open = (h: Hold): () => void =>
+  'query' in h
+    ? holdQuery(h.query, h.source)
+    : 'board' in h
+    ? boardSub(h.board)
+    : 'entity' in h
+    ? routeSub(h.entity, h.fields)
+    : 'rows' in h
+    ? rowsSub([...new Set(h.rows)])
+    : 'entries' in h
+    ? entrySub(h.entries)
+    : 'edges' in h
+    ? edgeSub(h.edges, h.rider)
+    : 'agg' in h
+    ? holdAgg(h.agg, h.line, h.once)
+    : 'comments' in h
+    ? holdCommentCount(h.comments)
+    : holdClientRows(h.client)
+
+// The one door to the server's live data (T-131877): a live query is owned by
+// the component that draws it. It opens when that component mounts and closes
+// when it unmounts, and reads (queryEids, querySubscription, aggRead, …) never
+// open one. A hold kept across renders stays open, so a view whose set of
+// holds shifts (a path discovered hop by hop) never closes and reopens the
+// ones it keeps. Identical holds from several components share one server
+// subscription, counted by owners.
+export let useHold = (...holds: (Hold | false | null | undefined | '')[]) => {
+  let live = useRef(new Map<string, () => void>())
+  let want = new Map(
+    holds.filter((h): h is Hold => !!h).map((h) => [holdKey(h), h]),
+  )
+  let key = [...want.keys()].join('\n')
+  // A board's query edit replaces its line under the same hold.
+  let lines = [...want.values()].flatMap((h) =>
+    'board' in h ? [String(h.board.board?.query ?? '')] : []
+  ).join('\n')
+  useLayoutEffect(() => {
+    for (let [k, off] of live.current) {
+      if (want.has(k)) continue
+      off()
+      live.current.delete(k)
+    }
+    for (let [k, h] of want) {
+      if (!live.current.has(k)) live.current.set(k, open(h))
+      else if ('board' in h) boardQuery(h.board)
+    }
+  }, [key, lines])
+  useLayoutEffect(() => () => {
+    for (let off of live.current.values()) off()
+    live.current.clear()
+  }, [])
 }
 
 // A board TILE renders status counts and nothing else, so it subscribes to the
@@ -2987,19 +3022,18 @@ export let boardTally = (e: Ent): Record<string, number> | undefined => {
   let line = boardTallyLine(e)
   if (line == null) return undefined
   if (!line) return {}
-  let t = aggQuery(boardTallyName(e), line)
-  return t.live.value ? t.map.value : undefined
+  let t = aggRead(boardTallyName(e))
+  return t?.live ? t.map : undefined
 }
 
 type Folded = { eid: string; statuses: string }
 // The fold row for a (client, board) — a unique (client, board) pair, so the two
 // eid EQUALITIES the refs index answers narrow to ≤1 row. Resolved LOCALLY over
-// the rows the tab's client sub streams (ensureClientRows — a wire sub per
+// the rows the tab's client sub streams (held by the app — a wire sub per
 // board visited would accumulate, T-21490); membership wakes the face, and the
 // live `statuses` field rides the fold's own row signal, so a collapse/expand
 // edit wakes the face too without re-testing the whole cache.
 export let foldFor = (client: string, board: string): Folded | undefined => {
-  ensureClientRows(client)
   let eid = localEids([
     eq('fold', 'client', client),
     eq('fold', 'board', board),
@@ -3007,39 +3041,6 @@ export let foldFor = (client: string, board: string): Folded | undefined => {
   if (!eid) return undefined
   let f = row(eid).value?.fold
   return f && { eid, statuses: String(f.statuses ?? '') }
-}
-
-// The root canvas: the first canvas-tagged entity by num, read through the
-// query door (`.canvas`) rather than a whole-cache scan, so a partial cache
-// resolves the same first canvas the complete graph would (T-18094). Membership
-// wakes it when a canvas is minted or dies; `canvasVersion` when a num arrives —
-// a canvas whose num hasn't landed yet can't be "first", or sorting the unknown
-// to the front would yank every tab sitting on `/` to it.
-export let rootCanvas = () => {
-  if (!capable('canvas')) return undefined
-  canvasVersion.value
-  return queryEids([has('canvas')]).value
-    .map((eid) => [eid, paint.peek()[eid]] as const)
-    .sort(([, a], [, b]) =>
-      (a?.entity?.num ?? Infinity) - (b?.entity?.num ?? Infinity)
-    )[0]
-    ?.[0]
-}
-
-// A fresh graph holds no canvas, so `/` would name nothing and the first page
-// a person opens would be a 404 (T-39749). `homeless` is the graph having
-// answered that it holds none — a loading or failed canvas query says nothing
-// about the graph — and `makeHome` then makes the first. Once per tab: the new
-// canvas reaches the server's answer a moment after the local write, and a
-// second mint meanwhile would leave two.
-export let homeless = () =>
-  capable('canvas') && !rootCanvas() &&
-  querySubscription([has('canvas')])?.state.status == 'ready'
-let homeMade = false
-export let makeHome = () => {
-  if (homeMade || !homeless()) return
-  homeMade = true
-  mutate({ eid: uuid(), name: 'canvas', comp: {} })
 }
 
 // The canvas working set: the carded pins on ONE canvas, scoped to it through
@@ -3079,7 +3080,7 @@ let pinFields = (() => {
     return fields
   }
 })()
-let pinsOn = (canvas: string): Pred[] => [
+export let pinsOn = (canvas: string): Pred[] => [
   eq('pin', 'canvas', canvas),
   has('card'),
   { comp: '', prop: '', op: PROJECT, value: '', fields: pinFields() },
@@ -3122,10 +3123,15 @@ export let backlinks = (target: string): Backlink[] =>
 // index answers in O(result); membership is the only reactive edge (at
 // is server-stamped at the claim's birth, never edited, and a release removes
 // the row), so the face wakes exactly when its session gains or loses a claimed
-// task — no bespoke per-session set to keep (T-17064).
+// task — no bespoke per-session set to keep (T-17064). A view that draws it
+// holds the query (useJob).
+export let jobQuery = (session: string): Pred[] => [
+  eq('claim', 'session', session),
+  has('task'),
+]
 export let jobOf = (e: Ent): string | null => {
   let g = paint.peek()
-  return queryEids([eq('claim', 'session', e.eid), has('task')]).value
+  return queryEids(jobQuery(e.eid)).value
     .toSorted((a, b) =>
       String(g[b]?.claim?.at ?? '').localeCompare(
         String(g[a]?.claim?.at ?? ''),
@@ -3188,16 +3194,14 @@ export let toPlane = (clientX: number, clientY: number, rect: DOMRect) => {
 // (both {eid} columns anchor the derived index) over the rows the tab's client
 // sub streams (T-21490), so a partial cache still finds the row the graph holds
 // without a wire sub per canvas visited.
-export let myCamera = (client: string, canvas: string) => {
-  ensureClientRows(client)
-  return localEids([
+export let myCamera = (client: string, canvas: string) =>
+  localEids([
     eq('camera', 'client', client),
     eq('camera', 'canvas', canvas),
   ])
     .value
     .map((eid) => paint.peek()[eid]?.camera)
     .find((c) => !!c)
-}
 
 // This client's cursor — WHERE it's looking, one row per client (T-12788).
 // Resolved LOCALLY (the client column anchors the derived unique index) over
@@ -3205,13 +3209,11 @@ export let myCamera = (client: string, canvas: string) => {
 // mark()'s idempotency check and ui_state's tab report stay O(1) and the hot
 // render path never pays (M-17862). The cursor is UPDATE-ONLY: it is published,
 // never read back to drive navigation (nav.tsx), so no reader here yanks a tab.
-export let myCursor = (client: string) => {
-  ensureClientRows(client)
-  return localEids([eq('cursor', 'client', client)])
+export let myCursor = (client: string) =>
+  localEids([eq('cursor', 'client', client)])
     .value
     .map((eid) => row(eid).value?.cursor)
     .find((c) => !!c)
-}
 
 // Who this browser is: a client entity, its uuid minted into localStorage on
 // first visit. The db rows appear when the camera first persists.
@@ -3222,6 +3224,17 @@ export let clientId = () => {
     localStorage.setItem(storageKey('tasks-client'), id)
   }
   return id
+}
+
+// This tab's client where it has screen state (a canvas-capable browser); the
+// terminal has no client identity.
+export let myClient = (): string | null => {
+  if (!capable('canvas')) return null
+  try {
+    return clientId()
+  } catch {
+    return null
+  }
 }
 
 // This tab's camera over the canvas it's viewing: x/y is the viewport CENTER

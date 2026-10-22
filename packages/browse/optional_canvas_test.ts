@@ -2,21 +2,11 @@ import { test } from '@yaks/testing'
 import { tick, until } from './testing.ts'
 import { assertEquals } from '@std/assert'
 import { learn, vocab } from './types.ts'
-import {
-  cache,
-  clientSubscription,
-  config,
-  ent,
-  homeless,
-  makeHome,
-  myActor,
-  owner,
-  rootCanvas,
-} from './live.ts'
+import { cache, config, ent, myActor, owner } from './live.ts'
 import { actionsFor, applicable, resolve } from './components/registry.ts'
 import { screenTarget } from './components/nav.tsx'
 import { offerPlaces } from './components/offers.ts'
-import { host } from './host_testing.ts'
+import { held, host } from './host_testing.ts'
 
 let docs = vocab.docs
 let without = docs.filter((d) =>
@@ -83,9 +73,7 @@ test('canvas contributions disappear without changing the stored entities', asyn
         installed,
       )
       assertEquals(resolve(ent('task')).view, 'Full')
-      rootCanvas()
-      clientSubscription('client')
-      makeHome()
+      let free = held({ client: 'client' })
       if (installed) await until(() => wire.asked().length > 0)
       else await tick()
       assertEquals(
@@ -94,8 +82,8 @@ test('canvas contributions disappear without changing the stored entities', asyn
         ),
         installed,
       )
+      free()
       if (!installed) {
-        assertEquals(homeless(), false)
         assertEquals(cache.peek().canvas?.canvas, { eid: 'canvas' })
       }
     } finally {

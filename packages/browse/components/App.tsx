@@ -9,9 +9,9 @@ import {
   schemaAt,
 } from '../navigation.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
-import { useEffect, useLayoutEffect } from 'preact/hooks'
+import { useEffect } from 'preact/hooks'
 import { idOf } from '../types.ts'
-import { config, ent, entityRead, mode, routeSub } from '../live.ts'
+import { config, ent, entityRead, mode, myClient, useHold } from '../live.ts'
 import { block, Loading, Section, Shell, Tabs, Viewport } from '@yaks/ui'
 import { filterable, FilterInput } from './Filter.tsx'
 import { applicable } from './registry.ts'
@@ -27,6 +27,7 @@ import {
   screenResolving,
   screenTarget,
 } from './nav.tsx'
+import { useDrafts } from '../domain-host.tsx'
 import { Run, run } from './Run.tsx'
 import { Search, searchOpen, SearchPage } from './Search.tsx'
 import { Status } from './Status.tsx'
@@ -109,7 +110,7 @@ export let Page = ({ at }: { at: string }) => {
   let rootEid = offered
     ? undefined
     : addressId(decodeURIComponent(url.pathname.slice(1))) ?? t?.eid
-  useLayoutEffect(() => rootEid ? routeSub(rootEid) : undefined, [rootEid])
+  useHold(rootEid && { entity: rootEid })
   let read = rootEid && config.host
     ? entityRead(rootEid, undefined, t?.eid)
     : undefined
@@ -310,6 +311,11 @@ export let Page = ({ at }: { at: string }) => {
 }
 
 export let App = () => {
+  // What the app draws for this person everywhere inside it: their drafts,
+  // and this tab's own screen rows (cursor, camera, folds, shelf).
+  useDrafts()
+  let me = myClient()
+  useHold(me && { client: me })
   // `/` raises the search palette over ANY page — canvas, doc, board.
   // The shell owns the hotkey and the one <Search> mount so any page can
   // search; a pick opens the hit as the page in its default view.

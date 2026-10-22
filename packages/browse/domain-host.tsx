@@ -9,20 +9,21 @@ import {
   capable,
   config,
   ent,
-  holdQuery,
+  findEid,
   myActor,
   pending,
+  queryEids,
   row,
 } from './live.ts'
 import { scopedStorage } from './hosting.ts'
-import { parseQuery } from './query.ts'
+import { parseQuery, resolveRefs } from './query.ts'
 import { type Ent, idOf, nick, vocab } from './types.ts'
 import { commands, orderIn, suggest } from './commands.ts'
 import { slotsOf } from './verb.ts'
 import { people } from './components/hits.ts'
 import { usePage } from './components/page.ts'
 import { useModel, useRepoUrl } from './components/subscriptions.ts'
-import { useQuery } from './components/useQuery.ts'
+import { useQuery, useQueryResult } from './components/useQuery.ts'
 import { linkProps } from './components/nav.tsx'
 import { Markdown } from './components/Markdown.tsx'
 import { ago } from './components/Stamp.tsx'
@@ -55,10 +56,11 @@ configureDrafts({
   },
   client: {
     mutate: apply,
+    // What the mounted app holds (useDrafts), read: a watch opens nothing.
     watch: (query) => {
-      let ids = holdQuery(parseQuery(query))
+      let preds = resolveRefs(parseQuery(query), findEid)
       let held = computed(() =>
-        ids.value.flatMap((eid): Bundle[] => {
+        queryEids(preds).value.flatMap((eid): Bundle[] => {
           let draft = row(eid).value?.draft
           return draft ? [{ entity: { eid }, draft }] : []
         })
@@ -72,6 +74,14 @@ configureDrafts({
     },
   },
 })
+// The person's drafts, held by the app while it is mounted: every box that
+// types one and every view that reads one (a board's open quick-create, a
+// comment's composer) is inside it, and the desk's watch reads this hold.
+export let useDrafts = () => {
+  let by = capable('draft') ? myActor() : undefined
+  useQueryResult(by ? `.draft.by=${by}` : '', !!by)
+}
+
 configureComments({
   get: (eid) => domainBundle(ent(eid)),
   id: (b) => idOf(entity(b)),

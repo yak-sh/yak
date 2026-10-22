@@ -1,6 +1,6 @@
 import { Decision } from '../Decision.tsx'
 import { useReference, useRepoUrl, useRows } from '../subscriptions.ts'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { type ComponentChildren } from 'preact'
 import { type Ent, statusOf, vocab } from '../../types.ts'
 import { statusChanges } from '../../client.ts'
@@ -12,12 +12,12 @@ import {
   edgeWindow,
   ent,
   gated,
-  holdCommentCount,
   mutate,
   parents,
   pending,
   settled,
   statuses,
+  useHold,
 } from '../../live.ts'
 import { actionsAt } from '../nav.tsx'
 import { useBoardsOver, useQueryEids } from '../useQuery.ts'
@@ -584,10 +584,7 @@ export let Meta = (
   },
 ) => {
   let claimant = useReference(e.claim?.session)
-  useLayoutEffect(
-    () => vocab.prop('comment', 'target') ? holdCommentCount(e.eid) : undefined,
-    [e.eid],
-  )
+  useHold(!!vocab.prop('comment', 'target') && { comments: e.eid })
   let talk = commentCount(e.eid).value
   let edges = tallies(e)
   let hasEdges = edges.some(([, open, done]) => open > 0 || done > 0)

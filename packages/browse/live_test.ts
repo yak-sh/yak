@@ -18,6 +18,7 @@ let test: typeof preparedTest = (name, body, options) =>
     }
   }, options)
 import {
+  aggValue,
   agreementProbe,
   applyLocal,
   assertAgree,
@@ -26,7 +27,7 @@ import {
   boardAll,
   boardPost,
   boardsOver,
-  boardSub,
+  boardTally,
   boardTasks,
   byWarmth,
   cache,
@@ -34,26 +35,22 @@ import {
   chatFor,
   clearForTest,
   clearResolved,
+  clientSubscription,
   commentCount,
   commentsOn,
   config,
   deps,
   domains,
   dropLocal,
-  dropQuery,
   ent,
   findEid,
   foldFor,
   gated,
-  holdCommentCount,
   holdLocal,
-  holdQuery,
-  homeless,
   hostFrom,
   jobOf,
   landSub,
   loaded,
-  makeHome,
   myCamera,
   myCursor,
   myMode,
@@ -69,18 +66,14 @@ import {
   resetSignals,
   resolveGen,
   resolvingId,
-  rootCanvas,
-  routeSub,
   ROW,
   row,
-  rowsSub,
   serverEid,
   serverName,
   shelfFor,
   shown,
   sieve,
   subEids,
-  subscribe,
   subscriptionChecks,
   subscriptionState,
   topZ,
@@ -90,8 +83,8 @@ import {
 } from './live.ts'
 import { quiet } from './live_client.ts'
 import { edgeEid, link } from './edge.ts'
-import { type Ask, host } from './host_testing.ts'
-import { EXISTS, parseQuery, PROJECT, resolveRefs } from './query.ts'
+import { type Ask, held as owned, host } from './host_testing.ts'
+import { EXISTS, parseQuery, type Pred, PROJECT, resolveRefs } from './query.ts'
 import { type Change, type Ent } from './types.ts'
 import { effect } from '@preact/signals'
 import {
@@ -101,6 +94,21 @@ import {
   assertThrows,
 } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
+
+// What a mounted view holds, each held by a component of its own (owned).
+let holding = new Map<Pred[], (() => void)[]>()
+let holdQuery = (preds: Pred[], source?: string) => {
+  holding.set(preds, [
+    ...holding.get(preds) ?? [],
+    owned({ query: preds, source }),
+  ])
+  return queryEids(preds)
+}
+let dropQuery = (preds: Pred[]) => holding.get(preds)?.pop()?.()
+let boardSub = (board: Ent) => owned({ board })
+let routeSub = (entity: string, fields?: string) => owned({ entity, fields })
+let rowsSub = (rows: string[]) => owned({ rows })
+let holdCommentCount = (comments: string) => owned({ comments })
 
 // One tab supplies these independent reactive fixtures. Tests keep the live
 // patches and observer assertions; seeding and subscription ownership happen once.
@@ -2294,6 +2302,7 @@ test('client singletons: four tab subs, local reads, isolation (T-21490)', () =>
   let T = 'eeee0000-0000-4000-8000-0000000000ee'
   let b1 = 'b1b10000-0000-4000-8000-0000000000b1'
   let b2 = 'b2b20000-0000-4000-8000-0000000000b2'
+  let holds: (() => void)[] = []
   try {
     cache.value = {
       [T]: { entity: { eid: T, num: 1 }, canvas: { eid: T } },
@@ -2329,6 +2338,10 @@ test('client singletons: four tab subs, local reads, isolation (T-21490)', () =>
     let preds = resolveRefs(parseQuery(`.fold.client=${A}`), findEid)
     assertEquals(predsToQuery(preds), `.fold.client=${A}`)
     let n0 = probe.subN()
+    // A read opens nothing; the app's hold opens one sub per component.
+    assertEquals(myCursor(A)?.target, T)
+    assertEquals(probe.subN(), n0)
+    holds.push(owned({ client: A }))
     // Every singleton read for A answers A's rows through its four wire subs.
     assertEquals(myCursor(A)?.target, T)
     assertEquals(foldFor(A, b1)?.statuses, 'open')
@@ -2336,7 +2349,8 @@ test('client singletons: four tab subs, local reads, isolation (T-21490)', () =>
     assertEquals(shelfFor(A), 'sa')
     assertEquals(myCamera(A, CV)?.x, 7)
     assertEquals(probe.subN(), n0 + 4)
-    // Isolation: A's reads never surface B's rows; B's first read adds ITS subs.
+    // Isolation: A's reads never surface B's rows; B's hold adds ITS subs.
+    holds.push(owned({ client: B }))
     assertEquals(myCursor(B)?.target, CV)
     assertEquals(probe.subN(), n0 + 8)
     // The tab sub streams a new fold row for A — the local reader sees it.
@@ -2354,7 +2368,32 @@ test('client singletons: four tab subs, local reads, isolation (T-21490)', () =>
     assertEquals(foldFor(A, b2)?.statuses, 'wip')
     assertEquals(probe.subN(), n0 + 8) // still no per-shape subs
   } finally {
+    for (let free of holds) free()
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
+  }
+})
+
+// A live query is owned by the component that draws it (T-131877): reads open
+// nothing, a mounted owner opens its line, and its unmount closes it.
+test('reads open nothing; a mounted owner opens and its unmount closes', () => {
+  let sent: { subscribe?: string; unsubscribe?: string }[] = []
+  let prior = useRoute((f) => void sent.push(f as typeof sent[number]))
+  let preds = resolveRefs(parseQuery('.doc.title=unowned'), findEid)
+  try {
+    queryEids(preds).value
+    querySubscription(preds)
+    aggValue('tally:sleeping')
+    boardTally(ent('sleeping'))
+    clientSubscription('unowned-client')
+    assertEquals(sent, [])
+    let free = owned({ query: preds })
+    assertEquals(sent.flatMap((f) => f.subscribe ?? []), [
+      '.doc.title=unowned&*',
+    ])
+    free()
+    assertEquals(sent.filter((f) => f.unsubscribe).length, 1)
+  } finally {
+    useRoute(prior)
   }
 })
 
@@ -2468,8 +2507,7 @@ test('no location, no host: nothing dials a server we never named', () => {
   }
   try {
     assertThrows(() => base(), Error, 'no server host')
-    subscribe('probe', '.task')
-    unsubscribe('probe')
+    owned({ entries: 'probe' })()
     assertEquals(dialed, [])
   } finally {
     ;(globalThis as { WebSocket: unknown }).WebSocket = RealWS
@@ -2707,11 +2745,18 @@ test('subscription failures persist until a successful replacement', () => {
 test('domains: the server distinct wins over the working set', () => {
   fill([['T', 'Ops']])
   assertEquals(domains.value, ['Ops'])
-  landSub({ sub: 'agg:domains', agg: { Fable: 1, Eng: 1 } })
-  assertEquals(domains.value, ['Eng', 'Fable'])
-  // A later answer moves it without a task changing hands.
-  landSub({ sub: 'agg:domains', agg: { Fable: 1, Ops: 1 } })
-  assertEquals(domains.value, ['Fable', 'Ops'])
+  let free = owned({ agg: domains.agg, line: domains.line })
+  try {
+    landSub({ sub: domains.agg, replace: true, agg: { Fable: 1, Eng: 1 } })
+    assertEquals(domains.value, ['Eng', 'Fable'])
+    // A later answer moves it without a task changing hands.
+    landSub({ sub: domains.agg, replace: true, agg: { Fable: 1, Ops: 1 } })
+    assertEquals(domains.value, ['Fable', 'Ops'])
+  } finally {
+    free()
+  }
+  // Released, the well answers from the working set again.
+  assertEquals(domains.value, ['Ops'])
 })
 
 // A board now renders from the server's subscription (subEids); the local query
@@ -3040,47 +3085,5 @@ test('a list of rows is held in one sub and freed by its last holder', async () 
     for (let off of offs) off()
     unsubscribe(name)
     useRoute(prior)
-  }
-})
-
-// A fresh graph has no canvas for `/` to name (T-39749). Until the server has
-// answered, nothing is made: a graph still loading may hold one. Once it says
-// there is none, the page makes the first, `/` names it, and asking again
-// makes nothing more.
-test('a graph that answers it has no canvas gets its first', async () => {
-  let prior = config.host
-  let made: Change[] = []
-  let restore = useRoute((frame) => {
-    made.push(...(frame as { apply?: Change[] }).apply ?? [])
-    if ((frame as { request?: Request }).request) return Response.json([])
-  })
-  config.host = 'browser.test'
-  cache.value = {}
-  resetSignals()
-  let wire = host((a) =>
-    a.subscribe.startsWith('.canvas') ? { bundles: [] } : undefined
-  )
-  let canvases = () => made.filter((c) => c.name == 'canvas').length
-  try {
-    assertEquals(homeless(), false)
-    makeHome()
-    assertEquals(canvases(), 0)
-    await until(() => homeless())
-    makeHome()
-    makeHome()
-    await until(() => canvases() === 1)
-    // The server takes the write, and its answer names the new canvas.
-    let eid = made.find((c) => c.name == 'canvas')!.eid
-    let ask = wire.asked().find((a) => a.subscribe.startsWith('.canvas'))!
-    await wire.say({ id: ask.id, bundles: [{ entity: { eid }, canvas: {} }] })
-    assertEquals(rootCanvas(), eid)
-    assertEquals(homeless(), false)
-  } finally {
-    wire.free()
-    useRoute(restore)
-    config.host = prior
-    dropQuery(resolveRefs(parseQuery('.canvas'), findEid))
-    cache.value = {}
-    resetSignals()
   }
 })

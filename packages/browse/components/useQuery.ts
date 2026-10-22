@@ -14,12 +14,9 @@ import { useLayoutEffect, useMemo, useRef } from 'preact/hooks'
 import {
   type Backlink,
   dropLocal,
-  dropQuery,
-  edgeSub,
   ent,
   findEid,
   holdLocal,
-  holdQuery,
   linksVia,
   loaded,
   localEids,
@@ -29,6 +26,7 @@ import {
   type References,
   references,
   type SubscriptionRead,
+  useHold,
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { type Ent, vocab } from '../types.ts'
@@ -87,15 +85,11 @@ export let useQueryResult = (
 ): QueryResult => {
   let preds = usePreds(query)
   let source = direct ? query : undefined
-  useLayoutEffect(() => {
-    if (!enabled || preds instanceof Error) return
-    holdQuery(preds, source)
-    return () => dropQuery(preds)
-  }, [preds, enabled, source])
+  useHold(enabled && !(preds instanceof Error) && { query: preds, source })
   if (preds instanceof Error) return refused(query, preds)
   let subscription = enabled ? querySubscription(preds, source) : undefined
   return {
-    eids: enabled ? queryEids(preds, source).value : [],
+    eids: enabled ? queryEids(preds).value : [],
     subscription,
     ready: !subscription || subscription.state.status == 'ready',
     loaded,
@@ -229,6 +223,6 @@ let referenceQuery = () => {
 // column; this hook only owns the subscription and reads its scoped edge set.
 export let useReferences = (eid: string): References => {
   let query = referenceQuery()
-  useLayoutEffect(() => query ? edgeSub(eid, query) : undefined, [eid, query])
+  useHold(query && { edges: eid, rider: query })
   return references(eid)
 }

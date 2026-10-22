@@ -508,10 +508,10 @@ on two cards, keeps a state of its own. The host supplies:
 - `find(line, limit)`: a server search, the entities a query line answers.
 
 and, where the page has them: `editing` (its input language, @yaks/render
-`EditOptions`), `values` (a well's values), `fields` (its query fields),
-`markup` (inline markdown), `wears` (what a choice wears beside its word, a
-status's dot), and `Float`, the platform's popover (@yaks/ui's, in a browser);
-without it a popout paints in the flow, as a terminal wants.
+`EditOptions`), `useValues` (a well's values, a hook), `fields` (its query
+fields), `markup` (inline markdown), `wears` (what a choice wears beside its
+word, a status's dot), and `Float`, the platform's popover (@yaks/ui's, in a
+browser); without it a popout paints in the flow, as a terminal wants.
 
 ## Limits
 

@@ -142,7 +142,20 @@ handlers.
   socket, its reconnect and the resubscribe after it. Aggregates (`.tally=`,
   `.count`, `.distinct=`) arrive as their value and again when it moves. wire.ts
   turns a query line into the host's grammar and bundles into the cache's
-  changes.
+  changes. A subscription is owned by the component that draws its data:
+  `useHold` (live.ts) opens it when that component mounts and closes it when it
+  unmounts, identical holds share one line, and every read (`queryEids`,
+  `querySubscription`, `aggRead`, …) only reads what is held.
+
+  ```tsx ignore
+  let Tasks = ({ project }: { project: string }) => {
+    let preds = useMemo(() => parseQuery(`.filed.project=${project}`), [
+      project,
+    ])
+    useHold({ query: preds })
+    return <List eids={queryEids(preds).value} />
+  }
+  ```
 - **Writes.** A batch is applied locally, kept in a durable outbox, and POSTed
   to `/web/apply` (live.ts `post`), attributed to the configured owner by the
   web door using @yaks/api's admission and write handler. A refusal is recorded

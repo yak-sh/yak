@@ -1,7 +1,6 @@
 // One Session status for every browser surface: the host's, from the session
 // row. Entry work is a lazy partition.
-import { useLayoutEffect } from 'preact/hooks'
-import { ent, entrySub, subscriptionState } from '../live.ts'
+import { ent, subscriptionState, useHold } from '../live.ts'
 import { type Ent, standing } from '../types.ts'
 import { type EntryRow, type GraphLog, graphLog } from '../entry_log.ts'
 import { Dot } from './Dot.tsx'
@@ -52,10 +51,7 @@ export let useEntryLog = (
   enabled = true,
   limit?: number,
 ): EntryReadState => {
-  useLayoutEffect(
-    () => enabled && limit == null ? entrySub(eid) : undefined,
-    [eid, enabled, limit == null],
-  )
+  useHold(enabled && limit == null && { entries: eid })
   let base = `.entry.session=${eid}&.order=-entry.seq`
   let page = usePage(
     base,

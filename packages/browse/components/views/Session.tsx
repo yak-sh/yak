@@ -1,5 +1,5 @@
 import { domainBundle } from '../../domain-host.tsx'
-import { useModel, useReference, useRepoUrl } from '../subscriptions.ts'
+import { useJob, useModel, useReference, useRepoUrl } from '../subscriptions.ts'
 import {
   useEffect,
   useLayoutEffect,
@@ -8,14 +8,7 @@ import {
   useState,
 } from 'preact/hooks'
 import { awake, type Ent, idOf, kilo, type LogRow } from '../../types.ts'
-import {
-  ent,
-  findEid,
-  jobOf,
-  mutate,
-  retrySubscription,
-  uuid,
-} from '../../live.ts'
+import { ent, findEid, mutate, retrySubscription, uuid } from '../../live.ts'
 import { graphLog } from '../../entry_log.ts'
 import { slot, tileLink, type TileProps, tileTitle } from '../Tile.tsx'
 import { linkProps, screenTarget } from '../nav.tsx'
@@ -320,7 +313,7 @@ let Fact = ({ k, v }: { k: string; v?: string | null }) =>
 // what the session serves instead of reserving a header column of its own.
 export let SessionSummary = ({ e, gist }: { e: Ent; gist: string }) => {
   let s = e.session!
-  let job = jobOf(e)
+  let job = useJob(e)
   return (
     <Summary>
       {job && <Entity eid={job} view='Inline' />}

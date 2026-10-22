@@ -6,14 +6,14 @@ import {
   boardTally,
   byPriority,
   byWarmth,
-  capable,
-  clientId,
   clientSubscription,
   ent,
   foldFor,
   mutate,
+  myClient,
   statuses,
   subWindow,
+  useHold,
   uuid,
 } from '../../live.ts'
 import { spec, taskChanges } from '../../client.ts'
@@ -217,6 +217,12 @@ export let Board = ({ e }: { e: Ent }) => {
       order = byWarmth(Date.now())
     }
   } catch { /* boardTasks below surfaces the bad query */ }
+  // Double-click a column name to fold the column to a vertical header.
+  // Folds are graph state like camera — a `fold` entity per (client,
+  // board), so they persist, sync across this client's tabs, and agents
+  // can see them. The TUI has no client identity; it just never folds.
+  let me = myClient()
+  useHold(me && { client: me })
   // The ephemeral filter (typed in the titlebar) ANDs into the saved
   // query at read time only — drops and quick-adds still adopt from
   // board.query alone, so a glance never leaks into what a filed task
@@ -240,18 +246,6 @@ export let Board = ({ e }: { e: Ent }) => {
       </Frame>
     )
   }
-  // Double-click a column name to fold the column to a vertical header.
-  // Folds are graph state like camera — a `fold` entity per (client,
-  // board), so they persist, sync across this client's tabs, and agents
-  // can see them. The TUI has no client identity; it just never folds.
-  let me = (() => {
-    if (!capable('canvas')) return null
-    try {
-      return clientId()
-    } catch {
-      return null
-    }
-  })()
   let screen = me ? clientSubscription(me) : undefined
   let row = me ? foldFor(me, e.eid) : null
   if (screen?.state.status == 'failed') {

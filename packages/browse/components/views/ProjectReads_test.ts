@@ -5,15 +5,15 @@ import { parseQuery, resolveRefs } from '../../query.ts'
 import {
   applyLocal,
   cache,
-  dropQuery,
   ent,
   findEid,
-  holdQuery,
   landSub,
   predsToQuery,
+  queryEids,
   querySubscription,
   useRoute,
 } from '../../live.ts'
+import { held } from '../../host_testing.ts'
 import { sessionsOf } from './Dashboard.tsx'
 import '../Entity.tsx'
 
@@ -58,7 +58,8 @@ test('project reads open wire subs and retain hits without cached far rows', () 
       let preds = resolveRefs(parseQuery(query), findEid)
       assertEquals(typeof predsToQuery(preds), 'string')
       let before = frames.length
-      let ids = holdQuery(preds)
+      let free = held({ query: preds })
+      let ids = queryEids(preds)
       try {
         assertEquals(frames.length, before + 1)
         let read = querySubscription(preds)!
@@ -84,7 +85,7 @@ test('project reads open wire subs and retain hits without cached far rows', () 
         assertEquals(ids.value, ['s'])
         assertEquals(querySubscription(preds)?.state.status, 'ready')
       } finally {
-        dropQuery(preds)
+        free()
       }
     }
   } finally {

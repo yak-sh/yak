@@ -1,49 +1,36 @@
-// View lifecycles for live query subscriptions. The board hook opens the
-// shadow set beside the complete cache and closes it with the last view; the
-// entity hooks hold ONE row (and its edges) for as long as a view paints it.
-import { useEffect, useLayoutEffect, useRef } from 'preact/hooks'
+// View lifecycles for live query subscriptions, each a live.ts `useHold`: the
+// board hook holds a board's members while a view draws them; the entity hooks
+// hold ONE row (and its edges) for as long as a view paints it.
 import {
-  boardQuery,
-  boardSub,
   boardTallyLine,
   boardTallyName,
-  dropAgg,
   ent,
   entityRead,
-  holdAgg,
+  jobOf,
+  jobQuery,
+  pinned,
+  pinsOn,
   repoTrace,
   routeName,
-  routeSub,
-  rowsSub,
   type SubscriptionRead,
   subscriptionState,
+  useHold,
 } from '../live.ts'
 import { useQueryResult } from './useQuery.ts'
-import { type Ent, vocab } from '../types.ts'
+import { type Ent, type Pinned, vocab } from '../types.ts'
 
 export let useBoardSub = (e?: Ent): SubscriptionRead | undefined => {
-  let q = String(e?.board?.query ?? '')
-  useLayoutEffect(() => e ? boardSub(e) : undefined, [e?.eid])
-  useEffect(() => {
-    if (e) boardQuery(e)
-  }, [e?.eid, q])
+  useHold(e && { board: e })
   if (!e) return undefined
   let sub = `board:${e.eid}`
   return { sub, state: subscriptionState(sub) }
 }
 
 // The tile's half of a board: its status COUNTS, held for the tile's life and
-// closed by the last one. The aggregate is keyed by the BOARD, so a query edit
-// re-asks under the same name (live.ts aggQuery) rather than churning the hold.
+// closed by the last one. A query edit asks the new line.
 export let useBoardTally = (e?: Ent) => {
-  useEffect(() => {
-    if (!e) return
-    let line = boardTallyLine(e)
-    if (!line) return
-    let name = boardTallyName(e)
-    holdAgg(name, line)
-    return () => dropAgg(name)
-  }, [e?.eid])
+  let line = e && boardTallyLine(e)
+  useHold(e && line && { agg: boardTallyName(e), line })
 }
 
 // The entity a view PAINTS but no enclosing subscription delivers — held for
@@ -53,17 +40,27 @@ export let useBoardTally = (e?: Ent) => {
 // SAYS so, and the row — with the `.edges` rider's edges and their far
 // endpoints — streams in on mount and is evicted with the last view of it.
 export let useEntity = (eid?: string | null, fields?: string) => {
-  useLayoutEffect(() => eid ? routeSub(eid, fields) : undefined, [eid, fields])
+  useHold(eid && { entity: eid, fields })
   return eid ? entityRead(eid, fields) : undefined
+}
+
+// The cards on a canvas, held while a view draws them.
+export let usePinned = (canvas: string): Pinned[] => {
+  useHold(!!canvas && { query: pinsOn(canvas) })
+  return pinned(canvas)
+}
+
+// The task a session is on, held while a view draws it.
+export let useJob = (e: Ent): string | null => {
+  useHold(!!e.session && { query: jobQuery(e.eid) })
+  return jobOf(e)
 }
 
 // The rows of a LIST of entities, in one sub (live.ts rowsSub), never their
 // edges; the joined key means a re-render that moves nothing re-subscribes
 // nothing.
-export let useRows = (eids: string[]) => {
-  let key = [...new Set(eids)].join(',')
-  useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
-}
+export let useRows = (eids: string[]) =>
+  useHold(eids.length > 0 && { rows: eids })
 
 // The canvas List face and the tray's shelf chips paint a pin's target without
 // mounting a Card, so they hold it here.
@@ -121,9 +118,9 @@ export let useModel = (e: Ent): {
   }
 }
 
-// Ownership is a changing path, not a cache assumption. Keep common hops
-// held while discovering the next ones, and release only hops no longer used.
-// Replacing the whole hold on each discovery would repeatedly unload its root.
+// Ownership is a changing path, not a cache assumption. useHold keeps common
+// hops held while discovering the next ones, and releases only hops no longer
+// used.
 let repoFields = 'repo.url,filed.project,comment.target,' +
   'session.actor,memory.scope,entry.session'
 export let useRepoUrl = (e: Ent): string | undefined => {
@@ -134,26 +131,11 @@ export let useRepoUrl = (e: Ent): string | undefined => {
   let trace = vocab.prop('repo', 'url')
     ? repoTrace(ent(e.eid))
     : { eids: [], url: undefined }
-  let held = useRef(new Map<string, () => void>())
-  let key = trace.eids.toSorted().join(',')
-  for (let eid of trace.eids) {
-    subscriptionState(routeName(eid, fields || 'entity.eid'))
-  }
-  useLayoutEffect(() => {
-    let want = new Set(key ? key.split(',') : [])
-    for (let [eid, off] of held.current) {
-      if (want.has(eid)) continue
-      off()
-      held.current.delete(eid)
-    }
-    for (let eid of want) {
-      if (held.current.has(eid)) continue
-      held.current.set(eid, routeSub(eid, fields || 'entity.eid'))
-    }
-  }, [key])
-  useEffect(() => () => {
-    for (let off of held.current.values()) off()
-    held.current.clear()
-  }, [])
+  let holds = trace.eids.map((eid) => ({
+    entity: eid,
+    fields: fields || 'entity.eid',
+  }))
+  for (let h of holds) subscriptionState(routeName(h.entity, h.fields))
+  useHold(...holds)
   return trace.url
 }

@@ -11,7 +11,6 @@ import {
   cache,
   config,
   deps,
-  dropAgg,
   ent,
   landSub,
   problem,
@@ -113,7 +112,7 @@ test('the meta row renders its tally without reaching live', () => {
   config.host = ''
   // Cold: whatever an earlier mount left open, the render below must face an
   // unopened tally and still open nothing.
-  dropAgg('agg:comments')
+  unsubscribe('agg:comments')
   let restore = useRoute(() => {
     throw new Error('a row render reached the transport')
   })

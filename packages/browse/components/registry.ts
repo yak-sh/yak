@@ -46,7 +46,7 @@ import { ago } from './Stamp.tsx'
 import { fields, front } from './fields.tsx'
 import { drafts } from '@yaks/draft/input'
 import { rows } from './hits.ts'
-import { wells } from './wells.ts'
+import { useWell } from './wells.ts'
 import { type Offer, tabOffers } from './offers.ts'
 
 export type Renderer = ComponentRenderer<Ent> & {
@@ -276,7 +276,7 @@ export let ux: Host = {
   when: (at) => ago(at),
   find: rows,
   editing: editOptions,
-  values: (well) => wells[well]?.() ?? [],
+  useValues: useWell,
   get fields() {
     return fields
   },

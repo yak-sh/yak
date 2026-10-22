@@ -4,9 +4,9 @@ import { title, TitleEdit } from '../title.tsx'
 import { Pip } from './Show.tsx'
 import { Id } from './Inline.tsx'
 import { SessionDot } from '../session_status.tsx'
-import { useModel, useReference } from '../subscriptions.ts'
+import { useJob, useModel, useReference } from '../subscriptions.ts'
 import { renderView } from '../registry.ts'
-import { ent, jobOf } from '../../live.ts'
+import { ent } from '../../live.ts'
 
 let Frame = block('div', 'CardTitle', { Text: 'span' })
 let { Text } = Frame
@@ -80,7 +80,7 @@ export let SessionTitle = ({ e }: { e: Ent }) => {
 // holds, else the one it worked, else its own title. Its id is beside it
 // already, and its dot says how the run is doing.
 export let SessionBarTitle = ({ e }: { e: Ent }) => {
-  let job = jobOf(e)
+  let job = useJob(e)
   let worked = useReference(e.refs.find((r) => r.type == 'worked')?.child)
     .value
   let task = job ? ent(job) : worked

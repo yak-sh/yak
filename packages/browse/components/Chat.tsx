@@ -4,9 +4,9 @@
 // conversation is with it: a message to it begins a native session wearing it
 // on the host's default model (D-130780), as `yak session new --persona`
 // does. On any other document the chat plan picks a provider.
-import { useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { useRef, useState } from 'preact/hooks'
 import { sessionFrames } from '../client.ts'
-import { mutate, myActor, rowsSub, uuid } from '../live.ts'
+import { mutate, myActor, useHold, uuid } from '../live.ts'
 import { catalog, type Provider, usingOf } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
 import { block, Field } from '@yaks/ui'
@@ -64,8 +64,7 @@ export let ReferenceList = (
     held?: boolean
   },
 ) => {
-  let key = held ? '' : items.map((i) => i.eid).join(',')
-  useLayoutEffect(() => rowsSub(key ? key.split(',') : []), [key])
+  useHold(!held && items.length > 0 && { rows: items.map((i) => i.eid) })
   return items.length
     ? (
       <References>

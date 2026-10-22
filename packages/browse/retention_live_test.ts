@@ -5,17 +5,19 @@ import {
   applyLocal,
   cache,
   census,
-  dropQuery,
   ent,
-  holdQuery,
   landSub,
+  queryEids,
   restore,
-  subscribe,
   subscriptionState,
   unsubscribe,
   useRoute,
 } from './live.ts'
 import { parseQuery } from './query.ts'
+import { held } from './host_testing.ts'
+
+// A line held under a name of the test's own, by a mounted owner.
+let line = (sub: string, q: string) => held({ agg: sub, line: q })
 
 let changes = (eid: string) => [
   { eid, name: 'entity', comp: { eid, num: 1 } },
@@ -42,12 +44,13 @@ test('reopen paints retained rows before sending; confirmation removes stale hit
       assertEquals(ent('a').doc?.title, 'a')
       assertEquals(subscriptionState(sub), { status: 'loading' })
     })
-    let ids = holdQuery(preds)
+    let free = held({ query: preds })
+    let ids = queryEids(preds)
     assertEquals(sent, true)
     assertEquals(ids.peek().sort(), ['a', 'b'])
     // Test transport is shadow; a real non-shadow subscription is what owns
     // eviction. subscribe uses the same prime, without the legacy shadow flag.
-    subscribe('confirm', '.comment.target=card')
+    let confirm = line('confirm', '.comment.target=card')
     landSub({ sub: 'confirm', replace: true, changes: changes('b') })
     assertEquals(ent('a').doc, undefined)
     assertEquals(ent('b').doc?.title, 'b')
@@ -55,8 +58,8 @@ test('reopen paints retained rows before sending; confirmation removes stale hit
     useRoute(() => {})
     landSub({ sub, replace: true, changes: changes('b') })
     assertEquals(subscriptionState(sub).status, 'ready')
-    dropQuery(preds)
-    unsubscribe('confirm')
+    free()
+    confirm()
   } finally {
     useRoute(route)
     cache.value = {}
@@ -85,7 +88,8 @@ test('ownership-only retention does not expand a confirmed bounded query', () =>
   try {
     cache.value = {}
     landSub({ sub: 'other-holder', replace: true, changes: changes('a') })
-    let ids = holdQuery(preds)
+    let free = held({ query: preds })
+    let ids = queryEids(preds)
     landSub({ sub, replace: true, window: { limit: 1 }, changes: changes('b') })
     assertEquals(ids.peek(), ['b'])
     unsubscribe('other-holder')
@@ -95,7 +99,7 @@ test('ownership-only retention does not expand a confirmed bounded query', () =>
     applyLocal(changes('a'))
     assertEquals(census.peek() === before, true)
     assertEquals(ids.peek(), ['b'])
-    dropQuery(preds)
+    free()
   } finally {
     useRoute(route)
     cache.value = {}
@@ -113,7 +117,7 @@ test('bounded confirmation does not invalidate retained rows outside its page', 
       changes: changes('comment'),
     })
     unsubscribe('card-comments')
-    subscribe('board:hot', '.order=hot')
+    let hot = line('board:hot', '.order=hot')
     landSub({
       sub: 'board:hot',
       replace: true,
@@ -122,7 +126,7 @@ test('bounded confirmation does not invalidate retained rows outside its page', 
     })
     assertEquals(cache.peek().comment?.doc?.title, 'comment')
     assertEquals(ent('comment').doc?.title, 'comment')
-    unsubscribe('board:hot')
+    hot()
   } finally {
     useRoute(route)
     cache.value = {}
@@ -137,7 +141,7 @@ test('full confirmation drops removed components without blanking retained rows'
     landSub({ sub: 'route:full', replace: true, changes: changes('full') })
     applyLocal([{ eid: 'full', name: 'doc', comp: { body: 'removed' } }])
     unsubscribe('route:full')
-    subscribe('route:full', 'id=full')
+    let full = line('route:full', 'id=full')
     assertEquals(ent('full').comment?.target, 'card')
     landSub({
       sub: 'route:full',
@@ -147,7 +151,7 @@ test('full confirmation drops removed components without blanking retained rows'
     assertEquals(ent('full').doc?.title, 'full')
     assertEquals(ent('full').doc?.body, undefined)
     assertEquals(ent('full').comment, undefined)
-    unsubscribe('route:full')
+    full()
   } finally {
     useRoute(route)
     cache.value = {}

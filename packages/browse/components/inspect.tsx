@@ -4,7 +4,7 @@
 import { type ComponentChild, h } from 'preact'
 import { define, prepared, resolve } from '@yaks/render'
 import { signal } from '@preact/signals'
-import { useLayoutEffect, useMemo } from 'preact/hooks'
+import { useMemo } from 'preact/hooks'
 import { parse } from '@yaks/query'
 import { all, schemaPages } from '@yaks/inspect'
 import { inspectViews as memoryViews } from '@yaks/memory/views'
@@ -14,16 +14,13 @@ import type { Answer, Ask, Asks, Bundle, Io } from '@yaks/inspect'
 import {
   aggRead,
   apply,
-  dropAgg,
-  dropQuery,
   ent,
-  holdAgg,
-  holdAggOnce,
-  holdQuery,
+  type Hold,
   queryEids,
   querySubscription,
   row,
   subscriptionState,
+  useHold,
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
@@ -69,17 +66,13 @@ let plan = (a: Ask): Plan => {
 
 let aggName = (p: Plan) => `inspect:${p.once ? 'once' : 'live'}:${p.line}`
 
-// Hold what an ask needs while its view is mounted.
-let hold = (p: Plan): () => void => {
-  if (p.error) return () => {}
-  if (p.agg) {
-    let name = aggName(p)
-    p.once ? holdAggOnce(name, p.line) : holdAgg(name, p.line)
-    return () => dropAgg(name)
-  }
-  holdQuery(p.preds!, p.line)
-  return () => dropQuery(p.preds!)
-}
+// What an ask holds while its view is mounted.
+let hold = (p: Plan): Hold | undefined =>
+  p.error
+    ? undefined
+    : p.agg
+    ? { agg: aggName(p), line: p.line, once: p.once }
+    : { query: p.preds!, source: p.line }
 
 // What an ask's answer is now: read in the render, so a new answer paints.
 let answer = (p: Plan): Answer => {
@@ -99,7 +92,7 @@ let answer = (p: Plan): Answer => {
     }
   }
   let state = querySubscription(p.preds!, p.line)?.state
-  let rows = queryEids(p.preds!, p.line).value.map(held)
+  let rows = queryEids(p.preds!).value.map(held)
     .filter((b): b is Bundle => !!b)
   return {
     rows,
@@ -114,10 +107,7 @@ let useAnswers = (asks: Asks): Record<string, Answer> => {
     () => Object.entries(asks).map(([name, a]) => [name, plan(a)] as const),
     [key],
   )
-  useLayoutEffect(() => {
-    let drops = plans.map(([, p]) => hold(p))
-    return () => drops.forEach((drop) => drop())
-  }, [key])
+  useHold(...plans.map(([, p]) => hold(p)))
   return Object.fromEntries(plans.map(([name, p]) => [name, answer(p)]))
 }
 

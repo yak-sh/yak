@@ -9,9 +9,36 @@
 import type { Bundle } from '@yaks/graph'
 import { matcher, type MatchOpts } from '@yaks/match'
 import type { Frame, Socket } from '@yaks/sync'
-import { cache, useSocket } from './live.ts'
+import { type ComponentChild, h, render } from 'preact'
+import { act } from 'preact/test-utils'
+import { parseHTML } from 'linkedom'
+import { cache, type Hold, useHold, useSocket } from './live.ts'
 import { tick } from './testing.ts'
 import { vocab } from './types.ts'
+
+/** Mount a component that holds `holds`, as a view drawing them would; the
+ * returned function unmounts it, which releases them. */
+let page: Document | undefined
+export let held = (...holds: Hold[]): () => void => {
+  let document = page ??= parseHTML('<main></main>').document
+  let root = document.createElement('div') as unknown as Element
+  let Owner = () => {
+    useHold(...holds)
+    return null
+  }
+  let mounted = (vnode: ComponentChild) => {
+    let g = globalThis as { document?: unknown }
+    let prior = g.document
+    g.document ??= document
+    try {
+      act(() => render(vnode, root))
+    } finally {
+      g.document = prior
+    }
+  }
+  mounted(h(Owner, null))
+  return () => mounted(null)
+}
 
 /** The rows a server answers a line with, in the order it takes a window in:
  * @yaks/match reads the line over `rows`, and its parity tests hold it to

@@ -18,9 +18,9 @@ import {
   relations,
   resolveGen,
   resolvingId,
-  routeSub,
   serverEid,
   submit,
+  useHold,
 } from '../live.ts'
 import {
   comps,
@@ -394,8 +394,7 @@ let opened = (applied: Bundle[], b: Batch, inEid?: string) => {
 }
 
 export let New = ({ at }: { at: At }) => {
-  useLayoutEffect(() => at.in ? routeSub(at.in) : undefined, [at.in])
-  useLayoutEffect(() => at.like ? routeSub(at.like) : undefined, [at.like])
+  useHold(at.in && { entity: at.in }, at.like && { entity: at.like })
   let inEid = eidOf(at.in), likeEid = eidOf(at.like ?? at.in)
   let form = useRef<HTMLFormElement>(null)
   let [refused, setRefused] = useState<Said>()
