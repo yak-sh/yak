@@ -4,7 +4,7 @@ import { and, eq, list, mask, parse, want } from '@yaks/query/core'
 import { matcher, rows as matchRows } from '@yaks/match'
 import type { Vocab } from '@yaks/vocab'
 import { type Context, context, during, live, peek, scope } from '@yaks/trace'
-import { after, each } from '@yaks/fp'
+import { after, each, isPromise } from '@yaks/fp'
 import type { Bundle, Eid } from './bundle.ts'
 import type {
   Query,
@@ -40,11 +40,14 @@ export type Reader =
     use: (plugin: Plugin) => void
   }
 
-/** Retain the caller's activity context across asynchronous read hooks. */
+/** Retain the caller's activity context across asynchronous read hooks. A
+ * value already here runs on in the caller's own context, so a synchronous
+ * read enters no scope. */
 export let continuing = <A, B>(
   value: A | Promise<A>,
   run: (value: A) => B,
 ): B | Promise<Awaited<B>> => {
+  if (!isPromise(value)) return run(value)
   let at = context()
   return after(value, at ? (value) => scope(at, () => run(value)) : run)
 }
