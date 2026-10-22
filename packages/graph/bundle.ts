@@ -287,25 +287,65 @@ export let coalesced = (bundles: Bundle[]): Bundle[] => {
   return batch.read()
 }
 
+// Places as a reader counts them, from 1, a run of three or more said by its
+// ends: [4, 5, 6, 9] is '4–6, 9'.
+let places = (ns: number[]): string =>
+  ns.reduce<number[][]>((runs, n) => {
+    let run = runs.at(-1)
+    if (run && run.at(-1)! + 1 == n) run.push(n)
+    else runs.push([n])
+    return runs
+  }, []).map((run) =>
+    run.length > 2 ? `${run[0]}–${run.at(-1)}` : run.join(', ')
+  ).join(', ')
+
 /**
  * The bundles, refused unless they form a batch: an array whose every
  * member is an object whose `entity` names an eid. Every door hands `apply()`
  * what arrived, and the first phase reads each bundle's eid, so the shape is
- * refused here, before anything reads it, naming the bundle by its place.
+ * refused here, before anything reads it. The refusal names every bundle
+ * without one, counted from 1 as a reader counts them, and says what the
+ * first holds, so a caller fixes them all at once rather than one per try,
+ * and steers a new entity to a `$name`, never an eid made up by hand.
+ *
+ * ```ts
+ * import { assertThrows } from '@std/assert'
+ * assertThrows(
+ *   () => formed([{ entity: { eid: '$a' } }, { edge: {} }, { edge: {} }]),
+ *   Error,
+ *   'bundles 2, 3 of 3 have no entity (bundle 2 holds edge)',
+ * )
+ * ```
  */
 export let formed = (bundles: unknown): Bundle[] => {
   if (!Array.isArray(bundles)) {
     throw new Misfit('a batch is an array of bundles')
   }
-  bundles.forEach((b, i) => {
+  let missing = bundles.flatMap((b, i) => {
     let eid = b && typeof b == 'object' ? b.entity?.eid : undefined
-    if (typeof eid != 'string' || (!eid && b.$prune !== true)) {
-      throw new Misfit(
-        `bundle ${i} needs an entity: {entity: {eid}} — an eid you mint, or ` +
-          `'$name' to have the graph mint one`,
-      )
-    }
+    return typeof eid != 'string' || (!eid && b.$prune !== true) ? [i + 1] : []
   })
+  if (missing.length) {
+    let first = bundles[missing[0] - 1]
+    let holds = first && typeof first == 'object'
+      ? Object.keys(first).filter((k) => k != 'entity')
+      : []
+    let many = missing.length > 1
+    throw new Misfit(
+      `${many ? 'bundles' : 'bundle'} ${
+        places(missing)
+      } of ${bundles.length} ` +
+        `${many ? 'have' : 'has'} no entity` +
+        (holds.length
+          ? ` (${many ? `bundle ${missing[0]}` : 'it'} holds ${
+            holds.join(', ')
+          })`
+          : '') +
+        `: a new entity is {entity: {eid: '$name'}}, a name of your own, one ` +
+        `per entity, whose eid the graph makes (an edge's from its ends) and ` +
+        `the answer gives beside its $alias; an existing one is its eid or name`,
+    )
+  }
   return bundles
 }
 

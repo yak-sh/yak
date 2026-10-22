@@ -234,7 +234,7 @@ test('a bundle that names no entity is refused by its place, and lands nothing',
           bad as unknown as Bundle,
         ]),
       Refused,
-      'bundle 1 needs an entity',
+      'bundle 2 of 2 has no entity',
     )
   }
   assertEquals(one.get(['b1']), [])

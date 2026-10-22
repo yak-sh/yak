@@ -481,7 +481,7 @@ test('a refusal is the tool error the agent reads, not a broken call', async () 
     return String(out.content[0].text)
   }
   let nobody = await said([{ book: {} }])
-  assert(nobody.includes('bundle 0 needs an entity'), nobody)
+  assert(nobody.includes('bundle 1 of 1 has no entity'), nobody)
   // A property nobody declared names the properties that do exist, and where
   // to read them (T-34277).
   let colour = await said([{ entity: { eid: 'b1' }, book: { colour: 'red' } }])
