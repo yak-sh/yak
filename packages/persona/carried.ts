@@ -50,17 +50,19 @@ export let asks = (e: Bundle): Asks => ({
   out: `.${EDGE}.from=${e.entity.eid}&*&.limit=${EDGES}`,
 })
 
-// The owner of every carried document's `Edit` state on one page, so the
-// press that writes a new document opens its title before it is drawn.
-let owner = (from: string) => `carried/${from}`
+// The owner of each list's carried documents' `Edit` state on one page, so
+// the press that writes a new document opens its title before it is drawn.
+// Each list owns its own: a document carried in both shows in both, and a
+// click types into the one clicked, not both, whose focus would fight.
+let owner = (from: string, tag: string) => `carried/${from}/${tag}`
 
 /** One carried document: its title over its body, each typed into on a
  * click. */
 let Carried = (
-  { io, end, from }: { io: Io; end: Bundle; from: string },
+  { io, end, from, tag }: { io: Io; end: Bundle; from: string; tag: string },
 ): JSX.Element => {
   let eid = end.entity.eid
-  let titled = at(owner(from), eid, 'doc', 'title')
+  let titled = at(owner(from, tag), eid, 'doc', 'title')
   let edit = useEdit(eid, 'doc', 'title', {
     at: titled,
     value: str(end, 'doc', 'title'),
@@ -85,7 +87,7 @@ let Carried = (
       e: end,
       comp: 'doc',
       prop: 'body',
-      at: at(owner(from), eid, 'doc', 'body'),
+      at: at(owner(from, tag), eid, 'doc', 'body'),
       click: true,
     }),
   )
@@ -125,7 +127,7 @@ let List = (
     .filter((b): b is Bundle => !!b?.doc)
   let write = () => {
     let eid = mint()
-    io.set(put(at(owner(from), eid, 'doc', 'title'), { open: true }))
+    io.set(put(at(owner(from, tag), eid, 'doc', 'title'), { open: true }))
     void io.apply(written(from, tag, links, eid))
   }
   return h(
@@ -138,7 +140,9 @@ let List = (
       h(ui.Section.Count, {}, String(docs.length)),
     ),
     h(ui.Section.Sub, {}, sub),
-    ...docs.map((end) => h(Carried, { key: end.entity.eid, io, end, from })),
+    ...docs.map((end) =>
+      h(Carried, { key: end.entity.eid, io, end, from, tag })
+    ),
     !docs.length
       ? links.length && !ends?.ready
         ? h(ui.Loading, {})
