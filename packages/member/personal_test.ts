@@ -47,7 +47,9 @@ let fixture = () => {
     },
     { entity: { eid: 'bob' }, person: { name: 'Bob' } },
     { entity: { eid: 'private' }, draft: { by: 'alice', text: 'unsent' } },
+    { entity: { eid: 'burned' }, draft: { by: 'alice', text: 'torn up' } },
   ])
+  g.apply([{ entity: { eid: 'burned' }, $delete: true }])
   g.use(personal(vocab, { draft: 'by', preference: 'entity' }))
   return g
 }
@@ -97,6 +99,17 @@ test('native answers mask references to foreign private entities', () =>
     [{
       entity: { eid: 'bob' },
       person: { name: 'Bob', friend: null },
+    }],
+  ))
+test('native answers name a deleted entity, which holds nothing anybody owns', () =>
+  equal(
+    read.answer([{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: 'burned' },
+    }], { person: 'bob', native: true }),
+    [{
+      entity: { eid: 'bob' },
+      person: { name: 'Bob', friend: 'burned' },
     }],
   ))
 test('native answers preserve references to public people', () =>

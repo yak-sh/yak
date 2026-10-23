@@ -243,9 +243,11 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
           ),
         ]
         if (!targets.length) return visible
+        // A deleted target holds nothing, so nobody owns it and a reference
+        // names it, as the store's scoped reads do (@yaks/sql README).
         return after(tx.get(targets, comps), (rows) => {
           let allowed = new Set(
-            rows.filter((b) => !dead(b) && !foreign(b, opts.person)).map((b) =>
+            rows.filter((b) => !foreign(b, opts.person)).map((b) =>
               b.entity.eid
             ),
           )
