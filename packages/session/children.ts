@@ -496,12 +496,13 @@ export let deliverChild = async (g: Graph, child: Eid): Promise<void> => {
     await done(g, task.entity.eid)
   let last = tail ?? await newestOf(g, child)
   if (!last) return
-  // A parent's own completion is already known to it. Fall back to the
+  // A parent's own completion is already known to it: the completion came
+  // through it (`via`; `by` is the actor it works for). Fall back to the
   // ordinary child receipt identity: a new child response must still arrive,
   // while an already delivered response must not echo on completion/restart.
   let announceTask = ready &&
     (taskStatus(g.vocab, task!) != 'done' ||
-      comp(task, 'completed')?.by != String(link.parent))
+      comp(task, 'completed')?.via != String(link.parent))
   let receipt = (last: Bundle) =>
     derivedEid(
       announceTask

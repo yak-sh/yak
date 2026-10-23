@@ -81,7 +81,7 @@ export let skillTools = (
       },
       readOnly: true,
       run: async (call) => {
-        let session = who(call)?.by
+        let session = who(call)?.via
         if (!session) throw new Refused('skill_read needs a session')
         let title = String(argsOf(call).skill)
         let { graphSkill, skillLocation } = await import('@yaks/persona/skills')

@@ -139,7 +139,7 @@ test('native skill loading attributes graph instructions without a machine', asy
     let [inner] = await exact.g.get([
       derivedEid(`harness graph tool ${call.entity.eid}`),
     ])
-    assertEquals((inner.created as Comp).by, 'session')
+    assertEquals((inner.created as Comp).via, 'session')
     assertEquals(
       await skillItems(exact.g, {
         session: 'session',

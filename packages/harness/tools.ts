@@ -76,9 +76,8 @@ export let graphTools = (
     // and `via` the session itself (@yaks/session `speaking`), so the runner
     // lands what the function answered in that actor's name.
     run: async (args: Record<string, unknown>, call) => {
-      let [asking] = call?.session ? await g.get([call.session]) : []
-      let actor = asking
-        ? await speaking(g, asking)
+      let actor = call?.session
+        ? await speaking(g, { entity: { eid: call.session } })
         : opts.actor
         ? { by: opts.actor.eid }
         : null
