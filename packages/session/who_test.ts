@@ -90,7 +90,7 @@ test('an id that names no run is refused, never taken for a name', async () => {
   await assertRejects(() => found('S-404'), Refused, 'S-404 names nothing')
 })
 
-// Runs of every kind, and who each works for.
+// Runs of every kind, and the actor each works as.
 let works = (() => {
   let words = loadVocab([sessionDoc, spine, {
     $defs: {
@@ -112,16 +112,23 @@ let works = (() => {
     { entity: { eid: 'lab' }, project: {} },
     { entity: { eid: 'common' }, persona: { home: 'tasks' } },
     { entity: { eid: 'oracle' }, persona: {} },
-    { entity: { eid: 'named' }, session: { actor: 'p1', persona: 'common' } },
-    { entity: { eid: 'filed' }, session: { persona: 'common' } },
-    { entity: { eid: 'filed' }, filed: { project: 'lab' } },
-    { entity: { eid: 'worn' }, session: { persona: 'common' } },
+    { entity: { eid: 'worn' }, session: { actor: 'p1', persona: 'common' } },
+    { entity: { eid: 'worn' }, filed: { project: 'lab' } },
     { entity: { eid: 'homeless' }, session: { persona: 'oracle' } },
+    { entity: { eid: 'named' }, session: { actor: 'p1' } },
+    { entity: { eid: 'named' }, filed: { project: 'lab' } },
+    { entity: { eid: 'filed' }, session: {}, filed: { project: 'lab' } },
+    { entity: { eid: 'filed' }, spawned: { parent: 'worn' } },
     { entity: { eid: 'child' }, session: {}, spawned: { parent: 'worn' } },
     {
       entity: { eid: 'grandchild' },
       session: {},
       spawned: { parent: 'child' },
+    },
+    {
+      entity: { eid: 'forked' },
+      session: { persona: 'oracle' },
+      spawned: { parent: 'worn' },
     },
     { entity: { eid: 'nobody' }, session: {} },
   ], { trusted: true })
@@ -130,12 +137,13 @@ let works = (() => {
 
 for (
   let [run, by] of [
+    ['worn', 'common'],
+    ['homeless', 'oracle'],
     ['named', 'p1'],
     ['filed', 'lab'],
-    ['worn', 'tasks'],
-    ['homeless', 'oracle'],
-    ['child', 'tasks'],
-    ['grandchild', 'tasks'],
+    ['child', 'common'],
+    ['grandchild', 'common'],
+    ['forked', 'oracle'],
   ]
 ) {
   test(`${run} writes by ${by}, through itself`, async () => {

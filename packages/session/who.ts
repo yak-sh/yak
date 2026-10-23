@@ -14,13 +14,16 @@
 //
 // The same sequence resolves an HTTP request. A request names which run it
 // speaks for (in `x-via`, the fleet's own header for the instrument behind a
-// write), and what it writes is attributed `by` the actor that run works for
-// and `via` the run itself. An actor is one of a handful (a project, a
-// persona, a person) and never a session: there are thousands of sessions,
-// and the owner's word is that sessions never go in `by` (M-31958). A run
-// works for the actor it names (`session.actor`), else the project it is
-// filed in, else its persona's home project, else its persona, else whoever
-// the session that spawned it works for (`actorOf`).
+// write), and what it writes is attributed `by` the actor that run works as
+// and `via` the run itself. An actor is one of a handful, and never a
+// session: there are thousands of sessions, and the owner's word is that
+// sessions never go in `by` (M-31958). The actor is the session's persona; the
+// owner, verbatim: "the persona should always be the actor. it used to be the
+// project. i was saying i think actually the persona is the right one", and
+// "i guess you could have fallbacks still, but it should be rare to have
+// agents with no persona". So a run works as its persona, else the actor it
+// names (`session.actor`), else the project it is filed in, else whatever the
+// session that spawned it works as (`actorOf`).
 //
 // A session created from the harness's own id takes its eid from that id
 // (`sessionEid`): the id itself where it is a uuid, as Claude Code's and
@@ -167,16 +170,18 @@ let DEPTH = 8
 let str = (v: unknown): string => typeof v == 'string' ? v : ''
 
 /**
- * The actor a session works for: the one it names (`session.actor`), else the
- * project it is filed in (`filed.project`), else its persona's home project,
- * else its persona, else whoever the session that spawned it works for. Never
- * a session; `undefined` where nothing names one.
+ * The actor a session works as: its persona, else the actor it names
+ * (`session.actor`), else the project it is filed in (`filed.project`), else
+ * whatever the session that spawned it works as, so a subagent works as the
+ * persona it runs under. Never a session; `undefined` where nothing names one.
+ * A session with no persona anywhere up its line should be rare, and a door
+ * that starts one is worth fixing rather than falling back for.
  */
 export let actorOf = async (
   g: Pick<Graph, 'get' | 'vocab'>,
   session: Eid,
 ): Promise<Eid | undefined> => {
-  let has = (comp: string, prop: string) => !!g.vocab.prop(comp, prop)
+  let filed = !!g.vocab.prop('filed', 'project')
   let comps = [SESSION, 'filed', 'spawned'].filter((c) => g.vocab.comp(c))
   let seen = new Set<Eid>()
   for (let at: Eid = session; at && !seen.has(at) && seen.size < DEPTH;) {
@@ -184,23 +189,17 @@ export let actorOf = async (
     let [s] = await g.get([at], comps)
     if (!s?.[SESSION] || s[TOMBSTONE] != null) return
     let named = s[SESSION] as Comp
-    let project = has('filed', 'project')
-      ? str((s.filed as Comp | undefined)?.project)
-      : ''
-    let worn = str(named.persona)
-    let home = worn && has('persona', 'home')
-      ? str(((await g.get([worn], ['persona']))[0]?.persona as Comp)?.home)
-      : ''
-    let by = str(named.actor) || project || home || worn
+    let project = filed ? str((s.filed as Comp | undefined)?.project) : ''
+    let by = str(named.persona) || str(named.actor) || project
     if (by) return by as Eid
     at = str((s.spawned as Comp | undefined)?.parent) as Eid
   }
 }
 
 /**
- * The actor a transcript writes as: `by` the actor it works for
+ * The actor a transcript writes as: `by` the actor it works as
  * ({@link actorOf}), the identity that survives a `/clear`, and `via` the run
- * itself. A session that works for nobody leaves `by` unsaid rather than
+ * itself. A session that works as nobody leaves `by` unsaid rather than
  * standing in it.
  */
 export let speaking = async (

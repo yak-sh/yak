@@ -82,10 +82,11 @@ handed back with the memory you read.
 Each entity in a batch is stamped as the writer its own first bundle names in
 `$actor`, else the batch's writer (`writers()` in packages/graph/stamp.ts;
 `signed()` sets one), and the journal records one transaction per writer. `by`
-names the actor, one of a handful (a project, a persona, a person), and `via`
-the instrument, a session among them: a session's writes are `by` the actor it
-works for and `via` itself (`speaking()` in packages/session/who.ts). A session
-is never in `by`. The owner, verbatim (M-31958): "yeah, we can't have sessions
+names the actor, one of a handful, and `via` the instrument, a session among
+them: a session's writes are `by` its persona and `via` itself (`speaking()` in
+packages/session/who.ts, with its rare fallbacks). The owner, verbatim: "the
+persona should always be the actor". A session is never in `by`. The owner,
+verbatim (M-31958): "yeah, we can't have sessions
 as actors. then it will look as if there are thousands of actors in the system
 when there is really a handful". A person is the writer only of what that
 person typed or asked for: "i think "closing the door" is probably a fleet-wide

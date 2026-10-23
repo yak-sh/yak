@@ -632,11 +632,12 @@ managed run's session is written first under an eid of its own, which
 
 `sessionFor()` resolves an entity ID, a human-readable session ID, or a harness
 session ID to the same entity. `speaking()` returns the actor a session writes
-as: `by` the actor it works for (`actorOf()`), and `via` the session itself. A
-session works for the actor it names (`session.actor`), else the project it is
-filed in, else its persona's home project, else its persona, else whoever the
-session that spawned it works for. A session is never an actor: one that works
-for nobody leaves `by` unsaid.
+as: `by` the actor it works as (`actorOf()`), and `via` the session itself.
+The actor is the session's persona, else the actor it names (`session.actor`),
+else the project it is filed in, else whatever the session that spawned it
+works as, so a subagent works as the persona it runs under. A session with no
+persona anywhere up its line should be rare. A session is never an actor: one
+that works as nobody leaves `by` unsaid.
 
 The `@yaks/session/graph` entry point exports `authenticate()`, for every door
 over the graph: an HTTP request and a `yak` command alike. It reads the session
