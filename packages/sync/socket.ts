@@ -15,6 +15,11 @@
 // holding and did not hear about again is reported as gone. The relayed values
 // this side is saying are said again first, since the server held them under
 // the connection that closed.
+//
+// So a drop the wire comes back from is recovered, not lost: once the socket
+// is open again and every subscription has been answered again (the set as it
+// now stands, or a refusal, which is said on its own), nothing was missed.
+// Only a drop that has not recovered `most` after it began is a failure.
 
 import type { Bundle, Eid } from '@yaks/graph'
 import { decode, stringify, unpack } from '@yaks/vocab/wire'
@@ -116,7 +121,8 @@ export type WireOpts = {
   /** the reconnect delay in ms after a failed attempt, doubling to `most`
    * (default: 250); a connection that held this long is retried at once */
   wait?: number
-  /** the longest reconnect delay in ms (default: 30_000) */
+  /** the longest reconnect delay in ms, and how long an outage may go
+   * unresumed before it is reported (default: 30_000) */
   most?: number
   /** each frame, once the reset bookkeeping has been done for it */
   land: (frame: Frame) => unknown | Promise<unknown>
@@ -159,28 +165,22 @@ export type Wire = {
   close: () => void
 }
 
-/** An open socket that closed under this wire and opened again: what closed
- * it (its close code, when it gave one) and how long it was down. Said once it
- * reopens, so a report about it reaches a server that is back. A server going
- * away on purpose (`1001`: a restart, a proxy reloading) that is back within
- * five seconds is the system working, and is never said. */
+/** A connection that closed under this wire and has not resumed `most` after
+ * it began: what closed it (its close code, when it gave one) and how long it
+ * has been down. Resumed is open again with every subscription answered again,
+ * so a drop that resumes in time, whatever its close code (a restart, a proxy
+ * reloading, a laptop waking), is the system working and is never said. Said
+ * once per outage, while it lasts. */
 export class Dropped extends Error {
   constructor(url: string, code: number | undefined, ms: number) {
     super(
-      `${url} closed${code ? ` (${code})` : ''} and reopened after ${
+      `${url} closed${code ? ` (${code})` : ''} and has not resumed after ${
         (ms / 1000).toFixed(1)
       } s`,
     )
     this.name = 'Dropped'
   }
 }
-
-// Whether a drop is the system working rather than failing: the far side went
-// away on purpose (close code 1001: a restart, a proxy reloading) and was back
-// within five seconds. An abnormal close, or an outage that lasts, is a
-// failure.
-let expected = (code: number | undefined, ms: number): boolean =>
-  code == 1001 && ms <= 5000
 
 /** The next reconnect delay: double it, but never past the ceiling. */
 export let backoff = (wait: number, most: number): number =>
@@ -218,10 +218,9 @@ export let wire = (opts: WireOpts): Wire => {
   let wait = first
   let retrying = false // the one timer — never a second
   let closed = false
-  // Every unexpected drop is reported once the socket opens again
-  // (`Dropped`), and an outage the backoff reaches its ceiling in is reported
-  // as it goes on, once, until a connection opens again.
-  let told = false
+  // The outage under way, from the first close until the wire resumes: an
+  // open socket closing, or an attempt failing, starts one, and one still
+  // here `most` later is said (`Dropped`).
   let down: { at: number; code?: number } | undefined
   let hearing = new Set<(open: boolean) => void>()
   let heard = (open: boolean) => {
@@ -281,6 +280,25 @@ export let wire = (opts: WireOpts): Wire => {
     }, 16)
   }
 
+  // An outage still under way `most` after it began is a failure, said once.
+  let overdue = (outage: { at: number; code?: number }) =>
+    timer(() => {
+      if (down !== outage || closed) return
+      let ms = agreed.read() - outage.at
+      opts.report(new Dropped(wsUrl(opts.url), outage.code, ms))
+    }, most)
+
+  // Open, and every query answered since, with the set as it now stands or a
+  // refusal: the outage is over, and no change in it was missed. A raw feed
+  // has no set to answer with, and holds nothing up.
+  let resume = () => {
+    if (!down || socket?.readyState != OPEN) return
+    for (let id of resetting) {
+      if (asks.get(id) !== true && !refused.has(id)) return
+    }
+    down = undefined
+  }
+
   // A frame, with the reopen bookkeeping done: a reset frame reports whatever
   // the client was holding and did not hear about again as gone, and every
   // frame keeps the membership set current so the next reset can do the same.
@@ -290,6 +308,7 @@ export let wire = (opts: WireOpts): Wire => {
     if (frame.refused) {
       if (asks.has(frame.id)) {
         refused.add(frame.id)
+        resume()
         return opts.land(frame)
       }
       // A malformed or relay request may have no subscription id at all.
@@ -312,6 +331,7 @@ export let wire = (opts: WireOpts): Wire => {
     }
     for (let eid of arrived) held.add(eid)
     for (let eid of gone) held.delete(eid)
+    resume()
     return opts.land({ ...frame, gone })
   }
 
@@ -341,14 +361,6 @@ export let wire = (opts: WireOpts): Wire => {
       opened = agreed.read()
       waiting = []
       wait = first // the server is reachable: retry promptly after the next drop
-      told = false
-      if (down) {
-        let ms = agreed.read() - down.at
-        if (!expected(down.code, ms)) {
-          opts.report(new Dropped(wsUrl(opts.url), down.code, ms))
-        }
-        down = undefined
-      }
       agreed.reset()
       rounds = 0
       probe()
@@ -362,6 +374,7 @@ export let wire = (opts: WireOpts): Wire => {
           stringify({ subscribe: query, id, acks: true, frames: true }),
         )
       }
+      resume() // at once, when nothing is asked
       heard(true)
     })
     let inbox: Frame[] = []
@@ -442,24 +455,19 @@ export let wire = (opts: WireOpts): Wire => {
         let next = pending
       } else message(e.data)
     })
-    s.addEventListener('error', (e) => {
-      if (told || wait < most) return
-      told = true
-      let why = (e as ErrorEvent).message || 'the connection failed'
-      opts.report(new Error(`${wsUrl(opts.url)}: ${why}; still reconnecting`))
-    })
     s.addEventListener('close', (e) => {
       if (socket != s) return
       socket = null
-      // A connection that never opened is a retry failing, not a drop.
-      if (opened !== undefined) {
-        down ??= { at: agreed.read(), code: (e as CloseEvent).code }
-      }
+      let begun = down
+        ? undefined
+        : { at: agreed.read(), code: (e as CloseEvent).code }
+      down ??= begun
       stopClock()
       waiting = []
       inbox = []
       // The next connection is on its way before the page hears of the loss.
       retry(opened !== undefined && agreed.read() - opened >= first)
+      if (begun) overdue(begun)
       for (let id of asks.keys()) {
         if (!refused.has(id)) opts.pending?.(id)
       }
@@ -487,6 +495,7 @@ export let wire = (opts: WireOpts): Wire => {
       members.delete(id)
       resetting.delete(id)
       send({ unsubscribe: id })
+      resume()
     },
     relay: (bundles) => {
       if (!bundles.length || !socket || socket.readyState != OPEN) return

@@ -8,8 +8,8 @@
 import { test } from '@yaks/testing'
 import { assert, assertEquals } from '@std/assert'
 import { type Bundle, dead, Refused } from '@yaks/graph'
-import { at, boxGraph, client, comp, COOK, server } from './testing.ts'
-import { Dropped } from './socket.ts'
+import { at, boxGraph, client, comp, COOK, pair, server } from './testing.ts'
+import { Dropped, wire } from './socket.ts'
 
 let dal = (eid = 'r1'): Bundle => ({
   entity: { eid },
@@ -286,7 +286,7 @@ test('a dropped socket resubscribes and catches up on what it missed', async () 
   b.fire() // the one reconnect the backoff scheduled
   await b.idle()
   assert(b.wire.connected())
-  assertEquals(b.trouble.map((t) => t.error instanceof Dropped), [true])
+  assertEquals(b.trouble, []) // recovered, so nothing to say
   // The set as it now stands: the new one arrived, the deleted one left.
   assertEquals(
     (b.graph.read('.recipe.course=dinner&*') as Bundle[]).map((x) =>
@@ -353,28 +353,88 @@ test('a subscription refused by the server is reported, not applied', async () =
   c.wire.close()
 })
 
-// A server going away on purpose (1001) and back at once is a restart working;
-// an abnormal close, or a going-away that lasts, is a failure.
+// A wire over sockets driven by hand, so its server can stay away, or take a
+// connection and never answer on it. It holds one query, answered and held a
+// second before each script begins.
+let drops = () => {
+  let now = 0
+  let due: { at: number; fn: () => void }[] = []
+  let sockets: ReturnType<typeof pair>[] = []
+  let away = false
+  let said: unknown[] = []
+  wire({
+    url: 'http://drop.test',
+    connect: () => sockets[sockets.push(pair()) - 1].client,
+    time: () => now,
+    timer: (fn, ms) => {
+      due.push({ at: now + ms, fn })
+      due.sort((a, b) => a.at - b.at)
+    },
+    land: () => {},
+    report: (e) => said.push(e),
+  }).subscribe('.recipe', 'q')
+  let last = () => sockets[sockets.length - 1]
+  let tell = (frame: object) =>
+    last().server.send(JSON.stringify({ id: 'q', ...frame }))
+  // A connection made while the server is away fails at once.
+  let fail = () => {
+    if (away && last().client.readyState == 0) last().client.close(1006)
+  }
+  let fire = () => {
+    let next = due.shift()!
+    now = Math.max(now, next.at)
+    next.fn()
+    fail()
+  }
+  let pass = (ms: number) => {
+    let until = now + ms
+    while (due.length && due[0].at <= until) fire()
+    now = until
+  }
+  let steps: Record<string, (n: number) => void> = {
+    drop: (code) => last().server.close(code),
+    away: (ms) => {
+      away = true
+      fail()
+      pass(ms)
+      away = false
+    },
+    back: () => {
+      while (last().client.readyState != 0) fire()
+      last().client.emit('open')
+    },
+    answer: () => tell({ bundles: [] }),
+    refuse: () => tell({ refused: { error: 'Refused', message: 'no word' } }),
+    pass,
+  }
+  let run = (script: string) => {
+    for (let step of script.split(' ')) {
+      let [verb, n] = step.split(':')
+      steps[verb](Number(n))
+    }
+    return said
+  }
+  run('back answer pass:1000')
+  return run
+}
+
+// A drop is said only when the wire has not resumed from it `most` (30 s)
+// after it began: open again, with every query answered again. A refusal is
+// an answer, said on its own path. Each outage is said once, while it lasts.
 for (
-  let [code, ms, said] of [
-    [1001, 250, false],
-    [1001, 6000, true],
-    [1006, 250, true],
+  let [script, times] of [
+    ['drop:1001 back answer', 0], // a restart
+    ['drop:1006 back answer', 0], // a proxy, a laptop waking
+    ['drop:1001 back refuse', 0], // a page that outlived a deploy
+    ['drop:1006 away:10000 back answer', 0],
+    ['drop:1006 away:120000', 1],
+    ['drop:1001 back', 1],
+    ['drop:1006 away:120000 back answer drop:1006 away:120000', 2],
   ] as const
 ) {
-  test(`a drop closed ${code} and back after ${ms} ms ${said ? 'is' : 'is not'} reported`, async () => {
-    let c = client(server())
-    c.wire.subscribe('.recipe', 'all')
-    await c.idle()
-    c.socket()!.close(code)
-    c.pass(ms) // the one reconnect the backoff scheduled, and the time down
-    await c.idle()
-    assert(c.wire.connected())
-    assertEquals(
-      c.trouble.map((t) => t.error instanceof Dropped),
-      said ? [true] : [],
-    )
-    c.wire.close()
+  test(`a wire that does "${script}" is said dropped ${times} times`, () => {
+    let said = drops()(`${script} pass:120000`)
+    assertEquals(said.map((e) => e instanceof Dropped), Array(times).fill(true))
   })
 }
 
@@ -396,15 +456,12 @@ test('an oversized subscribe refuses once, never reopens, and does not erase pai
     assertEquals(c.wire.refusal('large')?.error, 'Refused')
     assert((await c.graph.get(['r1'])).length)
 
-    // A genuine later loss reopens healthy asks, not the terminal refusal.
+    // A genuine later loss reopens healthy asks, at once since it held, not
+    // the terminal refusal.
     srv.sockets[0].close()
-    c.fire()
     await c.idle()
     assertEquals(srv.sockets.length, 2)
-    assertEquals(
-      c.trouble.slice(1).map((t) => t.error instanceof Dropped),
-      [true],
-    )
+    assertEquals(c.trouble.length, 1) // recovered: nothing more to say
     assertEquals(
       c.socket()?.sent.filter((m) => (m as { id?: string }).id == 'large'),
       [],

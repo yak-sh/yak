@@ -16,14 +16,14 @@ let ids = (rows: Bundle[]) => rows.map((b) => b.entity.eid)
 let fixture = (opts: ClientOpts = {}) => {
   let sockets = [pair().client]
   let trouble: Trouble[] = []
-  let retry = () => {}
+  let due: { ms: number; fn: () => void }[] = []
   let c = client(box, [], {
     url: 'http://box.test',
     vault: false,
     wireVault: false,
     connect: () => sockets.at(-1)!,
-    timer: (fn) => {
-      retry = fn
+    timer: (fn, ms) => {
+      due.push({ ms, fn })
     },
     report: (t) => {
       trouble.push(t)
@@ -33,10 +33,13 @@ let fixture = (opts: ClientOpts = {}) => {
   })
   let frame = (frame: Frame) =>
     sockets.at(-1)!.emit('message', JSON.stringify(frame))
+  // The close schedules its reconnect, the soonest of its timers.
   let reopen = () => {
     sockets.at(-1)!.close()
     sockets.push(pair().client)
-    retry()
+    let [soonest] = due.sort((a, b) => a.ms - b.ms)
+    due = []
+    soonest?.fn()
     sockets.at(-1)!.emit('open')
   }
   return { c, frame, sockets, trouble, reopen }

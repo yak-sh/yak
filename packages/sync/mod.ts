@@ -52,9 +52,9 @@
  * applied to the local graph, so a render reads the local store and never
  * awaits. A dropped socket reconnects with a widening backoff, sends every
  * subscription again, and treats the first frame after a reopen as the whole
- * set. Each drop is reported as a {@link Dropped} once the socket reopens; a
- * server going away on purpose (close code 1001) and back within five seconds
- * is a restart working, and is not.
+ * set. A drop the wire resumes from (open again, every query answered again)
+ * missed nothing and says nothing; an outage still unresumed `most` after it
+ * began is reported once as a {@link Dropped}.
  *
  * ## Both transports are injected
  * {@link SyncOpts.fetch} and {@link SyncOpts.connect} default to the

@@ -76,7 +76,8 @@ export type ClientOpts = {
   /** the reconnect delay in ms after a failed attempt, doubling to `most`
    * (default: 250); a connection that held this long is retried at once */
   wait?: number
-  /** the longest reconnect delay in ms (default: 30_000) */
+  /** the longest reconnect delay in ms, and how long an outage may go
+   * unresumed before it is reported (default: 30_000) */
   most?: number
   /** Local epoch milliseconds for the synced clock (default: monotonic epoch). */
   time?: () => number

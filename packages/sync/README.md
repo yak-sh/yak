@@ -360,15 +360,21 @@ unsubscribe clears it.
 A connection that held at least `wait` (default 250 ms) and dropped, as one does
 when its server hands over to a replacement, is reopened at once. A failed
 attempt is retried after a delay doubling from `wait` to `most` (default 30
-seconds), resetting on open. Once an open socket that closed opens again,
-`report` receives a `Dropped` error naming its close code and how long it was
-down, unless the server went away on purpose (close code 1001, a restart) and
-was back within five seconds; an outage still going at `most` is reported once
-as it lasts. `timer` supplies reconnect and pace timers. Refused subscriptions
-are not reopened automatically; explicitly subscribe on their id to retry. The
-first successful frame after reconnecting replaces prior membership, adding
-missing entities to `gone`. Cached data alone never makes a subscription ready
-on a new connection.
+seconds), resetting on open. `timer` supplies reconnect and pace timers. Refused
+subscriptions are not reopened automatically; explicitly subscribe on their id
+to retry. The first successful frame after reconnecting replaces prior
+membership, adding missing entities to `gone`. Cached data alone never makes a
+subscription ready on a new connection.
+
+A drop is recovered once the wire has **resumed**: the socket is open again and
+every query it holds has been answered again, with the set as it now stands or
+with a refusal (reported on its own, as `refused`). Nothing was missed, so
+whatever closed it (a restart, a proxy, a laptop waking) says nothing. An outage
+that has not resumed `most` after it began, because the server stays away or
+takes the connection and never answers, is a failure: `report` receives a
+`Dropped` error naming the close code and how long it has been down, once per
+outage, while it lasts. It reaches the server whenever only the socket fails; a
+server that is away is seen by its own reporting.
 
 ### The store's clock
 

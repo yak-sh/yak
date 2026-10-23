@@ -6,8 +6,9 @@
 // is a client built by `client()` rather than by hand, an in-process socket
 // for it, and a stand-in IndexedDB.
 //
-// Nothing here touches a network, a timer or a browser. `fire()` runs a
-// scheduled reconnect, `idle()` waits for everything in flight, and the
+// Nothing here touches a network, a timer or a browser. `fire()` runs the
+// timer due soonest, a scheduled reconnect say, `idle()` waits for everything
+// in flight, and the
 // IndexedDB is npm's `fake-indexeddb`, which is the same API over a Map.
 
 import { IDBFactory } from 'fake-indexeddb'
@@ -34,7 +35,7 @@ export {
 export type Box = Client & {
   /** everything the connection reported */
   trouble: Trouble[]
-  /** run the pending reconnect, if one is scheduled */
+  /** run the timer due soonest, a pending reconnect say, if one is set */
   fire: () => void
   /** the socket this client currently holds */
   socket: () => Fake | undefined
@@ -57,7 +58,8 @@ export let boxClient = (
   vocab: Vocab = box,
 ): Box => {
   let trouble: Trouble[] = []
-  let timers: (() => void)[] = []
+  // By delay, and in the order set within one: the soonest runs first.
+  let timers: { ms: number; fn: () => void }[] = []
   let opening: Promise<unknown> = Promise.resolve()
   let mine: Fake | undefined
   let theirs: Fake | undefined
@@ -85,13 +87,16 @@ export let boxClient = (
     url: srv ? 'http://box.test' : undefined,
     fetch: srv ? (request) => srv.handler(request) : undefined,
     connect: srv ? connect : undefined,
-    timer: (fn) => timers.push(fn),
+    timer: (fn, ms) => {
+      timers.push({ ms, fn })
+      timers.sort((a, b) => a.ms - b.ms)
+    },
     report: (t) => trouble.push(t),
   })
 
   return Object.assign(c, {
     trouble,
-    fire: () => timers.shift()?.(),
+    fire: () => timers.shift()?.fn(),
     socket: () => mine,
     cut: () => {
       mine!.readyState = 3
