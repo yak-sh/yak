@@ -181,6 +181,18 @@ export let worker = (
       eid,
     })
   }
+  // Every call into an object goes through here. The object can be reset, the
+  // connection to it lost, or the runtime can refuse it with its own opaque
+  // internal error while it moves the object, as it does to every object a
+  // deploy reaches; each send takes a fresh stub and the same body. Every
+  // door is a read or a write keyed by its eids, so a send that landed before
+  // its answer was lost lands the same way again.
+  let send = (scope: string, request: Request, body: ArrayBuffer | null) =>
+    retried(
+      () => env.TRACKERS.getByName(scope).fetch(new Request(request, { body })),
+      true,
+      (error) => evicted(error) || lost(error) || opaque(error),
+    )
   // Where a receipt stands, asked through the object's stable read doors
   // across Worker/DO deployment propagation. The runtime holds its signing
   // key; the build learns only whether its canary arrived or failed.
@@ -192,12 +204,13 @@ export let worker = (
       admin: true,
       exp: Date.now() / 1000 + 60,
     }, env.TRACKER_SECRET)
-    let object = env.TRACKERS.getByName(platform)
     let headers = { authorization: `Bearer ${signed}` }
     return standing(
       (path) =>
-        object.fetch(
+        send(
+          platform,
           new Request(`https://tracker.internal${path}`, { headers }),
+          null,
         ),
       hash,
       eid,
@@ -284,21 +297,12 @@ export let worker = (
           await env.ERRORS.send(rows)
           return json({ eid: rows[0].entity.eid })
         }
-        // The object can be reset, the connection to it lost, or the runtime
-        // can refuse it with its own opaque internal error while it moves the
-        // object; each send takes a fresh stub and the same body. Every door
-        // is a read or a write keyed by its eids, so a send that landed before
-        // its answer was lost lands the same way again. Only GET and HEAD
-        // carry no body; asking `request.body` instead makes a stream to read.
+        // Only GET and HEAD carry no body; asking `request.body` instead
+        // makes a stream to read, which a resend could not read again.
         let body = request.method == 'GET' || request.method == 'HEAD'
           ? null
           : await request.arrayBuffer()
-        return await retried(
-          () =>
-            env.TRACKERS.getByName(scope).fetch(new Request(request, { body })),
-          true,
-          (error) => evicted(error) || lost(error) || opaque(error),
-        )
+        return await send(scope, request, body)
       } catch (error) {
         await report(error, 'fetch', request)
         return json({ error: 'tracker temporarily unavailable' }, 503)

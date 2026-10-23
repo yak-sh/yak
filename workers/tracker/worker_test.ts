@@ -15,6 +15,7 @@ let unavailable = () =>
     stack: 'Error: tracker object unavailable\n    at fetch (object.ts:1:1)',
   })
 
+let hash = 'a'.repeat(64)
 let fixture = (fetch?: Stub['fetch']) => {
   let sent: Bundle[][] = []
   let fail = () => Promise.reject(unavailable())
@@ -26,6 +27,8 @@ let fixture = (fetch?: Stub['fetch']) => {
     ingestTrace: fail,
   }
   let w = worker({
+    BUNDLE_HASH: hash,
+    TRACKER_SECRET: 'scratch',
     CF_VERSION_METADATA: { id: '00000000-0000-4000-8000-000000000012' },
     TRACKERS: { getByName: () => stub },
     ERRORS: {
@@ -116,4 +119,30 @@ test('a mark lost, reset or refused on its way to the object is sent again', asy
   ])
   equal((await marked(Array(backoff.pauses.length + 1).fill(lost)))[0], 503)
   equal(await marked([broken]), [503, ['{"bug":"b"}'], 1])
+})
+
+// A deploy's canary read, through `failures` on its way to the object: what
+// the Worker answers, and how many failures it reported.
+let stood = async (failures: Error[]) => {
+  let { w, sent } = fixture((request) => {
+    let failure = failures.shift()
+    if (failure) return Promise.reject(failure)
+    return Promise.resolve(
+      Response.json(new URL(request.url).pathname == '/bundle' ? { hash } : []),
+    )
+  })
+  let response = await w.fetch(
+    new Request(
+      `https://tracker.test/canary?scope=platform&hash=${hash}&eid=${crypto.randomUUID()}`,
+    ),
+  )
+  return [response.status, await response.json(), sent.length]
+}
+
+test("a canary's read of a moving object waits it out, unreported", async () => {
+  equal(await stood([refused, lost, reset]), [200, { arrived: false }, 0])
+  equal(
+    await stood(Array(backoff.pauses.length + 1).fill(refused)),
+    [503, { error: 'tracker temporarily unavailable' }, 1],
+  )
 })
