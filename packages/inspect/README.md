@@ -11,15 +11,15 @@ sidebar and history stack.
 
 ## Views
 
-| name                                            | draws                                                            |
-| ----------------------------------------------- | ---------------------------------------------------------------- |
-| `Inspect.Page`                                  | a `_comp`, `_package`, `_prop` or `_effect` vocabulary entity    |
-| `Inspect.Head`, `Inspect.Body`, `Inspect.Facts` | name, provenance, words and component values                     |
-| `Inspect.Links`, `Inspect.History`              | references both ways and recorded changes                        |
-| `Inspect.Query`                                 | query rows with shared component columns, count or tally         |
-| `Inspect.Map`                                   | packages, components, relations and archetypes with their counts |
-| `Inspect.Note`                                  | a note under a heading, selected through the registry            |
-| `Tile`, `Inline`                                | vocabulary entities in any screen that asks for them             |
+| name                                            | draws                                                                               |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `Inspect.Page`                                  | a `_comp`, `_package`, `_prop` or `_effect` vocabulary entity                       |
+| `Inspect.Head`, `Inspect.Body`, `Inspect.Facts` | name, provenance, words and component values                                        |
+| `Inspect.Links`, `Inspect.History`              | references both ways and recorded changes                                           |
+| `Inspect.Query`                                 | query rows with shared component columns, count or tally                            |
+| `Inspect.Map`                                   | the schema: a package tree, components, relations and archetypes, with their counts |
+| `Inspect.Note`                                  | a note under a heading, selected through the registry                               |
+| `Tile`, `Inline`                                | vocabulary entities in any screen that asks for them                                |
 
 The `/views` facet contributes `inspectViews()`, which loads `all` when a host
 asks for inspector views. Hosts adapt `View.Render` to their query and edit
@@ -53,11 +53,15 @@ for Inspect.
 ## Limits
 
 Inspect serves no page or terminal app, and owns no stack or URL. Browse
-integrates these views into its app. The schema map starts with packages, then
-opens components, effects and properties on demand from the loaded vocabulary.
-It needs no graph query or census to paint. Expansion stays in the page graph.
+integrates these views into its app.
 
-Detail pages share a census of archetype rows and populations rather than
-running a count for each component. SQLite and the Cloudflare Store answer the
-unfiltered population tally and component counts from maintained metadata;
-filtered counts still run their candidate query.
+The schema map shows one slice at a time: a tree of packages, the components and
+effects each declares, and the properties of each component; every component;
+the relations; or the archetypes. Names and what each is come from the loaded
+vocabulary, so the map paints before any count; the slice, open rows and table
+order stay in the page graph.
+
+The map and the detail pages share a census of archetype rows and populations
+rather than running a count for each component. SQLite and the Cloudflare Store
+answer the unfiltered population tally and component counts from maintained
+metadata; filtered counts still run their candidate query.

@@ -19,6 +19,12 @@
  * does is the caller's. The table's `style` is its own: it carries the
  * columns.
  *
+ * A table can be a tree, its rows holding rows. A row that holds some starts
+ * its first cell with a `Toggle`, a press showing them under it (`Toggle-open`
+ * while they show), and a row sits an `Indent` deep for each row it is under;
+ * an `Indent` is as wide as a `Toggle`, and stands for one in a row that holds
+ * none, so the words of every row line up under its parent's.
+ *
  * Each part says what it is to a reader of the page by its role (`table`,
  * `row`, `cell`, …), as an html table's elements would, and a terminal lays
  * it out as the grid it is (@yaks/tui's `grid`).
@@ -46,6 +52,8 @@ let Base = block('div', 'Table', {
   Row: 'div',
   Heading: 'div',
   Cell: 'div',
+  Toggle: 'button',
+  Indent: 'span',
 })
 
 // A part that says what it is to a reader of the page.
@@ -64,7 +72,10 @@ let template = (cols: Col[]) =>
 /** A table. */
 export let Table:
   & FunctionComponent<TableProps>
-  & Record<'Head' | 'Body' | 'Row' | 'Heading' | 'Cell', Part> = Object
+  & Record<
+    'Head' | 'Body' | 'Row' | 'Heading' | 'Cell' | 'Toggle' | 'Indent',
+    Part
+  > = Object
     .assign(
       ({ cols = [], ...p }: TableProps) =>
         h(Base, { role: 'table', ...p, style: { '--cols': template(cols) } }),
@@ -80,6 +91,8 @@ export let Table:
             arrow(p.mod),
           ),
         Cell: roled(Base.Cell, 'cell'),
+        Toggle: Base.Toggle,
+        Indent: (p: Props) => h(Base.Indent, { 'aria-hidden': true, ...p }),
       },
     )
 
@@ -104,9 +117,12 @@ export let sheet = (c: Colors): Sheet => ({
   'Table_Cell-num': { fg: c.number, align: 'right' },
   'Table_Cell-key': { fg: c.muted },
   'Table_Cell-prose': { fg: c.muted, wrap: true },
+  Table_Toggle: { fg: c.muted, glyph: '▸' },
+  'Table_Toggle-open': { glyph: '▾' },
+  Table_Indent: { glyph: '  ' },
 })
 
-let { Head, Body, Row, Heading, Cell } = Table
+let { Head, Body, Row, Heading, Cell, Toggle, Indent } = Table
 
 let prop = (name: string, type: string, about: string, mod?: string) =>
   h(
@@ -129,8 +145,33 @@ let pair = (key: string, value: string, shape?: string) =>
 // A specimen's own room, narrower than what its table holds.
 let narrow: Props = { style: 'max-width: 22rem' }
 
+// A row of a tree: as deep as it is, a toggle when it holds rows.
+let branch = (
+  depth: number,
+  name: string,
+  holds: string,
+  n: string,
+  open?: boolean | null,
+) =>
+  h(
+    Row,
+    { key: name, mod: 'picks' },
+    h(
+      Cell,
+      {},
+      Array.from({ length: depth }, (_, i) => h(Indent, { key: i })),
+      open == null
+        ? h(Indent, {})
+        : h(Toggle, { type: 'button', mod: open && 'open' }),
+      name,
+    ),
+    h(Cell, {}, holds),
+    h(Cell, { mod: 'num' }, n),
+  )
+
 /** A table sorted by one column, with the keyboard on a row and one under
- * the pointer; a column too narrow for what it holds; and a table of pairs. */
+ * the pointer; a column too narrow for what it holds; a tree; and a table of
+ * pairs. */
 export let specimens = (): Specimen[] => [
   [
     'Table, Heading-sorts, Heading-desc, Heading-num, Row-picks, Row-focus, ' +
@@ -198,6 +239,22 @@ export let specimens = (): Specimen[] => [
             h(Cell, { mod: 'num' }, '1,204'),
           ),
         ),
+      ),
+    ),
+  ],
+  [
+    'Table, Toggle, Toggle-open, Indent',
+    h(
+      Table,
+      { cols: [null, null, 'num'] },
+      h(
+        Body,
+        {},
+        branch(0, '@yaks/task', '4 components', '40,213', true),
+        branch(1, 'task', 'a mark', '12,403', null),
+        branch(1, 'filed', '4 properties', '12,000', true),
+        branch(2, 'priority', 'number', ''),
+        branch(0, '@yaks/topic', '2 components', '381', false),
       ),
     ),
   ],

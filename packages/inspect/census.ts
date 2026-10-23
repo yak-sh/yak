@@ -4,8 +4,8 @@
  * each. From it, how many entities carry each component, which sets a
  * component is found in, and how many edges state each relation: no page asks
  * the graph to count those again. The storage adapters answer this unfiltered
- * tally from maintained archetype populations, not by reading their owners. It is asked once and
- * shared by the detail pages that read it; the initial schema map needs none.
+ * tally from maintained archetype populations, not by reading their owners.
+ * It is asked once, and shared by the map and every page that reads it.
  *
  * @module
  */

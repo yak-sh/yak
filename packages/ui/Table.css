@@ -91,3 +91,29 @@
   background: var(--card);
   box-shadow: inset 2px 0 var(--accent);
 }
+/* A tree's rows: a toggle where a row holds rows, pointing down while they
+   show; an indent as wide as a toggle for each row a row is under, and in
+   place of the toggle where it holds none, so the words line up. */
+.Table_Toggle,
+.Table_Indent {
+  display: inline-block;
+  width: 1.25em;
+}
+.Table_Toggle {
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.Table_Toggle::before {
+  content: '▸';
+}
+.Table_Toggle-open::before {
+  content: '▾';
+}
+.Table_Toggle:hover {
+  color: var(--text);
+}

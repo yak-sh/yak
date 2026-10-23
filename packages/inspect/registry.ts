@@ -19,28 +19,6 @@ import { entityViews } from './Entity.ts'
 import { packageViews } from './Package.ts'
 import { propViews } from './Prop.ts'
 
-// What a package or a component holds, as the map's line for it says.
-let summaries: View[] = ['_package', '_comp', '_prop'].map((name) => ({
-  view: 'Inspect.Schema.Summary',
-  match: parse(`.${name}`),
-  Render: ({ e, io }) => {
-    let title = str(e, name, 'name')
-    let n = name == '_package'
-      ? io.vocab.all.filter((c) =>
-        (io.vocab.comp(c)?.package ?? '') ==
-          (title == 'Unpackaged' ? '' : title)
-      ).length
-      : io.vocab.props(title).length
-    return `${title} · ${n} ${
-      name == '_package'
-        ? n == 1 ? 'component' : 'components'
-        : n == 1
-        ? 'property'
-        : 'properties'
-    }`
-  },
-}))
-
 // Schema names belong to inspect; every consumer asks for this renderer,
 // including the query table and any inline reference.
 let schemaTiles: View[] = ['_package', '_comp', '_prop', '_effect'].flatMap((
@@ -76,7 +54,6 @@ export let schemaPages: View[] = [
 /** Every inspector view. */
 export let all: View[] = [
   { view: 'Inspect.Note', match: parse('.comment'), Render: Note },
-  ...summaries,
   ...schemaTiles,
   ...compViews,
   ...propViews,

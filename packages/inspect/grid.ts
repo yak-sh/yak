@@ -14,6 +14,11 @@
  * properties) pages them itself (`local`), and sorts them by a column's
  * `value` (`run`).
  *
+ * A table whose rows hold rows is a tree (`holds`): a row holding some wears a
+ * toggle, and once opened the rows it holds show under it, a step in, run by
+ * the same column as their parent's; which rows are open is the table's state
+ * too. A long tree pages the rows it shows.
+ *
  * @module
  */
 
@@ -75,6 +80,44 @@ export let run = (
     return down ? -d : d
   })
 }
+
+/** A row a tree shows: how deep it is, and whether it holds rows (and so
+ * wears a toggle). */
+export type Branch = { b: Bundle; depth: number; holds: boolean }
+
+/**
+ * The rows a tree shows, in order: each level run by `order` (`run`), and
+ * under each row `open` names the rows it `holds`, a step deeper.
+ *
+ * ```ts
+ * import { type Column, unfold } from './grid.ts'
+ * let b = (eid: string) => ({ entity: { eid } })
+ * let kids: Record<string, string[]> = { p: ['c2', 'c1'], c1: ['x'] }
+ * let holds = (r: { entity: { eid: string } }) =>
+ *   (kids[r.entity.eid] ?? []).map(b)
+ * let cols: Column[] = [{ name: 'n', value: (r) => r.entity.eid, cell: () => '' }]
+ * unfold([b('q'), b('p')], cols, 'n', ['p', 'c1'], holds)
+ *   .map((r) => `${r.depth}${r.b.entity.eid}${r.holds ? '+' : ''}`)
+ * // ['0p+', '1c1+', '2x', '1c2', '0q']
+ * ```
+ */
+export let unfold = (
+  rows: Bundle[],
+  columns: Column[],
+  order: string | null | undefined,
+  open: string[],
+  holds: (b: Bundle) => Bundle[],
+  depth = 0,
+): Branch[] =>
+  run(rows, columns, order).flatMap((b) => {
+    let kids = holds(b)
+    return [
+      { b, depth, holds: kids.length > 0 },
+      ...kids.length && open.includes(b.entity.eid)
+        ? unfold(kids, columns, order, open, holds, depth + 1)
+        : [],
+    ]
+  })
 
 /**
  * The line for the page of `base`'s rows the table `id` shows: run by its
@@ -139,6 +182,9 @@ export type GridProps = {
   /** the entity a press on a row opens (its own, unless this says
    * another); undefined opens nothing */
   pick?: ((b: Bundle) => string | undefined) | false
+  /** the rows a row holds, which make the table a tree: shown under it once
+   * its toggle opens it. A tree holds all its rows, as a `local` table does */
+  holds?: (b: Bundle) => Bundle[]
 }
 
 /** What a pager is drawn with: the table it pages, how many rows this page
@@ -202,15 +248,46 @@ let way = (order: string | null | undefined, c: Column) =>
     ? 'desc'
     : undefined
 
+// What a tree row's first cell starts with: an indent for each row it is
+// under, then its toggle, or an indent where it holds none.
+let Stem = (
+  { io, id, at, open }: { io: Io; id: string; at: Branch; open: string[] },
+) => {
+  let eid = at.b.entity.eid
+  let shown = open.includes(eid)
+  return h(
+    Fragment,
+    null,
+    Array.from({ length: at.depth }, (_, i) => h(Table.Indent, { key: i })),
+    at.holds
+      ? h(Table.Toggle, {
+        type: 'button',
+        mod: shown && 'open',
+        'aria-expanded': shown,
+        'aria-label': 'what it holds',
+        onClick: () =>
+          io.set(turned(id, {
+            open: shown ? open.filter((o) => o != eid) : [...open, eid],
+          })),
+      })
+      : h(Table.Indent, {}),
+  )
+}
+
 /** A table of things, paged, its rows opened and its columns sorted. */
 export let Grid = (p: GridProps): JSX.Element => {
-  let { io, id, columns, local } = p
+  let { io, id, columns, local, holds } = p
   let size = p.size ?? SIZE
   let g = grid(io, id)
-  let rows = local ? run(p.rows, columns, g.order) : p.rows
+  let open = g.open ?? []
+  let tree: Branch[] = holds
+    ? unfold(p.rows, columns, g.order, open, holds)
+    : (local ? run(p.rows, columns, g.order) : p.rows)
+      .map((b) => ({ b, depth: 0, holds: false }))
+  let rows = tree.map((t) => t.b)
   let after = g.after ?? []
   let page = after.length
-  let shown = local ? rows.slice(page * size, (page + 1) * size) : rows
+  let shown = local || holds ? tree.slice(page * size, (page + 1) * size) : tree
   let pick = p.pick === false
     ? () => undefined
     : p.pick ?? ((b: Bundle) => b.entity.eid)
@@ -225,7 +302,11 @@ export let Grid = (p: GridProps): JSX.Element => {
     null,
     h(
       Table,
-      { 'data-table': id, cols: columns.map((c) => c.mod) },
+      {
+        'data-table': id,
+        ...holds ? { role: 'treegrid' } : {},
+        cols: columns.map((c) => c.mod),
+      },
       h(
         Table.Head,
         {},
@@ -248,7 +329,8 @@ export let Grid = (p: GridProps): JSX.Element => {
       h(
         Table.Body,
         {},
-        shown.map((b) => {
+        shown.map((t) => {
+          let { b } = t
           let at = pick(b)
           return h(
             Table.Row,
@@ -256,6 +338,7 @@ export let Grid = (p: GridProps): JSX.Element => {
               key: b.entity.eid,
               mod: at && 'picks',
               'data-pick': at,
+              'aria-level': holds ? t.depth + 1 : undefined,
               tabIndex: at ? -1 : undefined,
               onClick: at
                 ? (ev: { target: unknown }) => {
@@ -264,8 +347,13 @@ export let Grid = (p: GridProps): JSX.Element => {
                 }
                 : undefined,
             },
-            columns.map((c) =>
-              h(Table.Cell, { key: c.name, mod: c.mod }, c.cell(b))
+            columns.map((c, i) =>
+              h(
+                Table.Cell,
+                { key: c.name, mod: c.mod },
+                holds && !i ? h(Stem, { io, id, at: t, open }) : null,
+                c.cell(b),
+              )
             ),
           )
         }),
@@ -275,9 +363,9 @@ export let Grid = (p: GridProps): JSX.Element => {
       io,
       id,
       shown: shown.length,
-      last: shown.at(-1)?.entity.eid,
+      last: shown.at(-1)?.b.entity.eid,
       size,
-      total: local ? rows.length : p.total,
+      total: local || holds ? rows.length : p.total,
     }),
   )
 }

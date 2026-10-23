@@ -10,7 +10,7 @@
       "type": "object",
       "sync": "none",
       "durable": "connection",
-      "description": "the inspector's page, on the entity `inspect`: the page being edited, a note open, a delete armed and a refused write; what the index's field holds is the same entity's `filter` (@yaks/filter)",
+      "description": "the inspector's page, on the entity `inspect`: the page being edited, a note open, a delete armed, a refused write and the slice of the schema its map shows; what the index's field holds is the same entity's `filter` (@yaks/filter)",
       "properties": {
         "editing": {
           "type": "string",
@@ -31,6 +31,11 @@
         "at": {
           "type": "string",
           "description": "where the refused write came from: a note's key, or the eid of the entity it was about"
+        },
+        "slice": {
+          "type": "string",
+          "enum": ["packages", "components", "relations", "archetypes"],
+          "description": "the slice of the schema the map shows; packages when none is chosen"
         }
       }
     },
@@ -39,7 +44,7 @@
       "type": "object",
       "sync": "none",
       "durable": "connection",
-      "description": "one table on an inspector page, how its rows run and which page of them shows; its id is `<eid> <heading>`",
+      "description": "one table on an inspector page, how its rows run, which page of them shows and which of its rows are open; its id is `<eid> <heading>`",
       "properties": {
         "order": {
           "type": "string",
@@ -49,6 +54,11 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "the last row of each page before the one shown, the way back"
+        },
+        "open": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the eids of the rows showing the rows they hold, in a table that is a tree"
         },
         "rank": {
           "type": "boolean",

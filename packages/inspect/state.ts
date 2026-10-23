@@ -3,8 +3,8 @@
  * (./front.json): read through `io.state`, changed by the patches built here
  * and written through `io.set`. One entity, `inspect`, holds the page's
  * (`inspector`: the page being edited, a note open, a delete armed, where a
- * write was refused); each table holds its own (`table`: its order and
- * page).
+ * write was refused, the slice of the schema the map shows); each table holds
+ * its own (`table`: its order, its page and its open rows).
  *
  * @module
  */
@@ -23,10 +23,16 @@ export type Inspector = {
   armed?: string | null
   said?: string | null
   at?: string | null
+  slice?: string | null
 }
 
 /** One table's state. */
-export type Grid = { order?: string | null; after?: string[]; rank?: boolean }
+export type Grid = {
+  order?: string | null
+  after?: string[]
+  open?: string[]
+  rank?: boolean
+}
 
 /** The page's state, read reactively. */
 export let me = (io: Pick<Io, 'state'>): Inspector =>
