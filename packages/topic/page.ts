@@ -9,7 +9,7 @@
  * (`cites`), the beliefs about it (`belief.about`), and the comments on it,
  * with a line to write one, where the host draws a thread (`Comments`); last,
  * the parts any page has (`io.show`: the facts, the links, the history). Its
- * head says what holds it and where it holds.
+ * head says what holds it: a topic belongs to whatever contains it.
  *
  * Whatever a topic holds or cites is drawn by its own renderer, asked for as
  * `Topic.List.Tile`: a subtopic as its cover (`TopicTile`), a belief as what
@@ -70,16 +70,14 @@ let str = (b: Bundle | undefined, name: string, prop: string): string => {
 }
 let rows = (a?: Answer): Bundle[] => a?.rows ?? []
 
-/** What a topic's page asks: its edges, what holds it, the project it holds
- * for, and the beliefs about it where the graph keeps beliefs. What holds it
- * and its project come whole, so the head names them as it first paints. */
+/** What a topic's page asks: its edges, what holds it, and the beliefs about
+ * it where the graph keeps beliefs. What holds it comes whole, so the head
+ * names it as it first paints. */
 export let asks = (e: Bundle, io: Io): Asks => {
   let eid = e.entity.eid
-  let scope = str(e, TOPIC, 'scope')
   return {
     out: `.edge.from=${eid}&*&.order=edge.ord&.limit=${EDGES}`,
     within: `.contains[<=1]->${eid}&?doc&?${TOPIC}&.limit=${EDGES}`,
-    ...scope ? { scope: `.entity.eid=${scope}` } : {},
     ...io.vocab.comp('belief')
       ? {
         beliefs: `.belief.about=${eid}&!archived&*` +
@@ -102,22 +100,6 @@ let listed = (io: Io, said: string, all: Bundle[]): ComponentChildren =>
   all.length
     ? [said, ...all.flatMap((b, i) => [i ? ', ' : null, named(io, b)])]
     : null
-
-// Where it sits: what holds it, and the project it holds for once it has come.
-let where = (
-  io: Io,
-  within: Bundle[],
-  scope: string,
-  project: Bundle | undefined,
-): ComponentChildren[] =>
-  [
-    listed(io, 'in ', within),
-    !scope
-      ? 'holds everywhere'
-      : project
-      ? ['holds for ', named(io, project)]
-      : null,
-  ].filter(Boolean).flatMap((said, i) => [i ? ' · ' : null, said])
 
 type Of = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 
@@ -275,18 +257,11 @@ export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
   let ends = io.ask(
     ids.length ? { ends: `.entity.eid=${ids.join(',')}&*` } : {},
   ).ends
-  let within = rows(got.within).toSorted(byTitle)
-  let scope = str(e, TOPIC, 'scope')
   return h(
     'div',
     { 'data-inspect': eid },
     io.show(e, 'Inspect.Head', {
-      sub: where(
-        io,
-        within,
-        scope,
-        rows(got.scope)[0],
-      ),
+      sub: listed(io, 'in ', rows(got.within).toSorted(byTitle)),
       notes: notes.get(''),
     }),
     // Its cover's words, what belongs under it, as any page says what an

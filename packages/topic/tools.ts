@@ -44,7 +44,6 @@ export let runs = (): Runs => ({
     let args = argsOf(call)
     let title = str(args.name).trim().replace(/\s+/g, ' ')
     let body = str(args.body).trim()
-    let scope = str(args.scope)
     if (!title) throw new Refused('a topic needs a name')
     if (!body) {
       throw new Refused('a topic needs a brief saying what belongs under it')
@@ -70,7 +69,7 @@ export let runs = (): Runs => ({
     // answer learns the id to use.
     return [{
       entity: { eid: '$topic' },
-      [TOPIC]: { name: named(title), ...(scope ? { scope } : {}) },
+      [TOPIC]: { name: named(title) },
       doc: { title, body },
     }]
   },

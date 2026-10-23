@@ -15,18 +15,12 @@
         "doc"
       ],
       "prefix": "Q",
-      "description": "a subject in the knowledge graph. Any entity may be one by wearing this: a subject of its own is topic + doc + content, and a project is its own topic, so what is known about it sits under it. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains: a subtopic, or anything else, such as a memory, a design, a skill, a package or somebody's words), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about). A session opened on it (session.topic) starts from its tree, compiled (topic_read)",
+      "description": "a subject in the knowledge graph. Any entity may be one by wearing this: a subject of its own is topic + doc + content, and a project is its own topic, so what is known about it sits under it. What a topic belongs to is whatever contains it: one about a project sits under the project, and one about the world under none. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains: a subtopic, or anything else, such as a memory, a design, a skill, a package or somebody's words), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about). A session opened on it (session.topic) starts from its tree, compiled (topic_read)",
       "properties": {
         "name": {
           "type": "string",
           "unique": true,
           "description": "the title in lowercase, its spaces single; no two topics share one, so a name said again finds the topic that has it. A name, not an identity: it changes with the title, and the entity keeps its eid"
-        },
-        "scope": {
-          "type": "string",
-          "ref": "project",
-          "death": "keep",
-          "description": "the project it holds for; absent for a topic that holds everywhere, as world or fleet knowledge"
         }
       }
     },
@@ -69,7 +63,7 @@
       "noun": "topic",
       "verb": "new",
       "title": "Make a topic",
-      "description": "Make a topic, where no existing topic fits; a project is already its own topic. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its cover, a line or two saying what belongs under it, never a point anybody made. scope names the project it holds for; leave it out for a topic that holds everywhere. One name is one topic: a name that is taken is refused with the topic that has it, to use instead, and so is a name whose words hold another topic's or are held by them (\"economic market design\" beside \"market design\"). Returns the applied bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
+      "description": "Make a topic, where no existing topic fits; a project is already its own topic. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its cover, a line or two saying what belongs under it, never a point anybody made. It belongs to whatever contains it, so its name and cover never say the project: put one about a project under the project with topic_add. One name is one topic: a name that is taken is refused with the topic that has it, to use instead, and so is a name whose words hold another topic's or are held by them (\"economic market design\" beside \"market design\"). Returns the applied bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
       "input": {
         "name": {
           "type": "string",
@@ -78,12 +72,6 @@
         "body": {
           "type": "string",
           "description": "a line or two saying what belongs under it"
-        },
-        "scope": {
-          "type": "string",
-          "ref": "project",
-          "description": "project id or name it holds for; omit for a topic that holds everywhere",
-          "short": "s"
         }
       },
       "required": [

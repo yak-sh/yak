@@ -1,11 +1,11 @@
 /**
  * @yaks/topic — a knowledge graph of topics. A topic is a subject:
- * `topic{name, scope}` beside `doc{title, body}`, its cover, and
- * `content{body}`, its contents; a project is its own topic. Its edges say
- * what it holds (`contains`: a subtopic, or any other entity), what to
- * understand first (`requires`), what it reads and references, and the
- * sources it cites (`cites{hash}`); those relations are @yaks/task's and
- * @yaks/kernel's, and nothing here copies them.
+ * `topic{name}` beside `doc{title, body}`, its cover, and `content{body}`,
+ * its contents; a project is its own topic, and a topic belongs to whatever
+ * contains it. Its edges say what it holds (`contains`: a subtopic, or any
+ * other entity), what to understand first (`requires`), what it reads and
+ * references, and the sources it cites (`cites{hash}`); those relations are
+ * @yaks/task's and @yaks/kernel's, and nothing here copies them.
  *
  * A topic is also a session's context: a session opened on one
  * (`session.topic`) wears the {@link ORACLE} persona and starts from the

@@ -118,14 +118,6 @@ test('a topic is its name, and a name said twice is one topic', async () => {
   )
 })
 
-test('a topic holds for the project its scope names, or everywhere', async () => {
-  let g = fresh()
-  let [held] = await ask('topic_new', { name: 'a', body: 'b', scope: 'P' }, g)
-  let [everywhere] = await ask('topic_new', { name: 'c', body: 'd' }, g)
-  assertEquals(part(held, 'topic'), { name: 'a', scope: 'P' })
-  assertEquals(part(everywhere, 'topic'), { name: 'c' })
-})
-
 test("a name holding another topic's words, or held by them, is refused", async () => {
   for (let name of ['economic market design', 'markets', 'design']) {
     await assertRejects(

@@ -1,18 +1,18 @@
 # @yaks/topic
 
 A knowledge graph of topics. A topic is a subject, such as "data model" or
-"testing", and a project is its own topic. Some topics are world knowledge and
-some belong to a project; together they form a tree you can open, browse and
-read, everything known about a subject is held under it, and every claim in it
-leads back to who said it.
+"testing", and a project is its own topic. A topic belongs to whatever contains
+it: one about a project sits under the project, and one about the world under
+none. Together they form a tree you can open, browse and read, everything known
+about a subject is held under it, and every claim in it leads back to who said
+it.
 
 A topic is an entity (a record identified by `entity.eid`) carrying:
 
-- `topic{name, scope}`: `name` is its title in lowercase with single spaces, and
-  no two topics share one, so a name said twice is one topic. It is a name, not
-  an identity: the eid is the entity's own, so any entity may wear `topic`, and
-  a project does, to be its own topic. `scope` is the project it holds for,
-  absent for a topic that holds everywhere.
+- `topic{name}`: `name` is its title in lowercase with single spaces, and no two
+  topics share one, so a name said twice is one topic. It is a name, not an
+  identity: the eid is the entity's own, so any entity may wear `topic`, and a
+  project does, to be its own topic.
 - `doc{title, body}` ([@yaks/doc](../doc)), the **cover**: its title and a line
   or two saying what belongs under it, what a reader sees in a list and decides
   by.
@@ -127,7 +127,6 @@ testing.
 yak topic find model
 yak topic find --near '#c625160bfa'
 yak topic new testing --body 'what a test checks, and how fast a suite runs'
-yak topic new billing --body 'plans, prices and invoices' --scope P-19
 yak topic add Q-59416 M-14942 M-59035
 yak topic add 'Task Graph' D-130781
 yak topic add Q-59416 M-59035 --drop
@@ -140,12 +139,14 @@ session opened on it starts from.
 `topic find` answers topics whole: those `said` finds (`fits`), ranked by
 meaning to `near` where the server has embeddings, or else in order of name.
 
-`topic new` makes a topic from a name, a cover and an optional scope. One name
-is one topic, so it refuses a name that is taken, or whose words hold another
-topic's or are held by them ("economic market design" beside "market design"),
-and says which topic to use. Whoever makes a topic finds first, so a subject
-already named is reused, and the name's unique index refuses the second of two
-writers that found nothing at once.
+`topic new` makes a topic from a name and a cover. One name is one topic, so it
+refuses a name that is taken, or whose words hold another topic's or are held by
+them ("economic market design" beside "market design"), and says which topic to
+use. Whoever makes a topic finds first, so a subject already named is reused,
+and the name's unique index refuses the second of two writers that found nothing
+at once. Neither the name nor the cover says a project: what a topic belongs to
+is whatever contains it, so one about a project goes under the project with
+`topic add`.
 
 `topic add` puts entities under a topic, a `contains` edge from the topic to
 each, where whoever reads the topic finds them: a memory, a design, a skill, a
@@ -173,8 +174,8 @@ tab, beside the shelves, titles only, the topic lit and the shelves holding it
 open; stacked, as on a phone, the page comes first. The page alone is its
 `Inspect.Page`, and a card's face (`Card.Topic`):
 
-- the head: its title, what contains it, and where it holds (the project its
-  scope names, or everywhere), each named from the answer that brought it;
+- the head: its title and what contains it, each named from the answer that
+  brought it;
 - the cover's words; then a line to ask about it, where the host draws a
   conversation (`Conversation`; browse's chat), whose first message opens a
   session on the topic wearing the oracle; then the contents, as markdown;

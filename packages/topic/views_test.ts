@@ -76,7 +76,6 @@ store.tx((tx) =>
     topic('ids', 'Ids'),
     topic('naming', 'Naming'),
     topic('world', 'World'),
-    { ...topic('scoped', 'Scoped'), topic: { name: 'scoped', scope: 'fleet' } },
     doc('guide', 'The guide'),
     doc('spec', 'The spec'),
     doc('said', 'what Jeff said'),
@@ -199,7 +198,6 @@ let opened = disclosed({
 }, true)
 let data = drawn('data', 'Topic')
 let open = drawn('data', 'Topic', host([opened]))
-let scoped = drawn('scoped', 'Inspect.Page')
 let waiting = drawn('naming', 'Topic', host([], false))
 let tree = drawn('data', 'Tree')
 let naming = drawn('naming', 'Topic')
@@ -226,12 +224,9 @@ test('what it holds, needs, relates to and cites, each by its own face', () => {
   equal(part(data, 'Links'), null)
 })
 
-test('the head says what holds it and where it holds', () => {
-  let sub = data.querySelector('.Head_Sub')?.textContent ?? ''
-  equal(sub, 'in Ids, World · holds everywhere')
-  ok(
-    scoped.querySelector('.Head_Sub')?.textContent?.includes('holds for Fleet'),
-  )
+test('the head says what holds it', () => {
+  equal(data.querySelector('.Head_Sub')?.textContent, 'in Ids, World')
+  equal(naming.querySelector('.Head_Sub'), null)
 })
 
 test('live beliefs list; archived ones wait behind a press, muted', () => {
@@ -281,17 +276,16 @@ let none = page('zzz')
 test('every topic stands on a shelf, under the topics holding it', () => {
   equal(shelves(catalogue), [
     'naming',
-    'scoped',
     ['world', [['data', [['model', [['ids', ['data']]]]]]]],
   ])
   ok(catalogue.textContent?.includes('What belongs under Naming.'))
-  ok(catalogue.querySelector('.Head_Facts')?.textContent?.includes('6 topics'))
+  ok(catalogue.querySelector('.Head_Facts')?.textContent?.includes('5 topics'))
 })
 
 test('a topic opens beside the shelves, lit, the shelves holding it open', () => {
   let lit = data.querySelector('[data-shelf="data"] > .Tile')
   equal(lit?.getAttribute('aria-current'), 'page')
-  equal(shelves(naming), ['naming', 'scoped', 'world'])
+  equal(shelves(naming), ['naming', 'world'])
   equal(
     naming.querySelector('[data-shelf="world"] .Tile_Count')?.textContent,
     '1',
