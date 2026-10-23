@@ -125,7 +125,7 @@ export let personaFiles = async (g: Graph): Promise<Files> => {
   let render = voice(g.vocab)
   let wearing = wear(g.storage, g.vocab)
   let heard = (w: Worn): Worn => {
-    for (let b of [w.persona, ...w.carries, ...w.names]) said.add(eidOf(b))
+    for (let b of [w.persona, ...w.contains, ...w.names]) said.add(eidOf(b))
     return w
   }
   // Each project's common persona along its lineage, read once a pass.

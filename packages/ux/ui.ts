@@ -134,7 +134,7 @@ export let kit: Kit = defineKit({
     Order: {
       Component: Order,
       description:
-        'Rows put in order by dragging, taking an entity carried from elsewhere',
+        'Rows put in order by dragging, taking an entity dragged from elsewhere',
       state: ['Order'],
       specimens: () => [[
         'Drag a row between two others',

@@ -36,7 +36,7 @@
 export { PERSON, PERSONA, personaDoc, SKILL } from './comp.ts'
 export { NAMED, voice, type Worn } from './voice.ts'
 export {
-  CARRIES,
+  CONTAINS,
   offer,
   READS,
   type Reads,

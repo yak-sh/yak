@@ -5,7 +5,7 @@
 // Entity.tsx's top-level define() list reading an uninitialized view
 // binding under hot-swap re-evaluation. Native payloads and pointer geometry
 // belong with the interaction machinery, not the views that consume them.
-import { carry } from '@yaks/ux'
+import { drag } from '@yaks/ux'
 import { idOf } from '../types.ts'
 import { capable, ent } from '../live.ts'
 import { resolve } from './registry.ts'
@@ -171,7 +171,7 @@ export let dragData = (
 ) => {
   if (!ev.dataTransfer || !(ev.currentTarget instanceof HTMLElement)) return
   // Any list a package draws takes the entity by this, whoever drew the row.
-  carry(ev, eid)
+  drag(ev, eid)
   let e = ent(eid)
   let box = ev.currentTarget.getBoundingClientRect()
   if (capable('canvas')) {

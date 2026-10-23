@@ -1,11 +1,11 @@
-// Rows put in order by dragging, on a page: a row carried over the list marks
+// Rows put in order by dragging, on a page: a row dragged over the list marks
 // where it would land, and dropped there it is put there; a list that puts
 // nothing in order is a plain one.
 import { h, render } from 'preact'
 import { parseHTML } from 'linkedom'
 import { equal, test } from '@yaks/testing'
 import type { Bundle } from '@yaks/graph'
-import { CARRIED } from './carry.ts'
+import { DRAGGED } from './drag.ts'
 import { landed, Order, orderAt } from './Order.ts'
 
 let { document } = parseHTML('<html><body><main></main></body></html>')
@@ -30,7 +30,7 @@ let draw = (ordered = true) =>
 let fire = (type: string, eid: string) => {
   let ev = new document.defaultView!.Event(type, { bubbles: true })
   Object.assign(ev, {
-    dataTransfer: { types: [CARRIED], getData: () => eid },
+    dataTransfer: { types: [DRAGGED], getData: () => eid },
     clientY: -1,
   })
   root.querySelector('[role=list]')!.dispatchEvent(ev)
@@ -51,7 +51,7 @@ let plain = root.querySelectorAll('[draggable]').length
 render(null, root)
 delete g.document
 
-test('a row carried over the list marks where it would land', () => {
+test('a row dragged over the list marks where it would land', () => {
   equal(over, [landed(state, 0)])
   equal(marked, ['a'])
 })

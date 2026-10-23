@@ -263,7 +263,7 @@ equal(editorViews().every((entry) => entry.view == 'Edit'), true)
 | `Ux`, `useHost`, `Host`            | what a page hands down                                                                                      |
 | `views`, `editorViews`             | the controls as registrations; `TimeVal`, `UrlVal` are faces                                                |
 | `pickLine`, `useHits`, `label`     | a picker's candidates, asked of the graph                                                                   |
-| `carry`, `carries`, `carried`      | an entity carried by a drag from one list to another                                                        |
+| `drag`, `drags`, `dragged`         | an entity dragged from one list to another                                                                  |
 | `Order`, `orderAt`, `placing`      | a list put in order by dragging its rows; its page eid, and where a dropped row lands                       |
 | `canEdit`, `formatProp`, `reading` | what a value is, pure                                                                                       |
 
@@ -295,21 +295,20 @@ tree.props.onChange(opened)
 equal(sent, [opened])
 ```
 
-## Carrying an entity
+## Dragging an entity
 
 A drag between two lists on one page says which entity the dragged row stands
-for under one type, `CARRIED`, whichever package drew either list.
-`carry(ev,
-eid)` sets it as the drag starts; `carries(ev)` is all a place can
+for under one type, `DRAGGED`, whichever package drew either list.
+`drag(ev, eid)` puts it in the drag as it starts; `drags(ev)` is all a place can
 know while the drag moves over it, so a list says it would take one by
-cancelling the `dragover`; `carried(ev)` reads the eid on the drop. Browse's
-rows carry their entity, so a row from any list it draws drops on a list a
+cancelling the `dragover`; `dragged(ev)` reads the eid on the drop. Browse's
+rows drag their entity, so a row from any list it draws drops on a list a
 package draws.
 
 ## Putting rows in order
 
-`Order` is a list put in order by dragging its rows. Each row carries the entity
-it stands for, so it drops on other lists too, and the list takes any carried
+`Order` is a list put in order by dragging its rows. Each row drags the entity
+it stands for, so it drops on other lists too, and the list takes any dragged
 entity: dropped between two rows, it goes to `onPlace(eid, at)`, its index among
 the other rows, whether it was one of them or came from elsewhere. A drop that
 leaves a row where it was says nothing. While an entity is dragged over the
@@ -323,7 +322,7 @@ import { h } from 'preact'
 import { landed, landing, Order, orderAt, placing } from '@yaks/ux'
 import { equal } from '@yaks/testing'
 
-let e = { entity: { eid: orderAt('binder/carries') } }
+let e = { entity: { eid: orderAt('binder/contains') } }
 equal(landing(landed(e, 1)), 1)
 // b dropped before c stays where it is; a dropped there moves between b and c
 equal(placing(['a', 'b', 'c'], 'b', 2), undefined)

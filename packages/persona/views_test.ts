@@ -1,6 +1,6 @@
 // The desk and the binders over a small graph, mounted through the inspector
 // contract browse uses: every persona and skill on the desk, found by what is
-// typed; a persona opened beside it, its binder listing what it carries in
+// typed; a persona opened beside it, its binder listing what it contains in
 // the order an agent reads it, what it names and what it leaves; a row
 // dragged within a list or onto another put where it is dropped, and opened
 // in place on its words; and a skill's instructions.
@@ -20,7 +20,7 @@ import { taskDoc } from '@yaks/task/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { CARRIED, disclosureAt, type Host as UxHost, Ux } from '@yaks/ux'
+import { disclosureAt, DRAGGED, type Host as UxHost, Ux } from '@yaks/ux'
 import {
   all,
   type Answer,
@@ -79,7 +79,7 @@ let seed = [
   memory('m1', 'signal over noise', 'tasks'),
   memory('m22', 'map', 'tasks'),
   memory('m333', 'one idea', 'tasks'),
-  memory('m4444', 'not yet carried', 'tasks'),
+  memory('m4444', 'not linked', 'tasks'),
   memory('m55555', 'for everyone'),
   link('common', 'contains', 'm22'),
   link('common', 'contains', 'm1', 1),
@@ -247,7 +247,7 @@ let dropped = await (async () => {
   let drop = async (heading: string, eid: string, top = false) => {
     let ev = new document.defaultView!.Event('drop', { bubbles: true })
     Object.assign(ev, {
-      dataTransfer: { types: [CARRIED], getData: () => eid },
+      dataTransfer: { types: [DRAGGED], getData: () => eid },
       clientY: top ? -1 : 1,
     })
     let at = part(root, heading)!
@@ -262,12 +262,12 @@ let dropped = await (async () => {
   try {
     render(tree('common', 'Binder', host([], wrote), ''), root)
     return {
-      top: await drop('Carries', 'm22', true),
+      top: await drop('Contains', 'm22', true),
       across: await drop('Reads', 'm1', true),
-      end: await drop('Carries', 'm333'),
-      left: await drop('Not carried', 'm22'),
-      self: await drop('Carries', 'common'),
-      still: await drop('Carries', 'm1', true),
+      end: await drop('Contains', 'm333'),
+      left: await drop('Memories in its scope with neither edge', 'm22'),
+      self: await drop('Contains', 'common'),
+      still: await drop('Contains', 'm1', true),
     }
   } finally {
     render(null, root)
@@ -275,7 +275,7 @@ let dropped = await (async () => {
   }
 })()
 
-// A carried document opened where it stands.
+// A contained document opened where it stands.
 let link22 = store.read('.edge.from=common&.contains&*')
   .find((b) => (b.edge as { to: string }).to == 'm22')!
 let opening = drawn(
@@ -310,17 +310,18 @@ test('a persona opens beside the desk, lit, its binder and its try-out beside', 
   ok(opened.textContent?.includes('works for Task Graph'))
 })
 
-test('a binder lists what it carries in the order an agent reads it', () => {
-  equal(held(opened, 'Carries'), ['m1', 'fleet', 'm22'])
+test('a binder lists what it contains in the order an agent is given it, and what it reads', () => {
+  equal(held(opened, 'Contains'), ['m1', 'fleet', 'm22'])
   equal(held(opened, 'Reads'), ['m22', 'm333'])
   ok(opened.querySelector('[data-twice]')?.textContent?.includes('map'))
 })
 
-test('what is in its scope and carried neither way waits behind a press', () => {
-  let count = part(opened, 'Not carried')?.querySelector('.Section_Count')
+test('the memories in its scope with neither edge wait behind a press', () => {
+  let count = part(opened, 'Memories in its scope with neither edge')
+    ?.querySelector('.Section_Count')
   equal(count?.textContent, '1')
-  equal(held(opened, 'Not carried'), [])
-  equal(held(unfolded, 'Not carried'), ['m4444'])
+  equal(held(opened, 'Memories in its scope with neither edge'), [])
+  equal(held(unfolded, 'Memories in its scope with neither edge'), ['m4444'])
 })
 
 test('a skill opens at the desk on its description and instructions', () => {
@@ -349,12 +350,12 @@ test('a row dropped on another list moves there, where it is dropped', () => {
   })
 })
 
-test('a row dropped on Not carried leaves both lists; the persona itself is let fall', () => {
+test('a row dropped on the memories with neither edge loses both; the persona itself is let fall', () => {
   equal(dropped.left, { contains: ['m1', 'fleet'], reads: ['m333'] })
   equal(dropped.self, undefined)
 })
 
-test('a carried document opens where it stands, on its title and body', () => {
+test('a contained document opens where it stands, on its title and body', () => {
   let opened = opening.querySelector('[data-detail="m22"]')
   ok(opened?.textContent?.includes('map'))
   ok(opened?.textContent?.includes('What map says.'))
@@ -383,4 +384,19 @@ test("a skill's Markdown view is its SKILL.md", () => {
 
 test('what an agent reads sits beside the binder at the desk', () => {
   equal(workshopMd, said)
+})
+
+test('a persona and a skill are changed where they stand, with no edit view', () => {
+  for (let page of [opened, skill]) {
+    let head = page.querySelector('[data-binder] .Head_Title')
+    ok(head?.querySelector('.Edit'))
+    equal(page.querySelectorAll('[data-binder] [aria-pressed]').length, 0)
+    equal(page.querySelectorAll('[data-binder] select').length, 0)
+  }
+  ok(opened.querySelector('[data-binder] [data-words="doc.body"]'))
+  ok(
+    skill.querySelector(
+      '[data-section="Instructions"] [data-words="content.body"]',
+    ),
+  )
 })

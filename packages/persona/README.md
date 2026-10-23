@@ -274,19 +274,24 @@ chat), and the text it is given. Stacked, as on a phone, the binder comes first
 and the desk last. The binder alone is `Binder`, and a card's face
 (`Card.Context`):
 
-- a persona's binder is its head (naming the project it works for) and its own
-  text, then what it **Carries** (`contains`, said in full) and what it
-  **Reads** (`reads`, named in its Reads list), each in the order an agent reads
-  them (`served`), then, behind a press, the memories in its scope it carries
-  neither way. Carries and Reads are ordered lists edited in place
-  (@yaks/inspect's `Held`): a row dragged between two others is put there, which
-  writes its `edge.ord`, the order an agent reads it in, and a row opens where
-  it stands on its document's title and body, to type over. A row dragged onto
-  another list moves there, where it is dropped; onto Not carried it leaves
-  both. Any row that carries its entity (@yaks/ux `carry`), a row of the desk or
-  of any list in browse, drops the same way. A document on both lists is said
-  once, in full, and the binder says so;
-- a skill's binder is its description and its instructions.
+- a persona's binder is its head, its title and the project it works for, and
+  its own text, each changed where it stands as everywhere in browse (the title
+  typed over, the project picked, the text read as markdown and typed over on a
+  double-click: @yaks/inspect's `Words`); then a list for each relation it links
+  to documents by, headed by the relation's name: **Contains** (`contains`
+  edges: each said in full, in the order an agent is given them, `served`; a
+  tool it contains is offered, not said) and **Reads** (`reads` edges: each
+  listed by id and title under the text's `## Reads`); then, behind a press, the
+  memories in its scope it has neither edge to. Contains and Reads are ordered
+  lists edited in place (@yaks/inspect's `Held`): a row dragged between two
+  others is put there, which writes its `edge.ord`, and a row opens where it
+  stands on its document's title and body, to type over. A row dragged onto the
+  other list moves its edge there, where it is dropped; onto the memories with
+  neither edge, it loses both. Any row that drags its entity (@yaks/ux `drag`),
+  a row of the desk or of any list in browse, drops the same way. A document
+  both lists lead to is said once, in full, and the binder says so;
+- a skill's binder is its name, its description and its instructions, each
+  changed where it stands.
 
 Each row is drawn by its own renderer, asked for as `Context.List.Tile`.
 

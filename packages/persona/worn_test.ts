@@ -36,7 +36,7 @@ let graph = (...bundles: Bundle[]): Graph => {
 test('contains carries the doc, reads only names it', () => {
   let g = graph(link('n1', 'contains', 'm1'), link('n1', 'reads', 'm2'))
   let worn = now(g, 'n1')!
-  assertEquals(ids(worn.carries), ['m1'])
+  assertEquals(ids(worn.contains), ['m1'])
   assertEquals(ids(worn.names), ['m2'])
   assertEquals(worn.persona.entity.eid, 'n1')
 })
@@ -47,7 +47,7 @@ test('the authored order is the order: ord first, then the end it points at', ()
     link('n1', 'contains', 'm1', 9),
     link('n1', 'contains', 'm2', 2),
   )
-  assertEquals(ids(now(g, 'n1')!.carries), ['m3', 'm2', 'm1'])
+  assertEquals(ids(now(g, 'n1')!.contains), ['m3', 'm2', 'm1'])
 })
 
 test('an unordered link sorts after the ordered ones, stably', () => {
@@ -56,7 +56,7 @@ test('an unordered link sorts after the ordered ones, stably', () => {
     link('n1', 'contains', 'm2'),
     link('n1', 'contains', 'm1', 1),
   )
-  assertEquals(ids(now(g, 'n1')!.carries), ['m1', 'm2', 'm3'])
+  assertEquals(ids(now(g, 'n1')!.contains), ['m1', 'm2', 'm3'])
 })
 
 test('a carried persona folds in: its voice is carried and its tiers join', () => {
@@ -67,7 +67,7 @@ test('a carried persona folds in: its voice is carried and its tiers join', () =
     link('n2', 'reads', 'm2'),
   )
   let worn = now(g, 'n1')!
-  assertEquals(ids(worn.carries), ['n2', 'm1'])
+  assertEquals(ids(worn.contains), ['n2', 'm1'])
   assertEquals(ids(worn.names), ['m2'])
 })
 
@@ -78,7 +78,7 @@ test('a named persona is only named — what it holds stays where it is', () => 
     link('n2', 'contains', 'm1'),
   )
   let worn = now(g, 'n1')!
-  assertEquals(ids(worn.carries), [])
+  assertEquals(ids(worn.contains), [])
   assertEquals(ids(worn.names), ['n2'])
 })
 
@@ -90,7 +90,7 @@ test('a doc carried and named is carried once', () => {
     link('n2', 'contains', 'm1'),
   )
   let worn = now(g, 'n1')!
-  assertEquals(ids(worn.carries), ['n2', 'm1'])
+  assertEquals(ids(worn.contains), ['n2', 'm1'])
   assertEquals(ids(worn.names), [])
 })
 
@@ -101,7 +101,7 @@ test('a ring of personas ends the gather rather than spinning', () => {
     link('n2', 'contains', 'n1'),
     link('n2', 'contains', 'm1'),
   )
-  assertEquals(ids(now(g, 'n1')!.carries), ['n2', 'm1'])
+  assertEquals(ids(now(g, 'n1')!.contains), ['n2', 'm1'])
 })
 
 test('a proposal is said only once somebody approves it', () => {
@@ -114,7 +114,7 @@ test('a proposal is said only once somebody approves it', () => {
     link('n1', 'reads', 'm3'),
   )
   let worn = now(g, 'n1')!
-  assertEquals(ids(worn.carries), [])
+  assertEquals(ids(worn.contains), [])
   assertEquals(ids(worn.names), ['m3'])
 })
 
@@ -134,7 +134,7 @@ test('a relation this vocabulary never declares contributes nothing', () => {
     link('n1', 'reads', 'm1'),
   ])
   let worn = now(g, 'n1', thin)!
-  assertEquals(ids(worn.carries), [])
+  assertEquals(ids(worn.contains), [])
   assertEquals(ids(worn.names), ['m1'])
 })
 
@@ -157,7 +157,7 @@ test('a persona offers the tools it contains, and those a persona it carries con
 })
 
 test('a contained tool is never carried or said', () => {
-  assertEquals(ids(toolsWorn.carries), ['n2', 'm1'])
+  assertEquals(ids(toolsWorn.contains), ['n2', 'm1'])
   assert(!voice(said)(toolsWorn).includes('topic_find'))
 })
 

@@ -33,7 +33,7 @@ import { lineage } from '@yaks/project'
 import type { Vocab } from '@yaks/vocab'
 import { PERSONA } from './comp.ts'
 import { voice, type Worn } from './voice.ts'
-import { beside, CARRIES, fold, wear } from './worn.ts'
+import { beside, CONTAINS, fold, wear } from './worn.ts'
 
 let comp = (b: Bundle | undefined, name: string): Comp =>
   (b?.[name] ?? {}) as Comp
@@ -51,7 +51,7 @@ export let commons = async (
   projects: Eid[],
 ): Promise<Map<Eid, Bundle>> => {
   let out = new Map<Eid, Bundle>()
-  let tag = relations(g.vocab)[CARRIES]
+  let tag = relations(g.vocab)[CONTAINS]
   if (!tag || !projects.length) return out
   let homed = await g.storage.read(
     and(present(PERSONA), eq(`${PERSONA}.home`, value(projects))),

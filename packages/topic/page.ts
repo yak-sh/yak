@@ -122,7 +122,7 @@ let Contents = ({ e, io, notes }: Of): JSX.Element => {
 
 /** One part's far ends, each drawn by its own renderer, in edge order: an
  * ordered list edited in place (@yaks/inspect `Held`), which an entity
- * carried from elsewhere joins where a part names one relation. */
+ * dragged from elsewhere joins where a part names one relation. */
 let Relation = (
   { e, io, notes, heading, rels, edges, ends }: Of & {
     heading: string

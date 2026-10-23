@@ -3,8 +3,8 @@
  * order where it stands: `Held`. Each row is the entity a link leads to,
  * drawn by its own renderer (the view `tile` names). Where the host takes
  * edits, a row is picked up and dropped between two others, which writes the
- * links' positions (`edge.ord`, @yaks/edge `placed`), and an entity carried
- * from elsewhere (@yaks/ux `carry`: a row of another list, of a desk) joins
+ * links' positions (`edge.ord`, @yaks/edge `placed`), and an entity dragged
+ * from elsewhere (@yaks/ux `drag`: a row of another list, of a desk) joins
  * the list where it is dropped, linked by `tag`. Each row opens in place on
  * the title and body of what it leads to, typed over where they stand
  * (@yaks/ux `Edit.Text`), and read only where the host takes no edits.
@@ -36,6 +36,7 @@ import { relation, str } from './read.ts'
 import { relations } from './schema.ts'
 import { refusal, write } from './state.ts'
 import { mention } from './value.ts'
+import { Words } from './Words.ts'
 
 /** What a list of what an entity holds is drawn with. */
 export type HeldProps = {
@@ -77,7 +78,13 @@ let Detail = ({ io, end, owner }: { io: Io; end: Bundle; owner: string }) => {
     ui.Rows.Detail,
     { 'data-detail': eid },
     h('strong', {}, text('title', { inline: true })),
-    h(ui.Body, {}, text('body', { multi: true })),
+    h(Words, {
+      io,
+      e: end,
+      comp: 'doc',
+      prop: 'body',
+      at: editAt(owner, eid, 'doc', 'body'),
+    }),
     no ? h(ui.Rows.More, { role: 'alert' }, no) : io.edits
       ? h(
         ui.Rows.More,

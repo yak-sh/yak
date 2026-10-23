@@ -1,7 +1,7 @@
 /**
- * A list put in order by dragging its rows: `Order`. Each row carries the
- * entity it stands for (`carry`), so it can be dropped on another list as
- * well, and the list takes any carried entity: dropped between two rows, it
+ * A list put in order by dragging its rows: `Order`. Each row drags the
+ * entity it stands for (`drag`), so it can be dropped on another list as
+ * well, and the list takes any dragged entity: dropped between two rows, it
  * is put there (`onPlace`), whether it was one of the list's rows or came
  * from elsewhere. While one is dragged over the list, a line shows where it
  * would land. That is its state, `Order{at}`, the index of the row it would
@@ -16,13 +16,13 @@ import { type ComponentChildren, h, type JSX } from 'preact'
 import type { Bundle } from '@yaks/graph'
 import { derivedEid } from '@yaks/graph/identity'
 import { Rows } from '@yaks/ui'
-import { carried, carries, carry } from './carry.ts'
+import { drag, dragged, drags } from './drag.ts'
 
-/** The page entity carrying this owner's order state. */
+/** The page entity holding this owner's order state. */
 export let orderAt = (owner: string): string =>
   derivedEid(['Order', owner].join('|'))
 
-/** Where a carried entity would land, or nothing while none is dragged over
+/** Where a dragged entity would land, or nothing while none is dragged over
  * the list. */
 /// landing({ entity: { eid: 'o' }, Order: { at: 2 } }) -> 2
 /// landing({ entity: { eid: 'o' } }) -> undefined
@@ -31,7 +31,7 @@ export let landing = (e?: Bundle): number | undefined => {
   return typeof at == 'number' ? at : undefined
 }
 
-/** The bundle saying where a carried entity would land; `null`, nowhere. */
+/** The bundle saying where a dragged entity would land; `null`, nowhere. */
 /// landed({ entity: { eid: 'o' } }, 1) -> { entity: { eid: 'o' }, Order: { at: 1 } }
 /// landed({ entity: { eid: 'o' } }, null).Order -> null
 export let landed = (e: Bundle, at: number | null): Bundle => ({
@@ -105,7 +105,7 @@ export let Order = (
   let takes = onPlace
     ? {
       onDragOver: (ev: Ev) => {
-        if (!carries(ev)) return
+        if (!drags(ev)) return
         ev.preventDefault()
         land(among(boxes(ev.currentTarget), ev.clientY))
       },
@@ -113,7 +113,7 @@ export let Order = (
         if (!ev.currentTarget.contains(ev.relatedTarget as Node)) land(null)
       },
       onDrop: (ev: Ev) => {
-        let eid = carried(ev)
+        let eid = dragged(ev)
         land(null)
         if (!eid) return
         ev.preventDefault()
@@ -127,7 +127,7 @@ export let Order = (
     onPlace
       ? {
         draggable: true,
-        onDragStart: (ev: DragEvent) => carry(ev, id),
+        onDragStart: (ev: DragEvent) => drag(ev, id),
         onDragEnd: () => land(null),
       }
       : {}

@@ -9,8 +9,8 @@
  * (`Conversation`). Stacked, as on a phone, the one open comes first and the
  * desk last.
  *
- * A row of the desk carries its entity when dragged (@yaks/ux `carry`), so a
- * persona dropped on another's binder is carried by it.
+ * A row of the desk drags its entity (@yaks/ux `drag`), so a persona dropped
+ * on another's binder is linked from it there.
  *
  * What is typed to find one is the person's draft (the UX host's `drafts`), so
  * it stays as they go from one to the next, and in every interface they use.
@@ -21,7 +21,7 @@
 import { h, type JSX } from 'preact'
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import * as ui from '@yaks/ui'
-import { carry, useHost } from '@yaks/ux'
+import { drag, useHost } from '@yaks/ux'
 import {
   type Answer,
   type Bundle,
@@ -135,7 +135,7 @@ let Find = ({ io, said, personas, skills }: Shelved & { io: Io }) => {
 type Drawn = { io: Io; lit?: string; covers?: boolean }
 
 /** One persona or skill on the desk, linked to its page, lit when open, its
- * cover under it where covers show. Dragged, it carries itself. */
+ * cover under it where covers show. Dragged, it drags itself. */
 let Item = (
   { io, b, lit, covers }: Drawn & { b: Bundle },
 ): JSX.Element => {
@@ -153,7 +153,7 @@ let Item = (
     {
       role: 'listitem',
       'data-given': eid,
-      onDragStart: (ev: DragEvent) => carry(ev, eid),
+      onDragStart: (ev: DragEvent) => drag(ev, eid),
     },
     h(
       ui.Tile,
@@ -238,7 +238,7 @@ export let DeskPage = ({ io }: Props): JSX.Element => {
       h(
         ui.Head.Sub,
         {},
-        'What agents are given: every persona and skill, and what each carries. Open one to arrange it, read what an agent receives, and try it.',
+        'What agents are given: every persona and skill, and what each contains and reads. Open one to arrange it, read what an agent is given, and try it.',
       ),
       ready
         ? h(
@@ -290,8 +290,8 @@ export let Workshop = ({ e, io }: Props): JSX.Element => {
           : null,
         h(
           ui.Section,
-          { 'data-section': 'What an agent reads' },
-          h(ui.Section.Title, {}, 'What an agent reads'),
+          { 'data-section': 'What an agent is given' },
+          h(ui.Section.Title, {}, 'What an agent is given'),
           io.show(e, 'Markdown', {}),
         ),
       ),

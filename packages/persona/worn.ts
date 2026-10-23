@@ -40,7 +40,7 @@ import { PERSONA } from './comp.ts'
 import type { Worn } from './voice.ts'
 
 /** The relation whose far end is included in full. */
-export let CARRIES = 'contains'
+export let CONTAINS = 'contains'
 
 /** The relation whose far end is only listed by id. */
 export let READS = 'reads'
@@ -121,7 +121,7 @@ export let wear = (
     after(storage.get([eid]), (found) => {
       let persona = found[0]
       if (!persona?.[PERSONA]) return undefined
-      let carries = new Map<Eid, Bundle>()
+      let contained = new Map<Eid, Bundle>()
       let names = new Map<Eid, Bundle>()
       let tools = new Map<Eid, Bundle>()
       let seen = new Set<Eid>([eid])
@@ -129,7 +129,7 @@ export let wear = (
       return after(
         each(Array.from({ length: DEPTH }, (_, i) => i), null, () => {
           if (!level.length) return null
-          return after(links(storage, level, tags[CARRIES]), (held) =>
+          return after(links(storage, level, tags[CONTAINS]), (held) =>
             after(links(storage, level, tags[READS]), (said) =>
               after(
                 storage.get([...new Set([...held, ...said])]),
@@ -152,7 +152,7 @@ export let wear = (
                       continue
                     }
                     seen.add(id)
-                    carries.set(id, b)
+                    contained.set(id, b)
                     // An included persona's text is included like any other
                     // document; the documents it links to are read on the
                     // next level.
@@ -178,13 +178,13 @@ export let wear = (
           // Inclusion wins: a document listed in one place and included in
           // another is included once, and never appears twice. The persona
           // itself is neither — its text is what the document opens with.
-          for (let id of carries.keys()) {
+          for (let id of contained.keys()) {
             names.delete(id)
           }
           names.delete(eid)
           return {
             persona,
-            carries: [...carries.values()],
+            contains: [...contained.values()],
             names: [...names.values()],
             tools: [...tools.values()],
           }
@@ -204,20 +204,22 @@ let eidOf = (b: Bundle): Eid => b.entity.eid
  */
 export let fold = (head: Worn, ...more: Worn[]): Worn => {
   let lead = eidOf(head.persona)
-  let carries = new Map(head.carries.map((b) => [eidOf(b), b]))
+  let contained = new Map(head.contains.map((b) => [eidOf(b), b]))
   let names = new Map(head.names.map((b) => [eidOf(b), b]))
   let tools = new Map(head.tools.map((b) => [eidOf(b), b]))
   for (let w of more) {
-    for (let b of [w.persona, ...w.carries]) {
-      if (eidOf(b) != lead && !carries.has(eidOf(b))) carries.set(eidOf(b), b)
+    for (let b of [w.persona, ...w.contains]) {
+      if (eidOf(b) != lead && !contained.has(eidOf(b))) {
+        contained.set(eidOf(b), b)
+      }
     }
     for (let b of w.names) if (!names.has(eidOf(b))) names.set(eidOf(b), b)
     for (let b of w.tools) if (!tools.has(eidOf(b))) tools.set(eidOf(b), b)
   }
-  for (let id of [lead, ...carries.keys()]) names.delete(id)
+  for (let id of [lead, ...contained.keys()]) names.delete(id)
   return {
     persona: head.persona,
-    carries: [...carries.values()],
+    contains: [...contained.values()],
     names: [...names.values()],
     tools: [...tools.values()],
   }
@@ -231,11 +233,11 @@ export let fold = (head: Worn, ...more: Worn[]): Worn => {
  * twice.
  */
 export let beside = (w: Worn, said: Worn): Worn => {
-  let carried = new Set([said.persona, ...said.carries].map(eidOf))
-  let named = new Set([...carried, ...said.names.map(eidOf)])
+  let included = new Set([said.persona, ...said.contains].map(eidOf))
+  let named = new Set([...included, ...said.names.map(eidOf)])
   return {
     persona: w.persona,
-    carries: w.carries.filter((b) => !carried.has(eidOf(b))),
+    contains: w.contains.filter((b) => !included.has(eidOf(b))),
     names: w.names.filter((b) => !named.has(eidOf(b))),
     tools: w.tools,
   }

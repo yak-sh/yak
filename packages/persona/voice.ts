@@ -44,7 +44,7 @@ export type Worn = {
   /** the persona itself — its `doc` body is the instruction text */
   persona: Bundle
   /** the documents it includes: each body in full */
-  carries: Bundle[]
+  contains: Bundle[]
   /** the documents it only mentions: one line apiece */
   names: Bundle[]
   /** the tools a session wearing it is offered: each registered tool
@@ -102,10 +102,10 @@ export let voice = (vocab: Vocab): (worn: Worn) => string => {
   let head = (b: Bundle): string => safe(`${id(b)} ${prop(b, TITLE)}`).trim()
   let part = (b: Bundle): string =>
     [`# ${head(b)}`, prop(b, BODY).trim()].filter(Boolean).join('\n\n')
-  return ({ persona, carries, names }) =>
+  return ({ persona, contains, names }) =>
     [
       part(persona),
-      ...carries.map(part),
+      ...contains.map(part),
       ...names.length
         ? [
           `${NAMED}\n\n${ASK}\n\n${

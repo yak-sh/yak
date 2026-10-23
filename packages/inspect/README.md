@@ -51,7 +51,7 @@ place, for any package's page: each row is the entity a link leads to, drawn by
 the view the caller names (`tile`), in the order the caller gives the links.
 Where the host takes edits, a row dragged between two others is put there, which
 writes the links' positions (`edge.ord`, @yaks/edge's `placed`), and an entity
-carried from elsewhere (@yaks/ux's `carry`) joins the list where it is dropped,
+dragged from elsewhere (@yaks/ux's `drag`) joins the list where it is dropped,
 linked by `tag`; `join` says what else that writes, or refuses it. Each row
 opens in place on the title and body of what it leads to, typed over where they
 stand (@yaks/ux's `Edit.Text`). @yaks/persona's binder and @yaks/topic's page
@@ -67,6 +67,18 @@ h(Held, {
   tag: 'contains',
   empty: 'nothing yet',
 })
+```
+
+## What an entity says, where it stands
+
+`Words` draws a body (`comp.prop`, markdown) the way browse draws every body:
+read as markdown, and typed over in its source on a double-click (@yaks/ux's
+`Edit.Text`), written when the person leaves it. Where the host takes no edits
+it is only read. `Held`'s rows and @yaks/persona's binders draw their documents'
+bodies with it.
+
+```ts ignore
+h(Words, { io, e, comp: 'doc', prop: 'body' })
 ```
 
 ## Code written for a storage, in a view

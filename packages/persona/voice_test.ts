@@ -20,7 +20,7 @@ let who = (over: Partial<Worn> = {}): Worn => ({
     doc: { title: 'TaskMaster', body: 'the voice itself' },
     persona: {},
   },
-  carries: [],
+  contains: [],
   names: [],
   tools: [],
   ...over,
@@ -33,7 +33,7 @@ test('the persona leads: its own doc is the voice', () => {
 })
 
 test('what it carries rides whole, a rule between each', () => {
-  let out = told({ carries: [says('m1', 3, 'delegation', 'fork the work')] })
+  let out = told({ contains: [says('m1', 3, 'delegation', 'fork the work')] })
   assertEquals(
     out,
     '# N-1 TaskMaster\n\nthe voice itself\n\n---\n\n' +
@@ -42,7 +42,7 @@ test('what it carries rides whole, a rule between each', () => {
 })
 
 test('a carried body keeps its own headings — the frame is H1 and a rule', () => {
-  let out = told({ carries: [says('m1', 3, 'style', '## Rules\n\n- one')] })
+  let out = told({ contains: [says('m1', 3, 'style', '## Rules\n\n- one')] })
   assert(out.includes('# M-3 style\n\n## Rules\n\n- one'))
 })
 
@@ -62,12 +62,12 @@ test('a control byte in a title never reaches the document', () => {
   // Said as a code, never as the byte: a source file carrying one is binary to
   // git, and a binary file cannot be merged (bin/check-bytes.ts).
   let esc = String.fromCharCode(27)
-  let out = told({ carries: [says('m1', 3, `be${esc}[31mred`, 'body')] })
+  let out = told({ contains: [says('m1', 3, `be${esc}[31mred`, 'body')] })
   assert(out.includes('# M-3 be[31mred'), out)
   assert(!out.includes(esc), 'an escape reached the reader')
 })
 
 test('a doc with no title is its id, and one with no body is its heading', () => {
-  let out = told({ carries: [says('m1', 3, '', '')] })
+  let out = told({ contains: [says('m1', 3, '', '')] })
   assertEquals(out.split('---\n\n')[1], '# M-3\n')
 })

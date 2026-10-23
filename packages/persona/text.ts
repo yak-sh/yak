@@ -1,7 +1,7 @@
 /**
  * What an agent is given, as the Markdown view of a persona or a skill draws
  * it, so that view is the preview. A persona's is its whole text: its own
- * words, then each document it carries in full and its Reads list, the text
+ * words, then each document it contains in full and what it reads, the text
  * `yak persona read` says and a session wearing it is given (`voice` of
  * `wear`). The page composes it with that same code over what the page holds
  * (@yaks/inspect's `useReading`), so it is recomposed as anything it read

@@ -14,9 +14,9 @@
  *   `isOpen`, `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
  *   (./host.ts).
- * - `carry`, `carries`, `carried`: an entity carried by a drag from one
- *   place to another, whoever drew either (./carry.ts).
- * - `Order`: a list put in order by dragging its rows, taking a carried
+ * - `drag`, `drags`, `dragged`: an entity dragged from one place to
+ *   another, whoever drew either (./drag.ts).
+ * - `Order`: a list put in order by dragging its rows, taking a dragged
  *   entity between two of them; `orderAt`, `landing`, `landed`, `among`,
  *   `placing`, its page eid, bundles and arithmetic, pure (./Order.ts).
  * - `useEdit`, `Editing`: an `Edit`'s state, read and changed by whoever
@@ -61,7 +61,7 @@ export {
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
-export { CARRIED, carried, carries, carry } from './carry.ts'
+export { drag, DRAGGED, dragged, drags } from './drag.ts'
 export {
   among,
   landed,
