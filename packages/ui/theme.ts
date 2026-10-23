@@ -35,7 +35,8 @@ export type Colors = {
   accent: string
   /** a link, whatever part it is in */
   link: string
-  /** a section's title */
+  /** a section's title: the text's own ink in both themes, set apart by
+   * size and weight, not hue */
   heading: string
   /** the tones a state is said in (a `Dot`'s): something to know, or still
    * open */

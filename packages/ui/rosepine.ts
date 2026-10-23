@@ -13,6 +13,7 @@ let rose = '#ebbcba'
 let pine = '#31748f'
 let foam = '#9ccfd8'
 let iris = '#c4a7e7'
+let fg = '#e0def4'
 
 /** Rosé Pine (main). */
 export let rosepine: Theme = {
@@ -23,12 +24,12 @@ export let rosepine: Theme = {
     card: '#26233a',
     border: '#403d52',
     border2: '#524f67',
-    text: '#e0def4',
+    text: fg,
     muted: '#908caa',
     dim: '#6e6a86',
     accent: rose,
     link: iris,
-    heading: foam,
+    heading: fg,
     info: foam,
     active: rose,
     positive: pine,

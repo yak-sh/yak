@@ -267,7 +267,8 @@ The CSS custom properties use the same names as `Colors`:
   come from the palette's darker greys so they read on the three floors, and the
   hues are as the palette gives them.
 - Selection and the primary action: `--accent`; links: `--link`; section titles:
-  `--heading`.
+  `--heading`, the text's own ink in both themes: a heading is set apart by size
+  and weight, never a hue.
 - Dot tones: `--info`, `--active`, `--positive`, `--negative`, `--caution`,
   `--special`.
 - Values: `--number`, `--literal` (true, false, null), `--time`, `--who`; code
