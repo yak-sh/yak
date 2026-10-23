@@ -710,3 +710,86 @@ test('a worker serving every enabled effect keeps the pool presence lease', asyn
   }
   assertEquals(await working(server.g), false)
 })
+
+// The graph as the pool alone sees it (`Access`): the runs owed, kept as it
+// writes them, and each `worker` row it says, in order. Every read answers
+// alike, so a pass here examines one candidate (`page: 1`).
+let bare = (owed: string[]) => {
+  let runs = new Map<string, Comp>(owed.map((eid) => [eid, {
+    handler: 'post_note',
+    target: eid,
+    kind: 'created',
+    comp: 'post',
+    state: 'pending',
+    attempts: 0,
+  }]))
+  let said: (Comp | null)[] = []
+  let heard = () => {}
+  let g = {
+    vocab: pooledBlog,
+    read: () =>
+      [...runs].filter(([, r]) => !r.lease_owner && !r.next)
+        .map(([eid, effect]) => ({ entity: { eid }, effect })),
+    get: () => [],
+    outside: { get: () => [] },
+    apply: (bundles: Bundle[]) => {
+      for (let b of bundles) {
+        let eid = b.entity.eid
+        if (b.worker !== undefined) {
+          said.push(b.worker as Comp | null)
+          heard()
+        } else if (b.$delete) runs.delete(eid)
+        else runs.set(eid, { ...runs.get(eid), ...b.effect as Comp })
+      }
+      return bundles
+    },
+  } as unknown as Access
+  let says = () => new Promise<void>((done) => heard = done)
+  return { g, runs, said, says }
+}
+
+test('a worker that stays says what it is running and what ended, and takes its row when it leaves', async () => {
+  let t = Date.now()
+  let fx = effects(pooledBlog, {
+    owner: 'server',
+    now: () => t,
+    cpu: () => 0,
+    backoff: () => 60_000,
+    page: 1,
+    report: () => {},
+  })
+  let release = () => {}
+  let held = new Promise<void>((done) => release = done)
+  fx.handle({
+    post_note: (e) => {
+      if (e.entity.eid == 'p0') throw new Error('no')
+      if (e.entity.eid == 'p2') return held
+    },
+  })
+  // A run ends in an error a second before it says anything.
+  let { g, runs, said, says } = bare(['p0'])
+  await fx.work(g, undefined, 1)
+  t += 1000
+  runs.set('p2', { ...runs.get('p0'), target: 'p2', next: null })
+  let up = new AbortController()
+  let first = says()
+  let serving = fx.work(g, up.signal)
+  try {
+    await first
+    let [w] = said as Comp[]
+    assertEquals(
+      (w.runs as Comp[]).map((r) => [r.handler, r.target, r.since]),
+      [['post_note', 'p2', new Date(t).toISOString()]],
+    )
+    assertEquals([w.running, w.ran, w.errors, w.cpu], [1, 1, 1, 0])
+    let history = w.history as number[]
+    assertEquals([history.length, history.at(-1)], [60, 1])
+    assertEquals(typeof w.lag, 'number')
+  } finally {
+    up.abort()
+    await serving
+    release()
+    await fx.stop()
+  }
+  assertEquals(said.at(-1), null)
+})

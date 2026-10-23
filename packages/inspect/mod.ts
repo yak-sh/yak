@@ -13,6 +13,7 @@ export type { HeadCtx } from './Head.ts'
 export type { FactsCtx } from './Facts.ts'
 export type { LinksCtx } from './Links.ts'
 export { mention, reads } from './value.ts'
+export { effectEid } from './schema.ts'
 export type {
   Answer,
   Ask,

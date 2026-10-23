@@ -54,6 +54,7 @@ import { sandboxCapabilities } from './sandboxes.ts'
  */
 
 import { UNNUMBERED } from './init.ts'
+import { cpuUsage } from 'node:process'
 import type { Actor, Bundle, Comp, Eid, Graph } from '@yaks/graph'
 import { Stale } from '@yaks/graph/errors'
 import { hit } from '@yaks/graph/hit'
@@ -710,6 +711,11 @@ let composed = async (
           owner: built.me,
           lease: config.lease,
           gone: built.gone,
+          // How busy a worker says its process is (@yaks/effects worker).
+          cpu: () => {
+            let { user, system } = cpuUsage()
+            return (user + system) / 1000
+          },
           nudge: opts.thread?.nudge,
           // Runs another process commits wake this one's pool at once.
           watch: (heard) => store?.watch?.(EFFECT, heard) ?? (() => {}),

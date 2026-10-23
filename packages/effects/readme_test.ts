@@ -73,7 +73,7 @@ const example4 = (() => {
 test('a failed observer reports without preventing other handlers', example4)
 
 const example13 = await (async () => {
-  let vocab = loadVocab([effectDoc, { $defs: { worker: { component: true } } }])
+  let vocab = loadVocab([effectDoc])
   let g = graph({ storage: ram(vocab), vocab })
   await g.apply([
     { entity: { eid: 'w1' }, worker: {} },

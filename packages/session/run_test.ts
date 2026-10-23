@@ -42,9 +42,10 @@ import { sessionTools } from './children.ts'
 import { RUN, type Runner, running, settle } from './run.ts'
 import { match, test, until } from '@yaks/testing'
 
-let worker: VocabDoc = {
+// What the workers' entities carry, standing in for their process rows.
+let stand: VocabDoc = {
   $defs: {
-    worker: { component: true, type: 'object', properties: {} },
+    stand: { component: true, type: 'object', properties: {} },
   },
 }
 let vocab = loadVocab([
@@ -59,7 +60,7 @@ let vocab = loadVocab([
   modelDoc,
   effectDoc,
   processDoc,
-  worker,
+  stand,
 ], [kernelKeywords])
 
 let P = identityEid('provider', ['fake'])
@@ -68,7 +69,7 @@ let M = identityEid('model', ['fake-1'])
 
 // Each worker the pool and runner name stands in the fixture's graph.
 let seedWorkers = (g: Graph) =>
-  g.apply(['w1', 'w2'].map((eid) => ({ entity: { eid }, worker: {} })))
+  g.apply(['w1', 'w2'].map((eid) => ({ entity: { eid }, stand: {} })))
 
 let store = (): Storage => {
   let s = storage(mem(), vocab, { derived: sessionDerived(vocab) })
@@ -523,7 +524,7 @@ test('a graph with tasks and no claims runs its transcripts', async () => {
     pick(kernelDoc, ['completed']),
     toolsDoc,
     modelDoc,
-    worker,
+    stand,
   ])
   let s = storage(mem(), words, { derived: sessionDerived(words) })
   s.install()

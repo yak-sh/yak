@@ -1,0 +1,43 @@
+/* The few numbers a page is about: tiles side by side, as many to a line as
+   fit, each its number large over the words saying what it counts. The
+   number keeps its digits in columns, so a value that moves does not shift. */
+.Stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--gap);
+}
+.Stats_Item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--gap);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.Stats_Value {
+  font-size: var(--h1);
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.Stats_Value-caution {
+  color: var(--caution);
+}
+.Stats_Value-negative {
+  color: var(--negative);
+}
+.Stats_Label {
+  font-size: var(--small);
+  color: var(--muted);
+}
+.Stats_Note {
+  margin-top: 4px;
+  font-size: var(--small);
+  color: var(--muted);
+  overflow: hidden;
+}

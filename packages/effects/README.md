@@ -72,16 +72,17 @@ deno add jsr:@yaks/effects
 
 ## Exports
 
-| Import                | Exports                                                                                                                                                                                                                                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@yaks/effects`       | `effects`; registry, handler, registration and event types; `before`, `wanting`, `events`, `strip`, `BEFORE`; `generation`, `marked`, `unmark`, `ORIGIN`, `Write`; `pool`, `working`, `effectDoc`, pool types and retry settings; lease operations and types; `expire`, `expireDaily`, `expiration`; `PROVISIONAL`, `provisionalDoc` |
-| `@yaks/effects/vocab` | `docs`, `description`, `effectDoc`, `provisionalDoc`                                                                                                                                                                                                                                                                                 |
-| `@yaks/effects/tools` | `runs`, `Options`: implementation and configuration of `effect_check`                                                                                                                                                                                                                                                                |
+| Import                | Exports                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/effects`       | `effects`; registry, handler, registration and event types; `before`, `wanting`, `events`, `strip`, `BEFORE`; `generation`, `marked`, `unmark`, `ORIGIN`, `Write`; `pool`, `working`, `effectDoc`, pool types and retry settings; lease operations and types; `expire`, `expireDaily`, `expiration`; `PROVISIONAL`, `provisionalDoc`; `WORKER` and the `Worker` it says |
+| `@yaks/effects/vocab` | `docs`, `description`, `effectDoc`, `provisionalDoc`                                                                                                                                                                                                                                                                                                                    |
+| `@yaks/effects/tools` | `runs`, `Options`: implementation and configuration of `effect_check`                                                                                                                                                                                                                                                                                                   |
+| `@yaks/effects/views` | `destinations`, `inspectViews`, `icons`: the Effects page a browsing app offers                                                                                                                                                                                                                                                                                         |
 
-`effectDoc` declares `effect`, `lease`, `provisional`, and `effect_check`.
-`docs` contains `effectDoc`; loading it alone does not install a registry or
-work the pool. `provisionalDoc` declares only `provisional`; load one document
-or the other.
+`effectDoc` declares `effect`, `lease`, `worker`, `provisional`, and
+`effect_check`. `docs` contains `effectDoc`; loading it alone does not install a
+registry or work the pool. `provisionalDoc` declares only `provisional`; load
+one document or the other.
 
 ## Observers and events
 
@@ -386,6 +387,21 @@ handling only some effects holds no presence lease. Signal abort or `stop` stops
 further claims; `idle` and `stop` wait for started runs while renewing their
 claims. Abort the live `work` signal to end its loop.
 
+### What a worker says
+
+A worker with an `owner` entity says what it is doing while its live `work`
+runs, about once a second, as a `worker` component on that entity:
+`worker{at, running, runs, ran, errors, history, cpu, lag}`. `running` counts
+its runs going and `runs` lists the oldest twenty, each with its handler, target
+and when it started; `ran` and `errors` count the runs it finished since it
+started and how many of those threw; `history` holds how many it finished in
+each of the last sixty whole seconds, oldest first. How busy it is holds however
+many runs it takes at once: `cpu` is the share of a core its process used since
+it last said (from the `cpu` option, the process's CPU time in ms; absent
+without one), and `lag` the most its thread ran a timer late, in ms, which
+climbs as its event loop fills. A row whose `at` stops moving is a worker that
+stopped saying; a worker leaving the pool removes its row.
+
 ### Single-owner stores
 
 **Single-owner mode** means exactly one process exclusively owns the store,
@@ -627,7 +643,6 @@ import { equal } from '@yaks/testing'
 
 let vocab = loadVocab([effectDoc, {
   $defs: {
-    worker: { component: true },
     enabled: { component: true },
     order: { component: true },
     send_receipt: {
@@ -766,7 +781,7 @@ import { ram } from '@yaks/ram'
 import { effectDoc, held, take } from '@yaks/effects'
 import { equal } from '@yaks/testing'
 
-let vocab = loadVocab([effectDoc, { $defs: { worker: { component: true } } }])
+let vocab = loadVocab([effectDoc])
 let g = graph({ storage: ram(vocab), vocab })
 await g.apply([
   { entity: { eid: 'w1' }, worker: {} },
@@ -821,6 +836,18 @@ equal((await g.get(['p1']))[0].provisional, { note: 'updating the index' })
 await g.apply([{ entity: { eid: 'p1' }, [PROVISIONAL]: null }])
 equal((await g.get(['p1']))[0].provisional, undefined)
 ```
+
+## The Effects page
+
+`@yaks/effects/views` offers a browsing app (@yaks/browse) the page its sidebar
+lists as Effects, at `/?effects`: how many workers are up, the runs going every
+second over the last minute, what is waiting and what failed; a row for each
+worker with how busy it is, its loop delay, its runs a second and how long it
+has been up, or how long it has been silent; every run going, the longest first;
+and every declared effect with the runs it is owed, running, waiting, retrying
+and failed, each count a link to those runs. The workers' numbers are their
+`worker` rows; the runs owed are the `effect` rows, tallied by handler. Both are
+subscriptions, so the page moves as they do.
 
 ## Check recorded runs
 

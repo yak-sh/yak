@@ -1,0 +1,14 @@
+/* A series in characters: one cell per value, so it reads the same in a
+   terminal. */
+.Spark {
+  font-family: var(--mono);
+  white-space: pre;
+  letter-spacing: 0;
+  line-height: 1;
+}
+.Spark_Bar {
+  color: var(--accent);
+}
+.Spark_Floor {
+  color: var(--dim);
+}

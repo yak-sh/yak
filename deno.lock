@@ -2107,7 +2107,9 @@
       },
       "packages/effects": {
         "dependencies": [
-          "jsr:@std/assert@1"
+          "jsr:@std/assert@1",
+          "npm:lucide@1.31.0",
+          "npm:preact@^10.29.1"
         ]
       },
       "packages/egress": {

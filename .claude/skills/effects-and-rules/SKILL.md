@@ -217,6 +217,11 @@ explicitly authorized.
 `platform-visualize` traces what ran after a write. The runs themselves:
 
 - `yak effect check`: failed and overdue runs.
+- Browse's Effects page (`/?effects`): the workers up, how busy each is and
+  what each is running, runs a second, and the runs owed by handler. Each
+  worker says itself once a second in a `worker` row on its process entity
+  (packages/effects/worker.ts); `yak graph query '.worker&?process'` reads
+  them.
 - `yak graph query '.effect.state=failed'`, with `effect.error`,
   `effect.touched` (every component the commit moved on that entity) and
   `effect.attempts`.

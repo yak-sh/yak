@@ -154,6 +154,80 @@
         }
       }
     },
+    "worker": {
+      "component": true,
+      "type": "object",
+      "journal": false,
+      "description": "what a process working the effect pool says about itself, on its own process entity, about once a second while it works: how many runs it has going and the oldest of them, how many it has finished, and how busy it is. A row whose `at` stops moving is a worker that stopped saying, because it ended or its thread is stuck; one leaving the pool takes its row with it",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it last said this"
+        },
+        "running": {
+          "type": "integer",
+          "stamped": true,
+          "description": "how many runs it has going"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "run": {
+                "type": "string",
+                "description": "the run's `effect` row"
+              },
+              "handler": {
+                "type": "string",
+                "description": "the declared effect it runs"
+              },
+              "target": {
+                "type": "string",
+                "description": "the entity it runs for"
+              },
+              "since": {
+                "type": "string",
+                "format": "date-time",
+                "description": "when it started"
+              }
+            }
+          },
+          "stamped": true,
+          "description": "the runs it has going, oldest first, at most twenty"
+        },
+        "ran": {
+          "type": "integer",
+          "stamped": true,
+          "description": "how many runs it has finished since it started, however each ended"
+        },
+        "errors": {
+          "type": "integer",
+          "stamped": true,
+          "description": "how many of those threw"
+        },
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "stamped": true,
+          "description": "how many runs it finished in each of the last sixty whole seconds, oldest first"
+        },
+        "cpu": {
+          "type": "number",
+          "stamped": true,
+          "description": "the share of one core its process used since it last said, 1 being a whole core; absent where its host cannot tell"
+        },
+        "lag": {
+          "type": "integer",
+          "stamped": true,
+          "description": "the longest its thread ran a timer late since it last said, in milliseconds: how full its event loop is"
+        }
+      }
+    },
     "provisional": {
       "component": true,
       "journal": false,

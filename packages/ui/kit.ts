@@ -37,7 +37,9 @@ import * as rows from './Rows.ts'
 import * as say from './Say.ts'
 import * as section from './Section.ts'
 import * as shell from './Shell.ts'
+import * as spark from './Spark.ts'
 import * as stamp from './Stamp.ts'
+import * as stats from './Stats.ts'
 import * as table from './Table.ts'
 import * as tabs from './Tabs.ts'
 import * as tile from './Tile.ts'
@@ -64,6 +66,7 @@ let modules = {
     Chip: chip,
     Value: value,
     Meter: meter,
+    Spark: spark,
     Tip: tip,
   },
   Controls: {
@@ -90,6 +93,7 @@ let modules = {
     Loading: loading,
     Shell: shell,
     Head: head,
+    Stats: stats,
     Section: section,
     Panes: panes,
     Overlay: overlay,

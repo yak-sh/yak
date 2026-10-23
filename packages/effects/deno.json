@@ -5,12 +5,15 @@
     ".": "./mod.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
-    "./lease": "./lease.ts"
+    "./lease": "./lease.ts",
+    "./views": "./views.ts"
   },
   "license": "Apache-2.0",
   "description": "Runs application code after graph changes commit, with isolated failures, an optional pool for persisted runs, and leases for work held by one process.",
   "imports": {
-    "@std/assert": "jsr:@std/assert@^1.0.0"
+    "@std/assert": "jsr:@std/assert@^1.0.0",
+    "lucide": "npm:lucide@1.31.0",
+    "preact": "npm:preact@^10.29.1"
   },
   "publish": {
     "exclude": [

@@ -77,6 +77,10 @@
 // are. Only a worker with code for every enabled declared effect holds one: a process
 // lending one effect its code (a terminal running its own transcripts) works
 // that one, and says nothing about the rest.
+//
+// A worker that stays up also says what it is doing, about once a second, on
+// its own process entity: the runs it has going, how many it has finished and
+// how busy it is (./worker.ts). Where it leaves the pool, the row goes too.
 
 import type { Access, Bundle, Comp, Eid, HookContext, Tx } from '@yaks/graph'
 import { after } from '@yaks/fp'
@@ -99,6 +103,7 @@ import type { Write } from './write.ts'
 import { HOLD, LEASE, leaseEid, sleep, take } from './lease.ts'
 import { finishedRun } from './cleanup.ts'
 import { except, ready } from './ready.ts'
+import { lagging, seconds, SHOWN, WORKER } from './worker.ts'
 
 export { effectDoc } from './docs.ts'
 
@@ -232,6 +237,10 @@ export type PoolOpts = {
    * presence need not be waited out. Ending processes release their claims;
    * otherwise claims recover when their leases expire. */
   gone?: (holder: Eid) => boolean | Promise<boolean>
+  /** The CPU time this process has spent so far, in ms (`process.cpuUsage`,
+   * user and system together): a worker that stays says from it how busy its
+   * process is. Without it, a worker says nothing of its CPU. */
+  cpu?: () => number
   /** Hear the runs another process commits soon after they land (@yaks/sqlite
    * `Store.watch` of the `effect` component): `heard` is called, and a
    * worker that stays passes at once instead of at the next pass, up to
@@ -382,6 +391,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
   let graph: Access | undefined
   let running = new Map<Eid, Held>()
   let admitting = 0
+  // Runs that ended here, however they ended: in all, by the second, and how
+  // many threw. What a worker says of itself (./worker.ts).
+  let ran = 0, errors = 0
+  let ends = seconds()
   let loop: { done: Promise<void>; signal: AbortSignal } | undefined
 
   let claim = () =>
@@ -562,6 +575,7 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
             ))
         }
       } catch (err) {
+        errors++
         if (peek(g) && span?.active) {
           span.end({ outcome: outcome(err), counts: { runs: 1 } })
         }
@@ -599,6 +613,8 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       })
       .finally(() => {
         running.delete(eid)
+        ran++
+        ends.count(clock())
         if (full) nap.abort()
       })
     running.set(eid, held)
@@ -811,6 +827,42 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
         handler: POOL,
         event: { kind: 'created', entity: { eid: me }, name: EFFECT },
       })
+    // What it says of itself, about once a second (./worker.ts): busy as the
+    // CPU its process used and how late its thread ran a timer, both over
+    // the time since it last said, by the wall's clock rather than the pool's.
+    let speaks = !opts.singleOwner && !!opts.owner && !!g.vocab.comp(WORKER)
+    let lag = speaks ? lagging() : undefined
+    let spoke = -Infinity
+    let spent = { cpu: opts.cpu?.(), at: performance.now() }
+    let say = async () => {
+      let now = clock()
+      let was = spent
+      spent = { cpu: opts.cpu?.(), at: performance.now() }
+      let cpu = spent.cpu != null && was.cpu != null
+        ? (spent.cpu - was.cpu) / Math.max(1, spent.at - was.at)
+        : undefined
+      let runs = [...running.values()].sort((a, b) => a.since - b.since)
+      await g.apply([{
+        entity: { eid: me },
+        [WORKER]: {
+          at: stamp(now),
+          running: running.size,
+          runs: runs.slice(0, SHOWN).map((r) => ({
+            run: r.eid,
+            handler: r.handler,
+            target: r.target,
+            since: stamp(r.since),
+          })),
+          ran,
+          errors,
+          history: ends.last(now),
+          ...cpu != null ? { cpu: Math.round(cpu * 100) / 100 } : {},
+          lag: lag!.read(),
+        },
+      }], { trusted: true })
+    }
+    // A wake before the first pass is answered by it.
+    if (nap.signal.aborted) nap = new AbortController()
     // A worker that cannot hear other processes still finds their runs, a
     // pass later.
     let unwatch = () => {}
@@ -833,6 +885,10 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
           more = (await pass(g, budget)).more
           budget = page
           await renew(g)
+          if (speaks && clock() - spoke >= CAP) {
+            spoke = clock()
+            await say()
+          }
         } catch (err) {
           if (signal.aborted) break
           told(err)
@@ -847,10 +903,18 @@ export let pool = (ctx: Ctx, opts: Partial<PoolOpts> = {}): Pool => {
       }
     } finally {
       unwatch()
+      lag?.stop()
       if (present) {
         try {
           await g.apply([{ entity: { eid: leaseEid(seat) }, $delete: true }])
         } catch { /* already gone, or the graph is closing */ }
+      }
+      if (speaks) {
+        try {
+          await g.apply([{ entity: { eid: me }, [WORKER]: null }], {
+            trusted: true,
+          })
+        } catch { /* the graph is closing */ }
       }
     }
   }

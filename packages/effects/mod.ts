@@ -84,6 +84,7 @@ export * from './registry.ts'
 export * from './pool.ts'
 export * from './lease.ts'
 export * from './provisional.ts'
+export { type Listed, WORKER, type Worker } from './worker.ts'
 
 export * from './expire.ts'
 
