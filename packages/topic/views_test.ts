@@ -8,7 +8,7 @@ import { parseHTML } from 'linkedom'
 import { equal, ok, test } from '@yaks/testing'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
-import { and } from '@yaks/query'
+import { and, parse } from '@yaks/query'
 import { define, resolve } from '@yaks/render'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
@@ -106,7 +106,14 @@ let tile: View = {
   match: and(),
   Render: ({ e }) => h('span', { 'data-tile': e.entity.eid }, title(e)),
 }
-let registry = define<View>([...inspectViews, ...all, tile])
+// The host's face for a doc's body, the one every doc is drawn by.
+let body: View = {
+  view: 'Body',
+  match: parse('.doc.body'),
+  Render: ({ e }) =>
+    h('div', { 'data-doc': e.entity.eid }, (e.doc as { body: string }).body),
+}
+let registry = define<View>([...inspectViews, ...all, tile, body])
 // A host that draws a comment thread, as browse does (@yaks/kernel's), and a
 // conversation, as browse's chat does.
 let thread: View = {
@@ -198,12 +205,11 @@ let tree = drawn('data', 'Tree')
 let naming = drawn('naming', 'Topic')
 let bare = drawn('naming', 'Tree')
 
-test('a topic reads cover first, then its contents', () => {
+test('a topic reads cover first, drawn as every doc is, then its contents', () => {
   equal(data.querySelector('.Head_Title')?.firstChild?.textContent, 'Data')
-  ok(
-    data.querySelector('[data-cover]')?.textContent?.includes(
-      'What belongs under Data.',
-    ),
+  equal(
+    data.querySelector('[data-body] [data-doc="data"]')?.textContent,
+    'What belongs under Data.',
   )
   equal(part(data, 'Contents')?.querySelector('strong')?.textContent, 'id')
   ok(text(naming, 'Contents').includes('nothing is written'))

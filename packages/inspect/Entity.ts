@@ -30,15 +30,23 @@ import { edited } from './state.ts'
 /** What a page's parts are drawn with: the notes under each heading. */
 export type PageCtx = { notes?: Map<string, Bundle[]> }
 
-/** What an entity says, in full: a doc's body, or a message's words, as
- * markdown. Edited, it is typed over in the facts, so it is not said twice. */
+/** What an entity says, in full: a doc's body drawn by the host's `Body`, the
+ * view every doc's body is drawn by (@yaks/doc's, a document), or a message's
+ * words as markdown. Edited, it is typed over in the facts, so it is not said
+ * twice. */
 export let Body = ({ e, io }: Props): JSX.Element | null => {
   let text = bodyOf(e)
   return text && !edited(io, e.entity.eid)
     ? h(
       ui.Section,
       { 'data-body': '' },
-      h(ui.Body, {}, h(Markdown, { source: text })),
+      h(
+        ui.Body,
+        {},
+        str(e, 'doc', 'body') && io.can(e, 'Body')
+          ? io.show(e, 'Body')
+          : h(Markdown, { source: text }),
+      ),
     )
     : null
 }

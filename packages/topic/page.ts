@@ -1,8 +1,9 @@
 /**
  * A topic's page, read the way a book is: its cover (`doc{title, body}`, the
- * title and a line or two saying what belongs under it), a line to ask about
- * it where the host draws a conversation (`Conversation`: a session opened on
- * the topic, wearing the oracle), its contents (`content.body`, what is
+ * title and a line or two saying what belongs under it, its body drawn as
+ * every doc's is, through `Inspect.Body`), a line to ask about it where the
+ * host draws a conversation (`Conversation`: a session opened on the topic,
+ * wearing the oracle), its contents (`content.body`, what is
  * understood about it), then what it holds (`contains`), what to understand
  * first (`requires`), what is related (`reads`, `references`) and its sources
  * (`cites`), the beliefs about it (`belief.about`), and the comments on it,
@@ -117,18 +118,6 @@ let where = (
       ? ['holds for ', named(io, project)]
       : null,
   ].filter(Boolean).flatMap((said, i) => [i ? ' · ' : null, said])
-
-/** Its cover's words: what belongs under it. */
-let Cover = ({ e, io }: { e: Bundle; io: Io }): JSX.Element | null => {
-  let text = str(e, 'doc', 'body')
-  return text && !edited(io, e.entity.eid)
-    ? h(
-      ui.Section,
-      { 'data-cover': '' },
-      h(ui.Body, {}, h(Markdown, { source: text })),
-    )
-    : null
-}
 
 type Of = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 
@@ -300,7 +289,9 @@ export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
       ),
       notes: notes.get(''),
     }),
-    h(Cover, { e, io }),
+    // Its cover's words, what belongs under it, as any page says what an
+    // entity says; a topic with no cover has its contents said below alone.
+    str(e, 'doc', 'body') ? io.show(e, 'Inspect.Body') : null,
     h(Ask, { e, io }),
     h(Contents, { e, io, notes }),
     ...PARTS.map(([heading, rels]) =>
