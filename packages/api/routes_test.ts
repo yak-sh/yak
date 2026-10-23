@@ -48,6 +48,11 @@ test('with no filter, every route and door answers as before', async () => {
   assertEquals(await status(h, '/nowhere'), 404)
 })
 
+test('a GET route answers a HEAD with its headers and no body', async () => {
+  let res = await host([])(req('/hello', { method: 'HEAD' }))
+  assertEquals([res.status, await res.text()], [200, ''])
+})
+
 test('an HTTP route answers while the graph reader is busy', async () => {
   let graph = shopGraph()
   let slow = Promise.withResolvers<Awaited<ReturnType<typeof graph.read>>>()

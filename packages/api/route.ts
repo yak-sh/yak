@@ -38,9 +38,12 @@ export type Route = {
  * on. */
 export type Filter = (request: Request) => void | Promise<void>
 
-/** Whether a route matches this request's method and path. */
+/** Whether a route matches this request's method and path. A GET route
+ * matches a HEAD too, which is a GET answered without its body (RFC 9110
+ * §9.3.2): how a page asks a bundle's etag without fetching it. */
 export let routed = (route: Route, method: string, path: string): boolean =>
-  (route.method == '*' || route.method == method) &&
+  (route.method == '*' || route.method == method ||
+    route.method == 'GET' && method == 'HEAD') &&
   (route.path.endsWith('*')
     ? path.startsWith(route.path.slice(0, -1))
     : route.path == path)

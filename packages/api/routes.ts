@@ -137,7 +137,9 @@ export let handler = (host: Hosting, options: {
   return served(async (request) => {
     for (let f of filters) await f(request)
     let route = claimed(request)
-    return route ? route.handle(request) : door(request)
+    if (!route) return door(request)
+    let answer = await route.handle(request)
+    return request.method == 'HEAD' ? new Response(null, answer) : answer
   }, {
     graph: host.graph,
     report,
