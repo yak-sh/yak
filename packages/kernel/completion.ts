@@ -2,11 +2,13 @@
 // edits.
 //
 // The hook runs in the `precondition` phase, before @yaks/graph fills in the
-// mark's `{at, by, via}`. For every bundle that writes `completed`, it reads
-// the row already stored: if that row had a `completed` component, its `by` is
-// carried over, so a later patch of the same mark cannot change who finished
-// the work. If there was no such component, `by` is the one on the incoming
-// component, or the `$actor.by` the `apply()` call carries, or null.
+// mark's `{at, by, via}`. For every bundle that writes `completed`, `by` is
+// the one the incoming component names, which only trusted server code can
+// (the wire refuses a stamped property), as a repair or a restore does. A
+// write naming none reads the row already stored: if that row had a
+// `completed` component, its `by` is carried over, so a later patch of the
+// same mark cannot change who finished the work; otherwise `by` is the
+// `$actor.by` the `apply()` call carries, or null.
 
 import { after } from '@yaks/fp'
 import type { Comp } from '@yaks/graph/bundle'
@@ -20,9 +22,10 @@ export let completing: Hook = (bundles, tx) => {
     let previous = new Map(rows.map((b) => [b.entity.eid, b.completed as Comp]))
     for (let b of writes) {
       let old = previous.get(b.entity.eid)
+      let named = (b.completed as Comp).by
       b.completed = {
         ...(b.completed as Comp),
-        by: old ? old.by ?? null : (b.completed as Comp).by ?? actor ?? null,
+        by: named !== undefined ? named : old ? old.by ?? null : actor ?? null,
       }
     }
     return bundles

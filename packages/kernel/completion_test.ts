@@ -41,4 +41,10 @@ test('completion fills an author gap but preserves a named author and later edit
     { entity: { eid: 'voice' }, $actor: { by: 'named' } },
   ])
   assertEquals(await authors(), ['named', 'writer'])
+  // Server code correcting the author names it, and is taken at its word.
+  await g.apply(
+    [{ entity: { eid: 'inferred' }, completed: { by: 'named' } }],
+    { trusted: true, stamp: false },
+  )
+  assertEquals(await authors(), ['named', 'named'])
 })
