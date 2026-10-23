@@ -6,6 +6,7 @@ import * as ui from '@yaks/ui'
 import { copy } from '../clipboard.ts'
 import { usePlaceAt } from '@yaks/ui'
 import {
+  buriedId,
   cache,
   capable,
   clientId,
@@ -76,11 +77,19 @@ export let screenResolving = (at = route.value) => {
 // Whether the route names an id the server says names nothing. The page draws
 // Lost then, whatever its own read of that id was told.
 export let screenGone = (at = route.value) => {
-  let id = addressId(
-    decodeURIComponent(new URL(at, 'http://x').pathname.slice(1)),
-  )
+  let id = screenId(at)
   return !!id && goneId(id)
 }
+
+// The id the route names when the server says it names a deleted entity: the
+// page reads that entity's last version and its history.
+export let screenBuried = (at = route.value): string | undefined => {
+  let id = screenId(at)
+  return id && buriedId(id) ? id : undefined
+}
+
+let screenId = (at: string) =>
+  addressId(decodeURIComponent(new URL(at, 'http://x').pathname.slice(1)))
 
 // The plain-click half of an in-app anchor: modifiers and middle-click keep
 // their new-tab forms; a bare click (tap included) opens the page in place,

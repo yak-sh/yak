@@ -273,6 +273,7 @@ let called = (ast: And, opts: BindOpts, p: Prepared) => {
     spelled,
     o.storageOrder ?? null,
     o.unordered ?? null,
+    opts.graves ?? null,
     o.exactIds ?? null,
     o.missingIndexes ?? null,
     o.visibility ?? null,

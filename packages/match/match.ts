@@ -78,6 +78,9 @@ export type MatchOpts = {
   storageOrder?: boolean
   /** Accept any matching rows when no order or cursor is requested. */
   unordered?: boolean
+  /** Select tombstoned entities too, each matched as an entity holding
+   * nothing would be (@yaks/graph `ReadOpts.graves`). */
+  graves?: boolean
   /** `comp.prop` → the value for one bundle, for a property the vocabulary
    * declares but never stores. The in-memory equivalent of @yaks/sql's
    * `derived` hook: an unregistered computed property is refused, as it is
@@ -149,6 +152,7 @@ type Kept = {
   unordered?: boolean
   exact?: boolean
   eids?: string
+  graves?: boolean
   made: unknown
 }
 let NONE: Computed = {}
@@ -177,7 +181,7 @@ let once = <T>(
   let hit = forms[kind]
   if (
     hit && hit.physical === opts.storageOrder && hit.exact === opts.exactIds &&
-    hit.unordered === opts.unordered &&
+    hit.unordered === opts.unordered && hit.graves === opts.graves &&
     hit.eids === JSON.stringify(opts.eids) &&
     (hit.at === undefined || hit.at === opts.now)
   ) {
@@ -196,6 +200,7 @@ let once = <T>(
     storageOrder: opts.storageOrder,
     unordered: opts.unordered,
     eids: opts.eids,
+    graves: opts.graves,
   }
   let made = make(ctx)
   forms[kind] = {
@@ -204,6 +209,7 @@ let once = <T>(
     unordered: opts.unordered,
     exact: opts.exactIds,
     eids: JSON.stringify(opts.eids),
+    graves: opts.graves,
     made,
   }
   return made
@@ -382,7 +388,7 @@ let selection = (ctx: Ctx, q: And): Select => {
     let sort = sorted(among)
     let out: Bundle[] = []
     for (let b of candidates(needs, among)) {
-      if (live(b) && test(b, among)) out.push(b)
+      if ((ctx.graves || live(b)) && test(b, among)) out.push(b)
       if (!sort && limit && out.length >= limit.n) break
     }
     if (sort) out.sort(sort)
@@ -540,5 +546,5 @@ export let filter = (
   once(ast(query), vocab, opts, 'filter', (ctx) => {
     let { test } = compiled(ctx, ast(query))
     return (bundle: Bundle, among: Source = [bundle]) =>
-      live(bundle) && test(bundle, indexed(among))
+      (ctx.graves || live(bundle)) && test(bundle, indexed(among))
   })

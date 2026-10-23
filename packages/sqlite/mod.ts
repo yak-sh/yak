@@ -537,13 +537,13 @@ export let storage = (
   }
   let reading = (o: Opts, fetch = cached): ReadCache => ({
     fetch: (eids, comps) => fetch(eids, comps, false),
-    permit: (eids, components, run) => {
+    permit: (eids, components, run, graves) => {
       let selected = new Set(eids)
       let queries = [
         o.visibility?.entity,
         ...components.map((c) => o.visibility?.components?.[c]),
       ].filter((q) => !!q)
-      let compiled = queries.map((q) => tested(ast(q!), true))
+      let compiled = queries.map((q) => tested(ast(q!), true, graves))
       let tests = compiled.every((t) => !!t) ? compiled as Filter[] : undefined
       let test: Filter | undefined = tests &&
         ((b) => selected.has(b.entity.eid) && tests.every((t) => t(b)))
@@ -556,7 +556,7 @@ export let storage = (
         ) => ({ eid: b.entity.eid }))
       }
       return memo.answer(
-        JSON.stringify(['permit', eids, components, o.visibility]),
+        JSON.stringify(['permit', eids, components, o.visibility, !!graves]),
         policies(o),
         run,
         test,
@@ -636,12 +636,16 @@ export let storage = (
       ? (eids: string[], comps?: string[]) =>
         viewed(eids, comps, o, fetch, pending())
       : undefined
-  let tested = (query: And, exactIds = false): Filter | undefined => {
+  let tested = (
+    query: And,
+    exactIds = false,
+    graves = false,
+  ): Filter | undefined => {
     if (!basis(vocab, query, base.derived) || !local(vocab, query)) {
       return undefined
     }
     try {
-      return filter(query, vocab, { exactIds })
+      return filter(query, vocab, { exactIds, graves })
     } catch {
       return undefined
     }
@@ -666,8 +670,10 @@ export let storage = (
     visit(query)
     if (!operands.size) return undefined
     let eids = [...operands]
+    // A deleted entity is admitted as the scope would admit one holding
+    // nothing, so its history is asked by its id (@yaks/sql `visibleBacked`).
     let allowed = reading(o).permit(eids, [], () => {
-      let screen = sourceScreen(vocab, { ...opts(), ...o })!
+      let screen = sourceScreen(vocab, { ...opts(), ...o, graves: true })!
       return driver.query(select({
         cols: [col('eid', '__target')],
         from: table('entity', '__target'),
@@ -676,7 +682,7 @@ export let storage = (
           among(col('id', '__target'), screen),
         ),
       }))
-    })
+    }, true)
     let ids = spines(driver, allowed.map((r) => String(r.eid)))
     return Object.fromEntries(
       eids.map((eid) => [eid, ids.get(eid)?.id ?? null]),
@@ -707,10 +713,11 @@ export let storage = (
     ) {
       let { visibility: _visibility, ...plain } = o
       let raw = asked(query, plain, direct)
+      let ids = raw.map((r) => String(r.eid))
       let permitted = new Set(
-        reading(o).permit(raw.map((r) => String(r.eid)), [], () => []).map((
-          r,
-        ) => String(r.eid)),
+        reading(o).permit(ids, [], () => [], o.graves).map((r) =>
+          String(r.eid)
+        ),
       )
       return raw.filter((r) => permitted.has(String(r.eid)))
     }

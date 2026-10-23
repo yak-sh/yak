@@ -319,6 +319,8 @@ define([
   'Web',
   'Media',
   'Inspect.Page',
+  // Its history, each moment opening the version it left (App.tsx `?at=`).
+  'Inspect.History',
   'Debug',
 ])
 

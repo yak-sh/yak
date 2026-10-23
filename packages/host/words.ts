@@ -165,15 +165,19 @@ let spoken = (
     docs = [...beneath(docs, own), ...own]
   }
   let vocab = loadVocab(docs, keywords)
+  let derived = Object.assign(
+    {},
+    callsDerived(vocab),
+    ...vocabs.map(([v]) => v.derived?.(vocab)),
+  )
   return {
     docs,
     vocab,
-    derived: Object.assign(
+    derived,
+    backed: Object.assign(
       {},
-      callsDerived(vocab),
-      ...vocabs.map(([v]) => v.derived?.(vocab)),
+      ...vocabs.map(([v]) => v.backed?.(vocab, derived)),
     ),
-    backed: Object.assign({}, ...vocabs.map(([v]) => v.backed?.(vocab))),
     // The generic tier lists `search` only where a property is indexed, so its
     // declarations are read off the tier the graph would build. Read on asking,
     // since checking every declaration costs what a graph opened to answer one

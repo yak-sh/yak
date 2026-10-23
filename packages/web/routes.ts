@@ -24,7 +24,6 @@ import { type Application, application } from './app.ts'
 
 import { type Authenticate, type Route, write } from '@yaks/api'
 import type { Graph } from '@yaks/graph'
-import { dead } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
@@ -107,16 +106,16 @@ let files: [string, string, () => Promise<Body>][] = [
     ]),
 ]
 
-// Whether a path names an entity: one segment, resolved to an eid, and that
-// entity alive. A name no plugin resolves is taken as an eid, and one a plugin
-// recognises but finds naming nothing is refused: both are no entity.
+// Whether a path names an entity: one segment, resolved to an eid the graph
+// holds, alive or deleted (a deleted entity's page reads its history). A name
+// no plugin resolves is taken as an eid, and one a plugin recognises but finds
+// naming nothing is refused: both are no entity.
 let names = async (graph: Graph, path: string): Promise<boolean> => {
   let id = addressId(decodeURIComponent(path.slice(1)))
   if (!id || id.includes('/')) return false
   try {
     let eid = (await graph.address([id])).get(id) ?? id
-    let [row] = await graph.get([eid])
-    return !!row && !dead(row)
+    return (await graph.get([eid])).length > 0
   } catch {
     return false
   }

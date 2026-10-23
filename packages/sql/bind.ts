@@ -166,6 +166,10 @@ export type BindOpts = {
   storageOrder?: boolean
   /** Accept any matching rows when no order or cursor is requested. */
   unordered?: boolean
+  /** Match the deleted too: a tombstoned entity holds no component, and is
+   * matched as an entity holding nothing would be; under a visibility, those
+   * it admits as holding nothing. */
+  graves?: boolean
   /** Matching against a current snapshot of this database file's archetypes,
    * done while the statement is being compiled. */
   archetypes?: ArchetypeSet
@@ -2950,6 +2954,9 @@ export let prepared = (
     }
   }
   d = absentDialect(d, vocab, opts.absent)
+  if (opts.graves && !opts.visibility) {
+    d = { ...d, live: () => ({ sql: '1', params: [] }) }
+  }
   if (opts.visibility) {
     return visible(
       ast,
@@ -2989,6 +2996,7 @@ export let prepared = (
   }
   let captured: BindOpts = {
     ...opts.missingIndexes ? { missingIndexes: opts.missingIndexes } : {},
+    ...opts.graves ? { graves: true } : {},
     derived: ctx.derived,
     backed: ctx.backed,
     extend: ctx.ext,
@@ -3648,33 +3656,59 @@ export let visibleDerived = (vocab: Vocab, opts: BindOpts): Derived => {
 
 /** Each backing as a scoped read sees it (./derived.ts `Backing`). A row is
  * seen when the scope admits an entity the row tells of, under the scope of
- * the component it tells where that component has one; a deleted entity is
- * admitted by no scope. A backing that tells of no entity is seen by no
- * scoped read. Its rows are bound when first read, so a scoped read that
- * reads no backing never binds the screens. */
+ * the component it tells where that component has one. A deleted entity holds
+ * nothing, so it is admitted when the scope admits an entity holding nothing
+ * and the backing tells of no component of it that the scope tests: a deleted
+ * task is seen where a person's deleted draft is not. A backing that tells of
+ * no entity is seen by no scoped read. Its rows are bound when first read, so
+ * a scoped read that reads no backing never binds the screens. */
 export let visibleBacked = (vocab: Vocab, opts: BindOpts): Backings => {
   let backed = opts.backed ?? {}
   let names = Object.keys(opts.visibility?.components ?? {})
   if (
     !Object.keys(backed).length || !opts.visibility?.entity && !names.length
   ) return backed
-  let sees: Cond | undefined
-  let seen = () => {
-    let about = col('about', '__about')
-    let within = (screen: Raw | null) =>
-      screen
-        ? exists(select({
+  let about = col('about', '__about')
+  let alive = not(exists(select({
+    cols: [lit(1)],
+    from: table('tombstone', '__grave'),
+    where: eq(col('entity', '__grave'), about),
+  })))
+  let seen = (b: Backing) => {
+    let within = (components: string[] = []) => {
+      let screen = sourceScreen(vocab, { ...opts, graves: true }, components)
+      if (!screen) return TRUE
+      let told = tested(vocab, [
+        opts.visibility?.entity,
+        ...components.map((name) => opts.visibility?.components?.[name]),
+      ])
+      return and(
+        exists(select({
           cols: [lit(1)],
           from: from(screen, '__seen'),
           where: eq(col('id', '__seen'), about),
-        }))
-        : TRUE
-    let entity = within(sourceScreen(vocab, opts))
+        })),
+        told.length
+          ? or(
+            alive,
+            not(exists(select({
+              cols: [lit(1)],
+              from: from(b.about!, '__told'),
+              where: and(
+                eq(col('about', '__told'), about),
+                among(col('component', '__told'), told.map((c) => lit(c))),
+              ),
+            }))),
+          )
+          : TRUE,
+      )
+    }
+    let entity = within()
     return names.length
       ? when(
         names.map((name) => [
           eq(col('component', '__about'), lit(name)),
-          within(sourceScreen(vocab, opts, [name])),
+          within([name]),
         ]),
         entity,
       )
@@ -3690,7 +3724,7 @@ export let visibleBacked = (vocab: Vocab, opts: BindOpts): Backings => {
           from: from(b.about, '__about'),
           where: and(
             eq(col('entity', '__about'), col('entity', '__backed')),
-            sees ??= seen(),
+            seen(b),
           ),
         }))
         : FALSE,
@@ -3706,6 +3740,25 @@ export let visibleBacked = (vocab: Vocab, opts: BindOpts): Backings => {
       }]
     }),
   )
+}
+
+// The components a scope's clauses test, besides the entity's own identity.
+let tested = (
+  vocab: Vocab,
+  scopes: (string | And | undefined)[],
+): string[] => {
+  let out = new Set<string>()
+  let visit = (c: Clause): void => {
+    if (c.kind == 'and' || c.kind == 'or') c.clauses.forEach(visit)
+    else if (c.kind == 'pred') {
+      out.add(vocab.aim(c.path.join('.'), bare(c))[0].comp)
+    }
+  }
+  for (let q of scopes) {
+    if (q) (typeof q == 'string' ? parse(q) : q).clauses.forEach(visit)
+  }
+  out.delete('entity')
+  return [...out]
 }
 
 let scopedTally = (
@@ -3909,7 +3962,8 @@ let visible = (
   let quoted = (name: string) => `"${name.replaceAll('"', '""')}"`
   let aspects = Object.entries(visibility.components ?? {})
   let masked = !!vocab.prop('entity', 'archetype') && aspects.length > 0
-  let permits = (scope: string | And, owner: Cond): Cond => {
+  // With `graves`, a deleted entity is permitted as one holding nothing.
+  let permits = (scope: string | And, owner: Cond, graves = false): Cond => {
     let query = typeof scope == 'string' ? parse(scope) : scope
     let keyed = (c: Clause): boolean => {
       if (c.kind == 'and' || c.kind == 'or') return c.clauses.every(keyed)
@@ -3944,6 +3998,7 @@ let visible = (
             read(comp, base.refCol!(comp, prop)),
         }
         : {},
+      ...graves ? { live: () => ({ sql: '1', params: [] }) } : {},
     }
     let owners = bound(
       query,
@@ -3988,11 +4043,13 @@ let visible = (
     }
     return quoted(name)
   }
-  // The rows of `comp` the visibility admits, as the relation named `name`.
+  // The rows of `comp` the visibility admits, as the relation named `name`,
+  // the deleted among them where `graves` asks.
   let admits = (
     comp: string,
     name: string,
     scope: string | And | undefined,
+    graves = false,
   ): Cte => {
     let where = []
     if (comp != 'entity' && visibility.entity) {
@@ -4006,6 +4063,7 @@ let visible = (
       where.push(permits(
         scope,
         raw(`"__visible"."${comp == 'entity' ? 'id' : 'entity'}"`),
+        graves,
       ))
     }
     let cols: Cond[] | undefined
@@ -4040,9 +4098,25 @@ let visible = (
     }
   }
   let entity = source('entity')
+  // The entities a reference names: those the scope admits, and the deleted
+  // it would admit holding nothing, as @yaks/sqlite's gather and reference
+  // operands name them.
+  let named = (): string => {
+    if (!visibility.entity) return entity
+    let name = '__visible_named'
+    if (!ctes.has(name)) {
+      let cte: Cte | undefined
+      ctes.set(
+        name,
+        () => cte ??= admits('entity', name, visibility.entity, true),
+      )
+    }
+    return quoted(name)
+  }
   let scoped: Dialect = {
     ...base,
-    spine: `${entity} as "entity"`,
+    // A read asking for graves selects the deleted the scope admits too.
+    spine: `${opts.graves ? named() : entity} as "entity"`,
     admitted: !masked ? base.spine : undefined,
     joined: (comp) =>
       visibility.components?.[comp]
@@ -4074,11 +4148,11 @@ let visible = (
       : base.archetype,
     col: (comp, prop, v) =>
       v.prop(comp, prop)?.category == 'ref'
-        ? `(select "__re"."eid" from ${entity} as "__re" where "__re"."id" = ${
+        ? `(select "__re"."eid" from ${named()} as "__re" where "__re"."id" = ${
           quoted(comp)
         }.${quoted(field(prop))})`
         : base.col(comp, prop, v),
-    refEq: refEqAt(entity),
+    refEq: (c, eids, negate) => refEqAt(named())(c, eids, negate),
   }
   let tally = scopedTally(
     ast,

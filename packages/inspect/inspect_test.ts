@@ -27,6 +27,7 @@ import {
   editing,
   type Host,
   inspector,
+  Past,
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
@@ -98,7 +99,8 @@ let CLOSE: Bundle = {
 }
 
 // A host that answers each line from `answers`, or by matching it over a
-// graph of bundles, and keeps what was asked and written, over a page graph of
+// graph of bundles, holds the rows it answered, as a page does what its
+// asks brought in, and keeps what was asked and written, over a page graph of
 // the inspector's own, where what is followed is stacked; `draw` hands
 // @yaks/ux a host over it.
 type Answers =
@@ -114,6 +116,7 @@ let host = (answers: Answers = {}, edits = true) => {
     : (l: string) => answers[l]
   let asked: string[] = []
   let applied: Bundle[][] = []
+  let held = new Map<string, Bundle>()
   let front = client(loadVocab([...docs, ...uxDocs]), [], { vault: false })
   let double: Host = {
     vocab,
@@ -124,7 +127,9 @@ let host = (answers: Answers = {}, edits = true) => {
         Object.entries(asks).map(([k, a]) => {
           let line = typeof a == 'string' ? a : a.query
           asked.push(line)
-          return [k, { rows: [], ready: true, ...answer(line) }]
+          let got = { rows: [], ready: true, ...answer(line) }
+          for (let b of got.rows) held.set(b.entity.eid, b)
+          return [k, got]
         }),
       ),
     // A write naming T-404 is refused, as a graph refuses an id that names
@@ -135,8 +140,10 @@ let host = (answers: Answers = {}, edits = true) => {
         return Promise.reject(new Error("no entity 'T-404'"))
       }
     },
-    get: (eid) => ({ t1: T1, t2: T2 } as Record<string, Bundle>)[eid],
+    get: (eid) =>
+      ({ t1: T1, t2: T2 } as Record<string, Bundle>)[eid] ?? held.get(eid),
     link: pagePath,
+    past: (eid, tx) => `${pagePath(eid)}?at=${tx}`,
     find: (q) => `/?q=${encodeURIComponent(q)}`,
     go: (_href) => {},
     id: (b) => b.entity.eid.toUpperCase(),
@@ -599,4 +606,75 @@ test('an inspector without a journal never asks for history', () => {
     false,
   )
   assertEquals(p.root.textContent?.includes('History'), false)
+})
+
+// A memory written twice, then deleted, told by its history.
+let change = (eid: string, tx: string, comp: string, value?: object) => ({
+  entity: { eid },
+  _change: { tx, target: 'gone', comp, ...value ? { value } : {} },
+})
+let gone = (l: string): Partial<Answer> | undefined =>
+  l.startsWith('._change&')
+    ? {
+      rows: [
+        change('c1', 'x1', 'cd', { title: 'Plan', body: 'The first body.' }),
+        change('c2', 'x2', 'cd', { body: 'The second body.' }),
+        change('c3', 'x3', 'ce'),
+      ],
+    }
+    : l.startsWith('._comp&')
+    ? {
+      rows: [
+        { entity: { eid: 'cd' }, _comp: { name: 'doc' } },
+        { entity: { eid: 'ce' }, _comp: { name: 'entity' } },
+      ],
+    }
+    : l.startsWith('._tx&')
+    ? {
+      rows: ['x1', 'x2', 'x3'].map((x) => ({
+        entity: { eid: x },
+        _tx: { at: `at ${x}`, by: 't1' },
+      })),
+    }
+    : undefined
+
+// The past page of the deleted memory, as of `at`: its head and body, and the
+// versions its history opens.
+let past = (at?: string) => {
+  using t = host(gone)
+  using p = mount(t.draw(h(Past, {
+    e: { entity: { eid: 'gone' } },
+    io: t.io,
+    id: 'M-9',
+    at,
+    lost: h('p', {}, 'lost'),
+  })))
+  return {
+    head: p.text('.Head').replace(/\s+/g, ' '),
+    body: p.text('.Body'),
+    opens: [...p.root.querySelectorAll('a')].map((a) => a.getAttribute('href'))
+      .filter((x) => x?.includes('?at=')),
+  }
+}
+let deleted = past()
+let first = past('x1')
+let never = past('x9')
+
+test('a deleted entity reads as it was last, deleted when and by whom', () => {
+  assert(deleted.head.includes('Plan'), deleted.head)
+  assert(deleted.head.includes('deleted at x3 by N-t1'), deleted.head)
+  assertEquals(deleted.body, 'The second body.')
+})
+
+test('each moment of a history but its deletion opens its version', () => {
+  assertEquals(deleted.opens, ['/gone?at=x2', '/gone?at=x1'])
+})
+
+test('a version reads what its entity held just after that transaction', () => {
+  assert(first.head.includes('as it was at x1'), first.head)
+  assertEquals(first.body, 'The first body.')
+})
+
+test('a version its history never held is lost', () => {
+  assertEquals(never, { head: '', body: '', opens: [] })
 })

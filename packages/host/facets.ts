@@ -23,8 +23,8 @@ export type VocabFacet = {
   /** properties the store computes rather than stores, written as SQL */
   derived?: (vocab: Vocab) => Derived
   /** the rows each computed component this plugin declares is read from
-   * (@yaks/sql `Backing`) */
-  backed?: (vocab: Vocab) => Backings
+   * (@yaks/sql `Backing`), given the store's read overrides */
+  backed?: (vocab: Vocab, derived: Derived) => Backings
 }
 
 /** `<plugin>/graph` — what a write means, what a query may ask for, and who

@@ -497,24 +497,20 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   // Remove hidden relations before the matcher can inspect a value or follow
   // a reference. Every index for this read is built from this visible dataset.
+  // A deleted entity stays where the scope admits one holding nothing, as it
+  // stays in the store: a reference names it, and only `graves` selects it.
   let visible = (opts: ReadOpts): Index | Bundle[] => {
     let scope = opts.visibility
     if (!scope) return view()
     let source = view()
+    let screen = { now: opts.now ?? base.now, exactIds: true, graves: true }
     let allowed = scope.entity
-      ? matcher(scope.entity, vocab, {
-        now: opts.now ?? base.now,
-        exactIds: true,
-      })(source)
+      ? matcher(scope.entity, vocab, screen)(source)
       : source.list
     let components = Object.entries(scope.components ?? {}).map(([name, q]) =>
       [
         name,
-        new Set(
-          matcher(q, vocab, { now: opts.now ?? base.now, exactIds: true })(
-            source,
-          ).map((b) => b.entity.eid),
-        ),
+        new Set(matcher(q, vocab, screen)(source).map((b) => b.entity.eid)),
       ] as const
     )
     let present = new Set(allowed.map((b) => b.entity.eid))
@@ -556,6 +552,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       storageOrder: opts.storageOrder,
       unordered: opts.unordered,
       eids: opts.eids,
+      graves: opts.graves,
       computed: base.computed,
     })(among)
     let gathered = statuses.length || derived.length
@@ -573,6 +570,7 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
       storageOrder: opts.storageOrder,
       unordered: opts.unordered,
       eids: opts.eids,
+      graves: opts.graves,
       computed: base.computed,
     })(visible(opts)).map((row) => {
       if (!Object.values(row).some((v) => v instanceof Uint8Array)) return row

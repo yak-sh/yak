@@ -59,6 +59,8 @@ export type Ctx = {
   unordered?: boolean
   exactIds?: boolean
   eids?: readonly string[]
+  /** Select tombstoned entities too. */
+  graves?: boolean
 }
 
 /**

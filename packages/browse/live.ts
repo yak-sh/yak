@@ -2495,6 +2495,9 @@ export let findEid = (id: string): string | undefined => {
 // names nothing`) — an honest Lost, not a pending spinner.
 type Named = { eid: string; num: number; kind: string }
 let named = new Map<string, Named | null>() // token OR eid -> naming (null = gone)
+// The gone tokens the server addressed without refusing: each names an entity
+// no query selects, a deleted one, whose page reads its history.
+let buried = new Set<string>()
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
 
@@ -2525,7 +2528,10 @@ let kickResolve = (token: string): Promise<Named | null> => {
   let p = new Promise<Named | null>((resolve) => {
     oneShot(sub, `id=${token}`, () => {
       let eid = [...(subEids(sub) ?? [])][0]
-      if (!eid) return resolve(settle(null))
+      if (!eid) {
+        buried.add(token)
+        return resolve(settle(null))
+      }
       let comps = paint.peek()[eid] ?? {}
       resolve(settle({
         eid,
@@ -2586,11 +2592,19 @@ export let goneId = (token: string): boolean => {
   return named.get(token) === null
 }
 
+// Whether a gone token names a deleted entity: the server addressed it, and
+// no query selects what it names.
+export let buriedId = (token: string): boolean => {
+  resolveGen.value
+  return named.get(token) === null && buried.has(token)
+}
+
 // A wholesale reseed may hold what this client could not name before, so
 // resetSignals clears the sidecar and the next render re-resolves rather than
 // serving a stale miss.
 export let clearResolved = () => {
   named.clear()
+  buried.clear()
   resolvingIds.clear()
   resolveGen.value++
 }

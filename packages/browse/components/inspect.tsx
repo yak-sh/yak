@@ -6,7 +6,7 @@ import { define, prepared, resolve } from '@yaks/render'
 import { signal } from '@preact/signals'
 import { useMemo } from 'preact/hooks'
 import { parse } from '@yaks/query'
-import { all, schemaPages } from '@yaks/inspect'
+import { all, Past, schemaPages } from '@yaks/inspect'
 import { inspectViews as memoryViews } from '@yaks/memory/views'
 import { inspectViews as sessionViews } from '@yaks/session/views'
 import { inspectViews as taskViews } from '@yaks/task/views'
@@ -24,7 +24,7 @@ import {
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { findEid } from '../live.ts'
-import { idOf, kindOf, vocab } from '../types.ts'
+import { EID, idOf, kindOf, vocab } from '../types.ts'
 import { entityPath } from '../url.ts'
 import { called } from '@yaks/inspect'
 import { bundle, type Entry, extend, registry, renderView } from './registry.ts'
@@ -37,6 +37,11 @@ import type { IconNode } from 'lucide'
 
 let held = (eid: string): Bundle | undefined =>
   row(eid).value ? bundle(ent(eid)) : undefined
+
+// An entity's page: by the id it displays, or, for a deleted entity the page
+// knows only by the id it was named by (`M-4446`), by that id.
+let pathOf = (eid: string) =>
+  entityPath(row(eid).value || EID.test(eid) ? idOf(ent(eid)) : eid)
 
 let AGGREGATES = ['count', 'tally', 'distinct']
 
@@ -125,7 +130,9 @@ export let inspectIo: Io = {
     await apply(bs)
   },
   get: (eid) => row(eid).value ? bundle(ent(eid)) : undefined,
-  link: (eid) => entityPath(idOf(ent(eid))),
+  link: (eid) => pathOf(eid),
+  // An old version is its entity's page as of a transaction (App.tsx `?at=`).
+  past: (eid, tx) => `${pathOf(eid)}?at=${tx}`,
   find: (q) => `/?q=${encodeURIComponent(q)}`,
   go: (href) => navigate(href),
   id: (b) =>
@@ -197,6 +204,19 @@ export let PagePart = (
     })
     : null
 }
+
+/** An entity as it was just after a transaction (`at`), or, without one, a
+ * deleted entity as it was last: @yaks/inspect's `Past`, through the app's
+ * doors. `eid` is the entity's eid, or the id a deleted one was named by. */
+export let PastPage = (
+  { eid, id, at, lost }: {
+    eid: string
+    id: string
+    at?: string
+    lost: import('preact').JSX.Element
+  },
+) =>
+  h(Past, { e: held(eid) ?? { entity: { eid } }, io: inspectIo, id, at, lost })
 
 export let InspectPage = (
   { query, map }: { query?: string; map?: boolean },

@@ -95,6 +95,8 @@ presence.store.tx((tx) =>
 presence.store.rows('.pointer.to', visitor)
 presence.store.rows('.pointer.to', visitor)
 let queryOpts = { visibility: { entity: '!private|.private.by=alice' } }
+// A scope that sees no entity holding nothing, so no deleted one.
+let owned = { visibility: { entity: '.pointer|.private.by=alice' } }
 selected.store.rows('.pointer.to=draft', queryOpts)
 selected.store.rows('.pointer.to=draft', queryOpts)
 unchanged.store.rows('.pointer.to=draft', queryOpts)
@@ -156,7 +158,7 @@ test('a reference operand admits a target created in the transaction', () => {
       { entity: { eid: 'new-link' }, pointer: { to: 'new-target' } },
     ])
     let q = '.pointer.to=new-target'
-    assertEquals(pending.store.rows(q, queryOpts), [{ eid: 'new-link' }])
+    assertEquals(pending.store.rows(q, owned), [{ eid: 'new-link' }])
   })
 })
 test('a warmed reference operand remains restricted to its owner', () => {
@@ -170,8 +172,15 @@ test('a warmed reference operand remains restricted to its owner', () => {
 test('a reference operand follows a target removed in the transaction', () => {
   pending.store.tx((tx) => {
     tx.remove([{ eid: 'new-target' }])
-    assertEquals(tx.read('.pointer.to=new-target', queryOpts), [])
+    assertEquals(tx.read('.pointer.to=new-target', owned), [])
   })
+})
+test('a reference names a deleted target where the scope sees one holding nothing', () => {
+  let q = '.pointer.to=new-target'
+  assertEquals(pending.store.tx((tx) => tx.read(q, queryOpts)), [{
+    entity: { eid: 'new-link' },
+    pointer: { to: 'new-target' },
+  }])
 })
 test('a removed component leaves no cached aspect', () => {
   removed.store.tx((tx) => tx.patch([{ entity: { eid: 'draft' }, doc: null }]))

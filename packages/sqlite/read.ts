@@ -94,7 +94,8 @@ export let rows = (
   let indexed = !!vocab.comp('archetype')
   let ask = () => {
     let parsed = ast(query)
-    let shape = cardinality(parsed, vocab, opts)
+    // A store's counted populations are of the living.
+    let shape = opts.graves ? undefined : cardinality(parsed, vocab, opts)
     if (
       shape && (!opts.archetypes || opts.archetypes({}) != undefined) &&
       classified(driver)
@@ -120,7 +121,7 @@ export let rows = (
         if (n != undefined) return [{ value: '', n }]
       }
     }
-    let population = parsed.clauses.length == 1 &&
+    let population = !opts.graves && parsed.clauses.length == 1 &&
         parsed.clauses[0].kind == 'tally' &&
         parsed.clauses[0].path.join('.') == 'entity.archetype' &&
         installed(driver) && classified(driver)
@@ -814,7 +815,14 @@ let joinedGet = (
  */
 export type ReadCache = {
   fetch: (eids: string[], comps?: string[]) => Bundle[]
-  permit: (eids: string[], components: string[], run: () => Row[]) => Row[]
+  /** the eids a scope admits, the deleted among them too where `graves` asks
+   * (each as an entity holding nothing) */
+  permit: (
+    eids: string[],
+    components: string[],
+    run: () => Row[],
+    graves?: boolean,
+  ) => Row[]
 }
 
 export let get = (
@@ -844,6 +852,9 @@ export let get = (
       ).map((b) => b.entity.eid)
     // A getter's eids are physical identities. Query addressing may interpret
     // a human id such as history-1 as number 1, which cannot decide ownership.
+    // A deleted entity is admitted as one holding nothing: it is gotten as its
+    // tombstone, as without a scope, and a reference names it, as a query's
+    // reference operand does (./mod.ts `resolved`).
     let permitted = (all: string[], components: string[] = []): Set<string> => {
       let backed = backings.length ? all.filter(tagged) : []
       let ids = backed.length ? all.filter((eid) => !tagged(eid)) : all
@@ -857,7 +868,7 @@ export let get = (
         return out
       }
       let run = () => {
-        let screen = sourceScreen(vocab, opts, components)
+        let screen = sourceScreen(vocab, { ...opts, graves: true }, components)
         return driver.query(select({
           cols: [col('eid', '__requested')],
           from: table('entity', '__requested'),
@@ -873,7 +884,9 @@ export let get = (
           ),
         }))
       }
-      for (let r of cache ? cache.permit(ids, components, run) : run()) {
+      for (
+        let r of cache ? cache.permit(ids, components, run, true) : run()
+      ) {
         out.add(String(r.eid))
       }
       return out
@@ -950,9 +963,7 @@ export let get = (
       }
     }
     let references = visibility.entity && targets.size
-      ? new Set(
-        permitted([...targets]),
-      )
+      ? permitted([...targets])
       : targets
     return found.map((b) => {
       let out: Bundle = { ...b, entity: { ...b.entity } }

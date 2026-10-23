@@ -38,6 +38,7 @@ export let icons: Record<string, string> = {
   Markdown: 'hash',
   JSON: 'braces',
   'Inspect.Page': 'table',
+  'Inspect.History': 'history',
   Debug: 'bug',
 }
 

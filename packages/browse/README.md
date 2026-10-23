@@ -4,7 +4,10 @@ The graph browsing app: cards, boards, pages and editing in a browser and a
 terminal. `/` is home: the owner drawn in the home page a configured package
 offers, or the host's own list where none does. `/T-9` opens T-9's page, `?v=`
 picks its view, and every card on screen is live: an edit anywhere reaches the
-page over the socket.
+page over the socket. `?at=<transaction>` reads the entity as it was just after
+that transaction (@yaks/inspect `Past`); each moment of its History opens one.
+The id of a deleted entity opens what it held last, when and by whom it was
+deleted, and its history; an id nothing ever carried is the not-found page.
 
 ## Search
 

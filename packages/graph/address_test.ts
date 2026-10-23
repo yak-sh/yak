@@ -155,6 +155,17 @@ test('a handle several eids start with is refused, naming them', () => {
   }
 })
 
+// A deleted entity keeps its eid and number, so its id names it still, though
+// no query selects it.
+let buried = handles()
+buried.apply([{ entity: { eid: 'gone' }, doc: {} }])
+let grave = `D-${get(buried, 'gone').entity.num}`
+buried.apply([{ entity: { eid: 'gone' }, $delete: true }])
+test('a deleted entity’s number still names it', () => {
+  resolves(grave, 'gone', buried)
+  assertEquals(buried.read(`.entity.eid=${grave}`), [])
+})
+
 test('a read and a write name the entity a bare handle does', () => {
   plain.apply([{ entity: { eid: 'r9' }, review: { book: '47e9678bdf12' } }])
   assertEquals(comp(get(plain, 'r9'), 'review').book, both[0])

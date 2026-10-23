@@ -5,7 +5,13 @@
 
 import { test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import { blobKeywords } from '@yaks/blob'
+import {
+  blobKeywords,
+  blobRead,
+  blobs,
+  blobSchema,
+  sqliteBlobs,
+} from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { type Bundle, type Comp, graph } from '@yaks/graph'
 import type { Visibility } from '@yaks/graph/storage'
@@ -29,15 +35,17 @@ let vocab = loadVocab([...wiki.docs, metaDoc, journalDoc], [
 // and a fifth makes a note, a component nothing describes.
 let build = () => {
   let db = mem()
-  let store = storage(db, vocab, { backed: backed(vocab) })
+  let derived = blobRead(vocab)
+  let store = storage(db, vocab, { derived, backed: backed(vocab, derived) })
   store.install()
-  for (let s of ddl()) db.query(s)
+  for (let s of [...blobSchema(), ...ddl()]) db.query(s)
   actors(graph({ storage: store, vocab }))
   let g = graph({
     storage: store,
     vocab,
     plugins: [
       journal(log({ rows: (s) => db.query(s) }), vocab, { now: () => NOW }),
+      blobs(vocab, sqliteBlobs(db)),
     ],
   })
   let apply = (bundles: Bundle[]) => sync(g.apply(bundles))
@@ -210,8 +218,10 @@ test('the journal is no part of any other answer', () => {
 })
 
 // A scoped reader sees the changes to what it may see, and the transactions
-// that made one of them. Here the note n1 is private, and p2 is deleted, which
-// no scope admits; a component's own scope hides that component's changes.
+// that made one of them. Here the note n1 is private; p2 is deleted, and seen
+// by a scope that would see it holding nothing, unless it once held what that
+// scope tests (a page, under `!page`); a component's own scope hides that
+// component's changes.
 // Each scope's answers are read once, beside the wiki's; the test compares.
 // A query and a gather by eid each decide what is seen, so each is asked.
 let every = changes.concat(built.read('._change.target=p2,n1'))
@@ -227,18 +237,32 @@ let sees = (visibility: Visibility) => {
 }
 let scoped = [
   sees({ entity: '!note' }),
+  sees({ entity: '!page' }),
   sees({ components: { note: '!entity' } }),
 ]
 test('a scoped read sees only the history of what it may see', () => {
   let p1 = ['page p1 {"title":"Kickoff"}', 'page p1 {"title":"Retro"}']
   let p2 = ['page p2 {"title":"Notes"}', 'entity p2 null']
+  let pages = {
+    got: [...p1, ...p2],
+    targets: ['p1', 'p1', 'p2', 'p2'],
+    txs: [1, 2, 3],
+  }
   assertEquals(scoped, [
-    { got: p1, targets: ['p1', 'p1'], txs: [1, 2] },
-    {
-      got: [...p1, ...p2],
-      targets: ['p1', 'p1', 'p2', 'p2'],
-      txs: [1, 2, 3],
-    },
+    pages,
+    { got: ['- n1 {"text":"aside"}'], targets: ['n1'], txs: [4] },
+    pages,
+  ])
+})
+
+// A page's text is kept by its address (@yaks/blob), and its change says the
+// text, as a reader of the page reads it.
+let texted = build()
+texted.apply([{ entity: { eid: 'w1' }, page: { title: 'Plan', text: 'Hi' } }])
+let told = texted.read('._change.target=w1')
+test('a change says the text a body is kept as', () => {
+  assertEquals(told.map((b) => (b._change as Comp).value), [
+    { title: 'Plan', text: 'Hi' },
   ])
 })
 

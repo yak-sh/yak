@@ -7,6 +7,7 @@ import { test } from '@yaks/testing'
 import { assert, assertEquals, assertThrows } from '@std/assert'
 import { isPromise } from '@yaks/fp'
 import { type Bundle, graph, Refused, Stale, token } from '@yaks/graph'
+import type { Visibility } from '@yaks/graph/storage'
 import { storage } from './mod.ts'
 import {
   mem,
@@ -185,6 +186,41 @@ test('a cascade reference pulls its owner into the grave', () => {
   assert(out.some((b) => b.entity.eid == 'r1' && b.tombstone))
   assertEquals(g.read('.kind=review&*'), [])
   assertEquals(g.read('.kind=product&*'), [])
+})
+
+// A read asking for graves selects the deleted too, as their tombstones, and
+// under a scope those it admits as holding nothing, as a get under it does.
+// Each query is asked plainly and in order, which a scope reads another way.
+// Read once, beside the graph; the test compares.
+let mourned = shopGraph()
+sync(mourned.apply([{ entity: { eid: 'p9' }, product: { price: 3 } }]))
+sync(mourned.apply([{ entity: { eid: 'p9' }, $delete: true }]))
+let empty = { entity: '!review' }, held = { entity: '.product' }
+let tombs = (bs: Bundle[]) => bs.map((b) => [b.entity.eid, !!b.tombstone])
+let mourn = (graves?: boolean, visibility?: Visibility) =>
+  ['.entity.eid=p9', '.entity.eid=p9&.order=entity.eid'].map((q) =>
+    tombs(mourned.read(q, { graves, visibility }) as Bundle[])
+  )
+let mourning = [
+  mourn(),
+  mourn(true),
+  mourn(undefined, empty),
+  mourn(true, empty),
+  mourn(true, held),
+  tombs(sync(mourned.get(['p9'], undefined, { visibility: empty }))),
+  tombs(sync(mourned.get(['p9'], undefined, { visibility: held }))),
+]
+test('a read asking for graves selects the deleted as their tombstones', () => {
+  let p9 = [['p9', true]]
+  assertEquals(mourning, [
+    [[], []],
+    [p9, p9],
+    [[], []],
+    [p9, p9],
+    [[], []],
+    p9,
+    [],
+  ])
 })
 
 test('a detach reference is nulled when its target dies', () => {

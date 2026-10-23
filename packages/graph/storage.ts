@@ -54,6 +54,13 @@ export type ReadOpts = {
   storageOrder?: boolean
   /** Accept any matching rows when no order or cursor is requested. */
   unordered?: boolean
+  /** Match the deleted too: a tombstoned entity holds no component, is
+   * matched as an entity holding nothing would be, and comes back carrying
+   * `tombstone`. Under a `visibility`, a deleted entity is likewise one
+   * holding nothing, which a reference names and a get answers wherever the
+   * scope admits one; `graves` selects it too. What finds the entity a deleted
+   * entity's number still names (@yaks/id). */
+  graves?: boolean
   durable?: boolean
   /** A graph-local runtime activity parent; storage adapters need not use it. */
   parent?: string

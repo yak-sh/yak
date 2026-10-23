@@ -117,10 +117,12 @@ whenever it is asked for the same eid.
 resolves human ids and short handles. The number is the identity: a human id
 names the entity carrying its number, whatever letter it is written with, and a
 bare number does too. An entity's letter follows its components, so an id
-printed before a component came or went keeps naming it. A number no entity
-carries is refused. A short handle several entities share is answered with all
-of them, and the graph refuses it, naming them. Eids and other strings are left
-to the graph's other addressing.
+printed before a component came or went keeps naming it. A deleted entity keeps
+its number, so its id names it still (read with `graves`, @yaks/graph
+`ReadOpts`): its page and its history answer, and a write to it brings it back.
+A number no entity carries is refused. A short handle several entities share is
+answered with all of them, and the graph refuses it, naming them. Eids and other
+strings are left to the graph's other addressing.
 
 A handle copied without its `#` is the graph's to resolve
 ([@yaks/graph](../graph/README.md) `address`): it is asked after every plugin,

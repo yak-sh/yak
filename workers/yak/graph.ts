@@ -1492,7 +1492,9 @@ export class Store {
             // receives the same resolution, keeping hashes out of the index
             // (T-33978).
             derived,
-            ...(vocab.comp('_tx') ? { backed: journalBacked(vocab) } : {}),
+            ...(vocab.comp('_tx')
+              ? { backed: journalBacked(vocab, derived) }
+              : {}),
           },
         )
         return store

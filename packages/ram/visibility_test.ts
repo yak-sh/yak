@@ -54,8 +54,11 @@ let fixture = (storage: Storage) => {
       { entity: { eid: 'b' }, note: { by: 'bob', text: 'hidden' } },
       { entity: { eid: 'public' }, link: { to: 'bob' } },
       { entity: { eid: 'private-link' }, link: { to: 'b' } },
+      { entity: { eid: 'gone' }, name: { text: 'Gone' } },
+      { entity: { eid: 'to-gone' }, link: { to: 'gone' } },
     ])
   )
+  storage.tx((tx) => tx.remove([{ eid: 'gone' }]))
   return graph({
     storage,
     vocab,
@@ -81,6 +84,19 @@ let aggregates = [
   ['private value distinct', '.pref .distinct=pref.value', [{ value: 'blue' }]],
   ['private value tally', '.pref .tally=pref.value', [{ value: 'blue', n: 1 }]],
 ] as const
+// The scope admits an entity holding nothing, so it sees the deleted one: a
+// get answers its tombstone, a reference names it and an operand finds it,
+// and only a read asking for graves selects it. Read once per graph; the test
+// compares.
+let mourned = new Map(
+  Object.values(graphs).map((g) => [g, {
+    got: (g.get(['gone']) as Bundle[]).map((b) => [b.entity.eid, b.tombstone]),
+    named: g.rows('.entity.eid=to-gone .fields=link.to'),
+    found: ids(g.rows('.link.to=gone')),
+    selected: ids(g.rows('.entity.eid=gone')),
+    graves: ids(g.rows('.entity.eid=gone', { graves: true })),
+  }]),
+)
 for (let [adapter, g] of Object.entries(graphs)) {
   for (let [name, query, expected] of reads) {
     test(`${adapter} visibility scopes ${name}`, () =>
@@ -111,6 +127,14 @@ for (let [adapter, g] of Object.entries(graphs)) {
       { eid: 'bob', 'pref.value': null },
     ])
   })
+  test(`${adapter} visibility sees a deleted entity as one holding nothing`, () =>
+    assertEquals(mourned.get(g), {
+      got: [['gone', {}]],
+      named: [{ eid: 'to-gone', 'link.to': 'gone' }],
+      found: ['to-gone'],
+      selected: [],
+      graves: ['gone'],
+    }))
 }
 
 // Warm the shared query and projection machinery outside individual budgets.

@@ -363,9 +363,13 @@ string [eid](../graph/README.md#data-model), optional `num` and `archetype`.
 Each stored [component](../graph/README.md#data-model) has a table with an
 integer `entity` owner column. [References](../vocab/README.md#vocabulary) store
 the target's integer id; reads project it to an eid. Deleted entities keep their
-identity row and are listed in `tombstone`; compiled queries exclude them. A
-presence predicate tests for a component row, including one whose properties are
-all NULL.
+identity row and are listed in `tombstone`; compiled queries exclude them,
+unless the read asks for `graves`, which matches each as an entity holding
+nothing (how a deleted entity's number still names it, @yaks/id). Under a
+`visibility` scope a deleted entity is likewise one holding nothing: a reference
+names it, and a reference operand finds it, where the scope admits an entity
+holding nothing. A presence predicate tests for a component row, including one
+whose properties are all NULL.
 
 A **Tag** is the type used to coerce comparisons: a vocabulary
 [scalar](../vocab/README.md#the-format), `enum` or `eid`. `tagOf` derives it
@@ -525,10 +529,13 @@ A backing's entities have no row a visibility policy can test, so a backing says
 what each row tells of: `about` is a select of `entity` (the row's id), `about`
 (an entity-table id) and `component` (the name of the component whose values the
 row tells, or null). Under a scope, a row is seen when the scope admits an
-entity it tells of, under that component's own scope where it has one, and a
-deleted entity is admitted by no scope. A backing without `about` has no row any
-scoped read sees. `visibleBacked(vocab, opts)` is the backings as the read's
-`visibility` sees them; a scoped query and a scoped gather both read through it.
+entity it tells of, under that component's own scope where it has one. A deleted
+entity holds nothing: it is admitted when the scope admits an entity holding
+nothing and the backing tells of no component of it the scope tests, so a
+deleted task's history is seen where a person's deleted draft's is not. A
+backing without `about` has no row any scoped read sees.
+`visibleBacked(vocab, opts)` is the backings as the read's `visibility` sees
+them; a scoped query and a scoped gather both read through it.
 
 ## Clause compilation
 

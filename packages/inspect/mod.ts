@@ -9,6 +9,15 @@
 export { type DoorProps, type Inspector, inspector } from './door.ts'
 export { note, Part, type PartProps, useNamed } from './notes.ts'
 export { type PageCtx, usePageNotes } from './Entity.ts'
+export {
+  type Change,
+  Past,
+  type PastProps,
+  type Version,
+  version,
+  VERSIONS,
+  versions,
+} from './Past.ts'
 export type { HeadCtx } from './Head.ts'
 export type { FactsCtx } from './Facts.ts'
 export type { LinksCtx } from './Links.ts'

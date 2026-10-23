@@ -93,8 +93,9 @@ export let ids = (vocab: Vocab): Plugin => ({
     for (let id of lettered) at.set(id, null)
     if (!want.size && !handles.length) return at
     for (let id of [...want.values()].flat()) at.set(id, null)
+    // A deleted entity keeps its number, so the number still names it.
     let numbered = want.size
-      ? tx.read(`.entity.num=${[...want.keys()].join(',')}`)
+      ? tx.read(`.entity.num=${[...want.keys()].join(',')}`, { graves: true })
       : []
     let held = handles.map((id) => starting(tx, id.slice(1).toLowerCase()))
     let done = (found: Bundle[], starts: Eid[][]) => {

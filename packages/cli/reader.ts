@@ -37,9 +37,13 @@ export let reader = async (
     // Opened under `config`, so refused where `config` lacks a plugin the
     // store requires, the way the host it reads beside would be.
     meet(config, requirements(sql))
+    let derived = Object.assign({}, ...facets.map((f) => f?.derived?.(vocab)))
     let store = storage(sql, vocab, {
-      derived: Object.assign({}, ...facets.map((f) => f?.derived?.(vocab))),
-      backed: Object.assign({}, ...facets.map((f) => f?.backed?.(vocab))),
+      derived,
+      backed: Object.assign(
+        {},
+        ...facets.map((f) => f?.backed?.(vocab, derived)),
+      ),
     })
     let g = graph({ storage: store, vocab, plugins: [ids(vocab)] })
     return {

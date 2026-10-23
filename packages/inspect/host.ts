@@ -77,6 +77,9 @@ export type Host = {
   /** where an entity's page is: the host opens it on the view it draws
    * that entity with, as any link to it does */
   link: (eid: string) => string
+  /** where an entity reads as it was just after a transaction (./Past.ts);
+   * a host without it offers no old versions */
+  past?: (eid: string, tx: string) => string
   /** where the inspector's page for a query is */
   find: (query: string) => string
   /** follow an address in place: a link's, or a pressed row's (its

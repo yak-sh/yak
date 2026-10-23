@@ -30,10 +30,14 @@ export type Bundle = {
     | undefined
 }
 
-/** A transaction, as these plugins use one: read entities by id, or by query. */
+/** A transaction, as these plugins use one: read entities by id, or by query,
+ * the deleted too where `graves` asks for them. */
 export type Tx = {
   get: (eids: Eid[]) => Bundle[] | Promise<Bundle[]>
-  read: (query: string) => Bundle[] | Promise<Bundle[]>
+  read: (
+    query: string,
+    opts?: { graves?: boolean },
+  ) => Bundle[] | Promise<Bundle[]>
 }
 
 /** A graph plugin, narrowed to what this package contributes: a vocabulary,

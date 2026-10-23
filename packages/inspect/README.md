@@ -33,6 +33,12 @@ equal(all.some((v) => v.view === 'Inspect.Query'), true)
 equal(all.some((v) => v.view === 'Inspect.Map'), true)
 ```
 
+`Past` reads an entity as it was: what it held just after one of its
+transactions, rebuilt from its history, or, for a deleted entity, what it held
+last, with when and by whom it was deleted. It is never edited, and its history
+opens each moment's version through the host's `past(eid, tx)` door, as an
+entity's own History does wherever the host has one.
+
 Inspect pages are read until the reader asks to edit. Values use @yaks/ux
 editing; changes are emitted as bundles. Notes are comments and tasks about the
 entity and heading where they were left. Page-only table order, paging, editing

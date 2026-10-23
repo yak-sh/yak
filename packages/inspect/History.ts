@@ -73,7 +73,7 @@ let did = (
   prop?: string,
 ): ComponentChildren[] => {
   let now = value(b)
-  if (now == null) return ['removed']
+  if (now == null) return [name == 'entity' ? 'deleted' : 'removed']
   let was = older ? value(older) ?? {} : undefined
   let props = Object.keys(now).filter((p) =>
     (!prop || p == prop) &&
@@ -153,6 +153,11 @@ export let History = (p: HistoryProps): JSX.Element => {
   let moments = [...Map.groupBy(told, (b) => str(b, '_change', 'tx'))]
   let total = got.total?.count
   let target = (b: Bundle) => str(b, '_change', 'target')
+  // An entity's own history opens each moment's version, but the one that
+  // deleted it, which left nothing to read.
+  let opens = (cs: Bundle[]) =>
+    !about1 && io.past &&
+    !cs.some((b) => name(b) == 'entity' && value(b) == null)
   return h(
     Part,
     { io, eid, subject: about(io, e), heading, count: total, notes: p.notes },
@@ -177,6 +182,9 @@ export let History = (p: HistoryProps): JSX.Element => {
                 { href: io.link(x) },
                 w.at ? io.when(String(w.at)) : `#${w.seq ?? '…'}`,
               ),
+              opens(cs)
+                ? [' · ', h('a', { href: io.past!(eid, x) }, 'as it was')]
+                : null,
             ),
             h(Timeline.Who, {}, by ? mention(io, by) : ''),
             via ? ['via', h(Timeline.Who, {}, mention(io, via))] : null,

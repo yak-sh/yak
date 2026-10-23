@@ -1,4 +1,4 @@
-import { InspectPage, PagePart } from './inspect.tsx'
+import { InspectPage, PagePart, PastPage } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
 import { left, scrolledTo } from '../history.ts'
 import {
@@ -24,6 +24,7 @@ import {
   menu,
   navigate,
   route,
+  screenBuried,
   screenGone,
   screenResolving,
   screenTarget,
@@ -99,6 +100,10 @@ export let Page = ({ at }: { at: string }) => {
   let url = new URL(at, 'http://x')
   let search = searchAt(at)
   let making = newAt(at)
+  // `?at=<transaction>` reads the entity as it was just after it; an id that
+  // names a deleted entity reads what it held last.
+  let past = url.searchParams.get('at') ?? undefined
+  let buried = screenBuried(at)
   let place = destinationAt(at, allDestinations())
   let t = screenTarget(at)
   let home = url.pathname == '/' && !url.search
@@ -264,11 +269,29 @@ export let Page = ({ at }: { at: string }) => {
             </>
           )
           : !e && screenGone(at)
-          ? <Lost at={at} />
+          ? buried
+            ? (
+              <PastPage
+                eid={buried}
+                id={buried}
+                at={past}
+                lost={<Lost at={at} />}
+              />
+            )
+            : <Lost at={at} />
           : read?.state.status == 'failed'
           ? <SubscriptionFailure read={read} />
           : read && !read.ready
           ? <Loading />
+          : past && e
+          ? (
+            <PastPage
+              eid={e.eid}
+              id={idOf(e)}
+              at={past}
+              lost={<Lost at={at} />}
+            />
+          )
           : offered && e
           ? <Entity eid={e.eid} view={offered.view} />
           : e
