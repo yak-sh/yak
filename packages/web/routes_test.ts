@@ -49,8 +49,7 @@ await graph.apply([
   { entity: { eid: 'kindless' }, favorite: {} },
   { entity: { eid: 'buried' }, doc: { title: 'deleted' } },
 ])
-// A deleted entity keeps its number, and its page reads its history.
-let [buried] = await graph.get(['buried'])
+// A deleted entity's page reads its history.
 await graph.apply([{ entity: { eid: 'buried' }, $delete: true }])
 let table = routes({
   vocab,
@@ -114,7 +113,7 @@ test('a name opens the page, and a path naming nothing is the 404 page', async (
     true,
   ])
   assertEquals(await page('/T-9'), [200, true])
-  assertEquals(await page(`/D-${buried.entity.num}`), [200, true])
+  assertEquals(await page('/buried'), [200, true])
   for (
     let path of ['/lemon-pie', '/lemon-cake/x', '/favicon.ico', '/T%23abc123']
   ) {
