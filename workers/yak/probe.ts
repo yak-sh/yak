@@ -169,8 +169,9 @@ let toml = () =>
   ) as Toml
 
 // The Worker's generated files and npm tree made current (wrangler.ts
-// `ready`), once a process: every kernel the process boots runs the same
-// checkout, and each readying runs two generators of its own.
+// `ready`), once a process, and not at all in a runtime of a test run that
+// readied them before starting it: every kernel the process boots runs the
+// same checkout, and each readying starts generators of its own.
 let readied: Promise<unknown> | undefined
 
 /**

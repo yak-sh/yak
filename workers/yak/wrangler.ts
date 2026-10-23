@@ -188,13 +188,21 @@ let preparing = (root = dir, timeout = 600_000, quiet = false) =>
         ], quiet), quiet),
   })
 
-/** Prepare every prerequisite before a probe reads it. Answers whether npm
- * installed. `quiet` says only what failed: a test run's reader acts on
- * nothing else. */
+/** Set in the environment of a process that readied a root, naming it: every
+ * process it starts afterwards inherits it, so a test run (bin/test.ts)
+ * readies once, and the runtimes that boot its kernels find it done. */
+export let READIED = 'YAK_WORKER_READIED'
+
+/** Prepare every prerequisite before a probe reads it, unless this process or
+ * the one that started it already did. Answers whether npm installed. `quiet`
+ * says only what failed: a test run's reader acts on nothing else. */
 export let ready = async (quiet = false, root = dir, timeout = 600_000) => {
+  if (Deno.env.get(READIED) == root) return false
   let made = preparing(root, timeout, quiet)
   await made.all
-  return await made.dependencies
+  let installed = await made.dependencies
+  Deno.env.set(READIED, root)
+  return installed
 }
 
 // Wrangler accepts --env on either side of the command. Both forms need
