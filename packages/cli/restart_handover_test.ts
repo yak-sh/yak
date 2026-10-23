@@ -41,6 +41,10 @@ test('restart drains tracker intake without losing its spool or a web request', 
   let hosts: Awaited<ReturnType<typeof compose>>[] = []
   let ports: number[] = []
   let events: string[] = []
+  // A client asking all through the handover, on a connection per request;
+  // it stops when the test does, passed or not.
+  let asking = true
+  let client: Promise<void> | undefined
   let env = {
     PROCESS_DIR: `${dir}/processes`,
     HARNESS_HOME: `${dir}/home`,
@@ -157,11 +161,9 @@ test('restart drains tracker intake without losing its spool or a web request', 
     assert(worker)
     let web = start('probe-tracker-web@old.service', tracker)
     await wait(() => answering(ports[1]), 'tracker HTTP ready')
-    // A client asking all through the handover, on a connection per request.
     let asked = 0
     let refused = 0
-    let asking = true
-    let client = (async () => {
+    client = (async () => {
       while (asking) {
         asked++
         try {
@@ -250,6 +252,8 @@ test('restart drains tracker intake without losing its spool or a web request', 
       'tracker HTTP stopped with its old worker',
     )
   } finally {
+    asking = false
+    await client
     await Deno.writeTextFile(`${dir}/release`, '').catch(() => {})
     for (let child of children) if (!child.ended) child.proc.kill('SIGTERM')
     await Promise.all(children.map((child) => child.output))
