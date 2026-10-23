@@ -24,6 +24,7 @@ import {
   menu,
   navigate,
   route,
+  screenGone,
   screenResolving,
   screenTarget,
 } from './nav.tsx'
@@ -261,6 +262,8 @@ export let Page = ({ at }: { at: string }) => {
               )}
             </>
           )
+          : !e && screenGone(at)
+          ? <Lost at={at} />
           : read?.state.status == 'failed'
           ? <SubscriptionFailure read={read} />
           : read && !read.ready

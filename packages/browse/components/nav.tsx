@@ -11,6 +11,7 @@ import {
   clientId,
   ent,
   findEid,
+  goneId,
   mutate,
   myCursor,
   owner,
@@ -70,6 +71,15 @@ export let screenResolving = (at = route.value) => {
     decodeURIComponent(new URL(at, 'http://x').pathname.slice(1)),
   )
   return !!id && resolvingId(id)
+}
+
+// Whether the route names an id the server says names nothing. The page draws
+// Lost then, whatever its own read of that id was told.
+export let screenGone = (at = route.value) => {
+  let id = addressId(
+    decodeURIComponent(new URL(at, 'http://x').pathname.slice(1)),
+  )
+  return !!id && goneId(id)
 }
 
 // The plain-click half of an in-app anchor: modifiers and middle-click keep

@@ -172,13 +172,16 @@ let makeClient = () => {
     connect: (url) => socketFor(url),
     // A refusal on a page that outlived a deploy is its old code asking the
     // new server what it no longer answers: the page reloads onto the code
-    // now served. An id the page resolves by asking (one in the address, or a
-    // link) takes its refusal as the answer, and draws the Lost face. On a
-    // page running what is served, any other refusal is a bug.
+    // now served. A read of an id that names nothing (one in the address, or a
+    // link) is refused for it, and the page draws the Lost face. On a page
+    // running what is served, any other refusal is a bug.
     report: (r) => {
       if (!r.refused) return said(r)
-      if (r.names?.length && r.names.every(resolving)) return
-      void outlived().then((old) => old ? location.reload() : said(r))
+      void unnamed(r.names).then(async (lost) => {
+        if (lost) return
+        if (await outlived()) location.reload()
+        else said(r)
+      })
     },
     disk: typeof location !== 'undefined',
     outbox,
@@ -2495,8 +2498,18 @@ let named = new Map<string, Named | null>() // token OR eid -> naming (null = go
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
 
-// The line a token is resolved on, whose refusal is its answer.
-let resolving = (sub: string) => sub.startsWith('resolve:')
+// Whether a refused line was refused for a token that names nothing: every
+// name holding it reads a token (its resolve, `resolve:T-998`, or a page's own
+// read of it, `route:T-998`) that this sidecar finds names nothing. Such a
+// refusal is the answer a page draws as Lost, not a failure of its code.
+let unnamed = async (names: string[] = []): Promise<boolean> => {
+  let found = await Promise.all(names.map((sub) => {
+    let [kind, token] = sub.split(':')
+    if (kind != 'resolve' && kind != 'route') return undefined
+    return named.has(token) ? named.get(token) : resolvingIds.get(token)
+  }))
+  return found.length > 0 && found.every((n) => n === null)
+}
 
 let kickResolve = (token: string): Promise<Named | null> => {
   let found = resolvingIds.get(token)
@@ -2564,6 +2577,13 @@ export let serverName = (eid: string): Named | null | undefined => nameFor(eid)
 export let resolvingId = (token: string): boolean => {
   resolveGen.value
   return !named.has(token) && resolvingIds.has(token)
+}
+
+// Whether the server said a token names nothing: its resolve came back empty
+// or refused.
+export let goneId = (token: string): boolean => {
+  resolveGen.value
+  return named.get(token) === null
 }
 
 // A wholesale reseed may hold what this client could not name before, so

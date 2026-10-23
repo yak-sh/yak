@@ -45,6 +45,7 @@ import {
   findEid,
   foldFor,
   gated,
+  goneId,
   hostFrom,
   jobOf,
   landSub,
@@ -2553,25 +2554,63 @@ test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm', asy
   }
 })
 
-test('server-resolve: an id that names nothing is the Lost answer, not a failure', async () => {
+// What the page tracker hears while `run` runs: the console's errors.
+let errorsDuring = async (run: (heard: unknown[]) => Promise<void>) => {
+  let heard: unknown[] = []
+  let original = console.error
+  console.error = (line) => void heard.push(line)
+  try {
+    await run(heard)
+  } finally {
+    console.error = original
+  }
+  return heard
+}
+
+test('server-resolve: a page read of an id that names nothing is Lost, not a failure', async () => {
   clearResolved()
   cache.value = {}
-  let heard: unknown[][] = []
-  let original = console.error
-  console.error = (...args) => void heard.push(args)
   let wire = host((a) =>
-    a.subscribe.startsWith('.entity.eid=')
+    a.subscribe.includes('T-404')
       ? { refused: { error: 'Refused', message: 'T-404 names nothing' } }
       : undefined
   )
+  let free = () => {}
   try {
-    let gen = resolveGen.value
-    serverEid('T-404')
-    await until(() => resolveGen.value > gen)
-    await tick()
-    assertEquals([serverName('T-404'), heard], [null, []])
+    let heard = await errorsDuring(async () => {
+      serverEid('T-404')
+      free = owned({ entity: 'T-404' })
+      await until(() => goneId('T-404'))
+      await tick()
+    })
+    assertEquals(heard, [])
   } finally {
-    console.error = original
+    free()
+    wire.free()
+  }
+})
+
+test('server-resolve: a refused page read of an id that names something is a failure', async () => {
+  clearResolved()
+  cache.value = {}
+  let eid = 'eeeeeeee-0000-4000-8000-000000000005'
+  let wire = host((a) =>
+    a.subscribe.startsWith('.edge.from=')
+      ? { refused: { error: 'Unknown', message: 'no such component: tends' } }
+      : a.subscribe.startsWith('.entity.eid=T-5')
+      ? { bundles: [{ entity: { eid, num: 5 }, task: {} }] }
+      : undefined
+  )
+  let free = () => {}
+  try {
+    let heard = await errorsDuring(async (heard) => {
+      serverEid('T-5')
+      free = owned({ entity: 'T-5' })
+      await until(() => heard.length > 0)
+    })
+    assertEquals(heard, ['live client — Unknown: no such component: tends'])
+  } finally {
+    free()
     wire.free()
   }
 })
