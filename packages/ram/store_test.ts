@@ -262,12 +262,6 @@ test('a mirror holds only the number it is told, never a guess', () => {
   assertEquals(at(s, 'p2').entity, { eid: 'p2' })
 })
 
-test('a store nobody mirrors keeps its own numbering', () => {
-  let s = shopRam()
-  put(s, { entity: { eid: 'p1', num: 7 }, doc: { title: 'Mug' } })
-  assertEquals(at(s, 'p1').entity.num, 1)
-})
-
 test('a map has no schema: install does nothing', () => {
   // and a Store is a Storage — the seam @yaks/graph applies bundles through
   let s: Storage = shopRam()
@@ -277,9 +271,9 @@ test('a map has no schema: install does nothing', () => {
 test('a mirror adopts an explicit unnumbered spine', () => {
   let s = shopRam({ adopt: true })
   put(s, { entity: { eid: 'blob', num: null }, doc: {} })
-  assertEquals(at(s, 'blob').entity, { eid: 'blob', num: null })
+  assertEquals(at(s, 'blob').entity, { eid: 'blob' })
   put(s, { entity: { eid: 'blob' }, doc: { title: 'still unnumbered' } })
-  assertEquals(at(s, 'blob').entity.num, null)
+  assertEquals(at(s, 'blob').entity, { eid: 'blob' })
 })
 
 test('physical eviction reserves identity and rolls back with nested transactions', () => {

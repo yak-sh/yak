@@ -415,8 +415,8 @@ backing with `tagOf(epoch, comp)` once the first install has minted its epoch
 (read from metadata without minting), so a backed entity's eid names it in this
 store and no other. `read` and `get` return such entities like any other;
 `patch` refuses one, since nothing writes it. `number` controls human numbering,
-and `adopt: true` accepts numbers supplied in patches when mirroring another
-store.
+and a patch stating `entity.num` sets, changes or clears (`null`) an entity's
+number.
 
 ### Read options
 
@@ -1033,9 +1033,10 @@ therefore keep resolving; new excluded entities consume no numbers.
 
 The transactional `entity_sequence` high-water mark is initialized from existing
 numbers and advanced by insert/update triggers. Clearing a number does not
-recycle it, including after reopening the database. `adopt: true` instead
-accepts an incoming identity's `num` or explicit null when replicating another
-graph.
+recycle it, including after reopening the database. A patch stating `entity.num`
+gives its entity that number, born or not, or none for `null`; a number another
+entity holds, a tombstone's included, is refused, since it is that entity's
+address (@yaks/graph `renumbering`).
 
 ```ts
 import { open } from '@yaks/sqlite/db'
@@ -1053,13 +1054,10 @@ try {
       entry: { component: true, type: 'object', properties: {} },
     },
   }])
-  let store = storage(sql, vocab, {
-    number: { except: ['entry'] },
-    adopt: true,
-  })
+  let store = storage(sql, vocab, { number: { except: ['entry'] } })
   store.tx((tx) =>
     tx.patch([
-      { entity: { eid: 'a', num: 40 }, doc: { title: 'Adopted' } },
+      { entity: { eid: 'a', num: 40 }, doc: { title: 'Stated' } },
       { entity: { eid: 'b' }, entry: {} },
       { entity: { eid: 'c' }, doc: { title: 'Allocated' } },
     ])
@@ -1069,6 +1067,12 @@ try {
     undefined,
     41,
   ])
+  store.tx((tx) =>
+    tx.patch([{ entity: { eid: 'a', num: null } }, {
+      entity: { eid: 'c', num: 7 },
+    }])
+  )
+  equal(store.get(['a', 'c']).map((b) => b.entity.num), [undefined, 7])
 } finally {
   sql.close()
 }

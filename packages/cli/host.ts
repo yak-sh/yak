@@ -667,7 +667,6 @@ let composed = async (
               ],
             }
             : false,
-          adopt: config.adopt ?? false,
           history,
         }
         store = opening(o)

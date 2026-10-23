@@ -64,10 +64,6 @@ export type Config = {
    * what a host using @yaks/archetype wants, since a descriptor is bookkeeping
    * nobody refers to by number. */
   numbers?: boolean | { except: string[] }
-  /** reuse the `num` an incoming entity already carries instead of minting a
-   * new one — what a store seeded from another store's export needs, and never
-   * what a host serving clients wants (default false) */
-  adopt?: boolean
   /** what the MCP server calls itself (default `yak`) */
   name?: string
   /** the person who works at this machine, as any id the graph resolves (an

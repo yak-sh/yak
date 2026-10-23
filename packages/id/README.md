@@ -108,7 +108,11 @@ allocate a number.
 ## Allocate numbers and resolve ids
 
 `idDoc` [extends](../vocab/README.md#composition) the `entity` component with
-`num`. `numbers(allocate)` contributes that document and answers the
+`num`, which a write may set, change or clear like any other property:
+`{ entity: { eid, num: 40 } }` gives the entity number 40, and
+`{ entity: { eid, num: null } }` leaves it none. A number another entity holds
+is refused, since it names that entity; two entities may swap numbers in one
+write. `numbers(allocate)` contributes that document and answers the
 [request](../graph/README.md#data-model) `$num: true` for a live entity. The
 allocator runs inside the write transaction and must return the same number
 whenever it is asked for the same eid.

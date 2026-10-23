@@ -181,8 +181,9 @@ export let admit = (
   if (alien.size) throw new Misfit(unknownComps([...alien], teach))
   if (!trusted) unstamped(bundles, vocab)
   return bundles.flatMap((b) => {
-    // The identity's stamps are the store's (entity.archetype, entity.num),
-    // and arrive only with an identity copied from a read.
+    // The identity's stamps are the store's (entity.archetype), and arrive
+    // only with an identity copied from a read. @yaks/id's entity.num is no
+    // stamp: a write may state it (./storage.ts `renumbering`).
     if (!trusted) {
       for (let k of Object.keys(b.entity)) {
         if (!vocab.prop('entity', k)?.stamped) continue

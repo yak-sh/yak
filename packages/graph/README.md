@@ -52,7 +52,9 @@ application-specific class hierarchy for entities.
 `entity.num`, when a store keeps one, is a short human-facing number, not an
 identity. Do not use it in place of an eid. Numbering is [@yaks/id](../id)'s:
 that package declares the property and ships the allocator behind `$num: true`,
-and a graph that registers neither has no numbers at all.
+and a graph that registers neither has no numbers at all. A write may set,
+change or clear a number like any other property (`{ entity: { eid, num } }`,
+`null` for none); storage refuses one another entity holds (`renumbering`).
 
 `mint()` generates an eid — a v4 UUID from `crypto.getRandomValues`, so a page
 served over plain HTTP generates ids too — and `minted(id)` says whether an id
@@ -1217,9 +1219,10 @@ Trusted writes admit stamped properties. Computed properties are dropped from
 writes except trusted replicas. Send a patch of writable properties, not a whole
 bundle read back with server-owned stamps. The identity is the exception: it is
 the row's address, so a write may carry the identity it read, and its stamps
-(`entity.num`, `entity.archetype`) are dropped. `Refused` reports invalid
-writes; `status(error)` maps named errors to HTTP status codes (`Stale` is 409;
-an unlisted error is 500). Every refusal core admission makes, and a malformed
+(`entity.archetype`, and `entity.num` where a vocabulary keeps it stamped, as
+this example's does) are dropped. `Refused` reports invalid writes;
+`status(error)` maps named errors to HTTP status codes (`Stale` is 409; an
+unlisted error is 500). Every refusal core admission makes, and a malformed
 bundle, is a `Misfit`: a `Refused` carrying `misfit: true`, because the writer's
 code is wrong about the words. A door that relays it tells a writer's mistake
 from a deliberate no with `misfit(error)`; a bound a schema opts into refuses a

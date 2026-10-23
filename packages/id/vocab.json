@@ -11,8 +11,7 @@
       "properties": {
         "num": {
           "type": "number",
-          "stamped": true,
-          "description": "the number this graph gave it, counting up — what a human id such as B-7 is built from"
+          "description": "the number this graph gave it, counting up — what a human id such as B-7 is built from. A write may set it, change it, or clear it with null; a number another entity holds is refused"
         }
       }
     }

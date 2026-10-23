@@ -11,6 +11,7 @@
 
 import type { Query as Ast } from '@yaks/query'
 import type { Bundle, Eid, Entity } from './bundle.ts'
+import { Misfit, Refused } from './errors.ts'
 import type { Binding, Match } from './join.ts'
 
 /** One raw result row from a storage read — column name → value. */
@@ -151,7 +152,9 @@ export type Tx = {
    * database may not know them yet — it fills each `num` into the very entity
    * object it returned, before its `tx()` settles. `apply()` reads them only
    * when it builds its return value, which happens after that. A bundle for
-   * a tombstoned entity writes nothing. */
+   * a tombstoned entity writes nothing. A bundle stating `entity.num` gives
+   * its entity that number, or none for `null`, born or not, as
+   * {@link renumbering} checks it. */
   patch: (bundles: Bundle[]) => Entity[] | Promise<Entity[]>
   /** remove these entities: their component rows are deleted, and their
    * identity is tombstoned, keeping its eid and number */
@@ -291,3 +294,61 @@ export let detached = (storage: Storage): Tx => ({
   remove: (entities) => storage.tx((tx) => tx.remove(entities)),
   revive: (eids) => storage.tx((tx) => tx.revive(eids)),
 })
+
+/**
+ * The numbers a batch states for its entities (`entity.num`), checked before a
+ * store writes any of them: each a whole number from 1, or `null` for none; no
+ * two entities given one number; and none given a number another entity
+ * holds, since a number is an address and names one entity. An entity moving
+ * off a number in the same batch frees it, so two entities may swap. `now`
+ * says an entity's number before the batch (`undefined` where it has no
+ * entity yet), and `holders` the entity holding each number stated, where one
+ * does. Answers the stated numbers that change something; a number that
+ * cannot be given is refused as the caller's own error.
+ *
+ * ```ts
+ * import { equal } from '@yaks/testing'
+ * import { renumbering } from '@yaks/graph/storage'
+ * let now = new Map<string, number | null>([['a', 1], ['b', 2]])
+ * let changes = (stated: [string, number | null][], holders: [number, string][]) =>
+ *   renumbering(new Map(stated), (e) => now.get(e), new Map(holders))
+ * equal(changes([['a', 1], ['b', null]], [[1, 'a']]), new Map([['b', null]]))
+ * equal(changes([['a', 2], ['b', 1]], [[1, 'a'], [2, 'b']]).size, 2)
+ * let no = (f: () => unknown) => { try { f() } catch (e) { return (e as Error).message } }
+ * equal(no(() => changes([['a', 2]], [[2, 'b']])), 'number 2 is b\'s: two entities cannot share a number')
+ * equal(no(() => changes([['a', 1.5]], [])), 'entity.num is a whole number from 1, or null for none')
+ * ```
+ */
+export let renumbering = (
+  stated: ReadonlyMap<Eid, number | null>,
+  now: (eid: Eid) => number | null | undefined,
+  holders: ReadonlyMap<number, Eid>,
+): Map<Eid, number | null> => {
+  let changes = new Map(
+    [...stated].filter(([eid, num]) => (now(eid) ?? null) !== num),
+  )
+  let given = new Map<number, Eid>()
+  for (let [eid, num] of changes) {
+    if (num === null) continue
+    let at = { eid, comp: 'entity', prop: 'num' }
+    if (!Number.isSafeInteger(num) || num < 1) {
+      throw new Misfit(
+        'entity.num is a whole number from 1, or null for none',
+        at,
+      )
+    }
+    let twin = given.get(num)
+    if (twin) {
+      throw new Refused(`${twin} and ${eid} are both given number ${num}`, at)
+    }
+    given.set(num, eid)
+    let holder = holders.get(num)
+    if (holder && holder != eid && !changes.has(holder)) {
+      throw new Refused(
+        `number ${num} is ${holder}'s: two entities cannot share a number`,
+        at,
+      )
+    }
+  }
+  return changes
+}

@@ -282,10 +282,12 @@ counter. `number: { except: ['componentName'] }` leaves entities carrying those
 components unnumbered at allocation. Existing numbers remain valid addresses,
 even after adding an excluded component.
 
-`adopt: true` accepts supplied `entity.num` values and stores incoming computed
-values. It never generates numbers. For a new identity, adoption requires
-`number` to be enabled; an existing identity can receive a supplied number
-without `number`.
+Where the vocabulary declares numbers (@yaks/id's `entity.num`), a patch stating
+`entity.num` gives its entity that number, born or not, or none for `null`. A
+number another entity holds is refused, unless that entity moves off it in the
+same patch (@yaks/graph `renumbering`). `adopt: true` is for a mirror: it never
+generates numbers, takes every stated one unchecked whatever its vocabulary
+says, and stores incoming computed values.
 
 ```ts
 import { ram } from '@yaks/ram'

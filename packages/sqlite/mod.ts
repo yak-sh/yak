@@ -391,13 +391,6 @@ export type Opts = BindOpts & {
    * types the number of wants. Identity, and reporting which entities were
    * created, still belong to storage either way. */
   number?: boolean | { except: readonly string[] }
-  /** Adopt the `num` a patch's identity carries instead of minting one — a
-   * given number for the entity to take, an explicit `null` for one that is to
-   * have none. What a store mirroring another graph needs, and the same option
-   * name @yaks/ram uses: a batch from another store is stating the identity,
-   * not requesting one. Off by default, because a store nobody mirrors owns
-   * its own numbering. */
-  adopt?: boolean
   /** Where a failure the store outlives is told: a table that stood and could
    * not be fitted to the vocabulary, left as it was (ddl.ts `fit`). One
    * line on the console, by default (ddl.ts `logged`). */
@@ -829,7 +822,6 @@ export let storage = (
             vocab,
             bundles,
             base.number,
-            base.adopt,
             undefined,
             known,
           ),
@@ -968,7 +960,6 @@ export let storage = (
                 vocab,
                 bundles,
                 base.number,
-                base.adopt,
                 l.moved,
                 known,
                 born,

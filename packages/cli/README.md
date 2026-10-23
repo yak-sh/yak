@@ -154,7 +154,6 @@ config file.
 | `port`     | Port the `serve` tool listens on; defaults to `@yaks/api`'s `PORT`.                               |
 | `hostname` | Network interface used by `serve`; defaults to `@yaks/api`'s `HOSTNAME`, `127.0.0.1`.             |
 | `numbers`  | Enables short entity numbers. `{ "except": [...] }` excludes entities carrying named components.  |
-| `adopt`    | Preserves incoming entity numbers instead of minting new ones. Intended for store imports.        |
 | `name`     | MCP server name; defaults to `yak`.                                                               |
 | `person`   | Who works at this machine, as any id the graph resolves; a command typed at a terminal is theirs. |
 | `lease`    | Duty lease and effect-run claim duration in milliseconds; defaults to `30000` and `60000`.        |

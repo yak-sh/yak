@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
-import { assertEquals } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import { assertEquals, assertThrows } from '@std/assert'
+import { type Bundle, Refused, type Tx } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { among, by, col, select, table, val } from '@yaks/sql'
@@ -295,27 +295,70 @@ test('a mint may state the number it is adopting', () => {
   })
 })
 
-test('an adopting store takes the number a patch states', () => {
-  // A store seeded from another store's export is told the identity: a stated
-  // number is the one the entity takes, a stated null leaves it unnumbered,
-  // and the sequence carries on past whatever was stated.
-  let s = storage(mem(), vocab, { number: true, adopt: true })
-  s.install()
-  s.tx((tx) => {
-    tx.patch([
-      { entity: { eid: 'old', num: 37574 }, task: {} },
-      { entity: { eid: 'made', num: null }, task: {} },
-      { entity: { eid: 'mine' }, task: {} },
-    ])
-    assertEquals(tx.get(['old'])[0].entity.num, 37574)
-    assertEquals(tx.get(['made'])[0].entity, { eid: 'made' })
-    assertEquals(tx.get(['mine'])[0].entity.num, 37575)
-  })
-})
+// A number is a property like any other: a patch stating one gives it to a
+// new entity or one holding another, `null` clears it, and the sequence
+// carries on past every one given. A number another entity holds is that
+// entity's address, so it is refused, unless that entity moves off it in the
+// same batch. Each test's store is made beside it, and its patches run in one
+// transaction, so the test times only them.
+for (let backend of ['sqlite', 'ram']) {
+  let fresh = () => {
+    let s = backend == 'sqlite'
+      ? storage(mem(), vocab, { number: true })
+      : ram(vocab, { number: true })
+    s.install()
+    s.tx((tx) =>
+      tx.patch([
+        { entity: { eid: 'old', num: 37574 }, task: {} },
+        { entity: { eid: 'made', num: null }, task: {} },
+        { entity: { eid: 'mine' }, task: {} },
+      ])
+    )
+    // A new entity takes a stated number, or none for null, and the sequence
+    // carries on past it.
+    assertEquals(
+      s.tx((tx) => tx.get(['old', 'made', 'mine']).map((b) => b.entity.num)),
+      [37574, undefined, 37575],
+    )
+    return (body: (tx: Tx, nums: () => (number | null)[]) => void) =>
+      s.tx((tx) =>
+        body(
+          tx,
+          () =>
+            tx.get(['old', 'made', 'mine']).map((b) => b.entity.num ?? null),
+        )
+      )
+  }
+  let sets = fresh(), clears = fresh(), refuses = fresh()
 
-let local = storage(mem(), vocab, { number: true })
-local.install()
-local.tx((tx) => tx.patch([{ entity: { eid: 'old', num: 37574 }, task: {} }]))
-test('a store that is not adopting mints its own numbers regardless', () => {
-  assertEquals(local.get(['old'])[0].entity.num, 1)
-})
+  test(`${backend}: a patch stating a number gives it, and two may swap`, () =>
+    sets((tx, nums) => {
+      tx.patch([
+        { entity: { eid: 'old', num: 37575 } },
+        { entity: { eid: 'mine', num: 37574 } },
+        { entity: { eid: 'made', num: 3 } },
+      ])
+      assertEquals(nums(), [37575, 3, 37574])
+    }))
+
+  test(`${backend}: a patch stating a null number clears it`, () =>
+    clears((tx, nums) => {
+      tx.patch([{ entity: { eid: 'old', num: null } }])
+      assertEquals(nums(), [null, null, 37575])
+    }))
+
+  test(`${backend}: a number another entity holds is refused`, () =>
+    refuses((tx, nums) => {
+      assertThrows(
+        () => tx.patch([{ entity: { eid: 'made', num: 37574 } }]),
+        Refused,
+        'two entities cannot share a number',
+      )
+      assertThrows(
+        () => tx.patch([{ entity: { eid: 'made', num: 0 } }]),
+        Refused,
+        'a whole number from 1',
+      )
+      assertEquals(nums(), [37574, null, 37575])
+    }))
+}

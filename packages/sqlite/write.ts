@@ -47,6 +47,7 @@ import type { Vocab } from '@yaks/vocab'
 import type { Bundle, Comp, Entity } from '@yaks/graph'
 import { comps, TOMBSTONE } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
+import { renumbering } from '@yaks/graph/storage'
 import {
   among,
   and,
@@ -227,6 +228,40 @@ export let numberSql = (eid: string, number: true | number): Update => ({
   where: and(eq(col('eid'), val(eid)), isNull(col('num'))),
   returning: IDENTITY,
 })
+
+// The entity holding each of these numbers, where one does, a tombstone
+// included: its number is still its address.
+let holders = (
+  driver: Driver,
+  nums: number[],
+): Map<number, string> =>
+  nums.length
+    ? new Map(
+      driver.query(select({
+        cols: [col('num'), col('eid')],
+        from: table('entity'),
+        where: oneOf(col('num'), nums),
+      })).map((r) => [Number(r.num), String(r.eid)]),
+    )
+    : new Map()
+
+// An entity's number set to another, or to none, and the store's memory of
+// its spine with it. The sequence follows a number set past it
+// (`entity_number_update`).
+let renumber = (
+  driver: Driver,
+  eid: string,
+  spine: Spine,
+  num: number | null,
+) => {
+  effect(driver, {
+    t: 'update',
+    table: 'entity',
+    set: { num: num == null ? lit(null) : val(num) },
+    where: eq(col('eid'), val(eid)),
+  })
+  spined(driver).learn(eid, { ...spine, num })
+}
 
 /** The identity a {@link mintSql} statement reported — the rows it returned —
  * or `undefined` when the eid already had one and nothing was minted. */
@@ -596,7 +631,6 @@ export let patch = (
   vocab: Vocab,
   bundles: Bundle[],
   number: boolean | { except: readonly string[] } = false,
-  adopt = false,
   moved?: Moved,
   had?: Known,
   born?: Births,
@@ -616,18 +650,28 @@ export let patch = (
   let ids = new Map([...known].map(([eid, row]) => [eid, row.id]))
   let resolve: Resolve = (eid) => ids.has(eid) ? val(ids.get(eid)!) : owner(eid)
 
-  // What each bundle states its entity's number to be, where the store is
-  // adopting rather than minting: a number to take, or `null` for none. Only a
-  // birth honours it — a number in use is not something a later batch may
-  // reassign.
+  // What each bundle states its entity's number to be: a number to take, or
+  // `null` for none, born or not, checked against the numbers every other
+  // entity holds, a tombstone's included (@yaks/graph `renumbering`). A
+  // vocabulary that declares no number (@yaks/id) reads none back, and a
+  // stated one says nothing to it.
   let stated = new Map<string, number | null>()
-  if (adopt) {
-    for (let b of alive) {
-      if (b.entity.num !== undefined) stated.set(b.entity.eid, b.entity.num)
-    }
+  for (let b of vocab.prop('entity', 'num') ? alive : []) {
+    if (b.entity.num !== undefined) stated.set(b.entity.eid, b.entity.num)
   }
-  // The eids a bundle of their own arrives for: one giving a component, or,
-  // where the store is adopting, one stating the number.
+  let renumbered = stated.size
+    ? renumbering(
+      stated,
+      (eid) => known.get(eid)?.num,
+      holders(driver, [...stated.values()].filter((n) => n != null)),
+    )
+    : new Map<string, number | null>()
+  // An entity moving off its number lets go of it before any is given, so a
+  // number another entity of the batch leaves is free for this one.
+  let moving = [...renumbered.keys()].filter((eid) => known.get(eid)?.num)
+  for (let eid of moving) renumber(driver, eid, known.get(eid)!, null)
+  // The eids a bundle of their own arrives for: one giving a component, or
+  // one stating the number.
   let own = new Set([
     ...alive.filter((b) => comps(b).some(([, c]) => c != null))
       .map((b) => b.entity.eid),
@@ -666,15 +710,15 @@ export let patch = (
     // Exclusions govern allocation, not addresses already given out. A number
     // in a comment, transcript or URL keeps resolving after policy changes.
   }
-  // The number an entity is born with: none where the store numbers nothing or
-  // the entity wears an excepted component, the stated one where the store is
-  // adopting, else the next.
+  // The number an entity is born with: the one its bundle states, else none
+  // where the store numbers nothing or the entity wears an excepted
+  // component, else the next.
   let take = (eid: string): boolean | number =>
-    number === false || excluded.has(eid)
+    stated.has(eid)
+      ? stated.get(eid) ?? false
+      : number === false || excluded.has(eid)
       ? false
-      : !stated.has(eid)
-      ? true
-      : stated.get(eid) ?? false
+      : true
   // What the live bundles give each entity, and the pointer they name for
   // it: what a mint is told it opens holding, and the class it may take.
   let opening = new Map<string, string[]>()
@@ -723,7 +767,8 @@ export let patch = (
   // on purpose, and keeps it that way.
   let pointed = [...own].filter((eid) => {
     let k = known.get(eid)
-    return k && !k.dead && k.num == null && take(eid) !== false
+    return k && !k.dead && k.num == null && !stated.has(eid) &&
+      take(eid) !== false
   })
   if (pointed.length) {
     for (let b of get(driver, vocab, pointed)) {
@@ -732,6 +777,12 @@ export let patch = (
       let e = minted(driver.query(numberSql(b.entity.eid, n)))
       if (e) made.push(e)
     }
+  }
+  // Every entity the store held before the batch takes the number stated for
+  // it; one born here took it as it was minted.
+  for (let [eid, num] of renumbered) {
+    let k = known.get(eid)
+    if (k && num != null) renumber(driver, eid, k, num)
   }
 
   // The physical table is the last word on required columns: an older store

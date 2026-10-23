@@ -95,6 +95,12 @@ export let mutate = (
       : undefined
     let writer = authoring ? writerOf ?? writers(bundles) : undefined
     let present = new Set(found.map((b) => b.entity.eid))
+    // Each entity's number before the batch: a bundle stating another one
+    // writes to it, as a patch to any property does.
+    let nums = new Map(found.map((b) => [b.entity.eid, b.entity.num ?? null]))
+    let renumbers = (b: Bundle) =>
+      b.entity.num !== undefined &&
+      b.entity.num !== (nums.get(b.entity.eid) ?? null)
     // Deleted before this batch began: a write may bring one back.
     let buried = new Set(
       found.filter((b) => dead(b)).map((b) => b.entity.eid),
@@ -132,7 +138,7 @@ export let mutate = (
       }
       live.push(w)
       present.add(eid)
-      if (comps(w).length) st.touched.add(eid)
+      if (comps(w).length || renumbers(w)) st.touched.add(eid)
       return [w]
     })
     if (!live.length) return kept
