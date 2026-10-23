@@ -16,7 +16,10 @@ import { tick } from './testing.ts'
 import { vocab } from './types.ts'
 
 /** Mount a component that holds `holds`, as a view drawing them would; the
- * returned function unmounts it, which releases them. */
+ * returned function unmounts it, which releases them. Preact's render reads
+ * the `document` global: where none is set, one is lent for the render and
+ * taken back after; one already set, such as mount()'s read-only one
+ * (./components/mount.ts), is left as it is. */
 let page: Document | undefined
 export let held = (...holds: Hold[]): () => void => {
   let document = page ??= parseHTML('<main></main>').document
@@ -27,12 +30,12 @@ export let held = (...holds: Hold[]): () => void => {
   }
   let mounted = (vnode: ComponentChild) => {
     let g = globalThis as { document?: unknown }
-    let prior = g.document
-    g.document ??= document
+    if (g.document) return render(vnode, root)
+    g.document = document
     try {
       render(vnode, root)
     } finally {
-      g.document = prior
+      delete g.document
     }
   }
   mounted(h(Owner, null))

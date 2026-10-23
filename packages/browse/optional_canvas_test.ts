@@ -6,6 +6,7 @@ import { cache, config, ent, myActor, owner } from './live.ts'
 import { applicable, resolve } from './components/registry.ts'
 import { screenTarget } from './components/nav.tsx'
 import { offerPlaces } from './components/offers.ts'
+import './components/Entity.tsx' // the app's renderers
 import { held, host } from './host_testing.ts'
 
 let docs = vocab.docs
