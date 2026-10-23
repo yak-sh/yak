@@ -36,10 +36,12 @@ export type Named = { eid: string; kind: string; num?: number | null }
  * typed as a bare number) and the number that identifies the entity. */
 export type Parsed = { prefix: string; num: number }
 
-// A component that declares no prefix still needs a letter, so it uses its own
-// initial. Two components sharing an initial share a series — harmless, since
-// the number is what identifies an entity.
-let initial = (kind: string) => kind.slice(0, 1).toUpperCase()
+// A component that declares no prefix still needs a letter, so it uses the
+// first letter of its name: `_effect`, a description component (@yaks/vocab),
+// reads `E`, since `parse` reads a prefix of letters and an `_` would make an
+// id nothing resolves. Two components sharing an initial share a series —
+// harmless, since the number is what identifies an entity.
+let initial = (kind: string) => (kind.match(/[a-z]/i)?.[0] ?? '').toUpperCase()
 
 /**
  * Every prefix the vocabulary declares, as component name → letter. Reads the

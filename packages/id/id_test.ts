@@ -71,6 +71,12 @@ test('a numbered entity wears its human id', () => {
   assertEquals(id({ eid, kind: 'review', num: 3 }), 'R-3')
 })
 
+test('every id a numbered entity wears parses back to its number', () => {
+  for (let kind of ['book', 'review', '_effect']) {
+    assertEquals(parse(id({ eid, kind, num: 7 }))?.num, 7, kind)
+  }
+})
+
 test('an unnumbered entity wears its short handle, with no letter', () => {
   assertEquals(id({ eid, kind: 'book' }), '#9f1c8d2a0b')
   assertEquals(id({ eid, kind: 'author', num: null }), '#9f1c8d2a0b')
