@@ -1,7 +1,17 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { parse } from '@yaks/query'
-import { compile, insert } from '@yaks/sql'
+import {
+  col,
+  compile,
+  type Derived,
+  eq,
+  fn,
+  insert,
+  select,
+  sub,
+  table,
+} from '@yaks/sql'
 import { fields } from './fields.ts'
 import { search } from './compile.ts'
 import { find, ranked, screens } from './search.ts'
@@ -69,3 +79,29 @@ test('standalone ranking excludes a hidden owner', () =>
       .some((hit) => hit.entity == 'book-2'),
     false,
   ))
+
+// A ranked page beside a filter read through another component (a derived
+// read, as a task's status reads its marks), under a scope. The ranking is
+// asked of the rest of the query bound again under the scope, which names only
+// the scoped relations it defines itself, never the outer statement's.
+let rated: Derived = {
+  'book.price': {
+    tag: 'number',
+    expr: (owner) =>
+      sub(select({
+        cols: [fn('max', col('stars', '__r'))],
+        from: table('review', '__r'),
+        where: eq(col('book', '__r'), owner),
+      })),
+  },
+}
+let ranking = search(text, db)
+let page = (q: string) =>
+  db.query(compile(parse(q), shop, {
+    visibility: { entity: '.entity.eid!=book-2' },
+    derived: rated,
+    extend: [ranking],
+  })).map((r) => r.eid)
+let paged = page('dragon .book.price=5 .order=search .limit=2')
+test('a ranked page beside a derived filter reads under its scope', () =>
+  assertEquals(paged, ['book-1']))

@@ -2909,6 +2909,10 @@ export let bind = (ast: And, vocab: Vocab, opts: BindOpts = {}): Select =>
 type Scope = {
   visibility?: BindOpts['visibility']
   dialect?: Dialect
+  /** the read overrides as the caller wrote them, before the scope laid its
+   * relations over them: a screen is bound again under the scope, which lays
+   * its own, so it never names a relation only this statement defines */
+  derived?: Derived
   correlated?: boolean
   screening?: boolean
 }
@@ -2998,7 +3002,7 @@ export let prepared = (
   let captured: BindOpts = {
     ...opts.missingIndexes ? { missingIndexes: opts.missingIndexes } : {},
     ...opts.graves ? { graves: true } : {},
-    derived: ctx.derived,
+    derived: scope?.derived ?? ctx.derived,
     backed: ctx.backed,
     extend: ctx.ext,
     now: ctx.now,
@@ -3025,7 +3029,9 @@ export let prepared = (
       selected(e, {
         ...opts,
         eids: ctx.eids,
-        ...scope ? { visibility: scope.visibility } : {},
+        ...scope
+          ? { visibility: scope.visibility, derived: captured.derived }
+          : {},
       }),
     (e) => selected(e, screenOpts),
     scope?.screening,
@@ -4269,7 +4275,13 @@ let visible = (
     },
     scoped,
     reads,
-    { visibility, dialect: base, screening, correlated },
+    {
+      visibility,
+      dialect: base,
+      derived: derivedOf(vocab, opts.derived),
+      screening,
+      correlated,
+    },
     { archetypes, extend: heard.extend },
   )
   return {
