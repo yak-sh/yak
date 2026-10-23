@@ -1,25 +1,29 @@
-// A topic's name, its id, and the query that finds topics: the pure half of
-// the package, which ./tools.ts reads and writes with.
+// A topic's name and the query that finds topics: the pure half of the
+// package, which ./tools.ts reads and writes with.
 //
 // The one danger is synonyms. A model names a subject by what it means, not by
 // its letters, so left alone it calls the same subject "testing" in one build,
 // "tests" in the next and "test suite" in a third, and what is known about it
 // scatters across three topics that each hold a third (M-12915 on why). Three
-// things stand against that. A topic's name is its identity (`topic.name`
-// derives its id), folded to lowercase with single spaces, so a name said twice
-// is one topic whoever says it, even two builds at once; whoever makes one is
-// shown the topics that exist, nearest its words by meaning, first, so it
-// reuses a subject already named; and `topic_new` refuses a name that is taken,
-// or whose words hold another topic's or are held by them ("economic market
-// design" beside "market design"), and says which topic to use.
+// things stand against that. A topic's name is unique (`topic.name`'s index),
+// folded to lowercase with single spaces, so a name said twice is one topic
+// whoever says it, and the second of two builds at once is refused; whoever
+// makes one is shown the topics that exist, nearest its words by meaning,
+// first, so it reuses a subject already named; and `topic_new` refuses a name
+// that is taken, or whose words hold another topic's or are held by them
+// ("economic market design" beside "market design"), and says which topic to
+// use. The name is not the topic's identity: any entity may wear `topic`, a
+// project to be its own topic, and keeps its eid when its name changes.
 
 import type { Bundle } from '@yaks/graph'
-import { identityEid } from '@yaks/graph/identity'
 import { tokens } from '@yaks/match'
 import { stemmer } from 'stemmer'
 
 /** The component this package is about. */
 export let TOPIC = 'topic'
+
+/** The relation from a topic to what it holds (@yaks/task's word). */
+export let HOLDS = 'contains'
 
 /** The relation from a persona to the topic it looks after, its oracle. */
 export let TENDS = 'tends'
@@ -40,10 +44,6 @@ export let TOPICS = 100000
  */
 export let named = (title: string): string =>
   title.trim().replace(/\s+/g, ' ').toLowerCase()
-
-/** The id of the topic a title names, whether or not it exists yet. */
-export let topicEid = (title: string): string =>
-  identityEid(TOPIC, [named(title)])
 
 let prop = (t: Bundle, comp: string, name: string): string => {
   let v = (t[comp] as Record<string, unknown> | undefined)?.[name]

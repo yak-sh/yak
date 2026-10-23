@@ -1,16 +1,18 @@
 # @yaks/topic
 
-A knowledge graph of topics. A topic is a subject no project, package, component
-or design already is, such as "data model" or "testing". Some topics are world
-knowledge and some belong to a project; together they form a tree you can open,
-browse and read, and every claim in it leads back to who said it.
+A knowledge graph of topics. A topic is a subject, such as "data model" or
+"testing", and a project is its own topic. Some topics are world knowledge and
+some belong to a project; together they form a tree you can open, browse and
+read, everything known about a subject is held under it, and every claim in it
+leads back to who said it.
 
 A topic is an entity (a record identified by `entity.eid`) carrying:
 
 - `topic{name, scope}`: `name` is its title in lowercase with single spaces, and
-  is its identity, so its id is derived from it and a name said twice is one
-  topic. `scope` is the project it holds for, absent for a topic that holds
-  everywhere.
+  no two topics share one, so a name said twice is one topic. It is a name, not
+  an identity: the eid is the entity's own, so any entity may wear `topic`, and
+  a project does, to be its own topic. `scope` is the project it holds for,
+  absent for a topic that holds everywhere.
 - `doc{title, body}` ([@yaks/doc](../doc)), the **cover**: its title and a line
   or two saying what belongs under it, what a reader sees in a list and decides
   by.
@@ -19,12 +21,12 @@ A topic is an entity (a record identified by `entity.eid`) carrying:
 
 Its edges are relations that already exist, never new ones:
 
-| Relation              | Package                   | Means                                                                 |
-| --------------------- | ------------------------- | --------------------------------------------------------------------- |
-| `contains`            | [@yaks/task](../task)     | what it holds: a subtopic, or any other entity (a project, a package) |
-| `requires`            | [@yaks/task](../task)     | a topic to understand first                                           |
-| `reads`, `references` | [@yaks/kernel](../kernel) | related things, listed but not held                                   |
-| `cites{hash}`         | [@yaks/kernel](../kernel) | its sources: verbatim words, sessions, entries, memories              |
+| Relation              | Package                   | Means                                                                |
+| --------------------- | ------------------------- | -------------------------------------------------------------------- |
+| `contains`            | [@yaks/task](../task)     | what it holds: a subtopic, or any other entity (a memory, a package) |
+| `requires`            | [@yaks/task](../task)     | a topic to understand first                                          |
+| `reads`, `references` | [@yaks/kernel](../kernel) | related things, listed but not held                                  |
+| `cites{hash}`         | [@yaks/kernel](../kernel) | its sources: verbatim words, sessions, entries, memories             |
 
 One relation is this package's own, and it arrives at a topic: `tends{}`, a link
 from a [persona](../persona) to the topic it looks after, its **oracle**. The
@@ -47,11 +49,10 @@ deno add jsr:@yaks/topic
 ## Use
 
 ```ts
-import { fits, named, overlaps, topicEid } from '@yaks/topic'
+import { fits, named, overlaps } from '@yaks/topic'
 import { equal } from '@yaks/testing'
 
 equal(named('  Data   Model '), 'data model')
-equal(topicEid('Data Model'), topicEid('data model'))
 equal(overlaps('economic market design', 'market design'), true)
 equal(overlaps('ui design', 'cover design'), false)
 equal(fits('Data Modeling', 'data model'), true)
@@ -64,14 +65,18 @@ testing.
 
 ## The tools
 
-`@yaks/topic/tools` exports `runs()`, the implementations behind the two tools
-`vocab.json` declares (`yak topic find`, `yak topic new`, and each over `/mcp`):
+`@yaks/topic/tools` exports `runs()`, the implementations behind the three tools
+`vocab.json` declares (`yak topic find`, `yak topic new`, `yak topic add`, and
+each over `/mcp`):
 
 ```sh
 yak topic find model
 yak topic find --near '#c625160bfa'
 yak topic new testing --body 'what a test checks, and how fast a suite runs'
 yak topic new billing --body 'plans, prices and invoices' --scope P-19
+yak topic add Q-59416 M-14942 M-59035
+yak topic add 'Task Graph' D-130781
+yak topic add Q-59416 M-59035 --drop
 ```
 
 `topic find` answers topics whole: those `said` finds (`fits`), ranked by
@@ -81,8 +86,15 @@ meaning to `near` where the server has embeddings, or else in order of name.
 is one topic, so it refuses a name that is taken, or whose words hold another
 topic's or are held by them ("economic market design" beside "market design"),
 and says which topic to use. Whoever makes a topic finds first, so a subject
-already named is reused, and the refusal catches two writers that found nothing
-at once.
+already named is reused, and the name's unique index refuses the second of two
+writers that found nothing at once.
+
+`topic add` puts entities under a topic, a `contains` edge from the topic to
+each, where whoever reads the topic finds them: a memory, a design, a skill, a
+package, somebody's words, a subtopic. Adding one already there changes nothing,
+and `--drop` takes them out. It refuses a topic that is not one, and a topic
+holding itself. A project is its own topic, so a project's id or name places
+things under it.
 
 ## The views
 
@@ -123,17 +135,17 @@ its own path without walking it, and links to the rest past `DEPTH` levels.
 
 ## Exports
 
-The root exports `topicDoc`, `named` (a title folded to a topic's name),
-`topicEid` (the id a title names, whether or not it exists yet), `overlaps`
-(whether two names share a subject by their words), `fits` (whether what was
-said finds a topic's words), `about` (a topic's words: name, title and cover),
-`found` (the query that reads every topic), `shelves` and `within` (the topics
-as a tree, and that tree narrowed to what was said), and the constants `TOPIC`,
-`FIND` and `TOPICS`. `@yaks/topic/vocab` exports `topicDoc` and
-`docs: [topicDoc]` for schema loaders. `@yaks/topic/views` exports
-`inspectViews()`, which loads the shelves, the page, the tree and the tile;
-`tabs`, the two tabs a topic wears; `destinations`, the Topics page the sidebar
-offers; and `icons`, the glyph it wears.
+The root exports `topicDoc`, `named` (a title folded to a topic's name), `HOLDS`
+(the relation a topic holds things by, `contains`), `overlaps` (whether two
+names share a subject by their words), `fits` (whether what was said finds a
+topic's words), `about` (a topic's words: name, title and cover), `found` (the
+query that reads every topic), `shelves` and `within` (the topics as a tree, and
+that tree narrowed to what was said), and the constants `TOPIC`, `FIND` and
+`TOPICS`. `@yaks/topic/vocab` exports `topicDoc` and `docs: [topicDoc]` for
+schema loaders. `@yaks/topic/views` exports `inspectViews()`, which loads the
+shelves, the page, the tree and the tile; `tabs`, the two tabs a topic wears;
+`destinations`, the Topics page the sidebar offers; and `icons`, the glyph it
+wears.
 
 ## Compatibility
 

@@ -5,7 +5,7 @@
 // every interface; the batch it writes is derived from it here, whole, so it
 // can be shown before it is sent. The batch names what it makes by alias
 // (`$1`), and the graph mints each id, or derives it where a component's
-// identity says (a topic's name), so the page never guesses one.
+// identity says (a link's ends and relation), so the page never guesses one.
 //
 // Nothing here reads the page: the vocabulary, and a reader for typed text,
 // are handed in.
@@ -224,11 +224,22 @@ let values = (s: Sketch, cx: Context, said: Said[]) =>
     ]),
   ) as Record<string, Comp>
 
+// What identifies a component's entity among its kind: the properties its id
+// is derived from, or else one no two of them share (a topic's name).
+let keyOf = (v: Vocab, name: string): string[] => {
+  let identity = v.identity(name)
+  return identity.length
+    ? identity
+    : v.indexes(name).flatMap((i) =>
+      i.unique && !i.present && i.props.length == 1 ? i.props : []
+    )
+}
+
 // Whether what was typed names the entity: a title, or what identifies it.
 let named = (v: Vocab, comps: Record<string, Comp>) =>
   comps.doc?.title != null ||
   Object.entries(comps).some(([name, c]) =>
-    v.identity(name).some((p) => c[p] != null)
+    keyOf(v, name).some((p) => c[p] != null)
   )
 
 // An outline line's entity: the sketch's values, its line the title and what
@@ -237,7 +248,7 @@ let titled = (v: Vocab, comps: Record<string, Comp>, title: string) => {
   let out: Record<string, Comp> = { ...comps }
   if (v.comp('doc')) out.doc = { ...out.doc, title }
   for (let [name, c] of Object.entries(comps)) {
-    for (let p of v.identity(name)) {
+    for (let p of keyOf(v, name)) {
       if (c[p] == null) out[name] = { ...out[name], [p]: title }
     }
   }

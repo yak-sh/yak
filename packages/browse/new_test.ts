@@ -2,7 +2,6 @@
 // ids the graph gives it, and where a refusal points.
 import { equal, test } from '@yaks/testing'
 import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
-import { identityEid } from '@yaks/graph/identity'
 import { ram } from '@yaks/ram'
 import { loadVocab } from '@yaks/vocab'
 import { plugins } from '@yaks/edge/graph'
@@ -25,6 +24,10 @@ let vocab = loadVocab([
   {
     $defs: {
       book: { component: true, properties: { pages: { type: 'number' } } },
+      shelf: {
+        component: true,
+        properties: { aisle: { type: 'string', identity: true } },
+      },
     },
   },
 ], keywords)
@@ -55,7 +58,8 @@ let written = async (s: Partial<Sketch>, cx: Partial<Context> = {}) => {
     .map((e) =>
       `${title.get(e.from as string)} > ${title.get(e.to as string)} @${e.ord}`
     )
-  return { links, tasks: await eids('.task'), topics: await eids('.topic') }
+  let topics = (await g.read('.topic')).map((b) => (b.topic as Comp).name)
+  return { links, tasks: await eids('.task'), topics: topics.toSorted() }
 }
 let nested = await written(
   { comps: { task: {} }, outline: 'A\n  B\n    C\n  D\nE' },
@@ -69,7 +73,7 @@ let topics = await written({ comps: { topic: {} }, outline: 'breads\n  rye' })
 let refused: Refused | undefined
 try {
   await fresh().apply(
-    batch(sketch({ comps: { topic: {} } }), { vocab, read }).bundles,
+    batch(sketch({ comps: { shelf: {} } }), { vocab, read }).bundles,
   )
 } catch (e) {
   refused = e as Refused
@@ -99,12 +103,8 @@ test('a sketch that names itself holds its outline, and each line is like it', (
   equal(rooted.tasks.length, 3)
 })
 
-test('a line is what identifies its entity, so a topic’s id is its name’s', () => {
-  equal(
-    topics.topics,
-    [identityEid('topic', ['breads']), identityEid('topic', ['rye'])]
-      .toSorted(),
-  )
+test('a line is what identifies its entity, so a topic is named by its line', () => {
+  equal(topics.topics, ['breads', 'rye'])
 })
 
 test('nothing typed writes nothing, and an outline alone is its titled lines', () => {
@@ -132,7 +132,7 @@ test('typed text that cannot be read is said beside its field, and left out', ()
 })
 
 test('a refusal points at the alias and field it is about', () => {
-  equal([refused?.eid, refused?.comp, refused?.prop], ['$1', 'topic', 'name'])
+  equal([refused?.eid, refused?.comp, refused?.prop], ['$1', 'shelf', 'aisle'])
 })
 
 test('like this is the components a client writes, without values or history', () => {

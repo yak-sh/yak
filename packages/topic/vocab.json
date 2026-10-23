@@ -15,12 +15,12 @@
         "doc"
       ],
       "prefix": "Q",
-      "description": "a subject in the knowledge graph that no project, package, component or design already is. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains, a subtopic or any other entity), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about)",
+      "description": "a subject in the knowledge graph. Any entity may be one by wearing this: a subject of its own is topic + doc + content, and a project is its own topic, so what is known about it sits under it. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains: a subtopic, or anything else, such as a memory, a design, a skill, a package or somebody's words), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about)",
       "properties": {
         "name": {
           "type": "string",
-          "identity": true,
-          "description": "the title in lowercase, its spaces single; the topic's id is derived from it, so one name is one topic and naming it again finds the same one"
+          "unique": true,
+          "description": "the title in lowercase, its spaces single; no two topics share one, so a name said again finds the topic that has it. A name, not an identity: it changes with the title, and the entity keeps its eid"
         },
         "scope": {
           "type": "string",
@@ -43,7 +43,7 @@
       "noun": "topic",
       "verb": "new",
       "title": "Make a topic",
-      "description": "Make a topic, where no existing topic, project, package, component or design fits. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its cover, a line or two saying what belongs under it, never a point anybody made. scope names the project it holds for; leave it out for a topic that holds everywhere. One name is one topic: a name that is taken is refused with the topic that has it, to use instead, and so is a name whose words hold another topic's or are held by them (\"economic market design\" beside \"market design\"). Returns the applied bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
+      "description": "Make a topic, where no existing topic fits; a project is already its own topic. name is what it is called, as plain and general as the subject is (\"testing\", \"ui components\", \"naming\"), never a phrase about one point; body is its cover, a line or two saying what belongs under it, never a point anybody made. scope names the project it holds for; leave it out for a topic that holds everywhere. One name is one topic: a name that is taken is refused with the topic that has it, to use instead, and so is a name whose words hold another topic's or are held by them (\"economic market design\" beside \"market design\"). Returns the applied bundles (JSON objects with entity ids and components); the topic's id is its entity.eid.",
       "input": {
         "name": {
           "type": "string",
@@ -73,7 +73,7 @@
       "noun": "topic",
       "verb": "find",
       "title": "Find topics",
-      "description": "Find existing topics: those whose name, title or cover holds each word in said, as the start of a word or by its stem (\"data modeling\" finds \"data model\", \"tests\" finds \"testing\"), ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it before making a topic, with near set to what you are filing under one, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
+      "description": "Find existing topics: those whose name, title or cover holds each word in said, as the start of a word or by its stem (\"data modeling\" finds \"data model\", \"tests\" finds \"testing\"), ranked by meaning to the entity near names when the server has a vector index, or, given neither, the topics in order of name. Use it to find what is known about a subject (graph_show on a topic lists what it holds), before putting something you wrote under its topic (topic_add), and before making a topic, with near set to what you are filing under one, so a subject already named is reused rather than named again in other words. Returns bundles (JSON objects with entity ids and components), each whole; limit defaults to 12.",
       "input": {
         "said": {
           "type": "string",
@@ -93,6 +93,40 @@
       "readOnly": true,
       "positional": [
         "said"
+      ]
+    },
+    "topic_add": {
+      "tool": true,
+      "noun": "topic",
+      "verb": "add",
+      "title": "Add to a topic",
+      "description": "Put entities under a topic, where whoever reads the topic finds them: a memory, a design, a skill, a package, somebody's words, or a subtopic. Each gets a contains edge from the topic; adding one already there changes nothing, and drop takes them out instead. One entity may sit under several topics. Find the topic first with topic_find, or make one with topic_new; a project is its own topic, so its id or name places things under it. Returns the applied bundles: JSON objects with entity ids and the components (named groups of fields) written or removed.",
+      "input": {
+        "topic": {
+          "type": "string",
+          "ref": "topic",
+          "description": "the topic's id or title, or a project's"
+        },
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "ref": "entity",
+          "description": "the entities to put under it, by id"
+        },
+        "drop": {
+          "type": "boolean",
+          "description": "take them out of the topic instead"
+        }
+      },
+      "required": [
+        "topic",
+        "ids"
+      ],
+      "positional": [
+        "topic",
+        "ids..."
       ]
     }
   }
