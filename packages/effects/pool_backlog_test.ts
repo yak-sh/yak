@@ -14,7 +14,7 @@ import { test, until } from '@yaks/testing'
 import { effects, type Opts } from './registry.ts'
 import { pooledBlog } from './testing.ts'
 
-let fixture = (sqlite = false, opts: Partial<Opts> = {}, adopt = false) => {
+let fixture = (sqlite = false, opts: Partial<Opts> = {}) => {
   let db = sqlite ? new Database(':memory:') : undefined
   let native = db ? driver(db) : undefined
   let steps = 0
@@ -66,8 +66,8 @@ let fixture = (sqlite = false, opts: Partial<Opts> = {}, adopt = false) => {
     }
     : undefined
   let store = counted
-    ? storage(counted, pooledBlog, { number: true, adopt })
-    : ram(pooledBlog, { number: true, adopt })
+    ? storage(counted, pooledBlog, { number: true })
+    : ram(pooledBlog, { number: true })
   let errors: unknown[] = []
   let fx = effects(pooledBlog, {
     write: (b) => g.apply(b, { trusted: true }),
@@ -257,7 +257,7 @@ for (let sqlite of [false, true]) {
   })
 
   // Imported rows are the pagination fixture, not the operation being timed.
-  let physical = fixture(sqlite, {}, true)
+  let physical = fixture(sqlite)
   await physical.g.apply([{
     entity: { eid: 'target' },
     post: { title: 'Target' },
