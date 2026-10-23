@@ -183,9 +183,9 @@ changed description, skim the other descriptions
 (`head -n 22 .claude/skills/*/SKILL.md`) and grep for anything yours now teaches,
 so nothing is taught twice.
 
-`sharing` belongs to the fleet. It comes from holdco's template
-(~/code/holdco/templates/new-venture/.claude/skills/sharing), so a change to it
-goes there too.
+`sharing` and `business-model` belong to the fleet. They come from holdco's
+venture template (~/code/holdco/templates/new-venture/.claude/skills), so a
+change to either goes there too.
 
 ## Writing one from a session
 

@@ -14,7 +14,7 @@ description: >
   platform page's parts are `ui-building`, vectors and `.near` in a store are
   `search-and-embeddings`, an app's builders are `builders-and-builds`, its
   tests are `testing`, a key it calls out with is `secrets-and-connections`,
-  and pricing is `business-model`.
+  and pricing is `yaks-app-business`.
 ---
 
 # The yaks.app platform
