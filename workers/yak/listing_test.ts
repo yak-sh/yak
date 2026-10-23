@@ -233,6 +233,20 @@ test('a saved aspect cannot be a lens step, while a stamp can', () => {
   assertEquals(asking('.recipe|.created', words).includes('!_lens'), true)
 })
 
+test('a saved aspect cannot describe the vocabulary, while a doc or edge can', () => {
+  let words = ['_comp', '_effect', '_before']
+  let screens = (line: string) => {
+    let asked = asking(line, words)
+    return words.map((w) => asked.includes(`!${w}`))
+  }
+  assertEquals(screens('.recipe'), [false, false, false])
+  assertEquals(screens('.recipe .doc'), [false, false, false])
+  assertEquals(screens('.doc'), [true, true, true])
+  assertEquals(screens('.edge.from=x'), [true, true, true])
+  assertEquals(screens('.recipe|.doc'), [true, true, true])
+  assertEquals(screens('.created'), [true, true, true])
+})
+
 test('what is not a row listing passes through as it came', () => {
   assertEquals(listing('{"count":3}', '.count'), '{"count":3}')
   assertEquals(listing('not json at all', '.doc'), 'not json at all')

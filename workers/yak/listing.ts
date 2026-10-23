@@ -42,6 +42,19 @@ export let KERNEL = ['exception', 'error', 'refusal']
 // `builder_model`): planted in every app's store by the platform, and saved by
 // nobody. So is who may reach the app (`access`, `grant`): the store keeps it
 // for its own door to read, and app_set and grant are where it is said.
+//
+// So are the store's metadata: its lens steps (`_lens`) and the rows that
+// describe its vocabulary (@yaks/vocab's bundles.ts), each wearing its own
+// word and `doc`, and a `_before` its `edge`.
+export let DESCRIBED = [
+  '_package',
+  '_comp',
+  '_effect',
+  '_prop',
+  '_extends',
+  '_before',
+  '_vocab',
+]
 export let PLATFORM = [
   ...KERNEL,
   'person',
@@ -51,14 +64,8 @@ export let PLATFORM = [
   'tool',
   'access',
   'grant',
-  '_package',
   '_lens',
-  '_comp',
-  '_effect',
-  '_prop',
-  '_extends',
-  '_before',
-  '_vocab',
+  ...DESCRIBED,
 ]
 
 // How a store keeps its rows rather than any row it keeps: which component
@@ -122,9 +129,13 @@ export let asking = (
   // a lookup per candidate row for nothing.
   let clause = parse(ask)
   let spared = holds(clause) ? [...STORAGE] : []
-  // A lens step is immutable metadata, never an aspect on an app's saved row.
-  // Stamp-only questions can still reach it, so those retain the screen.
-  if (holds(clause, [...STORAGE, ...STAMPS, ...PLATFORM])) spared.push('_lens')
+  // The store's metadata is immutable, never an aspect on an app's saved row,
+  // so a line holding a component none of it wears never reaches it. A
+  // stamp-only question can still reach a lens step, and a `doc` or `edge`
+  // one a description row, so those retain the screen.
+  let platform = [...STORAGE, ...STAMPS, ...PLATFORM]
+  if (holds(clause, platform)) spared.push('_lens')
+  if (holds(clause, [...platform, 'doc', 'edge'])) spared.push(...DESCRIBED)
   let screen = words.filter((k) =>
     !spared.includes(k) && !names(line, k) &&
     !(k == 'person' && aspect) &&
