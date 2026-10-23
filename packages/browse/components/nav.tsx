@@ -16,6 +16,7 @@ import {
   mutate,
   myCursor,
   owner,
+  peeked,
   resolveEid,
   resolvingId,
   serverEid,
@@ -34,6 +35,7 @@ import { historyPort } from '@yaks/ui/history'
 
 export let navigate = (to: string, options: { replace?: boolean } = {}) => {
   let url = new URL(to, 'http://x')
+  peeked.value = null
   go(localPath(url.pathname) + url.search + url.hash, options.replace)
   mark()
 }
@@ -45,9 +47,55 @@ export let appRoute = (path: string) =>
   /^\/[^/?#.]*$/.test(path) &&
   path != '/inspect'
 
-// Following an entity link opens its page, on either pointer kind.
-export let openAt = (eid: string, _ev: MouseEvent) =>
-  navigate(entityPath(idOf(ent(eid))))
+// Pressing a link to an entity. Where a fine pointer reads, it peeks
+// (./Peek.tsx): the entity floats over this page, which stays where it was,
+// and one at a time, so a link pressed inside the peek shows its entity in
+// the peek's place. A link to what is already shown, the peek's entity or the
+// page's, opens its page: a second press, or a double click, is the way in.
+// A coarse pointer and the terminal open the page at once, fullscreen being
+// a phone's right answer.
+export let openAt = (eid: string, ev: MouseEvent) => {
+  let at = route.peek()
+  let up = peeked.peek()
+  let now = up?.at == at ? up : null
+  if (!fine() || now?.eid == eid || screenTarget(at)?.eid == eid) {
+    return navigate(entityPath(idOf(ent(eid))))
+  }
+  let from = linkAt(ev)
+  let card = from?.closest('.Peek') as HTMLElement | null | undefined
+  peeked.value = card && now
+    ? {
+      ...now,
+      eid,
+      from: undefined,
+      left: card.offsetLeft,
+      top: card.offsetTop,
+    }
+    : { eid, at, from }
+}
+
+let fine = () => !!globalThis.matchMedia?.('(pointer: fine)').matches
+
+// The link a press landed on: the element whose handler heard it, or, for a
+// listener on the document, the nearest link around what was pressed.
+let linkAt = (ev: MouseEvent): Element | undefined => {
+  let on = ev.currentTarget as Element | null | undefined
+  let at = ev.target as Element | null | undefined
+  return typeof on?.closest == 'function'
+    ? on
+    : at?.closest?.('a, [data-href]') ?? undefined
+}
+
+// A plain press on an in-app anchor no component owns (../browser-links.ts):
+// an entity's own address opens as its links do, anything else is gone to.
+export let visit = (to: string, ev: MouseEvent) => {
+  let url = new URL(to, 'http://x')
+  let id = !url.search && !url.hash &&
+    addressId(decodeURIComponent(url.pathname.slice(1)))
+  let eid = id ? routed(id) : undefined
+  if (eid) openAt(eid, ev)
+  else navigate(to)
+}
 
 // An id in the wild — T-num, bare num, raw eid, a sigilled eid fragment, or
 // an alias — resolved in the host's order; undefined while unloaded or dead.
@@ -92,8 +140,9 @@ let screenId = (at: string) =>
   addressId(decodeURIComponent(new URL(at, 'http://x').pathname.slice(1)))
 
 // The plain-click half of an in-app anchor: modifiers and middle-click keep
-// their new-tab forms; a bare click (tap included) opens the page in place,
-// by its entity when the caller knows it, by its href when that is all it has.
+// their new-tab forms; a bare click (tap included) opens its entity as a link
+// does (openAt) when the caller knows it, or goes to its href when that is
+// all it has.
 export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
   if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button != 0) return
   ev.preventDefault()
@@ -104,7 +153,7 @@ export let follow = (href: string, eid?: string) => (ev: MouseEvent) => {
 
 // A link inside another link keeps its tag and says data-href (@yaks/ui el),
 // and no component owns its clicks. It resolves its entity at click time, so
-// it opens like any chip.
+// it opens like any chip, and double click goes to its page.
 // Heard in the capture phase, ahead of the link around it, which would
 // otherwise take the click as its own.
 let demoted =
@@ -164,8 +213,8 @@ export let wire = (doc: Host | undefined = globalThis.document) => {
 wire()
 
 // The pointer half of the internal-link contract: a real href keeps native
-// new-tab gestures, plain click follows in place, double click is the
-// deliberate fullscreen, and right-click opens the target entity's menu.
+// new-tab gestures, plain click peeks (openAt), double click opens its page,
+// and right-click opens the target entity's menu.
 // For tiles whose wrapper already owns the drag (a board Item, a List Row).
 export let clickProps = (e: Ent) => {
   let href = entityPath(idOf(e))

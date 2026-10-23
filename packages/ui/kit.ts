@@ -34,6 +34,7 @@ import * as overlay from './Overlay.ts'
 import * as pager from './Pager.ts'
 import * as pairs from './Pairs.ts'
 import * as passage from './Passage.ts'
+import * as peek from './Peek.ts'
 import * as panes from './Panes.ts'
 import * as prop from './Prop.ts'
 import * as quote from './Quote.ts'
@@ -102,6 +103,7 @@ let modules = {
     Section: section,
     Panes: panes,
     Overlay: overlay,
+    Peek: peek,
     Palette: palette,
     Catalog: catalog,
     Gallery: gallery,

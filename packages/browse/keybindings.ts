@@ -10,6 +10,7 @@ export let webKeys: Keybinding[] = [
   { keys: [':'], about: 'open the command line' },
   { keys: ['i'], about: 'enter insert mode' },
   { keys: ['Esc'], about: 'return to normal mode' },
+  { keys: ['Esc', 'q'], about: 'close a peek' },
   { plugin: 'canvas', keys: ['Space'], about: 'frame a canvas card' },
   { plugin: 'canvas', keys: ['0'], about: 'reset canvas zoom' },
 ]

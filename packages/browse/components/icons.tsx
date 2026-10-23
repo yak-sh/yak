@@ -49,6 +49,7 @@ import Stamp from 'lucide/dist/esm/icons/stamp.mjs'
 import Star from 'lucide/dist/esm/icons/star.mjs'
 import Table from 'lucide/dist/esm/icons/table.mjs'
 import Workflow from 'lucide/dist/esm/icons/workflow.mjs'
+import X from 'lucide/dist/esm/icons/x.mjs'
 
 let glyphs: Record<string, IconNode> = {
   'alarm-clock': AlarmClock,
@@ -92,6 +93,7 @@ let glyphs: Record<string, IconNode> = {
   house: House,
   plus: Plus,
   star: Star,
+  x: X,
 }
 
 /** Learn glyphs a package names for what it offers (its `./views` facet's

@@ -1,11 +1,18 @@
-// Links open their entity's page in place; menus and routes resolve ids.
+// Links peek their entity or open its page; menus and routes resolve ids.
 import { test } from '@yaks/testing'
 import { until } from '../testing.ts'
 import { parseHTML } from 'linkedom'
 import { assertEquals, assertStrictEquals } from '@std/assert'
-import { cache, clearResolved, landSub, unsubscribe } from '../live.ts'
+import {
+  cache,
+  clearResolved,
+  ent,
+  landSub,
+  peeked,
+  unsubscribe,
+} from '../live.ts'
 import { host } from '../host_testing.ts'
-import { type Ent } from '../types.ts'
+import { type Ent, idOf } from '../types.ts'
 import {
   actionsAt,
   cardMenuAt,
@@ -29,6 +36,54 @@ let e: Ent = {
   kids: [],
 }
 
+// Two tasks to press, held and read once as the file loads, so no case pays
+// for building the page's index.
+landSub({
+  sub: 'pressed',
+  replace: true,
+  changes: ([['task', 7], ['other', 8]] as const).flatMap(([eid, num]) => [
+    { eid, name: 'entity', comp: { eid, num } },
+    { eid, name: 'task', comp: { eid } },
+  ]),
+})
+idOf(ent('task'))
+
+// Presses on a page that is no entity's, by a fine pointer or a coarse one:
+// where the page is, and what is peeked, after each.
+let pressed = (fine: boolean, ...eids: string[]) => {
+  let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
+  Object.defineProperty(globalThis, 'matchMedia', {
+    value: (q: string) => ({ matches: fine && q == '(pointer: fine)' }),
+    configurable: true,
+  })
+  try {
+    route.value = '/?recent'
+    return eids.map((eid) => {
+      openAt(eid, {} as MouseEvent)
+      return [route.value, peeked.value?.eid]
+    })
+  } finally {
+    peeked.value = null
+    if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
+    else delete (globalThis as { matchMedia?: unknown }).matchMedia
+  }
+}
+
+test('a fine pointer peeks a link over the page, one at a time', () => {
+  assertEquals(pressed(true, 'task', 'other'), [
+    ['/?recent', 'task'],
+    ['/?recent', 'other'],
+  ])
+})
+
+test('a link to what is peeked opens its page', () => {
+  assertEquals(pressed(true, 'other', 'other')[1], ['/T-8', undefined])
+})
+
+test('a coarse pointer opens the page at once', () => {
+  assertEquals(pressed(false, 'task'), [['/T-7', undefined]])
+})
+
 test('numeric routes resolve confirmed retained rows before a reopen frame', () => {
   cache.value = {}
   try {
@@ -48,33 +103,6 @@ test('numeric routes resolve confirmed retained rows before a reopen frame', () 
     assertEquals(eidOf('12345'), 'retained')
   } finally {
     cache.value = {}
-  }
-})
-
-test('following an entity opens its page on either pointer kind', () => {
-  let priorMedia = Object.getOwnPropertyDescriptor(globalThis, 'matchMedia')
-  let prior = cache.peek()
-  cache.value = {
-    task: { entity: { eid: 'task', num: 7 }, task: { eid: 'task' } },
-    other: { entity: { eid: 'other', num: 8 }, task: { eid: 'other' } },
-  }
-  try {
-    Object.defineProperty(globalThis, 'matchMedia', {
-      value: () => ({ matches: true }),
-      configurable: true,
-    })
-    openAt('task', {} as MouseEvent)
-    assertEquals(route.value, '/T-7')
-    Object.defineProperty(globalThis, 'matchMedia', {
-      value: () => ({ matches: false }),
-      configurable: true,
-    })
-    openAt('other', {} as MouseEvent)
-    assertEquals(route.value, '/T-8')
-  } finally {
-    cache.value = prior
-    if (priorMedia) Object.defineProperty(globalThis, 'matchMedia', priorMedia)
-    else delete (globalThis as { matchMedia?: unknown }).matchMedia
   }
 })
 

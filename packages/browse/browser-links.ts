@@ -1,8 +1,9 @@
 // Browser anchors keep shared addresses and follow the app in place.
-import { appRoute, navigate } from './components/nav.tsx'
+import { appRoute, visit } from './components/nav.tsx'
 import { localPath } from './hosting.ts'
 // Internal anchors retain their native shared-link/new-tab address, while a
-// plain click follows the app's controlled navigation in this tab.
+// plain click follows the app's controlled navigation in this tab: an
+// entity's own address peeks it, as its links do (nav.tsx visit).
 addEventListener('click', (event) => {
   let ev = event as MouseEvent
   if (
@@ -23,5 +24,5 @@ addEventListener('click', (event) => {
     url.hash && url.pathname + url.search == location.pathname + location.search
   ) return
   ev.preventDefault()
-  navigate(localPath(url.pathname) + url.search + url.hash)
+  visit(localPath(url.pathname) + url.search + url.hash, ev)
 })

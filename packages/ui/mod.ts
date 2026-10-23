@@ -8,7 +8,7 @@
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
  *   `Chip`, `Match`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
- *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Shell`,
+ *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Peek`, `Table`, `Pager`, `Shell`,
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
  *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
@@ -105,3 +105,4 @@ export { installViewport, Viewport, type ViewportProps } from './viewport.ts'
 
 export { Loading } from './Loading.ts'
 export { Palette } from './Palette.ts'
+export { Peek } from './Peek.ts'

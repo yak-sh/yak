@@ -3292,3 +3292,19 @@ export let mode = signal<'normal' | 'insert' | 'command' | 'visual'>('normal')
 // Whether the search palette is up. Shell state so a hot swap of the
 // component graph can't shut it mid-search (Search.tsx owns the rest).
 export let searchOpen = signal(false)
+
+// The one entity a pressed link shows over the page (components/Peek.tsx).
+// Shell state for the same reason as searchOpen: a hot swap must not shut
+// what the person is reading or typing into. `at` is the page it floats over,
+// `from` the link pressed, and `left`, `top`, `w`, `h` where it was moved or
+// sized to.
+export type Peeked = {
+  eid: string
+  at: string
+  from?: Element
+  left?: number
+  top?: number
+  w?: number
+  h?: number
+}
+export let peeked = signal<Peeked | null>(null)

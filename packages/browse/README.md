@@ -203,6 +203,14 @@ The main area shows one page at a time, each at its own address; the browser's
 back is the way back, and a page gone back to starts scrolled where it was left.
 Changing a page's view replaces its address rather than adding one.
 
+A **peek** is a pressed link's entity shown over the page, which stays where it
+was: whole, in the Full view its own page draws, its title and body typed into
+right there. There is one at a time, and a link pressed inside it shows its
+entity in its place. A second press on a link to it, its Id in the head, or the
+head's open button goes to its page; Esc, q, the close button or a press
+anywhere else puts it away. The head moves it and its corner sizes it. Only a
+fine pointer peeks: a phone and the terminal open the page at once.
+
 The sidebar is a short fixed list of places: search, then home (named for the
 offered home page, or Home), Favorites, Recent, each package's destinations,
 Sessions, and the Schema when the host serves its packages. Each is a plain

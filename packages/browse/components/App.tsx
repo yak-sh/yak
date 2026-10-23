@@ -49,6 +49,7 @@ import { Id } from './views/Inline.tsx'
 import { SubscriptionFailure } from './SubscriptionFailure.tsx'
 import { Configuration } from './Configuration.tsx'
 import { New } from './New.tsx'
+import { Peek } from './Peek.tsx'
 
 tips() // mount the one delegated [data-tip] tooltip (idempotent)
 
@@ -380,6 +381,7 @@ export let App = () => {
         <Page key={route.value} at={route.value} />
         <Status />
       </Shell.Main>
+      <Peek />
       <Menu />
       <Run />
       <Search open={(eid) => navigate(entityPath(idOf(ent(eid))))} />

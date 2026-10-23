@@ -1,0 +1,73 @@
+/* A card floating over the page, fixed to the viewport where its caller puts
+   it (left and top), under every popover and menu so what opens from inside
+   it clears it. It keeps one width as what it shows changes, and grows
+   to most of the viewport's height; past that its body scrolls, and a wheel
+   over it never moves the page beneath. Sized by hand, it keeps the size
+   it was given. */
+.Peek {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  width: min(44rem, calc(100vw - 2 * var(--gap)));
+  max-height: min(75dvh, 52rem);
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.Peek-sized {
+  min-width: 16rem;
+  max-width: none;
+  max-height: none;
+}
+/* The line it is held by: what it shows on one side, its presses on the
+   other, on the surface like a bar. */
+.Peek_Head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--half-gap);
+  padding: 2px var(--half-gap) 2px var(--gap);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
+  font-size: var(--small);
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+.Peek_Body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--gap) calc(var(--gap) * 1.5) calc(var(--gap) * 1.5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The corner it is sized by: a quiet mark until the pointer finds it. */
+.Peek_Grip {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  background: linear-gradient(
+    135deg,
+    transparent 55%,
+    var(--dim) 55%,
+    var(--dim) 62%,
+    transparent 62%,
+    transparent 75%,
+    var(--dim) 75%,
+    var(--dim) 82%,
+    transparent 82%
+  );
+  opacity: 0.5;
+}
+.Peek_Grip:hover {
+  opacity: 1;
+}
