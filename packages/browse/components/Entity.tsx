@@ -174,6 +174,12 @@ define([
   { view: 'Full', match: parse('.decision'), Render: Show },
   { view: 'Full', match: parse('.doc'), Render: Show },
   { view: 'Card.Full', match: parse('.doc'), Render: CardFull },
+  // Every entity has a Full page, the same one: its title, its meta, its
+  // body, its relationships and its comments, each drawn by the entity's own
+  // renderer (a tool's name and description, an effect's triggers), so the
+  // inspector's generic page is a tab, never what a person lands on.
+  { view: 'Full', match: and(), Render: Show },
+  { view: 'Card.Full', match: and(), Render: CardFull },
   // A document's title and body on its Full page, typed over where they
   // stand. Here rather than as its `Title` and `Body`, which a configured
   // package's portable reading (@yaks/doc's) outranks: that one reads, and
@@ -254,7 +260,14 @@ define([
   // Catch-all matchers on purpose: each renders nothing when its data is
   // absent, and a specialized look for an entity shape is a higher-
   // scoring entry above these, never an edit to Full.
-  { view: 'Body', match: and(), Render: Body },
+  { view: 'Body', match: parse('.doc'), Render: Body },
+  // What an entity with no text of its own says: the facts its components
+  // state (@yaks/inspect's).
+  {
+    view: 'Body',
+    match: and(),
+    Render: ({ e }) => <Entity eid={e.eid} view='Inspect.Facts' />,
+  },
   { view: 'Acceptance', match: and(), Render: Acceptance },
   { view: 'Meta', match: parse('.board'), Render: BoardMeta },
   { view: 'Meta', match: and(), Render: Meta },

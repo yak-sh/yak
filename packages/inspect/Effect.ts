@@ -14,7 +14,7 @@ import { parse } from '@yaks/query'
 import { Pairs, Value } from '@yaks/ui'
 import type { Bundle, Io, Props, View } from './host.ts'
 import { usePageNotes } from './Entity.ts'
-import { chip, propEid } from './schema.ts'
+import { chip, Described, described, propEid } from './schema.ts'
 import { Part, useNamed } from './notes.ts'
 import { comp, str } from './read.ts'
 import { none } from './rows.ts'
@@ -64,55 +64,78 @@ let owed = (io: Io, e: Bundle): [string, ComponentChildren][] => {
     .map(([k, draw]) => [k, draw(io, c[k])])
 }
 
-/** An effect's own page. */
-export let EffectPage = ({ e, io }: Props): JSX.Element => {
+// What an effect's page says, under whichever head tops it.
+let useEffectPage = ({ e, io }: Props) => {
   let name = nameOf(e)
   let notes = usePageNotes(io, e, HEADINGS)
   let c = comp(e, '_effect')
   let pkg = str(e, '_effect', 'package')
   useNamed(io, [pkg])
-  let sub = [
-    str(e, 'doc', 'body'),
-    h('br', {}),
-    pkg
-      ? ['from ', h('a', { href: io.link(pkg) }, io.name(pkg))]
-      : 'no package',
-    c.option ? ` · only with the option ${c.option}` : '',
-    c.tries ? ` · ${c.tries} tries` : '',
-    c.idempotent === false ? ' · not idempotent' : '',
-  ]
   let triggers = owed(io, e)
+  return {
+    name,
+    notes,
+    text: str(e, 'doc', 'body'),
+    facts: [
+      pkg
+        ? ['from ', h('a', { href: io.link(pkg) }, io.name(pkg))]
+        : 'no package',
+      c.option ? ` · only with the option ${c.option}` : '',
+      c.tries ? ` · ${c.tries} tries` : '',
+      c.idempotent === false ? ' · not idempotent' : '',
+    ],
+    parts: [
+      h(
+        Part,
+        {
+          io,
+          eid: e.entity.eid,
+          subject: name,
+          heading: 'Owed by',
+          note: io.vocab.comp('effect')
+            ? h('a', { href: io.find(`.effect.handler=${name}`) }, 'its runs')
+            : undefined,
+          notes,
+        },
+        triggers.length
+          ? h(
+            Pairs,
+            {},
+            triggers.flatMap(([k, v]) => [
+              h(Pairs.Key, {}, k),
+              h(Pairs.Value, {}, v),
+            ]),
+          )
+          : none(),
+      ),
+    ],
+  }
+}
+
+/** An effect's own page. */
+export let EffectPage = (p: Props): JSX.Element => {
+  let { name, notes, text, facts, parts } = useEffectPage(p)
   return h(
     'div',
-    { 'data-inspect': e.entity.eid },
-    io.show(e, 'Inspect.Head', { sub, notes: notes.get(''), subject: name }),
-    h(
-      Part,
-      {
-        io,
-        eid: e.entity.eid,
-        subject: name,
-        heading: 'Owed by',
-        note: io.vocab.comp('effect')
-          ? h('a', { href: io.find(`.effect.handler=${name}`) }, 'its runs')
-          : undefined,
-        notes,
-      },
-      triggers.length
-        ? h(
-          Pairs,
-          {},
-          triggers.flatMap(([k, v]) => [
-            h(Pairs.Key, {}, k),
-            h(Pairs.Value, {}, v),
-          ]),
-        )
-        : none(),
-    ),
+    { 'data-inspect': p.e.entity.eid },
+    p.io.show(p.e, 'Inspect.Head', {
+      sub: described(text, facts),
+      notes: notes.get(''),
+      subject: name,
+    }),
+    ...parts,
   )
 }
 
-/** An effect's page. */
+/** An effect's page under another head: what it does, and what owes it a
+ * run (the body of its Full page). */
+export let EffectBody = (p: Props): JSX.Element => {
+  let { text, facts, parts } = useEffectPage(p)
+  return h('div', {}, h(Described, { text, facts }), ...parts)
+}
+
+/** An effect's page, and its body under another head. */
 export let effectViews: View[] = [
   { view: 'Inspect.Page', match: parse('._effect'), Render: EffectPage },
+  { view: 'Full.Body', match: parse('.doc ._effect'), Render: EffectBody },
 ]

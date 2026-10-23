@@ -80,14 +80,19 @@ let tool = parse('.tool.name')
 let text = (b: Record<string, unknown>, comp: string, prop: string) =>
   (b[comp] as Record<string, unknown> | undefined)?.[prop]
 
-/** `Title`, `Tile` and `List.Tile` for a registered tool; `Tile` and `Page`
- * for an entity that carries a tool's text, and `Tile` for one the graph
- * keeps. */
+/** `Title`, `Body`, `Tile` and `List.Tile` for a registered tool; `Tile` and
+ * `Page` for an entity that carries a tool's text, and `Tile` for one the
+ * graph keeps. */
 export let views: Registry = define<Renderer>([
   {
     view: 'Title',
     match: tool,
     render: (b, h) => h('span', null, named(b, 'name')),
+  },
+  {
+    view: 'Body',
+    match: tool,
+    load: () => import('./body.ts').then((m) => m.body),
   },
   { view: 'Tile', match: tool, render: tile },
   { view: 'List.Tile', match: tool, render: tile },

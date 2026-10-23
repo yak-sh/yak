@@ -511,6 +511,20 @@ test("an effect's page says what owes it a run, each name linked to its page", (
   ) assert(page.includes(said), said)
 })
 
+test("an effect's page under another head says what it does and what owes it a run, with no head of its own", () => {
+  using t = host()
+  let body = renderToString(h(t.Door, { e: CLOSE, view: 'Full.Body' }))
+  for (
+    let said of [
+      'Close the task when it is done.',
+      '3 tries',
+      'Owed by',
+      `href="/${propEid('task', 'status')}"`,
+    ]
+  ) assert(body.includes(said), said)
+  assert(!body.includes('Head_Title'))
+})
+
 test('a terminal paints a page as values, with nothing to type in', () => {
   using t = host({}, false)
   let painted = print(h(t.Door, { e: T1, view: 'Inspect.Page' }), 100)

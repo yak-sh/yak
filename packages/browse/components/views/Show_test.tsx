@@ -25,6 +25,9 @@ import { mount } from '../mount.ts'
 import { Entity } from '../Entity.tsx'
 import { Pip } from './Show.tsx'
 import { views as docViews } from '@yaks/doc/views'
+import { views as toolViews } from '@yaks/tools/views'
+import { toolEid } from '@yaks/tools'
+import { applicable } from '../registry.ts'
 import { contributedViews } from '../inspect.tsx'
 import type { Change, Ent } from '../../types.ts'
 
@@ -534,6 +537,66 @@ preparedTest(
   "Full types over a document's title and body in place, with a package's reading laid over browse's",
   () => {
     assertEquals(typedOver, { title: true, body: true })
+  },
+)
+
+// Every entity opens on the same Full page, each part drawn by its own
+// renderer: a tool (no doc) by its name and description, and an entity with
+// no text of its own by the facts it states.
+let lands = await (async () => {
+  let drop = extend(await contributedViews([{ views: toolViews }]))
+  let tool = toolEid('graph_query')
+  cache.value = {
+    [tool]: {
+      entity: { eid: tool, num: 0 },
+      tool: {
+        eid: tool,
+        name: 'graph_query',
+        description: 'Find **stored** records.',
+      },
+    },
+    bare: {
+      entity: { eid: 'bare', num: 0 },
+      blocked: { eid: 'bare', on: 'a vendor' },
+    },
+  }
+  let page = (eid: string) => {
+    let { root, free } = mount(h(Entity, { eid, view: 'Full' }))
+    try {
+      return {
+        first: applicable(ent(eid))[0],
+        title: root.querySelector('.Show_Title')?.textContent,
+        body: root.querySelector('.Show_Main')?.textContent ?? '',
+        strong: root.querySelector('.Show_Main strong')?.textContent,
+      }
+    } finally {
+      free()
+    }
+  }
+  try {
+    return { tool: page(tool), bare: page('bare') }
+  } finally {
+    drop()
+    cache.value = {}
+  }
+})()
+preparedTest(
+  'a tool opens on Full: its name for a title, its description for a body',
+  () => {
+    let { first, title, body, strong } = lands.tool
+    assertEquals({ first, title, strong }, {
+      first: 'Full',
+      title: 'graph_query',
+      strong: 'stored',
+    })
+    assert(body.includes('Find stored records.'))
+  },
+)
+preparedTest(
+  'an entity with no text of its own opens on Full, saying what it states',
+  () => {
+    assertEquals(lands.bare.first, 'Full')
+    assert(lands.bare.body.includes('a vendor'))
   },
 )
 

@@ -1060,7 +1060,11 @@ export type Model = {
 }
 
 // A tool a transcript's calls name (@yaks/tools `tool`).
-export type Tool = { eid: string; name?: string | null }
+export type Tool = {
+  eid: string
+  name?: string | null
+  description?: string | null
+}
 
 // A distilled fact the fleet keeps: content in the doc, provenance in
 // created, scope in scope (the project it belongs to; absent = a

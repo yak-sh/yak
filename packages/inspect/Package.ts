@@ -9,7 +9,7 @@
 
 import { h, type JSX } from 'preact'
 import { parse } from '@yaks/query'
-import { Head, Loading } from '@yaks/ui'
+import { Body, Head, Loading } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'
 import { type Census, useCensus } from './census.ts'
 import { Grid } from './grid.ts'
@@ -130,8 +130,8 @@ let Effects = ({ e, io, notes, effects }: Part_ & { effects: Answer }) =>
     }),
   )
 
-/** A package's own page. */
-export let PackagePage = ({ e, io }: Props): JSX.Element => {
+// What a package's page says, under whichever head tops it.
+let usePackage = ({ e, io }: Props) => {
   let eid = e.entity.eid
   let name = str(e, '_package', 'name') || str(e, 'doc', 'title')
   let notes = under(useNotes(io, eid), name, HEADINGS)
@@ -141,6 +141,22 @@ export let PackagePage = ({ e, io }: Props): JSX.Element => {
     props: `._prop&._prop.package=${eid}&?doc&.order=_prop.comp`,
     effects: `._effect&._effect.package=${eid}&?doc&.order=_effect.name`,
   })
+  return {
+    name,
+    notes,
+    parts: [
+      h(Declares, { e, io, notes, comps: got.comps, census }),
+      h(Extends, { e, io, notes, comps: got.comps, props: got.props }),
+      h(Effects, { e, io, notes, effects: got.effects }),
+    ],
+  }
+}
+
+/** A package's own page. */
+export let PackagePage = (p: Props): JSX.Element => {
+  let { e, io } = p
+  let eid = e.entity.eid
+  let { name, notes, parts } = usePackage(p)
   return h(
     'div',
     { 'data-inspect': eid },
@@ -157,13 +173,19 @@ export let PackagePage = ({ e, io }: Props): JSX.Element => {
       h(Head.Sub, {}, str(e, 'doc', 'body')),
     ),
     h(Said, { io, eid, subject: name, heading: '', notes: notes.get('') }),
-    h(Declares, { e, io, notes, comps: got.comps, census }),
-    h(Extends, { e, io, notes, comps: got.comps, props: got.props }),
-    h(Effects, { e, io, notes, effects: got.effects }),
+    ...parts,
   )
 }
 
-/** A package's page. */
+/** A package's page under another head: what it is, then what it declares
+ * (the body of its Full page). */
+export let PackageBody = (p: Props): JSX.Element => {
+  let { parts } = usePackage(p)
+  return h('div', {}, h(Body, {}, str(p.e, 'doc', 'body')), ...parts)
+}
+
+/** A package's page, and its body under another head. */
 export let packageViews: View[] = [
   { view: 'Inspect.Page', match: parse('._package'), Render: PackagePage },
+  { view: 'Full.Body', match: parse('.doc ._package'), Render: PackageBody },
 ]

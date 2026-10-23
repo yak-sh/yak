@@ -14,6 +14,7 @@ sidebar and history stack.
 | name                                            | draws                                                                               |
 | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `Inspect.Page`                                  | a `_comp`, `_package`, `_prop` or `_effect` vocabulary entity                       |
+| `Full.Body`                                     | the same page under another head (a Full page's): its words, facts and parts        |
 | `Inspect.Head`, `Inspect.Body`, `Inspect.Facts` | name, provenance, words and component values                                        |
 | `Inspect.Links`, `Inspect.History`              | references both ways and recorded changes                                           |
 | `Inspect.Query`                                 | query rows with shared component columns, count or tally                            |

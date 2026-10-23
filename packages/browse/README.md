@@ -9,6 +9,18 @@ that transaction (@yaks/inspect `Past`); each moment of its History opens one.
 The id of a deleted entity opens what it held last, when and by whom it was
 deleted, and its history; an id nothing ever carried is the not-found page.
 
+## Full
+
+Every entity has the same **Full** page: its title, who made it and its meta
+line, its body, its relationships, then its comments, each part drawn by the
+entity's own renderer. A document's title and body are typed over where they
+stand (a double-click); a kind says them its own way by registering its `Title`,
+`Body` or `Full.Body` (a tool by its name and description, a persona by its text
+and every document it carries, a component by its properties), and an entity
+with no text of its own says the facts its components state. An entity opens on
+the first view offered for it (a persona on its Context desk, a board on its
+board) and on Full otherwise; the inspector's page is a tab.
+
 ## Search
 
 The sidebar's **Search /** button and the `/` key open the same palette over any

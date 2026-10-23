@@ -21,7 +21,7 @@ import { useCensus } from './census.ts'
 import { usePageNotes } from './Entity.ts'
 import { Grid, SIZE } from './grid.ts'
 import { History } from './History.ts'
-import { chip, compEid } from './schema.ts'
+import { chip, compEid, Described, described } from './schema.ts'
 import { Part, useNamed } from './notes.ts'
 import { comp, count, face, flags, line, named, str, typed } from './read.ts'
 import { waiting } from './rows.ts'
@@ -69,8 +69,6 @@ let about = (io: Io, e: Bundle): ComponentChildren[] => {
   let ref = str(e, '_prop', 'ref')
   let listed = (k: string) => p[k] != null ? [` · ${k} ${face(p[k])}`] : []
   return [
-    str(e, 'doc', 'body'),
-    h('br', {}),
     'of ',
     chip(io, name),
     pkg ? [' from ', h('a', { href: io.link(pkg) }, io.name(pkg))] : '',
@@ -158,34 +156,53 @@ let Values = ({ e, io, notes }: Part_) => {
   )
 }
 
-/** A property's own page. */
-export let PropPage = ({ e, io }: Props): JSX.Element => {
-  let subject = str(e, 'doc', 'title')
+// What a property's page says, under whichever head tops it.
+let useProp = ({ e, io }: Props) => {
   let notes = usePageNotes(io, e, HEADINGS)
   let [name, prop] = split(e)
   useNamed(io, [str(e, '_prop', 'package')])
+  return {
+    notes,
+    text: str(e, 'doc', 'body'),
+    facts: about(io, e),
+    parts: [
+      h(Values, { e, io, notes }),
+      h(History, {
+        e,
+        io,
+        notes,
+        heading: 'Recent writes',
+        where: `comp=${compEid(name)}`,
+        prop,
+        once: true,
+      }),
+    ],
+  }
+}
+
+/** A property's own page. */
+export let PropPage = (p: Props): JSX.Element => {
+  let { notes, text, facts, parts } = useProp(p)
   return h(
     'div',
-    { 'data-inspect': e.entity.eid },
-    io.show(e, 'Inspect.Head', {
-      sub: about(io, e),
+    { 'data-inspect': p.e.entity.eid },
+    p.io.show(p.e, 'Inspect.Head', {
+      sub: described(text, facts),
       notes: notes.get(''),
-      subject,
+      subject: str(p.e, 'doc', 'title'),
     }),
-    h(Values, { e, io, notes }),
-    h(History, {
-      e,
-      io,
-      notes,
-      heading: 'Recent writes',
-      where: `comp=${compEid(name)}`,
-      prop,
-      once: true,
-    }),
+    ...parts,
   )
 }
 
-/** A property's page. */
+/** A property's page under another head (the body of its Full page). */
+export let PropBody = (p: Props): JSX.Element => {
+  let { text, facts, parts } = useProp(p)
+  return h('div', {}, h(Described, { text, facts }), ...parts)
+}
+
+/** A property's page, and its body under another head. */
 export let propViews: View[] = [
   { view: 'Inspect.Page', match: parse('._prop'), Render: PropPage },
+  { view: 'Full.Body', match: parse('.doc ._prop'), Render: PropBody },
 ]

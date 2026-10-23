@@ -8,8 +8,9 @@
  * @module
  */
 
-import { h, type JSX } from 'preact'
+import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { identityEid } from '@yaks/graph/identity'
+import { Body } from '@yaks/ui'
 import type { Io } from './host.ts'
 
 /** The eid of the package named `name`. */
@@ -39,3 +40,22 @@ export let relations = (io: Io): string[] =>
 /** Components' names, each in its hue and linked, joined: `doc + task`. */
 export let chips = (io: Io, names: string[]): JSX.Element =>
   h('span', {}, names.flatMap((n, i) => [i ? ' + ' : null, chip(io, n)]))
+
+/** What a vocabulary entity's page says of it, as its head's sub: its words,
+ * then its facts (its package, how it is kept) on a line of their own. */
+export let described = (
+  text: ComponentChildren,
+  facts: ComponentChildren[],
+): ComponentChildren[] => [text, h('br', {}), ...facts]
+
+/** The same, as the body of a page another head tops (a Full page's): its
+ * words read in the ink, its facts a quiet line under them. */
+export let Described = (
+  { text, facts }: { text: ComponentChildren; facts: ComponentChildren[] },
+): JSX.Element =>
+  h(
+    Fragment,
+    null,
+    text ? h(Body, {}, text) : null,
+    h(Body, { mod: 'short' }, ...facts),
+  )

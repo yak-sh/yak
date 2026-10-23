@@ -21,7 +21,7 @@ import { Value } from '@yaks/ui'
 import type { Answer, Bundle, Io, Props, View } from './host.ts'
 import { type Census, useCensus, within } from './census.ts'
 import { type Column, Grid, paged } from './grid.ts'
-import { chip, chips, relations } from './schema.ts'
+import { chip, chips, Described, described, relations } from './schema.ts'
 import { Part, useNamed, useSets } from './notes.ts'
 import { History } from './History.ts'
 import { usePageNotes } from './Entity.ts'
@@ -396,8 +396,9 @@ let Entities = ({ e, io, notes, census }: Part_ & { census: Census }) => {
   )
 }
 
-/** A component's own page. */
-export let CompPage = ({ e, io }: Props): JSX.Element => {
+// What a component's page says, under whichever head tops it: its words and
+// facts, and its parts.
+let useComp = ({ e, io }: Props) => {
   let name = nameOf(e)
   let notes = usePageNotes(io, e, HEADINGS)
   let census = useCensus(io)
@@ -407,37 +408,60 @@ export let CompPage = ({ e, io }: Props): JSX.Element => {
   let pkg = str(e, '_comp', 'package')
   useNamed(io, [pkg])
   let n = census.carried[name]
-  let sub = [
-    io.vocab.comp(name)?.description ?? str(e, 'doc', 'body'),
-    h('br', {}),
-    pkg
-      ? ['from ', h('a', { href: io.link(pkg) }, io.name(pkg))]
-      : 'no package',
-    census.ready ? ` · carried by ${count(n ?? 0)} entities` : '',
-    ...kept(io, name).map((f) => ` · ${f}`),
-  ]
+  return {
+    name,
+    notes,
+    text: io.vocab.comp(name)?.description ?? str(e, 'doc', 'body'),
+    facts: [
+      pkg
+        ? ['from ', h('a', { href: io.link(pkg) }, io.name(pkg))]
+        : 'no package',
+      census.ready ? ` · carried by ${count(n ?? 0)} entities` : '',
+      ...kept(io, name).map((f) => ` · ${f}`),
+    ],
+    parts: [
+      h(Properties, { e, io, notes, props: got.props }),
+      h(Found, { e, io, notes, census }),
+      h(Refers, { e, io, notes, props: got.props, census }),
+      h(Entities, { e, io, notes, census }),
+      io.vocab.comp('_change') && io.vocab.comp(name)?.journal
+        ? h(History, {
+          e,
+          io,
+          notes,
+          heading: 'Recent writes',
+          where: `comp=${e.entity.eid}`,
+          once: true,
+        })
+        : null,
+    ],
+  }
+}
+
+/** A component's own page. */
+export let CompPage = (p: Props): JSX.Element => {
+  let { name, notes, text, facts, parts } = useComp(p)
   return h(
     'div',
-    { 'data-inspect': e.entity.eid },
-    io.show(e, 'Inspect.Head', { sub, notes: notes.get(''), subject: name }),
-    h(Properties, { e, io, notes, props: got.props }),
-    h(Found, { e, io, notes, census }),
-    h(Refers, { e, io, notes, props: got.props, census }),
-    h(Entities, { e, io, notes, census }),
-    io.vocab.comp('_change') && io.vocab.comp(name)?.journal
-      ? h(History, {
-        e,
-        io,
-        notes,
-        heading: 'Recent writes',
-        where: `comp=${e.entity.eid}`,
-        once: true,
-      })
-      : null,
+    { 'data-inspect': p.e.entity.eid },
+    p.io.show(p.e, 'Inspect.Head', {
+      sub: described(text, facts),
+      notes: notes.get(''),
+      subject: name,
+    }),
+    ...parts,
   )
 }
 
-/** A component's page. */
+/** A component's page under another head: its words and facts, then its
+ * parts (the body of its Full page). */
+export let CompBody = (p: Props): JSX.Element => {
+  let { text, facts, parts } = useComp(p)
+  return h('div', {}, h(Described, { text, facts }), ...parts)
+}
+
+/** A component's page, and its body under another head. */
 export let compViews: View[] = [
   { view: 'Inspect.Page', match: parse('._comp'), Render: CompPage },
+  { view: 'Full.Body', match: parse('.doc ._comp'), Render: CompBody },
 ]

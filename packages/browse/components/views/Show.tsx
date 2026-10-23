@@ -37,14 +37,16 @@ import { decisionActions, Entity } from '../Entity.tsx'
 import { Icon } from '../icons.tsx'
 import { Chat } from '../Chat.tsx'
 
-// The lego box. A SECTION is an internal view ('Body', 'Meta',
-// 'Dependencies', 'Runs', 'Comments' — registered in Entity.tsx like 'Id'
-// and 'Dependency'): matched per entity through the registry door, and
-// each renders NOTHING when its data is absent. Show serves the Full
-// role — the one generic whole-entity view, just stacking the sections —
-// so there is no Task-vs-Doc split to keep in sync: a bare doc simply
-// has fewer sections with something to say. Specializing a section for
-// an entity shape is a higher-scoring registry entry, not an edit here.
+// The lego box. A SECTION is an internal view ('Full.Title', 'Meta',
+// 'Full.Body', 'Dependencies', 'Runs', 'Comments' — registered in Entity.tsx
+// like 'Id' and 'Dependency'): matched per entity through the registry door,
+// and each renders NOTHING when its data is absent. Show serves the Full
+// role for every entity — the one generic whole-entity view, just stacking
+// the sections — so there is no Task-vs-Doc split to keep in sync: a bare
+// doc simply has fewer sections with something to say, and a tool its name
+// for a title and its description for a body. Specializing a section for an
+// entity shape is a higher-scoring registry entry (a kind's own `Title`,
+// `Body` or `Full.Body`), not an edit here.
 
 let Frame = block('div', 'Show', {
   Main: 'div',
