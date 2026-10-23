@@ -62,7 +62,7 @@ import { matcher, net, rows as matchRows } from '@yaks/match'
 import { type And, bare, drifts, parse } from '@yaks/query'
 import { paceOf, saveOf, syncOf } from '@yaks/vocab'
 import { published } from './publish.ts'
-import { cares, type Interest, interest } from './interest.ts'
+import { cares, type Interest, interest, refers } from './interest.ts'
 import { peerPlan, peerTargets } from './peer_query.ts'
 import { fault, type Refusal, refusal } from './refuse.ts'
 import { type Relay, relay as relaying, type Timer } from './relay.ts'
@@ -397,12 +397,14 @@ let affected = (
     }
     if (
       sub.members.has(eid) ||
-      (t.born && !i.own.length) ||
-      (cares(i, t.named, t.worn) &&
-        i.fixed.every(({ comp, prop, value }) =>
-          (t.bundle?.[comp] as Record<string, unknown> | undefined)
-            ?.[prop] === value
-        ))
+      refers(i, t.bundle) && (
+          (t.born && !i.own.length) ||
+          (cares(i, t.named, t.worn) &&
+            i.fixed.every(({ comp, prop, value }) =>
+              (t.bundle?.[comp] as Record<string, unknown> | undefined)
+                ?.[prop] === value
+            ))
+        )
     ) ids.add(eid)
     for (let [comp, prop] of i.via) {
       if (!t.named.has(comp) && !t.worn.has(comp)) continue

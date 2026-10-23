@@ -9,7 +9,7 @@ import {
   statusOf,
 } from '../../types.ts'
 import { ent, mutate, parents } from '../../live.ts'
-import { useBacklinks } from '../useQuery.ts'
+import { BACKLINKS, useBacklinks } from '../useQuery.ts'
 import { up } from './Dependency.tsx'
 import * as ui from '@yaks/ui'
 import { Edit } from '@yaks/ux'
@@ -301,7 +301,7 @@ export let Debug = (
   // Incoming references too: whatever points here, said by which prop
   // brought it (useBacklinks — the held eid-keyed reverse sub, derived from
   // the typed vocabulary: sessions on their task, cards on their target, …).
-  let links = useBacklinks(e.eid)
+  let incoming = useBacklinks(e.eid)
   let head = <Entity eid={e.eid} view='Debug.Tile' />
   let body = (
     <>
@@ -326,16 +326,19 @@ export let Debug = (
           ))}
         </Kids>
       )}
-      {project ? <ProjectIncoming e={e} /> : links.length > 0 && (
-        <Kids>
-          {links.map((b) => (
-            <Linked key={b.from + b.via}>
-              <Via>← {b.via}</Via>
-              <Entity eid={b.from} view='Debug.Tile' />
-            </Linked>
-          ))}
-        </Kids>
-      )}
+      {project
+        ? <ProjectIncoming e={e} {...incoming} />
+        : incoming.links.length > 0 && (
+          <Kids>
+            {incoming.links.map((b) => (
+              <Linked key={b.from + b.via}>
+                <Via>← {b.via}</Via>
+                <Entity eid={b.from} view='Debug.Tile' />
+              </Linked>
+            ))}
+            {incoming.more && <Census e={e} />}
+          </Kids>
+        )}
     </>
   )
   return (
@@ -364,14 +367,27 @@ let groups = (links: { from: string; via: string }[]) => {
   }))
 }
 
-let ProjectIncoming = ({ e }: { e: Ent }) => {
-  let linked = groups(useBacklinks(e.eid))
+// The window holds the newest referrers; the inspector reads every one.
+let Census = ({ e }: { e: Ent }) => {
+  let href = `/inspect?q=${encodeURIComponent(`.refs=${idOf(e)}`)}`
+  return (
+    <Linked href={href} onClick={follow(href)}>
+      <Via>← refs</Via>
+      the newest {BACKLINKS} are shown; every one
+    </Linked>
+  )
+}
+
+let ProjectIncoming = (
+  { e, links, more }: { e: Ent } & ReturnType<typeof useBacklinks>,
+) => {
+  let linked = groups(links)
   if (!linked.length) return null
   return (
     <Kids>
       {linked.flatMap((group) => {
         let shown = group.ids.slice(0, CAP)
-        let more = group.ids.length - shown.length
+        let rest = group.ids.length - shown.length
         let query = `.${group.via}=${idOf(e)}`
         let href = `/inspect?q=${encodeURIComponent(query)}`
         return [
@@ -381,7 +397,7 @@ let ProjectIncoming = ({ e }: { e: Ent }) => {
               <Entity eid={eid} view='Debug.Tile' />
             </Linked>
           )),
-          ...(more
+          ...(rest
             ? [
               <Linked
                 key={group.via + group.kind}
@@ -389,12 +405,13 @@ let ProjectIncoming = ({ e }: { e: Ent }) => {
                 onClick={follow(href)}
               >
                 <Via>← {group.via}</Via>
-                +{more} more {plural(group.kind)}
+                +{rest} more {plural(group.kind)}
               </Linked>,
             ]
             : []),
         ]
       })}
+      {more && <Census e={e} />}
     </Kids>
   )
 }

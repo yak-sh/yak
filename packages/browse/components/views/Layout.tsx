@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks'
 import { type Ent, type Hit, uuid } from '../../types.ts'
 import { backlinks, ent, mutate } from '../../live.ts'
-import { useBacklinks } from '../useQuery.ts'
+import { useQueryEids } from '../useQuery.ts'
 import { block, Button, Choices, Field } from '@yaks/ui'
 import { resolve } from '../registry.ts'
 import { Entity } from '../Entity.tsx'
@@ -32,8 +32,8 @@ let { Pane, Gutter: GutterEl, Acts, Act, Fill: FillEl, Empty } = Frame
 // key is the identity (a comp cast from another client may carry no eid
 // inside itself — the Pinned precedent), so eid is restamped here.
 // Imperative on purpose — handlers call it mid-gesture — so the Layout
-// component HOLDS the `.refs=<layout>` sub (useBacklinks at its root) and
-// every read here is local over those held rows; handlers never open a sub.
+// component HOLDS the `.pane.layout=<layout>` sub at its root and every read
+// here is local over those held rows; handlers never open a sub.
 let panesOf = (layout: string) =>
   backlinks(layout)
     .filter((b) => b.via == 'pane.layout')
@@ -187,10 +187,10 @@ let PaneView = ({ eid, layout }: { eid: string; layout: string }) => {
 }
 
 export let Layout = ({ e }: { e: Ent }) => {
-  // Hold the layout's reverse sub for the view's life: panesOf's imperative
-  // reads (render helpers AND drag/close handlers) reuse this held set, and
-  // closing the layout releases it (T-21489).
-  useBacklinks(e.eid)
+  // Hold the layout's panes for the view's life: panesOf's imperative reads
+  // (render helpers AND drag/close handlers) reuse this held set, and closing
+  // the layout releases it (T-21489).
+  useQueryEids(`.pane.layout=${e.eid}`)
   let root = e.layout?.root
   if (root && ent(root).pane) {
     return (

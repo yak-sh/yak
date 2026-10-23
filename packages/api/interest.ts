@@ -16,6 +16,10 @@
 //         An entry changing `session.status`, for example, names its session.
 //   fixed exact reference values every member has, which exclude unrelated
 //         writes from a window's whole-answer refresh.
+//   refs  the entity a backlink query (`.refs=<eid>`) names, and every
+//         reference property that can name it: only an entity holding one
+//         equal to it can join, so a write to anything else leaves the answer
+//         where it was, windowed or not.
 //   alone each entity alone says whether it is in the answer: the query reads
 //         nothing far or via another entity, and keeps no cursor (`.after`)
 //         and no backlink (`.refs`). Deleting an entity outside such an answer
@@ -33,8 +37,9 @@
 // `null` is a query this cannot place — a text term, a neighbour, a computed
 // property that declares no `reads` — and every commit reaches it.
 
-import { type And, bare, type Clause } from '@yaks/query'
+import { type And, bare, type Clause, type Refs } from '@yaks/query'
 import type { Hop, Vocab } from '@yaks/vocab'
+import { type Bundle, minted } from '@yaks/graph'
 
 /** The components one subscription's answer is read from. */
 export type Interest = {
@@ -43,6 +48,7 @@ export type Interest = {
   far: Set<string>
   via: Map<string, string>
   fixed: { comp: string; prop: string; value: string }[]
+  refs?: { eid: string; props: [string, string][] }
   whole: boolean
   alone: boolean
   unseen: boolean
@@ -216,8 +222,14 @@ export let interest = (
         ? [{ ...hop, value: c.value.raw }]
         : []
     })
+    // A backlink query at the top level of an AND, naming an eid as stored
+    // (a person's id such as P-19 is resolved only by the read).
+    let backlink = ast.clauses.find((c): c is Refs =>
+      c.kind == 'refs' && c.op == '=' && minted(c.value)
+    )
+    let refs = backlink && { eid: backlink.value, props: v.refProps() }
     alone &&= !far.size && !via.size && !unseen
-    return { own, near, far, via, fixed, whole, alone, unseen }
+    return { own, near, far, via, fixed, refs, whole, alone, unseen }
   } catch {
     return null
   }
@@ -225,6 +237,15 @@ export let interest = (
 
 let any = (want: Set<string>, has: Set<string>) =>
   [...has].some((c) => want.has(c))
+
+/** Whether an entity, as it is now, can be in a backlink query's answer: it
+ * holds a reference to the entity the query names. Any entity can be, for a
+ * query that names none. */
+export let refers = (i: Interest, b: Bundle | undefined): boolean =>
+  !i.refs ||
+  i.refs.props.some(([comp, prop]) =>
+    (b?.[comp] as Record<string, unknown> | undefined)?.[prop] === i.refs!.eid
+  )
 
 /**
  * Whether a change to one entity can move the answer: `named` are the

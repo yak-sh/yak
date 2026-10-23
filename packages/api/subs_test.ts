@@ -533,6 +533,34 @@ test('a windowed query refills when a member leaves its fixed owner', () => {
   assertEquals(left.gone, ['r2'])
 })
 
+test('a backlink query ignores writes to what references something else', () => {
+  let g = shop()
+  let [b1, b2] = [derivedEid('fixture:b1'), derivedEid('fixture:b2')]
+  g.apply([
+    { entity: { eid: b1 }, book: { price: 12 } },
+    { entity: { eid: b2 }, book: { price: 15 } },
+    { entity: { eid: 'r1' }, review: { book: b1, stars: 3 } },
+    { entity: { eid: 'r2' }, review: { book: b2, stars: 4 } },
+  ])
+  let reads: string[] = []
+  let spy: Graph = {
+    ...g,
+    read: (q, o) => (reads.push(String(q)), g.read(q, o)),
+  }
+  let subs = subscriptions(spy), e = ear()
+  subs.open(e.to, 'window', `.refs=${b1}&?review&.limit=5`)
+  subs.open(e.to, 'all', `.refs=${b1}&?review`)
+  assertEquals(e.take().map(ids), [['r1'], ['r1']])
+  reads.length = 0
+
+  g.apply([{ entity: { eid: 'r2' }, review: { stars: 5 } }])
+  g.apply([{ entity: { eid: 'r3' }, review: { book: b2, stars: 1 } }])
+  assertEquals([reads, e.take()], [[], []])
+
+  g.apply([{ entity: { eid: 'r2' }, review: { book: b1 } }])
+  assertEquals(e.take().map((f) => ids(f).includes('r2')), [true, true])
+})
+
 test('windowed property filters skip births without their components', () => {
   let g = shop()
   let reads: string[] = []

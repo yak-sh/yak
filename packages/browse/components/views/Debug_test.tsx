@@ -11,6 +11,7 @@ import { applicable, ux } from '../registry.ts'
 import { Ux } from '@yaks/ux'
 import '../Entity.tsx'
 import { AddComp, Debug, DebugTabs, ProjectDebug } from './Debug.tsx'
+import { BACKLINKS } from '../useQuery.ts'
 
 test('raw formats are nested under Debug', async () => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
@@ -233,6 +234,48 @@ test('project backlinks omit attribution and cap associations', () => {
         ],
       ],
     )
+  } finally {
+    act(() => render(null, root))
+    useRoute(priorRoute)
+    cache.value = {}
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})
+
+test('a full window of referrers links every reference in the inspector', () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let project = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  let rows: typeof cache.value = {
+    [project]: {
+      entity: { eid: project, num: 19 },
+      doc: { eid: project, title: 'Task Graph', body: '' },
+      project: { eid: project },
+    },
+  }
+  for (let n = 1; n <= BACKLINKS; n++) {
+    let eid = `bbbbbbbb-bbbb-4bbb-8bbb-${String(n).padStart(12, '0')}`
+    rows[eid] = {
+      entity: { eid, num: n },
+      task: { eid, status: 'open' },
+      filed: { eid, project },
+    }
+  }
+  cache.value = rows
+  let root = document.querySelector('main')!
+  let priorRoute = useRoute(() => {})
+  try {
+    act(() =>
+      render(h(Ux, { host: ux }, h(ProjectDebug, { e: ent(project) })), root)
+    )
+    let links = [...root.querySelectorAll('.Debug_Linked[href]')]
+      .map((node) => node.getAttribute('href'))
+    assertEquals(links.includes('/inspect?q=.refs%3DP-19'), true)
   } finally {
     act(() => render(null, root))
     useRoute(priorRoute)

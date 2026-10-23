@@ -151,9 +151,27 @@ export let useCommitsOn = (target: string): Ent[] =>
 let backlinkComps = () =>
   [...new Set(vocab.refProps().map(([comp]) => comp))]
     .map((comp) => `&?${comp}`).join('')
-export let useBacklinks = (target: string): Backlink[] =>
-  useQueryEids(`.refs=${target}${backlinkComps()}`)
-    .flatMap((from) => linksVia(from, target))
+
+/** How many referrers a view holds: the newest. A project, a person or a long
+ * session is referenced tens of thousands of times, and every referrer comes
+ * with each of its reference components, so the whole set is a read that runs
+ * for seconds and a page no one can scroll. The rest is the inspector's
+ * `.refs=<id>`. */
+export let BACKLINKS = 200
+
+/** What points at `target`, by which property, and whether there may be more
+ * than the window holds. */
+export let useBacklinks = (
+  target: string,
+): { links: Backlink[]; more: boolean } => {
+  let from = useQueryEids(
+    `.refs=${target}${backlinkComps()}&.limit=${BACKLINKS}`,
+  )
+  return {
+    links: from.flatMap((eid) => linksVia(eid, target)),
+    more: from.length >= BACKLINKS,
+  }
+}
 
 // EID-keyed lookups belong to the mounted view, never an unheld render read.
 export let useBoardsOver = (target: string): string[] =>
