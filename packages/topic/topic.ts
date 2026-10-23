@@ -55,6 +55,13 @@ let prop = (t: Bundle, comp: string, name: string): string => {
 export let title = (t: Bundle): string =>
   prop(t, 'doc', 'title') || prop(t, TOPIC, 'name')
 
+/** What a list of topics shows under its title: the first paragraph of its
+ * cover, since a project's cover is its whole description. */
+/// cover({ entity: { eid: 'p' }, doc: { body: 'A game.\n\nIts engine is…' } }) -> 'A game.'
+/// cover({ entity: { eid: 'q' } }) -> ''
+export let cover = (t: Bundle): string =>
+  prop(t, 'doc', 'body').trim().split(/\n\s*\n/)[0]
+
 /**
  * Whether two names name one subject by their words: every word of one starts
  * a word of the other, or is started by one.

@@ -22,17 +22,13 @@ import * as ui from '@yaks/ui'
 import { useHost } from '@yaks/ux'
 import type { Answer, Bundle, Io, Props } from '@yaks/inspect'
 import { every, holds, type Shelf, shelves, within } from './shelves.ts'
-import { about, fits, title, TOPIC, TOPICS } from './topic.ts'
+import { about, cover, fits, title, TOPIC, TOPICS } from './topic.ts'
 import { TopicPage } from './page.ts'
 
 /** Where what is typed to find a topic is kept, as the person's draft. */
 export let FINDING = 'topics:find'
 
 let rows = (a?: Answer): Bundle[] => a?.rows ?? []
-let cover = (t: Bundle): string => {
-  let v = (t.doc as { body?: unknown } | undefined)?.body
-  return typeof v == 'string' ? v : ''
-}
 
 /** What the shelves ask: every live topic with its cover, and every
  * `contains` edge from one topic to another. */

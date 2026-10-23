@@ -1,7 +1,7 @@
 // The topic tools over a graph small enough to read: one name is one topic, a
 // name holding another's words is refused, a find answers by words, and a
 // topic holds what is added to it, a project as much as any other topic.
-import { test } from '@yaks/testing'
+import { equal, ok, test } from '@yaks/testing'
 import { assertEquals, assertRejects } from '@std/assert'
 import { type Bundle, type Comp, graph, Refused } from '@yaks/graph'
 import { loadTools } from '@yaks/graph/tools'
@@ -48,6 +48,46 @@ let subjects = await topical([
 let holds = async (g: G, eid: string) =>
   (await g.read(`.contains&.edge.from=${eid}&?edge`))
     .map((b) => part(b, 'edge').to).sort()
+
+// What a call refuses with, or nothing.
+let refusal = async (run: () => Promise<unknown>) => {
+  try {
+    await run()
+  } catch (e) {
+    if (e instanceof Refused) return e.message
+    throw e
+  }
+}
+let memories: Bundle[] = [
+  { entity: { eid: 'm1' }, doc: { title: 'one aspect per component' } },
+  { entity: { eid: 'm2' }, doc: { title: 'marks, not states' } },
+]
+
+// A topic given two memories, one of them twice, and then one dropped.
+let shaped = await topical([['data model', 'how data is shaped']])
+let [model] = eids(await shaped.read('.topic'))
+await shaped.apply(memories)
+let add = async (args: Record<string, unknown>) =>
+  await shaped.apply(await ask('topic_add', { topic: model, ...args }, shaped))
+await add({ ids: ['m1', 'm2'] })
+await add({ ids: ['m1'] })
+let added = await holds(shaped, model)
+await add({ ids: ['m1'], drop: true })
+let dropped = await holds(shaped, model)
+
+// A project wearing topic, given a design.
+let vale = fresh()
+await vale.apply([
+  {
+    entity: { eid: 'p1' },
+    project: {},
+    topic: { name: 'mossvale' },
+    doc: { title: 'Mossvale', body: 'a voxel game' },
+  },
+  { entity: { eid: 'd1' }, doc: { title: 'creatures as components' } },
+])
+await vale.apply(await ask('topic_add', { topic: 'p1', ids: ['d1'] }, vale))
+let [p1] = await vale.get(['p1'])
 
 test('every topic tool is declared and implemented', () => {
   assertEquals(loadTools(topicDoc, tools).map((t) => t.name).sort(), [
@@ -114,50 +154,27 @@ test('find answers the topics holding the words, else every one by name', async 
 })
 
 test('a topic holds what is added to it, until it is dropped', async () => {
-  let g = await topical([['data model', 'how data is shaped']])
-  let [model] = eids(await g.read('.topic'))
-  await g.apply([
-    { entity: { eid: 'm1' }, doc: { title: 'one aspect per component' } },
-    { entity: { eid: 'm2' }, doc: { title: 'marks, not states' } },
-  ])
-  let add = async (args: Record<string, unknown>) =>
-    await g.apply(await ask('topic_add', args, g))
-  await assertRejects(
-    () => ask('topic_add', { topic: 'm1', ids: ['m2'] }, g),
-    Refused,
-    'not a topic',
+  equal(added, ['m1', 'm2'])
+  equal(dropped, ['m2'])
+  ok(
+    (await refusal(() =>
+      ask('topic_add', { topic: 'm1', ids: ['m2'] }, shaped)
+    ))?.includes('not a topic'),
   )
-  await add({ topic: model, ids: ['m1', 'm2'] })
-  await add({ topic: model, ids: ['m1'] })
-  assertEquals(await holds(g, model), ['m1', 'm2'])
-  await add({ topic: model, ids: ['m1'], drop: true })
-  assertEquals(await holds(g, model), ['m2'])
-  await assertRejects(
-    () => ask('topic_add', { topic: model, ids: [model] }, g),
-    Refused,
-    'itself',
+  ok(
+    (await refusal(() =>
+      ask('topic_add', { topic: model, ids: [model] }, shaped)
+    ))?.includes('itself'),
   )
 })
 
 test('a project is its own topic: it holds things, and its name is taken', async () => {
-  let g = fresh()
-  await g.apply([
-    {
-      entity: { eid: 'p1' },
-      project: {},
-      topic: { name: 'mossvale' },
-      doc: { title: 'Mossvale', body: 'a voxel game' },
-    },
-    { entity: { eid: 'd1' }, doc: { title: 'creatures as components' } },
-  ])
-  await g.apply(await ask('topic_add', { topic: 'p1', ids: ['d1'] }, g))
-  assertEquals(await holds(g, 'p1'), ['d1'])
-  await assertRejects(
-    () => ask('topic_new', { name: 'Mossvale', body: 'the game' }, g),
-    Refused,
-    'p1',
+  equal(await holds(vale, 'p1'), ['d1'])
+  ok(
+    (await refusal(() =>
+      ask('topic_new', { name: 'Mossvale', body: 'the game' }, vale)
+    ))?.includes('p1'),
   )
   // It is still read as a project, so its human id keeps its P.
-  let [p1] = await g.get(['p1'])
-  assertEquals(vocab.kindOf(p1), 'project')
+  equal(vocab.kindOf(p1), 'project')
 })
