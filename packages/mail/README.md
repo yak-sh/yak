@@ -344,6 +344,12 @@ request by the id derived from it — so a crash between recording and
 acknowledging only repeats the pull. An item that cannot be recorded stays at
 the edge and is tried again.
 
+An edge that does not answer is tried again on the next pass. The service
+reports a tray as failing once it has gone unanswered for `LATE` (a minute), the
+time a letter may wait at the edge, and reports a letter that waited longer when
+it takes it. A one-pass host, which has no next pass, reports a tray it cannot
+take at once.
+
 ## The tools
 
 `@yaks/mail/tools` exports `runs()`. A server loading these implementations and
@@ -456,21 +462,21 @@ and `tel` URLs. Relative links remain text. To use another renderer, construct a
 
 The root import `@yaks/mail` provides:
 
-| Exports                                                                             | Purpose                                                                    |
-| ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `mailDoc`, `MAIL`, `EMAIL`, `DELIVER`, `DELIVERED`, `BOUNCED`, `NOTIFIED`           | Vocabulary and component names.                                            |
-| `mailbox`, `Mailbox`                                                                | Graph plugin and its options.                                              |
-| `sending`, `message`, `addressOf`, `Post`, `Sender`, `Message`, `Receipt`, `Unsent` | Sending handler, message composition, address lookup, and transport types. |
-| `cloudflare`, `deliver`, `payload`, `Account`, `Payload`, `Fetch`                   | Cloudflare transport and request construction.                             |
-| `stash`, `Stash`, `Kept`                                                            | In-memory transport.                                                       |
-| `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head`          | Incoming-message conversion and header interpretation.                     |
-| `arrived`, `wearer`, `named`, `routed`, `known`, `Arrivals`, `Book`                 | Graph lookups used when receiving.                                         |
-| `Reading`, `Read`                                                                   | What another package makes of an arrival.                                  |
-| `pull`, `edge`, `received`, `hookTo`, `messageIdOf`, `Edge`, `Pulled`               | Pulling arrivals from an edge.                                             |
-| `invited`, `Invite`, `Welcome`, `Seat`                                              | Membership invitation handler and types.                                   |
-| `canon`, `local`, `at`, `parts`, `address`                                          | Address parsing and normalization.                                         |
-| `html`, `text`, `tokens`, `linkable`, `escape`, `Token`                             | Body rendering.                                                            |
-| `Options`, `Transport`, `Door`, `Pull`                                              | Plugin configuration types.                                                |
+| Exports                                                                               | Purpose                                                                    |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `mailDoc`, `MAIL`, `EMAIL`, `DELIVER`, `DELIVERED`, `BOUNCED`, `NOTIFIED`             | Vocabulary and component names.                                            |
+| `mailbox`, `Mailbox`                                                                  | Graph plugin and its options.                                              |
+| `sending`, `message`, `addressOf`, `Post`, `Sender`, `Message`, `Receipt`, `Unsent`   | Sending handler, message composition, address lookup, and transport types. |
+| `cloudflare`, `deliver`, `payload`, `Account`, `Payload`, `Fetch`                     | Cloudflare transport and request construction.                             |
+| `stash`, `Stash`, `Kept`                                                              | In-memory transport.                                                       |
+| `inbound`, `author`, `messageId`, `verdict`, `Received`, `Arrival`, `Head`            | Incoming-message conversion and header interpretation.                     |
+| `arrived`, `wearer`, `named`, `routed`, `known`, `Arrivals`, `Book`                   | Graph lookups used when receiving.                                         |
+| `Reading`, `Read`                                                                     | What another package makes of an arrival.                                  |
+| `pull`, `edge`, `received`, `hookTo`, `messageIdOf`, `Edge`, `Pulled`, `Down`, `LATE` | Pulling arrivals from an edge.                                             |
+| `invited`, `Invite`, `Welcome`, `Seat`                                                | Membership invitation handler and types.                                   |
+| `canon`, `local`, `at`, `parts`, `address`                                            | Address parsing and normalization.                                         |
+| `html`, `text`, `tokens`, `linkable`, `escape`, `Token`                               | Body rendering.                                                            |
+| `Options`, `Transport`, `Door`, `Pull`                                                | Plugin configuration types.                                                |
 
 Separate entry points provide `mailDoc` and `docs` from `@yaks/mail/vocab`,
 `plugins()` from `@yaks/mail/graph`, `effects()` and `post()` from

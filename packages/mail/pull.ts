@@ -26,6 +26,11 @@
 // pull gets the same items back, records nothing new, and acknowledges them.
 // An item that cannot be recorded is left unacknowledged and said, so it is
 // tried again rather than lost.
+//
+// An edge that does not answer is tried again on the next pass, which takes
+// everything a blip left behind. Where another pass follows, a tray is said to
+// fail once it has gone unanswered for LATE, the time a letter may wait: by
+// then a letter may be late, and the edge is out rather than slow.
 
 import type { Eid, Graph } from '@yaks/graph'
 import { hooked, type Request } from '@yaks/hook'
@@ -42,7 +47,7 @@ export type Report = (
 
 /** How long a letter may wait at the edge before taking it is itself a
  * failure: a pull runs every few seconds, so a letter this old means the pull
- * did not run, however it came to be late. */
+ * did not run, however it came to be late. A tray may go unanswered as long. */
 export let LATE = 60_000
 
 /** A letter as the edge holds it: the envelope and what it parsed out. */
@@ -231,20 +236,28 @@ let request = (r: EdgeRequest): Request => ({
   ...(r.sig_ok == null ? {} : { verified: !!r.sig_ok }),
 })
 
+/** Since when each tray has gone unanswered, kept by a caller that pulls
+ * again: a tray that answers leaves it. */
+export type Down = Map<string, number>
+
+// What every tray of one pass shares.
+type Pass = { report: Report; now: () => number; down?: Down | undefined }
+
 // One tray: list it, record each item, acknowledge the ones recorded. Nothing
 // here throws — nobody is waiting on a pull to answer — so a failure is said
 // instead, and an item that failed stays at the edge for the next pull.
 let tray = async <T extends { id: string }>(
+  { report, now, down }: Pass,
   name: string,
   list: () => Promise<T[] | null>,
   record: (item: T) => Promise<unknown>,
   ack: (ids: string[]) => Promise<void>,
-  report: Report = console.error,
 ): Promise<number> => {
-  let fail = (what: string, err: unknown) =>
+  let fail = (what: string, err: unknown, tags: Record<string, string> = {}) =>
     report(new Error(`@yaks/mail — pull could not ${what}`, { cause: err }), {
-      tags: { step: 'mail pull', tray: name },
+      tags: { step: 'mail pull', tray: name, ...tags },
     })
+  let began = now()
   let done: string[] = []
   try {
     for (let item of await list() ?? []) {
@@ -256,8 +269,12 @@ let tray = async <T extends { id: string }>(
       }
     }
     if (done.length) await ack(done)
+    down?.delete(name)
   } catch (err) {
-    fail(`take ${name}s`, err)
+    let since = down?.get(name) ?? began
+    down?.set(name, since)
+    let out = now() - since
+    if (!down || out > LATE) fail(`take ${name}s`, err, { down: `${out} ms` })
   }
   return done.length
 }
@@ -274,12 +291,22 @@ export type Pulled = { messages: number; requests: number }
  * Requests are recorded only where the graph declares `hook`, and aimed at
  * whom they are for only where it declares `about`; a graph without `hook`
  * leaves the request tray for one that has it.
+ *
+ * A caller that pulls again hands in the same `down` each pass, so a tray the
+ * edge does not answer is said once it has been down for LATE; without one,
+ * it is said at once.
  */
 export let pull = async (
-  at: Arrivals & { graph: Graph; report?: Report; now?: () => number },
+  at: Arrivals & {
+    graph: Graph
+    report?: Report
+    now?: () => number
+    down?: Down
+  },
   from: Edge,
 ): Promise<Pulled> => {
-  let { graph, report = console.error, now = Date.now } = at
+  let { graph, report = console.error, now = Date.now, down } = at
+  let pass: Pass = { report, now, down }
   let receive = arrived(at)
   // Where a late letter's time went, per step, so the report says which.
   let took: Record<string, string> = {}
@@ -295,6 +322,7 @@ export let pull = async (
     }
   }
   let messages = await tray(
+    pass,
     'message',
     () => timed('list', from.messages),
     async (m) => {
@@ -311,10 +339,10 @@ export let pull = async (
       }
     },
     from.notified,
-    report,
   )
   let requests = graph.vocab.comp('hook')
     ? await tray(
+      pass,
       'request',
       from.requests,
       async (r) => {
@@ -324,7 +352,6 @@ export let pull = async (
         await graph.apply(hooked(request(r), about), { trusted: true })
       },
       from.processed,
-      report,
     )
     : 0
   return { messages, requests }

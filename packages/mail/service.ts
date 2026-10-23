@@ -23,7 +23,8 @@ export let EVERY = 10_000
 type Host = { graph: Graph; config?: Config; report?: Report }
 
 /** Pull from one edge, then again every `pull.every`, until the signal aborts.
- * An already-aborted signal is one pull. */
+ * An already-aborted signal is one pull, so a tray it cannot take is said at
+ * once; a loop tries again and says it once the tray has been down for LATE. */
 let polling = async (
   host: Host,
   from: Edge,
@@ -35,6 +36,7 @@ let polling = async (
     ...(host.report ? { report: host.report } : {}),
     ...(options.domain ? { domain: options.domain } : {}),
     ...(options.triage ? { triage: options.triage } : {}),
+    ...(signal.aborted ? {} : { down: new Map() }),
     readings: await readings(host.config?.plugins),
   }
   let began = Date.now()

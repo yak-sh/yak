@@ -204,6 +204,35 @@ test('pull: each tray fails alone, and a graph without hook leaves requests', as
   assertEquals(other.acked, [letter(1).id])
 })
 
+test('pull: an edge that does not answer is said once it has been down for LATE', async () => {
+  let g = await club()
+  let up = stub([letter(1)])
+  let out: Edge = {
+    ...up.at,
+    messages: () => Promise.reject(new Error('timeout')),
+  }
+  let told: unknown[] = []
+  let down = new Map<string, number>()
+  let at = (t: number, from: Edge, keep = true) =>
+    pull({
+      graph: g,
+      domain,
+      now: () => t,
+      report: (e) => told.push(e),
+      ...(keep ? { down } : {}),
+    }, from)
+  await at(0, out)
+  await at(LATE, out)
+  assertEquals(told.length, 0)
+  await at(LATE + 1, out)
+  assertEquals(told.length, 1)
+  await at(LATE + 2, up.at)
+  await at(LATE * 2 + 3, out)
+  assertEquals([told.length, up.acked], [1, [letter(1).id]])
+  await at(LATE * 2 + 4, out, false)
+  assertEquals(told.length, 2)
+})
+
 test('edge: the HTTP API, a missing tray, and acknowledgements in bites', async () => {
   let asked: string[] = []
   let at = edge({ url: 'https://inbox.example/', token: 't' }, (url, init) => {
@@ -319,14 +348,16 @@ test('service: a timed-out pull is tried again', async () => {
     domain,
     pull: { url: 'https://inbox.example', token: 't', every: 0 },
   }
+  let told: unknown[] = []
   await service(
-    { graph: g },
+    { graph: g, report: (e) => told.push(e) },
     options,
     stop.signal,
     (pull, signal) => edge(pull, go, signal, 1),
   )
   assertEquals(calls, 2)
   assertEquals((await mails(g)).length, 1)
+  assertEquals(told.filter((e) => String(e).includes('could not take')), [])
 })
 
 test('service: stopping ends an in-flight pull', async () => {
