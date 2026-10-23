@@ -2553,6 +2553,29 @@ test('server-resolve: a 404 is a genuine miss — Lost, and no retry storm', asy
   }
 })
 
+test('server-resolve: an id that names nothing is the Lost answer, not a failure', async () => {
+  clearResolved()
+  cache.value = {}
+  let heard: unknown[][] = []
+  let original = console.error
+  console.error = (...args) => void heard.push(args)
+  let wire = host((a) =>
+    a.subscribe.startsWith('.entity.eid=')
+      ? { refused: { error: 'Refused', message: 'T-404 names nothing' } }
+      : undefined
+  )
+  try {
+    let gen = resolveGen.value
+    serverEid('T-404')
+    await until(() => resolveGen.value > gen)
+    await tick()
+    assertEquals([serverName('T-404'), heard], [null, []])
+  } finally {
+    console.error = original
+    wire.free()
+  }
+})
+
 test('server-resolve: a hanging server never stalls nav, never storms, and its late answer lands', async () => {
   clearResolved()
   cache.value = {}

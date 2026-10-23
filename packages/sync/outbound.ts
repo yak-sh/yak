@@ -60,7 +60,7 @@ export class WriteUnknown extends Error {
  * in-process handler, which is how this package is tested with no network. */
 export type Fetch = (request: Request) => Response | Promise<Response>
 
-/** One outgoing write that was not applied on the server. */
+/** One outgoing write, or one subscription, the server did not take. */
 export type Trouble = {
   /** the bundles as they were sent */
   sent: Bundle[]
@@ -70,6 +70,9 @@ export type Trouble = {
   error?: unknown
   /** whether the optimistic local change was undone */
   reverted: boolean
+  /** the subscription whose query the server refused, when what it refused
+   * was a subscription rather than a write */
+  subscription?: string
 }
 
 /** Where a failure is reported: a page shows it, a test collects it. */

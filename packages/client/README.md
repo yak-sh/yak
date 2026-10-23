@@ -773,8 +773,10 @@ Apache-2.0
 
 `@yaks/client/named` gives a host names for server-evaluated watches. Watches on
 the same query share one wire; a landed frame is reported with every name
-holding it. The host supplies its vocabulary, socket and optional wire vault, so
-the client knows no application's kinds, status or storage identity.
+holding it, and so is a refused one to `report` (`names`), so a host can take a
+refusal one name expects as that name's answer. The host supplies its
+vocabulary, socket and optional wire vault, so the client knows no application's
+kinds, status or storage identity.
 
 ```ts
 import { namedClient, quiet } from '@yaks/client/named'

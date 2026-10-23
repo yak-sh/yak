@@ -409,6 +409,7 @@ export let sync = (graph: Graph, opts: SyncOpts): Sync => {
           sent: [],
           refused: frame.refused,
           reverted: false,
+          subscription: frame.id,
         })
       }
       // Another connection's word on a value takes it over (./saying.ts).

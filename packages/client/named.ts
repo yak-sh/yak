@@ -10,7 +10,7 @@ import {
   wireIdb,
 } from './mod.ts'
 import { type Bundle } from '@yaks/graph'
-import { type Frame, replicate, type Socket } from '@yaks/sync'
+import { type Frame, replicate, type Socket, type Trouble } from '@yaks/sync'
 import type { Vocab } from '@yaks/vocab'
 import { map, parse } from '@yaks/query'
 // A socket that answers nothing: the replica of a process with no host (a
@@ -45,10 +45,15 @@ export let entire = (line: string): string => {
   return shaped ? line : `${line}&*`
 }
 
+/** What a named client reports: the trouble, and for a refused subscription
+ * the names holding its line, so the host can tell a refusal one of them takes
+ * as its answer from a failure. */
+export type Told = (trouble: Trouble & { names?: string[] }) => void
+
 /** How a named client says a refusal or a failure where nobody else hears
  * it: on the console, an error where nothing was sent, which the page tracker
  * captures by its first argument. */
-export let said: NonNullable<ClientOpts['report']> = (r) => {
+export let said: Told = (r) => {
   let error = r.error
   if (r.refused) {
     error = Object.assign(new Error(r.refused.message), {
@@ -82,7 +87,7 @@ export let namedClient = (opts: {
   wireVault?: Parameters<typeof wireIdb>[0]
   url: string
   fetch?: ClientOpts['fetch']
-  report?: ClientOpts['report']
+  report?: Told
   connect: (url: string) => Socket
   changed: (eids: string[]) => void
   ready: (sub: string) => void
@@ -191,7 +196,13 @@ export let namedClient = (opts: {
       ? wireIdb(opts.wireVault)
       : false,
     fetch: opts.fetch,
-    report: opts.report ?? said,
+    report: (trouble) =>
+      (opts.report ?? said)({
+        ...trouble,
+        names: trouble.subscription == undefined
+          ? undefined
+          : [...named.get(lines.get(trouble.subscription) ?? '') ?? []],
+      }),
   })
   box.cache.onRows(opts.changed)
   let open = (sub: string, line: string) => {

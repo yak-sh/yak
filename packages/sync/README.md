@@ -18,8 +18,9 @@ committed patches.
 An **optimistic write** is a batch committed locally before the server answers
 it. `report` receives a `Trouble`: the sent bundles,
 [refusal](../api/README.md#refusals-and-request-reports) or transport error, and
-whether the optimistic write was reverted. `Refusal` carries the server's
-`error`, `message`, and optional error-specific fields.
+whether the optimistic write was reverted. A subscription the server refuses is
+reported the same way, with no bundles and its id as `subscription`. `Refusal`
+carries the server's `error`, `message`, and optional error-specific fields.
 
 ## Install
 

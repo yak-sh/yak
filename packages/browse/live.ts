@@ -172,9 +172,12 @@ let makeClient = () => {
     connect: (url) => socketFor(url),
     // A refusal on a page that outlived a deploy is its old code asking the
     // new server what it no longer answers: the page reloads onto the code
-    // now served. On a page running what is served, a refusal is a bug.
+    // now served. An id the page resolves by asking (one in the address, or a
+    // link) takes its refusal as the answer, and draws the Lost face. On a
+    // page running what is served, any other refusal is a bug.
     report: (r) => {
       if (!r.refused) return said(r)
+      if (r.names?.length && r.names.every(resolving)) return
       void outlived().then((old) => old ? location.reload() : said(r))
     },
     disk: typeof location !== 'undefined',
@@ -2491,6 +2494,9 @@ type Named = { eid: string; num: number; kind: string }
 let named = new Map<string, Named | null>() // token OR eid -> naming (null = gone)
 let resolvingIds = new Map<string, Promise<Named | null>>() // token -> in flight
 export let resolveGen = signal(0) // bumped when a resolve settles, to re-render
+
+// The line a token is resolved on, whose refusal is its answer.
+let resolving = (sub: string) => sub.startsWith('resolve:')
 
 let kickResolve = (token: string): Promise<Named | null> => {
   let found = resolvingIds.get(token)
