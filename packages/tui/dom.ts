@@ -30,6 +30,44 @@ export let touch = (): void => {
   })
 }
 
+/** A rectangle of cells: columns left to right, rows top to bottom, the
+ * right and bottom edges just past the last. */
+export type Box = { left: number; top: number; right: number; bottom: number }
+
+let none: Box = { left: 0, top: 0, right: 0, bottom: 0 }
+let union = (a: Box, b: Box): Box => ({
+  left: Math.min(a.left, b.left),
+  top: Math.min(a.top, b.top),
+  right: Math.max(a.right, b.right),
+  bottom: Math.max(a.bottom, b.bottom),
+})
+
+// What the last paint did: the cells each element painted itself, and the
+// elements its sheet hid.
+let placed = new Map<TElement, Box>()
+let hidden = new Set<TElement>()
+let revealed: TElement | undefined
+
+/** Record a paint: the screen's lines, each segment's owner the element that
+ * painted it, and the elements the sheet hid. Elements measure themselves by
+ * it (`getBoundingClientRect`, `checkVisibility`). */
+export let place = (
+  lines: { text: string; owner?: TElement }[][],
+  hid: Set<TElement> = new Set(),
+): void => {
+  placed = new Map()
+  hidden = hid
+  lines.forEach((line, top) => {
+    let left = 0
+    for (let { text, owner } of line) {
+      let cells = { left, top, right: left + text.length, bottom: top + 1 }
+      let had = owner && placed.get(owner)
+      if (owner && text) placed.set(owner, had ? union(had, cells) : cells)
+      left = cells.right
+    }
+  })
+}
+
 /** The base node: parent link, sibling walk, and self-removal. */
 export class TNode {
   /** The element this node hangs from, or null when detached. */
@@ -94,17 +132,78 @@ export class TElement extends TNode {
   get ownerDocument(): typeof doc {
     return doc
   }
+  /** Take the focus from whatever held it; the painter shows where it is. */
   focus() {
+    if (doc.activeElement && doc.activeElement != this) {
+      doc.activeElement.blur()
+    }
     doc.activeElement = this
     if (this.matches('input,textarea')) {
       this.setAttribute('data-caret', this.selectionStart)
     }
     this.dispatchEvent(new Event('focus'))
+    touch()
   }
   blur() {
     if (doc.activeElement == this) doc.activeElement = null
     this.removeAttribute('data-caret')
     this.dispatchEvent(new Event('blur'))
+    touch()
+  }
+  /** Press it, as a primary-button click does. */
+  click() {
+    dispatch(
+      this,
+      Object.assign(new Event('click', { bubbles: true, cancelable: true }), {
+        button: 0,
+        detail: 0,
+        metaKey: false,
+        ctrlKey: false,
+        shiftKey: false,
+        altKey: false,
+      }),
+    )
+  }
+  /** Keep it in sight: the scroll region around it shows it on the next
+   * paint, until another element asks. */
+  scrollIntoView() {
+    if (revealed == this) return
+    revealed?.removeAttribute('reveal')
+    revealed = this
+    this.setAttribute('reveal', '')
+  }
+  /** Where the last paint put it, in cells: every cell it or anything inside
+   * it painted. Nothing painted, out of a window's sight or hidden, is an
+   * empty box at the origin. */
+  getBoundingClientRect(): Box & {
+    x: number
+    y: number
+    width: number
+    height: number
+  } {
+    let at: Box | undefined
+    let add = (n: TElement) => {
+      let b = placed.get(n)
+      if (b) at = at ? union(at, b) : b
+      for (let k of n.childNodes) if (k instanceof TElement) add(k)
+    }
+    add(this)
+    let { left, top, right, bottom } = at ?? none
+    return {
+      left,
+      top,
+      right,
+      bottom,
+      x: left,
+      y: top,
+      width: right - left,
+      height: bottom - top,
+    }
+  }
+  /** Whether it shows: false where the last paint's sheet hid it or what
+   * holds it, true out of a window's sight. */
+  checkVisibility(): boolean {
+    return !hidden.has(this) && (this.parentNode?.checkVisibility() ?? true)
   }
   setSelectionRange(start: number, end: number) {
     this.selectionStart = start
@@ -138,10 +237,10 @@ export class TElement extends TNode {
     ).join('')
   }
   getAttribute(k: string): string | null {
-    return this.attr(k) ?? null
+    return this.attr(k.toLowerCase()) ?? null
   }
   hasAttribute(k: string): boolean {
-    return this.attr(k) != null
+    return this.attr(k.toLowerCase()) != null
   }
   get tagName(): string {
     return this.localName.toUpperCase()
@@ -241,14 +340,16 @@ export class TElement extends TNode {
     c.parentNode = null
     touch()
   }
-  /** Set an attribute; values are stringified, as the DOM does. */
+  /** Set an attribute; its name lowercased and its value stringified, as an
+   * HTML document does (Preact writes `tabIndex`, a selector reads
+   * `[tabindex]`). */
   setAttribute(k: string, v: unknown) {
-    this.attrs.set(k, String(v))
+    this.attrs.set(k.toLowerCase(), String(v))
     touch()
   }
   /** Remove an attribute. */
   removeAttribute(k: string) {
-    this.attrs.delete(k)
+    this.attrs.delete(k.toLowerCase())
     touch()
   }
   /** Record a listener. Pointer events bubble here; keys go through `screen`. */

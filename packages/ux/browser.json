@@ -8,6 +8,7 @@
     ],
     "strict": true
   },
+  "entries": [".", "./keys"],
   "imports": {
     "@yaks/archetype": "../archetype/mod.ts",
     "@yaks/fp": "../fp/mod.ts",

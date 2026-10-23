@@ -38,7 +38,7 @@ import { scrollbar } from './scrollbar.ts'
 
 import { safe as strip, safeHref } from '@yaks/text'
 import type { TElement, TNode } from './dom.ts'
-import { touch, TText } from './dom.ts'
+import { doc, touch, TText } from './dom.ts'
 import { table } from './table.ts'
 import { type Track, tracks } from './grid.ts'
 import { graphics } from './graphics.ts'
@@ -81,7 +81,13 @@ export type Backend = {
   /** Paint the tree; report lines written and what was measured. */
   draw: (
     root: TElement,
-  ) => { written: number; metrics: Metrics; lines?: Line[] }
+  ) => {
+    written: number
+    metrics: Metrics
+    lines?: Line[]
+    /** what the sheet hid */
+    hidden?: Set<TElement>
+  }
   /** Forget what is on screen, so the next draw repaints every line. */
   reset: () => void
   /** Request clipboard write; terminals may deny it. */
@@ -123,7 +129,11 @@ let own = (el: TElement, sheet: Sheet): Style => {
       if (name && sheet[name]) Object.assign(out, sheet[name])
     }
   }
-  if (el.attr('data-terminal-focus') != null) out.inverse = true
+  // Focus shows as a browser rings it: whatever holds it from a key, never a
+  // box focused only to hear keys (tabindex -1, a dialog).
+  if (doc.activeElement == el && el.attr('tabindex') != '-1') {
+    out.inverse = true
+  }
   let href = el.localName == 'a' && el.attr('href')
   if (href) out.href = safeHref(href)
   return out
@@ -178,6 +188,14 @@ type Ctx = {
   metrics: Metrics
   spaced?: boolean
   columns?: number[]
+  /** what the sheet hid, for elements to say they don't show */
+  hidden?: Set<TElement>
+}
+
+// Whether an element shows; one its sheet hides is noted as hidden.
+let shows = (el: TElement, o: Style, c: Ctx) => {
+  if (o.hidden) c.hidden?.add(el)
+  return !o.hidden
 }
 
 // Whether a spaced layout puts a space between what a line holds and the run
@@ -194,7 +212,7 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   let el = n as TElement
   if (el.localName == 'br') return [{ text: '\n', style: st, owner: el }]
   let o = own(el, c.sheet)
-  if (o.hidden) return []
+  if (!shows(el, o, c)) return []
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s, owner: el }]
   if (el.localName == 'input' || el.localName == 'textarea') {
@@ -232,7 +250,7 @@ let field = (el: TElement, s: Style, c: Ctx): Seg[] => {
     text ? [{ text, style, owner: el }] : []
   let mark = MARKS[type]
   if (mark) return seg(mark[el.attr('checked') == null ? 0 : 1], s)
-  if (type == 'hidden') return []
+  if (!shows(el, { hidden: type == 'hidden' }, c)) return []
   let value = safe(el.attr('value') ?? '')
   if (type == 'password') value = '•'.repeat(value.length)
   let hint = value ? [] : seg(
@@ -433,7 +451,7 @@ let col = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
 // Under a grid, the grid's columns say how wide each is instead (`cells`).
 let row = (el: TElement, s: Style, w: number, h: number | null, c: Ctx) => {
   if (c.columns) return cells(el, s, w, h, c)
-  let all = kids(el).filter((k) => !own(k, c.sheet).hidden)
+  let all = kids(el).filter((k) => shows(k, own(k, c.sheet), c))
   let fixed = all.map((k) => wide(k, c.sheet))
   let spare = w - fixed.reduce((n: number, v) => n + (v ?? 0), 0)
   let growers = fixed.filter((v) => v == null).length
@@ -726,7 +744,7 @@ export let lay = (
   c: Ctx,
 ): Line[] => {
   let o = own(el, c.sheet)
-  if (o.hidden) return []
+  if (!shows(el, o, c)) return []
   let boxed = el.viewport || el.attr('scroll') != null ||
     num(el, 'width') != null || o.width != null ||
     el.attr('grow') != null || o.grow
@@ -866,9 +884,10 @@ export let screenful = (
   columns: number,
   rows: number,
   sheet: Sheet = {},
-): { lines: Line[]; metrics: Metrics } => {
-  let c: Ctx = { sheet: compose(sheet), metrics: {} }
-  return { lines: lay(root, {}, columns, rows, c), metrics: c.metrics }
+): { lines: Line[]; metrics: Metrics; hidden: Set<TElement> } => {
+  let c: Ctx = { sheet: compose(sheet), metrics: {}, hidden: new Set() }
+  let lines = lay(root, {}, columns, rows, c)
+  return { lines, metrics: c.metrics, hidden: c.hidden! }
 }
 
 /** A tree painted once, as tall as it is, for a command that prints and exits:
@@ -964,7 +983,7 @@ export let ansiBackend = (opts: {
     },
     draw: (root) => {
       let { columns, rows } = size()
-      let { lines, metrics } = screenful(root, columns, rows, sheet())
+      let { lines, metrics, hidden } = screenful(root, columns, rows, sheet())
       let annotated = pictures.annotate(lines)
       let out = ''
       let written = 0
@@ -984,6 +1003,7 @@ export let ansiBackend = (opts: {
       return {
         written,
         metrics,
+        hidden,
         lines: lines.slice(0, rows).map((line) => clip(line, columns)),
       }
     },

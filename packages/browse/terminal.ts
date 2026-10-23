@@ -132,10 +132,7 @@ export let open = async (url: string, opts: {
         quit()
         return true
       }
-      if (
-        k.alt && k.name == 'left' || k.ctrl && k.text == 'o' ||
-        k.name == 'char' && k.text == 'h'
-      ) {
+      if (k.alt && k.name == 'left' || k.ctrl && k.text == 'o') {
         port.back()
         return true
       }

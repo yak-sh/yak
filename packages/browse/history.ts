@@ -1,7 +1,7 @@
 // Where Browse is comes from its door's history: one page at a time, each at
 // its own address. Going somewhere adds an entry, and the door's back and
-// forward (the browser's, or Ctrl-O and Ctrl-F in a terminal) are the way
-// back. An entry keeps how far its page was scrolled when it was left, so the
+// forward (the browser's, or Ctrl-O and Ctrl-F in a terminal, and H and L in
+// either) are the way back. An entry keeps how far its page was scrolled when it was left, so the
 // way back finds the place too.
 import { signal } from '@preact/signals'
 import {
@@ -55,5 +55,9 @@ export let go = (to: string, replace = false): void => {
   left.value = 0
   route.value = to
 }
+
+/** Step back through the door's history, or forward again. */
+export let back = (): void => port?.back()
+export let forward = (): void => port?.forward()
 
 bindHistory()

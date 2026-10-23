@@ -1,6 +1,6 @@
 import { InspectPage, PagePart, PastPage } from './inspect.tsx'
 import { hosting } from '../hosting.ts'
-import { left, scrolledTo } from '../history.ts'
+import { back, forward, left, scrolledTo } from '../history.ts'
 import {
   configAt,
   destinationAt,
@@ -9,7 +9,8 @@ import {
   schemaAt,
 } from '../navigation.ts'
 import { addressId, entityPath, searchAt } from '../url.ts'
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
+import { walk } from '@yaks/ux/keys'
 import { idOf } from '../types.ts'
 import { config, ent, entityRead, mode, myClient, useHold } from '../live.ts'
 import { block, Loading, Section, Shell, Tabs, Viewport } from '@yaks/ui'
@@ -360,8 +361,25 @@ export let App = () => {
     addEventListener('keydown', key)
     return () => removeEventListener('keydown', key)
   }, [])
+  // Vim's keys walk the items on the page, or on the peek over it, in normal
+  // mode (@yaks/ux/keys). On the document, so a terminal's keydown reaches it
+  // as a browser's does; a peek's own keys, heard first, keep Esc and q.
+  let shell = useRef<HTMLElement>(null)
+  useEffect(() => {
+    let keys = walk({
+      scope: () =>
+        shell.current?.querySelector('.Peek') ??
+          shell.current?.querySelector('.Shell_Main'),
+      back,
+      forward,
+    })
+    let key = (e: KeyboardEvent) => mode.value == 'normal' && keys(e)
+    document.addEventListener('keydown', key)
+    return () => document.removeEventListener('keydown', key)
+  }, [])
   return (
     <Shell
+      elRef={shell}
       mod={sidebarOpen() && 'open'}
       onPointerDown={() => {
         menu.value = null

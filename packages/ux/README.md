@@ -103,6 +103,7 @@ try {
 | `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                  |
 | `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                 |
 | `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                             |
+| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                       |
 
 ## Kits from outside
 
@@ -535,6 +536,51 @@ try {
 }
 ```
 
+## Vim's keys
+
+`walk` is a keydown listener that moves a page's focus by vim's keys, one
+**keymap** for every door: h, j, k and l move to the **item** left of, below,
+above or right of the one holding the focus; gg and G to the first and the last;
+H and L go back and forward; Enter presses an item the platform doesn't press
+itself; Esc lets go. An item is anything a person can press or type into that
+shows (`items`). The keys rest while a field is typed into (`typing`), and pass
+by a key held with Ctrl, Alt or Meta or one a listener took before it.
+
+Where a move lands is pure (`land`): each item's box, from the platform's
+`getBoundingClientRect`, and the rules Android's FocusFinder walks a screen by.
+An item with no box is out of sight, as a terminal paints only what its window
+shows: a walk up or down that finds nothing in sight reaches it in reading
+order. `chord` reads keys into moves, a prefix such as the first g pending.
+
+```ts
+import { chord, land } from '@yaks/ux/keys'
+import { equal } from '@yaks/testing'
+
+let at = (left: number, top: number) => ({
+  left,
+  top,
+  right: left + 10,
+  bottom: top + 10,
+})
+// A link beside a link, and a button under the first.
+let page = [at(0, 0), at(20, 0), at(0, 20)]
+equal(chord('', 'g'), { pending: 'g' })
+equal(chord('g', 'g'), { move: 'first', pending: '' })
+equal(land(page, 1, 'left'), 0)
+equal(land(page, 0, 'down'), 2)
+```
+
+The browser hears the keys as it hears any. @yaks/tui's document sends each key
+as a keydown on the element in focus, measures what it painted, and focuses and
+reveals as a browser does, so the same listener walks a page there:
+
+```ts ignore
+document.addEventListener(
+  'keydown',
+  walk({ scope: () => page, back: history.back, forward: history.forward }),
+)
+```
+
 ## The host
 
 `h(Ux, { host }, tree)` hands the host to every UX component under it, so one
@@ -586,3 +632,4 @@ URLs. The host supplies those policies. Styling belongs to
 | `read.ts`             | what a property is, off the vocabulary                              |
 | `completion.ts`       | shared completion controller, field, list and input binding         |
 | `completion-state.ts` | pure completion transitions and candidate types                     |
+| `keys.ts`             | vim's keys: the keymap, where a move lands, the walk over a page    |

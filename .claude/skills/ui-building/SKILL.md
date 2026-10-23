@@ -164,6 +164,11 @@ examples. The shape of it:
 What a browser and a terminal do differently (a popover, focus, keys) is a
 platform primitive with one interface: the browser's in @yaks/ui
 (packages/ui/float.ts is the popover), the terminal's in @yaks/tui.
+What they do alike stays one copy: vim's keys walking a page are one keymap and
+one focus model in @yaks/ux/keys, heard in a terminal because @yaks/tui's
+document sends keydowns, measures what it painted and focuses as a browser
+does. A screen that wants a key adds it there or listens for it beside the
+walk, never with a second walk of its own.
 
 ## Drawing an entity, anywhere
 

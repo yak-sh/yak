@@ -1,6 +1,10 @@
-/** Keyboard focus and native form events for any tree painted by the terminal.
+/** Keyboard focus and native form events for any tree painted by the
+ * terminal: what a browser does for its controls by itself. Tab walks them,
+ * Enter and Space press one, a field takes what is typed, Escape lets go, and
+ * every key is a keydown on the element in focus first, so a page's own
+ * listeners (vim's keys, @yaks/ux/keys) hear it as they would in a browser.
  * The app owns links and history; this adapter knows only DOM controls. */
-import { dispatch, doc, type TElement, touch } from './dom.ts'
+import { dispatch, doc, type TElement } from './dom.ts'
 import { edit } from './Textarea.ts'
 import type { Key } from './input.ts'
 
@@ -30,8 +34,8 @@ export let event = (
   return e
 }
 
-// Controls that take text keep every printable key, j and k included; any
-// other control (a select, a checkbox, a button) lets j and k move on.
+// Controls that take text keep every printable key; any other control (a
+// select, a checkbox, a button) leaves them to the page.
 let entering = (node: TElement | null): boolean =>
   !!node && (
     node.matches('textarea,[contenteditable]') ||
@@ -68,27 +72,27 @@ export let interaction = (
   activate: (node: TElement) => void
   active: () => TElement | null
 } => {
-  let selected: TElement | undefined
   let controls = () =>
     root.querySelectorAll(
       'a,button,input,textarea,select,[tabindex],[role=button]',
     )
       .filter((n) => n.attr('disabled') == null && n.attr('tabindex') != '-1')
+  // Focus one control, kept in sight with its caret at the end, or none.
   let focus = (node?: TElement) => {
-    selected?.removeAttribute('data-terminal-focus')
-    selected?.removeAttribute('reveal')
-    doc.activeElement?.blur()
-    selected = node
-    if (node) {
-      node.focus()
-      node.setAttribute('data-terminal-focus', '')
-      node.setAttribute('reveal', '')
-      if (node.matches('input,textarea')) {
-        node.setSelectionRange(node.value.length, node.value.length)
-        node.setAttribute('data-caret', node.value.length)
-      }
+    if (!node) return doc.activeElement?.blur()
+    node.focus()
+    node.scrollIntoView()
+    if (node.matches('input,textarea')) {
+      node.setSelectionRange(node.value.length, node.value.length)
+      node.setAttribute('data-caret', node.value.length)
     }
-    touch()
+  }
+  // Tab and Shift-Tab: the next control in reading order, round the ends.
+  let tab = (node: TElement | null, back: boolean) => {
+    let list = controls()
+    let i = node ? list.indexOf(node) : -1
+    if (i < 0 && back) i = 0
+    focus(list[(i + (back ? -1 : 1) + list.length) % list.length])
   }
   let activate = (node: TElement) => {
     let e = event(node, 'click', {
@@ -119,14 +123,8 @@ export let interaction = (
     }
     let node = active()
     let typing = entering(node)
-    if (
-      k.name == 'tab' && !typing ||
-      !typing && k.name == 'char' && (k.text == 'j' || k.text == 'k')
-    ) {
-      let list = controls()
-      let i = list.indexOf(node ?? selected!)
-      let step = k.shift || k.text == 'k' ? -1 : 1
-      focus(list[(i + step + list.length) % list.length])
+    if (k.name == 'tab' && !typing) {
+      tab(node, !!k.shift)
       return true
     }
     let target = node ?? root
@@ -151,13 +149,7 @@ export let interaction = (
     }
     if (typing && node) {
       if (k.name == 'tab') {
-        let list = controls()
-        focus(
-          list[
-            (list.indexOf(node) + (k.shift ? -1 : 1) + list.length) %
-            list.length
-          ],
-        )
+        tab(node, !!k.shift)
         return true
       }
       if (k.name == 'enter' && !k.shift) {

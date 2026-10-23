@@ -6,7 +6,8 @@
     "./views": "./views.ts",
     "./vocab": "./vocab.ts",
     "./ui": "./ui.ts",
-    "./completion": "./completion.ts"
+    "./completion": "./completion.ts",
+    "./keys": "./keys.ts"
   },
   "license": "Apache-2.0",
   "description": "Controlled Preact components for editing properties, opening disclosures and completing input. Component state lives in a page graph; drafts and emitted bundles belong to the caller.",

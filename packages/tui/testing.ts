@@ -9,7 +9,7 @@
  */
 
 import { type ComponentType, h, render } from 'preact'
-import { install, onPaint } from './dom.ts'
+import { install, onPaint, place } from './dom.ts'
 import { decode } from './input.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
 import { ansiBackend, type Line, screenful } from './paint.ts'
@@ -45,6 +45,7 @@ export let mount = async (
     wrote += r.written
     lines = r.lines ?? []
     measured(r.metrics)
+    place(lines, r.hidden)
   }
   onPaint(draw)
   render(h(App, {}), screen.root as unknown as Parameters<typeof render>[1])

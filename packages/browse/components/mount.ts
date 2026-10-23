@@ -27,6 +27,33 @@ for (
     this.selectionEnd = end
   }
 }
+// Nor does it keep the focus: focus and blur move the document's
+// activeElement, and say so, and an element taken out of the page lets go of
+// it, as a browser's do.
+let held = new WeakMap<object, Element | null>()
+Object.defineProperty(window.Document.prototype, 'activeElement', {
+  get() {
+    let at = held.get(this)
+    return at?.isConnected ? at : null
+  },
+  configurable: true,
+})
+let element = window.HTMLElement.prototype
+element.focus = function (this: HTMLElement) {
+  let doc = this.ownerDocument
+  if (doc.activeElement == this) return
+  ;(doc.activeElement as HTMLElement | null)?.blur()
+  held.set(doc, this)
+  this.dispatchEvent(new window.Event('focus'))
+  this.dispatchEvent(new window.Event('focusin', { bubbles: true }))
+}
+element.blur = function (this: HTMLElement) {
+  let doc = this.ownerDocument
+  if (doc.activeElement != this) return
+  held.set(doc, null)
+  this.dispatchEvent(new window.Event('blur'))
+  this.dispatchEvent(new window.Event('focusout', { bubbles: true }))
+}
 export let mount = (node: ComponentChild) => {
   let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', {

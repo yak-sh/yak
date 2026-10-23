@@ -177,6 +177,25 @@ text and link targets with `@yaks/text`. Newlines remain line breaks and tabs
 become two spaces. All terminal escape sequences originate in backend code,
 including `ansi`, drawing, graphics, and clipboard output.
 
+## Focus, measuring and keys
+
+The document does what a browser does for a page's own scripts. `focus()` takes
+the focus from whatever held it and the painter shows it inverse (never on a box
+with `tabindex="-1"`, focused only to hear keys); `scrollIntoView()` keeps an
+element in sight, the scroll region around it showing it on the next paint;
+`click()` presses it. After each paint, `place(lines, hidden)` records what was
+painted: `getBoundingClientRect()` is then the cells an element and everything
+inside it painted (an empty box at the origin out of a window's sight), and
+`checkVisibility()` is false where the sheet hid it or what holds it. `run` and
+the test `mount` record every paint; a test painting with `screenful` calls
+`place` itself. Attribute names are lowercased, as an HTML document's are.
+
+`@yaks/tui/interaction` is what a browser does for its controls by itself: Tab
+and Shift-Tab walk them, Enter and Space press one, a field takes what is typed,
+arrows choose a select's option, Escape lets go. Every key reaches the element
+in focus first as a keydown, so a page's own listeners hear it as they would in
+a browser; vim's keys over a page are [@yaks/ux](../ux/README.md)'s.
+
 ## Compatibility
 
 `run` currently requires Deno because it uses `Deno.stdin`, `Deno.consoleSize`,

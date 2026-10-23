@@ -60,6 +60,14 @@
   color: var(--link);
 }
 
+/* Where the keyboard is: whatever a key gave the focus (Tab, or vim's keys
+   walking a page, @yaks/ux/keys) wears the theme's accent ring, plain to see
+   in every theme. A part that rings its own focus says so and wins. */
+:where(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* Prose, wherever it lands: documents, comments and messages all speak the
    same HTML (marked, GFM). */
 :where(p, ul, ol, pre, blockquote) {

@@ -53,7 +53,7 @@ test('terminal keyboard activates an anchor, edits its native field and submits 
     screen.free()
   }
 })
-test('j walks past a select and a checkbox to the text box, and arrows choose', async () => {
+test('Tab walks past a select and a checkbox to the text box, arrows choose, and the box keeps k', async () => {
   let screen = install()
   let model = '', keys = interaction(screen.root, () => {})
   let target = screen.root as unknown as Parameters<typeof render>[1]
@@ -80,16 +80,16 @@ test('j walks past a select and a checkbox to the text box, and arrows choose', 
         target,
       )
     )
-    keys.press({ name: 'char', text: 'j' })
+    keys.press({ name: 'tab' })
     equal(at(), 'select')
     keys.press({ name: 'right' })
     keys.press({ name: 'right' })
     equal(model, 'opus')
     keys.press({ name: 'left' })
     equal(model, '')
-    keys.press({ name: 'char', text: 'j' })
+    keys.press({ name: 'tab' })
     equal(at(), 'input')
-    keys.press({ name: 'char', text: 'j' })
+    keys.press({ name: 'tab' })
     equal(at(), 'textarea')
     keys.press({ name: 'char', text: 'k' })
     equal(at(), 'textarea')

@@ -25,6 +25,7 @@ export {
   doc,
   install,
   onPaint,
+  place,
   TElement,
   TNode,
   touch,

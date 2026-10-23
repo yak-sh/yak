@@ -17,7 +17,7 @@
 import { type ComponentType, h, render } from 'preact'
 import { useEffect } from 'preact/hooks'
 import { type Hold, listen, wind } from '@yaks/process/wind'
-import { install, onPaint, touch } from './dom.ts'
+import { install, onPaint, place, touch } from './dom.ts'
 import { ansiBackend, type Backend } from './paint.ts'
 import { clearMouse, routeMouse } from './mouse.ts'
 import type { Line } from './paint.ts'
@@ -180,6 +180,7 @@ export let run = async (
       let frame = backend.draw(screen.root)
       painted = frame.lines ?? []
       measured(frame.metrics)
+      place(painted, frame.hidden)
     })
     render(h(App, {}), host)
 

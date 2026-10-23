@@ -110,11 +110,12 @@ page:
 Set `person` to the owner's id: `/web/owner` resolves it for the home page at
 `/`. Without one the page reads and refuses writes. Reply, decision and search
 drafts stay shared across web and terminal. `yak browse` opens the same App in a
-terminal. Tab/Shift+Tab and j/k focus controls; Enter follows links or uses
-buttons, typing changes a focused field, Enter submits and Shift+Enter adds a
-line. Escape leaves a field without spending its draft. `f` focuses the sidebar
-query and `i` the first page field. Ctrl-O goes back, Ctrl-F forward, and q
-quits. `TASKS_TUI_STATE` names the terminal history file; the configured server
+terminal. Vim's keys walk the page as on the web (see Pages and the sidebar);
+Tab/Shift+Tab focus every control in turn; Enter follows links or uses buttons,
+typing changes a focused field, Enter submits and Shift+Enter adds a line.
+Escape leaves a field without spending its draft. `f` focuses the sidebar query
+and `i` the first page field. Ctrl-O goes back, Ctrl-F forward, and q quits.
+`TASKS_TUI_STATE` names the terminal history file; the configured server
 supplies the graph, never a guessed host.
 
 ```sh
@@ -226,6 +227,14 @@ entity in its place. A second press on a link to it, its Id in the head, or the
 head's open button goes to its page; Esc, q, the close button or a press
 anywhere else puts it away. The head moves it and its corner sizes it. Only a
 fine pointer peeks: a phone and the terminal open the page at once.
+
+Vim's keys walk the items on the page, the peek's while one is up, in a browser
+and a terminal alike ([@yaks/ux/keys](../ux/README.md#vims-keys)): h, j, k and l
+move to the item left, below, above or right, gg and G to the first and the
+last, H and L go back and forward, Enter opens the item (a link peeks, as a
+press does) and Esc lets go; put away by a key, a peek hands the focus back to
+its link. They rest outside normal mode and while a field is typed into. The
+item in focus wears the theme's accent ring, or paints inverse in a terminal.
 
 The sidebar is a short fixed list of places: search, then home (named for the
 offered home page, or Home), Favorites, Recent, each package's destinations,

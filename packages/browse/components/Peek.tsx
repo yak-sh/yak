@@ -4,7 +4,9 @@
 // right there; the page beneath stays where it was. One at a time: a link
 // pressed inside it shows its entity in its place. Its Id and the head's open
 // button go to the entity's page; Esc, q, the close button or a press anywhere
-// else put it away. The head moves it and the corner sizes it.
+// else put it away. The head moves it and the corner sizes it. Vim's keys
+// (App.tsx) open it with Enter on a link and walk inside it while it is up;
+// put away by a key, it hands the focus back to the link it came from.
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { Loading, Peek as Frame, place, Tabs } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
@@ -70,7 +72,11 @@ let useDismiss = (p: Peeked) =>
     let key = (ev: KeyboardEvent) => {
       if (!closes(ev.key, typing(ev.target))) return
       ev.stopPropagation()
+      let within = (ev.target as Element | null)?.closest?.('.Peek')
       close()
+      if (within && p.from?.isConnected) {
+        ;(p.from as HTMLElement).focus?.({ preventScroll: true })
+      }
     }
     document.addEventListener('pointerdown', away)
     document.addEventListener('keydown', key, true)
