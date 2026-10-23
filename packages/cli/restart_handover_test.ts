@@ -179,9 +179,11 @@ test('restart drains tracker intake without losing its spool or a web request', 
     })()
     let sink = spool(files(`${dir}/spool`).append)
     await caught(new Error('held report'), { sink, eid: 'held-occurrence' })
-    await wait(() => exists(`${dir}/held`), 'tracker intake in flight')
+    // The pid is written after the file is made: wait for what it says.
+    let held = () => Deno.readTextFile(`${dir}/held`).catch(() => '')
+    await wait(held, 'tracker intake in flight')
     assertEquals(
-      await Deno.readTextFile(`${dir}/held`),
+      await held(),
       String((worker.process as Comp).pid),
     )
     let run = (_command: string, args: string[]) => {
