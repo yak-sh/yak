@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { type Ent, uuid } from '../../types.ts'
+import { relations, reversed } from '@yaks/edge/vocab'
+import { type Ent, uuid, vocab } from '../../types.ts'
 import { link } from '../../edge.ts'
 import { up } from './Dependency.tsx'
 import { spec, taskChanges } from '../../client.ts'
@@ -21,36 +22,49 @@ let Frame = block('span', 'Relate', {
 })
 let { Verb, Anchor, Pop, Find, Row, New } = Frame
 
-// The sentences a task grows an edge by — parent-first, the same
-// grammar Dependency renders. out: this task is the parent.
-let verbs = [
-  { type: 'requires', out: true },
-  { type: 'requires', out: false },
-  { type: 'contains', out: true },
-  { type: 'contains', out: false },
-  { type: 'reads', out: true },
-  { type: 'about', out: true },
-] as const
-type V = (typeof verbs)[number]
+// A sentence an entity grows a link by: a relation, and which end the entity
+// is (out: it is the parent), the same grammar Dependency renders.
+type V = { type: string; out: boolean }
+
+// Every relation the vocabulary declares and the wire may write (not a
+// computed one, not the meta vocabulary's), read off the vocabulary each time
+// so a relation declared today is offered today: forwards by its name, and
+// from the child's side too where it declares a phrase for that ('required
+// by').
+export let verbs = (): V[] => {
+  let back = reversed(vocab)
+  return Object.entries(relations(vocab)).filter(([, name]) => {
+    let c = vocab.comp(name)
+    return c?.wire && !c.computed
+  }).flatMap(([type]) => [
+    { type, out: true },
+    ...(back[type] ? [{ type, out: false }] : []),
+  ])
+}
 
 // A verb as it reads: the relation's name from the parent's side, its
 // reversed phrase from the child's ('required by', 'contained by').
 let said = (v: V) => v.out ? v.type : up(v.type)
 
-// Add an edge by finishing its sentence: pick a verb chip, then type —
-// the list is a live search over documented entities; Enter (or a click)
-// links the pick, and text that matches nothing becomes a NEW task, spec-parsed
+// Add a link by finishing its sentence: press `+ link` and pick its relation
+// from every one declared (typing narrows them), then type its far end — the
+// list is a live search over documented entities; Enter (or a click) links
+// the pick, and text that matches nothing becomes a NEW task, spec-parsed
 // (`P1 .filed.domain=Eng title` works here), created and linked in one atomic
-// apply, inheriting the host's project and domain. The list overlays —
-// nothing below it moves.
+// apply, inheriting the host's project and domain. Both lists overlay —
+// nothing below them moves.
 export let Relate = ({ e }: { e: Ent }) => {
   // A verb whose line is half-typed stays open — a new task or edge not yet
   // filed, typed here before a reload, in another tab or in the terminal
   // (../drafts.ts). Keyed by (host, verb) so the sentence resumes exact. A
   // verb picked here takes the keyboard; one its draft opened waits.
+  let all = verbs()
   let dk = (v: V) => `relate:${e.eid}:${said(v)}`
-  let [picked, setVerb] = useState<V | null>(null)
-  let verb = picked ?? verbs.find((v) => drafts.text(dk(v))) ?? null
+  let [picked, setVerb] = useState<V | 'choose' | null>(null)
+  let choosing = picked == 'choose'
+  let verb = picked == 'choose'
+    ? null
+    : picked ?? all.find((v) => drafts.text(dk(v))) ?? null
   let [q, setQ] = useState('')
   let [pick, setPick] = useState(0)
   // The Find input doubles as the picker's anchor; focus it when a verb
@@ -77,7 +91,17 @@ export let Relate = ({ e }: { e: Ent }) => {
   let hits = useHits(verb ? pickLine(q) : '', 8, rows)
     .filter((h) => !taken.has(h.entity.eid))
     .slice(0, 6)
-  let fresh = q.trim() ? spec(q).title : ''
+  let fresh = verb && q.trim() ? spec(q).title : ''
+  // While choosing, the relations whose sentence holds what is typed.
+  let options = choosing
+    ? all.filter((v) => said(v).includes(q.trim().toLowerCase()))
+    : []
+  let choose = (v: V) => {
+    if (find.current) find.current.value = ''
+    setVerb(v)
+    setQ('')
+    setPick(0)
+  }
 
   let edge = (v: V, other: string) =>
     v.out ? link(e.eid, v.type, other) : link(other, v.type, e.eid)
@@ -110,51 +134,60 @@ export let Relate = ({ e }: { e: Ent }) => {
     }
     if (ev.key == 'Enter') {
       ev.preventDefault()
+      if (choosing) return options[pick] && choose(options[pick])
       return hits[pick] ? tie(hits[pick].entity.eid) : create()
     }
     let d = ev.key == 'ArrowDown' ? 1 : ev.key == 'ArrowUp' ? -1 : 0
     if (!d) return
     ev.preventDefault()
-    setPick((p) => Math.min(Math.max(p + d, 0), hits.length - (fresh ? 0 : 1)))
+    let last = choosing ? options.length - 1 : hits.length - (fresh ? 0 : 1)
+    setPick((p) => Math.min(Math.max(p + d, 0), last))
   }
   let grab = (ev: MouseEvent, go: () => void) => {
     ev.preventDefault() // keep focus — the click must land before any blur
     go()
   }
 
-  if (!verb) {
+  if (!verb && !choosing) {
     return (
       <Frame>
-        {verbs.map((v) => (
-          <Verb
-            key={said(v)}
-            mod={v.type}
-            type='button'
-            onClick={() => setVerb(v)}
-          >
-            + {said(v)}
-          </Verb>
-        ))}
+        <Verb type='button' onClick={() => setVerb('choose')}>+ link</Verb>
       </Frame>
     )
   }
   return (
     <Frame>
-      <Verb mod={verb.type} type='button' onClick={close}>{said(verb)}</Verb>
+      <Verb mod={verb?.type} type='button' onClick={close}>
+        {verb ? said(verb) : '+ link'}
+      </Verb>
       <Anchor>
         <Find
           elRef={find}
-          placeholder='entity…'
+          placeholder={verb ? 'entity…' : 'relation…'}
           onInput={(ev: InputEvent) => {
-            sync(ev.currentTarget as HTMLInputElement)
+            let el = ev.currentTarget as HTMLInputElement
+            sync(el)
+            setQ(el.value)
             setPick(0)
           }}
           onKeyDown={key}
           onBlur={close}
         />
-        {(hits.length || fresh) && (
+        {(options.length || hits.length || fresh) && (
           <Float anchor={find} side='below'>
             <Pop>
+              {options.map((v, i) => (
+                <Row
+                  key={said(v)}
+                  mod={[v.type, i == pick && 'sel']}
+                  onMouseEnter={() => setPick(i)}
+                  onMouseDown={(ev: MouseEvent) =>
+                    grab(ev, () =>
+                      choose(v))}
+                >
+                  {said(v)}
+                </Row>
+              ))}
               {hits.map((t, i) => (
                 <Row
                   key={t.entity.eid}

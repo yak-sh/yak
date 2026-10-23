@@ -17,7 +17,11 @@ entity's own renderer. A document's title and body are typed over where they
 stand (a double-click); a kind says them its own way by registering its `Title`,
 `Body` or `Full.Body` (a tool by its name and description, a persona by its text
 and every document it carries, a component by its properties), and an entity
-with no text of its own says the facts its components state. An entity opens on
+with no text of its own says the facts its components state. Each relationship
+is a row of two lines: the relation and the entity's name, then smaller, what it
+is (its `Gist`). Under them, `+ link` adds a link of any relation the vocabulary
+declares, read either way where the relation says how ('required by'): pick the
+relation, then find the far end, or type a new task's title. An entity opens on
 the first view offered for it (a persona on its Context desk, a board on its
 board) and on Full otherwise; the inspector's page is a tab.
 

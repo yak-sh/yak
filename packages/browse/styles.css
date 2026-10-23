@@ -1142,8 +1142,9 @@ html {
 .Show_Claim:hover {
   text-decoration: underline;
 }
-/* Grow an edge by finishing its sentence: muted verb chips, then a search
-   whose list OVERLAYS (absolute pop) — nothing below it moves. */
+/* Grow an edge by finishing its sentence: a muted `+ link`, then a search
+   for its relation and then its far end, whose lists OVERLAY (absolute pop) —
+   nothing below them moves. */
 .Relate {
   display: flex;
   align-items: baseline;
@@ -1161,13 +1162,16 @@ html {
   opacity: 0.5; /* the faded invitation; full ink on hover or armed */
 }
 /* Each verb wears its edge's color — the same paint the sentence gets. */
-.Relate_Verb-requires {
+.Relate_Verb-requires,
+.Relate_Row-requires {
   color: var(--requires);
 }
-.Relate_Verb-contains {
+.Relate_Verb-contains,
+.Relate_Row-contains {
   color: var(--contains);
 }
-.Relate_Verb-reads {
+.Relate_Verb-reads,
+.Relate_Row-reads {
   color: var(--reads);
 }
 .Relate_Verb:hover,
@@ -1192,6 +1196,8 @@ html {
   /* portaled into an .Overlay (@yaks/ui Float) — box only, no positioning */
   min-width: 240px;
   max-width: 320px;
+  max-height: 50vh; /* every declared relation is a long list */
+  overflow-y: auto;
   display: grid;
   padding: 2px;
   background: var(--surface);

@@ -31,6 +31,32 @@ import { applicable } from '../registry.ts'
 import { contributedViews } from '../inspect.tsx'
 import type { Change, Ent } from '../../types.ts'
 
+// Lay globals over the window for one case, as linkedom lacks what a Float
+// reads (its size, ResizeObserver); the returned function puts them back.
+let windowed = (globals: Record<string, unknown> = {}) => {
+  let all = {
+    innerWidth: 1000,
+    innerHeight: 800,
+    ResizeObserver: class {
+      observe() {}
+      disconnect() {}
+    },
+    ...globals,
+  }
+  let prior = Object.keys(all).map((k) =>
+    [k, Object.getOwnPropertyDescriptor(globalThis, k)] as const
+  )
+  for (let [k, value] of Object.entries(all)) {
+    Object.defineProperty(globalThis, k, { value, configurable: true })
+  }
+  return () => {
+    for (let [k, d] of prior) {
+      if (d) Object.defineProperty(globalThis, k, d)
+      else delete (globalThis as Record<string, unknown>)[k]
+    }
+  }
+}
+
 test('task acceptance is a distinct Markdown section', () => {
   cache.value = {
     task: {
@@ -656,6 +682,65 @@ preparedTest(
   },
 )
 
+// Full offers a link of every relation the vocabulary declares, a goal's
+// `satisfies` as much as a task's `requires`, backwards where the relation
+// says how; typing narrows them, and the one picked asks for the far end.
+let linking = await (async () => {
+  cache.value = {
+    task: {
+      entity: { eid: 'task', num: 1 },
+      doc: { eid: 'task', title: 'Ship it', body: '' },
+      task: { eid: 'task' },
+    },
+  }
+  let e = ent('task')
+  let unwindow = windowed()
+  let { root, free } = mount(h(resolve(e, 'Relate').Render, { e }))
+  let doc = root.ownerDocument
+  let { Event } = doc.defaultView!
+  let offered = () =>
+    [...doc.querySelectorAll('.Relate_Row')].map((r) => r.textContent)
+  let find = () => root.querySelector<HTMLInputElement>('.Relate_Find')!
+  try {
+    root.querySelector('.Relate_Verb')!
+      .dispatchEvent(new Event('click', { bubbles: true }))
+    await tick()
+    let all = offered()
+    find().value = 'satisf'
+    find().dispatchEvent(new Event('input', { bubbles: true }))
+    await tick()
+    let narrowed = offered()
+    find().dispatchEvent(
+      Object.assign(new Event('keydown', { bubbles: true }), { key: 'Enter' }),
+    )
+    await tick()
+    return {
+      all: ['requires', 'required by', 'satisfies', 'contains', 'cites']
+        .filter((s) => !all.includes(s)),
+      narrowed,
+      asks: [
+        root.querySelector('.Relate_Verb')?.textContent,
+        find().getAttribute('placeholder'),
+        find().value,
+      ],
+    }
+  } finally {
+    free()
+    unwindow()
+    cache.value = {}
+  }
+})()
+preparedTest(
+  'Full offers a link of every declared relation, narrowed as it is typed',
+  () => {
+    assertEquals(linking, {
+      all: [],
+      narrowed: ['satisfies', 'satisfied by'],
+      asks: ['satisfies', 'entity…', ''],
+    })
+  },
+)
+
 test('a view that throws fails in its own slot, and the page paints', async () => {
   let drop = extend([{
     view: 'Full.Body',
@@ -832,21 +917,7 @@ test('Runs and Tasks ask only their typed memberships, not every reverse ref', (
 
 test('the status pip picks a status through its Edit and writes marks', async () => {
   let { document } = parseHTML('<html><body><main></main></body></html>')
-  let globals = {
-    document,
-    innerWidth: 1000,
-    innerHeight: 800,
-    ResizeObserver: class {
-      observe() {}
-      disconnect() {}
-    },
-  }
-  let prior = Object.keys(globals).map((k) =>
-    [k, Object.getOwnPropertyDescriptor(globalThis, k)] as const
-  )
-  for (let [k, value] of Object.entries(globals)) {
-    Object.defineProperty(globalThis, k, { value, configurable: true })
-  }
+  let unwindow = windowed({ document })
   let sent: Change[] = []
   let restore = useRoute((frame) => {
     let write = frame as { apply?: Change[]; request?: Request }
@@ -878,9 +949,6 @@ test('the status pip picks a status through its Edit and writes marks', async ()
     render(null, root)
     useRoute(restore)
     cache.value = {}
-    for (let [k, d] of prior) {
-      if (d) Object.defineProperty(globalThis, k, d)
-      else delete (globalThis as Record<string, unknown>)[k]
-    }
+    unwindow()
   }
 })
