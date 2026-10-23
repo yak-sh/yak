@@ -65,6 +65,7 @@ import { BoardList, List, ListEntry, ListTile } from './views/List.tsx'
 import { Canvas } from './Canvas.tsx'
 import { IdFace, Inline, SessionId, TaskInline } from './views/Inline.tsx'
 import { Dependency } from './views/Dependency.tsx'
+import { Gist } from './views/Gist.tsx'
 import {
   Debug,
   DebugAnyItem,
@@ -325,6 +326,7 @@ define([
   { view: 'Id', match: and(), Render: IdFace },
   { view: 'Status.Session.Id', match: parse('.session'), Render: SessionId },
   { view: 'Dependency', match: and(), Render: Dependency },
+  { view: 'Gist', match: and(), Render: Gist },
 ], [
   'Wake',
   'Canvas',

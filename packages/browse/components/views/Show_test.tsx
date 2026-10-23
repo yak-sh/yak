@@ -600,6 +600,62 @@ preparedTest(
   },
 )
 
+// An edge row on Full says two lines: the entity's name, then what it is,
+// its own way: a memory its kind and first line, a tool its first line.
+let rows = await (async () => {
+  let drop = extend(await contributedViews([{ views: toolViews }]))
+  let tool = toolEid('graph_query')
+  cache.value = {
+    persona: {
+      entity: { eid: 'persona', num: 1 },
+      doc: { eid: 'persona', title: 'Coder', body: '' },
+    },
+    memo: {
+      entity: { eid: 'memo', num: 2 },
+      doc: {
+        eid: 'memo',
+        title: 'Signal over noise',
+        body: '# Jeff, verbatim\nWhat the owner says is the signal.',
+      },
+      memory: { eid: 'memo' },
+    },
+    [tool]: {
+      entity: { eid: tool, num: 0 },
+      tool: {
+        eid: tool,
+        name: 'graph_query',
+        description: 'Find stored records.\nReturns bundles.',
+      },
+    },
+  }
+  deps.value = [
+    { parent: 'persona', type: 'contains', child: 'memo' },
+    { parent: 'persona', type: 'contains', child: tool },
+  ]
+  let e = ent('persona')
+  let { root, free } = mount(h(resolve(e, 'Dependencies').Render, { e }))
+  try {
+    return [...root.querySelectorAll('.Dependency')].map((row) => [
+      row.querySelector('.Dependency_Line')?.textContent?.trim(),
+      row.querySelector('.Dependency_Gist')?.textContent,
+    ])
+  } finally {
+    free()
+    drop()
+    deps.value = []
+    cache.value = {}
+  }
+})()
+preparedTest(
+  'an edge row says the name, then what it is in a smaller line',
+  () => {
+    assertEquals(rows, [
+      ['contains Signal over noise', 'memory · Jeff, verbatim'],
+      ['contains graph_query', 'tool · Find stored records.'],
+    ])
+  },
+)
+
 test('a view that throws fails in its own slot, and the page paints', async () => {
   let drop = extend([{
     view: 'Full.Body',

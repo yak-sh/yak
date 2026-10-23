@@ -170,6 +170,7 @@ export let open = async (url: string, opts: {
         Md_Q: { fg: c.muted },
         Md_Fence: { fg: c.dim },
         Entry_Speaker: { fg: c.dim, bold: true, block: true },
+        Dependency_Gist: { fg: c.muted },
         // Debug as it painted in the terminal before this door: its rows'
         // runs apart, as that layout's global `spaced` kept them.
         Debug: { spaced: true },

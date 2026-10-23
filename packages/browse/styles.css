@@ -1227,10 +1227,8 @@ html {
   font-size: var(--small);
   color: var(--muted);
 }
-/* in a kin row the edge sentence flows inline — the score rides it;
-   the grid's gap owns the spacing, not the sentence's own margin */
-.Show_Kin .Dependency {
-  display: inline;
+/* in the kin list the grid's gap owns the spacing, not the row's margin */
+.Show_Similar > .Dependency {
   margin: 0;
 }
 
@@ -1334,10 +1332,28 @@ html {
   width: 100%;
 }
 
+/* An edge row: the sentence at the body's size, and under it, smaller, what
+   the entity is, one line cut short. */
 .Dependency {
-  display: block; /* one edge sentence per line, a list you can scan */
+  display: block;
   margin: var(--half-gap) 0 0;
   color: var(--muted);
+}
+.Dependency_Line {
+  color: var(--text);
+}
+.Dependency_Note {
+  margin-left: var(--half-gap);
+}
+.Dependency_Gist {
+  font-size: var(--small);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Dependency_Gist:empty {
+  display: none;
 }
 /* An edge is reading content, not a dense row: let its linked identity flow
    through lines while the shared Inline role stays compact everywhere else. */

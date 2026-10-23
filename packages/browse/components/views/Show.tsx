@@ -74,7 +74,6 @@ let Frame = block('div', 'Show', {
   Boards: 'div',
   Tasks: 'div',
   Similar: 'div',
-  Kin: 'span',
   Score: 'span',
 })
 let {
@@ -102,7 +101,6 @@ let {
   Boards: BoardsEl,
   Tasks: TasksEl,
   Similar: SimilarEl,
-  Kin,
   Score,
 } = Frame
 
@@ -488,10 +486,13 @@ export let Similar = ({ e }: { e: Ent }) => {
   return (
     <SimilarEl>
       {live.map((h) => (
-        <Kin key={h.eid}>
-          <Entity eid={h.eid} view='Dependency' type='similar' />{' '}
-          <Score>{h.score.toFixed(2)}</Score>
-        </Kin>
+        <Entity
+          key={h.eid}
+          eid={h.eid}
+          view='Dependency'
+          type='similar'
+          note={<Score>{h.score.toFixed(2)}</Score>}
+        />
       ))}
     </SimilarEl>
   )

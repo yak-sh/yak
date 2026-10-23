@@ -80,9 +80,16 @@ let tool = parse('.tool.name')
 let text = (b: Record<string, unknown>, comp: string, prop: string) =>
   (b[comp] as Record<string, unknown> | undefined)?.[prop]
 
-/** `Title`, `Body`, `Tile` and `List.Tile` for a registered tool; `Tile` and
- * `Page` for an entity that carries a tool's text, and `Tile` for one the
- * graph keeps. */
+// What a tool is, in a line under its name: a tool, and the first line of
+// what it does.
+let gist = <Node>(b: Record<string, unknown>, h: H<Node>): Node => {
+  let does = named(b, 'description').split('\n').find((l) => l.trim()) ?? ''
+  return h('span', null, 'tool', does ? ` · ${does.trim()}` : '')
+}
+
+/** `Title`, `Body`, `Gist`, `Tile` and `List.Tile` for a registered tool;
+ * `Tile` and `Page` for an entity that carries a tool's text, and `Tile` for
+ * one the graph keeps. */
 export let views: Registry = define<Renderer>([
   {
     view: 'Title',
@@ -94,6 +101,7 @@ export let views: Registry = define<Renderer>([
     match: tool,
     load: () => import('./body.ts').then((m) => m.body),
   },
+  { view: 'Gist', match: tool, render: gist },
   { view: 'Tile', match: tool, render: tile },
   { view: 'List.Tile', match: tool, render: tile },
   {
