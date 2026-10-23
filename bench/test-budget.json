@@ -862,6 +862,7 @@
       "quick-add previews empty facets and ordinary properties": 4.6
     },
     "packages/browse/components/views/Debug_test.tsx": {
+      "a full window of referrers links every reference in the inspector": 22.8,
       "a reference reads as one association row, a structure as a row per leaf": 11.6,
       "addable components keep their component tones": 9.1,
       "project backlinks omit attribution and cap associations": 20.7,
@@ -982,7 +983,9 @@
       "server query projections index member wakes and preserve server membership": 54.7,
       "server-resolve: a 404 is a genuine miss — Lost, and no retry storm": 10.5,
       "server-resolve: a hanging server never stalls nav, never storms, and its late answer lands": 24.2,
+      "server-resolve: a page read of an id that names nothing is Lost, not a failure": 4.9,
       "server-resolve: a reconnect reseed clears the sidecar": 22.9,
+      "server-resolve: a refused page read of an id that names something is a failure": 5.2,
       "server-resolve: an unloaded id resolves through one addressed sub": 11.4,
       "serverQuery: a held membership query tracks its subscription": 6.8,
       "subscription failures persist until a successful replacement": 2.4,

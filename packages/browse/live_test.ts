@@ -2580,8 +2580,9 @@ test('server-resolve: a page read of an id that names nothing is Lost, not a fai
     let heard = await errorsDuring(async () => {
       serverEid('T-404')
       free = owned({ entity: 'T-404' })
-      await until(() => goneId('T-404'))
-      await tick()
+      // Seen gone a turn after its frame landed, by when every refusal's
+      // report in that frame has been decided.
+      await until(() => goneId('T-404'), { poll: 0 })
     })
     assertEquals(heard, [])
   } finally {
@@ -2606,7 +2607,7 @@ test('server-resolve: a refused page read of an id that names something is a fai
     let heard = await errorsDuring(async (heard) => {
       serverEid('T-5')
       free = owned({ entity: 'T-5' })
-      await until(() => heard.length > 0)
+      await until(() => heard.length > 0, { poll: 0 })
     })
     assertEquals(heard, ['live client — Unknown: no such component: tends'])
   } finally {
