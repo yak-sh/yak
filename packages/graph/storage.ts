@@ -56,9 +56,9 @@ export type ReadOpts = {
   unordered?: boolean
   /** Match the deleted too: a tombstoned entity holds no component, is
    * matched as an entity holding nothing would be, and comes back carrying
-   * `tombstone`. Under a `visibility`, a deleted entity is likewise one
-   * holding nothing, which a reference names and a get answers wherever the
-   * scope admits one; `graves` selects it too. What finds the entity a deleted
+   * `tombstone`. Under a `visibility`, only the deleted the scope would have
+   * seen as they last were, as their history tells (@yaks/sql `ghostly`), as
+   * a get answers and a reference names them. What finds the entity a deleted
    * entity's number still names (@yaks/id). */
   graves?: boolean
   durable?: boolean

@@ -23,7 +23,7 @@ import { type Application, application } from './app.ts'
 // `broken`) and hands each break to the host's own telemetry.
 
 import { type Authenticate, type Route, write } from '@yaks/api'
-import type { Graph } from '@yaks/graph'
+import type { Graph, ReadOpts } from '@yaks/graph'
 import { Refused } from '@yaks/graph/errors'
 import { addressId } from '@yaks/id'
 import { everforest, kits, stylesheet } from '@yaks/ui'
@@ -106,16 +106,22 @@ let files: [string, string, () => Promise<Body>][] = [
     ]),
 ]
 
-// Whether a path names an entity: one segment, resolved to an eid the graph
-// holds, alive or deleted (a deleted entity's page reads its history). A name
-// no plugin resolves is taken as an eid, and one a plugin recognises but finds
-// naming nothing is refused: both are no entity.
-let names = async (graph: Graph, path: string): Promise<boolean> => {
+// Whether a path names an entity to whoever asks: one segment, resolved to an
+// eid the graph holds, alive or deleted (a deleted entity's page reads its
+// history), read as the API's doors read for that person, so what their scope
+// hides answers 404 as a name nothing carries does. A name no plugin resolves
+// is taken as an eid, and one a plugin recognises but finds naming nothing is
+// refused: both are no entity.
+let names = async (
+  graph: Graph,
+  path: string,
+  opts: ReadOpts,
+): Promise<boolean> => {
   let id = addressId(decodeURIComponent(path.slice(1)))
   if (!id || id.includes('/')) return false
   try {
-    let eid = (await graph.address([id])).get(id) ?? id
-    return (await graph.get([eid])).length > 0
+    let eid = (await graph.address([id], undefined, opts)).get(id) ?? id
+    return (await graph.get([eid], undefined, opts)).length > 0
   } catch {
     return false
   }
@@ -134,7 +140,8 @@ export let routes = (host: Hosting, options: Options = {}): Route[] => {
   let page = async (request: Request) => preload(await cached(request))
   let app = () => application(host.config?.plugins ?? [], options.app)
   let named = async (request: Request) => {
-    if (await names(host.graph, new URL(request.url).pathname)) {
+    let person = (await host.who?.(request))?.by ?? null
+    if (await names(host.graph, new URL(request.url).pathname, { person })) {
       return page(request)
     }
     let lost = await page(new Request(request.url))

@@ -282,7 +282,19 @@ export type Backing = {
    * component's own scope where it has one. A backing without `about` has no
    * row any scoped read sees. */
   about?: Select
+  /** Where the rows are a history: component `comp` as it last told each
+   * entity held it, one row per entity whose last change to `comp` wrote it
+   * rather than removed it, its integer id as `entity` and a column per
+   * property of `props` as the component's own table keeps it, a reference
+   * as the referent's integer id. A scoped read judges a deleted entity by
+   * what it held last: it sees one its scope would have seen then
+   * (./bind.ts `ghostly`). */
+  held?: (comp: string, props: Held[]) => Select
 }
+
+/** A property a history is asked to tell (`Backing.held`): its name, the
+ * column it is read into, and whether it is a reference. */
+export type Held = { name: string; as: string; ref: boolean }
 
 /** Every computed component a store reads, keyed by component name. */
 export type Backings = Record<string, Backing>

@@ -56,6 +56,14 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
       let c = row[name] as Comp | undefined
       return c && (!person || c[by] != person)
     })
+  // The entities `who` may see: each holds no private component, or holds it
+  // as theirs.
+  let mine = (who: string | null | undefined) =>
+    and(
+      ...entityOwned.map(([name, by]) =>
+        who ? or(absent(name), eq(`${name}.${by}`, who)) : absent(name)
+      ),
+    )
   let check = (
     bundles: Bundle[],
     tx: Tx,
@@ -122,11 +130,7 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
       if (!entries.length || !caller(opts)) return undefined
       let who = opts.person
       return {
-        entity: and(
-          ...entityOwned.map(([name, by]) =>
-            who ? or(absent(name), eq(`${name}.${by}`, who)) : absent(name)
-          ),
-        ),
+        entity: mine(who),
         components: Object.fromEntries(
           entries.filter(([, by]) => by == 'entity')
             .map(([name]) => [
@@ -243,25 +247,34 @@ export let personal = (vocab: Vocab, declared: Personal = {}): Plugin => {
           ),
         ]
         if (!targets.length) return visible
-        // A deleted target holds nothing, so nobody owns it and a reference
-        // names it, as the store's scoped reads do (@yaks/sql README).
         return after(tx.get(targets, comps), (rows) => {
-          let allowed = new Set(
-            rows.filter((b) => !foreign(b, opts.person)).map((b) =>
-              b.entity.eid
-            ),
-          )
-          return visible.map((b) => {
-            let out = b
-            for (let [name, prop, eid] of references(b)) {
-              if (!allowed.has(eid)) {
-                out = {
-                  ...out,
-                  [name]: { ...out[name] as Comp, [prop]: null },
+          // A deleted target holds nothing left to say whose it was. Its
+          // history does, so the store is asked under this scope, which sees
+          // one it would have seen as it last was (@yaks/sql `ghostly`).
+          let gone = rows.filter(dead).map((b) => b.entity.eid)
+          let seen = gone.length
+            ? tx.get(gone, [], { visibility: { entity: mine(opts.person) } })
+            : []
+          return after(seen, (seen) => {
+            let allowed = new Set(
+              [
+                ...rows.filter((b) => !dead(b) && !foreign(b, opts.person)),
+                ...seen,
+              ]
+                .map((b) => b.entity.eid),
+            )
+            return visible.map((b) => {
+              let out = b
+              for (let [name, prop, eid] of references(b)) {
+                if (!allowed.has(eid)) {
+                  out = {
+                    ...out,
+                    [name]: { ...out[name] as Comp, [prop]: null },
+                  }
                 }
               }
-            }
-            return out
+              return out
+            })
           })
         })
       })

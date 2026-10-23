@@ -815,8 +815,8 @@ let joinedGet = (
  */
 export type ReadCache = {
   fetch: (eids: string[], comps?: string[]) => Bundle[]
-  /** the eids a scope admits, the deleted among them too where `graves` asks
-   * (each as an entity holding nothing) */
+  /** the eids a scope admits, and where `graves` asks, the deleted it sees
+   * (@yaks/sql `ghostly`), which only `run`'s statement judges */
   permit: (
     eids: string[],
     components: string[],
@@ -852,9 +852,9 @@ export let get = (
       ).map((b) => b.entity.eid)
     // A getter's eids are physical identities. Query addressing may interpret
     // a human id such as history-1 as number 1, which cannot decide ownership.
-    // A deleted entity is admitted as one holding nothing: it is gotten as its
-    // tombstone, as without a scope, and a reference names it, as a query's
-    // reference operand does (./mod.ts `resolved`).
+    // A deleted entity the scope sees (@yaks/sql `ghostly`) is admitted: it
+    // is gotten as its tombstone, as without a scope, and a reference names
+    // it, as a query's reference operand does (./mod.ts `resolved`).
     let permitted = (all: string[], components: string[] = []): Set<string> => {
       let backed = backings.length ? all.filter(tagged) : []
       let ids = backed.length ? all.filter((eid) => !tagged(eid)) : all

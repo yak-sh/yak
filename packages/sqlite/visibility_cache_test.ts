@@ -175,12 +175,12 @@ test('a reference operand follows a target removed in the transaction', () => {
     assertEquals(tx.read('.pointer.to=new-target', owned), [])
   })
 })
-test('a reference names a deleted target where the scope sees one holding nothing', () => {
+// A deleted entity is judged by its history (@yaks/sql `ghostly`), and this
+// store keeps none, so even a scope that would see an entity holding nothing
+// finds no deleted target.
+test('a reference operand finds no deleted target its store keeps no history of', () => {
   let q = '.pointer.to=new-target'
-  assertEquals(pending.store.tx((tx) => tx.read(q, queryOpts)), [{
-    entity: { eid: 'new-link' },
-    pointer: { to: 'new-target' },
-  }])
+  assertEquals(pending.store.tx((tx) => tx.read(q, queryOpts)), [])
 })
 test('a removed component leaves no cached aspect', () => {
   removed.store.tx((tx) => tx.patch([{ entity: { eid: 'draft' }, doc: null }]))

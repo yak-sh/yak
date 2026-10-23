@@ -84,10 +84,10 @@ let aggregates = [
   ['private value distinct', '.pref .distinct=pref.value', [{ value: 'blue' }]],
   ['private value tally', '.pref .tally=pref.value', [{ value: 'blue', n: 1 }]],
 ] as const
-// The scope admits an entity holding nothing, so it sees the deleted one: a
-// get answers its tombstone, a reference names it and an operand finds it,
-// and only a read asking for graves selects it. Read once per graph; the test
-// compares.
+// A deleted entity is judged by its history (@yaks/sql `ghostly`), and
+// neither store keeps one here, so though the scope would see an entity
+// holding nothing, nothing reaches the deleted one: no get, reference, operand
+// or read asking for graves. Read once per graph; the test compares.
 let mourned = new Map(
   Object.values(graphs).map((g) => [g, {
     got: (g.get(['gone']) as Bundle[]).map((b) => [b.entity.eid, b.tombstone]),
@@ -127,13 +127,13 @@ for (let [adapter, g] of Object.entries(graphs)) {
       { eid: 'bob', 'pref.value': null },
     ])
   })
-  test(`${adapter} visibility sees a deleted entity as one holding nothing`, () =>
+  test(`${adapter} visibility sees no deleted entity it keeps no history of`, () =>
     assertEquals(mourned.get(g), {
-      got: [['gone', {}]],
-      named: [{ eid: 'to-gone', 'link.to': 'gone' }],
-      found: ['to-gone'],
+      got: [],
+      named: [{ eid: 'to-gone', 'link.to': null }],
+      found: [],
       selected: [],
-      graves: ['gone'],
+      graves: [],
     }))
 }
 

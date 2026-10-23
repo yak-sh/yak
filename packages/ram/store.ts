@@ -497,13 +497,13 @@ export let ram = (vocab: Vocab, base: RamOpts = {}): Store => {
 
   // Remove hidden relations before the matcher can inspect a value or follow
   // a reference. Every index for this read is built from this visible dataset.
-  // A deleted entity stays where the scope admits one holding nothing, as it
-  // stays in the store: a reference names it, and only `graves` selects it.
+  // A deleted entity is judged by its history (@yaks/sql `ghostly`), and
+  // this store keeps none, so no scope sees it here.
   let visible = (opts: ReadOpts): Index | Bundle[] => {
     let scope = opts.visibility
     if (!scope) return view()
     let source = view()
-    let screen = { now: opts.now ?? base.now, exactIds: true, graves: true }
+    let screen = { now: opts.now ?? base.now, exactIds: true }
     let allowed = scope.entity
       ? matcher(scope.entity, vocab, screen)(source)
       : source.list

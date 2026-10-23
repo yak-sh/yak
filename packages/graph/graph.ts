@@ -310,10 +310,13 @@ export type Graph = {
    * eids start with, naming them. `kind` is the
    * component the ids are meant to name, where the caller knows it (a tool
    * argument declared `ref: 'session'`): a plugin may answer to a key only
-   * that kind has, such as a transcript's own id. */
+   * that kind has, such as a transcript's own id. With `opts`, the ids are
+   * asked as that reader reads, under its scope, so one naming what is hidden
+   * from it names nothing; a read addresses its own ids so. */
   address: (
     ids: string[],
     kind?: string,
+    opts?: ReadOpts,
   ) => Map<string, Eid> | Promise<Map<string, Eid>>
   /** apply bundles in one transaction → the bundles as applied, one per
    * entity, plus everything the pipeline generated */

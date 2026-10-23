@@ -1,6 +1,10 @@
 import { type Comp, graph, signed, type Tx } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import { graph as readonly } from '@yaks/graph/read'
+import { backed, ddl, journal, log } from '@yaks/journal'
+import { journalDoc } from '@yaks/journal/vocab'
+import { storage } from '@yaks/sqlite'
+import { open } from '@yaks/sqlite/db'
 import { loadVocab } from '@yaks/vocab'
 import { equal, test } from '@yaks/testing'
 import { assertThrows } from '@std/assert'
@@ -10,7 +14,7 @@ let sync = <T>(v: T | Promise<T>): T => {
   return v
 }
 
-let vocab = loadVocab({
+let defs = {
   $defs: {
     entity: { component: true, type: 'object' },
     person: {
@@ -36,9 +40,9 @@ let vocab = loadVocab({
       properties: { color: { type: 'string' } },
     },
   },
-})
-let fixture = () => {
-  let g = graph({ vocab, storage: ram(vocab) })
+}
+let vocab = loadVocab(defs)
+let fixture = (g = graph({ vocab, storage: ram(vocab) })) => {
   g.apply([
     {
       entity: { eid: 'alice' },
@@ -101,17 +105,27 @@ test('native answers mask references to foreign private entities', () =>
       person: { name: 'Bob', friend: null },
     }],
   ))
-test('native answers name a deleted entity, which holds nothing anybody owns', () =>
-  equal(
-    read.answer([{
-      entity: { eid: 'bob' },
-      person: { name: 'Bob', friend: 'burned' },
-    }], { person: 'bob', native: true }),
-    [{
-      entity: { eid: 'bob' },
-      person: { name: 'Bob', friend: 'burned' },
-    }],
-  ))
+// A deleted draft holds nothing left to say whose it was. A store that keeps
+// a history (@yaks/journal) says it, so its author's answers name it and no
+// one else's do; where no history is kept, nobody's do.
+let logged = loadVocab([defs, journalDoc])
+let db = open(':memory:')
+let store = storage(db, logged, { backed: backed(logged) })
+store.install()
+for (let s of ddl()) db.query(s)
+let kept = fixture(graph({
+  vocab: logged,
+  storage: store,
+  plugins: [journal(log({ rows: (s) => db.query(s) }), logged)],
+}))
+let friend = (g: typeof read, person: string) =>
+  (sync(g.answer([{
+    entity: { eid: 'bob' },
+    person: { name: 'Bob', friend: 'burned' },
+  }], { person, native: true }))[0].person as Comp).friend
+let friends = [read, kept].map((g) => ['alice', 'bob'].map((p) => friend(g, p)))
+test('native answers name a deleted draft to its author alone, as its history says', () =>
+  equal(friends, [[null, null], ['burned', null]]))
 test('native answers preserve references to public people', () =>
   equal(
     read.answer([{

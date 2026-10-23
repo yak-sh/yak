@@ -138,21 +138,37 @@ export let reader = (opts: {
   // refused here, once for every door: otherwise the caller reads it back as
   // an eid and a write mints an entity whose eid is `T-998`. One several
   // entities fit is refused too, naming them, so the caller can say which.
+  // A reader's ids are asked under its scope (`scoped`, already applied to
+  // `readOpts`), so an id names to it only what it may see: one naming what
+  // is hidden from it names nothing, as one naming nothing does.
   let address = (
     ids: string[],
     kind?: string,
+    readOpts?: ReadOpts,
   ): Map<string, Eid> | Promise<Map<string, Eid>> => {
     let asks = plugins.flatMap((p) => p.address ?? [])
     if (!ids.length || !asks.length && !ids.some(handled)) {
       return new Map<string, Eid>()
     }
     let outside = outsideRead()
+    let under = (o?: ReadOpts) => ({ ...readOpts, ...o })
+    let read = (q: Query, o?: ReadOpts, comps?: string[]) =>
+      outside.read(q, under(o), comps)
+    let reader: ReadTx = readOpts?.visibility
+      ? {
+        ...outside,
+        read,
+        whole: read,
+        get: (eids: Eid[], comps?: string[], o?: ReadOpts) =>
+          outside.get(eids, comps, under(o)),
+      }
+      : outside
     let asked = each(
       asks,
       new Map<string, Eid | Eid[] | null>(),
       (at, ask) =>
         continuing(
-          ask(outside, ids.filter((id) => at.get(id) == null), kind),
+          ask(reader, ids.filter((id) => at.get(id) == null), kind),
           (more) => new Map([...at, ...more]),
         ),
     )
@@ -180,6 +196,10 @@ export let reader = (opts: {
       return found
     })
   }
+
+  // A query with its ids addressed as its reader may (`address`).
+  let aimed = (query: Query, readOpts?: ReadOpts) =>
+    aim(query, (ids: string[]) => address(ids, undefined, readOpts))
 
   // A handle as a person copies it is often its hex without the `#`
   // (`e854bf7dc0`): a shell reads a leading `#` as a comment, and a handle
@@ -211,7 +231,7 @@ export let reader = (opts: {
     )
 
   let ask = (query: Query, readOpts?: ReadOpts): Query | Promise<Query> =>
-    continuing(aim(query, address), (q) => {
+    continuing(aimed(query, readOpts), (q) => {
       if (readOpts?.native || !askHooks.length) return q
       let hooks = askHooks.filter((p) =>
         !p.reads || p.reads(readOpts ?? emptyReadOpts)
@@ -263,7 +283,7 @@ export let reader = (opts: {
       !p.reads || p.reads(readOpts ?? emptyReadOpts)
     )
     if (!hooks.length) return null
-    return continuing(aim(query, address), (q) => {
+    return continuing(aimed(query, readOpts), (q) => {
       let original = typeof q == 'string' ? parse(q) : q
       return continuing(
         each(
@@ -394,7 +414,7 @@ export let reader = (opts: {
 
   let readPlain = (query: Query, readOpts?: ReadOpts) =>
     continuing(
-      aim(query, address),
+      aimed(query, readOpts),
       (q) => readStored(q, readOpts, !!readOpts?.native),
     )
 
@@ -426,7 +446,7 @@ export let reader = (opts: {
     : readPlain
 
   let rowsPlain = (query: Query, readOpts?: ReadOpts) =>
-    continuing(aim(query, address), (q) => storage.rows(q, readOpts))
+    continuing(aimed(query, readOpts), (q) => storage.rows(q, readOpts))
 
   let rowsTranslated = (
     query: Query,
@@ -479,7 +499,7 @@ export let reader = (opts: {
     : rowsPlain
 
   return {
-    address,
+    address: (ids, kind, o) => address(ids, kind, o && scoped(o)),
     scope: scoped,
     ask: (q, o) => ask(q, scoped(o)),
     answer,

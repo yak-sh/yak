@@ -266,6 +266,74 @@ test('a change says the text a body is kept as', () => {
   ])
 })
 
+// A deleted entity is seen by a scope that saw it as it last was and by no
+// other, its existence included: a page (pd) by `!note`, a note (nd) by
+// `!page` and by `.note.text=secret`, what it said last, as a person's scope
+// sees their own draft by its `draft.by`, and an entity that held only what
+// the journal keeps no history of (rd) by no scope. Each way to reach one is
+// asked: a get, a reference to it (w's creator), a read asking for graves (as
+// an id is resolved, @yaks/id), and its history by id. Read once; the test
+// compares.
+let mourned = build()
+mourned.apply([
+  { entity: { eid: 'pd' }, page: { title: 'Gone' } },
+  { entity: { eid: 'nd' }, note: { text: 'draft' } },
+  { entity: { eid: 'rd' }, render: { state: 'owed' } },
+])
+mourned.apply([{ entity: { eid: 'nd' }, note: { text: 'secret' } }])
+sync(mourned.g.apply([
+  { entity: { eid: 'w1' }, page: { title: 'W1' }, created: { by: 'pd' } },
+  { entity: { eid: 'w2' }, page: { title: 'W2' }, created: { by: 'nd' } },
+], { trusted: true }))
+mourned.apply(
+  ['pd', 'nd', 'rd'].map((eid) => ({ entity: { eid }, $delete: true })),
+)
+let reach = (visibility?: Visibility) => {
+  let g = visibility ? mourned.seen(visibility) : mourned.g
+  let eids = (bs: Bundle[]) => bs.map((b) => b.entity.eid)
+  return {
+    got: eids(sync(g.get(['pd', 'nd', 'rd']))),
+    creators: sync(g.get(['w1', 'w2'])).map((b) => (b.created as Comp)?.by),
+    selected: eids(sync(g.read('.entity.eid=pd,nd,rd', { graves: true }))),
+    history: ['pd', 'nd', 'rd'].map((eid) =>
+      sync(g.rows(`._change&._change.target=${eid}&.count`))[0]?.n ?? 0
+    ),
+  }
+}
+let reached = [
+  undefined,
+  '!note',
+  '!note|.note.text=secret',
+  '!note|.note.text=draft',
+  '!page',
+].map((entity) => reach(entity ? { entity } : undefined))
+test('a deleted entity is seen by a scope that saw it as it last was', () => {
+  let pd = {
+    got: ['pd'],
+    creators: ['pd', null],
+    selected: ['pd'],
+    history: [2, 0, 0],
+  }
+  let both = {
+    got: ['pd', 'nd'],
+    creators: ['pd', 'nd'],
+    selected: ['pd', 'nd'],
+    history: [2, 3, 0],
+  }
+  assertEquals(reached, [
+    {
+      got: ['pd', 'nd', 'rd'],
+      creators: ['pd', 'nd'],
+      selected: ['pd', 'nd', 'rd'],
+      history: [2, 3, 0],
+    },
+    pd,
+    both,
+    pd,
+    { got: ['nd'], creators: [], selected: ['nd'], history: [0, 3, 0] },
+  ])
+})
+
 test('nothing writes the journal’s components', () => {
   let { apply, g } = build()
   let change = { tx: null, target: 'p1', value: {} }

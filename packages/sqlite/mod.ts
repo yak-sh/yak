@@ -118,6 +118,7 @@ import { basis, local, memoized, rooted } from './memo.ts'
 import { revision } from '@yaks/sql'
 import { watch } from './watch.ts'
 import { gotten, metered, named } from './budget.ts'
+import { dead } from '@yaks/graph/bundle'
 import { Refused } from '@yaks/graph/errors'
 import {
   type History,
@@ -543,7 +544,7 @@ export let storage = (
         o.visibility?.entity,
         ...components.map((c) => o.visibility?.components?.[c]),
       ].filter((q) => !!q)
-      let compiled = queries.map((q) => tested(ast(q!), true, graves))
+      let compiled = queries.map((q) => tested(ast(q!), true))
       let tests = compiled.every((t) => !!t) ? compiled as Filter[] : undefined
       let test: Filter | undefined = tests &&
         ((b) => selected.has(b.entity.eid) && tests.every((t) => t(b)))
@@ -551,15 +552,20 @@ export let storage = (
         basis(vocab, ast(q!), base.derived) ?? []
       )
       if (tests && policies(o)) {
-        return fetch(eids, [...new Set(names)]).filter((b) => test!(b)).map((
-          b,
-        ) => ({ eid: b.entity.eid }))
+        let found = fetch(eids, [...new Set(names)])
+        // A deleted entity is judged by its history, which only the store's
+        // statement reads (@yaks/sql `ghostly`).
+        if (!graves || !found.some(dead)) {
+          return found.filter((b) => test!(b)).map((b) => ({
+            eid: b.entity.eid,
+          }))
+        }
       }
       return memo.answer(
         JSON.stringify(['permit', eids, components, o.visibility, !!graves]),
         policies(o),
         run,
-        test,
+        graves ? undefined : test,
         true,
       )
     },
@@ -636,16 +642,12 @@ export let storage = (
       ? (eids: string[], comps?: string[]) =>
         viewed(eids, comps, o, fetch, pending())
       : undefined
-  let tested = (
-    query: And,
-    exactIds = false,
-    graves = false,
-  ): Filter | undefined => {
+  let tested = (query: And, exactIds = false): Filter | undefined => {
     if (!basis(vocab, query, base.derived) || !local(vocab, query)) {
       return undefined
     }
     try {
-      return filter(query, vocab, { exactIds, graves })
+      return filter(query, vocab, { exactIds })
     } catch {
       return undefined
     }
@@ -670,8 +672,8 @@ export let storage = (
     visit(query)
     if (!operands.size) return undefined
     let eids = [...operands]
-    // A deleted entity is admitted as the scope would admit one holding
-    // nothing, so its history is asked by its id (@yaks/sql `visibleBacked`).
+    // A deleted entity the scope sees is admitted too, so its history is
+    // asked by its id (@yaks/sql `ghostly`).
     let allowed = reading(o).permit(eids, [], () => {
       let screen = sourceScreen(vocab, { ...opts(), ...o, graves: true })!
       return driver.query(select({
@@ -704,8 +706,10 @@ export let storage = (
               return hops.length == 1 &&
                 (!h.prop || vocab.prop(h.comp, h.prop)?.category != 'ref')
             })()
+    // A read asking for graves is the statement's: it alone judges the
+    // deleted (@yaks/sql `ghostly`).
     if (
-      o.visibility && !owing &&
+      o.visibility && !owing && !o.graves &&
       !Object.keys(o.visibility.components ?? {}).length &&
       (!o.visibility.entity || local(vocab, ast(o.visibility.entity))) &&
       policies(o) && basis(vocab, query, base.derived, catalogued) &&
@@ -713,11 +717,10 @@ export let storage = (
     ) {
       let { visibility: _visibility, ...plain } = o
       let raw = asked(query, plain, direct)
-      let ids = raw.map((r) => String(r.eid))
       let permitted = new Set(
-        reading(o).permit(ids, [], () => [], o.graves).map((r) =>
-          String(r.eid)
-        ),
+        reading(o).permit(raw.map((r) => String(r.eid)), [], () => []).map((
+          r,
+        ) => String(r.eid)),
       )
       return raw.filter((r) => permitted.has(String(r.eid)))
     }

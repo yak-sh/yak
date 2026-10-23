@@ -27,34 +27,39 @@ import {
   as,
   col,
   type Derived,
+  desc,
   eq,
   type Expr,
   fn,
+  join,
   left,
   lit,
+  type Select,
   select,
   sub,
   table,
   when,
 } from '@yaks/sql/core'
-import type { Backings } from '@yaks/sql'
+import type { Backings, Held } from '@yaks/sql'
 import type { Vocab } from '@yaks/vocab'
 
 let jc = (c: string) => col(c, 'jc')
 let jf = (c: string) => col(c, 'jf')
 let cc = (c: string) => col(c, 'cc')
 
-// The address a field recorded: its value, or, as the journal once recorded
-// content, the eid of the entity holding it (`ref`).
-let address = fn(
-  'coalesce',
-  fn('json_extract', jf('value'), lit('$')),
-  sub(select({
-    cols: [col('eid', 'jr')],
-    from: table('entity', 'jr'),
-    where: eq(col('id', 'jr'), jf('ref')),
-  })),
-)
+// The address a field row `f` recorded: its value, or, as the journal once
+// recorded content, the eid of the entity holding it (`ref`).
+let addressOf = (f: (c: string) => Expr) =>
+  fn(
+    'coalesce',
+    fn('json_extract', f('value'), lit('$')),
+    sub(select({
+      cols: [col('eid', 'jr')],
+      from: table('entity', 'jr'),
+      where: eq(col('id', 'jr'), f('ref')),
+    })),
+  )
+let address = addressOf(jf)
 
 // One field's value as JSON: through its property's `text` where the store
 // keeps it in another form, and as recorded otherwise.
@@ -110,9 +115,63 @@ let tells = (id: string) =>
     from: table('journal_change', 'jc'),
   })
 
+// Component `comp` as the journal last told each entity held it (@yaks/sql
+// `Backing.held`), which is how a scoped read judges a deleted entity: an
+// entity whose newest change to it wrote it, and each property's newest
+// after-image, null where that is the tombstone a removal wrote. A reference
+// is read back to the referent's integer id, as the component's table keeps
+// it. The newest change and each property's newest row are read through the
+// index on (entity, component), for the one entity a read asks about.
+let held = (comp: string, props: Held[]): Select => {
+  let jn = (c: string) => col(c, 'jn')
+  let jl = (c: string) => col(c, 'jl')
+  let ours = (c: (c: string) => Expr) =>
+    and(eq(c('entity'), jc('entity')), eq(c('component'), lit(comp)))
+  let newest = ({ name, ref }: Held) =>
+    sub(select({
+      cols: [when([[
+        eq(jl('present'), lit(1)),
+        ref
+          ? sub(select({
+            cols: [col('id', 'jr')],
+            from: table('entity', 'jr'),
+            where: eq(
+              col('eid', 'jr'),
+              fn('json_extract', jl('value'), lit('$')),
+            ),
+          }))
+          : addressOf(jl),
+      ]])],
+      from: table('journal_field', 'jl'),
+      joins: [join(table('journal_change', 'jn'), eq(jn('id'), jl('change')))],
+      where: and(ours(jn), eq(jl('field'), lit(name))),
+      order: [desc(jl('id'))],
+      limit: lit(1),
+    }))
+  return select({
+    cols: [
+      as(jc('entity'), 'entity'),
+      ...props.map((p) => as(newest(p), p.as)),
+    ],
+    from: table('journal_change', 'jc'),
+    where: and(
+      eq(jc('component'), lit(comp)),
+      eq(jc('operation'), lit('upsert')),
+      eq(
+        jc('id'),
+        sub(select({
+          cols: [fn('max', jn('id'))],
+          from: table('journal_change', 'jn'),
+          where: ours(jn),
+        })),
+      ),
+    ),
+  })
+}
+
 /** The rows `_tx` and `_change` are read from: the journal's tables, a value
  * the store keeps in another form read through `derived`, the store's read
- * overrides. */
+ * overrides. `_change` also tells what each entity last held (`held`). */
 export let backed = (vocab: Vocab, derived: Derived = {}): Backings => {
   let { comp, joins } = described(vocab)
   let value = valueOf(derived)
@@ -134,6 +193,7 @@ export let backed = (vocab: Vocab, derived: Derived = {}): Backings => {
     },
     _change: {
       about: tells('id'),
+      held,
       rows: select({
         cols: [
           as(jc('id'), 'entity'),

@@ -71,7 +71,7 @@ All exports are available from `@yaks/sql`; the table groups them by purpose.
 | Numeric lookup        | `lookup`                                                                                                                    |
 | Drivers               | `Driver`, `Row`, `effect`, `scan`, `tally`, `revision`                                                                      |
 | Property reads        | `Tag`, `tagOf`, `held`, `field`, `Derived`, `DerivedProp`, `ladders`, `derivedOf`, `worn`                                   |
-| Computed components   | `Backing`, `Backings`, `eidOf`, `idOf`, `eidAt`, `visibleBacked`                                                            |
+| Computed components   | `Backing`, `Backings`, `Held`, `eidOf`, `idOf`, `eidAt`, `visibleBacked`                                                    |
 | Clause compilation    | `Extension`, `Compile`, `Site`, `OrderBy`, `Begin`, `Screen`, `claimed`                                                     |
 | Presence optimization | `ArchetypeSet`, `Matching`, `archetypeSet`                                                                                  |
 | Rule compilation      | `rule`, `Plan`, `On`, `At`, `Gone`                                                                                          |
@@ -365,11 +365,19 @@ integer `entity` owner column. [References](../vocab/README.md#vocabulary) store
 the target's integer id; reads project it to an eid. Deleted entities keep their
 identity row and are listed in `tombstone`; compiled queries exclude them,
 unless the read asks for `graves`, which matches each as an entity holding
-nothing (how a deleted entity's number still names it, @yaks/id). Under a
-`visibility` scope a deleted entity is likewise one holding nothing: a reference
-names it, and a reference operand finds it, where the scope admits an entity
-holding nothing. A presence predicate tests for a component row, including one
-whose properties are all NULL.
+nothing (how a deleted entity's number still names it, @yaks/id). A presence
+predicate tests for a component row, including one whose properties are all
+NULL.
+
+Under a `visibility` scope, a deleted entity is seen only by a scope that would
+have seen it as it last was, its existence included (`ghostly`). It holds no
+component left to test, so the scope is tested against what the store's history
+(the backing with `held`) last told it held. Where it is seen, a get answers its
+tombstone, a reference names it, a reference operand finds it and `graves`
+selects it; anywhere else it is as if it never was. A person's deleted draft is
+seen by its author, whose scope admits a draft by them, and by no one else; an
+entity whose history tells of nothing it held, born before the history or
+holding only what it leaves out, is seen by no scope.
 
 A **Tag** is the type used to coerce comparisons: a vocabulary
 [scalar](../vocab/README.md#the-format), `enum` or `eid`. `tagOf` derives it
@@ -529,13 +537,16 @@ A backing's entities have no row a visibility policy can test, so a backing says
 what each row tells of: `about` is a select of `entity` (the row's id), `about`
 (an entity-table id) and `component` (the name of the component whose values the
 row tells, or null). Under a scope, a row is seen when the scope admits an
-entity it tells of, under that component's own scope where it has one. A deleted
-entity holds nothing: it is admitted when the scope admits an entity holding
-nothing and the backing tells of no component of it the scope tests, so a
-deleted task's history is seen where a person's deleted draft's is not. A
-backing without `about` has no row any scoped read sees.
-`visibleBacked(vocab, opts)` is the backings as the read's `visibility` sees
-them; a scoped query and a scoped gather both read through it.
+entity it tells of, under that component's own scope where it has one, and of a
+deleted entity, where the scope sees it (above): a deleted task's history is
+seen by whoever saw the task, and a person's deleted draft's by its author
+alone. A backing without `about` has no row any scoped read sees. A backing
+whose rows are the store's history also says what each entity held when it last
+told of it: `held(comp, props)` is a select of that component's rows as they
+were last told, one per entity whose last change to it wrote it, with an integer
+`entity` and a column per property (`Held`), a reference as the referent's
+integer id. `visibleBacked(vocab, opts)` is the backings as the read's
+`visibility` sees them; a scoped query and a scoped gather both read through it.
 
 ## Clause compilation
 
