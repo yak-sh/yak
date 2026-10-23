@@ -120,6 +120,10 @@ Think about who needs it, and when.
 - **The owner's words** stay verbatim where they were recorded (M-31946). A
   skill quotes them or points at them; it never paraphrases them into rules.
 - **A task or a design** holds what's to be done. A skill says what is.
+- **A topic** gathers all of these about one subject: `yak topic add <topic>
+  <ids>` puts a skill, a memory, a design or the owner's words under it, so
+  whoever opens the topic finds them (@yaks/topic). A new skill goes under its
+  topic once it has an entity.
 
 A preloaded memory that only one area needs is a skill waiting to happen.
 Moving it changes the persona, so mention it to the owner first (M-31946).
