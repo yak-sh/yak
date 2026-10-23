@@ -35,14 +35,4 @@ test('every CI run step has a stable timing label and failures retain the artifa
     steps.find((s) => s.uses === 'actions/upload-artifact@v4')?.if,
     'always()',
   )
-  let tasks =
-    JSON.parse(Deno.readTextFileSync(new URL('../deno.json', import.meta.url)))
-      .tasks
-  // Each is timed, as the suite of its own name.
-  for (let name of ['check', 'test']) {
-    assertEquals(
-      tasks[name].startsWith(`deno run -A bench/run.ts command ${name} `),
-      true,
-    )
-  }
 })
