@@ -263,6 +263,7 @@ equal(editorViews().every((entry) => entry.view == 'Edit'), true)
 | `Ux`, `useHost`, `Host`            | what a page hands down                                                                                      |
 | `views`, `editorViews`             | the controls as registrations; `TimeVal`, `UrlVal` are faces                                                |
 | `pickLine`, `useHits`, `label`     | a picker's candidates, asked of the graph                                                                   |
+| `carry`, `carries`, `carried`      | an entity carried by a drag from one list to another                                                        |
 | `canEdit`, `formatProp`, `reading` | what a value is, pure                                                                                       |
 
 ## Disclosure
@@ -292,6 +293,17 @@ let tree = h(Disclosure, {
 tree.props.onChange(opened)
 equal(sent, [opened])
 ```
+
+## Carrying an entity
+
+A drag between two lists on one page says which entity the dragged row stands
+for under one type, `CARRIED`, whichever package drew either list.
+`carry(ev,
+eid)` sets it as the drag starts; `carries(ev)` is all a place can
+know while the drag moves over it, so a list says it would take one by
+cancelling the `dragover`; `carried(ev)` reads the eid on the drop. Browse's
+rows carry their entity, so a row from any list it draws drops on a list a
+package draws.
 
 ## State and events
 

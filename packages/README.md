@@ -433,7 +433,8 @@ grouped approximately by function, **not** by dependency order.
 - **[@yaks/persona](./persona)** — Declare human identities, agent instruction
   sets and assigned roles. Read a persona's own document and its
   included/reference documents, then render one Markdown string. The caller
-  decides whether to write a file or use it directly as model context.
+  decides whether to write a file or use it directly as model context. Its views
+  are the Context desk in browse, where personas and skills are written.
 
 - **[@yaks/project](./project)** — a portfolio: the `project` work is filed
   under, the `filed` that files it, the `board` that is a saved filter over it,

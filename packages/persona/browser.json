@@ -15,10 +15,14 @@
     "@yaks/graph": "../graph/mod.ts",
     "@yaks/trace": "../trace/mod.ts",
     "@yaks/id": "../id/mod.ts",
+    "@yaks/inspect": "../inspect/mod.ts",
+    "@yaks/markdown": "../markdown/mod.ts",
     "@yaks/query": "../query/mod.ts",
     "@yaks/render": "../render/mod.ts",
     "@yaks/sql": "../sql/mod.ts",
     "@yaks/text": "../text/mod.ts",
+    "@yaks/ui": "../ui/mod.ts",
+    "@yaks/ux": "../ux/mod.ts",
     "@yaks/vocab": "../vocab/mod.ts"
   }
 }

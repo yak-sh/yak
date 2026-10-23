@@ -252,6 +252,37 @@ checkout, so its personas, its common one included, are written there as
 specialists, each saying its home's common persona beside the checkout's
 `AGENTS.md`.
 
+## The desk
+
+`@yaks/persona/views` draws what agents are given wherever the browsing app
+([@yaks/browse](../browse)) does, in a browser and a terminal alike, as a
+writer's desk: every persona and skill on one side, the one being written in the
+middle, and what an agent gets on the other.
+
+The sidebar offers it as **Context** (`destinations`), at `/?context`: every
+persona with the project it works for and every skill with its description
+(`Context.Page`). A field over them finds one by the words of its title and
+description; Enter opens the first, and Escape clears it. What is typed there is
+the person's draft, through the UX host's `drafts` (@yaks/ux).
+
+A persona or a skill opens on its `Context` tab: the desk, titles only, the one
+open lit; its **binder** in the middle; and, where the host draws a conversation
+(`Conversation`; browse's chat), a session to try it. Stacked, as on a phone,
+the binder comes first and the desk last. The binder alone is `Binder`, and a
+card's face (`Card.Context`):
+
+- a persona's binder is its head (naming the project it works for) and its own
+  text, then what it **Carries** (`contains`, said in full) and what it
+  **Reads** (`reads`, named in its Reads list), each in the order an agent reads
+  them (`served`), then, behind a press, the memories in its scope it carries
+  neither way. A row dragged onto another list moves there; onto Not carried it
+  leaves both. Any row that carries its entity (@yaks/ux `carry`), a row of the
+  desk or of any list in browse, drops the same way. A document on both lists is
+  said once, in full, and the binder says so;
+- a skill's binder is its description and its instructions.
+
+Each row is drawn by its own renderer, asked for as `Context.List.Tile`.
+
 ## Exports
 
 | subpath          | what it provides                                                                                        |
@@ -263,6 +294,7 @@ specialists, each saying its home's common persona beside the checkout's
 | `./skills`       | Graph skill reads and read-only checkout views                                                          |
 | `./skill-text`   | Portable skill parsing, frontmatter and rendering                                                       |
 | `./skill-mirror` | `syncSkills`, `skillRoots` — bidirectional landed repository mirror                                     |
+| `./views`        | `inspectViews()`, `tabs`, `destinations`, `icons` — the desk, as the browsing app draws it              |
 
 The two edge relations are borrowed rather than invented here: `contains` is
 [@yaks/task](../task)'s and `reads` is [@yaks/kernel](../kernel)'s. A relation
@@ -277,4 +309,5 @@ graph separately.
 ## Compatibility
 
 `.` and `./vocab` run in Deno, Node and the browser — they call no platform API.
+`./views` are Preact components a host mounts through @yaks/inspect's contract.
 `./tools` and `./effects` write files through Deno.

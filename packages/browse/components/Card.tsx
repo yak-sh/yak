@@ -31,7 +31,6 @@ export let icons: Record<string, string> = {
   Board: 'kanban',
   Split: 'columns-2',
   Layout: 'columns-3',
-  Persona: 'drama',
   Dashboard: 'layout-dashboard',
   Web: 'globe',
   Media: 'image',

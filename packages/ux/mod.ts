@@ -14,6 +14,8 @@
  *   `isOpen`, `disclosed`, its page eid and bundles, pure (./Disclosure.ts).
  * - `Ux`, `useHost`, `Host`: what a page hands down, once per tree
  *   (./host.ts).
+ * - `carry`, `carries`, `carried`: an entity carried by a drag from one
+ *   place to another, whoever drew either (./carry.ts).
  * - `useEdit`, `Editing`: an `Edit`'s state, read and changed by whoever
  *   owns it (./live.ts).
  * - `at`, `place`, `put`, `changed`, `refused`, `valueOf`: the bundles and
@@ -56,6 +58,7 @@ export {
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
+export { carried, CARRIED, carries, carry } from './carry.ts'
 export { type Editing, useEdit } from './live.ts'
 export {
   at,

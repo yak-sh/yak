@@ -2330,7 +2330,9 @@
       "packages/persona": {
         "dependencies": [
           "jsr:@std/assert@1",
-          "jsr:@std/yaml@^1.2.0"
+          "jsr:@std/yaml@^1.2.0",
+          "npm:lucide@1.31.0",
+          "npm:preact@^10.29.1"
         ]
       },
       "packages/platform": {

@@ -56,7 +56,6 @@ import { SessionDot } from './session_status.tsx'
 import { SearchTile } from './views/Search.tsx'
 import { Layout } from './views/Layout.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
-import { Persona } from './views/Persona.tsx'
 import { Conversation } from './Chat.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
@@ -200,7 +199,6 @@ define([
     match: and(parse('.doc .project')),
     Render: (props) => <Dashboard {...props} />,
   },
-  { view: 'Persona', match: parse('.doc .persona'), Render: Persona },
   { view: 'Web', match: parse('.web'), Render: Web },
   // An attachment shares the artifact's face. A doc carrying one still opens
   // on Full and offers Media as a tab.
@@ -312,7 +310,6 @@ define([
   'List',
   'Split',
   'Layout',
-  'Persona',
   // After every view a package offers as a tab (./offers.ts), which come
   // first: the fullscreen bar opens a bare URL on tabs[0] (App.tsx), and the
   // cockpit is a chosen tab, never a changed default.

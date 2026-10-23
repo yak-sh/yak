@@ -71,23 +71,26 @@ let far = (b: Bundle): Eid => {
   return typeof to == 'string' ? to : ''
 }
 
-// The links of one relation out of a whole level, in the order they were
-// authored: an edge's own `ord` where its author set one, then the entity it
-// points at, so two unordered siblings never swap places between reads.
+let ordOf = (b: Bundle): number =>
+  Number((b[EDGE] as { ord?: unknown })?.ord ?? Number.MAX_SAFE_INTEGER)
+
+/**
+ * The order links are read in, the order an agent is given what they lead
+ * to: an edge's own `ord` where its author set one, then the entity it points
+ * at, so two unordered siblings never swap places between reads. A sort's
+ * comparator, for anything drawing them in that order.
+ */
+/// let to = (to: string, ord?: number) => ({ entity: { eid: to }, edge: { from: 'p', to, ...ord == null ? {} : { ord } } })
+/// [to('b'), to('a'), to('c', 1)].sort(served).map((b) => b.entity.eid) -> ['c', 'a', 'b']
+export let served = (a: Bundle, b: Bundle): number =>
+  ordOf(a) - ordOf(b) || far(a).localeCompare(far(b))
+
+// The links of one relation out of a whole level, in the order they are
+// served.
 let links = (storage: Storage, from: Eid[], tag: string | undefined) =>
   !tag || !from.length ? [] : after(
     storage.read(and(eq(`${EDGE}.from`, value(from)), present(tag))),
-    (found) =>
-      found
-        .map((b) => ({
-          to: far(b),
-          ord: Number(
-            (b[EDGE] as { ord?: unknown })?.ord ?? Number.MAX_SAFE_INTEGER,
-          ),
-        }))
-        .filter((l) => !!l.to)
-        .sort((a, b) => a.ord - b.ord || a.to.localeCompare(b.to))
-        .map((l) => l.to),
+    (found) => found.filter(far).sort(served).map(far),
   )
 
 /**
