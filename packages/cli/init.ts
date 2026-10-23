@@ -41,11 +41,18 @@ export let STARTER = [
 ]
 
 /** What nobody needs a new number for: sessions, letters, knocks and internal
- * records. Content-addressed artifacts and Git objects already have addresses.
+ * records, the vocabulary's description among them (@yaks/vocab).
+ * Content-addressed artifacts and Git objects already have addresses.
  * Numbered, these would spend the numbers a person reads — a first task would
  * be T-27. A name here no plugin declares excepts nothing. Existing numbers
  * remain addresses; this policy only governs allocation. */
 export let UNNUMBERED = [
+  '_comp',
+  '_effect',
+  '_extends',
+  '_package',
+  '_prop',
+  '_vocab',
   'archetype',
   'artifact',
   'build',
