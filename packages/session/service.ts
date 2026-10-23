@@ -73,6 +73,8 @@ export {
   transcripts,
 } from './files.ts'
 
+let str = (v: unknown): string => typeof v == 'string' ? v : ''
+
 /** What a config file can set for this plugin's duty. */
 export type Options = {
   /** how often transcripts are looked at, in milliseconds (default one
@@ -127,20 +129,29 @@ let meta = (path: string): { call?: string; title?: string } => {
 // A subagent's session, linked to the session that started it and to the call
 // that did, where the graph holds it, and titled by what that call said it
 // was for: written the first time its transcript is opened, with the parent
-// where the graph has not met it yet. One opened before it was titled is
-// titled then.
+// where the graph has not met it yet. One the hook door met first, or one
+// opened before it was titled, gains its call and title then.
 let spawned = async (g: Graph, f: Found & { parent: string }) => {
   let eid = sessionEid(f.id, f.parent)
   let { call: id, title } = meta(f.path)
   let doc = title && g.vocab.comp('doc') ? { doc: { title } } : {}
   let [s] = await g.get([eid], ['spawned', 'doc'])
+  let parent = s?.spawned && s[TOMBSTONE] == null
+    ? str((s.spawned as Comp).parent)
+    : (await sessionFor(g, f.parent, ['session.id']))?.entity.eid
+  let call = parent && id ? callOf(parent, id) : undefined
+  let [made] = call && !(s?.spawned as Comp | undefined)?.call
+    ? await g.get([call])
+    : []
+  let linked = made?.entry && made[TOMBSTONE] == null ? { call } : {}
   if (s?.spawned && s[TOMBSTONE] == null) {
-    if (!s.doc && doc.doc) await g.apply([{ entity: { eid }, ...doc }])
+    let more = {
+      ...s.doc ? {} : doc,
+      ...linked.call ? { spawned: linked } : {},
+    }
+    if (Object.keys(more).length) await g.apply([{ entity: { eid }, ...more }])
     return eid
   }
-  let parent = (await sessionFor(g, f.parent, ['session.id']))?.entity.eid
-  let call = parent && id ? callOf(parent, id) : undefined
-  let [made] = call ? await g.get([call]) : []
   await g.apply([
     ...parent
       ? []
@@ -148,10 +159,7 @@ let spawned = async (g: Graph, f: Found & { parent: string }) => {
     {
       entity: { eid },
       [SESSION]: { id: f.id },
-      spawned: {
-        parent: parent ?? '$parent',
-        ...made?.entry && made[TOMBSTONE] == null ? { call } : {},
-      },
+      spawned: { parent: parent ?? '$parent', ...linked },
       ...doc,
     },
   ] as Bundle[])

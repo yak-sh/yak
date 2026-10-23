@@ -3,7 +3,9 @@
 // ./hooks.ts), and hears back what the bus owes that session (./bus.ts
 // `heard`). A harness runs many contexts under one session id, and only its
 // hook says which context an event came from, so this is the one place the
-// session's own line of work can be told from its subagents.
+// session's own line of work can be told from its subagents: before a call,
+// the hook says which run makes it, and a door the call then reaches writes
+// as that run (./announce.ts).
 //
 // A body that is not a hook event is the caller's mistake, refused with a
 // 400. Anything else that goes wrong is thrown to the host, which reports it;
@@ -14,6 +16,7 @@ import type { Meaning } from '@yaks/host'
 import type { Graph } from '@yaks/graph'
 import type { Authenticate, Route } from '@yaks/api'
 import { heard, type Hook } from './bus.ts'
+import { hear } from './announce.ts'
 
 /** Where the harness posts its hook events. */
 export let PATH = '/session/hook'
@@ -63,6 +66,7 @@ export let routes = (
         { status: 400 },
       )
     }
+    if (await hear(host.graph, hook)) return Response.json({})
     return Response.json(await heard(host.graph, hook as Hook))
   },
 }]

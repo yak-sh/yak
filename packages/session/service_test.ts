@@ -6,7 +6,7 @@ import { BATCH, look, type Seen, service, stale, strip } from './service.ts'
 import { fileOf } from '@yaks/file'
 import { onDisk } from '@yaks/file/local'
 import { callOf } from './tail.ts'
-import { sessionEid } from './who.ts'
+import { sessionEid, subagentSession } from './who.ts'
 
 let lines = (...texts: string[]) =>
   texts.flatMap((text, i) => [
@@ -248,6 +248,43 @@ test("a subagent's transcript is a session of its own, started by its parent's c
     })
     await look(g, dir, seen)
     assertEquals(await told(g, 'a1'), ['(call)', 'a.txt', 'done'])
+  })
+})
+
+// A subagent the hook door wrote before its transcript was read.
+let hookFirst: unknown
+let hookParent = '49805559-ca98-4c0a-873e-45c19ec7316c'
+await projects({
+  [hookParent]: {
+    text: JSON.stringify({
+      type: 'assistant',
+      message: {
+        content: [{
+          type: 'tool_use',
+          id: 'toolu_a',
+          name: 'Agent',
+          input: {},
+        }],
+      },
+    }) + '\n',
+    ago: 1000,
+  },
+  [`${hookParent}/subagents/agent-a1`]: { text: side(tool) },
+}, async (dir) => {
+  Deno.writeTextFileSync(
+    `${dir}/-home-me-code/${hookParent}/subagents/agent-a1.meta.json`,
+    '{"toolUseId":"toolu_a"}',
+  )
+  let g = locked(store())
+  let child = await subagentSession(g, hookParent, 'a1')
+  await look(g, dir, { tails: new Map(), done: new Set() })
+  hookFirst = (await g.get([child!]))[0].spawned
+})
+
+test("a subagent the hook door met first gains its parent's call once read", () => {
+  assertEquals(hookFirst, {
+    parent: hookParent,
+    call: callOf(hookParent, 'toolu_a'),
   })
 })
 

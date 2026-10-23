@@ -36,6 +36,7 @@ import { sessionHome, type Workspaces } from '@yaks/machine/targets'
 import {
   type ChildLimits,
   sessionTools,
+  speaking,
   type Tool,
   ToolError,
 } from '@yaks/session'
@@ -71,10 +72,16 @@ export let graphTools = (
     description: t.description,
     parameters: inputSchemaOf(t),
     ...t.readOnly ? { readOnly: true } : {},
-    // A call, signed as the session that asked: the runner runs the function
-    // and lands what it answered in that session's name.
+    // A call, signed as the session that asked: `by` the actor it works for
+    // and `via` the session itself (@yaks/session `speaking`), so the runner
+    // lands what the function answered in that actor's name.
     run: async (args: Record<string, unknown>, call) => {
-      let actor = call?.session ? { eid: call.session } : opts.actor ?? null
+      let [asking] = call?.session ? await g.get([call.session]) : []
+      let actor = asking
+        ? await speaking(g, asking)
+        : opts.actor
+        ? { by: opts.actor.eid }
+        : null
       await r.ensure()
       let id = call?.call
         ? derivedEid(`harness graph tool ${call.call.entity.eid}`)
@@ -83,7 +90,7 @@ export let graphTools = (
         await r.call({
           entity: { eid: id },
           call: { to: toolEid(toolName(t)), args: args ?? {} },
-          ...(actor ? { $actor: { by: actor.eid } } : {}),
+          ...(actor ? { $actor: actor } : {}),
         }),
         id,
       ))

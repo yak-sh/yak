@@ -521,6 +521,10 @@ a subagent's too, marks the session `hooked{}`, and from then on the bus says
 nothing beside a tool reply to it, since a tool call cannot say which context
 made it.
 
+A PreToolUse HTTP hook on MCP tools (`mcp__.*`) posts to the same door before
+each call, which remembers the session or subagent making it under the call's
+id, so the MCP door writes as that run (see "Identity and HTTP attribution").
+
 The hook door speaks only after a tool call, so an agent at rest hears nothing
 there. To be woken, its own context runs the listener as a background command
 that ends at the first thing it says; the harness then wakes the agent with that
@@ -628,11 +632,21 @@ managed run's session is written first under an eid of its own, which
 
 `sessionFor()` resolves an entity ID, a human-readable session ID, or a harness
 session ID to the same entity. `speaking()` returns the actor a session writes
-as. The `@yaks/session/graph` entry point exports `authenticate()`, which reads
-the session from the `x-via` header, for every door over the graph: an HTTP
-request and a `yak` command alike. Writes use `session.actor` as `by` when
-present, otherwise the session itself; `via` identifies the session in either
-case. Applications enforce access separately.
+as: `by` the actor it works for (`actorOf()`), and `via` the session itself. A
+session works for the actor it names (`session.actor`), else the project it is
+filed in, else its persona's home project, else its persona, else whoever the
+session that spawned it works for. A session is never an actor: one that works
+for nobody leaves `by` unsaid.
+
+The `@yaks/session/graph` entry point exports `authenticate()`, for every door
+over the graph: an HTTP request and a `yak` command alike. It reads the session
+from the `x-via` header, else from a harness's tool call the hook door was told
+about. Claude Code runs one MCP connection for a session and all its subagents,
+so before each MCP tool call its `PreToolUse` hook posts the call's id with the
+session and subagent making it, and the call itself carries that id in its
+`_meta` (`claudecode/toolUseId`). A subagent the graph has not met is written
+then, spawned by its session, and so is one the harness's `SubagentStart` hook
+reports. Applications enforce access separately.
 
 <a id="appending-entries"></a>
 

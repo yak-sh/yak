@@ -23,6 +23,7 @@ import {
   type Opts,
   unique,
   usage,
+  via,
 } from './run.ts'
 import { commandOf } from './tool.ts'
 
@@ -574,3 +575,34 @@ test('a known noun answers an unknown word before any app stray', async () => {
     assertEquals(asked, [])
   }
 })
+
+// Which run a command line speaks for, from what its harness put around it.
+let harness = (vars: Record<string, string>) => (name: string) => vars[name]
+let subagent = harness({
+  CLAUDE_CODE_SESSION_ID: 'parent',
+  AI_AGENT: 'claude-code_2_agent',
+})
+for (
+  let [said, env, cwd, run] of [
+    [
+      'a subagent in its worktree',
+      subagent,
+      '/r/.claude/worktrees/agent-a1b2/p',
+      'a1b2',
+    ],
+    ["a subagent in its parent's directory", subagent, '/r/p', 'parent'],
+    [
+      "the session itself in a subagent's worktree",
+      harness({ CLAUDE_CODE_SESSION_ID: 'parent' }),
+      '/r/.claude/worktrees/agent-a1b2',
+      'parent',
+    ],
+    ['a native session', harness({ TASKS_SESSION: 'native' }), '/r', 'native'],
+    ['Codex', harness({ CODEX_THREAD_ID: 'thread' }), '/r', 'thread'],
+    ['a keyboard', harness({}), '/r', undefined],
+  ] as const
+) {
+  test(`${said} speaks for ${run ?? 'nobody'}`, () => {
+    assertEquals(via(env, cwd), run)
+  })
+}

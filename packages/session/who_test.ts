@@ -90,17 +90,63 @@ test('an id that names no run is refused, never taken for a name', async () => {
   await assertRejects(() => found('S-404'), Refused, 'S-404 names nothing')
 })
 
-test('a run writes for whoever it speaks as, through itself', () => {
-  assertEquals(
-    speaking({ entity: { eid: 's1' }, session: { id: 'abc', actor: 'p1' } }),
-    { by: 'p1', via: 's1' },
-  )
-  // Speaking for nobody, it speaks for itself — the run is still the answer
-  // to "through what".
-  assertEquals(
-    speaking({ entity: { eid: 's2' }, session: { id: 'def' } }),
-    { by: 's2', via: 's2' },
-  )
+// Runs of every kind, and who each works for.
+let works = (() => {
+  let words = loadVocab([sessionDoc, spine, {
+    $defs: {
+      project: { component: true, properties: {} },
+      persona: {
+        component: true,
+        properties: { home: { type: 'string', ref: 'project' } },
+      },
+      filed: {
+        component: true,
+        properties: { project: { type: 'string', ref: 'project' } },
+      },
+    },
+  }], [idKeywords])
+  let g = graph({ storage: ram(words), vocab: words })
+  g.apply([
+    { entity: { eid: 'p1' }, person: {} },
+    { entity: { eid: 'tasks' }, project: {} },
+    { entity: { eid: 'lab' }, project: {} },
+    { entity: { eid: 'common' }, persona: { home: 'tasks' } },
+    { entity: { eid: 'oracle' }, persona: {} },
+    { entity: { eid: 'named' }, session: { actor: 'p1', persona: 'common' } },
+    { entity: { eid: 'filed' }, session: { persona: 'common' } },
+    { entity: { eid: 'filed' }, filed: { project: 'lab' } },
+    { entity: { eid: 'worn' }, session: { persona: 'common' } },
+    { entity: { eid: 'homeless' }, session: { persona: 'oracle' } },
+    { entity: { eid: 'child' }, session: {}, spawned: { parent: 'worn' } },
+    {
+      entity: { eid: 'grandchild' },
+      session: {},
+      spawned: { parent: 'child' },
+    },
+    { entity: { eid: 'nobody' }, session: {} },
+  ], { trusted: true })
+  return g
+})()
+
+for (
+  let [run, by] of [
+    ['named', 'p1'],
+    ['filed', 'lab'],
+    ['worn', 'tasks'],
+    ['homeless', 'oracle'],
+    ['child', 'tasks'],
+    ['grandchild', 'tasks'],
+  ]
+) {
+  test(`${run} writes by ${by}, through itself`, async () => {
+    let s = (await works.get([run]))[0]
+    assertEquals(await speaking(works, s), { by, via: run })
+  })
+}
+
+test('a run that works for nobody leaves by unsaid, never itself', async () => {
+  let s = (await works.get(['nobody']))[0]
+  assertEquals(await speaking(works, s), { via: 'nobody' })
 })
 
 test("a run's own name addresses it when a session is meant, and only then", async () => {
@@ -118,7 +164,7 @@ test('session resolution can project identity without reading transcript history
   for (let said of ['s1', 'abc']) {
     let row = await sessionFor(runs, said, ['session.id', 'session.actor'])
     assertEquals(row?.session, { id: 'abc', actor: 'p1' })
-    assertEquals(speaking(row!), { by: 'p1', via: 's1' })
+    assertEquals(await speaking(runs, row!), { by: 'p1', via: 's1' })
   }
 })
 

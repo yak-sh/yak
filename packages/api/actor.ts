@@ -26,7 +26,9 @@ import type { Actor } from '@yaks/graph'
  *
  * It runs on every request the handler answers — a read, a write and a
  * WebSocket upgrade alike — so an application that restricts reads restricts
- * them here.
+ * them here. A door that has already read the request's body hands what it
+ * said as `message` (the MCP door's JSON-RPC message), so the caller a body
+ * names is answered without reading it twice.
  *
  * ```ts
  * declare let memberOf: (key: string) => string
@@ -39,6 +41,7 @@ import type { Actor } from '@yaks/graph'
  */
 export type Authenticate = (
   request: Request,
+  message?: unknown,
 ) => Actor | null | Promise<Actor | null>
 
 // The bundles signed by this handler: every bundle's `$actor` replaced by

@@ -411,12 +411,34 @@ export let aimed = (
  * (@yaks/session/graph). A graph this process opened itself is asked the
  * same way, through the same door (local.ts).
  *
- * The variable names are the harnesses' own, read most specific first: a
- * subagent's own id before the tree it was spawned from.
+ * The variable names are the harnesses' own. Claude Code hands a subagent its
+ * parent's session id and marks the shell as an agent's (`AI_AGENT=…_agent`),
+ * so the one place a subagent's own id shows is the worktree Claude Code made
+ * for it, `.claude/worktrees/agent-<id>`: a command a subagent runs there
+ * speaks for that subagent, whose session the harness's `SubagentStart` hook
+ * wrote (@yaks/session `session_context`). A subagent working in its parent's
+ * directory is told apart by nothing in its environment, and speaks for the
+ * parent.
  */
-export let via = (env: Env = own): string | undefined =>
-  env('CLAUDE_CODE_SESSION_ID') ?? env('TASKS_SESSION') ??
-    env('CODEX_THREAD_ID')
+export let via = (env: Env = own, cwd = here()): string | undefined => {
+  let claude = env('CLAUDE_CODE_SESSION_ID')
+  let agent = claude && env('AI_AGENT')?.endsWith('_agent')
+    ? cwd.match(WORKTREE)?.[1]
+    : undefined
+  return agent ?? claude ?? env('TASKS_SESSION') ?? env('CODEX_THREAD_ID')
+}
+
+// The worktree Claude Code makes for a subagent, named by the subagent's id.
+let WORKTREE = /\/\.claude\/worktrees\/agent-([0-9a-f]+)(?:\/|$)/
+
+// This process's directory, or none where it was removed under it.
+let here = (): string => {
+  try {
+    return Deno.cwd()
+  } catch {
+    return ''
+  }
+}
 
 let disk: Reads = {
   file: (path) => Deno.readTextFile(path),

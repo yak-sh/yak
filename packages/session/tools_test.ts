@@ -9,6 +9,7 @@ import { taskDoc } from '@yaks/task'
 import { sessionDoc } from './comp.ts'
 import { ids, locked, pages, seed, store } from './testing.ts'
 import { hooked, type Options, runs } from './tools.ts'
+import { sessionEid } from './who.ts'
 import { fleet, said as personas } from '../persona/testing.ts'
 import { edgeKeywords } from '@yaks/edge'
 import { onDisk } from '@yaks/file/local'
@@ -121,13 +122,20 @@ test('a release drops the component', async () => {
   assertEquals(said.claim, null)
 })
 
-test('a hook payload names the session and where it started; anything else says nothing', () => {
+test('a hook payload names the session, where it started and its subagent; anything else says nothing', () => {
+  let none = { session: '', cwd: '', agent: '' }
   assertEquals(hooked('{"session_id":"abc","cwd":"/r"}'), {
+    ...none,
     session: 'abc',
     cwd: '/r',
   })
-  assertEquals(hooked('not json at all'), { session: '', cwd: '' })
-  assertEquals(hooked(undefined), { session: '', cwd: '' })
+  assertEquals(hooked('{"session_id":"abc","agent_id":"a1"}'), {
+    ...none,
+    session: 'abc',
+    agent: 'a1',
+  })
+  assertEquals(hooked('not json at all'), none)
+  assertEquals(hooked(undefined), none)
 })
 
 // The fleet @yaks/persona tests with: a checkout at /r whose project's common
@@ -161,6 +169,27 @@ test('a session wears the persona of the checkout it starts anywhere in', async 
 
 test('a session that wears a persona keeps it', async () => {
   assertEquals(await wears('chose', '/r'), undefined)
+})
+
+test('a subagent starting is written as a session its parent spawned, once', async () => {
+  let g = fleet('/r', fleetVocab)
+  await g.apply([{ entity: { eid: 's1' }, session: { id: 'chose' } }])
+  let start = async () =>
+    await tools.session_context!(
+      {
+        entity: { eid: 'c1' },
+        call: {
+          args: { hook: '{"session_id":"chose","agent_id":"a1","cwd":"/r"}' },
+        },
+      },
+      g,
+    ) as Bundle[]
+  let [child] = await start()
+  assertEquals(child.entity.eid, sessionEid('a1', 'chose'))
+  assertEquals(child.session, { id: 'a1' })
+  assertEquals(child.spawned, { parent: 's1' })
+  await g.apply([child])
+  assertEquals(await start(), [])
 })
 
 test('a session nobody has seen is minted, holding nothing', async () => {

@@ -81,14 +81,18 @@ handed back with the memory you read.
 
 Each entity in a batch is stamped as the writer its own first bundle names in
 `$actor`, else the batch's writer (`writers()` in packages/graph/stamp.ts;
-`signed()` sets one), and the journal records one transaction per writer. A
-session's own rows (a persona snapshot, a report) name the session, and a person
-is the writer only of what that person typed or asked for. The owner, verbatim
-(M-31958): "i think "closing the door" is probably a fleet-wide prompt
-clarifying they should only mark me as the actor if i *explicitly* ask them to
-do that exact thing. any follow-ups or later things should be marked as the
-agent". A row stamped with the wrong writer moves with `data-migration`, and the
-code that chose that writer is fixed where it chose.
+`signed()` sets one), and the journal records one transaction per writer. `by`
+names the actor, one of a handful (a project, a persona, a person), and `via`
+the instrument, a session among them: a session's writes are `by` the actor it
+works for and `via` itself (`speaking()` in packages/session/who.ts). A session
+is never in `by`. The owner, verbatim (M-31958): "yeah, we can't have sessions
+as actors. then it will look as if there are thousands of actors in the system
+when there is really a handful". A person is the writer only of what that
+person typed or asked for: "i think "closing the door" is probably a fleet-wide
+prompt clarifying they should only mark me as the actor if i *explicitly* ask
+them to do that exact thing. any follow-ups or later things should be marked as
+the agent". A row stamped with the wrong writer moves with `data-migration`,
+and the code that chose that writer is fixed where it chose.
 
 ## Deleting
 

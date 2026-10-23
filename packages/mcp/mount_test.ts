@@ -10,8 +10,9 @@ import { type Bundle, derivedEid, graph } from '@yaks/graph'
 import { graphDoc } from '@yaks/graph/vocab'
 import { served, subscriptions, Unauthorized } from '@yaks/api'
 import { ram } from '@yaks/ram'
-import { sessionDoc } from '@yaks/session'
+import { sessionDoc, sessionEid } from '@yaks/session'
 import { authenticate as sessionAuth } from '@yaks/session/graph'
+import { PATH as HOOK, routes as sessionRoutes } from '@yaks/session/routes'
 import { loadVocab } from '@yaks/vocab'
 import { mcp } from './mount.ts'
 import { routes } from './routes.ts'
@@ -286,7 +287,7 @@ test('an MCP connection writes through its own graph session', async () => {
   assertEquals(wrote.status, 200)
   assertEquals(wrote.headers.get('mcp-session-id'), id)
   let made = comp((await g.get(['b1']))[0], 'created')
-  assertEquals(made.by, session.entity.eid)
+  assertEquals(made.by, undefined)
   assertEquals(made.via, session.entity.eid)
   assertEquals(
     (await g.read('.session&*')).map((b) => b.entity.eid),
@@ -356,13 +357,57 @@ test('x-via keeps its session, and a one-shot CLI call gets one', async () => {
   assertEquals(comp((await g.get(['b1']))[0], 'created').via, 's1')
   assertEquals((await g.read('.session')).length, 1)
 
+  // A connection working for nobody is the instrument, never the actor.
   let cli = await door(bundles('b2'))
   let id = cli.headers.get('mcp-session-id')
   assert(id)
   let [session] = await g.read(`.session.id=${JSON.stringify(id)}&*`)
   let made = comp((await g.get(['b2']))[0], 'created')
-  assertEquals(made.by, session.entity.eid)
+  assertEquals(made.by, undefined)
   assertEquals(made.via, session.entity.eid)
+})
+
+// Calls a harness's hook announced to the hook door before making them: one
+// by the session itself, one by a subagent the graph had not met.
+let announced = sessionGraph()
+await announced.apply([
+  { entity: { eid: MEMBER }, doc: { title: 'A member' } },
+  { entity: { eid: 'parent' }, session: { id: 'harness-run', actor: MEMBER } },
+])
+let made = async (eid: string, hook: Record<string, unknown>) => {
+  let toolu = `toolu_${eid}`
+  let hooks = sessionRoutes({ graph: announced })
+    .find((r) => r.path == HOOK)!.handle
+  await hooks(post({
+    hook_event_name: 'PreToolUse',
+    tool_use_id: toolu,
+    session_id: 'harness-run',
+    ...hook,
+  }))
+  await mcp({
+    graph: announced,
+    authenticate: sessionAuth({ graph: announced }),
+  })(
+    rpc('tools/call', {
+      name: 'graph_apply',
+      arguments: { bundles: [{ entity: { eid }, book: { price: 12 } }] },
+      _meta: { 'claudecode/toolUseId': toolu },
+    }),
+  )
+  let { by, via } = comp((await announced.get([eid]))[0], 'created')
+  return [by, via]
+}
+let own = await made('b1', {})
+let child = sessionEid('a1', 'harness-run')
+let childs = await made('b2', { agent_id: 'a1' })
+
+test("a harness call the hook door announced writes as that call's run", () => {
+  assertEquals(own, [MEMBER, 'parent'])
+})
+
+test("a subagent's announced call writes via its own session, its parent's spawn", async () => {
+  assertEquals(childs, [MEMBER, child])
+  assertEquals((await announced.get([child]))[0].spawned, { parent: 'parent' })
 })
 
 test('what the host owes a direct call rides after the answer, which is unchanged', async () => {

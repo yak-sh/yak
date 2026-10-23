@@ -14,17 +14,21 @@
 //
 // The same sequence resolves an HTTP request. A request names which run it
 // speaks for (in `x-via`, the fleet's own header for the instrument behind a
-// write), and what it writes is attributed `by` the identity that run speaks as
-// and `via` the run itself: a session's work is attributed to the persona,
-// without losing which transcript did it.
+// write), and what it writes is attributed `by` the actor that run works for
+// and `via` the run itself. An actor is one of a handful (a project, a
+// persona, a person) and never a session: there are thousands of sessions,
+// and the owner's word is that sessions never go in `by` (M-31958). A run
+// works for the actor it names (`session.actor`), else the project it is
+// filed in, else its persona's home project, else its persona, else whoever
+// the session that spawned it works for (`actorOf`).
 //
 // A session created from the harness's own id takes its eid from that id
 // (`sessionEid`): the id itself where it is a uuid, as Claude Code's and
 // Codex's are, since an eid is a uuid; one derived from it otherwise. So
 // whoever holds the harness's id holds the eid, and the hook and the importer
 // that both create a session for one id land on one entity. A subagent's id
-// (Claude Code's `agent-<id>`) names it within its parent, so its eid derives
-// from the two.
+// (Claude Code's agent id, its transcript `agent-<id>.jsonl`) names it within
+// its parent, so its eid derives from the two (`subagentSession`).
 
 import { after } from '@yaks/fp'
 import { and, eq, fields, limit, list, or, present } from '@yaks/query'
@@ -156,13 +160,94 @@ export let sessionFor = async (
   return run ? await get(run) : undefined
 }
 
+// How far `actorOf` follows a chain of spawning sessions before it stops: a
+// chain longer than this is a cycle someone wrote, not a family.
+let DEPTH = 8
+
+let str = (v: unknown): string => typeof v == 'string' ? v : ''
+
 /**
- * The actor a transcript writes as: `by` whoever it speaks for — the identity
- * that survives a `/clear` — and `via` the run itself. A session that speaks
- * for nobody speaks for itself.
+ * The actor a session works for: the one it names (`session.actor`), else the
+ * project it is filed in (`filed.project`), else its persona's home project,
+ * else its persona, else whoever the session that spawned it works for. Never
+ * a session; `undefined` where nothing names one.
  */
-export let speaking = (s: Bundle): Actor => {
-  let eid = s.entity.eid
-  let actor = (s[SESSION] as Comp | undefined)?.actor
-  return { by: actor ? String(actor) as Eid : eid, via: eid }
+export let actorOf = async (
+  g: Pick<Graph, 'get' | 'vocab'>,
+  session: Eid,
+): Promise<Eid | undefined> => {
+  let has = (comp: string, prop: string) => !!g.vocab.prop(comp, prop)
+  let comps = [SESSION, 'filed', 'spawned'].filter((c) => g.vocab.comp(c))
+  let seen = new Set<Eid>()
+  for (let at: Eid = session; at && !seen.has(at) && seen.size < DEPTH;) {
+    seen.add(at)
+    let [s] = await g.get([at], comps)
+    if (!s?.[SESSION] || s[TOMBSTONE] != null) return
+    let named = s[SESSION] as Comp
+    let project = has('filed', 'project')
+      ? str((s.filed as Comp | undefined)?.project)
+      : ''
+    let worn = str(named.persona)
+    let home = worn && has('persona', 'home')
+      ? str(((await g.get([worn], ['persona']))[0]?.persona as Comp)?.home)
+      : ''
+    let by = str(named.actor) || project || home || worn
+    if (by) return by as Eid
+    at = str((s.spawned as Comp | undefined)?.parent) as Eid
+  }
+}
+
+/**
+ * The actor a transcript writes as: `by` the actor it works for
+ * ({@link actorOf}), the identity that survives a `/clear`, and `via` the run
+ * itself. A session that works for nobody leaves `by` unsaid rather than
+ * standing in it.
+ */
+export let speaking = async (
+  g: Pick<Graph, 'get' | 'vocab'>,
+  s: Bundle,
+): Promise<Actor> => {
+  let via = s.entity.eid
+  let by = await actorOf(g, via)
+  return by ? { by, via } : { via }
+}
+
+/**
+ * The session of a subagent its harness knows by `id` within the session it
+ * knows by `parent`: its eid, and the rows that write it where the graph has
+ * not met it yet (with the parent, where that is new too), else none.
+ */
+export let spawning = async (
+  g: Pick<Graph, 'get' | 'read' | 'address'>,
+  parent: string,
+  id: string,
+): Promise<{ eid: Eid; rows: Bundle[] }> => {
+  let eid = sessionEid(id, parent)
+  let [s] = await g.get([eid], [SESSION])
+  if (s?.[SESSION] && s[TOMBSTONE] == null) return { eid, rows: [] }
+  let up = (await sessionFor(g, parent, ['session.id']))?.entity.eid
+  return {
+    eid,
+    rows: [
+      ...up ? [] : [{ entity: { eid: '$parent' }, [SESSION]: { id: parent } }],
+      {
+        entity: { eid },
+        [SESSION]: { id },
+        spawned: { parent: up ?? '$parent' },
+      },
+    ],
+  }
+}
+
+/** The session of a subagent ({@link spawning}), written where it is new.
+ * Answers its eid, or nothing where either id is empty. */
+export let subagentSession = async (
+  g: Pick<Graph, 'get' | 'read' | 'address' | 'apply'>,
+  parent: string,
+  id: string,
+): Promise<Eid | undefined> => {
+  if (!parent || !id) return
+  let { eid, rows } = await spawning(g, parent, id)
+  if (rows.length) await g.apply(rows)
+  return eid
 }

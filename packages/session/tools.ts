@@ -59,7 +59,7 @@ import { checked } from '@yaks/tools/check'
 import { carried } from '@yaks/persona'
 import type { Vocab } from '@yaks/vocab'
 import { CLAIM, SESSION } from './comp.ts'
-import { sessionFor } from './who.ts'
+import { sessionFor, spawning } from './who.ts'
 import { ENTRY } from './native.ts'
 import { ordered, statusOf } from './state.ts'
 import { install, settingsPath } from './hooks.ts'
@@ -86,14 +86,25 @@ let ENDED = ['stopped', 'failed']
 let str = (v: unknown): string => v == null ? '' : String(v)
 
 /** What a hook payload says, where the command line did not: the session's
- * own id, and the directory it started in. A payload that will not parse says
- * nothing, and does so quietly. */
-export let hooked = (hook: unknown): { session: string; cwd: string } => {
+ * own id, the directory it started in, and the subagent the event is about,
+ * when it is about one (Claude Code's `agent_id`). A payload that will not
+ * parse says nothing, and does so quietly. */
+export let hooked = (
+  hook: unknown,
+): { session: string; cwd: string; agent: string } => {
   try {
-    let said = JSON.parse(str(hook)) as { session_id?: unknown; cwd?: unknown }
-    return { session: str(said.session_id), cwd: str(said.cwd) }
+    let said = JSON.parse(str(hook)) as {
+      session_id?: unknown
+      cwd?: unknown
+      agent_id?: unknown
+    }
+    return {
+      session: str(said.session_id),
+      cwd: str(said.cwd),
+      agent: str(said.agent_id),
+    }
   } catch {
-    return { session: '', cwd: '' }
+    return { session: '', cwd: '', agent: '' }
   }
 }
 
@@ -288,6 +299,12 @@ export let runs = (
     }
     let id = idIn(args)
     if (!id) return []
+    // A subagent starting is a session of its own, spawned by the one the
+    // hook names, and written now, before its first command: a command it
+    // runs in its worktree speaks for it (@yaks/cli `via`), and a call it
+    // makes through the MCP tools is heard as its own (./announce.ts).
+    let agent = hooked(args.hook).agent
+    if (agent) return (await spawning(graph, id, agent)).rows
     let found = await sessionFor(graph, id, [
       'session.id',
       'session.operator',

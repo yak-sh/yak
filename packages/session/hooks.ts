@@ -13,10 +13,12 @@
 //
 // Between the edges, the turns are not carried: the harness writes every turn
 // to a transcript file of its own, and the package's duty reads it from there
-// (./service.ts). One entry runs between them: after each tool call the
-// harness posts the event to the graph's hook door (./routes.ts), the one
-// report that says whether the call came from the session's own line of work
-// or from a subagent sharing its id, and adds what the bus owes the session.
+// (./service.ts). Two entries run between them, both posting the event to the
+// graph's hook door (./routes.ts), the one report that says whether a call
+// came from the session's own line of work or from a subagent sharing its id.
+// Before each MCP tool call, the door learns which run makes it, so the MCP
+// door writes as that run (./announce.ts); after each tool call, it adds what
+// the bus owes the session.
 //
 // Nothing here may fail loudly. A hook that exits non-zero is a session that
 // will not start, so every entry ends `|| true`: a graph that is not there
@@ -36,6 +38,8 @@ import { PATH } from './routes.ts'
 
 /** One lifecycle entry, in the form a harness settings file stores it. */
 export type Hook = {
+  /** the tool names it runs for, a pattern the harness matches */
+  matcher?: string
   hooks: (
     | { type: 'command'; command: string; timeout?: number }
     | { type: 'http'; url: string; timeout?: number }
@@ -56,7 +60,8 @@ let cmd = (command: string, timeout?: number): Hook => ({
 
 // A hook posted to a server: a server that is down costs the harness the
 // timeout and nothing else.
-let post = (url: string): Hook => ({
+let post = (url: string, matcher?: string): Hook => ({
+  ...(matcher ? { matcher } : {}),
   hooks: [{ type: 'http', url, timeout: 2 }],
 })
 
@@ -72,15 +77,19 @@ export let SERVER = 'http://localhost:5173'
 export let lifecycle = (
   yak = 'yak',
   server = SERVER,
-): Record<string, Hook[]> => ({
-  SessionStart: [cmd(`${yak} session context --hook - || true`)],
-  SubagentStart: [cmd(`${yak} session context --hook - || true`)],
-  UserPromptSubmit: [
-    cmd(`${yak} session context --hook - 2>/dev/null || true`, 2),
-  ],
-  PostToolUse: [post(`${server.replace(/\/+$/, '')}${PATH}`)],
-  SessionEnd: [cmd(`${yak} session wrap --hook - || true`, 5)],
-})
+): Record<string, Hook[]> => {
+  let door = `${server.replace(/\/+$/, '')}${PATH}`
+  return {
+    SessionStart: [cmd(`${yak} session context --hook - || true`)],
+    SubagentStart: [cmd(`${yak} session context --hook - || true`)],
+    UserPromptSubmit: [
+      cmd(`${yak} session context --hook - 2>/dev/null || true`, 2),
+    ],
+    PreToolUse: [post(door, 'mcp__.*')],
+    PostToolUse: [post(door)],
+    SessionEnd: [cmd(`${yak} session wrap --hook - || true`, 5)],
+  }
+}
 
 // Ours, identified by the command it runs or the door it posts to, including
 // the turn hooks an older install wrote (`session/turn.ts`), which an install

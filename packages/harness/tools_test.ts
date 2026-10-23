@@ -58,6 +58,28 @@ test('a graph tool writes and reads the harness graph', async () => {
   h.close()
 })
 
+// A session's call through a graph tool, and the stamp it left.
+let signedBy = await (async () => {
+  let h = await harness()
+  await h.g.apply([
+    { entity: { eid: 'works' }, doc: { title: 'the project' } },
+    { entity: { eid: 'run' }, session: { actor: 'works' } },
+  ])
+  let [apply] = graphTools(h.g)
+  await apply.run({ bundles: [{ entity: { eid: 't1' }, task: {} }] }, {
+    session: 'run',
+    call: { entity: { eid: 'asked' } },
+    entries: [],
+  })
+  let { by, via } = (await h.g.get(['t1']))[0].created as Comp
+  h.close()
+  return [by, via]
+})()
+
+test('a graph tool writes by the actor its session works for, via the session', () => {
+  assertEquals(signedBy, ['works', 'run'])
+})
+
 test('a graph tool’s answer carries what a direct call is owed beside it', async () => {
   let h = await harness()
   let told: string[][] = []

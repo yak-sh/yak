@@ -20,9 +20,9 @@ test('a second install replaces the first, never doubles it', () => {
   )
   let twice = merged(once, lifecycle('/usr/local/bin/yak', 'http://box:9'))
   assertEquals(twice.SessionStart.length, 2)
-  assertEquals(twice.PostToolUse, [{
-    hooks: [{ type: 'http', url: 'http://box:9/session/hook', timeout: 2 }],
-  }])
+  let door = { type: 'http', url: 'http://box:9/session/hook', timeout: 2 }
+  assertEquals(twice.PostToolUse, [{ hooks: [door] }])
+  assertEquals(twice.PreToolUse, [{ matcher: 'mcp__.*', hooks: [door] }])
   assertEquals(twice.SessionStart[1], theirs)
   assertEquals(twice.UserPromptSubmit.length, 2)
   assertEquals(twice.UserPromptSubmit[1], theirs)
@@ -50,6 +50,7 @@ test('a settings file keeps the keys nobody asked about', () => {
   assertEquals(said.model, 'opus')
   assertEquals(Object.keys(said.hooks).sort(), [
     'PostToolUse',
+    'PreToolUse',
     'SessionEnd',
     'SessionStart',
     'SubagentStart',

@@ -264,17 +264,22 @@ export let mcp = (opts: MountOptions): Handler => {
           ? new Response(null, { status: 202 })
           : refused('not a JSON-RPC request', 400)
       }
-      let via = request.headers.get(VIA)
-      let conn = via || !opts.sessions
+      // A request whose run the door already knows (named in `x-via`, or by
+      // the harness call its message makes) speaks through that run; only
+      // one naming none speaks through a connection of its own. The host's
+      // own fallback is the process acting through itself, which names none.
+      let named = !!request.headers.get(VIA) ||
+        !!actor?.via && actor.via != actor.by
+      let conn = named || !opts.sessions
         ? undefined
         : await connected(opts.sessions, request.headers.get(ID), actor)
       if (
-        !via && opts.sessions && request.headers.has(ID) &&
+        !named && opts.sessions && request.headers.has(ID) &&
         !conn
       ) {
         return refused('unknown MCP session', 404)
       }
-      let caller = conn ? speaking(conn.session) : actor
+      let caller = conn ? await speaking(opts.sessions!, conn.session) : actor
       if (conn && actor?.by && actor.by != actor.via) {
         caller = { by: actor.by, via: conn.session.entity.eid }
       }
@@ -299,8 +304,11 @@ export let mcp = (opts: MountOptions): Handler => {
   return async (request) => {
     try {
       // The SDK validates neither tokens nor Host/Origin. The host's existing
-      // authentication/security boundary runs before both protocol legs.
-      let actor = (await opts.authenticate?.(request)) ?? null
+      // authentication/security boundary runs before both protocol legs, once
+      // per request, and is handed the message where it was read: a harness
+      // names the run behind a call in the call's `_meta`.
+      let who = async (message?: unknown) =>
+        (await opts.authenticate?.(request, message)) ?? null
       // Classify and serve from one bounded read. The SDK's predicate and
       // modern handler accept the same parsed body, keeping the protocol's
       // size limit without making more streams just to read the bytes again.
@@ -316,16 +324,21 @@ export let mcp = (opts: MountOptions): Handler => {
           // metadata type; the SDK reader uses only its body and headers.
           read = await readRequestBody(request.clone() as Request)
         } catch {
-          if (modernClaim) return await modern.fetch(request)
-          return refused('the body is not JSON', 400)
+          if (!modernClaim) return refused('the body is not JSON', 400)
+          await who()
+          return await modern.fetch(request)
         }
-        if (read.tooLarge) return await modern.fetch(request)
+        if (read.tooLarge) {
+          await who()
+          return await modern.fetch(request)
+        }
         try {
           body = JSON.parse(read.text)
         } catch {
           return refused('the body is not JSON', 400)
         }
       }
+      let actor = await who(body)
       if (await isLegacyRequest(request, body)) {
         return await legacy(request, actor, body)
       }

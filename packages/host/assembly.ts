@@ -126,7 +126,9 @@ let doorman = (
   }
   let [mod, options] = said[0] ?? []
   let ask = mod?.authenticate?.(host, options ?? {})
-  return ask ? async (request) => (await ask(request)) ?? self : () => self
+  return ask
+    ? async (request, message) => (await ask(request, message)) ?? self
+    : () => self
 }
 
 // A plugin's `./effects` handling a name no vocabulary declares: code that
@@ -363,7 +365,7 @@ export let assemble = (
         },
         observe: observed.observe,
         ui: gather(dressed.map(([facet]) => facet)),
-        who: (request) => authenticate(request),
+        who: (request, message) => authenticate(request, message),
         // Present only when a plugin offers one: a host without it polls its
         // store's revision instead (@yaks/api routes), so another process's
         // commits still reach its subscriptions.
