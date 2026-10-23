@@ -1,7 +1,7 @@
 /**
  * The few numbers a page is about, side by side, each large over what it
- * counts: `Stats` holds a `Stats.Item` for each, its `Stats.Value` over its
- * `Stats.Label`, and under them, where there is one, a `Stats.Note`: a
+ * counts: `Metrics` holds a `Metrics.Item` for each, its `Metrics.Value` over its
+ * `Metrics.Label`, and under them, where there is one, a `Metrics.Note`: a
  * `Spark`, or a line of words. A value that needs watching wears
  * `Value-caution`; one saying something went wrong, `Value-negative`.
  *
@@ -18,8 +18,8 @@ import type { Colors, Specimen } from './theme.ts'
 import { Spark } from './Spark.ts'
 
 /** Numbers over what they count. */
-export let Stats: Part & Record<'Item' | 'Value' | 'Label' | 'Note', Part> =
-  block('div', 'Stats', {
+export let Metrics: Part & Record<'Item' | 'Value' | 'Label' | 'Note', Part> =
+  block('div', 'Metrics', {
     Item: 'div',
     Value: 'div',
     Label: 'div',
@@ -33,23 +33,23 @@ export let description =
 /** The value says itself first and boldly, in its tone; what it counts is
  * muted. */
 export let sheet = (c: Colors): Sheet => ({
-  Stats_Item: { block: true, spaced: true },
-  Stats_Value: { fg: c.text, bold: true },
-  'Stats_Value-caution': { fg: c.caution, bold: true },
-  'Stats_Value-negative': { fg: c.negative, bold: true },
-  Stats_Label: { fg: c.muted },
-  Stats_Note: { fg: c.muted },
+  Metrics_Item: { block: true, spaced: true },
+  Metrics_Value: { fg: c.text, bold: true },
+  'Metrics_Value-caution': { fg: c.caution, bold: true },
+  'Metrics_Value-negative': { fg: c.negative, bold: true },
+  Metrics_Label: { fg: c.muted },
+  Metrics_Note: { fg: c.muted },
 })
 
-let { Item, Value, Label, Note } = Stats
+let { Item, Value, Label, Note } = Metrics
 
 /** Four numbers: one with a series under it, one to watch and one gone
  * wrong. */
 export let specimens = (): Specimen[] => [
   [
-    'Stats, Item, Value, Label, Note, Value-caution, Value-negative',
+    'Metrics, Item, Value, Label, Note, Value-caution, Value-negative',
     h(
-      Stats,
+      Metrics,
       {},
       h(Item, {}, h(Value, {}, '2'), h(Label, {}, 'workers')),
       h(

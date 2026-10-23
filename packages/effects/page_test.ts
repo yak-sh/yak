@@ -133,7 +133,7 @@ let section = (at: Element, title: string) =>
   )!
 
 test('the numbers up top count what is up, running, fast, waiting and failed', () => {
-  equal(all(page, '.Stats_Item').map((n) => words(n, 'div')), [
+  equal(all(page, '.Metrics_Item').map((n) => words(n, 'div')), [
     ['1', 'worker up', '1 silent'],
     ['23', 'running now'],
     ['5.0', 'runs a second', '▁'.repeat(50) + '█'.repeat(10)],
@@ -141,8 +141,8 @@ test('the numbers up top count what is up, running, fast, waiting and failed', (
     ['2', 'failed'],
   ])
   equal(
-    page.querySelector('.Stats_Item:last-child .Stats_Value')?.className,
-    'Stats_Value Stats_Value-negative',
+    page.querySelector('.Metrics_Item:last-child .Metrics_Value')?.className,
+    'Metrics_Value Metrics_Value-negative',
   )
 })
 
@@ -194,8 +194,8 @@ test('each declared effect, the busiest first, its counts opening the runs they 
 
 test('with nobody working the pool, it says so, and what waits is a warning', () => {
   equal(
-    empty.querySelector('.Stats_Value')?.className,
-    'Stats_Value Stats_Value-negative',
+    empty.querySelector('.Metrics_Value')?.className,
+    'Metrics_Value Metrics_Value-negative',
   )
   equal(
     section(empty, 'Workers').querySelector('[role=status]')?.textContent,

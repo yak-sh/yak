@@ -24,6 +24,7 @@ import * as index from './Index.ts'
 import * as inbox from './Inbox.ts'
 import * as menu from './Menu.ts'
 import * as meter from './Meter.ts'
+import * as metrics from './Metrics.ts'
 import * as loading from './Loading.ts'
 import * as notes from './Notes.ts'
 import * as palette from './Palette.ts'
@@ -39,7 +40,6 @@ import * as section from './Section.ts'
 import * as shell from './Shell.ts'
 import * as spark from './Spark.ts'
 import * as stamp from './Stamp.ts'
-import * as stats from './Stats.ts'
 import * as table from './Table.ts'
 import * as tabs from './Tabs.ts'
 import * as tile from './Tile.ts'
@@ -93,7 +93,7 @@ let modules = {
     Loading: loading,
     Shell: shell,
     Head: head,
-    Stats: stats,
+    Metrics: metrics,
     Section: section,
     Panes: panes,
     Overlay: overlay,

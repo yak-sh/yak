@@ -27,7 +27,7 @@ import {
   useNamed,
   type View,
 } from '@yaks/inspect'
-import { Head, Loading, Meter, Section, Spark, Stats, Table } from '@yaks/ui'
+import { Head, Loading, Meter, Metrics, Section, Spark, Table } from '@yaks/ui'
 import { effectsIn } from '@yaks/vocab'
 import { rate, said, type Worker } from './worker.ts'
 
@@ -223,11 +223,11 @@ let stat = (
   note?: ComponentChildren,
 ) =>
   h(
-    Stats.Item,
+    Metrics.Item,
     {},
-    h(Stats.Value, { mod }, value),
-    h(Stats.Label, {}, label),
-    note ? h(Stats.Note, {}, note) : null,
+    h(Metrics.Value, { mod }, value),
+    h(Metrics.Label, {}, label),
+    note ? h(Metrics.Note, {}, note) : null,
   )
 
 let percent = (n: number) => `${Math.round(n * 100)}%`
@@ -475,8 +475,8 @@ export let EffectsPage = ({ got, io }: Props): JSX.Element => {
     ),
     waiting(got.workers, 'the workers') ?? [
       h(
-        Stats,
-        { 'data-stats': '' },
+        Metrics,
+        {},
         stat(
           String(up.length),
           up.length == 1 ? 'worker up' : 'workers up',

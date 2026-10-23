@@ -1,12 +1,12 @@
 /* The few numbers a page is about: tiles side by side, as many to a line as
    fit, each its number large over the words saying what it counts. The
    number keeps its digits in columns, so a value that moves does not shift. */
-.Stats {
+.Metrics {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
   gap: var(--gap);
 }
-.Stats_Item {
+.Metrics_Item {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -16,7 +16,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
-.Stats_Value {
+.Metrics_Value {
   font-size: var(--h1);
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
@@ -25,17 +25,17 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.Stats_Value-caution {
+.Metrics_Value-caution {
   color: var(--caution);
 }
-.Stats_Value-negative {
+.Metrics_Value-negative {
   color: var(--negative);
 }
-.Stats_Label {
+.Metrics_Label {
   font-size: var(--small);
   color: var(--muted);
 }
-.Stats_Note {
+.Metrics_Note {
   margin-top: 4px;
   font-size: var(--small);
   color: var(--muted);

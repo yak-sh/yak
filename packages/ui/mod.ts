@@ -9,7 +9,7 @@
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
  *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Turns`,
  *   `Body`, `Quote`, `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Shell`,
- *   `Panes`, `Head`, `Stats`, `Spark`, `Notes`,
+ *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
  *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
  * - `Float`, `place`, `placeAt`, `usePlaceAt`, `tips`: what floats above a
@@ -69,7 +69,7 @@ export { Turns } from './Turns.ts'
 export { Value } from './Value.ts'
 export { Meter } from './Meter.ts'
 export { Spark } from './Spark.ts'
-export { Stats } from './Stats.ts'
+export { Metrics } from './Metrics.ts'
 export { everforest } from './everforest.ts'
 export { rosepine } from './rosepine.ts'
 export {
