@@ -11,13 +11,19 @@ let worker = (count: number) => {
     bug: { fault: `f${i}` },
   }))
   let marks: string[] = []
+  let named: string[][] = []
   let doors: Doors = {
     bugs: (params) => {
-      let after = params.get('query')?.match(/\.after=(\S+)/)?.[1] ?? ''
+      let query = params.get('query') ?? ''
+      let after = query.match(/\.after=(\S+)/)?.[1] ?? ''
+      let ids = query.match(/\.entity\.eid=(\S+)/)?.[1].split(',')
+      if (ids) named.push(ids)
       let limit = Number(params.get('limit'))
       return Promise.resolve({
         ok: true,
-        value: bugs.filter((b) => b.entity.eid > after).slice(0, limit),
+        value: bugs.filter((b) =>
+          b.entity.eid > after && (!ids || ids.includes(b.entity.eid))
+        ).slice(0, limit),
       })
     },
     mark: (bug, name, said) => {
@@ -25,7 +31,7 @@ let worker = (count: number) => {
       return Promise.resolve(true)
     },
   }
-  return { doors, marks }
+  return { doors, marks, bugs, named }
 }
 let remote = { url: 'https://tracker.example', secret: 'test' }
 
@@ -51,6 +57,19 @@ test('a poll answers every page of the platform tracker, and marks reach it', as
   ])
   equal(marks, ['resolved a race', 'archived b', 'taken d T-7'])
   open.close()
+})
+
+let named = worker(230)
+let namedPoll = poll(remote, '.bug.status=open', { doors: named.doors })
+let namedBugs = named.bugs.slice(0, 150)
+let namedGot = await namedPoll.get([
+  ...namedBugs.map((b) => b.entity.eid),
+  'gone',
+])
+namedPoll.close()
+test('a poll reads bugs by id whatever its query, a page of ids to a request', () => {
+  equal(namedGot, namedBugs)
+  equal(named.named.map((ids) => ids.length), [100, 51])
 })
 
 // Signing and the failed response are the fixture. Await the subscriber, not

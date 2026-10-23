@@ -24,6 +24,8 @@ export type Polled = {
    * Worker. Its marks carry no precondition, so a bundle's `$was` is not
    * checked. */
   mutate: (bundles: Bundle[]) => Promise<Bundle[]>
+  /** the bugs among `eids`, whatever the poll's query, asked once */
+  get: (eids: string[]) => Promise<Bundle[]>
 }
 
 /** The Worker's doors a poll asks: a page of its bugs, and a mark. */
@@ -124,10 +126,10 @@ export let poll = (
     )
     return { signal: AbortSignal.any([stop.signal, late.signal]), cancel }
   }
-  let page = async (after: string): Promise<Bundle[]> => {
+  let page = async (asked: string, after: string): Promise<Bundle[]> => {
     let params = new URLSearchParams({
       limit: String(PAGE),
-      query: `${query} .order=entity.eid${after ? ` .after=${after}` : ''}`,
+      query: `${asked} .order=entity.eid${after ? ` .after=${after}` : ''}`,
     })
     let { signal, cancel } = opts.timeout
       ? deadline(opts.timeout)
@@ -143,7 +145,7 @@ export let poll = (
   let all = async () => {
     let rows: Bundle[] = [], after = ''
     for (;;) {
-      let got = await page(after)
+      let got = await page(query, after)
       rows.push(...got)
       if (got.length < PAGE) return rows
       after = got.at(-1)!.entity.eid
@@ -200,6 +202,16 @@ export let poll = (
         if (name) await doors.mark(b.entity.eid, name, saying(b[name]))
       }
       return bundles
+    },
+    // A page's worth of ids at a time keeps each request's address short,
+    // and its answer to one page.
+    get: async (eids) => {
+      let rows: Bundle[] = []
+      for (let at = 0; at < eids.length; at += PAGE) {
+        let some = eids.slice(at, at + PAGE).join(',')
+        rows.push(...await page(`.bug .entity.eid=${some}`, ''))
+      }
+      return rows
     },
   }
 }

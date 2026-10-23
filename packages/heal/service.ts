@@ -10,7 +10,7 @@ import {
   WriteRefused,
 } from '@yaks/client'
 import { sleep } from '@yaks/effects'
-import type { Graph } from '@yaks/graph'
+import type { Bundle, Graph } from '@yaks/graph'
 import type { Host } from '@yaks/host'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel'
 import { provenanceDoc } from '@yaks/provenance'
@@ -19,15 +19,33 @@ import { trackerDoc } from '@yaks/tracker/vocab'
 import { poll } from '@yaks/tracker/poll'
 import type { Remote } from '@yaks/tracker/remote'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
-import { follow } from './follow.ts'
+import { follow, owed } from './follow.ts'
 import type { Options as FixOptions } from './fix.ts'
 
 export { follow, taskEid } from './follow.ts'
 
-/** A tracker answer and its acknowledged write door, on the same client. */
+/** A tracker's open bugs, its acknowledged write door, and a read of any of
+ * its bugs by id, on the same client. */
 export type Tracker =
   & Pick<Watch, 'query' | 'value' | 'ready' | 'subscribe' | 'close'>
-  & { refused?: string; mutate: Client['mutate'] }
+  & {
+    refused?: string
+    mutate: Client['mutate']
+    /** the bugs among `eids`, whatever their marks, asked once */
+    get: (eids: string[]) => Promise<Bundle[]>
+  }
+
+// A tracker answers its open bugs, carrying what reconciling one reads, so
+// the answer costs what its open bugs cost. A resolved or archived bug is
+// asked for by id while work here is still open about it (`owed`).
+let followed = '.bug.status=open ?doc ?regressed ?taken'
+let named = (eids: string[]) =>
+  `.bug .entity.eid=${
+    eids.join(',')
+  } ?doc ?regressed ?resolved ?archived ?taken`
+
+/** How long a tracker may take to answer a read by id, in ms. */
+const ASK = 30_000
 
 /** How the platform tracker is named among the followed trackers. */
 export const PLATFORM = 'yaks.app'
@@ -68,14 +86,37 @@ export let track = (url: string, options: ClientOpts = {}): Tracker => {
     vault: false,
     wireVault: false,
   })
+  // Reads by id still unanswered, each failed when the tracker closes.
+  let asking = new Set<(error: Error) => void>()
+  // A read by id is a watch the server answers, closed at its first answer.
+  // One the tracker cannot answer within `ASK` fails, and a later pass asks
+  // again.
+  let get = (eids: string[]) =>
+    new Promise<Bundle[]>((resolve, reject) => {
+      let watch = remote.watch(named(eids), { evaluate: 'server' })
+      let off = () => {}
+      let end = (settle: () => void) => {
+        off()
+        clearTimeout(late)
+        asking.delete(fail)
+        watch.close()
+        settle()
+      }
+      let fail = (error: Error) => end(() => reject(error))
+      let heard = () =>
+        watch.refused
+          ? fail(new Error(watch.refused))
+          : watch.ready && end(() => resolve(watch.value))
+      let late = setTimeout(
+        () => fail(new Error(`${url} did not answer a read by id in time`)),
+        ASK,
+      )
+      asking.add(fail)
+      off = watch.subscribe(heard)
+      heard()
+    })
   try {
-    // Terminal bugs remain visible so their marks can close existing work.
-    let watch = remote.watch(
-      '.bug ?doc ?regressed ?resolved ?archived ?taken',
-      {
-        evaluate: 'server',
-      },
-    )
+    let watch = remote.watch(followed, { evaluate: 'server' })
     return {
       get query() {
         return watch.query
@@ -91,7 +132,11 @@ export let track = (url: string, options: ClientOpts = {}): Tracker => {
       },
       subscribe: watch.subscribe,
       mutate: remote.mutate,
-      close: () => remote.close(),
+      get: (eids) => eids.length ? get(eids) : Promise.resolve([]),
+      close: () => {
+        for (let fail of asking) fail(new Error(`${url} closed`))
+        remote.close()
+      },
     }
   } catch (error) {
     remote.close()
@@ -124,6 +169,8 @@ export let service = async (
   // periodic pass. Replaying every open bug for each new hit made cap checks
   // spend the whole worker on the same fixer transcripts.
   let replayed = new Map<string, string>()
+  // The open bugs each tracker answered at its last pass.
+  let members = new Map<string, Set<string>>()
   let whole = -Infinity
   // A changed answer ends the wait at once; the timer re-checks tasks and gates.
   let nudge = () => {}
@@ -137,7 +184,7 @@ export let service = async (
   let open = options.open ??
     ((url: string) =>
       url == PLATFORM
-        ? poll(options.remote!, '.bug', {
+        ? poll(options.remote!, followed, {
           every: options.every && Math.min(options.every, 30_000),
           report: (error) => void report(error),
         })
@@ -158,6 +205,18 @@ export let service = async (
       let began = Date.now()
       let all = began - whole >= every
       let covered = true
+      // A whole pass also asks the trackers after what the box's open work is
+      // about, so a bug resolved or archived while no pass heard it, before a
+      // restart say, still closes its work.
+      let owing: string[] = []
+      if (all) {
+        try {
+          owing = await owed(host.graph)
+        } catch (error) {
+          covered = false
+          await report(error)
+        }
+      }
       for (let url of urls) {
         if (!once && signal.aborted) return
         try {
@@ -183,21 +242,37 @@ export let service = async (
             if (url == platform && !once && !heard.has(url)) break
             continue
           }
-          let due = watch.value.flatMap((bug) => {
-            let key = `${url} ${bug.entity.eid}`
-            // Occurrence counts and last-seen timestamps change on every hit;
-            // they do not change the work or a fixer gate. A regression, mark
-            // or changed evidence does, and the periodic pass retries gates.
-            let row = JSON.stringify([
-              (bug.bug as Record<string, unknown>).fault,
-              bug.doc,
-              bug.regressed,
-              bug.resolved,
-              bug.archived,
-              bug.taken,
-            ])
-            return all || replayed.get(key) != row ? [{ bug, key, row }] : []
-          })
+          let held = new Set(watch.value.map((bug) => bug.entity.eid))
+          // A bug that left the answer was resolved or archived: its marks
+          // are read by id at once, to close its work. One whose read fails
+          // stays a member, so the next pass asks again.
+          let left = [...members.get(url) ?? []].filter((eid) => !held.has(eid))
+          let asked = [...new Set([...left, ...owing])]
+            .filter((eid) => !held.has(eid))
+          let closed = asked.length ? await watch.get(asked) : []
+          members.set(url, held)
+          for (let eid of left) replayed.delete(`${url} ${eid}`)
+          let due = [
+            ...watch.value.flatMap((bug) => {
+              let key = `${url} ${bug.entity.eid}`
+              // Occurrence counts and last-seen timestamps change on every
+              // hit; they do not change the work or a fixer gate. A
+              // regression, mark or changed evidence does, and the periodic
+              // pass retries gates.
+              let row = JSON.stringify([
+                (bug.bug as Record<string, unknown>).fault,
+                bug.doc,
+                bug.regressed,
+                bug.taken,
+              ])
+              return all || replayed.get(key) != row ? [{ bug, key, row }] : []
+            }),
+            ...closed.map((bug) => ({
+              bug,
+              key: `${url} ${bug.entity.eid}`,
+              row: undefined,
+            })),
+          ]
           if (!due.length) continue
           let settle = await reconcile(
             due.map(({ bug }) => bug),
@@ -208,7 +283,7 @@ export let service = async (
             if (!once && signal.aborted) return
             try {
               await settle(bug)
-              replayed.set(key, row)
+              if (row) replayed.set(key, row)
             } catch (error) {
               replayed.delete(key)
               await report(error)

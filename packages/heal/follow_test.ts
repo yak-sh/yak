@@ -94,6 +94,14 @@ let bareTrackerVocab = loadVocab(
   })),
   [kernelKeywords],
 )
+// A tracker's door over a RAM tracker graph: its open bugs, its marks, and
+// its bugs read by id.
+let door = (tracker: Graph, seen: ReturnType<typeof watches>) =>
+  Object.assign(seen.watch('.bug.status=open ?doc ?regressed ?taken'), {
+    mutate: (rows: Bundle[]) => tracker.apply(rows, { trusted: true }),
+    get: async (eids: string[]) =>
+      (await tracker.get(eids)).filter((row) => row.bug),
+  })
 let trackerGraph = (unstamped = false) => {
   let schema = unstamped ? bareTrackerVocab : trackerVocab
   return graph({
@@ -168,13 +176,7 @@ let fixture = async (options: Options = {}, unstamped = false) => {
     project,
     effort: 'high',
     trackers: [url],
-    open: () =>
-      Object.assign(
-        seen.watch('.bug ?doc ?regressed ?resolved ?archived ?taken'),
-        {
-          mutate: (rows: Bundle[]) => tracker.apply(rows, { trusted: true }),
-        },
-      ),
+    open: () => door(tracker, seen),
     ...options,
   }
   let errors: unknown[] = []
@@ -473,8 +475,8 @@ await service({ ...flood.host, graph: watchedFlood }, {
 let asked = (b: string) => floodRead.filter((eid) => eid == taskEid(b)).length
 // The completed replay is the fixture; timed checks inspect its observations.
 flood.close()
-test('occurrence-only tracker hits do not replay unchanged open or closed work', () => {
-  equal(gone.map(asked), [2, 1, 1])
+test('occurrence-only hits replay no unchanged work, and closed bugs cost no read', () => {
+  equal(gone.map(asked), [2, 0, 0])
   equal(asked(bug), 2)
 })
 
@@ -588,11 +590,22 @@ let remote = async (unstamped = false) => {
     }
     ok(watch.ready)
   }
+  // A read by id through the API, its frames delivered as they come.
+  let ask = async (eids: string[]) => {
+    let done = false
+    let answer = watch.get(eids).finally(() => done = true)
+    for (let i = 0; !done && i < 100; i++) {
+      while (frames.length) frames.shift()!()
+      await Promise.resolve()
+    }
+    return answer
+  }
   await ready()
   return {
     ...f,
     watch,
     ready,
+    ask,
     posts: () => posts,
     down: (value: boolean) => unavailable = value,
     lose: (value = true) => lose = value,
@@ -632,19 +645,15 @@ let reconnectMembers = await reconnected.tracker.read(
 )
 reconnected.reconnect()
 await reconnected.ready()
+let [reconnectResolved] = await reconnected.ask([bug])
+reconnected.watch.close()
+reconnected.close()
 test('the headless tracker reconnect replaces stale query membership', () => {
   equal(reconnectMembers.map((row) => row.entity.eid), [replacement])
-  equal(
-    reconnected.watch.value.filter((row) => !row.resolved).map((row) =>
-      row.entity.eid
-    ),
-    [replacement],
-  )
+  equal(reconnected.watch.value.map((row) => row.entity.eid), [replacement])
 })
-test('a reconnect retains the resolved bug beside replacement membership', () => {
-  ok(reconnected.watch.value.find((row) => row.entity.eid == bug)?.resolved)
-  reconnected.watch.close()
-  reconnected.close()
+test('a bug resolved while disconnected is read by id with its mark', () => {
+  ok(reconnectResolved.resolved)
 })
 
 // Completed work whose bug regressed inside the fixer's cooldown.
@@ -695,8 +704,9 @@ for (
     [bugMark]: { at: '2026-10-02T00:00:02Z' },
   }])
   await f.ready()
-  test(`the headless answer carries a tracker ${bugMark} mark to its task`, async () => {
-    let row = f.watch.value.find((row) => row.entity.eid == bug)!
+  let [row] = await f.ask([bug])
+  test(`a tracker ${bugMark} bug leaves the headless answer, and its mark read by id closes its task`, async () => {
+    equal(f.watch.value, [])
     ok(row[bugMark])
     await alone(f.g)(row, url, f.watch.mutate)
     ok((await f.g.get([taskEid(bug)]))[0][taskMark])
@@ -886,6 +896,33 @@ test('cancelling completed work archives its bug once', async () => {
   archivedLater.close()
 })
 
+// A bug resolved after its work was filed: between two passes of one
+// follower, or while none ran. Either way the follower reads it by id.
+for (let between of [true, false]) {
+  let f = await off()
+  let resolve = () =>
+    put(f.tracker, [{
+      entity: { eid: bug },
+      resolved: { at: '2026-10-02T00:00:02Z' },
+    }])
+  if (!between) await f.run().then(resolve)
+  let stop = new AbortController(), waits = 0
+  let task = async () => (await f.g.get([taskEid(bug)]))[0]
+  await service(f.host, {
+    ...f.config,
+    // The tracker's answer moves a moment after the write: pass until then.
+    wait: async () => {
+      if (between && ++waits == 1) await resolve()
+      else if (!between || waits > 20 || (await task()).completed) stop.abort()
+    },
+  }, stop.signal)
+  let [completed] = [comp(await task(), 'completed')]
+  f.close()
+  test(`a bug resolved ${between ? 'between passes' : 'while no follower ran'} completes its work`, () => {
+    equal(completed?.at, '2026-10-02T00:00:02Z')
+  })
+}
+
 let heldRegression = await fixture({ cooldown: 0, cap: 0 })
 await heldRegression.run()
 await put(heldRegression.g, [{
@@ -913,7 +950,7 @@ test('the follower marks the bug only in the tracker that holds its eid', async 
     trackers: ['http://empty.test', url],
     open: (address) =>
       address == url ? elsewhere.config.open!(address) : {
-        ...emptySeen.watch('.bug ?doc ?regressed ?resolved ?archived'),
+        ...door(emptyTracker, emptySeen),
         mutate: () => {
           throw new Error('no bug lives here')
         },
@@ -1069,6 +1106,7 @@ test("until the platform's first poll settles, no other tracker's bug takes a sl
           ),
           close: () => {},
           mutate: (rows: Bundle[]) => Promise.resolve(rows),
+          get: () => Promise.resolve([]),
         }
         : held.config.open!(at),
     wait: async () => {

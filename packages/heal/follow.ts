@@ -8,7 +8,7 @@ import { token } from '@yaks/graph/sha256'
 import type { Client } from '@yaks/client'
 import { link } from '@yaks/edge'
 import { human } from '@yaks/id'
-import { and, eq, list, present } from '@yaks/query'
+import { absent, and, eq, fields, list, present } from '@yaks/query'
 import { remoteBug } from '@yaks/tracker'
 import { active, fixing, type Options } from './fix.ts'
 
@@ -25,6 +25,25 @@ let comp = (row: Bundle | undefined, name: string) =>
   row?.[name] as Comp | undefined
 let str = (value: unknown) => value == null ? '' : String(value)
 let moment = (value: unknown) => Date.parse(str(value))
+
+// What a task neither completed nor cancelled is about.
+let opened = and(
+  present('about'),
+  present('edge.from.task'),
+  absent('edge.from.completed'),
+  absent('edge.from.cancelled'),
+  fields('edge.to'),
+)
+
+/** What the box's open work is about. Among it is every bug whose
+ * resolution or archival still has a task to close, however long ago the bug
+ * left its tracker's open answer, so a follower asks its trackers for these
+ * by id rather than following every bug ever filed. */
+export let owed = async (g: Graph): Promise<string[]> => [
+  ...new Set(
+    (await g.read(opened)).map((edge) => str(comp(edge, 'edge')?.to)),
+  ),
+]
 
 // A later service pass can resend a mark while the headless client's unknown
 // outcome is still queued. The same guarded intent must keep the same receipt;

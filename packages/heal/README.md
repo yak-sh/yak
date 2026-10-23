@@ -36,16 +36,22 @@ in place. A configured `project` is needed to enable the switch. The read-only
 
 ## What happens
 
-The `@yaks/heal/service` **follower** follows bugs in the configured tracker
-graphs through a headless [client](../client/README.md) subscription on `/ws`,
-and the platform tracker on yaks.app, when `remote` names it, through
-[tracker](../tracker/README.md)'s polled `./poll` watch. A **pass** reconciles
-the bugs of each followed tracker in turn: every bug in a periodic pass, or only
-the bugs whose answer moved. The platform's bugs reach people, so each pass
-takes them first, and after a restart no other tracker's bug takes a fixer slot
-until the platform's first poll settles (answered or failed, within a minute).
-The Worker has no page, so their tasks link the bug's page on the first
-configured tracker web (`/?q=.bug&side=yaks.app&bug=<eid>`), or with none name
+The `@yaks/heal/service` **follower** follows the open bugs (`.bug.status=open`)
+of the configured tracker graphs through a headless
+[client](../client/README.md) subscription on `/ws`, and of the platform tracker
+on yaks.app, when `remote` names it, through [tracker](../tracker/README.md)'s
+polled `./poll` watch, so an answer costs what its open bugs cost, never every
+bug ever filed. A **pass** reconciles the bugs of each followed tracker in turn:
+every open bug in a periodic pass, or only the bugs whose answer moved. A bug
+that left an answer was resolved or archived, and the pass reads it from that
+tracker by id with its marks; a periodic pass also reads by id what the box's
+open work is about (`about` edges from tasks neither completed nor cancelled),
+so a bug closed while no pass heard it, before a restart say, still closes its
+work. The platform's bugs reach people, so each pass takes them first, and after
+a restart no other tracker's bug takes a fixer slot until the platform's first
+poll settles (answered or failed, within a minute). The Worker has no page, so
+their tasks link the bug's page on the first configured tracker web
+(`/?q=.bug&side=yaks.app&bug=<eid>`), or with none name
 `yak bug show <eid> --source yaks.app`. Its marks carry no precondition. The
 tracker web role serves that query independently of intake. One process holds
 the `@yaks/heal` service lease: the subscription and the serial fixer decisions
@@ -111,9 +117,9 @@ remain cancelled.
 
 A cancelled task archives its bug. A completed task resolves nothing: a
 resolution needs its explanation, which only the resolver can give, so its bug
-stays open until someone resolves it explained. The follower keeps resolved and
-archived bugs in its answer. A tracker resolution completes its task; archival
-cancels it. Cancelling work after completion still archives its bug. Only open
+stays open until someone resolves it explained. A tracker resolution completes
+its task; archival cancels it. Cancelling work after completion archives its bug
+while the bug is open; a resolved one is archived if it regresses. Only open
 bugs file tasks or request fixers. A running fixer that holds a bug's task marks
 the bug `taken{task}` in its tracker, as soon as heal starts it and again on a
 replay that finds no mark for the bug's current opening, so the bug's letter
@@ -129,7 +135,8 @@ the durable receipt: every pass, including the first after a restart, retries a
 missing mark without a retry limit or a separate checkpoint. An existing mark
 writes nothing. Preconditions on the marks and regression reject a stale answer
 if the tracker changes before admission. Each configured tracker receives only
-marks for bugs in its own answer. No tracker database is opened.
+marks for bugs it answered, in its answer or by id. No tracker database is
+opened.
 
 The subscription reconnects with [sync](../sync/README.md)'s backoff and asks
 for a fresh answer; while disconnected, its cached answer is not ready and files
@@ -182,8 +189,9 @@ The root export is `healDoc` and the pure `actionable` filter.
 `@yaks/heal/vocab` exports `docs` for plugin loaders. `@yaks/heal/service`
 exports `service`, `track` (a headless tracker watch), `follow` (one tracker's
 pass), and `taskEid`. `service` accepts `open(url)` returning a `Tracker` (a
-client `Watch` with `mutate`) and an abortable `wait(ms, signal)` for hosts with
-their own graph transport or clock.
+client `Watch` of the open bugs, with `mutate` and `get`, which reads bugs by id
+whatever their marks) and an abortable `wait(ms, signal)` for hosts with their
+own graph transport or clock.
 
 `await follow(graph, options)(bugs, url, tracker.mutate)` reads the pass's work
 for `bugs` and answers `(bug) => Promise<void>`, which reconciles one of them
