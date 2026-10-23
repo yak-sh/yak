@@ -332,12 +332,9 @@ supplies the connector's title, brief and description. Link each offered page
 from `workers/yak/public/docs.md` and add its slug to `PAGES` in
 `workers/yak/guide.ts`. After editing a page, run `deno task content`
 to regenerate `workers/yak/content.ts` and the connector skills under
-`plugins/yaks.app/`; don't edit those projections by hand. Check with
-`deno task content --check` and
-`deno task test workers/yak/guide_test.ts workers/yak/content_test.ts`, plus
-`deno task test` on the tests you change. Examples and claims must be
-checked against the implementing packages and working apps, not just against
-other prose.
+`plugins/yaks.app/`; don't edit those projections by hand. Examples and
+claims must be checked against the implementing packages and working apps,
+not just against other prose.
 
 ## Debugging an app
 

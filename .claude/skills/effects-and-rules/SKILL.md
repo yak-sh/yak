@@ -234,9 +234,8 @@ explicitly authorized.
   its own (M-37965) rather than hold a failure until the next deploy.
 
 When a declaration narrows or an opt-in is disabled, pending runs can outlive
-what owed them. After proving the declaration and settlement on a scratch
-server, `host.fx.settle(host.graph, '<effect>')` settles unclaimed pending runs
-that the declaration or configuration no longer owes, through guarded graph
+what owed them. `host.fx.settle(host.graph, '<effect>')` settles unclaimed
+pending runs that the declaration or configuration no longer owes, through guarded graph
 writes and the ordinary successful-run cleanup. The pool also settles disabled
 runs an older writer leaves during a rolling restart, without invoking a handler or spending an attempt. Settlement preserves
 failures and claims; removal runs whose old scope is no longer available are

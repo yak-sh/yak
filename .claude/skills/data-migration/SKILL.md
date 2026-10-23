@@ -165,10 +165,10 @@ alarm once it serves, fifty rows to a transaction. workers/yak/README.md,
 The owner's standing word for these, on D-45640 and D-59037, verbatim on the
 latter: "and let's ensure that the migrations don't bring down yaks apps".
 
-A live Worker can still call an object running its previous code for minutes.
-Readiness therefore reaches the changed interface through the queue and object,
-as the tracker deployment canary does, repeating one immutable capture until its
-grouping receipt arrives. A queue send acknowledges transport, not destination
+A live Worker can still call an object running its previous code for minutes,
+so a changed interface between them answers the old form and the new while the
+two overlap (expand, migrate, contract), rather than waiting for the old code to
+go. A queue send acknowledges transport, not destination
 admission. For a forwarding move, count the source receipts and verify the
 destination identities, including archived or notified records. Failed delivery
 can leave complete captures in the dead-letter queue: preserve them, replay their
