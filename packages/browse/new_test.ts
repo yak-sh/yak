@@ -10,6 +10,7 @@ import { docs as provenance } from '@yaks/provenance/vocab'
 import { docs as edge } from '@yaks/edge/vocab'
 import { docs as doc } from '@yaks/doc/vocab'
 import { docs as task } from '@yaks/task/vocab'
+import { docs as session } from '@yaks/session/vocab'
 import { docs as topic } from '@yaks/topic/vocab'
 import { keywords } from './types.ts'
 import { batch, type Context, find, like, type Sketch } from './new.ts'
@@ -20,6 +21,7 @@ let vocab = loadVocab([
   ...edge,
   ...doc,
   ...task,
+  ...session,
   ...topic,
   {
     $defs: {

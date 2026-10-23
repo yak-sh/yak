@@ -41,6 +41,7 @@ let vocab = loadVocab([
   toolsDoc,
   memoryDoc,
   topicDoc,
+  { $defs: { session: { component: true, type: 'object', kind: true } } },
 ], [kernelKeywords, edgeKeywords])
 let store = ram(vocab)
 
@@ -79,8 +80,6 @@ store.tx((tx) =>
     doc('guide', 'The guide'),
     doc('spec', 'The spec'),
     doc('said', 'what Jeff said'),
-    doc('farmer', 'Data oracle'),
-    link('farmer', 'tends', 'data'),
     link('world', 'contains', 'data'),
     link('data', 'contains', 'model', 1),
     link('data', 'contains', 'fleet', 2),
@@ -108,13 +107,19 @@ let tile: View = {
   Render: ({ e }) => h('span', { 'data-tile': e.entity.eid }, title(e)),
 }
 let registry = define<View>([...inspectViews, ...all, tile])
-// A host that draws a comment thread, as browse does (@yaks/kernel's).
+// A host that draws a comment thread, as browse does (@yaks/kernel's), and a
+// conversation, as browse's chat does.
 let thread: View = {
   view: 'Comments',
   match: and(),
   Render: ({ e }) => h('form', { 'data-thread': e.entity.eid }),
 }
-let talking = define<View>([...inspectViews, ...all, tile, thread])
+let chat: View = {
+  view: 'Conversation',
+  match: and(),
+  Render: ({ e }) => h('form', { 'data-chat': e.entity.eid }),
+}
+let talking = define<View>([...inspectViews, ...all, tile, thread, chat])
 
 let host = (state: Bundle[] = [], ready = true, views = registry): Io => {
   let answers = (asks: Asks) =>
@@ -215,10 +220,9 @@ test('what it holds, needs, relates to and cites, each by its own face', () => {
   equal(part(data, 'Links'), null)
 })
 
-test('the head says what holds it, where it holds and who tends it', () => {
+test('the head says what holds it and where it holds', () => {
   let sub = data.querySelector('.Head_Sub')?.textContent ?? ''
-  equal(sub, 'in Ids, World · holds everywhere · tended by Data oracle')
-  ok(!naming.querySelector('.Head_Sub')?.textContent?.includes('tended'))
+  equal(sub, 'in Ids, World · holds everywhere')
   ok(
     scoped.querySelector('.Head_Sub')?.textContent?.includes('holds for Fleet'),
   )
@@ -246,6 +250,11 @@ let talked = drawn('data', 'Topic', host([], true, talking))
 test('a topic is commented on where the host draws a thread', () => {
   ok(part(talked, 'Comments')?.querySelector('[data-thread="data"]'))
   equal(part(data, 'Comments'), null)
+})
+
+test('a topic is asked about where the host draws a conversation', () => {
+  ok(part(talked, 'Ask')?.querySelector('[data-chat="data"]'))
+  equal(part(data, 'Ask'), null)
 })
 
 // The shelves as drawn: each topic's id, and the shelves open under it.

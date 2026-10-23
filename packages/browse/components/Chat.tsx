@@ -3,8 +3,12 @@
 // reload or another browser finds the same transcript. On a persona the
 // conversation is with it: a message to it begins a native session wearing it
 // on the host's default model (D-130780), as `yak session new --persona`
-// does. On any other document the chat plan picks a provider.
+// does. On a topic it is with the oracle, the session opened on the topic
+// (D-131941), as `yak session new --topic` does. On any other document the
+// chat plan picks a provider. The conversation alone is `Conversation`, the
+// part a topic's page asks its host for.
 import { useRef, useState } from 'preact/hooks'
+import { ORACLE } from '@yaks/topic'
 import { sessionFrames } from '../client.ts'
 import { mutate, myActor, useHold, uuid } from '../live.ts'
 import { catalog, type Provider, usingOf } from '../providers.ts'
@@ -81,14 +85,23 @@ export let ReferenceList = (
     : null
 }
 
+/** Who a chat talks to, and what about: the persona its session wears, and
+ * the topic it is opened on. */
+export type Voice = { persona: string; topic?: string }
+
 // Who a chat on `e` talks to: `e` itself when it is a persona, so a chat
-// there is a message to it (D-130780); no one in particular otherwise.
-export let voiceOf = (e: Ent): string | undefined =>
-  e.persona ? e.eid : undefined
+// there is a message to it (D-130780); the oracle when it is a topic, about
+// that topic (D-131941); no one in particular otherwise.
+export let voiceOf = (e: Ent): Voice | undefined =>
+  e.persona
+    ? { persona: e.eid }
+    : e.topic
+    ? { persona: ORACLE, topic: e.eid }
+    : undefined
 
 // A chat is opened by the person typing its first ask, bound to this actor
-// and document; one sent to a persona is native and wears it. A new one
-// unbinds the old.
+// and document; one sent to a persona or a topic is native and wears the
+// persona, opened on the topic. A new one unbinds the old.
 export let chatChanges = (
   old: string | undefined,
   session: string,
@@ -96,16 +109,26 @@ export let chatChanges = (
   target: string,
   using: { provider: string; model?: string; effort?: string },
   body: string,
-  persona?: string,
+  voice?: Voice,
 ): Change[] => [
   ...(old ? [{ eid: old, name: 'chat', comp: null } as Change] : []),
   ...sessionFrames(session, body, using, {
     operator: true,
-    persona,
-    native: !!persona,
+    ...voice,
+    native: !!voice,
   }),
   { eid: session, name: 'chat', comp: { actor, target } },
 ]
+
+// What the first line says it starts.
+let invite = (e: Ent): string => {
+  let voice = voiceOf(e)
+  return voice?.topic
+    ? `ask about ${e.doc?.title || 'this topic'}…`
+    : voice
+    ? `message ${e.doc?.title || 'this persona'}…`
+    : 'start a chat…'
+}
 
 // The provider and model a document's chat runs on, by the chat plan.
 let planned = async () => {
@@ -131,9 +154,9 @@ export let Starter = (
     if (!body || state) return
     setState('Starting chat…')
     try {
-      let persona = voiceOf(e)
-      let using = persona ? await nativeUsing() : await planned()
-      mutate(...chatChanges(old, uuid(), actor, e.eid, using, body, persona))
+      let voice = voiceOf(e)
+      let using = voice ? await nativeUsing() : await planned()
+      mutate(...chatChanges(old, uuid(), actor, e.eid, using, body, voice))
       done()
     } catch (error) {
       setState(error instanceof Error ? error.message : String(error))
@@ -145,9 +168,7 @@ export let Starter = (
         lines
         elRef={box}
         rows={3}
-        placeholder={voiceOf(e)
-          ? `message ${e.doc?.title || 'this persona'}…`
-          : 'start a chat…'}
+        placeholder={invite(e)}
         onKeyDown={(event: KeyboardEvent) => {
           if (event.key != 'Enter' || event.shiftKey) return
           event.preventDefault()
@@ -159,40 +180,48 @@ export let Starter = (
   )
 }
 
-export let Chat = ({ e }: { e: Ent }) => {
+// This actor's conversation on `e`: the session it last bound here, or a
+// line to start one. Nothing for a reader with no actor.
+export let Conversation = ({ e }: { e: Ent }) => {
   let actor = myActor()
-  let cited = useReferences(e.eid)
   let selected = useChatFor(actor, e.eid)
   let [fresh, setFresh] = useState(false)
+  return actor
+    ? (
+      <section class='Chat_Conversation'>
+        <Head>
+          <Label>chat</Label>
+          {selected && (
+            <New
+              type='button'
+              onClick={() => setFresh((value) => !value)}
+            >
+              {fresh ? 'current chat' : 'new chat'}
+            </New>
+          )}
+        </Head>
+        {selected && !fresh
+          ? <Entity eid={selected.eid} view='Session' />
+          : (
+            <Starter
+              e={e}
+              actor={actor}
+              old={selected?.eid}
+              done={() => setFresh(false)}
+            />
+          )}
+      </section>
+    )
+    : null
+}
+
+export let Chat = ({ e }: { e: Ent }) => {
+  let cited = useReferences(e.eid)
   return (
     <Frame>
       <ReferenceList label='references' items={cited.out} />
       <ReferenceList label='referenced by' items={cited.in} held />
-      {actor && (
-        <section class='Chat_Conversation'>
-          <Head>
-            <Label>chat</Label>
-            {selected && (
-              <New
-                type='button'
-                onClick={() => setFresh((value) => !value)}
-              >
-                {fresh ? 'current chat' : 'new chat'}
-              </New>
-            )}
-          </Head>
-          {selected && !fresh
-            ? <Entity eid={selected.eid} view='Session' />
-            : (
-              <Starter
-                e={e}
-                actor={actor}
-                old={selected?.eid}
-                done={() => setFresh(false)}
-              />
-            )}
-        </section>
-      )}
+      <Conversation e={e} />
     </Frame>
   )
 }

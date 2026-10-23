@@ -7,6 +7,10 @@
  * sources it cites (`cites{hash}`); those relations are @yaks/task's and
  * @yaks/kernel's, and nothing here copies them.
  *
+ * A topic is also a session's context: a session opened on one
+ * (`session.topic`) wears the {@link ORACLE} persona and starts from the
+ * topic's tree, read by `gather` and written as markdown by `compile`.
+ *
  * ```ts
  * import { fits, named, overlaps } from '@yaks/topic'
  *
@@ -15,7 +19,7 @@
  * fits('data modeling', 'data model') // true
  * ```
  *
- * The tools, `topic_find`, `topic_new` and `topic_add`, are
+ * The tools, `topic_find`, `topic_new`, `topic_add` and `topic_read`, are
  * `@yaks/topic/tools`.
  *
  * @module
@@ -28,10 +32,22 @@ export {
   found,
   HOLDS,
   named,
+  ORACLE,
   overlaps,
-  TENDS,
   TOPIC,
   TOPICS,
 } from './topic.ts'
+export {
+  type Branch,
+  BUDGET,
+  compile,
+  CUT,
+  cut,
+  gather,
+  type Gathered,
+  GIST,
+  LEVELS,
+  LINES,
+} from './context.ts'
 export { type Shelf, shelves, within } from './shelves.ts'
 export { topicDoc } from './vocab.ts'

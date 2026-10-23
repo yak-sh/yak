@@ -57,6 +57,7 @@ import { SearchTile } from './views/Search.tsx'
 import { Layout } from './views/Layout.tsx'
 import { Dashboard } from './views/Dashboard.tsx'
 import { Persona } from './views/Persona.tsx'
+import { Conversation } from './Chat.tsx'
 import { MemoryTile } from './views/Memory.tsx'
 import { TaskTile } from './views/TaskTile.tsx'
 import { BoardMeta, BoardTile } from './views/BoardTile.tsx'
@@ -263,6 +264,14 @@ define([
   { view: 'Runs', match: and(), Render: Runs },
   { view: 'Similar', match: and(), Render: Similar },
   { view: 'Comments', match: and(), Render: Talkback },
+  // The conversation alone, which a topic's page asks for as its Ask part.
+  // Named when it draws, not here: ./Chat.tsx imports this module, so when it
+  // loads first, Conversation is not yet defined while this list is made.
+  {
+    view: 'Conversation',
+    match: and(),
+    Render: ({ e }) => <Conversation e={e} />,
+  },
   { view: 'Card.Title', match: parse('.wake .deliver'), Render: WakeTitle },
   { view: 'Card.Title', match: parse('.doc .task'), Render: TaskTitle },
   { view: 'Card.Title', match: parse('.doc .board'), Render: BoardTitle },

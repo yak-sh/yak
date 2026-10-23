@@ -16,6 +16,7 @@
 // project to be its own topic, and keeps its eid when its name changes.
 
 import type { Bundle } from '@yaks/graph'
+import { derivedEid } from '@yaks/graph/identity'
 import { tokens } from '@yaks/match'
 import { stemmer } from 'stemmer'
 
@@ -25,8 +26,11 @@ export let TOPIC = 'topic'
 /** The relation from a topic to what it holds (@yaks/task's word). */
 export let HOLDS = 'contains'
 
-/** The relation from a persona to the topic it looks after, its oracle. */
-export let TENDS = 'tends'
+/** The oracle: the one persona a session opened on a topic wears where whoever
+ * opened it named none. Its eid is derived from a fixed sentence, as
+ * @yaks/harness's own row is, so every graph names it alike and no door looks
+ * it up; what it says is a row like any persona's. */
+export let ORACLE: string = derivedEid('@yaks/topic oracle')
 
 /** How many topics a find returns when the caller gave no limit. */
 export let FIND = 12

@@ -1,13 +1,14 @@
 /**
  * A topic's page, read the way a book is: its cover (`doc{title, body}`, the
- * title and a line or two saying what belongs under it), its contents
- * (`content.body`, what is understood about it), then what it holds
- * (`contains`), what to understand first (`requires`), what is related
- * (`reads`, `references`) and its sources (`cites`), the beliefs about it
- * (`belief.about`), and the comments on it, with a line to write one, where
- * the host draws a thread (`Comments`); last, the parts any page has
- * (`io.show`: the facts, the links, the history). Its head says what holds it,
- * where it holds, and who tends it (`tends`, its oracle).
+ * title and a line or two saying what belongs under it), a line to ask about
+ * it where the host draws a conversation (`Conversation`: a session opened on
+ * the topic, wearing the oracle), its contents (`content.body`, what is
+ * understood about it), then what it holds (`contains`), what to understand
+ * first (`requires`), what is related (`reads`, `references`) and its sources
+ * (`cites`), the beliefs about it (`belief.about`), and the comments on it,
+ * with a line to write one, where the host draws a thread (`Comments`); last,
+ * the parts any page has (`io.show`: the facts, the links, the history). Its
+ * head says what holds it and where it holds.
  *
  * Whatever a topic holds or cites is drawn by its own renderer, asked for as
  * `Topic.List.Tile`: a subtopic as its cover (`TopicTile`), a belief as what
@@ -34,7 +35,7 @@ import {
   type Props,
   usePageNotes,
 } from '@yaks/inspect'
-import { TENDS, title, TOPIC } from './topic.ts'
+import { title, TOPIC } from './topic.ts'
 
 /** How many edges from a topic its page reads. */
 export let EDGES = 500
@@ -52,11 +53,10 @@ export let PARTS: [string, string[]][] = [
 ]
 
 // What the links part leaves to the parts above: each relation read from the
-// topic's end, the topic holding it, who tends it, and the beliefs about it.
+// topic's end, the topic holding it, and the beliefs about it.
 let DRAWN = [
   ...PARTS.flatMap(([, rels]) => rels),
   'contained by',
-  'tended by',
   'belief.about',
 ]
 
@@ -69,17 +69,15 @@ let str = (b: Bundle | undefined, name: string, prop: string): string => {
 }
 let rows = (a?: Answer): Bundle[] => a?.rows ?? []
 
-/** What a topic's page asks: its edges, what holds it, who tends it, the
- * project it holds for, and the beliefs about it where the graph keeps
- * beliefs. What holds it, who tends it and its project come whole, so the head
- * names them as it first paints. */
+/** What a topic's page asks: its edges, what holds it, the project it holds
+ * for, and the beliefs about it where the graph keeps beliefs. What holds it
+ * and its project come whole, so the head names them as it first paints. */
 export let asks = (e: Bundle, io: Io): Asks => {
   let eid = e.entity.eid
   let scope = str(e, TOPIC, 'scope')
   return {
     out: `.edge.from=${eid}&*&.order=edge.ord&.limit=${EDGES}`,
     within: `.contains[<=1]->${eid}&?doc&?${TOPIC}&.limit=${EDGES}`,
-    tended: `.${TENDS}[<=1]->${eid}&?doc&.limit=${EDGES}`,
     ...scope ? { scope: `.entity.eid=${scope}` } : {},
     ...io.vocab.comp('belief')
       ? {
@@ -104,14 +102,12 @@ let listed = (io: Io, said: string, all: Bundle[]): ComponentChildren =>
     ? [said, ...all.flatMap((b, i) => [i ? ', ' : null, named(io, b)])]
     : null
 
-// Where it sits: what holds it, the project it holds for once it has come, and
-// who tends it.
+// Where it sits: what holds it, and the project it holds for once it has come.
 let where = (
   io: Io,
   within: Bundle[],
   scope: string,
   project: Bundle | undefined,
-  tended: Bundle[],
 ): ComponentChildren[] =>
   [
     listed(io, 'in ', within),
@@ -120,7 +116,6 @@ let where = (
       : project
       ? ['holds for ', named(io, project)]
       : null,
-    listed(io, 'tended by ', tended),
   ].filter(Boolean).flatMap((said, i) => [i ? ' · ' : null, said])
 
 /** Its cover's words: what belongs under it. */
@@ -253,6 +248,19 @@ let Beliefs = (
   )
 }
 
+/** A line to ask about it: a session opened on the topic, wearing the oracle,
+ * wherever the host draws a conversation (`Conversation`); a host without one
+ * has no part. */
+let Ask = ({ e, io }: { e: Bundle; io: Io }): JSX.Element | null =>
+  io.can(e, 'Conversation')
+    ? h(
+      ui.Section,
+      { 'data-section': 'Ask' },
+      h(ui.Section.Title, {}, 'Ask'),
+      io.show(e, 'Conversation', {}),
+    )
+    : null
+
 /** What people said about it: the comment thread, with a line to say more,
  * wherever the host draws one (`Comments`); a host without one has no part. */
 let Comments = ({ e, io }: { e: Bundle; io: Io }): JSX.Element | null =>
@@ -289,11 +297,11 @@ export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
         within,
         scope,
         rows(got.scope)[0],
-        rows(got.tended).toSorted(byTitle),
       ),
       notes: notes.get(''),
     }),
     h(Cover, { e, io }),
+    h(Ask, { e, io }),
     h(Contents, { e, io, notes }),
     ...PARTS.map(([heading, rels]) =>
       h(Held, {

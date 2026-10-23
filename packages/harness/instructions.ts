@@ -7,6 +7,8 @@ import { type Snapshot, snapshot } from '@yaks/context'
 import type { Machine } from '@yaks/machine'
 import { owing } from './session_machines.ts'
 import { type As, offer, wearing } from '@yaks/persona'
+import { compile, gather } from '@yaks/topic'
+import { human } from '@yaks/id'
 
 /** Each directory from the root down to `dir`, an absolute path. */
 let ancestors = (dir: string): string[] =>
@@ -98,17 +100,31 @@ export let instructionsFor = async (
   return admitted(g, undefined, home, context)
 }
 
-/** What a session opening here begins with: its instruction files, and the
- * names of the tools the persona it wears offers (@yaks/persona `offer`),
- * which are then all a turn is offered. No `tools` where that persona offers
- * none, which leaves the runner's own set. */
+/** The topic a session is opened on, as its context: the topic tree compiled
+ * from it (@yaks/topic `gather`, `compile`), one snapshot named by the
+ * topic's id. A topic that is not there is refused, as a persona is. */
+export let topical = async (g: Graph, topic: string): Promise<Snapshot> => {
+  let got = await gather(g)(topic)
+  if (!got) throw new Refused(`no topic called ${topic}`)
+  return await snapshot(compile(g.vocab)(got), human(g.vocab)(got.topic))
+}
+
+/** Who a session is and what it is opened on: its persona or work (@yaks/persona
+ * `As`), and the topic whose tree follows the persona's text. */
+export type On = As & { topic?: string }
+
+/** What a session opening here begins with: its instruction files, the topic
+ * it is opened on after them, and the names of the tools the persona it wears
+ * offers (@yaks/persona `offer`), which are then all a turn is offered. No
+ * `tools` where that persona offers none, which leaves the runner's own set. */
 export let openingFor = async (
   g: Graph,
   home: Comp,
   workspaces?: Workspaces,
-  context: As = {},
+  context: On = {},
 ): Promise<{ files: Snapshot[]; tools?: string[] }> => {
   let files = await instructionsFor(g, home, workspaces, context)
+  if (context.topic) files.push(await topical(g, context.topic))
   let tools = home.cwd || context.persona || context.work
     ? offer(await wearing(g, String(home.cwd ?? ''), context))
     : undefined

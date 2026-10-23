@@ -15,7 +15,7 @@
         "doc"
       ],
       "prefix": "Q",
-      "description": "a subject in the knowledge graph. Any entity may be one by wearing this: a subject of its own is topic + doc + content, and a project is its own topic, so what is known about it sits under it. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains: a subtopic, or anything else, such as a memory, a design, a skill, a package or somebody's words), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about)",
+      "description": "a subject in the knowledge graph. Any entity may be one by wearing this: a subject of its own is topic + doc + content, and a project is its own topic, so what is known about it sits under it. Its doc is the cover: the title, and a line or two saying what belongs under it. Its content.body is the contents: what is understood about it, written as one document citing its sources. Its edges say what it holds (contains: a subtopic, or anything else, such as a memory, a design, a skill, a package or somebody's words), what to understand first (requires), what it reads or references, and what it cites; beliefs are about it (belief.about). A session opened on it (session.topic) starts from its tree, compiled (topic_read)",
       "properties": {
         "name": {
           "type": "string",
@@ -30,13 +30,39 @@
         }
       }
     },
-    "tends": {
+    "session": {
       "component": true,
+      "extends": true,
       "type": "object",
-      "edge": "tends",
-      "reversed": "tended by",
-      "description": "the relation on a link from a persona to the topic it looks after, its oracle: it keeps the topic's cover, contents and edges true and answers what is asked about it. It puts nothing in the persona's context; what the persona contains does",
-      "properties": {}
+      "properties": {
+        "topic": {
+          "type": "string",
+          "ref": "topic",
+          "death": "keep",
+          "description": "the topic it was opened on: the topic tree compiled from it (topic_read) opens its context, after its persona's"
+        }
+      }
+    },
+    "topic_read": {
+      "tool": true,
+      "noun": "topic",
+      "verb": "read",
+      "title": "Read a topic as a session's context",
+      "description": "Read a topic as the context a session opened on it is given (session_new with topic): one markdown document with the topics that contain it, its cover, its contents and their $was token, everything it holds in full (a long body cut, with the id to read the rest), the topics below it as an outline, and what to understand first, what is related and its sources, one line each. Returns text in content.body.",
+      "input": {
+        "topic": {
+          "type": "string",
+          "ref": "topic",
+          "description": "the topic's id (Q-12) or eid"
+        }
+      },
+      "required": [
+        "topic"
+      ],
+      "readOnly": true,
+      "positional": [
+        "topic"
+      ]
     },
     "topic_new": {
       "tool": true,

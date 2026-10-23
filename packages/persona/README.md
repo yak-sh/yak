@@ -21,9 +21,9 @@ deno add jsr:@yaks/persona
 
 A person identifies a human and a persona contains agent instructions. Keeping
 them apart lets provenance fields such as `created.by` identify the actual
-author. What a persona looks after is a relation of the thing it looks after,
-such as a topic's oracle (`tends`, [@yaks/topic](../topic)), not a component of
-the persona.
+author. What a session wearing a persona is about is the session's, not the
+persona's: a session opened on a topic ([@yaks/topic](../topic)) names it as
+`session.topic` and wears one persona, the oracle, whatever the topic.
 
 ## Rendering a persona
 

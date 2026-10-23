@@ -31,6 +31,7 @@ import { hosted } from './store.ts'
 import { homeAt } from './session_machines.ts'
 import { conversations } from './conversations.ts'
 import { openingFor } from './instructions.ts'
+import { ORACLE } from '@yaks/topic'
 import { sessionHome } from '@yaks/machine/targets'
 
 type Args = Record<string, unknown>
@@ -157,7 +158,9 @@ export let runs = (host?: Host): Runs => ({
     }
     let using = await named(graph, word(args, 'provider'), word(args, 'model'))
     let effort = word(args, 'effort')
-    let persona = word(args, 'persona')
+    // A session opened on a topic wears the oracle unless it names another.
+    let topic = word(args, 'topic')
+    let persona = word(args, 'persona') ?? (topic ? ORACLE : undefined)
     let work = word(args, 'work')
     let home = args.workspace
       ? {
@@ -170,7 +173,7 @@ export let runs = (host?: Host): Runs => ({
       graph,
       home,
       host?.workspaces,
-      { persona, work },
+      { persona, work, topic },
     )
     let s = await begin(graph, prompt || undefined, {
       eid: id,
@@ -178,6 +181,7 @@ export let runs = (host?: Host): Runs => ({
       ...opened,
       work,
       ...persona ? { persona } : {},
+      ...topic ? { topic } : {},
       by: caller(call),
       via: who(call)?.via,
       using: { ...using, ...effort ? { effort } : {} },

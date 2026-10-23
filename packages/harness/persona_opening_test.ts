@@ -1,7 +1,7 @@
 // A session any door writes as data (a browser's chat: the session, the
-// persona it wears, its first message) opens with that persona's
-// instructions, and the tools it offers, admitted by the runner before its
-// first turn.
+// persona it wears, the topic it is opened on, its first message) opens with
+// that persona's instructions, the topic's tree after them, and the tools the
+// persona offers, admitted by the runner before its first turn.
 import { equal, ok, test, throws } from '@yaks/testing'
 import { compose } from '@yaks/cli/host'
 import { type Comp, identityEid } from '@yaks/graph'
@@ -17,8 +17,9 @@ let opened = await (async () => {
   let g = host.graph
   let handlers = effects(host)
   let provider = identityEid('provider', ['openai'])
-  let begun = (session: string, persona?: string) => [
-    { entity: { eid: session }, session: { operator: true, persona } },
+  let yaks = 'yaks'
+  let begun = (session: string, persona?: string, topic?: string) => [
+    { entity: { eid: session }, session: { operator: true, persona, topic } },
     {
       entity: { eid: session + '-said' },
       entry: { session },
@@ -46,11 +47,18 @@ let opened = await (async () => {
       link('farmer', 'contains', toolEid('topic_find')),
       link('farmer', 'contains', 'base'),
       link('base', 'contains', toolEid('search')),
+      {
+        entity: { eid: yaks },
+        topic: { name: 'yaks' },
+        doc: { title: 'Yaks', body: 'What belongs under yaks.' },
+        content: { body: 'A yak is a bovid.' },
+      },
       ...begun('worn', 'oracle'),
       ...begun('tooled', 'farmer'),
       ...begun('plain'),
+      ...begun('topical', 'oracle', yaks),
     ], { trusted: true })
-    for (let session of ['worn', 'worn', 'tooled', 'plain']) {
+    for (let session of ['worn', 'worn', 'tooled', 'plain', 'topical']) {
       // No default model is installed, so the opening is tested without a
       // paid ask.
       await throws(() =>
@@ -67,13 +75,28 @@ let opened = await (async () => {
       persona: 'farmer',
       using: { provider },
     })
-    let prompts = (s: string) => g.read(`.entry.session=${s}&.prompt&*`)
+    // And `session new --topic` names the topic on the session it begins.
+    let asked = await begin(g, undefined, {
+      ...await openingFor(g, {}, undefined, {
+        persona: 'oracle',
+        topic: yaks,
+      }),
+      persona: 'oracle',
+      topic: yaks,
+      using: { provider },
+    })
+    let prompts = (s: string) =>
+      g.read(`.entry.session=${s}&.prompt&*&.order=entry.seq`)
     return {
       worn: await prompts('worn'),
       tooled: await prompts('tooled'),
       commanded: await prompts(command),
       plain: await prompts('plain'),
+      topical: await prompts('topical'),
+      asked: await prompts(asked),
       session: (await g.get(['worn']))[0],
+      opened: (await g.get([asked]))[0],
+      yaks,
     }
   } finally {
     await host.close()
@@ -104,4 +127,17 @@ test('a session begun wearing a persona is offered the same tools', () => {
 
 test('a session wearing no persona is opened with nothing', () => {
   equal(opened.plain.length, 0)
+})
+
+let said = (prompts: Comp[]) =>
+  prompts.map((p) => String((p.content as Comp).body))
+
+test('a session on a topic opens with its persona, then the topic compiled', () => {
+  for (let prompts of [opened.topical, opened.asked]) {
+    let [persona, topic] = said(prompts)
+    ok(persona.includes('Tend the topic of yaks.'))
+    ok(topic.includes('Yaks\n\nWhat belongs under yaks.'), topic)
+    ok(topic.includes('A yak is a bovid.'))
+  }
+  equal((opened.opened.session as Comp).topic, opened.yaks)
 })

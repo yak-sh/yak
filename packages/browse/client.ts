@@ -452,8 +452,9 @@ export let find = (all: Row[], id: string) => {
 // the session, its first entry carrying the instruction and the `using` it
 // runs on, and the claim on the task it works. A native session (@yaks/harness,
 // as `yak session new` begins one) is marked so, with the persona it wears
-// where it was sent to one; the harness admits that persona's instructions
-// before its first turn (packages/harness/effects.ts). The host reads the
+// where it was sent to one and the topic it is opened on; the harness admits
+// that persona's instructions and the topic's tree before its first turn
+// (packages/harness/effects.ts). The host reads the
 // entry and starts the run; anything it cannot honor shows on the session.
 export let sessionFrames = (
   session: string,
@@ -463,16 +464,21 @@ export let sessionFrames = (
     operator: boolean
     task?: string
     persona?: string
+    topic?: string
     native?: boolean
   },
 ): Change[] => {
-  let { operator, task, persona, native } = opening
+  let { operator, task, persona, topic, native } = opening
   let entry = uuid()
   return [
     {
       eid: session,
       name: 'session',
-      comp: { operator, ...(persona ? { persona } : {}) },
+      comp: {
+        operator,
+        ...(persona ? { persona } : {}),
+        ...(topic ? { topic } : {}),
+      },
     },
     ...(native ? [{ eid: session, name: 'native', comp: {} }] : []),
     { eid: entry, name: 'entry', comp: { session } },

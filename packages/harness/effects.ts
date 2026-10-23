@@ -45,11 +45,11 @@ export let effects = (
     g.read(`.entry.session=${session}&${q}&.limit=1&.fields=entity.eid`)
   // The instructions a transcript opens with, admitted once before it is
   // answered, when whoever began it wrote none: an HTTP fixer's (its home,
-  // its claimed task or project), or the persona a session wears, as any door
-  // writes it (a browser's chat names the persona and its first message, no
-  // more), with the tools that persona offers. A persona is admitted only
-  // before the first turn, so a session whose persona owes nothing beside its
-  // files is not asked again.
+  // its claimed task or project), or the persona a session wears and the
+  // topic it is opened on, as any door writes them (a browser's chat names
+  // the persona, the topic and its first message, no more), with the tools
+  // that persona offers. They are admitted only before the first turn, so a
+  // session whose persona owes nothing beside its files is not asked again.
   let opening = async (session: string) => {
     let [owner] = await g.get([session])
     let s = owner?.session as Comp | undefined
@@ -58,7 +58,8 @@ export let effects = (
     ) return
     let fixer = !!owner.fixer && !owner.process && !owner.stop
     let persona = typeof s.persona == 'string' ? s.persona : undefined
-    if (!fixer && !persona) return
+    let topic = typeof s.topic == 'string' ? s.topic : undefined
+    if (!fixer && !persona && !topic) return
     try {
       if (fixer) {
         // HTTP fixer requests use the native runner, not an outside CLI. An
@@ -82,7 +83,7 @@ export let effects = (
         g,
         { ...owner.home as Comp | undefined },
         host.workspaces,
-        { persona, work: work as string | undefined },
+        { persona, work: work as string | undefined, topic },
       )
       if (files.length) {
         await g.apply(

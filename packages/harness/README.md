@@ -155,6 +155,7 @@ Then:
 ```sh
 yak session new 'reply with the word pong'
 yak session new 'inspect the task graph' --persona N-4568
+yak session new 'what is an entity?' --topic Q-59416
 yak session tui
 yak session send <session> 'and again'
 yak session send <session> 'continue here' --provider openai --model gpt-6-sol
@@ -180,6 +181,12 @@ needs a terminal supporting kitty keyboard sequences (Alt+Enter also inserts a
 newline). On a new session, NORMAL `P` chooses a persona from the graph for that
 session. `--persona` accepts a persona id or registered name; the session keeps
 that choice and snapshots its instructions before its first message.
+
+`--topic` opens the session on a topic ([@yaks/topic](../topic)): it keeps the
+topic as `session.topic`, wears the oracle persona (`ORACLE`) unless `--persona`
+names another, and snapshots the topic tree compiled from it (what
+`yak topic read` prints) after the persona's instructions. A question the topic
+already answers is answered with no tool call.
 
 What a session is offered is its work's to say: a persona that contains
 registered tools, itself or through a persona it includes (@yaks/persona
@@ -594,14 +601,15 @@ Root sessions record their explicitly selected persona through `@yaks/persona`
 and `@yaks/context`, along with any prompt snapshots their caller supplies. A
 session any other door writes as data, wearing a persona and holding no
 instructions (browse's chat on a persona writes `session{operator, persona}`,
-`native{}` and its first entry), has that persona's instructions admitted by the
-runner before its first turn, on no machine unless its home names a workspace
-(./effects.ts). Starting one does not read the CLI host's instruction files.
-Reading a machine file through a tool does not make it instructions: the caller
-must explicitly admit it through the prompt channel. Existing
-`opts.instructions` and `sending.instructions` remain the base instruction
-channel; delegated `instructions` append local guidance rather than replacing
-that base.
+`native{}` and its first entry; on a topic,
+`session{operator, persona, topic}`), has that persona's instructions, and the
+topic's tree after them, admitted by the runner before its first turn, on no
+machine unless its home names a workspace (./effects.ts). Starting one does not
+read the CLI host's instruction files. Reading a machine file through a tool
+does not make it instructions: the caller must explicitly admit it through the
+prompt channel. Existing `opts.instructions` and `sending.instructions` remain
+the base instruction channel; delegated `instructions` append local guidance
+rather than replacing that base.
 
 Fresh children copy shared prompt snapshots from their parent. Forks copy no
 files: their exact inherited prefix is followed by a local fork-execution note,

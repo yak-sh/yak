@@ -6,7 +6,15 @@ import { assertEquals, assertThrows } from '@std/assert'
 import { h } from 'preact'
 import { cache, ent, useRoute } from '../live.ts'
 import { mount } from './mount.ts'
-import { chatChanges, chatPlan, ReferenceList, Starter } from './Chat.tsx'
+import { ORACLE } from '@yaks/topic'
+import type { Ent } from '../types.ts'
+import {
+  chatChanges,
+  chatPlan,
+  ReferenceList,
+  Starter,
+  voiceOf,
+} from './Chat.tsx'
 
 test('a human chat opens a taskless session and rebinds the chat', () => {
   let got = chatChanges(
@@ -36,7 +44,7 @@ test('a chat on a persona opens a native session wearing it', () => {
     'oracle',
     { provider: 'p' },
     'What do you look after?',
-    'oracle',
+    { persona: 'oracle' },
   )
   assertEquals(got.slice(0, 2), [
     {
@@ -51,6 +59,27 @@ test('a chat on a persona opens a native session wearing it', () => {
     name: 'chat',
     comp: { actor: 'actor', target: 'oracle' },
   })
+})
+
+test('a chat on a topic opens a native session on it, wearing the oracle', () => {
+  let topic = { eid: 'data', topic: { name: 'data' } } as unknown as Ent
+  let got = chatChanges(
+    undefined,
+    'next',
+    'actor',
+    'data',
+    { provider: 'p' },
+    'What is an entity?',
+    voiceOf(topic),
+  )
+  assertEquals(got.slice(0, 2), [
+    {
+      eid: 'next',
+      name: 'session',
+      comp: { operator: true, persona: ORACLE, topic: 'data' },
+    },
+    { eid: 'next', name: 'native', comp: {} },
+  ])
 })
 
 test('chatPlan picks a graph-native provider', () => {
@@ -100,46 +129,39 @@ test('chat references mount the entity List.Tile renderer', () => {
   }
 })
 
-test('a new chat reuses the composer input with a terse prompt', () => {
-  cache.value = {
-    target: {
-      entity: { eid: 'target', num: 7 },
-      doc: { eid: 'target', title: 'A very long document title', body: '' },
-    },
-  }
-  let mounted = mount(
-    h(Starter, { e: ent('target'), actor: 'actor', done() {} }),
-  )
+// What a new chat's line invites, and how it is drawn, for a row of each kind:
+// each mounted once, at load.
+let invited = (row: Record<string, unknown>) => {
+  cache.value = { it: { entity: { eid: 'it', num: 9 }, ...row } }
+  let mounted = mount(h(Starter, { e: ent('it'), actor: 'actor', done() {} }))
   try {
     let box = mounted.root.querySelector('textarea.Field')
-    assertEquals(box?.getAttribute('placeholder'), 'start a chat…')
-    assertEquals(box?.getAttribute('class'), 'Field')
+    return [box?.getAttribute('placeholder'), box?.getAttribute('class')]
   } finally {
     mounted.free()
     cache.value = {}
   }
+}
+let titled = (title: string) => ({ doc: { eid: 'it', title, body: '' } })
+let invites = {
+  document: invited(titled('A very long document title')),
+  persona: invited({ ...titled('Oracle of yaks'), persona: { eid: 'it' } }),
+  topic: invited({
+    ...titled('Data model'),
+    topic: { eid: 'it', name: 'data model' },
+  }),
+}
+
+test('a new chat reuses the composer input with a terse prompt', () => {
+  assertEquals(invites.document, ['start a chat…', 'Field'])
 })
 
 test('a chat on a persona messages it by name', () => {
-  cache.value = {
-    oracle: {
-      entity: { eid: 'oracle', num: 9 },
-      doc: { eid: 'oracle', title: 'Oracle of yaks', body: '' },
-      persona: { eid: 'oracle' },
-    },
-  }
-  let mounted = mount(
-    h(Starter, { e: ent('oracle'), actor: 'actor', done() {} }),
-  )
-  try {
-    assertEquals(
-      mounted.root.querySelector('textarea.Field')?.getAttribute('placeholder'),
-      'message Oracle of yaks…',
-    )
-  } finally {
-    mounted.free()
-    cache.value = {}
-  }
+  assertEquals(invites.persona[0], 'message Oracle of yaks…')
+})
+
+test('a chat on a topic asks about it by name', () => {
+  assertEquals(invites.topic[0], 'ask about Data model…')
 })
 
 // T-37445: the referencing sessions ride the citation answer as peers, so the

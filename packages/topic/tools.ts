@@ -4,13 +4,15 @@
 // makes one only under a name no topic holds; the name's unique index refuses
 // the second of two builds that looked at once and found nothing. `topic_add`
 // puts things under a topic, a `contains` edge each, so whoever reads the
-// topic finds them.
+// topic finds them, and `topic_read` answers what a session opened on a topic
+// is given: its tree, compiled (./context.ts).
 
 import type { Bundle, Graph } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { Refused } from '@yaks/graph/errors'
 import type { Runs } from '@yaks/graph/tools'
 import { link, unlink } from '@yaks/edge'
+import { compile, gather } from './context.ts'
 import {
   about,
   FIND,
@@ -34,9 +36,9 @@ let brief = (t: Bundle): string => {
 let nameOf = (t: Bundle): string =>
   str((t[TOPIC] as { name?: unknown } | undefined)?.name)
 
-/** The implementations of `topic_new`, `topic_find` and `topic_add`. A
- * factory, like every such module, although these need nothing from the
- * server. */
+/** The implementations of `topic_new`, `topic_find`, `topic_add` and
+ * `topic_read`. A factory, like every such module, although these need
+ * nothing from the server. */
 export let runs = (): Runs => ({
   topic_new: async (call, graph: Graph): Promise<Bundle[]> => {
     let args = argsOf(call)
@@ -104,5 +106,18 @@ export let runs = (): Runs => ({
     if (ids.includes(topic)) throw new Refused('a topic never holds itself')
     let edge = args.drop ? unlink : link
     return ids.map((id) => edge(topic, HOLDS, id))
+  },
+
+  // Text, as @yaks/persona's `persona_read` answers: a `content{body}` entity
+  // naming the call it came from.
+  topic_read: async (call, graph: Graph): Promise<Bundle[]> => {
+    let said = str(argsOf(call).topic).trim()
+    let got = said ? await gather(graph)(said) : undefined
+    if (!got) throw new Refused(`no topic called ${said}`)
+    return [{
+      entity: { eid: '$topic' },
+      content: { body: compile(graph.vocab)(got) },
+      output: { source: call.entity.eid },
+    }]
   },
 })

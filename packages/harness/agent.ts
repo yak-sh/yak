@@ -143,12 +143,13 @@ export type Where = { phase: string; session?: Eid }
 
 /** What a new session opens with: where it lives, the instruction files
  * found there, each snapshotted into the transcript ahead of the first
- * message, and the names of the tools its persona offers, all a turn is then
- * offered. */
+ * message, the topic it is opened on (@yaks/topic's `session.topic`), and the
+ * names of the tools its persona offers, all a turn is then offered. */
 export type Opening = {
   home?: Comp
   files?: Snapshot[]
   persona?: Eid
+  topic?: Eid
   tools?: string[]
 }
 
@@ -333,6 +334,7 @@ export let begin = async (
         id: session.slice(0, 8),
         operator,
         ...o.persona ? { persona: o.persona } : {},
+        ...o.topic ? { topic: o.topic } : {},
       },
       native: {},
       ...o.home ? { home: o.home } : {},

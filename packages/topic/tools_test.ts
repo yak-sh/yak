@@ -15,7 +15,9 @@ import { topicDoc } from './vocab.ts'
 import { runs } from './tools.ts'
 
 let vocab = loadVocab(
-  [edgeDoc, docDoc, taskDoc, projectDoc, topicDoc],
+  [edgeDoc, docDoc, taskDoc, projectDoc, topicDoc, {
+    $defs: { session: { component: true, type: 'object', kind: true } },
+  }],
   [edgeKeywords],
 )
 let tools = runs()
@@ -94,6 +96,7 @@ test('every topic tool is declared and implemented', () => {
     'topic_add',
     'topic_find',
     'topic_new',
+    'topic_read',
   ])
 })
 
