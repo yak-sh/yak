@@ -136,9 +136,12 @@ the graph to write with the plugin in its config adds them (packages/cli/README.
 "The schema follows the vocabulary"). Every `yak`
 command composes from yak.json, so an entry that fails to compose takes all of
 them down together, and that has happened. Treat the edit like work on a
-running patient: prove the config on a scratch server first
-(`end-to-end-checks`), keep a copy of the old file and a `.backup` of its db,
-then edit it and run `yak restart`, the agent restart door. The file is plain JSON on disk, so a
+running patient: prove it composes first, with no server, by copying the
+edited file beside a scratch graph (`yak init Probe --config <dir>/yak.json`
+makes one; keep its `"db"`) and running any command over it, `yak --config
+<dir>/yak.json graph schema`. Keep a copy of the old file and a `.backup` of
+its db, then edit it and run `yak restart`, the agent restart door. The file
+is plain JSON on disk, so a
 key in `with` is `{"secret": "NAME"}` and the value lives in the vault
 (`secrets-and-connections`).
 
@@ -184,9 +187,10 @@ override is for undoing your own earlier work or a change you were asked to
 undo, and the commit message says which.
 
 A change here feels finished when each moved idea has one home and nothing
-reaches the old one, `deno task check` is green (it runs format, lint, bytes,
-types, publish, browser, workers and content, so cycles and browser leaks show
-up there), and the package's README and packages/README.md describe it as it
-is.
+reaches the old one, the checks the move touches are green (`deno task
+check:types`, and `check:browser`, `check:workers` and `check:publish`, where
+cycles and browser leaks show up), and the package's README and
+packages/README.md describe it as it is. The whole `deno task check` starts
+nine checks at once, so main runs it on every commit, not this box.
 
 When this skill is wrong or missing something, fix it in the same change.

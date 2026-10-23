@@ -175,8 +175,7 @@ reference material that wants a file of its own beside it.
 ## Scripts
 
 When every agent in a workflow would otherwise write the same helper, write it
-once in `scripts/` beside the skill, with its usage in its header.
-`end-to-end-checks` does this for reading a page's DOM over CDP. deno.json
+once in `scripts/` beside the skill, with its usage in its header. deno.json
 excludes `.claude`, so run a script yourself before landing it.
 
 ## One home per idea

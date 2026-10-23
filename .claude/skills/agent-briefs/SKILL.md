@@ -100,14 +100,11 @@ persona and the skills carry the rest, and repeating them buries what matters.
 pointer stays true; a pasted excerpt goes stale.
 
 **How it will know it works.** The tests of what it changed, and after a
-yaks.app deploy, `app_errors`. A browser check (`end-to-end-checks`) earns its
-place when nothing else can show the change works, and then once: browser
-checks are slow, and the owner asked for fewer ("can you tell your sessions to
-stop testing so much in chrome"). A brief that asks for one every time gets one
-every time. When one is needed, it runs against a probe server rather than the
-live graph, which is the owner's, in a scratch directory named for its task:
-agents of one session share the session's scratchpad, and fixed names like
-`scratchpad/probe` collide.
+yaks.app deploy, `app_errors`. Whatever it runs to check starts no other
+process: no probe server, no Chrome, no benchmark driving a server ("tests and
+benchmarks should be starting zero other processes", M-132169; "we need to
+stop all this chrome testing locally", 18bc9a78). An end-to-end check runs in
+its own process (`end-to-end-checks`), and the gate on main runs the rest.
 
 **Tests worth having.** "Run only the tests your change could break", plus the
 behavior a new test must catch, or no new test at all. "Add a test" alone gets
@@ -144,10 +141,10 @@ the owner's words. Claim it under your session and release it when done.
 <what should be true when you're done, and why it matters to him; how it should
 feel; the constraints that bite; pointers>
 
-You'll know it works when <how; if it needs a browser, against a probe server
-with its own config, port and a scratch directory named for this task>. Run
-only the tests your change could break. Land with `yak land`, put a one-line
-sha comment on T-123 and close it. Report in a few lines: <what you need back>.
+You'll know it works when <how, checked in your own process>. Run only the
+tests your change could break, and start no servers and no Chrome. Land with
+`yak land`, put a one-line sha comment on T-123 and close it. Report in a few
+lines: <what you need back>.
 ```
 
 ## A bug the owner hits while playing

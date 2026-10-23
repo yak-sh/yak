@@ -37,8 +37,8 @@ terminal quietly falls behind. Most of what follows is that one idea, met
 again at each layer.
 
 The words a domain component owns are `vocabulary`'s, and where a kit or a
-`/views` facet is wired is `packages-and-plugins`. Proving a screen in a
-browser and a terminal is `end-to-end-checks`; its tests are `testing`.
+`/views` facet is wired is `packages-and-plugins`. Proving what a screen
+does, in your own process, is `end-to-end-checks`; its tests are `testing`.
 
 ## Feel
 
@@ -209,21 +209,21 @@ synced everywhere, so it's never lost (M-59093).
 
 ## Looking at it
 
-A screen is done when it reads well to someone using it, so look the way they
-will:
+A screen is done when it reads well to someone using it. What it does and how
+it looks are checked in different places, and neither in a Chrome on this box:
+"most things don't need chrome" (18bc9a78).
 
-- **The style guide:** `/ui?theme=everforest|rosepine&scheme=light|dark` (add
-  `&skin=ledger`) in a browser, and `yak ui` in a terminal (`t` cycles the
-  theme, `s` the skin, `j`/`k` walk). Both themes, light and dark, phone width
-  and the terminal: each one catches what the others hide.
-- **The app itself:** drive it as a person would, in a browser over CDP and in
-  tmux, against a probe server (`end-to-end-checks`). Its `dom.ts` reads the
-  DOM, which is where behavior is checked, and with `--shot` gives you a
-  picture to look at: `--width 390` at phone width, `--scheme light` or `dark`
-  for each. Look in light first: faint text shows there before anywhere else.
-  Fill the probe with rows copied from the live graph, long titles and old
-  data included; a specimen's tidy sample hides what the owner's rows do to a
-  screen.
+- **What it does:** mount it in your own process and act on it as a person
+  would (`end-to-end-checks`): the web app on a linkedom document, the
+  terminal through @yaks/tui's `lay`. Read the text that shows and what a
+  press changes. Fill it with rows copied from the live graph, long titles
+  and old data included; a specimen's tidy sample hides what the owner's rows
+  do to a screen.
+- **How it looks:** the style guide, `/ui?theme=everforest|rosepine&scheme=light|dark`
+  (add `&skin=ledger`), and `yak ui` in a terminal (`t` cycles the theme, `s`
+  the skin, `j`/`k` walk), seen on the live box once the change lands. Both
+  themes, light and dark, phone width and the terminal: each one catches what
+  the others hide, and faint text shows in light before anywhere else.
 - **Tests:** `deno task test packages/ui` (and `packages/ux`,
   `packages/inspect`) runs the part tests and the guide's checks.
 - **The task:** review of a screen arrives as comments on its task, often

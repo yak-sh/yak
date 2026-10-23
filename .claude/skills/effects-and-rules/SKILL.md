@@ -202,13 +202,15 @@ work left owed is the next worker's.
 ## Profiling a box worker
 
 A busy worker is still doing the owner's work. Read its CPU and elapsed time
-with `ps -o pid,pcpu,cputime,etimes`; take a CPU profile from a probe worker
-you started yourself, not by signalling the live one. Deno's inspector is
-enabled with `--inspect=<host>:<port>` at process start. Unlike Node, Deno has
-no SIGUSR1 inspector switch: SIGUSR1's default action terminates it (exit 138).
-An extra effects-only worker may join the live pool when explicitly authorized;
-otherwise give the probe its own config and graph (`end-to-end-checks`). Keep
-its inspector local, and stop only that probe when the capture ends.
+with `ps -o pid,pcpu,cputime,etimes`, and never signal it to profile it: Deno
+has no SIGUSR1 inspector switch, and SIGUSR1's default action terminates it
+(exit 138). To see where the time goes, run the slow work itself in one
+process of your own: a script that composes the graph and the effect over a
+copy of the data (`end-to-end-checks` has the doors) and does the work once,
+under `deno run --cpu-prof-md`, which writes a readable profile beside the
+V8 one when it exits. No second worker, and nothing driving one
+(M-132169). An extra effects-only worker joins the live pool only when
+explicitly authorized.
 
 ## Debugging after a write
 

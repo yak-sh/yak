@@ -1,221 +1,108 @@
 ---
 name: end-to-end-checks
 description: >
-  Prove a change end to end in ~/code/tasks before calling it done: run the
-  branch's own code as scratch `yak serve` with its own config, port and
-  directory, drive the page in headless Chrome over CDP and read its DOM, drive
-  `yak inspect`, `yak ui` or web TUI in tmux, and reap everything afterwards.
-  Use it whenever checking "in the browser", "in the terminal", "live", on a
-  "probe server" or "against real data", taking a screenshot, auditing a screen,
-  or verifying UI, query, write path or migration by hand, even if asked only
-  "make sure it works" or "check it", or measuring a Worker's container image
-  under docker. `platform-visualize` is causal observation, not proof; proving
-  its page and CLI also takes this skill. Automated tests are `testing`; a
-  manual probe runs apart from the live graph and its web units.
+  Prove a change end to end in ~/code/tasks from inside your own process: the
+  box's server composed in memory (`compose()` from @yaks/cli/host, its
+  `handler` called with a Request), yaks.app's kernel in memory (`kernel()`),
+  a page on a linkedom document, the TUI painted by @yaks/tui's `lay`, data
+  copied from the live graph; then, once landed, the live system (`yak admin
+  deploys`, `yak admin errors`, a throwaway account). Use it whenever checking
+  "in the browser", "in the terminal", "live", on a "probe server" or "against
+  real data", taking a screenshot, auditing a screen, or verifying UI, query,
+  write path or migration by hand, even if asked only "make sure it works" or
+  "check it". Local Chrome, a scratch `yak serve`, tmux probes and docker are
+  not how a change is proved here. Automated tests are `testing`;
+  `platform-visualize` is causal observation, not proof.
 ---
 
-# Probing a change
+# Proving a change end to end
 
-A test says the code does what its author meant. A probe says what a person
-sees: the page that paints, the key that moves the cursor, the row a write
-leaves behind. It's a throwaway copy of the system running your branch's code
-against data you can break, and its whole value is that it's apart: its own
-graph, port, browser profile and directory.
+A test says the code does what its author meant. An end-to-end check says what
+a person meets: the page a request comes back with, the row a write leaves
+behind, the screen a key press paints. Here it runs in the process that asks
+for it, through the same doors a person's request goes through, over data you
+can break.
 
-Two things press on it. The owner's live graph is where he works, so nothing a
-probe does may land there. And the box is shared by many agents at once, every
-one of them reaching for a port, a profile and a directory called `probe`:
-every collision so far came from two probes sharing one of those. So a probe is
-named for your task, holds everything it makes under that name, and is gone
-when you're done, and your report says which claims were probed and which were
-tested.
+The box has four cores, and every agent working shares them. When about eight
+agents each ran a probe server, its worker, a dozen Chrome processes and the
+gates beside them, the load reached 11.7 and the owner stopped them all. His
+words, 2026-10-23 (18bc9a78, M-132169):
 
-This is the hands-on half of finishing a change; `testing` is the automated
-half. A screen being proved is built with `ui-building`; `platform-visualize`
-shows what ran after a write, which is observation, not proof.
+> a handful of agents shouldn't bring the box to its knees. and we need to stop
+> all this chrome testing locally; it's too heavy and most things don't need
+> chrome.
 
-## The scratch directory
+> tests and benchmarks should be starting zero other processes
 
-Everything a probe makes lives in one directory named for your task, inside
-the session's scratchpad: `<scratchpad>/<task id or slug>/`. Forks of one
-session share that scratchpad, so a generic name like `probe/` is exactly what
-the agent beside you picked too.
+and, of a benchmark that would drive a separate server: "that's the heavyness
+i'm talking about. never do that!"
 
-## A graph and a server of your own
+He would rather recover than gate (M-37965): every commit on main runs the
+whole gate, deploys yaks.app and reports what breaks to the tracker, and a
+failure there is fixed forward. So a check on the box is light, and aimed: the
+change's own path, through its door, in your process. What it can't reach, the
+gate and the live system will.
 
-`yak` on the PATH runs the main checkout's code; your branch's code is your
-worktree's CLI:
+## The doors, in your process
 
-```sh
-W=<your worktree>          # the repo root you are working in
-D=<scratchpad>/<task>      # your scratch directory
-yak init Probe --config $D/yak.json     # a fresh graph and a minimal config
-# edit $D/yak.json: "port" nobody uses (not 5173), and the plugins your change needs
-YAK_RUNTIME_CACHE=$D/runtime deno run -A --config $W/deno.json $W/packages/cli/yak.ts serve --config $D/yak.json > $D/serve.log 2>&1 &
-echo $! > $D/serve.pid
-until curl -sf -o /dev/null http://127.0.0.1:<port>/; do sleep 0.5; done
-```
+- **The box's server.** `compose(config, roles)` from @yaks/cli/host builds
+  what `yak serve` listens with, without binding a port. A config naming
+  @yaks/api has a `handler`: hand it a `Request` and it answers as the server
+  would. Compose over `{db: ':memory:', plugins: [...]}` with the plugins your
+  change touches, and `close()` it when done; packages/cli/host_test.ts does
+  this throughout.
+- **yaks.app.** `kernel()` in workers/yak/probe.ts is the kernel in memory
+  this process shares, and `fresh()` a kernel of one test's own (`testing`).
+  Its stores, doors and connector answer as the Worker's do.
+- **A page.** The web app mounts on a linkedom document in a Deno runtime, not
+  in a browser; packages/browse/host_testing.ts speaks for the server on the
+  page's socket. Check what a person meets: the text that shows, what a
+  dispatched click or key changes.
+- **The terminal.** @yaks/tui's `lay` paints an element to lines without a tty
+  (`pane` in packages/browse/tui/testing.ts). Browse and inspect mount the
+  browser's own App through it, so a key press and the screen after it are
+  checked the same way.
+- **Data shaped like the owner's.** Read entities from the live graph (`yak
+  graph show`, `yak graph query … --json`) and apply them to your in-memory
+  graph; reading the live graph costs nothing, and a write to it lands in his
+  day. For the whole of the box's data, `cp` the bench snapshot
+  (`~/.cache/yak-bench/base.db`, bench/README.md) into your scratch directory
+  and name it as the config's `db`; the first writer that opens the copy
+  brings it to the schema your code expects. Copy with `cp`: sqlite's
+  `.backup` of it rereads the file without end through its read-only `-shm`.
 
-The config is the probe's address book. `yak browse` and `yak inspect` reach
-whatever server its `port` names (8787 when it names none), so the port goes in
-$D/yak.json rather than a `--port` flag on serve. The `until` loop holds up on
-a loaded box, where any fixed sleep is either too short or wasted.
+A check worth keeping is a test (`testing`); a one-off is a script or a test
+you don't land, and either way it runs in one process and leaves nothing
+running.
 
-- `yak init` writes a small plugin list (kernel, doc, task, session, api, web,
-  browse, …). Add what your change touches, such as `@yaks/ui` and
-  `@yaks/inspect`; the live list in `~/.yak/yak.json` is there to copy from.
-- `serve` and `work` pin their code in a [runtime snapshot](../../../packages/cli/README.md).
-  Give every probe launch `YAK_RUNTIME_CACHE=$D/runtime`, including unit
-  templates, so those cached sources are reaped with the probe.
-- `@yaks/session` follows Claude transcripts and Codex rollouts unless told
-  otherwise, which floods a probe with this box's sessions. Point both roots
-  at an empty directory:
-  `{"use": "@yaks/session", "with": {"transcripts": "<absolute path under $D>", "codex": "<absolute path under $D>"}}`.
-- Plugins with outside effects (mail, spawn, harness, connections) do from a
-  probe exactly what they do anywhere: send the mail, start the agent. Leave
-  them out unless the change is about them; a mail probe gives @yaks/mail
-  `"sender": {"via": "stash"}` and no `pull`. A spawn probe puts a `yak` shim
-  running your worktree's CLI first on the PATH it starts the worker with, so
-  the agent's hooks reach the probe; tells the agent to use no tools, since its
-  PostToolUse hook posts to the live server; and, once done, removes the run's
-  transcript directory under `~/.claude/projects` and deletes the session the
-  live graph's importer made of it (`yak graph apply` with `$delete` on its
-  eid and its `log`). Over a copy of the box's graph,
-  @yaks/git's service and @yaks/persona's `files` act on the checkouts the
-  graph names, which are the owner's, so leave those out too.
-- Write and read the probe the same way:
-  `deno run -A --config $W/deno.json $W/packages/cli/yak.ts --config $D/yak.json task new "…"`.
-- For data shaped like the owner's, read entities from the live graph
-  (`yak graph show`, `yak graph query … --json`) and write them into the probe
-  with `<worktree CLI> --config $D/yak.json graph apply --bundles @file`.
-  Reading the live graph costs nothing; a write to it, or a press on a page it
-  serves, lands in the owner's day.
-- For the whole of the box's data, copy the bench snapshot
-  (`~/.cache/yak-bench/base.db`, bench/README.md) into `$D` with `cp`: nothing
-  writes it, and sqlite's `.backup` of it rereads the file without end through
-  its read-only `-shm`. The snapshot can predate the schema your code expects;
-  the first writer that opens the copy brings it to that schema.
-- Harness and process state have their own homes: set `HARNESS_HOME` and
-  `TASKS_HOME` to directories under `$D` when the change touches sessions or
-  spawned runs (packages/harness/README.md). Keep `HOME`, so Deno's module cache
-  is reused.
+## What no longer runs here
 
-## Units of your own
+- **Chrome.** A screen's behavior is checked on its document, as above. How it
+  reads, its spacing and colour and weight, the owner sees on the live page
+  once it lands, and his review arrives as comments on the task
+  (`ui-building`).
+- **A scratch `yak serve`, `yak work` or units of your own.** Each is a server
+  that keeps running beside you, with a worker that outlives it. A change to
+  how the box's units start, stop or hand over is checked through
+  packages/cli/restart.ts's functions with their effects handed in, then by
+  the next `yak restart`; one that breaks is fixed forward.
+- **tmux driving a CLI against a probe.** The TUI's paint is checked with
+  `lay`; the commands themselves through `compose()`.
+- **docker.** A container image a Worker runs is measured where it runs, on
+  Cloudflare, after it deploys, and the report says so.
 
-A change to how the box's units start, stop or hand over (`yak restart`, a
-unit file, how `serve` or `work` winds down) is proved on units named for your
-task, never on the live ones. Write templates into
-`$XDG_RUNTIME_DIR/systemd/user/` (systemd finds a new file there without a
-daemon-reload), each running your worktree's CLI over `$D/yak.json` with the
-unit's settings copied from ~/code/dotfiles, and drive `restart()` from
-packages/cli/restart.ts with `roles` naming only them. A client asking
-continuously through the handover (`connection: close` for a connection per
-request) counts what failed and the longest gap.
+Where today's tooling still starts processes (the test runner's runtimes, the
+workerd kernel), `testing` says which, and T-132170 takes them away.
 
-## The browser
+## Once it lands
 
-Chrome gets a profile of its own, under `/tmp` with a short name:
-
-```sh
-mkdir -p /tmp/cdp-<task>
-TMPDIR=/tmp/cdp-<task> nohup google-chrome --headless=new --disable-quic --remote-debugging-port=<cdp port> \
-  --user-data-dir=/tmp/cdp-<task> --no-first-run about:blank > /tmp/cdp-<task>/chrome.log 2>&1 &
-```
-
-The short path isn't style: Chrome makes a socket inside its profile, and a
-socket path over about 107 bytes kills it at start ("Socket path too long").
-The scratchpad's path is already longer than that. Nor is `--disable-quic`:
-from this box, Chrome's HTTP/3 to yaks.app never finishes a page's
-stylesheets, so a live page stays `interactive` and a screenshot hangs.
-
-Launch it in a command of its own. A `pkill -f` later in the same shell line
-matches that line's own text and kills the shell running it.
-
-Then read the page with the helper beside this skill. It opens a tab, waits for
-a condition, evaluates an expression and prints it as JSON:
-
-```sh
-deno run -A <this skill>/scripts/dom.ts <cdp port> http://127.0.0.1:<port>/T-1 \
-  "document.body.innerText.slice(0, 500)" --wait "document.body.innerText.includes('my task')"
-```
-
-Pages here paint from a socket after `load`, so wait on the thing you expect to
-see. Check behavior the way a person meets it: what text shows, what moves,
-what a click changes (dispatch the event in the expression, then read again).
-The DOM is where a claim gets checked; a picture is how you see whether it
-reads well. `--shot $D/page.png` saves one after the expression runs,
-`--width 390` lays the page out at phone width first (1280 gives a 1280×800
-desktop), and `--scheme light` or `dark` paints a page that follows the
-system's scheme in that one.
-
-## The terminal
-
-```sh
-tmux new-session -d -s <task> -x 160 -y 40 "<command>"
-tmux send-keys -t <task> j Enter
-tmux capture-pane -p -t <task>
-```
-
-`yak ui`, `yak browse` and `yak inspect` run through your worktree's CLI with
-`--config $D/yak.json`. Browse and inspect keep terminal history in
-`~/.yak/browse-terminal.json` unless `TASKS_TUI_STATE` names another file, so
-point it at `$D/tui.json`, and give `HARNESS_HOME` and `TASKS_HOME` scratch
-homes too. Both mount the browser's own app (packages/browse/components/App.tsx)
-through @yaks/tui, so a terminal probe drives the same app by key presses
-and proves navigation and a write the way a person makes them.
-
-## yaks.app
-
+Every commit on main deploys the yak worker through Workers Builds and runs the
+gate. `yak admin deploys --as admin` says what is live, `yak admin errors`
+what broke, and a new failure reaches the tracker when it happens (M-37965).
 A probe of the platform runs as a test account: `yak admin throwaway` signs in
 as one, and `--as` selects that connection per command (listing accounts is
 `secrets-and-connections`). Acting as the owner is his to grant (M-31958).
-Tests that need workerd itself are `deno task test --tag=workerd`. After a
-deploy, `yak admin deploys` shows what is live and `yak admin errors` what
-broke; both take `--as`. The platform itself is `yaks-app`.
-
-## A container image
-
-A change to an image a Worker runs (the builder's sandbox, yak-esbuild's
-compiler) is proved by running the image under its instance type's limits
-(`docker run --cpus=0.25 --memory=1g --memory-swap=1g` is `basic`), posting it
-what its Worker would post, and reading the container cgroup's `memory.peak`
-and `cpu.stat`. That gives the time, memory and CPU-seconds a release will
-cost, and whether the answer is the one the old path gave.
-
-This box has the docker CLI and no engine, and it is an unprivileged LXC,
-which decides how you get one. A rootless engine from Docker's static
-binaries needs `uidmap` and `slirp4netns`, and a subuid range inside the
-LXC's own map (`/proc/self/uid_map` covers 0-65535, and the stock 100000 range
-is refused); even then an image holding files of uid 65532 (distroless) won't
-unpack. A root `dockerd` started by hand with `--iptables=false
---ip6tables=false --ip-forward=false` leaves the firewall alone; its containers
-get no NAT, so build and run them with `--network host`. `wrangler dev` with
-containers doesn't work here under either: workerd's egress sidecar
-(`cloudflare/proxy-everything`, which steers packets with nft TPROXY) never
-completes a TCP handshake inside this LXC, so the Worker-to-container hop is
-proved on Cloudflare, and the report says so. Reaping an engine means stopping
-it, `ip link delete docker0`, unmounting `<exec-root>/netns/default`,
-removing its data, and putting back any package or subuid line you changed.
-
-## Reaping
-
-A probe is done when nothing of it is left running or on disk:
-
-- the server and its worker: a plain `yak serve` starts a detached `yak work`
-  for the duty roles nobody serves, and that worker outlives the server by
-  design. Kill every process whose command line names the config,
-  `pkill -f "$D/yak.jso[n]"`, and confirm `pgrep -f "$D/yak.jso[n]"` finds
-  none and nothing answers on the port. A pattern without `$D` in it, such as
-  a command and its roles (`work --roles effects,@yaks/tracker`), also matches
-  the live service running that command, and a signal starts its wind-down;
-  run `pgrep -af` with the pattern before any `pkill`;
-- Chrome: the pid you started is a launcher, and the browser is a dozen
-  processes. Kill every one whose command line names the profile,
-  `pkill -f "user-data-dir=/tmp/cdp-<tas>[k]"` (the bracket keeps `pkill` from
-  matching your own shell), and confirm `pgrep -f` finds none;
-- units: `systemctl --user stop '<task>-*'`, then remove their files from
-  `$XDG_RUNTIME_DIR/systemd/user/`;
-- tmux: `tmux kill-session -t <task>`;
-- then `rm -rf $D /tmp/cdp-<task>`.
+The box's own server runs main after `yak restart`. The platform itself is
+`yaks-app`.
 
 When this skill is wrong or missing something, fix it in the same change.

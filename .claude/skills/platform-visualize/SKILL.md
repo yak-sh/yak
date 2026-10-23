@@ -11,7 +11,7 @@ description: >
   plain-text search. Wiring packages is packages-and-plugins; changing effects
   or rules is effects-and-rules. Building the screen is ui-building, not just
   reading it. Automated assertions are testing; proving commands or the page
-  on an isolated scratch host is end-to-end-checks. Observation is not proof.
+  in your own process is end-to-end-checks. Observation is not proof.
 ---
 
 # Platform anatomy and activity
@@ -148,8 +148,8 @@ correctly, and an apply span isn't proof its stored result is right. What the
 picture shows is wired by `packages-and-plugins`, named by `vocabulary` and set
 in motion after a write by `effects-and-rules`. Automated assertions over the
 doors are `testing`. Checking the page or the CLI by hand is
-`end-to-end-checks`, on an isolated scratch host running the branch's own code
-rather than the live service. Changing the page itself is `ui-building` too.
+`end-to-end-checks`, composed in your own process rather than against the
+live service. Changing the page itself is `ui-building` too.
 
 ## Adding to what it sees
 

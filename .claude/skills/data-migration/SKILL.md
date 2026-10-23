@@ -90,10 +90,9 @@ sqlite3 -readonly ~/.yak/yak.db BEGIN "select count(*) from sqlite_schema" \
 Without the BEGIN, `.backup` starts over each time another process commits,
 which on the box is several times a second; `VACUUM INTO` takes about as long
 (425 s) and writes a compacted copy, not the pages as they stood. Point a
-scratch config at the
-copy (`end-to-end-checks` has how a probe stays apart from the live graph),
-run the script, compare counts before and after, and run it again to show the
-second run changes nothing. A script that parses sqlite3's output names its
+scratch config's `db` at the copy, run the script over it in one process (no
+server; `end-to-end-checks` has the doors), compare counts before and after,
+and run it again to show the second run changes nothing. A script that parses sqlite3's output names its
 mode (`-list`, `-json`): a ~/.sqliterc can set `.mode box`, and its borders
 then read as data, eids included. A copy is as big as the live file
 (`ls -lh ~/.yak/yak.db`) and sits on the disk the live graph writes to. Copies

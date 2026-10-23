@@ -5,12 +5,13 @@ description: >
   @yaks/testing (`test`, `suite`, `equal`, `until`, `///` doctests, fenced
   examples), `deno task test` and its deno/browser/terminal/workerd platforms,
   unchanged-dependency skips, kernel and workerd tests in workers/yak, the
-  Stripe sandbox, and running the changed package's tests. Use it whenever you
-  write, change, run, narrow, time or debug a test, doctest or README example,
-  when a run fails or is slow, a brief says "add a test", or before landing to
-  choose what to run. `platform-visualize` observes anatomy and causal activity,
-  not assertions; its automated contracts take this skill. Proving a change by
-  hand in a browser or terminal is `end-to-end-checks`.
+  Stripe sandbox, benchmarks, and running the changed package's tests. Use it
+  whenever you write, change, run, narrow, time or debug a test, doctest, README
+  example or benchmark, when a run fails or is slow, a brief says "add a test",
+  or before landing to choose what to run. `platform-visualize` observes
+  anatomy and causal activity, not assertions; its automated contracts take
+  this skill. Proving a change by hand, in your own process, is
+  `end-to-end-checks`.
 ---
 
 # Testing
@@ -32,10 +33,26 @@ you alone". What earns a place is behavior someone depends on, checked where it
 shows.
 
 The posture is a quick, light suite you run without thinking: most tests near
-1 ms, each package checked where it lives, a red test treated as news. This is
-the automated half of finishing a change; `end-to-end-checks` is the half done
-by hand, and `platform-visualize` observes what ran, which is not an
-assertion.
+1 ms, each package checked where it lives, a red test treated as news. And a
+test runs in the process that asked for it. The box's four cores are shared by
+every agent working; when about eight of them each ran gates, tests, probe
+servers and Chrome, the load reached 11.7 and the owner stopped them all. His
+words, 2026-10-23 (M-132169, 18bc9a78): "tests and benchmarks should be
+starting zero other processes", and of a benchmark driving a separate server,
+"that's the heavyness i'm talking about. never do that!"
+
+The cure for a test that keeps catching one kind of breakage is not another
+check but code that can't break that way: "if we have problems with our code
+not running on certain platforms, the systematic fix is to *remove the code's
+ability to see the platform*" (15ce9bf9). He would rather recover than gate
+(M-37965): every commit on main runs the whole suite
+(.github/workflows/gate.yml), the tracker reports what breaks live, and a
+failure is fixed forward. So a run here is the few tests your change could
+break, and nothing more.
+
+This is the automated half of finishing a change; `end-to-end-checks` is the
+half done by hand, in your own process, and `platform-visualize` observes what
+ran, which is not an assertion.
 
 ## Writing one
 
@@ -51,6 +68,12 @@ assertion.
 - A graph over `:memory:` or @yaks/ram is a value, not a boot, so most tests
   run at a pure seam, in memory. When RAM lacks something a test needs,
   @yaks/ram gets it (M-39498).
+- A test starts no process: no `deno` or `yak` child, no `git`, no server, no
+  browser. Code that starts one takes it at a small generic boundary
+  (M-39503), and the test hands it one in memory, the way
+  packages/cli/restart_test.ts hands `restart()` a `run` that never reaches
+  systemd. Many existing tests still start processes; T-132170 is moving
+  them, so don't copy one.
 - A case times only the act it checks. Build and seed its graph, store or
   field when the file loads (top-level `await`), one fixture per case that
   writes to it, and give each behavior a case of its own. A case that builds
@@ -83,10 +106,19 @@ stronger.
 
 ## Running
 
-- `deno task test [path...]` runs what lies under the paths, each platform in
-  one runtime of the runner (bin/test.ts). `--tag=deno` (or `browser`,
-  `terminal`, `workerd`, or any tag a test carries) narrows it; `--all` runs
-  files the skip would leave out.
+- `deno task test [path...]` runs what lies under the paths (bin/test.ts).
+  `--tag=deno` (or `browser`, `terminal`, `workerd`, or any tag a test
+  carries) narrows it; `--all` runs files the skip would leave out.
+- Today a run still starts processes, and T-132170 is taking them away. It
+  goes through a chain of Deno processes (bench/run.ts, bin/scratch.ts,
+  bin/test.ts and its coordinator), then starts one runtime for each platform
+  the selection holds. A selection with anything under workers/ first runs
+  `ready()` (workers/yak/wrangler.ts: `npm ci` when its install is stale, five
+  asset generators as `deno run`, and Stripe's sandbox key, through `op` when
+  `STRIPE_KEY` isn't set). One with a `*_workerd_test.ts` also starts workerd
+  with its kernel. So name the package you changed, and keep workerd out
+  unless your change is about the runtime itself: `deno task test --tag=deno
+  workers/yak/<file>`.
 - A run says only what you act on, since its output is read again on every
   later turn: each failure's name, file and error (its frames in the checkout,
   cut to 30 lines), a line naming the slowest few tests the budget flags, and
@@ -103,16 +135,15 @@ stronger.
   shared by every checkout.
 - Packages exist so a change can be checked where it lives: run the package
   you changed (`deno task test packages/<name>`), and a change inside one yaks
-  app at most `deno task test apps/<name>`. A shared interface's consumers also
-  belong in that selection: SQL and SQLite reads are exercised by blob's
-  predicates, paths and projections, not just the storage packages. Vocabulary
-  declarations also meet in `packages/vocab_test.ts`, whose directory walk
-  needs `--all` to see changed JSON files. The full suite is for a change that
-  reaches across packages in a way their own tests can't cover, and a change
-  to how @yaks/query parses, @yaks/match evaluates, @yaks/sql compiles,
-  @yaks/sqlite plans or @yaks/graph applies is always that: every package that
-  reads or writes depends on it, and its own tests can't see them. Run `deno task test` and
-  `deno task test --tag=workerd workers/yak` once before landing it.
+  app at most `deno task test apps/<name>`. A shared interface's consumers you
+  can name belong in that selection too: SQL and SQLite reads are exercised by
+  blob's predicates, paths and projections, not just the storage packages.
+  Vocabulary declarations also meet in `packages/vocab_test.ts`, whose
+  directory walk needs `--all` to see changed JSON files. The whole suite,
+  workerd's included, is what main runs on every commit; a change to how
+  @yaks/query parses, @yaks/match evaluates, @yaks/sql compiles, @yaks/sqlite
+  plans or @yaks/graph applies is checked across every consumer there, and
+  what goes red is fixed forward. It isn't a run for this box.
 - Every run is held to the budget (bin/test-budget.ts): a test case over 1 ms
   fails it unless bench/test-budget.json lists it. What is held is the test's
   own time: its wall clock less what its runtime waited for a CPU another
@@ -143,14 +174,23 @@ stronger.
 - `deno task test` and `deno task check` are timed against a baseline
   (bench/suites.md); with `--verbose` or in CI, the `benchmark:` line closing a
   run is that timing, report-only, not a test result.
-- `deno task check` (fmt, lint, bytes, types, publish, browser, workers and
-  content) is separate from tests, and `deno task gate` runs both. Each check
-  says one line, and a failed one its output, cut to its first and last lines;
-  `deno task check:types` (or whichever failed) says it whole, and
-  `--verbose` says every check's output as it comes. Run `deno fmt` and
-  `deno lint` on the files you changed before landing—the gate refuses
-  both—and run the other parts your change touches (`deno task check:types`,
-  …).
+- A benchmark runs in the process that asked for it, too, and measures its own
+  work. Today's suites don't yet: `deno task bench` starts Deno children
+  (bench/throughput.ts), bench/box.ts and bench/monitor.ts time the commands
+  and servers they start, and the client-frame report opens headless Chrome
+  (bench/README.md). So they aren't run on this box until T-132170 brings them
+  into one process; a question of speed is answered by timing the code in your
+  own.
+- `deno task check` (fmt, lint, bytes, types, raycast, publish, browser,
+  workers and content) is separate from tests, and `deno task gate` runs both.
+  Both are main's, on every commit, not runs for this box: `deno task check`
+  starts its nine checks at once, each a process of its own (bin/check.ts),
+  and `check:raycast` runs `npm ci`. Before landing, run `deno fmt` and `deno
+  lint` on the files you changed (main refuses both), and the one check your
+  change touches (`deno task check:types`, …), which says its output whole. In
+  a whole run each check says one line, and a failed one its output, cut to
+  its first and last lines; `--verbose` says every check's output as it
+  comes.
 - Piping a run eats its exit code: read `${pipestatus[1]}` before acting.
 - A run doesn't type-check (`--no-check`); the gate does. `deno check` the files
   you changed, test files included, before landing.
@@ -167,16 +207,26 @@ stronger.
 ## Platforms
 
 Tests divide by where they run, not by speed, and each platform's environment
-starts once per run (M-39441). The platforms run at once, workerd's as soon as
-its kernel is up:
+starts once per run (M-39441). Today each platform is a runtime of its own, and
+they run at once:
 
 - **deno**: every `*_test.ts` and every example.
-- **browser**: packages/web and packages/browse; **terminal**:
-  packages/browse/tui. Each host sets up its own kind of document.
+- **browser**: packages/web and packages/browse, on a linkedom document in a
+  Deno runtime, not Chrome; **terminal**: packages/browse/tui, painted by
+  @yaks/tui. Each host sets up its own kind of document as globals, and the
+  web app keeps its state in its modules, which is why they don't share a
+  runtime yet.
 - **workerd**: every `*_workerd_test.ts`, against the one kernel
-  workers/yak/probe-suite.ts starts for the run. Only what the runtime alone
-  has belongs here (a socket's upgrade, the `send_email` binding, an uploaded
-  script); it's rare and slow.
+  workers/yak/probe-suite.ts starts for the run in workerd, a process of its
+  own. Only what the runtime alone has belongs here (a socket's upgrade, the
+  `send_email` binding, an uploaded script); it's rare and slow, and main runs
+  it.
+
+A platform exists because code can see where it runs. The way out is code
+that can't: the kernel already runs in memory in Deno because it meets
+storage, sockets and mail only through interfaces of its own (`kernel()`
+below). T-132170's design takes the rest of the way, so every platform's tests
+run in the process that asked.
 
 In workers/yak (workers/yak/probe.ts):
 
@@ -191,8 +241,8 @@ In workers/yak (workers/yak/probe.ts):
 
 What proves a purchase works is Stripe taking it, so Stripe tests run against
 the sandbox. A run finds its key once, and only when it includes workers/
-tests: `STRIPE_KEY`, or the owner's through `op` (`sandboxKey()` in
-workers/yak/probe.ts). A key that isn't test-mode is refused; a live one would
+tests: `STRIPE_KEY`, or the owner's through `op`, a process of its own
+(`sandboxKey()` in workers/yak/probe.ts). A key that isn't test-mode is refused; a live one would
 charge somebody.
 
 - A test whose subject is what a plan allows, not how it's bought, puts the
