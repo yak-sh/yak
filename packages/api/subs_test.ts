@@ -533,7 +533,10 @@ test('a windowed query refills when a member leaves its fixed owner', () => {
   assertEquals(left.gone, ['r2'])
 })
 
-test('a backlink query ignores writes to what references something else', () => {
+// A backlink query on one of two books, among reviews of each, its answer
+// and reads followed through a commit that changes a review of the other book
+// and adds another, then through a review moving onto its book.
+let backlinked = (more: string) => {
   let g = shop()
   let [b1, b2] = [derivedEid('fixture:b1'), derivedEid('fixture:b2')]
   g.apply([
@@ -547,19 +550,26 @@ test('a backlink query ignores writes to what references something else', () => 
     ...g,
     read: (q, o) => (reads.push(String(q)), g.read(q, o)),
   }
-  let subs = subscriptions(spy), e = ear()
-  subs.open(e.to, 'window', `.refs=${b1}&?review&.limit=5`)
-  subs.open(e.to, 'all', `.refs=${b1}&?review`)
-  assertEquals(e.take().map(ids), [['r1'], ['r1']])
+  let e = ear()
+  subscriptions(spy).open(e.to, 'refs', `.refs=${b1}&?review${more}`)
+  assertEquals(e.take().map(ids), [['r1']])
   reads.length = 0
 
-  g.apply([{ entity: { eid: 'r2' }, review: { stars: 5 } }])
-  g.apply([{ entity: { eid: 'r3' }, review: { book: b2, stars: 1 } }])
+  g.apply([
+    { entity: { eid: 'r2' }, review: { stars: 5 } },
+    { entity: { eid: 'r3' }, review: { book: b2, stars: 1 } },
+  ])
   assertEquals([reads, e.take()], [[], []])
 
   g.apply([{ entity: { eid: 'r2' }, review: { book: b1 } }])
-  assertEquals(e.take().map((f) => ids(f).includes('r2')), [true, true])
-})
+  assertEquals(e.take().map((f) => ids(f).includes('r2')), [true])
+}
+
+test('a backlink query ignores writes to what references something else', () =>
+  backlinked(''))
+
+test('a windowed backlink query ignores writes to what references something else', () =>
+  backlinked('&.limit=5'))
 
 test('windowed property filters skip births without their components', () => {
   let g = shop()
