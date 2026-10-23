@@ -20,14 +20,12 @@ import {
   problem,
   queryEids,
   querySubscription,
-  type References,
   references,
   type SubscriptionRead,
   useHold,
 } from '../live.ts'
 import { parseQuery, type Pred, resolveRefs } from '../query.ts'
 import { type Ent, vocab } from '../types.ts'
-import { dotFields } from '../sessions.ts'
 
 // A query that does not parse fails where it was asked, never in the render
 // around it: the hook reports it once and answers a failed read, so the view
@@ -188,44 +186,19 @@ export let useChatFor = (
     !!actor && !!vocab.prop('chat', 'actor') && !!vocab.prop('chat', 'target'),
   ).eids.map(ent)[0]
 
-// The far endpoints ride the citation answer as PEERS, cut to what a reference
-// row paints: a session's dot and its row line (sessions.ts dotFields plus the
-// model/effort/persona a SessionRow shows), a target's title and status. So the
-// referencing sessions of a task arrive in the edges frame itself, where they
-// were a second round trip of ten full rows, 27 KB and the last frame of the
-// page (T-37445). A view that needs a whole row still holds it (rowsSub).
-export let REFERENCE_PEERS = [
-  'doc.title',
-  'task.status',
-  'created.at',
-  'session.actor',
-  'session.persona',
-  'session.model',
-  'session.serving_model',
-  'session.effort',
-  'spawn.model',
-  'spawn.effort',
-  'spawn.persona',
-  ...dotFields.map((f) => `${f.comp}.${f.prop}`),
-]
 let referenceQuery = () => {
   let kinds = [
     ...(vocab.comp('referenced') ? ['referenced'] : []),
     ...(vocab.prop('entry', 'session') ? ['entry.session'] : []),
   ]
-  if (!kinds.length) return undefined
-  let fields = REFERENCE_PEERS.filter((field) => {
-    let [comp, prop] = field.split('.')
-    return vocab.prop(comp, prop)
-  })
-  return `.edges[${kinds.join(',')}]` +
-    (fields.length ? `&.edges.peers=${fields.join(',')}` : '')
+  return kinds.length ? `.edges[${kinds.join(',')}]` : undefined
 }
 
-// Citations are a typed edge rider over one addressed entity. The server
-// projects entry endpoints to their Session through the indexed entry.session
-// column; this hook only owns the subscription and reads its scoped edge set.
-export let useReferences = (eid: string): References => {
+// What an entity cites (live.ts `references`): a typed edge rider over one
+// addressed entity. The server projects entry endpoints to their Session
+// through the indexed entry.session column, so a session cites what its
+// entries do; this hook only owns the subscription and reads its scoped edges.
+export let useReferences = (eid: string): string[] => {
   let query = referenceQuery()
   useHold(query && { edges: eid, rider: query })
   return references(eid)

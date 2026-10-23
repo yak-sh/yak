@@ -1,5 +1,4 @@
-// The document-side conversation: indexed cited-entity associations above one
-// actor's selected Session. The binding is graph data on the session, so a
+// The document-side conversation: one actor's selected Session. The binding is graph data on the session, so a
 // reload or another browser finds the same transcript. On a persona the
 // conversation is with it: a message to it begins a native session wearing it
 // on the host's default model (D-130780), as `yak session new --persona`
@@ -10,17 +9,15 @@
 import { useRef, useState } from 'preact/hooks'
 import { ORACLE } from '@yaks/topic'
 import { sessionFrames } from '../client.ts'
-import { mutate, myActor, useHold, uuid } from '../live.ts'
+import { mutate, myActor, uuid } from '../live.ts'
 import { catalog, type Provider, usingOf } from '../providers.ts'
 import type { Change, Ent } from '../types.ts'
 import { block, Field } from '@yaks/ui'
 import { Entity } from './Entity.tsx'
-import { Rows } from '@yaks/ui'
 import { liveBlocked, load, nativeUsing, providers } from './Run.tsx'
-import { useChatFor, useReferences } from './useQuery.ts'
+import { useChatFor } from './useQuery.ts'
 
 let Frame = block('aside', 'Chat', {
-  References: 'section',
   Label: 'h2',
   Head: 'div',
   New: 'button',
@@ -28,7 +25,7 @@ let Frame = block('aside', 'Chat', {
   State: 'p',
   Box: 'div',
 })
-let { References, Label, Head, New, Start, State, Box } = Frame
+let { Label, Head, New, Start, State, Box } = Frame
 
 export let chatPlan = (
   ps: Provider[],
@@ -49,41 +46,6 @@ export let chatPlan = (
     model: pick.model,
     effort,
   }
-}
-
-// A tile reads the row alone, never its edges: a referencing session's bare
-// route carried its hundred edges, 4.8 KB and the last frame of a page load.
-export let ReferenceRow = ({ eid }: { eid: string }) => (
-  <Entity eid={eid} view='List.Tile' />
-)
-
-// The list holds its rows in ONE sub (live.ts rowsSub): ten referencing
-// sessions were ten route subs and ten frames after the edges answered. A
-// list whose rows already RIDE the citation answer as peers (useQuery
-// REFERENCE_PEERS: the referencing sessions of a task) is `held` and asks for
-// nothing more, so it paints from the edges frame itself.
-export let ReferenceList = (
-  { label, items, held }: {
-    label: string
-    items: { eid: string }[]
-    held?: boolean
-  },
-) => {
-  useHold(!held && items.length > 0 && { rows: items.map((i) => i.eid) })
-  return items.length
-    ? (
-      <References>
-        <Label>{label}</Label>
-        <Rows>
-          {items.map((item) => (
-            <Rows.Item key={item.eid}>
-              <ReferenceRow eid={item.eid} />
-            </Rows.Item>
-          ))}
-        </Rows>
-      </References>
-    )
-    : null
 }
 
 /** Who a chat talks to, and what about: the persona its session wears, and
@@ -226,13 +188,8 @@ export let Conversation = (
     : null
 }
 
-export let Chat = ({ e }: { e: Ent }) => {
-  let cited = useReferences(e.eid)
-  return (
-    <Frame>
-      <ReferenceList label='references' items={cited.out} />
-      <ReferenceList label='referenced by' items={cited.in} held />
-      <Conversation e={e} boxed />
-    </Frame>
-  )
-}
+export let Chat = ({ e }: { e: Ent }) => (
+  <Frame>
+    <Conversation e={e} boxed />
+  </Frame>
+)

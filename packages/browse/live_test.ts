@@ -2567,6 +2567,31 @@ let errorsDuring = async (run: (heard: unknown[]) => Promise<void>) => {
   return heard
 }
 
+// Every list of an entity's links (Show's, Relate's, the Meta tallies, Debug,
+// the Markdown frontmatter) reads ent()'s refs and kids and parents().
+test('an entity lists its links, not what cites it or what it cites', () => {
+  deps.value = [
+    { parent: 'project', type: 'contains', child: 'task' },
+    { parent: 'task', type: 'reads', child: 'part' },
+    { parent: 'task', type: 'contains', child: 'kid' },
+    { parent: 'entry', type: 'referenced', child: 'task' },
+    { parent: 'task', type: 'referenced', child: 'cited' },
+  ]
+  try {
+    let e = ent('task')
+    assertEquals(
+      [
+        parents('task').map((d) => d.parent),
+        e.refs.map((r) => r.child),
+        e.kids.map((k) => k.eid),
+      ],
+      [['project'], ['part'], ['kid']],
+    )
+  } finally {
+    deps.value = []
+  }
+})
+
 test('server-resolve: a page read of an id that names nothing is Lost, not a failure', async () => {
   clearResolved()
   cache.value = {}

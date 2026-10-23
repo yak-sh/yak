@@ -749,7 +749,6 @@ html {
   top: var(--gap);
   max-height: calc(100vh - 7rem);
 }
-.Chat_References,
 .Chat_Conversation {
   min-width: 0;
   border-left: 1px solid var(--border);
@@ -762,9 +761,6 @@ html {
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-.Chat_References > .Rows {
-  margin-top: var(--half-gap);
 }
 .Chat_Head {
   display: flex;

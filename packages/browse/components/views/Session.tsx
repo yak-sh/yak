@@ -617,7 +617,7 @@ export let Session = (
       x.row?.kind == 'say' && x.row.role == 'user' ? [x.row.text] : []
     ),
   )
-  let cited = new Set(useReferences(e.eid).out.map((r) => r.eid))
+  let cited = new Set(useReferences(e.eid))
   let cs = useCommentsOn(e.eid).filter((c) => {
     let body = c.doc?.body ?? ''
     return !inputs.has(body) && !inputs.has(`${idOf(c)}: ${body}`)

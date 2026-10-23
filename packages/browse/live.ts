@@ -35,7 +35,7 @@ import {
   statusOf,
   vocab,
 } from './types.ts'
-import { moves, typeOf } from './edge.ts'
+import { moves, natureOf, typeOf } from './edge.ts'
 import type { Row } from './client.ts'
 import { sessionQueries } from './sessions.ts'
 import {
@@ -1092,25 +1092,17 @@ export let myMode = (target: string) => {
     : undefined
 }
 
-export type Reference = { eid: string }
-export type References = { out: Reference[]; in: Reference[] }
-
-// Citation reads are ordinary held edges. The selector that loaded them has
-// already projected entry endpoints to Sessions; this door only reads the two
-// endpoint indexes, so a render never sees or scans the durable entry partition.
-export let references = (eid: string): References => {
-  let named = (edges: Dep[], side: 'parent' | 'child'): Reference[] =>
-    [
-      ...new Set(
-        edges.filter((d) => d.type == 'referenced').map((d) => d[side]),
-      ),
-    ]
-      .map((eid) => ({ eid }))
-  return {
-    out: named(relations(eid).value, 'child'),
-    in: named(childRelations(eid).value, 'parent'),
-  }
-}
+// What an entity cites: its `references` edges, read as ordinary held edges.
+// The selector that loaded them has already projected entry endpoints to
+// Sessions; this door only reads the endpoint index, so a render never sees or
+// scans the durable entry partition.
+export let references = (eid: string): string[] => [
+  ...new Set(
+    relations(eid).value.filter((d) => d.type == 'referenced').map((d) =>
+      d.child
+    ),
+  ),
+]
 
 // The sentence a cached edge entity says. An edge wears `edge{from, to}` and
 // exactly one nature tag, so the row IS the triple — this is how a client that
@@ -2235,14 +2227,18 @@ let routeSub = (eid: string, fields?: string) => {
   // silent match-all.
   // A whole route also holds the edges incident to the entity, each end its
   // own subscription: the edge rows land like any other, and the cache reads
-  // the sentences off them. A store that keeps no edges is never asked.
+  // the sentences off them. A store that keeps no edges is never asked. The
+  // edges a page does not list are not asked for, so on an entity cited a
+  // thousand times its hundred are the links it lists.
   let ends = fields || !vocab.comp('edge')
     ? []
     : ['from', 'to'].map((end) => `${sub}:${end}`)
+  let unlisted = natureOf(UNLISTED)
+  let skip = unlisted && vocab.comp(unlisted) ? `&!${unlisted}` : ''
   if (!n) {
     ownBoard(sub, routeLine(eid, fields))
     for (let end of ends) {
-      ownBoard(end, `.edge.${end.split(':').at(-1)}=${eid}&.limit=100`)
+      ownBoard(end, `.edge.${end.split(':').at(-1)}=${eid}${skip}&.limit=100`)
     }
   }
   return () => {
@@ -2399,13 +2395,22 @@ probe.__probe = {
   retainedN: () => replica?.box.cache.size() ?? 0,
 }
 
+// The edges a page lists, and so every list of an entity's links reads
+// (`refs`, `kids`, `parents`): all but the kernel's `references`, written when
+// a transcript entry cites an entity or a session names its persona, which
+// say what mentioned it rather than how it relates. `yak graph show` leaves
+// them out too, and a route never asks for them (`routeSub`). Who cites what
+// is still read through `relations` itself (`references`).
+let UNLISTED = 'referenced'
+let listed = (d: Dep) => d.type != UNLISTED
+
 // The whole entity, assembled for a renderer: spine, components present,
 // outgoing edge sentences, contained children (recursive — graphs stay
 // small; a view reads as deep as it wants).
 export let ent = (eid: string): Ent => {
   let { entity, ...comps } = row(eid).value ?? {}
   if (comps.pin) comps.pin = { ...comps.pin, z: pinZ(eid, comps.pin.z).value }
-  let mine = relations(eid).value
+  let mine = relations(eid).value.filter(listed)
   return {
     ...comps, // whatever components the entity carries, verbatim —
     // created/updated (provenance) ride here like any other component now
@@ -3177,9 +3182,9 @@ export let jobOf = (e: Ent): string | null => {
 }
 
 // The edges that hold an entity FROM ABOVE — every edge whose child
-// is this eid. refs/kids read downward; this is the climb back up, how a
-// task names the parents that contain or require it.
-export let parents = (eid: string) => childRelations(eid).value
+// is this eid that a page lists (`listed`). refs/kids read downward; this is
+// the climb back up, how a task names the parents that contain or require it.
+export let parents = (eid: string) => childRelations(eid).value.filter(listed)
 
 // A board query carries refs as TEXT, outside the schema's eid columns, so a
 // CONTAINS over `board.query` names every board mentioning this target. The pred

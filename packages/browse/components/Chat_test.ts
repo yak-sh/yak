@@ -4,17 +4,11 @@ import { test } from '@yaks/testing'
 import '../testing.ts'
 import { assertEquals, assertThrows } from '@std/assert'
 import { h } from 'preact'
-import { cache, ent, useRoute } from '../live.ts'
+import { cache, ent } from '../live.ts'
 import { mount } from './mount.ts'
 import { ORACLE } from '@yaks/topic'
 import type { Ent } from '../types.ts'
-import {
-  chatChanges,
-  chatPlan,
-  ReferenceList,
-  Starter,
-  voiceOf,
-} from './Chat.tsx'
+import { chatChanges, chatPlan, Starter, voiceOf } from './Chat.tsx'
 
 test('a human chat opens a taskless session and rebinds the chat', () => {
   let got = chatChanges(
@@ -104,31 +98,6 @@ test('chatPlan picks a graph-native provider', () => {
   )
 })
 
-test('chat references mount the entity List.Tile renderer', () => {
-  cache.value = {
-    target: {
-      entity: { eid: 'target', num: 7 },
-      doc: { eid: 'target', title: 'A target', body: '' },
-      task: { eid: 'target' },
-      filed: { eid: 'target', priority: 0 },
-    },
-  }
-  let mounted = mount(
-    h(ReferenceList, { label: 'referenced by', items: [{ eid: 'target' }] }),
-  )
-  try {
-    assertEquals(
-      mounted.root.querySelector('.Rows_Item > .Row-task .Row_Title')
-        ?.textContent,
-      'A target',
-    )
-    assertEquals(mounted.root.querySelector('.Chat_Link'), null)
-  } finally {
-    mounted.free()
-    cache.value = {}
-  }
-})
-
 // What a new chat's line invites, and how it is drawn, for a row of each kind:
 // each mounted once, at load.
 let invited = (row: Record<string, unknown>) => {
@@ -162,33 +131,4 @@ test('a chat on a persona messages it by name', () => {
 
 test('a chat on a topic asks about it by name', () => {
   assertEquals(invites.topic[0], 'ask about Data model…')
-})
-
-// T-37445: the referencing sessions ride the citation answer as peers, so the
-// held list opens no rows sub of its own; an unheld list still does.
-test('a held reference list asks for no rows of its own', async () => {
-  let sent: Record<string, unknown>[] = []
-  let prior = useRoute((f) => sent.push(f as Record<string, unknown>))
-  let peer = 'c0000000-0000-4000-8000-000000000001'
-  let cited = 'c0000000-0000-4000-8000-000000000002'
-  let held = mount(
-    h(ReferenceList, {
-      label: 'referenced by',
-      items: [{ eid: peer }],
-      held: true,
-    }),
-  )
-  let asked = mount(
-    h(ReferenceList, { label: 'references', items: [{ eid: cited }] }),
-  )
-  try {
-    await Promise.resolve()
-    let lines = sent.map((f) => f.subscribe)
-    assertEquals(lines.includes(`.entity.eid=${cited}&*`), true)
-    assertEquals(lines.some((l) => String(l).includes(peer)), false)
-  } finally {
-    asked.free()
-    held.free()
-    useRoute(prior)
-  }
 })
