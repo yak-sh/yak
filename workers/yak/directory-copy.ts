@@ -53,10 +53,30 @@ export class Unfenced extends Error {
 // directory has committed. A write that fails mends as it leaves, and a signed
 // read still fenced after its first look asks the directory to mend (MEND), so
 // a fence is up for as long as a write holds it and never longer.
-let open = 0
+//
+// A write holds its fence from the `begin` that raises it until it commits
+// (`released`, the directory's commit hook) or fails, and not while its effects
+// run after the commit: a wake's job runs in the effects of the write that
+// fired it, for as long as the job takes, and a fence orphaned meanwhile is
+// still lowered. A `begin` on its way holds whatever revision it will be
+// answered, so no fence is lowered while one is.
+let raising = 0
+let held = new Set<number>()
+
+/** The directory committed a write under this fence: it holds it no longer. */
+export let released = (revision: number) => void held.delete(revision)
+
+/** Lower an orphaned fence, if there is one. Never throws: a copy that cannot
+ * answer is mended by the next read that finds the fence. */
 export let mend = async (copy: ServingCopyDoor, committed: () => number) => {
-  let revision = await copy.revision?.()
-  if (revision != null && open == 0) await copy.settle?.(revision, committed())
+  try {
+    if (raising) return
+    let revision = await copy.revision?.()
+    if (revision == null || raising || held.has(revision)) return
+    await copy.settle?.(revision, committed())
+  } catch (e) {
+    if (!moving(e)) defect(e, { request: 'serving fence mend' })
+  }
 }
 
 export let fenced = async <T>(
@@ -65,27 +85,32 @@ export let fenced = async <T>(
   committed: () => number,
   tries = 4,
 ): Promise<T> => {
-  open++
   let failed = true
   try {
     for (;; tries--) {
-      let revision = await retried(() => copy.begin(), true, moving)
+      raising++
+      let revision: number
       try {
-        let out = await write(revision)
-        await retried(() => copy.finish(revision), true, moving)
-        failed = false
-        return out
+        revision = await retried(() => copy.begin(), true, moving)
+        held.add(revision)
+      } finally {
+        raising--
+      }
+      let out: T
+      try {
+        out = await write(revision)
       } catch (e) {
         if (!(e instanceof Unfenced) || tries <= 1) throw e
+        continue
+      } finally {
+        released(revision)
       }
+      await retried(() => copy.finish(revision), true, moving)
+      failed = false
+      return out
     }
   } finally {
-    open--
-    if (failed) {
-      await mend(copy, committed).catch((e) => {
-        if (!moving(e)) defect(e, { request: 'serving fence mend' })
-      })
-    }
+    if (failed) await mend(copy, committed)
   }
 }
 
@@ -209,10 +234,12 @@ export let signedDirectory = (
 ): Fetcher & { signed?: boolean } => {
   if (!copy) return via
   let began = time.now()
-  let unavailable = () =>
-    new Response('Serving authority unavailable', { status: 503 })
+  // What the last look saw is what the request is told, and what its report
+  // says: a give-up that names no cause cannot be fixed.
+  let unavailable = (why: string) =>
+    new Response(`Serving authority unavailable: ${why}`, { status: 503 })
   let accept = async (revision: number, body: string) =>
-    await confirms(copy, revision)
+    await current(copy, revision) === true
       ? new Response(body, { headers: { [EPOCH]: String(revision) } })
       : null
   return {
@@ -250,33 +277,39 @@ export let signedDirectory = (
         headers.set(EPOCH, '1')
         let from = time.now()
         // One read of the directory: an answer that stands, a refusal
-        // included, or null while nothing can be confirmed yet.
-        let look = async (): Promise<Response | null> => {
+        // included, or why nothing can be confirmed yet.
+        let look = async (): Promise<Response | string> => {
           let answer: Response
           try {
             answer = await via.fetch(new Request(req, { headers }))
-          } catch {
+          } catch (e) {
             await fallback()
-            return null
+            return `the directory did not answer: ${said(e)}`
           }
-          if (answer.status == 503) {
-            void answer.body?.cancel()
-            return null
+          // A 5xx is the directory failing to answer for the moment, not
+          // saying no: its own failure is reported where it happened.
+          if (answer.status >= 500) {
+            return `the directory answered ${answer.status}: ${
+              message(await answer.text())
+            }`
           }
           if (!answer.ok) return answer
           let epoch = answer.headers.get(EPOCH)
           if (epoch == null || !/^\d+$/.test(epoch)) {
             void answer.body?.cancel()
-            return null
+            return 'the directory answered with no revision'
           }
           let revision = Number(epoch)
           let body = await answer.text()
           try {
             await copy.publish?.(revision, key, body)
           } catch { /* The copy is filled again by the next read. */ }
-          let accepted = await accept(revision, body)
-          if (!accepted) headers.set(MEND, '1')
-          return accepted
+          let standing = await current(copy, revision)
+          if (standing === true) {
+            return new Response(body, { headers: { [EPOCH]: epoch } })
+          }
+          headers.set(MEND, '1')
+          return standing
         }
         void (async () => {
           // Nothing has escaped before the first accepted answer. A directory
@@ -293,27 +326,49 @@ export let signedDirectory = (
           for (let pause = 10; !settled; pause = Math.min(pause * 2, 250)) {
             let answer = await look()
             if (settled) return
-            if (answer || time.now() - from >= FENCE_WAIT) {
-              done(answer ?? unavailable())
-              return
+            if (typeof answer != 'string') return done(answer)
+            if (time.now() - from >= FENCE_WAIT) {
+              return done(unavailable(answer))
             }
             await new Promise<void>((resume) => time.after(pause, resume))
           }
         })().catch((e) => {
           defect(e, { request: 'signed directory read' })
-          done(unavailable())
+          done(unavailable(said(e)))
         })
       })
     },
   }
 }
 
-/** Whether the copy says a revision is current. A copy that cannot answer,
- * moving with a deploy, has not said so. */
-export let confirms = async (copy: ServingCopyDoor, revision: number) => {
+// A failure's words, and a refusal body's `message` (@yaks/api), cut short:
+// they ride in a sentence.
+let said = (e: unknown) =>
+  (e instanceof Error ? e.message : String(e))
+    .slice(0, 300)
+let message = (text: string) => {
   try {
-    return !!await copy.valid?.(revision)
-  } catch {
-    return false
+    let { message } = JSON.parse(text)
+    if (typeof message == 'string') return said(message)
+  } catch { /* not a refusal body: its text is the message */ }
+  return said(text)
+}
+
+/** Whether the copy says a revision is current, or why it has not: a copy
+ * that cannot answer, moving with a deploy, has not said so. */
+let current = async (
+  copy: ServingCopyDoor,
+  revision: number,
+): Promise<true | string> => {
+  try {
+    return await copy.valid?.(revision)
+      ? true
+      : `the serving copy does not hold revision ${revision} current`
+  } catch (e) {
+    return `the serving copy did not answer: ${said(e)}`
   }
 }
+
+/** Whether the copy says a revision is current. */
+export let confirms = async (copy: ServingCopyDoor, revision: number) =>
+  await current(copy, revision) === true

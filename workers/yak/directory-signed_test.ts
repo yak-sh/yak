@@ -227,13 +227,25 @@ await proof(
 // either while it moves (T-127751).
 let moving = () => Promise.reject(new Error('Network connection lost.'))
 
+// The refusal says what the last look saw, so its report names the cause.
 for (
-  let [what, fenced, fetch] of [
+  let [what, fenced, fetch, why] of [
     ['a fence that never clears', true, () =>
       Promise.resolve(
         new Response('page', { headers: { [EPOCH]: '0' } }),
-      )],
-    ['a directory that never answers', false, moving],
+      ), 'the serving copy does not hold revision 0 current'],
+    [
+      'a directory that never answers',
+      false,
+      moving,
+      'the directory did not answer: Network connection lost.',
+    ],
+    ['a directory that keeps failing', false, () =>
+      Promise.resolve(
+        Response.json({ error: 'Error', message: 'internal error' }, {
+          status: 500,
+        }),
+      ), 'the directory answered 500: internal error'],
   ] as const
 ) {
   await proof(`${what} is refused after the bounded wait`, async () => {
@@ -245,7 +257,9 @@ for (
       await time.advance(250)
       await flush()
     }
-    return () => equal(answer.answer().status, 503)
+    let out = answer.answer()
+    let said = [out.status, await out.text()]
+    return () => equal(said, [503, `Serving authority unavailable: ${why}`])
   })
 }
 
@@ -262,6 +276,13 @@ let blip = async (at: string) => {
         if (trip('fetch')) return moving()
         if (trip('503')) {
           return Promise.resolve(new Response('moving', { status: 503 }))
+        }
+        if (trip('500')) {
+          return Promise.resolve(
+            Response.json({ error: 'Error', message: 'internal error' }, {
+              status: 500,
+            }),
+          )
         }
         let epoch = trip('epoch') ? {} : { [EPOCH]: String(f.core().revision) }
         return Promise.resolve(new Response('page', { headers: epoch }))
@@ -283,6 +304,7 @@ for (
   let [at, what] of [
     ['fetch', 'a directory call that throws'],
     ['503', 'a directory answering 503'],
+    ['500', 'a directory failing with a 500'],
     ['epoch', 'a directory answer with no revision'],
     ['publish', 'a copy that cannot be filled'],
     ['valid', 'a copy that cannot say what is current'],

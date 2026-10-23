@@ -5,6 +5,7 @@ import {
   FENCE_WAIT,
   fenced,
   mend,
+  released,
   signedDirectory,
   Unfenced,
 } from './directory-copy.ts'
@@ -1559,6 +1560,10 @@ export class Store {
                       throw new Unfenced()
                     }
                     this.#put('directory-revision', String(revision))
+                    // The transaction commits synchronously from here, so
+                    // the write holds its fence no longer, though its
+                    // effects may run on for a while (directory-copy.ts).
+                    released(revision)
                     return bundles
                   },
                 },

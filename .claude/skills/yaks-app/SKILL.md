@@ -61,12 +61,14 @@ and setup; this is the map and the feel.
 - **The serving fence**: a directory write raises a fence on the serving
   copy (`directory-copy.ts`, `serving-copy.ts`) until it commits, and every
   signed read and every store's check of a caller waits it out, at most
-  `FENCE_WAIT`. A directory or copy that can't answer for a moment is waited
-  out the same way, never refused, and a write resends its fence calls while
-  a deploy moves the copy (`fenced`). A write of what no authorization reads
-  raises none (graph.ts `unfenced`: use receipts), so a new bookkeeping word
-  written often belongs there, or each write of it holds back every check on
-  the platform.
+  `FENCE_WAIT`. A directory or copy that can't answer for a moment (a throw,
+  a 5xx, no revision) is waited out the same way, never refused, and a read
+  that gives up says what its last look saw. A write resends its fence calls
+  while a deploy moves the copy, and holds its fence only until it commits,
+  not while its effects run on (`fenced`). A write of what no authorization
+  reads raises none (graph.ts `unfenced`: use receipts), so a new bookkeeping
+  word written often belongs there, or each write of it holds back every check
+  on the platform.
 - **Serving an app**: `apps.ts` serves its files and `./api/*`; `door.ts`
   hands the store the caller's standing, including its access mode
   (`x-yak-access`). Every HTML page leaving for a browser is woven the

@@ -3,7 +3,7 @@
 import { backoff } from '@yaks/durable-object'
 import { select, table } from '@yaks/sql'
 import { equal, ok, test } from '@yaks/testing'
-import { doorOf, PLATFORM_STORE } from './door.ts'
+import { doorOf, IDEMPOTENCY, PLATFORM_STORE } from './door.ts'
 import { EPOCH, type ServingCopyDoor } from './directory-copy.ts'
 import type { Env } from './env.ts'
 import { Store } from './graph.ts'
@@ -29,6 +29,7 @@ let fixture = async (rules: Rule[] = []) => {
   let beforeBegin = () => Promise.resolve()
   let offered = (revision: number) => revision
   let beforeFinish = (_revision: number) => Promise.resolve()
+  let beforeRevision = () => Promise.resolve()
   let rpc: ServingCopyDoor = {
     begin: async () => {
       let revision = core.begin()
@@ -36,7 +37,10 @@ let fixture = async (rules: Rule[] = []) => {
       await beforeBegin()
       return offered(revision)
     },
-    revision: () => Promise.resolve(core.revision),
+    revision: async () => {
+      await beforeRevision()
+      return core.revision
+    },
     finish: async (revision) => {
       await beforeFinish(revision)
       finishes.push(revision)
@@ -103,6 +107,20 @@ let fixture = async (rules: Rule[] = []) => {
           body: body == null ? undefined : JSON.stringify(body),
         }),
       ),
+    // A write as the kernel's door sends one: keyed, so it commits live
+    // rather than through the write log (door.ts `storeOf`).
+    live: (bundles: unknown) =>
+      store.fetch(
+        new Request('http://store/apply', {
+          method: 'POST',
+          headers: {
+            'x-store': PLATFORM_STORE,
+            [IDEMPOTENCY]: crypto.randomUUID(),
+            ...KERNEL,
+          },
+          body: JSON.stringify(bundles),
+        }),
+      ),
     move: () => store.alarm(),
     // The fenced graph itself, for writes no door serializes.
     graph: async () => (await store.door).graph,
@@ -116,6 +134,9 @@ let fixture = async (rules: Rule[] = []) => {
     },
     onFinish: (fn: typeof beforeFinish) => {
       beforeFinish = fn
+    },
+    onRevision: (fn: typeof beforeRevision) => {
+      beforeRevision = fn
     },
     restart: () => {
       core = new ServingCopy({ persistence })
@@ -516,3 +537,59 @@ await proof(
     }
   },
 )
+
+// A write is still running after its commit (a wake's job runs in the effects
+// of the write that fired it), and a fence is orphaned meanwhile.
+await proof(
+  'a fence orphaned while a committed write runs on is lowered by a read',
+  async () => {
+    let f = await fixture()
+    let release!: () => void
+    f.onFinish(() => new Promise<void>((r) => release = r))
+    let running = f.live(patch)
+    while (!release) await new Promise((r) => setTimeout(r, 0))
+    f.core().begin()
+    let mended = await f.read(true)
+    let epoch = Number(mended.headers.get(EPOCH))
+    await mended.body?.cancel()
+    let current = f.core().valid(epoch)
+    release()
+    let written = (await running).status
+    return () => {
+      equal([epoch, current, written], [f.initial + 1, true, 200])
+      ok(f.core().valid(epoch))
+    }
+  },
+)
+
+await proof(
+  'a fence whose begin is still on its way is never lowered',
+  async () => {
+    let f = await fixture()
+    let release!: () => void
+    f.onBegin(() => new Promise<void>((r) => release = r))
+    let writing = f.live(patch)
+    while (!release) await new Promise((r) => setTimeout(r, 0))
+    await (await f.read(true)).body?.cancel()
+    let blocked = f.saved().blocked
+    release()
+    let written = (await writing).status
+    return () => {
+      equal([blocked, written], [true, 200])
+      equal(f.committed(), { access: 'private', epoch: String(f.initial + 1) })
+      ok(f.core().valid(f.initial + 1))
+    }
+  },
+)
+
+await proof('a read is answered when the copy fails its mend', async () => {
+  let f = await fixture()
+  f.core().begin()
+  f.onRevision(moving(1))
+  let read = await f.read(true)
+  await read.body?.cancel()
+  return () => {
+    equal(read.status, 200)
+    equal(f.saved().blocked, true)
+  }
+})
