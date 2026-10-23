@@ -18,8 +18,13 @@
 // is called, how a time reads — and the other entities a page gathers (its
 // relations and its comments), drawn through `show` so they go through the
 // same registry as everything else.
+//
+// A long text in a list is a passage (`passage`), not the text whole: a
+// package that owns words (an entry's, a comment's, a document's content)
+// registers its `Tile` with it.
 
 import { parse } from '@yaks/query/core'
+import { snippet } from '@yaks/graph/hit'
 import {
   type Bundle,
   type Child,
@@ -27,6 +32,8 @@ import {
   type H,
   type Registry,
   type RenderContext,
+  type Renderer,
+  type Rendering,
 } from './mod.ts'
 
 /** One group of related entities on a page: `requires`, `requires this`. */
@@ -189,6 +196,121 @@ let comment = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
     ctx.render?.('Body'),
   )
 }
+
+/** Where a passage reads its words, and what it says of them: the texts the
+ * words may be in, the first that matches what was sought giving the passage;
+ * the title, when the words are a document's own; what kind of words they
+ * are, when not plain prose (`tool result`); and the entity they sit in, with
+ * the word that says how (`in` a transcript, `on` what a comment is aimed
+ * at). */
+export type Said = {
+  texts: (b: Bundle) => unknown[]
+  title?: (b: Bundle) => unknown
+  what?: (b: Bundle) => string | undefined
+  where?: (b: Bundle) => [word: string, eid: string] | undefined
+}
+
+// Who made an entity and when, as its `created` says.
+let made = (b: Bundle) => {
+  let { by, at } = (b.created ?? {}) as { by?: unknown; at?: unknown }
+  return {
+    by: typeof by == 'string' && by ? by : undefined,
+    at: typeof at == 'string' && at ? at : undefined,
+  }
+}
+
+// The runs a snippet sets between \x01 and \x02, each a match.
+let marks = <Node>(h: H<Node>, cut: string): Child<Node>[] =>
+  cut.split('\x01').flatMap((chunk, i) => {
+    if (!i) return chunk ? [chunk] : []
+    let [found, rest = ''] = chunk.split('\x02')
+    return [h('mark', { class: 'Match' }, found), ...rest ? [rest] : []]
+  })
+
+/**
+ * A long text as one row of a list (@yaks/ui's `Passage`): a line saying who
+ * said it, when and where, then the words around what was sought, every match
+ * marked; with nothing sought, the words it opens with. What was sought is the
+ * caller's `ctx.words`, the words of its query. The row names the entities it
+ * mentions, so it asks its host for them (`needs`).
+ *
+ * ```ts
+ * import { define } from '@yaks/render'
+ * import { passage } from '@yaks/render/views'
+ * import { parse } from '@yaks/query'
+ * import { plain, tree } from '@yaks/text'
+ * import { loadVocab } from '@yaks/vocab'
+ * import { equal } from '@yaks/testing'
+ *
+ * let said = passage({
+ *   texts: (b) => [(b.note as { text?: string }).text],
+ *   where: (b) => ['on', String((b.note as { on?: string }).on)],
+ * })
+ * let views = define([{ view: 'Tile', match: parse('.note'), ...said }])
+ * let note = {
+ *   entity: { eid: 'n1' },
+ *   note: { text: 'Results are often miles long.', on: 't1' },
+ *   created: { by: 'p1', at: '2026-10-23T18:26:21Z' },
+ * }
+ * let ctx = {
+ *   name: (eid: string) => ({ p1: 'Jeff', t1: 'T-9' })[eid] ?? eid,
+ *   when: () => '2 hours ago',
+ *   words: ['miles'],
+ * }
+ * let vocab = loadVocab({
+ *   $defs: {
+ *     note: {
+ *       component: true,
+ *       properties: { text: { type: 'string' }, on: { type: 'string' } },
+ *     },
+ *   },
+ * })
+ * equal(
+ *   plain(tree(views, note, 'Tile', vocab, ctx)),
+ *   'Jeff · 2 hours ago · on T-9 Results are often miles long.',
+ * )
+ * equal(said.needs!(note), ['p1', 't1'])
+ * ```
+ */
+export let passage = (
+  said: Said,
+): { render: Rendering; needs: NonNullable<Renderer['needs']> } => ({
+  needs: (b) =>
+    [made(b).by, said.where?.(b)?.[1]].filter((e): e is string => !!e),
+  render: <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
+    let s = shown(ctx)
+    let words = Array.isArray(ctx.words) ? ctx.words.map(String) : []
+    let cuts = said.texts(b)
+      .filter((t): t is string => typeof t == 'string' && !!t.trim())
+      .map((t) => snippet(t, words))
+    let cut = cuts.find((c) => c.includes('\x01')) ?? cuts[0] ?? ''
+    let { by, at } = made(b)
+    let title = said.title?.(b)
+    let what = said.what?.(b)
+    let where = said.where?.(b)
+    let parts = [
+      typeof title == 'string' && title &&
+      h('span', { class: 'Passage_Title' }, ...marks(h, snippet(title, words))),
+      by && h('span', { class: 'Passage_Who' }, s.name(by)),
+      what && h('span', null, what),
+      at && h('time', { datetime: at }, s.when(at)),
+      where && h('span', null, `${where[0]} ${s.name(where[1])}`),
+    ].filter((p): p is Node => !!p)
+    return h(
+      'a',
+      { class: 'Passage', href: s.link?.(b.entity.eid) },
+      h(
+        'span',
+        { class: 'Passage_By' },
+        ...parts.flatMap((p, i) =>
+          i ? [' ', h('span', { class: 'Passage_Sep' }, '·'), ' ', p] : [p]
+        ),
+      ),
+      ' ',
+      h('span', { class: 'Passage_Text' }, ...marks(h, cut)),
+    )
+  },
+})
 
 let page = <Node>(b: Bundle, h: H<Node>, ctx: RenderContext<Node>): Node => {
   let s = shown(ctx)

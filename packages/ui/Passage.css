@@ -1,0 +1,56 @@
+/* A passage of a longer text, as one row of a list: a line saying whose words
+   they are, when and where, small and muted and cut short before it wraps,
+   then the words, cut to two lines. As a link, the whole row is the target. */
+.Passage {
+  --lines: 2;
+  margin: 0;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 2px 0;
+  color: var(--text);
+  text-decoration: none;
+}
+a.Passage:hover,
+.Passage[data-href]:hover {
+  background-color: var(--soft);
+}
+.Passage_By {
+  display: flex;
+  align-items: baseline;
+  gap: var(--half-gap);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--small);
+  color: var(--muted);
+}
+/* Who and when keep their room; a title and where give theirs up first. */
+.Passage_By > * {
+  flex: none;
+}
+.Passage_By > :is(.Passage_Title, :last-child) {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.Passage_Title {
+  font-size: var(--size);
+  color: var(--text);
+}
+.Passage_Who {
+  color: var(--who);
+}
+.Passage_Sep {
+  color: var(--dim);
+}
+.Passage_Text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--lines);
+  line-clamp: var(--lines);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}

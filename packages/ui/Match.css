@@ -1,0 +1,7 @@
+/* Words that match what was sought: a wash of the accent behind them, the
+   words keeping their own ink. */
+.Match {
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: inherit;
+  border-radius: 2px;
+}

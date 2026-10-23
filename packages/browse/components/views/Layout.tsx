@@ -124,8 +124,8 @@ let Fill = ({ eid, layout }: { eid: string; layout: string }) => {
     mutate(...setContent(
       panesOf(layout),
       eid,
-      h.open,
-      resolve(ent(h.open)).view,
+      h.eid,
+      resolve(ent(h.eid)).view,
     ))
   return (
     <FillEl>
@@ -145,7 +145,7 @@ let Fill = ({ eid, layout }: { eid: string; layout: string }) => {
               if (ev.key == 'Enter' || ev.key == ' ') pick(h)
             }}
           >
-            <Entity eid={h.open} view='Layout.Pick.List.Tile' />
+            <Entity eid={h.eid} view='Layout.Pick.List.Tile' />
           </Choices.Item>
         ))}
       </Choices>

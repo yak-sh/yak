@@ -692,7 +692,11 @@ equal(await answer.json(), {
 ```
 
 `views` supplies `Tile` and `Page` [renderers](../render/README.md#use) for
-`content.body`, preserving line breaks through the rendering backend.
+`content.body`, preserving line breaks through the rendering backend. A text the
+graph keeps (it carries `created`) is, as a `Tile`, a passage
+([@yaks/render](../render/README.md#shared-views)'s `passage`): its title, who
+wrote it, when, and the words around what was sought; its `Page` is still the
+text whole.
 
 ```ts
 import { views } from '@yaks/tools/views'

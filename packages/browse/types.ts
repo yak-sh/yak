@@ -1122,20 +1122,14 @@ export type Decided = Stamp & {
   choice?: string | null
 }
 
-// A full-text search hit. snip marks matches with \x01…\x02 (renderers
-// highlight without trusting HTML); open is what to OPEN — the entity
-// itself, or a comment's target.
+// A row a search answered, as the palette groups and opens it. What it says
+// and where the words matched are its tile's (views/Search.tsx).
 export type Hit = {
   eid: string
   num: number
   kind: string
   title: string
-  title_hit?: string
-  snip: string
   score?: number // query-only relevance; larger ranks earlier
-  open: string
-  open_id?: string // open spoken (T-7) — only when it isn't the hit
-  retired?: boolean // its project is over — the hit sank to the tail
 }
 
 // `ord` is an optional, editable listing order for the edge — a tie-break

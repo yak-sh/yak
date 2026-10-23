@@ -26,11 +26,13 @@ import * as menu from './Menu.ts'
 import * as meter from './Meter.ts'
 import * as metrics from './Metrics.ts'
 import * as loading from './Loading.ts'
+import * as match from './Match.ts'
 import * as notes from './Notes.ts'
 import * as palette from './Palette.ts'
 import * as overlay from './Overlay.ts'
 import * as pager from './Pager.ts'
 import * as pairs from './Pairs.ts'
+import * as passage from './Passage.ts'
 import * as panes from './Panes.ts'
 import * as prop from './Prop.ts'
 import * as quote from './Quote.ts'
@@ -64,6 +66,7 @@ let modules = {
     Id: id,
     Stamp: stamp,
     Chip: chip,
+    Match: match,
     Value: value,
     Meter: meter,
     Spark: spark,
@@ -86,6 +89,7 @@ let modules = {
     Table: table,
     Timeline: timeline,
     Turns: turns,
+    Passage: passage,
     Notes: notes,
     Inbox: inbox,
   },

@@ -1,7 +1,13 @@
 import { entityPath, searchPath } from '../url.ts'
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'preact/hooks'
 import { type Hit, idOf, kindOrder, plural } from '../types.ts'
-import { ent, searchOpen } from '../live.ts'
+import { searchOpen } from '../live.ts'
 import { follow, navigate } from './nav.tsx'
 import { Loading, Palette as Frame } from '@yaks/ui'
 import { Icon } from './icons.tsx'
@@ -9,6 +15,7 @@ import { fields } from './fields.tsx'
 import { Entity } from './Entity.tsx'
 import { InspectPage } from './inspect.tsx'
 import { aggregate, hits as queryHits } from './hits.ts'
+import { parse, words } from '@yaks/query'
 
 // `/` in normal mode opens the palette (the App shell owns the hotkey
 // and the mount, so any root can search; the `open` callback decides
@@ -50,12 +57,25 @@ export let group = (hits: Hit[], q: string) =>
 // The palette's query is the person's draft.
 let FIELD = 'search'
 
+// The words a line searches for, which each result marks where they match;
+// none while the line does not parse.
+let sought = (q: string): string[] => {
+  try {
+    return words(parse(q))
+  } catch {
+    return []
+  }
+}
+
 export let Search = ({ open }: { open: (eid: string) => void }) => {
   let [hits, setHits] = useState<Hit[]>([])
   let [err, setErr] = useState('')
   let [answered, setAnswered] = useState<string | undefined>()
   let [sel, setSel] = useState(0)
   let q = fields.text(FIELD)
+  // One array a line, so a row redraws when the words change, not each time
+  // the selection moves.
+  let marks = useMemo(() => sought(q), [q])
   let [drag, setDrag] = useState(false)
   let box = useRef<HTMLInputElement>(null)
   let seq = useRef(0)
@@ -117,10 +137,10 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
     setSel(0)
   }
   let pick = (h: Hit) => {
-    open(h.open)
+    open(h.eid)
     close()
   }
-  let href = (h: Hit) => entityPath(idOf(h.open == h.eid ? h : ent(h.open)))
+  let href = (h: Hit) => entityPath(idOf(h))
   // The field's list took its keys (Escape included) before these.
   let key = (e: KeyboardEvent) => {
     if (e.key == 'Escape') return close()
@@ -227,7 +247,7 @@ export let Search = ({ open }: { open: (eid: string) => void }) => {
                 pick(h)
               }}
             >
-              <Entity eid={h.open} view='Search.Tile' hit={h} />
+              <Entity eid={h.eid} view='Search.Tile' words={marks} />
             </Row>
           )
           if (!head) return [row]

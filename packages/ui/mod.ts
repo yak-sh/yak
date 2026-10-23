@@ -7,8 +7,8 @@
  *
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
- *   `Chip`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`, `Turns`,
- *   `Body`, `Quote`, `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Shell`,
+ *   `Chip`, `Match`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
+ *   `Turns`, `Passage`, `Body`, `Quote`, `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Shell`,
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
  *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
@@ -43,6 +43,7 @@ export { Gallery } from './Gallery.ts'
 export { Head } from './Head.ts'
 export { Index } from './Index.ts'
 export { Inbox } from './Inbox.ts'
+export { marked, Match } from './Match.ts'
 export { Notes } from './Notes.ts'
 export { Overlay } from './Overlay.ts'
 export {
@@ -60,6 +61,7 @@ export { Quote } from './Quote.ts'
 export { Say } from './Say.ts'
 export { type Col, Table, type TableProps } from './Table.ts'
 export { Pairs } from './Pairs.ts'
+export { Passage } from './Passage.ts'
 export { Rows } from './Rows.ts'
 export { Section } from './Section.ts'
 export { Shell } from './Shell.ts'

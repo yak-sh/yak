@@ -110,21 +110,14 @@ export let uniq = (all: Row[]) =>
   [...new Map(all.map((r) => [r.eid, r])).values()]
     .sort((a, b) => a.num - b.num)
 
-export let hitOf = (r: Row): Hit => {
-  let rank = r.comps.rank ?? {}
-  return {
-    eid: r.eid,
-    num: r.num,
-    kind: r.kind,
-    title: String(rank.title ?? r.comps.doc?.title ?? ''),
-    title_hit: String(rank.title_hit ?? r.comps.doc?.title ?? ''),
-    snip: String(rank.snip ?? ''),
-    score: Number(rank.score ?? 0),
-    open: String(rank.open ?? r.eid),
-    ...(rank.open_id ? { open_id: String(rank.open_id) } : {}),
-    ...(rank.retired ? { retired: true } : {}),
-  }
-}
+// A search by meaning (`.near`) ranks each row it answers (`rank.score`).
+export let hitOf = (r: Row): Hit => ({
+  eid: r.eid,
+  num: r.num,
+  kind: r.kind,
+  title: String(r.comps.doc?.title ?? ''),
+  score: Number(r.comps.rank?.score ?? 0),
+})
 
 // The pipe, as a seam. Reading is sync because inflate is, and `taken`
 // rides the seam because consumability is a fact about the resource, not

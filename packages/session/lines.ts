@@ -13,6 +13,7 @@ import {
   type Registry,
   type Rendering,
 } from '@yaks/render'
+import { passage } from '@yaks/render/views'
 import { SESSION } from './comp.ts'
 import { ASK, CALL, ENTRY } from './native.ts'
 import { kindOf, statusOf, textOf } from './state.ts'
@@ -92,14 +93,46 @@ let tile: Rendering = (b, h, ctx) => {
   )
 }
 
+// What kind of words an entry's are, where they are not a person's or a
+// model's prose: the same words a transcript says them by.
+let labels: [string, string][] = [
+  ['reasoning', 'reasoning'],
+  ['prompt', 'instructions'],
+  ['notice', 'context'],
+  ['checkpoint', 'checkpoint'],
+]
+let what = (b: Bundle): string | undefined => {
+  let kind = kindOf(b)
+  if (kind == 'call' || kind == 'result') return `tool ${kind}`
+  if (kind && kind != 'input' && kind != 'output') return kind
+  return labels.find(([comp]) => comp in b)?.[1]
+}
+
+// Words said in a transcript, as one row of a list: who said them, when, the
+// transcript they are in, and the passage around what was sought.
+let said = passage({
+  texts: (b) => [textOf(b)],
+  what,
+  where: (b) => {
+    let session = comp(b, ENTRY)?.session
+    return typeof session == 'string' ? ['in', session] : undefined
+  },
+})
+
 /** The transcript views: `Line` for an entry, `Status` for a transcript. The
  * context may carry `names` (model or tool eid → name), `anchor` (reads a
  * provider's anchor off an ask entry), and `entries` (the transcript, for
  * `Status`), `full` (entry prose), `maxChars` (a full prose preview bound). In a list
- * of answers, an entry's `Tile` is its line and a transcript's is its status
- * as the store computed it. */
+ * of answers, words someone said in a transcript are a passage (`words`, the
+ * words sought, marks them), any other entry's `Tile` is its line, and a
+ * transcript's is its status as the store computed it. */
 export let sessionViews: Registry = define([
   { view: 'Line', match: parse('.entry'), render: line },
+  {
+    view: 'Tile',
+    match: parse('.entry .created .content.body'),
+    ...said,
+  },
   { view: 'Tile', match: parse('.entry'), render: line },
   { view: 'Tile', match: parse(`.${SESSION}`), render: tile },
   { view: 'Body', match: parse('.entry'), render: entryBody },

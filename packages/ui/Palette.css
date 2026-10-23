@@ -73,8 +73,3 @@
   text-overflow: ellipsis;
   padding: var(--half-gap) var(--gap);
 }
-.Palette_Message mark {
-  background: color-mix(in srgb, var(--accent) 25%, transparent);
-  color: var(--text);
-  border-radius: 2px;
-}

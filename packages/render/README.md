@@ -78,7 +78,7 @@ equal(render(registry, bundle, 'Board.List.Tile', vocab), '## A document')
 | Module               | Exports                                                                                                                                                                                                                                                                              |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `@yaks/render`       | `define`, `extend`, `resolve`, `applicable`, `actions`, `edit`; types `Registration`, `Renderer`, `Registry`, `Selection`, `Options`, `H`, `Child`, `Context`, `RenderContext`, `Action`, `Contributor`, `Patch`, `EditOptions`, `ArchetypeLookup`; re-exported `Bundle` and `Query` |
-| `@yaks/render/views` | `views`, `sheet`; types `Shown`, `Related`                                                                                                                                                                                                                                           |
+| `@yaks/render/views` | `views`, `sheet`, `passage`; types `Shown`, `Related`, `Said`                                                                                                                                                                                                                        |
 
 ## Selection
 
@@ -326,6 +326,18 @@ content. A **Related** value groups bundles under a title:
 `{ title: 'requires', items: [...] }`. `sheet(colors)` supplies the views'
 terminal styles from `dim`, `heading`, and `muted` colors;
 [@yaks/tui](../tui/README.md) supplies terminal painting.
+
+A long text in a list is a passage, never the text whole. `passage(said)` is a
+renderer, with its `needs`, that draws one row: who wrote it (`created.by`),
+when (`created.at`), where it sits, and the words around what was sought (the
+caller's `ctx.words`), every match marked, in the class names of
+[@yaks/ui](../ui/README.md)'s `Passage` and `Match`. A **Said** value says where
+the words are: `texts`, the first matching what was sought giving the passage,
+and optionally a `title`, `what` kind of words they are, and `where` they sit
+(`['in', session]`). A package that owns words registers its `Tile` with it:
+[@yaks/session](../session/README.md) for words said in a transcript,
+[@yaks/kernel](../kernel/README.md) for a comment and
+[@yaks/tools](../tools/README.md) for a kept text.
 
 ```ts
 import { sheet, type Shown, views } from '@yaks/render/views'

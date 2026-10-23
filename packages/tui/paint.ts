@@ -150,6 +150,7 @@ let INLINE = new Set([
   'strong',
   'em',
   'del',
+  'mark',
   'code',
   'a',
   'time',
@@ -363,6 +364,9 @@ let flow = (
   let spaced = (c.spaced || o.spaced) &&
     !el.className.split(/\s+/).includes('Md_Code')
   for (let n of el.childNodes) {
+    // White space opening a line says nothing, as a browser collapses it: the
+    // space a tree puts between two blocks for a plain-text reader is no line.
+    if (n instanceof TText && !cur.length && !n.data.trim()) continue
     if (runs(n, c.sheet)) {
       let segs = inline(n, s, c)
       if (!segs.length) continue

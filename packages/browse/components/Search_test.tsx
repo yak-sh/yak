@@ -1,4 +1,3 @@
-import { hitSlots } from './views/Search.tsx'
 // The graph palette lets a word settle before asking the single server loop
 // to search it.
 import { test } from '@yaks/testing'
@@ -21,8 +20,6 @@ let hit = (num: number, kind: string, title: string) => ({
   num,
   kind,
   title,
-  snip: '',
-  open: `${num}`,
 })
 
 test('search keeps exact ids and titles above kind groups', () => {
@@ -38,21 +35,6 @@ test('search keeps exact ids and titles above kind groups', () => {
     group([persona, memory, task], '"fleet base common persona"')[0],
     persona,
   )
-})
-
-test('search fills tile titles and bodies with marked matches', () => {
-  let slots = hitSlots({
-    ...hit(1, 'task', 'One row'),
-    title_hit: 'One \x01row\x02',
-    snip: 'Body \x01match\x02',
-  })
-  let title = slots.title as unknown[]
-  let body = slots.body!
-  assertEquals(title[0], 'One ')
-  assertEquals((title[1] as { type: unknown }).type, 'mark')
-  let snip = (body.props.children as unknown[]).flat()
-  assertEquals(snip[0], 'Body ')
-  assertEquals((snip[1] as { type: unknown }).type, 'mark')
 })
 
 // Polls a real debounce window to prove only the settled query is sent — the

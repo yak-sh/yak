@@ -10,9 +10,21 @@
 // The body goes out as preformatted lines with an explicit break between each,
 // because a text backend drops the control bytes of every literal, newlines
 // included: a break is structure, and structure is what survives.
+//
+// A text kept in the graph (it has a maker, `created`) is a record among
+// others, so in a list it is a passage (@yaks/render's `passage`): who wrote
+// it, when, its title where it has one, and the words around what was sought.
+// Its `Page` is still the text whole.
 
 import { parse } from '@yaks/query/core'
-import { define, type H, type Registry, type RenderContext } from '@yaks/render'
+import {
+  define,
+  type H,
+  type Registry,
+  type RenderContext,
+  type Renderer,
+} from '@yaks/render'
+import { passage } from '@yaks/render/views'
 
 let lines = <Node>(b: Record<string, unknown>, h: H<Node>): Node => {
   let body = (b.content as { body?: unknown } | undefined)?.body
@@ -65,9 +77,13 @@ let tile = <Node>(
 
 let tool = parse('.tool.name')
 
+let text = (b: Record<string, unknown>, comp: string, prop: string) =>
+  (b[comp] as Record<string, unknown> | undefined)?.[prop]
+
 /** `Title`, `Tile` and `List.Tile` for a registered tool; `Tile` and `Page`
- * for an entity that carries a tool's text. */
-export let views: Registry = define([
+ * for an entity that carries a tool's text, and `Tile` for one the graph
+ * keeps. */
+export let views: Registry = define<Renderer>([
   {
     view: 'Title',
     match: tool,
@@ -75,6 +91,14 @@ export let views: Registry = define([
   },
   { view: 'Tile', match: tool, render: tile },
   { view: 'List.Tile', match: tool, render: tile },
+  {
+    view: 'Tile',
+    match: parse('.created .content.body'),
+    ...passage({
+      texts: (b) => [text(b, 'content', 'body'), text(b, 'doc', 'body')],
+      title: (b) => text(b, 'doc', 'title'),
+    }),
+  },
   { view: 'Tile', match: said, render: lines },
   { view: 'Page', match: said, render: lines },
 ])

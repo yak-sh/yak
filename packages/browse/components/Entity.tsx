@@ -163,7 +163,8 @@ define([
     match: parse('.entry .content .tool_progress'),
     Render: PendingSummary,
   },
-  { view: 'Tile', match: parse('.entry .content'), Render: MessageSummary },
+  // Words said in a transcript are a passage in a list (@yaks/session's
+  // views), never the message whole.
   { view: 'Tile', match: and(), Render: (props) => <ListTile {...props} /> },
   { view: 'Wake', match: parse('.wake'), Render: Wake },
   { view: 'Session', match: parse('.session'), Render: Session },
