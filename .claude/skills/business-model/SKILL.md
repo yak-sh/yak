@@ -155,14 +155,9 @@ too.
 
 This skill holds the thinking. Each venture keeps its own model (who it's for,
 its plans and prices, its pages and where its numbers live in code) in its own
-skill or design; a venture holdco stamped starts with BUSINESS-PLAN.md. Read it
-before you change anything there. Find the owner's own words on the venture
+skill or design. Read it before you change anything there. Find the owner's own words on the venture
 with `yak memory recall "<topic>" --feedback`. A price, a plan or who the
 product is for turns on preferences only the owner holds, so when one is open,
 put it to him as a decision (`yak decision new`) with the one you recommend.
-
-This skill belongs to the fleet. Its source is holdco's venture template
-(templates/new-venture/.claude/skills/business-model), which stamps it into each
-new venture, so a change goes there too.
 
 When this skill is wrong or missing something, fix it in the same change.
