@@ -25,6 +25,7 @@ import { nameKeywords } from '@yaks/names'
 import { ram } from '@yaks/ram'
 import {
   CORE_URI,
+  effectsIn,
   fromBundles,
   type Ids,
   type Keywords,
@@ -135,8 +136,9 @@ test('packages: every vocab.json is plain JSON that loads', () => {
 
 test('packages: every vocabulary goes through a graph as bundles and back', async () => {
   // Every package's words, each read on its own the way @yaks/code reads a
-  // vocab.json, into one graph that holds them as `_comp`, `_prop` and
-  // `_before`; what loads back from its rows is what loaded from the files.
+  // vocab.json, into one graph that holds them as `_comp`, `_prop`,
+  // `_effect` and `_before`; what loads back from its rows is what loaded
+  // from the files.
   let docs = files.map(([pkg, d]) => ({ ...d, package: `@yaks/${pkg}` }))
   let all = Object.values(words)
   let vocab = loadVocab(docs, all)
@@ -149,9 +151,14 @@ test('packages: every vocabulary goes through a graph as bundles and back', asyn
   let rows = [
     ...await g.read('._package'),
     ...await g.read('._comp ?doc'),
+    ...await g.read('._effect ?doc'),
     ...await g.read('._extends ?doc'),
     ...await g.read('._prop ?doc'),
     ...await g.read('._before ?edge'),
   ]
   assertEquals(facts(loadVocab(fromBundles(rows), all)), facts(vocab))
+  // Effects by name: the rows group them by package, not by file.
+  let effects = (docs: VocabDoc[]) =>
+    Object.fromEntries(effectsIn(docs).map((e) => [e.name, e]))
+  assertEquals(effects(fromBundles(rows)), effects(docs))
 })

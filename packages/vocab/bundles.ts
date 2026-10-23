@@ -1,22 +1,26 @@
 // A vocabulary described as entities, in the meta vocabulary (./vocab.json): a
 // `_package` for the package a document is, a `_comp` per component it
 // declares, an `_extends` per component it extends (the status rungs it adds),
-// a `_prop` per property it declares or extends, and a `_before` edge per kind
-// a kind sorts before, each wearing `doc` for its name and its description. A vocabulary is then read, searched and linked like anything
-// else in a graph, and what `graph_schema` answers is a query:
+// a `_prop` per property it declares or extends, an `_effect` per effect it
+// declares, and a `_before` edge per kind a kind sorts before, each wearing
+// `doc` for its name and its description. A vocabulary is then read, searched
+// and linked like anything else in a graph, and what `graph_schema` answers is
+// a query:
 //
 //   ._comp ?doc                    every component, by name
 //   ._prop.comp._comp.name=mail    mail's properties (`.order=_prop.ord`)
 //   ._prop.ref=mail                what refers to mail
 //   ._before .edge.from=<mail>     the kinds mail sorts before
 //   ._prop.package=<@yaks/id>      what a package declares and extends
+//   ._effect.package=<@yaks/mail>  the effects a package declares
 //
 // `toBundles` reads one document on its own, so a file is read on its own
 // (@yaks/code reads each package's vocab.json this way). What joins two
-// documents is their ids: a `_package` and a `_comp` are identified by their
-// names, a `_prop` by its component and its name — declared identities a
-// graph derives — so an `extends` entry's properties land on the component
-// another package declares, and neither document knows the other.
+// documents is their ids: a `_package`, a `_comp` and an `_effect` are
+// identified by their names, a `_prop` by its component and its name —
+// declared identities a graph derives — so an `extends` entry's properties
+// land on the component another package declares, and neither document knows
+// the other.
 // `fromBundles` goes back, to documents `loadVocab` takes.
 //
 // A keyword with a column of its own is written there, and every other one an
@@ -43,7 +47,7 @@ export type Bundle = {
  * entities in every graph that reads it.
  */
 export type Ids = (
-  comp: '_package' | '_comp' | '_extends' | '_prop',
+  comp: '_package' | '_comp' | '_effect' | '_extends' | '_prop',
   values: Record<string, unknown>,
 ) => string
 
@@ -54,6 +58,7 @@ let columns = (comp: string, own: string[]) =>
 let OWN = ['name', 'package', 'keywords']
 let COMP = columns('_comp', OWN)
 let PROP = columns('_prop', [...OWN, 'comp', 'ord', 'required'])
+let EFFECT = columns('_effect', OWN)
 
 // What a component entry says by its shape rather than by a keyword: that it
 // is one, its properties, and the lists that become rows and edges.
@@ -67,6 +72,9 @@ let SHAPE = [
   'before',
   'package',
 ]
+
+// What an effect entry says by its shape: that it is one, and what it does.
+let EFFECT_SHAPE = ['effect', 'description']
 
 // A schema's keywords as columns: each column set, or null where the schema
 // says nothing — a row states its whole self, so a keyword a file stopped
@@ -82,14 +90,14 @@ let row = (s: PropSchema, cols: string[], skip: string[]) => {
 }
 
 /**
- * One document's components as bundles: a `_package` where the document names
+ * One document's vocabulary as bundles: a `_package` where the document names
  * its `package` (its `description` the package's), a `_comp` for each component
  * it declares, an `_extends` for each one it extends, a `_prop` for each
  * property it declares or adds, a `_before` edge for each kind its `before`
- * names. A component it only names
- * (`before`, `extends`) is referred to by the id its name derives, whichever
- * document declares it. A tool, a rule or any other entry that is not a
- * component is left out.
+ * names, and an `_effect` for each effect it declares. A component it only
+ * names (`before`, `extends`) is referred to by the id its name derives,
+ * whichever document declares it. A tool, a rule or any other entry that is
+ * neither a component nor an effect is left out.
  *
  * ```ts
  * let id = (comp: string, v: Record<string, unknown>) =>
@@ -117,7 +125,16 @@ export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
   let extensions: Bundle[] = []
   let props: Bundle[] = []
   let edges: Bundle[] = []
+  let effects: Bundle[] = []
   for (let [name, s] of Object.entries(doc.$defs ?? {})) {
+    if (s?.effect === true) {
+      effects.push({
+        entity: { eid: id('_effect', { name }) },
+        _effect: { name, package: pkg, ...row(s, EFFECT, EFFECT_SHAPE) },
+        doc: { title: name, body: s.description ?? null },
+      })
+      continue
+    }
     if (s?.component !== true) continue
     let c = comp(name)
     if (!s.extends) {
@@ -159,7 +176,7 @@ export let toBundles = (doc: VocabDoc, id: Ids): Bundle[] => {
       })
     )
   }
-  return [...packages, ...comps, ...extensions, ...props, ...edges]
+  return [...packages, ...comps, ...effects, ...extensions, ...props, ...edges]
 }
 
 // A component's columns as read back, without the nulls a store fills an
@@ -178,10 +195,11 @@ let described = (b: Bundle) => {
 
 /**
  * Bundles back into documents: one per package, each declaring that package's
- * components, and an `extends` entry wherever a package added properties or
- * status rungs to a component another one declares. `loadVocab` of what it returns is the
- * vocabulary the bundles were projected from. It reads the rows a graph holds
- * (`._package`, `._comp`, `._extends`, `._prop`, `._before`), with whatever else those
+ * components and effects, and an `extends` entry wherever a package added
+ * properties or status rungs to a component another one declares. `loadVocab`
+ * and `effectsIn` of what it returns are the vocabulary the bundles were
+ * projected from. It reads the rows a graph holds (`._package`, `._comp`,
+ * `._effect`, `._extends`, `._prop`, `._before`), with whatever else those
  * entities wear. An edge to an entity no `_comp` names is a kind these bundles
  * never declared, and is left out.
  */
@@ -207,6 +225,15 @@ export let fromBundles = (bundles: Bundle[]): VocabDoc[] => {
       ...cols,
       ...described(b),
       properties: {},
+    }
+  }
+  for (let b of bundles.filter((b) => b._effect)) {
+    let { name, package: at, keywords, ...cols } = kept(b, '_effect')
+    defs(packageOf(at))[String(name)] = {
+      effect: true,
+      ...keywords as object,
+      ...cols,
+      ...described(b),
     }
   }
   // Each extension, its rungs in the order its entry gave them; the

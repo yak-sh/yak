@@ -1,9 +1,9 @@
 /**
  * The links every page makes to the vocabulary: a package's page, a
- * component's and a property's, by the eids their names derive (@yaks/vocab
- * identifies each `_package` and `_comp` by its name and each `_prop` by its
- * component and its name), so a name links to its page without asking the
- * graph where that is.
+ * component's, a property's and an effect's, by the eids their names derive
+ * (@yaks/vocab identifies each `_package`, `_comp` and `_effect` by its name
+ * and each `_prop` by its component and its name), so a name links to its page
+ * without asking the graph where that is.
  *
  * @module
  */
@@ -17,6 +17,9 @@ export let packEid = (name: string): string => identityEid('_package', [name])
 
 /** The eid of the component named `name`. */
 export let compEid = (name: string): string => identityEid('_comp', [name])
+
+/** The eid of the effect named `name`. */
+export let effectEid = (name: string): string => identityEid('_effect', [name])
 
 /** The eid of the property `prop` of the component named `name`. */
 export let propEid = (name: string, prop: string): string =>

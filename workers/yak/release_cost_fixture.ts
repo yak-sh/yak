@@ -28,7 +28,15 @@ let plus = (a: Cost, b: Cost) => {
 }
 
 // The words that describe a vocabulary (@yaks/vocab), and the store's spine.
-let DESCRIBED = ['_package', '_comp', '_prop', '_extends', '_before', '_vocab']
+let DESCRIBED = [
+  '_package',
+  '_comp',
+  '_effect',
+  '_prop',
+  '_extends',
+  '_before',
+  '_vocab',
+]
 let SPINE = ['entity', 'archetype', 'retired', 'created', 'edge']
 
 /** Where a statement's rows go: the table it reads from or writes into,

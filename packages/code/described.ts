@@ -1,7 +1,8 @@
 // The vocabulary a graph is served with, described in it as @yaks/vocab's
-// `_package`, `_comp`, `_extends`, `_prop` and `_before` entities
+// `_package`, `_comp`, `_effect`, `_extends`, `_prop` and `_before` entities
 // (@yaks/vocab `toBundles`), so the graph's own model is read, searched and
-// linked like anything else, and a page about a component resolves.
+// linked like anything else, and a page about a component or an effect
+// resolves.
 //
 // The served vocabulary is the one source: every document the host composed,
 // each written with the package that brought it and that package's
@@ -31,7 +32,15 @@ let str = (v: unknown) => v == null ? '' : String(v)
 
 // The rows a vocabulary is described in, in the order a batch writes them,
 // so each reference lands on an entity written before it.
-let ROWS = ['_package', '_comp', '_extends', '_prop', '_before', '_vocab']
+let ROWS = [
+  '_package',
+  '_comp',
+  '_effect',
+  '_extends',
+  '_prop',
+  '_before',
+  '_vocab',
+]
 let rank = (b: Bundle) => ROWS.findIndex((r) => b[r] !== undefined)
 
 // A value as a string that is the same whatever order its keys are in, and
@@ -146,6 +155,7 @@ export let described = async (
     : (await Promise.all([
       g.read('._package ?doc'),
       g.read('._comp ?doc'),
+      g.read('._effect ?doc'),
       g.read('._extends ?doc'),
       g.read('._prop ?doc'),
       g.read('._before ?edge'),

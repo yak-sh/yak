@@ -1,17 +1,19 @@
 /**
  * The schema starts with packages, not every slice of the graph. Opening a
- * package mounts its components; opening a component mounts its properties.
- * All three come from the vocabulary the host already loaded: opening this
- * map never waits for a graph census or reads rows to count them.
+ * package mounts its components and its effects; opening a component mounts
+ * its properties. All of them come from the vocabulary the host already
+ * loaded: opening this map never waits for a graph census or reads rows to
+ * count them.
  * @module
  */
 
 import { type ComponentChildren, Fragment, h, type JSX } from 'preact'
 import { Head, Rows, Section } from '@yaks/ui'
 import { Disclosure, disclosureAt, isOpen } from '@yaks/ux'
+import { type EffectDecl, effectsIn } from '@yaks/vocab'
 import type { Bundle, Io } from './host.ts'
 import { Grid } from './grid.ts'
-import { compEid, packEid, propEid } from './schema.ts'
+import { compEid, effectEid, packEid, propEid } from './schema.ts'
 import { count, str } from './read.ts'
 import { key } from './state.ts'
 
@@ -96,11 +98,35 @@ let Components = ({ io, names }: { io: Io; names: string[] }) =>
     }),
   )
 
+// The effects a package declares, a tile and a line each.
+let Effects = ({ io, effects }: { io: Io; effects: EffectDecl[] }) =>
+  h(
+    Rows,
+    {},
+    effects.map(({ name, description }) =>
+      h(
+        Rows.Item,
+        { key: name },
+        io.show({
+          entity: { eid: effectEid(name) },
+          _effect: { name },
+        }, 'Tile'),
+        h(Section.Sub, {}, description),
+      )
+    ),
+  )
+
 /** A package → component → property map, with no query required to paint. */
 export let HomePage = ({ io }: { io: Io }): JSX.Element => {
   let declared = Map.groupBy(
     io.vocab.all.toSorted(),
     (name) => io.vocab.comp(name)?.package ?? '',
+  )
+  let effects = Map.groupBy(
+    io.vocab.docs.flatMap((d) =>
+      effectsIn(d).map((x) => ({ ...x, package: d.package ?? '' }))
+    ).toSorted((a, b) => a.name.localeCompare(b.name)),
+    (x) => x.package,
   )
   // Keep packages with no components (and properties extending another
   // package's component) visible too. Properties are the merged vocabulary.
@@ -108,6 +134,7 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
     ...new Set([
       ...io.vocab.docs.flatMap((d) => d.package ? [d.package] : []),
       ...declared.keys(),
+      ...effects.keys(),
     ]),
   ].toSorted()
   return h(
@@ -128,6 +155,11 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
         {},
         h('span', {}, `${count(packages.length)} packages`),
         h('span', {}, `${count(io.vocab.all.length)} components`),
+        h(
+          'span',
+          {},
+          `${count([...effects.values()].flat().length)} effects`,
+        ),
         h('a', { href: io.find('.archetype') }, 'Archetypes'),
       ),
     ),
@@ -155,6 +187,9 @@ export let HomePage = ({ io }: { io: Io }): JSX.Element => {
             names.length
               ? h(Components, { io, names })
               : h(Section.Sub, {}, 'No components declared.'),
+            effects.has(name)
+              ? h(Effects, { io, effects: effects.get(name)! })
+              : null,
           ),
         )
       }),

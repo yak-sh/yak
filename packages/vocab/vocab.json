@@ -102,6 +102,78 @@
         }
       }
     },
+    "_effect": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "kind": true,
+      "wire": false,
+      "before": ["doc"],
+      "description": "an effect a vocabulary declares: what a commit owes a run of, by name (@yaks/effects runs it). Its doc.title is its name, its doc.body its description",
+      "properties": {
+        "name": {
+          "type": "string",
+          "identity": true,
+          "description": "the name a recorded run names, and the code that runs it is registered under"
+        },
+        "package": {
+          "type": "string",
+          "ref": "_package",
+          "death": "cascade",
+          "description": "the package whose vocabulary declares it"
+        },
+        "created": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the components whose appearance on an entity owes a run"
+        },
+        "changed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the components, or comp.prop properties, whose patch owes a run"
+        },
+        "removed": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "the components whose removal owes a run"
+        },
+        "match": {
+          "type": "string",
+          "format": "query",
+          "description": "a query that owes a run wherever a batch made it hold"
+        },
+        "target": {
+          "type": "string",
+          "format": "query",
+          "description": "the query a trigger's subject matches, before or after the write, for a commit to owe a run"
+        },
+        "active": {
+          "type": "string",
+          "format": "query",
+          "description": "the query that must match an entity for a commit to owe a run"
+        },
+        "start": {
+          "type": "boolean",
+          "description": "true = a run is owed each time a process starts working the effects"
+        },
+        "option": {
+          "type": "string",
+          "description": "the declaring plugin's boolean option that must be true for a run to be owed"
+        },
+        "tries": {
+          "type": "integer",
+          "description": "the most attempts a run gets before it is left failed"
+        },
+        "idempotent": {
+          "type": "boolean",
+          "description": "false = running it twice is not the same as running it once"
+        },
+        "keywords": {
+          "type": "object",
+          "description": "every other keyword its entry says, as written"
+        }
+      }
+    },
     "_prop": {
       "component": true,
       "journal": false,

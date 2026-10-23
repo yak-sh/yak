@@ -856,19 +856,20 @@ lets a host compose it alongside [@yaks/doc](../doc/README.md) and
 | `_comp`    | A declared component and its package                          |
 | `_extends` | A component extension, its package and its added status rungs |
 | `_prop`    | A property, its component, declaration order and package      |
+| `_effect`  | A declared effect, its package and what owes it a run         |
 | `_before`  | An edge from a kind to a kind it sorts before                 |
 | `_vocab`   | A graph's vocabulary hash                                     |
 
-These components are `wire: false`. `_package`, `_comp`, `_extends` and `_prop`
-carry `doc` for their name and description. Keywords without their own meta
-vocabulary property are retained verbatim in `keywords`, including extension
-keywords and native JSON Schema keywords. Type unions remain lists.
+These components are `wire: false`. `_package`, `_comp`, `_extends`, `_prop` and
+`_effect` carry `doc` for their name and description. Keywords without their own
+meta vocabulary property are retained verbatim in `keywords`, including
+extension keywords and native JSON Schema keywords. Type unions remain lists.
 
-`toBundles(doc, id)` projects component declarations; tools, rules and effects
+`toBundles(doc, id)` projects component and effect declarations; tools and rules
 are omitted. Its `id` callback derives the declared identities using the graph's
 `identities`. `fromBundles` reconstructs one vocabulary document per package,
-including extensions. A `_before` edge naming an absent component is omitted.
-`_vocab` is not produced by `toBundles`.
+including extensions and effects. A `_before` edge naming an absent component is
+omitted. `_vocab` is not produced by `toBundles`.
 
 ```ts
 import { identities } from '@yaks/graph'
@@ -878,7 +879,7 @@ import { equal } from '@yaks/testing'
 
 const derive = identities(loadVocab(metaDoc))
 const id = (
-  comp: '_package' | '_comp' | '_extends' | '_prop',
+  comp: '_package' | '_comp' | '_effect' | '_extends' | '_prop',
   values: Record<string, unknown>,
 ) => derive[comp](values, { entity: { eid: '' } })
 const doc = {

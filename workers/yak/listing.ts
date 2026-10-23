@@ -54,6 +54,7 @@ export let PLATFORM = [
   '_package',
   '_lens',
   '_comp',
+  '_effect',
   '_prop',
   '_extends',
   '_before',

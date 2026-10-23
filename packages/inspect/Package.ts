@@ -1,8 +1,8 @@
 /**
  * A package's page (`_package`, @yaks/vocab): what it is, the components it
  * declares and how many entities carry each (from the census, ./census.ts),
- * and the properties it adds to components other packages declare
- * (`extends`).
+ * the properties it adds to components other packages declare (`extends`),
+ * and the effects it declares.
  *
  * @module
  */
@@ -19,7 +19,7 @@ import { comp, count, line, str, typed } from './read.ts'
 import { rows, waiting } from './rows.ts'
 import { key } from './state.ts'
 
-let HEADINGS = ['Components', 'Extends']
+let HEADINGS = ['Components', 'Extends', 'Effects']
 
 type Part_ = { e: Bundle; io: Io; notes: Map<string, Bundle[]> }
 
@@ -102,6 +102,34 @@ let Extends = (
   )
 }
 
+// The effects it declares, where it declares any.
+let Effects = ({ e, io, notes, effects }: Part_ & { effects: Answer }) =>
+  effects.ready && !rows(effects).length ? null : h(
+    Part,
+    {
+      io,
+      eid: e.entity.eid,
+      subject: str(e, '_package', 'name'),
+      heading: 'Effects',
+      count: effects.ready ? rows(effects).length : undefined,
+      notes,
+    },
+    waiting(effects) ?? h(Grid, {
+      io,
+      id: key(e.entity.eid, 'Effects'),
+      local: true,
+      rows: rows(effects),
+      columns: [
+        {
+          name: 'name',
+          value: (b) => str(b, '_effect', 'name'),
+          cell: (b) => io.show(b, 'Inline'),
+        },
+        { name: 'description', mod: 'prose', cell: about },
+      ],
+    }),
+  )
+
 /** A package's own page. */
 export let PackagePage = ({ e, io }: Props): JSX.Element => {
   let eid = e.entity.eid
@@ -111,6 +139,7 @@ export let PackagePage = ({ e, io }: Props): JSX.Element => {
   let got = io.ask({
     comps: `._comp&._comp.package=${eid}&?doc&.order=_comp.name`,
     props: `._prop&._prop.package=${eid}&?doc&.order=_prop.comp`,
+    effects: `._effect&._effect.package=${eid}&?doc&.order=_effect.name`,
   })
   return h(
     'div',
@@ -130,6 +159,7 @@ export let PackagePage = ({ e, io }: Props): JSX.Element => {
     h(Said, { io, eid, subject: name, heading: '', notes: notes.get('') }),
     h(Declares, { e, io, notes, comps: got.comps, census }),
     h(Extends, { e, io, notes, comps: got.comps, props: got.props }),
+    h(Effects, { e, io, notes, effects: got.effects }),
   )
 }
 

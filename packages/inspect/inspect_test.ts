@@ -30,6 +30,7 @@ import {
   views,
 } from './mod.ts'
 import { docs } from './front.ts'
+import { compEid, propEid } from './schema.ts'
 let pagePath = (id: string) => `/${id}`
 
 import { CENSUS } from './census.ts'
@@ -82,6 +83,18 @@ let TASK: Bundle = {
   entity: { eid: 'c-task' },
   _comp: { name: 'task' },
   doc: { title: 'task', body: 'Work to be done.' },
+}
+
+let CLOSE: Bundle = {
+  entity: { eid: 'e-close' },
+  _effect: {
+    name: 'task_close',
+    created: ['task'],
+    changed: ['task.status'],
+    target: '.task',
+    tries: 3,
+  },
+  doc: { title: 'task_close', body: 'Close the task when it is done.' },
 }
 
 // A host that answers each line from `answers`, or by matching it over a
@@ -475,6 +488,20 @@ test('a query that counts shows the count through its view registration', () => 
     ),
   )
   assert(p.root.textContent?.includes('12,403'))
+})
+
+test("an effect's page says what owes it a run, each name linked to its page", () => {
+  using t = host()
+  let page = renderToString(h(t.Door, { e: CLOSE, view: 'Inspect.Page' }))
+  for (
+    let said of [
+      'Close the task when it is done.',
+      '3 tries',
+      `href="/${compEid('task')}"`,
+      `href="/${propEid('task', 'status')}"`,
+      `href="/?q=.task"`,
+    ]
+  ) assert(page.includes(said), said)
 })
 
 test('a terminal paints a page as values, with nothing to type in', () => {

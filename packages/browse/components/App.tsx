@@ -123,7 +123,8 @@ export let Page = ({ at }: { at: string }) => {
   let coarse = globalThis.matchMedia?.('(pointer: coarse)').matches
   let view = t?.view && tabs.includes(t.view)
     ? t.view
-    : e && (e._comp || e._package || e._prop) && tabs.includes('Inspect.Page')
+    : e && (e._comp || e._package || e._prop || e._effect) &&
+        tabs.includes('Inspect.Page')
     ? 'Inspect.Page'
     : coarse && tabs[0] == 'Canvas' && tabs.includes('List')
     ? 'List'

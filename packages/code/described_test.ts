@@ -45,6 +45,7 @@ let q: VocabDoc = {
       extends: true,
       properties: { c: { type: 'boolean' } },
     },
+    note_tidy: { effect: true, created: ['note'], description: 'tidy a note' },
   },
 }
 
@@ -103,6 +104,9 @@ test('a graph describes what it is served with, and stops describing what it is 
     'note.c',
   ])
   assertEquals(await titles('._prop.package._package.name=@t/q'), ['note.c'])
+  assertEquals(await titles('._effect.package._package.name=@t/q'), [
+    'note_tidy',
+  ])
   assertEquals(await befores(), 1)
   assertEquals((await eids(`.refs=${note}`)).length, 5)
   assertEquals(
@@ -113,6 +117,7 @@ test('a graph describes what it is served with, and stops describing what it is 
     let query of [
       '._package ?doc',
       '._comp ?doc',
+      '._effect ?doc',
       '._extends ?doc',
       '._prop ?doc',
       '._before ?edge',
@@ -135,6 +140,7 @@ test('a graph describes what it is served with, and stops describing what it is 
   await serve([p({ a: { type: 'string' } }, [])])
   assertEquals(await titles('._prop.comp._comp.name=note'), ['note.a'])
   assertEquals(await titles('._package'), ['@t/p'])
+  assertEquals(await titles('._effect.name=note_tidy'), [])
   assertEquals(await befores(), 0)
 
   // A component no longer served is cleared; served again, it is back on

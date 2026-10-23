@@ -13,7 +13,7 @@ sidebar and history stack.
 
 | name                                            | draws                                                            |
 | ----------------------------------------------- | ---------------------------------------------------------------- |
-| `Inspect.Page`                                  | a `_comp`, `_package` or `_prop` vocabulary entity               |
+| `Inspect.Page`                                  | a `_comp`, `_package`, `_prop` or `_effect` vocabulary entity    |
 | `Inspect.Head`, `Inspect.Body`, `Inspect.Facts` | name, provenance, words and component values                     |
 | `Inspect.Links`, `Inspect.History`              | references both ways and recorded changes                        |
 | `Inspect.Query`                                 | query rows with shared component columns, count or tally         |
@@ -54,8 +54,8 @@ for Inspect.
 
 Inspect serves no page or terminal app, and owns no stack or URL. Browse
 integrates these views into its app. The schema map starts with packages, then
-opens components and properties on demand from the loaded vocabulary. It needs
-no graph query or census to paint. Expansion stays in the page graph.
+opens components, effects and properties on demand from the loaded vocabulary.
+It needs no graph query or census to paint. Expansion stays in the page graph.
 
 Detail pages share a census of archetype rows and populations rather than
 running a count for each component. SQLite and the Cloudflare Store answer the

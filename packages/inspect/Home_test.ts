@@ -20,6 +20,11 @@ let vocab = loadVocab([{
       properties: { status: { type: 'string' }, owner: { type: 'string' } },
     },
     done: { component: true },
+    task_close: {
+      effect: true,
+      created: ['done'],
+      description: 'Close the task when it is done.',
+    },
   },
 }])
 
@@ -139,6 +144,11 @@ test('opening a schema package reveals components but does not mount property ta
   )
   equal(packaged.tables, 0)
   equal(packaged.asked, [])
+})
+
+test('opening a schema package lists the effects it declares, each linked', () => {
+  ok(packaged.links.some((a) => a?.includes('task_close')))
+  ok(packaged.text.includes('Close the task when it is done.'))
 })
 
 test('opening a schema component reveals linked properties without a census', () => {

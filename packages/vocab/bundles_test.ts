@@ -9,6 +9,7 @@ import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
 import { type Bundle, graph, identities } from '@yaks/graph'
 import { ram } from '@yaks/ram'
 import {
+  effectsIn,
   fromBundles,
   type Ids,
   type Keywords,
@@ -71,6 +72,15 @@ let kitchen: VocabDoc = {
       properties: { text: { type: 'string', store: 'blob' } },
     },
     recipe_list: { tool: true, noun: 'recipe', verb: 'list', input: {} },
+    recipe_shop: {
+      effect: true,
+      created: ['recipe'],
+      changed: ['recipe.serves'],
+      target: '.recipe !note',
+      tries: 3,
+      sweep: '.recipe',
+      description: 'buy what a recipe needs',
+    },
   },
 }
 
@@ -100,10 +110,10 @@ let bundlesOf = (docs: VocabDoc[], id: Ids) =>
 
 test('a vocabulary loads back from its bundles as it was', () => {
   let docs = [kitchen, tagger, docDoc]
-  assertEquals(
-    facts(load(fromBundles(bundlesOf(docs, plain)))),
-    facts(load(docs)),
-  )
+  let back = fromBundles(bundlesOf(docs, plain))
+  assertEquals(facts(load(back)), facts(load(docs)))
+  assertEquals(effectsIn(back), effectsIn(docs))
+  assertEquals(back[0].$defs?.recipe_shop.sweep, '.recipe')
 })
 
 test('a saved peer-relayed declaration survives a vocabulary bundle roundtrip', () => {
@@ -202,6 +212,7 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   assertEquals((await titles('._comp')).sort(), [
     '_before',
     '_comp',
+    '_effect',
     '_extends',
     '_package',
     '_prop',
@@ -242,6 +253,17 @@ test('the queries that describe a vocabulary answer from its entities', async ()
     before.map((b) => (b.edge as { to: string }).to),
     [id('_comp', { name: 'note' }), id('_comp', { name: 'doc' })],
   )
+  // The effects a package declares, and what owes each a run.
+  let [shop] = await g.read('._effect.package._package.name=@t/kitchen')
+  assertEquals(shop._effect, {
+    name: 'recipe_shop',
+    package: id('_package', { name: '@t/kitchen' }),
+    created: ['recipe'],
+    changed: ['recipe.serves'],
+    target: '.recipe !note',
+    tries: 3,
+    keywords: { sweep: '.recipe' },
+  })
   // A word is found in a description.
   assertEquals(await titles('dish'), ['recipe'])
   // And what the graph holds is the vocabulary it was given.
@@ -251,14 +273,14 @@ test('the queries that describe a vocabulary answer from its entities', async ()
   let rows = [
     ...await g.read('._package'),
     ...await g.read('._comp ?doc'),
+    ...await g.read('._effect ?doc'),
     ...await g.read('._extends ?doc'),
     ...await g.read('._prop ?doc'),
     ...await g.read('._before ?edge'),
   ]
-  assertEquals(
-    facts(load(fromBundles(rows))),
-    facts(load([kitchen, tagger, meta, docDoc])),
-  )
+  let docs = [kitchen, tagger, meta, docDoc]
+  assertEquals(facts(load(fromBundles(rows))), facts(load(docs)))
+  assertEquals(effectsIn(fromBundles(rows)), effectsIn(docs))
 })
 
 test('a document read again states each row whole', async () => {

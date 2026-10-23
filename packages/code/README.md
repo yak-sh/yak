@@ -26,15 +26,15 @@ imports                            @yaks/edge relation: module → module
 Where the config also lists `@yaks/vocab`, the vocabulary the graph is served
 with is described in it as
 [@yaks/vocab](../vocab/README.md#a-vocabulary-as-entities)'s `_package`,
-`_comp`, `_extends`, `_prop` and `_before` entities, by the `vocab_describe`
-start-up effect (`start: true`, ./described.ts), owed each time a process starts
-working the effects. It is the composed vocabulary, not the files: a package the
-checkout holds and the config does not list is not described. The graph's
-`_vocab` holds the hash of the rows as last described, so a graph already
-describing it is checked by that hash and written nothing; otherwise only the
-difference is written. The `_package` carries its name and the description its
-deno.json gives it (@yaks/cli `compose` writes it on each document), and each
-row points at the `_package` that declares it, so
+`_comp`, `_effect`, `_extends`, `_prop` and `_before` entities, by the
+`vocab_describe` start-up effect (`start: true`, ./described.ts), owed each time
+a process starts working the effects. It is the composed vocabulary, not the
+files: a package the checkout holds and the config does not list is not
+described. The graph's `_vocab` holds the hash of the rows as last described, so
+a graph already describing it is checked by that hash and written nothing;
+otherwise only the difference is written. The `_package` carries its name and
+the description its deno.json gives it (@yaks/cli `compose` writes it on each
+document), and each row points at the `_package` that declares it, so
 `._prop.package._package.name=@yaks/id` lists every property @yaks/id declares,
 on its own components and on the ones it extends. A row the served vocabulary
 stops declaring is cleared like a gone export.
