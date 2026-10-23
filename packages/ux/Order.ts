@@ -7,7 +7,9 @@
  * would land. That is its state, `Order{at}`, the index of the row it would
  * land before, on the consumer-named page entity (`orderAt`), kept by its
  * consumer as a disclosure's is. What each row says, and what opens beneath
- * it, is the consumer's.
+ * it, is the consumer's. A row opened for reading and typing (`open`) is no
+ * drag handle: selecting its text, clicking into it and typing never pick it
+ * up.
  *
  * @module
  */
@@ -82,6 +84,8 @@ export type OrderProps = {
   /** an entity put at `at` among the other rows; without it, the rows are
    * neither picked up nor put in order */
   onPlace?: (eid: string, at: number) => void
+  /** whether a row is open for reading and typing, and so not picked up */
+  open?: (id: string) => boolean
   /** what a list with no rows says */
   empty?: ComponentChildren
 }
@@ -96,7 +100,7 @@ let boxes = (list: HTMLElement) =>
 
 /** A list put in order by dragging its rows. */
 export let Order = (
-  { e, onChange, ids, row, onPlace, empty }: OrderProps,
+  { e, onChange, ids, row, onPlace, open, empty }: OrderProps,
 ): JSX.Element => {
   let at = landing(e)
   let land = (i: number | null) => {
@@ -124,7 +128,7 @@ export let Order = (
     }
     : {}
   let picked = (id: string) =>
-    onPlace
+    onPlace && !open?.(id)
       ? {
         draggable: true,
         onDragStart: (ev: DragEvent) => drag(ev, id),

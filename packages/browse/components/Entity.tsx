@@ -32,6 +32,7 @@ import {
   CardFull,
   CommentDependencies,
   Dependencies,
+  FullTitle,
   Mail,
   Meta,
   Relate,
@@ -173,6 +174,13 @@ define([
   { view: 'Full', match: parse('.decision'), Render: Show },
   { view: 'Full', match: parse('.doc'), Render: Show },
   { view: 'Card.Full', match: parse('.doc'), Render: CardFull },
+  // A document's title and body on its Full page, typed over where they
+  // stand. Here rather than as its `Title` and `Body`, which a configured
+  // package's portable reading (@yaks/doc's) outranks: that one reads, and
+  // Full is where a document is written. A kind that says its body its own
+  // way registers its own `Full.Body` (a persona's, its documents).
+  { view: 'Full.Title', match: parse('.doc'), Render: FullTitle },
+  { view: 'Full.Body', match: parse('.doc'), Render: Body },
   { view: 'Board', match: parse('.doc .board'), Render: Board },
   // The two-pane view: list left, opened entity right. A view of anything
   // with a list face (a board/project, or a canvas), never a default face —

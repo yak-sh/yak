@@ -7,7 +7,9 @@
  * from elsewhere (@yaks/ux `drag`: a row of another list, of a desk) joins
  * the list where it is dropped, linked by `tag`. Each row opens in place on
  * the title and body of what it leads to, typed over where they stand
- * (@yaks/ux `Edit.Text`), and read only where the host takes no edits.
+ * (@yaks/ux `Edit.Text`), and read only where the host takes no edits. An
+ * open row is no drag handle: selecting its text, clicking into it and typing
+ * never pick it up.
  *
  * Its caller names the links and their order (the order its reader reads
  * them in) and draws the heading around it.
@@ -121,12 +123,17 @@ export let Held = (
     }
   }
 
+  // Whether the row leading to `to` is open, and what says so.
+  let opened = (to: string) => {
+    let at = disclosureAt(`held/${by.get(to)!.entity.eid}`)
+    let state = io.state(at) ?? { entity: { eid: at } }
+    return { state, open: isOpen(state) && !!held.get(to)?.doc }
+  }
+
   let row = (to: string) => {
     let b = by.get(to)!
     let end = held.get(to)
-    let at = disclosureAt(`held/${b.entity.eid}`)
-    let state = io.state(at) ?? { entity: { eid: at } }
-    let open = isOpen(state) && !!end?.doc
+    let { state, open } = opened(to)
     return [
       h(
         ui.Rows.Line,
@@ -159,6 +166,7 @@ export let Held = (
     ids: rows.map(far),
     row,
     onPlace: io.edits ? place : undefined,
+    open: (to) => opened(to).open,
     empty,
   })
 }

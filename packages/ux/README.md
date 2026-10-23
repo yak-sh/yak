@@ -315,7 +315,9 @@ leaves a row where it was says nothing. While an entity is dragged over the
 list, `Order{at}` on the consumer-named page entity (`orderAt(owner)`) holds the
 index of the row it would land before, and that row is marked; its owner keeps
 the state bundles from `onChange` as a disclosure's owner does. Without
-`onPlace` the rows are a plain list. What each row says is `row(id)`.
+`onPlace` the rows are a plain list. What each row says is `row(id)`. A row
+`open(id)` says is open for reading and typing is no drag handle, so selecting
+its text, clicking into it and typing never pick it up.
 
 ```ts
 import { h } from 'preact'

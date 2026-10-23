@@ -4,13 +4,14 @@
  * page the sidebar offers as Context, is the desk alone, each persona with the
  * project it works for and each skill with its description. `Context`, the tab
  * a persona or a skill opens on, sets it beside the desk, titles only, with
- * its binder (./binder.ts) in the middle and, on the right, what an agent
+ * its Full page in the middle, where what it says and every document it
+ * carries are typed into (./carried.ts), and, on the right, what an agent
  * gets: the conversation that tries it, where the host draws one
- * (`Conversation`). Stacked, as on a phone, the one open comes first and the
- * desk last.
+ * (`Conversation`), and the text it is given. Stacked, as on a phone, the one
+ * open comes first and the desk last.
  *
- * A row of the desk drags its entity (@yaks/ux `drag`), so a persona dropped
- * on another's binder is linked from it there.
+ * A row of the desk drags its entity (@yaks/ux `drag`), so it can be dropped
+ * on any list that takes one.
  *
  * What is typed to find one is the person's draft (the UX host's `drafts`), so
  * it stays as they go from one to the next, and in every interface they use.
@@ -254,9 +255,10 @@ export let DeskPage = ({ io }: Props): JSX.Element => {
   )
 }
 
-/** A persona or a skill opened at the desk: the desk, its binder, and what
- * an agent gets: the text it is given, and a session to try it where the
- * host draws a conversation. */
+/** A persona or a skill opened at the desk: the desk, its Full page without
+ * the chat a page has beside it, and what an agent gets beside that: a
+ * session to try it where the host draws a conversation, and the text it is
+ * given. */
 export let Workshop = ({ e, io }: Props): JSX.Element => {
   let d = useDesk(io)
   let eid = e.entity.eid
@@ -271,12 +273,12 @@ export let Workshop = ({ e, io }: Props): JSX.Element => {
     ),
     h(
       ui.Panes.Pane,
-      { mod: 'main', 'aria-label': 'Binder' },
-      h(ui.Panes.Body, {}, io.show(e, 'Binder')),
+      { mod: 'main', 'aria-label': 'Full' },
+      h(ui.Panes.Body, {}, io.show(e, 'Full', { chat: false })),
     ),
     h(
       ui.Panes.Pane,
-      { mod: 'main', 'aria-label': 'What an agent gets' },
+      { mod: 'side', 'aria-label': 'What an agent gets' },
       h(
         ui.Panes.Body,
         {},

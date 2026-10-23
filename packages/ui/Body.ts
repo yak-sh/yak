@@ -2,6 +2,7 @@
  * The text of a thing, to be read: its paragraphs (rendered markdown, or plain
  * lines) at a reading measure, in the ink. `Body-short` is one that is only a
  * line or two, set a little smaller, as the gist of a longer one.
+ * `Body-typed` is one a press types into, and says so under the pointer.
  * `Body-source` is a document's source as written, in a `pre` it holds: every
  * character as it stands, its lines kept and wrapped at the measure, in the
  * face of what is typed, such as the markdown an agent is given.
@@ -44,6 +45,10 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   ['Body-short', h(Body, { mod: 'short' }, 'what a test checks')],
+  [
+    'Body-typed',
+    h(Body, { mod: 'typed' }, h('p', null, 'Click to type into this text.')),
+  ],
   [
     'Body-source',
     h(

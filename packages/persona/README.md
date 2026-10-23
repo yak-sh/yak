@@ -268,32 +268,28 @@ description; Enter opens the first, and Escape clears it. What is typed there is
 the person's draft, through the UX host's `drafts` (@yaks/ux).
 
 A persona or a skill opens on its `Context` tab: the desk, titles only, the one
-open lit; its **binder** in the middle; and on the right what an agent gets: a
+open lit; its Full page in the middle, without the chat a page has beside it;
+and on the right, as wide as a chat beside any page, what an agent gets: a
 session to try it, where the host draws a conversation (`Conversation`; browse's
-chat), and the text it is given. Stacked, as on a phone, the binder comes first
-and the desk last. The binder alone is `Binder`, and a card's face
-(`Card.Context`):
+chat), and the text it is given. Stacked, as on a phone, the Full page comes
+first and the desk last.
 
-- a persona's binder is its head, its title and the project it works for, and
-  its own text, each changed where it stands as everywhere in browse (the title
-  typed over, the project picked, the text read as markdown and typed over on a
-  double-click: @yaks/inspect's `Words`); then a list for each relation it links
-  to documents by, headed by the relation's name: **Contains** (`contains`
-  edges: each said in full, in the order an agent is given them, `served`; a
-  tool it contains is offered, not said) and **Reads** (`reads` edges: each
-  listed by id and title under the text's `## Reads`); then, behind a press, the
-  memories in its scope it has neither edge to. Contains and Reads are ordered
-  lists edited in place (@yaks/inspect's `Held`): a row dragged between two
-  others is put there, which writes its `edge.ord`, and a row opens where it
-  stands on its document's title and body, to type over. A row dragged onto the
-  other list moves its edge there, where it is dropped; onto the memories with
-  neither edge, it loses both. Any row that drags its entity (@yaks/ux `drag`),
-  a row of the desk or of any list in browse, drops the same way. A document
-  both lists lead to is said once, in full, and the binder says so;
-- a skill's binder is its name, its description and its instructions, each
-  changed where it stands.
+The body of its Full page (`Full.Body`, and a card's face, `Card.Context`) is
+where it is written, every part typed into where it shows:
 
-Each row is drawn by its own renderer, asked for as `Context.List.Tile`.
+- a persona says the project it works for, picked where it stands, then its own
+  text; a skill its description, then its instructions;
+- then a list for each relation it carries documents by, headed by the
+  relation's name: **Contains** (`contains` edges: for a persona, each said in
+  full, in the order an agent is given them, `served`) and **Reads** (`reads`
+  edges: each listed by id and title under the text's `## Reads`). Each document
+  shows its title over its body, and a click on either types into it in place
+  (@yaks/ux's `Edit.Text`, @yaks/inspect's `Words`): nothing to open first, and
+  nothing on it drags. A tool it contains is offered to an agent, not said, so
+  it is among the page's relationships rather than here;
+- under each list, **+ new document** writes a document with nothing in it yet
+  into the list, linked by its relation after the others (`written`), with its
+  title open for typing.
 
 The **Markdown view** of a persona or a skill (`Markdown`, more specific than
 any doc's, so it is the one browse's Markdown tab draws) is the text an agent

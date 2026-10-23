@@ -11,6 +11,15 @@
   color: var(--muted);
   font-size: var(--small);
 }
+/* A text a press types into: the pointer says so, a text cursor over a
+   faint wash. */
+.Body-typed {
+  cursor: text;
+  border-radius: var(--radius);
+}
+.Body-typed:hover {
+  background: var(--soft);
+}
 /* A document's source: its lines kept and wrapped at the measure, every
    character where it stands, smaller, in the face of what is typed. */
 .Body-source > pre {

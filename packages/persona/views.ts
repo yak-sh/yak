@@ -1,7 +1,8 @@
 // The `@yaks/persona/views` facet: the desk where personas and skills are
-// written, a persona's or a skill's binder, loaded only by an interface that
-// draws them (./inspect.ts); the tab a persona or a skill opens on; and the
-// page the sidebar offers, Context, every persona and skill on the desk.
+// written, the body of a persona's or a skill's Full page, loaded only by an
+// interface that draws them (./inspect.ts); the tab a persona or a skill opens
+// on; and the page the sidebar offers, Context, every persona and skill on the
+// desk.
 import type { View } from '@yaks/inspect'
 import NotebookPen from 'lucide/dist/esm/icons/notebook-pen.mjs'
 // TODO(T-132250): Deno 2.9.1's bundler, under the workspace's
@@ -12,7 +13,7 @@ import NotebookPen from 'lucide/dist/esm/icons/notebook-pen.mjs'
 // Remove once the bundler builds the whole graph.
 import '@std/yaml'
 
-/** The desk, the workshop and the binders, as the inspector draws them. */
+/** The desk, the workshop and the bodies, as the inspector draws them. */
 export let inspectViews = (): Promise<View[]> =>
   import('./inspect.ts').then((m) => m.inspectViews)
 

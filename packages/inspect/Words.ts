@@ -4,6 +4,8 @@
  * place (@yaks/ux `Edit.Text`), as every body in browse is edited; leaving it
  * writes what was typed. Where the host takes no edits it is only read. One
  * with nothing written says so, so a double-click has somewhere to land.
+ * Where typing is what a page is for (`click`), one click types into it, a
+ * link in it still opens, and it says so under the pointer.
  *
  * ```ts ignore
  * h(Words, { io, e, comp: 'doc', prop: 'body' })
@@ -29,20 +31,29 @@ export type WordsProps = {
   at?: string
   /** what it says when nothing is written */
   empty?: string
+  /** one click types into it, rather than a double-click */
+  click?: boolean
 }
 
 /** A body read as markdown, typed over where it stands. */
 export let Words = (
-  { io, e, comp, prop, at, empty = 'nothing is written yet' }: WordsProps,
+  { io, e, comp, prop, at, empty = 'nothing is written yet', click }:
+    WordsProps,
 ): JSX.Element => {
   let text = str(e, comp, prop)
   let edit = useEdit(e.entity.eid, comp, prop, { at, value: text })
   let open = io.edits && edit.open
+  let typed = io.edits && !open
   return h(
     ui.Body,
     {
       'data-words': `${comp}.${prop}`,
-      onDblClick: io.edits && !open ? edit.begin : undefined,
+      mod: io.edits && click ? 'typed' : undefined,
+      onDblClick: typed ? edit.begin : undefined,
+      onClick: typed && click
+        ? (ev: MouseEvent) =>
+          (ev.target as Element).closest?.('a') || edit.begin()
+        : undefined,
     },
     open
       ? h(Edit.Text, { e, comp, prop, at: edit.at, multi: true })
@@ -51,7 +62,9 @@ export let Words = (
       : h(
         ui.Rows.More,
         {},
-        io.edits ? `${empty}: double-click to write` : empty,
+        io.edits
+          ? `${empty}: ${click ? 'click' : 'double-click'} to write`
+          : empty,
       ),
   )
 }

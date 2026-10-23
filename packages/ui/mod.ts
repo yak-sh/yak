@@ -8,7 +8,7 @@
  * - `el`, `block`: the builders every part is made from (el.ts).
  * - `Dot`, `Id`, `Stamp`, `Tabs`, `Menu`, `Tip`, `Field`, `Choices`, `Button`,
  *   `Chip`, `Match`, `Value`, `Pairs`, `Tile`, `Rows`, `Section`, `Timeline`,
- *   `Turns`, `Passage`, `Body`, `Quote`, `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Shell`,
+ *   `Turns`, `Passage`, `Body`, `Doc`, `Quote`, `Edit`, `Prop`, `Overlay`, `Table`, `Pager`, `Shell`,
  *   `Panes`, `Head`, `Metrics`, `Spark`, `Notes`,
  *   `Say`, `Index`, `Catalog`, `Gallery`: the parts; `groups`, the parts by
  *   what they are for, and `kit`, all of them (kit.ts).
@@ -35,6 +35,7 @@ export { Tip } from './Tip.ts'
 export { Field, type FieldProps } from './Field.ts'
 export { Choices } from './Choices.ts'
 export { Body } from './Body.ts'
+export { Doc } from './Doc.ts'
 export { Button } from './Button.ts'
 export { Catalog } from './Catalog.ts'
 export { Chip, hues } from './Chip.ts'

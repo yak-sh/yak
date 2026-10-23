@@ -18,7 +18,9 @@
    nil, a ghost, a placeholder, a disabled step). The mono face is for what a
    person would copy or type (an id, a sha, code, a raw stored value), never
    for a label, a moment said the human way, or a count. A part that steps
-   back is muted, small or both; never mono to look quiet, and never dim. */
+   back is muted, small or both; never mono to look quiet, and never dim.
+   And the width of what sits beside a page (a chat, what an agent gets):
+   --side, never narrower than --side-min. */
 :where(:root) {
   --half-gap: calc(var(--gap) / 2);
   --soft: color-mix(in srgb, var(--text) 6%, transparent);
@@ -29,6 +31,8 @@
   --h3: calc(var(--size) * var(--scale));
   --h2: calc(var(--h3) * var(--scale));
   --h1: calc(var(--h2) * var(--scale));
+  --side: 26rem;
+  --side-min: 18rem;
 }
 @media (pointer: coarse) {
   :where(:root) {

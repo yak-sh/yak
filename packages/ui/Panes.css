@@ -27,6 +27,11 @@
 .Panes_Pane-main {
   flex: 1 1 0;
 }
+/* What sits beside the page, as wide as a chat beside a page is. */
+.Panes_Pane-side {
+  flex: 0 1 var(--side);
+  min-width: var(--side-min);
+}
 .Panes_Top {
   padding: var(--half-gap) var(--gap);
   border-bottom: 1px solid var(--border);

@@ -1,0 +1,27 @@
+/* A document: its title over its text, a half gap between. Typed into, the
+   title takes a text cursor over a faint wash under the pointer, as a typed
+   Body does, and an empty one says where a title goes until it has the
+   keyboard. */
+.Doc {
+  display: grid;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Doc_Title {
+  margin: 0;
+  font-size: var(--h3);
+  font-weight: 600;
+  color: var(--heading);
+  overflow-wrap: anywhere;
+}
+.Doc-typed > .Doc_Title {
+  cursor: text;
+  border-radius: var(--radius);
+}
+.Doc-typed > .Doc_Title:hover {
+  background: var(--soft);
+}
+.Doc-typed > .Doc_Title:not(:focus-within):has(> .Edit:empty)::before {
+  content: 'Untitled';
+  color: var(--dim);
+}

@@ -24,6 +24,8 @@ import { Ux } from '@yaks/ux'
 import { mount } from '../mount.ts'
 import { Entity } from '../Entity.tsx'
 import { Pip } from './Show.tsx'
+import { views as docViews } from '@yaks/doc/views'
+import { contributedViews } from '../inspect.tsx'
 import type { Change, Ent } from '../../types.ts'
 
 test('task acceptance is a distinct Markdown section', () => {
@@ -498,9 +500,46 @@ test('the full face paints the body for a viewer with no actor', () => {
   }
 })
 
+// A configured package's portable reading of a document (@yaks/doc's Title
+// and Body) is laid over browse's own, as the web door lays every package's
+// views; Full still types a document's title and body over where they stand.
+let typedOver = await (async () => {
+  let drop = extend(await contributedViews([{ views: docViews }]))
+  cache.value = {
+    doc: {
+      entity: { eid: 'doc', num: 1 },
+      doc: { eid: 'doc', title: 'Typed', body: 'The body text' },
+    },
+  }
+  let { root, free } = mount(h(Entity, { eid: 'doc', view: 'Full' }))
+  let { Event } = root.ownerDocument.defaultView!
+  let dbl = (el: Element | null) =>
+    el?.dispatchEvent(new Event('dblclick', { bubbles: true }))
+  let typed = (at: string) =>
+    !!root.querySelector(`${at} .Edit`)?.hasAttribute('contenteditable')
+  try {
+    dbl(root.querySelector('.Show_Title .Edit'))
+    await tick()
+    let title = typed('.Show_Title')
+    dbl(root.querySelector('.Show_Body'))
+    await tick()
+    return { title, body: typed('.Show_Body') }
+  } finally {
+    free()
+    drop()
+    cache.value = {}
+  }
+})()
+preparedTest(
+  "Full types over a document's title and body in place, with a package's reading laid over browse's",
+  () => {
+    assertEquals(typedOver, { title: true, body: true })
+  },
+)
+
 test('a view that throws fails in its own slot, and the page paints', async () => {
   let drop = extend([{
-    view: 'Body',
+    view: 'Full.Body',
     match: parse('.doc.title=Throws'),
     Render: () => {
       throw new Error('boom')

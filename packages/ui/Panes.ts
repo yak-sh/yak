@@ -1,6 +1,8 @@
 /**
  * The screen in columns, side by side: a narrow `Pane-nav` to find the way,
- * and the `Pane-main` page beside it, or any column that takes the rest.
+ * and the `Pane-main` page beside it, or any column that takes the rest; a
+ * `Pane-side` after the page holds what sits beside it (a chat), as wide as
+ * a chat beside any page is.
  * What stays at a pane's top is its `Top`; its `Body` scrolls on its own
  * beneath. `Pane-on` is the pane that has the keyboard.
  *
@@ -42,6 +44,7 @@ export let sheet = (c: Colors): Sheet => ({
   Panes: { row: true, grow: true },
   Panes_Pane: { col: true, border: 'Panes_Edge' },
   'Panes_Pane-nav': { width: 30 },
+  'Panes_Pane-side': { width: 30 },
   'Panes_Pane-main': { grow: true },
   'Panes_Pane-on': { border: 'Panes_Edge-on' },
   Panes_Body: { grow: true },

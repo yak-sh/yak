@@ -16,7 +16,7 @@ g.document = document
 let sent: Bundle[] = []
 let placed: [string, number][] = []
 let state: Bundle = { entity: { eid: orderAt('test') } }
-let draw = (ordered = true) =>
+let draw = (ordered = true, open?: string) =>
   render(
     h(Order, {
       e: state,
@@ -24,6 +24,7 @@ let draw = (ordered = true) =>
       ids: ['a', 'b', 'c'],
       row: (id) => h('p', {}, id),
       onPlace: ordered ? (id, at) => placed.push([id, at]) : undefined,
+      open: (id) => id == open,
     }),
     root,
   )
@@ -48,6 +49,10 @@ fire('drop', 'c')
 let dropped = sent.splice(0)
 draw(false)
 let plain = root.querySelectorAll('[draggable]').length
+draw(true, 'b')
+let handles = [...root.querySelectorAll('[draggable]')].map((n) =>
+  n.textContent
+)
 render(null, root)
 delete g.document
 
@@ -63,4 +68,8 @@ test('a row dropped between others is put there, and the mark goes', () => {
 
 test('a list that puts nothing in order picks up no row', () => {
   equal(plain, 0)
+})
+
+test('a row open for reading and typing is no drag handle', () => {
+  equal(handles, ['a', 'c'])
 })

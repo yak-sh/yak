@@ -14,6 +14,7 @@ import * as button from './Button.ts'
 import * as catalog from './Catalog.ts'
 import * as chip from './Chip.ts'
 import * as choices from './Choices.ts'
+import * as doc from './Doc.ts'
 import * as dot from './Dot.ts'
 import * as edit from './Edit.ts'
 import * as field from './Field.ts'
@@ -60,7 +61,7 @@ import type { Composition, Contributions, Kit, Piece, Theme } from './theme.ts'
  * what frames a page. A group's name is never a part's: each is a place in
  * the guide. */
 let modules = {
-  Prose: { base, Body: body, Quote: quote },
+  Prose: { base, Body: body, Doc: doc, Quote: quote },
   Marks: {
     Dot: dot,
     Id: id,

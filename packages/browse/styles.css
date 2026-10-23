@@ -734,9 +734,17 @@ html {
    the App bar's compact title listens to. */
 .Show {
   display: grid;
-  grid-template-columns: minmax(0, var(--measure)) minmax(18rem, 26rem);
+  grid-template-columns: minmax(0, var(--measure)) minmax(
+    var(--side-min),
+    var(--side)
+  );
   gap: calc(var(--gap) * 2);
   align-items: start;
+}
+/* Drawn without its chat (the Context desk has its own beside it), the page
+   is one column. */
+.Show:not(:has(> .Chat)) {
+  grid-template-columns: minmax(0, var(--measure));
 }
 .Show_Main {
   min-width: 0;

@@ -1,9 +1,9 @@
-// The desk and the binders over a small graph, mounted through the inspector
-// contract browse uses: every persona and skill on the desk, found by what is
-// typed; a persona opened beside it, its binder listing what it contains in
-// the order an agent reads it, what it names and what it leaves; a row
-// dragged within a list or onto another put where it is dropped, and opened
-// in place on its words; and a skill's instructions.
+// The desk and the body of a persona's and a skill's Full page over a small
+// graph, mounted through the inspector contract browse uses: every persona and
+// skill on the desk, found by what is typed; a persona opened beside it, its
+// Full page in the middle; every document it contains and reads, typed into
+// where it shows on a click, with nothing on it to drag; a new document
+// written into a list; and a skill's instructions.
 import { h, render } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
@@ -12,6 +12,7 @@ import { loadVocab } from '@yaks/vocab'
 import { ram } from '@yaks/ram'
 import { and } from '@yaks/query'
 import { define, resolve } from '@yaks/render'
+import { client } from '@yaks/client'
 import { edgeDoc, edgeKeywords, link } from '@yaks/edge'
 import { kernelDoc, kernelKeywords } from '@yaks/kernel/vocab'
 import { provenanceDoc } from '@yaks/provenance'
@@ -20,7 +21,8 @@ import { taskDoc } from '@yaks/task/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { disclosureAt, DRAGGED, type Host as UxHost, Ux } from '@yaks/ux'
+import { type Host as UxHost, Ux } from '@yaks/ux'
+import { docs as uxDocs } from '@yaks/ux/vocab'
 import {
   all,
   type Answer,
@@ -80,10 +82,11 @@ let seed = [
   memory('m22', 'map', 'tasks'),
   memory('m333', 'one idea', 'tasks'),
   memory('m4444', 'not linked', 'tasks'),
-  memory('m55555', 'for everyone'),
+  { entity: { eid: 'grep' }, tool: { name: 'grep' } },
   link('common', 'contains', 'm22'),
   link('common', 'contains', 'm1', 1),
   link('common', 'contains', 'fleet'),
+  link('common', 'contains', 'grep'),
   link('common', 'reads', 'm333'),
   link('common', 'reads', 'm22'),
 ]
@@ -99,7 +102,8 @@ let asked = (q: string): Answer =>
     ? { rows: [], count: store.read(q.slice(0, -7)).length, ready: true }
     : { rows: store.read(q), ready: true }
 let title = (e?: Bundle) => String((e?.doc as { title?: string })?.title ?? '')
-// The host's own faces: a tile for anything, a head and a conversation.
+// The host's own faces: a tile for anything and a conversation; and Full, as
+// browse draws it, its title over its body, saying whether it drew its chat.
 let face = (view: string, tag: string): View => ({
   view,
   match: and(),
@@ -110,9 +114,26 @@ let registry = define<View>([
   ...all,
   face('Tile', 'tile'),
   face('Conversation', 'chat'),
+  {
+    view: 'Full',
+    match: and(),
+    Render: ({ e, io, ctx }) =>
+      h(
+        'div',
+        { 'data-full': e.entity.eid, 'data-beside': String(ctx.chat) },
+        h('h1', {}, title(e)),
+        io.show(e, 'Full.Body'),
+      ),
+  },
 ])
 
-let host = (state: Bundle[] = [], wrote: Bundle[][] = []): Io => {
+// The page's own graph, as browse keeps it: where a typed value's `Edit`
+// state lives.
+type Page = ReturnType<typeof client>
+let page = (): Page =>
+  client(loadVocab([...uxDocs]), [], { vault: false, wireVault: false })
+
+let host = (front: Page, wrote: Bundle[][] = []): Io => {
   let answers = (asks: Asks) =>
     Object.fromEntries(
       Object.entries(asks).map((
@@ -130,8 +151,8 @@ let host = (state: Bundle[] = [], wrote: Bundle[][] = []): Io => {
         : null
     },
     can: (e, view) => !!resolve(registry, e, view, vocab),
-    state: (eid) => state.find((b) => b.entity.eid == eid),
-    set: () => {},
+    state: (eid) => front.ent(eid),
+    set: (bs) => void front.mutate(bs),
     apply: (bs) => {
       wrote.push(bs)
     },
@@ -146,81 +167,88 @@ let host = (state: Bundle[] = [], wrote: Bundle[][] = []): Io => {
   }
   return io
 }
-let typing = (said: string) =>
+let typing = (said: string, front: Page) =>
   ({
     vocab,
     write: () => {},
-    front: {
-      mutate: () => {},
-      watch: () => ({ value: [], subscribe: () => () => {} }),
-      ent: () => undefined,
-    },
+    front,
     drafts: {
       text: (at: string) => at == FINDING ? said : '',
       type: () => {},
       spend: () => {},
     },
   }) as unknown as UxHost
-let tree = (eid: string, view: string, io: Io, said: string) =>
+let tree = (eid: string, view: string, said: string, front: Page, io: Io) =>
   h(
     Ux,
-    { host: typing(said) },
+    { host: typing(said, front) },
     h('main', {}, io.show(store.get([eid])[0] ?? { entity: { eid } }, view)),
   )
-let drawn = (eid: string, view: string, said = '', io = host()) =>
-  parseHTML(renderToString(tree(eid, view, io, said))).document
-    .querySelector('main')!
+let drawn = (eid: string, view: string, said = '') => {
+  let front = page()
+  try {
+    return parseHTML(
+      renderToString(tree(eid, view, said, front, host(front))),
+    ).document.querySelector('main')!
+  } finally {
+    front.close()
+  }
+}
 
 let shelf = (page: Element, heading: string) =>
   [...page.querySelectorAll(`[data-shelf="${heading}"] [data-given]`)]
     .map((n) => n.getAttribute('data-given'))
 let part = (page: Element, heading: string) =>
   page.querySelector(`[data-section="${heading}"]`)
-let held = (page: Element, heading: string) =>
-  [...part(page, heading)?.querySelectorAll('[data-held]') ?? []]
-    .map((n) => n.getAttribute('data-held'))
+let carried = (page: Element, heading: string) =>
+  [...part(page, heading)?.querySelectorAll('[data-carried]') ?? []]
+    .map((n) => n.getAttribute('data-carried'))
 
 let desk = drawn('context', 'Context.Page')
 let found = drawn('context', 'Context.Page', 'BUILD')
 let none = drawn('context', 'Context.Page', 'zzz')
 let opened = drawn('common', 'Context')
 let skill = drawn('testing', 'Context')
-let press = opened.querySelector('[aria-controls]')?.getAttribute(
-  'aria-controls',
-)
-let unfolded = drawn(
-  'common',
-  'Binder',
-  '',
-  host([{
-    entity: { eid: String(press).replace('disclosure-', '') },
-    Disclosure: { open: true },
-  }]),
-)
 
-// A view mounted on a page, as a browser mounts it: its effects run, and it
-// is read once what it asked for has come.
-let mounted = async (eid: string, view: string, io = host()) => {
+// A view mounted on a page, as a browser mounts it: its effects run, and
+// `act` presses on it once what it asked for has come.
+let settle = async () => {
+  for (let i = 0; i < 12; i++) await new Promise((go) => setTimeout(go, 0))
+}
+let mounted = async (
+  eid: string,
+  view: string,
+  act: (root: Element) => unknown = () => {},
+  wrote: Bundle[][] = [],
+) => {
   let { document } = parseHTML('<html><body><main></main></body></html>')
   let g = globalThis as { document?: unknown }
   let prior = g.document
   g.document = document
   let root = document.querySelector('main')!
+  let front = page()
   try {
-    render(tree(eid, view, io, ''), root)
-    for (let i = 0; i < 12; i++) await new Promise((go) => setTimeout(go, 0))
-    return root.innerHTML
+    render(tree(eid, view, '', front, host(front, wrote)), root)
+    await settle()
+    let did = await act(root)
+    await settle()
+    return { html: root.innerHTML, did }
   } finally {
     render(null, root)
     g.document = prior
+    front.close()
   }
 }
+let press = (root: Element, el: Element | null) =>
+  el?.dispatchEvent(
+    new (root.ownerDocument!.defaultView!.Event)('click', { bubbles: true }),
+  )
 let source = (html: string) =>
   parseHTML(`<main>${html}</main>`).document
     .querySelector('[data-markdown] pre')?.textContent
-let personaMd = source(await mounted('common', 'Markdown'))
-let skillMd = source(await mounted('testing', 'Markdown'))
-let workshopMd = source(await mounted('common', 'Context'))
+let personaMd = source((await mounted('common', 'Markdown')).html)
+let skillMd = source((await mounted('testing', 'Markdown')).html)
+let workshopMd = source((await mounted('common', 'Context')).html)
 let said = voice(vocab)((await wear(store, vocab)('common'))!)
 
 // A persona's lists, read from a store: the far ends of each, in the order
@@ -234,59 +262,39 @@ let lists = (at = store) =>
     ]),
   )
 
-// Each row dropped on the binder, as a browser would, at the top of the list
-// (`top`) or anywhere else on it: the lists after its batch is written, or
-// nothing where it writes nothing.
-let dropped = await (async () => {
-  let { document } = parseHTML('<html><body><main></main></body></html>')
-  let g = globalThis as { document?: unknown }
-  let prior = g.document
-  g.document = document
-  let wrote: Bundle[][] = []
-  let root = document.querySelector('main')!
-  let drop = async (heading: string, eid: string, top = false) => {
-    let ev = new document.defaultView!.Event('drop', { bubbles: true })
-    Object.assign(ev, {
-      dataTransfer: { types: [DRAGGED], getData: () => eid },
-      clientY: top ? -1 : 1,
-    })
-    let at = part(root, heading)!
-    ;(at.querySelector('[role=list]') ?? at).dispatchEvent(ev)
-    await new Promise((go) => setTimeout(go, 0))
-    let batch = wrote.splice(0)[0]
-    if (!batch) return undefined
-    let after = fresh()
-    after.tx((tx) => tx.patch(batch))
-    return lists(after)
+// A click on a carried document's title, then on its body: each is typed
+// into where it stands.
+let clicked = (await mounted('common', 'Full.Body', async (root) => {
+  let doc = () => root.querySelector('[data-carried="m22"]')!
+  let typed = (at: string) =>
+    !!doc().querySelector(`${at} .Edit`)?.hasAttribute('contenteditable')
+  let before = { title: typed('.Doc_Title'), body: typed('[data-words]') }
+  press(root, doc().querySelector('.Doc_Title'))
+  await settle()
+  let title = typed('.Doc_Title')
+  press(root, doc().querySelector('[data-words]'))
+  await settle()
+  return {
+    before,
+    title,
+    body: typed('[data-words]'),
+    drags: root.querySelectorAll('[data-section] [draggable="true"]').length,
   }
-  try {
-    render(tree('common', 'Binder', host([], wrote), ''), root)
-    return {
-      top: await drop('Contains', 'm22', true),
-      across: await drop('Reads', 'm1', true),
-      end: await drop('Contains', 'm333'),
-      left: await drop('Memories in its scope with neither edge', 'm22'),
-      self: await drop('Contains', 'common'),
-      still: await drop('Contains', 'm1', true),
-    }
-  } finally {
-    render(null, root)
-    g.document = prior
-  }
-})()
+})).did
 
-// A contained document opened where it stands.
-let link22 = store.read('.edge.from=common&.contains&*')
-  .find((b) => (b.edge as { to: string }).to == 'm22')!
-let opening = drawn(
-  'common',
-  'Binder',
-  '',
-  host([{
-    entity: { eid: disclosureAt(`held/${link22.entity.eid}`) },
-    Disclosure: { open: true },
-  }]),
-)
+// + new document under Contains: what it writes, and its title open.
+let writing = await (async () => {
+  let wrote: Bundle[][] = []
+  let { did } = await mounted('common', 'Full.Body', async (root) => {
+    press(root, root.querySelector('[data-write="contains"]'))
+    await settle()
+    return wrote[0]
+  }, wrote)
+  let batch = did as Bundle[]
+  let after = fresh()
+  after.tx((tx) => tx.patch(batch))
+  return { made: batch[0].entity.eid, doc: batch[0], lists: lists(after) }
+})()
 
 test('the desk lists every persona and skill by title, each with its cover', () => {
   equal(shelf(desk, 'Personas'), ['fleet', 'common'])
@@ -302,69 +310,45 @@ test('what is typed finds a persona or a skill by its words', () => {
   ok(none.textContent?.includes('none fits “zzz”'))
 })
 
-test('a persona opens beside the desk, lit, its binder and its try-out beside', () => {
+test('a persona opens beside the desk, lit, its Full page and its try-out beside', () => {
   let lit = opened.querySelector('[data-given="common"] > .Tile')
   equal(lit?.getAttribute('aria-current'), 'page')
-  ok(opened.querySelector('[data-binder="common"]'))
+  let full = opened.querySelector('[data-full="common"]')
+  equal(full?.getAttribute('data-beside'), 'false')
   ok(opened.querySelector('[data-chat="common"]'))
   ok(opened.textContent?.includes('works for Task Graph'))
 })
 
-test('a binder lists what it contains in the order an agent is given it, and what it reads', () => {
-  equal(held(opened, 'Contains'), ['m1', 'fleet', 'm22'])
-  equal(held(opened, 'Reads'), ['m22', 'm333'])
-  ok(opened.querySelector('[data-twice]')?.textContent?.includes('map'))
+test("a persona's page shows each document it contains and reads, title and body, in the order an agent is given them", () => {
+  equal(carried(opened, 'Contains'), ['m1', 'fleet', 'm22'])
+  equal(carried(opened, 'Reads'), ['m22', 'm333'])
+  let doc = part(opened, 'Contains')?.querySelector('[data-carried="m1"]')
+  ok(doc?.textContent?.includes('signal over noise'))
+  ok(doc?.textContent?.includes('What signal over noise says.'))
 })
 
-test('the memories in its scope with neither edge wait behind a press', () => {
-  let count = part(opened, 'Memories in its scope with neither edge')
-    ?.querySelector('.Section_Count')
-  equal(count?.textContent, '1')
-  equal(held(opened, 'Memories in its scope with neither edge'), [])
-  equal(held(unfolded, 'Memories in its scope with neither edge'), ['m4444'])
+test('a click types into a carried document where it shows, and nothing on it drags', () => {
+  equal(clicked, {
+    before: { title: false, body: false },
+    title: true,
+    body: true,
+    drags: 0,
+  })
+})
+
+test('a new document is written into the list after the others, its title open for typing', () => {
+  equal(writing.doc, {
+    entity: { eid: writing.made },
+    doc: { title: '', body: '' },
+  })
+  equal(writing.lists.contains, ['m1', 'fleet', 'grep', 'm22', writing.made])
 })
 
 test('a skill opens at the desk on its description and instructions', () => {
-  ok(skill.querySelector('[data-binder="testing"]'))
+  ok(skill.querySelector('[data-body="testing"]'))
   ok(skill.textContent?.includes('What testing says.'))
   let said = part(skill, 'Instructions')?.querySelector('strong')
   equal(said?.textContent, 'only')
-})
-
-test('a row dragged within a list is put where it is dropped', () => {
-  equal(dropped.top, {
-    contains: ['m22', 'm1', 'fleet'],
-    reads: ['m22', 'm333'],
-  })
-  equal(dropped.still, undefined)
-})
-
-test('a row dropped on another list moves there, where it is dropped', () => {
-  equal(dropped.across, {
-    contains: ['fleet', 'm22'],
-    reads: ['m1', 'm22', 'm333'],
-  })
-  equal(dropped.end, {
-    contains: ['m1', 'fleet', 'm22', 'm333'],
-    reads: ['m22'],
-  })
-})
-
-test('a row dropped on the memories with neither edge loses both; the persona itself is let fall', () => {
-  equal(dropped.left, { contains: ['m1', 'fleet'], reads: ['m333'] })
-  equal(dropped.self, undefined)
-})
-
-test('a contained document opens where it stands, on its title and body', () => {
-  let opened = opening.querySelector('[data-detail="m22"]')
-  ok(opened?.textContent?.includes('map'))
-  ok(opened?.textContent?.includes('What map says.'))
-  equal(opening.querySelectorAll('[data-detail]').length, 1)
-  equal(
-    opening.querySelector('[data-held="m22"] [aria-expanded]')
-      ?.getAttribute('aria-expanded'),
-    'true',
-  )
 })
 
 test("a persona's Markdown view is the whole text an agent wearing it is given", () => {
@@ -382,18 +366,16 @@ test("a skill's Markdown view is its SKILL.md", () => {
   )
 })
 
-test('what an agent reads sits beside the binder at the desk', () => {
+test('what an agent reads sits beside the Full page at the desk', () => {
   equal(workshopMd, said)
 })
 
-test('a persona and a skill are changed where they stand, with no edit view', () => {
+test('a persona and a skill are typed into where they stand, with no edit view', () => {
   for (let page of [opened, skill]) {
-    let head = page.querySelector('[data-binder] .Head_Title')
-    ok(head?.querySelector('.Edit'))
-    equal(page.querySelectorAll('[data-binder] [aria-pressed]').length, 0)
-    equal(page.querySelectorAll('[data-binder] select').length, 0)
+    equal(page.querySelectorAll('[data-body] [aria-pressed]').length, 0)
+    equal(page.querySelectorAll('[data-body] select').length, 0)
+    ok(page.querySelector('[data-body] [data-words="doc.body"].Body-typed'))
   }
-  ok(opened.querySelector('[data-binder] [data-words="doc.body"]'))
   ok(
     skill.querySelector(
       '[data-section="Instructions"] [data-words="content.body"]',

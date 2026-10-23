@@ -54,8 +54,9 @@ writes the links' positions (`edge.ord`, @yaks/edge's `placed`), and an entity
 dragged from elsewhere (@yaks/ux's `drag`) joins the list where it is dropped,
 linked by `tag`; `join` says what else that writes, or refuses it. Each row
 opens in place on the title and body of what it leads to, typed over where they
-stand (@yaks/ux's `Edit.Text`). @yaks/persona's binder and @yaks/topic's page
-draw their lists with it.
+stand (@yaks/ux's `Edit.Text`). An open row is no drag handle: selecting its
+text, clicking into it and typing never pick it up. @yaks/topic's page draws its
+lists with it.
 
 ```ts ignore
 h(Held, {
@@ -74,8 +75,9 @@ h(Held, {
 `Words` draws a body (`comp.prop`, markdown) the way browse draws every body:
 read as markdown, and typed over in its source on a double-click (@yaks/ux's
 `Edit.Text`), written when the person leaves it. Where the host takes no edits
-it is only read. `Held`'s rows and @yaks/persona's binders draw their documents'
-bodies with it.
+it is only read. Where typing is what a page is for (`click`), one click types
+into it and it says so under the pointer. `Held`'s rows and @yaks/persona's
+pages draw their documents' bodies with it.
 
 ```ts ignore
 h(Words, { io, e, comp: 'doc', prop: 'body' })

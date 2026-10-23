@@ -693,31 +693,42 @@ let stack = [
   'Comments',
 ]
 
+// A document's title on its Full page (`Full.Title`): its inline markdown,
+// typed over in place on a double-click.
+export let FullTitle = ({ e }: { e: Ent }) => <TitleEdit eid={e.eid} />
+
 // The root Full face is the DOCUMENT: a real h1 owns the title at the
 // column's measure — it wraps, never truncates — with the pip riding its
 // first line and the meta chips in a quiet row beneath (id included; the
 // App bar's compact title stays hidden until this h1 scrolls away — the
-// view-timeline in styles.css).
+// view-timeline in styles.css). Its title and its body are the entity's own
+// `Full.Title` and `Full.Body`: a document's typed over where they stand, and
+// a kind's own wherever it registers one (a persona's body, its documents). A
+// page that draws its own chat beside Full asks for none (`chat`).
 export let Show = (
-  { e, talkback = true }: { e: Ent; talkback?: boolean },
+  { e, talkback = true, chat = talkback }: {
+    e: Ent
+    talkback?: boolean
+    chat?: boolean
+  },
 ) => (
   <Frame>
     <Main>
       <Heading>
         {e.task && <Pip e={e} />}
         <Title>
-          <TitleEdit eid={e.eid} />
+          <Entity eid={e.eid} view='Full.Title' />
         </Title>
       </Heading>
       <Entity eid={e.eid} view='Meta' id />
       <Entity eid={e.eid} view='Mail' />
       <Decision e={e} />
-      <Entity eid={e.eid} view='Body' />
+      <Entity eid={e.eid} view='Full.Body' />
       {stack.filter((v) => talkback || v != 'Comments').map((v) => (
         <Entity key={v} eid={e.eid} view={v} />
       ))}
     </Main>
-    {talkback && <Chat e={e} />}
+    {chat && <Chat e={e} />}
   </Frame>
 )
 
@@ -728,7 +739,7 @@ export let CardFull = ({ e }: { e: Ent }) => (
     <Entity eid={e.eid} view='Meta' />
     <Entity eid={e.eid} view='Mail' />
     <Decision e={e} />
-    <Entity eid={e.eid} view='Body' mod='bare' />
+    <Entity eid={e.eid} view='Full.Body' mod='bare' />
     {stack.map((v) => <Entity key={v} eid={e.eid} view={v} />)}
   </>
 )
