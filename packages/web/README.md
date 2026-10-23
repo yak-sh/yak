@@ -54,10 +54,11 @@ more-specific routes.
 
 ## Exports
 
-| export     | provides                                               |
-| ---------- | ------------------------------------------------------ |
-| `.`        | `routes`, `letters` and the host's `Hosting` interface |
-| `./routes` | routes facet composed by the browser host              |
+| export       | provides                                               |
+| ------------ | ------------------------------------------------------ |
+| `.`          | `routes`, `letters` and the host's `Hosting` interface |
+| `./routes`   | routes facet composed by the browser host              |
+| `./outlived` | whether a page outlived the bundle it runs             |
 
 `assets.ts` builds the same module, page, stylesheet and icons into a static
 host's asset directory:
@@ -102,6 +103,16 @@ Web installs the `@yaks/ui/history` port before mounting browse. The port owns
 `pushState`, `replaceState` and `popstate`; browse supplies the page's path and
 where it was scrolled. Ordinary internal anchors follow that port, while
 modified clicks keep their native new-tab behavior.
+
+## A page that outlived a deploy
+
+`/web/app.js` carries its sha as its etag, and a deploy serves another bundle. A
+page loaded before the deploy runs the old bundle, and what its old code asks (a
+live query naming a word the new vocabulary dropped) can be refused by the new
+server. `outlived()` (`./outlived`) says whether the bundle served now differs
+from the one served when the page loaded, and browse reloads such a page onto
+the code now served instead of reporting its refusals. A refusal on a page
+running what is served is reported, as a bug.
 
 ## Application contributions
 

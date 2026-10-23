@@ -45,6 +45,25 @@ export let entire = (line: string): string => {
   return shaped ? line : `${line}&*`
 }
 
+/** How a named client says a refusal or a failure where nobody else hears
+ * it: on the console, an error where nothing was sent, which the page tracker
+ * captures by its first argument. */
+export let said: NonNullable<ClientOpts['report']> = (r) => {
+  let error = r.error
+  if (r.refused) {
+    error = Object.assign(new Error(r.refused.message), {
+      name: r.refused.error,
+    })
+  }
+  if (error) {
+    let message = error instanceof Error
+      ? `${error.name}: ${error.message}`
+      : String(error)
+    let log = r.sent.length ? console.warn : console.error
+    log(`live client — ${message}`, error)
+  }
+}
+
 export type NamedClient = {
   box: Client
   open(sub: string, line: string): void
@@ -172,22 +191,7 @@ export let namedClient = (opts: {
       ? wireIdb(opts.wireVault)
       : false,
     fetch: opts.fetch,
-    report: opts.report ?? ((r) => {
-      let error = r.error
-      if (r.refused) {
-        error = Object.assign(new Error(r.refused.message), {
-          name: r.refused.error,
-        })
-      }
-      // The page tracker captures console.error's first argument.
-      if (error) {
-        let message = error instanceof Error
-          ? `${error.name}: ${error.message}`
-          : String(error)
-        let log = r.sent.length ? console.warn : console.error
-        log(`live client — ${message}`, error)
-      }
-    }),
+    report: opts.report ?? said,
   })
   box.cache.onRows(opts.changed)
   let open = (sub: string, line: string) => {

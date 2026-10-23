@@ -70,6 +70,8 @@ import {
 } from './index.ts'
 import { type MemoryResolver, memoryResolver } from './resolver.ts'
 import { type LiveClient, liveClient, quiet } from './live_client.ts'
+import { said } from '@yaks/client/named'
+import { outlived } from '@yaks/web/outlived'
 import type { Socket } from '@yaks/sync'
 import type { Bundle, Entity } from '@yaks/graph'
 import { normalizeChanges } from './props.ts'
@@ -168,6 +170,13 @@ let makeClient = () => {
       return response
     },
     connect: (url) => socketFor(url),
+    // A refusal on a page that outlived a deploy is its old code asking the
+    // new server what it no longer answers: the page reloads onto the code
+    // now served. On a page running what is served, a refusal is a bug.
+    report: (r) => {
+      if (!r.refused) return said(r)
+      void outlived().then((old) => old ? location.reload() : said(r))
+    },
     disk: typeof location !== 'undefined',
     outbox,
     frame: (subs, f, reset) => {
