@@ -112,7 +112,10 @@ live query naming a word the new vocabulary dropped) can be refused by the new
 server. `outlived()` (`./outlived`) says whether the bundle served now differs
 from the one served when the page loaded, and browse reloads such a page onto
 the code now served instead of reporting its refusals. A refusal on a page
-running what is served is reported, as a bug.
+running what is served is reported, as a bug. The tag is asked at
+`/web/app.js?tag`, never at the bundle's own address: a page that fetches that
+address makes Chrome drop the bundle it cached, and every reload would download
+and compile it again.
 
 ## Application contributions
 

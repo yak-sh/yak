@@ -9,12 +9,18 @@
 /** Where the page's bundle is served. */
 export let BUNDLE = '/web/app.js'
 
+/** Where its tag is asked: the bundle's route, at another address. Chrome
+ * drops the page's cached bundle when the page fetches the bundle's own
+ * address, in any method or cache mode, so every reload would download and
+ * compile it again (T-132047). */
+export let TAG = `${BUNDLE}?tag`
+
 /** The tag the server gives its bundle now, or null where it gives none. */
 export let tagged = (
   get: typeof fetch = fetch,
 ): () => Promise<string | null> =>
 () =>
-  get(BUNDLE, { method: 'HEAD', cache: 'no-store' })
+  get(TAG, { method: 'HEAD', cache: 'no-store' })
     .then((r) => r.ok ? r.headers.get('etag') : null, () => null)
 
 /**
