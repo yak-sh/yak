@@ -31,6 +31,9 @@ import {
 import { personaDoc } from './comp.ts'
 import { inspectViews } from './inspect.ts'
 import { FINDING } from './desk.ts'
+import { voice } from './voice.ts'
+import { wear } from './worn.ts'
+import { renderSkill } from './skill-text.ts'
 
 let vocab = loadVocab([
   kernelDoc,
@@ -184,6 +187,31 @@ let unfolded = drawn(
   }]),
 )
 
+// A view mounted on a page, as a browser mounts it: its effects run, and it
+// is read once what it asked for has come.
+let mounted = async (eid: string, view: string, io = host()) => {
+  let { document } = parseHTML('<html><body><main></main></body></html>')
+  let g = globalThis as { document?: unknown }
+  let prior = g.document
+  g.document = document
+  let root = document.querySelector('main')!
+  try {
+    render(tree(eid, view, io, ''), root)
+    for (let i = 0; i < 12; i++) await new Promise((go) => setTimeout(go, 0))
+    return root.innerHTML
+  } finally {
+    render(null, root)
+    g.document = prior
+  }
+}
+let source = (html: string) =>
+  parseHTML(`<main>${html}</main>`).document
+    .querySelector('[data-markdown] pre')?.textContent
+let personaMd = source(await mounted('common', 'Markdown'))
+let skillMd = source(await mounted('testing', 'Markdown'))
+let workshopMd = source(await mounted('common', 'Context'))
+let said = voice(vocab)((await wear(store, vocab)('common'))!)
+
 // Rows dropped on the binder's lists, as a browser would: each drop's batch.
 let dropped = (() => {
   let { document } = parseHTML('<html><body><main></main></body></html>')
@@ -262,4 +290,23 @@ test('a row dropped on another list moves there, one dropped on Not carried leav
     [[], ['edge', 'contains']],
     [[], []],
   ])
+})
+
+test("a persona's Markdown view is the whole text an agent wearing it is given", () => {
+  equal(personaMd, said)
+  let at = (words: string) => said.indexOf(words)
+  ok(at('What signal over noise says.') < at('What fleet base says.'))
+  ok(at('What fleet base says.') < at('## Reads'))
+})
+
+test("a skill's Markdown view is its SKILL.md", () => {
+  let [b] = store.get(['testing'])
+  equal(
+    skillMd,
+    renderSkill({ doc: b.doc, skill: b.skill, content: b.content }),
+  )
+})
+
+test('what an agent reads sits beside the binder at the desk', () => {
+  equal(workshopMd, said)
 })

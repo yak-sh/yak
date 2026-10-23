@@ -33,7 +33,6 @@
 import { and, eq, type Input, list, present } from '@yaks/query'
 import { after, each } from '@yaks/fp'
 import type { Bundle, Eid, Storage } from '@yaks/graph'
-import { detached } from '@yaks/graph/storage'
 import { EDGE, relations } from '@yaks/edge'
 import { DOC } from '@yaks/doc'
 import type { Vocab } from '@yaks/vocab'
@@ -53,6 +52,11 @@ export let TOOL = 'tool'
 // somebody drew by hand; deeper than this means a cycle, and a cycle is what
 // the `seen` set already stops.
 let DEPTH = 8
+
+/** What composing a persona reads of a storage: queries, and entities by
+ * eid. A page hands it a storage over what it holds (@yaks/inspect's
+ * `useReading`), so the page composes with this very code. */
+export type Reads = Pick<Storage, 'read' | 'get'>
 
 let value = (eids: Eid[]): Input => eids.length == 1 ? eids[0] : list(...eids)
 
@@ -87,7 +91,7 @@ export let served = (a: Bundle, b: Bundle): number =>
 
 // The links of one relation out of a whole level, in the order they are
 // served.
-let links = (storage: Storage, from: Eid[], tag: string | undefined) =>
+let links = (storage: Reads, from: Eid[], tag: string | undefined) =>
   !tag || !from.length ? [] : after(
     storage.read(and(eq(`${EDGE}.from`, value(from)), present(tag))),
     (found) => found.filter(far).sort(served).map(far),
@@ -109,13 +113,12 @@ let links = (storage: Storage, from: Eid[], tag: string | undefined) =>
  * promise.
  */
 export let wear = (
-  storage: Storage,
+  storage: Reads,
   vocab: Vocab,
 ): (eid: Eid) => Worn | undefined | Promise<Worn | undefined> => {
   let tags = relations(vocab)
-  let tx = detached(storage)
   return (eid) =>
-    after(tx.get([eid]), (found) => {
+    after(storage.get([eid]), (found) => {
       let persona = found[0]
       if (!persona?.[PERSONA]) return undefined
       let carries = new Map<Eid, Bundle>()
@@ -129,7 +132,7 @@ export let wear = (
           return after(links(storage, level, tags[CARRIES]), (held) =>
             after(links(storage, level, tags[READS]), (said) =>
               after(
-                tx.get([...new Set([...held, ...said])]),
+                storage.get([...new Set([...held, ...said])]),
                 (docs) => {
                   let by = new Map(docs.map((b) => [b.entity.eid, b]))
                   let next: Eid[] = []

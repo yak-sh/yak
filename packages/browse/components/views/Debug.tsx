@@ -13,7 +13,7 @@ import { BACKLINKS, useBacklinks } from '../useQuery.ts'
 import { up } from './Dependency.tsx'
 import * as ui from '@yaks/ui'
 import { Edit } from '@yaks/ux'
-import { bundle } from '../registry.ts'
+import { bundle, renderView } from '../registry.ts'
 import { Id } from './Inline.tsx'
 import { Entity } from '../Entity.tsx'
 import { viaName } from '@yaks/kernel/Comments'
@@ -22,7 +22,6 @@ import { follow } from '../nav.tsx'
 import { compTone } from '../comp.ts'
 import { Icon } from '../icons.tsx'
 import { dragData } from '../drag.ts'
-import { Md } from './Md.tsx'
 import { Json } from './Json.tsx'
 import { face, leaves, shape } from '@yaks/inspect'
 
@@ -86,7 +85,9 @@ let { Tab } = ui.Tabs
 
 // Raw file forms belong to the inspector, not every card's primary tab row.
 // They remain draggable here because the same gesture is how a browser hands
-// the serialized bytes to the desktop.
+// the serialized bytes to the desktop. The Markdown form is the registry's, so
+// a kind whose package says it better (a persona as the text an agent is
+// given) says it here.
 export let DebugTabs = (
   { e, head, children }: {
     e: Ent
@@ -126,7 +127,7 @@ export let DebugTabs = (
         </Tabs>
       </Head>
       {view == 'Markdown'
-        ? <Md e={e} />
+        ? renderView(e, 'Markdown')
         : view == 'JSON'
         ? <Json e={e} />
         : children}

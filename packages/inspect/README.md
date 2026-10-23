@@ -38,6 +38,25 @@ editing; changes are emitted as bundles. Notes are comments and tasks about the
 entity and heading where they were left. Page-only table order, paging, editing
 and refusal state use the `/front` vocabulary.
 
+## Code written for a storage, in a view
+
+A view can run a function written for a storage, such as a package's composer,
+over what the view holds. `useReading(io, read)` hands `read` a **reader**, a
+storage that only reads (`read` a query, `get` some entities), whose every read
+is one of the view's asks, kept live while the view is mounted. A read not
+answered yet reads as nothing; as each answer lands the function runs again and
+reads on, and when a write moves anything it read, it runs again with that. It
+returns the function's value and whether every read was answered (`ready`).
+@yaks/persona's Markdown view composes a persona this way, with the code the
+server composes it with.
+
+```ts ignore
+let { value, ready } = useReading(io, (r) => voice(vocab)(wear(r, vocab)(eid)))
+```
+
+The function must stay synchronous over synchronous input, as @yaks/fp's `after`
+and `each` do.
+
 ## Exports
 
 | export    | provides                                                        |

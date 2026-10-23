@@ -35,5 +35,13 @@
 
 export { PERSON, PERSONA, personaDoc, SKILL } from './comp.ts'
 export { NAMED, voice, type Worn } from './voice.ts'
-export { CARRIES, offer, READS, served, TOOL, wear } from './worn.ts'
+export {
+  CARRIES,
+  offer,
+  READS,
+  type Reads,
+  served,
+  TOOL,
+  wear,
+} from './worn.ts'
 export { type As, carried, common, type Owed, owed, wearing } from './owed.ts'

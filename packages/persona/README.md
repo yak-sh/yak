@@ -57,11 +57,13 @@ if (worn) console.log(voice(vocab)(worn))
 ```
 
 `wear(storage, vocab)(eid)` reads a persona by its stored entity id and follows
-its document relationships. It returns `undefined` if that entity is missing or
-is not a persona. `voice(vocab)(worn)` returns Markdown containing the persona's
-instructions, each included document in full, and a `Reads` list of referenced
-documents. Load @yaks/edge plus the schemas declaring `contains` and `reads` to
-use those relationships. The minimal example has no linked documents.
+its document relationships. It needs only a storage's `read` and `get`
+(`Reads`), so a page can hand it one answered from what the page holds. It
+returns `undefined` if that entity is missing or is not a persona.
+`voice(vocab)(worn)` returns Markdown containing the persona's instructions,
+each included document in full, and a `Reads` list of referenced documents. Load
+@yaks/edge plus the schemas declaring `contains` and `reads` to use those
+relationships. The minimal example has no linked documents.
 
 Rendering behavior:
 
@@ -266,10 +268,11 @@ description; Enter opens the first, and Escape clears it. What is typed there is
 the person's draft, through the UX host's `drafts` (@yaks/ux).
 
 A persona or a skill opens on its `Context` tab: the desk, titles only, the one
-open lit; its **binder** in the middle; and, where the host draws a conversation
-(`Conversation`; browse's chat), a session to try it. Stacked, as on a phone,
-the binder comes first and the desk last. The binder alone is `Binder`, and a
-card's face (`Card.Context`):
+open lit; its **binder** in the middle; and on the right what an agent gets: a
+session to try it, where the host draws a conversation (`Conversation`; browse's
+chat), and the text it is given. Stacked, as on a phone, the binder comes first
+and the desk last. The binder alone is `Binder`, and a card's face
+(`Card.Context`):
 
 - a persona's binder is its head (naming the project it works for) and its own
   text, then what it **Carries** (`contains`, said in full) and what it
@@ -282,6 +285,14 @@ card's face (`Card.Context`):
 - a skill's binder is its description and its instructions.
 
 Each row is drawn by its own renderer, asked for as `Context.List.Tile`.
+
+The **Markdown view** of a persona or a skill (`Markdown`, more specific than
+any doc's, so it is the one browse's Markdown tab draws) is the text an agent
+receives. A persona's is `voice` of `wear`, what `persona_read` returns and a
+session wearing it is given, composed in the page by that same code over what
+the page holds (@yaks/inspect's `useReading`) and composed again whenever a
+write moves anything it read. A skill's is its SKILL.md (`renderSkill`). Either
+is drawn as its source, as written.
 
 ## Exports
 

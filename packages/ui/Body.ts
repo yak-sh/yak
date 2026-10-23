@@ -2,6 +2,9 @@
  * The text of a thing, to be read: its paragraphs (rendered markdown, or plain
  * lines) at a reading measure, in the ink. `Body-short` is one that is only a
  * line or two, set a little smaller, as the gist of a longer one.
+ * `Body-source` is a document's source as written, in a `pre` it holds: every
+ * character as it stands, its lines kept and wrapped at the measure, in the
+ * face of what is typed, such as the markdown an agent is given.
  *
  * @module
  */
@@ -21,6 +24,7 @@ export let description = 'The text of a thing, to be read, at its measure.'
 export let sheet = (c: Colors): Sheet => ({
   Body: { fg: c.text, wrap: true, gap: true },
   'Body-short': { fg: c.muted },
+  'Body-source': { fg: c.text },
 })
 
 /** A body of two paragraphs and a quote, and a short one. */
@@ -40,4 +44,17 @@ export let specimens = (): Specimen[] => [
     ),
   ],
   ['Body-short', h(Body, { mod: 'short' }, 'what a test checks')],
+  [
+    'Body-source',
+    h(
+      Body,
+      { mod: 'source' },
+      h(
+        'pre',
+        null,
+        '# N-1 reviewer\n\nCheck changes against the tests, and say which ' +
+          'test catches each one.\n\n---\n\n# M-2 tests never share a lock',
+      ),
+    ),
+  ],
 ]

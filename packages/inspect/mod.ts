@@ -31,3 +31,4 @@ export { all, composed, schemaPages, views } from './registry.ts'
 export { called, face, leaves, shape } from './read.ts'
 
 export { type Census, useCensus } from './census.ts'
+export { type Reader, type Reading, useReading, whole } from './reading.ts'

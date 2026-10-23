@@ -7,7 +7,8 @@ import { act } from 'preact/test-utils'
 import { parseHTML } from 'linkedom'
 import { compTone } from '../comp.ts'
 import { cache, ent, useRoute } from '../../live.ts'
-import { applicable, ux } from '../registry.ts'
+import { applicable, extend, ux } from '../registry.ts'
+import { parse } from '@yaks/query'
 import { Ux } from '@yaks/ux'
 import '../Entity.tsx'
 import { AddComp, Debug, DebugTabs, ProjectDebug } from './Debug.tsx'
@@ -70,6 +71,50 @@ test('raw formats are nested under Debug', async () => {
     if (prior) Object.defineProperty(globalThis, 'document', prior)
     else delete (globalThis as { document?: unknown }).document
   }
+})
+
+// A persona's Markdown tab, with a package's own Markdown view for personas.
+let composed = await (async () => {
+  let prior = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  let { document } = parseHTML('<main></main>')
+  Object.defineProperty(globalThis, 'document', {
+    value: document,
+    configurable: true,
+  })
+  let drop = extend([{
+    view: 'Markdown',
+    match: parse('.doc .persona'),
+    Render: () => h('pre', { class: 'Composed' }, 'what an agent reads'),
+  }])
+  let root = document.querySelector('main')!
+  let e = {
+    eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab',
+    num: 2,
+    kind: 'persona',
+    refs: [],
+    kids: [],
+    persona: {},
+    doc: { title: 'Reviewer', body: 'its own words' },
+  }
+  try {
+    render(h(DebugTabs, { e }, h('i', {}, 'components')), root)
+    root.querySelectorAll<HTMLButtonElement>('.Debug_Tabs .Tabs_Tab')[1]
+      .click()
+    await Promise.resolve()
+    return {
+      said: root.querySelector('.Composed')?.textContent,
+      raw: !!root.querySelector('.Md'),
+    }
+  } finally {
+    render(null, root)
+    drop()
+    if (prior) Object.defineProperty(globalThis, 'document', prior)
+    else delete (globalThis as { document?: unknown }).document
+  }
+})()
+
+test("a kind's own Markdown view is the one its Markdown tab draws", () => {
+  assertEquals(composed, { said: 'what an agent reads', raw: false })
 })
 
 test('addable components keep their component tones', async () => {

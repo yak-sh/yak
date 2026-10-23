@@ -11,3 +11,12 @@
   color: var(--muted);
   font-size: var(--small);
 }
+/* A document's source: its lines kept and wrapped at the measure, every
+   character where it stands, smaller, in the face of what is typed. */
+.Body-source > pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--small);
+  line-height: 1.5;
+}

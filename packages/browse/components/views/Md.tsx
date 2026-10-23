@@ -5,9 +5,9 @@ import { highlight } from '../../highlight.ts'
 
 // A doc as markdown with frontmatter — the file a dragged Markdown tab drops on
 // the desktop, shown raw by the Markdown view. Any entity with a doc qualifies;
-// workflow lines (status) appear only where the entity carries them. A
-// persona shows its own doc too: what an agent reads, with every included
-// document, is `yak persona read`.
+// workflow lines (status) appear only where the entity carries them. A kind
+// whose package draws its own Markdown view wins over this one: a persona or a
+// skill is the text an agent is given (@yaks/persona).
 export let mdText = (e: Ent) => {
   let refs = e.refs
     .map((r) => `${r.type}: ${idOf(ent(r.child))}`)

@@ -255,11 +255,11 @@ export let DeskPage = ({ io }: Props): JSX.Element => {
 }
 
 /** A persona or a skill opened at the desk: the desk, its binder, and what
- * an agent gets where the host draws a conversation. */
+ * an agent gets: the text it is given, and a session to try it where the
+ * host draws a conversation. */
 export let Workshop = ({ e, io }: Props): JSX.Element => {
   let d = useDesk(io)
   let eid = e.entity.eid
-  let talks = io.can(e, 'Conversation')
   return h(
     ui.Panes,
     { 'data-workshop': eid },
@@ -274,21 +274,27 @@ export let Workshop = ({ e, io }: Props): JSX.Element => {
       { mod: 'main', 'aria-label': 'Binder' },
       h(ui.Panes.Body, {}, io.show(e, 'Binder')),
     ),
-    talks
-      ? h(
-        ui.Panes.Pane,
-        { mod: 'main', 'aria-label': 'What an agent gets' },
-        h(
-          ui.Panes.Body,
-          {},
-          h(
+    h(
+      ui.Panes.Pane,
+      { mod: 'main', 'aria-label': 'What an agent gets' },
+      h(
+        ui.Panes.Body,
+        {},
+        io.can(e, 'Conversation')
+          ? h(
             ui.Section,
             { 'data-section': 'Try it' },
             h(ui.Section.Title, {}, 'Try it'),
             io.show(e, 'Conversation', {}),
-          ),
+          )
+          : null,
+        h(
+          ui.Section,
+          { 'data-section': 'What an agent reads' },
+          h(ui.Section.Title, {}, 'What an agent reads'),
+          io.show(e, 'Markdown', {}),
         ),
-      )
-      : null,
+      ),
+    ),
   )
 }
