@@ -192,7 +192,7 @@ export let probeSuite = async () => {
   let mail = Deno.makeTempFileSync({ prefix: 'yak-probe-mail-' })
   let cf = cloudflare(mail)
   // workers/yak's own wrangler, which Deno loads from there only when the run
-  // says --node-modules-dir=manual (deno.json `test:run`): from Deno's npm
+  // says --node-modules-dir=manual (deno.json `test`): from Deno's npm
   // cache, the bundler finds none of the polyfills npm put beside it.
   let { createTestHarness } = createRequire(`${dir}/`)('wrangler')
   let kernel = config(

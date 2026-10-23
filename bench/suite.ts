@@ -153,18 +153,18 @@ export async function timed(command: string, args: string[]): Promise<Sample> {
  *
  * ```ts
  * import { assertEquals } from '@std/assert'
- * assertEquals(suiteOf('test', 'deno', ['task', '-q', 'test:run']), 'test')
+ * assertEquals(suiteOf('test', 'deno', ['task', '-q', 'test']), 'test')
  * assertEquals(
- *   suiteOf('test', 'deno', ['task', 'test:run', '--tag=deno', 'workers']),
+ *   suiteOf('test', 'deno', ['task', 'test', '--tag=deno', 'workers']),
  *   'test --tag=deno workers',
  * )
  * assertEquals(suiteOf('ci/tests', 'bash', ['-c', 'x']), 'ci/tests')
  * assertEquals(
- *   suiteOf('test', 'deno', ['task', '-q', 'test:run', '--all', '--write']),
+ *   suiteOf('test', 'deno', ['task', '-q', 'test', '--all', '--write']),
  *   'test --all',
  * )
  * assertEquals(
- *   suiteOf('test', 'deno', ['task', 'test:run', '--verbose', 'bin']),
+ *   suiteOf('test', 'deno', ['task', 'test', '--verbose', 'bin']),
  *   'test bin',
  * )
  * ```

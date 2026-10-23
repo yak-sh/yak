@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "check": "deno run -A bench/run.ts command check deno run -A bin/check.ts",
+    "check": "deno run -A bin/check.ts",
     "check:fmt": "deno fmt --check",
     "check:lint": "deno lint",
     "check:bytes": "deno run --allow-read --allow-run=git bin/check-bytes.ts",
@@ -91,7 +91,7 @@
     "install": "bin/install",
     "app-grep": "deno run --allow-net=api.cloudflare.com --allow-read --allow-write --allow-env=HOME,XDG_CACHE_HOME --allow-run=op,rg bin/app-grep.ts",
     "jsr": "deno run --allow-read --allow-net=api.jsr.io --allow-env=JSR_TOKEN bin/jsr.ts",
-    "test": "deno run -A bench/run.ts command test deno task -q test:run",
+    "test": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A --node-modules-dir=manual bin/test.ts",
     "bench": "deno run -A bench/run.ts run",
     "bench:check": "deno run -A bench/run.ts check",
     "bench:ratchet": "deno run -A bench/run.ts accept",
@@ -107,8 +107,7 @@
         "check:workers",
         "check:content"
       ]
-    },
-    "test:run": "DB_PATH=:memory: TASKS_SYNC=off TASKS_EMBED=0 TASKS_BACKOFF= deno run -A bin/scratch.ts deno run -A --node-modules-dir=manual bin/test.ts"
+    }
   },
   "workspace": [
     "./workers/yak",

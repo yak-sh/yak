@@ -1,35 +1,21 @@
 # Suite and CI wall clocks
 
-`deno task check` and `deno task test` time the complete command (including Deno
-startup and discovery). Their original commands live under `:run`; use those
-only when intentionally bypassing timing. Arguments and exit statuses pass
-through, and a run given arguments (`deno task test --tag=deno workers`) is a
-suite of its own, named with them, so a narrowed run never becomes the whole
-suite's floor. Timing is **report-only**, matching the performance steps in CI:
-the `benchmark:` line closing a run says its verdict (`REGRESSED` for a
-regression), and never turns it into a failing test or a deployment veto. The
-line is said in CI and on `--verbose`; a run an agent reads leaves it out.
+CI times every step of the gate: its shell is
+`deno run -A bench/run.ts command --ci …` (below), and each step is a suite in
+[@yaks/benchmark](../packages/benchmark/README.md). Timing is **report-only**:
+the `benchmark:` line closing a step says its verdict (`REGRESSED` for a
+regression), and never turns it into a failing test or a deployment veto.
+`deno task test` and `deno task check` time nothing themselves: a test run
+starts no other process (M-132169).
 
-Each command is a suite in [@yaks/benchmark](../packages/benchmark/README.md).
-`check` writes `bench/suite-check.results.json` and checks the committed
-`bench/suite-check.baseline.json`; `test` has its own corresponding files. Other
-names, including narrowed runs and CI steps, use
-`bench/suite-<URL-encoded-name>.baseline.json` and `.results.json`. A result
-keeps the raw wall seconds, mean control seconds, control sample count,
-timestamp, command exit code and ratio alongside the runner's metadata. The
-committed baseline supplies the 25% tolerance. Recording and checking never
-change it.
-
-Accept a reviewed measurement explicitly:
-
-```sh
-SUITE_ACCEPT=1 deno task check
-SUITE_ACCEPT=1 deno task test
-```
-
-Review and commit each suite's baseline diff. Failed commands and loaded runs
-cannot be accepted. A command without a baseline writes its measurement without
-comparing it; explicit acceptance establishes the floor.
+A suite named `NAME` writes `bench/suite-<URL-encoded-name>.results.json` and
+checks a committed `bench/suite-<URL-encoded-name>.baseline.json` when there is
+one. A result keeps the raw wall seconds, mean control seconds, control sample
+count, timestamp, command exit code and ratio alongside the runner's metadata.
+The committed baseline supplies the 25% tolerance. Recording and checking never
+change it; `SUITE_ACCEPT=1` banks a reviewed measurement. Failed commands and
+loaded runs cannot be accepted. A command without a baseline writes its
+measurement without comparing it.
 
 ## Load compensation
 
@@ -71,14 +57,11 @@ detection, deploy recording, tests, and performance reports. Each has a stable
 and artifact-upload Actions are not shell commands and are not timed by this
 wrapper; their wall clocks remain in GitHub's job timeline. The job summary
 receives each timing report, and an `always()` artifact step retains results
-even after a failure. The CI wrapper also measures suite wrapper overhead; local
-suites and CI steps are intentionally separate. No extra paid runner, API
-credential, or deployment dependency is added.
-
-CI also prefixes its nested suites with `ci/suite/`, so a cold checkout does not
-ratchet a local warm-cache baseline. The artifact includes the per-suite result
-files. Bank reviewed CI floors with `SUITE_ACCEPT=1`; until a CI step has a
-committed baseline, it records without comparison.
+even after a failure. No extra paid runner, API credential, or deployment
+dependency is added. A `command` run inside a CI step is prefixed `ci/suite/`.
+The artifact includes the per-suite result files. Bank reviewed CI floors with
+`SUITE_ACCEPT=1`; until a CI step has a committed baseline, it records without
+comparison.
 
 Long command names use a shortened filename with a digest; the JSON keeps the
 complete suite name, so distinct narrowed commands retain distinct results.

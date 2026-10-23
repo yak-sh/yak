@@ -110,9 +110,9 @@ stronger.
   `--tag=deno` (or `browser`, `terminal`, `workerd`, or any tag a test
   carries) narrows it; `--all` runs files the skip would leave out.
 - Today a run still starts processes, and T-132170 is taking them away. It
-  goes through a chain of Deno processes (bench/run.ts, bin/scratch.ts,
-  bin/test.ts and its coordinator), then starts one runtime for each platform
-  the selection holds. A selection with anything under workers/ first runs
+  goes through a chain of Deno processes (bin/scratch.ts, bin/test.ts, its
+  coordinator and that one's guard), then starts one runtime for each platform
+  the selection holds, each running `deno info` for the skip. A selection with anything under workers/ first runs
   `ready()` (workers/yak/wrangler.ts: `npm ci` when its install is stale, five
   asset generators as `deno run`, and Stripe's sandbox key, through `op` when
   `STRIPE_KEY` isn't set). One with a `*_workerd_test.ts` also starts workerd
@@ -171,9 +171,8 @@ stronger.
 - A red gate's verdict closes its tests step, and `gh run view --log` cuts that
   step short: read the job's whole log, `gh api
   repos/yak-sh/yak/actions/jobs/<job id>/logs`.
-- `deno task test` and `deno task check` are timed against a baseline
-  (bench/suites.md); with `--verbose` or in CI, the `benchmark:` line closing a
-  run is that timing, report-only, not a test result.
+- CI times each of its steps (bench/suites.md); the `benchmark:` line closing
+  one is that timing, report-only, not a test result.
 - A benchmark runs in the process that asked for it, too, and measures its own
   work. Today's suites don't yet: `deno task bench` starts Deno children
   (bench/throughput.ts), bench/box.ts and bench/monitor.ts time the commands

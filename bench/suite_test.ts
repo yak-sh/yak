@@ -26,7 +26,7 @@ for (let name of ['check', 'test']) {
       )
       equal(await Deno.readTextFile(options.baseline), before)
       equal(
-        suiteOf('test', 'deno', ['task', 'test:run', '--tag=deno', 'workers']),
+        suiteOf('test', 'deno', ['task', 'test', '--tag=deno', 'workers']),
         'test --tag=deno workers',
       )
     } finally {
