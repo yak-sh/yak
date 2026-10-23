@@ -4,9 +4,10 @@
 // right there; the page beneath stays where it was. One at a time: a link
 // pressed inside it shows its entity in its place. Its Id and the head's open
 // button go to the entity's page; Esc, q, the close button or a press anywhere
-// else put it away. The head moves it and the corner sizes it. Vim's keys
-// (App.tsx) open it with Enter on a link and walk inside it while it is up;
-// put away by a key, it hands the focus back to the link it came from.
+// else put it away. The head moves it and the corner sizes it. It is a layer
+// (role dialog) to vim's keys (App.tsx, @yaks/ux/keys): Enter on a link opens
+// it, the cursor walks inside it while it is up, and Esc or q sends it
+// `cancel`, which puts it away and hands the cursor back to the link.
 import { useLayoutEffect, useRef } from 'preact/hooks'
 import { Loading, Peek as Frame, place, Tabs } from '@yaks/ui'
 import { Ux } from '@yaks/ux'
@@ -21,16 +22,6 @@ import { moved, moveEl, resizeEl } from './drag.ts'
 
 let { Head, Body, Grip } = Frame
 let { Tab } = Tabs
-
-/** Whether a key puts the peek away: never one typed into a field, whose
- * editor spends its own Escape first. */
-export let closes = (key: string, typing: boolean) =>
-  !typing && (key == 'Escape' || key == 'q')
-
-let typing = (at: EventTarget | null) =>
-  !!(at as Element | null)?.closest?.(
-    'input, textarea, select, [contenteditable]',
-  )
 
 let close = () => {
   peeked.value = null
@@ -59,9 +50,9 @@ let usePlace = (el: { current: HTMLElement | null }, p: Peeked) =>
   }, [p.from, p.left])
 
 // While it is up, a press outside it (and outside the popovers and menus
-// opened from it, which float in an Overlay of their own) or a closing key
-// puts it away. The link that opened it is not outside: pressing it again
-// opens the entity's page.
+// opened from it, which float in an Overlay of their own) puts it away. The
+// link that opened it is not outside: pressing it again opens the entity's
+// page.
 let useDismiss = (p: Peeked) =>
   useLayoutEffect(() => {
     let away = (ev: Event) => {
@@ -69,21 +60,8 @@ let useDismiss = (p: Peeked) =>
       if (at?.closest?.('.Peek, .Overlay') || p.from?.contains(at)) return
       close()
     }
-    let key = (ev: KeyboardEvent) => {
-      if (!closes(ev.key, typing(ev.target))) return
-      ev.stopPropagation()
-      let within = (ev.target as Element | null)?.closest?.('.Peek')
-      close()
-      if (within && p.from?.isConnected) {
-        ;(p.from as HTMLElement).focus?.({ preventScroll: true })
-      }
-    }
     document.addEventListener('pointerdown', away)
-    document.addEventListener('keydown', key, true)
-    return () => {
-      document.removeEventListener('pointerdown', away)
-      document.removeEventListener('keydown', key, true)
-    }
+    return () => document.removeEventListener('pointerdown', away)
   }, [p])
 
 let Card = ({ p }: { p: Peeked }) => {
@@ -129,6 +107,9 @@ let Card = ({ p }: { p: Peeked }) => {
   return (
     <Frame
       elRef={root}
+      role='dialog'
+      aria-label={`${idOf(e)}, peeked`}
+      onCancel={close}
       mod={!!(p.w || p.h) && 'sized'}
       style={{
         left: p.left == null ? undefined : `${p.left}px`,

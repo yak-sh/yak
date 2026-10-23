@@ -1,19 +1,32 @@
 /**
- * The keys that walk a page: vim's, one keymap and one focus model for every
- * door. h, j, k and l move the focus to the item left of, below, above or
- * right of the one holding it; gg and G to the first and the last; H and L go
- * back and forward; Enter presses an item the platform doesn't press itself;
- * Esc lets go. An item is anything a person can press or type into, and the
- * keys rest while one is being typed into.
+ * The keys that walk a page: vim's, one keymap and one cursor for every door.
+ *
+ * The **cursor** is the item the keys stand on, a mark of its own
+ * (`data-cursor`), never the browser's focus: standing on a field doesn't
+ * type into it, and nothing opening or closing moves it. In normal mode h, j,
+ * k and l move it to the item left of, below, above or right of where it
+ * stands; gg and G to the first and the last; Enter or Space presses the item
+ * (a link opens, a button presses); H and L go back and forward. An **item**
+ * is anything a person can press or type into.
+ *
+ * Insert mode is the browser's focus in a field: i, or Enter on a field,
+ * gives the item under the cursor the focus to type into, and every key is
+ * the field's until Esc leaves it, the cursor still on it.
+ *
+ * A **layer** is what floats over the page: a peek, a menu, a popover, a
+ * dialog (`role="dialog"`, `role="menu"`, `aria-modal`). The front-most one
+ * takes the keys: the cursor walks only its items, and Esc or q sends it
+ * `cancel`, which a layer answers by closing, and the cursor goes back to
+ * what it stood on when the layer opened. Without a layer the keys walk the
+ * whole surface, the sidebar beside the page included.
  *
  * A browser hears the keys as it hears any, and @yaks/tui's document
- * dispatches the same keydown on the element in focus, measures what it
- * painted, and focuses and reveals as a browser does, so one `walk` listener
- * walks a page in either.
+ * dispatches the same keydown, measures what it painted, and presses and
+ * focuses as a browser does, so one `walk` walks a page in either.
  *
  * The core is pure: `chord` reads keys into moves, and `land` picks the item
  * a move lands on from where the items sit. `walk` is the boundary that reads
- * the document and moves its focus.
+ * the document and moves the cursor.
  *
  * ```ts
  * import { land } from '@yaks/ux/keys'
@@ -45,9 +58,10 @@ export type Move =
   | 'back'
   | 'forward'
   | 'open'
-  | 'leave'
+  | 'insert'
+  | 'close'
 
-/** The keymap: a chord typed where no one is typing, and its move. */
+/** The keymap: a chord typed in normal mode, and its move. */
 export let keymap: Record<string, Move> = {
   h: 'left',
   j: 'down',
@@ -58,21 +72,25 @@ export let keymap: Record<string, Move> = {
   H: 'back',
   L: 'forward',
   Enter: 'open',
-  Escape: 'leave',
+  ' ': 'open',
+  i: 'insert',
+  Escape: 'close',
+  q: 'close',
 }
 
-/** The keymap as a keybinding card reads it, but for Esc, which a door
- * says with whatever else it lets go of. */
+/** The keymap as a keybinding card reads it. */
 export let walkKeys: { keys: string[]; about: string }[] = [
   {
     keys: ['h', 'j', 'k', 'l'],
-    about: 'move to the item left, below, above or right',
+    about: 'move the cursor to the item left, below, above or right',
   },
-  { keys: ['gg', 'G'], about: 'move to the first or the last item' },
+  { keys: ['gg', 'G'], about: 'move the cursor to the first or the last item' },
   {
-    keys: ['Enter'],
-    about: 'open the item: a link peeks or opens, a button presses',
+    keys: ['Enter', 'Space'],
+    about: 'press the item: a link opens, a button presses, a field types',
   },
+  { keys: ['i'], about: 'type into the item: insert mode, until Esc' },
+  { keys: ['Esc', 'q'], about: 'close the peek, menu or popover in front' },
   { keys: ['H', 'L'], about: 'go back or forward' },
 ]
 
@@ -173,11 +191,25 @@ export let land = (
   return best ?? (order ? next : undefined)
 }
 
-// What a person can press or type into, and what a platform presses itself
-// on Enter.
-let reach =
-  'a[href], button, input, textarea, select, summary, [tabindex], [role=button], [role=link]'
-let pressed = 'a[href], button, input, select, textarea, summary'
+// What a person can press or type into; what floats over the page; the
+// cursor's mark.
+let reach = [
+  'a[href]',
+  'button',
+  'input',
+  'textarea',
+  'select',
+  'summary',
+  '[tabindex]',
+  '[contenteditable]',
+  '[role=button]',
+  '[role=link]',
+  '[role=option]',
+  '[role=menuitem]',
+  '[role=textbox]',
+].join(', ')
+let layers = '[role=dialog], [role=menu], [aria-modal=true]'
+let mark = 'data-cursor'
 let buttons = [
   'checkbox',
   'radio',
@@ -200,13 +232,28 @@ export let typing = (at: EventTarget | null | undefined): boolean => {
     el.matches('input') && !buttons.includes(el.getAttribute('type') ?? 'text')
 }
 
-/** The items under `root` a walk lands on, in reading order: what can be
- * pressed or typed into, and is shown. */
+// Whether an item is typed into once entered: a field, or text typed over in
+// place (`role="textbox"`), which opens as a double press opens it.
+let editable = (n: Element) => typing(n) || n.matches('[role=textbox]')
+
+let shown = (n: Element) =>
+  (n as { checkVisibility?: () => boolean }).checkVisibility?.() ?? true
+
+/** The items under `root` the cursor stands on, in reading order: what can
+ * be pressed or typed into, and is shown. */
 export let items = (root: Element): Element[] =>
   [...root.querySelectorAll(reach)].filter((n) =>
     !n.hasAttribute('disabled') && n.getAttribute('tabindex') != '-1' &&
-    ((n as { checkVisibility?: () => boolean }).checkVisibility?.() ?? true)
+    n.getAttribute('contenteditable') != 'false' && shown(n)
   )
+
+/** The front-most layer in `surface`'s document: the last shown in reading
+ * order, as what opens later floats over what opened before. */
+export let front = (surface: Element): Element | undefined => {
+  let top = surface
+  while (top.parentElement) top = top.parentElement
+  return [...top.querySelectorAll(layers)].filter(shown).at(-1)
+}
 
 let box = (n: Element): Box | undefined => {
   let r = n.getBoundingClientRect?.()
@@ -218,46 +265,147 @@ let view = (): Box | undefined =>
     ? { left: 0, top: 0, right: innerWidth, bottom: innerHeight }
     : undefined
 
-let show = (n: Element) => {
-  let el = n as HTMLElement
-  el.focus({ preventScroll: true, focusVisible: true } as FocusOptions)
-  el.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+// The item whose box holds where the cursor last stood: a cursor whose
+// element was drawn anew stays where it was.
+let near = (boxes: (Box | undefined)[], was: Box) => {
+  let x = (was.left + was.right) / 2, y = (was.top + was.bottom) / 2
+  return boxes.findIndex((b) =>
+    !!b && b.left <= x && x <= b.right && b.top <= y && y <= b.bottom
+  )
 }
 
-/** A keydown listener that walks the items `scope` holds (the page, or what
- * floats over it) by the keymap. A key someone took before it, a key with
- * Ctrl, Alt or Meta, and every key while a field is typed into pass by. */
+// Send `n` an event made by its own window, as its document takes only its
+// own (a terminal's document has no window, and takes any).
+let send = (n: Element, type: string, init: EventInit) => {
+  let view = n.ownerDocument?.defaultView as typeof globalThis | null
+  n.dispatchEvent(new (view?.Event ?? Event)(type, init))
+}
+
+// Enter an item: type into a field, choose in a select, open text typed over
+// in place as a double press does, press anything else.
+let enter = (n: Element) => {
+  let el = n as HTMLElement
+  if (typing(n) || n.matches('select')) return el.focus()
+  if (n.matches('[role=textbox]')) {
+    return send(n, 'dblclick', { bubbles: true })
+  }
+  el.click()
+}
+
+/** The walk over a surface (the app's frame: the sidebar and the page):
+ * `key` hears keydowns, and `point` hears presses, which carry the cursor,
+ * unmarked, to the item pressed. A walk from nowhere starts in `start` (the
+ * page) when there is one. A key someone took before it, a key with Ctrl,
+ * Alt or Meta, and every key while a field is typed into pass by. */
 export let walk = (o: {
-  scope: () => Element | null | undefined
+  surface: () => Element | null | undefined
+  start?: () => Element | null | undefined
   back?: () => void
   forward?: () => void
-}): (e: KeyboardEvent) => void => {
+}): { key: (e: KeyboardEvent) => void; point: (e: Event) => void } => {
   let pending = ''
-  return (e) => {
+  let at: Element | undefined
+  let was: Box | undefined
+  let stack: { layer: Element; opener?: Element }[] = []
+
+  let put = (n?: Element) => {
+    at?.removeAttribute(mark)
+    at = n
+    if (!n) return
+    n.setAttribute(mark, '')
+    was = box(n) ?? was
+    n.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }
+
+  // The front layer. One that closed gives the cursor back to what it stood
+  // on when it opened, and one newly in front remembers that.
+  let settle = (surface: Element) => {
+    let top = front(surface)
+    while (stack.length && !stack.at(-1)!.layer.isConnected) {
+      let { opener } = stack.pop()!
+      if (!at?.isConnected) put(opener)
+    }
+    if (top && stack.at(-1)?.layer != top) {
+      stack.push({ layer: top, opener: at })
+    }
+    return top
+  }
+
+  // An item drawn anew as it closes (text typed over in place is) keeps the
+  // cursor: it goes to what now stands where it stood.
+  let heal = () => {
+    let surface = o.surface()
+    if (!surface || !was || at?.isConnected != false) return
+    let list = items(front(surface) ?? surface)
+    let i = near(list.map(box), was)
+    if (i >= 0) put(list[i])
+  }
+
+  let current = (list: Element[]) =>
+    at?.isConnected ? list.indexOf(at) : was ? near(list.map(box), was) : -1
+
+  let move = (root: Element, i: number, way: Way | 'first' | 'last') => {
+    let list = items(root)
+    let page = i < 0 && root == o.surface() && o.start?.()
+    let from = page ? items(page) : list
+    let to = land(from.map(box), page ? -1 : i, way, view())
+    if (to != null && from[to] != list[i]) put(from[to])
+  }
+
+  let key = (e: KeyboardEvent) => {
     if (held.includes(e.key)) return
-    let mine = !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey &&
-      !typing(e.target)
-    let read = mine ? chord(pending, e.key) : { pending: '' }
+    let mine = !e.defaultPrevented && !e.ctrlKey && !e.metaKey && !e.altKey
+    if (!mine || typing(e.target)) {
+      pending = ''
+      // Esc leaves insert mode, the cursor where it was typed: the walk takes
+      // it, so a layer the field is in stays up.
+      if (mine && e.key == 'Escape') {
+        e.preventDefault()
+        put(e.target as Element)
+        setTimeout(heal)
+      }
+      return
+    }
+    let read = chord(pending, e.key)
     pending = read.pending
     if (pending) return e.preventDefault()
-    let move = read.move
-    if (move == 'back' || move == 'forward') {
+    let way = read.move
+    if (way == 'back' || way == 'forward') {
       e.preventDefault()
-      return o[move]?.()
+      return o[way]?.()
     }
-    let root = move && o.scope()
-    if (!move || !root) return
+    let surface = way && o.surface()
+    if (!way || !surface) return
+    let top = settle(surface)
+    let root = top ?? surface
     let list = items(root)
-    let at = list.indexOf(root.ownerDocument?.activeElement as Element)
-    let item = list[at] as HTMLElement | undefined
-    if (move == 'leave') return item?.blur()
-    if (move == 'open') {
-      if (!item || item.matches(pressed)) return
+    let i = current(list)
+    if (way == 'close') {
+      if (!top) return
       e.preventDefault()
-      return item.click()
+      send(top, 'cancel', { cancelable: true })
+      return put(stack.pop()?.opener)
+    }
+    if (way == 'open') {
+      if (i < 0) return
+      e.preventDefault()
+      enter(list[i])
+      // A choice that closes its layer hands the cursor back once it has.
+      if (top) setTimeout(() => settle(surface))
+      return
     }
     e.preventDefault()
-    let to = land(list.map(box), at, move, view())
-    if (to != null && to != at) show(list[to])
+    if (way != 'insert') return move(root, i, way)
+    let field = [...list.slice(Math.max(i, 0)), ...list].find(editable)
+    if (field) put(field), enter(field)
   }
+
+  let point = (e: Event) => {
+    let hit = (e.target as Element | null)?.closest?.(reach) ?? undefined
+    at?.removeAttribute(mark)
+    at = hit
+    was = hit && box(hit)
+  }
+
+  return { key, point }
 }

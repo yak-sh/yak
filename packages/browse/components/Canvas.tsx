@@ -284,7 +284,7 @@ export let Canvas = ({ eid }: { eid: string }) => {
     // top of the stack: every interaction raises, so highest z IS the
     // last card focused.
     let key = (e: KeyboardEvent) => {
-      if (mode.value != 'normal' || e.repeat) return
+      if (mode.value != 'normal' || e.repeat || e.defaultPrevented) return
       if (
         e.target instanceof HTMLElement &&
         e.target.matches('input, textarea, select, [contenteditable]')

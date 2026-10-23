@@ -2,7 +2,15 @@
  * over a document, here the terminal's, painted and measured. */
 import { equal, ok, test } from '@yaks/testing'
 import { h, render } from 'preact'
-import { doc, install, place, screenful } from '@yaks/tui'
+import {
+  doc,
+  install,
+  onNavigate,
+  place,
+  screenful,
+  TElement,
+  TText,
+} from '@yaks/tui'
 import { type Box, land, walk } from './keys.ts'
 
 let at = (left: number, top: number, width = 10, height = 10): Box => ({
@@ -80,10 +88,13 @@ render(
   ),
   root as unknown as Parameters<typeof render>[1],
 )
-let { lines, hidden } = screenful(root, 40, 10, { Gone: { hidden: true } })
-place(lines, hidden)
+let paint = () => {
+  let { lines, hidden } = screenful(root, 40, 10, { Gone: { hidden: true } })
+  place(lines, hidden)
+}
+paint()
 let keys = walk({
-  scope: () => root as unknown as Element,
+  surface: () => root as unknown as Element,
   back: () => went.push('back'),
   forward: () => went.push('forward'),
 })
@@ -96,58 +107,92 @@ let press = (key: string, shiftKey = false) => {
     metaKey: false,
   })
   Object.defineProperty(e, 'target', { value: doc.activeElement ?? root })
-  keys(e as unknown as KeyboardEvent)
+  keys.key(e as unknown as KeyboardEvent)
   return e.defaultPrevented
 }
-let focused = () =>
-  doc.activeElement?.textContent || doc.activeElement?.localName
+// The cursor's item, by its text or its tag; pointing at one puts the cursor
+// there, and pointing at none takes it away.
+let cursor = () => root.querySelector('[data-cursor]')
+let on = () => cursor()?.textContent || cursor()?.localName
+let point = (at = 'none') =>
+  keys.point({ target: root.querySelector(at) ?? root } as unknown as Event)
+let walked = (...keys: string[]) => keys.map((k) => (press(k), on()))
 screen.free()
 
-let walked = (...keys: string[]) => keys.map((k) => (press(k), focused()))
+test('j and l move the cursor down and right, by where each item sits', () => {
+  point()
+  equal(walked('j', 'l', 'j'), ['One', 'Two', 'input'])
+})
 
-test('hjkl walk the painted page by where each item sits', () => {
-  doc.activeElement?.blur()
-  equal(walked('j', 'l', 'j', 'h', 'k', 'j', 'j'), [
-    'One',
-    'Two',
-    'input',
-    'Three',
-    'One',
-    'Three',
-    'Four',
-  ])
+test('h and k move the cursor left and up, and never the focus', () => {
+  point('input')
+  equal(walked('h', 'k', 'j', 'j'), ['Three', 'One', 'Three', 'Four'])
+  equal(doc.activeElement, null)
 })
 
 test('gg and G go to the first and the last item; a hidden one never counts', () => {
-  root.querySelector('a')!.focus()
-  equal(walked('G', 'g', 'g'), ['textarea', 'textarea', 'textarea'])
-  root.querySelector('[tabindex]')!.focus()
-  equal(walked('g', 'g'), ['Four', 'One'])
+  point('a')
+  equal(walked('G', 'g', 'g', 'G'), ['textarea', 'textarea', 'One', 'textarea'])
 })
 
-test('a field being typed into keeps every key', () => {
+test('the cursor stands on a field and walks past it, typing nothing', () => {
+  point('textarea')
+  ok(press('k'))
+  equal([on(), doc.activeElement], ['Four', null])
+})
+
+test('i types into the field from the cursor on; Esc leaves it, the cursor on it', () => {
+  point('a')
+  ok(press('i'))
   let field = root.querySelector('textarea')!
-  field.focus()
-  equal(press('j'), false)
-  equal(press('G'), false)
-  equal(doc.activeElement, field)
+  equal([doc.activeElement, on()], [field, 'textarea'])
+  equal([press('j'), press('G')], [false, false])
+  press('Escape')
+  field.blur()
+  equal([doc.activeElement, on()], [null, 'textarea'])
 })
 
-test('Enter presses an item the platform would not, and leaves a link to it', () => {
-  root.querySelector('[tabindex]')!.focus()
+test('Enter and Space press the item; a link pressed is followed', () => {
+  let followed: string[] = []
+  onNavigate((href) => followed.push(href))
+  point('[tabindex]')
   pressed = 0
   ok(press('Enter'))
-  equal(pressed, 1)
-  root.querySelector('a')!.focus()
-  equal(press('Enter'), false)
+  ok(press(' '))
+  equal(pressed, 2)
+  point('a')
+  press('Enter')
+  equal(followed, ['/1'])
 })
 
-test('H and L go back and forward; Esc lets go of the item', () => {
+test('the layer in front takes the keys; Esc closes it, the cursor back where it was', () => {
+  let menu = new TElement('div')
+  menu.setAttribute('role', 'menu')
+  for (let label of ['Open', 'Copy']) {
+    let row = menu.appendChild(new TElement('div'))
+    row.appendChild(new TElement('button')).appendChild(new TText(label))
+  }
+  menu.addEventListener('cancel', () => menu.remove())
+  point('a[href="/2"]')
+  root.appendChild(menu)
+  paint()
+  equal(walked('j', 'j', 'k', 'G', 'h'), [
+    'Open',
+    'Copy',
+    'Open',
+    'Copy',
+    'Copy',
+  ])
+  ok(press('Escape'))
+  equal([on(), menu.parentNode], ['Two', null])
+  paint()
+})
+
+test('Esc and q pass by with nothing in front; H and L go back and forward', () => {
+  point('a')
   went = []
+  equal([press('Escape'), press('q')], [false, false])
   press('H', true)
   press('L', true)
   equal(went, ['back', 'forward'])
-  root.querySelector('a')!.focus()
-  press('Escape')
-  equal(doc.activeElement, null)
 })

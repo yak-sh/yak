@@ -24,6 +24,7 @@ export {
   dispatch,
   doc,
   install,
+  onNavigate,
   onPaint,
   place,
   TElement,

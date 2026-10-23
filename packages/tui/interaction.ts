@@ -4,7 +4,7 @@
  * every key is a keydown on the element in focus first, so a page's own
  * listeners (vim's keys, @yaks/ux/keys) hear it as they would in a browser.
  * The app owns links and history; this adapter knows only DOM controls. */
-import { dispatch, doc, type TElement } from './dom.ts'
+import { dispatch, doc, onNavigate, type TElement } from './dom.ts'
 import { edit } from './Textarea.ts'
 import type { Key } from './input.ts'
 
@@ -38,7 +38,7 @@ export let event = (
 // select, a checkbox, a button) leaves them to the page.
 let entering = (node: TElement | null): boolean =>
   !!node && (
-    node.matches('textarea,[contenteditable]') ||
+    node.matches('textarea') || node.isContentEditable ||
     node.matches('input') &&
       !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color']
         .includes(node.attr('type') ?? 'text')
@@ -94,20 +94,8 @@ export let interaction = (
     if (i < 0 && back) i = 0
     focus(list[(i + (back ? -1 : 1) + list.length) % list.length])
   }
-  let activate = (node: TElement) => {
-    let e = event(node, 'click', {
-      button: 0,
-      detail: 0,
-      metaKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      altKey: false,
-    })
-    if (!e.defaultPrevented) {
-      let href = node.attr('href') ?? node.attr('data-href')
-      if (href) open(href)
-    }
-  }
+  onNavigate(open)
+  let activate = (node: TElement) => node.click()
   let active = () => {
     let node = doc.activeElement
     if (node && !root.contains(node)) {
@@ -152,17 +140,24 @@ export let interaction = (
         tab(node, !!k.shift)
         return true
       }
-      if (k.name == 'enter' && !k.shift) {
+      // Text typed over in place holds its text as its content, and Enter
+      // there is a new line (what it does otherwise, it does on keydown).
+      let inPlace = node.isContentEditable
+      if (k.name == 'enter' && !k.shift && !inPlace) {
         let form = node.closest('form')
         if (form) event(form, 'submit')
         return true
       }
       let next = edit(
-        { text: node.value, at: node.selectionStart },
+        {
+          text: inPlace ? node.textContent : node.value,
+          at: node.selectionStart,
+        },
         k.name == 'enter' ? { name: 'char', text: '\n' } : k,
       )
       if (next) {
-        node.value = next.text
+        if (inPlace) node.textContent = next.text
+        else node.value = next.text
         node.setSelectionRange(next.at, next.at)
         node.setAttribute('data-caret', next.at)
         event(node, 'input')

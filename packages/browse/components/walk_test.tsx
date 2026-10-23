@@ -1,9 +1,10 @@
-// Vim's keys on the web page (@yaks/ux/keys): they walk the page, not the
-// sidebar; Enter on a link peeks it as a press does; they walk the peek while
-// it is up; Esc puts it away and hands the focus back to the link; and they
-// rest in insert mode and in a field typed into. A linkedom document lays
+// Vim's keys on the web page (@yaks/ux/keys). A linkedom document lays
 // nothing out, so the walk here keeps to reading order; where each item sits
-// is the terminal's test (../tui/walk_test.ts) and @yaks/ux's.
+// is the terminal's test (../tui/walk_test.ts) and @yaks/ux's. j puts the
+// cursor on the page, never the focus; the sidebar is on the same walk; Enter
+// on a link peeks it, the keys walk the peek, and Esc or q closes it with the
+// cursor back on the link; a field is walked onto without typing into it, i
+// types into it in insert mode, and Esc leaves it with the cursor on it.
 import { test, until } from '../testing.ts'
 import { equal } from '@yaks/testing'
 import '../domain-host.tsx'
@@ -64,43 +65,54 @@ let seen = await (async () => {
   let root = document.createElement('main')
   document.body.append(root)
   wire(document as unknown as Parameters<typeof wire>[0])
-  let held = () => document.activeElement as HTMLElement | null
-  // A key as a browser sends it, in a mode: a keydown on what holds the
-  // focus, then, for Enter on a link or a button nobody took, a press.
-  let press = async (key: string, as: 'normal' | 'insert' = 'normal') => {
-    mode.value = as
-    let at = (held() ?? document.body) as HTMLElement
+  let held = () => document.activeElement
+  let cursor = () => root.querySelector('[data-cursor]')
+  // A key as a browser sends it: a keydown on what holds the focus.
+  let press = async (key: string) => {
     let e = Object.assign(
       new window.Event('keydown', { bubbles: true, cancelable: true }),
       { key },
     )
-    await act(() => {
-      at.dispatchEvent(e)
-      if (key == 'Enter' && !e.defaultPrevented && at.matches('a, button')) {
-        at.click()
-      }
-    })
+    await act(() => void (held() ?? document.body).dispatchEvent(e))
     return e.defaultPrevented
   }
-  let inside = (part: string) => !!held()?.closest(part)
+  let point = (n: Element) =>
+    act(() =>
+      void n.dispatchEvent(
+        new window.Event('pointerdown', { bubbles: true }),
+      )
+    )
+  let peeking = () => !!root.querySelector('.Peek')
   try {
     await act(() => render(h(Ux, { host: ux }, h(App, {})), root))
     await until(() => !!root.querySelector('a[href="/T-2"]'))
     await press('j')
-    let page = inside('.Shell_Main') && !inside('.Shell_Side')
-    let link = root.querySelector('a[href="/T-2"]') as HTMLElement
-    link.focus()
+    let page = [!!cursor()?.closest('.Shell_Main'), held()]
+    await press('g')
+    await press('g')
+    let side = !!cursor()?.closest('.Shell_Side')
+    let link = root.querySelector('a[href="/T-2"]')!
+    await point(link)
     await press('Enter')
-    await until(() => !!root.querySelector('.Peek'))
+    await until(peeking)
     let peek = peeked.value?.eid
     await press('j')
-    let walksPeek = inside('.Peek')
+    let walksPeek = !!cursor()?.closest('.Peek')
     await press('Escape')
-    let after = { peek: !!root.querySelector('.Peek'), link: held() == link }
-    let insert = await press('j', 'insert')
-    ;(root.querySelector('textarea') as HTMLElement).focus()
-    let typing = await press('j')
-    return { page, peek, walksPeek, after, insert, typing }
+    let esc = [peeking(), cursor() == link]
+    await press('Enter')
+    await until(peeking)
+    await press('q')
+    let q = [peeking(), cursor() == link]
+    let field = root.querySelector('textarea')
+    for (let n = 0; n < 60 && cursor() != field; n++) await press('j')
+    let onto = [cursor() == field, held()]
+    await press('i')
+    let insert = [held() == field, mode.value]
+    let typed = await press('j')
+    await press('Escape')
+    let left = [mode.value, held(), cursor() == field]
+    return { page, side, peek, walksPeek, esc, q, onto, insert, typed, left }
   } finally {
     render(null, root)
     mode.value = 'normal'
@@ -118,8 +130,9 @@ let seen = await (async () => {
   }
 })()
 
-test('j walks the page, not the sidebar beside it', () => {
-  equal(seen.page, true)
+test('j puts the cursor on the page, not the focus; gg reaches the sidebar', () => {
+  equal(seen.page, [true, null])
+  equal(seen.side, true)
 })
 
 test('Enter on a link peeks it, and the keys walk the peek while it is up', () => {
@@ -127,10 +140,13 @@ test('Enter on a link peeks it, and the keys walk the peek while it is up', () =
   equal(seen.walksPeek, true)
 })
 
-test('Esc puts the peek away and hands the focus back to its link', () => {
-  equal(seen.after, { peek: false, link: true })
+test('Esc and q close the peek, the cursor back on its link', () => {
+  equal([seen.esc, seen.q], [[false, true], [false, true]])
 })
 
-test('the keys rest in insert mode and in a field typed into', () => {
-  equal([seen.insert, seen.typing], [false, false])
+test('a field is walked onto, typed into after i, and left by Esc with the cursor on it', () => {
+  equal(seen.onto, [true, null])
+  equal(seen.insert, [true, 'insert'])
+  equal(seen.typed, false)
+  equal(seen.left, ['normal', null, true])
 })

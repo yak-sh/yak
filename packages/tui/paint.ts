@@ -129,11 +129,10 @@ let own = (el: TElement, sheet: Sheet): Style => {
       if (name && sheet[name]) Object.assign(out, sheet[name])
     }
   }
-  // Focus shows as a browser rings it: whatever holds it from a key, never a
-  // box focused only to hear keys (tabindex -1, a dialog).
-  if (doc.activeElement == el && el.attr('tabindex') != '-1') {
-    out.inverse = true
-  }
+  // The cursor (@yaks/ux/keys) and the focus show as a browser rings them;
+  // never a box focused only to hear keys (tabindex -1, a dialog).
+  let focused = doc.activeElement == el && el.attr('tabindex') != '-1'
+  if (focused || el.attr('data-cursor') != null) out.inverse = true
   let href = el.localName == 'a' && el.attr('href')
   if (href) out.href = safeHref(href)
   return out
@@ -215,7 +214,8 @@ let inline = (n: TNode, st: Style, c: Ctx): Seg[] => {
   if (!shows(el, o, c)) return []
   let s = inherit(st, o)
   if (o.glyph) return [{ text: o.glyph, style: s, owner: el }]
-  if (el.localName == 'input' || el.localName == 'textarea') {
+  let typed = el.attr('data-caret') != null && el.isContentEditable
+  if (el.localName == 'input' || el.localName == 'textarea' || typed) {
     return field(el, s, c)
   }
   if (el.localName == 'select') {
@@ -241,9 +241,10 @@ let MARKS: Record<string, [string, string]> = {
 }
 
 // A field paints what a browser shows in it: a checkbox or a radio its mark,
-// a password its dots, and any other its value, its placeholder (dimmed, as
-// the text entry's hint is) while empty, and a painted cursor where
-// `data-caret` puts the caret, since a terminal has no focus to show it by.
+// a password its dots, and any other its value (text typed over in place, its
+// text), its placeholder (dimmed, as the text entry's hint is) while empty,
+// and a painted cursor where `data-caret` puts the caret, since a terminal has
+// no focus to show it by.
 let field = (el: TElement, s: Style, c: Ctx): Seg[] => {
   let type = el.attr('type') ?? 'text'
   let seg = (text: string, style: Style): Seg[] =>
@@ -251,7 +252,9 @@ let field = (el: TElement, s: Style, c: Ctx): Seg[] => {
   let mark = MARKS[type]
   if (mark) return seg(mark[el.attr('checked') == null ? 0 : 1], s)
   if (!shows(el, { hidden: type == 'hidden' }, c)) return []
-  let value = safe(el.attr('value') ?? '')
+  let value = safe(
+    el.isContentEditable ? el.textContent : el.attr('value') ?? '',
+  )
   if (type == 'password') value = '•'.repeat(value.length)
   let hint = value ? [] : seg(
     safe(el.attr('placeholder') ?? ''),

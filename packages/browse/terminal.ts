@@ -111,18 +111,6 @@ export let open = async (url: string, opts: {
           return true
         }
       }
-      if (
-        k.name == 'char' && !k.ctrl && !k.alt && k.text == 'i' &&
-        !keys.active()?.matches('input,textarea,select,[contenteditable]')
-      ) {
-        let field = screen.root.querySelector('.Shell_Body')?.querySelector(
-          'input,textarea',
-        )
-        if (field) {
-          keys.focus(field)
-          return true
-        }
-      }
       if (keys.press(k)) return true
       if (k.name == 'char' && !k.ctrl && !k.alt && k.text == 'n') {
         navigate(newPath())
@@ -156,6 +144,8 @@ export let open = async (url: string, opts: {
         ...sheet({ kits, theme: everforest }),
         'Button-quiet': { block: true },
         Status: { block: true, fg: c.muted },
+        Status_Mode: { bold: true, fg: c.text },
+        'Status_Mode-insert': { bold: true, fg: c.bg, bg: c.active },
         Icon: { glyph: '◇' },
         'lucide-menu': { glyph: '≡' },
         'lucide-ellipsis-vertical': { glyph: '⋮' },

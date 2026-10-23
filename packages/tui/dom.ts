@@ -47,6 +47,13 @@ let union = (a: Box, b: Box): Box => ({
 let placed = new Map<TElement, Box>()
 let hidden = new Set<TElement>()
 let revealed: TElement | undefined
+let follow = (_href: string) => {}
+
+/** Say how a pressed link is followed: the app's own navigation, since a
+ * terminal has no location to load. */
+export let onNavigate = (fn: (href: string) => void): void => {
+  follow = fn
+}
 
 /** Record a paint: the screen's lines, each segment's owner the element that
  * painted it, and the elements the sheet hid. Elements measure themselves by
@@ -76,6 +83,12 @@ export class TNode {
   get nextSibling(): TNode | null {
     let sibs = this.parentNode?.childNodes
     return sibs ? sibs[sibs.indexOf(this) + 1] ?? null : null
+  }
+  /** Whether it hangs under a screen's root, as a browser's node hangs in
+   * its document. */
+  get isConnected(): boolean {
+    return this.parentNode?.isConnected ??
+      (this as { localName?: string }).localName == 'root'
   }
   /** Detach this node from its parent. */
   remove() {
@@ -120,6 +133,8 @@ export class TElement extends TNode {
   onblur = null
   onselect = null
   onkeyup = null
+  ondblclick = null
+  oncancel = null
   selectionStart = 0
   selectionEnd = 0
   /** Forms share their value and selection with browser components. */
@@ -138,31 +153,43 @@ export class TElement extends TNode {
       doc.activeElement.blur()
     }
     doc.activeElement = this
-    if (this.matches('input,textarea')) {
+    // Text typed over in place takes the caret at its end, where a browser
+    // page puts it (a terminal has no selection to put it by).
+    if (this.isContentEditable) {
+      this.selectionStart = this.selectionEnd = this.textContent.length
+    }
+    if (this.matches('input,textarea') || this.isContentEditable) {
       this.setAttribute('data-caret', this.selectionStart)
     }
     this.dispatchEvent(new Event('focus'))
+    this.dispatchEvent(new Event('focusin', { bubbles: true }))
     touch()
   }
   blur() {
-    if (doc.activeElement == this) doc.activeElement = null
+    let held = doc.activeElement == this
+    if (held) doc.activeElement = null
     this.removeAttribute('data-caret')
     this.dispatchEvent(new Event('blur'))
+    if (held) this.dispatchEvent(new Event('focusout', { bubbles: true }))
     touch()
   }
-  /** Press it, as a primary-button click does. */
+  /** Press it, as a primary-button click does: a link no listener took is
+   * followed (`onNavigate`). */
   click() {
-    dispatch(
-      this,
-      Object.assign(new Event('click', { bubbles: true, cancelable: true }), {
+    let e = Object.assign(
+      new Event('click', { bubbles: true, cancelable: true }),
+      {
         button: 0,
         detail: 0,
         metaKey: false,
         ctrlKey: false,
         shiftKey: false,
         altKey: false,
-      }),
+      },
     )
+    if (!dispatch(this, e)) return
+    let href = this.closest('a')?.attr('href') ?? this.attr('data-href')
+    if (href) follow(href)
   }
   /** Keep it in sight: the scroll region around it shows it on the next
    * paint, until another element asks. */
@@ -236,6 +263,13 @@ export class TElement extends TNode {
       n instanceof TText ? n.data : (n as TElement).textContent
     ).join('')
   }
+  /** Its children become one text node holding `text`, or none. */
+  set textContent(text: string) {
+    for (let n of this.childNodes) n.parentNode = null
+    this.childNodes = []
+    if (text) this.appendChild(new TText(text))
+    touch()
+  }
   getAttribute(k: string): string | null {
     return this.attr(k.toLowerCase()) ?? null
   }
@@ -248,8 +282,21 @@ export class TElement extends TNode {
   get parentElement(): TElement | null {
     return this.parentNode
   }
+  /** `contenteditable`, as a browser's element reads and sets it. */
+  get contentEditable(): string {
+    return this.attr('contenteditable') ?? 'inherit'
+  }
+  set contentEditable(v: string) {
+    if (v == 'inherit') this.removeAttribute('contenteditable')
+    else this.setAttribute('contenteditable', v)
+  }
+  /** Whether it is typed into in place: its own `contenteditable`, or its
+   * parent's. */
   get isContentEditable(): boolean {
-    return this.attr('contenteditable') == 'true'
+    let v = this.attr('contenteditable')
+    return v == null || v == 'inherit'
+      ? !!this.parentNode?.isContentEditable
+      : v != 'false'
   }
   get href(): string {
     return this.attr('href') ?? ''
@@ -321,17 +368,18 @@ export class TElement extends TNode {
   set className(v: string) {
     this.setAttribute('class', v)
   }
-  /** Append a child. */
-  appendChild(c: TNode) {
-    this.insertBefore(c, null)
+  /** Append a child; it is returned, as a browser returns it. */
+  appendChild<N extends TNode>(c: N): N {
+    return this.insertBefore(c, null)
   }
   /** Insert a child before `ref`, or at the end when ref is null. */
-  insertBefore(c: TNode, ref: TNode | null) {
+  insertBefore<N extends TNode>(c: N, ref: TNode | null): N {
     c.parentNode?.removeChild(c)
     let i = ref ? this.childNodes.indexOf(ref) : -1
     this.childNodes.splice(i < 0 ? this.childNodes.length : i, 0, c)
     c.parentNode = this
     touch()
+    return c
   }
   /** Remove a child. */
   removeChild(c: TNode) {

@@ -412,6 +412,27 @@ test('a well offers the values seen so far, and what is typed', async () => {
   assertEquals(p.emitted, [{ entity: { eid: T }, task: { domain: 'ops' } }])
 })
 
+// Whether a picker is still up after Esc in its search, as vim's keys leave
+// the field or not, observed at load.
+let escaped = await (async () => {
+  using p = page()
+  p.draw(value('domain'))
+  let esc = async (taken: boolean) => {
+    await press(p)
+    let doc = p.root.ownerDocument
+    let take = (e: Event) => taken && e.preventDefault()
+    doc.addEventListener('keydown', take)
+    await p.fire(p.$('.Overlay .Prop_Find'), 'keydown', 'Escape')
+    doc.removeEventListener('keydown', take)
+    return !!doc.querySelector('.Overlay')
+  }
+  return [await esc(false), await esc(true)]
+})()
+
+test("Esc in a picker's search closes it, unless vim's keys took it to leave the field", () => {
+  assertEquals(escaped, [false, true])
+})
+
 test("a number is typed over in place, in the host's language", async () => {
   using p = page({ editing: { parse: (v) => Number(String(v).slice(1)) } })
   p.draw(value('prio'))

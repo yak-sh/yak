@@ -1447,12 +1447,16 @@ html {
 .Status_Close:hover {
   color: var(--text);
 }
+/* The mode, plain to see: normal in the text's own ink, insert filled. */
 .Status_Mode {
-  color: var(--muted);
-  font-weight: 600;
+  color: var(--text);
+  font-weight: 700;
 }
 .Status_Mode-insert {
-  color: var(--active);
+  color: var(--bg);
+  background: var(--active);
+  padding: 0 var(--half-gap);
+  border-radius: calc(var(--radius) / 2);
 }
 .Status_Mode-visual {
   color: var(--special);

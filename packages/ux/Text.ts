@@ -121,6 +121,8 @@ export let Text = (
   return h(Span, {
     key: open ? 'open' : 'rest',
     elRef: ref,
+    // Typed into once opened: what vim's keys enter (@yaks/ux/keys).
+    role: still ? undefined : 'textbox',
     onDblClick: () => still || open || edit.begin(),
     // Pressed into, a draft opened elsewhere is being typed in here.
     onFocus: () => open && !edit.now()?.open && edit.begin(),

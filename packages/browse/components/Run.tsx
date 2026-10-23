@@ -188,6 +188,9 @@ let Form = ({ a }: { a: Ask }) => {
   return (
     <Frame
       elRef={root}
+      role='dialog'
+      aria-label='run'
+      onCancel={() => run.value = null}
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
       <Row>

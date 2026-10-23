@@ -103,7 +103,7 @@ try {
 | `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                  |
 | `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                 |
 | `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                             |
-| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `typing`; `Box`, `Move`: vim's keys walking a page                                                                       |
+| `@yaks/ux/keys`       | `walk`, `keymap`, `walkKeys`, `chord`, `land`, `items`, `front`, `typing`; `Box`, `Move`: vim's keys walking a page                                                              |
 
 ## Kits from outside
 
@@ -538,13 +538,28 @@ try {
 
 ## Vim's keys
 
-`walk` is a keydown listener that moves a page's focus by vim's keys, one
-**keymap** for every door: h, j, k and l move to the **item** left of, below,
-above or right of the one holding the focus; gg and G to the first and the last;
-H and L go back and forward; Enter presses an item the platform doesn't press
-itself; Esc lets go. An item is anything a person can press or type into that
-shows (`items`). The keys rest while a field is typed into (`typing`), and pass
-by a key held with Ctrl, Alt or Meta or one a listener took before it.
+`walk` moves a **cursor** over a page by vim's keys, one **keymap** for every
+door. The cursor is the item the keys stand on, drawn by its own mark
+(`data-cursor`), never the browser's focus: standing on a field types nothing
+into it. An **item** is anything a person can press or type into that shows
+(`items`).
+
+In normal mode h, j, k and l move the cursor to the item left of, below, above
+or right of it; gg and G to the first and the last; Enter or Space presses the
+item (a link opens, a button presses); H and L go back and forward. Insert mode
+is the focus in a field (`typing`): i, or Enter on a field, gives the item under
+the cursor the focus, every key is the field's until Esc, and the cursor stays
+on the field. Text typed over in place (`Edit.Text`, `role="textbox"`) opens as
+a double press opens it. A key held with Ctrl, Alt or Meta, or one a listener
+took before it, passes by.
+
+A **layer** is what floats over the page: a peek, a menu, a popover or a dialog
+(`role="dialog"`, `role="menu"`, `aria-modal`). The front-most one (`front`)
+takes the keys: the cursor walks only its items, and Esc or q sends it `cancel`,
+the event an HTML dialog closes on. A layer answers by closing, and the cursor
+goes back to what it stood on when the layer opened. A part becomes a layer by
+its role and an `onCancel` that closes it; nothing registers it. Without a
+layer, the keys walk the whole surface, a sidebar beside the page included.
 
 Where a move lands is pure (`land`): each item's box, from the platform's
 `getBoundingClientRect`, and the rules Android's FocusFinder walks a screen by.
@@ -571,14 +586,20 @@ equal(land(page, 0, 'down'), 2)
 ```
 
 The browser hears the keys as it hears any. @yaks/tui's document sends each key
-as a keydown on the element in focus, measures what it painted, and focuses and
-reveals as a browser does, so the same listener walks a page there:
+as a keydown on the element in focus, measures what it painted, and presses,
+focuses and reveals as a browser does, so the same walk walks a page there. Its
+`key` hears keydowns and its `point` hears presses, which carry the cursor to
+the item pressed; a walk from nowhere starts in `start`:
 
 ```ts ignore
-document.addEventListener(
-  'keydown',
-  walk({ scope: () => page, back: history.back, forward: history.forward }),
-)
+let keys = walk({
+  surface: () => frame,
+  start: () => frame.querySelector('main'),
+  back: history.back,
+  forward: history.forward,
+})
+document.addEventListener('keydown', keys.key)
+document.addEventListener('pointerdown', keys.point)
 ```
 
 ## The host
@@ -632,4 +653,4 @@ URLs. The host supplies those policies. Styling belongs to
 | `read.ts`             | what a property is, off the vocabulary                              |
 | `completion.ts`       | shared completion controller, field, list and input binding         |
 | `completion-state.ts` | pure completion transitions and candidate types                     |
-| `keys.ts`             | vim's keys: the keymap, where a move lands, the walk over a page    |
+| `keys.ts`             | vim's keys: the keymap, where a move lands, the cursor and layers   |

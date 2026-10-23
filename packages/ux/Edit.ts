@@ -79,6 +79,13 @@ let popout = (E: Control): Control => (p) => {
   )
 }
 
+// A popout is a layer (@yaks/ux/keys): vim's keys walk its choices while it
+// is up, and its `cancel` (Esc in normal mode) closes it.
+let layer = (p: ControlProps) => ({
+  role: 'dialog',
+  onCancel: () => p.edit.end(),
+})
+
 // A choice made: emitted, its draft spent, and the control closed.
 let choose = (host: Host, p: ControlProps, v: unknown) => {
   emit(host, p.onChange, p.e, p.comp, p.prop, v)
@@ -158,7 +165,7 @@ let EnumEdit = (p: ControlProps) => {
   let now = chosen(host, p)
   return h(
     Pop,
-    null,
+    layer(p),
     choices(host, p.comp, p.prop).map((v) =>
       h(
         Tab,
@@ -191,8 +198,14 @@ let Search = (
     onInput: (ev: InputEvent) =>
       p.edit.search((ev.currentTarget as HTMLInputElement).value),
     onKeyDown: (ev: KeyboardEvent) => {
-      if (ev.key == 'Escape') p.edit.end()
       if (ev.key == 'Enter') enter((p.edit.row?.query ?? '').trim())
+      // Esc closes the picker, unless a page's vim keys took it to leave the
+      // field (@yaks/ux/keys), where the next Esc closes it. They hear it
+      // after the field does, so whether they took it is known once it has
+      // gone by.
+      if (ev.key == 'Escape') {
+        queueMicrotask(() => ev.defaultPrevented || p.edit.end())
+      }
     },
   })
 
@@ -210,17 +223,17 @@ let WellEdit = (p: ControlProps) => {
   let pick = (v: unknown) => () => choose(host, p, v)
   return h(
     Pop,
-    { mod: 'list' },
+    { mod: 'list', ...layer(p) },
     h(Search, {
       p,
       place: String(valueOf(p.e, p.comp, p.prop) ?? 'search…'),
       enter: (t) => t ? choose(host, p, t) : p.edit.end(),
     }),
-    h(Row, { mod: 'none', onClick: pick(null) }, 'none'),
+    h(Row, { mod: 'none', role: 'option', onClick: pick(null) }, 'none'),
     typed && !all.includes(typed)
-      ? h(Row, { onClick: pick(typed) }, `“${typed}”`)
+      ? h(Row, { role: 'option', onClick: pick(typed) }, `“${typed}”`)
       : null,
-    hits.map((x) => h(Row, { key: x, onClick: pick(x) }, x)),
+    hits.map((x) => h(Row, { key: x, role: 'option', onClick: pick(x) }, x)),
   )
 }
 
@@ -241,15 +254,19 @@ let EidEdit = (p: ControlProps) => {
   let pick = (v: unknown) => () => choose(host, p, v)
   return h(
     Pop,
-    { mod: 'list' },
+    { mod: 'list', ...layer(p) },
     h(Search, {
       p,
       place: 'search…',
       enter: () => hits[0] && choose(host, p, hits[0].entity.eid),
     }),
-    h(Row, { mod: 'none', onClick: pick(null) }, 'none'),
+    h(Row, { mod: 'none', role: 'option', onClick: pick(null) }, 'none'),
     hits.map((b) =>
-      h(Row, { key: b.entity.eid, onClick: pick(b.entity.eid) }, label(host, b))
+      h(Row, {
+        key: b.entity.eid,
+        role: 'option',
+        onClick: pick(b.entity.eid),
+      }, label(host, b))
     ),
   )
 }
@@ -433,6 +450,7 @@ let EditValue = (
       ? h(Val, {
         elRef: handle ? undefined : anchor,
         mod: !face && 'nil',
+        role: !handle && open ? 'button' : undefined,
         onClick: handle ? undefined : open,
       }, face || (paint && editor ? `+ ${name ?? prop}` : '—'))
       : null,

@@ -361,21 +361,27 @@ export let App = () => {
     addEventListener('keydown', key)
     return () => removeEventListener('keydown', key)
   }, [])
-  // Vim's keys walk the items on the page, or on the peek over it, in normal
-  // mode (@yaks/ux/keys). On the document, so a terminal's keydown reaches it
-  // as a browser's does; a peek's own keys, heard first, keep Esc and q.
+  // Vim's keys move a cursor over the whole frame, the sidebar and the page,
+  // or over the peek, menu or popover in front (@yaks/ux/keys); a walk from
+  // nowhere starts in the page. On the document, so a terminal's keydown
+  // reaches it as a browser's does. They rest on the command line and over a
+  // selection; insert mode is a field's own focus, which the walk leaves be.
   let shell = useRef<HTMLElement>(null)
   useEffect(() => {
     let keys = walk({
-      scope: () =>
-        shell.current?.querySelector('.Peek') ??
-          shell.current?.querySelector('.Shell_Main'),
+      surface: () => shell.current,
+      start: () => shell.current?.querySelector('.Shell_Main'),
       back,
       forward,
     })
-    let key = (e: KeyboardEvent) => mode.value == 'normal' && keys(e)
+    let key = (e: KeyboardEvent) =>
+      mode.value != 'command' && mode.value != 'visual' && keys.key(e)
     document.addEventListener('keydown', key)
-    return () => document.removeEventListener('keydown', key)
+    document.addEventListener('pointerdown', keys.point)
+    return () => {
+      document.removeEventListener('keydown', key)
+      document.removeEventListener('pointerdown', keys.point)
+    }
   }, [])
   return (
     <Shell

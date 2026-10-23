@@ -402,7 +402,9 @@ export let Menu = () => {
   return (
     <ui.Menu
       class='Overlay'
+      role='menu'
       elRef={root}
+      onCancel={close}
       onPointerDown={(e: Event) => e.stopPropagation()}
     >
       {m.eid && (

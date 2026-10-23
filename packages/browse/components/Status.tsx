@@ -27,6 +27,7 @@ import {
 import { num, slotsOf } from '../verb.ts'
 import { navigate, screenTarget } from './nav.tsx'
 import { pickLine, useHits } from '@yaks/ux'
+import { typing } from '@yaks/ux/keys'
 import { spawnOf } from './Run.tsx'
 import { block } from '@yaks/ui'
 import { Entity } from './Entity.tsx'
@@ -278,9 +279,12 @@ let WhoAmI = () => {
   )
 }
 
-// The vim statusbar: NORMAL / -- INSERT -- / a live : command line. It owns
-// the mode transitions — : opens the command line, i enters insert, Escape
-// always returns to normal (and blurs whatever was being typed in).
+// The vim statusbar: -- NORMAL -- / -- INSERT -- / a live : command line. It
+// owns the mode transitions: : opens the command line, and Escape always
+// returns to normal (and blurs whatever was being typed in). Insert mode is
+// a field holding the focus, however it got it (i or Enter on the cursor's
+// item, @yaks/ux/keys, or a press); the walk's cursor is normal mode's.
+// On the document, so a terminal's keys and focus reach it as a browser's.
 export let Status = () => {
   let input = useRef<HTMLTextAreaElement>(null)
   // The line is the `cmd` field (fields.tsx), whose text is the person's
@@ -294,13 +298,11 @@ export let Status = () => {
         commandFocus(e, input.current)
         return // the command input owns every other key
       }
-      let t = e.target
-      let typing = t instanceof HTMLElement &&
-        t.matches('input, textarea, select, [contenteditable]')
-      if (mode.value == 'insert' || typing) {
+      let t = e.target as HTMLElement | null
+      if (mode.value == 'insert' || typing(t) || t?.matches?.('select')) {
         if (e.key == 'Escape') {
           mode.value = 'normal'
-          if (t instanceof HTMLElement) t.blur()
+          t?.blur?.()
         }
         return
       }
@@ -308,19 +310,17 @@ export let Status = () => {
         e.preventDefault()
         msg.value = ''
         mode.value = 'command'
-      } else if (e.key == 'i' && mode.value == 'normal') {
-        mode.value = 'insert'
       } else if (e.key == 'Escape') {
         msg.value = ''
-        document.getSelection()?.removeAllRanges() // drops visual too
+        document.getSelection?.()?.removeAllRanges() // drops visual too
       }
     }
-    addEventListener('keydown', key)
+    document.addEventListener('keydown', key)
 
     // VISUAL is derived, not entered: a live selection outside a text input.
     let sel = () => {
       if (mode.value == 'insert' || mode.value == 'command') return
-      let s = document.getSelection()
+      let s = document.getSelection?.()
       let n = s?.anchorNode
       let host = n instanceof Element ? n : n?.parentElement
       let has = !!s && !s.isCollapsed && !host?.closest('input, textarea')
@@ -328,17 +328,15 @@ export let Status = () => {
     }
     document.addEventListener('selectionchange', sel)
 
-    // INSERT is derived too: the keyboard in a value typed over in place.
-    let typed = (t: EventTarget | null) =>
-      t instanceof HTMLElement && t.isContentEditable
+    // INSERT is derived too: the keyboard in a field it types into.
     let focus = (e: FocusEvent) => {
-      if (typed(e.target) && mode.value != 'command') mode.value = 'insert'
+      if (typing(e.target) && mode.value != 'command') mode.value = 'insert'
     }
     let unfocus = (e: FocusEvent) => {
-      if (typed(e.target) && mode.value == 'insert') mode.value = 'normal'
+      if (typing(e.target) && mode.value == 'insert') mode.value = 'normal'
     }
-    addEventListener('focusin', focus)
-    addEventListener('focusout', unfocus)
+    document.addEventListener('focusin', focus)
+    document.addEventListener('focusout', unfocus)
 
     // Pointer clicks don't keep keyboard focus: a clicked tab/×/link would
     // otherwise swallow the next <space> (browsers activate the focused
@@ -350,10 +348,10 @@ export let Status = () => {
     }
     addEventListener('click', declick)
     return () => {
-      removeEventListener('keydown', key)
+      document.removeEventListener('keydown', key)
       document.removeEventListener('selectionchange', sel)
-      removeEventListener('focusin', focus)
-      removeEventListener('focusout', unfocus)
+      document.removeEventListener('focusin', focus)
+      document.removeEventListener('focusout', unfocus)
       removeEventListener('click', declick)
     }
   }, [])
@@ -486,7 +484,7 @@ export let Status = () => {
                   ? '-- INSERT --'
                   : mode.value == 'visual'
                   ? '-- VISUAL --'
-                  : 'NORMAL'}
+                  : '-- NORMAL --'}
               </Mode>
               {(msg.value || problem.value) && (
                 <Msg
