@@ -41,7 +41,10 @@ import { entityUrl } from '../../url.ts'
 // the snapshot like any component, so the bar re-renders itself as the
 // run moves), the log with the session's comments woven in by time, then
 // the pinned composer (Comments.tsx), which is the way to talk TO the
-// agent.
+// agent. The session never scrolls on its own: it takes its content's height,
+// the frame a page boxes it in (its own page, a card, a chat's box) or the
+// page around it scrolls, and the bar and composer stick to that scroller's
+// edges while the session is in view.
 //
 // Every substrate normalizes to one renderer row: process-backed and
 // graph-native Sessions alike subscribe to their ordered entry partition (a
@@ -427,9 +430,9 @@ let Row = ({ x, repo }: { x: Entry; repo?: string }) => {
   )
 }
 
-// The transcript's scroller, or the nearest host still owning that job.
-// Null in the TUI's fake DOM (no parentElement), which switches the feature
-// off there.
+// What scrolls the session: never the session itself, but the frame a page
+// boxes it in or the page around it. Null in the TUI's fake DOM (no
+// parentElement), which switches the feature off there.
 let scrollerOf = (n: HTMLElement | null) => {
   // No getComputedStyle off the browser (TUI fake DOM, linkedom mounts): there
   // is no scroller to find, so tail-pin/auto-grow simply switch off.
@@ -440,17 +443,32 @@ let scrollerOf = (n: HTMLElement | null) => {
   return null
 }
 
+// How far the session's end (its composer, or its last row) sits below what
+// its scroller shows: at most 0 while the reader can see it, and null once it
+// has scrolled away above.
+let below = (s: HTMLElement, session: HTMLElement) => {
+  let end = session.getBoundingClientRect().bottom
+  let top = s.getBoundingClientRect().top + s.clientTop
+  return end > top ? end - (top + s.clientHeight) : null
+}
+
 // The transcript loads from its tail in pages. This window caps rendering
 // while a page is held, and grows as the reader asks for older entries.
 // Distance from the bottom anchors the view across a prepend.
 //
-// Follow the tail: while the reader sits at the scroller's end, each new log
-// row pins it there again and the window slides (bounded); scroll up and it
-// stays put — and a new tail row then widens the window instead of letting the
-// start advance and unmount the row being read. Stickiness is sampled on scroll
-// events (before new rows land — right after a render the end has already moved
-// and measuring would always say "not at end"). The programmatic pin fires a
-// scroll event too, re-arming itself.
+// Follow the tail: while the reader can see the session's end, each new log
+// row brings it back into view and the window slides (bounded); scroll up and
+// it stays put — and a new tail row then widens the window instead of letting
+// the start advance and unmount the row being read. Stickiness is sampled on
+// scroll events (before new rows land — right after a render the end has
+// already moved and measuring would always say "not at end"). The
+// programmatic pin fires a scroll event too, re-arming itself.
+//
+// A session framed alone (its own page, a card, a chat's box) opens at its
+// tail and loads older rows as the reader nears its top. One drawn among a
+// page's other parts leaves the page where the reader put it: it follows its
+// tail only once the reader has scrolled its end into view, and older rows
+// come on a press.
 //
 // `enabled` is false in the TUI (no real scroller / getComputedStyle): there
 // the whole log renders as before, since the terminal owns its own scrollback.
@@ -465,18 +483,23 @@ let useTranscript = (
   loaded: number,
   load: () => void,
 ) => {
-  let frame = useRef<HTMLDivElement>(null)
+  let root = useRef<HTMLDivElement>(null)
   // Find the host's scroll container while the transcript is still empty.
   // Re-reading computed style after every appended tail forces the browser
   // to lay out the whole transcript just to rediscover the same ancestor.
   let scroller = useRef<HTMLElement | null | undefined>(undefined)
+  // Whether the scroller holds the session alone, and whether the reader can
+  // see its end: a session framed alone starts there.
+  let alone = useRef(false)
+  let stuck = useRef(false)
   let scroll = () => {
     if (scroller.current === undefined) {
-      scroller.current = scrollerOf(frame.current)
+      let parent = root.current?.parentElement ?? null
+      scroller.current = scrollerOf(parent)
+      alone.current = stuck.current = !!parent && scroller.current == parent
     }
     return scroller.current
   }
-  let stuck = useRef(true)
   let [shown, setShown] = useState(WINDOW)
   let anchor = useRef<number | null>(null)
   let start = enabled ? Math.max(0, total - shown) : 0
@@ -510,11 +533,13 @@ let useTranscript = (
     let s = scroll()
     if (!s) return
     let sample = () => {
+      let gap = below(s, root.current!)
       // within a scrollbar-rounding of the end still counts as AT it
-      stuck.current = s.scrollTop + s.clientHeight >= s.scrollHeight - 4
-      if ((startRef.current > 0 || page.current.more) && s.scrollTop < 400) {
-        older()
-      }
+      stuck.current = gap != null && gap <= 4
+      if (
+        alone.current && (startRef.current > 0 || page.current.more) &&
+        s.scrollTop < 400
+      ) older()
     }
     s.addEventListener('scroll', sample)
     return () => s.removeEventListener('scroll', sample)
@@ -532,14 +557,15 @@ let useTranscript = (
     if (d > 0 && newTail && !stuck.current) setShown((n) => n + d)
   }, [total, tail])
 
-  // Pin the bottom while stuck (the tail moved).
+  // Bring the end back into view while stuck (the tail moved).
   useLayoutEffect(() => {
-    if (!stuck.current) return
     let s = scroll()
-    if (s) s.scrollTop = s.scrollHeight
+    if (!s || !stuck.current) return
+    let gap = below(s, root.current!)
+    if (gap != null && gap > 0) s.scrollTop += gap
   }, [tail])
 
-  return { frame, start, older }
+  return { root, start, older }
 }
 
 /** Whether a session is drawn inside another page (a document's chat, a
@@ -605,7 +631,7 @@ export let Session = (
     trees.map((node) => ent(node.row.entity.eid)).filter(heard),
   )
   // Windowed from the tail on the web; the whole thread in the TUI.
-  let { frame, start, older } = useTranscript(
+  let { root, start, older } = useTranscript(
     thread.length,
     `${log.entries.at(-1)?.seq ?? 0}`,
     web,
@@ -643,7 +669,7 @@ export let Session = (
       )
   let showActivity = live || status == 'idle'
   return (
-    <Frame>
+    <Frame elRef={root}>
       <Head>
         <Dot status={status} />
         {embedded(e) && <Id e={e} />}
@@ -667,7 +693,7 @@ export let Session = (
         )}
       </Head>
       <SessionRelated eid={e.eid} />
-      <Panel elRef={frame}>
+      <Panel>
         {/* markdown, escaped of any markup by md.ts — as with a task body */}
         {fault && <Fault mod='error'>{fault}</Fault>}
         <Log>

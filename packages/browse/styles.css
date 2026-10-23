@@ -833,11 +833,21 @@ html {
   color: var(--muted);
   font-size: var(--small);
 }
-.Chat .Session {
+/* The box a chat gives its session, beside a page that stays put: the one
+   frame with a scroll area of its own. It keeps no overscroll of its own, so
+   a wheel that finds it at an end moves the page. */
+.Chat_Box {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
   min-height: 20rem;
   max-height: calc(100vh - 10rem);
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+}
+.Chat_Box > .Session {
+  flex: 1 0 auto;
 }
 @media (max-width: 900px) {
   .Show,
@@ -848,7 +858,7 @@ html {
     position: static;
     max-height: none;
   }
-  .Chat .Session {
+  .Chat_Box {
     max-height: 70vh;
   }
 }
@@ -1802,12 +1812,12 @@ a[data-ref]:hover {
   text-decoration: underline;
 }
 
-/* A session keeps every control in sight on a phone. Wide hosts place
-   references beside the transcript. */
+/* A session takes the height of what it holds and never scrolls on its own:
+   the frame that hosts it (its own page, a card, a chat's box) or the page it
+   sits in scrolls it, and its bar and composer stick to that scroller's edges
+   while it is in view. Wide hosts place references beside the transcript. */
 .Card_Scroll:has(> .Session) {
   padding: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 /* Every host of a session is its width container: the responsive grid
    below keys off the room the session actually has, not the viewport —
@@ -1816,27 +1826,30 @@ a[data-ref]:hover {
 .Card_Scroll:has(> .Session) {
   container-type: inline-size;
 }
+/* On its own page it fills the floor, so a short transcript keeps the
+   composer at the bottom. */
 .Shell_Body > .Session {
+  flex: 1 0 auto;
   padding: 0;
 }
 .Session {
   display: grid;
   gap: 0;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto 1fr auto;
   grid-template-areas:
     'head'
     'related'
     'references'
     'body'
     'foot';
-  height: 100%;
-  min-height: 100%;
   min-width: 0;
-  overflow: hidden;
+  /* Keeps its bar's and composer's bands inside it; unlike hidden, clip makes
+     no scroll container, so they stick to the scroller around it. */
+  overflow: clip;
 }
 .Session:not(:has(> .Session_References)) {
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto 1fr auto;
   grid-template-areas:
     'head'
     'related'
@@ -1845,6 +1858,8 @@ a[data-ref]:hover {
 }
 .Session_Head {
   grid-area: head;
+  position: sticky;
+  top: 0;
   z-index: 1;
   box-sizing: border-box;
   display: flex;
@@ -1854,6 +1869,9 @@ a[data-ref]:hover {
   padding: var(--half-gap) var(--gap);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+  /* A scroller sticks it inside its padding: this band covers the rows that
+     would show above it there. */
+  box-shadow: 0 calc(var(--gap) * -2) 0 0 var(--surface);
 }
 .SessionManage_Related {
   grid-area: related;
@@ -1876,8 +1894,6 @@ a[data-ref]:hover {
 .SessionManage_List {
   display: grid;
   gap: var(--half-gap);
-  max-height: min(22dvh, 10rem);
-  overflow-y: auto;
   padding: var(--half-gap) 0;
 }
 .SessionManage_Link {
@@ -1917,25 +1933,16 @@ a[data-ref]:hover {
   gap: var(--gap);
   align-content: start;
   min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
   padding: var(--half-gap) var(--gap) var(--gap);
 }
 .Session_References {
   grid-area: references;
   min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
   padding: var(--half-gap) var(--gap);
   border-bottom: 1px solid var(--border);
   background: var(--card);
   color: var(--muted);
   font-size: var(--small);
-}
-.Session_References[open] {
-  max-height: min(30dvh, 14rem);
 }
 .Session_ReferencesGist {
   color: var(--muted);
@@ -1968,7 +1975,7 @@ a[data-ref]:hover {
 @container (min-width: 50rem) {
   .Session {
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto 1fr auto;
     grid-template-areas:
       'head head'
       'related references'
@@ -1988,9 +1995,6 @@ a[data-ref]:hover {
   }
   .Session_References:not([open]) {
     justify-self: end;
-  }
-  .Session_References[open] {
-    max-height: none;
   }
 }
 /* The two-pane view (Split, T-17321). Same responsive shape as the
@@ -2057,12 +2061,15 @@ a[data-ref]:hover {
 /* The composer, pinned like the bar. */
 .Session_Foot {
   grid-area: foot;
+  position: sticky;
+  bottom: 0;
   z-index: 1;
   box-sizing: border-box;
   display: grid;
   background: var(--surface);
   border-top: 1px solid var(--border);
   padding: var(--half-gap) var(--gap);
+  box-shadow: 0 calc(var(--gap) * 2) 0 0 var(--surface); /* as the head's */
 }
 /* Task, role and lifecycle share the head's flexible lane. Titles give out
    first and paint their own ellipsis; the timestamp never claims a lane. */

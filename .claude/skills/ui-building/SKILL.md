@@ -86,7 +86,11 @@ A part lives in its author's kit as two files and a `Piece`
 
 A part is paint. It holds no state, reads no graph, imports no app, sets no
 outer layout (margins, widths), and leaves the parts nested in it to style
-themselves. That's what lets it sit anywhere and look the same. A part made of
+themselves. That's what lets it sit anywhere and look the same. Nor does it
+scroll itself: it takes its content's height, and only a frame a page puts
+around it gets a scroll area. In Chrome a box with `overflow: auto` and
+`overscroll-behavior: contain` holds the wheel even when nothing in it
+overflows, so a page drawing that part stops scrolling under the pointer. A part made of
 other parts holds them, the way `Say` holds a `Field` and a `Button`: an
 `input` a part styles itself is a second text box beside `Field`, with its own
 look in both hosts.

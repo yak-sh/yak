@@ -7,7 +7,7 @@
   min-width: 0;
 }
 .Section + .Section {
-  margin-top: var(--gap);
+  margin-top: calc(var(--gap) * 2);
 }
 .Section_Title {
   margin: 0;

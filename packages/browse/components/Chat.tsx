@@ -26,8 +26,9 @@ let Frame = block('aside', 'Chat', {
   New: 'button',
   Start: 'div',
   State: 'p',
+  Box: 'div',
 })
-let { References, Label, Head, New, Start, State } = Frame
+let { References, Label, Head, New, Start, State, Box } = Frame
 
 export let chatPlan = (
   ps: Provider[],
@@ -181,8 +182,12 @@ export let Starter = (
 }
 
 // This actor's conversation on `e`: the session it last bound here, or a
-// line to start one. Nothing for a reader with no actor.
-export let Conversation = ({ e }: { e: Ent }) => {
+// line to start one. Nothing for a reader with no actor. A page that draws it
+// among its parts lets the session scroll with it; the chat beside a page
+// that stays put gives it a box of its own to scroll in (`boxed`).
+export let Conversation = (
+  { e, boxed = false }: { e: Ent; boxed?: boolean },
+) => {
   let actor = myActor()
   let selected = useChatFor(actor, e.eid)
   let [fresh, setFresh] = useState(false)
@@ -201,7 +206,13 @@ export let Conversation = ({ e }: { e: Ent }) => {
           )}
         </Head>
         {selected && !fresh
-          ? <Entity eid={selected.eid} view='Session' />
+          ? (boxed
+            ? (
+              <Box>
+                <Entity eid={selected.eid} view='Session' />
+              </Box>
+            )
+            : <Entity eid={selected.eid} view='Session' />)
           : (
             <Starter
               e={e}
@@ -221,7 +232,7 @@ export let Chat = ({ e }: { e: Ent }) => {
     <Frame>
       <ReferenceList label='references' items={cited.out} />
       <ReferenceList label='referenced by' items={cited.in} held />
-      <Conversation e={e} />
+      <Conversation e={e} boxed />
     </Frame>
   )
 }
