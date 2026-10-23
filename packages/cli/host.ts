@@ -88,6 +88,7 @@ import {
 import { EFFECT, effects, expiration, released } from '@yaks/effects'
 import { type Local, peek, warm } from '@yaks/secrets'
 import { command, reporter, revision } from './report.ts'
+import { faults } from '@yaks/api'
 import {
   artifactsAt,
   type Backend,
@@ -411,7 +412,9 @@ let composed = async (
     { by: selfEid(), via: selfEid() },
     // Asked now and awaited only by a report: the commit is this run's, and
     // a command that reports nothing does not wait on git to learn it.
-    config.tracker && !opts.readOnly ? revision() : undefined,
+    config.tracker && !opts.readOnly
+      ? config.tracker.commit ?? revision()
+      : undefined,
     { command: command(Deno.args), roles: roles.join(',') },
   )
   opts.reader?.overrun?.((error) =>
@@ -435,6 +438,15 @@ let composed = async (
       : (await import('@yaks/sqlite/db')).open(path)
   let recorded: Traces | undefined
   let captureControl: ReturnType<typeof traceControl> | undefined
+  // What @yaks/api catches in this process and answers, or meets with nobody
+  // to answer (a page body that did not build, a socket, a subscription), is
+  // reported here too, named by where it was caught.
+  let unfault = faults((error, where) =>
+    void report(error, {
+      during: { process: selfEid() },
+      tags: { step: where },
+    })
+  )
   try {
     // An existing graph can refuse before any plugin runtime is imported.
     // Keep its connection; absent graphs wait for a valid assembly before
@@ -973,6 +985,7 @@ let composed = async (
             await wait('storage', () =>
               cleanup('close storage', () =>
                 sql.close()))
+            unfault()
             await wait('reports', () =>
               report.close())
           }
@@ -1014,6 +1027,7 @@ let composed = async (
       await cleanup('close traces', () => recorded?.close())
       await cleanup('close storage', () => opened?.close())
     } finally {
+      unfault()
       await report.close()
     }
     throw error

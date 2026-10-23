@@ -157,30 +157,34 @@ export let scopeOf = (url: URL) => {
     ? scope
     : null
 }
+/** A failure of this Worker, reported to its own queue with the entry that
+ * met it. */
+export let reporting = (env: Pick<Env, 'ERRORS' | 'CF_VERSION_METADATA'>) =>
+(
+  error: unknown,
+  entrypoint: string,
+  request?: Request,
+  eid?: string,
+) => {
+  let context = origin(
+    'yak-tracker',
+    env.CF_VERSION_METADATA?.id,
+    entrypoint,
+    request,
+    eid ? sha256(`${eid}|request`) : undefined,
+  )
+  return caught(error, {
+    sink: env.ERRORS ? queue(env.ERRORS) : () => {},
+    ...context,
+    eid,
+  })
+}
 export let worker = (
   env: Env,
   ticket: typeof sign = sign,
   now: () => number = Date.now,
 ) => {
-  let report = (
-    error: unknown,
-    entrypoint: string,
-    request?: Request,
-    eid?: string,
-  ) => {
-    let context = origin(
-      'yak-tracker',
-      env.CF_VERSION_METADATA?.id,
-      entrypoint,
-      request,
-      eid ? sha256(`${eid}|request`) : undefined,
-    )
-    return caught(error, {
-      sink: env.ERRORS ? queue(env.ERRORS) : () => {},
-      ...context,
-      eid,
-    })
-  }
+  let report = reporting(env)
   // Every call into an object goes through here. The object can be reset, the
   // connection to it lost, or the runtime can refuse it with its own opaque
   // internal error while it moves the object, as it does to every object a

@@ -115,12 +115,12 @@ because they span transactions; unkeyed requests keep their ordinary behavior.
 
 ## Exports
 
-| Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/api`        | `api`, `Options`, `Handler`, `Route`, `routed`, `Filter`; `Authenticate`, `signed`, `PeerWriter`; `ask`, `write`, `pour`, `poured`, `CHUNK`, `WriteContext`; `published`; `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`, `Opening`; `attach`, `clockReply`, `decode`, `Incoming`, `queue`, `receive`, `sink`, `Socket`, `Upgrade`; `denoUpgrade`, `denoListen`, `Listen`, `Listener`, `Addr`; `json`, `refusal`, `refuse`, `fault`, `Refusal`, `Unauthorized`; `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`; `timed` |
-| `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Import             | Exports                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/api`        | `api`, `Options`, `Handler`, `Route`, `routed`, `Filter`; `Authenticate`, `signed`, `PeerWriter`; `ask`, `write`, `pour`, `poured`, `CHUNK`, `WriteContext`; `published`; `subscriptions`, `Subs`, `Ask`, `Frame`, `Sink`, `Opening`; `attach`, `clockReply`, `decode`, `Incoming`, `queue`, `receive`, `sink`, `Socket`, `Upgrade`; `denoUpgrade`, `denoListen`, `Listen`, `Listener`, `Addr`; `json`, `refusal`, `refuse`, `fault`, `faults`, `Refusal`, `Unauthorized`; `served`, `requested`, `agent`, `Report`, `Watch`, `Answered`; `timed` |
+| `@yaks/api/vocab`  | `apiDoc`, `docs`, `description`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `@yaks/api/routes` | `handler`, `Hosting`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `@yaks/api/tools`  | `runs`, `Serving`, `PORT`, `HOSTNAME`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
 ## Query answers
 
@@ -629,17 +629,31 @@ A **refusal** is the JSON error body sent to a caller (`Refusal`): its error
 name, message, and enumerable details except `stack`. `refusal` constructs that
 body; `refuse` adds the HTTP status from
 [@yaks/graph](../graph/README.md#admission-and-schema-checks). `json` constructs
-a JSON response. `fault` logs errors whose status is at least 500, leaving
-expected client refusals unlogged.
+a JSON response. `fault` reports an error whose status is at least 500, with
+where it was caught, leaving expected client refusals unreported. It goes to the
+reporter a host installed with `faults`, which returns its removal, or to the
+console while none is. Every failure this package catches goes there: a socket
+message, a subscription refresh, a streamed import's failed line, and a server
+failure `refuse` answers. Under `served`, that last one is reported with its
+request instead, once.
 
 ```ts
-import { json, refusal, refuse, Unauthorized } from '@yaks/api'
+import { faults, json, refusal, refuse, Unauthorized } from '@yaks/api'
 import { Misfit } from '@yaks/graph/errors'
 import { equal } from '@yaks/testing'
 
+const caught: string[] = []
+const remove = faults((_error, where) => {
+  caught.push(where)
+})
 const error = new Unauthorized('sign in')
 equal(refusal(error), { error: 'Unauthorized', message: 'sign in' })
 equal(refuse(error).status, 401)
+const gone = new Request('https://shop.test/books?token=x', { method: 'PUT' })
+equal(refuse(new Error('disk gone'), gone).status, 500)
+remove()
+// The failure reached the reporter, named by where; the refusal did not.
+equal(caught, ['PUT /books'])
 equal(await json({ ready: true }).json(), { ready: true })
 // A write that did not fit the vocabulary is a `Refused` that says so.
 const misfit = new Misfit('book.pages is a number')
@@ -667,7 +681,7 @@ lines. An HTTP answer at 500 or over carries `x-request-id` and is handed to
 without query string, matched route, status, duration and reduced user agent.
 `served` watches any handler this way. An answer already carrying `x-request-id`
 is not reported again. `report` chooses where to keep the bundle; the default
-reports to the console. `requested` constructs it and `agent` reduces a
+reports it through `fault`. `requested` constructs it and `agent` reduces a
 `User-Agent`.
 
 ```ts

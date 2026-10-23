@@ -3,6 +3,7 @@
 import { equal, test } from '@yaks/testing'
 import { served } from './request.ts'
 import { requests } from './requests.ts'
+import { faults, refuse } from './refuse.ts'
 
 let read = (() => {
   let answer = Promise.withResolvers<Response>(), errors: unknown[] = []
@@ -43,6 +44,29 @@ test('an unexpected read failure is still reported before cancellation', async (
   broken.active.cancel()
   equal(response.status, 500)
   equal(broken.errors, [broken.error])
+})
+
+// A failure `refuse` answers under a watch is the watch's to report, once,
+// with its error: to the host's report, or through `fault` without one.
+let refused = async (report: boolean) => {
+  let error = new Error('disk gone'), told: unknown[] = []
+  let remove = faults((e, where) => told.push([e, where]))
+  try {
+    let answer = await served(
+      (request) => refuse(error, request),
+      report ? { report: (_request, e) => told.push(e) } : {},
+    )(new Request('http://test/blob/x?token=1'))
+    return { error, told, id: answer.headers.get('x-request-id') }
+  } finally {
+    remove()
+  }
+}
+
+test('a failure refuse answers under a watch is reported once, with its error', async () => {
+  let hosted = await refused(true)
+  equal(hosted.told, [hosted.error])
+  let bare = await refused(false)
+  equal(bare.told, [[bare.error, `GET /blob/x (request ${bare.id})`]])
 })
 
 let write = (() => {

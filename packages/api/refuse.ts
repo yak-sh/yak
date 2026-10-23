@@ -48,12 +48,48 @@ export let refusal = (err: unknown): Refusal => {
   return out
 }
 
-/** A server failure, said on the console with where it happened, so a
- * calling program's log watcher sees it; a refusal (below 500) is the
- * caller's and says nothing. */
-export let fault = (err: unknown, where: string): void => {
-  if (status(err) >= 500) console.error(`${where} failed —`, err)
+// Where a server failure goes: the reporter its host installed last, else the
+// console, so a failure met before any host installs one is still said.
+let reporters: ((err: unknown, where: string) => void)[] = []
+let said = (err: unknown, where: string) =>
+  console.error(`${where} failed —`, err)
+
+/** Report every server failure this package catches to `report`, with where
+ * it was caught: the host's own reporter, which tells its tracker. A failure
+ * answered to its caller and one with no caller at all (a socket's message, a
+ * subscription's refresh, a page body that did not build) go the same way.
+ * The newest installed is the one told; the function returned removes it. */
+export let faults = (
+  report: (err: unknown, where: string) => void,
+): () => void => {
+  reporters.push(report)
+  return () => {
+    let at = reporters.lastIndexOf(report)
+    if (at >= 0) reporters.splice(at, 1)
+  }
 }
+
+/** A server failure, reported with where it happened to the host's reporter
+ * ({@link faults}), or said on the console while none is installed; a refusal
+ * (below 500) is the caller's and says nothing. */
+export let fault = (err: unknown, where: string): void => {
+  if (status(err) < 500) return
+  let report = reporters.at(-1) ?? said
+  try {
+    report(err, where)
+  } catch (why) {
+    said(err, where)
+    said(why, `reporting ${where}`)
+  }
+}
+
+// The requests a watch is answering (./request.ts `served`), each with the
+// failure `refuse` answered it with: the watch reports that failure once, with
+// its request. A failure answered where nothing watches is reported here.
+let watched = new WeakMap<Request, unknown>()
+export let watch = (request: Request): void =>
+  void watched.set(request, undefined)
+export let cause = (request: Request): unknown => watched.get(request)
 
 /** A JSON response. */
 export let json = (body: unknown, code = 200): Response =>
@@ -62,11 +98,22 @@ export let json = (body: unknown, code = 200): Response =>
     headers: { 'content-type': 'application/json' },
   })
 
-/** A thrown error as its response: the refusal body, at its HTTP status. When
- * a request is supplied, server failures are logged with the method and path,
- * never the query string, headers or body. Expected client refusals are not
- * logged at all. */
+/** A thrown error as its response: the refusal body, at its HTTP status. A
+ * server failure is reported once: by the watch the request is answered under
+ * (`served`), with its request, or else here ({@link fault}), with the method
+ * and path when a request is supplied, never the query string, headers or
+ * body. An expected client refusal is not reported at all. */
 export let refuse = (err: unknown, request?: Request): Response => {
-  if (request) fault(err, `${request.method} ${new URL(request.url).pathname}`)
-  return json(refusal(err), status(err))
+  let code = status(err)
+  if (request && watched.has(request)) {
+    if (code >= 500) watched.set(request, err)
+  } else {
+    fault(
+      err,
+      request
+        ? `${request.method} ${new URL(request.url).pathname}`
+        : 'request',
+    )
+  }
+  return json(refusal(err), code)
 }

@@ -1,6 +1,7 @@
 // Runtime retention for tracker delivery and its bounded repeat windows.
 import { waitUntil } from 'cloudflare:workers'
-import { within } from './defects.ts'
+import { faults } from '@yaks/api'
+import { caught, within } from './defects.ts'
 import { origin } from '@yaks/tracker/report'
 import type { Env } from './env.ts'
 import { learn } from './running.ts'
@@ -23,6 +24,11 @@ let clock = {
     }
   },
 }
+
+// What @yaks/api catches and answers, or meets with nobody to answer (a
+// socket's message, a subscription's refresh, a store's answer at 500), is a
+// failure of ours, reported where it was caught in the invocation it ran in.
+faults((error, where) => caught(error, { request: where }))
 
 // A Durable Object's state, when the invocation is one of its own.
 let own = (state: unknown): state is { storage: Own } =>

@@ -1,12 +1,18 @@
 // Runtime entrypoints are the only Cloudflare inheritance in this Worker.
 // The graph, queue consumer and authenticated doors also run in RAM fixtures.
-import { DurableObject } from 'cloudflare:workers'
+import { DurableObject, env, waitUntil } from 'cloudflare:workers'
+import { faults } from '@yaks/api'
 import { type State, Tracker as ObjectStore } from './object.ts'
-import { type Env, worker } from './worker.ts'
+import { type Env, reporting, worker } from './worker.ts'
 import type { Bundle } from '@yaks/graph'
 import type { Wire } from '@yaks/durable-object'
 import type { Message } from './queue.ts'
 import type { Explanation } from '@yaks/tracker/resolution'
+
+// What @yaks/api catches and answers here, or meets with nobody to answer (a
+// socket's message, a subscription's refresh), is reported to this Worker's
+// own queue, named by where it was caught, before the invocation ends.
+faults((error, where) => waitUntil(reporting(env as Env)(error, where)))
 
 export class Tracker extends DurableObject<Env> {
   tracker: ObjectStore

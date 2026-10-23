@@ -9,13 +9,14 @@
 // name one thing.
 //
 // Where the bundle goes is not this package's word. {@link served} hands it to
-// the `report` its host supplies, with the error when one was thrown; a host
-// that supplies none has it said on the console, as a failure was before.
+// the `report` its host supplies, with the error when one was thrown or
+// `refuse` answered one; a host that supplies none has the failure go where
+// every other failure here goes (./refuse.ts `fault`).
 
 import type { Bundle } from '@yaks/graph'
 import { status } from '@yaks/graph/errors'
 import { during, link, parent, peek, unlink } from '@yaks/trace'
-import { fault, json, refusal } from './refuse.ts'
+import { cause, fault, json, refusal, watch } from './refuse.ts'
 import type { Handler } from './route.ts'
 import { receive } from './requests.ts'
 
@@ -132,13 +133,12 @@ export let requested = (
   }
 }
 
-// The report a host that supplied none gets: the console line a failure was
-// always said with, now naming the id its caller holds.
+// The report a host that supplied none gets: a fault, where it names the id
+// its caller holds. An answer at 500 that no error explains is one too.
 let said: Report = (b, err) => {
   let r = b.request as { method: string; url: string; status: number }
   let where = `${r.method} ${new URL(r.url).pathname} (request ${b.entity.eid})`
-  if (err === undefined) console.error(`${where} answered ${r.status}`)
-  else fault(err, where)
+  fault(err === undefined ? `answered ${r.status}` : err, where)
 }
 
 /** What {@link served} is told by the host it serves: where a request that
@@ -153,12 +153,14 @@ export type Watch = {
 /**
  * `handle`, watched. Each answer is timed; one at 500 or over, thrown or
  * returned, is answered with an `x-request-id` and reported as a `request`
- * bundle under that id. A thrown error is answered as its refusal body. An
- * answer that already carries an `x-request-id` was reported by whoever
- * answered it, so a watched handler inside another is reported once.
+ * bundle under that id, with the error thrown or the one `refuse` answered.
+ * A thrown error is answered as its refusal body. An answer that already
+ * carries an `x-request-id` was reported by whoever answered it, so a watched
+ * handler inside another is reported once.
  */
 export let served =
   (handle: Handler, o: Watch = {}): Handler => async (request) => {
+    watch(request)
     let c = o.graph && peek(o.graph)
     // Nested served handlers share this request's locally trusted parent.
     let span = c && !parent(o.graph!, request)
@@ -203,7 +205,7 @@ export let served =
       route: o.route?.(request),
     })
     try {
-      ;(o.report ?? said)(b, err)
+      ;(o.report ?? said)(b, err ?? cause(request))
     } catch (why) {
       fault(why, `report ${id}`)
     }

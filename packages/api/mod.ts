@@ -70,6 +70,7 @@ export { published } from './publish.ts'
 export { readBody } from './body.ts'
 export {
   fault,
+  faults,
   json,
   type Refusal,
   refusal,

@@ -55,7 +55,7 @@ export let reporter = (
   let pending = new Set<Promise<void>>()
   let report = async (error: unknown, context: Partial<Context> = {}) => {
     try {
-      console.error('box failed —', error)
+      console.error(`${context.tags?.step ?? 'box'} failed —`, error)
     } catch { /* telemetry cannot break the caller */ }
     if (!file) return
     let at = await commit
