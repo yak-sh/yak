@@ -87,14 +87,15 @@ let composed = await (async () => {
     Render: () => h('pre', { class: 'Composed' }, 'what an agent reads'),
   }])
   let root = document.querySelector('main')!
+  let eid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab'
   let e = {
-    eid: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab',
+    eid,
     num: 2,
     kind: 'persona',
     refs: [],
     kids: [],
-    persona: {},
-    doc: { title: 'Reviewer', body: 'its own words' },
+    persona: { eid },
+    doc: { eid, title: 'Reviewer', body: 'its own words' },
   }
   try {
     render(h(DebugTabs, { e }, h('i', {}, 'components')), root)
