@@ -17,6 +17,19 @@
         }
       }
     },
+    "Order": {
+      "component": true,
+      "type": "object",
+      "sync": "none",
+      "durable": "connection",
+      "description": "Where an entity dragged over an ordered list (@yaks/ux Order) would land, on the consumer-named page entity; missing state is none dragged over it.",
+      "properties": {
+        "at": {
+          "type": "number",
+          "description": "the index of the row it would land before; the number of rows, after the last"
+        }
+      }
+    },
     "Edit": {
       "component": true,
       "type": "object",

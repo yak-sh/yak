@@ -60,6 +60,34 @@ await g.apply([{ entity: { eid: 'p2' }, $delete: true }])
 equal(await g.read('.edge'), [])
 ```
 
+## Put a link in its place
+
+Where order matters, a list of links is drawn by `edge.ord`. `placed()` takes
+the links of a list in the order they are drawn, the link to put and its new
+index among the others, and gives the bundles that put it there: one of them
+moving, or a new link (`link()`) joining. Between neighbours that each have a
+position, the moved link alone is written, halfway between them. A list without
+positions is numbered from 1 in its new order, and only the links whose position
+changes are written.
+
+```ts
+import { equal } from '@yaks/testing'
+import { link, placed } from '@yaks/edge'
+
+let [a, b, c] = ['a', 'b', 'c'].map((to, i) => link('p', 'cites', to, i + 1))
+// c between a and b: c alone, halfway
+equal(placed([a, b, c], c, 1), [{ entity: c.entity, edge: { ord: 1.5 } }])
+// a list with no positions yet is numbered in its new order
+let loose = ['a', 'b', 'c'].map((to) => link('p', 'cites', to))
+equal(placed(loose, loose[2], 0).map((x) => x.edge), [
+  { ord: 1 },
+  { ord: 2 },
+  { ord: 3 },
+])
+// a link joining comes whole, with its place
+equal(placed([a, b], link('p', 'cites', 'd'), 2), [link('p', 'cites', 'd', 3)])
+```
+
 `edgeEid(from, relation, to)` hashes `from|relation|to` with SHA-256 and formats
 it as the graph's derived UUID. The same endpoints and component name identify
 one link. Direction matters. `link()` computes this eid; `unlink()` removes only
@@ -77,6 +105,7 @@ Both endpoints are [references](../vocab/README.md#routing-and-references) with
 | `@yaks/edge`       | `edgeDoc`, `EDGE`: component declaration and name; `edgeKeywords`, `EDGE_URI`: keyword registration                      |
 | `@yaks/edge`       | `relations`, `names`, `reversed`: interpret relation declarations                                                        |
 | `@yaks/edge`       | `link`, `unlink`, `edgeEid`: create and remove links and compute eids                                                    |
+| `@yaks/edge`       | `placed`: put a link in its place among the others of its list                                                           |
 | `@yaks/edge`       | `tagOf`, `derive`: find the relation component and supply eid derivation                                                 |
 | `@yaks/edge`       | `edges`, `stated`: graph plugin and validation hook                                                                      |
 | `@yaks/edge`       | `walk`, `Walk`, `Dir`: storage traversal; `traverse`: SQL compiler extension                                             |

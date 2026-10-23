@@ -13,7 +13,9 @@
  *
  * Whatever a topic holds or cites is drawn by its own renderer, asked for as
  * `Topic.List.Tile`: a subtopic as its cover (`TopicTile`), a belief as what
- * it states (@yaks/memory), anything else as it reads in any list.
+ * it states (@yaks/memory), anything else as it reads in any list. Each part
+ * is an ordered list edited in place: a row dragged between two others is
+ * put there, and opens where it stands on its title and body.
  *
  * An archived belief is kept, not live, so the beliefs part lists the live
  * ones and opens the archived ones on a press, muted.
@@ -30,8 +32,8 @@ import {
   type Asks,
   type Bundle,
   edited,
+  Held,
   type Io,
-  mention,
   Part,
   type Props,
   usePageNotes,
@@ -118,47 +120,39 @@ let Contents = ({ e, io, notes }: Of): JSX.Element => {
   )
 }
 
-/** One relation's far ends, each drawn by its own renderer, in edge order. */
-let Held = (
+/** One part's far ends, each drawn by its own renderer, in edge order: an
+ * ordered list edited in place (@yaks/inspect `Held`), which an entity
+ * carried from elsewhere joins where a part names one relation. */
+let Relation = (
   { e, io, notes, heading, rels, edges, ends }: Of & {
     heading: string
     rels: string[]
     edges: Bundle[]
     ends?: Answer
   },
-): JSX.Element | null => {
-  if (!edges.length) return null
-  let held = new Map(rows(ends).map((b) => [b.entity.eid, b]))
-  return h(
-    Part,
-    {
-      io,
-      eid: e.entity.eid,
-      subject: io.id(e),
-      heading,
-      count: edges.length,
-      notes,
-    },
-    h(
-      ui.Rows,
-      {},
-      edges.map((b) => {
-        let to = str(b, 'edge', 'to')
-        let end = held.get(to)
-        return h(
-          ui.Rows.Item,
-          { key: b.entity.eid, 'data-held': to },
-          rels.length > 1 ? h(ui.Rows.Kind, {}, rels.find((r) => b[r])) : null,
-          end
-            ? io.show(end, 'Topic.List.Tile', {})
-            : ends?.ready
-            ? [mention(io, to), ' is gone']
-            : h(ui.Loading, {}),
-        )
+): JSX.Element | null =>
+  edges.length
+    ? h(
+      Part,
+      {
+        io,
+        eid: e.entity.eid,
+        subject: io.id(e),
+        heading,
+        count: edges.length,
+        notes,
+      },
+      h(Held, {
+        io,
+        from: e.entity.eid,
+        links: edges,
+        ends,
+        tile: 'Topic.List.Tile',
+        empty: '',
+        tag: rels.length == 1 ? rels[0] : undefined,
       }),
-    ),
-  )
-}
+    )
+    : null
 
 /** The archived beliefs, asked for only once they are opened. */
 let Archived = ({ e, io }: { e: Bundle; io: Io }): JSX.Element => {
@@ -270,7 +264,7 @@ export let TopicPage = ({ e, io, got }: Props): JSX.Element => {
     h(Ask, { e, io }),
     h(Contents, { e, io, notes }),
     ...PARTS.map(([heading, rels]) =>
-      h(Held, {
+      h(Relation, {
         key: heading,
         e,
         io,

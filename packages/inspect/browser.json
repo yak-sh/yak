@@ -28,6 +28,7 @@
     "@preact/signals": "npm:@preact/signals@^2.9.0",
     "preact": "npm:preact@^10.29.1",
     "preact/hooks": "npm:preact@^10.29.1/hooks",
-    "@yaks/ux": "../ux/mod.ts"
+    "@yaks/ux": "../ux/mod.ts",
+    "@yaks/edge": "../edge/mod.ts"
   }
 }

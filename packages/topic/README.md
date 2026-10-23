@@ -180,7 +180,9 @@ open; stacked, as on a phone, the page comes first. The page alone is its
   conversation (`Conversation`; browse's chat), whose first message opens a
   session on the topic wearing the oracle; then the contents, as markdown;
 - what it contains, what to understand first, what is related and its sources,
-  each in edge order;
+  each in edge order, an ordered list edited in place (@yaks/inspect's `Held`):
+  a row dragged between two others is put there, and opens where it stands on
+  its title and body;
 - the beliefs about it, newest first, and the archived ones on a press, muted;
 - the comments on it, with a line to write one, where the host draws a thread
   (`Comments`; @yaks/kernel's in browse), each stamped as its writer's;

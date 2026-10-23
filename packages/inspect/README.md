@@ -44,6 +44,31 @@ editing; changes are emitted as bundles. Notes are comments and tasks about the
 entity and heading where they were left. Page-only table order, paging, editing
 and refusal state use the `/front` vocabulary.
 
+## What an entity holds, in order
+
+`Held` draws what an entity holds by its links as an ordered list edited in
+place, for any package's page: each row is the entity a link leads to, drawn by
+the view the caller names (`tile`), in the order the caller gives the links.
+Where the host takes edits, a row dragged between two others is put there, which
+writes the links' positions (`edge.ord`, @yaks/edge's `placed`), and an entity
+carried from elsewhere (@yaks/ux's `carry`) joins the list where it is dropped,
+linked by `tag`; `join` says what else that writes, or refuses it. Each row
+opens in place on the title and body of what it leads to, typed over where they
+stand (@yaks/ux's `Edit.Text`). @yaks/persona's binder and @yaks/topic's page
+draw their lists with it.
+
+```ts ignore
+h(Held, {
+  io,
+  from,
+  links,
+  ends,
+  tile: 'Topic.List.Tile',
+  tag: 'contains',
+  empty: 'nothing yet',
+})
+```
+
 ## Code written for a storage, in a view
 
 A view can run a function written for a storage, such as a package's composer,

@@ -48,3 +48,56 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* A list put in order by dragging its rows. A row that can be picked up says
+   so under the pointer, and a line says where a dragged one would land. */
+.Rows-ordered > .Rows_Item[draggable='true'] {
+  cursor: grab;
+}
+.Rows_Item-before {
+  box-shadow: 0 -2px 0 var(--accent);
+}
+.Rows_Item-after {
+  box-shadow: 0 2px 0 var(--accent);
+}
+
+/* A row that opens in place: a glyph pressed beside what it says, and, while
+   open, what it opens, beneath it, hung off a rule. */
+.Rows_Line {
+  display: flex;
+  align-items: center;
+  gap: var(--half-gap);
+  min-width: 0;
+}
+.Rows_Line > :last-child {
+  flex: 1;
+  min-width: 0;
+}
+.Rows_Toggle {
+  font: inherit;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0 4px;
+  min-height: var(--tap);
+  cursor: pointer;
+}
+.Rows_Toggle:hover {
+  color: var(--text);
+  background: var(--soft);
+}
+.Rows_Toggle:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.Rows_Toggle:disabled {
+  visibility: hidden;
+}
+.Rows_Detail {
+  display: grid;
+  gap: var(--half-gap);
+  margin: var(--half-gap) 0 var(--gap) var(--gap);
+  padding-left: var(--gap);
+  border-left: 1px solid var(--border2);
+  min-width: 0;
+}

@@ -3,13 +3,18 @@
  * an agent besides. A persona's head names the project it works for; under
  * its own text come the documents it carries, said in full in the order an
  * agent reads them (`contains`), the ones it names in its Reads list
- * (`reads`), and last, behind a press, the memories in its scope that it
- * carries neither way. A row dragged onto another list moves there: onto
- * Carries or Reads it is linked by that relation and unlinked from the other,
- * onto Not carried it is unlinked from both. Anything that carries an entity
- * (@yaks/ux `carry`), a row of the desk or of any list, can be dropped the
- * same way. A document on both lists is said once, in full, and the binder
- * says so.
+ * (`reads`), in the order they are listed, and last, behind a press, the
+ * memories in its scope that it carries neither way.
+ *
+ * Carries and Reads are each an ordered list edited in place (@yaks/inspect
+ * `Held`): a row dragged between two others is put there, which is the order
+ * an agent reads it in, and a row opens where it stands on its document's
+ * title and body, to type over. A row dragged onto another list moves there:
+ * onto Carries or Reads it is linked by that relation, where it is dropped,
+ * and unlinked from the other; onto Not carried it is unlinked from both.
+ * Anything that carries an entity (@yaks/ux `carry`), a row of the desk or of
+ * any list, can be dropped the same way. A document on both lists is said
+ * once, in full, and the binder says so.
  *
  * A skill's binder is its description and its instructions, as an agent
  * loads them.
@@ -35,11 +40,12 @@ import {
   type Asks,
   type Bundle,
   edited,
+  Held,
   type Io,
   mention,
   type Props,
 } from '@yaks/inspect'
-import { EDGE, link, relations, unlink } from '@yaks/edge'
+import { EDGE, relations, unlink } from '@yaks/edge'
 import { PERSONA } from './comp.ts'
 import { CARRIES, READS, served } from './worn.ts'
 
@@ -82,27 +88,20 @@ export let asks = (e: Bundle, io: Io): Asks => {
   }
 }
 
-/** The bundles that move `to` onto one of a persona's lists: linked by
- * `tag` and unlinked from every other of `tags` it is on now; with no `tag`,
- * unlinked from them all. */
+/** The bundles that take `to` off each of a persona's lists named by
+ * `tags` that it is on: what a row leaving them writes. */
 /// let edge = (rel: string, to: string) => ({ entity: { eid: rel + to }, edge: { from: 'p', to }, [rel]: {} })
-/// moved('p', 'm', 'reads', ['contains', 'reads'], [edge('contains', 'm')]).map((b) => Object.keys(b).slice(1))
-///   -> [['edge', 'contains'], ['edge', 'reads']]
-/// moved('p', 'm', 'contains', ['contains', 'reads'], [edge('contains', 'm')]) -> []
-/// moved('p', 'm', undefined, ['contains', 'reads'], [edge('reads', 'm')]).length -> 1
-export let moved = (
+/// leaving('p', 'm', ['reads'], [edge('contains', 'm')]) -> []
+/// leaving('p', 'm', ['contains', 'reads'], [edge('reads', 'm')]).map((b) => Object.keys(b).slice(1))
+///   -> [['edge', 'reads']]
+export let leaving = (
   from: string,
   to: string,
-  tag: string | undefined,
   tags: string[],
   out: Bundle[],
-): Bundle[] => {
-  let has = (t: string) => out.some((b) => b[t] && far(b) == to)
-  return [
-    ...tags.filter((t) => t != tag && has(t)).map((t) => unlink(from, t, to)),
-    ...tag && !has(tag) ? [link(from, tag, to)] : [],
-  ]
-}
+): Bundle[] =>
+  tags.filter((t) => out.some((b) => b[t] && far(b) == to))
+    .map((t) => unlink(from, t, to))
 
 let drag = (io: Io, eid: string) =>
   io.edits
@@ -112,14 +111,15 @@ let drag = (io: Io, eid: string) =>
     }
     : {}
 
-/** One list of a persona's binder, a place to drop a row on. */
+/** One list of a persona's binder; one that takes a row anywhere on it
+ * says what a drop there does (`onDrop`). */
 let List = (
   { io, heading, sub, count, onDrop, children }: {
     io: Io
     heading: string
     sub: string
     count?: number
-    onDrop: (ev: DragEvent) => void
+    onDrop?: (ev: DragEvent) => void
     children?: ComponentChildren
   },
 ): JSX.Element =>
@@ -127,7 +127,7 @@ let List = (
     ui.Section,
     {
       'data-section': heading,
-      ...io.edits
+      ...io.edits && onDrop
         ? {
           onDragOver: (ev: DragEvent) => carries(ev) && ev.preventDefault(),
           onDrop,
@@ -144,8 +144,9 @@ let List = (
     children,
   )
 
-/** Each of some entities, drawn by its own renderer, in the order given. */
-let Held = (
+/** The memories it carries neither way, each drawn by its own renderer, to
+ * be dragged onto a list. */
+let Loose = (
   { io, ids, ends, empty }: {
     io: Io
     ids: string[]
@@ -202,17 +203,34 @@ export let PersonaBinder = ({ e, io, got }: Props): JSX.Element => {
   let scoped = got.scoped?.count
   let left = scoped == null ? undefined : Math.max(0, scoped - mine)
 
-  // A row dropped here moves to this list; what carries nothing to say, or
-  // the persona itself, is let fall.
-  let drop = (tag?: string) => (ev: DragEvent) => {
+  // What carries nothing to say, or the persona itself, is let fall.
+  let fits = (to: string) => {
+    let b = io.get(to)
+    return to != eid && !(b && !b.doc && !b.content)
+  }
+  // A row joining one list leaves the other.
+  let join = (tag: string) => (to: string) =>
+    fits(to) ? leaving(eid, to, both.filter((t) => t != tag), out) : undefined
+  // A row dropped on Not carried leaves both.
+  let drop = (ev: DragEvent) => {
     let to = carried(ev)
-    let b = to && io.get(to)
-    if (!to || to == eid || b && !b.doc && !b.content) return
+    if (!to || !fits(to)) return
     ev.preventDefault()
     ev.stopPropagation()
-    let batch = moved(eid, to, tag, both, out)
+    let batch = leaving(eid, to, both, out)
     if (batch.length) void io.apply(batch)
   }
+  let list = (tag: string, links: Bundle[]) =>
+    h(Held, {
+      io,
+      from: eid,
+      links,
+      ends,
+      tile: 'Context.List.Tile',
+      empty: 'nothing yet: drop one here',
+      tag,
+      join: join(tag),
+    })
 
   let at = disclosureAt(`${eid}/not carried`)
   let open = io.state(at) ?? { entity: { eid: at } }
@@ -240,14 +258,8 @@ export let PersonaBinder = ({ e, io, got }: Props): JSX.Element => {
           heading: 'Carries',
           sub: 'said in full to every agent wearing it, in this order',
           count: held.length,
-          onDrop: drop(carriesTag),
         },
-        h(Held, {
-          io,
-          ids: held.map(far),
-          ends,
-          empty: 'nothing yet: drop one here',
-        }),
+        list(carriesTag, held),
       )
       : null,
     readsTag
@@ -258,14 +270,8 @@ export let PersonaBinder = ({ e, io, got }: Props): JSX.Element => {
           heading: 'Reads',
           sub: 'named in its Reads list, for an agent to ask for',
           count: named.length,
-          onDrop: drop(readsTag),
         },
-        h(Held, {
-          io,
-          ids: named.map(far),
-          ends,
-          empty: 'nothing yet: drop one here',
-        }),
+        list(readsTag, named),
       )
       : null,
     got.loose
@@ -278,7 +284,7 @@ export let PersonaBinder = ({ e, io, got }: Props): JSX.Element => {
             ? 'memories of the project it works for that it carries neither way'
             : 'memories of no project that it carries neither way',
           count: left,
-          onDrop: drop(),
+          onDrop: drop,
         },
         h(
           Disclosure,
@@ -293,7 +299,7 @@ export let PersonaBinder = ({ e, io, got }: Props): JSX.Element => {
             ],
             summaryProps: { mod: 'quiet' },
           },
-          h(Held, {
+          h(Loose, {
             io,
             ids: loose.map((b) => b.entity.eid),
             ends: got.loose,

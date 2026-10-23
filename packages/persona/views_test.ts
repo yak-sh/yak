@@ -2,7 +2,8 @@
 // contract browse uses: every persona and skill on the desk, found by what is
 // typed; a persona opened beside it, its binder listing what it carries in
 // the order an agent reads it, what it names and what it leaves; a row
-// dropped on another list moving there; and a skill's instructions.
+// dragged within a list or onto another put where it is dropped, and opened
+// in place on its words; and a skill's instructions.
 import { h, render } from 'preact'
 import { renderToString } from 'preact-render-to-string'
 import { parseHTML } from 'linkedom'
@@ -19,7 +20,7 @@ import { taskDoc } from '@yaks/task/vocab'
 import { projectDoc } from '@yaks/project/vocab'
 import { memoryDoc } from '@yaks/memory/vocab'
 import { toolsDoc } from '@yaks/tools/vocab'
-import { CARRIED, type Host as UxHost, Ux } from '@yaks/ux'
+import { CARRIED, disclosureAt, type Host as UxHost, Ux } from '@yaks/ux'
 import {
   all,
   type Answer,
@@ -32,7 +33,7 @@ import { personaDoc } from './comp.ts'
 import { inspectViews } from './inspect.ts'
 import { FINDING } from './desk.ts'
 import { voice } from './voice.ts'
-import { wear } from './worn.ts'
+import { served, wear } from './worn.ts'
 import { renderSkill } from './skill-text.ts'
 
 let vocab = loadVocab([
@@ -46,7 +47,6 @@ let vocab = loadVocab([
   memoryDoc,
   personaDoc,
 ], [kernelKeywords, edgeKeywords])
-let store = ram(vocab)
 
 let doc = (eid: string, title: string, more: Bundle = { entity: { eid } }) => ({
   ...more,
@@ -59,36 +59,40 @@ let memory = (eid: string, title: string, scope?: string) =>
     memory: scope ? { scope } : {},
     created: { at: `2026-10-0${eid.length}T00:00:00Z` },
   })
-store.tx((tx) =>
-  tx.patch([
-    { entity: { eid: 'tasks' }, project: {}, doc: { title: 'Task Graph' } },
-    doc('common', 'tasks-v2 common persona', {
-      entity: { eid: 'common' },
-      persona: { home: 'tasks' },
-    }),
-    doc('fleet', 'fleet base', { entity: { eid: 'fleet' }, persona: {} }),
-    doc('testing', 'testing', {
-      entity: { eid: 'testing' },
-      skill: { invoke: 'both' },
-      content: { body: 'Run **only** what your change could break.' },
-    }),
-    doc('ui', 'ui-building', {
-      entity: { eid: 'ui' },
-      skill: {},
-      content: { body: 'Build with the kit.' },
-    }),
-    memory('m1', 'signal over noise', 'tasks'),
-    memory('m22', 'map', 'tasks'),
-    memory('m333', 'one idea', 'tasks'),
-    memory('m4444', 'not yet carried', 'tasks'),
-    memory('m55555', 'for everyone'),
-    link('common', 'contains', 'm22'),
-    link('common', 'contains', 'm1', 1),
-    link('common', 'contains', 'fleet'),
-    link('common', 'reads', 'm333'),
-    link('common', 'reads', 'm22'),
-  ])
-)
+let seed = [
+  { entity: { eid: 'tasks' }, project: {}, doc: { title: 'Task Graph' } },
+  doc('common', 'tasks-v2 common persona', {
+    entity: { eid: 'common' },
+    persona: { home: 'tasks' },
+  }),
+  doc('fleet', 'fleet base', { entity: { eid: 'fleet' }, persona: {} }),
+  doc('testing', 'testing', {
+    entity: { eid: 'testing' },
+    skill: { invoke: 'both' },
+    content: { body: 'Run **only** what your change could break.' },
+  }),
+  doc('ui', 'ui-building', {
+    entity: { eid: 'ui' },
+    skill: {},
+    content: { body: 'Build with the kit.' },
+  }),
+  memory('m1', 'signal over noise', 'tasks'),
+  memory('m22', 'map', 'tasks'),
+  memory('m333', 'one idea', 'tasks'),
+  memory('m4444', 'not yet carried', 'tasks'),
+  memory('m55555', 'for everyone'),
+  link('common', 'contains', 'm22'),
+  link('common', 'contains', 'm1', 1),
+  link('common', 'contains', 'fleet'),
+  link('common', 'reads', 'm333'),
+  link('common', 'reads', 'm22'),
+]
+let fresh = () => {
+  let at = ram(vocab)
+  at.tx((tx) => tx.patch(seed))
+  return at
+}
+let store = fresh()
 
 let asked = (q: string): Answer =>
   q.endsWith('&.count')
@@ -144,6 +148,13 @@ let host = (state: Bundle[] = [], wrote: Bundle[][] = []): Io => {
 }
 let typing = (said: string) =>
   ({
+    vocab,
+    write: () => {},
+    front: {
+      mutate: () => {},
+      watch: () => ({ value: [], subscribe: () => () => {} }),
+      ent: () => undefined,
+    },
     drafts: {
       text: (at: string) => at == FINDING ? said : '',
       type: () => {},
@@ -212,35 +223,70 @@ let skillMd = source(await mounted('testing', 'Markdown'))
 let workshopMd = source(await mounted('common', 'Context'))
 let said = voice(vocab)((await wear(store, vocab)('common'))!)
 
-// Rows dropped on the binder's lists, as a browser would: each drop's batch.
-let dropped = (() => {
+// A persona's lists, read from a store: the far ends of each, in the order
+// an agent reads them.
+let lists = (at = store) =>
+  Object.fromEntries(
+    ['contains', 'reads'].map((rel) => [
+      rel,
+      at.read(`.edge.from=common&.${rel}&*`).toSorted(served)
+        .map((b) => (b.edge as { to: string }).to),
+    ]),
+  )
+
+// Each row dropped on the binder, as a browser would, at the top of the list
+// (`top`) or anywhere else on it: the lists after its batch is written, or
+// nothing where it writes nothing.
+let dropped = await (async () => {
   let { document } = parseHTML('<html><body><main></main></body></html>')
   let g = globalThis as { document?: unknown }
   let prior = g.document
   g.document = document
   let wrote: Bundle[][] = []
   let root = document.querySelector('main')!
-  let drop = (heading: string, eid: string) => {
+  let drop = async (heading: string, eid: string, top = false) => {
     let ev = new document.defaultView!.Event('drop', { bubbles: true })
     Object.assign(ev, {
       dataTransfer: { types: [CARRIED], getData: () => eid },
+      clientY: top ? -1 : 1,
     })
-    part(root, heading)!.dispatchEvent(ev)
+    let at = part(root, heading)!
+    ;(at.querySelector('[role=list]') ?? at).dispatchEvent(ev)
+    await new Promise((go) => setTimeout(go, 0))
+    let batch = wrote.splice(0)[0]
+    if (!batch) return undefined
+    let after = fresh()
+    after.tx((tx) => tx.patch(batch))
+    return lists(after)
   }
   try {
     render(tree('common', 'Binder', host([], wrote), ''), root)
-    drop('Reads', 'm1')
-    drop('Carries', 'm333')
-    drop('Not carried', 'm22')
-    drop('Carries', 'common')
+    return {
+      top: await drop('Carries', 'm22', true),
+      across: await drop('Reads', 'm1', true),
+      end: await drop('Carries', 'm333'),
+      left: await drop('Not carried', 'm22'),
+      self: await drop('Carries', 'common'),
+      still: await drop('Carries', 'm1', true),
+    }
   } finally {
     render(null, root)
     g.document = prior
   }
-  return wrote.map((bs) =>
-    bs.map((b) => Object.keys(b).filter((k) => k != 'entity' && b[k]))
-  )
 })()
+
+// A carried document opened where it stands.
+let link22 = store.read('.edge.from=common&.contains&*')
+  .find((b) => (b.edge as { to: string }).to == 'm22')!
+let opening = drawn(
+  'common',
+  'Binder',
+  '',
+  host([{
+    entity: { eid: disclosureAt(`held/${link22.entity.eid}`) },
+    Disclosure: { open: true },
+  }]),
+)
 
 test('the desk lists every persona and skill by title, each with its cover', () => {
   equal(shelf(desk, 'Personas'), ['fleet', 'common'])
@@ -284,12 +330,40 @@ test('a skill opens at the desk on its description and instructions', () => {
   equal(said?.textContent, 'only')
 })
 
-test('a row dropped on another list moves there, one dropped on Not carried leaves', () => {
-  equal(dropped, [
-    [[], ['edge', 'reads']],
-    [[], ['edge', 'contains']],
-    [[], []],
-  ])
+test('a row dragged within a list is put where it is dropped', () => {
+  equal(dropped.top, {
+    contains: ['m22', 'm1', 'fleet'],
+    reads: ['m22', 'm333'],
+  })
+  equal(dropped.still, undefined)
+})
+
+test('a row dropped on another list moves there, where it is dropped', () => {
+  equal(dropped.across, {
+    contains: ['fleet', 'm22'],
+    reads: ['m1', 'm22', 'm333'],
+  })
+  equal(dropped.end, {
+    contains: ['m1', 'fleet', 'm22', 'm333'],
+    reads: ['m22'],
+  })
+})
+
+test('a row dropped on Not carried leaves both lists; the persona itself is let fall', () => {
+  equal(dropped.left, { contains: ['m1', 'fleet'], reads: ['m333'] })
+  equal(dropped.self, undefined)
+})
+
+test('a carried document opens where it stands, on its title and body', () => {
+  let opened = opening.querySelector('[data-detail="m22"]')
+  ok(opened?.textContent?.includes('map'))
+  ok(opened?.textContent?.includes('What map says.'))
+  equal(opening.querySelectorAll('[data-detail]').length, 1)
+  equal(
+    opening.querySelector('[data-held="m22"] [aria-expanded]')
+      ?.getAttribute('aria-expanded'),
+    'true',
+  )
 })
 
 test("a persona's Markdown view is the whole text an agent wearing it is given", () => {

@@ -11,6 +11,7 @@ import type { Bundle } from '@yaks/graph'
 import { loadVocab } from '@yaks/vocab'
 import { Disclosure, disclosureAt } from './Disclosure.ts'
 import { Edit } from './Edit.ts'
+import { Order, orderAt } from './Order.ts'
 import { Text } from './Text.ts'
 import { type Host, Ux } from './host.ts'
 import { defineKit, type Kit } from './kit.ts'
@@ -49,6 +50,37 @@ let DisclosureSample = ({ open }: { open: boolean }): JSX.Element => {
     onChange: (b) => void front.mutate([b]),
     summary: 'Completed',
   }, h('p', {}, 'The village is safe.'))
+}
+
+// Rows put in order by dragging, in the specimen's own page graph.
+let OrderSample = (): JSX.Element => {
+  let front = useMemo(
+    () => client(loadVocab([uxDoc]), [], { vault: false, wireVault: false }),
+    [],
+  )
+  let state = useSignal<Bundle>({ entity: { eid: orderAt('guide/order') } })
+  let ids = useSignal(['signal over noise', 'the map', 'the one idea'])
+  useEffect(() => {
+    let watch = front.watch('.Order', { remote: false })
+    let off = watch.subscribe((rows) => {
+      state.value = rows[0] ?? { entity: state.value.entity }
+    })
+    return () => {
+      off()
+      watch.close()
+      front.close()
+    }
+  }, [])
+  return h(Order, {
+    e: state.value,
+    onChange: (b) => void front.mutate([b]),
+    ids: ids.value,
+    row: (id) => h('p', {}, id),
+    onPlace: (id, at) => {
+      let rest = ids.value.filter((x) => x != id)
+      ids.value = [...rest.slice(0, at), id, ...rest.slice(at)]
+    },
+  })
 }
 
 // Read-only text specimens do not type drafts. A real editor uses the
@@ -98,6 +130,16 @@ export let kit: Kit = defineKit({
           h('div', {}, h(DisclosureSample, { open: true })),
         ],
       ],
+    },
+    Order: {
+      Component: Order,
+      description:
+        'Rows put in order by dragging, taking an entity carried from elsewhere',
+      state: ['Order'],
+      specimens: () => [[
+        'Drag a row between two others',
+        h('div', {}, h(OrderSample, {})),
+      ]],
     },
     Edit: {
       Component: Edit,

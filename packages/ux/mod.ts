@@ -16,6 +16,9 @@
  *   (./host.ts).
  * - `carry`, `carries`, `carried`: an entity carried by a drag from one
  *   place to another, whoever drew either (./carry.ts).
+ * - `Order`: a list put in order by dragging its rows, taking a carried
+ *   entity between two of them; `orderAt`, `landing`, `landed`, `among`,
+ *   `placing`, its page eid, bundles and arithmetic, pure (./Order.ts).
  * - `useEdit`, `Editing`: an `Edit`'s state, read and changed by whoever
  *   owns it (./live.ts).
  * - `at`, `place`, `put`, `changed`, `refused`, `valueOf`: the bundles and
@@ -59,6 +62,15 @@ export {
   isOpen,
 } from './Disclosure.ts'
 export { CARRIED, carried, carries, carry } from './carry.ts'
+export {
+  among,
+  landed,
+  landing,
+  Order,
+  orderAt,
+  type OrderProps,
+  placing,
+} from './Order.ts'
 export { type Editing, useEdit } from './live.ts'
 export {
   at,

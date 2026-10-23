@@ -278,10 +278,14 @@ and the desk last. The binder alone is `Binder`, and a card's face
   text, then what it **Carries** (`contains`, said in full) and what it
   **Reads** (`reads`, named in its Reads list), each in the order an agent reads
   them (`served`), then, behind a press, the memories in its scope it carries
-  neither way. A row dragged onto another list moves there; onto Not carried it
-  leaves both. Any row that carries its entity (@yaks/ux `carry`), a row of the
-  desk or of any list in browse, drops the same way. A document on both lists is
-  said once, in full, and the binder says so;
+  neither way. Carries and Reads are ordered lists edited in place
+  (@yaks/inspect's `Held`): a row dragged between two others is put there, which
+  writes its `edge.ord`, the order an agent reads it in, and a row opens where
+  it stands on its document's title and body, to type over. A row dragged onto
+  another list moves there, where it is dropped; onto Not carried it leaves
+  both. Any row that carries its entity (@yaks/ux `carry`), a row of the desk or
+  of any list in browse, drops the same way. A document on both lists is said
+  once, in full, and the binder says so;
 - a skill's binder is its description and its instructions.
 
 Each row is drawn by its own renderer, asked for as `Context.List.Tile`.

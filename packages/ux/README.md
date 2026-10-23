@@ -96,13 +96,13 @@ try {
 
 ## Exports
 
-| Entry point           | Provides                                                                                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@yaks/ux`            | `Edit`, `Text`, `Disclosure`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
-| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                         |
-| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                         |
-| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                        |
-| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                    |
+| Entry point           | Provides                                                                                                                                                                         |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@yaks/ux`            | `Edit`, `Text`, `Disclosure`, `Order`; `Ux`, `useHost`, `useOwner`; `useEdit`; state, emission, formatting and picker helpers; `defineKit`, `kitDocs`; `completion`; their types |
+| `@yaks/ux/views`      | `editorViews`, `views`: editor registrations and their registry                                                                                                                  |
+| `@yaks/ux/vocab`      | `uxDoc`, `docs`, `description`: the UX vocabulary documents and package summary                                                                                                  |
+| `@yaks/ux/ui`         | `kit`, `ux`: the base UX kit and `{ base: kit }`                                                                                                                                 |
+| `@yaks/ux/completion` | `completion`; `typed`, `placed`, `moved`, `taken`, `dismissed`, `act`, `CAP`; controller, input and transition types                                                             |
 
 ## Kits from outside
 
@@ -187,9 +187,9 @@ for page-only state rather than requesting a server subscription.
 
 A package's `./ui` facet exports `ux = {toggle}` beside any `kits`, `themes` and
 `skins` it contributes. `@yaks/ux/ui` exports `kit` and `ux = {base: kit}`:
-`Edit`, `Disclosure` and `Text`, with labelled Preact specimens. `Text` shares
-`Edit` state. **Refused** is the transient event component emitted when input
-cannot be read; its `said` property is the reason. The guide reads
+`Edit`, `Disclosure`, `Order` and `Text`, with labelled Preact specimens. `Text`
+shares `Edit` state. **Refused** is the transient event component emitted when
+input cannot be read; its `said` property is the reason. The guide reads
 `components[name].description` and `specimens()` without importing UX or
 invoking its component references. Guide identities must include the kind and
 kit name: UI `base/Edit` and UX `base/Edit` are separate entries even though
@@ -264,6 +264,7 @@ equal(editorViews().every((entry) => entry.view == 'Edit'), true)
 | `views`, `editorViews`             | the controls as registrations; `TimeVal`, `UrlVal` are faces                                                |
 | `pickLine`, `useHits`, `label`     | a picker's candidates, asked of the graph                                                                   |
 | `carry`, `carries`, `carried`      | an entity carried by a drag from one list to another                                                        |
+| `Order`, `orderAt`, `placing`      | a list put in order by dragging its rows; its page eid, and where a dropped row lands                       |
 | `canEdit`, `formatProp`, `reading` | what a value is, pure                                                                                       |
 
 ## Disclosure
@@ -305,25 +306,58 @@ cancelling the `dragover`; `carried(ev)` reads the eid on the drop. Browse's
 rows carry their entity, so a row from any list it draws drops on a list a
 package draws.
 
+## Putting rows in order
+
+`Order` is a list put in order by dragging its rows. Each row carries the entity
+it stands for, so it drops on other lists too, and the list takes any carried
+entity: dropped between two rows, it goes to `onPlace(eid, at)`, its index among
+the other rows, whether it was one of them or came from elsewhere. A drop that
+leaves a row where it was says nothing. While an entity is dragged over the
+list, `Order{at}` on the consumer-named page entity (`orderAt(owner)`) holds the
+index of the row it would land before, and that row is marked; its owner keeps
+the state bundles from `onChange` as a disclosure's owner does. Without
+`onPlace` the rows are a plain list. What each row says is `row(id)`.
+
+```ts
+import { h } from 'preact'
+import { landed, landing, Order, orderAt, placing } from '@yaks/ux'
+import { equal } from '@yaks/testing'
+
+let e = { entity: { eid: orderAt('binder/carries') } }
+equal(landing(landed(e, 1)), 1)
+// b dropped before c stays where it is; a dropped there moves between b and c
+equal(placing(['a', 'b', 'c'], 'b', 2), undefined)
+equal(placing(['a', 'b', 'c'], 'a', 2), 1)
+let list = h(Order, {
+  e,
+  onChange: () => {},
+  ids: ['a', 'b', 'c'],
+  row: (id) => id,
+  onPlace: () => {},
+})
+equal(list.type, Order)
+```
+
 ## State and events
 
 | component    | on                                | what it holds                                          |
 | ------------ | --------------------------------- | ------------------------------------------------------ |
 | `Edit`       | `at(owner, eid, comp, prop)`      | `open` while it is changed here, `query` in its picker |
 | `Disclosure` | `disclosureAt(owner)`             | `open`, whether its content is shown                   |
+| `Order`      | `orderAt(owner)`                  | `at`, where an entity dragged over it would land       |
 | `Completion` | field id                          | `caret`, `from`, `to`, `cands`, `pick`                 |
 | `Refused`    | the entity whose value it changes | an event: `said`, why what was typed could not be read |
 
 Each state component is `sync: none`: nothing leaves the page. `Edit`,
-`Disclosure` and `Completion` are `durable: connection`, gone with the page and
-kept across every remount before that; closing an `Edit` removes it. What is
-typed over a value is not its state but the person's draft, in the value's own
-place (`place(eid, comp, prop)`), kept by the host's `drafts`: every view of the
-value, and every interface the host syncs drafts to, types on from it, and a
-value whose draft says something else shows it, open, wherever it is drawn.
-Leaving a value typed over emits it and spends the draft, Escape puts the value
-back and spends it, and being taken off the page is neither: the draft waits for
-the remount. `Refused` is `durable: "0s"`; see
+`Disclosure`, `Order` and `Completion` are `durable: connection`, gone with the
+page and kept across every remount before that; closing an `Edit` removes it.
+What is typed over a value is not its state but the person's draft, in the
+value's own place (`place(eid, comp, prop)`), kept by the host's `drafts`: every
+view of the value, and every interface the host syncs drafts to, types on from
+it, and a value whose draft says something else shows it, open, wherever it is
+drawn. Leaving a value typed over emits it and spends the draft, Escape puts the
+value back and spends it, and being taken off the page is neither: the draft
+waits for the remount. `Refused` is `durable: "0s"`; see
 [component lifetimes](../vocab/README.md#state-lifetimes).
 
 The state helpers can also be used without rendering a component.
@@ -539,13 +573,14 @@ URLs. The host supplies those policies. Styling belongs to
 | --------------------- | ------------------------------------------------------------------- |
 | `kit.ts`              | external kit metadata, boundary validation and vocabulary documents |
 | `ui.ts`               | the base kit and its browser-safe `./ui` facet and specimens        |
-| `vocab.json`          | the `Edit`, `Disclosure`, `Completion` and `Refused` components     |
+| `vocab.json`          | the `Edit`, `Disclosure`, `Order`, `Completion`, `Refused` words    |
 | `state.ts`            | the bundles: an `Edit`'s eid, its patches, what it emits            |
 | `live.ts`             | `useEdit`: an `Edit`'s state and its value's draft, read live       |
 | `emit.ts`             | typed or picked input, read as its type, sent as a bundle           |
 | `host.ts`             | `Host`, `Ux`                                                        |
 | `Edit.ts`             | `Edit`, its controls and faces, `views`                             |
 | `Text.ts`             | `Edit.Text`                                                         |
+| `Order.ts`            | `Order`, rows put in order by dragging                              |
 | `hits.ts`             | a picker's line and its debounced search                            |
 | `read.ts`             | what a property is, off the vocabulary                              |
 | `completion.ts`       | shared completion controller, field, list and input binding         |
