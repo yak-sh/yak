@@ -171,25 +171,32 @@ test('a session that wears a persona keeps it', async () => {
   assertEquals(await wears('chose', '/r'), undefined)
 })
 
-test('a subagent starting is written as a session its parent spawned, once', async () => {
-  let g = fleet('/r', fleetVocab)
-  await g.apply([{ entity: { eid: 's1' }, session: { id: 'chose' } }])
-  let start = async () =>
-    await tools.session_context!(
-      {
-        entity: { eid: 'c1' },
-        call: {
-          args: { hook: '{"session_id":"chose","agent_id":"a1","cwd":"/r"}' },
-        },
+// A subagent starting, as its harness's SubagentStart hook reports it: once
+// new, and again once its session is written.
+let starting = fleet('/r', fleetVocab)
+await starting.apply([{ entity: { eid: 's1' }, session: { id: 'chose' } }])
+let start = async () =>
+  await tools.session_context!(
+    {
+      entity: { eid: 'c1' },
+      call: {
+        args: { hook: '{"session_id":"chose","agent_id":"a1","cwd":"/r"}' },
       },
-      g,
-    ) as Bundle[]
-  let [child] = await start()
+    },
+    starting,
+  ) as Bundle[]
+let [child] = await start()
+await starting.apply([child])
+let restarted = await start()
+
+test('a subagent starting is written as a session its parent spawned', () => {
   assertEquals(child.entity.eid, sessionEid('a1', 'chose'))
   assertEquals(child.session, { id: 'a1' })
   assertEquals(child.spawned, { parent: 's1' })
-  await g.apply([child])
-  assertEquals(await start(), [])
+})
+
+test('a subagent already written is not written again', () => {
+  assertEquals(restarted, [])
 })
 
 test('a session nobody has seen is minted, holding nothing', async () => {
