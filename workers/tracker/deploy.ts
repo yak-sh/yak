@@ -5,17 +5,29 @@
 // A canary the tracker says failed, or one still missing after ten minutes, is
 // reported to the tracker and fails the build. The new version stays live:
 // whether to roll back or fix forward is an agent's call, never this script's.
+//
+// Workers Builds runs one build per push and they finish in any order, so a
+// build deploys only while no newer commit's build owns the Worker, as the yak
+// Worker's deploy door decides it (workers/yak/wrangler.ts `superseded`).
 import { root, run } from './wrangler.ts'
+import { type Seen, seen, superseded } from '../yak/wrangler.ts'
 
+/** The tracker trigger's build watch paths (README.md), as git pathspecs: a
+ * push that changes one starts a tracker build of its own. */
+export let WATCHED = ['workers/tracker', 'packages', 'bin/build-tracker']
 /** The tracker's answer that this build's canary failed, not still on its way. */
 export class Failed extends Error {}
 export type Hooks = {
   current: () => Promise<{ hash?: string }>
+  /** This build's commit beside main's tip and the commits live now. */
+  seen: () => Promise<Seen>
   deploy: (hash: string) => Promise<void>
   /** Whether the canary arrived; throws {@link Failed} when it failed. */
   canary: () => Promise<boolean>
   /** Tell the tracker this build's canary did not arrive. */
   report: () => Promise<void>
+  /** A line for the build's log. */
+  note: (line: string) => void
   now: () => number
   wait: () => Promise<void>
 }
@@ -34,12 +46,14 @@ let confirmed = async (hooks: Hooks) => {
 }
 export let deploy = async (hash: string, hooks: Hooks): Promise<boolean> => {
   if ((await hooks.current()).hash == hash) return false
+  let why = superseded(await hooks.seen())
+  if (why) return hooks.note(`not deploying: ${why}`), false
   await hooks.deploy(hash)
   if (await confirmed(hooks)) return true
-  // A newer build that deployed meanwhile owns the Worker and its objects, so
-  // this canary could never arrive; that build answers for itself.
-  let now = await hooks.current()
-  if (now.hash && now.hash != hash) return false
+  // A newer commit's build that deployed meanwhile owns the Worker and its
+  // objects, so this canary could never arrive; that build answers for itself.
+  // Its bundle can equal this one's, so the commit tells, never the hash.
+  if ((await hooks.seen()).live.some((live) => live.ahead)) return false
   await hooks.report()
   throw Error('tracker canary missing; reported, and this build stays live')
 }
@@ -122,20 +136,50 @@ if (import.meta.main) {
       (b) => b.toString(16).padStart(2, '0'),
     ).join('')
     let probe = canary(url, hash)
+    let head = new TextDecoder().decode(
+      (await new Deno.Command('git', {
+        args: ['rev-parse', 'HEAD'],
+        cwd: root,
+        stdout: 'piped',
+      }).output()).stdout,
+    ).trim()
+    // The bundle and commit the version live now was deployed from, as the
+    // message each deploy gives it says. The version keeps the whole message;
+    // a deployment's copy can be cut short.
+    let serving = async () => {
+      let all = await command('deployments', 'list', '--json')
+      let latest =
+        all.sort((a: { created_on: string }, b: { created_on: string }) =>
+          b.created_on.localeCompare(a.created_on)
+        )[0]
+      let version = latest?.versions?.find((v: { percentage: number }) =>
+        v.percentage == 100
+      )?.version_id
+      if (!version) return {}
+      let detail = await command('versions', 'view', version, '--json')
+      let message: string = detail.annotations?.['workers/message'] ?? ''
+      return {
+        hash: message.match(/tracker-bundle:([0-9a-f]{64})/)?.[1],
+        commit: message.match(/^[0-9a-f]{40}\b/)?.[0],
+      }
+    }
     await deploy(hash, {
-      current: async () => {
-        let all = await command('deployments', 'list', '--json')
-        let latest =
-          all.sort((a: { created_on: string }, b: { created_on: string }) =>
-            b.created_on.localeCompare(a.created_on)
-          )[0]
-        let version = latest?.versions?.find((v: { percentage: number }) =>
-          v.percentage == 100
-        )?.version_id
-        if (!version) return {}
-        let detail = await command('versions', 'view', version, '--json')
-        let message = detail.annotations?.['workers/message'] ?? ''
-        return { hash: message.match(/tracker-bundle:([0-9a-f]{64})/)?.[1] }
+      current: serving,
+      seen: async () => {
+        let saw = await seen(
+          root,
+          serving().then(({ commit }) => commit ? [commit] : []),
+          WATCHED,
+        )
+        console.log(
+          `tracker ${saw.head.slice(0, 8)}: main at ${
+            saw.tip?.slice(0, 8) ?? '(unread)'
+          }, live ${
+            saw.live.map((l) => l.sha.slice(0, 8) + (l.ahead ? ' (ahead)' : ''))
+              .join(' ') || '(unread)'
+          }`,
+        )
+        return saw
       },
       deploy: async (hash) => {
         if (
@@ -144,7 +188,7 @@ if (import.meta.main) {
             '--var',
             `BUNDLE_HASH:${hash}`,
             '--message',
-            `tracker-bundle:${hash}`,
+            `${head} tracker-bundle:${hash}`,
           ])
         ) {
           throw Error('tracker deploy failed')
@@ -152,6 +196,7 @@ if (import.meta.main) {
       },
       canary: probe.arrived,
       report: probe.report,
+      note: console.log,
       now: Date.now,
       wait: () => new Promise((done) => setTimeout(done, 1000)),
     })

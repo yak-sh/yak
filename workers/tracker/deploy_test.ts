@@ -2,6 +2,7 @@
 // credentials, paid resources, or waiting for deployment propagation.
 import { clock, equal, ok, test, throws } from '@yaks/testing'
 import { canary, deploy, Failed, type Hooks } from './deploy.ts'
+import type { Seen } from '../yak/wrangler.ts'
 import { canary as receipt, STALL, worker } from './worker.ts'
 import { grouped } from '@yaks/tracker'
 import { json } from './door.ts'
@@ -15,22 +16,28 @@ import { durable } from '../../packages/durable-object/testing.ts'
 let fixture = (step = 15_000) => {
   let calls: string[] = []
   let time = clock()
-  // What the hooks read is what is deployed.
-  let live = { hash: 'old' }
-  let another = (hash: string) => live = { hash }
+  // What the hooks read is what is deployed, and from which commit: this
+  // build's is `mine`, and a newer commit's build deploys through `another`.
+  let live = { hash: 'old', ahead: false }
+  let saw: Seen = { head: 'mine', tip: 'mine', changed: false, live: [] }
+  let another = (hash: string, ahead = true) => live = { hash, ahead }
   let hooks: Hooks = {
     current: () => Promise.resolve(live),
+    seen: () =>
+      Promise.resolve({ ...saw, live: [{ sha: 'live', ahead: live.ahead }] }),
     deploy: (hash) => {
       calls.push('deploy')
-      another(hash)
+      another(hash, false)
       return Promise.resolve()
     },
     canary: () => Promise.resolve(false),
     report: () => Promise.resolve(void calls.push('report')),
+    note: () => {},
     now: time.now,
     wait: () => time.advance(step),
   }
-  return { hooks, calls, another }
+  let see = (seen: Partial<Seen>) => saw = { ...saw, ...seen }
+  return { hooks, calls, another, see }
 }
 test('unchanged bundle does not deploy; changed bundle requires a canary', async () => {
   let { hooks, calls } = fixture()
@@ -69,11 +76,34 @@ test('deployment waits for object convergence beyond one minute', async () => {
   equal(calls, ['deploy'])
 })
 test('a build superseded by a newer deployment reports nothing', async () => {
-  let { hooks, calls, another } = fixture()
-  let wait = hooks.wait
-  hooks.wait = () => (another('newer'), wait())
-  equal(await deploy('new', hooks), false)
-  equal(calls, ['deploy'])
+  // A newer commit's build can deploy the same bundle again after an older
+  // one replaced it, so the hash alone cannot tell.
+  for (let bundle of ['newer', 'new']) {
+    let { hooks, calls, another } = fixture()
+    let wait = hooks.wait
+    hooks.wait = () => (another(bundle), wait())
+    equal(await deploy('new', hooks), false)
+    equal(calls, ['deploy'])
+  }
+})
+test('a build behind a newer commit never deploys over it', async () => {
+  let cases: [seen: Partial<Seen>, ahead: boolean, deploys: boolean][] = [
+    // A newer commit's version is live.
+    [{}, true, false],
+    // main moved on with tracker source, so its build deploys it.
+    [{ tip: 'newer', changed: true }, false, false],
+    [{ tip: 'newer', changed: null }, false, false],
+    // A push that starts no tracker build leaves this one to deploy.
+    [{ tip: 'newer', changed: false }, false, true],
+  ]
+  for (let [seen, ahead, deploys] of cases) {
+    let { hooks, calls, another, see } = fixture()
+    another('newer', ahead)
+    see(seen)
+    hooks.canary = () => Promise.resolve(true)
+    await deploy('new', hooks)
+    equal(calls, deploys ? ['deploy'] : [])
+  }
 })
 let hash = 'a'.repeat(64)
 let setup = (now: () => number = Date.now) => {

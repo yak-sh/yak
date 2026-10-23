@@ -153,16 +153,21 @@ Intake preserves an already scheduled earlier alarm. Repeated queue deliveries
 must not move grouping's return later; otherwise continuous intake can admit
 captures while indefinitely postponing the effects that group them.
 
-`deploy.ts` hashes the dry-run bundle and skips an unchanged deployment. It sets
-the nonsecret `BUNDLE_HASH` binding and publishes a content-hash canary through
-the Worker's queue. It republishes the same capture every thirty seconds until
-intake and grouping produce its bug, allowing Worker and object versions to
-converge. A canary the tracker says failed, or one still missing after ten
-minutes, is reported to the tracker and fails the build. Nothing rolls back: the
-new version stays live, and an agent decides whether to roll back or fix
-forward. A build superseded by a newer deployment reports nothing. No legacy
-error store is deleted, and yak reporting/read-path changes are outside this
-Worker.
+`deploy.ts` hashes the dry-run bundle and skips an unchanged deployment. Builds
+run one per push and finish in any order, so, like the yak Worker's deploy door
+(`superseded` in [workers/yak/wrangler.ts](../yak/wrangler.ts)), a build deploys
+only while main's tip has no newer tracker source (the watched paths above) and
+no live version comes from a newer commit; each version's message names its
+commit and bundle. It sets the nonsecret `BUNDLE_HASH` binding and publishes a
+content-hash canary through the Worker's queue. It republishes the same capture
+every thirty seconds until intake and grouping produce its bug, allowing Worker
+and object versions to converge. A canary the tracker says failed, or one still
+missing after ten minutes, is reported to the tracker and fails the build.
+Nothing rolls back: the new version stays live, and an agent decides whether to
+roll back or fix forward. A build whose canary waited while a newer commit's
+build deployed reports nothing: that build answers for itself, even with the
+same bundle. No legacy error store is deleted, and yak reporting/read-path
+changes are outside this Worker.
 
 `POST /canary?scope=platform&hash=<bundle-hash>&nonce=<uuid>&at=<iso-time>`
 needs no ticket and returns `{eid}` for a synthetic error. Only the deployed

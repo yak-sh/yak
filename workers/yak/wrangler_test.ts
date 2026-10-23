@@ -35,6 +35,7 @@ import {
   siblings,
   superseded,
   uploadSibling,
+  WATCHED,
 } from './wrangler.ts'
 
 let apiFailure =
@@ -817,6 +818,10 @@ test('wrangler: app-only pushes do not supersede a build, but Worker source and 
     )
     assertEquals(await changed(thinnest, a, b), false)
     assertEquals(await changed(thinnest, b, c), true)
+    // A deploy runs in its Worker's directory, where the paths mean the same.
+    let worker = join(work, 'workers/yak')
+    assertEquals(await changed(worker, a, b), false)
+    assertEquals(await changed(worker, b, c), true)
   } finally {
     Deno.removeSync(root, { recursive: true })
   }
@@ -1048,10 +1053,15 @@ test('deploy preflight starts Git reads while the serving version is pending', a
   let live = Promise.withResolvers<string[]>()
   let calls: string[][] = []
   let head = 'a'.repeat(40)
-  let inspection = seen('/checkout', live.promise, (_root, ...args) => {
-    calls.push(args)
-    return Promise.resolve({ code: 0, out: head })
-  })
+  let inspection = seen(
+    '/checkout',
+    live.promise,
+    WATCHED,
+    (_root, ...args) => {
+      calls.push(args)
+      return Promise.resolve({ code: 0, out: head })
+    },
+  )
   assertEquals(calls, [
     ['rev-parse', 'HEAD'],
     ['ls-remote', 'origin', 'refs/heads/main'],

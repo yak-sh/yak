@@ -978,6 +978,8 @@ export let descendants = (pid: number): number[] => {
 // pushes do not start a build, so they must not supersede the last one.
 // A live version that is neither behind nor ahead (a commit that never reached
 // main) is replaced: main is what runs. What could not be read is printed.
+// The tracker's deploy (workers/tracker/deploy.ts) asks the same with the
+// watched paths of its own trigger.
 
 /** What a deploy sees: its own commit, main's tip at the remote (null when the
  * remote could not be asked), whether the watched source changed at that tip,
@@ -1056,17 +1058,32 @@ let fetched = async (
     ))
 }
 
+// A watched path as the trigger means it, from the repository's top: git reads
+// a pathspec from the directory it runs in, and a deploy runs in its Worker's.
+let top = (spec: string) =>
+  spec.startsWith(':(') ? `:(top,${spec.slice(2)}` : `:(top)${spec}`
+
 /** Whether the watched source differs between two commits, so the later one
  * starts a build; fetches what `root`'s clone lacks, and is null when git
- * cannot tell. */
+ * cannot tell. `root` is any directory of the checkout, and a Worker with a
+ * build trigger of its own names its paths. */
 export let changed = async (
   root: string,
   from: string,
   to: string,
+  watched = WATCHED,
   read = git,
 ): Promise<boolean | null> => {
   for (let sha of [from, to]) await fetched(root, sha, 'blob:none', read)
-  let { code } = await read(root, 'diff', '--quiet', from, to, '--', ...WATCHED)
+  let { code } = await read(
+    root,
+    'diff',
+    '--quiet',
+    from,
+    to,
+    '--',
+    ...watched.map(top),
+  )
   return code == 0 ? false : code == 1 ? true : null
 }
 
@@ -1079,6 +1096,7 @@ export let changed = async (
 export let seen = async (
   root: string,
   live: string[] | Promise<string[]>,
+  watched = WATCHED,
   read = git,
 ): Promise<Seen> => {
   let [checked, asked, named] = await Promise.all([
@@ -1088,7 +1106,9 @@ export let seen = async (
   ])
   let head = checked.out
   let tip = asked.code ? null : SHA.exec(asked.out)?.[0] ?? null
-  let moved = tip && tip != head ? await changed(root, head, tip, read) : false
+  let moved = tip && tip != head
+    ? await changed(root, head, tip, watched, read)
+    : false
   let ahead = async (sha: string) => {
     if (sha == head) return false
     await fetched(root, sha, 'tree:0', read)
