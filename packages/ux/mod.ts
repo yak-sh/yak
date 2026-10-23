@@ -58,7 +58,7 @@ export {
   type DisclosureProps,
   isOpen,
 } from './Disclosure.ts'
-export { carried, CARRIED, carries, carry } from './carry.ts'
+export { CARRIED, carried, carries, carry } from './carry.ts'
 export { type Editing, useEdit } from './live.ts'
 export {
   at,
