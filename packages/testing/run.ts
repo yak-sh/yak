@@ -141,13 +141,16 @@ export let running = (count: number, path: string, loaded: number) =>
 /**
  * Runs the tests of one file, `loaded` being what loading it took. A test's
  * name is said as it starts and how it went ends the line, so what watches a
- * run knows which test it waits on.
+ * run knows which test it waits on. A failure's errors follow at once, `brief`
+ * unless `verbose`: a runtime that dies later, before its closing report, has
+ * still said why each test failed.
  */
 export let file = async (
   path: string,
   tests: Test[],
   timeout: number,
   loaded = 0,
+  verbose = false,
 ): Promise<Outcome[]> => {
   if (!tests.length) return []
   say(paint(90, `${running(tests.length, path, loaded)}\n`))
@@ -156,6 +159,7 @@ export let file = async (
     say(`${t.name} ... `)
     let o = await one(t, timeout)
     say(how(o))
+    if (!o.ok) say(`${told(o, verbose)}\n`)
     out.push(o)
   }
   return out
@@ -235,6 +239,13 @@ export let brief = (text: string, root: string, lines = LINES) => {
     : kept.join('\n')
 }
 
+/** A failure's errors, a line each: whole when `verbose`, else `brief`. */
+let told = (o: Outcome, verbose: boolean) => {
+  let root = `file://${Deno.cwd()}/`
+  return o.errors.map((e) => `${verbose ? shown(e) : brief(shown(e), root)}\n`)
+    .join('')
+}
+
 /**
  * The closing report: every failure with its errors, then the counts and the
  * files left out as unchanged since they passed. Each error is `brief`;
@@ -250,16 +261,11 @@ export let summary = (
   let failed = outcomes.filter((o) => !o.ok)
   let passed = outcomes.filter((o) => o.ok && !o.skipped).length
   let ignored = outcomes.filter((o) => o.skipped).length
-  let root = `file://${Deno.cwd()}/`
   let text = ''
   if (failed.length) {
     text += `\n${paint(31, 'ERRORS')}\n\n`
     for (let o of failed) {
-      text += `${o.test.name} => ${at(o.test.file)}\n`
-      for (let e of o.errors) {
-        text += `${verbose ? shown(e) : brief(shown(e), root)}\n`
-      }
-      text += '\n'
+      text += `${o.test.name} => ${at(o.test.file)}\n${told(o, verbose)}\n`
     }
     if (verbose) {
       text += `${paint(31, 'FAILURES')}\n\n`

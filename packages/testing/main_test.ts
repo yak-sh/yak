@@ -60,6 +60,9 @@ suite('sum', ({ it, ok }) => it('holds', () => ok(true)))`,
     'b_test.ts loads': 'FAILED',
     'sum › holds': 'ok',
   })
+  // A failure's error is said at once, not only in the closing report: a
+  // runtime that dies later has still said it.
+  match(text, /^fails \.\.\. FAILED \(\S+\)\n\S*Error: /m)
   match(text, /2 passed \| 2 failed \| 1 ignored/)
 })
 

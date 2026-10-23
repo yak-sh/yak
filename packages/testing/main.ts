@@ -17,9 +17,10 @@
 // every file a second time once all have run, as modules of their own, so a
 // test is also timed warm, the way it runs among the whole suite: for
 // measuring (bin/test-budget.ts), since a test that cannot run twice in one
-// runtime fails its second pass. Each test is said as it runs; the closing
-// report cuts each failure's error short (./run.ts `brief`) unless
-// `--verbose`. The exit code is 1 when a test failed.
+// runtime fails its second pass. Each test is said as it runs, a failure's
+// error right after it, and the closing report says every failure again; each
+// error is cut short (./run.ts `brief`) unless `--verbose`. The exit code is 1
+// when a test failed.
 import { keys, passed, remember } from './deps.ts'
 import { find } from './find.ts'
 import { examples, plan, sweep } from './load.ts'
@@ -42,6 +43,7 @@ let tags = flag('tag').flatMap((t) => t.split(','))
 let timeout = Number(flag('timeout').at(-1) ?? 50_000)
 let all = Deno.args.includes('--all')
 let twice = Deno.args.includes('--twice')
+let verbose = Deno.args.includes('--verbose')
 let paths = Deno.args.filter((a) => !a.startsWith('--'))
 let started = performance.now()
 let here = (path: string) => new URL(path, `file://${Deno.cwd()}/`).href
@@ -99,7 +101,7 @@ let run = async (path: string, load: () => Promise<unknown>) => {
   loads[path] = loaded
   // Executed bodies own fixtures; retain only report metadata after the file.
   let tests = collected.splice(at).filter(chosen)
-  outcomes.push(...await file(path, tests, timeout, loaded))
+  outcomes.push(...await file(path, tests, timeout, loaded, verbose))
 }
 // Pages first: Deno's dynamic import costs more the larger the graph already
 // loaded, and every example is a module of its own. After the test modules'
@@ -121,12 +123,7 @@ let remembered = Object.fromEntries(
 )
 remember(Object.values(remembered))
 let wall = performance.now() - started
-summary(
-  outcomes,
-  wall,
-  { left, planned, loading },
-  Deno.args.includes('--verbose'),
-)
+summary(outcomes, wall, { left, planned, loading }, verbose)
 let times = flag('times').at(-1)
 if (times) {
   await Deno.mkdir(times, { recursive: true })

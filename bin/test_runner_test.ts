@@ -38,7 +38,12 @@ let colored = ['one ... \x1b[0m', '\x1b[32mok\x1b[0m (1ms)\n']
   .map((chunk) => new TextEncoder().encode(chunk))
 
 test('colored test results count as completed', async () => {
-  let progress = { name: 'loading tests', completed: 0, count: 0 }
+  let progress = {
+    name: 'loading tests',
+    completed: 0,
+    count: 0,
+    failed: [] as string[],
+  }
   await observe(colored, progress)
   assertEquals(progress.name, 'one')
   assert(progress.completed > 0)
@@ -60,11 +65,17 @@ let reported = new ReadableStream<Uint8Array>({
 })
 
 test('test results after console output count once and only while a test runs', async () => {
-  let progress = { name: 'loading tests', completed: 0, count: 0 }
+  let progress = {
+    name: 'loading tests',
+    completed: 0,
+    count: 0,
+    failed: [] as string[],
+  }
   await observe(reported, progress)
   assertEquals(progress.name, 'third')
   assert(progress.completed > 0)
   assertEquals(progress.count, 3)
+  assertEquals(progress.failed, ['third'])
 })
 
 test('a run started inside a run refuses at once', async () => {

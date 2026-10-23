@@ -240,11 +240,13 @@ load fails as a test. A test that exceeds `--timeout` (default 50000 ms) fails
 and the runner continues; the timeout does not cancel its body. A failed test
 sets exit code 1; an unknown flag sets exit code 2.
 
-The runner says each test as it runs (`adds ... ok (120µs)`), then a closing
-report: each failed test's name and file with its errors, then the counts. An
-error keeps only the stack frames in the current directory, named from it, and
-none of this package's own, and is cut to 30 lines. `--verbose` says each error
-whole, names the failures again, and says what planning and loading took.
+The runner says each test as it runs (`adds ... ok (120µs)`), a failed test's
+errors right after its line, so a runtime that dies before it ends has still
+said them, then a closing report: each failed test's name and file with its
+errors again, then the counts. An error keeps only the stack frames in the
+current directory, named from it, and none of this package's own, and is cut to
+30 lines. `--verbose` says each error whole, names the failures again, and says
+what planning and loading took.
 
 `--tag` selects tests carrying every named tag; comma-separated tags are also
 accepted. `--platform` supplies the runtime's tag, so selecting that tag keeps

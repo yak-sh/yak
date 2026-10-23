@@ -143,14 +143,23 @@ export let runtime = (shared: string = denoDir()) => ({
 })
 
 // Deno prints a test's name before running it, then finishes the same line
-// with its result. Keep that name while the reporter's bytes stay buffered
-// for an intact report at exit.
+// with its result. Keep that name, and each test that failed, while the
+// reporter's bytes stay buffered for an intact report at exit.
 // deno-lint-ignore no-control-regex -- ESC starts the reporter's color codes
 let ansi = /\x1b\[[0-9;]*m/g
 
+/** What a platform's runtime has said so far: the test or file it is on,
+ * when a test last ended, how many have, and each that failed. */
+export type Progress = {
+  name: string
+  completed: number
+  count: number
+  failed: string[]
+}
+
 export let observe = async (
   stream: AsyncIterable<Uint8Array> | Iterable<Uint8Array>,
-  progress: { name: string; completed: number; count: number },
+  progress: Progress,
 ) => {
   let decoder = new TextDecoder()
   let pending = ''
@@ -169,11 +178,13 @@ export let observe = async (
     }
     // Console output can end the test's opening line. Its result then starts
     // a line of its own; a repeated result outside a running test is no news.
-    let result =
-      /^(?:.+? \.\.\. )?(ok|FAILED|ignored) \(\d+(?:µs|ms|s|m\d+s)\)$/
-    if (done && running && result.test(line)) {
+    let result = line.match(
+      /^(?:.+? \.\.\. )?(ok|FAILED|ignored) \(\d+(?:µs|ms|s|m\d+s)\)$/,
+    )
+    if (done && running && result) {
       progress.completed = Date.now()
       progress.count++
+      if (result[1] == 'FAILED') progress.failed.push(progress.name)
       running = false
     }
   }
@@ -186,6 +197,26 @@ export let observe = async (
   }
   read(pending + decoder.decode(), true)
 }
+
+/// reported('a ... ok (1ms)\n\nok | 1 passed | 0 failed (2ms)\n') -> true
+/// reported('a ... ok (1ms)\nb ... ') -> false
+/** Whether a runtime said its closing report, the line its runner ends on. */
+export let reported = (out: string) =>
+  /^(?:ok|FAILED) \| \d+ passed \|/m.test(out.replace(ansi, ''))
+
+/// died({ name: 'b', completed: 0, count: 9, failed: [] }) -> ' during b, after 9 tests'
+/// died({ name: 'c', completed: 0, count: 1, failed: ['a'] }) -> ' during c, after 1 test; failed before it: a'
+/// died({ name: 'd', completed: 0, count: 9, failed: ['a', 'b'] }) -> ' during d, after 9 tests; failed before it: a; b'
+/**
+ * What a runtime that ended before its closing report was doing, from what
+ * it said as it ran: the test or file it was on, how many tests had ended,
+ * and each that failed. Their errors are in what it said (./run.ts `file`);
+ * the report that would have listed them never came.
+ */
+export let died = ({ name, count, failed }: Progress) =>
+  ` during ${name}, after ${count} test${count == 1 ? '' : 's'}${
+    failed.length ? `; failed before it: ${failed.join('; ')}` : ''
+  }`
 
 /// failures('a ... ok (1ms)\n\nERRORS\n\nb => ./a_test.ts\nError: no\n\n\nFAILED | 1 passed | 1 failed (2ms)\n', '') -> 'ERRORS\n\nb => ./a_test.ts\nError: no\n\n'
 /// failures('', 'error: Module not found\n', 'test deno: 1') -> 'test deno: 1\nerror: Module not found\n'
@@ -287,6 +318,7 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     name: p == 'workerd' ? 'starting the kernel' : 'loading tests',
     completed: Date.now(),
     count: 0,
+    failed: [] as string[],
     said: 0,
     reported: Date.now(),
     done: false,
@@ -353,16 +385,20 @@ if (import.meta.main && Deno.args[0] === '--bulk') {
     let status = await child.status
     await followed
     progress[i].done = true
-    let why = `test ${runs[i][0]}: ${status.signal ?? status.code}`
+    let out = new Uint8Array(await output)
+    let said = new TextDecoder().decode(out)
+    // A runtime that died (out of memory, say) never listed its failures.
+    let why = `test ${runs[i][0]}: ${status.signal ?? status.code}${
+      status.success || reported(said) ? '' : died(progress[i])
+    }`
     // Every platform runs to its own end and prints its own report: whole
     // when verbose, and otherwise only a red one's failures.
     if (verbose) {
-      report(Deno.stdout, new Uint8Array(await output))
+      report(Deno.stdout, out)
       report(Deno.stderr, new Uint8Array(await error))
     } else if (!status.success) {
-      let text = (b: ArrayBuffer) => new TextDecoder().decode(b)
-      let told = failures(text(await output), text(await error), why)
-      report(Deno.stdout, new TextEncoder().encode(told))
+      let err = new TextDecoder().decode(await error)
+      report(Deno.stdout, new TextEncoder().encode(failures(said, err, why)))
     }
     if (!status.success) failed.push(why)
   }

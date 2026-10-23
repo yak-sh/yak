@@ -276,7 +276,8 @@ export type Measured = {
   ms?: number
 }
 
-/** A set of times kept in `dir`: bench/test-times/, or a gate's. */
+/** A set of times kept in `dir`: bench/test-times/, or a gate's, with the
+ * code its run ended with. */
 export let read = async (dir: string): Promise<Measured> => {
   let runs: Record<string, Times> = {}
   let meta = { gate: false, whole: false }
@@ -350,7 +351,10 @@ export let measure = async (
     for (let [platform, times] of Object.entries(runs)) {
       await Deno.writeTextFile(`${KEPT}${platform}.json`, JSON.stringify(times))
     }
-    await Deno.writeTextFile(`${KEPT}run.json`, JSON.stringify({ gate, whole }))
+    await Deno.writeTextFile(
+      `${KEPT}run.json`,
+      JSON.stringify({ gate, whole, code }),
+    )
   }
   return { code, runs, gate, whole, ms: performance.now() - start }
 }
@@ -420,9 +424,10 @@ export let hold = async (
   let report = args.includes('--report')
   let verbose = args.includes('--verbose')
   let j = judge(b, runs)
-  // Only a whole run knows which tests are gone, and the records are held on
-  // the gate's, where they are taken.
-  if (!whole) j.gone = []
+  // Only a whole run knows which tests are gone, and only one that passed: a
+  // runtime that died wrote no times, and every test it held would read as
+  // gone. The records are held on the gate's, where they are taken.
+  if (!whole || code) j.gone = []
   let gated = whole && gate
   let slower = whole ? j.slower : []
   let wide = j.walls.filter((w) =>
