@@ -16,15 +16,16 @@ let unavailable = () =>
   })
 
 let hash = 'a'.repeat(64)
-let fixture = (fetch?: Stub['fetch']) => {
+let fixture = (doors: Partial<Stub> = {}) => {
   let sent: Bundle[][] = []
   let fail = () => Promise.reject(unavailable())
   let stub: Stub = {
-    fetch: fetch ?? fail,
+    fetch: fail,
     ingest: fail,
     monitor: fail,
     admitTrace: fail,
     ingestTrace: fail,
+    ...doors,
   }
   let w = worker({
     BUNDLE_HASH: hash,
@@ -89,11 +90,13 @@ test('tracker queue and scheduled failures identify their entrypoint', async () 
 // sends; what the Worker answers and how many sends the object saw.
 let marked = async (failures: Error[]) => {
   let bodies: string[] = []
-  let { w, sent } = fixture(async (request) => {
-    bodies.push(await request.text())
-    let failure = failures.shift()
-    if (failure) throw failure
-    return Response.json({ ok: true })
+  let { w, sent } = fixture({
+    fetch: async (request) => {
+      bodies.push(await request.text())
+      let failure = failures.shift()
+      if (failure) throw failure
+      return Response.json({ ok: true })
+    },
   })
   let response = await w.fetch(
     new Request('https://tracker.test/take?scope=platform', {
@@ -124,12 +127,16 @@ test('a mark lost, reset or refused on its way to the object is sent again', asy
 // A deploy's canary read, through `failures` on its way to the object: what
 // the Worker answers, and how many failures it reported.
 let stood = async (failures: Error[]) => {
-  let { w, sent } = fixture((request) => {
-    let failure = failures.shift()
-    if (failure) return Promise.reject(failure)
-    return Promise.resolve(
-      Response.json(new URL(request.url).pathname == '/bundle' ? { hash } : []),
-    )
+  let { w, sent } = fixture({
+    fetch: (request) => {
+      let failure = failures.shift()
+      if (failure) return Promise.reject(failure)
+      return Promise.resolve(
+        Response.json(
+          new URL(request.url).pathname == '/bundle' ? { hash } : [],
+        ),
+      )
+    },
   })
   let response = await w.fetch(
     new Request(
@@ -145,4 +152,31 @@ test("a canary's read of a moving object waits it out, unreported", async () => 
     await stood(Array(backoff.pauses.length + 1).fill(refused)),
     [503, { error: 'tracker temporarily unavailable' }, 1],
   )
+})
+
+// The minute's monitor or a queue's intake through `failures` on its way to
+// the object: how many sends the object saw, and how many failures were
+// reported.
+let ran = async (door: 'monitor' | 'ingest', failures: Error[]) => {
+  let sends = 0
+  let { w, sent } = fixture({
+    [door]: () => {
+      sends++
+      let failure = failures.shift()
+      return failure ? Promise.reject(failure) : Promise.resolve()
+    },
+  })
+  await (door == 'monitor' ? w.scheduled() : w.queue([{
+    body: [{ entity: { eid: crypto.randomUUID() }, error: {} }],
+    ack: () => {},
+    retry: () => {},
+  }])).catch(() => {})
+  return [sends, sent.length]
+}
+
+test("the minute's monitor and a queue's intake wait out a moving object, unreported", async () => {
+  for (let door of ['monitor', 'ingest'] as const) {
+    equal(await ran(door, [lost, refused, reset]), [4, 0])
+    equal(await ran(door, [broken]), [1, 1])
+  }
 })

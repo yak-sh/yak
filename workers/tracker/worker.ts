@@ -185,18 +185,23 @@ export let worker = (
   now: () => number = Date.now,
 ) => {
   let report = reporting(env)
-  // Every call into an object goes through here. The object can be reset, the
+  // Every call into an object goes through here, but trace admission, which
+  // charges a budget and is sent once. The object can be reset, the
   // connection to it lost, or the runtime can refuse it with its own opaque
   // internal error while it moves the object, as it does to every object a
-  // deploy reaches; each send takes a fresh stub and the same body. Every
-  // door is a read or a write keyed by its eids, so a send that landed before
-  // its answer was lost lands the same way again.
-  let send = (scope: string, request: Request, body: ArrayBuffer | null) =>
+  // deploy reaches; each send takes a fresh stub. Every door is a read or a
+  // write keyed by its eids, intake writes immutable rows and the monitor only
+  // looks again, so a send that landed before its answer was lost lands the
+  // same way again.
+  let call = <T>(scope: string, use: (stub: Stub) => Promise<T>) =>
     retried(
-      () => env.TRACKERS.getByName(scope).fetch(new Request(request, { body })),
+      () => use(env.TRACKERS.getByName(scope)),
       true,
       (error) => evicted(error) || lost(error) || opaque(error),
     )
+  // An HTTP door, its body read again by each send.
+  let send = (scope: string, request: Request, body: ArrayBuffer | null) =>
+    call(scope, (stub) => stub.fetch(new Request(request, { body })))
   // Where a receipt stands, asked through the object's stable read doors
   // across Worker/DO deployment propagation. The runtime holds its signing
   // key; the build learns only whether its canary arrived or failed.
@@ -315,7 +320,9 @@ export let worker = (
     queue: (messages: Message[]) =>
       consume(
         messages,
-        (scope) => env.TRACKERS.getByName(scope),
+        (scope) => ({
+          ingest: (rows) => call(scope, (stub) => stub.ingest(rows)),
+        }),
         (error) => report(error, 'queue'),
         async (message, error) => {
           if (!env.REJECTED) {
@@ -334,7 +341,7 @@ export let worker = (
       ),
     scheduled: async () => {
       try {
-        await env.TRACKERS.getByName(platform).monitor()
+        await call(platform, (stub) => stub.monitor())
       } catch (error) {
         await report(error, 'scheduled')
         throw error
