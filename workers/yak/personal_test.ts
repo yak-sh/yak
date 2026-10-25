@@ -1,8 +1,8 @@
 // The guide's example for `personal` (docs/components.md, "Rows that belong to
 // one person"): an app's vocab.json read as the store reads it, with each
 // member's rows readable and writable by that member alone.
-import { test } from '@yaks/testing'
-import { assertEquals, assertThrows } from '@std/assert'
+import { equal, test } from '@yaks/testing'
+import { assertThrows } from '@std/assert'
 import { graph, signed } from '@yaks/graph'
 import { personal } from '@yaks/member'
 import { ram } from '@yaks/ram'
@@ -50,7 +50,7 @@ for (
   ] as const
 ) {
   test(`${person} sees ${q} as ${seen.join() || 'nothing'}`, () =>
-    assertEquals(see(person, q), seen))
+    equal(see(person, q), [...seen]))
 }
 
 test('a member cannot write on another person', () => {
