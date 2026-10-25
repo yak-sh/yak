@@ -302,11 +302,11 @@ Every hop but the last must be a reference:
     .filed.project.doc.title~=Kitchen       tasks in the project called Kitchen
     .assignee.title~=maya                  bare: filed.assignee → doc.title
 
-Only the platform's properties can be references — a `vocab.json` property is
-`text`, `number`, `bool`, `time` or `url` — so paths walk `comment.target`,
-`filed.project`, `filed.assignee`, `attachment.blob`, and the `by` of each
-stamp. Point at another entity from your own component by keeping its eid in a
-`text` property; it holds the address, but a path will not walk it.
+A path walks a reference: the platform's `comment.target`, `filed.project`,
+`filed.assignee`, `attachment.blob` and the `by` of each stamp, and any property
+of your own that a `vocab.json` declares with `ref` and `death`
+(<https://yaks.app/docs/components.md>). A `text` property holding an eid is
+only text, and a path will not walk it.
 
 The plural form walks the other way — the entities pointing back at this one:
 

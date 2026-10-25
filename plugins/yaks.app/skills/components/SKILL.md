@@ -1,6 +1,6 @@
 ---
 name: components
-description: "Components: the platform's, and your own (yaks.app). Every component an app already has, property by property, and vocab.json for components of your own: the property types, who may write one and how often, what a later deploy may change, the names already taken, and when a property beats doc.body."
+description: "Components: the platform's, and your own (yaks.app). Every component an app already has, property by property, and vocab.json for components of your own: the property types, who may write one and how often, which rows belong to one person, what a later deploy may change, the names already taken, and when a property beats doc.body."
 ---
 
 # Components: the platform's, and your own
@@ -240,8 +240,11 @@ shown beside it:
   `["bread", "vegan"]`.
 - a union — `{"type": ["string", "number"]}`, any one of the types it lists, and
   `"null"` may be one of them. It is kept the way an object is.
-- `eid` — a reference to another entity. The platform's own components have
-  these; a `vocab.json` cannot declare one (below).
+- `eid` — a reference to another entity:
+  `{"type": "string", "ref": "entity",
+  "death": "keep"}`. The platform's own
+  components have these, and a component of yours declares one to say whose row
+  it is ("Rows that belong to one person", below).
 - a closed set of values — the platform's alone; a refusal lists the set,
   `cancelled|done|open`.
 
@@ -255,17 +258,17 @@ Every property says its `type`; `app_deploy` refuses one that does not. A string
 property keeps what it is sent as a string: a number written to a `text`
 property comes back as `"5"`.
 
-Every type above `eid` is one a `vocab.json` may declare. References, closed
-sets and content-addressed bodies each need machinery a store cannot plant from
-a name alone — a foreign key, a set to enforce, a hash.
+A `vocab.json` declares every type above. A closed set and a content-addressed
+body each need machinery a store cannot plant from a name alone, a set to
+enforce or a hash, so it declares neither.
 
-**No eid property of your own**, then: a component of yours cannot point at
-another entity by declaring one. Where a row of yours needs to be about another
-row, the platform already has a component for it — `comment.target` is an eid
-aimed at any entity, and an edge is the other way to record it. A history
-component (a chore's ticks, a diary's plantings) is the case that wants this;
-until it can be declared, hang the ticks off `comment.target` or make each tick
-its own entity carrying the parent's eid in `comment.target`.
+A reference says `ref` and `death`, and `app_deploy` refuses one with no
+`death`. `death` is what happens to the row when the entity it points at is
+deleted: `cascade` deletes the row, `detach` clears the property, `release`
+removes the component, and `keep` leaves the reference where it was. A path
+walks it, as it walks the platform's own (<https://yaks.app/docs/querying.md>):
+`.chore.room.doc.title~=Kitchen` for a `chore` whose `room` property is a
+reference.
 
 ## What a refusal tells you
 
@@ -412,8 +415,7 @@ platform's:
           "caption": { "type": "string" },
           "blob":    { "type": "string" } } } } }
 
-`photo.blob` is `text` and not `eid`, because a manifest cannot declare a
-reference. It costs nothing: it holds the eid `upload` answered with, and
+`photo.blob` is `text`: it holds the eid `upload` answered with, and
 `./api/blob/<eid>` serves the bytes.
 
 **A list, or a small record, in one property.** A value that only ever travels
@@ -456,9 +458,11 @@ message naming the property. A property that declares nothing extra is stored
 and readable and simply never searched.
 
 **Where it lives and who sees it.** `sync`, `durable`, `pace` and `save` belong
-beside `properties`. For local input, relayed movement, saved positions and
-disconnects, follow <https://yaks.app/docs/storage.md>. Omitting these keywords
-keeps the ordinary stored component: `sync: server`, `durable: forever`.
+beside `properties`, and so does `personal`, which makes a row private to one
+person ("Rows that belong to one person", below). For local input, relayed
+movement, saved positions and disconnects, follow
+<https://yaks.app/docs/storage.md>. Omitting these keywords keeps the ordinary
+stored component: `sync: server`, `durable: forever`.
 
 **Who writes it, and how often.** A component can say who may write it and how
 often each of them may, beside its `properties`, and the store holds both at
@@ -496,6 +500,48 @@ Either refusal reaches a page as `refused` with that sentence
 Neither is a break: nothing is filed. A page that changes each line at its
 component’s pace is never refused. `me()` on load says whether the person is
 signed in, before they type.
+
+## Rows that belong to one person
+
+In an app shared between members (<https://yaks.app/docs/sharing.md>), every
+member reads every row. A component that declares **`personal`**, beside its
+`properties`, is the exception: each row is private to one person, so a friend
+can use the same app and never see another's rows. The owner and the editors
+read only their own, too, and a guest who is not signed in reads none.
+
+`personal` is one of two forms.
+
+- **`"personal": "by"`** makes the whole row private to the person a property
+  names. That property is a reference to a person, declared with `ref` and
+  `death` (a reference is the type `eid`, above). A write that leaves it out
+  gets the person writing.
+- **`"personal": "entity"`** makes the component private on a person's own
+  entity, the row whose eid is the person's. Only that person writes it, and
+  only they read it; the entity's other components stay as they were.
+
+A diary where each member keeps notes of their own and a mood of their own:
+
+    { "$defs": {
+        "note": {
+          "personal": "by",
+          "properties": {
+            "text": { "type": "string" },
+            "by":   { "type": "string", "ref": "entity", "death": "keep" } } },
+        "mood": {
+          "personal": "entity",
+          "properties": { "today": { "type": "string" } } } } }
+
+    let { person } = await me()
+    await apply({ entity: { eid: '$n' }, note: { text: 'Psalm 23' } })
+    await apply({ entity: { eid: person }, mood: { today: 'calm' } })
+
+    let mine = await query('.note')
+
+Another member running that code in the same app gets their own notes and their
+own mood: `query('.note')` returns only the rows whose `by` is them, and a
+`mood` written onto somebody else's entity is refused. Share the app
+(`member_add`, <https://yaks.app/docs/sharing.md>) and each person starts with
+none of the others' rows.
 
 Your components are yours. No other app's store has heard of them, and no other
 app's rows can collide with them — unless a sibling app of the same person

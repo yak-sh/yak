@@ -76,6 +76,11 @@ own code. That is how a rule finer than one of the three settings gets written â
 an invitation code that opens one household's row and no other. See `env.APP` in
 [Code of your own](./code.md).
 
+Sharing an app need not share what each person writes in it. A component of your
+own that declares `personal` keeps each person's rows to that person, the owner
+and editors included: <https://yaks.app/docs/components.md>, "Rows that belong
+to one person".
+
 One rule sits above all three: **writing an app's files is always a member's
 act**, whatever the app lets its visitors save into its store. An `open` app
 accepts a guest's rows and never a guest's deploy.
