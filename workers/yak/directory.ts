@@ -1025,6 +1025,13 @@ export let restoreOf = (r: Row) => ({
 export let storeName = (space: Space, app: App) =>
   app.store ?? `${space.slug}/${app.slug}`
 
+/** The dispatch script serving the app's live release: each release uploads
+ * its own (`app-<eid>-r-<uuid>`, tools.ts), and an app released before that
+ * still runs the one named by its handle. What the running worker reads, its
+ * connections included (connections.ts `rebind`), is bound here. */
+export let scriptOf = (space: Space, app: App) =>
+  app.script ?? storeName(space, app)
+
 /**
  * The handle app_new writes, and what a rename — of the app or of its space —
  * must therefore leave alone: the address it was born at, plus a short key off

@@ -237,7 +237,9 @@ answers with 404 falls through to them, so it owns the routes it names and
 nothing else. It reads the app's store as the person viewing it (env.STORE),
 its files (env.FILES), and each key the person connected
 (store_connection_need) as env.NAME — a sentinel yaks.app swaps for the key on
-the way out, which is what a page must not hold. Call guide with page code for a whole one.
+the way out. A key needs no worker: a page reads the same sentinel from
+./api/env and sends its call through ./api/fetch?url=…, which swaps it the same
+way. Call guide with page code for a whole one.
 
 A worker may be written in TypeScript as worker.ts, and a worker or a page's
 module script may import npm packages that a package.json beside index.html

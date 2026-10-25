@@ -1107,6 +1107,12 @@ let connection = (
           `<option value="${esc(a.app)}">${esc(a.title)}</option>`
         ).join('')
       }</select>
+<label for="bind-${esc(c.eid)}">Name its code reads it by</label>
+<input class="Field" id="bind-${
+        esc(c.eid)
+      }" name="binding" autocomplete="off" spellcheck="false" pattern="[A-Za-z_][A-Za-z0-9_]*" placeholder="${
+        esc(c.binding)
+      }">
 <p>Only the app’s members can use it. Its code receives a sentinel, never the key.</p>
 <button class="Button" type="submit" name="do" value="attach">Attach to app</button>`,
     )

@@ -1,7 +1,7 @@
 // The files are staged when a release arrives here. Config and account
 // capabilities are checked before any upload, so a refused resource never
 // publishes a worker with only half of its requested bindings.
-import { type App, type Space, storeName } from './directory.ts'
+import { type App, scriptOf, type Space, storeName } from './directory.ts'
 import { carried, drop, NEEDS_TOKEN, upload, WORKER } from './dispatch.ts'
 import type { Env } from './env.ts'
 import {
@@ -62,7 +62,7 @@ export let deployWorker = async (
   compiled?: Compiled['worker'],
 ) => {
   let store = storeName(space, app)
-  let target = app.script ?? store
+  let target = scriptOf(space, app)
   let { config, report } = parsed
   let refused = [...parsed.refused]
   let why = unreached(space, app, config)
@@ -141,7 +141,7 @@ export let deployWorker = async (
   // is to bind the app's connections to (connections.ts). The worker is up
   // either way, so a binding that did not take is ours to hear about.
   try {
-    await rebind(env, target, app.eid)
+    await rebind(env, space, app)
   } catch (e) {
     caught(e, { request: 'rebind', app: app.slug })
     if (target != store) throw e

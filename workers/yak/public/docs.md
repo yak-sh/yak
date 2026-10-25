@@ -191,7 +191,8 @@ An app is pages until you give it a `worker.js`, and then it has a server. Every
 request that is not `/api/...` reaches it first, and anything it answers with a
 404 falls through to the files. `env.STORE` is the app's own store as the person
 looking, and a key the person connected (`store_connection_need`) arrives as
-`env.NAME`, which is the reason to write a worker at all.
+`env.NAME`. A key is no reason to write one: a page calls a connected service
+through `./api/fetch`, which puts the key in on the way out.
 
 A worker and a page's scripts may be TypeScript and may import npm packages:
 name the packages in a `package.json`, and `app_deploy` compiles them, pinning

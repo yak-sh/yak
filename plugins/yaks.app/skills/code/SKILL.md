@@ -17,13 +17,16 @@ Most apps never need one. A page reads and writes the app's own graph through
 `./api/client.js`, and that client already knows who is looking and already
 enforces the app's `access`. A worker adds nothing there.
 
+Nor does a key need one. A page calls an outside service with a key the person
+connected through `./api/fetch`, which puts the key in on the way out, so the
+page never holds it (Keys, below).
+
 Write one when the app has to do something a page cannot be trusted with, or
 cannot do at all:
 
-- **A key.** An API key in a page is a key you have given away — anyone with the
-  link can read it out of the source. `store_connection_need` asks the person
-  for one, and the worker calls out with it without ever holding it. This is the
-  reason most workers exist.
+- **A key the service wants transformed.** A request signature or AWS SigV4 is
+  made from the key itself, so the code that signs needs the key
+  (`direct: true`), and only a worker is handed one.
 - **A machine calling in.** A webhook, a form post from somewhere else, a cron
   on another service: none of them run your page, so none of them can use the
   client.
@@ -497,63 +500,91 @@ What they do not prove:
 
 ## Keys
 
-    store_connection_need(app, owner: space, integration: 'weather',
-      hosts: ['api.weatherapi.com'])
+    store_connection_need(app, owner: space, integration: 'ESV',
+      hosts: ['api.esv.org'])
     store_connection_list(owner: space)  → what is connected, and to which apps
 
 An app never holds a key. `store_connection_need` says what it needs — a built
 integration by name, or a name of your own with the hosts its key may be sent to
 — and the person pastes the key, or signs in, on the space's connections page
-(`yaks.app/manage/connections`). It goes from there to the vault; it is never in
-this chat, the app's data, its history or any tool's answer. Never ask the
-person to paste a key to you, and never invent one.
+(`yaks.app/manage/connections?space=<slug>`). It goes from there to the vault;
+it is never in this chat, the app's data, its history or any tool's answer.
+Never ask the person to paste a key to you, and never invent one. The app reads
+it by its **binding**: the integration's name in capitals (`ESV`), or the
+`binding` you give.
 
-If the space already has a connected account for that integration,
-`store_connection_list` shows its connection id and the apps using it. The
-space's owner can attach it to another app with `connection_attach`, naming that
-app and connection id, or select the app under the connection at
-`yaks.app/manage/connections?space=<slug>` and click **Attach to app**.
-Attaching is the owner's grant: the app starts with access for its members only,
-receives a sentinel, and uses the connection's existing scopes. The owner can
-open that app's use to visitors separately on the same page.
+The person can do all of it on that page without you, too: **Add a key** with
+the service's name and the hosts it may be sent to, then, under the connection,
+choose the app and the name its code reads it by and click **Attach to app**.
+That is the way when `store_connection_need` is not among your tools: say which
+name the code reads and which hosts, and the person does the rest. A space's
+connection already connected is attached the same way, or with
+`connection_attach`, naming the app, the connection id from
+`store_connection_list` and the `binding`. Attaching is the owner's grant: the
+app starts with access for its members only and receives a sentinel. The owner
+can open that app's use to visitors separately on the same page.
 
-What the worker reads, as `env.WEATHER` (the integration's name in capitals, or
-the `binding` you give), is a **sentinel**: a string that stands for the key.
-Put it wherever the service wants its key — a header, the query, the body:
+A connection made or attached reaches the app at once, whatever release it is
+running: there is nothing to redeploy.
 
-    let got = await fetch(
-      'https://api.weatherapi.com/v1/current.json?q=Paris&key=' + env.WEATHER,
-    )
+### From a page
 
-Every fetch the worker makes leaves through yaks.app, which sends it on with the
-key in the sentinel's place — only to the hosts the connection names, and only
-over https. A sentinel is useless anywhere else, so one that leaks is nothing to
-worry about. Until the person connects it, `env.WEATHER` is not there; say so
-rather than failing.
-
-Only someone with a role on the app may call out through it. A worker that
-answers everybody (a public page's weather) needs the person to open the
-connection to anyone, on the same page; until then a signed-out visitor's call
-comes back `403` from yaks.app, saying so.
-
-A sentinel inside Basic auth (`Authorization: Basic` of `user:sentinel`, as
-`curl -u` sends it) is swapped inside the pair. A key the service wants
-transformed before it is sent — a request signature, AWS SigV4 — never appears
-verbatim, so it cannot be swapped. `direct: true` hands the worker the key
-itself instead. Use it only for that.
-
-A page's own fetches never pass through yaks.app, so a sentinel in one goes out
-as it is. An app with no worker sends the call through the platform instead:
-`./api/env` answers the sentinels this visitor may call out with, by name, and
-`./api/fetch?url=` sends a call on to that address with the key in the
-sentinel's place, answering what the service answered:
+What the app is handed is a **sentinel**: a string that stands for the key,
+useless anywhere else, so one in a page's source gives nothing away. A page asks
+`./api/env` for the sentinels this visitor may call out with, by binding, puts
+one wherever the service wants its key — a header, the query, the body — and
+sends the call to `./api/fetch?url=` and the address. yaks.app sends it on with
+the key in the sentinel's place, only to the hosts the connection names and only
+over https, and answers what the service answered. The ESV API takes its key as
+`Authorization: Token <key>`:
 
     let env = await (await fetch('./api/env')).json()
-    let got = await fetch('./api/fetch?url=' + encodeURIComponent(
-      'https://api.weatherapi.com/v1/current.json?q=Paris&key=' + env.WEATHER,
-    ))
+    let esv = (path) =>
+      fetch('./api/fetch?url=' + encodeURIComponent(
+        'https://api.esv.org/v3/passage/' + path,
+      ), { headers: { authorization: 'Token ' + env.ESV } })
+        .then((r) => r.json())
 
-It sends only a call carrying a sentinel, and a direct key never reaches a page.
+    let { passages } = await esv('text/?q=' + encodeURIComponent('John 3:16'))
+    let { results } = await esv('search/?q=' + encodeURIComponent('living water'))
+    // results: [{ reference, content }, ...]
+
+`./api/fetch` keeps the method, the body and every header but the page's own
+(cookies, origin, referer), so a POST with a JSON body works the same way. It
+sends only a call carrying a sentinel; the page makes any other call itself.
+
+Until the key is connected, `./api/env` has no `ESV`. Say so where the person
+will see it, and how to fix it, rather than failing:
+
+    if (!env.ESV) {
+      document.querySelector('#status').textContent =
+        'The ESV key is not connected to this app yet: add it at ' +
+        'yaks.app/manage/connections and attach it to this app as ESV.'
+    }
+
+Only someone with a role on the app may call out through it. A page that answers
+everybody (a public page's weather) needs the person to open the connection to
+anyone, on the connections page; until then a signed-out visitor's call comes
+back `403` from yaks.app, saying so.
+
+### From a worker
+
+A worker reads the same sentinel as `env.ESV`, and every fetch it makes leaves
+through yaks.app, which swaps it the same way:
+
+    let got = await fetch('https://api.esv.org/v3/passage/text/?q=John+3:16', {
+      headers: { authorization: 'Token ' + env.ESV },
+    })
+
+A worker is for what a page can't do (the top of this page), not for the key:
+the call is the same either way. A sentinel inside Basic auth
+(`Authorization: Basic` of `user:sentinel`, as `curl -u` sends it) is swapped
+inside the pair. A key the service wants transformed before it is sent — a
+request signature, AWS SigV4 — never appears verbatim, so it cannot be swapped.
+`direct: true` hands the worker the key itself instead. Use it only for that; a
+direct key never reaches a page.
+
+### Each person's own account
 
 An app that reads each person's own account — their calendar, their inbox — asks
 with `each: true`. Link each person to the app's

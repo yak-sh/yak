@@ -309,8 +309,8 @@ test('the owner can attach a connected space key to a live app from the page', a
       app: app.eid,
     }),
     {
-      say:
-        'Notes can now use Weather. Only its members can call out through it.',
+      say: 'Notes can now use Weather, as env.SKY. Only its members can call ' +
+        'out through it.',
       no: false,
     },
   )
@@ -323,6 +323,41 @@ test('the owner can attach a connected space key to a live app from the page', a
   let sent = await envOf(c, app.eid)
   assert(sent.SKY && sent.SKY != key)
   assert(!s.dump().includes(key))
+})
+
+test('a key added on the page is attached to an app under the name its code reads', async () => {
+  let s = await setup()
+  await s.post({
+    do: 'add',
+    integration: 'ESV API',
+    hosts: 'api.esv.org',
+    key: 'private-esv-key',
+  })
+  let app = await liveApp(s)
+  let [esv] = (await s.shown()).list
+  assertStringIncludes(
+    await (await desk({
+      space: s.space.slug,
+      apps: [],
+      view: 'connections',
+      connections: await s.shown(),
+    })).text(),
+    'name="binding"',
+  )
+  assertEquals(
+    await s.post({
+      do: 'attach',
+      connection: esv.eid,
+      app: app.eid,
+      binding: 'ESV',
+    }),
+    {
+      say: 'Notes can now use ESV API, as env.ESV. Only its members can call ' +
+        'out through it.',
+      no: false,
+    },
+  )
+  assertEquals(Object.keys(await envOf(ctxOf(s.p.env), app.eid)), ['ESV'])
 })
 
 test('attaching a space connection is an owner tool, not an editor tool', async () => {
@@ -543,20 +578,23 @@ let wired = async (
 }
 
 test(
-  'an app calls out with the key in its sentinel’s place, for whom its link allows, and its worker is bound to it',
+  'an app calls out with the key in its sentinel’s place, for whom its link allows, and its running worker is bound to it',
   async () => {
     let s = await setup()
     s.p.env.CF_WORKERS_TOKEN = 'cf'
     s.p.env.CF_ACCOUNT = 'acct'
+    // Deployed: its live release runs a script of its own.
     await s.at.apply([{
       entity: { eid: '$app' },
       doc: { title: 'Notes' },
       app: {
         slug: 'notes',
         space: s.space.eid,
-        version: 0,
+        version: 1,
         access: 'public',
         store: 'ada/notes.a1',
+        script: 'app-notes-r-1',
+        worker: 'w-1',
       },
     }], KERNEL)
     let app = (await s.dir.app(s.space, 'notes'))!
@@ -581,9 +619,10 @@ test(
     )
     let { HUB } = await envOf(ctxOf(s.p.env), app.eid)
     assert(HUB.startsWith('yak_sentinel_'))
-    // Kept, the key's sentinel is bound as the name the app's code reads.
+    // Kept, the key's sentinel is bound as the name the app's code reads, on
+    // the script serving now: no deploy needed.
     let put = bound.find((r) => r.method == 'PUT')!
-    assertEquals(put.url.split('/scripts/')[1], 'ada_notes_a1/secrets')
+    assertEquals(put.url.split('/scripts/')[1], 'app-notes-r-1/secrets')
     assertEquals(await put.json(), {
       name: 'HUB',
       text: HUB,
@@ -625,10 +664,10 @@ test(
         await (await page('/env', new Request('https://x/'), 'viewer')).json(),
         { HUB },
       )
-      let door = (to: string) =>
+      let door = (to: string, headers: Record<string, string> = {}) =>
         new Request(
           `https://ada.yaks.app/notes/api/fetch?url=${encodeURIComponent(to)}`,
-          { headers: { cookie: 'yak_session=mine' } },
+          { headers: { cookie: 'yak_session=mine', ...headers } },
         )
       assertEquals(
         (await page('/fetch', door('https://api.hub.test/'), 'viewer')).status,
@@ -641,6 +680,13 @@ test(
       )
       assertEquals(await res.text(), 'https://api.hub.test/v2?key=sk-hub')
       assertEquals(sent[1].headers.get('cookie'), null)
+      // A key the service reads from a header (ESV's `Authorization: Token`).
+      await page(
+        '/fetch',
+        door('https://api.hub.test/v3', { authorization: `Token ${HUB}` }),
+        'viewer',
+      )
+      assertEquals(sent[2].headers.get('authorization'), 'Token sk-hub')
       // Opened to anyone, a stranger calls out through it too.
       await s.post({ do: 'open', connection: eid, app: app.eid })
       assertEquals((await out(null)).status, 200)

@@ -2,14 +2,14 @@
 // answering (M-37853).
 //
 // A directory snapshots `tools/list` when a connector is submitted and serves
-// that snapshot to everyone who installs it from there; only `tools/call`
-// reaches us. So every name in the listing answers, with the arguments it was
-// listed with, until a new listing is released. A tool renamed or dropped
-// since is kept here as a translation onto what does its work now. Only the
-// connector door answers one (agent.ts `platform`), and no `tools/list` names
-// it: a call reaching it came from a snapshot, and a client listing the tools
-// today is offered the tool doing the work. The builder, which no directory
-// lists, never sees them.
+// that snapshot to everyone who installs it from there. So every name in the
+// listing answers, with the arguments it was listed with, until a new listing
+// is released. A tool renamed or dropped since is kept here as a translation
+// onto what does its work now. Only the connector door answers one (agent.ts
+// `platform`), and its `tools/list` names each: a client installed from a
+// snapshot checks the live list before it calls a name, and answers "was not
+// returned by tools/list" for one it does not find there, without calling
+// (T-132627). The builder, which no directory lists, never sees them.
 //
 // The release that publishes a new listing replaces LISTING with the tools it
 // lists and deletes every translation whose name it no longer carries.
@@ -25,7 +25,6 @@ import {
 import type { Bundle, Comp, NamedTool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
 import { ctxOf, pageOf, rebind } from './connections.ts'
-import { storeName } from './directory.ts'
 import { CWD, TIMEOUT } from './sandbox.ts'
 import { vaulted } from './vault.ts'
 import {
@@ -194,7 +193,7 @@ let ROWS: Row[] = [
       let made = await c.graph.apply(asked)
       let eid = made.find((b) => !b.edge && !b[INTEGRATION])!.entity.eid
       await connect(c, eid, { key: value })
-      await rebind(ctx.env, app.script ?? storeName(space, app), app.eid)
+      await rebind(ctx.env, space, app)
       return {
         space,
         text: `${space.slug}/${app.slug}: ${name} is set — worker.js reads ` +
@@ -255,12 +254,7 @@ let ROWS: Row[] = [
         let left = await c.graph.read(`.edge.to=${to}&.${USES}`)
         if (comp(link, USES).direct && !left.length) await disconnect(c, to)
       }
-      await rebind(
-        ctx.env,
-        app.script ?? storeName(space, app),
-        app.eid,
-        [name],
-      )
+      await rebind(ctx.env, space, app, [name])
       return { space, text: `${space.slug}/${app.slug}: ${name} removed` }
     },
   },
@@ -455,7 +449,7 @@ let CONNECTIONS: Row[] = [
         }
       }
       if (status == 'connected') {
-        await rebind(ctx.env, storeName(space, app), app.eid)
+        await rebind(ctx.env, space, app)
       }
       return {
         space,
@@ -469,7 +463,9 @@ let CONNECTIONS: Row[] = [
               `env.${u.binding} answers from then on.`) +
           (u.direct ? '' : ` Send env.${u.binding} wherever the service ` +
             'wants its key (a header, the query, the body); it is swapped for ' +
-            'the key on the way out, only to the hosts the connection names.') +
+            'the key on the way out, only to the hosts the connection names. ' +
+            `A page needs no worker for it: it reads ${u.binding} from ` +
+            './api/env and sends the call through ./api/fetch?url=….') +
           (u.anyone ? '' : ' Only a member of the app may call out ' +
             'through it until the person opens it to anyone on that page.'),
       }
@@ -667,19 +663,28 @@ let BUILDERS: Row[] = [{
   },
 }]
 
-/** The translations, worded: answered on the connector door beside `TOOLS`,
- * and unlisted. */
+/** The translations, worded: listed and answered on the connector door
+ * beside `TOOLS`. */
 export let PUBLISHED: Tool[] = [...ROWS, ...MEMORY, ...CONNECTIONS, ...BUILDERS]
   .map(worded)
 
 /**
  * The listing's `mail_send`, onto @yaks/mail's own (listed as
  * `store_mail_send`): the subject was called `title`, and the answer was the
- * letter alone, as bundles rather than words. Unlisted, like the rest.
+ * letter alone, as bundles rather than words. Listed, like the rest.
  */
 export let sending = (ctx: Ctx): NamedTool => ({
   name: 'mail_send',
-  description: 'store_mail_send, with its subject called title',
+  title: "Send email from an app's address",
+  description: "Send one email from an app's own address to one recipient, " +
+    'an email address or the id of a record with email{address}: ' +
+    'store_mail_send, with its subject called title. A sent email cannot be ' +
+    'recalled, so confirm the recipient and message first. Returns the ' +
+    'email as written.',
+  // An email to a stranger's inbox: it leaves the platform, and no second
+  // call takes it back.
+  destructive: true,
+  openWorld: true,
   applied: true,
   inputSchema: {
     type: 'object',

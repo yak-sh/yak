@@ -33,6 +33,7 @@ import { decodedPath } from './request-path.ts'
 import {
   attach,
   begin,
+  bindingOf,
   clientOf,
   connect,
   connectable,
@@ -62,8 +63,8 @@ import {
   type App,
   appStore,
   directory,
+  scriptOf,
   type Space,
-  storeName,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
@@ -145,6 +146,8 @@ export type Shown = {
   scopes: string[]
   /** the apps that call out through it */
   apps: Using[]
+  /** the name an app attached to it reads it by, unless the owner names one */
+  binding: string
   /** live apps in this space that the owner may attach */
   available: { app: string; title: string }[]
   /** why it is not finished yet: the note on its `provisional` mark */
@@ -202,33 +205,40 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
 }
 
 /**
- * An app's worker brought up to date with the connections it uses
+ * An app's running worker brought up to date with the connections it uses
  * (dispatch.ts): each `uses` link's binding set to the connection's sentinel,
  * or to its key for a direct link, and a binding whose connection holds no
- * credential any more taken off. A name no link gives is not this function's
- * to touch, except one in `gone`: a name its link was just taken from. An app
- * with no worker has nothing to bind — its first deploy calls this again — and
- * neither has a deploy with no vault or no Cloudflare token.
+ * credential any more taken off. The worker is the live release's script
+ * (directory.ts `scriptOf`), so a connection made or attached after a deploy
+ * reaches the app at once. A name no link gives is not this function's to
+ * touch, except one in `gone`: a name its link was just taken from. An app
+ * whose release built no worker has nothing to bind — its first deploy calls
+ * this again — and neither has a deploy with no vault or no Cloudflare token.
+ * A worker its release built and the namespace doesn't have is a failure.
  */
 export let rebind = async (
   env: Env,
-  store: string,
-  app: string,
+  space: Space,
+  app: App,
   gone: string[] = [],
 ) => {
   if (!env.CF_WORKERS_TOKEN || !vaulted(env)) return
   let { dropSecret, secrets, setSecret } = await import('./dispatch.ts')
-  let had = await secrets(env, store)
-  if (!had) return
-  let want = await envOf(ctxOf(env), app)
-  let links = await readOf(env)(`.edge.from=${app}&.${USES}&*`)
+  let script = scriptOf(space, app)
+  let had = await secrets(env, script)
+  if (!had) {
+    if (!app.worker) return
+    throw Error(`${space.slug}/${app.slug}'s worker ${script} is not there`)
+  }
+  let want = await envOf(ctxOf(env), app.eid)
+  let links = await readOf(env)(`.edge.from=${app.eid}&.${USES}&*`)
   let owned = [...links.map((l) => comp(l, USES).binding), ...gone]
   for (let [name, value] of Object.entries(want)) {
-    await setSecret(env, store, name, value)
+    await setSecret(env, script, name, value)
   }
   for (let name of had) {
     if (owned.includes(name) && !(name in want)) {
-      await dropSecret(env, store, name)
+      await dropSecret(env, script, name)
     }
   }
 }
@@ -247,7 +257,7 @@ let rebound = async (env: Env, apps: string[]) => {
   for (let eid of apps) {
     let at = await dir.appAt(eid)
     if (!at) continue
-    await rebind(env, storeName(at.space, at.app), eid).catch((e) =>
+    await rebind(env, at.space, at.app).catch((e) =>
       caught(e, { request: 'rebind', app: at.app.slug })
     )
   }
@@ -324,6 +334,7 @@ export let connectionsOf = async (
             anyone: u.anyone == true,
           }
         }),
+        binding: bindingOf(String(c.integration)),
         available: (available.get(String(c.owner)) ?? [])
           .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
@@ -488,12 +499,18 @@ export let connecting = async (
         owner: space.eid,
         app: at.app.eid,
         connection: eid,
+        binding: field('binding') || undefined,
       })
       if (bundles.length) await c.graph.apply(bundles)
       await rebound(env, [at.app.eid])
+      let [l] = await c.graph.read(
+        `.entity.eid=${edgeEid(at.app.eid, USES, eid)}&.${USES}`,
+      )
       return {
         say: `${at.app.title || at.app.slug} can now use ${
           integrationOf(b)
+        }, as env.${
+          comp(l, USES).binding
         }. Only its members can call out through it.`,
         no: false,
       }
@@ -764,6 +781,10 @@ let CONNECTIONS: Row[] = [
           'the id of a connected connection owned by this space, from ' +
             'store_connection_list',
         ),
+        binding: str(
+          'the name the app reads it as, env.NAME in worker.js and from ' +
+            "./api/env in a page; omit for the service's name in capitals",
+        ),
       },
       required: ['app', 'connection'],
     },
@@ -781,14 +802,21 @@ let CONNECTIONS: Row[] = [
         owner: space.eid,
         app: app.eid,
         connection,
+        ...args.binding == null
+          ? {}
+          : { binding: text(args.binding, 'binding') },
       }).catch((e) => {
         throw refuse('conflict', e instanceof Error ? e.message : String(e))
       })
       if (bundles.length) await c.graph.apply(bundles)
       await rebound(ctx.env, [app.eid])
+      let [l] = await c.graph.read(
+        `.entity.eid=${edgeEid(app.eid, USES, connection)}&.${USES}`,
+      )
       return {
         space,
-        text: `${space.slug}/${app.slug} can use connection ${connection}. ` +
+        text: `${space.slug}/${app.slug} can use connection ${connection}, ` +
+          `as env.${comp(l, USES).binding}. ` +
           'Only app members can call out through it. The credential stays in the vault.',
       }
     },

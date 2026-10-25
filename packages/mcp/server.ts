@@ -355,12 +355,13 @@ let spelling = (tool: NamedTool): Record<string, unknown> | undefined => {
 }
 
 /**
- * Every tool this server answers, in the order it registers them: the generic
- * tier, then the graph's plugins', then the caller's own. A caller that
- * already has the tier in its own list passes `core: false`, so the tier is
- * not added twice. A tool offered only elsewhere (`surfaces` without `mcp`)
- * is neither listed nor callable here; one marked `listed: false` is callable
- * and left out of `tools/list` ({@link shown}).
+ * Every tool this server lists and answers, in the order it registers them:
+ * the generic tier, then the graph's plugins', then the caller's own. A caller
+ * that already has the tier in its own list passes `core: false`, so the tier
+ * is not added twice. A tool offered only elsewhere (`surfaces` without `mcp`)
+ * is neither listed nor callable here. Nothing is callable and unlisted: a
+ * client checks `tools/list` before it calls, so a name it does not find there
+ * is a name that does not answer.
  *
  * ```ts ignore
  * let names = listing(opts).map(toolName)
@@ -381,15 +382,10 @@ export let listing = (opts: Options): Tool[] =>
     ...(opts.tools ?? []),
   ].filter(offered('mcp'))
 
-/** Whether `tools/list` names a tool: all but the ones marked `listed: false`,
- * which answer a call by name and are never offered. */
-export let shown = (t: Pick<Tool, 'listed'>): boolean => t.listed !== false
-
 /** The roster this server serves: the tool names it lists, in listing order.
  * This is what a client caches when it connects, and what
  * {@link rosterVersion} hashes. */
-export let roster = (opts: Options): string[] =>
-  listing(opts).filter(shown).map(toolName)
+export let roster = (opts: Options): string[] => listing(opts).map(toolName)
 
 /**
  * One tool's behavior, as MCP's four hints (`ToolAnnotations`). A client reads
@@ -471,7 +467,7 @@ export let server = (
     report,
     ...opts.reply ? { reply: opts.reply } : {},
   })
-  let names = tools.filter(shown).map((t) => t.name)
+  let names = tools.map((t) => t.name)
 
   let callbacks = new Map<
     string,
@@ -526,7 +522,7 @@ export let server = (
   // every tool is listed with the one
   // answer schema, since every tool answers bundles, unless it declared its own.
   mcp.server.setRequestHandler('tools/list', () => ({
-    tools: tools.filter(shown).map((t) => ({
+    tools: tools.map((t) => ({
       name: t.name,
       ...(t.title ? { title: t.title } : {}),
       description: t.description,

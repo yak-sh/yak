@@ -156,6 +156,7 @@ test('connections: the space’s ask of each person offers nothing to connect, a
           hosts: [],
           scopes: [],
           available: [],
+          binding: 'WEATHER',
           apps: [{
             app: 'n',
             title: 'Notes',
@@ -195,6 +196,7 @@ test('connections: the person’s own, then this space with what it could add, t
     hosts: [],
     scopes: [],
     available: [],
+    binding: integration.toUpperCase(),
     apps: [],
     saving: '',
     failed: '',

@@ -172,8 +172,17 @@ grants one the space already has. What app builders read is the guide's
 "Keys" section (workers/yak/public/docs/code.md).
 
 - The app is handed a sentinel per binding: `env.NAME` in its worker, set as a
-  Workers secret on the app's script (workers/yak/connections.ts `rebind`), or
-  from `./api/env` in a page.
+  Workers secret on the live release's script (workers/yak/connections.ts
+  `rebind`, directory.ts `scriptOf`: each release uploads a script of its own)
+  the moment a connection is made, attached, replaced or ended, and on a
+  release put back; or from `./api/env` in a page. A connection never waits
+  for a redeploy.
+- A key needs no worker. The owner, verbatim: "That should be able to work
+  from the front-end. The token is filled in by the egress anyway, so nothing
+  would be exposed by writing that front-end." The guide's page path
+  (`./api/env`, then `./api/fetch?url=…` with the sentinel in a header, the
+  query or the body) is the default; a worker is for `direct` keys and what a
+  page can't do.
 - Every fetch a worker makes leaves through the outbound Worker; a page sends
   its call to `./api/fetch?url=…` (workers/yak/outbound.ts). @yaks/egress
   `forward` swaps the sentinel, in a header, a Basic credential, the query or

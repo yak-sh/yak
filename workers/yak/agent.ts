@@ -276,9 +276,9 @@ export let sugared = (ctx: Ctx, t: Sugar): Tool => ({
  * order, whoever is asking — which is what a directory that snapshots
  * `tools/list` at submission and serves it forever needs from us
  * (declared.ts). The names a directory listed and no tool carries any more
- * follow, as their translations (published.ts): they answer a call and are
- * left out of `tools/list`, where they would only say a second time what the
- * tool doing their work now says.
+ * follow, as their translations (published.ts), listed like the rest: a
+ * client installed from that directory checks `tools/list` before it calls a
+ * name its snapshot holds, and refuses one it does not find there.
  */
 export let platform = (ctx: Ctx): Plugin => {
   let bound = (t: Sugar) =>
@@ -288,9 +288,9 @@ export let platform = (ctx: Ctx): Plugin => {
     name: 'yak/platform',
     tools: [
       ...TOOLS.map(bound),
-      ...PUBLISHED.map((t) => ({ ...bound(t), listed: false })),
+      ...PUBLISHED.map(bound),
       ...packageTools(ctx).map(signed),
-      { ...signed(sending(ctx)), listed: false },
+      signed(sending(ctx)),
     ],
   }
 }

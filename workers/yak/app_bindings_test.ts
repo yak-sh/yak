@@ -12,6 +12,10 @@ import * as dirPart from './directory.ts'
 import { platform } from './testing.ts'
 import { meta } from './meta.ts'
 import { call, type Ctx, type Listed } from './tools.ts'
+import { connect, envOf, need } from '@yaks/connections'
+import type { D1Like } from '@yaks/d1'
+import { d1 } from '../../packages/d1/testing.ts'
+import { ctxOf } from './connections.ts'
 
 let PERSON = 'a0000000-0000-4000-8000-0000000000ad'
 let who = { 'x-yak-person': PERSON, 'x-yak-role': 'owner' }
@@ -33,10 +37,16 @@ let configuration = {
 // The tools, directory, and app store run together, as in serving_test.ts.
 // Only Cloudflare's account API is replaced: its resources and multipart
 // uploads are the effects this lifecycle test needs to inspect.
-let fixture = async (active = true) => {
+let fixture = async (active = true, vault = false) => {
   let scenario = platform('bindings-probe', {
     CF_ACCOUNT: 'acct',
     CF_WORKERS_TOKEN: 'test-token',
+    ...vault
+      ? {
+        VAULT: d1() as unknown as D1Like,
+        VAULT_KEY: btoa(String.fromCharCode(...new Uint8Array(32).fill(7))),
+      }
+      : {},
   })
   let { env } = scenario
   let dir = directory({ fetch: (r: Request) => dirPart.fetch(r, env) }, true)
@@ -105,7 +115,7 @@ let fixture = async (active = true) => {
     if (form) uploadedFiles.push(form)
     let body = form
       ? JSON.parse(await (form.get('metadata') as File).text())
-      : request.method == 'POST'
+      : ['POST', 'PUT'].includes(request.method)
       ? await request.json()
       : {}
     calls.push({ method: request.method, path, body })
@@ -143,6 +153,10 @@ let fixture = async (active = true) => {
       }
       state.objects.delete(decodeURIComponent(path.split('/objects/')[1]))
     } else if (request.method == 'GET') {
+      // An uploaded script's secrets: names only, and none set here.
+      if (path.endsWith('/secrets') && state.scripts.has(path.slice(0, -8))) {
+        return Response.json({ success: true, result: [] })
+      }
       if (path == '/d1/database') {
         return Response.json({
           success: true,
@@ -290,6 +304,42 @@ test('rollback selects the kept files and worker without uploading or minting a 
     )
     await page.body?.cancel()
     assertEquals(k.asked.length, 1)
+  } finally {
+    await k.done()
+  }
+})
+
+test('a release put back is bound to the connections the app has now', async () => {
+  let k = await fixture(true, true)
+  try {
+    await k.write({ main: 'worker.js' })
+    await k.tool('app_deploy')
+    let space = (await k.dir.space('ada'))!
+    let first = (await k.dir.app(space, 'cookbook'))!
+    await k.tool('app_deploy')
+    // Connected after both releases went out.
+    let c = ctxOf(k.env, { person: PERSON, role: 'owner' })
+    let made = await c.graph.apply(
+      await need(c.graph.read, {
+        owner: space.eid,
+        app: first.eid,
+        integration: 'Hub',
+        hosts: ['api.hub.test'],
+      }),
+    )
+    await connect(c, made.find((b) => b.connection)!.entity.eid, { key: 'k' })
+    let { HUB } = await envOf(c, first.eid)
+    await k.tool('app_rollback')
+    let put = k.calls.filter((c) => c.path.endsWith('/secrets'))
+      .filter((c) => c.method == 'PUT')
+    assertEquals(
+      put.map((c) => [c.path.split('/scripts/')[1], c.body]),
+      [[`${first.script}/secrets`, {
+        name: 'HUB',
+        text: HUB,
+        type: 'secret_text',
+      }]],
+    )
   } finally {
     await k.done()
   }

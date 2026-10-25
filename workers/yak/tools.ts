@@ -323,7 +323,7 @@ import {
 } from './tool.ts'
 import { read } from '@yaks/yaml'
 import { viewsTools } from './views.ts'
-import { connectionTools } from './connections.ts'
+import { connectionTools, rebind } from './connections.ts'
 import { background, caught } from './defects.ts'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
@@ -1297,6 +1297,16 @@ let published = async (
     source: release,
     script,
     lenses: latestSpeaks(dirPart.storeName(space, app), manifest, app.lenses),
+  }
+  // A release put back runs its kept script, bound to the connections the
+  // app had when that release was last live: it is brought up to date with
+  // today's before it serves. The release goes back either way, so a binding
+  // that did not take is ours to hear about.
+  if (kept) {
+    await rebind(ctx.env, space, { ...stagedApp, worker: kept.worker })
+      .catch((e) =>
+        caught(e, { request: 'rebind', space: space.slug, app: app.slug })
+      )
   }
   let deployed = kept
     ? { ready: true, worker: kept.worker, lines: [] }

@@ -53,7 +53,7 @@ import { COOKIE, opened, seal } from './lib/token.ts'
 import { instrumentEid } from './instrument.ts'
 import { sha256 } from '@yaks/graph/sha256'
 import type { App, Role, Space } from './directory.ts'
-import { storeName, url } from './directory.ts'
+import { scriptOf, storeName, url } from './directory.ts'
 import type { Env } from './env.ts'
 import { accountUrl } from './workers_api.ts'
 import { oops } from './pages.ts'
@@ -434,7 +434,7 @@ export let workerBreak = async (
     space,
     app,
     request: req,
-    script: scriptName(app.script ?? storeName(space, app)),
+    script: scriptName(scriptOf(space, app)),
     entrypoint: 'fetch',
   })
     .then(() => reported(error))
@@ -538,7 +538,7 @@ let called = async (
     // Declared commands may do bounded work beyond a page's 50 ms budget.
     worker = script(
       env.DISPATCH,
-      scriptName(app.script ?? store),
+      scriptName(scriptOf(space, app)),
       app,
       who,
       cpuMs,
