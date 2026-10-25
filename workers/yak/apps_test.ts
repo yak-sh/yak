@@ -16,7 +16,8 @@ import {
 } from './apps.ts'
 
 let ICON = '<link rel="apple-touch-icon" href="/cookbook/icon.png">'
-let MANIFEST = '<link rel="manifest" href="/cookbook/manifest.webmanifest">'
+let MANIFEST = '<link rel="manifest" href="/cookbook/manifest.webmanifest" ' +
+  'crossorigin="use-credentials">'
 let CAPABLE = '<meta name="apple-mobile-web-app-capable" content="yes">'
 let MOBILE = '<meta name="mobile-web-app-capable" content="yes">'
 let STATUS_BAR =
@@ -54,7 +55,7 @@ test('a page that declares one is given only the other four', () => {
   assert(one.includes(MANIFEST), one)
   assert(one.includes(PLATFORM_META), one)
 
-  let theirs = '<link rel=manifest href="app.webmanifest">'
+  let theirs = '<link rel=manifest href="app.webmanifest" crossorigin>'
   let two = pinned('/cookbook/', page(theirs), app('Cookbook'))
   assert(two.includes(theirs), two)
   assert(!two.includes(MANIFEST), two)
@@ -80,7 +81,7 @@ test('a page naming its own theme-color or Apple tags keeps them, untouched', ()
 
 test('a page that declares all five is untouched', () => {
   let mine = '<link rel="apple-touch-icon-precomposed" href="logo.png">' +
-    "<link rel='manifest' href='app.webmanifest'>" +
+    "<link rel='manifest' href='app.webmanifest' crossorigin='anonymous'>" +
     '<meta name="theme-color" content="#000">' +
     MOBILE + CAPABLE +
     '<meta name="apple-mobile-web-app-status-bar-style" content="black">'
@@ -88,6 +89,25 @@ test('a page that declares all five is untouched', () => {
   // And a `rel`/`name` that merely mentions the word is not a declaration.
   let other = '<link rel="stylesheet" href="manifest.css">'
   assert(pinned('/cookbook/', page(other), app('Cookbook')).includes(MANIFEST))
+})
+
+test("a manifest on the app's own origin is fetched with the person's cookies", () => {
+  let use = (tag: string) =>
+    tag.replace(/^<link/i, '<link crossorigin="use-credentials"')
+  let kept = (tag: string) => tag
+  let cases: [string, (tag: string) => string][] = [
+    ['<link rel="manifest" href="app.webmanifest">', use],
+    ["<LINK rel='Manifest' href='/cookbook/m.json'>", use],
+    ['<link href=./m.json rel=manifest>', use],
+    ['<link rel="manifest" href="app.webmanifest" crossorigin>', kept],
+    ['<link rel="manifest" href="https://cdn.example/m.json">', kept],
+    ['<link rel="manifest" href="//cdn.example/m.json">', kept],
+    ['<link rel="stylesheet" href="manifest.css">', kept],
+  ]
+  for (let [tag, becomes] of cases) {
+    let out = pinned('/cookbook/', page(tag), app('Cookbook'))
+    assert(out.includes(becomes(tag)), out)
+  }
 })
 
 test('a page with no head at all still gets its tags', () => {

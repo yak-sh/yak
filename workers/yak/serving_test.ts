@@ -447,7 +447,8 @@ test('an app is installable: the five tags, the icon, the manifest', async () =>
   )
   assert(
     html.includes(
-      '<link rel="manifest" href="/cookbook/manifest.webmanifest">',
+      '<link rel="manifest" href="/cookbook/manifest.webmanifest" ' +
+        'crossorigin="use-credentials">',
     ),
     html,
   )

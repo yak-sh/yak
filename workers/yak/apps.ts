@@ -633,7 +633,8 @@ let backgroundColorOf = (app: App) =>
 // colour, and the two Apple words. Each is decided on its own — a page naming
 // one gets the other four still — and what the page declares is never
 // touched, because a second answer beside the author's own is a second
-// answer to a question they already answered.
+// answer to a question they already answered. The one exception is how the
+// browser fetches a manifest (`credentialed` below), which no author chose.
 //
 // The hrefs are absolute at the mount, like the reporter's, rather than
 // relative: a page carrying its own `<base>` keeps it (`based` above), and a
@@ -646,7 +647,8 @@ export let pinned = (at: string, page: string, app: App) => {
       : `<link rel="apple-touch-icon" href="${at}icon.png">`) +
     (declares(page, 'link', 'rel', 'manifest')
       ? ''
-      : `<link rel="manifest" href="${at}manifest.webmanifest">`) +
+      : `<link rel="manifest" href="${at}manifest.webmanifest" ` +
+        'crossorigin="use-credentials">') +
     (declares(page, 'meta', 'name', 'theme-color')
       ? ''
       : `<meta name="theme-color" content="${themeColorOf(app)}">`) +
@@ -659,8 +661,30 @@ export let pinned = (at: string, page: string, app: App) => {
     (declares(page, 'meta', 'name', 'apple-mobile-web-app-status-bar-style')
       ? ''
       : '<meta name="apple-mobile-web-app-status-bar-style" content="default">')
-  return tags ? intoHead(page, tags) : page
+  return credentialed(tags ? intoHead(page, tags) : page)
 }
+
+// A browser fetches the manifest a page links without the person's cookies
+// unless the link says `crossorigin="use-credentials"`, and the door of an
+// app that is not public answers nobody without them: it sends the fetch to
+// sign in, on yaks.app's own origin, where it fails. So every manifest link
+// on the app's own origin is given that attribute, the platform's and the
+// author's alike, and on a public app it costs nothing. A link naming a
+// `crossorigin` of its own keeps it, and one to another origin is left as
+// written, since that origin admits credentials only if it says so.
+let elsewhere = /^\s*(?:[a-z][a-z\d+.-]*:|\/\/)/i
+let hrefOf = (tag: string) =>
+  /\shref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(tag)
+    ?.slice(1).find((v) => v != null) ?? ''
+let credentialed = (page: string) =>
+  page.replace(
+    /<link\b[^>]*>/gi,
+    (tag) =>
+      declares(tag, 'link', 'rel', 'manifest') &&
+        !/\scrossorigin\b/i.test(tag) && !elsewhere.test(hrefOf(tag))
+        ? tag.replace(/^<link/i, '<link crossorigin="use-credentials"')
+        : tag,
+  )
 
 // What an app's manifest says when the app wrote none: its name, its own root
 // as the scope a standalone window stays inside, the icon at the two sizes an
