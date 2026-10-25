@@ -425,7 +425,7 @@ connection_attach:
     connection id with store_connection_list. No key or token passes through
     this tool or its answer. Documentation: https://yaks.app/docs/code.
 integration_set:
-  title: Say how to get a key for a service this space added, or list it
+  title: Describe or list a custom integration
   description: >-
     Change what a custom integration this space made says about itself: its
     title, a one-line tagline, its https site, and instructions, markdown for
