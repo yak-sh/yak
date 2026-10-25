@@ -2,7 +2,9 @@
 // deno.json (fmt, lint, bytes, types, …), run at once. Each says one line as
 // it ends, `ok check:fmt (1.2s)`, and one that failed says what it printed
 // after that line, cut short (`cut`): an agent reads a run on every later
-// turn, and a passing check's output is never news. `--verbose` runs
+// turn, and a passing check's output is never news. The run closes with one
+// line naming every check that failed (`closing`), so its last line is the
+// verdict even when a failure that ended early scrolled away. `--verbose` runs
 // `check:run` itself, every check's output said as it comes, each line led by
 // its task's name.
 import config from '../deno.json' with { type: 'json' }
@@ -32,6 +34,14 @@ export let cut = (text: string, task: string, head = 20, tail = 40) => {
 }
 
 let took = (ms: number) => `${(ms / 1000).toFixed(1)}s`
+
+/// closing([], 9, 52500) -> 'ok | 9 passed | 0 failed (52.5s)'
+/// closing(['check:content'], 9, 3100) -> 'FAILED | 8 passed | 1 failed: check:content (3.1s)'
+/** The run's last line, as the test runner closes its own. */
+export let closing = (failed: string[], total: number, ms: number) =>
+  `${failed.length ? 'FAILED' : 'ok'} | ${total - failed.length} passed | ${
+    failed.length ? `${failed.length} failed: ${failed.join(', ')}` : '0 failed'
+  } (${took(ms)})`
 
 // One check, its output and errors as one stream, in the order they came.
 let check = async (task: string) => {
@@ -67,6 +77,9 @@ if (import.meta.main) {
     }).spawn().status
     Deno.exit(code)
   }
+  let start = performance.now()
   let passed = await Promise.all(CHECKS.map(check))
-  Deno.exit(passed.every(Boolean) ? 0 : 1)
+  let failed = CHECKS.filter((_, i) => !passed[i])
+  console.log(closing(failed, CHECKS.length, performance.now() - start))
+  Deno.exit(failed.length ? 1 : 0)
 }
