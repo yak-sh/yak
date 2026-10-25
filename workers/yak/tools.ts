@@ -323,7 +323,7 @@ import {
 } from './tool.ts'
 import { read } from '@yaks/yaml'
 import { viewsTools } from './views.ts'
-import { connectionTools, rebind } from './connections.ts'
+import { carried, connectionTools, rebind } from './connections.ts'
 import { background, caught } from './defects.ts'
 
 // What a tool IS, and the little kit for saying one, live in tool.ts — below
@@ -5286,13 +5286,23 @@ let OURS: Row[] = [
       // from and which version it took. Its access is the published app's: an
       // app written to be voted on has to stay votable, and the person can
       // app_set it after.
-      let entities: Bundle[] = [{
+      let row: Bundle = {
         ...born(space, s, {
           title: clamped(offer.app.title),
           access: offer.app.access,
         }),
         installed: { of: offer.app.eid, version, ...sandboxing(false) },
-      }]
+      }
+      // What the copy asks this space for: a needed connection for each one
+      // the app uses, read before anything is written and written with the
+      // row, so no copy is ever without them.
+      let asked = await carried(
+        ctx.env,
+        space,
+        { eid: row.entity.eid, slug: s },
+        offer.app.eid,
+      )
+      let entities = [row, ...asked.asks]
       let applied = await ctx.dir.apply({ entities }, vouched(who))
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
@@ -5335,7 +5345,7 @@ let OURS: Row[] = [
             wrote.length == 1 ? 'file' : 'files'
           }, its own ` +
           'store and its own data, pinned to that version (app_update moves ' +
-          'it)' + out.said,
+          'it)' + asked.said + out.said,
         space,
       }
     },
@@ -5398,6 +5408,12 @@ let OURS: Row[] = [
         ? 'required'
         : undefined
       let { wrote, gone } = await copied(ctx, source, { space, app }, who)
+      // The asks for what the new version uses that the copy did not, before
+      // the release, which binds what the copy is connected to.
+      let asked = await carried(ctx.env, space, app, from.app.eid)
+      if (asked.asks.length) {
+        await ctx.dir.apply({ entities: asked.asks }, vouched(who))
+      }
       let out = await released(
         ctx,
         space,
@@ -5415,7 +5431,7 @@ let OURS: Row[] = [
             wrote.length == 1 ? 'file' : 'files'
           }${
             gone.length ? `, ${gone.length} removed` : ''
-          } — everything it had saved is still there` + out.said,
+          } — everything it had saved is still there` + asked.said + out.said,
         space,
       }
     },

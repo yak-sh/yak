@@ -33,6 +33,11 @@
 // person's calendar is never read on another's behalf; the needed connection
 // the space holds for it is only the ask, and nobody calls out through it.
 //
+// A copy of an app, made in another space from the same code, asks for what
+// the app it was copied from uses (`carry`): a needed connection in its own
+// space for each, by the same name, so its person connects their own and the
+// copy works without anyone saying again what it needs.
+//
 // The two verbs an untrusted caller may ask, `need` and `list`, are the tools,
 // and answer bundles like every tool, for the caller to write in its own name.
 // Attaching an existing credential is the owner's act through a host that
@@ -302,6 +307,56 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
     }],
     ...a.app ? [linked(a.app, made.entity.eid, u)] : [],
   ]
+}
+
+/** What a copy of an app asks for, read off the app it was copied from: for
+ * each connection the source uses and the copy does not yet, a connection
+ * needing a credential, owned by `owner`, the copy's space, and linked from the
+ * copy as `need` makes one. It goes through the same integration, is read by
+ * the same binding, as directly, for each person where the source asks each,
+ * and asks for the same scopes. A credential never travels, and neither does a
+ * link opened to anyone, which is the person's act. An install and an update
+ * both ask it, so an update adds what its version gained and leaves what the
+ * copy already uses as its person made it. */
+export let carry = async (
+  read: Read,
+  a: { source: Eid; app: Eid; owner: Eid },
+): Promise<Bundle[]> => {
+  let out = await links(read, 'from', any([a.source, a.app]))
+  if (!out.length) return []
+  let to = await read(
+    `.entity.eid=${any(out.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+  )
+  // One ask for each integration, shared or each: every person's own
+  // connection is linked by the name and scopes of the ask it answers. What
+  // the copy uses already, as `using` finds it, is not asked for again.
+  let had = new Set<string>()
+  let asks = new Map<string, Need>()
+  for (let l of out) {
+    let c = comp(to.find((b) => b.entity.eid == far(l, 'from')), CONNECTION)
+    let u = comp(l, USES)
+    let each = u.each == true
+    let key = `${each} ${c.integration}`
+    if (comp(l, EDGE).from == a.app) {
+      if (!each || c.owner == a.owner) had.add(key)
+    } else if (typeof c.integration == 'string') {
+      asks.set(key, {
+        owner: a.owner,
+        app: a.app,
+        integration: c.integration,
+        scopes: strs(c.scopes),
+        each,
+        binding: typeof u.binding == 'string' ? u.binding : undefined,
+        direct: u.direct == true,
+      })
+    }
+  }
+  let made = await Promise.all(
+    [...asks].filter(([key]) => !had.has(key)).map(([, ask]) =>
+      need(read, ask)
+    ),
+  )
+  return made.flat()
 }
 
 /** Link an app to a connection its space already owns and has connected.

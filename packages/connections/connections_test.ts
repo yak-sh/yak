@@ -18,7 +18,7 @@ import { loadTools } from '@yaks/graph/tools'
 import { ram } from '@yaks/ram'
 import { loadVocab, type VocabDoc } from '@yaks/vocab'
 import { provisionalDoc } from '@yaks/effects'
-import { edgeDoc, edgeKeywords, edges } from '@yaks/edge'
+import { edgeDoc, edgeEid, edgeKeywords, edges } from '@yaks/edge'
 import {
   isHandle,
   ramVault,
@@ -33,6 +33,7 @@ import {
   accountOf,
   attach,
   begin,
+  carry,
   clientOf,
   connect,
   connectionsDoc,
@@ -685,6 +686,66 @@ test(
     assertEquals((await list(g.read, 'ann')).length, 0)
   },
 )
+
+// An app using a connected key it opened to anyone, an account each person
+// connects (one person's own among them), and a key handed to it directly;
+// copied into ann's space as `other`.
+let used = async () => {
+  let s = await setup()
+  let texts = await s.needs({ integration: 'texts', binding: 'SMS' })
+  await connect(s.c, texts, { key: 'sk-texts' })
+  await s.g.apply([{
+    entity: { eid: edgeEid('app', 'uses', texts) },
+    uses: { anyone: true },
+  }])
+  await s.needs({ scopes: ['events.read'], each: true })
+  await s.needs({ owner: 'bob', scopes: ['events.read'], each: true })
+  await s.needs({
+    integration: 'weather',
+    hosts: ['api.weather.example'],
+    direct: true,
+  })
+  return { ...s, copy: () => carry(s.g.read, COPY) }
+}
+let COPY = { source: 'app', app: 'other', owner: 'ann' }
+let copying = await used()
+// The same, once its copy asked, and after the app gained another.
+let copied = await used()
+await copied.g.apply(await copied.copy())
+await copied.needs({ integration: 'openrouter' })
+
+// Each connection asked for, and the link from the copy to it.
+let asked = (bundles: Bundle[]) =>
+  bundles.filter((b) => b.connection).map((b) => {
+    let l = bundles.find((l) => of(l, 'edge').to == b.entity.eid)
+    let { integration, owner, status, scopes } = of(b, 'connection')
+    return [integration, owner, status, scopes, of(l, 'edge').from, l?.uses]
+  }).sort()
+
+test(
+  'carry: a copy asks its own space for each connection its app uses, by the same name, as directly, and for each person',
+  async () => {
+    assertEquals(asked(await copying.copy()), [
+      ['calendar', 'ann', 'needed', ['events.read'], 'other', {
+        binding: 'CALENDAR',
+        each: true,
+      }],
+      ['texts', 'ann', 'needed', undefined, 'other', { binding: 'SMS' }],
+      ['weather', 'ann', 'needed', undefined, 'other', {
+        binding: 'WEATHER',
+        direct: true,
+      }],
+    ])
+  },
+)
+
+test('carry: a copy already asking is asked again only for what its app gained', async () => {
+  assertEquals(asked(await copied.copy()), [
+    ['openrouter', 'ann', 'needed', undefined, 'other', {
+      binding: 'OPENROUTER',
+    }],
+  ])
+})
 
 test(
   'envOf: what the app reads, by name: a sentinel, or the key itself where the link is direct',

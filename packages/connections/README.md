@@ -135,6 +135,15 @@ is the integration directory: every built integration but one in its service's
 testing mode, and every listed custom one, by title, and with `words` only those
 whose name, title, tagline, site, hosts or instructions hold every word.
 
+`carry(read, {source, app, owner})` plans what a copy of an app asks for: a
+`needed` connection owned by `owner`, the copy's space or person, for each
+connection the `source` app uses and the copy does not yet, made by `need`
+through the same integration, with the same `binding`, `direct`, `each` and
+scopes. No credential travels, and neither does a link opened to anyone. A host
+asks it when it installs a copy, and again when it updates one, which adds the
+asks for what the new version gained and leaves the rest as the copy's person
+made it.
+
 `using(read, {app, integration, owner?, each?})` answers the connection an app
 uses through an integration: the shared one, or with `each`, the one the owner
 holds. A host reads the space's ask with it before a person connects their own.

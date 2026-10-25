@@ -32,7 +32,8 @@
  * through it.
  *
  * The verbs: {@link need}, {@link list} (the two tools), {@link attach} and
- * {@link set} for a space owner through its host, {@link using},
+ * {@link set} for a space owner through its host, {@link carry} for a copy of
+ * an app, {@link using},
  * {@link through},
  * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve},
  * {@link used} and {@link envOf}, {@link credential}, {@link refresh}. A host
@@ -74,6 +75,7 @@ export {
   attach,
   begin,
   bindingOf,
+  carry,
   connect,
   CONNECTION,
   credential,

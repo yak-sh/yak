@@ -626,9 +626,13 @@ with `each: true`. Link each person to the app's
 `./api/connections/<integration>`, where yaks.app draws the Connect button;
 `./api/env` then answers their own sentinel, and only they call out through it.
 
-Keys are not copied by an install. An installed copy is a new app; its own
-person connects their own. A published app that needs a key should say so in its
-`about` line.
+An install copies what an app asks for, never a key. The copy asks the
+installer's space for each connection the app uses: by the same binding, as
+directly, and of each person where the app asks each person. Their connections
+page lists each as needed, with how to get its key, and `env.ESV` answers once
+they connect their own. Opening a connection to anyone does not travel; the
+installer opens theirs. `app_update` asks for any connection the new version
+gained.
 
 ## The limits
 

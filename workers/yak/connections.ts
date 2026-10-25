@@ -36,6 +36,7 @@ import {
   attach,
   begin,
   bindingOf,
+  carry,
   clientOf,
   connect,
   connectable,
@@ -272,6 +273,46 @@ export let rebind = async (
     if (owned.includes(name) && !(name in want)) {
       await dropSecret(env, script, name)
     }
+  }
+}
+
+/**
+ * What a copy of an app asks its space for, read off the app it was copied
+ * from (@yaks/connections `carry`): the bundles that make each ask, for an
+ * install to write with the copy's row and an update before its release, and
+ * the line its answer says of them, naming where each is connected. Nothing
+ * is written here.
+ */
+export let carried = async (
+  env: Env,
+  space: Space,
+  copy: { eid: string; slug: string },
+  source: string,
+) => {
+  let asks = await carry(readOf(env), {
+    source,
+    app: copy.eid,
+    owner: space.eid,
+  })
+  let named = (each: boolean) =>
+    asks.filter((l) => l[USES] && !comp(l, USES).each == !each).map((l) =>
+      integrationOf(asks.find((b) => b.entity.eid == comp(l, 'edge').to))
+    )
+  let shared = named(false), each = named(true)
+  let own = `https://${space.slug}.${apex(env)}/${copy.slug}/api/connections/`
+  return {
+    asks,
+    said:
+      (shared.length
+        ? `\nasks for ${shared.join(', ')}: the person pastes each key or ` +
+          `signs in at ${pageOf(env, space.slug)}, never in this chat ` +
+          '(store_connection_list says how to get each)'
+        : '') +
+      (each.length
+        ? `\nasks each person who uses it to connect their own ${
+          each.join(', ')
+        }, at ${each.map((n) => own + encodeURIComponent(n)).join(', ')}`
+        : ''),
   }
 }
 

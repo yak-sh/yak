@@ -318,9 +318,12 @@ What travels is the app's own files — the pages, the stylesheets, the
   data, not its code, and stay behind.
 - **Version history.** The copy earns its own from the release the install
   makes.
-- **Keys.** A connection is the space's, and the copy is in another space. An
-  app that needs a key should say so in its `about`, and the installer connects
-  their own after `store_connection_need`.
+- **Keys.** A connection is the space's, and the copy is in another space. The
+  copy asks for each connection the app uses instead: the installer's
+  connections page lists each as needed, with how to get its key, under the name
+  the app's code reads it by, and the copy works once they connect their own.
+  Opening a connection to anyone does not travel either; the installer opens
+  theirs. `app_update` asks for any connection the new version gained.
 - **Members.** The copy belongs to the installer's space and its guest list.
 
 ## How an installed app runs

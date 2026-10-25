@@ -574,6 +574,14 @@ test('an installed app is the installer own copy, data and all', async () => {
     await mine('index.html', '<h1>Tally v1</h1>')
     await mine('vocab.json', vocabFile({ vote: { who: txt, pick: txt } }))
     await his.tool('app_deploy', { app: 'tally' })
+    // A key it calls out with, through an integration of this run's own.
+    let ballots = unique('ballots'), boards = unique('boards')
+    await his.tool('connection_need', {
+      app: 'tally',
+      integration: ballots,
+      hosts: ['api.ballots.example'],
+      binding: 'BALLOTS',
+    })
     await his.tool('app_publish', {
       app: 'tally',
       name: published,
@@ -604,6 +612,17 @@ test('an installed app is the installer own copy, data and all', async () => {
     assertStringIncludes(took, `https://${space}.yaks.app/tally/`)
     assertStringIncludes(took, '2 files')
     assertStringIncludes(took, 'components: vote')
+    // The copy asks her space for the key the app uses, by the same name, for
+    // her to connect her own (T-132638).
+    assertStringIncludes(took, `asks for ${ballots}: the person pastes`)
+    // What her space asks for, by integration, as connection_list names each.
+    let asked = async () =>
+      (await hers.tool('connection_list', {})).match(/^\S+(?= \()/gm)?.sort()
+    assertEquals(await asked(), [ballots])
+    assertStringIncludes(
+      await hers.tool('connection_list', {}),
+      ': needed; tally reads it as env.BALLOTS (a sentinel)',
+    )
 
     // The code came; the data did not. Her store is empty and her page is
     // the one that was published.
@@ -633,6 +652,11 @@ test('an installed app is the installer own copy, data and all', async () => {
       vocabFile({ vote: { who: txt, pick: txt, at: txt } }),
     )
     await his.tool('app_deploy', { app: 'tally' })
+    await his.tool('connection_need', {
+      app: 'tally',
+      integration: boards,
+      hosts: ['api.boards.example'],
+    })
     await his.tool('app_publish', { app: 'tally' })
     assertStringIncludes(
       await hers.tool('app_files', {
@@ -648,6 +672,9 @@ test('an installed app is the installer own copy, data and all', async () => {
     assertStringIncludes(moved, 'updated ' + space + '/tally from v1 to v2')
     assertStringIncludes(moved, 'everything it had saved is still there')
     assertStringIncludes(moved, 'added: vote.at')
+    // And the copy asks for the key the new version gained, once.
+    assertStringIncludes(moved, `asks for ${boards}: the person pastes`)
+    assertEquals(await asked(), [ballots, boards].sort())
     assertEquals(await votes(hers)(), ['ann'])
     assertStringIncludes(
       await hers.tool('app_files', {

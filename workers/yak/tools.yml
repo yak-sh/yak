@@ -658,7 +658,10 @@ app_install:
     person their own copy of it: their own address, their own data store,
     their own everything from the first byte. Nothing is shared but the
     code, so what they save is theirs alone and the publisher never sees it.
-    The copy is pinned to the version it was installed from; the publisher's
+    No key travels either: the copy asks the person's space for each
+    connection the app uses, by the same env.NAME, and they connect their own
+    on their connections page; the answer names each and where. The copy is
+    pinned to the version it was installed from; the publisher's
     next version does not arrive on its own, and app_update moves the copy
     forward while keeping their data. Pass the published name and optionally
     as for the new app slug. By default it uses the source app slug if free,
@@ -676,8 +679,9 @@ app_update:
     Only the code is replaced, so anything you wrote into the copy yourself
     is replaced too. A vocab.json schema that only added properties is
     applied to their store; one that would retype a property their rows
-    were written under is refused, and nothing moves. It reports what
-    changed. To undo: app_rollback, since the update goes out as a version
+    were written under is refused, and nothing moves. A connection the new
+    version uses that the copy did not is asked for, as app_install asks. It
+    reports what changed. To undo: app_rollback, since the update goes out as a version
     like any other and app_versions lists the one before it. Documentation:
     https://yaks.app/docs/sharing.
 member_add:
