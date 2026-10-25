@@ -271,4 +271,24 @@ for (let async of [false, true]) {
       assertEquals(comp(whole, 'doc').title, 'Before')
     })
   })
+
+  test(`projected gather: a rule sees what it names of the entity, in the one read (${async})`, async () => {
+    let { storage, calls } = fixture(async)
+    let g = graph({ storage, vocab: books })
+    g.use({
+      name: 'reread',
+      rules: [{
+        phase: 'rules',
+        match: '+book, *doc',
+        run: (row) => ({
+          book: { pages: Number(comp(row, 'book').pages) + 1 },
+        }),
+      }],
+    })
+    await g.apply([{ entity: { eid: 'b' }, book: { pages: 4 } }])
+    calls.length = 0
+    await g.apply([{ entity: { eid: 'b' }, doc: { title: 'Again' } }])
+    assertEquals(comp((await g.get(['b']))[0], 'book').pages, 5)
+    assertEquals(calls[0], 'pick')
+  })
 }

@@ -111,6 +111,7 @@ import {
   registry,
   type Resource,
   type Rule,
+  sees,
   stands,
 } from './rules.ts'
 import { own, type Ready, ready, settle } from './declared.ts'
@@ -412,8 +413,14 @@ export let graph = (opts: Options): Graph => {
   let asking = (bundles: Bundle[], admission = false): Ask[] => [
     {
       eids: reached(bundles, vocab),
+      // The batch's own components, and what the rules phase's rules name:
+      // they see the entity through this read (`of`), before anything
+      // completes it, and a `+meter, *spend` rule adds to the meter held.
       select: [
-        ...new Set(bundles.flatMap((b) => comps(b).map(([name]) => name))),
+        ...new Set([
+          ...bundles.flatMap((b) => comps(b).map(([name]) => name)),
+          ...ruled('rules').flatMap((r) => sees(r, vocab)),
+        ]),
       ],
     },
     // Provenance can introduce references that the input did not name. Read

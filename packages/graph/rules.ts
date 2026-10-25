@@ -425,6 +425,17 @@ export let observes = (rule: Rule, vocab: Vocab, bundle: Bundle): boolean => {
   return !ready.checked || ready.writes.some((name) => name in bundle)
 }
 
+/** Every component a rule's match names that this vocabulary declares: what
+ * a phase evaluating it must answer for each entity it sees (`Tick.of`),
+ * beyond what the batch carries. Read planning for the gather; nothing for a
+ * rule that cannot fire here. */
+export let sees = (rule: Rule, vocab: Vocab): string[] => {
+  let ready = compile(rule, vocab)
+  if (!ready.query) return []
+  return [...new Set([...ready.allowed, ...words(ready.query)])]
+    .filter((c) => c != 'entity' && !!vocab.comp(c))
+}
+
 /**
  * Run the rules of one phase over a batch: the bundles in, the bundles plus
  * what the rules produced out.
