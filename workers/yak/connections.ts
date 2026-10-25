@@ -36,6 +36,7 @@ import {
   attach,
   begin,
   bindingOf,
+  borrowed,
   carry,
   clientOf,
   connect,
@@ -49,10 +50,13 @@ import {
   integrationEid,
   keyed,
   known,
+  lend,
   list,
   LISTED,
   need,
+  type Owners,
   type Read,
+  recall,
   set,
   type Status,
   USES,
@@ -197,6 +201,29 @@ export type Using = {
   calls: number
   /** the most calls a month it may make, or null for no limit */
   cap: number | null
+  /** the cap each copy installed from it borrows the connection under, or
+   * null where it lends it to none (@yaks/connections `lend`) */
+  lends: number | null
+  /** for a copy borrowing it from another space's app: the space the copy is
+   * in, as its people call it; null for an app of the connection's own */
+  borrower: string | null
+}
+
+/** A connection an app here borrows from the space that lends it, as the
+ * page shows it: whose it is, and what the app has spent of its cap. */
+export type Borrowed = {
+  /** the connection lent */
+  eid: string
+  integration: string
+  face: Face
+  /** connected by pasting a key, rather than by signing in */
+  keyed: boolean
+  /** the space lending it, as its people call it */
+  lender: string
+  /** the space here whose app borrows it, by slug */
+  space: string
+  /** the app borrowing it */
+  app: Using
 }
 
 /** What the connections page is drawn from. */
@@ -216,6 +243,8 @@ export type Connections = {
   /** the integration the page was opened to add (`?add=<name>`, from the
    * integration directory), while this space has none through it */
   asked?: { name: string; keyed: boolean; face: Face }
+  /** what the apps of these spaces borrow from another space's lend */
+  borrowed: Borrowed[]
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
@@ -235,6 +264,30 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
     redirect: url(env, CALLBACK),
   }
 }
+
+/** Whose space each app is in (@yaks/connections `Owners`): what its row in
+ * the directory says. */
+export let ownersOf =
+  (env: Partial<Env> & Pick<Env, 'STORE'>): Owners => async (apps) =>
+    apps.length
+      ? Object.fromEntries(
+        (await readOf(env)(`.entity.eid=${apps.join(',')}&.app`))
+          .map((b) => [b.entity.eid, String(comp(b, 'app').space)]),
+      )
+      : {}
+
+// What a space's people call it, for each of these: its title, else its
+// address.
+let spaceNames = async (env: Env, spaces: string[]) =>
+  new Map(
+    spaces.length
+      ? (await readOf(env)(`.entity.eid=${spaces.join(',')}&.space&?doc`))
+        .map((b) => [
+          b.entity.eid,
+          String(comp(b, 'doc').title || comp(b, 'space').slug),
+        ])
+      : [],
+  )
 
 /** What an app's code reads as env.NAME from the connections it uses
  * (@yaks/connections `envOf`), and nothing where no vault is kept. */
@@ -299,15 +352,34 @@ export let carried = async (
     app: copy.eid,
     owner: space.eid,
   })
+  let loans = asks.filter((l) => comp(l, USES).lender != null)
+  let lent = loans.length
+    ? await readOf(env)(
+      `.entity.eid=${
+        loans.map((l) => comp(l, 'edge').to).join(',')
+      }&.${CONNECTION}`,
+    )
+    : []
   let named = (each: boolean) =>
-    asks.filter((l) => l[USES] && !comp(l, USES).each == !each).map((l) =>
+    asks.filter((l) =>
+      l[USES] && comp(l, USES).lender == null &&
+      !comp(l, USES).each == !each
+    ).map((l) =>
       integrationOf(asks.find((b) => b.entity.eid == comp(l, 'edge').to))
     )
   let shared = named(false), each = named(true)
+  let borrowed = loans.map((l) =>
+    `${integrationOf(lent.find((b) => b.entity.eid == comp(l, 'edge').to))} ` +
+    `(${comp(l, USES).cap} calls a month)`
+  )
   let own = `https://${space.slug}.${apex(env)}/${copy.slug}/api/connections/`
   return {
     asks,
     said:
+      (borrowed.length
+        ? `\nborrows ${borrowed.join(', ')} from the app's maker; no key ` +
+          'or data is copied. Its owner can connect their own instead.'
+        : '') +
       (shared.length
         ? `\nasks for ${shared.join(', ')}: the person pastes each key or ` +
           `signs in at ${pageOf(env, space.slug)}, never in this chat ` +
@@ -377,7 +449,37 @@ export let connectionsOf = async (
         .map((app) => ({ app: app.eid, title: app.title || app.slug })),
     )
   }
-  let apps = [...new Set(links.map((l) => String(comp(l, 'edge').from)))]
+  let local = [...available.values()].flat().map((a) => a.app)
+  let loans = await borrowed(read, local)
+  let apps = [
+    ...new Set(
+      [...links, ...loans.filter((b) => b[USES])]
+        .map((l) => String(comp(l, 'edge').from)),
+    ),
+  ]
+  let owners = await ownersOf(env)(apps)
+  let names = await spaceNames(env, [
+    ...Object.values(owners),
+    ...loans.filter((b) => b[CONNECTION])
+      .map((b) => String(comp(b, CONNECTION).owner)),
+  ])
+  let usingOf = (l: Bundle): Using => {
+    let app = String(comp(l, 'edge').from)
+    let u = comp(l, USES)
+    return {
+      app,
+      title: named.get(app) ?? 'another app',
+      binding: String(u.binding ?? ''),
+      direct: u.direct == true,
+      anyone: u.anyone == true,
+      calls: spent(l, month),
+      cap: capOf(l),
+      lends: typeof u.lends == 'number' ? u.lends : null,
+      borrower: u.lender == null
+        ? null
+        : names.get(owners[app]) ?? 'another space',
+    }
+  }
   if (apps.length) {
     for (let b of await read(`.entity.eid=${apps.join(',')}&.app&*`)) {
       named.set(
@@ -390,7 +492,7 @@ export let connectionsOf = async (
     all.filter((b) => b[CONNECTION]).map(async (b): Promise<Shown> => {
       let c = comp(b, CONNECTION)
       let i = await known(read, String(c.integration))
-      let failed = !b[PROVISIONAL] && b.exception
+      let failed = !b[PROVISIONAL] && (b.failed || b.exception)
       let to = links.filter((l) => comp(l, 'edge').to == b.entity.eid)
       return {
         eid: b.entity.eid,
@@ -409,25 +511,16 @@ export let connectionsOf = async (
         listed: !!i?.built ||
           listed.has(integrationEid(String(c.integration))),
         scopes: strs(c.scopes).length ? strs(c.scopes) : i?.scopes ?? [],
-        apps: to.map((l): Using => {
-          let app = String(comp(l, 'edge').from)
-          let u = comp(l, USES)
-          return {
-            app,
-            title: named.get(app) ?? 'another app',
-            binding: String(u.binding ?? ''),
-            direct: u.direct == true,
-            anyone: u.anyone == true,
-            calls: spent(l, month),
-            cap: capOf(l),
-          }
-        }),
+        apps: to.map(usingOf),
         binding: bindingOf(String(c.integration)),
         available: (available.get(String(c.owner)) ?? [])
           .filter((app) => !to.some((l) => comp(l, 'edge').from == app.app)),
         saving: String(comp(b, PROVISIONAL).note ?? ''),
         failed: failed
-          ? String(comp(b, 'content').body ?? 'the key could not be saved')
+          ? String(
+            comp(b, 'failed').reason ?? comp(b, 'content').body ??
+              'the key could not be saved',
+          )
           : '',
       }
     }),
@@ -468,10 +561,97 @@ export let connectionsOf = async (
     on: vaulted(env),
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services,
+    borrowed: await Promise.all(
+      loans.filter((l) => l[USES]).map(async (l): Promise<Borrowed> => {
+        let eid = String(comp(l, 'edge').to)
+        let b = loans.find((b) => b.entity.eid == eid)
+        let c = comp(b, CONNECTION)
+        let integration = String(c.integration)
+        let i = await known(read, integration)
+        return {
+          eid,
+          integration,
+          face: await faceOf(integration, i),
+          keyed: !i || keyed(i),
+          lender: names.get(String(c.owner)) ?? 'another space',
+          space: slugs.get(owners[String(comp(l, 'edge').from)])!,
+          app: usingOf(l),
+        }
+      }),
+    ),
     built: built.filter((b) => b.name != asked?.name),
     enable,
     ...asked ? { asked } : {},
   }
+}
+
+// A lend changes host-owned caps in other spaces. Ownership is checked by
+// its caller; only the resulting bundles are applied as the host.
+let lending = async (
+  env: Env,
+  app: string,
+  integration: string,
+  cap: number | null,
+) => {
+  let c = ctxOf(env)
+  let bundles = await lend(
+    c.graph.read,
+    { app, integration, cap },
+    ownersOf(env),
+  )
+  // A source may have replaced its own connection since lending to a copy.
+  // Read the changed links before tombstoning them so those copies rebind too.
+  let was = bundles.length
+    ? await c.graph.read(
+      `.entity.eid=${bundles.map((b) => b.entity.eid).join(',')}&.${USES}&*`,
+    )
+    : []
+  let apps = [
+    ...new Set(
+      [...was, ...bundles].filter((b) => b.edge && b[USES])
+        .map((b) => String(comp(b, 'edge').from)),
+    ),
+  ]
+  await c.graph.apply(bundles)
+  await rebound(env, apps)
+}
+
+// A connected mark is written beside the credential, before the vault has
+// sealed it. Do not replace a working loan when sealing was given up on.
+let ready = async (env: Env, connection: string) => {
+  let [b] = await readOf(env)(`.entity.eid=${connection}&.${CONNECTION}&*`)
+  if (!b || comp(b, CONNECTION).status != 'connected') {
+    throw new Error('The connection was not saved.')
+  }
+  let why = comp(b, 'failed').reason ??
+    (b.exception ? comp(b, 'content').body : undefined) ??
+    comp(b, PROVISIONAL).note
+  if (why) throw refuse('connection', String(why))
+}
+
+// The newly connected credential replaces the copy's borrowed link only once
+// saving or signing in has succeeded. The lender's connection is untouched.
+let attached = async (
+  env: Env,
+  who: Who,
+  space: Space,
+  app: string,
+  connection: string,
+) => {
+  let at = await dirOf(env).appAt(app)
+  if (
+    who.role != 'owner' || !at || at.app.trashed || at.space.eid != space.eid
+  ) {
+    throw refuse('access', 'Only this space’s owner can connect its app.')
+  }
+  let c = ctxOf(env, who)
+  let bundles = await attach(c.graph.read, {
+    owner: space.eid,
+    app,
+    connection,
+  })
+  if (bundles.length) await c.graph.apply(bundles)
+  await rebound(env, [app])
 }
 
 /** What a POST from the page answers, when it is not a redirect. */
@@ -492,6 +672,8 @@ type Held = {
   person: string
   attempt: { state: string; until: number; verifier: string }
   back: string
+  /** the copy replacing a borrowed connection after a successful sign-in */
+  app?: string
 }
 
 // The connections page of a space, where a sign-in begun there comes back to.
@@ -519,6 +701,7 @@ let signingIn = async (
   who: Who,
   eid: string,
   back = enabling(pageOf(env, space.slug), enabled(req)),
+  app?: string,
 ): Promise<Response> => {
   let { url: to, attempt } = await begin(c, eid)
   let held: Held = {
@@ -527,6 +710,7 @@ let signingIn = async (
     person: who.person!,
     attempt,
     back,
+    ...app ? { app } : {},
   }
   let domain = domainOf(req, env)
   return new Response(null, {
@@ -593,6 +777,35 @@ export let connecting = async (
       ? await c.graph.read(`.entity.eid=${eid}&.${CONNECTION}`)
       : []
     let owner = comp(b, CONNECTION).owner
+    if (act == 'own') {
+      if (!vaulted(env)) return no("Keys can't be saved here yet.")
+      let app = field('app')
+      let at = await dirOf(env).appAt(app)
+      let [loan] = at && at.space.eid == space.eid && !at.app.trashed
+        ? await c.graph.read(`.entity.eid=${edgeEid(app, USES, eid)}&.${USES}`)
+        : []
+      if (who.role != 'owner' || !b || comp(loan, USES).lender == null) {
+        return no('Choose a connection this space’s app borrows.')
+      }
+      let integration = integrationOf(b)
+      let i = await known(c.graph.read, integration)
+      if ((!i || keyed(i)) && !key) return no('Paste the key first.')
+      let made = await c.graph.apply(
+        await need(c.graph.read, {
+          owner: space.eid,
+          integration,
+          scopes: strs(comp(b, CONNECTION).scopes),
+        }),
+      )
+      let own = made[0].entity.eid
+      if (i && !keyed(i)) {
+        return signingIn(req, env, c, space, who, own, undefined, app)
+      }
+      await connect(c, own, { key })
+      await ready(env, own)
+      await attached(env, who, space, app, own)
+      return { say: 'The app uses your own connection now.', no: false }
+    }
     if (!b || (owner != space.eid && owner != who.person)) {
       return no('That connection is not here any more.')
     }
@@ -620,6 +833,36 @@ export let connecting = async (
             'for anyone to add to a space of theirs with their own key. The ' +
             'page shows it within half a minute.'
           : `${integrationOf(b)} is out of the integration directory.`,
+        no: false,
+      }
+    }
+    if (act == 'lend' || act == 'recall') {
+      if (who.role != 'owner' || owner != space.eid) {
+        return no('Only this space’s owner can lend its connection.')
+      }
+      let app = field('app')
+      if (!apps.includes(app)) return no('That app does not use it any more.')
+      if (act == 'lend') {
+        let at = await dirOf(env).appAt(app)
+        if (!at || at.app.trashed || at.space.eid != space.eid) {
+          return no('Choose a live app in this space.')
+        }
+        let cap = field('cap') == '' ? null : Number(field('cap'))
+        await lending(env, app, integrationOf(b), cap)
+        return {
+          say: cap == null
+            ? 'Stopped lending to installed copies.'
+            : `Installed copies may each make ${cap} calls a month.`,
+          no: false,
+        }
+      }
+      let host = ctxOf(env)
+      await host.graph.apply(
+        await recall(host.graph.read, { connection: eid, app }, ownersOf(env)),
+      )
+      await rebound(env, [app])
+      return {
+        say: 'Stopped lending to that copy; it needs its own connection now.',
         no: false,
       }
     }
@@ -669,7 +912,7 @@ export let connecting = async (
       }
     }
     if (act == 'disconnect') {
-      await disconnect(c, eid)
+      await disconnect(ctxOf(env), eid, ownersOf(env))
       await rebound(env, apps)
       return { say: 'Disconnected.', no: false }
     }
@@ -725,11 +968,19 @@ export let callback: Door = async ({ env, req, path, space }) => {
   // An attempt begun before its cookie named a page came from the space's.
   let back = held.back ?? pageOf(env, at.slug)
   try {
-    await connect(ctxOf(env, who), held.connection, {
+    let saved = await connect(ctxOf(env, who), held.connection, {
       attempt: held.attempt,
       callback: req.url,
     })
-    await rebound(env, await usersOf(env, held.connection))
+    let connection = saved.find((b) =>
+      comp(b, CONNECTION).status == 'connected'
+    )?.entity.eid
+    if (!connection) {
+      throw new Error('The service did not return a connected account.')
+    }
+    await ready(env, connection)
+    if (held.app) await attached(env, who, at, held.app, connection)
+    await rebound(env, await usersOf(env, connection))
     return answer(told(back, 'connected'))
   } catch (e) {
     caught(e, { request: `GET ${CALLBACK}` })
@@ -954,6 +1205,57 @@ let CONNECTIONS: Row[] = [
         text: `${space.slug}/${app.slug} can use connection ${connection}, ` +
           `as env.${comp(l, USES).binding}. ` +
           'Only app members can call out through it. The credential stays in the vault.',
+      }
+    },
+  },
+  {
+    name: 'connection_lend',
+    destructive: true,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        app: APP,
+        integration: str(
+          'the integration of a shared connection this app uses',
+        ),
+        cap: {
+          type: ['integer', 'null'],
+          minimum: 1,
+          description:
+            'the calls a month each installed copy may make; null stops lending and recalls outstanding loans from this app',
+        },
+      },
+      required: ['app', 'integration', 'cap'],
+    },
+    run: async (ctx, args) => {
+      let { space, app, who } = await inApp(ctx, args)
+      if (who.role != 'owner') {
+        throw refuse(
+          'access',
+          `only the owner of ${space.slug} may lend its connection`,
+        )
+      }
+      let integration = text(args.integration, 'integration')
+      let c = ctxOf(ctx.env)
+      let connection = await using(c.graph.read, { app: app.eid, integration })
+      if (!connection || comp(connection, CONNECTION).owner != space.eid) {
+        throw refuse('access', 'Only a connection this space owns may be lent.')
+      }
+      if (args.cap !== null && typeof args.cap != 'number') {
+        throw refuse(
+          'cap',
+          'Give a whole number of calls a month, or null to stop lending.',
+        )
+      }
+      let cap = args.cap as number | null
+      await lending(ctx.env, app.eid, integration, cap)
+      return {
+        space,
+        text: cap == null
+          ? `${space.slug}/${app.slug} stopped lending ${integration}; every copy borrowing through it needs its own connection now.`
+          : `${space.slug}/${app.slug} lends ${integration} to copies installed from it, capped at ${cap} calls a month each. A changed cap reaches copies already borrowing it. The key stays in the vault; each copy keeps its own data and may connect its own key instead.`,
       }
     },
   },

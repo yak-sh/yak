@@ -31,6 +31,7 @@ export {
   grants,
   type Host,
   Refused,
+  sentinelsIn,
 } from './egress.ts'
 export {
   CALLED,

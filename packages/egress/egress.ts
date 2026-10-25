@@ -123,6 +123,21 @@ let basic = (v: string) => {
   }
 }
 
+/** The sentinels a request carries, including either half of a Basic
+ * credential. Hosts checking whether a call uses a connection scan it the
+ * same way as the egress that swaps it. */
+export let sentinelsIn = (
+  url: string,
+  headers: Iterable<[string, string]>,
+  body = '',
+): string[] => [
+  ...new Set([
+    url,
+    ...[...headers].flatMap(([, v]) => [v, basic(v)?.pair ?? '']),
+    body,
+  ].flatMap(sentinels)),
+]
+
 // One connection a request's sentinel stands for, checked, with the value that
 // goes in its place and the link the app uses it through.
 type Hit = Grant & { eid: Eid; oauth: boolean; link: Eid }
@@ -212,15 +227,7 @@ let prepare = async (
   let tail = req.url.slice(url.origin.length)
   let headers = [...req.headers].filter(([k]) => !SIZED.includes(k))
   let body = req.body ? latin(new Uint8Array(await req.arrayBuffer())) : null
-  let found = [
-    ...new Set(
-      [
-        tail,
-        ...headers.flatMap(([, v]) => [v, basic(v)?.pair ?? '']),
-        body ?? '',
-      ].flatMap(sentinels),
-    ),
-  ]
+  let found = sentinelsIn(tail, headers, body ?? '')
   let sent = (by: readonly Grant[]) => {
     let values = new Map(by.map((h) => [h.sentinel, h.value]))
     let raw = new Map(by.map((h) => [h.sentinel, utf8(h.value)]))

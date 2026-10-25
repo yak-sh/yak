@@ -644,13 +644,37 @@ inbox, requests the connection with `each: true`. Link each person to the app's
 `./api/env` then returns that person's own sentinel, and only they can make
 calls with it.
 
-Installing an app copies the connections it requests, never a key. The installed
-copy requests each connection the app uses from the installer's space: with the
-same binding, the same `direct` setting, and per person where the app requests
-one per person. The installer's connections page lists each as needed, with
-instructions for getting its key, and `env.ESV` is set once they connect their
-own. Opening a connection to anyone is not copied by an install; the installer
-opens their own. `app_update` requests any connection the new version added.
+### Connections in installed copies
+
+Installing an app carries each connection request, with the same binding, the
+same `direct` setting, and per person where the app requests one per person. The
+installer's connections page lists unmet requests with instructions for getting
+the key, and `env.ESV` is set once they connect their own. Opening a connection
+to anyone is not copied; the installer opens their own. `app_update` adds any
+connection request the new version gained and keeps the connections the copy
+already uses.
+
+The publisher can instead lend a shared connection to installed copies:
+
+    connection_lend(app, integration: 'ESV', cap: 100)
+
+Only the owner of the app's space can lend a connection their space owns. A copy
+installed afterwards borrows it under a cap of 100 calls per month, using the
+same binding and the same page or worker code. The key stays in the vault and is
+swapped for the sentinel only at egress; the borrower never receives it.
+`direct` keys, per-person connections (`each: true`) and borrowed connections
+cannot be lent. The copy has its own store and data; borrowing gives neither
+space access to the other's app data.
+
+`connection_list` reports who lends a borrowed connection and each copy's
+monthly count and cap. Changing the lending cap changes every borrowing copy's
+cap. `cap: null` stops lending and leaves every borrowing copy asking for its
+own connection. A copy's owner can connect a key in their own space and use
+`connection_attach` to replace its borrowed connection; the lender's connection
+stays as it was. See
+[Lending a connection to installed
+copies](./sharing.md#lending-a-connection-to-installed-copies) for the install
+and revoke calls.
 
 ## CPU and subrequest limits
 

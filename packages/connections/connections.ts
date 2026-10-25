@@ -38,6 +38,18 @@
 // space for each, by the same name, so its person connects their own and the
 // copy works without anyone saying again what it needs.
 //
+// Or the app's space lends the copies its connection (`lend`): its link says
+// `lends`, and each copy is linked to that same connection instead of asking,
+// its link capped at that many calls a month and naming the `lender`. The
+// copy calls out through it at once and never holds the key. A space knows
+// which of its apps' links are borrowed by their `lender`, and which copies
+// borrow its own connection the same way. Stopping a lend (`recall`) gives the
+// copy the ask it would have had, in its own space; a key of its own replaces
+// the borrowed link (`attach`); and the lender's connection stays as it was
+// either way. Only a sentinel is lent: never a direct key, nor a link where
+// each person connects their own. Which space a copy is in is the host's to
+// say (`Owners`), since an app is the host's word.
+//
 // The two verbs an untrusted caller may ask, `need` and `list`, are the tools,
 // and answer bundles like every tool, for the caller to write in its own name.
 // Attaching an existing credential is the owner's act through a host that
@@ -121,6 +133,10 @@ export type Ctx = {
   fetch?: typeof fetch
   now?: () => number
 }
+
+/** Whose space each app is in, by its eid: who is asked for what it needs. The
+ * host says, since an app is its word; an app it does not know is missing. */
+export type Owners = (apps: Eid[]) => Promise<Record<Eid, Eid>>
 
 /** What a caller calling out through a connection is given: the connection,
  * the `uses` link to it from the app, and the sentinel for its credential. */
@@ -284,6 +300,20 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let retold = i && Object.keys(about).length ? await set(read, a) : []
   let used = a.app ? await using(read, { ...a, app: a.app }) : undefined
   if (used) {
+    if (a.direct) {
+      let [l] = await read(
+        `.entity.eid=${edgeEid(a.app!, USES, used.entity.eid)}&.${USES}`,
+      )
+      let loan = comp(l, USES)
+      if (loan.lender != null || loan.lends != null) {
+        throw new CallError(
+          'direct',
+          loan.lender != null
+            ? 'A borrowed connection only supplies a sentinel; connect your own key first'
+            : 'Stop lending this connection before handing its key to the app',
+        )
+      }
+    }
     let said = a.binding != null || a.direct != null
     return [
       // Answered with the integration it goes through, as it already does.
@@ -308,15 +338,31 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   ]
 }
 
+// Whether a link may lend its connection: a sentinel every caller shares, on
+// a connection the app's own space keeps rather than borrows.
+let lendable = (u: Comp) => !u.each && !u.direct && u.lender == null
+
+// The copy's link to the connection its source app lends, capped as lent.
+let borrowing = (app: Eid, lent: Bundle, lender: Eid): Bundle => {
+  let u = comp(lent, USES)
+  return {
+    ...link(app, USES, far(lent, 'from')),
+    [USES]: { binding: u.binding, cap: u.lends, lender },
+  }
+}
+
 /** What a copy of an app asks for, read off the app it was copied from: for
  * each connection the source uses and the copy does not yet, a connection
  * needing a credential, owned by `owner`, the copy's space, and linked from the
  * copy as `need` makes one. It goes through the same integration, is read by
  * the same binding, as directly, for each person where the source asks each,
  * and asks for the same scopes. A credential never travels, and neither does a
- * link opened to anyone, which is the person's act. An install and an update
- * both ask it, so an update adds what its version gained and leaves what the
- * copy already uses as its person made it. */
+ * link opened to anyone, which is the person's act. Where the source lends a
+ * connected connection (`lend`), the copy borrows it instead: a link to that
+ * same connection, capped at what the source lends and naming it the
+ * `lender`, which the host writes as itself since only it sets a cap. An
+ * install and an update both ask it, so an update adds what its version gained
+ * and leaves what the copy already uses as its person made it. */
 export let carry = async (
   read: Read,
   a: { source: Eid; app: Eid; owner: Eid },
@@ -330,7 +376,7 @@ export let carry = async (
   // connection is linked by the name and scopes of the ask it answers. What
   // the copy uses already, as `using` finds it, is not asked for again.
   let had = new Set<string>()
-  let asks = new Map<string, Need>()
+  let asks = new Map<string, Need | Bundle>()
   for (let l of out) {
     let c = comp(to.find((b) => b.entity.eid == far(l, 'from')), CONNECTION)
     let u = comp(l, USES)
@@ -338,6 +384,10 @@ export let carry = async (
     let key = `${each} ${c.integration}`
     if (comp(l, EDGE).from == a.app) {
       if (!each || c.owner == a.owner) had.add(key)
+    } else if (
+      lendable(u) && typeof u.lends == 'number' && c.status == 'connected'
+    ) {
+      asks.set(key, borrowing(a.app, l, a.source))
     } else if (typeof c.integration == 'string') {
       asks.set(key, {
         owner: a.owner,
@@ -352,10 +402,122 @@ export let carry = async (
   }
   let made = await Promise.all(
     [...asks].filter(([key]) => !had.has(key)).map(([, ask]) =>
-      need(read, ask)
+      'entity' in ask ? [ask] : need(read, ask)
     ),
   )
   return made.flat()
+}
+
+/** Lend the connection an app uses through an integration to every copy
+ * installed from it, from then on: each copy borrows it at install (`carry`)
+ * under a cap of `cap` calls a month, and a new cap moves every copy already
+ * borrowing it. `null` stops lending it, and every copy borrowing it through
+ * this app asks for its own (`recall`). The cap a copy borrows under is the
+ * host's to write, so the host applies this as itself, once it has checked
+ * that the actor owns the app's space and the connection. Refused for a key
+ * handed to the app's code, a link where each person connects their own, and
+ * a connection the app itself borrows. */
+export let lend = async (
+  read: Read,
+  a: { app: Eid; integration: string; cap: number | null },
+  owners: Owners,
+): Promise<Bundle[]> => {
+  if (a.cap != null && !(Number.isInteger(a.cap) && a.cap > 0)) {
+    throw new CallError(
+      'cap',
+      'a cap is a whole number of calls a month, at least one',
+    )
+  }
+  let c = await using(read, { app: a.app, integration: a.integration })
+  if (!c) {
+    throw new CallError(
+      'integration',
+      `the app shares no ${a.integration} connection to lend; one each ` +
+        'person connects is theirs',
+    )
+  }
+  let eid = edgeEid(a.app, USES, c.entity.eid)
+  let u = comp((await read(`.entity.eid=${eid}&.${USES}`))[0], USES)
+  if (u.direct) {
+    throw new CallError(
+      'integration',
+      `the app's code is handed the ${a.integration} key itself, and only a ` +
+        'sentinel is lent',
+    )
+  }
+  if (u.lender != null) {
+    throw new CallError(
+      'integration',
+      `the app borrows its ${a.integration} connection, which is not its to lend`,
+    )
+  }
+  let lends = { entity: { eid }, [USES]: { lends: a.cap } }
+  let loans = await read(`.${USES}.lender=${a.app}${ALL}`)
+  let connections = loans.length
+    ? await read(
+      `.entity.eid=${any(loans.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+    )
+    : []
+  let targets = new Set(
+    connections.filter((b) => comp(b, CONNECTION).integration == a.integration)
+      .map((b) => b.entity.eid),
+  )
+  let lent = loans.filter((l) => targets.has(far(l, 'from')))
+  if (a.cap == null) {
+    return [
+      lends,
+      ...(await Promise.all(
+        [...targets].map((connection) =>
+          recall(read, { connection, lender: a.app }, owners)
+        ),
+      )).flat(),
+    ]
+  }
+  return [
+    lends,
+    ...lent.map((l) => ({
+      entity: { eid: l.entity.eid },
+      [USES]: { cap: a.cap },
+    })),
+  ]
+}
+
+/** Stop lending a connection: to the one copy `app`, to every copy borrowing
+ * it through the `lender` app's lend, or with neither to every copy borrowing
+ * it. Each copy's link gives way to a connection needing a credential of its
+ * own, in the copy's own space (`owners`), linked by the same name, as
+ * `disconnect` leaves the apps that shared one. The connection lent stays as
+ * it was. */
+export let recall = async (
+  read: Read,
+  a: { connection: Eid; app?: Eid; lender?: Eid },
+  owners: Owners,
+): Promise<Bundle[]> => {
+  let b = await held(read, a.connection)
+  let loans = (await links(read, 'to', a.connection)).filter((l) => {
+    let u = comp(l, USES)
+    return u.lender != null && (a.app == null || far(l, 'to') == a.app) &&
+      (a.lender == null || u.lender == a.lender)
+  })
+  return [
+    ...loans.map((l) => ({ entity: { eid: l.entity.eid }, tombstone: {} })),
+    ...await reasked(b, loans, owners),
+  ]
+}
+
+/** The connections these apps borrow rather than hold, each with the link
+ * borrowing it and the integration it goes through: what the apps' own space
+ * reads beside the connections it keeps. A borrowed connection is read
+ * without its secret, which is the lender's. */
+export let borrowed = async (read: Read, apps: Eid[]): Promise<Bundle[]> => {
+  if (!apps.length) return []
+  let loans = (await links(read, 'from', any(apps)))
+    .filter((l) => comp(l, USES).lender != null)
+  if (!loans.length) return []
+  let lent = await read(
+    `.entity.eid=${any(loans.map((l) => far(l, 'from')))}&.${CONNECTION}`,
+  )
+  return [...lent, ...loans, ...await through(read, lent)]
 }
 
 /** Link an app to a connection its space already owns and has connected.
@@ -493,7 +655,7 @@ export let envOf = async (
   for (let r of await used(c, app, person)) {
     let u = comp(r.link, USES)
     if (typeof u.binding != 'string') continue
-    let value = u.direct
+    let value = u.direct && u.lender == null
       ? await credential(c, r.connection.entity.eid)
       : r.sentinel
     if (value) out[u.binding] = value
@@ -731,33 +893,58 @@ export let connect = async (
   ])
 }
 
+// What takes the place of `was`, links to a connection going away or no
+// longer lent: a connection needing a credential for each owner, in its own
+// space for the apps that shared it and in each copy's own for a copy that
+// borrowed it, and every app linked to its owner's as it was to the old one,
+// by the same name, as directly and as open. A copy's link keeps only its
+// name, since its cap was the lend's.
+let reasked = async (b: Bundle, was: Bundle[], owners?: Owners) => {
+  let { integration, owner, scopes } = comp(b, CONNECTION)
+  let loans = was.filter((l) => comp(l, USES).lender != null)
+  let whose = loans.length && owners
+    ? await owners(loans.map((l) => far(l, 'to')))
+    : {}
+  let asks = new Map<Eid, Bundle>()
+  let out: Bundle[] = []
+  for (let l of was) {
+    let app = far(l, 'to')
+    let u = comp(l, USES)
+    let at = u.lender == null ? String(owner) : whose[app]
+    if (!at) {
+      throw new Error(
+        `no space is known for ${app}, which borrows ${b.entity.eid}`,
+      )
+    }
+    let again = asks.get(at)
+    if (!again) {
+      asks.set(at, again = fresh(at, String(integration), strs(scopes)))
+      out.push(again)
+    }
+    out.push({
+      ...link(app, USES, again.entity.eid),
+      [USES]: u.lender == null ? u : { binding: u.binding },
+    })
+  }
+  return out
+}
+
 /** End a connection, and forget its credential. The apps that shared it each
- * need a connection again, and are linked to a new one. A person's own, for
- * an app that asks each person, is not replaced: the app still asks them. */
+ * need a connection again, and are linked to a new one; a copy that borrowed
+ * it is linked to one in its own space, which `owners` says. A person's own,
+ * for an app that asks each person, is not replaced: the app still asks
+ * them. */
 export let disconnect = async (
   c: Ctx,
   connection: Eid,
+  owners?: Owners,
 ): Promise<Bundle[]> => {
   let b = await held(c.graph.read, connection)
   let was = (await links(c.graph.read, 'to', connection))
     .filter((l) => !comp(l, USES).each)
-  let { integration, owner, scopes } = comp(b, CONNECTION)
-  let again = was.length
-    ? fresh(String(owner), String(integration), strs(scopes))
-    : undefined
-  // Each app is linked to the new one as it was to the old: by the same name,
-  // as directly, and as open.
   return c.graph.apply([
     { entity: { eid: connection }, tombstone: {} },
-    ...again
-      ? [
-        again,
-        ...was.map((l) => ({
-          ...link(far(l, 'to'), USES, again.entity.eid),
-          [USES]: comp(l, USES),
-        })),
-      ]
-      : [],
+    ...await reasked(b, was, owners),
   ])
 }
 

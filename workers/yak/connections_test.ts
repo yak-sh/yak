@@ -38,6 +38,8 @@ import { opened } from './lib/token.ts'
 import { desk } from './pages.ts'
 import { minted, type Who } from './session.ts'
 import { vaultOf } from './vault.ts'
+import { within } from './defects.ts'
+import type { Env } from './env.ts'
 
 let KEY = btoa(String.fromCharCode(...new Uint8Array(32).fill(7)))
 let SECRET = 'a probe secret'
@@ -566,10 +568,12 @@ test(
 
 // Every request the kernel sends out while `fn` runs, answered by `answer`.
 let wired = async (
+  env: Env,
   answer: (r: Request) => Response,
   fn: (sent: Request[]) => Promise<void>,
 ) => {
   let sent: Request[] = []
+  let pending: Promise<void>[] = []
   let was = globalThis.fetch
   globalThis.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
     let r = new Request(input, init)
@@ -577,8 +581,11 @@ let wired = async (
     return Promise.resolve(answer(r))
   }
   try {
-    await fn(sent)
+    await within(env, {}, () => fn(sent), undefined, {
+      retain: (work) => pending.push(work),
+    })
   } finally {
+    for (let i = 0; i < pending.length; i++) await pending[i]
     globalThis.fetch = was
   }
 }
@@ -616,6 +623,7 @@ test(
     let eid = made.find((b) => b.connection)!.entity.eid
     let bound: Request[] = []
     await wired(
+      s.p.env,
       (r) =>
         Response.json({ success: true, result: r.method == 'GET' ? [] : {} }),
       async (sent) => {
@@ -649,7 +657,7 @@ test(
       }
       return (await envDoor(at) ?? await fetchDoor(at))!
     }
-    await wired((r) => new Response(r.url), async (sent) => {
+    await wired(s.p.env, (r) => new Response(r.url), async (sent) => {
       let out = (level: 'viewer' | null, to?: string) =>
         outbound(call(to), s.p.env, { app: app.eid, level, person: null })
       assertEquals(await (await out('viewer')).text(), sent[0].url)
@@ -693,6 +701,18 @@ test(
         'viewer',
       )
       assertEquals(sent[2].headers.get('authorization'), 'Token sk-hub')
+      let basic = await page(
+        '/fetch',
+        door('https://api.hub.test/v4', {
+          authorization: `Basic ${btoa(`reader:${HUB}`)}`,
+        }),
+        'viewer',
+      )
+      assertEquals(basic.status, 200)
+      assertEquals(
+        sent[3].headers.get('authorization'),
+        `Basic ${btoa('reader:sk-hub')}`,
+      )
       // Opened to anyone, a stranger calls out through it too.
       await s.post({ do: 'open', connection: eid, app: app.eid })
       assertEquals((await out(null)).status, 200)

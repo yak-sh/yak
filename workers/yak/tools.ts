@@ -5320,7 +5320,7 @@ let OURS: Row[] = [
         offer.app.eid,
       )
       let entities = [row, ...asked.asks]
-      let applied = await ctx.dir.apply({ entities }, vouched(who))
+      let applied = await ctx.dir.stamp({ entities }, vouched(who))
       let eid = applied.find((row) => row.app)?.entity.eid
       if (!eid) throw new Error('app creation returned no identity')
       renew(ctx)
@@ -5430,7 +5430,7 @@ let OURS: Row[] = [
       // the release, which binds what the copy is connected to.
       let asked = await carried(ctx.env, space, app, from.app.eid)
       if (asked.asks.length) {
-        await ctx.dir.apply({ entities: asked.asks }, vouched(who))
+        await ctx.dir.stamp({ entities: asked.asks }, vouched(who))
       }
       let out = await released(
         ctx,

@@ -128,7 +128,7 @@ export let PAGES: Record<string, Page> = {
     'slug': 'sharing',
     'title': 'Access, Publishing and Installing',
     'description':
-      "Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, and publishing and installing: app_publish, app_install, app_update, the gallery, what an installed copy shares (the code, and nothing else), how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved.",
+      "Who may read and write an app (the public, open and private access settings), inviting people with member_add to one app or the whole space, roles, and publishing and installing: app_publish, app_install, app_update, the gallery, an installed copy's independent data and borrowed connections, how it runs like the space's own apps and the sandboxed setting, version pinning, and what an update does to the data people saved.",
     'brief':
       'access settings, inviting people, publishing and installing an app',
   },
@@ -400,6 +400,11 @@ export let WORDS: Record<string, Words> = {
     'title': 'Let an app use an existing connection',
     'description':
       "Give an app access to one connected connection its space already owns. Only the space's owner may do this. The app starts members-only, receives a sentinel rather than the credential, and reads it by binding (the name its code reads, env.NAME in worker.js and from ./api/env in a page): the one given, else any it already asked for, else the service's name in capitals. Attaching a connection the app already uses, with a new binding, renames it. It reaches the running app at once, with no redeploy. Find the connection id with store_connection_list. No key or token passes through this tool or its answer. Documentation: https://yaks.app/docs/code.",
+  },
+  'connection_lend': {
+    'title': 'Lend a connection to installed copies',
+    'description':
+      "Lend a shared connection this app uses to copies installed from it. Only the owner of the app's space may lend its own connection. Each copy gets a sentinel and a cap of calls a month, never the key or the source app's data. A new cap also changes copies already borrowing it. cap: null stops lending and gives every copy borrowing through this app a connection needing its own key. A copy may replace a borrowed connection with its own using connection_attach. A direct key, a connection each person connects, and a borrowed connection cannot be lent. Documentation: https://yaks.app/docs/sharing.",
   },
   'integration_set': {
     'title': 'Describe or list a custom integration',

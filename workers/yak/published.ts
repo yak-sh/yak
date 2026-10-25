@@ -26,7 +26,7 @@ import {
 } from '@yaks/connections'
 import type { Bundle, Comp, NamedTool } from '@yaks/graph'
 import { argsOf } from '@yaks/graph/call'
-import { ctxOf, pageOf, rebind } from './connections.ts'
+import { connectionsOf, ctxOf, pageOf, rebind } from './connections.ts'
 import { CWD, TIMEOUT } from './sandbox.ts'
 import { vaulted } from './vault.ts'
 import {
@@ -502,23 +502,30 @@ let CONNECTIONS: Row[] = [
       properties: { space: SPACE },
     },
     run: async (ctx, args) => {
-      let { space } = await inSpace(ctx, args)
+      let { space, who } = await inSpace(ctx, args)
       let all = await invokePackage(ctx, 'connection_list', {
         space: space.slug,
         owner: space.eid,
       })
+      let view = await connectionsOf(ctx.env, [space], who.person!)
       let titles = new Map(
         (await ctx.dir.apps(space)).map((a) => [a.eid, a.slug]),
       )
       let rows = all.filter((b) => b[CONNECTION]).map((b) => {
         let c = comp(b, CONNECTION)
         let uses = all.filter((l) => comp(l, 'edge').to == b.entity.eid)
-          .map((l) =>
-            said(
-              comp(l, USES),
-              titles.get(String(comp(l, 'edge').from)) ?? 'another app',
-            ) + calledOn(l)
-          )
+          .map((l) => {
+            let app = String(comp(l, 'edge').from)
+            let shown = view.list.find((c) => c.eid == b.entity.eid)?.apps
+              .find((a) => a.app == app)
+            let u = comp(l, USES)
+            return said(u, shown?.title ?? titles.get(app) ?? 'another app') +
+              (shown?.borrower ? ` in ${shown.borrower} (borrowing)` : '') +
+              calledOn(l) +
+              (typeof u.lends == 'number'
+                ? `; lends to installed copies at ${u.lends} calls a month each`
+                : '')
+          })
         let i = all.find((i) =>
           i[INTEGRATION] &&
           i.entity.eid == integrationEid(String(c.integration))
@@ -529,6 +536,15 @@ let CONNECTIONS: Row[] = [
           c.status == 'connected' ? '' : howTo(comp(i, INTEGRATION))
         }`
       })
+      for (let loan of view.borrowed) {
+        rows.push(
+          `${loan.integration} (${loan.eid}): borrowed from ${loan.lender}; ` +
+            `${loan.app.title} reads it as env.${loan.app.binding} (a sentinel), ` +
+            `${loan.app.calls} calls out this month of ${loan.app.cap} allowed. ` +
+            `Connect your own at ${pageOf(ctx.env, space.slug)} and use ` +
+            'connection_attach to replace the borrowed connection.',
+        )
+      }
       return {
         space,
         text: rows.length

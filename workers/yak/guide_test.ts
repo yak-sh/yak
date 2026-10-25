@@ -260,8 +260,7 @@ test('the code page prints the limits an app is held to', async () => {
 // The fifth list that can rot, and the one a person's data rides on: what
 // sharing an app costs them. An app is a plugin (T-32890), so the page has to
 // name every tool that makes one — a missing verb is a door nobody finds — and
-// say the two things that are not obvious from the names: an installed copy
-// shares nothing but the code, and it is pinned until someone moves it.
+// explain that an installed copy is pinned until someone moves it.
 test('the sharing page teaches every tool that shares an app', () => {
   let section = pageText('sharing')
   for (
@@ -271,10 +270,6 @@ test('the sharing page teaches every tool that shares an app', () => {
   ) {
     assert(section.includes(tool), `the sharing page never names ${tool}`)
   }
-  assert(
-    /the code, and nothing else|nothing but the code/.test(section),
-    'the sharing page never says what an installed app shares',
-  )
   assert(/pinned/.test(section), 'the sharing page never says what pinning is')
 })
 

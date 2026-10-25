@@ -33,6 +33,7 @@ import {
   accountOf,
   attach,
   begin,
+  borrowed,
   carry,
   clientOf,
   connect,
@@ -46,10 +47,12 @@ import {
   type Integration,
   integrationEid,
   known,
+  lend,
   list,
   listing,
   need,
   pick,
+  recall,
   refresh,
   registration,
   resolve,
@@ -754,6 +757,315 @@ test('carry: a copy already asking is asked again only for what its app gained',
       binding: 'OPENROUTER',
     }],
   ])
+})
+
+// The app of `used` lending its texts key at five calls a month, borrowed by
+// two copies: `other` in ann's space and `third` in bob's.
+let SPACES: Record<string, string> = { other: 'ann', third: 'bob' }
+let owners = (apps: string[]) =>
+  Promise.resolve(Object.fromEntries(apps.map((a) => [a, SPACES[a]])))
+let lent = async () => {
+  let s = await used()
+  let texts = String(
+    (await using(s.g.read, {
+      app: 'app',
+      integration: 'texts',
+    }))?.entity.eid,
+  )
+  let lending = (cap: number | null, app = 'app', integration = 'texts') =>
+    lend(s.g.read, { app, integration, cap }, owners).then((b) =>
+      s.g.apply(b, { trusted: true })
+    )
+  await lending(5)
+  await s.g.apply([{ entity: { eid: 'third' }, app: {} }])
+  for (let [app, owner] of Object.entries(SPACES)) {
+    await s.g.apply(await carry(s.g.read, { source: 'app', app, owner }), {
+      trusted: true,
+    })
+  }
+  return { ...s, texts, lending }
+}
+
+// Each case measures one connection verb; its graph and credentials stand
+// before the case starts, as they do when the caller asks it.
+let loans = await lent()
+let sourceSentinel = (await resolve(loans.c, 'app', 'texts'))!.sentinel
+let loanLink = (app: string, connection = loans.texts) =>
+  edgeEid(app, 'uses', connection)
+let needing = (bundles: Bundle[]) =>
+  bundles.filter((b) => b.edge && b.uses).map((l) => {
+    let c = of(
+      bundles.find((b) => b.entity.eid == of(l, 'edge').to),
+      'connection',
+    )
+    return [of(l, 'edge').from, c.owner, c.status, l.uses]
+  }).sort()
+
+test('carry: a connected lend gives a new copy its capped sentinel link', async () => {
+  let out = await carry(loans.g.read, { ...COPY, app: 'fourth' })
+  let loan = out.find((b) => of(b, 'uses').lender == 'app')!
+  assertEquals(of(loan, 'edge'), { from: 'fourth', to: loans.texts })
+  assertEquals(loan.uses, { binding: 'SMS', cap: 5, lender: 'app' })
+})
+
+test('envOf: a borrower is handed the lender’s sentinel', async () => {
+  assertEquals((await envOf(loans.c, 'other')).SMS, sourceSentinel)
+})
+
+test('resolve: a second copy uses the same lent connection', async () => {
+  assertEquals(
+    (await resolve(loans.c, 'third', 'texts'))!.connection.entity.eid,
+    loans.texts,
+  )
+})
+
+let waiting = await used()
+await waiting.needs({ integration: 'rain', hosts: ['api.rain.example'] })
+await waiting.g.apply(
+  await lend(
+    waiting.g.read,
+    { app: 'app', integration: 'rain', cap: 5 },
+    owners,
+  ),
+  { trusted: true },
+)
+test('carry: an unconnected lend asks for a key in the copy’s own space', async () => {
+  let asks = asked(await waiting.copy())
+  assertEquals(asks.find((a) => a[0] == 'rain'), [
+    'rain',
+    'ann',
+    'needed',
+    undefined,
+    'other',
+    { binding: 'RAIN' },
+  ])
+  assert(asks.every((a) => a[1] == 'ann'))
+})
+
+for (
+  let [label, cap, app, integration] of [
+    ['a direct key', 5, 'app', 'weather'],
+    ['each person’s own account', 5, 'app', 'calendar'],
+    ['a borrowed key', 5, 'other', 'texts'],
+    ['a zero cap', 0, 'app', 'texts'],
+    ['a fractional cap', 2.5, 'app', 'texts'],
+  ] as const
+) {
+  test(`lend refuses ${label}`, () =>
+    assertRejects(
+      () => lend(loans.g.read, { app, integration, cap }, owners),
+      CallError,
+    ))
+}
+
+test('lend: a new cap updates the source and every borrowing copy', async () => {
+  let out = await lend(loans.g.read, {
+    app: 'app',
+    integration: 'texts',
+    cap: 9,
+  }, owners)
+  assertEquals(out, [
+    { entity: { eid: loanLink('app') }, uses: { lends: 9 } },
+    ...['other', 'third'].map((app) => ({
+      entity: { eid: loanLink(app) },
+      uses: { cap: 9 },
+    })),
+  ])
+})
+
+test('recall: one copy asks in its own space and the other loan stands', async () => {
+  let out = await recall(loans.g.read, {
+    connection: loans.texts,
+    app: 'other',
+  }, owners)
+  assertEquals(needing(out), [['other', 'ann', 'needed', { binding: 'SMS' }]])
+  assert(out.some((b) => b.entity.eid == loanLink('other') && b.tombstone))
+  assert(!out.some((b) => b.entity.eid == loanLink('third')))
+})
+
+test('lend: clearing the cap recalls every copy to its own space', async () => {
+  let out = await lend(loans.g.read, {
+    app: 'app',
+    integration: 'texts',
+    cap: null,
+  }, owners)
+  assertEquals(needing(out), [
+    ['other', 'ann', 'needed', { binding: 'SMS' }],
+    ['third', 'bob', 'needed', { binding: 'SMS' }],
+  ])
+  assertEquals(out[0], {
+    entity: { eid: loanLink('app') },
+    uses: { lends: null },
+  })
+})
+
+let remembered = await lent()
+await remembered.g.apply(
+  await recall(remembered.g.read, {
+    connection: remembered.texts,
+    app: 'other',
+  }, owners),
+)
+await remembered.lending(null)
+await remembered.lending(5)
+test('carry: a recalled copy keeps its own ask when its source lends again', async () => {
+  assertEquals(await carry(remembered.g.read, COPY), [])
+})
+
+let ownCopy = await lent()
+let mine = await ownCopy.needs({
+  owner: 'ann',
+  app: undefined,
+  integration: 'texts',
+})
+await connect(ownCopy.c, mine, { key: 'ann-key' })
+test('attach: a copy’s own key replaces its loan without deleting the lender’s', async () => {
+  let out = await attach(ownCopy.g.read, {
+    owner: 'ann',
+    app: 'other',
+    connection: mine,
+  })
+  assertEquals(out.find((b) => b.edge)?.uses, { binding: 'SMS' })
+  assertEquals(of(out.find((b) => b.edge), 'edge'), { from: 'other', to: mine })
+  assert(
+    out.some((b) =>
+      b.entity.eid == edgeEid('other', 'uses', ownCopy.texts) && b.tombstone
+    ),
+  )
+  assert(!out.some((b) => b.entity.eid == ownCopy.texts))
+})
+let ownedCopy = await lent()
+let ownedKey = await ownedCopy.needs({
+  owner: 'ann',
+  app: undefined,
+  integration: 'texts',
+})
+await connect(ownedCopy.c, ownedKey, { key: 'ann-key' })
+await ownedCopy.g.apply(
+  await attach(ownedCopy.g.read, {
+    owner: 'ann',
+    app: 'other',
+    connection: ownedKey,
+  }),
+)
+test('disconnect refuses to guess a borrowing copy’s space', () =>
+  assertRejects(() => disconnect(ownedCopy.c, ownedCopy.texts)))
+test('disconnect: the lender and remaining borrower ask in their own spaces', async () => {
+  let out = await disconnect(
+    {
+      ...ownedCopy.c,
+      graph: { read: ownedCopy.g.read, apply: (b) => b },
+    },
+    ownedCopy.texts,
+    owners,
+  )
+  assertEquals(needing(out), [
+    ['app', 'space', 'needed', { binding: 'SMS', anyone: true, lends: 5 }],
+    ['third', 'bob', 'needed', { binding: 'SMS' }],
+  ])
+  assert(
+    !out.some((b) => b.entity.eid == ownedKey || of(b, 'edge').from == 'other'),
+  )
+})
+
+test('borrowed: the space reads its loan without the lender’s secret', async () => {
+  let got = await borrowed(loans.g.read, ['other'])
+  assertEquals(
+    got.map((b) => b.entity.eid).sort(),
+    [loanLink('other'), integrationEid('texts'), loans.texts].sort(),
+  )
+  assertEquals(got.some((b) => b.secret), false)
+})
+test('borrowed: a lender holds no borrowed connection', async () => {
+  assertEquals(await borrowed(loans.g.read, ['app']), [])
+})
+
+let changed = await lent()
+let owned = (apps: string[]) =>
+  Promise.resolve(
+    Object.fromEntries(
+      apps.map((app) => [app, app == 'fourth' ? 'ann' : SPACES[app]]),
+    ),
+  )
+let lendingChanged = async (integration: string, cap: number | null) =>
+  changed.g.apply(
+    await lend(changed.g.read, { app: 'app', integration, cap }, owned),
+    { trusted: true },
+  )
+let rain = await changed.needs({
+  integration: 'rain',
+  hosts: ['api.rain.example'],
+})
+await connect(changed.c, rain, { key: 'rain-key' })
+await lendingChanged('rain', 3)
+await changed.g.apply(await carry(changed.g.read, COPY), { trusted: true })
+let replacement = await changed.needs({ app: undefined, integration: 'texts' })
+await connect(changed.c, replacement, { key: 'replacement-key' })
+await changed.g.apply(
+  await attach(changed.g.read, {
+    owner: 'space',
+    app: 'app',
+    connection: replacement,
+  }),
+)
+await lendingChanged('texts', 7)
+await changed.g.apply([{ entity: { eid: 'fourth' }, app: {} }])
+await changed.g.apply(
+  await carry(changed.g.read, { source: 'app', app: 'fourth', owner: 'ann' }),
+  { trusted: true },
+)
+test('lend: cap changes reach old and new connections after source replacement', async () => {
+  let out = await lend(changed.g.read, {
+    app: 'app',
+    integration: 'texts',
+    cap: 9,
+  }, owned)
+  assertEquals(out, [
+    {
+      entity: { eid: edgeEid('app', 'uses', replacement) },
+      uses: { lends: 9 },
+    },
+    ...[['other', changed.texts], ['third', changed.texts], [
+      'fourth',
+      replacement,
+    ]].map(([app, connection]) => ({
+      entity: { eid: edgeEid(app, 'uses', connection) },
+      uses: { cap: 9 },
+    })),
+  ])
+})
+test('lend: recall reaches old and new connections without recalling another integration', async () => {
+  let out = await lend(changed.g.read, {
+    app: 'app',
+    integration: 'texts',
+    cap: null,
+  }, owned)
+  assertEquals(needing(out), [
+    ['fourth', 'ann', 'needed', { binding: 'SMS' }],
+    ['other', 'ann', 'needed', { binding: 'SMS' }],
+    ['third', 'bob', 'needed', { binding: 'SMS' }],
+  ])
+  for (let app of ['other', 'fourth']) {
+    assert(!out.some((b) => b.entity.eid == edgeEid(app, 'uses', rain)))
+  }
+})
+
+for (let [app, owner] of [['app', 'space'], ['other', 'ann']]) {
+  test(`need: ${app} cannot change a lent sentinel into a direct key`, () =>
+    assertRejects(
+      () =>
+        need(loans.g.read, { app, owner, integration: 'texts', direct: true }),
+      CallError,
+    ))
+}
+let hostile = await lent()
+await hostile.g.apply([{
+  entity: { eid: edgeEid('other', 'uses', hostile.texts) },
+  uses: { direct: true },
+}], { trusted: true })
+let hostileSentinel = (await resolve(hostile.c, 'app', 'texts'))!.sentinel
+test('envOf: an old direct mark cannot release a borrowed key', async () => {
+  assertEquals((await envOf(hostile.c, 'other')).SMS, hostileSentinel)
 })
 
 test(

@@ -1184,7 +1184,13 @@ let connection = (
 // connected — with, under the space the page is for, what it could connect
 // next and a box for a key no app asked for yet.
 let connections = (at: DeskPage, env: Host) => {
-  let c = at.connections ?? { on: false, list: [], services: [], built: [] }
+  let c: Connections = at.connections ?? {
+    on: false,
+    list: [],
+    services: [],
+    built: [],
+    borrowed: [],
+  }
   let first = [...c.list].sort((a, b) =>
     Number(a.status == 'connected' && !a.failed) -
     Number(b.status == 'connected' && !b.failed)

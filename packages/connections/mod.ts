@@ -33,7 +33,8 @@
  *
  * The verbs: {@link need}, {@link list} (the two tools), {@link attach} and
  * {@link set} for a space owner through its host, {@link carry} for a copy of
- * an app, {@link using},
+ * an app, {@link lend}, {@link recall} and {@link borrowed} for a connection
+ * lent to the copies, {@link using},
  * {@link through},
  * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve},
  * {@link used} and {@link envOf}, {@link credential}, {@link refresh}. A host
@@ -76,6 +77,7 @@ export {
   attach,
   begin,
   bindingOf,
+  borrowed,
   carry,
   connect,
   credential,
@@ -83,10 +85,13 @@ export {
   disconnect,
   envOf,
   type Given,
+  lend,
   list,
   type Need,
   need,
+  type Owners,
   pick,
+  recall,
   refresh,
   resolve,
   type Resolved,

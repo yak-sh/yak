@@ -8,7 +8,7 @@ guide:
     Who may read and write an app (the public, open and private access
     settings), inviting people with member_add to one app or the whole space,
     roles, and publishing and installing: app_publish, app_install, app_update,
-    the gallery, what an installed copy shares (the code, and nothing else),
+    the gallery, an installed copy's independent data and borrowed connections,
     how it runs like the space's own apps and the sandboxed setting, version
     pinning, and what an update does to the data people saved.
 ---
@@ -340,11 +340,13 @@ before building something from scratch.
 
 ## What an installed copy shares
 
-An installed copy shares nothing but the code. It is an ordinary app in the
-installer's space, with its own address, its own store, its own file prefix, its
-own worker script and its own version history starting at v1. Its store starts
-empty. Nothing is synced, the copy sends nothing back to the publisher, and the
-publisher never sees any of its data.
+An installed copy is an ordinary app in the installer's space, with its own
+address, its own store, its own file prefix, its own worker script and its own
+version history starting at v1. Its store starts empty. Installation gives the
+publisher no access to the copy's data, and data is not synced between them. The
+publisher can also lend a connection so the copy works before its owner gets
+their own key; this grants calls to the outside service, never access to either
+app's store.
 
 Only the app's own files are copied: the pages, the stylesheets, the
 `vocab.json`, the `worker.js`. What is not copied:
@@ -354,13 +356,46 @@ Only the app's own files are copied: the pages, the stylesheets, the
   data, not its code, and stay behind.
 - **Version history.** The copy's history starts with the release the install
   makes.
-- **Keys.** A connection belongs to a space, and the copy is in another space.
-  Instead, the copy asks for each connection the app uses: the installer's
-  connections page lists each as needed, with how to get its key, under the name
-  the app's code reads it by, and the copy works once they connect their own.
-  Opening a connection to anyone is not copied either; the installer opens their
-  own. `app_update` asks for any connection the new version gained.
+- **Keys.** The key stays in the vault. For each connection the app uses, the
+  copy either borrows the connection the publisher chose to lend (below) or asks
+  for its own. An unmet request appears on the installer's connections page with
+  instructions for getting the key, under the binding the app's code reads.
+  Opening a connection to anyone is not copied; the installer opens their own.
+  `app_update` adds any connection request the new version gained.
 - **Members.** The copy belongs to the installer's space and its guest list.
+
+## Lending a connection to installed copies
+
+    connection_lend(app, integration, cap, space?)
+
+Only the space owner can lend a connection their space owns and the app uses.
+Set `cap` to a positive whole number of calls per month for each installed copy:
+
+    connection_lend(app, integration: 'ESV', cap: 100)
+
+Each copy installed afterwards borrows that connection immediately, through the
+same binding the app reads. Its page or worker receives only a sentinel; the
+egress replaces it with the key when calling an allowed https host. The borrower
+cannot read the key, and neither space gains access to the other's app data.
+Only a shared sentinel can be lent: a `direct` key, a per-person connection
+(`each: true`), or a connection the app itself borrows cannot be lent.
+
+`connection_list` reports borrowed connections, whose space lends them, and each
+copy's monthly count and cap. Changing `cap` changes the cap of every copy
+already borrowing through that app. Calls beyond the cap return `403` with
+instructions for connecting the copy's own key.
+
+The copy's owner can connect their own key in their own space and attach it with
+`connection_attach`. That replaces the borrowed connection for their copy and
+leaves the lender's connection unchanged. To stop lending to every copy and to
+future installs, call:
+
+    connection_lend(app, integration: 'ESV', cap: null)
+
+Each borrowing copy then asks for its own connection, keeping its binding and
+data. Disconnecting the lender's connection has the same effect on its copies.
+See [API keys and connections](./code.md#api-keys-and-connections) for declaring
+a connection and using its sentinel from a page or worker.
 
 ## How an installed app runs, and the sandbox
 

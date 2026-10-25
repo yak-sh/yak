@@ -228,6 +228,17 @@
           "type": "number",
           "stamped": true,
           "description": "the most calls a month that may go out through it (@yaks/egress `calls`); past it the egress refuses them until the month turns. None is no limit. Only the host sets it, never the app it caps"
+        },
+        "lends": {
+          "type": "number",
+          "description": "on an app's link to a connection its own space keeps: the connection is lent to every copy installed from the app, which borrows it rather than asking for its own, and this is the cap each copy's link borrows it under, in calls a month. None lends it to no copy. The space owner's act, and only a sentinel every caller shares is lent: never a direct key, nor a link where each person connects their own"
+        },
+        "lender": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "on a copy's link to a connection it borrows rather than holds: the app whose lend it borrows it through. The copy's space connects a key of its own to stop borrowing, and the lender stops lending to it, either way leaving the lender's connection as it was. Only the host writes it, when the copy is installed or updated"
         }
       },
       "description": "the relation on a link: this app calls out through that connection"

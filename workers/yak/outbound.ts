@@ -28,10 +28,16 @@
 // at its monthly cap is refused, saying whose limit it is and where the person
 // calling connects a key of their own.
 import { used, USES } from '@yaks/connections'
-import { type Caller, Capped, forward, type Host, Refused } from '@yaks/egress'
+import {
+  type Caller,
+  Capped,
+  forward,
+  type Host,
+  Refused,
+  sentinelsIn,
+} from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
 import { callsOut, mode, reads } from '@yaks/member'
-import { sentinels } from '@yaks/secrets'
 import { ctxOf } from './connections.ts'
 import type { Env } from './env.ts'
 import type { Answer } from './apps.ts'
@@ -178,9 +184,9 @@ export let fetchDoor: Answer = async (
   let body = ['GET', 'HEAD'].includes(req.method)
     ? null
     : new Uint8Array(await req.arrayBuffer())
-  let text = [to, ...headers.map(([, v]) => v)].join('\n') +
-    (body ? new TextDecoder().decode(body) : '')
-  if (!sentinels(text).length) {
+  if (
+    !sentinelsIn(to, headers, body ? new TextDecoder().decode(body) : '').length
+  ) {
     return json(
       400,
       'no_connection',

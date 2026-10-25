@@ -459,6 +459,15 @@ test(
         await tool('connection_list', { space: mine }),
         `${service} (`,
       )
+      assertStringIncludes(
+        await tool('connection_lend', {
+          space: mine,
+          app,
+          integration: service,
+          cap: 25,
+        }),
+        service,
+      )
       let owner = eids[mine]
       await tool('store_connection_need', {
         space: mine,
