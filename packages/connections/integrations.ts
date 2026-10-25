@@ -139,15 +139,22 @@ export let told = (
   return out
 }
 
-/** An integration's owner changing what is said about it. A built one is the
+/** The mark on a custom integration shown in the integration directory. */
+export let LISTED = 'listed'
+
+/** An integration's owner changing what is said about it, or listing it in
+ * the integration directory (`listed`) or taking it out. A built one is the
  * host's, and one with no owner (made before owners were kept, or whose owner
  * is gone) is nobody's to change. */
 export let set = async (
   read: Read,
-  a: About & { owner: Eid; integration: string },
+  a: About & { owner: Eid; integration: string; listed?: boolean },
 ): Promise<Bundle[]> => {
   let name = a.integration
-  let i = await known(read, name)
+  let [held] = await read(
+    `.entity.eid=${integrationEid(name)}&.${INTEGRATION}&?${LISTED}`,
+  )
+  let i = held?.[INTEGRATION] as Integration | undefined
   if (!i) {
     throw new CallError('integration', `no integration is named ${name}`)
   }
@@ -161,13 +168,47 @@ export let set = async (
     throw new CallError('owner', `only the space that made ${name} changes it`)
   }
   let patch = told(a)
-  return Object.keys(patch).length
+  // Listed again, it keeps the moment it was first listed.
+  let listing = a.listed == null || a.listed == !!held[LISTED]
+    ? {}
+    : { [LISTED]: a.listed ? {} : null }
+  return Object.keys(patch).length || Object.keys(listing).length
     ? [{
       entity: { eid: integrationEid(name) },
-      [INTEGRATION]: patch,
+      ...Object.keys(patch).length ? { [INTEGRATION]: patch } : {},
+      ...listing,
       $was: { [INTEGRATION]: { owner: token(i.owner) } },
     }]
     : []
+}
+
+/** An integration in the integration directory, and since when a custom one
+ * is listed there. */
+export type Listed = Integration & { listed?: string }
+
+/**
+ * The integration directory: every built integration a person can be offered
+ * unasked (none in its service's testing mode), and every custom one its
+ * owner listed while it has one, by title. With `words`, only those whose name, title,
+ * tagline, site, hosts or instructions hold every one of them.
+ */
+export let listing = async (read: Read, words = ''): Promise<Listed[]> => {
+  let terms = words.toLowerCase().split(/\s+/).filter(Boolean)
+  let all = (await read(`.${INTEGRATION}&?${LISTED}`)).flatMap((b) => {
+    let i = b[INTEGRATION] as Integration
+    let at = (b[LISTED] as { at?: string } | undefined)?.at
+    // A listing whose owner is gone is nobody's to keep, or take down.
+    return (i.built && !i.testing) || (b[LISTED] && i.owner)
+      ? [{ ...i, ...at ? { listed: at } : {} }]
+      : []
+  })
+  let text = (i: Integration) =>
+    [i.name, i.title, i.tagline, i.site, ...i.hosts, i.instructions]
+      .join(' ').toLowerCase()
+  return all.filter((i) => terms.every((t) => text(i).includes(t)))
+    .sort((a, b) =>
+      cmp((a.title || a.name).toLowerCase(), (b.title || b.name).toLowerCase())
+    )
 }
 
 // A value in one order, so two that say the same thing compare equal: every

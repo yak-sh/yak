@@ -12,6 +12,7 @@
 import type { Frame } from './build.ts'
 import type { Agent } from './connected.ts'
 import type { Connections, Face, Shown, Using } from './connections.ts'
+import { INTEGRATIONS } from './integrations.ts'
 import { agentList, agentLive } from './connected_ui.ts'
 import { icon, type IconName } from './icons.ts'
 import { day, esc } from './html.ts'
@@ -1023,7 +1024,7 @@ let logo = (f: Face) =>
 // https address is linked, so a site can never be a script.
 let about = (f: Face) => {
   let site = /^https:\/\/\S+$/.test(f.site)
-    ? `<a href="${esc(f.site)}">${
+    ? `<a href="${esc(f.site)}"${f.theirs ? ' rel="nofollow ugc"' : ''}>${
       esc(f.site.replace(/^https:\/\//, '').replace(/\/$/, ''))
     }</a>`
     : ''
@@ -1082,6 +1083,17 @@ let connection = (
     }"><input type="hidden" name="connection" value="${
       esc(c.eid)
     }">${inner}</form>`
+  // Whether a service this space added is in the integration directory, for
+  // anyone to add with their own key: its owner lists it or takes it out.
+  let listing = c.about
+    ? form(
+      c.listed
+        ? `<p>In the <a href="${
+          esc(`${INTEGRATIONS.path}#${encodeURIComponent(c.integration)}`)
+        }">integration directory</a>, for anyone to add with their own key.</p><button class="Button Bill_Go-quiet" type="submit" name="do" value="unlist">Take it out</button>`
+        : `<button class="Button Bill_Go-quiet" type="submit" name="do" value="list">List in the integration directory</button><p>Anyone could then add it to a space of theirs, with their own key.</p>`,
+    )
+    : ''
   // What is said about a service this space added, its owner's to change.
   let told = c.about
     ? `<details class="Note Connection_Told"><summary>Change what ${
@@ -1199,7 +1211,7 @@ let connection = (
       : c.saving
       ? `<p class="Say" role="status">${esc(sentence(c.saving))}</p>`
       : ''
-  }${act}${drop}${told}</section>`
+  }${act}${drop}${listing}${told}</section>`
 }
 
 // The page: the person's own connections and the services that hold a
@@ -1216,8 +1228,8 @@ let connections = (at: DeskPage, env: Host) => {
   let offer = (i: Connections['built'][number]) =>
     `<form class="Card Connection" method="post" action="${action}"><header class="Connection_Head">${
       logo(i.face)
-    }<h2>${esc(i.face.title)}</h2></header>${
-      about(i.face)
+    }<h2>${esc(i.face.title)}</h2></header>${about(i.face)}${
+      howTo(i.face, true)
     }<input type="hidden" name="integration" value="${
       esc(i.name)
     }"><div class="Connection_Do">${
@@ -1229,14 +1241,19 @@ let connections = (at: DeskPage, env: Host) => {
     }</div></form>`
   let add = `<form class="Card Card-sectioned" method="post" action="${action}">
 <header class="Card_Header"><h2>Add a key</h2></header>
-<div class="Card_Body Desk_Profile"><p>For a service your apps call that isn't listed above. Your apps use it through yaks.app, which keeps the key and sends it only to the addresses you list.</p>
+<div class="Card_Body Desk_Profile"><p>For a service your apps call that isn't listed above. Your apps use it through yaks.app, which keeps the key and sends it only to the addresses you list. Services others have added are in the <a href="${
+    esc(url(env, INTEGRATIONS.path))
+  }">integration directory</a>.</p>
 <label for="new-name">Service</label><input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>
 <label for="new-hosts">Where it may be sent</label><input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>
 <label for="new-key">Key</label><input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>
 <label for="new-instructions">How to get the key <small>(optional)</small></label><textarea class="Field" id="new-instructions" name="instructions" rows="3" placeholder="Where to sign up, which page gives the key, and what to paste"></textarea>
 </div><footer class="Card_Footer"><button class="Button" type="submit" name="do" value="add">Save key</button></footer></form>`
-  let group = (title: string, cards: string) =>
-    cards ? `<h2 class="Desk_Group">${esc(title)}</h2>${cards}` : ''
+  // The service the page was opened to add comes first under its space.
+  let group = (title: string, cards: string, lead = '') =>
+    lead + cards
+      ? `<h2 class="Desk_Group">${esc(title)}</h2>${lead}${cards}`
+      : ''
   let yours = first.filter((one) => one.own)
     .map((one) => connection(one, c.on, at.pick, c.enable)).join('') +
     c.services.map((s) =>
@@ -1266,6 +1283,7 @@ let connections = (at: DeskPage, env: Host) => {
           (space == at.space
             ? c.built.map(offer).join('') + (c.on ? add : '')
             : ''),
+        space == at.space && c.asked ? offer(c.asked) : '',
       )
     ).join('')
   }`

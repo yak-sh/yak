@@ -27,6 +27,8 @@ let OPEN = [
   // page whether or not anybody has signed in (gallery.ts, T-34478).
   'gallery_search',
   'guide',
+  // The integration directory: a public page too (integrations.ts, T-132636).
+  'integration_list',
 ]
 
 test('the tools that need nobody are the pinned ones', () => {

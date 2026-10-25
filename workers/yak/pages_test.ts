@@ -12,6 +12,7 @@ import {
   spaceBinned,
   spaceIndex,
 } from './pages.ts'
+import type { Connections } from './connections.ts'
 
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
@@ -21,6 +22,7 @@ let named = (title: string) => ({
   site: '',
   logo: '',
   instructions: '',
+  theirs: false,
 })
 let CAL = {
   title: 'Cal',
@@ -28,6 +30,7 @@ let CAL = {
   site: 'https://cal.test/',
   logo: '<svg xmlns="http://www.w3.org/2000/svg"/>',
   instructions: '',
+  theirs: false,
 }
 // What a face draws: its logo as an image, never as markup, its line, and its
 // site linked by its host.
@@ -162,6 +165,7 @@ test('connections: the space’s ask of each person offers nothing to connect, a
           keyed: true,
           hosts: [],
           about: null,
+          listed: false,
           scopes: [],
           available: [],
           binding: 'WEATHER',
@@ -203,6 +207,7 @@ test('connections: the person’s own, then this space with what it could add, t
     keyed: true,
     hosts: [],
     about: null,
+    listed: false,
     scopes: [],
     available: [],
     binding: integration.toUpperCase(),
@@ -274,7 +279,7 @@ test('connections: the person’s own, then this space with what it could add, t
 // it: the instructions already drawn (theirs.ts), and what they were written as.
 let HOW =
   '<p>Sign up at <a href="https://weather.test" rel="nofollow ugc">weather.test</a>.</p>'
-let added = (status: 'needed' | 'connected') => ({
+let added = (status: 'needed' | 'connected', listed = false) => ({
   eid: 'w',
   integration: 'Weather',
   face: { ...named('Weather'), instructions: HOW },
@@ -291,6 +296,7 @@ let added = (status: 'needed' | 'connected') => ({
     site: '',
     instructions: 'Sign up at [weather.test](https://weather.test) & <b>.',
   },
+  listed,
   scopes: [],
   available: [],
   binding: 'WEATHER',
@@ -298,11 +304,21 @@ let added = (status: 'needed' | 'connected') => ({
   saving: '',
   failed: '',
 })
-let listing = (status: 'needed' | 'connected') =>
+let listing = (
+  status: 'needed' | 'connected',
+  listed = false,
+  asked?: Connections['asked'],
+) =>
   desk({
     ...page,
     view: 'connections',
-    connections: { on: true, list: [added(status)], services: [], built: [] },
+    connections: {
+      on: true,
+      list: [added(status, listed)],
+      services: [],
+      built: [],
+      asked,
+    },
   }, env).text()
 
 test('connections: how to get a key sits open beside a connection needing one, and closed once connected', async () => {
@@ -331,6 +347,44 @@ test('connections: a service the space added can be changed there, all but where
     told.slice(0, told.indexOf('</details>')).includes('name="hosts"'),
     false,
   )
+})
+
+test('connections: a service the space added is listed in the integration directory from there, or taken out', async () => {
+  assertStringIncludes(
+    await listing('connected'),
+    'value="list">List in the integration directory',
+  )
+  let out = await listing('connected', true)
+  assertStringIncludes(
+    out,
+    'href="/integrations#Weather">integration directory',
+  )
+  assertStringIncludes(out, 'value="unlist">Take it out')
+})
+
+test('connections: a page opened to add one from the directory offers it first, saying how to get its key', async () => {
+  let html = await listing('connected', false, {
+    name: 'ESV',
+    keyed: true,
+    face: {
+      ...named('ESV API'),
+      site: 'https://api.esv.org',
+      instructions: HOW,
+      theirs: true,
+    },
+  })
+  let at = html.indexOf('<h2>ESV API</h2>')
+  assert(at > 0 && at < html.indexOf('<h2>Weather</h2>'), html)
+  let card = html.slice(at, html.indexOf('</form>', at))
+  for (
+    let text of [
+      `<details class="Note Connection_Instructions" open><summary>How to get the key</summary>${HOW}`,
+      // Its site is its maker's word, linked as theirs.
+      '<a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>',
+      'name="integration" value="ESV"',
+      'value="add">Save key',
+    ]
+  ) assertStringIncludes(card, text)
 })
 
 test('askConnect: how to get the key, above the box it is pasted in', async () => {

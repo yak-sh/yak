@@ -37,6 +37,10 @@ them.
   that made a custom integration, and the only one who may change its `title`,
   `tagline`, `site` or `instructions`; nobody changes its `hosts`. A built
   integration has no owner, and one whose owner is gone is nobody's to change.
+- `listed{at, by, via}` marks a custom integration its owner listed in the
+  **integration directory**, which anyone may read and add to a space of their
+  own apart from any app; taking the mark off takes it out. Every built
+  integration is in the directory without it.
 - `connection{integration, owner, account, scopes, status}` names its
   integration, the space or person that `owner`s it (and is deleted with them),
   the outside account, the scopes asked for or granted, and `status`: `needed`
@@ -118,14 +122,18 @@ owner and requested OAuth scopes. It replaces an unmet ask, retains that ask's
 binding, removes the unused needed connection, and starts the new link
 members-only with a sentinel. The key stays in the vault.
 
-`set(read, {owner, integration, title?, tagline?, site?, instructions?})` plans
-an owner's change to what is said about a custom integration: each property
-given, trimmed, and an empty one cleared. It refuses a built integration, an
-owner other than the one the integration names, and a `site` that is not an
-https address, and it never touches `hosts`. As with `attach`, the host checks
-that the actor may act for that owner. `through(read, bundles)` is the
-integrations the connections among `bundles` go through, but for those already
-among them.
+`set(read, {owner, integration, title?, tagline?, site?, instructions?, listed?})`
+plans an owner's change to what is said about a custom integration: each
+property given, trimmed, and an empty one cleared; `listed` lists it in the
+integration directory or takes it out, and listing it again keeps the moment it
+was first listed. It refuses a built integration, an owner other than the one
+the integration names, and a `site` that is not an https address, and it never
+touches `hosts`. As with `attach`, the host checks that the actor may act for
+that owner. `through(read, bundles)` is the integrations the connections among
+`bundles` go through, but for those already among them. `listing(read, words?)`
+is the integration directory: every built integration but one in its service's
+testing mode, and every listed custom one, by title, and with `words` only those
+whose name, title, tagline, site, hosts or instructions hold every word.
 
 `using(read, {app, integration, owner?, each?})` answers the connection an app
 uses through an integration: the shared one, or with `each`, the one the owner

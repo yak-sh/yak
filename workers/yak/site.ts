@@ -1,6 +1,7 @@
 import { anonymousPage, copyOf, publicDirectory } from './directory-copy.ts'
 // The pages the Site entrypoint keeps in Cloudflare's cache (wrangler.toml):
-// the apex's two pages drawn from directory listings, each for at most thirty
+// the apex's pages drawn from directory listings (the home page, the gallery
+// and the integration directory), each for at most thirty
 // seconds, and every public page an app serves (page-cache.ts), keyed by the
 // address it answers. The uncached gateway sends only canonical,
 // uncredentialed requests here.
@@ -10,6 +11,7 @@ import { directory } from './directory.ts'
 import * as dirPart from './directory.ts'
 import { bound, type Env } from './env.ts'
 import * as gallery from './gallery.ts'
+import { INTEGRATIONS, page as integrations } from './integrations.ts'
 import { apex, type Host, url } from './host.ts'
 import { lost } from './pages.ts'
 import { matches } from './public-cache.ts'
@@ -82,7 +84,7 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
   let path = new URL(req.url).pathname
   if (
     req.method != 'GET' ||
-    !['/', '/gallery'].includes(path.slice(root.length)) ||
+    !['/', '/gallery', INTEGRATIONS.path].includes(path.slice(root.length)) ||
     !path.startsWith(`${root}/`)
   ) return uncached(lost(env))
   path = path.slice(root.length)
@@ -97,6 +99,8 @@ export let fetch = async (req: Request, env: Env): Promise<Response> => {
       await gallery.pictures(env, await gallery.listed(dir, env)),
       env,
     )
+  } else if (path == INTEGRATIONS.path) {
+    page = await integrations(await dir.integrations(), env)
   } else {
     let file = await env.ASSETS.fetch(new Request(url(env, '/')))
     page = file.status == 404 ? lost(env) : await gallery.made(env, dir, file)

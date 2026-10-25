@@ -440,26 +440,29 @@ test(
         'Notebook',
       )
       // A key the app's worker calls out with is a connection the person
-      // connects on their own page; the agent only says one is needed.
+      // connects on their own page; the agent only says one is needed. An
+      // integration's name is the platform's, its maker the first space to
+      // say it, so a deployed run names one of its own.
+      let service = `roster-${tag()}`
       assertStringIncludes(
         await tool('connection_need', {
           space: mine,
           app,
-          integration: 'roster',
+          integration: service,
           hosts: ['api.roster.example'],
         }),
         'env.ROSTER',
       )
       assertStringIncludes(
         await tool('connection_list', { space: mine }),
-        'roster (',
+        `${service} (`,
       )
       let owner = eids[mine]
       await tool('store_connection_need', {
         space: mine,
         app,
         owner,
-        integration: 'roster',
+        integration: service,
         hosts: ['api.roster.example'],
       })
       assertStringIncludes(
@@ -471,10 +474,32 @@ test(
       assertStringIncludes(
         await tool('integration_set', {
           space: mine,
-          integration: 'roster',
+          integration: service,
           instructions: 'Ask the roster desk for a key.',
         }),
         'Ask the roster desk for a key.',
+      )
+      // Its owner lists it in the integration directory, where anybody finds
+      // it, and takes it out again, so a run leaves nothing listed.
+      assertStringIncludes(
+        await tool('integration_set', {
+          space: mine,
+          integration: service,
+          listed: true,
+        }),
+        'It is listed in the integration directory',
+      )
+      assertStringIncludes(
+        await tool('integration_list', { words: `${service} roster desk` }),
+        `(integration: '${service}')`,
+      )
+      assertStringIncludes(
+        await tool('integration_set', {
+          space: mine,
+          integration: service,
+          listed: false,
+        }),
+        'It is not listed',
       )
       await refused(tool, 'connection_attach', {
         space: mine,

@@ -133,6 +133,33 @@
         }
       }
     },
+    "listed": {
+      "component": true,
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "format": "date-time",
+          "stamped": true,
+          "description": "when it was listed"
+        },
+        "by": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "who listed it, kept as history when that entity is deleted"
+        },
+        "via": {
+          "type": "string",
+          "ref": "entity",
+          "death": "keep",
+          "stamped": true,
+          "description": "what the write was made through: the session or client it came in on"
+        }
+      },
+      "description": "a custom integration shown in the integration directory, which anyone may read and add to a space of their own, apart from any app: its owner's act, and taking the mark off takes it out. Every built integration is shown without it"
+    },
     "connection": {
       "component": true,
       "type": "object",

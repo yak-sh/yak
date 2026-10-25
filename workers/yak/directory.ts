@@ -27,6 +27,7 @@ import { EPOCH, MEND } from './directory-copy.ts'
 import type { Reload } from '@yaks/platform'
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
+import { type Listed, listing } from '@yaks/connections'
 import { identityEid } from '@yaks/graph/identity'
 import type { Rec } from './domains.ts'
 import {
@@ -1598,6 +1599,11 @@ export let directory = (via: Fetcher | Part, now = false) => {
       }
       return out
     },
+    // The integration directory (T-132636): every built integration and every
+    // custom one its owner listed, which anyone may read, signed in or not
+    // (integrations.ts).
+    integrations: (words?: string): Promise<Listed[]> =>
+      listing((q) => query(String(q)) as Promise<Bundle[]>, words),
     switches: async (app: App) =>
       (await query(`.switched.app=${app.eid}`, true)).map((row) => ({
         ...row,

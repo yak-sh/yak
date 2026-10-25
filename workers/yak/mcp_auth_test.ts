@@ -105,6 +105,8 @@ test('the door before anyone signs in', async () => {
       // (gallery.ts, T-34478).
       'gallery_search',
       'guide',
+      // The integration directory, a public page too (integrations.ts).
+      'integration_list',
       'graph_query',
       'graph_schema',
       'graph_show',
@@ -370,6 +372,7 @@ test('the door before anyone signs in', async () => {
       'feedback',
       'gallery_search',
       'guide',
+      'integration_list',
     ]
     for (let name of openTools) {
       assertEquals(fullSchemes[name], [
@@ -506,6 +509,7 @@ test('signed out: the gallery, the guide, and one public app', async () => {
       'graph_schema',
       'graph_show',
       'guide',
+      'integration_list',
       'search',
     ])
     for (let t of open) {

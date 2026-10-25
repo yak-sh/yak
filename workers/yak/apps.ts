@@ -2498,6 +2498,7 @@ let desk = async (
         owner,
         await (await identity()).services(env, owner),
         enabled(req),
+        new URL(req.url).searchParams.get('add') ?? undefined,
       )
       : undefined,
     say: said?.say ?? returned(q)?.say ?? '',

@@ -762,6 +762,67 @@
     overflow-wrap: anywhere;
   }
 
+  /* The integration directory (integrations.ts): a card a service, saying
+     what it is, where its key goes and how to start, its button at the foot
+     so a row of cards lines them up. */
+  .Services {
+    display: grid;
+    gap: 1.25rem;
+  }
+
+  .Services_Intro {
+    display: grid;
+    gap: var(--half-gap);
+    max-width: 40rem;
+  }
+
+  .Services_List {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: var(--gap);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .Service {
+    display: flex;
+    flex-direction: column;
+    gap: var(--half-gap);
+    margin: 0;
+  }
+
+  .Service_Head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .Service_Head h2,
+  .Service_Tagline,
+  .Service_How {
+    margin: 0;
+  }
+
+  .Service_Logo {
+    flex: none;
+    width: 32px;
+    height: 32px;
+  }
+
+  .Service_How summary {
+    color: var(--meadow);
+    cursor: pointer;
+  }
+
+  .Service_How .Markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .Service_Add {
+    margin: auto 0 0;
+  }
+
   .Yours {
     display: grid;
     gap: 1.5rem;

@@ -95,6 +95,7 @@ import * as drop from './drop.ts'
 import { bound, type Env, type Handler, type Inbound } from './env.ts'
 import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
+import { INTEGRATIONS } from './integrations.ts'
 import { HANDOFF } from './handoff.ts'
 import { apex, hosted } from './host.ts'
 import { sprite } from './icons.ts'
@@ -234,10 +235,10 @@ let serve = async (req: Request, env: Env, r: Route) => {
     await callback({ env, req, path, space: null })
   if (said) return said
   // The apex's public pages are cached behind a separate entrypoint; only
-  // these two paths reach it, without credentials or unbounded query strings.
+  // these paths reach it, without credentials or unbounded query strings.
   if (
     (req.method == 'GET' || req.method == 'HEAD') &&
-    (path == '/' || path == gallery.PATH)
+    (path == '/' || path == gallery.PATH || path == INTEGRATIONS.path)
   ) {
     return site.forward(req, env, path)
   }

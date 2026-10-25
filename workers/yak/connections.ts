@@ -45,9 +45,11 @@ import {
   envOf,
   installed,
   type Integration,
+  integrationEid,
   keyed,
   known,
   list,
+  LISTED,
   need,
   type Read,
   set,
@@ -92,6 +94,8 @@ import {
 } from './tool.ts'
 import { vaulted, vaultOf } from './vault.ts'
 import { drawn } from './theirs.ts'
+import { INTEGRATIONS, said } from './integrations.ts'
+import { EITHER } from './preauth.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
@@ -124,6 +128,8 @@ export type Face = {
   /** how a person gets its key, drawn from its markdown as HTML, its links
    * marked as the writer's (theirs.ts) */
   instructions: string
+  /** what it says was written by the space that made it, not by yaks.app */
+  theirs: boolean
 }
 
 /** The face of an integration, called by its name where it has no title. */
@@ -133,6 +139,7 @@ export let faceOf = async (name: string, i?: Integration): Promise<Face> => ({
   site: i?.site ?? '',
   logo: i?.logo ?? '',
   instructions: await drawn(i?.instructions),
+  theirs: !i?.built,
 })
 
 /** One connection, as the page shows it. */
@@ -156,6 +163,9 @@ export type Shown = {
   /** its integration was made by the space or person it is kept for, who may
    * change what is said about it: these, as written */
   about: About | null
+  /** its integration is in the integration directory: listed by its owner,
+   * or built */
+  listed: boolean
   scopes: string[]
   /** the apps that call out through it */
   apps: Using[]
@@ -197,6 +207,9 @@ export type Connections = {
   /** the testing integrations the page was opened for (`enabled`), which its
    * forms carry */
   enable?: string[]
+  /** the integration the page was opened to add (`?add=<name>`, from the
+   * integration directory), while this space has none through it */
+  asked?: { name: string; keyed: boolean; face: Face }
 }
 
 // A read of the directory. Every read the verbs make is a filter line.
@@ -297,8 +310,10 @@ export let connectionsOf = async (
   person: string,
   services: Service[] = [],
   enable: string[] = [],
+  add?: string,
 ): Promise<Connections> => {
   let read = readOf(env)
+  let listed = new Set((await read(`.${LISTED}`)).map((b) => b.entity.eid))
   let slugs = new Map(spaces.map((s) => [s.eid, s.slug]))
   let all = (await Promise.all(
     [person, ...slugs.keys()].map((owner) => list(read, owner)),
@@ -344,6 +359,8 @@ export let connectionsOf = async (
         about: i && !i.built && i.owner == c.owner
           ? Object.fromEntries(ABOUT.map((k) => [k, i[k] ?? '']))
           : null,
+        listed: !!i?.built ||
+          listed.has(integrationEid(String(c.integration))),
         scopes: strs(c.scopes).length ? strs(c.scopes) : i?.scopes ?? [],
         apps: to.map((l): Using => {
           let app = String(comp(l, 'edge').from)
@@ -385,12 +402,26 @@ export let connectionsOf = async (
     }
   }
   built.sort((a, b) => a.name.localeCompare(b.name))
+  // The one the page was opened to add, from the integration directory: a
+  // built one offered here, or a custom one its owner listed.
+  let wanted = add ? await known(read, add) : undefined
+  let asked = wanted && !taken.has(wanted.name) &&
+      (wanted.built
+        ? await offered(wanted)
+        : listed.has(integrationEid(wanted.name)) && connectable(wanted))
+    ? {
+      name: wanted.name,
+      keyed: keyed(wanted),
+      face: await faceOf(wanted.name, wanted),
+    }
+    : undefined
   return {
     on: vaulted(env),
     list: shown.sort((a, b) => a.integration.localeCompare(b.integration)),
     services,
-    built,
+    built: built.filter((b) => b.name != asked?.name),
     enable,
+    ...asked ? { asked } : {},
   }
 }
 
@@ -520,17 +551,28 @@ export let connecting = async (
     // What is said about a custom integration is its owner's to change: for
     // a space's, the space's owner (@yaks/connections `set`). Where its key
     // goes never changes.
-    if (act == 'about') {
+    if (act == 'about' || act == 'list' || act == 'unlist') {
       if (owner == space.eid && who.role != 'owner') {
         return no('Only this space’s owner can change what it says here.')
       }
       let bundles = await set(c.graph.read, {
-        ...Object.fromEntries(ABOUT.map((k) => [k, field(k)])),
+        ...act == 'about'
+          ? Object.fromEntries(ABOUT.map((k) => [k, field(k)]))
+          : { listed: act == 'list' },
         owner: String(owner),
         integration: integrationOf(b),
       })
       if (bundles.length) await c.graph.apply(bundles)
-      return { say: `Saved what ${integrationOf(b)} says.`, no: false }
+      return {
+        say: act == 'about'
+          ? `Saved what ${integrationOf(b)} says.`
+          : act == 'list'
+          ? `${integrationOf(b)} is listed in the integration directory, ` +
+            'for anyone to add to a space of theirs with their own key. The ' +
+            'page shows it within half a minute.'
+          : `${integrationOf(b)} is out of the integration directory.`,
+        no: false,
+      }
     }
     if (act == 'attach') {
       if (who.role != 'owner' || owner != space.eid) {
@@ -886,6 +928,12 @@ let CONNECTIONS: Row[] = [
             'agent helping them: where to sign up, which page issues the ' +
             'key, what to paste',
         ),
+        listed: {
+          type: 'boolean',
+          description: 'true lists it in the integration directory at ' +
+            'yaks.app/integrations, where anyone may find it and add it to ' +
+            'a space of theirs with their own key; false takes it out',
+        },
       },
       required: ['integration'],
     },
@@ -906,9 +954,13 @@ let CONNECTIONS: Row[] = [
         ...about,
         owner: space.eid,
         integration: name,
+        ...args.listed == null ? {} : { listed: args.listed == true },
       })
       if (bundles.length) await c.graph.apply(bundles)
       let i = await known(c.graph.read, name)
+      let shown = (await c.graph.read(
+        `.entity.eid=${integrationEid(name)}&.${LISTED}`,
+      )).length > 0
       let said = (['title', 'tagline', 'site'] as const)
         .filter((k) => i?.[k]).map((k) => `${k} ${i![k]}`).join('; ')
       return {
@@ -921,7 +973,37 @@ let CONNECTIONS: Row[] = [
           }\n\nIts key is only ever sent to ${
             i?.hosts.join(', ') || 'no host'
           }, which no change here moves. Each space's connections page shows ` +
-          'the instructions beside a connection needing its key.',
+          'the instructions beside a connection needing its key. ' +
+          (shown
+            ? `It is listed in the integration directory, whose page shows ` +
+              `it within half a minute: ${url(ctx.env, INTEGRATIONS.path)}#${
+                encodeURIComponent(name)
+              }`
+            : 'It is not listed in the integration directory; listed: true ' +
+              'lists it.'),
+      }
+    },
+  },
+  {
+    name: 'integration_list',
+    readOnly: true,
+    // A token is welcome and none is needed: the directory is public, and
+    // this is how the anonymous door knows it may call this (anon.ts
+    // `openly`).
+    security: EITHER,
+    input: {
+      type: 'object',
+      properties: {
+        words: str(
+          'what to look for, in the words the person used: matched against ' +
+            "each service's name, title, line, site, hosts and instructions",
+        ),
+      },
+    },
+    run: async (ctx, args) => {
+      let words = args.words == null ? '' : String(args.words)
+      return {
+        text: said(await ctx.dir.integrations(words), words, ctx.env),
       }
     },
   },

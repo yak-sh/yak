@@ -112,6 +112,8 @@ export let about = (env: Host = {}): Says => ({
 Signed out, this endpoint already does a fair amount. The guide is here to read:
 ${url(env, '/docs.md')} is the map, and a page per subject sits beside it.
 app_published is what other people have published, browsable by word.
+integration_list is the integration directory: the outside services a yaks app
+can call, each with how to get its key.
 graph_query, graph_show, graph_schema and search read one app you name — its
 space and its slug — as long as its pages are readable by anyone with the
 link, which is exactly what a browser at that address would see. Those two

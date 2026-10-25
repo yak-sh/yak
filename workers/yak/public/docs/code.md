@@ -553,12 +553,25 @@ markdown, written for the person and for the agent helping them (where to sign
 up, which page issues the key, what to paste), with a `title`, a one-line
 `tagline` and its https `site`. Give them when `store_connection_need` makes the
 integration; afterwards the space's owner changes them with `integration_set`,
-or under the connection on the connections page. They show beside the
-connection on every connections page that needs that key, above the box on the
-page where a person connects their own, and in the `store_connection_need` and
+or under the connection on the connections page. They show beside the connection
+on every connections page that needs that key, above the box on the page where a
+person connects their own, and in the `store_connection_need` and
 `store_connection_list` answers, so you can walk the person through it. Only the
 space that made an integration changes what it says, and nothing changes the
 hosts its key may be sent to.
+
+### The integration directory
+
+    integration_list(words: 'bible')
+    integration_set(integration: 'ESV', listed: true)
+
+[yaks.app/integrations](/integrations) lists every service yaks.app has built
+in, and every one a space made and listed, each with how to get its key and a
+button that adds it to a space of the reader's own. `integration_list` searches
+it, signed in or not. The owner of the space that made an integration lists it
+with `integration_set(listed: true)` or from its card on the connections page,
+and takes it out with `listed: false`. Anyone who adds it connects their own
+key; the integration carries no credential, only what it says and its hosts.
 
 ### From a page
 

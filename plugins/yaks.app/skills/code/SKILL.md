@@ -549,6 +549,19 @@ person connects their own, and in the `store_connection_need` and
 space that made an integration changes what it says, and nothing changes the
 hosts its key may be sent to.
 
+### The integration directory
+
+    integration_list(words: 'bible')
+    integration_set(integration: 'ESV', listed: true)
+
+[yaks.app/integrations](/integrations) lists every service yaks.app has built
+in, and every one a space made and listed, each with how to get its key and a
+button that adds it to a space of the reader's own. `integration_list` searches
+it, signed in or not. The owner of the space that made an integration lists it
+with `integration_set(listed: true)` or from its card on the connections page,
+and takes it out with `listed: false`. Anyone who adds it connects their own
+key; the integration carries no credential, only what it says and its hosts.
+
 ### From a page
 
 What the app is handed is a **sentinel**: a string that stands for the key,

@@ -46,6 +46,7 @@ import {
   integrationEid,
   known,
   list,
+  listing,
   need,
   pick,
   refresh,
@@ -442,6 +443,68 @@ test('nobody else changes it, nor a built one, and its site is an https address'
     CallError,
   )
   assertEquals(e.code, 'owner')
+})
+
+// A custom integration to list, and one listed already, to take out.
+let lists = await setup()
+await lists.needs({ ...ESV, title: 'ESV API' })
+let unlists = await setup()
+await unlists.needs(ESV)
+await unlists.g.apply(
+  await set(unlists.g.read, {
+    owner: 'space',
+    integration: 'esv',
+    listed: true,
+  }),
+)
+// Listed, and then the space that made it was erased: its owner detaches.
+let orphaned = await setup()
+await orphaned.needs(ESV)
+await orphaned.g.apply([
+  ...await set(orphaned.g.read, {
+    owner: 'space',
+    integration: 'esv',
+    listed: true,
+  }),
+  { entity: { eid: integrationEid('esv') }, integration: { owner: null } },
+])
+let names = (all: Integration[]) => all.map((i) => i.title || i.name)
+
+test('the integration directory: every built one but those in testing, and each custom one its owner listed', async () => {
+  let { g } = lists
+  await g.apply(
+    await set(g.read, { owner: 'space', integration: 'esv', listed: true }),
+  )
+  assertEquals(names(await listing(g.read)), [
+    'calendar',
+    'ESV API',
+    'OpenAI',
+    'OpenRouter',
+    'texts',
+  ])
+  let [esv] = await listing(g.read, 'API.ESV.org esv')
+  assert(esv.listed && esv.instructions == undefined)
+})
+
+test('its owner takes a listed one out, and listing it twice is once', async () => {
+  let { g } = unlists
+  assertEquals(
+    await set(g.read, { owner: 'space', integration: 'esv', listed: true }),
+    [],
+  )
+  await g.apply(
+    await set(g.read, { owner: 'space', integration: 'esv', listed: false }),
+  )
+  assertEquals(names(await listing(g.read, 'esv')), [])
+  let e = await assertRejects(
+    () => set(g.read, { owner: 'bob', integration: 'esv', listed: true }),
+    CallError,
+  )
+  assertEquals(e.code, 'owner')
+})
+
+test('a listed integration whose owner is gone leaves the directory, since nobody could take it out', async () => {
+  assertEquals(names(await listing(orphaned.g.read, 'esv')), [])
 })
 
 test('a list, and an answer naming a connection, carry the integration it goes through', async () => {

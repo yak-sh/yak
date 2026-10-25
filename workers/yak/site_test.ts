@@ -20,6 +20,7 @@ import {
 import { quoted, rate } from './sell.ts'
 import { DRAWN, MARKDOWN } from './docs.ts'
 import { page as galleryPage } from './gallery.ts'
+import { INTEGRATIONS, page as integrationsPage } from './integrations.ts'
 import { PAGES, uriOf, WHOLE } from './guide.ts'
 import { askEmail, connect } from './pages.ts'
 import {
@@ -315,6 +316,7 @@ test('the gallery is a page of this site, drawn rather than filed', async () => 
   assert(!SITE.includes(GALLERY.path), 'the gallery is not a file in public/')
   assertEquals(RENDERED.map((p) => p.path), [
     '/gallery',
+    '/integrations',
     '/docs',
     '/docs/technical',
   ])
@@ -347,6 +349,49 @@ test('the gallery is a page of this site, drawn rather than filed', async () => 
   assertStringIncludes(sitemap(null), `<loc>${url}</loc>`)
   // And the home page points at it, since it is in no nav.
   assertStringIncludes(read('index.html'), 'href="/gallery"')
+})
+
+// The integration directory (T-132636) is drawn too, from what is listed: a
+// built service someone signs in to, and one a space added, its owner's words
+// drawn as theirs.
+let directoryPage = await (await integrationsPage([
+  {
+    name: 'openrouter',
+    title: 'OpenRouter',
+    tagline: 'Many models, one key.',
+    site: 'https://openrouter.ai',
+    token: 'https://openrouter.ai/api/v1/auth/keys',
+    hosts: ['openrouter.ai'],
+    built: true,
+  },
+  {
+    name: 'ESV',
+    title: 'ESV API',
+    site: 'https://api.esv.org',
+    hosts: ['api.esv.org'],
+    instructions: 'Sign up at [api.esv.org](https://api.esv.org).',
+    owner: 'ada',
+    listed: '2026-10-25T00:00:00.000Z',
+  },
+])).text()
+
+test('the integration directory is a page of this site, saying what each service is and how to start', () => {
+  let one = flat(directoryPage)
+  let url = `https://yaks.app${INTEGRATIONS.path}`
+  for (
+    let text of [
+      `<title>${INTEGRATIONS.title}</title>`,
+      `<link rel="canonical" href="${url}">`,
+      '<h2>ESV API</h2>',
+      'Its key is only ever sent to <code>api.esv.org</code>.',
+      '<a href="https://api.esv.org" rel="nofollow ugc">api.esv.org</a>',
+      'href="https://yaks.app/manage/connections?add=ESV">Add to a space',
+      'Connected by signing in to OpenRouter',
+    ]
+  ) assertStringIncludes(one, text)
+  assertEquals((one.match(/<h1[\s>]/g) ?? []).length, 1)
+  assertEquals(links(one.split('<footer')[1]), FOOT)
+  assertStringIncludes(sitemap(null), `<loc>${url}</loc>`)
 })
 
 // The rename is a rename: the link text and the address both moved, and a

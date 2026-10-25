@@ -4,9 +4,9 @@ import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
 import { workerd } from './probe.ts'
 
-test('workerd serves home and gallery through Site', async () => {
+test('workerd serves home, gallery and the integration directory through Site', async () => {
   let k = workerd()
-  for (let path of ['/', '/gallery']) {
+  for (let path of ['/', '/gallery', '/integrations']) {
     let page = await k.at('yaks.app', path)
     assertEquals(page.status, 200, path)
     assertEquals(
