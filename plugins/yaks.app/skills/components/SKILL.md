@@ -519,6 +519,9 @@ read only their own, too, and a guest who is not signed in reads none.
   entity, the row whose eid is the person's. Only that person writes it, and
   only they read it; the entity's other components stay as they were.
 
+`app_deploy` refuses a `personal` naming a property that is no reference, and
+says what to declare in its place.
+
 A diary where each member keeps notes of their own and a mood of their own:
 
     { "$defs": {
