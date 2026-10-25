@@ -353,15 +353,18 @@ export let servingDoc: VocabDoc = {
       type: 'object',
       properties: {},
     },
-    // An app that has published a file (public-files.ts), so each request it
-    // is sent looks for one at its path before the app runs. Worn from its
-    // first publish on; an app that never published pays nothing for it.
+    // The paths an app has published files at (public-files.ts), so a request
+    // at one of them asks the directory for its file before the app runs, and
+    // a request at any other path goes on to the app without asking. The list
+    // is JSON in one text property, sorted, as `home.first` is. The directory
+    // keeps it in the transaction that writes the files themselves
+    // (facets/publishing-graph.ts); an app that never published wears none.
     publishing: {
       description:
-        'An app that has published files, so its requests look for one at their path first.',
+        'The paths an app has published files at, so a request at one of them is answered its file before the app runs.',
       component: true,
       type: 'object',
-      properties: {},
+      properties: { paths: text },
     },
   },
 }

@@ -11,8 +11,10 @@
 // its eid derived from the app and the path, and its bytes under the app's
 // own prefix, where they count against the space's files, move with a rename
 // and go with an erase, as uploads do. No release holds one, so a deploy or a
-// rollback never moves it. An app wears `publishing` from its first publish,
-// and only such an app's requests look for one (apps.ts `served`).
+// rollback never moves it. The app's own row lists the paths it published
+// at (`publishing{paths}`, kept by facets/publishing-graph.ts), so a request
+// at any other path goes on to the app without asking the directory, and
+// only one at a listed path reads its file's row (apps.ts `served`).
 //
 // The door is the app's own `/api/public`, and publishing is a member's act,
 // as writing the app's files is (apps.ts decides who):
@@ -31,7 +33,6 @@ import type { App, Directory, PublicFile, Space } from './directory.ts'
 import type { Env } from './env.ts'
 import { blobBytes } from './files.ts'
 import { r2Objects } from './lib/objects.ts'
-import { appTag, purge } from './purge.ts'
 import { fullFiles } from './usage.ts'
 import { sha256 } from './versions.ts'
 
@@ -186,26 +187,23 @@ let published = async (ask: Ask, path: string) => {
     mime: typeOf(req.headers.get('content-type') ?? '', path),
     size: bytes.byteLength,
   }
-  // The row's write purges the app's kept pages (facets/pages-graph.ts).
+  // The directory lists the path on the app's row as it writes the file
+  // (facets/publishing-graph.ts), and that write purges the app's kept pages
+  // (facets/pages-graph.ts).
   await dir.stamp({
-    entities: [
-      { entity: { eid: publicEid(app, path) }, public_file: file },
-      ...(app.publishing ? [] : [{ entity: { eid: app.eid }, publishing: {} }]),
-    ],
+    entities: [{ entity: { eid: publicEid(app, path) }, public_file: file }],
   })
   if (was && was.sha != sha) await released(ask, was.sha)
   return Response.json(said({ eid: publicEid(app, path), ...file }, ask))
 }
 
 let unpublished = async (ask: Ask, path: string) => {
-  let { env, dir, space, app } = ask
+  let { dir, app } = ask
   let was = await dir.publicFile(app, path)
   if (!was) return no(404, 'no_such_file', `nothing is published at ${path}`)
+  // Taking the path off the app's row purges its kept pages, as publishing
+  // does.
   await dir.stamp({ entities: [{ entity: { eid: was.eid }, $delete: true }] })
-  // A deleted row names no app, so the directory's hook cannot purge for it.
-  await purge(env, [appTag(app.eid)]).catch((e) =>
-    caught(e, { request: 'unpublish purge', space: space.slug, app: app.slug })
-  )
   await released(ask, was.sha)
   return Response.json(said(was, ask))
 }
@@ -216,17 +214,28 @@ let released = async ({ env, dir, space, app }: Ask, sha: string) => {
   await r2Objects(env.BLOBS).delete(publicPrefix(space, app) + sha)
 }
 
+/// listed(['notes/week-1'], 'notes/week-1', false) -> true
+/// listed(['notes/week-1'], 'about', false) -> false
+/// listed(['notes/week-1'], 'about', true) -> true
+/// listed([], 'about', true) -> false
+/** Whether a request asks the directory for the file at `at`: the app's row
+ * lists it, or the row is a copy a moment old (`stale`, directory-copy.ts),
+ * whose list may not hold a file published since. An app that has published
+ * nothing never asks. */
+export let listed = (paths: string[], at: string, stale: boolean) =>
+  paths.length > 0 && (stale || paths.includes(at))
+
 /** The file an app published at the path a request asks for, as served to
  * anyone, or null where none is: the app's own turn. `path` is the request's
- * path within the app. HTML comes back unwoven; apps.ts weaves it as it does
- * a worker's page. */
-export let served = async (ask: Ask, path: string) => {
+ * path within the app, and `stale` whether the app's row came from the
+ * directory's copy. Only a listed path reads its row, fresh from the
+ * directory, so a file is gone the moment it is unpublished. HTML comes back
+ * unwoven; apps.ts weaves it as it does a worker's page. */
+export let served = async (ask: Ask, path: string, stale = false) => {
   let { req, env, dir, space, app } = ask
-  if (!app.publishing || (req.method != 'GET' && req.method != 'HEAD')) {
-    return null
-  }
+  if (req.method != 'GET' && req.method != 'HEAD') return null
   let at = askedFor(path)
-  if (!at) return null
+  if (!at || !listed(app.publishing ?? [], at, stale)) return null
   let file = await dir.publicFile(app, at)
   if (!file) return null
   let bytes = await blobBytes(

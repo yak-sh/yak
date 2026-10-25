@@ -4,7 +4,9 @@
 import { assert, assertEquals, assertMatch } from '@std/assert'
 import { test } from '@yaks/testing'
 import * as apps from './apps.ts'
+import type { Env } from './env.ts'
 import { pageAt } from './page-cache.ts'
+import { appTag, type Purgers } from './purge.ts'
 import { fetch as siteFetch } from './site.ts'
 import { ADA, as, platform, seeded, visit } from './serving-probe.ts'
 
@@ -12,8 +14,14 @@ let PAGE =
   '<!doctype html><head><title>Week 1</title></head><body>Psalm 23</body>'
 
 // Ada's private cookbook, and what she published to it as the file loads.
-let { env, files } = platform()
-await seeded(env, 'private')
+// Site's cache is purged through a Purger that writes down each tag.
+let purged: string[] = []
+let PURGER: Purgers = {
+  idFromName: () => 'purger',
+  get: () => ({ purge: (tags) => Promise.resolve(void purged.push(...tags)) }),
+}
+let { env, files } = platform({ PURGER } as Partial<Env>)
+let { app } = await seeded(env, 'private')
 let ada = await as(ADA)
 
 // One request at the cookbook, as Ada (`cookie`) or as nobody.
@@ -32,11 +40,30 @@ let publish = async (path: string | null, body = PAGE) =>
     headers: { 'content-type': 'text/html; charset=utf-8' },
   }, ada)).json()
 
+// The store hops a page view of Ada's takes (Server-Timing's `hops`), at a
+// path the app answers itself: before it published anything, and after. The
+// first view after a write reads the space afresh, so each is the second.
+let hops = async (path: string) => {
+  let res = await ask(path, {}, ada)
+  await res.body?.cancel()
+  return res.headers.get('server-timing')?.match(/(?:^|, )hops;dur=(\d+)/)?.[1]
+}
+await hops('recipes/soup')
+let unpublishedHops = await hops('recipes/soup')
+
 let week = await publish('notes/week-1')
 let fresh = await publish(null)
 await publish('posts/hello/index.html')
+await Promise.all([publish('together/a', 'A'), publish('together/b', 'B')])
+let together = await Promise.all(
+  ['together/a', 'together/b'].map(async (p) => await (await ask(p)).text()),
+)
+await hops('recipes/soup')
+let publishedHops = await hops('recipes/soup')
 await publish('gone')
+purged.length = 0
 let ungone = await ask('api/public/gone', { method: 'DELETE' }, ada)
+let ungonePurged = [...purged]
 // Two paths share bytes `one`, and `a` then moves on to `two`.
 let kept = () =>
   new Set([...files.held.keys()].filter((k) => k.includes('/public/'))).size
@@ -91,6 +118,19 @@ test('a folder asked with its slash is its index.html', async () => {
 test('unpublishing gives the address back to the app', async () => {
   assertEquals(ungone.status, 200)
   assertEquals((await ask('gone')).status, 303)
+})
+
+test("unpublishing purges the app's kept pages", () => {
+  assert(ungonePurged.includes(appTag(app.eid)), String(ungonePurged))
+})
+
+test('files published at once are each served', () => {
+  assertEquals(together.map((text) => text[0]), ['A', 'B'])
+})
+
+test('a page view where nothing is published asks the directory nothing more', () => {
+  assert(unpublishedHops, 'the page view counted its hops')
+  assertEquals(publishedHops, unpublishedHops)
 })
 
 test('replacing a file lets go of bytes no published file names', async () => {

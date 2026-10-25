@@ -3024,22 +3024,28 @@ let served = async (
   let walls = sandboxed(app)
   // A file the app published (public-files.ts) answers its address before
   // anything of the app's own runs: the home router, the worker, the private
-  // gate. Only an app that has published asks, for one row, straight from the
-  // directory, so a walk over many addresses leaves its serving copy alone.
-  // The same answer for everyone, so Site keeps it whatever the app's access,
-  // even from a directory copy a moment old: the file's own row is read
-  // fresh, and nothing of the app's access decides it.
-  let open = walls || !app.publishing
+  // gate. The app's row, read above, lists the paths it published at, so a
+  // request anywhere else asks nothing more. One at a listed path asks for
+  // its row straight from the directory, so a walk over many addresses
+  // leaves its serving copy alone. The same answer for everyone, so Site
+  // keeps it whatever the app's access, even from a directory copy a moment
+  // old: the file's own row is read fresh, and nothing of the app's access
+  // decides it.
+  let open = walls || !app.publishing?.length
     ? null
     : await c.time('public', () =>
-      publicFile({
-        req,
-        env,
-        dir: directory(direct),
-        space: space!,
-        app: app!,
-        at: bare,
-      }, path))
+      publicFile(
+        {
+          req,
+          env,
+          dir: directory(direct),
+          space: space!,
+          app: app!,
+          at: bare,
+        },
+        path,
+        'stale' in serving && !!serving.stale,
+      ))
   if (open) {
     if (open.headers.get('content-type')?.startsWith('text/html')) {
       open = await reported(env, bare, open, app.version ?? 0, free(space))

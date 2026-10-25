@@ -269,9 +269,10 @@ export type App = {
   // Whether its pages in folders resolve relative URLs from the app's root
   // rather than their own folder (`rooted`, apps.ts `asset`).
   rooted?: boolean
-  // Whether it has published files, so a request looks for one at its path
-  // before the app runs (`publishing`, public-files.ts).
-  publishing?: boolean
+  // The paths it has published files at (`publishing`, public-files.ts): a
+  // request at one of them is answered its file before the app runs, and one
+  // anywhere else goes on to the app without asking the directory again.
+  publishing?: string[]
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 
@@ -436,7 +437,7 @@ export type Row = {
   trashed?: { at?: string | null; by?: Id | null }
   theme?: { theme_color?: string | null; background_color?: string | null }
   rooted?: Record<string, never>
-  publishing?: Record<string, never>
+  publishing?: { paths?: string | null }
   public_file?: {
     app: Id
     path: string
@@ -971,7 +972,7 @@ export let appOf = (r: Row): App => ({
     }
     : null,
   rooted: r.rooted != null,
-  publishing: r.publishing != null,
+  publishing: publishingOf(r.publishing),
 })
 
 let hostOf = (r: Row): Host => ({
@@ -1017,6 +1018,21 @@ export let writtenOf = (r: Row) => ({
   at: r.written!.at ?? null,
   by: r.written!.by ? idOf(r.written!.by) : null,
 })
+
+/// publishingOf({paths: '["notes/week-1","posts/hello"]'}) -> ['notes/week-1', 'posts/hello']
+/// publishingOf({}) -> []
+/// publishingOf(undefined) -> []
+/// publishingOf({paths: 'not json'}) -> []
+/** The paths an app has published files at, as its row keeps them: the JSON
+ * array in `publishing.paths` (facets/publishing-graph.ts), or none. */
+export let publishingOf = (publishing?: Row['publishing']): string[] => {
+  try {
+    let held = JSON.parse(publishing?.paths || '[]')
+    return Array.isArray(held) ? held.filter((p) => typeof p == 'string') : []
+  } catch {
+    return []
+  }
+}
 
 // One file an app published (public-files.ts): where it answers, and its
 // bytes' address, type and length.
