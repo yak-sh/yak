@@ -605,8 +605,8 @@ These are the names, all of them:
     archetype archived artifact ask attachment attempt attribute_writes
     belief binding blob bounced browser build build_of builder
     builder_answer builder_dep builder_edit builder_model_answer
-    builder_open builder_ring built call call_ready call_woken cancel
-    cancelled checkout chosen cites comment commit compat completed
+    builder_open builder_ring built call call_ready call_woken called calls
+    cancel cancelled checkout chosen cites comment commit compat completed
     connection contains content cost created delegates delete_upload deliver
     delivered deploy dispatch doc draft edge effect email entity entry error exception
     execution failed favorite fee feedback file filed finding fired former
