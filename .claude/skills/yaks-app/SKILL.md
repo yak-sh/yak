@@ -166,7 +166,9 @@ box. A query that works on the box can be refused in a store.
 - **A boot is all or nothing.** It runs in one transaction. A schema that won't
   stand unwinds, and the store answers every request 503 with the reason
   (`graph.ts` `#stalled`), still keeping the writes it is sent (`writes.ts`),
-  until fixed code arrives as a new incarnation. So a shape change or a backfill
+  until fixed code arrives as a new incarnation. A release whose words throw
+  as the store selects it is no boot: the tracker hears it, the release before
+  keeps serving, and the next deploy is selected (`#select`). So a shape change or a backfill
   has no place in boot. It goes to the store mover (`mover.ts`): from the
   alarm, once the store serves, a few dozen rows a batch with requests in
   between. A batch that fails unwinds and waits for the next incarnation while

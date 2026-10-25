@@ -971,6 +971,10 @@ export class Store {
   // Why this object's schema would not stand, when it would not. The rows are
   // as they were: the boot ran in one transaction and it unwound.
   #refused: string | null = null
+  // The releases this incarnation could not select (`#select`). The store
+  // serves the one before, and tries one again only as fixed code, which
+  // arrives as the next incarnation.
+  #unselectable = new Set<string>()
   // This object's one alarm (D-37562), or null where the runtime under it has
   // none. One adapter for the incarnation: `arm` serializes its read-compare-
   // write per storage object, so two wakes arriving together cannot leave the
@@ -1243,15 +1247,15 @@ export class Store {
     return this.#sql.tx!(body)
   }
 
-  // One transaction over this object's storage. A failure refuses the object
-  // (`#failed`) and forgets the memory's copy, which may hold a word the
-  // rollback took back.
-  #atomic(body: () => void) {
+  // One transaction over this object's storage. A failure forgets the
+  // memory's copy, which may hold a word the rollback took back, and refuses
+  // the object (`#failed`) unless the caller answers it another way.
+  #atomic(body: () => void, failed = (e: unknown) => this.#failed(e)) {
     try {
       this.#tx(body)
     } catch (e) {
       this.#kv.clear()
-      this.#failed(e)
+      failed(e)
     }
   }
 
@@ -1994,6 +1998,12 @@ export class Store {
   // the app's declaration pointer. That pointer is the serving decision:
   // every request selects its declarations here, so a failed release keeps
   // answering with the old vocabulary and commands even after preparation.
+  //
+  // So does a release whose words throw as they are built, or whose seed will
+  // not apply: its transaction takes the pointer back, the tracker hears it,
+  // and the release before is built again, since the failed build may have
+  // replaced part of this incarnation's graph. The store stays open, so the
+  // deploy that fixes the release is staged and selected like any other.
   #select(req: Request): {
     deploymentMoved: boolean
     effects: (() => void | Promise<void>)[]
@@ -2006,9 +2016,10 @@ export class Store {
     let release = req.headers.get('x-yak-release')
     if (release == null || !/^[a-z0-9-]+$/.test(release)) return unchanged()
     let active = this.#get('release')
-    if (active == release) return unchanged()
+    if (active == release || this.#unselectable.has(release)) return unchanged()
     let deploymentMoved = false
     let effects: (() => void | Promise<void>)[] = []
+    let selected = true
     this.#atomic(() => {
       if (active == null) {
         deploymentMoved = release != '0' && !this.#deployedOnce()
@@ -2053,8 +2064,13 @@ export class Store {
       }
       deploymentMoved = this.#get('tools') != toolsWas ||
         this.#get('vocab') != was || !this.#deployedOnce()
+    }, (e) => {
+      selected = false
+      this.#unselectable.add(release)
+      defect(e, { request: 'select release', store: this.#name(), release })
+      this.#boot()
     })
-    return this.#refused ? unchanged() : { deploymentMoved, effects }
+    return selected ? { deploymentMoved, effects } : unchanged()
   }
 
   async #enter(draft: boolean): Promise<() => void> {

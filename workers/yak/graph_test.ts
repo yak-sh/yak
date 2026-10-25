@@ -27,6 +27,7 @@ import { ram } from '@yaks/ram'
 import { draftEid } from '@yaks/draft'
 import type { Wire } from '@yaks/durable-object'
 import { durable } from './testing.ts'
+import { within } from './defects.ts'
 import { doorOf, PLATFORM_STORE } from './door.ts'
 import { fitOf, formatted, grantEid, shapeOf, stands, Store } from './graph.ts'
 import { metaOf } from './meta.ts'
@@ -86,6 +87,8 @@ type Vouch = {
   role?: string
   title?: string
   kernel?: boolean
+  release?: string
+  base?: string
 }
 
 let headers = (v: Vouch = {}): Record<string, string> => ({
@@ -98,6 +101,8 @@ let headers = (v: Vouch = {}): Record<string, string> => ({
   ...(v.role ? { 'x-yak-role': v.role } : {}),
   ...(v.title ? { 'x-yak-title': v.title } : {}),
   ...(v.kernel ? { 'x-yak-kernel': '1' } : {}),
+  ...(v.release ? { 'x-yak-release': v.release } : {}),
+  ...(v.base ? { 'x-yak-base-release': v.base } : {}),
 })
 
 let get = (store: Store, path: string, v?: Vouch) =>
@@ -848,8 +853,8 @@ test('a malformed query is a 400 to the caller, not a failure', async () => {
 })
 
 // The words a store declares, as it answers them.
-let words = async (store: Store) =>
-  (await (await get(store, '/vocab')).json()).$defs
+let words = async (store: Store, v?: Vouch) =>
+  (await (await get(store, '/vocab', v)).json()).$defs
 
 // What a store keeps is the document, so a keyword a property declares is still
 // on it when the kernel reads the manifest back (T-37546).
@@ -924,6 +929,30 @@ test('a manifest the vocabulary refuses leaves the store as it was', async () =>
   assertEquals(no.status, 400)
   assert((await no.json()).message.includes('doc'))
   assertEquals(await words(store), was)
+
+  // One it refuses only as the store builds the release is the tracker's:
+  // the release before serves, and the next release stages over it.
+  let reported: Bundle[] = []
+  let env = {
+    ERRORS: {
+      send: (rows: Bundle[]) => Promise.resolve(void reported.push(...rows)),
+    },
+  }
+  let at = (release: string, base?: string) => ({ ...owner, release, base })
+  let ping = JSON.stringify({
+    $defs: { ...JSON.parse(SCHEMA).$defs, ping: { effect: true } },
+  })
+  await get(store, '/vocab', at('1'))
+  await within(env, {}, async () => {
+    let staged = [await post(store, '/vocab', ping, at('2', '1'))]
+    assertEquals(await words(store, at('2')), was)
+    staged.push(await post(store, '/vocab', SCHEMA, at('3', '2')))
+    equal(staged.map((r) => r.status), [200, 200])
+  }, clock())
+  equal(
+    reported.map((row) => (row.exception as { value: string }).value),
+    ["effect 'ping' is owed by nothing"],
+  )
 })
 
 test('an app store refuses a malformed score declaration', async () => {
