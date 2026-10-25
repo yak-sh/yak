@@ -133,6 +133,25 @@ export let directoryDoc: VocabDoc = {
       type: 'object',
       properties: { address: text },
     },
+    // A file an app published at a path of its address (public-files.ts):
+    // served to anyone there, before the app runs, whatever its access. Its
+    // eid is derived from the app and the path, so an address holds one file.
+    // The bytes are the app's, under its own prefix (`public/<sha>`).
+    public_file: {
+      description:
+        'A file an app published at a path of its address, served to anyone before the app runs.',
+      component: true,
+      type: 'object',
+      kind: true,
+      identity: ['app', 'path'],
+      properties: {
+        app: owned(ref('cascade')),
+        path: owned(text),
+        sha: owned(text),
+        mime: owned(text),
+        size: owned(num),
+      },
+    },
     // One time this app's store was put back to a moment (recover.ts,
     // T-34507): when it was asked for, the moment asked for, who asked, and
     // the bookmark the store stood at before it moved.
@@ -330,6 +349,16 @@ export let servingDoc: VocabDoc = {
     rooted: {
       description:
         "An app whose pages in folders resolve relative URLs from the app's root.",
+      component: true,
+      type: 'object',
+      properties: {},
+    },
+    // An app that has published a file (public-files.ts), so each request it
+    // is sent looks for one at its path before the app runs. Worn from its
+    // first publish on; an app that never published pays nothing for it.
+    publishing: {
+      description:
+        'An app that has published files, so its requests look for one at their path first.',
       component: true,
       type: 'object',
       properties: {},

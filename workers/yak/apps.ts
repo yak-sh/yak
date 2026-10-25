@@ -41,6 +41,7 @@ import {
 } from './asset_url.ts'
 import * as files from './files.ts'
 import { inside, prefixOf, VERSION } from './files.ts'
+import { door as publicDoor, served as publicFile } from './public-files.ts'
 import { blobPrefix, servable, uploadPrefix } from './blob-key.ts'
 import {
   type Access,
@@ -2202,6 +2203,16 @@ let api = async (
     }
     return Response.json({ ok: true, key: file })
   }
+  // Publishing a file to anyone (public-files.ts) is the same member's act as
+  // writing the app's files, and listing them is too: what this app put on
+  // the public web is its members' business.
+  if (path == '/public' || path.startsWith('/public/')) {
+    if (!writes(who.role) || who.guest || sandboxed(app)) return refused()
+    return await publicDoor(
+      { req, env, dir, space, app, at: mount },
+      path.slice('/public'.length),
+    )
+  }
   return json(404, 'not_found')
 }
 
@@ -3017,6 +3028,31 @@ let served = async (
   // addresses for a while.
   if (edge && 'stale' in serving && serving.stale && app.access != 'public') {
     return passed()
+  }
+  // A file the app published (public-files.ts) answers its address before
+  // anything of the app's own runs: the home router, the worker, the private
+  // gate. Only an app that has published asks, for one row, straight from the
+  // directory, so a walk over many addresses leaves its serving copy alone.
+  // The same answer for everyone, so Site keeps it whatever the app's access.
+  let open = walls || !app.publishing
+    ? null
+    : await c.time('public', () =>
+      publicFile({
+        req,
+        env,
+        dir: directory(direct),
+        space: space!,
+        app: app!,
+        at: bare,
+      }, path))
+  if (open) {
+    if (open.headers.get('content-type')?.startsWith('text/html')) {
+      open = await reported(env, bare, open, app.version ?? 0, free(space))
+    }
+    let page = reporting(open, req, bare)
+    if (edge) return keep(page, space, app)
+    viewed(env, req, page, seen(space, app))
+    return page
   }
   if (!keepable(app)) {
     if (edge) return passed()

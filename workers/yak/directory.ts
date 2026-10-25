@@ -27,6 +27,7 @@ import { EPOCH, MEND } from './directory-copy.ts'
 import type { Reload } from '@yaks/platform'
 import { type Host as HostEnv, spaceHost } from './host.ts'
 import type { Bundle } from '@yaks/graph'
+import { identityEid } from '@yaks/graph/identity'
 import type { Rec } from './domains.ts'
 import {
   type Door,
@@ -267,6 +268,9 @@ export type App = {
   // Whether its pages in folders resolve relative URLs from the app's root
   // rather than their own folder (`rooted`, apps.ts `asset`).
   rooted?: boolean
+  // Whether it has published files, so a request looks for one at its path
+  // before the app runs (`publishing`, public-files.ts).
+  publishing?: boolean
 }
 export type Role = 'owner' | 'editor' | 'viewer'
 
@@ -431,6 +435,14 @@ export type Row = {
   trashed?: { at?: string | null; by?: Id | null }
   theme?: { theme_color?: string | null; background_color?: string | null }
   rooted?: Record<string, never>
+  publishing?: Record<string, never>
+  public_file?: {
+    app: Id
+    path: string
+    sha: string
+    mime?: string | null
+    size?: number | null
+  }
   hostname?: {
     name: string
     serves: Id
@@ -800,6 +812,7 @@ export let APP_PARTS = [
   'trashed',
   'theme',
   'rooted',
+  'publishing',
 ]
 let ABOUT = APP_PARTS.map((part) => `?${part}`).join('&')
 
@@ -957,6 +970,7 @@ export let appOf = (r: Row): App => ({
     }
     : null,
   rooted: r.rooted != null,
+  publishing: r.publishing != null,
 })
 
 let hostOf = (r: Row): Host => ({
@@ -1002,6 +1016,18 @@ export let writtenOf = (r: Row) => ({
   at: r.written!.at ?? null,
   by: r.written!.by ? idOf(r.written!.by) : null,
 })
+
+// One file an app published (public-files.ts): where it answers, and its
+// bytes' address, type and length.
+export let publicFileOf = (r: Row) => ({
+  eid: r.entity.eid,
+  app: idOf(r.public_file!.app),
+  path: r.public_file!.path,
+  sha: r.public_file!.sha,
+  mime: r.public_file!.mime || 'application/octet-stream',
+  size: r.public_file!.size ?? 0,
+})
+export type PublicFile = ReturnType<typeof publicFileOf>
 
 // One restore of an app's store, as recover.ts reads it (T-34507). `from` is
 // the bookmark the store stood at before this one moved it, which is the way
@@ -1588,6 +1614,21 @@ export let directory = (via: Fetcher | Part, now = false) => {
         `.written.app=${app.eid}${draft ? `&.written.draft=${draft}` : ''}`,
         true,
       )).map(writtenOf),
+    // The file an app published at a path, or none (public-files.ts). Its
+    // eid is derived from the two, so this asks for one row by its eid.
+    publicFile: async (app: App, path: string) => {
+      let row = await one(
+        `.entity.eid=${identityEid('public_file', [app.eid, path])}` +
+          '&.public_file',
+        true,
+      )
+      return row?.public_file ? publicFileOf(row) : null
+    },
+    // Every file an app published, by path.
+    publicFiles: async (app: App) =>
+      (await query(`.public_file.app=${app.eid}`, true))
+        .map(publicFileOf)
+        .sort((a, b) => a.path.localeCompare(b.path)),
     // Every deploy of an app, newest first — the versions app_versions pages
     // through, app_rollback picks from, and the retention sweep marks live
     // bytes off (versions.ts). None is ever buried, so this grows with the

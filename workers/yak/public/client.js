@@ -143,6 +143,10 @@ let pageVersion = () => {
 // ends in a slash or `query` would replace the last segment. A sandboxed
 // app's page (installed.ts) has an opaque origin, which reads "null" and is no
 // base either, so its own address stands in: the hostname is the same.
+// A path as a URL carries it, each segment escaped.
+let encodedPath = (path) =>
+  String(path).split('/').map(encodeURIComponent).join('/')
+
 let based = (base) => {
   if (base instanceof URL) return base
   let here = globalThis.location
@@ -568,6 +572,26 @@ export let store = (base) => {
     throw new Error(`the upload of ${name || 'a file'} did not finish`)
   }
 
+  // A file on the public web, at a path of this app's address: from then on
+  // that address answers it to anyone, before the app runs and whatever its
+  // access (`PUT ./api/public/<path>`). With no path it goes to a new UUID
+  // path, a link only the people given it know (`POST ./api/public`). `file`
+  // is a Blob or a File, served as its own type, so a page's HTML goes in a
+  // Blob of `text/html`. Answers `{path, url, sha, mime, size}`. Only the
+  // app's own people who write it publish; publishing the same path again
+  // replaces the file there.
+  let publish = (file, path) =>
+    ask(path ? `public/${encodedPath(path)}` : 'public', {
+      method: path ? 'PUT' : 'POST',
+      headers: { 'content-type': file.type || 'application/octet-stream' },
+      body: file,
+    })
+  // Take a published file off the web again: its address goes back to the app.
+  let unpublish = (path) =>
+    ask(`public/${encodedPath(path)}`, { method: 'DELETE' })
+  // Every file this app published, by path.
+  let publicFiles = () => ask('public')
+
   // The live half: one socket onto this store, opened on the first
   // subscription and shared by all of them, reconnecting on its own.
   let subs = new Map()
@@ -679,6 +703,9 @@ export let store = (base) => {
     search,
     subscribe,
     upload,
+    publish,
+    unpublish,
+    publicFiles,
     drafts: (opts) =>
       browserDrafts({ apply, me, subscribe }, String(base), opts),
   }
@@ -780,7 +807,18 @@ let rows = ({ rows, riders }) => {
   return [...out.values()]
 }
 
-export let { apply, drafts, me, outbox, query, search, subscribe, upload } =
-  store(
-    new URL('.', import.meta.url),
-  )
+export let {
+  apply,
+  drafts,
+  me,
+  outbox,
+  publicFiles,
+  publish,
+  query,
+  search,
+  subscribe,
+  unpublish,
+  upload,
+} = store(
+  new URL('.', import.meta.url),
+)

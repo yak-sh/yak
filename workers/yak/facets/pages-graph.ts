@@ -73,6 +73,11 @@ let shows = (b: Bundle) =>
  *   await owed([{ entity: { eid: 'x' }, app: { draft: 'd' } }], rows),
  *   [],
  * )
+ * // A file published at an app's address.
+ * assertEquals(
+ *   await owed([{ entity: { eid: 'f' }, public_file: { app: 'x', path: 'p' } }], rows),
+ *   ['app:x'],
+ * )
  * // A release's commit: its pages went as its fence rose.
  * assertEquals(
  *   await owed([{ entity: { eid: 'x' }, app: { version: 2, fence: null } }], rows),
@@ -97,6 +102,13 @@ export let owed = async (
     (touched.length ? await rows(touched.map((b) => b.entity.eid)) : [])
       .map((row) => [row.entity.eid, row]),
   )
+  // A file an app published answers at its address (public-files.ts), so its
+  // app's kept pages go when one is written. Its deletion names no app; the
+  // door that unpublishes purges for it.
+  for (let b of applied) {
+    let file = b.public_file as { app?: string | { eid: string } } | undefined
+    if (!b.tombstone && file?.app) tags.add(appTag(idOf(file.app)))
+  }
   for (let b of touched) {
     let row = now.get(b.entity.eid)
     if (row?.app) {
@@ -124,7 +136,7 @@ export let plugins = (_host: unknown, options: Options): Plugin[] => {
       await purge(env, await owed(applied, async (eids) => await tx.get(eids)))
       return applied
     },
-    { keys: [...PARTS, 'tombstone'] },
+    { keys: [...PARTS, 'public_file', 'tombstone'] },
   )
   return [{ name: 'yak/pages', admission: () => true, hooks: { effect } }]
 }

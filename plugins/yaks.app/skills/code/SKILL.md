@@ -169,8 +169,10 @@ shared Three.js and the words its store keeps, follow
 
 ## The fall-through rule
 
-Every request for the app that is not under `/api/` reaches the worker first,
-and **anything it answers with a 404 falls through to the app's files.**
+Every request for the app that is not under `/api/`, and not at a file the app
+published ([files](./files.md), "Publishing a file to anyone"), reaches the
+worker first, and **anything it answers with a 404 falls through to the app's
+files.**
 
     return new Response('not found', { status: 404 })   // → the files
 

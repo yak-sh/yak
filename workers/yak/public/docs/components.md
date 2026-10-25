@@ -619,7 +619,7 @@ These are the names, all of them:
     integration integration_install interrupted invite inviting key lease
     lines mail mail_post member memory meter model
     notice notified notify_trash occupancy openai opened openrouter order output output_of
-    parent pending person plan price product project provider provisional
+    parent pending person plan price product project provider provisional public_file
     published quarantined questions reads recalled ref referenced
     refusal register_writes report repository representation requires
     restored result retired revision rtc rtc_lapse satisfies screenshot secret seeded

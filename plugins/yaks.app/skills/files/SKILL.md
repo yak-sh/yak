@@ -1,6 +1,6 @@
 ---
 name: files
-description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the vocab.json word that says which files the app takes, the downscale, and a gallery that never shows one picture twice."
+description: "Files and pictures (yaks.app). app_deploy's reload and the yak-release event, including a custom notice that keeps unsaved input; app_files — what a write returns, the patch and fetch ops, the history every write keeps and the restore that puts one back, the icon.svg that gives an app an icon on a home screen — then upload() for a file off an <input>: where the bytes are served back from, the attachment and image rows it writes, a big file sent in parts that resumes where it stopped, deleting an upload and its bytes, the vocab.json word that says which files the app takes, the downscale, a gallery that never shows one picture twice, and publish() for a file served to anyone at a path of the app's address, before the app and whatever its access."
 ---
 
 # Files and pictures
@@ -727,6 +727,50 @@ identical picture are one blob and one `attachment` row for free, but a `photo`
 row of your own is a separate row, and two of them are two pictures on the wall.
 On a wall left open for hours, read `.image` inside the subscription, so a photo
 added later gets its box too.
+
+## Publishing a file to anyone
+
+A **public file** is a file an app publishes at a path of its own address. From
+then on that address answers it to anyone, before the app's worker runs and
+whatever the app's `access` says. So a private app puts a page on the public web
+without writing any auth of its own: a private blog editor publishes its posts,
+a private notebook publishes one page for a friend.
+
+    import { publicFiles, publish, unpublish } from './api/client.js'
+
+    let page = new Blob([html], { type: 'text/html; charset=utf-8' })
+    let post = await publish(page, 'posts/hello')  // at the path you choose
+    let link = await publish(page)                 // at a new UUID path
+    // each → {path, url, sha, mime, size}; url is where it answers
+    await unpublish('posts/hello')                 // the address is the app's again
+    let all = await publicFiles()                  // every file it published
+
+- **A path** is from the app's root with no leading slash, in segments of
+  letters, digits, `-`, `_` and single dots. It is never under `api/` or a
+  segment starting with `_`, and never `index.html` at the root, which would
+  answer before the app for its own people too. `posts/hello/index.html` answers
+  at `posts/hello/`.
+- **With no path**, the file goes to a new UUID path: a link only the people you
+  give it to know, and anyone holding it can pass it on.
+- **Its type** is the Blob's, so a page goes in a Blob of `text/html`; with
+  none, the path's extension decides. A page is served with the reporter and, on
+  the free plan, the badge, as every page of the app is.
+- **Publishing the same path again replaces the file.** It is part of no
+  release, so a deploy or a rollback never moves it.
+- **Only the app's owner and editors publish**, as writing its files is theirs:
+  never a visitor of an `open` app, a guest invited to the one app, or a
+  sandboxed copy's page.
+- **It is static**: the bytes as published, the same for everyone. A page that
+  should show newer rows is published again. Its scripts run on the app's own
+  address, so publish only what you would deploy.
+- Each is up to 25 MiB, counted against the space's photos and files.
+
+The doors underneath, at the app's own `/api/`:
+
+    PUT    ./api/public/<path>   the bytes, typed by their content-type
+    POST   ./api/public          the same, at a new UUID path
+    DELETE ./api/public/<path>
+    GET    ./api/public          → [{path, url, sha, mime, size}]
 
 ## What files do not do
 

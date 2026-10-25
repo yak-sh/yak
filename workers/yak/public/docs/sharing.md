@@ -70,11 +70,13 @@ member of the space gets the same "Nothing here yet." a wrong address gets —
 whether the app exists at all is its owner's to tell. The app's `/api/`
 endpoints answer `not_a_reader` rather than pretending.
 
-The app's own `worker.js` is the exception, and the only one: it runs before
-that redirect, so a private app with a worker is an app whose gatekeeper is its
-own code. That is how a rule finer than one of the three settings gets written —
-an invitation code that opens one household's row and no other. See `env.APP` in
-[Code of your own](./code.md).
+Two things answer before that redirect. A file the app published is served to
+anyone at its path, which is how a private app puts a page on the public web
+([files](./files.md), "Publishing a file to anyone"). And the app's own
+`worker.js` runs before it, so a private app with a worker is an app whose
+gatekeeper is its own code. That is how a rule finer than one of the three
+settings gets written — an invitation code that opens one household's row and no
+other. See `env.APP` in [Code of your own](./code.md).
 
 Sharing an app need not share what each person writes in it. A component of your
 own that declares `personal` keeps each person's rows to that person, the owner

@@ -4488,6 +4488,17 @@
       "a domain marked active still routes to its app": 168.5,
       "a domain with nothing ready gets the branded page, not the apex": 6.6
     },
+    "workers/yak/public-files_test.ts": {
+      "a folder asked with its slash is its index.html": 3.2,
+      "a path the door may not publish at is refused": 3.1,
+      "Site keeps a private app's published page, tagged with its app": 7.4,
+      "a stranger is served a private app's published page, woven": 8.2,
+      "publishing is the app's writers' alone": 3.4,
+      "replacing a file lets go of bytes no published file names": 9.4,
+      "the rest of a private app stays its members'": 2.4,
+      "unpublishing gives the address back to the app": 3.3,
+      "with no path, a file is published at a new UUID path": 4.1
+    },
     "workers/yak/query_refs_test.ts": {
       "typed and untyped eid filters return the same rows and counts at each door": 551.8
     },
