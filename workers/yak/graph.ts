@@ -4558,11 +4558,16 @@ export class Store {
         if (!tools.some((t) => t.name == name)) {
           throw new Refused(`no store tool ${name}`)
         }
+        // A directory call is answered with what its packages owe a direct
+        // caller beside its tool's answer (@yaks/connections: the
+        // integration a connection goes through), as the box answers one.
+        let reply = this.#host.reply
         let run = kind == 'directory'
           ? runner(this.#kernelGraph(this.#graph), {
             host: this.#graph,
             tools,
             report: (e) => void this.#broke('tool', e),
+            ...reply ? { reply } : {},
           })
           : this.#runner()
         await run.ensure([name])

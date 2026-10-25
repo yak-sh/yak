@@ -341,6 +341,8 @@ export let BOUNDARIES = [
   'yak/store/session-imported/1',
   // Every space's handle (D-131924).
   'yak/store/space-store/1',
+  // Every custom integration's owner (T-132635).
+  'yak/store/integration-owner/1',
 ]
 
 /** A column dropped from a table. */

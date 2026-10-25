@@ -6,6 +6,7 @@
     "./identity": "./identity.ts",
     "./vocab": "./vocab.ts",
     "./tools": "./tools.ts",
+    "./graph": "./graph.ts",
     "./effects": "./effects.ts",
     "./cli": "./cli.ts",
     "./authorize-cli": "./authorize_cli.ts",

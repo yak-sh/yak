@@ -7,7 +7,7 @@
  * its credential may be sent to, and how a page shows it. Every one is an
  * `integration` entity in the graph: the built ones ship with this package as
  * seed data, which a host installs at start-up ({@link install}), and a custom
- * one is kept in the space.
+ * one is owned by the space or person that made it.
  *
  * A **connection** is one link through an integration, owned by a space or a
  * person, and is also the secret its credential is kept as
@@ -31,8 +31,9 @@
  * (`each`): each person's connection is theirs, and only they call out
  * through it.
  *
- * The verbs: {@link need}, {@link list} (the two tools), {@link attach} for a
- * space owner through its host, {@link using},
+ * The verbs: {@link need}, {@link list} (the two tools), {@link attach} and
+ * {@link set} for a space owner through its host, {@link using},
+ * {@link through},
  * {@link begin} and {@link connect}, {@link disconnect}, {@link resolve},
  * {@link used} and {@link envOf}, {@link credential}, {@link refresh}. A host
  * that composes this package
@@ -44,6 +45,8 @@
 
 export { connectionsDoc } from './vocab.ts'
 export {
+  ABOUT,
+  type About,
   connectable,
   install,
   installed,
@@ -51,6 +54,8 @@ export {
   keyed,
   known,
   type Read,
+  set,
+  told,
 } from './integrations.ts'
 export { INTEGRATION, integrationEid } from './identity.ts'
 export {
@@ -81,6 +86,7 @@ export {
   resolve,
   type Resolved,
   type Status,
+  through,
   used,
   USES,
   using,

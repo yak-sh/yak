@@ -730,6 +730,11 @@ let deskCss = `
 .Connection_Face { display: grid; justify-items: center; gap: .5rem; margin: 0 0 1rem }
 .Connection_Face .Connection_Logo { width: 48px; height: 48px }
 .Connection_Face .Connection_About { margin: 0 }
+.Connection_Instructions > summary { font-weight: 700 }
+.Connection_Instructions .Markdown > :first-child { margin-top: .5rem }
+.Connection_Instructions .Markdown > :last-child { margin-bottom: 0 }
+.Connection_Told { margin: 1rem 0 0 }
+.Connection_Told textarea { min-height: 8rem; resize: vertical }
 .Connection_Head .Apps_Tag { font-size: .8rem; color: var(--soft-ink) }
 .Connection_Status { font-size: .85rem; font-weight: 700; color: var(--soft-ink) }
 .Connection_Status-connected { color: var(--accent) }
@@ -1029,6 +1034,15 @@ let about = (f: Face) => {
     : ''
 }
 
+// How a person gets a service's key, as its integration says, open while the
+// key is still wanted.
+let howTo = (f: Face, open: boolean) =>
+  f.instructions
+    ? `<details class="Note Connection_Instructions"${
+      open ? ' open' : ''
+    }><summary>How to get the key</summary>${f.instructions}</details>`
+    : ''
+
 // One connection: which apps use it and where its key may go, whether its
 // key is still being saved or could not be, and what to do next. The space's
 // side of an app that asks each person to connect their own is only the ask:
@@ -1062,12 +1076,52 @@ let connection = (
         }">${a.anyone ? 'Members only' : 'Open to anyone'}</button>`,
       )
     }`
-  let form = (inner: string) =>
-    `<form class="Connection_Do" method="post" action="${
+  let form = (inner: string, kind = 'Connection_Do') =>
+    `<form class="${kind}" method="post" action="${
       esc(enabling(managePath('connections', c.space ?? pick), enable))
     }"><input type="hidden" name="connection" value="${
       esc(c.eid)
     }">${inner}</form>`
+  // What is said about a service this space added, its owner's to change.
+  let told = c.about
+    ? `<details class="Note Connection_Told"><summary>Change what ${
+      esc(c.face.title)
+    } says</summary>${
+      form(
+        `${
+          (
+            [
+              ['title', 'Its name', 'What people call it'],
+              [
+                'tagline',
+                'One line about it',
+                'What it is, in a line',
+              ],
+              ['site', 'Its site', 'https://…'],
+            ] as const
+          ).map(([k, label, hint]) =>
+            `<label for="${k}-${
+              esc(c.eid)
+            }">${label}</label><input class="Field" id="${k}-${
+              esc(c.eid)
+            }" name="${k}" value="${esc(c.about![k] ?? '')}" placeholder="${
+              esc(hint)
+            }"${k == 'site' ? ' type="url" pattern="https://.*"' : ''}>`
+          ).join('\n')
+        }
+<label for="instructions-${
+          esc(c.eid)
+        }">How to get the key</label><textarea class="Field" id="instructions-${
+          esc(c.eid)
+        }" name="instructions" rows="6" placeholder="Where to sign up, which page gives the key, and what to paste">${
+          esc(c.about.instructions ?? '')
+        }</textarea>
+<p>Written for whoever connects it and the agent helping them, in markdown. Where its key may be sent stays as it is.</p>
+<button class="Button" type="submit" name="do" value="about">Save</button>`,
+        'Desk_Profile',
+      )
+    }</details>`
+    : ''
   let keyForm = (label: string) =>
     form(
       `<input class="Field" name="key" type="password" autocomplete="off" spellcheck="false" aria-label="${label} for ${
@@ -1138,14 +1192,14 @@ let connection = (
       }.`
       : ''
   }${c.scopes.length ? ` Granted: ${c.scopes.map(esc).join(', ')}.` : ''}</p>${
-    ask ? '' : c.apps.map(using).join('')
-  }${attach}${
+    howTo(c.face, open && !ask)
+  }${ask ? '' : c.apps.map(using).join('')}${attach}${
     c.failed
       ? `<p class="Say Say-no" role="status">${esc(sentence(c.failed))}</p>`
       : c.saving
       ? `<p class="Say" role="status">${esc(sentence(c.saving))}</p>`
       : ''
-  }${act}${drop}</section>`
+  }${act}${drop}${told}</section>`
 }
 
 // The page: the person's own connections and the services that hold a
@@ -1179,6 +1233,7 @@ let connections = (at: DeskPage, env: Host) => {
 <label for="new-name">Service</label><input class="Field" id="new-name" name="integration" maxlength="60" placeholder="Weather API" required>
 <label for="new-hosts">Where it may be sent</label><input class="Field" id="new-hosts" name="hosts" autocomplete="off" spellcheck="false" placeholder="api.example.com" required>
 <label for="new-key">Key</label><input class="Field" id="new-key" name="key" type="password" autocomplete="off" spellcheck="false" required>
+<label for="new-instructions">How to get the key <small>(optional)</small></label><textarea class="Field" id="new-instructions" name="instructions" rows="3" placeholder="Where to sign up, which page gives the key, and what to paste"></textarea>
 </div><footer class="Card_Footer"><button class="Button" type="submit" name="do" value="add">Save key</button></footer></form>`
   let group = (title: string, cards: string) =>
     cards ? `<h2 class="Desk_Group">${esc(title)}</h2>${cards}` : ''
@@ -1722,7 +1777,7 @@ export let askConnect = (at: {
       at.face.logo || about(at.face)
         ? `<div class="Connection_Face">${logo(at.face)}${about(at.face)}</div>`
         : ''
-    }${
+    }${howTo(at.face, at.status != 'connected')}${
       at.status == 'needed'
         ? ''
         : `<p class="Say${at.status == 'broken' ? ' Say-no' : ''}">${

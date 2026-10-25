@@ -8,10 +8,17 @@
 import { argsOf } from '@yaks/graph/call'
 import type { Runs } from '@yaks/graph/tools'
 import { list, need } from './connections.ts'
+import { ABOUT, type About } from './integrations.ts'
 
 let str = (v: unknown): string => v == null ? '' : String(v)
 
 let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
+
+// What was said about a custom integration, each property as given.
+let about = (args: Record<string, unknown>): About =>
+  Object.fromEntries(
+    ABOUT.filter((k) => args[k] != null).map((k) => [k, str(args[k])]),
+  )
 
 /** The implementations of the tools ./vocab.json declares. */
 export let runs = (): Runs => ({
@@ -26,6 +33,7 @@ export let runs = (): Runs => ({
       each: args.each == true,
       binding: args.binding == null ? undefined : str(args.binding),
       direct: args.direct == null ? undefined : args.direct == true,
+      ...about(args),
     })
   },
 

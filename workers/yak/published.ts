@@ -17,6 +17,8 @@ import {
   connect,
   disconnect,
   INTEGRATION,
+  integrationEid,
+  known,
   need,
   type Read,
   used,
@@ -268,6 +270,13 @@ let answer = (bundles: Bundle[]) =>
 let integrationOf = (b: Bundle | undefined) =>
   String(comp(b, CONNECTION).integration)
 
+// How the person gets the key, as its integration says, for an agent to walk
+// them through: nothing where it says nothing.
+let howTo = (i: { instructions?: unknown } | undefined) =>
+  typeof i?.instructions == 'string' && i.instructions
+    ? `\n\nHow to get the key, as the integration says:\n\n${i.instructions}`
+    : ''
+
 let said = (u: Comp, title: string) =>
   `${title} reads it as env.${u.binding}${
     u.direct ? ' (the key itself)' : ' (a sentinel)'
@@ -436,6 +445,7 @@ let CONNECTIONS: Row[] = [
       )
       let status = comp(b, CONNECTION).status
       let u = comp(l, USES)
+      let how = howTo(await known(read, integrationOf(b)))
       if (u.each) {
         let at = `https://${space.slug}.${apex(ctx.env)}/${app.slug}`
         return {
@@ -445,7 +455,7 @@ let CONNECTIONS: Row[] = [
             `${encodeURIComponent(integrationOf(b))}, where the platform ` +
             `draws the Connect button. The page reads their sentinel as ` +
             `${u.binding} from ./api/env and sends the call through ` +
-            './api/fetch?url=…; only they call out through it.',
+            './api/fetch?url=…; only they call out through it.' + how,
         }
       }
       if (status == 'connected') {
@@ -467,7 +477,8 @@ let CONNECTIONS: Row[] = [
             `A page needs no worker for it: it reads ${u.binding} from ` +
             './api/env and sends the call through ./api/fetch?url=….') +
           (u.anyone ? '' : ' Only a member of the app may call out ' +
-            'through it until the person opens it to anyone on that page.'),
+            'through it until the person opens it to anyone on that page.') +
+          (status == 'connected' ? '' : how),
       }
     },
   },
@@ -496,9 +507,15 @@ let CONNECTIONS: Row[] = [
               titles.get(String(comp(l, 'edge').from)) ?? 'another app',
             )
           )
+        let i = all.find((i) =>
+          i[INTEGRATION] &&
+          i.entity.eid == integrationEid(String(c.integration))
+        )
         return `${c.integration} (${b.entity.eid}): ${c.status}${
           c.account ? ` as ${c.account}` : ''
-        }${uses.length ? `; ${uses.join('; ')}` : ''}`
+        }${uses.length ? `; ${uses.join('; ')}` : ''}${
+          c.status == 'connected' ? '' : howTo(comp(i, INTEGRATION))
+        }`
       })
       return {
         space,

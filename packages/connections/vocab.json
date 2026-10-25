@@ -10,7 +10,7 @@
       "component": true,
       "type": "object",
       "kind": true,
-      "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, the hosts its credential may be sent to, and how a page shows it. A built one is installed by the host from @yaks/connections' own seed data, and marked built; any other is a custom one, kept in the space",
+      "description": "an outside service, as data: where a person signs in to it and where its codes are exchanged, for one reached by OAuth, the hosts its credential may be sent to, and how a page shows it. A built one is installed by the host from @yaks/connections' own seed data, and marked built; any other is a custom one, owned by the space or person that made it",
       "properties": {
         "name": {
           "type": "string",
@@ -120,6 +120,16 @@
           "type": "string",
           "format": "uri",
           "description": "OpenID endpoint naming the signed-in account when the token answer has no id_token"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "how a person gets the credential, in markdown, written for them and for the agent helping them: where to sign up, which page issues the key, what to paste. Shown beside every connection it is needed for"
+        },
+        "owner": {
+          "type": "string",
+          "ref": "entity",
+          "death": "detach",
+          "description": "the space or person that made a custom integration: only its owner may change the integration's title, tagline, site or instructions, and nobody may change its hosts. A built integration has none, and is the host's"
         }
       }
     },
@@ -195,7 +205,7 @@
       "noun": "connection",
       "verb": "need",
       "title": "Say an app needs a connection",
-      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied bundles: JSON objects with entity ids and the components written.",
+      "description": "Say that an app needs an outside service: an integration by name, and the scopes it asks for. It makes a connection with no credential, owned by a space or a person, which shows them what to connect; no key or token ever passes through this tool. For a service with no built integration, name it and give the hosts its key may be sent to, and a custom integration is made for it, owned by the asking space; give it instructions too, markdown for a person and their agent saying how to get the key (where to sign up, which page issues it, what to paste), and a title, tagline and site. Its owner asking again with any of those changes them; its hosts never change. With each, every person who uses the app connects their own instead, and the owner connects nothing. An app that already uses a connection through that integration is answered with it. Returns the applied bundles: JSON objects with entity ids and the components written, followed by the integration the connection goes through, its instructions among it, to walk the person through getting the key.",
       "input": {
         "app": {
           "type": "string",
@@ -236,6 +246,22 @@
         "direct": {
           "type": "boolean",
           "description": "hand the app's code the key itself rather than a sentinel, for a key it must sign with; only for a pasted key"
+        },
+        "instructions": {
+          "type": "string",
+          "description": "for a custom integration: how a person gets its key, in markdown, written for them and the agent helping them"
+        },
+        "title": {
+          "type": "string",
+          "description": "for a custom integration: what a person calls the service, as its maker writes it"
+        },
+        "tagline": {
+          "type": "string",
+          "description": "for a custom integration: one line saying what the service is"
+        },
+        "site": {
+          "type": "string",
+          "description": "for a custom integration: the service's https address on the web"
         }
       },
       "required": [
@@ -252,7 +278,7 @@
       "noun": "connection",
       "verb": "list",
       "title": "List connections",
-      "description": "The connections a space or a person owns, each with its integration, account, scopes and status (needed, connected or broken), and the links from each app that uses one. A handle is shown where a credential is kept; the credential itself never is. Returns bundles: JSON objects with entity ids and component fields.",
+      "description": "The connections a space or a person owns, each with its integration, account, scopes and status (needed, connected or broken), the links from each app that uses one, and the integrations they go through, with each one's instructions for getting its key. A handle is shown where a credential is kept; the credential itself never is. Returns bundles: JSON objects with entity ids and component fields.",
       "input": {
         "owner": {
           "type": "string",

@@ -51,9 +51,13 @@ import {
   refresh,
   registration,
   resolve,
+  set,
+  through,
   using,
 } from './mod.ts'
+import { reply } from './graph.ts'
 import { runs } from './tools.ts'
+import { CallError } from '@yaks/tools/errors'
 
 let here: VocabDoc = {
   $defs: {
@@ -329,7 +333,10 @@ test(
       app: 'app',
       integration: 'calendar',
     })
-    assertEquals(again, [{ entity: { eid } }])
+    assertEquals(again, [{
+      entity: { eid },
+      connection: { integration: 'calendar' },
+    }])
     await g.apply(again)
     assertEquals((await g.read('.connection')).length, 1)
   },
@@ -343,6 +350,7 @@ test(
     assertEquals(of(await at(g, integrationEid('weather')), 'integration'), {
       name: 'weather',
       hosts: ['api.weather.example'],
+      owner: 'space',
     })
     await needs({
       app: 'other',
@@ -365,9 +373,93 @@ test(
     assertEquals(of(await at(g, integrationEid('SIGNING')), 'integration'), {
       name: 'SIGNING',
       hosts: [],
+      owner: 'space',
     })
   },
 )
+
+// A custom integration made saying how to get its key, as its owner asked;
+// a second, for its owner to change.
+let ESV = { integration: 'esv', hosts: ['api.esv.org'] }
+let SAID = 'Sign up at [api.esv.org](https://api.esv.org).'
+let told = await setup()
+await told.needs({ ...ESV, title: ' ESV API ', instructions: SAID })
+let retold = await setup()
+await retold.needs({ ...ESV, title: 'ESV API', instructions: SAID })
+let esvOf = async (g: Ctx['graph']) =>
+  of(await at(g, integrationEid('esv')), 'integration')
+
+test('a custom integration is owned by whoever made it, and says how to get its key', async () => {
+  assertEquals(await esvOf(told.g), {
+    ...{ name: 'esv', hosts: ['api.esv.org'], owner: 'space' },
+    title: 'ESV API',
+    instructions: SAID,
+  })
+})
+
+test('its owner changes what is said about it, and never where its key goes', async () => {
+  let { g } = retold
+  await g.apply(
+    await set(
+      g.read,
+      {
+        owner: 'space',
+        integration: 'esv',
+        title: '',
+        site: 'https://esv.org',
+        instructions: 'Make an API application.',
+        hosts: ['evil.example'],
+      } as Parameters<typeof set>[1],
+    ),
+  )
+  assertEquals(await esvOf(g), {
+    ...{ name: 'esv', hosts: ['api.esv.org'], owner: 'space' },
+    site: 'https://esv.org',
+    instructions: 'Make an API application.',
+  })
+})
+
+test('nobody else changes it, nor a built one, and its site is an https address', async () => {
+  let { g } = told
+  for (
+    let [asked, code] of [
+      [{ owner: 'bob', integration: 'esv', instructions: 'mine' }, 'owner'],
+      [
+        { owner: 'space', integration: 'openrouter', title: 'x' },
+        'integration',
+      ],
+      [{ owner: 'space', integration: 'esv', site: 'javascript:x' }, 'site'],
+    ] as const
+  ) {
+    assertEquals(
+      (await assertRejects(() => set(g.read, asked), CallError)).code,
+      code,
+    )
+  }
+  // Asking for it is anybody's; saying what it is, only its owner's.
+  let e = await assertRejects(
+    () => need(g.read, { owner: 'bob', integration: 'esv', title: 'mine' }),
+    CallError,
+  )
+  assertEquals(e.code, 'owner')
+})
+
+test('a list, and an answer naming a connection, carry the integration it goes through', async () => {
+  let { g } = told
+  let instructions = (bundles: Bundle[]) =>
+    bundles.flatMap((b) =>
+      b.integration ? [of(b, 'integration').instructions] : []
+    )
+  let listed = await list(g.read, 'space')
+  assertEquals(instructions(listed), [SAID])
+  assertEquals(await through(g.read, listed), [])
+  // Asked again, an ask is answered with the connection the app uses, which
+  // the reply answers the integration of.
+  let [asked] = await need(g.read, { owner: 'space', app: 'app', ...ESV })
+  assertEquals(instructions(await reply({ graph: g })(asked, [asked], [])), [
+    SAID,
+  ])
+})
 
 test(
   'connect: a pasted key goes to the vault, and the app is handed its sentinel',
@@ -479,10 +571,13 @@ test(
     let [now] = await g.read('.connection')
     assertEquals(of(now, 'connection').status, 'needed')
     assertEquals(
-      (await list(g.read, 'space')).map((b) => b.edge ?? b.connection),
+      (await list(g.read, 'space')).map((b) =>
+        b.edge ?? b.connection ?? of(b, 'integration').name
+      ),
       [
         of(now, 'connection'),
         { from: 'app', to: now.entity.eid },
+        'texts',
       ],
     )
     let alone = await needs({ app: undefined, integration: 'texts' })
@@ -606,10 +701,16 @@ test(
     )
     await g.apply(made)
     let listed = await run.connection_list(asked({ owner: 'space' }), g)
-    assertEquals(listed.map((b) => Object.keys(b.connection ?? b.edge ?? {})), [
-      ['integration', 'owner', 'status'],
-      ['from', 'to'],
-    ])
+    assertEquals(
+      listed.map((b) =>
+        Object.keys(b.connection ?? b.edge ?? b.integration ?? {})
+      ),
+      [['integration', 'owner', 'status'], ['from', 'to'], [
+        'name',
+        'hosts',
+        'owner',
+      ]],
+    )
     assertEquals(await run.connection_list(asked({ owner: 'app' }), g), [])
   },
 )

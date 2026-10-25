@@ -31,6 +31,8 @@ import { decodedPath } from './request-path.ts'
 // key is the secret it is checked against, and a request that fails is
 // refused rather than kept.
 import {
+  ABOUT,
+  type About,
   attach,
   begin,
   bindingOf,
@@ -48,6 +50,7 @@ import {
   list,
   need,
   type Read,
+  set,
   type Status,
   USES,
   using,
@@ -79,6 +82,7 @@ import { domainOf, vouched, type Who, whoIs } from './session.ts'
 import {
   APP,
   inApp,
+  inSpace,
   refuse,
   type Row,
   SPACE,
@@ -87,6 +91,7 @@ import {
   worded,
 } from './tool.ts'
 import { vaulted, vaultOf } from './vault.ts'
+import { drawn } from './theirs.ts'
 
 /** Where a service sends a person back after they sign in there. */
 export let CALLBACK = '/connections/callback'
@@ -108,21 +113,26 @@ let comp = (b: Bundle | undefined, name: string): Comp =>
 let strs = (v: unknown): string[] => Array.isArray(v) ? v.map(String) : []
 
 /** A service as a page draws it: what a person calls it, a line about it,
- * its site and its logo, each empty where its integration says none. */
+ * its site, its logo and how to get its key, each empty where its integration
+ * says none. */
 export type Face = {
   title: string
   tagline: string
   site: string
   /** an SVG document, drawn as an image */
   logo: string
+  /** how a person gets its key, drawn from its markdown as HTML, its links
+   * marked as the writer's (theirs.ts) */
+  instructions: string
 }
 
 /** The face of an integration, called by its name where it has no title. */
-export let faceOf = (name: string, i?: Integration): Face => ({
+export let faceOf = async (name: string, i?: Integration): Promise<Face> => ({
   title: i?.title || name,
   tagline: i?.tagline ?? '',
   site: i?.site ?? '',
   logo: i?.logo ?? '',
+  instructions: await drawn(i?.instructions),
 })
 
 /** One connection, as the page shows it. */
@@ -143,6 +153,9 @@ export type Shown = {
   keyed: boolean
   /** the hosts its key may be sent to */
   hosts: string[]
+  /** its integration was made by the space or person it is kept for, who may
+   * change what is said about it: these, as written */
+  about: About | null
   scopes: string[]
   /** the apps that call out through it */
   apps: Using[]
@@ -320,7 +333,7 @@ export let connectionsOf = async (
       return {
         eid: b.entity.eid,
         integration: String(c.integration),
-        face: faceOf(String(c.integration), i),
+        face: await faceOf(String(c.integration), i),
         own: c.owner == person,
         space: slugs.get(String(c.owner)) ?? null,
         each: to.some((l) => comp(l, USES).each),
@@ -328,6 +341,9 @@ export let connectionsOf = async (
         account: String(c.account ?? ''),
         keyed: !i || keyed(i),
         hosts: i?.hosts ?? [],
+        about: i && !i.built && i.owner == c.owner
+          ? Object.fromEntries(ABOUT.map((k) => [k, i[k] ?? '']))
+          : null,
         scopes: strs(c.scopes).length ? strs(c.scopes) : i?.scopes ?? [],
         apps: to.map((l): Using => {
           let app = String(comp(l, 'edge').from)
@@ -361,7 +377,11 @@ export let connectionsOf = async (
   let built = []
   for (let i of await installed(read)) {
     if (await offered(i)) {
-      built.push({ name: i.name, keyed: keyed(i), face: faceOf(i.name, i) })
+      built.push({
+        name: i.name,
+        keyed: keyed(i),
+        face: await faceOf(i.name, i),
+      })
     }
   }
   built.sort((a, b) => a.name.localeCompare(b.name))
@@ -479,6 +499,10 @@ export let connecting = async (
           owner: space.eid,
           integration: name,
           hosts,
+          // Said only by whoever makes it; adding a key says nothing of it.
+          ...field('instructions')
+            ? { instructions: field('instructions') }
+            : {},
         }),
       )
       eid = made[0].entity.eid
@@ -493,6 +517,21 @@ export let connecting = async (
       return no('That connection is not here any more.')
     }
     let apps = await usersOf(env, eid)
+    // What is said about a custom integration is its owner's to change: for
+    // a space's, the space's owner (@yaks/connections `set`). Where its key
+    // goes never changes.
+    if (act == 'about') {
+      if (owner == space.eid && who.role != 'owner') {
+        return no('Only this space’s owner can change what it says here.')
+      }
+      let bundles = await set(c.graph.read, {
+        ...Object.fromEntries(ABOUT.map((k) => [k, field(k)])),
+        owner: String(owner),
+        integration: integrationOf(b),
+      })
+      if (bundles.length) await c.graph.apply(bundles)
+      return { say: `Saved what ${integrationOf(b)} says.`, no: false }
+    }
     if (act == 'attach') {
       if (who.role != 'owner' || owner != space.eid) {
         return no('Only this space’s owner can attach its connection.')
@@ -652,7 +691,7 @@ export let own: Answer = async (
     })
     return askConnect({
       app: app.title,
-      face: faceOf(integration, i),
+      face: await faceOf(integration, i),
       keyed: keyed(i),
       on: !keyed(i) || vaulted(env),
       status: (comp(mine, CONNECTION).status ?? 'needed') as Status,
@@ -824,6 +863,65 @@ let CONNECTIONS: Row[] = [
         text: `${space.slug}/${app.slug} can use connection ${connection}, ` +
           `as env.${comp(l, USES).binding}. ` +
           'Only app members can call out through it. The credential stays in the vault.',
+      }
+    },
+  },
+  {
+    name: 'integration_set',
+    destructive: false,
+    idempotent: true,
+    input: {
+      type: 'object',
+      properties: {
+        space: SPACE,
+        integration: str(
+          'a custom integration this space made, by name, as ' +
+            'store_connection_list names it',
+        ),
+        title: str('what a person calls the service, as its maker writes it'),
+        tagline: str('one line saying what the service is'),
+        site: str("the service's https address on the web"),
+        instructions: str(
+          'how a person gets its key, in markdown, written for them and the ' +
+            'agent helping them: where to sign up, which page issues the ' +
+            'key, what to paste',
+        ),
+      },
+      required: ['integration'],
+    },
+    run: async (ctx, args) => {
+      let { space, who } = await inSpace(ctx, args, true)
+      if (who.role != 'owner') {
+        throw refuse(
+          'access',
+          `only the owner of ${space.slug} changes what its integrations say`,
+        )
+      }
+      let name = text(args.integration, 'integration')
+      let c = ctxOf(ctx.env, who)
+      let about = Object.fromEntries(
+        ABOUT.filter((k) => args[k] != null).map((k) => [k, String(args[k])]),
+      )
+      let bundles = await set(c.graph.read, {
+        ...about,
+        owner: space.eid,
+        integration: name,
+      })
+      if (bundles.length) await c.graph.apply(bundles)
+      let i = await known(c.graph.read, name)
+      let said = (['title', 'tagline', 'site'] as const)
+        .filter((k) => i?.[k]).map((k) => `${k} ${i![k]}`).join('; ')
+      return {
+        space,
+        text:
+          `${name} says: ${said || 'no title, tagline or site'}.${
+            i?.instructions
+              ? `\n\nHow to get its key:\n\n${i.instructions}`
+              : '\n\nIt says nothing yet of how to get its key.'
+          }\n\nIts key is only ever sent to ${
+            i?.hosts.join(', ') || 'no host'
+          }, which no change here moves. Each space's connections page shows ` +
+          'the instructions beside a connection needing its key.',
       }
     },
   },

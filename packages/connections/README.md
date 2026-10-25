@@ -20,7 +20,8 @@ them.
 ## Stored data
 
 - `integration{name, title, tagline, site, logo, authorize, token, scopes,
-  params, auth, refresh_encoding, client, client_id, hosts, signature, testing, built}`
+  params, auth, refresh_encoding, client, client_id, hosts, signature, testing,
+  built, instructions, owner}`
   is an outside service. `name` is its identity, so one name is one integration.
   `title`, `tagline`, `site` and `logo` are how a page shows it: what a person
   calls it, one line saying what it is, its address on the web, and its mark as
@@ -29,7 +30,13 @@ them.
   with PKCE, through [@yaks/oauth](../oauth)); one without is a pasted key.
   `hosts` are the only API hosts its credential may be sent to, and `signature`
   is the [@yaks/hook](../hook) scheme its webhooks are signed with. `built` is
-  server-owned: it marks one this package builds.
+  server-owned: it marks one this package builds. `instructions` is markdown
+  saying how a person gets the credential (where to sign up, which page issues
+  the key, what to paste), written for them and for the agent helping them; a
+  host shows it wherever the integration is met. `owner` is the space or person
+  that made a custom integration, and the only one who may change its `title`,
+  `tagline`, `site` or `instructions`; nobody changes its `hosts`. A built
+  integration has no owner, and one whose owner is gone is nobody's to change.
 - `connection{integration, owner, account, scopes, status}` names its
   integration, the space or person that `owner`s it (and is deleted with them),
   the outside account, the scopes asked for or granted, and `status`: `needed`
@@ -86,20 +93,23 @@ The two an untrusted caller may ask are the tools. Each returns bundles for the
 caller to apply in its own name:
 
 - `need(read, {owner, integration, app?, scopes?, hosts?, each?, binding?,
-  direct?})`
+  direct?, title?, tagline?, site?, instructions?})`
   makes a `needed` connection and the `uses` link from the app, read by
   `binding` (default: the integration's name in capitals, `bindingOf`). For a
-  service with no integration, `hosts` makes a custom key integration, and hosts
-  that differ from an existing one's are refused; a `direct` key, handed to the
-  app's code and never sent by anything here, may name none. An app that already
-  uses a connection through that integration is answered with it, and with its
-  link renamed where `binding` or `direct` was given. `need` never links an app
-  to a connection that holds a credential: giving an app a person's account is
-  the person's act. With `each`, the owner is the space asking each person, or a
-  person making their own, and an app is answered with the one that owner holds.
-  The connection comes first in what it returns.
-- `list(read, owner)` returns the owner's connections and the `uses` links to
-  them.
+  service with no integration, `hosts` makes a custom key integration, owned by
+  `owner` and saying what `title`, `tagline`, `site` and `instructions` give,
+  and hosts that differ from an existing one's are refused; any of those four
+  given for an integration that stands is `set` by its owner, and refused for
+  anyone else; a `direct` key, handed to the app's code and never sent by
+  anything here, may name none. An app that already uses a connection through
+  that integration is answered with it, and with its link renamed where
+  `binding` or `direct` was given. `need` never links an app to a connection
+  that holds a credential: giving an app a person's account is the person's act.
+  With `each`, the owner is the space asking each person, or a person making
+  their own, and an app is answered with the one that owner holds. The
+  connection comes first in what it returns.
+- `list(read, owner)` returns the owner's connections, the `uses` links to them,
+  and the integrations they go through.
 
 `attach(read, {owner, app, connection, binding?})` plans an owner's grant of an
 existing connected space connection to an app. The host checks that the actor
@@ -107,6 +117,15 @@ owns the space and that the app belongs to it; `attach` checks the connection's
 owner and requested OAuth scopes. It replaces an unmet ask, retains that ask's
 binding, removes the unused needed connection, and starts the new link
 members-only with a sentinel. The key stays in the vault.
+
+`set(read, {owner, integration, title?, tagline?, site?, instructions?})` plans
+an owner's change to what is said about a custom integration: each property
+given, trimmed, and an empty one cleared. It refuses a built integration, an
+owner other than the one the integration names, and a `site` that is not an
+https address, and it never touches `hosts`. As with `attach`, the host checks
+that the actor may act for that owner. `through(read, bundles)` is the
+integrations the connections among `bundles` go through, but for those already
+among them.
 
 `using(read, {app, integration, owner?, each?})` answers the connection an app
 uses through an integration: the shared one, or with `each`, the one the owner
@@ -184,12 +203,15 @@ its vault, and the redirect):
 
 `@yaks/connections/vocab` declares the components and the tools
 `connection_need` and `connection_list`; `@yaks/connections/tools` implements
-the tools; `@yaks/connections/effects` installs the built integrations when the
-process starts. `@yaks/connections/identity` derives an integration's id from
-its name for views and other readers. A host that composes this package also
-composes @yaks/secrets over its vault, the plugin and its effect, which seals
-each credential once the write commits and drops it when the connection is
-deleted, and @yaks/edge, which derives each `uses` link's id.
+the tools; `@yaks/connections/graph` answers a direct tool call whose answer
+names a connection with the integration it goes through too (its `reply`), so an
+agent that asked for a connection reads how to get its key;
+`@yaks/connections/effects` installs the built integrations when the process
+starts. `@yaks/connections/identity` derives an integration's id from its name
+for views and other readers. A host that composes this package also composes
+@yaks/secrets over its vault, the plugin and its effect, which seals each
+credential once the write commits and drops it when the connection is deleted,
+and @yaks/edge, which derives each `uses` link's id.
 
 ## Terminal sign-in
 

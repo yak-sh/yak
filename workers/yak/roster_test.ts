@@ -466,6 +466,16 @@ test(
         await tool('store_connection_list', { space: mine, owner }),
         'roster',
       )
+      // What the service this space added says of how to get its key is its
+      // owner's to write, and reaches whoever connects it.
+      assertStringIncludes(
+        await tool('integration_set', {
+          space: mine,
+          integration: 'roster',
+          instructions: 'Ask the roster desk for a key.',
+        }),
+        'Ask the roster desk for a key.',
+      )
       await refused(tool, 'connection_attach', {
         space: mine,
         app,

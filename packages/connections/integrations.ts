@@ -15,8 +15,10 @@
 // writes over a built integration, or changes where its tokens are sent.
 
 import { after, cmp } from '@yaks/fp'
-import type { Bundle, Query } from '@yaks/graph'
+import type { Bundle, Eid, Query } from '@yaks/graph'
+import { token } from '@yaks/graph/sha256'
 import type { Scheme } from '@yaks/hook'
+import { CallError } from '@yaks/tools/errors'
 import { INTEGRATION, integrationEid } from './identity.ts'
 import googleCalendar from './google-calendar.json' with { type: 'json' }
 import openrouter from './openrouter.json' with { type: 'json' }
@@ -67,6 +69,11 @@ export type Integration = {
   testing?: boolean
   /** installed from this package's seed data; only the host writes it */
   built?: boolean
+  /** how a person gets the credential, in markdown, for them and their agent */
+  instructions?: string
+  /** the space or person that made a custom one, who alone may change its
+   * text; none for a built one */
+  owner?: string
 }
 
 /** A read of the graph: what a tool's context and a graph both offer. */
@@ -104,6 +111,64 @@ export let installed = async (read: Read): Promise<Integration[]> =>
   (await read(`.${INTEGRATION}.built`)).map((b) =>
     b[INTEGRATION] as Integration
   )
+
+/** What a person reads about an integration, which its owner may change:
+ * never where its credential is sent. */
+export type About = Pick<
+  Integration,
+  'title' | 'tagline' | 'site' | 'instructions'
+>
+/** The properties of {@link About}, in the order a page shows them. */
+export let ABOUT = ['title', 'tagline', 'site', 'instructions'] as const
+
+/** What was said about an integration, as it is written: each property given,
+ * trimmed, and an empty one cleared. A site is an https address, the only
+ * kind a page links. */
+export let told = (
+  a: Record<string, unknown>,
+): Record<string, string | null> => {
+  let out: Record<string, string | null> = {}
+  for (let k of ABOUT) {
+    if (a[k] == null) continue
+    let v = String(a[k]).trim()
+    if (k == 'site' && v && !/^https:\/\/[^\s/]+\S*$/.test(v)) {
+      throw new CallError('site', `a site is an https address, not ${v}`)
+    }
+    out[k] = v || null
+  }
+  return out
+}
+
+/** An integration's owner changing what is said about it. A built one is the
+ * host's, and one with no owner (made before owners were kept, or whose owner
+ * is gone) is nobody's to change. */
+export let set = async (
+  read: Read,
+  a: About & { owner: Eid; integration: string },
+): Promise<Bundle[]> => {
+  let name = a.integration
+  let i = await known(read, name)
+  if (!i) {
+    throw new CallError('integration', `no integration is named ${name}`)
+  }
+  if (i.built) {
+    throw new CallError(
+      'integration',
+      `${name} is built, and only the host changes it`,
+    )
+  }
+  if (i.owner != a.owner) {
+    throw new CallError('owner', `only the space that made ${name} changes it`)
+  }
+  let patch = told(a)
+  return Object.keys(patch).length
+    ? [{
+      entity: { eid: integrationEid(name) },
+      [INTEGRATION]: patch,
+      $was: { [INTEGRATION]: { owner: token(i.owner) } },
+    }]
+    : []
+}
 
 // A value in one order, so two that say the same thing compare equal: every
 // object's properties sorted, and an absent one the same as a cleared one.

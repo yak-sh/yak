@@ -1,5 +1,5 @@
 import { test } from '@yaks/testing'
-import { assertEquals, assertStringIncludes } from '@std/assert'
+import { assert, assertEquals, assertStringIncludes } from '@std/assert'
 import { parseHTML } from 'linkedom'
 import {
   askCode,
@@ -15,12 +15,19 @@ import {
 
 let env = { APEX: 'yaks.fyi' }
 // A service as a page draws it, bare but for its name.
-let named = (title: string) => ({ title, tagline: '', site: '', logo: '' })
+let named = (title: string) => ({
+  title,
+  tagline: '',
+  site: '',
+  logo: '',
+  instructions: '',
+})
 let CAL = {
   title: 'Cal',
   tagline: 'Your calendar.',
   site: 'https://cal.test/',
   logo: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+  instructions: '',
 }
 // What a face draws: its logo as an image, never as markup, its line, and its
 // site linked by its host.
@@ -154,6 +161,7 @@ test('connections: the space’s ask of each person offers nothing to connect, a
           account: '',
           keyed: true,
           hosts: [],
+          about: null,
           scopes: [],
           available: [],
           binding: 'WEATHER',
@@ -194,6 +202,7 @@ test('connections: the person’s own, then this space with what it could add, t
     account: '',
     keyed: true,
     hosts: [],
+    about: null,
     scopes: [],
     available: [],
     binding: integration.toUpperCase(),
@@ -259,6 +268,82 @@ test('connections: the person’s own, then this space with what it could add, t
     new Set(posts.map((to) => to.searchParams.get('enable'))),
     new Set(['google-calendar']),
   )
+})
+
+// A service this space added, saying how to get its key, as the page is handed
+// it: the instructions already drawn (theirs.ts), and what they were written as.
+let HOW =
+  '<p>Sign up at <a href="https://weather.test" rel="nofollow ugc">weather.test</a>.</p>'
+let added = (status: 'needed' | 'connected') => ({
+  eid: 'w',
+  integration: 'Weather',
+  face: { ...named('Weather'), instructions: HOW },
+  own: false,
+  space: 'ada',
+  each: false,
+  status,
+  account: '',
+  keyed: true,
+  hosts: ['api.weather.test'],
+  about: {
+    title: 'Weather',
+    tagline: '',
+    site: '',
+    instructions: 'Sign up at [weather.test](https://weather.test) & <b>.',
+  },
+  scopes: [],
+  available: [],
+  binding: 'WEATHER',
+  apps: [],
+  saving: '',
+  failed: '',
+})
+let listing = (status: 'needed' | 'connected') =>
+  desk({
+    ...page,
+    view: 'connections',
+    connections: { on: true, list: [added(status)], services: [], built: [] },
+  }, env).text()
+
+test('connections: how to get a key sits open beside a connection needing one, and closed once connected', async () => {
+  assertStringIncludes(
+    await listing('needed'),
+    `<details class="Note Connection_Instructions" open><summary>How to get the key</summary>${HOW}</details>`,
+  )
+  assertStringIncludes(
+    await listing('connected'),
+    `<details class="Note Connection_Instructions"><summary>How to get the key</summary>${HOW}</details>`,
+  )
+})
+
+test('connections: a service the space added can be changed there, all but where its key goes', async () => {
+  let html = await listing('connected')
+  for (
+    let text of [
+      'Change what Weather says',
+      'name="title" value="Weather"',
+      '>Sign up at [weather.test](https://weather.test) &amp; &lt;b&gt;.</textarea>',
+      'value="about">Save',
+    ]
+  ) assertStringIncludes(html, text)
+  let told = html.slice(html.indexOf('Connection_Told'))
+  assertEquals(
+    told.slice(0, told.indexOf('</details>')).includes('name="hosts"'),
+    false,
+  )
+})
+
+test('askConnect: how to get the key, above the box it is pasted in', async () => {
+  let html = await askConnect({
+    app: 'Notes',
+    face: { ...CAL, instructions: HOW },
+    keyed: true,
+    on: true,
+    status: 'needed',
+    back: 'https://ada.yaks.fyi/notes/',
+  }, env).text()
+  let at = html.indexOf(HOW)
+  assert(at > 0 && at < html.indexOf('Paste your key'), html)
 })
 
 test('askConnect: the app, the service, the one form, and the way back', async () => {

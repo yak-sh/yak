@@ -60,11 +60,14 @@ import {
   type Vault,
 } from '@yaks/secrets'
 import {
+  type About,
   connectable,
   type Integration,
   keyed,
   known,
   type Read,
+  set,
+  told,
 } from './integrations.ts'
 import { INTEGRATION, integrationEid } from './identity.ts'
 import { clientOf } from './clients.ts'
@@ -81,8 +84,9 @@ export class AccountError extends Error {}
  * refused it. */
 export type Status = 'needed' | 'connected' | 'broken'
 
-/** What an app, or a person, asks for. */
-export type Need = {
+/** What an app, or a person, asks for, and for a custom integration what a
+ * person reads about it: its owner's to say, when it is made or later. */
+export type Need = About & {
   /** the space or person it belongs to */
   owner: Eid
   /** the integration, by name */
@@ -219,12 +223,15 @@ let linked = (
 
 /** Make a connection needing a credential, linked from the app that needs it,
  * with the custom integration a key for an unbuilt service needs — made only
- * where no integration holds the name, so it never writes over one. An app
- * that already uses a connection through that integration is answered with
- * it: with `each`, the one the owner holds. The connection comes first. */
+ * where no integration holds the name, so it never writes over one, and owned
+ * by whoever made it. What is said about it (`About`) is written with it, or
+ * changed by its owner asking again. An app that already uses a connection
+ * through that integration is answered with it: with `each`, the one the
+ * owner holds. The connection comes first. */
 export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
   let hosts = a.hosts ?? []
   let name = a.integration
+  let about = told(a)
   let i = await known(read, name)
   if (hosts.length && i?.built) {
     throw new CallError(
@@ -269,20 +276,27 @@ export let need = async (read: Read, a: Need): Promise<Bundle[]> => {
     )
   }
   let u = { binding, direct: !!a.direct, each: a.each }
+  // Said again of one that stands, it is its owner's change to make.
+  let retold = i && Object.keys(about).length ? await set(read, a) : []
   let used = a.app ? await using(read, { ...a, app: a.app }) : undefined
   if (used) {
     let said = a.binding != null || a.direct != null
     return [
-      { entity: { eid: used.entity.eid } },
+      // Answered with the integration it goes through, as it already does.
+      { entity: { eid: used.entity.eid }, [CONNECTION]: { integration: name } },
       ...said ? [linked(a.app!, used.entity.eid, u)] : [],
+      ...retold,
     ]
   }
   let made = fresh(a.owner, name, a.scopes ?? [])
+  let written = Object.fromEntries(
+    Object.entries(about).filter(([, v]) => v != null),
+  )
   return [
     made,
-    ...i ? [] : [{
+    ...i ? retold : [{
       entity: { eid: integrationEid(name) },
-      [INTEGRATION]: { name, hosts },
+      [INTEGRATION]: { name, hosts, owner: a.owner, ...written },
       // Refused, rather than written over, where one was made meanwhile.
       $was: { [INTEGRATION]: { name: null } },
     }],
@@ -360,15 +374,44 @@ export let attach = async (
   ]
 }
 
-/** A space's or a person's connections, and the `uses` links from the apps
- * that use them. */
+/** A space's or a person's connections, the `uses` links from the apps that
+ * use them, and the integrations they go through. */
 export let list = async (read: Read, owner: Eid): Promise<Bundle[]> => {
   let owned = await read(`.${CONNECTION}.owner=${owner}${ALL}`)
   if (!owned.length) return []
   let links = await read(
     `.${EDGE}.to=${any(owned.map((b) => b.entity.eid))}&.${USES}${ALL}`,
   )
-  return [...owned, ...links]
+  return [...owned, ...links, ...await through(read, owned)]
+}
+
+/** The integrations the connections among `bundles` go through, as the graph
+ * holds them, but for any `bundles` already carry: what a person and their
+ * agent read beside a connection, how to get its key among it. A `uses` link
+ * whose connection is not among them is read to find which. */
+export let through = async (
+  read: Read,
+  bundles: Bundle[],
+): Promise<Bundle[]> => {
+  let names = new Set<string>()
+  let ask: Eid[] = []
+  for (let b of bundles) {
+    let c = comp(b, CONNECTION)
+    if (typeof c.integration == 'string') names.add(c.integration)
+    else if (b[USES]) ask.push(far(b, 'from'))
+  }
+  if (ask.length) {
+    for (let b of await read(`.entity.eid=${any(ask)}&.${CONNECTION}`)) {
+      names.add(String(comp(b, CONNECTION).integration))
+    }
+  }
+  let have = new Set(
+    bundles.filter((b) => b[INTEGRATION]).map((b) => b.entity.eid),
+  )
+  let wanted = [...names].map(integrationEid).filter((e) => !have.has(e))
+  return wanted.length
+    ? await read(`.entity.eid=${any(wanted)}&.${INTEGRATION}`)
+    : []
 }
 
 /** Every connected connection an app calls out through for a person, or for

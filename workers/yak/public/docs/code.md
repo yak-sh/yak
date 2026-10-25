@@ -540,6 +540,26 @@ can open that app's use to visitors separately on the same page.
 A connection made or attached reaches the app at once, whatever release it is
 running: there is nothing to redeploy.
 
+### How to get the key
+
+    store_connection_need(app, owner: space, integration: 'ESV',
+      hosts: ['api.esv.org'], title: 'ESV API', site: 'https://api.esv.org',
+      instructions: 'Sign up at https://api.esv.org, create an API application, and paste its token.')
+    integration_set(integration: 'ESV', instructions: '…')
+
+A service of your own naming can say how a person gets its key, so someone you
+share the app with, and their agent, can get their own: `instructions`, in
+markdown, written for the person and for the agent helping them (where to sign
+up, which page issues the key, what to paste), with a `title`, a one-line
+`tagline` and its https `site`. Give them when `store_connection_need` makes the
+integration; afterwards the space's owner changes them with `integration_set`,
+or under the connection on the connections page. They show beside the
+connection on every connections page that needs that key, above the box on the
+page where a person connects their own, and in the `store_connection_need` and
+`store_connection_list` answers, so you can walk the person through it. Only the
+space that made an integration changes what it says, and nothing changes the
+hosts its key may be sent to.
+
 ### From a page
 
 What the app is handed is a **sentinel**: a string that stands for the key,
