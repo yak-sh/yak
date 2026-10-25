@@ -47,6 +47,7 @@ import type { Supply } from '@yaks/builders'
 import type { Ask } from '@yaks/builders/tools'
 import { edgeEid } from '@yaks/edge'
 import { CONNECTION } from '@yaks/connections'
+import { capOf, monthOf, spent } from '@yaks/egress'
 import { heard, LAST } from '@yaks/memory'
 import { invokePackage } from './package-tools.ts'
 import { apex } from './host.ts'
@@ -282,6 +283,17 @@ let said = (u: Comp, title: string) =>
     u.direct ? ' (the key itself)' : ' (a sentinel)'
   }${u.anyone ? ', open to anyone using it' : ''}`
 
+// The calls a link made this month against any cap, as the connections page
+// says them: nothing for the space's side of an ask each person answers.
+let calledOn = (l: Bundle) => {
+  if (comp(l, USES).each) return ''
+  let n = spent(l, monthOf(Date.now()))
+  let cap = capOf(l)
+  return `, ${n} ${n == 1 ? 'call' : 'calls'} out this month${
+    cap == null ? '' : ` of ${cap} allowed`
+  }`
+}
+
 // TODO: delete these translations in the release that drops their published
 // names and argument contracts from the connector directories' next listing.
 let MEMORY: Row[] = [
@@ -505,7 +517,7 @@ let CONNECTIONS: Row[] = [
             said(
               comp(l, USES),
               titles.get(String(comp(l, 'edge').from)) ?? 'another app',
-            )
+            ) + calledOn(l)
           )
         let i = all.find((i) =>
           i[INTEGRATION] &&

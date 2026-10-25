@@ -194,7 +194,8 @@ grants one the space already has. What app builders read is the guide's
   `calls{month, count}` (@yaks/egress), written to the directory after the
   answer through the host's `defer` (outbound.ts `egressOf`), so nobody waits
   on it and a count that fails reaches the tracker. A link's `uses.cap` is the
-  most calls a month it may make; the connections page shows both.
+  most calls a month it may make; the connections page and `connection_list`
+  say both.
 - `direct: true` hands the worker the key itself, for a key it must sign with
   (a request signature, SigV4). Only a pasted key shared by everyone
   may be direct.
