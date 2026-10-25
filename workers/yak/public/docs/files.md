@@ -308,14 +308,14 @@ sets in `<meta name="theme-color">` where it sets one.
 **What the app writes is kept.** Each link is added only where the page has
 none, so an app that writes its own `apple-touch-icon` keeps it and still gets
 the manifest link, and an app that ships its own `manifest.webmanifest` is
-served that file rather than the generated one. A manifest link on the app's
-own address that names no `crossorigin` is given `crossorigin="use-credentials"`,
-so a private app's manifest is fetched with its member's sign-in and answers
-them. An `icon.png` of the app's own
-is served in place of the drawing: a picture fetched with `op: fetch`, or one
-`sandbox_ship` copies in. A picture is read the way a browser would read it when
-it is written, and one that does not decode is refused: a PNG's bytes cannot be
-written out by hand, so an icon an assistant makes is an SVG.
+served that file rather than the generated one. A manifest link on the app's own
+address that names no `crossorigin` is given `crossorigin="use-credentials"`, so
+a private app's manifest is fetched with its member's sign-in and answers them.
+An `icon.png` of the app's own is served in place of the drawing: a picture
+fetched with `op: fetch`, or one `sandbox_ship` copies in. A picture is read the
+way a browser would read it when it is written, and one that does not decode is
+refused: a PNG's bytes cannot be written out by hand, so an icon an assistant
+makes is an SVG.
 
 Until an app writes an icon, `icon.png` serves the platform's own default tile,
 so an app somebody keeps on their phone is never a blank square.
