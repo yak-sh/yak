@@ -175,6 +175,8 @@ test('connections: the space’s ask of each person offers nothing to connect, a
             binding: 'WEATHER',
             direct: false,
             anyone: false,
+            calls: 3,
+            cap: 10,
           }],
           saving: '',
           failed: '',
@@ -191,6 +193,8 @@ test('connections: the space’s ask of each person offers nothing to connect, a
   assertStringIncludes(own, 'Paste the key for Weather')
   assertStringIncludes(own, 'value="disconnect">Remove')
   assertStringIncludes(own, 'Notes reads it as <code>env.WEATHER</code>.')
+  assertStringIncludes(own, '3 calls out this month, of 10 allowed.')
+  assertEquals(ask.includes('calls out this month'), false)
   assertEquals(own.includes('Open to anyone'), false)
 })
 

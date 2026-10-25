@@ -193,6 +193,8 @@ export let directoryConfig: Config = {
     },
     { use: '@yaks/topic', facets: ['vocab'], words: ['topic'] },
     { use: '@yaks/connections', facets: toolFacets },
+    // Each call out through a `uses` link counted on it (outbound.ts).
+    { use: '@yaks/egress', facets: ['vocab', 'graph'] },
     '@yaks/secrets',
     // The pool's rows: the directory's effects (a deploy's Git commit, trash
     // delivery) are recorded beside the write and run after it, durably, so

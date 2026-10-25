@@ -22,15 +22,22 @@
 // end, kept apart: the egress's refusal is an answer; the outside service not
 // answering is the app's fetch failing, as it would have without us; and
 // anything else is ours, and the tracker hears it.
+//
+// Each call that goes out is counted on its `uses` link once it is answered,
+// a write to the directory nobody waits on (@yaks/egress `defer`), and a link
+// at its monthly cap is refused, saying whose limit it is and where the person
+// calling connects a key of their own.
 import { used, USES } from '@yaks/connections'
-import { type Caller, forward, Refused } from '@yaks/egress'
+import { type Caller, Capped, forward, type Host, Refused } from '@yaks/egress'
 import type { Comp } from '@yaks/graph'
 import { callsOut } from '@yaks/member'
 import { sentinels } from '@yaks/secrets'
 import { ctxOf } from './connections.ts'
 import type { Env } from './env.ts'
 import type { Answer } from './apps.ts'
-import { caught } from './defects.ts'
+import { background, caught, defect } from './defects.ts'
+import { directoryOf } from './directory.ts'
+import { manageAt } from './route.ts'
 
 // The outside service's own failure, carried past the catch below unchanged.
 class Wire extends Error {
@@ -41,6 +48,50 @@ class Wire extends Error {
   }
 }
 
+/** The egress's host for an app's calls: the directory and the vault, as the
+ * kernel, with each call's count written after its answer, kept alive past it,
+ * and reported wherever it fails. A count that does not land is our failure,
+ * never the caller's, so it is reported even when the directory refused it. */
+export let egressOf = (
+  env: Partial<Env> & Pick<Env, 'STORE'>,
+  app: string,
+): Host => ({
+  ...ctxOf(env),
+  defer: (work) =>
+    background(
+      work().then(
+        () => {},
+        (e) => defect(e, { request: 'outbound count', app }),
+      ),
+    ),
+})
+
+// Whose limit a capped call met and, where it is somebody else's, where the
+// person calling connects a key of their own instead: the connections page of
+// the space the app is in. A connection a person keeps for themselves names
+// no space.
+let whose = async (
+  env: Partial<Env> & Pick<Env, 'STORE'>,
+  e: Capped,
+  app: string,
+) => {
+  let dir = directoryOf(env.STORE)
+  let [owner, at] = await Promise.all([dir.at(e.owner), dir.appAt(app)])
+  if (owner && owner.eid == at?.space.eid) {
+    return 'The limit is this space’s own.'
+  }
+  let limit = owner
+    ? `The limit is set by ${
+      owner.title || owner.slug
+    }, whose connection it is.`
+    : 'The limit is set by whoever keeps that connection.'
+  return at
+    ? `${limit} Connect your own ${e.title} key at ${
+      manageAt(at.space.slug, 'connections', env)
+    } to call it without their limit.`
+    : limit
+}
+
 // One call out, for a caller, with every ending but the service's own made an
 // answer.
 let sent = async (
@@ -49,7 +100,7 @@ let sent = async (
   req: Request,
 ) => {
   let c = {
-    ...ctxOf(env),
+    ...egressOf(env, caller.app),
     fetch: (r: RequestInfo | URL, init?: RequestInit) =>
       fetch(r, init).catch((e) => {
         throw new Wire(e)
@@ -58,6 +109,16 @@ let sent = async (
   try {
     return await forward(c, caller, req)
   } catch (e) {
+    if (e instanceof Capped) {
+      let said = await whose(env, e, caller.app).catch((err) => {
+        caught(err, { request: 'outbound cap', app: caller.app })
+        return ''
+      })
+      return new Response(
+        `yaks.app refused this call: ${e.message}. ${said}`.trim(),
+        { status: 403 },
+      )
+    }
     if (e instanceof Refused) {
       return new Response(`yaks.app refused this call: ${e.message}`, {
         status: 403,

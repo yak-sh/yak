@@ -223,6 +223,11 @@
         "direct": {
           "type": "boolean",
           "description": "the app's code is handed the credential itself rather than a sentinel, for a key it must transform before sending (a signature, Basic auth); only a pasted key may be"
+        },
+        "cap": {
+          "type": "number",
+          "stamped": true,
+          "description": "the most calls a month that may go out through it (@yaks/egress `calls`); past it the egress refuses them until the month turns. None is no limit. Only the host sets it, never the app it caps"
         }
       },
       "description": "the relation on a link: this app calls out through that connection"

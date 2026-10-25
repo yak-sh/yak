@@ -1,0 +1,39 @@
+{
+  "$vocabulary": {
+    "https://yak.sh/vocab/core": true
+  },
+  "title": "egress",
+  "$defs": {
+    "calls": {
+      "component": true,
+      "journal": false,
+      "type": "object",
+      "description": "the calls that went out through a `uses` link (@yaks/connections) in one month, each with the link's credential in place of its sentinel: what the link's cap is measured against. Only the egress counts them, and a new month starts the count over",
+      "properties": {
+        "month": {
+          "type": "string",
+          "stamped": true,
+          "description": "the UTC month it counts, as YYYY-MM"
+        },
+        "count": {
+          "type": "number",
+          "stamped": true,
+          "description": "how many calls went out through the link that month"
+        }
+      }
+    },
+    "called": {
+      "component": true,
+      "durable": "0s",
+      "type": "object",
+      "description": "an event: one call just went out through this `uses` link. The graph adds it to the link's `calls` inside the write's own transaction, so two at once both count, and never stores it",
+      "properties": {
+        "month": {
+          "type": "string",
+          "stamped": true,
+          "description": "the UTC month the call went out in, as YYYY-MM"
+        }
+      }
+    }
+  }
+}

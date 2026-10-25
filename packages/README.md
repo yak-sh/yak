@@ -323,7 +323,9 @@ grouped approximately by function, **not** by dependency order.
   never holds: `forward` swaps each sentinel for its connection's key or token,
   in a header, the query or the body, once the caller may call out through it
   (@yaks/member `callsOut`) and the request goes to a host its integration
-  names. A refused access token is refreshed and the call made once more.
+  names. A refused access token is refreshed and the call made once more. Each
+  call is counted on its `uses` link by the month, `calls{month, count}`, and a
+  link's `cap` refuses calls past it until the month turns.
 
 - **[@yaks/session](./session)** — Store agent transcripts as `entry` entities:
   content, model requests, tool calls/results and stops. Status is derived from

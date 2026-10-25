@@ -60,6 +60,7 @@ import {
 } from '@yaks/connections'
 import { edgeEid } from '@yaks/edge'
 import { PROVISIONAL } from '@yaks/effects'
+import { capOf, monthOf, spent } from '@yaks/egress'
 import type { Bundle, Comp } from '@yaks/graph'
 import { hooked, refusal } from '@yaks/hook'
 import { mode, reads } from '@yaks/member'
@@ -192,6 +193,10 @@ export type Using = {
   direct: boolean
   /** anyone using the app may call out through it, not only its members */
   anyone: boolean
+  /** the calls it made through it this month (@yaks/egress `calls`) */
+  calls: number
+  /** the most calls a month it may make, or null for no limit */
+  cap: number | null
 }
 
 /** What the connections page is drawn from. */
@@ -354,6 +359,7 @@ export let connectionsOf = async (
   add?: string,
 ): Promise<Connections> => {
   let read = readOf(env)
+  let month = monthOf(Date.now())
   let listed = new Set((await read(`.${LISTED}`)).map((b) => b.entity.eid))
   let slugs = new Map(spaces.map((s) => [s.eid, s.slug]))
   let all = (await Promise.all(
@@ -412,6 +418,8 @@ export let connectionsOf = async (
             binding: String(u.binding ?? ''),
             direct: u.direct == true,
             anyone: u.anyone == true,
+            calls: spent(l, month),
+            cap: capOf(l),
           }
         }),
         binding: bindingOf(String(c.integration)),

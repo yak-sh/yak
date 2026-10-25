@@ -25,6 +25,7 @@ import { capture } from '@yaks/tracker/report'
 import type { FrozenRequest, Kernel } from '../model/worker.ts'
 import { blobPrefix } from './blob-key.ts'
 import { ctxOf } from './connections.ts'
+import { egressOf } from './outbound.ts'
 import { appStore, directoryOf } from './directory.ts'
 import type { Env } from './env.ts'
 import type { Stored } from './graph.ts'
@@ -287,7 +288,7 @@ export let hosting = (env: Bindings): Kernel => ({
   grants: async (job): Promise<Grant[]> => {
     let { frozen } = await authenticated(env, job)
     if (frozen.provider.api === 'openrouter') {
-      return authorized(ctxOf({ ...env, STORE: env.STORE! }), {
+      return authorized(egressOf({ ...env, STORE: env.STORE! }, frozen.app), {
         app: frozen.app,
         person: null,
         level: 'owner',

@@ -48,7 +48,7 @@ them.
   same entity wears `secret{name, value}`: its name is `connection:` and a
   random id, and the entity id is derived from it. Its value is the handle of a
   pasted key, or of the OAuth tokens kept as a JSON record.
-- `uses{anyone, each, binding, direct}` is the relation on an
+- `uses{anyone, each, binding, direct, cap}` is the relation on an
   [@yaks/edge](../edge) link from an app to the connection it calls out through.
   Only a caller holding a level on the app may call out through it, unless
   `anyone` opens it to everyone, signed in or not, as a public widget's key is.
@@ -59,7 +59,10 @@ them.
   person who owns its connection. `binding` is the name the app's code reads it
   by (`env.NAME` in a worker), and `direct` hands that code the key itself
   rather than a sentinel, for a key it must sign with; only a pasted key shared
-  by everyone may be direct.
+  by everyone may be direct. `cap` is the most calls a month that may go out
+  through the link, which [@yaks/egress](../egress) counts on it as
+  `calls{month, count}` and refuses past; none is no limit. Only the host sets
+  it, never the app it caps.
 
 Every integration is an entity in the graph. The ones this package builds ship
 as seed data, one JSON file each, which a host installs into its graph at

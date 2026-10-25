@@ -8,13 +8,15 @@
  * call out through that connection
  * ({@link https://jsr.io/@yaks/member | @yaks/member} `callsOut`) and the
  * request goes to a host its integration names. A service that refuses an
- * access token is asked once more with a refreshed one.
+ * access token is asked once more with a refreshed one. Each call is counted
+ * on the app's `uses` link by the month ({@link counting}), and a link with a
+ * `cap` refuses calls past it ({@link Capped}).
  *
  * ```ts
  * import { forward } from '@yaks/egress'
  *
  * // the host vouches for the caller, and the egress does the rest
- * // let res = await forward({ graph: g, vault }, { app, level: 'viewer', person }, req)
+ * // let res = await forward({ graph: g, vault, defer }, { app, level: 'viewer', person }, req)
  * ```
  *
  * @module
@@ -22,9 +24,22 @@
 
 export {
   type Caller,
+  Capped,
   forward,
   type Grant,
   granted,
   grants,
+  type Host,
   Refused,
 } from './egress.ts'
+export {
+  CALLED,
+  calling,
+  CALLS,
+  capOf,
+  counted,
+  counting,
+  monthOf,
+  spent,
+} from './calls.ts'
+export { egressDoc } from './vocab.ts'

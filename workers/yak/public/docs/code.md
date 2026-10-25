@@ -611,7 +611,10 @@ will see it, and how to fix it, rather than failing:
 Only someone with a role on the app may call out through it. A page that answers
 everybody (a public page's weather) needs the person to open the connection to
 anyone, on the connections page; until then a signed-out visitor's call comes
-back `403` from yaks.app, saying so.
+back `403` from yaks.app, saying so. The connections page shows how many calls
+each app made through a connection this month, and where a connection carries a
+monthly cap, a call past it comes back `403` too, saying whose limit it is and
+where to connect a key of your own.
 
 ### From a worker
 

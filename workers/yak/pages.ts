@@ -1058,7 +1058,9 @@ let connection = (
   let ask = c.each && !c.own
   // An app that uses it: what its code reads and, for one it shares, who may
   // call out through it there, which the person opens to anyone or closes to
-  // members. A person's own is only ever theirs to call out through.
+  // members, and the calls it made through it this month against any cap,
+  // which the space's side of an ask has none of. A person's own is only ever
+  // theirs to call out through.
   let using = (a: Using) =>
     `<p class="Connection_App">${esc(a.title)} reads it as <code>env.${
       esc(a.binding)
@@ -1068,6 +1070,12 @@ let connection = (
         : a.anyone
         ? ' Anyone using the app may call out through it.'
         : ' Only its members may call out through it.'
+    }${
+      ask
+        ? ''
+        : ` ${a.calls} ${a.calls == 1 ? 'call' : 'calls'} out this month${
+          a.cap == null ? '' : `, of ${a.cap} allowed`
+        }.`
     }</p>${
       c.each ? '' : form(
         `<input type="hidden" name="app" value="${

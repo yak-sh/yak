@@ -190,6 +190,11 @@ grants one the space already has. What app builders read is the guide's
   connection the app uses, a caller allowed to call out through it, and https to
   a host its integration names; it follows no redirect
   (packages/egress/README.md).
+- Every call that goes out is counted on its `uses` link by the month,
+  `calls{month, count}` (@yaks/egress), written to the directory after the
+  answer through the host's `defer` (outbound.ts `egressOf`), so nobody waits
+  on it and a count that fails reaches the tracker. A link's `uses.cap` is the
+  most calls a month it may make; the connections page shows both.
 - `direct: true` hands the worker the key itself, for a key it must sign with
   (a request signature, SigV4). Only a pasted key shared by everyone
   may be direct.
@@ -254,7 +259,8 @@ with the child it was handed to.
 - **"yaks.app refused this call: …" (403)**: the egress refused. The host is not
   one the integration names, the app does not use that connection, the
   connection is another person's own, the caller has no level on the app and
-  the link is not open to anyone, or it is not https.
+  the link is not open to anyone, it is not https, or the link already made the
+  calls its `cap` allows this month (the refusal says whose limit it is).
 - **The service received `yak_sentinel_…` verbatim**: the call never passed the
   egress. A page fetched the service directly instead of through `./api/fetch`,
   or a process on the box sent a sentinel nothing swaps.

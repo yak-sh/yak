@@ -15,7 +15,6 @@ import {
   begin,
   connect,
   connectionsDoc,
-  type Ctx,
   install,
   type Integration,
   need,
@@ -23,7 +22,19 @@ import {
   resolve,
   USES,
 } from '@yaks/connections'
-import { type Caller, forward, granted, grants, Refused } from './mod.ts'
+import {
+  type Caller,
+  Capped,
+  counting,
+  egressDoc,
+  forward,
+  granted,
+  grants,
+  type Host,
+  monthOf,
+  Refused,
+  spent,
+} from './mod.ts'
 
 let here: VocabDoc = {
   $defs: {
@@ -53,10 +64,14 @@ let SEEDS: Integration[] = [
 ]
 
 // The network: every request it is sent, and the replies each test scripts.
+// What the egress put off is the test's own, so a test that scripts its
+// network starts with none left over.
 let seen: Request[] = []
 let replies: Response[] = []
+let deferred: (() => Promise<unknown>)[] = []
 let answering = (...r: [number, unknown?][]) => {
   seen = []
+  deferred = []
   replies = r.map(([status, body]) =>
     new Response(body === null ? null : JSON.stringify(body ?? {}), { status })
   )
@@ -72,7 +87,7 @@ let net = (input: RequestInfo | URL, init?: RequestInit) => {
 
 // A credential on its way to the vault wears @yaks/effects' `provisional`.
 let vocab = loadVocab(
-  [here, edgeDoc, secretsDoc, provisionalDoc, connectionsDoc],
+  [here, edgeDoc, secretsDoc, provisionalDoc, connectionsDoc, egressDoc],
   [edgeKeywords],
 )
 let vault = ramVault()
@@ -84,9 +99,20 @@ let g = graph({
   plugins: [
     secrets(vault, (b) => g.apply(b, { trusted: true })),
     edges(vocab),
+    counting(),
   ],
 })
-let c: Ctx = { graph: g, vault, fetch: net }
+// The host writes as itself, as yaks.app's kernel does: a call's count is
+// server-owned. It puts off what the egress defers until a test asks, and
+// keeps the clock the month is read from.
+let clock = Date.UTC(2026, 9, 25)
+let c: Host = {
+  graph: { read: g.read, apply: (b) => g.apply(b, { trusted: true }) },
+  vault,
+  fetch: net,
+  now: () => clock,
+  defer: (work) => void deferred.push(work),
+}
 for (let seeds of [undefined, SEEDS]) {
   await g.apply(await install(g.read, seeds), { trusted: true })
 }
@@ -241,6 +267,13 @@ test('a request carrying no sentinel goes out as it came', async () => {
   assertEquals(seen[0].redirect, 'follow')
 })
 
+// The calls counted this month on the link from an app to a connection, once
+// every count the egress put off has run.
+let callsOn = async (app: string, connection: string) => {
+  for (let work of deferred.splice(0)) await work()
+  let [l] = await g.get([link(app, USES, connection).entity.eid])
+  return spent(l, monthOf(clock))
+}
 // A call for the calendar, whose grant's access token the warm-up left at A1.
 let calendarRequest = new Request('https://api.example/events', {
   headers: { authorization: `Bearer ${GRANT}` },
@@ -300,10 +333,10 @@ test(
 
 // This case checks retry exhaustion, not graph query normalization. Keep the
 // real RAM reads, connections, vault and write hooks at the egress boundary.
-let exhausted: Ctx = {
+let exhausted: Host = {
   ...c,
   graph: {
-    ...g,
+    ...c.graph,
     read: (query: Query) =>
       storage.read(typeof query == 'string' ? parse(query) : query),
   },
@@ -397,3 +430,61 @@ test(
     )
   },
 )
+
+// An app using the texts key, its link as the egress would find it: its cap,
+// and what it has made this month.
+let seeded = async (app: string, uses: Comp = {}, calls?: Comp) => {
+  await g.apply([
+    { entity: { eid: app }, app: {} },
+    { ...link(app, USES, texts), [USES]: uses, ...calls ? { calls } : {} },
+  ], { trusted: true })
+  return { app, level: 'viewer', person: null } satisfies Caller
+}
+let text = (by: Caller, to = 'api.texts.example') =>
+  forward(c, by, new Request(`https://${to}/?k=${KEY}`))
+let NOV = Date.UTC(2026, 10, 3)
+let november = (count: number) => ({ month: '2026-11', count })
+let counter = await seeded('counter', {}, november(4))
+let turning = await seeded('turning', {}, november(7))
+let refusing = await seeded('refusing', {}, november(3))
+let full = await seeded('full', { cap: 2 }, november(2))
+let room = await seeded('room', { cap: 2 }, november(1))
+let lapsed = await seeded('lapsed', { cap: 2 }, { month: '2026-10', count: 2 })
+
+test('each call out adds one to its link’s count for the month', async () => {
+  clock = NOV
+  answering([200])
+  await text(counter)
+  assertEquals(await callsOn('counter', texts), 5)
+})
+
+test('a grant lent is counted, and a new month starts the count over', async () => {
+  clock = Date.UTC(2026, 11, 1)
+  answering()
+  await grants(c, turning, [KEY])
+  assertEquals(await callsOn('turning', texts), 1)
+})
+
+test('a call refused is not counted', async () => {
+  clock = NOV
+  await assertRejects(() => text(refusing, 'evil.example'), Refused)
+  assertEquals(await callsOn('refusing', texts), 3)
+})
+
+test('a link at its cap refuses calls, naming whose connection it is', async () => {
+  clock = NOV
+  answering()
+  let no = await assertRejects(() => text(full), Capped)
+  assertEquals([no.owner, no.integration, no.cap], ['space', 'texts', 2])
+  await assertRejects(() => grants(c, full, [KEY]), Capped)
+  assertEquals(seen, [])
+})
+
+test('a link below its cap, or at it only last month, calls out', async () => {
+  clock = NOV
+  answering([200], [200])
+  assertEquals([(await text(room)).status, (await text(lapsed)).status], [
+    200,
+    200,
+  ])
+})

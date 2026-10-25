@@ -12,12 +12,14 @@ It serves no route. A host authenticates the caller and hands each call to
 
 ## The verb
 
-`forward(ctx, {app, level, person}, request)` returns the service's response.
-`ctx` is @yaks/connections' `Ctx`: the graph, which holds every integration, and
-its vault, which holds each OAuth client and credential. `level` is what the
-host vouches the caller holds on the app ([@yaks/member](../member)), or `null`
-for nothing, and `person` is who the host vouches they are, or `null` for nobody
-signed in.
+`forward(host, {app, level, person}, request)` returns the service's response.
+`host` is @yaks/connections' `Ctx` (the graph, which holds every integration,
+and its vault, which holds each OAuth client and credential) with `defer`: how
+the host puts off work the answer must not wait on, counting the call (below).
+It runs that work once the call is answered (a Worker hands it to `waitUntil`)
+and reports its failure. `level` is what the host vouches the caller holds on
+the app ([@yaks/member](../member)), or `null` for nothing, and `person` is who
+the host vouches they are, or `null` for nobody signed in.
 
 Before a sentinel is swapped:
 
@@ -33,9 +35,11 @@ Before a sentinel is swapped:
   not one, so one that leaks into a page is useless to a stranger.
 - The request must go over https to a host the connection's integration names,
   and to another port only where the integration names it with one.
+- The app's `uses` link must not have made the calls its `cap` allows this month
+  (below).
 
-Anything else throws `Refused`, and nothing is sent. A request carrying no
-sentinel goes out as it came.
+Anything else throws `Refused` (`Capped`, for a link at its cap), and nothing is
+sent. A request carrying no sentinel goes out as it came.
 
 A pasted key goes in as it is kept. An access token is refreshed first when it
 is about to expire, and when the service refuses it (401) the call is made once
@@ -47,17 +51,51 @@ does not follow redirects, so a redirect comes back to the caller, whose next
 request is checked again. The body is sent whole, byte for byte, apart from the
 swap.
 
+## Counting calls
+
+Every call that goes out with a credential is counted on the `uses` link it went
+out through, by the UTC month: `calls{month, count}`, which this package
+declares. Once a call is answered the egress writes a `called{month}` event on
+each link it used, through the host's `defer`, and the `./graph` facet folds the
+event into the link's `calls` inside that write's own transaction, so two calls
+at once both count and nobody sends a sum back. A new month starts the count
+over, and a count for a month already over arrives too late to count. A call
+refused is not counted, and one asked again after a refresh is counted once.
+
+A link's `cap` (@yaks/connections `uses`) is the most calls a month it may make.
+At it, the egress throws `Capped`, naming the connection's owner, its
+integration and the cap, so a host can say whose limit it is and where to
+connect a key of one's own. The count is written after the answer, so calls at
+once near the cap may pass it by a few.
+
+```ts
+import { graph } from '@yaks/graph'
+import { ram } from '@yaks/ram'
+import { loadVocab } from '@yaks/vocab'
+import { equal } from '@yaks/testing'
+import { calling, counting, egressDoc, spent } from '@yaks/egress'
+
+let vocab = loadVocab([egressDoc])
+let g = graph({ storage: ram(vocab), vocab, plugins: [counting()] })
+for (let month of ['2026-10', '2026-10', '2026-11']) {
+  await g.apply(calling(['link'], month), { trusted: true })
+}
+let [link] = await g.get(['link'])
+equal([spent(link, '2026-10'), spent(link, '2026-11')], [0, 1])
+```
+
 ## A grant from a trusted host
 
 A **grant** is a credential and the destinations a trusted host authorized for
 one call: `{sentinel, value, hosts}`. `grants(ctx, caller, sentinels)`
 authorizes the requested sentinels through the caller's app, level and person,
-and reads their current credentials, refreshing access tokens when needed.
-`granted(grants, request, send?)` forwards using those grants without reading a
-graph or vault. A separate executor can obtain grants from its host at I/O and
-send a long response directly, keeping the host outside the response stream. It
-keeps the grant only while sending; durable requests carry sentinels, never
-credential values.
+and reads their current credentials, refreshing access tokens when needed. A
+grant is lent for one call, so each is counted on its link as it is lent, and a
+link at its cap lends none. `granted(grants, request, send?)` forwards using
+those grants without reading a graph or vault. A separate executor can obtain
+grants from its host at I/O and send a long response directly, keeping the host
+outside the response stream. It keeps the grant only while sending; durable
+requests carry sentinels, never credential values.
 
 ```ts
 import { granted } from '@yaks/egress'
