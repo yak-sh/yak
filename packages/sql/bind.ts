@@ -4003,12 +4003,12 @@ let visible = (
   let quoted = (name: string) => `"${name.replaceAll('"', '""')}"`
   let aspects = Object.entries(visibility.components ?? {})
   let masked = !!vocab.prop('entity', 'archetype') && aspects.length > 0
-  // With `graves`, the deleted the scope would have seen as they last were
-  // (`ghostly`) too.
+  // The deleted as they last were (`ghostly`), where a backing keeps history.
+  let ghost = ghostly(base, vocab, opts.backed ?? {})
+  // With `graves`, the deleted the scope would have seen too.
   let permits = (scope: string | And, owner: Cond, graves = false): Cond => {
     let alive = permitted(scope, owner, base)
-    let ghost = graves ? ghostly(base, vocab, opts.backed ?? {}) : undefined
-    return ghost ? or(alive, permitted(scope, owner, ghost)) : alive
+    return graves && ghost ? or(alive, permitted(scope, owner, ghost)) : alive
   }
   // Whether the entity `owner` is one `scope` admits, read through `base`.
   let permitted = (scope: string | And, owner: Cond, base: Dialect): Cond => {
@@ -4148,9 +4148,10 @@ let visible = (
   let entity = source('entity')
   // The entities a reference names: those the scope admits, and the deleted
   // it would have seen as they last were (`ghostly`), as @yaks/sqlite's
-  // gather and reference operands name them.
+  // gather and reference operands name them. Without history to read, those
+  // are the scoped entities themselves.
   let named = (): string => {
-    if (!visibility.entity) return entity
+    if (!visibility.entity || !ghost) return entity
     let name = '__visible_named'
     if (!ctes.has(name)) {
       let cte: Cte | undefined
