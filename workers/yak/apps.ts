@@ -3021,19 +3021,13 @@ let served = async (
   // the page afresh and never shows a token in the address bar. On an app
   // that is not sandboxed the segment names nothing.
   let walls = sandboxed(app)
-  // Site keeps the own files of an app anyone may read (public or open) and
-  // nothing else: a private app's pages are its members', a sandboxed page
-  // carries its visitor's token, and an app's worker may answer each visitor
-  // differently. Nor does the gateway ask Site about such an app's other
-  // addresses for a while.
-  if (edge && 'stale' in serving && serving.stale && app.access != 'public') {
-    return passed()
-  }
   // A file the app published (public-files.ts) answers its address before
   // anything of the app's own runs: the home router, the worker, the private
   // gate. Only an app that has published asks, for one row, straight from the
   // directory, so a walk over many addresses leaves its serving copy alone.
-  // The same answer for everyone, so Site keeps it whatever the app's access.
+  // The same answer for everyone, so Site keeps it whatever the app's access,
+  // even from a directory copy a moment old: the file's own row is read
+  // fresh, and nothing of the app's access decides it.
   let open = walls || !app.publishing
     ? null
     : await c.time('public', () =>
@@ -3053,6 +3047,14 @@ let served = async (
     if (edge) return keep(page, space, app)
     viewed(env, req, page, seen(space, app))
     return page
+  }
+  // Site keeps the own files of an app anyone may read (public or open) and
+  // nothing else: a private app's pages are its members', a sandboxed page
+  // carries its visitor's token, and an app's worker may answer each visitor
+  // differently. Nor does the gateway ask Site about such an app's other
+  // addresses for a while.
+  if (edge && 'stale' in serving && serving.stale && app.access != 'public') {
+    return passed()
   }
   if (!keepable(app)) {
     if (edge) return passed()
