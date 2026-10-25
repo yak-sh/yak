@@ -16,7 +16,7 @@ import type { Compiled } from './esbuild.ts'
 import { meta } from './meta.ts'
 import { refuse } from './tool.ts'
 import { caught } from './defects.ts'
-import { rebind } from './connections.ts'
+import { connectedEnv } from './connections.ts'
 import { scriptName } from './dispatch.ts'
 
 type Read = (path: string) => Promise<Uint8Array<ArrayBuffer> | null>
@@ -106,6 +106,10 @@ export let deployWorker = async (
   }
   let bound
   let modules = compiled?.modules ?? await carried(read, config.main)
+  // What its code reads as env.NAME rides in the upload: the release's script
+  // is new, so it is born bound to the app's connections, and nothing asks
+  // Cloudflare about a script it may not list yet (bug 3130eb30).
+  let secrets = await connectedEnv(env, app)
   try {
     bound = await provision(env, app, store, config)
   } catch (e) {
@@ -136,16 +140,8 @@ export let deployWorker = async (
     compiled ? { ...config, main: compiled.main } : config,
     bound,
     target == store ? undefined : scriptName(store),
+    secrets,
   ) || scriptName(target)
-  // What its code reads as env.NAME: a first upload is the first script there
-  // is to bind the app's connections to (connections.ts). The worker is up
-  // either way, so a binding that did not take is ours to hear about.
-  try {
-    await rebind(env, space, app)
-  } catch (e) {
-    caught(e, { request: 'rebind', app: app.slug })
-    if (target != store) throw e
-  }
   // An upload can finish after permanent deletion's script DELETE. Reconcile
   // that late effect while its ids are still in hand, before recording a release.
   if (!(await meta(env).query(`.entity.eid=${app.eid}&.app`)).length) {

@@ -204,6 +204,11 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
   }
 }
 
+/** What an app's code reads as env.NAME from the connections it uses
+ * (@yaks/connections `envOf`), and nothing where no vault is kept. */
+export let connectedEnv = async (env: Env, app: App) =>
+  vaulted(env) ? await envOf(ctxOf(env), app.eid) : {}
+
 /**
  * An app's running worker brought up to date with the connections it uses
  * (dispatch.ts): each `uses` link's binding set to the connection's sentinel,
@@ -212,9 +217,10 @@ export let ctxOf = (env: Partial<Env> & Pick<Env, 'STORE'>, who?: Who): Ctx => {
  * (directory.ts `scriptOf`), so a connection made or attached after a deploy
  * reaches the app at once. A name no link gives is not this function's to
  * touch, except one in `gone`: a name its link was just taken from. An app
- * whose release built no worker has nothing to bind — its first deploy calls
- * this again — and neither has a deploy with no vault or no Cloudflare token.
- * A worker its release built and the namespace doesn't have is a failure.
+ * whose release built no worker has nothing to bind — a release's script is
+ * uploaded bound already (deploy_worker.ts) — and neither has a deploy with no
+ * vault or no Cloudflare token. A worker its release built and the namespace
+ * doesn't have is a failure.
  */
 export let rebind = async (
   env: Env,
@@ -230,7 +236,7 @@ export let rebind = async (
     if (!app.worker) return
     throw Error(`${space.slug}/${app.slug}'s worker ${script} is not there`)
   }
-  let want = await envOf(ctxOf(env), app.eid)
+  let want = await connectedEnv(env, app)
   let links = await readOf(env)(`.edge.from=${app.eid}&.${USES}&*`)
   let owned = [...links.map((l) => comp(l, USES).binding), ...gone]
   for (let [name, value] of Object.entries(want)) {

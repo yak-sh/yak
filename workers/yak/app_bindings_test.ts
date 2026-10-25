@@ -309,6 +309,34 @@ test('rollback selects the kept files and worker without uploading or minting a 
   }
 })
 
+test('a release is uploaded bound to its connections, and its script is never read back', async () => {
+  let k = await fixture(true, true)
+  try {
+    await k.write({ main: 'worker.js' })
+    let space = (await k.dir.space('ada'))!
+    let c = ctxOf(k.env, { person: PERSON, role: 'owner' })
+    let made = await c.graph.apply(
+      await need(c.graph.read, {
+        owner: space.eid,
+        app: k.app.eid,
+        integration: 'Hub',
+        hosts: ['api.hub.test'],
+      }),
+    )
+    await connect(c, made.find((b) => b.connection)!.entity.eid, { key: 'k' })
+    let { HUB } = await envOf(c, k.app.eid)
+    await k.tool('app_deploy')
+    assertEquals(
+      (k.uploads[0].bindings as Record<string, unknown>[])
+        .filter((b) => b.type == 'secret_text'),
+      [{ type: 'secret_text', name: 'HUB', text: HUB }],
+    )
+    assertEquals(k.calls.filter((c) => c.path.endsWith('/secrets')), [])
+  } finally {
+    await k.done()
+  }
+})
+
 test('a release put back is bound to the connections the app has now', async () => {
   let k = await fixture(true, true)
   try {

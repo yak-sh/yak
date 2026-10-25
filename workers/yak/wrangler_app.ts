@@ -456,6 +456,7 @@ export let metadata = (
   tag?: string,
   service = 'yak',
   durableOwner?: string,
+  secrets: Record<string, string> = {},
 ) => {
   let bindings: Record<string, unknown>[] = [
     { type: 'service', name: 'KERNEL', service },
@@ -484,6 +485,9 @@ export let metadata = (
       ...binding,
       ...(durableOwner ? { script_name: durableOwner } : {}),
     })
+  }
+  for (let [name, text] of Object.entries(secrets)) {
+    bindings.push({ type: 'secret_text', name, text })
   }
   let migrations = durableOwner
     ? undefined

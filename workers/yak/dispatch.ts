@@ -878,6 +878,7 @@ export let upload = async (
   config: Config = {},
   bound: Bound[] = [],
   durableOwner?: string,
+  secrets: Record<string, string> = {},
 ) => {
   let names = new Set(['metadata', WRAPPER])
   for (let { name } of modules) {
@@ -905,7 +906,7 @@ export let upload = async (
     'metadata',
     new Blob([
       JSON.stringify({
-        ...metadata(config, bound, tag, env.WORKER_NAME, durableOwner),
+        ...metadata(config, bound, tag, env.WORKER_NAME, durableOwner, secrets),
         // Born wearing this release's wrapper, so rewrap.ts passes it by.
         tags: [WRAP],
       }),
@@ -1005,7 +1006,8 @@ export let drop = async (env: Env, store: string, forever = false) => {
 // a later upload replaces the binding list whole, and `keep_bindings:
 // ['secret_text']` in `upload` above is what keeps them
 // (https://developers.cloudflare.com/cloudflare-for-platforms/workers-for-platforms/configuration/bindings/).
-// Nothing but `rebind` writes one. Cloudflare's own list answers names and
+// A release's upload is born with them (deploy_worker.ts), and nothing but
+// `rebind` writes one after. Cloudflare's own list answers names and
 // types without values
 // (https://developers.cloudflare.com/api/resources/workers_for_platforms/subresources/dispatch/subresources/namespaces/subresources/scripts/subresources/secrets/methods/list/).
 

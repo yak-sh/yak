@@ -3878,6 +3878,7 @@
       "a missing explicit main refuses before resource creation, upload or deletion": 47.6,
       "a partial resource creation is recorded and reused on retry": 78.4,
       "a refused provisioning scope keeps draft files private and uploads no worker": 234.9,
+      "a release is uploaded bound to its connections, and its script is never read back": 200.0,
       "a release put back is bound to the connections the app has now": 200.0,
       "a static app may deploy its browser entry.js": 62.6,
       "a vpc_services door needs a tunnel, and the script never holds it": 75.7,
