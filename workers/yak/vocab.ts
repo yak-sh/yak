@@ -20,7 +20,7 @@ import {
 import { acceptsErrors, blobKeywords } from '@yaks/blob'
 import { edgeKeywords } from '@yaks/edge'
 import { keyKeywords } from '@yaks/key'
-import { floored, memberKeywords, permitted } from '@yaks/member'
+import { floored, memberKeywords, permitted, unowned } from '@yaks/member'
 import { idKeywords } from '@yaks/id'
 import { derived as builds } from '@yaks/builders/vocab'
 import { sessionDerived } from '@yaks/session/status'
@@ -581,10 +581,17 @@ export let appDoc = (source: unknown, file = 'vocab.json'): VocabDoc => {
   }
   let errs = [...storable(doc), ...floored(doc)]
   if (errs.length) throw refuse('arguments', `${file}: ${errs.join('; ')}`)
-  // A companion can be supplied by the platform, so resolve permission names
-  // in the same composed vocabulary the store will hold.
-  if (Object.values(doc.$defs ?? {}).some((s) => s.permit !== undefined)) {
-    let errors = permitted(composed(pluginsOf(doc), [doc], appOptions).vocab)
+  // A companion can be supplied by the platform, so permission and owner names
+  // resolve in the same composed vocabulary the store will hold, by the rules
+  // its load reads them with: a manifest the store could not load never
+  // deploys.
+  if (
+    Object.values(doc.$defs ?? {}).some((s) =>
+      s.permit !== undefined || s.personal !== undefined
+    )
+  ) {
+    let v = composed(pluginsOf(doc), [doc], appOptions).vocab
+    let errors = [...permitted(v), ...unowned(v)]
     if (errors.length) {
       throw refuse('arguments', `${file}: ${errors.join('; ')}`)
     }

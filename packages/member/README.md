@@ -293,7 +293,9 @@ private on the person's entity; its public name and other public components
 remain visible.
 
 Register `memberKeywords` when loading these declarations. `personal(vocab)`
-protects them as a graph plugin; `personalsIn(vocab)` validates and reads them.
+protects them as a graph plugin; `personalsIn(vocab)` reads them, refusing the
+vocabulary while `unowned(vocab)` finds any that names no owner, each as a
+sentence saying what to write instead. A host refuses a deploy by the same rule.
 The `@yaks/member/graph` facet composes this plugin through `@yaks/host`. Hosts
 can also supply a component-to-owner map in the facet's `personal` option. The
 shared draft vocabulary declares its own `by` policy.
@@ -369,7 +371,7 @@ The main export includes:
 | `Guard`, `Floors`, `Viewer`, `Where`, `Policy`                               | Configuration and policy types.                                                |
 | `Denied`                                                                     | Error with `actor`, `app`, `need` and `act` fields.                            |
 | `memberKeywords`, `floorsIn`, `floored`, `permitsIn`, `permitted`; `Permits` | Permission declarations, their validation and loaded forms.                    |
-| `personal`, `personalsIn`; `Personal`                                        | Person-owned policy and its validated component-to-owner declarations.         |
+| `personal`, `personalsIn`, `unowned`; `Personal`                             | Person-owned policy, its validated declarations and their refusals.            |
 
 ## What is deliberately not here
 

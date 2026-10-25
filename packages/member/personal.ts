@@ -18,26 +18,74 @@ import { Denied } from './deny.ts'
  * entity; a local reference property makes the entire entity private. */
 export type Personal = Record<string, string>
 
-/** Validate policy declarations against the vocabulary before serving rows. */
+// Component → owner as the vocabulary declares it, then as the host overrides.
+let said = (
+  vocab: Vocab,
+  overrides: Personal,
+): Record<string, unknown> => ({
+  ...Object.fromEntries(vocab.all.flatMap((name) => {
+    let owner = vocab.comp(name)?.keywords.personal
+    return owner === undefined ? [] : [[name, owner]]
+  })),
+  ...overrides,
+})
+
+// The owner property the guide declares, offered wherever one is missing.
+let BY = '{"type": "string", "ref": "entity", "death": "keep"}'
+
+/**
+ * Every `personal` declaration no row could be kept private by, as sentences
+ * naming the component and what to write instead, the way @yaks/vocab's
+ * `storable` answers. A deploy holding any is refused, and
+ * {@link personalsIn} serves none.
+ *
+ * ```ts
+ * import { assertEquals } from '@std/assert'
+ * import { loadVocab, type PropSchema } from '@yaks/vocab'
+ * import { memberKeywords, unowned } from '@yaks/member'
+ * let note = (by: PropSchema) =>
+ *   loadVocab({
+ *     $defs: {
+ *       note: {
+ *         component: true,
+ *         type: 'object',
+ *         personal: 'by',
+ *         properties: { by },
+ *       },
+ *     },
+ *   }, [memberKeywords])
+ * assertEquals(unowned(note({ type: 'string', ref: 'entity', death: 'keep' })), [])
+ * assertEquals(unowned(note({ type: 'string' })), [
+ *   'note.personal names by, which is no reference — declare "by": ' +
+ *   '{"type": "string", "ref": "entity", "death": "keep"}, or say ' +
+ *   '"personal": "entity" for a component on the person\'s own entity',
+ * ])
+ * ```
+ */
+export let unowned = (vocab: Vocab, overrides: Personal = {}): string[] =>
+  Object.entries(said(vocab, overrides)).flatMap(([name, owner]) => {
+    if (!vocab.comp(name)) return [`${name}.personal names no component`]
+    if (owner == 'entity') return []
+    let prop = typeof owner == 'string' ? vocab.prop(name, owner) : undefined
+    if (prop?.ref) return []
+    let entity = '"personal": "entity" for a component on the person\'s own ' +
+      'entity'
+    return [
+      typeof owner != 'string'
+        ? `${name}.personal is ${JSON.stringify(owner)} — say ${entity}, or ` +
+          `name a property of ${name} declared ${BY}`
+        : `${name}.personal names ${owner}, which is ${
+          prop ? 'no reference' : `no property of ${name}`
+        } — declare "${owner}": ${BY}, or say ${entity}`,
+    ]
+  })
+
+/** Read the policy declarations, refusing the vocabulary when any is no
+ * owner ({@link unowned}) before a row is served. */
 export let personalsIn = (vocab: Vocab, overrides: Personal = {}): Personal => {
-  let owners = {
-    ...Object.fromEntries(vocab.all.flatMap((name) => {
-      let owner = vocab.comp(name)?.keywords.personal
-      return owner === undefined ? [] : [[name, owner]]
-    })),
-    ...overrides,
-  }
-  for (let [name, owner] of Object.entries(owners)) {
-    if (
-      !vocab.comp(name) || typeof owner != 'string' ||
-      (owner != 'entity' && !vocab.prop(name, owner)?.ref)
-    ) {
-      throw new Error(
-        `${name}.personal must name entity or a local owner reference`,
-      )
-    }
-  }
-  return owners as Personal
+  let errors = unowned(vocab, overrides)
+  if (errors.length) throw new Error(errors.join('; '))
+  return said(vocab, overrides) as Personal
 }
 
 let caller = (opts: ReadOpts) =>
