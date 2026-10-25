@@ -10,7 +10,7 @@
 // Both write as the same host, which is what lets the feed leave out what this
 // host wrote itself.
 
-import type { Bundle, Plugin } from '@yaks/graph'
+import type { Bundle, News, Plugin } from '@yaks/graph'
 import {
   as,
   col,
@@ -33,14 +33,7 @@ import {
   type Recording,
   type Rows,
 } from './mod.ts'
-import {
-  type Feed,
-  feedDdl,
-  feeder,
-  feedOf,
-  follow,
-  type Heard,
-} from './feed.ts'
+import { type Feed, feedDdl, feeder, feedOf, follow } from './feed.ts'
 
 let logs = new WeakMap<object, Log>()
 let feeds = new WeakMap<object, Feed>()
@@ -161,13 +154,13 @@ export let plugins = (
  * config says (`{"use": "@yaks/journal", "with": {"every": 50}}`). */
 export let EVERY = 200
 
-/** What a feed hands each transaction to; it may take its time, and the next
- * transaction waits for it. */
-export type Each = (applied: Bundle[]) => void | Promise<void>
+/** What a feed hands what it heard to, all of it at once; it may take its
+ * time, and what is heard meanwhile waits for the next call. */
+export type Each = (news: News) => void | Promise<void>
 
-/** How many looks a transaction a consumer failed on is offered again before
- * it is reported and passed over, so one that can never be taken does not
- * hold back every commit after it. */
+/** How many times news the consumer failed on is offered again before it is
+ * reported and passed over, so news that can never be taken does not hold
+ * back everything after it; the consumer is then told it missed some. */
 export let TRIES = 5
 
 /**
@@ -177,57 +170,93 @@ export let TRIES = 5
  * or a cache is fed so it also sees writes its own graph did not make: a `yak`
  * command's beside `yak serve`, or a worker's serving the effects role.
  * Whatever goes wrong on the way is the host's to report.
+ *
+ * The feed is read every `every` ms however long the consumer takes, so a
+ * slow consumer is handed more at once rather than left behind what the store
+ * keeps (./feed.ts `KEEP`). What still never reaches it (a process asleep past
+ * that, news passed over) comes with `missed`, and the consumer reads again
+ * what it holds: it ends up correct on its own.
  */
 export let feed = (
   host: Bound & {
     stopping: AbortSignal
     report?: (error: unknown) => void | Promise<void>
   },
-  options: { every?: number } = {},
+  options: { every?: number; timer?: Timer } = {},
 ) =>
 (each: Each): () => void => {
   let every = options.every ?? EVERY
+  let timer = options.timer ?? later
   let told = (error: unknown) =>
     host.report
       ? void host.report(error)
       : console.error('@yaks/journal feed —', error)
+  let missed = false
   let next = follow(feedFor(host), {
-    missed: (n) =>
-      told(new Error(`the feed pruned ${n} commits before they were read`)),
+    missed: (n) => {
+      missed = true
+      told(new Error(`the feed pruned ${n} commits before they were read`))
+    },
   })
-  let queue: (Heard & { tries: number })[] = []
-  let timer: ReturnType<typeof setTimeout> | undefined
+  let heard: Bundle[][] = []
+  let tries = 0
+  let taking: Promise<void> | undefined
+  let cancel = () => {}
   let stopped = false
-  // One look at a time, the next one scheduled when this one is done, so the
-  // consumer is never handed a transaction out of order. A read that fails is
-  // tried again at the next look, since the cursor moves only past what was
-  // read. A transaction the consumer fails on (a store busy for a moment) is
-  // offered again at the next look, ahead of everything after it, until it
-  // has failed TRIES times.
-  let look = async () => {
+  // One call at a time, so the consumer is never handed a transaction out of
+  // order. News it fails on (a store busy for a moment) is offered again at
+  // the next look, ahead of everything heard after it.
+  let take = async () => {
+    while ((heard.length || missed) && !stopped) {
+      let news = { applied: heard, missed }
+      heard = []
+      missed = false
+      try {
+        await each(news)
+        tries = 0
+      } catch (err) {
+        if (++tries < TRIES) {
+          heard = [...news.applied, ...heard]
+          missed ||= news.missed
+          break
+        }
+        tries = 0
+        missed = true
+        told(new Error('the feed passed over what it heard', { cause: err }))
+      }
+    }
+  }
+  // A read that fails is tried again at the next look, since the cursor moves
+  // only past what was read.
+  let look = () => {
     try {
-      queue.push(...next().map((h) => ({ ...h, tries: 0 })))
+      heard.push(...next().map((h) => h.applied))
     } catch (err) {
       told(err)
     }
-    while (queue.length && !stopped) {
-      let head = queue[0]
-      try {
-        await each(head.applied)
-      } catch (err) {
-        if (++head.tries < TRIES) break
-        told(new Error(`the feed passed over ${head.seq}`, { cause: err }))
-      }
-      queue.shift()
-    }
-    if (!stopped) timer = setTimeout(look, every)
+    let started = !taking && (heard.length || missed)
+      ? taking = take().finally(() => taking = undefined)
+      : undefined
+    if (!stopped) cancel = timer(look, every)
+    return started
   }
   let stop = () => {
     stopped = true
-    clearTimeout(timer)
+    cancel()
   }
   if (host.stopping.aborted) return stop
   host.stopping.addEventListener('abort', stop, { once: true })
-  timer = setTimeout(look, every)
+  cancel = timer(look, every)
   return stop
+}
+
+/** What a feed schedules its next look with, and how it cancels it. */
+export type Timer = (
+  fn: () => void | Promise<void>,
+  ms: number,
+) => () => void
+
+let later: Timer = (fn, ms) => {
+  let id = setTimeout(fn, ms)
+  return () => clearTimeout(id)
 }

@@ -197,6 +197,13 @@ export type ReadTx = Pick<
   'read' | 'get' | 'whole' | 'about' | 'bindings' | 'buried'
 >
 
+/** What a store's feed hands a consumer at each look (@yaks/journal's
+ * `feed`): the transactions other hosts committed since the last, oldest
+ * first, each as the bundles it applied; and `missed` when some before them
+ * never reached this consumer, so what it holds from before is read again
+ * rather than patched. */
+export type News = { applied: Bundle[][]; missed: boolean }
+
 /**
  * A storage adapter. `@yaks/sqlite` implements this over an embedded database;
  * an in-memory map, a Durable Object and a remote SQL service implement the

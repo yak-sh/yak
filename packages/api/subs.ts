@@ -33,7 +33,7 @@
 // its set — it never sees the row that stopped matching — so the server is
 // what remembers who is in.
 
-import type { Bundle, Eid, Graph, Query, ReadOpts } from '@yaks/graph'
+import type { Bundle, Eid, Graph, News, Query, ReadOpts } from '@yaks/graph'
 import { after, isPromise, over } from '@yaks/fp'
 import { during, link, parent, peek, scope, unlink } from '@yaks/trace'
 import type { TransientFrame } from '@yaks/graph'
@@ -160,6 +160,9 @@ export type Subs = {
   drop: (sink: Sink) => void | Promise<void>
   /** a transaction committed: push what changed to whoever is watching */
   commit: (applied: Bundle[]) => void | Promise<void>
+  /** what other hosts committed, as a feed hands it: pushed as one pass, and
+   * every answer read again first when the feed missed some */
+  hear: (news: News) => void | Promise<void>
   /** Reconcile query answers when the store's revision changed outside this
    * registry. The host decides when to check; opening also checks before
    * reusing a retained answer. */
@@ -1628,8 +1631,9 @@ export let subscriptions = (graph: Graph, opts: {
   // A commit that finds earlier work still running waits for it, beside every
   // commit that arrives meanwhile: when their turn comes they are one pass.
   let waiting: { txs: Bundle[][]; done: Promise<void> } | undefined
-  let commit = (applied: Bundle[]): void | Promise<void> => {
-    if (ending.signal.aborted) return
+  let commits = (txs: Bundle[][]): void | Promise<void> => {
+    if (ending.signal.aborted || !txs.length) return
+    let applied = txs.flat()
     for (let mine of held.values()) {
       for (let sub of mine.values()) {
         if (
@@ -1641,17 +1645,28 @@ export let subscriptions = (graph: Graph, opts: {
     }
     flushPeers()
     if (waiting) {
-      waiting.txs.push(applied)
+      waiting.txs.push(...txs)
       return waiting.done
     }
-    if (!pendingWork) return ordered(() => fanout([applied]))
-    let next = { txs: [applied], done: Promise.resolve() }
+    if (!pendingWork) return ordered(() => fanout(txs))
+    let next = { txs: [...txs], done: Promise.resolve() }
     waiting = next
     next.done = ordered(() => {
       waiting = undefined
       return fanout(next.txs)
     }) as Promise<void>
     return next.done
+  }
+  let commit = (applied: Bundle[]) => commits([applied])
+  // What other hosts committed comes as one pass. When some of it never
+  // arrived, every answer is read again first: the patches that did arrive
+  // cannot say what the missing ones moved.
+  let hear = ({ applied, missed }: News): void | Promise<void> => {
+    let reset = missed ? (flushPeers(), ordered(resync)) : undefined
+    let pass = commits(applied)
+    return isPromise(reset) || isPromise(pass)
+      ? Promise.all([reset, pass]).then(() => {})
+      : undefined
   }
 
   // Each caller context routes only mandatory-policy-filtered canonical rows.
@@ -2342,12 +2357,17 @@ export let subscriptions = (graph: Graph, opts: {
 
   // A commit feed gives precise patches; a revision proves whether anything
   // changed even when no feed is installed. Such a change has no write set,
-  // so every query gets an authoritative reset and retained answers let go.
+  // and neither have commits a feed missed, so every query gets an
+  // authoritative reset and retained answers let go.
   let check = (): void | Promise<void> => {
     if (ending.signal.aborted || !opts.revision) return
     let next = opts.revision()
     if (Object.is(next, revision)) return
     revision = next
+    return resync()
+  }
+  let resync = (): void | Promise<void> => {
+    if (ending.signal.aborted) return
     for (let mine of held.values()) {
       for (let sub of mine.values()) if (sub.loading) sub.dirty = true
     }
@@ -2453,6 +2473,7 @@ export let subscriptions = (graph: Graph, opts: {
       })
     },
     commit,
+    hear,
     check: () => {
       flushPeers()
       return ordered(check)

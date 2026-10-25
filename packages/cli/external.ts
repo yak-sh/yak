@@ -2,7 +2,7 @@
 // invocation of this checkout's CLI; singleton services still take the host's
 // leases, and effects remain a pool. A fallback worker drains when its requesting web host ends.
 
-import type { Bundle, Graph } from '@yaks/graph'
+import type { Bundle, Graph, News } from '@yaks/graph'
 import {
   EXIT,
   gone,
@@ -14,7 +14,7 @@ import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** The commits other hosts made, handed over as they arrive (@yaks/host). */
-export type Feed = (each: (rows: Bundle[]) => void) => () => void
+export type Feed = (each: (news: News) => void) => () => void
 
 /** Which duty roles no live process serves, kept rather than read again.
  *
@@ -23,8 +23,9 @@ export type Feed = (each: (rows: Bundle[]) => void) => () => void
  * reading them all on each change and every second held the web's one thread
  * for hundreds of milliseconds at a time. They are read once. After that the
  * rows the feed hears say which processes took up or gave up a duty role, and
- * a look asks only whether the pids of the ones known still live. A store with
- * no feed says nothing of what changed, so each look reads it whole. */
+ * a look asks only whether the pids of the ones known still live; when the
+ * feed missed some, they are read once more. A store with no feed says nothing
+ * of what changed, so each look reads it whole. */
 export let coverage = (
   processes: Store,
   roles: readonly string[],
@@ -51,9 +52,10 @@ export let coverage = (
     )
   return {
     /** Fold what other hosts committed; true when coverage may have moved. */
-    hear: (rows: Bundle[]): boolean => {
-      let moved = false
-      for (let row of rows) {
+    hear: ({ applied, missed }: News): boolean => {
+      if (missed) known = undefined
+      let moved = missed
+      for (let row of applied.flat()) {
         let eid = row.entity.eid
         let ended = row.$delete || row.tombstone || row[EXIT]
         let duties = ended ? [] : serves(row)
@@ -325,7 +327,7 @@ export let external = (
   return monitor({
     ...rest,
     subscribe: feed &&
-      ((changed) => feed((rows) => void (covered.hear(rows) && changed()))),
+      ((changed) => feed((news) => void (covered.hear(news) && changed()))),
     uncovered: covered.missing,
     start: (roles, signal) => start(path, roles, signal),
   })

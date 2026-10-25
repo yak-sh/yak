@@ -356,9 +356,15 @@ stored. A host composes plugins in config order, and `@yaks/journal/graph`'s
 `plugins` returns the journal's and the feed's, bound as the same host
 (`logFor`, `feedFor`). Its `feed` is what a host offers as `host.feed(each)`: it
 looks every 200ms (`{"use": "@yaks/journal", "with": {"every": 50}}` to change
-it) and hands each commit to `each` in order. A commit `each` fails on is
-offered again at the next look, up to five times, before it is reported to the
-host and passed over. @yaks/api feeds its `/ws` subscriptions this way.
+it), however long `each` takes, and hands `each` the **news**: every commit
+heard since its last call, oldest first, in one call (`{ applied, missed }`,
+@yaks/graph `News`). A consumer still busy is handed more next time rather than
+left behind what the feed keeps. News `each` fails on is offered again at the
+next look, up to five times, before it is reported to the host and passed over.
+When commits never reach the consumer, pruned or passed over, the next news says
+`missed: true`, and the consumer reads again what it holds: @yaks/api's `/ws`
+subscriptions reset every answer (`subs.hear`), and a web's duty coverage reads
+the processes again.
 
 A store an older journal made gains the `host` column and the feed's table the
 next time a writing host opens it (`schema()`, @yaks/sqlite `grow`).

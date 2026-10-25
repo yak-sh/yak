@@ -4925,6 +4925,7 @@ export class Store {
       drop: (sink) => subs.drop(by(sink)),
       vocab: subs.vocab,
       commit: subs.commit,
+      hear: subs.hear,
       check: subs.check,
       // Hibernated writers keep the same instrument identity as HTTP writes,
       // including attachments made with a credential's outside id.

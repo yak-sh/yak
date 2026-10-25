@@ -1513,7 +1513,7 @@ test('a host hears what another host commits to the same store, and not what it 
   let db = journalFile, here = journalHere, there = journalThere
   try {
     let heard: Bundle[] = []
-    let stop = here.feed?.((applied) => void heard.push(...applied))
+    let stop = here.feed?.(({ applied }) => void heard.push(...applied.flat()))
     await here.graph.apply([{ entity: { eid: 'mine' }, book: { title: 'A' } }])
     await there.graph.apply([{
       entity: { eid: 'theirs' },

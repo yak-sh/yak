@@ -4,12 +4,12 @@
 // gets two hosts over a store of its own, built when the file loads, and
 // times only the commits and the hearing.
 
-import { test } from '@yaks/testing'
+import { clock, test } from '@yaks/testing'
 import { assertEquals, assertThrows } from '@std/assert'
-import type { Bundle } from '@yaks/graph'
+import type { Bundle, News } from '@yaks/graph'
 import { feedDdl, feedOf, follow } from './feed.ts'
 import { ddl } from './log.ts'
-import { logFor, plugins, schema } from './graph.ts'
+import { type Each, feed, logFor, plugins, schema, TRIES } from './graph.ts'
 import { mem } from '../sqlite/testing.ts'
 import { add, statements } from '@yaks/sqlite'
 import { sync, wiki, wikiLog } from './testing.ts'
@@ -148,4 +148,54 @@ test('a journal requires storage that offers statements', () => {
     Error,
     'this storage offers no SQL statements',
   )
+})
+
+// A host's feed loop over a bare feed table another host writes, its consumer
+// `each`, looking each time the test advances its clock. It has looked once
+// already, so a case pays for no first read.
+let looping = async (each: Each) => {
+  let db = mem()
+  for (let s of feedDdl()) db.query(s)
+  let theirs = feedOf({ rows: (s) => db.query(s) })
+  let time = clock()
+  let told: unknown[] = []
+  let host = {
+    storage: { statements: statements(db) },
+    stopping: new AbortController().signal,
+    report: (e: unknown) => void told.push(e),
+  }
+  feed(host, { every: 1, timer: (fn, ms) => time.after(ms, fn) })(each)
+  await time.advance(1)
+  let write = (eid: string) => theirs.write([page('p')(eid)])
+  return { write, told, look: (n = 1) => time.advance(n) }
+}
+let firsts = (news: News) => news.applied.map((tx) => tx[0].entity.eid)
+
+let gate = Promise.withResolvers<void>()
+let slow: News[] = []
+let busy = await looping(async (news) => {
+  slow.push(news)
+  if (slow.length == 1) await gate.promise
+})
+test('a busy consumer is handed what was heard meanwhile in one call', async () => {
+  busy.write('p1')
+  let first = busy.look()
+  for (let eid of ['p2', 'p3', 'p4']) busy.write(eid)
+  await busy.look()
+  gate.resolve()
+  await first
+  assertEquals(slow.map(firsts), [['p1'], ['p2', 'p3', 'p4']])
+})
+
+let failing: News[] = []
+let refusing = await looping((news) => {
+  failing.push(news)
+  if (failing.length <= TRIES) throw new Error('busy')
+})
+test('news passed over after failing tells the consumer it missed some', async () => {
+  refusing.write('p1')
+  await refusing.look(TRIES)
+  assertEquals(failing.slice(0, TRIES).map(firsts), Array(TRIES).fill(['p1']))
+  assertEquals(failing.slice(TRIES).map((n) => n.missed), [true])
+  assertEquals(refusing.told.length, 1)
 })

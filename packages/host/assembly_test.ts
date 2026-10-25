@@ -673,11 +673,14 @@ test('a host carries a feed only when a plugin offers one', async () => {
       name == 'graph'
         ? {
           ...facets.graph,
-          feed: () => (each) => (each([{ entity: { eid: 'x' } }]), () => {}),
+          feed: () => (each) => (
+            each({ applied: [[{ entity: { eid: 'x' } }]], missed: false }),
+              () => {}
+          ),
         }
         : facets[name] ?? null,
     )
   let fed = (await assembly(config, ['graph'], offering)).bind(binding())
-  fed.host.feed?.((applied) => void heard.push(applied))
+  fed.host.feed?.(({ applied }) => void heard.push(...applied))
   equal(heard, [[{ entity: { eid: 'x' } }]])
 })

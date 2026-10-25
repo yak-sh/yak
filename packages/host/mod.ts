@@ -1,6 +1,6 @@
 // The portable contract a host lends every plugin. Concrete hosts own drivers,
 // directories and resource lifetime; plugins see the graph and capabilities.
-import type { Bundle, Eid, Graph, NamedTool, Storage } from '@yaks/graph'
+import type { Bundle, Eid, Graph, NamedTool, News, Storage } from '@yaks/graph'
 import type { Search } from '@yaks/graph/tools'
 import type { Vocab } from '@yaks/vocab'
 import type { Derived, Raw, Statements } from '@yaks/sql'
@@ -18,9 +18,7 @@ import type { Sender } from './senders.ts'
 export type { Message, Receipt, Sender } from './senders.ts'
 export type { Config, Configured, Options, Plug } from './config.ts'
 export type Role = string
-export type Feed = (
-  each: (applied: Bundle[]) => void | Promise<void>,
-) => () => void
+export type Feed = (each: (news: News) => void | Promise<void>) => () => void
 /** Cooperative storage-change observation. The adapter owns any migration. */
 export type MigrationMonitor = {
   read: () => {
@@ -184,9 +182,10 @@ export interface Host {
    * nobody, the answer is this host process itself (its writer). */
   who: Authenticate
   /** Every commit another host makes to this store, as the patches it applied
-   * : what a subscription registry or a cache over
+   * (@yaks/graph `News`): what a subscription registry or a cache over
    * {@link graph} is fed so it sees the writes its graph's `effect` phase
-   * never ran for. Absent when no plugin offers one. */
+   * never ran for, and reads again what it holds when it missed some. Absent
+   * when no plugin offers one. */
   feed?: Feed
   /** This host shutting down, as one fact: aborted by host shutdown
    * before the last transaction and before the database is closed. A plugin

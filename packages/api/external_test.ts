@@ -87,6 +87,15 @@ test('an external deletion resets the active query to an empty answer', () => {
   equal(next.take()[0].bundles, [])
 })
 
+let missed = fixture()
+missed.change()
+test('news that missed commits resets the active query to what the store holds', () => {
+  missed.subs.hear({ applied: [], missed: true })
+  let [frame] = missed.first.take()
+  equal(frame.reset, true)
+  equal(frame.bundles?.[0].resolved, {})
+})
+
 let polling = (() => {
   let time = clock(), stopping = new AbortController()
   let reads = 0

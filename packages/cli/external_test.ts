@@ -86,11 +86,26 @@ for (let [name, rows, moves, left] of heard) {
       () => Promise.resolve(false),
     )
     assertEquals(await covered.missing(), ['wake'])
-    assertEquals(covered.hear(rows), moves)
+    assertEquals(covered.hear({ applied: [rows], missed: false }), moves)
     assertEquals(await covered.missing(), left)
     assertEquals(p.reads(), 1)
   })
 }
+
+test('coverage reads the store again once the feed missed commits', async () => {
+  let held = [row('pool', ['graph', 'effects'])]
+  let p = processes(held)
+  let covered = coverage(
+    p.store,
+    ['effects', 'wake'],
+    () => Promise.resolve(false),
+  )
+  assertEquals(await covered.missing(), ['wake'])
+  held.push(row('waker', ['wake']))
+  assertEquals(covered.hear({ applied: [], missed: true }), true)
+  assertEquals(await covered.missing(), [])
+  assertEquals(p.reads(), 2)
+})
 
 test('a known coverer whose pid is gone stops covering without a feed row', async () => {
   let p = processes([row('pool', ['effects'])])

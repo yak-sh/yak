@@ -731,8 +731,9 @@ When the host has no commit feed and `host.storage.revision` is available, the
 handler checks it every second and resets query answers after a store change,
 including writes from another process. Opening a query checks the revision
 before reusing a retained answer. A host with a commit feed is never polled: the
-feed carries every commit as patches. The checks and commit feed stop with
-`host.stopping`.
+feed carries every commit as patches, all those heard since its last call in one
+pass (`subs.hear`), and when it missed some, query answers are reset as after a
+store change. The checks and commit feed stop with `host.stopping`.
 
 ```ts
 import { routed } from '@yaks/api'

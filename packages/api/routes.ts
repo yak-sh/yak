@@ -12,7 +12,7 @@
 // It is handed the host once the graph is open and the routes are gathered,
 // unlike `authenticate` beside it, which is asked for before anything is open.
 
-import type { Bundle, Graph, Storage } from '@yaks/graph'
+import type { Bundle, Graph, News, Storage } from '@yaks/graph'
 import type { Authenticate } from './actor.ts'
 import {
   api,
@@ -40,7 +40,7 @@ export type Hosting = {
   who: Authenticate
   routes: Route[]
   filters?: Filter[]
-  feed?: (each: (applied: Bundle[]) => void | Promise<void>) => () => void
+  feed?: (each: (news: News) => void | Promise<void>) => () => void
   /** Host telemetry, supplied with the failing request bundle. */
   report?: (
     error: unknown,
@@ -83,7 +83,7 @@ export let handler = (host: Hosting, options: {
   // any write, so polling it beside a feed would reset every query each time.
   let revision = host.feed ? undefined : host.storage?.revision
   let subs = subscriptions(graph, { activity: host.graph, revision })
-  let stopFeed = host.feed?.((applied) => subs.commit(applied))
+  let stopFeed = host.feed?.(subs.hear)
   let cancel = () => {}
   let stopped = host.stopping?.aborted ?? false
   let stop = () => {
