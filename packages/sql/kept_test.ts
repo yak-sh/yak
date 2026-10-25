@@ -50,8 +50,13 @@ let query = (a: string, b = a) =>
     eq('link.right', list(b)),
     eq('mark.owner', list(a)),
   ))
-let same = (q: ReturnType<typeof and>, opts: BindOpts = {}) => {
-  let actual = compile(q, vocab, opts), expected = render(bind(q, vocab, opts))
+let same = (
+  q: ReturnType<typeof and>,
+  opts: BindOpts = {},
+  expected?: ReturnType<typeof render>,
+) => {
+  let actual = compile(q, vocab, opts)
+  expected ??= render(bind(q, vocab, opts))
   equal([actual.sql, actual.params], [expected.sql, expected.params])
   if (actual.origin) equal(render(actual.origin).sql, actual.sql)
   return actual
@@ -300,10 +305,11 @@ for (
     ['human identity', and(eq('entity.eid', '0'.repeat(40))), {}],
   ] as [string, ReturnType<typeof and>, BindOpts][]
 ) {
+  // The binder's answer, worked out as the file loads: the case times the
+  // three asks, the third the kept statement's first hit.
+  let expected = render(bind(q, vocab, opts))
   test(`${name} shapes answer as the binder does, asked again`, () => {
-    same(q, opts)
-    same(q, opts)
-    same(q, opts)
+    for (let k = 0; k < 3; k++) same(q, opts, expected)
   })
 }
 
