@@ -195,6 +195,13 @@ test('an uncaught fetch the page gave up waiting for is filed once', async () =>
   ])
 })
 
+test('a fetch with no answer the page reports itself is not filed', async () => {
+  let p = page({})
+  let error = await p.win.fetch(release).then(() => null, (e) => e)
+  p.heard.get('error')!({ target: p.win, error, filename: at, lineno: 90 })
+  equal(await p.said(), [])
+})
+
 test('any other uncaught rejection is filed', async () => {
   let p = page({})
   p.heard.get('unhandledrejection')!({ reason: Error('boom') })

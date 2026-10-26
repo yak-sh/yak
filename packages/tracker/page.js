@@ -115,6 +115,20 @@
     self.origin == 'null' ||
     (el.tagName == 'SCRIPT' && el.type == 'module')
 
+  // What the fetch below already answered for: a rejection it judged (no
+  // answer, or one the page gave up on, said there). The caller hears it
+  // either way, and one it leaves uncaught, as itself or as another's cause,
+  // was decided once: a page losing its server is not a break, and a timeout
+  // is said once.
+  let judged = new WeakSet()
+  let decided = (reason) => {
+    for (let r = reason, n = 0; r && typeof r == 'object' && n < 5; n++) {
+      if (judged.has(r)) return true
+      r = r.cause
+    }
+    return false
+  }
+
   // A miss is answered with its handling, settled once it is said or let go.
   addEventListener('error', (e) => {
     let el = missed(e)
@@ -141,7 +155,9 @@
         sorry,
       )
     }
-    if (foreign(e)) return
+    // A fetch with no answer is judged where it rejected (the wrapper below),
+    // whether the page leaves it uncaught or hands it to reportError.
+    if (foreign(e) || decided(e.error)) return
     // A notice the browser raises itself, such as a ResizeObserver loop, has
     // no error: its own message is the one that says what happened.
     broke({
@@ -152,20 +168,6 @@
       mechanism: 'onerror',
     })
   }, true)
-
-  // What the fetch below already answered for: a rejection it judged (no
-  // answer, or one the page gave up on, said there). The caller hears it
-  // either way, and one it leaves uncaught, as itself or as another's cause,
-  // was decided once: a page losing its server is not a break, and a timeout
-  // is said once.
-  let judged = new WeakSet()
-  let decided = (reason) => {
-    for (let r = reason, n = 0; r && typeof r == 'object' && n < 5; n++) {
-      if (judged.has(r)) return true
-      r = r.cause
-    }
-    return false
-  }
 
   // A refusal from ./api/client.js that the page never caught carries the
   // answer's status, and goes to the door as the fetch below sends it: the door
