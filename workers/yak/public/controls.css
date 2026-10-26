@@ -25,13 +25,14 @@
     justify-content: center;
     gap: .35rem;
     border: 1px solid color-mix(in srgb, var(--button-fill, var(--accent)),
-      var(--ink) 30%);
+      var(--shadow) 30%);
     border-radius: var(--button-radius, .45rem);
-    background: linear-gradient(to bottom, color-mix(in srgb, var(--button-fill,
-      var(--accent)), var(--rim) 12%), var(--button-fill, var(--accent)));
+    background: linear-gradient(to bottom, var(--button-fill, var(--accent)),
+      color-mix(in srgb, var(--button-fill, var(--accent)), var(--shadow) 8%));
     color: var(--button-ink, var(--on-accent));
-    box-shadow: inset 0 1px color-mix(in srgb, var(--rim) 35%, transparent), 0
-      2px 0 color-mix(in srgb, var(--button-fill, var(--accent)), var(--ink)
+    box-shadow: inset 0 1px color-mix(in srgb, var(--highlight) 35%,
+      transparent), 0
+      2px 0 color-mix(in srgb, var(--button-fill, var(--accent)), var(--shadow)
       40%), 0 3px 5px var(--shade);
     font-weight: 800;
     text-align: center;
@@ -39,7 +40,7 @@
     cursor: pointer;
   }
   .Button:hover {
-    filter: brightness(1.05);
+    filter: brightness(.95);
   }
   .Button:active:not(:disabled),
   .Button[aria-pressed='true'] {

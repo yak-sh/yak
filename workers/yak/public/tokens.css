@@ -38,6 +38,8 @@
     --preview: var(--forest); /* matches the embedded app in either theme */
 
     /* Materials: light on a rim, shade under a raised edge, and depth in a field. */
+    --highlight: white;
+    --shadow: black;
     --rim: color-mix(in srgb, var(--paper), white 65%);
     --edge: color-mix(in srgb, var(--line), var(--soft-ink) 32%);
     --shade: color-mix(in srgb, var(--ink) 16%, transparent);
