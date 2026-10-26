@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#d9d8d0">
+    <meta name="description"
+      content="A little instrument for big ideas. Build beats, shape sounds, arrange patterns and export your music.">
+    <title>Sound Lab — pocket studio</title>
+    <link rel="icon" href="./icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <div class="frame">
+      <header
+        class="mast"><a class="brand" href="./"><span class="brand-mark">◒</span> sound lab<span class="edition">01 / pocket studio</span></a><div class="mast-actions"><button id="help-button">Quick guide</button><button id="install-link">Get your own ↗</button></div></header>
+      <main class="device">
+        <div
+          class="device-top"><div><p class="eyebrow">Rhythm · melody · happy accidents</p><h1>Make a little <em>noise.</em></h1></div><span class="serial">SL–08<br>8 voice / 4 pattern</span></div>
+        <section class="bridge" aria-label="Transport and display">
+          <div
+            class="transport"><div class="section-label">01 / transport</div><button id="play" class="play" aria-label="Play"><span>▶</span> Play</button><button id="stop" class="stop" aria-label="Stop and rewind">■</button><div class="transport-note"><kbd>space</kbd> play / stop</div><label class="tempo">Tempo <input id="tempo" type="number" min="50" max="190" value="108"> <span>BPM</span></label><button id="tap">Tap tempo</button></div>
+          <div class="display">
+            <div
+              class="display-top"><span id="run-state">Ready to play</span><div class="display-modes" role="group" aria-label="Display view"><button data-view="wave" aria-pressed="true">Wave</button><button data-view="spectrum" aria-pressed="false">Spectrum</button><button data-view="levels" aria-pressed="false">Level</button></div></div>
+            <canvas id="scope"
+              aria-label="Live output waveform, silent until playback"></canvas>
+            <div
+              class="display-bottom"><span id="position">A : 01 / 32</span><span id="meter">−∞ dB</span><span id="clock">00:00</span></div>
+            <div class="display-progress" id="display-progress"></div>
+          </div>
+          <div
+            class="dials"><div class="section-label">02 / shape</div><label class="dial orange">Swing <span class="knob" id="swing-knob"></span><input id="swing" type="range" min="0" max="0.6" step="0.01" value="0"><output id="swing-value">0%</output></label><label class="dial blue">Echo <span class="knob" id="delay-knob"></span><input id="delay" type="range" min="0" max="0.65" step="0.01" value="0.18"><output id="delay-value">18%</output></label><label class="dial">Output <span class="knob" id="master-knob"></span><input id="master" type="range" min="0" max="1" step="0.01" value="0.75"><output id="master-value">75%</output></label></div>
+        </section>
+        <section class="project-bar"
+          aria-label="Project"><div class="project-name"><label for="title">Current beat</label><input id="title" value="Night window" maxlength="80" aria-label="Beat title"></div><label class="preset-label">Start somewhere<select id="preset" aria-label="Starter groove"></select></label><button id="undo" title="Undo (Ctrl or ⌘ Z)">↶ Undo</button><button id="save" class="dark">Save beat</button><button id="library">Open</button><button id="export" class="orange-button">Export ↗</button></section>
+        <section class="sequencer" aria-label="Step sequencer">
+          <div class="section-head">
+            <div><span class="section-label">03 / sequencer</span><h2>Find your pattern.</h2></div>
+            <div class="pattern-tabs" role="group"
+              aria-label="Pattern bank"></div>
+            <div
+              class="pattern-tools"><button id="copy" title="Copy this pattern to the next bank">Copy → next</button><button id="clear">Clear</button><label>Length <select id="length"><option value="16">16 steps</option><option value="32" selected>32 steps</option></select></label></div>
+          </div>
+          <div class="grid-scroll">
+            <div id="grid"></div>
+          </div>
+          <div
+            class="editor"><span id="selected-step">Tap a step to add a note. Tap again to remove.</span><div><label>Note <select id="note" aria-label="Selected note pitch"></select></label><label>Velocity <input id="velocity" type="range" min="0.15" max="1" step="0.05" value="0.8"><output id="velocity-value">80%</output></label></div><span class="hint">Shift + click to select without changing</span></div>
+        </section>
+        <div class="lower">
+          <section class="arranger" aria-label="Pattern arrangement">
+            <div
+              class="section-head"><div><span class="section-label">04 / arrangement</span><h2>Give it somewhere to go.</h2></div><button id="mode" aria-pressed="false">Pattern loop</button></div>
+            <p
+              class="sub">Eight scenes. Click a letter to cycle its pattern.</p>
+            <div id="chain" class="chain"></div>
+            <p class="sub" id="duration"></p>
+          </section>
+          <section class="performance" aria-label="Live performance pads">
+            <div
+              class="section-head"><div><span class="section-label">05 / play</span><h2>Trust your fingers.</h2></div><button id="record" aria-pressed="false">● Record</button></div>
+            <div id="pads" class="pads"></div>
+            <p
+              class="sub">Play the pads or keys <kbd>A S D F G H J K</kbd>. Record adds hits to the nearest step.</p>
+          </section>
+        </div>
+        <section class="mixer" aria-label="Track mixer">
+          <div
+            class="section-head"><div><span class="section-label">06 / mixer</span><h2>A place for every sound.</h2></div><span class="sub">Select a lane · mute · solo · shape</span></div>
+          <div id="mixers" class="mixers"></div>
+        </section>
+        <footer
+          class="device-footer"><span id="save-status" role="status">Ready. Press play to hear your first beat.</span><span>Public studio · every remix is its own beat</span></footer>
+      </main>
+      <footer
+        class="page-footer"><span>A small studio. A wide-open afternoon.</span><a href="https://yaks.app">Made with yaks.app ↗</a></footer>
+    </div>
+    <dialog id="modal">
+      <div
+        class="modal-head"><h2 id="modal-title"></h2><button id="close-modal" aria-label="Close dialog">×</button></div>
+      <div id="modal-body"></div>
+    </dialog>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "composition": {
+      "description": "A musical composition and its shared timing.",
+      "properties": {
+        "tempo": {
+          "type": "number"
+        },
+        "swing": {
+          "type": "number"
+        }
+      }
+    },
+    "mix": {
+      "description": "The composition's master output and echo send.",
+      "properties": {
+        "level": {
+          "type": "number"
+        },
+        "delay": {
+          "type": "number"
+        }
+      }
+    },
+    "arrangement": {
+      "description": "The ordered pattern identities played as a song, including repetitions.",
+      "properties": {
+        "patterns": {
+          "type": "array"
+        }
+      }
+    },
+    "pattern": {
+      "description": "One bank of eight ordered instrument lanes containing note and velocity cells.",
+      "properties": {
+        "composition": {
+          "type": "string",
+          "ref": "composition",
+          "death": "cascade"
+        },
+        "position": {
+          "type": "number"
+        },
+        "length": {
+          "type": "number"
+        },
+        "steps": {
+          "type": "array"
+        }
+      }
+    },
+    "channel": {
+      "description": "An instrument's settings in the composition's mix.",
+      "properties": {
+        "composition": {
+          "type": "string",
+          "ref": "composition",
+          "death": "cascade"
+        },
+        "instrument": {
+          "type": "string"
+        },
+        "position": {
+          "type": "number"
+        },
+        "volume": {
+          "type": "number"
+        },
+        "pan": {
+          "type": "number"
+        },
+        "tone": {
+          "type": "number"
+        },
+        "mute": {
+          "type": "boolean"
+        },
+        "solo": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
