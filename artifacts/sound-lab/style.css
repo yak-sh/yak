@@ -20,6 +20,7 @@
 }
 body {
   margin: 0;
+  background: var(--case);
 }
 button,
 input,
@@ -102,96 +103,26 @@ h2,
 p {
   margin: 0;
 }
-h1 {
-  font-size: clamp(30px,3.4vw,48px);
-  letter-spacing: -2px;
-  line-height: 1.05;
-  font-weight: 600;
-}
-h1 em {
-  font-weight: 400;
-}
 h2 {
   font-size: 18px;
   letter-spacing: -.5px;
   font-weight: 600;
 }
 .frame {
-  max-width: 1392px;
-  margin: auto;
-  padding: 0 40px;
-}
-.mast {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 100px;
-  gap: 20px;
-}
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 25px;
-  font-weight: 700;
-  letter-spacing: -1px;
-}
-.brand-mark {
-  color: var(--orange);
-  font-size: 34px;
-}
-.edition {
-  font-family: monospace;
-  font-size: 11px;
-  letter-spacing: 0;
-  color: var(--muted);
-  font-weight: 400;
-  border-left: 1px solid var(--line);
-  padding-left: 18px;
-  margin-left: 10px;
-}
-.mast-actions {
-  display: flex;
-  gap: 24px;
-  align-items: center;
-  font-size: 12px;
-}
-.mast-actions button {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
+  width: 100%;
+  min-height: 100dvh;
+  padding: 0;
 }
 .device {
-  position: relative;
-  border: 1px solid #b6b8ae;
-  border-radius: 15px;
-  background: var(--case);
-  padding: 28px;
-  box-shadow: 0 5px 0 #b7b8af,0 7px 0 #969b91,0 25px 45px #313a2521,inset 0 1px
-    #ffffffbd;
-}
-.device:before,
-.device:after {
-  content: '+';
-  position: absolute;
-  top: 12px;
-  font-family: monospace;
-  color: #91958b;
-  font-size: 14px;
-}
-.device:before {
-  left: 12px;
-}
-.device:after {
-  right: 12px;
-}
-.device-top {
+  min-height: 100dvh;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 8px 28px;
+  flex-direction: column;
+  padding: 8px 16px 6px;
+  background: var(--case);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
-.eyebrow,
 .section-label {
   font-size: 10px;
   letter-spacing: 1.3px;
@@ -199,26 +130,18 @@ h2 {
   text-transform: uppercase;
   font-weight: 600;
 }
-.eyebrow {
-  margin-bottom: 10px;
-}
-.serial {
-  font-family: monospace;
-  font-size: 11px;
-  line-height: 1.7;
-  color: var(--muted);
-  text-align: right;
-}
 .bridge {
   display: grid;
-  grid-template-columns: 150px minmax(260px,1fr) 235px;
-  gap: 22px;
-  padding-bottom: 24px;
+  grid-template-columns: 140px minmax(280px,1fr) 250px;
+  gap: 20px;
+  height: 114px;
+  flex-shrink: 0;
+  padding: 0 0 6px;
 }
 .transport {
   display: grid;
   grid-template-columns: 1fr 42px;
-  gap: 10px;
+  gap: 5px;
   align-content: start;
 }
 .transport .section-label,
@@ -228,8 +151,8 @@ h2 {
   grid-column: 1/-1;
 }
 .play {
-  height: 60px;
-  font-size: 17px;
+  height: 43px;
+  font-size: 16px;
   background: var(--orange);
   border-color: #d95229;
   box-shadow: 0 3px 0 #c24725;
@@ -249,25 +172,23 @@ h2 {
   font-size: 20px;
 }
 .transport-note {
-  font-size: 10px;
-  color: var(--muted);
-  text-align: center;
-  margin-top: 3px;
+  display: none;
 }
 .tempo {
   display: flex;
   gap: 6px;
   align-items: center;
   font-size: 11px;
-  margin-top: 5px;
+  margin-top: 0;
 }
 .tempo input {
   background: transparent;
   border: 0;
   border-bottom: 1px solid #9da294;
   font-family: monospace;
-  font-size: 22px;
-  padding: 4px;
+  font-size: 20px;
+  padding: 2px;
+  width: 68px;
 }
 .tempo span {
   font-size: 10px;
@@ -275,14 +196,15 @@ h2 {
 .display {
   background: var(--screen);
   color: var(--glow);
-  border: 6px solid #bfc2b6;
-  border-radius: 10px;
+  border: 4px solid #bfc2b6;
+  border-radius: 7px;
   box-shadow: inset 0 2px 5px #0008,0 1px 0 #ffffffe3;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 13px 16px 11px;
+  padding: 6px 13px 6px;
   position: relative;
+  overflow: hidden;
 }
 .display-top,
 .display-bottom {
@@ -290,11 +212,11 @@ h2 {
   align-items: center;
   justify-content: space-between;
   font-family: monospace;
-  font-size: 11px;
+  font-size: 10px;
   gap: 8px;
 }
 .display-top {
-  min-height: 26px;
+  min-height: 23px;
 }
 .display-modes {
   display: flex;
@@ -316,15 +238,15 @@ h2 {
 }
 #scope {
   width: 100%;
-  height: 130px;
+  height: 52px;
   display: block;
-  margin: 7px 0;
+  margin: 1px 0;
   flex: 1;
-  min-height: 120px;
+  min-height: 30px;
 }
 .display-bottom {
-  font-size: 11px;
-  padding-bottom: 10px;
+  font-size: 10px;
+  padding-bottom: 5px;
 }
 .display-progress {
   height: 4px;
@@ -341,29 +263,29 @@ h2 {
 .dials {
   display: grid;
   grid-template-columns: repeat(3,1fr);
-  gap: 10px;
+  gap: 12px;
   align-content: start;
+  padding-top: 2px;
 }
 .dials .section-label {
-  grid-column: 1/-1;
-  margin-bottom: 10px;
+  display: none;
 }
 .dial {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 13px;
+  gap: 6px;
   font-size: 11px;
 }
 .knob {
   --rotation: -130deg;
   display: block;
-  width: 56px;
-  height: 56px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: linear-gradient(120deg,#444a41,#20261f);
   border: 4px solid #3c4238;
-  box-shadow: 2px 5px 5px #32392655,0 0 0 5px #c6c8be;
+  box-shadow: 2px 4px 4px #32392655,0 0 0 4px #c6c8be;
   position: relative;
   transform: rotate(var(--rotation));
 }
@@ -371,10 +293,10 @@ h2 {
   content: '';
   position: absolute;
   width: 3px;
-  height: 16px;
+  height: 12px;
   background: #d9dfcf;
-  top: 3px;
-  left: 23px;
+  top: 2px;
+  left: 17px;
   border-radius: 2px;
 }
 .orange .knob {
@@ -391,19 +313,23 @@ h2 {
 }
 .dial output {
   font-family: monospace;
-  font-size: 13px;
+  font-size: 11px;
 }
 .project-bar {
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 19px 0;
+  padding: 7px 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
 }
 .project-name {
   flex: 1;
-  min-width: 150px;
+  min-width: 130px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .project-name label,
 .preset-label {
@@ -417,19 +343,21 @@ h2 {
 .project-name input {
   border: 0;
   background: transparent;
-  font-size: 21px;
-  letter-spacing: -.5px;
-  padding: 5px 0;
+  font-size: 17px;
+  letter-spacing: -.4px;
+  padding: 4px 0;
   width: 100%;
   outline-offset: 1px;
 }
 .preset-label {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 .preset-label select {
   font-size: 12px;
+  padding: 6px 8px;
 }
 .dark {
   background: #333a30;
@@ -451,10 +379,7 @@ h2 {
   gap: 18px;
   justify-content: space-between;
   align-items: center;
-  margin: 25px 0 18px;
-}
-.section-head h2 {
-  margin-top: 7px;
+  margin: 7px 0 6px;
 }
 .pattern-tabs,
 .pattern-tools {
@@ -463,11 +388,11 @@ h2 {
   gap: 7px;
 }
 .pattern-tabs button {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 30px;
   padding: 0;
   font-family: monospace;
-  font-size: 16px;
+  font-size: 15px;
 }
 .pattern-tabs button[aria-pressed=true] {
   background: var(--orange);
@@ -478,16 +403,16 @@ h2 {
   gap: 10px;
 }
 .pattern-tools button {
-  font-size: 10px;
-  padding: 9px;
+  font-size: 11px;
+  padding: 7px 9px;
 }
 .pattern-tools select {
   font-size: 11px;
-  padding: 7px;
+  padding: 5px;
 }
 .grid-scroll {
   overflow: auto;
-  padding: 3px 3px 7px;
+  padding: 3px 3px 5px;
   margin: 0 -3px;
 }
 .step-row {
@@ -495,7 +420,7 @@ h2 {
   grid-template-columns: 105px repeat(var(--steps,32),minmax(20px,1fr));
   gap: 4px;
   min-width: 950px;
-  margin-bottom: 7px;
+  margin-bottom: 4px;
 }
 .step-row.sixteen {
   min-width: 650px;
@@ -523,7 +448,7 @@ h2 {
 }
 .step {
   padding: 0;
-  height: 28px;
+  height: clamp(24px,calc((100dvh - 560px)/8),36px);
   border: 1px solid #b9bcb1;
   border-radius: 3px;
   background: #c8cbc1;
@@ -566,17 +491,17 @@ h2 {
   font-size: 9px;
   color: var(--muted);
   text-align: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 .steps-header span:first-child {
   text-align: left;
   padding: 0 8px;
 }
 .editor {
-  padding: 13px 0 16px;
+  padding: 5px 0 6px;
   border-bottom: 1px solid var(--line);
   display: flex;
-  gap: 20px;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
   font-size: 11px;
@@ -597,7 +522,7 @@ h2 {
 }
 .editor select {
   font-size: 11px;
-  padding: 5px;
+  padding: 3px;
 }
 .hint {
   font-size: 10px;
@@ -605,7 +530,8 @@ h2 {
 .lower {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 32px;
+  gap: 28px;
+  min-height: 112px;
 }
 .lower > section {
   min-width: 0;
@@ -619,12 +545,12 @@ h2 {
   display: grid;
   grid-template-columns: repeat(8,1fr);
   gap: 6px;
-  margin: 16px 0 10px;
+  margin: 8px 0 5px;
 }
 .chain button {
   font-family: monospace;
   font-size: 18px;
-  height: 50px;
+  height: 39px;
   position: relative;
   background: #c7cbbf;
 }
@@ -646,11 +572,11 @@ h2 {
   display: grid;
   grid-template-columns: repeat(8,1fr);
   gap: 6px;
-  margin: 16px 0 10px;
+  margin: 8px 0 5px;
 }
 .pad {
-  height: 65px;
-  padding: 8px 3px;
+  height: 51px;
+  padding: 5px 3px;
   position: relative;
   font-size: 9px;
   border-top: 4px solid var(--track);
@@ -658,8 +584,8 @@ h2 {
 }
 .pad b {
   display: block;
-  font-size: 17px;
-  margin-bottom: 9px;
+  font-size: 15px;
+  margin-bottom: 5px;
 }
 .pad.active {
   background: var(--track);
@@ -668,16 +594,17 @@ h2 {
 .mixers {
   display: grid;
   grid-template-columns: repeat(8,1fr);
-  gap: 10px;
+  gap: 9px;
 }
 .mixer {
-  border-top: 1px solid var(--line);
-  margin-top: 20px;
+  border: 0;
+  margin: 0;
+  min-height: 112px;
 }
 .strip {
   background: #cdd0c5;
   border: 1px solid #b7bcad;
-  padding: 12px 10px;
+  padding: 8px 10px;
   border-radius: 5px;
   min-width: 0;
 }
@@ -687,9 +614,9 @@ h2 {
 .strip-name {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   font-size: 11px;
-  margin-bottom: 14px;
+  margin-bottom: 7px;
 }
 .strip-name i {
   width: 8px;
@@ -700,49 +627,52 @@ h2 {
 .strip label {
   font-size: 10px;
   color: var(--muted);
-  display: block;
-  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 28px 1fr 22px;
+  gap: 3px;
+  align-items: center;
+  margin-top: 2px;
 }
 .strip input {
   width: 100%;
-  margin: 8px 0 0;
+  margin: 0;
   display: block;
   accent-color: var(--track);
+  grid-column: 2;
+  grid-row: 1;
+  height: 12px;
 }
 .strip output {
-  float: right;
   font-family: monospace;
+  grid-column: 3;
+  grid-row: 1;
+  text-align: right;
+  font-size: 9px;
 }
 .strip-buttons {
   display: flex;
   gap: 5px;
-  margin-top: 14px;
+  margin-top: 7px;
 }
 .strip-buttons button {
   flex: 1;
   font-size: 10px;
-  padding: 7px 2px;
+  padding: 4px 2px;
   box-shadow: none;
+  min-height: 24px;
 }
 .strip-buttons button[aria-pressed=true] {
   background: var(--track);
 }
 .device-footer {
-  margin-top: 25px;
-  border-top: 1px solid var(--line);
-  padding-top: 17px;
+  margin-top: auto;
+  padding-top: 6px;
+  border: 0;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 15px;
   font-size: 10px;
-  color: var(--muted);
-}
-.page-footer {
-  padding: 24px 3px 38px;
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  font-size: 11px;
   color: var(--muted);
 }
 dialog {
@@ -816,145 +746,137 @@ dialog::backdrop {
   color: #a13c22;
 }
 #save-status {
-  max-width: 65%;
+  max-width: 50%;
 }
-@media (min-width:1500px) {
-  .frame {
-    padding-top: 20px;
-  }
+.transport .section-label {
+  display: none;
 }
-@media (max-width:1150px) {
-  .frame {
-    padding: 0 24px;
-  }
+.project-bar > button {
+  padding: 8px 12px;
+}
+.workspace-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+.workspace-tabs button {
+  padding: 5px 12px;
+  box-shadow: none;
+  background: transparent;
+}
+.workspace-tabs button[aria-pressed=true] {
+  background: #333a30;
+  border-color: #333a30;
+  color: #f4f4ec;
+}
+.workspace-tabs .sub {
+  margin-left: auto;
+}
+[hidden] {
+  display: none!important;
+}
+.lower .section-head {
+  margin: 0 0 6px;
+}
+.lower .section-head button {
+  padding: 6px 10px;
+}
+.mixer > .section-head {
+  display: none;
+}
+.footer-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  white-space: nowrap;
+}
+.footer-actions button {
+  font-size: 10px;
+  padding: 5px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: var(--muted);
+}
+#tap {
+  padding: 4px 8px;
+  min-height: 23px;
+}
+@media (max-width:1100px) {
   .device {
-    padding: 22px;
+    padding: 10px 12px 8px;
   }
   .bridge {
-    grid-template-columns: 130px minmax(220px,1fr) 200px;
-    gap: 15px;
+    grid-template-columns: 125px minmax(260px,1fr) 210px;
+    gap: 14px;
   }
-  .knob {
-    width: 47px;
-    height: 47px;
+  .mixers {
+    gap: 5px;
   }
-  .knob:before {
-    left: 19px;
+  .strip {
+    padding: 8px 6px;
   }
-  .project-bar {
-    flex-wrap: wrap;
+  .strip label {
+    grid-template-columns: 25px 1fr 20px;
   }
-  .project-name {
-    flex-basis: 32%;
+  .strip-name {
+    font-size: 10px;
   }
   .hint {
     display: none;
   }
+  .project-bar {
+    gap: 7px;
+  }
+  .project-bar > button {
+    padding: 8px 10px;
+  }
   .step-row {
-    gap: 3px;
-  }
-  .mixers {
-    gap: 6px;
-  }
-  .strip {
-    padding: 10px 7px;
-  }
-  .section-head {
-    gap: 10px;
-  }
-  .pattern-tools {
-    gap: 6px;
+    min-width: 960px;
   }
   .lower {
     gap: 22px;
   }
-  .section-head h2 {
-    font-size: 16px;
-  }
 }
 @media (max-width:800px) {
-  .frame {
-    padding: 0 14px;
-  }
-  .mast {
-    height: 78px;
-  }
-  .edition {
-    display: none;
-  }
-  .mast-actions {
-    gap: 10px;
-  }
   .device {
-    padding: 18px 14px;
-    border-radius: 10px;
-  }
-  .device-top {
-    padding: 8px 2px 22px;
-  }
-  .serial {
-    font-size: 9px;
+    padding: 12px 12px 8px;
   }
   .bridge {
-    grid-template-columns: 100px 1fr;
-    gap: 12px;
+    grid-template-columns: 105px 1fr;
+    height: auto;
+    gap: 10px;
+  }
+  .display {
+    min-height: 120px;
   }
   .dials {
     grid-column: 1/-1;
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    padding: 10px 8px 0;
-  }
-  .dials .section-label {
-    margin: 0;
-    max-width: 60px;
+    padding: 4px 0 2px;
   }
   .dial {
-    display: grid;
-    grid-template-columns: 40px 70px 30px;
-    gap: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
   }
   .knob {
     display: none;
   }
   .dial input {
-    width: 70px;
+    width: 90px;
   }
   .dial output {
-    font-size: 11px;
+    font-size: 10px;
   }
-  .display {
-    padding: 9px 10px;
-    border-width: 4px;
-  }
-  .display-top {
-    font-size: 9px;
-  }
-  .display-modes button {
-    font-size: 9px;
-    padding: 4px;
-  }
-  .play {
-    height: 52px;
-    font-size: 13px;
-    gap: 5px;
-  }
-  .transport {
-    grid-template-columns: 1fr 30px;
-  }
-  .tempo {
+  .project-bar {
     flex-wrap: wrap;
   }
-  .tempo input {
-    width: 55px;
-    font-size: 19px;
-  }
-  .transport-note {
-    font-size: 9px;
-  }
   .project-name {
-    min-width: 180px;
+    flex-basis: 43%;
   }
   .preset-label {
     flex: 1;
@@ -964,60 +886,30 @@ dialog::backdrop {
   }
   .project-bar > button {
     flex: 1;
+    min-height: 36px;
   }
   .section-head {
+    gap: 8px;
     flex-wrap: wrap;
   }
   .pattern-tools {
     margin-left: auto;
+    gap: 6px;
   }
-  .section-head > div:first-child {
-    flex: 1;
-  }
-  .pattern-tabs {
-    gap: 5px;
-  }
-  .pattern-tabs button {
-    width: 34px;
-    height: 34px;
-  }
-  .lower {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
-  .mixers {
-    grid-template-columns: repeat(4,1fr);
-    gap: 9px;
-  }
-  .strip {
-    padding: 13px;
-  }
-  .editor {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .editor > span {
-    width: 100%;
-  }
-  .device-footer {
-    flex-direction: column;
-    gap: 7px;
-  }
-  .device-footer span {
-    max-width: 100%!important;
-  }
-  .page-footer {
-    font-size: 10px;
+  .pattern-tools label {
+    white-space: nowrap;
   }
   .step-row {
-    min-width: 1040px;
-    grid-template-columns: 90px repeat(var(--steps,32),minmax(24px,1fr));
+    min-width: 1080px;
+    grid-template-columns: 90px repeat(var(--steps,32),minmax(26px,1fr));
+    gap: 5px;
+    margin-bottom: 8px;
   }
   .step-row.sixteen {
-    min-width: 650px;
+    min-width: 680px;
   }
   .step {
-    height: 32px;
+    height: 36px;
   }
   .track-label {
     position: sticky;
@@ -1025,77 +917,191 @@ dialog::backdrop {
     background: var(--case);
     z-index: 2;
   }
-  .pads .pad {
+  .editor {
+    flex-wrap: wrap;
+    gap: 9px;
+    padding: 8px 0;
+  }
+  .editor > span {
+    width: 100%;
+  }
+  .editor select {
+    padding: 7px;
+  }
+  .workspace-tabs {
+    padding: 10px 0;
+  }
+  .workspace-tabs .sub {
+    display: none;
+  }
+  .workspace-tabs button {
+    min-height: 36px;
+  }
+  .mixers {
+    grid-template-columns: repeat(4,1fr);
+    gap: 8px;
+  }
+  .strip {
+    padding: 10px;
+  }
+  .strip-name {
+    font-size: 11px;
+  }
+  .strip label {
+    display: block;
+    margin-top: 8px;
+  }
+  .strip output {
+    float: right;
     font-size: 10px;
   }
+  .strip input {
+    margin-top: 4px;
+    height: 22px;
+  }
+  .strip-buttons button {
+    min-height: 32px;
+  }
+  .lower {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .chain button {
+    height: 45px;
+  }
+  .pads .pad {
+    height: 62px;
+  }
   .pad b {
-    font-size: 19px;
+    font-size: 18px;
+  }
+  .device-footer {
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 14px;
+  }
+  .device-footer > span:nth-child(2) {
+    display: none;
+  }
+  .footer-actions {
+    margin-left: auto;
+  }
+  .footer-actions button {
+    min-height: 30px;
+  }
+  #save-status {
+    max-width: 100%;
+    flex-basis: 100%;
+  }
+}
+@media (max-width:500px) {
+  .device {
+    padding: 10px 8px 6px;
+  }
+  .bridge {
+    grid-template-columns: 95px 1fr;
+    gap: 8px;
+  }
+  .display {
+    padding: 6px 7px;
+  }
+  .display-top {
+    font-size: 9px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+  .display-modes {
+    align-self: flex-end;
+  }
+  .display-modes button {
+    font-size: 9px;
+    padding: 4px;
+  }
+  .display-bottom {
+    font-size: 9px;
+  }
+  .dials {
+    gap: 8px;
+  }
+  .dial {
+    display: flex;
+    gap: 5px;
+    font-size: 10px;
+  }
+  .dial input {
+    width: 90px;
+  }
+  .play {
+    font-size: 13px;
+    gap: 6px;
+  }
+  .play span {
+    font-size: 17px;
+  }
+  .transport {
+    grid-template-columns: 1fr 30px;
+  }
+  .tempo {
+    gap: 4px;
+    font-size: 10px;
+    flex-wrap: wrap;
+  }
+  .tempo input {
+    font-size: 18px;
+    width: 46px;
+  }
+  .project-bar {
+    gap: 6px;
+  }
+  .project-name {
+    min-width: 120px;
+  }
+  .project-name input {
+    font-size: 16px;
+  }
+  .project-name label,
+  .preset-label {
+    font-size: 9px;
+  }
+  .preset-label {
+    gap: 5px;
+  }
+  .preset-label select {
+    max-width: 165px;
+    font-size: 11px;
+  }
+  .project-bar > button {
+    font-size: 11px;
+    padding: 7px 6px;
+  }
+  .section-head > .section-label {
+    font-size: 9px;
   }
   .pattern-tools {
     width: 100%;
     justify-content: flex-end;
   }
-  .mixer .section-head .sub {
-    display: none;
-  }
-}
-@media (max-width:500px) {
-  .mast-actions button {
-    padding: 8px 0;
-  }
-  .mast-actions {
-    font-size: 10px;
-  }
-  .brand {
-    font-size: 22px;
-  }
-  .dials {
-    padding: 6px 0 0;
-    gap: 6px;
-  }
-  .dials .section-label {
-    display: none;
-  }
-  .dial {
-    display: flex;
-    gap: 7px;
-    font-size: 10px;
-  }
-  .dial input {
-    width: 80px;
-  }
-  .serial {
-    max-width: 80px;
-  }
-  h1 {
-    font-size: 30px;
-    letter-spacing: -1.6px;
-  }
-  .eyebrow {
-    font-size: 8px;
-  }
-  .display-top {
-    align-items: flex-start;
-    gap: 2px;
-    flex-direction: column;
-  }
-  .display-modes {
-    align-self: flex-end;
-  }
-  .display-bottom {
-    font-size: 9px;
-  }
   .mixers {
     gap: 6px;
   }
   .strip {
-    padding: 9px;
+    padding: 8px 6px;
   }
   .strip-name {
     font-size: 10px;
   }
-  .page-footer {
-    gap: 12px;
+  .strip-buttons button {
+    font-size: 10px;
+  }
+  .workspace-tabs button {
+    font-size: 11px;
+  }
+  .sub {
+    font-size: 10px;
+  }
+  .footer-actions {
+    gap: 9px;
   }
 }
 @media (prefers-reduced-motion:reduce) {

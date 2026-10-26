@@ -20,6 +20,14 @@ export let dialogs = (
     letters,
   },
 ) => {
+  click(
+    'install-link',
+    () =>
+      modal(
+        'Get your own studio',
+        '<div class="modal-prose"><p>Ask your connected yaks.app assistant:</p><p><strong>Install sound-lab in my space.</strong></p><p>Your copy has its own saved beats.</p><p><a href="https://yaks.app">Connect yaks.app ↗</a></p></div>',
+      ),
+  )
   click('library', async () => {
     modal('The beat shelf', '<p class="sub">Opening saved beats…</p>')
     let rows = await storage.list()

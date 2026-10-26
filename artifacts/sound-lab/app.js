@@ -279,6 +279,14 @@ $('pads').innerHTML = tracks.map((track, t) =>
     track.name.replace('Closed ', '').replace('Percussion', 'Perc.')
   }</button>`
 ).join('')
+for (let name of ['mix', 'arrange']) {
+  click(name + '-tab', () => {
+    for (let panel of ['mix', 'arrange']) {
+      $(panel + '-panel').hidden = panel !== name
+      $(panel + '-tab').setAttribute('aria-pressed', panel === name)
+    }
+  })
+}
 click('play', play)
 click('stop', stop)
 click('close-modal', close)
