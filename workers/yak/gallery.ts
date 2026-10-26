@@ -301,8 +301,7 @@ export let pictures = async (env: Env, all: Shown[]) =>
 
 // ---- the page ----------------------------------------------------------
 
-// The card opens the app. Copy instructions sit outside that link so selecting
-// them does not navigate away.
+// Trying the app and installing a copy are separate actions.
 export let card = (a: Shown) =>
   `<li class="Make_Card">
 <a class="Make_Link" href="${esc(a.at)}">
@@ -317,10 +316,11 @@ ${
 ${a.about ? `<span class="Note Note-small">${esc(a.about)}</span>` : ''}
 <span class="Note Note-small">${esc(a.at.replace('https://', ''))}</span>
 </a>
-<details class="Make_Line"><summary>Get your own copy</summary>
-<p class="Note Note-small">Ask your assistant:</p>
-<q class="Said">Install the ${esc(a.name)} app from yaks.app.</q>
-</details>
+<form class="Make_Line" method="post" action="/install?name=${
+    encodeURIComponent(a.name)
+  }">
+<button class="Button" type="submit">Get your own copy</button>
+</form>
 </li>`
 
 // The gallery itself. The JSON-LD is the same list said for a machine — an

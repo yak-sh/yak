@@ -5346,6 +5346,7 @@ let OURS: Row[] = [
           }, its own ` +
           'store and its own data, pinned to that version (app_update moves ' +
           'it)' + asked.said + out.said,
+        value: { app: app.slug, url: url(space, app, ctx.env), version },
         space,
       }
     },

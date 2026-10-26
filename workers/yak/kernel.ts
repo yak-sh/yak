@@ -92,6 +92,7 @@ import * as dirPart from './directory.ts'
 import { directory } from './directory.ts'
 import { customOf, reading, refresh, type Step } from './domains.ts'
 import * as drop from './drop.ts'
+import * as install from './install.ts'
 import { bound, type Env, type Handler, type Inbound } from './env.ts'
 import * as docs from './docs.ts'
 import * as gallery from './gallery.ts'
@@ -244,6 +245,7 @@ let serve = async (req: Request, env: Env, r: Route) => {
   }
   // The gallery's ticketed review stays on this uncached gateway.
   let dir = directory(bound(env.DIRECTORY, dirPart.fetch, env))
+  if (path == install.PATH) return install.answer(req, env, dir)
   if (path == gallery.REVIEW) {
     let shown = await gallery.answer(req, env, path, dir)
     if (shown) return shown

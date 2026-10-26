@@ -4,7 +4,7 @@
 // documentation pages needed the same thing (T-37752), and two copies of a
 // header is how a visitor ends up on a page that is a little bit not the site.
 //
-// The nav is the same four places on every page of this site or it is not a
+// The nav is the same places on every page of this site or it is not a
 // nav (site_test.ts), and the footer the same seven. A drawn page says them
 // exactly as the files say them.
 import { esc } from './html.ts'
@@ -51,6 +51,7 @@ export let top = `<header class="Top">
 <a class="Top_Name" href="/" aria-label="yaks.app, home"><img class="Yak Yak-small" src="/yak.png" alt="" /><span>yaks.app</span></a>
 <nav class="Nav" aria-label="Site">
 <a href="/#how">How it works</a>
+<a href="/gallery">Gallery</a>
 <a href="/pricing">Pricing</a>
 <a href="/docs">Documentation</a>
 <a href="/login">Sign in</a>

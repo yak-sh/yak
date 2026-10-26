@@ -309,11 +309,16 @@ test('the homepage paints all six chosen screenshots and Mossvale', async () => 
   assertStringIncludes(html, 'https://yourname.yaks.app/vale/api/blob/abc')
 })
 
-test('a card keeps its copy instructions outside the app link', () => {
+test('a card offers installation separately from opening the app', () => {
   let html = card(shown())
   assertStringIncludes(html, 'href="https://jeff.yaks.app/recipes/"')
   assertStringIncludes(html, 'jeff.yaks.app/recipes/')
   // No picture of its own falls back to the platform's tile.
   assertStringIncludes(html, 'connector-512.png')
-  assert(html.indexOf('</a>') < html.indexOf('<details'))
+  assert(html.indexOf('</a>') < html.indexOf('<form'))
+  assertStringIncludes(html, 'method="post" action="/install?name=recipes"')
+  assertStringIncludes(
+    html,
+    '<button class="Button" type="submit">Get your own copy</button>',
+  )
 })

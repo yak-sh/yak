@@ -56,7 +56,7 @@ export let connector = (env: Host = {}) => ({
   name: PLATFORM,
   title: PLATFORM,
   version: VERSION,
-  description: 'Build a yaks app by asking Claude or ChatGPT.',
+  description: 'Build an app by asking Claude or ChatGPT.',
   websiteUrl: url(env),
   icons: [
     {
