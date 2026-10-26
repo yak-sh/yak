@@ -20,7 +20,7 @@
 }
 body {
   margin: 0;
-  background: var(--case);
+  background: #babdb3;
 }
 button,
 input,
@@ -111,17 +111,18 @@ h2 {
 .frame {
   width: 100%;
   min-height: 100dvh;
-  padding: 0;
+  padding: 6px;
 }
 .device {
-  min-height: 100dvh;
+  height: calc(100dvh - 12px);
+  min-height: 760px;
   display: flex;
   flex-direction: column;
   padding: 8px 16px 6px;
   background: var(--case);
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
+  border: 1px solid #9ca294;
+  border-radius: 9px;
+  box-shadow: inset 0 1px #f8f9f0,0 2px 0 #92998c;
 }
 .section-label {
   font-size: 10px;
@@ -132,26 +133,21 @@ h2 {
 }
 .bridge {
   display: grid;
-  grid-template-columns: 140px minmax(280px,1fr) 250px;
+  grid-template-columns: 150px minmax(280px,1fr) 250px;
   gap: 20px;
-  height: 114px;
-  flex-shrink: 0;
-  padding: 0 0 6px;
+  flex: 1 0 178px;
+  min-height: 178px;
+  padding: 0 0 8px;
 }
 .transport {
-  display: grid;
-  grid-template-columns: 1fr 42px;
-  gap: 5px;
-  align-content: start;
-}
-.transport .section-label,
-.transport-note,
-.tempo,
-#tap {
-  grid-column: 1/-1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  justify-content: center;
 }
 .play {
   height: 43px;
+  flex-shrink: 0;
   font-size: 16px;
   background: var(--orange);
   border-color: #d95229;
@@ -165,10 +161,6 @@ h2 {
   background: #ff7951;
 }
 .play span {
-  font-size: 20px;
-}
-.stop {
-  padding: 0;
   font-size: 20px;
 }
 .transport-note {
@@ -202,7 +194,7 @@ h2 {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  padding: 6px 13px 6px;
+  padding: 8px 13px;
   position: relative;
   overflow: hidden;
 }
@@ -238,11 +230,11 @@ h2 {
 }
 #scope {
   width: 100%;
-  height: 52px;
+  height: 0;
   display: block;
-  margin: 1px 0;
+  margin: 3px 0;
   flex: 1;
-  min-height: 30px;
+  min-height: 100px;
   /* Its bitmap follows its box; the box never follows its bitmap. */
   contain: size;
 }
@@ -266,8 +258,8 @@ h2 {
   display: grid;
   grid-template-columns: repeat(3,1fr);
   gap: 12px;
-  align-content: start;
-  padding-top: 2px;
+  align-content: center;
+  padding: 2px 0;
 }
 .dials .section-label {
   display: none;
@@ -450,7 +442,7 @@ h2 {
 }
 .step {
   padding: 0;
-  height: clamp(24px,calc((100dvh - 560px)/8),36px);
+  height: 24px;
   border: 1px solid #b9bcb1;
   border-radius: 3px;
   background: #c8cbc1;
@@ -667,7 +659,7 @@ h2 {
   background: var(--track);
 }
 .device-footer {
-  margin-top: auto;
+  margin-top: 0;
   padding-top: 6px;
   border: 0;
   display: flex;
@@ -805,12 +797,21 @@ dialog::backdrop {
   padding: 4px 8px;
   min-height: 23px;
 }
+.device > :not(.bridge) {
+  flex-shrink: 0;
+}
+#tempo-slider {
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  accent-color: var(--orange);
+}
 @media (max-width:1100px) {
   .device {
     padding: 10px 12px 8px;
   }
   .bridge {
-    grid-template-columns: 125px minmax(260px,1fr) 210px;
+    grid-template-columns: 140px minmax(260px,1fr) 210px;
     gap: 14px;
   }
   .mixers {
@@ -842,16 +843,24 @@ dialog::backdrop {
   }
 }
 @media (max-width:800px) {
+  .frame {
+    padding: 4px;
+  }
   .device {
+    height: auto;
+    min-height: calc(100dvh - 8px);
     padding: 12px 12px 8px;
   }
+
   .bridge {
     grid-template-columns: 105px 1fr;
     height: auto;
+    flex: none;
+    min-height: 0;
     gap: 10px;
   }
   .display {
-    min-height: 120px;
+    min-height: 190px;
   }
   .dials {
     grid-column: 1/-1;
@@ -1041,9 +1050,7 @@ dialog::backdrop {
   .play span {
     font-size: 17px;
   }
-  .transport {
-    grid-template-columns: 1fr 30px;
-  }
+
   .tempo {
     gap: 4px;
     font-size: 10px;

@@ -12,3 +12,10 @@ one screen so scrolling isn't as needed"
 
 "and no like branding or slogans needed. just the device. with the link to
 yaks.app still, though, of course"
+
+Jeff: "oh i guess i went too far. i still want like the device edges visible,
+but they should have very thin margins. tempo needs a control to adjust. display
+is a bit too short to function properly now. the design should stretch to fill
+extra vertical space."
+
+Jeff: "two stop buttons while music is playing"

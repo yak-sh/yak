@@ -15,7 +15,7 @@
       <main class="device">
         <section class="bridge" aria-label="Transport and display">
           <div
-            class="transport"><div class="section-label">Transport</div><button id="play" class="play" aria-label="Play"><span>▶</span> Play</button><button id="stop" class="stop" aria-label="Stop and rewind">■</button><div class="transport-note"><kbd>space</kbd> play / stop</div><label class="tempo">Tempo <input id="tempo" type="number" min="50" max="190" value="108"> <span>BPM</span></label><button id="tap">Tap tempo</button></div>
+            class="transport"><div class="section-label">Transport</div><button id="play" class="play" aria-label="Play"><span>▶</span> Play</button><div class="transport-note"><kbd>space</kbd> play / stop</div><label class="tempo">Tempo <input id="tempo" type="number" min="50" max="190" value="108"> <span>BPM</span></label><input id="tempo-slider" aria-label="Tempo in beats per minute" type="range" min="50" max="190" step="1" value="108"><button id="tap">Tap tempo</button></div>
           <div class="display">
             <div
               class="display-top"><span id="run-state">Ready to play</span><div class="display-modes" role="group" aria-label="Display view"><button data-view="wave" aria-pressed="true">Wave</button><button data-view="spectrum" aria-pressed="false">Spectrum</button><button data-view="levels" aria-pressed="false">Level</button></div></div>

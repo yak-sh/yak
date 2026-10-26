@@ -1,5 +1,6 @@
 import { apply, me, query } from './api/client.js'
 import { engine } from './audio.js'
+import { transport } from './transport.js'
 import {
   advance,
   duration,
@@ -180,6 +181,7 @@ let drawDuration = () => {
 let draw = () => {
   $('title').value = value.title
   $('tempo').value = value.bpm
+  $('tempo-slider').value = value.bpm
   $('length').value = bank().length
   for (let name of ['swing', 'delay', 'master']) {
     $(name).value = value[name]
@@ -203,28 +205,30 @@ let draw = () => {
   drawDuration()
   $('undo').disabled = !historyStack.length
 }
-let stop = () => {
-  audio.stop()
+let player = transport(audio, (playing) => {
+  $('play').innerHTML = playing ? '<span>■</span> Stop' : '<span>▶</span> Play'
+  $('play').setAttribute('aria-label', playing ? 'Stop' : 'Play')
+  $('run-state').textContent = playing === 'starting'
+    ? 'Starting…'
+    : playing
+    ? recording ? 'Recording' : 'Playing'
+    : 'Stopped'
+  if (playing) {
+    if (playing === true) started = audio.context().currentTime
+    return
+  }
   events = []
   position = null
-  $('play').innerHTML = '<span>▶</span> Play'
-  $('play').setAttribute('aria-label', 'Play')
-  $('run-state').textContent = 'Stopped'
+  $('position').textContent = `${
+    letters[value.pattern]
+  } : 01 / ${bank().length}`
   $('clock').textContent = '00:00'
   $('display-progress').style.setProperty('--progress', '0%')
   document.querySelectorAll('.playhead,.current').forEach((el) =>
     el.classList.remove('playhead', 'current')
   )
-}
-let play = async () => {
-  if (audio.playing) return stop()
-  await audio.start()
-  if (!audio.playing) return
-  $('play').setAttribute('aria-label', 'Stop')
-  started = audio.context().currentTime
-  $('play').innerHTML = '<span>■</span> Stop'
-  $('run-state').textContent = recording ? 'Recording' : 'Playing'
-}
+})
+let stop = player.stop, play = player.toggle
 let hit = async (track) => {
   let same = selected.track === track
   selected.track = track
@@ -288,7 +292,6 @@ for (let name of ['mix', 'arrange']) {
   })
 }
 click('play', play)
-click('stop', stop)
 click('close-modal', close)
 click('undo', () => {
   if (!historyStack.length) return
@@ -345,6 +348,12 @@ $('preset').addEventListener('change', async (e) => {
 })
 $('title').addEventListener('input', () => {
   value.title = $('title').value
+  changed()
+})
+$('tempo-slider').addEventListener('pointerdown', checkpoint)
+$('tempo-slider').addEventListener('input', () => {
+  value.bpm = Number($('tempo-slider').value)
+  $('tempo').value = value.bpm
   changed()
 })
 $('tempo').addEventListener('change', () =>
