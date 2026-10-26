@@ -303,6 +303,7 @@ import {
   tallying,
   waited,
 } from './lib/hops.ts'
+import { headed } from './timing.ts'
 import {
   batch,
   BATCHES,
@@ -3775,16 +3776,11 @@ export class Store {
           (request.headers.has('x-yak-person') ||
             request.headers.has('x-yak-via'))
         ) this.#used()
-        if (answer.status == 101) return answer
         let headers = new Headers(answer.headers)
         for (let [name, value] of Object.entries(reported(tally))) {
           headers.set(name, value)
         }
-        return new Response(answer.body, {
-          status: answer.status,
-          statusText: answer.statusText,
-          headers,
-        })
+        return headed(answer, headers)
       })
     try {
       return await (this.#profile

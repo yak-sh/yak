@@ -1780,13 +1780,9 @@ let api = async (
     try {
       Object.assign(
         headers,
-        await pageSpeaks(
-          req,
-          dir,
-          r2Objects(env.BLOBS),
-          space,
-          app,
-          appDoc,
+        await c.time(
+          'speaks',
+          () => pageSpeaks(req, dir, r2Objects(env.BLOBS), space, app, appDoc),
         ),
       )
     } catch (e) {
@@ -1999,7 +1995,7 @@ let api = async (
       return json(426, 'expected_websocket')
     }
     if (!mayRead) return refused('not_a_reader')
-    let graph = await sources(env, space, app, who)
+    let graph = await c.time('uses', () => sources(env, space, app, who))
     if (graph.reach.length > 1) {
       return pageSocket(req, env, space, app, graph, headers)
     }

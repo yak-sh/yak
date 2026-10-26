@@ -107,16 +107,29 @@ export let clock = () => {
   }
 }
 
-// The header onto a response. A 101 carries the runtime's own socket and no
-// Response constructor here can copy it, so a socket keeps its handshake
-// untouched — the same rule apps.ts `reporting` reads.
+// The header onto a response. A 101 carries the runtime's own socket: the
+// runtime's Response takes it over (`webSocket`), as the router's own
+// headers do (kernel.ts `handler`), and one with no socket to hand over is
+// left untouched — the same rule apps.ts `reporting` reads.
 export let timed = (res: Response, c: Clock, prefix = '') => {
-  if (res.status == 101) return res
   let headers = new Headers(res.headers)
   headers.set('server-timing', c.header(prefix))
-  return new Response(res.body, {
+  return headed(res, headers)
+}
+
+/** The answer again under other headers, a socket's handshake included. */
+export let headed = (res: Response, headers: Headers): Response => {
+  let socket = (res as { webSocket?: unknown }).webSocket
+  if (res.status == 101 && !socket) return res
+  let out = new Response(res.body, {
     status: res.status,
     statusText: res.statusText,
     headers,
-  })
+    ...socket ? { webSocket: socket } : {},
+  } as ResponseInit)
+  // A runtime with no socket of its own (Deno) keeps it on the object.
+  if (socket && !(out as { webSocket?: unknown }).webSocket) {
+    Object.assign(out, { webSocket: socket })
+  }
+  return out
 }
