@@ -1,0 +1,751 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>yaks.app — Ideas deserve an orbit</title>
+    <meta name="description"
+      content="Build, host and share web apps. Your assistant builds it. yaks.app gives it a home.">
+    <style>
+    :root {
+      --bg: #080e13;
+      --ink: #e6eee9;
+      --muted: #9aafa8;
+      --line: #c1d5ca28;
+      --accent: #c5f47a;
+      --signal: #c5f47a;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      margin: 0;
+      font-family: Arial,sans-serif;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button {
+      font: inherit;
+    }
+    a:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 6px;
+    }
+    header {
+      height: 90px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 5%;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand {
+      font-size: 25px;
+      font-weight: 700;
+      letter-spacing: -1px;
+    }
+    .brand-mark {
+      display: inline-block;
+      width: 19px;
+      height: 19px;
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      margin-right: 10px;
+      vertical-align: -1px;
+      position: relative;
+    }
+    .brand-mark:after {
+      content: '';
+      position: absolute;
+      inset: 5px -6px;
+      border: 1px solid var(--accent);
+      border-radius: 50%;
+      transform: rotate(-35deg);
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 35px;
+      font-size: 13px;
+    }
+    .nav-start {
+      border: 1px solid var(--line);
+      padding: 13px 17px;
+    }
+    .mono {
+      font-family: 'Courier New',monospace;
+      font-size: 11px;
+      letter-spacing: 1.4px;
+    }
+    .hero {
+      min-height: 780px;
+      position: relative;
+      padding: 57px 5% 0;
+      overflow: hidden;
+      background-image: radial-gradient(circle at 71% 47%,#12292388,transparent
+        40%);
+    }
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+    }
+    .hero-top p {
+      margin: 0;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      background: var(--accent);
+      border-radius: 50%;
+      margin-right: 8px;
+      vertical-align: 2px;
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: .95fr 1.05fr;
+      align-items: center;
+      max-width: 1450px;
+      margin: auto;
+      min-height: 660px;
+    }
+    .hero-copy {
+      position: relative;
+      z-index: 2;
+      padding-bottom: 70px;
+    }
+    .hero h1 {
+      font-weight: 400;
+      font-size: clamp(58px,6.6vw,100px);
+      letter-spacing: -5px;
+      line-height: 1.02;
+      margin: 0 0 29px;
+    }
+    .hero h1 span {
+      color: var(--accent);
+    }
+    .intro {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.75;
+      max-width: 370px;
+    }
+    .button {
+      background: var(--accent);
+      color: #142017;
+      display: inline-flex;
+      align-items: center;
+      gap: 40px;
+      padding: 18px 22px;
+      font-size: 14px;
+      margin-top: 21px;
+    }
+    .button span {
+      font-size: 22px;
+    }
+    .orbit {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+      min-width: 0;
+      max-width: 680px;
+      isolation: isolate;
+    }
+    .orbit:before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 1px solid #c1d5ca12;
+      border-radius: 50%;
+      box-shadow: 0 0 0 40px #c1d5ca04;
+    }
+    .crosshair {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    .crosshair:before,
+    .crosshair:after {
+      content: '';
+      position: absolute;
+      background: #c1d5ca14;
+    }
+    .crosshair:before {
+      width: 1px;
+      height: 110%;
+      left: 50%;
+      top: -5%;
+    }
+    .crosshair:after {
+      height: 1px;
+      width: 110%;
+      top: 50%;
+      left: -5%;
+    }
+    .orbit-ring {
+      position: absolute;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      inset: 12%;
+      transform: rotate(-28deg);
+    }
+    .orbit-ring.outer {
+      inset: 2%;
+      border-style: dashed;
+      border-color: #c1d5ca35;
+    }
+    .orbit-ring.inner {
+      inset: 26%;
+      border-color: #c1d5ca30;
+    }
+    .ellipse {
+      position: absolute;
+      border: 1px solid #c1d5ca50;
+      border-radius: 50%;
+      inset: 14% -5%;
+      transform: rotate(-33deg) scaleY(.46);
+      z-index: 1;
+    }
+    .globe {
+      position: absolute;
+      inset: 35%;
+      border-radius: 50%;
+      overflow: hidden;
+      background: radial-gradient(circle at 32% 23%,#d3f8b5,#79a683 24%,#22493e
+        48%,#081a1b 72%);
+      box-shadow: 0 0 70px #9ed88c23,inset -8px -8px 18px #030b11;
+      transition: filter .5s;
+    }
+    .globe:before {
+      content: '';
+      position: absolute;
+      inset: 5%;
+      border: 1px solid #d8ffda30;
+      border-radius: 50%;
+      box-shadow: inset 0 0 25px #a0dab220;
+    }
+    .globe:after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(0deg,transparent,transparent
+        11px,#c3f6b619 12px,transparent 13px);
+      transform: rotate(-30deg);
+    }
+    .core-label {
+      position: absolute;
+      top: 69%;
+      left: 39%;
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+    }
+    .planet {
+      position: absolute;
+      background: var(--bg);
+      border: 1px solid #90a69d;
+      color: var(--ink);
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      z-index: 3;
+      transition: box-shadow .3s,background .3s,transform .3s;
+    }
+    .planet span {
+      position: absolute;
+      left: 77px;
+      white-space: nowrap;
+      top: 24px;
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    .planet .symbol {
+      position: static;
+      font-size: 26px;
+      line-height: 1;
+      color: var(--signal);
+    }
+    .planet[aria-pressed="true"] {
+      border-color: var(--signal);
+      box-shadow: 0 0 0 8px #b2e88a0b,0 0 0 9px #b2e88a35;
+      background: #1b2b20;
+    }
+    .planet:hover {
+      transform: scale(1.07);
+    }
+    .planet[data-stage="build"] {
+      top: 14%;
+      left: 24%;
+    }
+    .planet[data-stage="host"] {
+      right: 9%;
+      top: 53%;
+    }
+    .planet[data-stage="host"] span {
+      left: auto;
+      right: 76px;
+    }
+    .planet[data-stage="share"] {
+      left: 15%;
+      bottom: 16%;
+    }
+    .coord {
+      position: absolute;
+      color: #7d948d;
+      font-family: 'Courier New',monospace;
+      font-size: 9px;
+      letter-spacing: 1px;
+    }
+    .c1 {
+      top: 1%;
+      left: 47%;
+    }
+    .c2 {
+      bottom: 1%;
+      left: 47%;
+    }
+    .c3 {
+      top: 48%;
+      left: 1%;
+    }
+    .c4 {
+      top: 48%;
+      right: 1%;
+    }
+    .star {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      background: #b7c9c1;
+      border-radius: 50%;
+    }
+    .s1 {
+      top: 25%;
+      right: 12%;
+    }
+    .s2 {
+      top: 64%;
+      left: 27%;
+    }
+    .s3 {
+      top: 10%;
+      left: 58%;
+    }
+    .s4 {
+      top: 83%;
+      right: 17%;
+    }
+    .orbit-caption {
+      position: absolute;
+      bottom: 10px;
+      right: 5%;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .console {
+      margin: 0 5%;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--signal);
+      display: grid;
+      grid-template-columns: .8fr 1.15fr 1.5fr;
+      gap: 45px;
+      align-items: center;
+      padding: 32px 38px;
+      transition: border-color .4s;
+    }
+    .console-label {
+      color: var(--muted);
+      line-height: 1.9;
+    }
+    .console-label strong {
+      color: var(--signal);
+      font-weight: 400;
+      display: block;
+    }
+    .console h2 {
+      font-size: 28px;
+      letter-spacing: -.8px;
+      font-weight: 400;
+      margin: 0;
+    }
+    .console p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.8;
+      margin: 0;
+    }
+    .section {
+      padding: 115px 10% 100px;
+    }
+    .section-heading {
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 60px;
+      margin-bottom: 70px;
+    }
+    .section-heading .mono {
+      color: var(--accent);
+      padding-top: 13px;
+    }
+    .section-heading h2 {
+      font-size: clamp(35px,4.3vw,62px);
+      line-height: 1.12;
+      font-weight: 400;
+      letter-spacing: -2px;
+      margin: 0;
+    }
+    .flight-row {
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: .4fr 1fr 1fr;
+      gap: 45px;
+      padding: 36px 0;
+    }
+    .flight-number {
+      font-family: 'Courier New',monospace;
+      font-size: 15px;
+      color: var(--muted);
+      padding-top: 7px;
+    }
+    .flight-row h3 {
+      font-size: 25px;
+      font-weight: 400;
+      letter-spacing: -.5px;
+      margin: 0;
+    }
+    .flight-row p {
+      font-size: 14px;
+      line-height: 1.8;
+      color: var(--muted);
+      margin: 0;
+    }
+    .outro {
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      margin: 0 5%;
+      padding: 65px 5%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 30px;
+      position: relative;
+      background: radial-gradient(ellipse at 0 100%,#163a2e,transparent 60%);
+    }
+    .outro h2 {
+      font-size: clamp(34px,4.4vw,62px);
+      font-weight: 400;
+      letter-spacing: -2px;
+      margin: 16px 0;
+    }
+    .outro .mono {
+      color: var(--muted);
+    }
+    .outro .button {
+      flex-shrink: 0;
+    }
+    footer {
+      margin: 0 5%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 36px 0 48px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .footer-links {
+      display: flex;
+      gap: 25px;
+    }
+    @media (min-width:1500px) {
+      .hero {
+        min-height: 900px;
+      }
+      .hero-grid {
+        min-height: 780px;
+      }
+    }
+    @media (max-width:900px) {
+      .hero-grid {
+        grid-template-columns: 1fr 1fr;
+        min-height: 570px;
+      }
+      .hero {
+        min-height: 680px;
+      }
+      .hero h1 {
+        font-size: 65px;
+        letter-spacing: -3px;
+      }
+      .hero-copy {
+        padding-bottom: 0;
+      }
+      .planet {
+        width: 50px;
+        height: 50px;
+      }
+      .planet span {
+        top: 17px;
+        left: 61px;
+        font-size: 10px;
+      }
+      .planet[data-stage="host"] span {
+        right: 61px;
+      }
+      .planet .symbol {
+        font-size: 21px;
+      }
+      .console {
+        padding: 25px;
+        gap: 25px;
+        grid-template-columns: .7fr 1fr;
+      }
+      .console > p {
+        grid-column: 2;
+      }
+      .section {
+        padding: 80px 7%;
+      }
+      .section-heading {
+        grid-template-columns: .6fr 1.5fr;
+        gap: 30px;
+      }
+      .flight-row {
+        grid-template-columns: .2fr 1fr 1.1fr;
+        gap: 25px;
+      }
+    }
+    @media (max-width:650px) {
+      header {
+        height: 78px;
+      }
+      nav {
+        gap: 20px;
+      }
+      nav > a:first-child {
+        display: none;
+      }
+      .brand {
+        font-size: 23px;
+      }
+      .hero {
+        padding: 30px 6% 45px;
+        min-height: 0;
+      }
+      .hero-top {
+        font-size: 9px;
+        letter-spacing: 1px;
+      }
+      .hero-top > p:last-child {
+        display: none;
+      }
+      .hero-grid {
+        grid-template-columns: 1fr;
+      }
+      .hero-copy {
+        padding-top: 42px;
+      }
+      .hero h1 {
+        font-size: 66px;
+        letter-spacing: -4px;
+      }
+      .intro {
+        max-width: 330px;
+      }
+      .orbit {
+        margin: 55px auto 30px;
+        width: 90%;
+        max-width: 430px;
+      }
+      .planet {
+        width: 53px;
+        height: 53px;
+      }
+      .planet span {
+        font-size: 10px;
+        left: 64px;
+      }
+      .planet[data-stage="host"] span {
+        right: 64px;
+      }
+      .core-label {
+        font-size: 8px;
+      }
+      .orbit-caption {
+        bottom: 15px;
+        font-size: 10px;
+      }
+      .console {
+        grid-template-columns: 1fr;
+        gap: 15px;
+        padding: 26px;
+      }
+      .console > p {
+        grid-column: 1;
+      }
+      .console-label {
+        font-size: 10px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .console h2 {
+        font-size: 28px;
+      }
+      .section {
+        padding: 65px 7%;
+      }
+      .section-heading {
+        grid-template-columns: 1fr;
+        gap: 17px;
+        margin-bottom: 42px;
+      }
+      .section-heading h2 {
+        font-size: 40px;
+      }
+      .flight-row {
+        grid-template-columns: 30px 1fr;
+        gap: 16px;
+        padding: 28px 0;
+      }
+      .flight-row p {
+        grid-column: 2;
+      }
+      .flight-row h3 {
+        font-size: 24px;
+      }
+      .outro {
+        flex-direction: column;
+        align-items: start;
+        padding: 43px 6% 50px;
+      }
+      .outro h2 {
+        font-size: 43px;
+      }
+      .outro .button {
+        margin-top: 0;
+      }
+      footer {
+        font-size: 10px;
+        align-items: start;
+        gap: 20px;
+      }
+      .footer-links {
+        gap: 17px;
+      }
+      .footer-tag {
+        max-width: 145px;
+        line-height: 1.6;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      * {
+        transition: none!important;
+        animation: none!important;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <header><a class="brand" href="https://yaks.app"><span class="brand-mark" aria-hidden="true"></span>yaks.app</a><nav aria-label="Main"><a href="#flight">Flight plan</a><a href="https://yaks.app/docs">Documentation ↗</a><a class="nav-start" href="https://yaks.app/login">Start building ↗</a></nav></header>
+    <main>
+      <section class="hero" aria-labelledby="title">
+        <div class="hero-top mono">
+          <p>Mission 001 / Your next idea</p>
+          <p><span class="status-dot"></span>Build, host and share web apps</p>
+        </div>
+        <div class="hero-grid">
+          <div
+            class="hero-copy"><h1 id="title">Your idea.<br>Its own<br><span>little universe.</span></h1><p class="intro">A web app starts with a conversation.<br>Ask Claude or ChatGPT to build what you need. Give it a home on yaks.app.</p><a class="button" href="https://yaks.app/login">Begin your mission <span aria-hidden="true">↗</span></a></div>
+          <div class="orbit"
+            aria-label="Explore the three parts of yaks.app"><div class="crosshair"></div><div class="orbit-ring outer"></div><div class="orbit-ring"></div><div class="orbit-ring inner"></div><div class="ellipse"></div><div class="globe" aria-hidden="true"></div><span class="core-label mono">Your idea</span><span class="coord c1" aria-hidden="true">000°</span><span class="coord c2" aria-hidden="true">180°</span><span class="coord c3" aria-hidden="true">270°</span><span class="coord c4" aria-hidden="true">090°</span><i class="star s1"></i><i class="star s2"></i><i class="star s3"></i><i class="star s4"></i>
+<button class="planet" data-stage="build" aria-pressed="true" aria-controls="readout"><span class="symbol" aria-hidden="true">✳</span><span>01 / Build</span></button><button class="planet" data-stage="host" aria-pressed="false" aria-controls="readout"><span class="symbol" aria-hidden="true">◎</span><span>02 / Host</span></button><button class="planet" data-stage="share" aria-pressed="false" aria-controls="readout"><span class="symbol" aria-hidden="true">↗</span><span>03 / Share</span></button></div>
+        </div>
+        <p
+          class="orbit-caption mono">Select a planet to explore the system ↗</p>
+      </section>
+      <section class="console" id="readout" aria-live="polite"
+        aria-atomic="true">
+        <div
+          class="console-label mono">System briefing<strong id="stage-number">01 / Build</strong></div>
+        <h2 id="stage-title">Your words become a web app.</h2>
+        <p
+          id="stage-copy">Describe what you need to Claude or ChatGPT. Your assistant builds the app, and you keep shaping it in the same conversation.</p>
+      </section>
+      <section class="section" id="flight">
+        <div class="section-heading">
+          <p class="mono">A very human flight plan</p>
+          <h2>Less setup.<br>More “look what I made.”</h2>
+        </div>
+        <div
+          class="flight-row"><span class="flight-number">01 —</span><h3>Start where you already think.</h3><p>You already talk to your assistant. Tell it about the problem you want to solve, and ask it to build a yaks app.</p></div>
+        <div
+          class="flight-row"><span class="flight-number">02 —</span><h3>A home beyond the chat.</h3><p>Your app gets an address. yaks.app keeps it online and stores its data, so you can return to it from any device.</p></div>
+        <div
+          class="flight-row"><span class="flight-number">03 —</span><h3>Bring your people aboard.</h3><p>Share your app with the people it’s for. Keep asking your assistant for changes as your idea takes shape.</p></div>
+      </section>
+      <section
+        class="outro"><div><p class="mono">Coordinates: wherever your idea takes you</p><h2>Ready when you are.</h2></div><a class="button" href="https://yaks.app/login">Give your idea an orbit <span aria-hidden="true">↗</span></a></section>
+    </main>
+    <footer>
+      <div class="footer-tag">yaks.app / Build, host and share web apps.</div>
+      <div
+        class="footer-links"><a href="https://yaks.app/docs">Documentation ↗</a><a href="https://yaks.app/login">Sign in ↗</a></div>
+    </footer>
+    <script>
+    let stages = {
+      build: {
+        number: '01 / Build',
+        title: 'Your words become a web app.',
+        copy:
+          'Describe what you need to Claude or ChatGPT. Your assistant builds the app, and you keep shaping it in the same conversation.',
+        color: '#c5f47a',
+        hue: '0deg',
+      },
+      host: {
+        number: '02 / Host',
+        title: 'Every idea needs a home.',
+        copy:
+          'yaks.app keeps your app online at your address, with its own data store. Open it on your phone, your laptop, or wherever you need it.',
+        color: '#8bd4f5',
+        hue: '65deg',
+      },
+      share: {
+        number: '03 / Share',
+        title: 'Better with your people.',
+        copy:
+          'Invite the people your app is for. Share a tool, gather around an idea, or build a world you can explore together.',
+        color: '#dfb3ff',
+        hue: '150deg',
+      },
+    }
+    document.querySelectorAll('.planet').forEach((button) =>
+      button.addEventListener('click', () => {
+        let stage = stages[button.dataset.stage]
+        document.querySelector('#stage-number').textContent = stage.number
+        document.querySelector('#stage-title').textContent = stage.title
+        document.querySelector('#stage-copy').textContent = stage.copy
+        document.documentElement.style.setProperty('--signal', stage.color)
+        document.querySelector('.globe').style.filter = `hue-rotate(${stage.hue})`
+        document.querySelectorAll('.planet').forEach((item) =>
+          item.setAttribute('aria-pressed', String(item === button))
+        )
+      })
+    )
+    </script>
+    <script src="lab.js" defer></script>
+  </body>
+</html>

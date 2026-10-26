@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yaks.app — The Type Foundry</title>
+    <meta name="description"
+      content="An idea deserves a place on the internet. Build, host and share web apps with yaks.app.">
+    <style>
+    :root {
+      --paper: #e6ef35;
+      --ink: #151612;
+      --quiet: #4b4f19;
+      --tracking: -.075em;
+      --display: Impact,'Arial Narrow',sans-serif;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Arial,Helvetica,sans-serif;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button,
+    input {
+      font: inherit;
+    }
+    button,
+    a,
+    input {
+      touch-action: manipulation;
+    }
+    button {
+      color: inherit;
+    }
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible {
+      outline: 3px solid currentColor;
+      outline-offset: 5px;
+    }
+    .wrap {
+      max-width: 1600px;
+      margin: auto;
+      padding: 0 4vw;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 30px;
+      padding: 30px 0;
+      border-bottom: 2px solid var(--ink);
+    }
+    .brand {
+      font-weight: 900;
+      letter-spacing: -2px;
+      font-size: 32px;
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 35px;
+      font-size: 14px;
+    }
+    .nav a:hover {
+      text-decoration: underline;
+    }
+    .nav .login {
+      border: 1px solid;
+      padding: 12px 19px;
+      border-radius: 30px;
+    }
+    .edition {
+      font-size: 12px;
+      letter-spacing: .04em;
+    }
+    .hero {
+      padding-top: 31px;
+      position: relative;
+    }
+    .eyebrow {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      font-size: 12px;
+    }
+    .eyebrow span:last-child {
+      max-width: 210px;
+    }
+    .headline {
+      font-family: var(--display);
+      font-size: clamp(80px,15.8vw,246px);
+      font-weight: 900;
+      letter-spacing: var(--tracking);
+      line-height: .85;
+      margin: 45px 0 30px;
+      text-wrap: nowrap;
+    }
+    .headline .first {
+      display: block;
+    }
+    .headline .second {
+      display: flex;
+      align-items: center;
+      gap: 3vw;
+    }
+    .headline em {
+      font-family: Georgia,'Times New Roman',serif;
+      font-size: .93em;
+      font-weight: 400;
+      letter-spacing: -.085em;
+      line-height: 1.03;
+    }
+    .asterisk {
+      width: .68em;
+      height: .68em;
+      flex: none;
+      margin: 0 .08em 0 .12em;
+      transition: transform .5s;
+    }
+    .headline .last {
+      display: block;
+    }
+    .hero-bottom {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      align-items: end;
+      gap: 30px;
+      padding: 25px 0 42px;
+    }
+    .description {
+      max-width: 330px;
+      font-size: 18px;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .start {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 40px;
+      border-bottom: 2px solid;
+      padding: 18px 0;
+      font-size: 23px;
+      font-weight: 600;
+    }
+    .start span {
+      font-size: 35px;
+      transition: transform .2s;
+    }
+    .start:hover span {
+      transform: translate(6px,-6px);
+    }
+    .stamp {
+      justify-self: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      transform: rotate(-9deg);
+      width: 116px;
+      height: 116px;
+      border: 2px solid;
+      border-radius: 50%;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .controls {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 2px solid;
+      padding: 18px 0 21px;
+      font-size: 12px;
+    }
+    .styles {
+      display: flex;
+      gap: 8px;
+    }
+    .styles button {
+      background: transparent;
+      border: 1px solid;
+      padding: 8px 14px;
+      cursor: pointer;
+      border-radius: 30px;
+    }
+    .styles button[aria-pressed=true] {
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .range {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .range input {
+      accent-color: var(--ink);
+      width: 130px;
+    }
+    .ticker {
+      background: var(--ink);
+      color: var(--paper);
+      font-size: clamp(25px,4.6vw,72px);
+      font-family: Georgia,serif;
+      font-style: italic;
+      padding: 20px 0;
+      overflow: hidden;
+      white-space: nowrap;
+      text-align: center;
+      word-spacing: 14px;
+    }
+    .ticker span {
+      font-family: Arial,sans-serif;
+      font-style: normal;
+      font-size: .7em;
+    }
+    .manifesto {
+      padding: 85px 0 75px;
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 8vw;
+    }
+    .section-label {
+      font-size: 13px;
+      display: flex;
+      align-items: start;
+      gap: 16px;
+    }
+    .section-label:before {
+      content: '↳';
+      font-size: 26px;
+      margin-top: -6px;
+    }
+    .manifesto h2 {
+      font-family: Georgia,serif;
+      font-size: clamp(35px,4.5vw,68px);
+      font-weight: 400;
+      letter-spacing: -.05em;
+      line-height: 1.08;
+      margin: 0 0 25px;
+    }
+    .manifesto p {
+      font-size: 17px;
+      line-height: 1.6;
+      max-width: 520px;
+    }
+    .verbs {
+      border-top: 2px solid;
+    }
+    .verb {
+      border-bottom: 2px solid;
+    }
+    .verb button {
+      width: 100%;
+      border: 0;
+      display: grid;
+      grid-template-columns: 60px 1fr auto;
+      align-items: center;
+      text-align: left;
+      background: transparent;
+      cursor: pointer;
+      padding: 21px 0;
+    }
+    .verb .number {
+      align-self: start;
+      padding-top: 12px;
+      font-size: 12px;
+    }
+    .verb strong {
+      font-family: Impact,'Arial Narrow',sans-serif;
+      font-size: clamp(55px,8vw,120px);
+      letter-spacing: -.035em;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .verb .plus {
+      font-size: 45px;
+      font-weight: 300;
+      transition: transform .2s;
+    }
+    .verb button:hover strong {
+      font-family: Georgia,serif;
+      font-style: italic;
+      font-weight: 400;
+    }
+    .verb button[aria-expanded=true] .plus {
+      transform: rotate(45deg);
+    }
+    .answer {
+      padding: 0 10% 30px 60px;
+      max-width: 760px;
+      font-size: 20px;
+      line-height: 1.5;
+    }
+    .answer p {
+      margin: 0;
+    }
+    .footer {
+      margin-top: 80px;
+      background: var(--ink);
+      color: var(--paper);
+      padding: 60px 0 25px;
+    }
+    .footer-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 40px;
+    }
+    .footer h2 {
+      font-family: Georgia,serif;
+      font-size: clamp(40px,6vw,85px);
+      font-weight: 400;
+      letter-spacing: -.05em;
+      line-height: 1.02;
+      margin: 0;
+    }
+    .footer .start {
+      min-width: 260px;
+    }
+    .colophon {
+      border-top: 1px solid #686a30;
+      margin-top: 70px;
+      padding-top: 24px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      font-size: 12px;
+    }
+    .colophon a {
+      text-decoration: underline;
+    }
+    .bookish {
+      --display: Georgia,'Times New Roman',serif;
+    }
+    .bookish .headline {
+      font-weight: 400;
+      font-size: clamp(72px,14vw,216px);
+    }
+    .offbeat .headline .first {
+      transform: rotate(-2deg);
+    }
+    .offbeat .headline .last {
+      transform: rotate(2deg);
+    }
+    .offbeat .asterisk {
+      transform: rotate(65deg);
+    }
+    .offbeat .headline em {
+      font-style: normal;
+    }
+    .offbeat .stamp {
+      transform: rotate(12deg);
+    }
+    [hidden] {
+      display: none!important;
+    }
+    @media (min-width:1600px) {
+      .wrap {
+        padding: 0 64px;
+      }
+    }
+    @media (max-width:760px) {
+      .wrap {
+        padding: 0 6vw;
+      }
+      .top {
+        padding: 22px 0;
+      }
+      .edition {
+        display: none;
+      }
+      .nav {
+        gap: 18px;
+      }
+      .nav .docs {
+        display: none;
+      }
+      .eyebrow {
+        font-size: 11px;
+      }
+      .eyebrow span:last-child {
+        max-width: 135px;
+        text-align: right;
+      }
+      .headline {
+        margin: 45px 0 20px;
+        font-size: 17vw;
+      }
+      .bookish .headline {
+        font-size: 15.3vw;
+      }
+      .headline .second {
+        gap: 2vw;
+      }
+      .hero-bottom {
+        grid-template-columns: 1fr auto;
+        gap: 25px;
+      }
+      .description {
+        font-size: 16px;
+      }
+      .stamp {
+        width: 90px;
+        height: 90px;
+        font-size: 10px;
+        justify-self: end;
+      }
+      .hero-bottom .start {
+        grid-column: 1/-1;
+        font-size: 23px;
+      }
+      .controls {
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+      .controls > span {
+        width: 100%;
+      }
+      .range {
+        margin-left: auto;
+      }
+      .range input {
+        width: 85px;
+      }
+      .manifesto {
+        padding: 55px 0;
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+      .manifesto h2 {
+        font-size: 39px;
+      }
+      .verb button {
+        grid-template-columns: 35px 1fr auto;
+      }
+      .answer {
+        padding-left: 35px;
+        font-size: 17px;
+      }
+      .footer {
+        margin-top: 50px;
+      }
+      .footer-main {
+        align-items: start;
+        flex-direction: column;
+      }
+      .footer .start {
+        width: 100%;
+      }
+      .colophon {
+        margin-top: 45px;
+        flex-wrap: wrap;
+      }
+      .ticker {
+        padding: 18px 0;
+        font-size: 29px;
+      }
+      .styles button {
+        padding: 8px 11px;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      *,
+      *:before,
+      *:after {
+        transition: none!important;
+      }
+    }
+    </style>
+    <script src="lab.js" defer></script>
+  </head>
+  <body>
+    <div class="wrap">
+      <header
+        class="top"><a class="brand" href="https://yaks.app/" aria-label="yaks.app home">yaks.app</a><span class="edition">A space for things that don't exist. Yet.</span><nav class="nav" aria-label="Main navigation"><a class="docs" href="https://yaks.app/docs">Field guide ↗</a><a class="login" href="https://yaks.app/login">Start building ↗</a></nav></header>
+    </div>
+    <main>
+      <div class="wrap">
+        <section class="hero" aria-labelledby="headline">
+          <div
+            class="eyebrow"><span>No. 03 / The Type Foundry</span><span>Build, host and share web apps.</span></div>
+          <h1 class="headline"
+            id="headline"><span class="first">Give your</span><span class="second"><em>idea</em><svg class="asterisk" viewBox="0 0 100 100" aria-hidden="true"><g fill="currentColor"><path d="M42 0h16v100H42z"/><path d="M0 42h100v16H0z"/><path d="M42 0h16v100H42z" transform="rotate(45 50 50)"/><path d="M42 0h16v100H42z" transform="rotate(-45 50 50)"/></g></svg>a place</span><span class="last">to live.</span></h1>
+          <div
+            class="hero-bottom"><p class="description">The thing in your head can be a thing on the internet. Make it with Claude or ChatGPT. Give it a home on yaks.app.</p><div class="stamp" aria-hidden="true">Big ideas.<br>Little apps.<br>Your corner<br>of the web.</div><a class="start" href="https://yaks.app/login">Make your first app <span aria-hidden="true">↗</span></a></div>
+          <div
+            class="controls"><span>Your idea. Your type. Try it →</span><div class="styles" role="group" aria-label="Typography style"><button data-style="" aria-pressed="true">Bold</button><button data-style="bookish" aria-pressed="false">Bookish</button><button data-style="offbeat" aria-pressed="false">Offbeat</button></div><label class="range">Breathing room <input id="tracking" type="range" min="-8" max="-3" step=".5" value="-7.5" aria-label="Letter spacing"></label></div>
+        </section>
+      </div>
+      <div class="ticker"
+        aria-hidden="true">a thought <span>↗</span> a conversation <span>↗</span> a little corner of the internet <span>↗</span></div>
+      <div class="wrap">
+        <section class="manifesto" aria-labelledby="manifesto">
+          <div class="section-label">From what if, to here it is.</div>
+          <div>
+            <h2
+              id="manifesto">Not every idea needs<br>to change the world.<br>It can change <em>your</em> day.</h2>
+            <p>A place to keep things. Something to bring people together. A tool that fits the way you think. Start with what you need, and tell your assistant about it.</p>
+          </div>
+        </section>
+        <section class="verbs" aria-label="How yaks.app works">
+          <article class="verb">
+            <h2
+              style="margin:0"><button aria-expanded="true" aria-controls="build-answer"><span class="number">01 /</span><strong>Build.</strong><span class="plus" aria-hidden="true">+</span></button></h2>
+            <div class="answer" id="build-answer">
+              <p>Tell Claude or ChatGPT what you want to make. Your assistant builds the app. Keep talking to shape it into something that feels like you.</p>
+            </div>
+          </article>
+          <article class="verb">
+            <h2
+              style="margin:0"><button aria-expanded="false" aria-controls="host-answer"><span class="number">02 /</span><strong>Host.</strong><span class="plus" aria-hidden="true">+</span></button></h2>
+            <div class="answer" id="host-answer" hidden>
+              <p>yaks.app gives your app a home online, with a place for its data and files. Open it on your phone, your laptop, wherever your day takes you.</p>
+            </div>
+          </article>
+          <article class="verb">
+            <h2
+              style="margin:0"><button aria-expanded="false" aria-controls="share-answer"><span class="number">03 /</span><strong>Share.</strong><span class="plus" aria-hidden="true">+</span></button></h2>
+            <div class="answer" id="share-answer" hidden>
+              <p>Send a link. Invite your people. A small idea becomes something you can use together.</p>
+            </div>
+          </article>
+        </section>
+      </div>
+    </main>
+    <footer class="footer">
+      <div class="wrap">
+        <div
+          class="footer-main"><h2>Good things begin<br>with <em>what if.</em></h2><a class="start" href="https://yaks.app/login">Find out <span aria-hidden="true">↗</span></a></div>
+        <div
+          class="colophon"><span>yaks.app / Build, host and share web apps.</span><a href="https://yaks.app/docs">Read the field guide ↗</a><span>Made for your ideas.</span></div>
+      </div>
+    </footer>
+    <script>
+    let styles = document.querySelectorAll('[data-style]')
+    styles.forEach((button) =>
+      button.addEventListener('click', () => {
+        document.body.classList.remove('bookish', 'offbeat')
+        if (button.dataset.style) document.body.classList.add(button.dataset.style)
+        styles.forEach((item) =>
+          item.setAttribute('aria-pressed', String(item === button))
+        )
+      })
+    )
+    document.querySelector('#tracking').addEventListener('input', (event) => {
+      document.documentElement.style.setProperty(
+        '--tracking',
+        `${Number(event.target.value) / 100}em`,
+      )
+    })
+    document.querySelectorAll('.verb button').forEach((button) =>
+      button.addEventListener('click', () => {
+        let open = button.getAttribute('aria-expanded') !== 'true'
+        button.setAttribute('aria-expanded', String(open))
+        document.getElementById(button.getAttribute('aria-controls')).hidden = !open
+      })
+    )
+    </script>
+  </body>
+</html>

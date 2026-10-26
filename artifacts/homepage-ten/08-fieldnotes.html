@@ -1,0 +1,734 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Field Notes — yaks.app</title>
+    <meta name="description"
+      content="An idea is a place worth going. Build, host and share web apps with yaks.app.">
+    <style>
+    :root {
+      --paper: #f4f0e5;
+      --ink: #283c30;
+      --muted: #626b5c;
+      --line: #bcbfb0;
+      --orange: #b84929;
+      --green: #d3dbb9;
+      --light: #fffdf5;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Arial,Helvetica,sans-serif;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button {
+      font: inherit;
+      cursor: pointer;
+    }
+    a:focus-visible,
+    button:focus-visible {
+      outline: 3px solid var(--orange);
+      outline-offset: 5px;
+    }
+    button,
+    a {
+      touch-action: manipulation;
+    }
+    .page {
+      max-width: 1480px;
+      margin: auto;
+      padding: 0 5.5%;
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--ink);
+      height: 104px;
+    }
+    .brand {
+      font-family: Georgia,serif;
+      font-size: 34px;
+      letter-spacing: -2px;
+    }
+    .brand span {
+      display: inline-block;
+      font-family: Arial,sans-serif;
+      font-size: 13px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      line-height: 23px;
+      text-align: center;
+      vertical-align: middle;
+      margin-left: 7px;
+      letter-spacing: 0;
+    }
+    .edition {
+      font-size: 10px;
+      letter-spacing: 1.7px;
+      text-align: center;
+      line-height: 1.7;
+    }
+    .nav {
+      display: flex;
+      gap: 30px;
+      font-size: 12px;
+    }
+    .nav a:last-child {
+      color: var(--orange);
+    }
+    .intro {
+      padding-top: 27px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      letter-spacing: 1.1px;
+    }
+    .intro p {
+      margin: 0;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.03fr 1fr;
+      gap: 6%;
+      padding: 58px 0 63px;
+      align-items: start;
+      position: relative;
+    }
+    .hero h1 {
+      font-family: Georgia,'Times New Roman',serif;
+      font-weight: 400;
+      font-size: clamp(66px,7.4vw,104px);
+      letter-spacing: -5px;
+      line-height: 1.01;
+      margin: 0 0 26px;
+      position: relative;
+      z-index: 1;
+    }
+    .hero h1 em {
+      font-weight: 400;
+      color: var(--orange);
+    }
+    .hero .lead {
+      font-size: 15px;
+      line-height: 1.8;
+      max-width: 365px;
+      margin: 0 0 23px;
+      color: var(--muted);
+    }
+    .link {
+      display: inline-flex;
+      gap: 29px;
+      font-size: 13px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--ink);
+      font-weight: 700;
+    }
+    .link:hover {
+      color: var(--orange);
+      border-color: var(--orange);
+    }
+    .note {
+      margin-top: 32px;
+      display: flex;
+      gap: 15px;
+      max-width: 340px;
+      align-items: center;
+    }
+    .note-mark {
+      font-family: Georgia,serif;
+      font-size: 47px;
+      color: var(--orange);
+      transform: rotate(-15deg);
+    }
+    .note p {
+      font-family: Georgia,serif;
+      font-size: 14px;
+      font-style: italic;
+      line-height: 1.5;
+      margin: 0;
+      color: var(--muted);
+    }
+    .map-assembly {
+      position: relative;
+      margin-top: 16px;
+      padding: 8px 0 0;
+    }
+    .map-paper {
+      position: relative;
+      background: #e2e4cf;
+      border: 1px solid #a6af92;
+      transform: rotate(3deg);
+      box-shadow: 7px 13px 0 #dedbcd;
+      padding: 16px;
+    }
+    .map-paper::after {
+      content: '';
+      position: absolute;
+      pointer-events: none;
+      inset: 0;
+      background: linear-gradient(90deg,transparent 32%,#fff5 33.2%,#4a563614
+        33.4%,transparent 35%,transparent 65%,#fff5 66.5%,#4a563614
+        66.8%,transparent 68%);
+    }
+    .map-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      letter-spacing: 1.3px;
+      margin-bottom: 13px;
+    }
+    .map {
+      width: 100%;
+      height: auto;
+      display: block;
+      overflow: visible;
+    }
+    .map-foot {
+      display: flex;
+      justify-content: space-between;
+      font-size: 9px;
+      border-top: 1px solid #a6af92;
+      padding-top: 12px;
+      margin-top: 10px;
+      color: #5d694d;
+    }
+    .map-foot span:last-child {
+      font-family: Georgia,serif;
+      font-style: italic;
+    }
+    .stamp {
+      position: absolute;
+      top: -28px;
+      right: -19px;
+      background: var(--orange);
+      color: #fff4e5;
+      width: 111px;
+      height: 126px;
+      padding: 12px;
+      border: 6px dotted var(--paper);
+      transform: rotate(12deg);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .stamp .mountain {
+      font-family: Georgia,serif;
+      font-size: 39px;
+      line-height: 1;
+    }
+    .stamp span {
+      font-size: 8px;
+      letter-spacing: 1px;
+    }
+    .stamp strong {
+      font-size: 11px;
+      font-weight: 400;
+      letter-spacing: 1px;
+    }
+    .postmark {
+      position: absolute;
+      bottom: 41px;
+      left: -50px;
+      width: 105px;
+      height: 105px;
+      border: 2px solid var(--orange);
+      border-radius: 50%;
+      color: var(--orange);
+      transform: rotate(-19deg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      line-height: 1.7;
+      letter-spacing: 1px;
+      opacity: .9;
+      background: #f4f0e53d;
+    }
+    .postmark b {
+      font-size: 21px;
+      font-family: Georgia,serif;
+      font-weight: 400;
+      letter-spacing: 0;
+    }
+    .map-caption {
+      margin: 30px 0 0 18px;
+      font-family: Georgia,serif;
+      font-style: italic;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+    }
+    .compass {
+      position: absolute;
+      right: 34px;
+      bottom: 87px;
+      width: 55px;
+      height: 55px;
+      background: var(--paper);
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      font-family: Georgia,serif;
+      font-size: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 2px 3px 0 #66745e2b;
+      color: var(--ink);
+      z-index: 2;
+    }
+    .compass:hover {
+      background: var(--light);
+    }
+    .compass span {
+      display: inline-block;
+      transition: transform .5s;
+    }
+    .route-point {
+      fill: var(--paper);
+      stroke: var(--orange);
+      stroke-width: 2;
+      transition: r .25s;
+    }
+    .route-point.active {
+      fill: var(--orange);
+      r: 9;
+    }
+    .route-line {
+      stroke: var(--orange);
+      stroke-width: 2.5;
+      stroke-dasharray: 6 7;
+      fill: none;
+    }
+    .journey {
+      border-top: 1px solid var(--ink);
+      padding: 33px 0 63px;
+      display: grid;
+      grid-template-columns: .65fr 2fr;
+      gap: 8%;
+    }
+    .section-kicker {
+      font-size: 10px;
+      letter-spacing: 1.7px;
+      margin: 0 0 17px;
+      color: var(--muted);
+    }
+    .journey h2 {
+      font-family: Georgia,serif;
+      font-size: 37px;
+      line-height: 1.1;
+      font-weight: 400;
+      letter-spacing: -1px;
+      margin: 0;
+    }
+    .fold {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      min-width: 0;
+    }
+    .stop {
+      background: #ece9dd;
+      border: 1px solid var(--line);
+      padding: 22px 19px;
+      position: relative;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      color: var(--ink);
+      min-height: 214px;
+      transition: background .2s,transform .2s;
+      margin-left: -1px;
+    }
+    .stop:first-child {
+      margin-left: 0;
+    }
+    .stop.active {
+      background: var(--light);
+      transform: translateY(-8px);
+      box-shadow: 0 8px 0 #d6d8c7;
+    }
+    .stop .step {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    .stop .step i {
+      font-style: normal;
+      color: var(--orange);
+    }
+    .stop strong {
+      font-family: Georgia,serif;
+      font-size: 26px;
+      font-weight: 400;
+      line-height: 1.1;
+      letter-spacing: -.6px;
+    }
+    .stop .teaser {
+      font-size: 12px;
+      line-height: 1.65;
+      margin-top: 14px;
+      color: var(--muted);
+    }
+    .stop .stop-icon {
+      position: absolute;
+      bottom: 17px;
+      right: 17px;
+      font-size: 18px;
+      color: var(--orange);
+    }
+    .route-story {
+      grid-column: 2;
+      margin-top: -10px;
+      display: flex;
+      gap: 25px;
+      align-items: baseline;
+      padding-top: 19px;
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .route-story strong {
+      color: var(--orange);
+      font-family: Georgia,serif;
+      font-size: 19px;
+      white-space: nowrap;
+      font-weight: 400;
+    }
+    .route-story p {
+      margin: 0;
+      color: var(--muted);
+      min-height: 44px;
+    }
+    .places {
+      border-top: 1px solid var(--ink);
+      padding: 45px 0 65px;
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 10%;
+      align-items: center;
+    }
+    .places h2 {
+      font-family: Georgia,serif;
+      font-weight: 400;
+      font-size: 58px;
+      line-height: 1.02;
+      letter-spacing: -2px;
+      margin: 0;
+    }
+    .places h2 em {
+      color: var(--orange);
+    }
+    .places .details p {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.85;
+      margin: 0 0 24px;
+    }
+    .footer {
+      border-top: 1px solid var(--ink);
+      padding: 24px 0 36px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .footer div {
+      display: flex;
+      gap: 24px;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    @media (max-width:1000px) {
+      .hero h1 {
+        font-size: 77px;
+        letter-spacing: -4px;
+      }
+      .hero {
+        gap: 5%;
+      }
+      .postmark {
+        left: -25px;
+        bottom: 40px;
+        width: 85px;
+        height: 85px;
+        font-size: 8px;
+      }
+      .postmark b {
+        font-size: 18px;
+      }
+      .stamp {
+        width: 92px;
+        height: 105px;
+        right: -12px;
+      }
+      .journey {
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+      .journey h2 br {
+        display: none;
+      }
+      .route-story {
+        grid-column: 1;
+        margin: 0;
+      }
+      .stop {
+        min-height: 205px;
+      }
+      .places h2 {
+        font-size: 48px;
+      }
+    }
+    @media (max-width:650px) {
+      .page {
+        padding: 0 7%;
+      }
+      .top {
+        height: 84px;
+      }
+      .brand {
+        font-size: 29px;
+      }
+      .edition {
+        display: none;
+      }
+      .nav {
+        gap: 22px;
+        font-size: 11px;
+      }
+      .intro {
+        font-size: 8px;
+        letter-spacing: .8px;
+      }
+      .intro p:last-child {
+        display: none;
+      }
+      .hero {
+        grid-template-columns: 1fr;
+        padding: 32px 0 48px;
+        gap: 40px;
+      }
+      .hero h1 {
+        font-size: 76px;
+        letter-spacing: -4px;
+      }
+      .hero .lead {
+        font-size: 14px;
+        max-width: 345px;
+      }
+      .note {
+        margin-top: 25px;
+      }
+      .map-assembly {
+        margin: 10px 7px 0 7px;
+      }
+      .map-paper {
+        padding: 13px;
+      }
+      .map-head,
+      .map-foot {
+        font-size: 8px;
+      }
+      .stamp {
+        top: -23px;
+        right: -17px;
+      }
+      .postmark {
+        bottom: 39px;
+        left: -25px;
+        width: 83px;
+        height: 83px;
+        font-size: 8px;
+      }
+      .map-caption {
+        font-size: 11px;
+        margin: 28px 0 0;
+      }
+      .compass {
+        right: 26px;
+        bottom: 77px;
+        width: 45px;
+        height: 45px;
+        font-size: 24px;
+      }
+      .journey {
+        padding: 28px 0 41px;
+        gap: 25px;
+      }
+      .journey h2 {
+        font-size: 32px;
+      }
+      .fold {
+        grid-template-columns: 1fr;
+      }
+      .stop {
+        min-height: auto;
+        padding: 18px 20px;
+        display: grid;
+        grid-template-columns: 45px 1fr;
+        margin: 0 0 -1px;
+        column-gap: 10px;
+      }
+      .stop .step {
+        grid-row: 1/3;
+        margin: 6px 0 0;
+        justify-content: flex-start;
+      }
+      .stop .step i {
+        display: none;
+      }
+      .stop strong {
+        font-size: 25px;
+      }
+      .stop .teaser {
+        margin-top: 8px;
+        font-size: 12px;
+        padding-right: 15px;
+      }
+      .stop.active {
+        transform: translateX(5px);
+        box-shadow: -5px 0 0 #d6d8c7;
+      }
+      .route-story {
+        display: block;
+        padding-top: 15px;
+      }
+      .route-story strong {
+        font-size: 21px;
+      }
+      .route-story p {
+        font-size: 13px;
+        margin-top: 10px;
+        min-height: 65px;
+      }
+      .places {
+        grid-template-columns: 1fr;
+        gap: 23px;
+        padding: 35px 0 40px;
+      }
+      .places h2 {
+        font-size: 49px;
+      }
+      .places .details p {
+        font-size: 13px;
+      }
+      .footer {
+        font-size: 10px;
+        gap: 20px;
+        line-height: 1.7;
+      }
+      .footer div {
+        gap: 14px;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      * {
+        transition: none!important;
+        animation: none!important;
+      }
+    }
+    </style>
+    <script src="lab.js" defer></script>
+  </head>
+  <body>
+    <div class="page">
+      <header
+        class="top"><a class="brand" href="https://yaks.app">yaks.app<span aria-hidden="true">↗</span></a><div class="edition">Field notes from a more personal internet<br>No. 08 · A place for your ideas</div><nav class="nav" aria-label="Main navigation"><a href="#journey">The journey</a><a href="https://yaks.app/login">Set out ↗</a></nav></header>
+      <main>
+        <div class="intro">
+          <p>Build, host and share web apps</p>
+          <p>Bring a little curiosity. Leave with something of your own.</p>
+        </div>
+        <section class="hero">
+          <div><h1>Every idea<br>is a place<br><em>worth going.</em></h1><p class="lead">There’s a little corner of the internet that only you could make. Tell Claude or ChatGPT what you have in mind. yaks.app gives it a home.</p><a class="link" href="https://yaks.app/login">Begin your own adventure <span aria-hidden="true">↗</span></a><div class="note"><span class="note-mark" aria-hidden="true">↳</span><p>No perfect plan required.<br>Start with the thing you wish existed.</p></div></div>
+          <div
+            class="map-assembly"><div class="map-paper"><div class="map-head"><span>A map of possibility</span><span>Chart 001</span></div><svg class="map" viewBox="0 0 450 425" role="img" aria-label="Illustrated map from an idea at the foothills, through the workshop, to a shared home by the sea"><defs><pattern id="grain" width="9" height="9" patternUnits="userSpaceOnUse"><circle cx="2" cy="3" r=".55" fill="#a1ad8b" opacity=".45"/></pattern><pattern id="forest" width="22" height="24" patternUnits="userSpaceOnUse"><path d="m11 3-5 11h10z M11 14v4" fill="none" stroke="#81916e" stroke-width=".8"/></pattern></defs><rect width="450" height="425" fill="url(#grain)"/><path d="M450 0H342c-17 32 9 49-4 83s-46 28-33 58 47 25 38 62-38 39-27 75 29 43 21 73-41 39-26 74h139Z" fill="#c2d2ce"/><g fill="none" stroke="#a5b393" stroke-width="1"><path d="M0 20c44-4 80 46 63 93S3 173 41 219s74 40 69 95-66 73-54 111"/><path d="M0 42c35 0 52 36 38 67S-12 174 17 218s77 48 67 97-60 80-48 110"/><path d="M0 4c63 4 100 58 86 111s-40 59-18 93 83 53 72 110-59 71-53 107"/><path d="M38 0c65 34 92 75 64 133s-13 54 10 85 69 51 54 99-38 61-32 108"/><path d="M84 0c38 34 73 85 41 134s-10 52 23 92 58 55 40 103-30 62-24 96"/><path d="M155 0c-18 43 43 48 30 92s-37 53-9 94 67 32 48 84 10 100 2 155"/><path d="M183 0c-18 43 43 48 30 92s-37 53-9 94 67 32 48 84 10 100 2 155"/><path d="M211 0c-18 43 43 48 30 92s-37 53-9 94 67 32 48 84 10 100 2 155"/><path d="M240 0c-18 43 43 48 30 92s-37 53-9 94 67 32 48 84 10 100 2 155"/></g><path d="M10 263q55-60 92-35t35 69l-15 61-112 20z M161 19l70 14 23 64-74 31-31-60z" fill="url(#forest)"/><g fill="none" stroke="#8aa7a1" stroke-width="1"><path d="M360 0c-35 54 22 67-17 110s37 55 22 99-39 57-19 95 10 83-18 121"/><path d="M377 0c-35 54 22 67-17 110s37 55 22 99-39 57-19 95 10 83-18 121"/><path d="M397 0c-35 54 22 67-17 110s37 55 22 99-39 57-19 95 10 83-18 121"/></g><path class="route-line" d="M76 340C114 328 151 310 156 274S108 239 141 208s83 10 91-35 44-47 72-67"/><g fill="#f4f0e5" stroke="#6e7f60" stroke-width="1.2"><path d="m43 136 18-34 21 34z m24 0 26-48 26 48z M87 222l10-19 10 19z M165 318l10-19 10 19z"/><path d="m236 181 13-12 13 12v20h-26z M241 201v-15h8v15 M292 88l13-13 13 13v17h-26z"/></g><g font-family="Georgia,serif" fill="#43563e"><text x="33" y="157" font-size="10" font-style="italic">The what-if hills</text><text x="195" y="242" font-size="10" font-style="italic" transform="rotate(-14 195 242)">A way through</text><text x="382" y="275" font-size="13" font-style="italic" transform="rotate(-90 382 275)">The open internet</text></g><g><circle class="route-point active" data-point="0" cx="76" cy="340" r="7"/><circle class="route-point" data-point="1" cx="141" cy="208" r="7"/><circle class="route-point" data-point="2" cx="304" cy="106" r="7"/></g><g font-family="Arial,sans-serif" fill="#283c30" font-size="10" font-weight="700"><text x="89" y="345">01 / An idea</text><text x="155" y="211">02 / A little making</text><text x="203" y="91">03 / Out in the world</text></g><g fill="none" stroke="#5b6d51"><path d="M22 395h80m-80-4v8m40-8v8m40-8v8"/></g><text x="22" y="413" fill="#5b6d51" font-size="8" font-family="Arial,sans-serif">Measured in small beginnings</text></svg><div class="map-foot"><span>Your idea → Your app → Your people</span><span>Not to scale. Nothing is, yet.</span></div></div><div class="stamp" aria-hidden="true"><span>Made for exploring</span><span class="mountain">△</span><strong>yaks.app</strong></div><div class="postmark" aria-hidden="true">A small start<b>Go somewhere</b>of your own</div><button class="compass" id="compass" aria-label="Explore the next stop on the map"><span id="needle" aria-hidden="true">✧</span></button><p class="map-caption"><span>Fig. 01 — A route worth taking.</span><span>Turn the compass ↗</span></p></div>
+        </section>
+        <section class="journey" id="journey">
+          <div>
+            <p class="section-kicker">An unfolding itinerary</p>
+            <h2>A beginning.<br>A few turns.<br>Something yours.</h2>
+          </div>
+          <div class="fold"
+            aria-label="Explore the three stops"><button class="stop active" data-stop="0" aria-pressed="true"><span class="step">01 <i>↗</i></span><strong>Follow<br>a what-if.</strong><span class="teaser">Start with a need, a curiosity,<br>or a very particular idea.</span><span class="stop-icon" aria-hidden="true">⌁</span></button><button class="stop" data-stop="1" aria-pressed="false"><span class="step">02 <i>↗</i></span><strong>Make it<br>as you go.</strong><span class="teaser">A conversation becomes<br>something you can use.</span><span class="stop-icon" aria-hidden="true">↝</span></button><button class="stop" data-stop="2" aria-pressed="false"><span class="step">03 <i>↗</i></span><strong>Put it<br>on the map.</strong><span class="teaser">An address of its own.<br>A place to bring your people.</span><span class="stop-icon" aria-hidden="true">⊹</span></button></div>
+          <div class="route-story"
+            aria-live="polite"><strong id="story-title">The starting point</strong><p id="story-copy">Tell Claude or ChatGPT what you want to make and who it is for. Your own situation is the best place to begin.</p></div>
+        </section>
+        <section class="places">
+          <h2>A small place.<br><em>Entirely yours.</em></h2>
+          <div
+            class="details"><p>Your assistant builds it. yaks.app keeps it online, holds its data, and gives you a link to share. Come back to the conversation whenever your idea takes another turn.</p><a class="link" href="https://yaks.app/login">Let’s see where this goes <span aria-hidden="true">↗</span></a></div>
+        </section>
+      </main>
+      <footer
+        class="footer"><span>yaks.app · For the ideas that take you somewhere.</span><div><a href="https://yaks.app/docs">Field guide</a><a href="https://yaks.app/login">Begin ↗</a></div></footer>
+    </div>
+    <script>
+    let stories = [
+      [
+        'The starting point',
+        'Tell Claude or ChatGPT what you want to make and who it is for. Your own situation is the best place to begin.',
+      ],
+      [
+        'Find your own route',
+        'Your assistant builds the app. Try it, ask for changes, and keep shaping it in the same conversation. The route can change as you go.',
+      ],
+      [
+        'Somewhere to return to',
+        'yaks.app hosts your app at your own address and keeps its data. Open it on your phone and share the link with your people.',
+      ],
+    ]
+    let current = 0
+    let turns = 0
+    let stops = [...document.querySelectorAll('[data-stop]')]
+    let choose = (index) => {
+      current = index
+      turns += 1
+      stops.forEach((stop, position) => {
+        stop.classList.toggle('active', position === index)
+        stop.setAttribute('aria-pressed', String(position === index))
+      })
+      document.querySelectorAll('[data-point]').forEach((point, position) =>
+        point.classList.toggle('active', position === index)
+      )
+      document.querySelector('#story-title').textContent = stories[index][0]
+      document.querySelector('#story-copy').textContent = stories[index][1]
+      document.querySelector('#needle').style.transform = 'rotate(' +
+        (turns * 120) + 'deg)'
+      document.querySelector('#compass').setAttribute(
+        'aria-label',
+        'Explore stop ' + ((index + 1) % 3 + 1) + ' on the map',
+      )
+    }
+    stops.forEach((stop, index) =>
+      stop.addEventListener('click', () => choose(index))
+    )
+    document.querySelector('#compass').addEventListener(
+      'click',
+      () => choose((current + 1) % 3),
+    )
+    </script>
+  </body>
+</html>

@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>yaks.app — A place for your ideas to grow</title>
+    <meta name="description"
+      content="Build, host and share web apps. Start with an idea, ask Claude or ChatGPT, and give it a home on yaks.app.">
+    <style>
+    :root {
+      --paper: #f4f0df;
+      --ink: #183f32;
+      --orange: #e86b34;
+      --pink: #ecc0bc;
+      --leaf: #68835b;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Arial,sans-serif;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button {
+      font: inherit;
+    }
+    a:focus-visible,
+    button:focus-visible {
+      outline: 3px solid var(--orange);
+      outline-offset: 6px;
+    }
+    header {
+      height: 108px;
+      padding: 0 6%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #183f3226;
+    }
+    .brand {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: -2px;
+    }
+    .brand i {
+      font-family: Georgia,serif;
+      font-weight: 400;
+    }
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+      font-size: 14px;
+    }
+    .nav-start {
+      border: 1px solid var(--ink);
+      padding: 13px 20px;
+      border-radius: 50%;
+    }
+    .hero {
+      position: relative;
+      min-height: 750px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+    }
+    .hero-copy {
+      padding: 75px 0 110px 12%;
+      z-index: 2;
+    }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 2px;
+      margin: 0 0 26px;
+    }
+    .hero h1 {
+      font-family: Georgia,serif;
+      font-size: clamp(68px,7.5vw,116px);
+      font-weight: 400;
+      letter-spacing: -6px;
+      line-height: .98;
+      margin: 0 0 27px;
+    }
+    .hero h1 em {
+      font-weight: 400;
+      color: var(--orange);
+    }
+    .intro {
+      max-width: 360px;
+      font-size: 17px;
+      line-height: 1.7;
+    }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      gap: 33px;
+      background: var(--ink);
+      color: var(--paper);
+      padding: 18px 25px;
+      border-radius: 4px;
+      margin-top: 17px;
+      font-size: 15px;
+    }
+    .button span {
+      font-size: 24px;
+    }
+    .small {
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .hero-copy .small {
+      margin-top: 17px;
+    }
+    .garden {
+      position: relative;
+      min-height: 710px;
+      align-self: stretch;
+    }
+    .scene {
+      position: absolute;
+      width: 112%;
+      height: 100%;
+      top: 0;
+      left: -8%;
+      overflow: visible;
+    }
+    .bloom {
+      transform-origin: 305px 254px;
+      transition: transform .7s cubic-bezier(.2,.8,.3,1),fill .7s;
+      fill: var(--orange);
+    }
+    .garden[data-seed="together"] .bloom {
+      transform: rotate(35deg);
+      fill: #dba6ad;
+    }
+    .garden[data-seed="everyday"] .bloom {
+      transform: rotate(-22deg);
+      fill: #c9aa37;
+    }
+    .leaf {
+      fill: var(--leaf);
+    }
+    .tag {
+      position: absolute;
+      bottom: 128px;
+      right: 9%;
+      width: 224px;
+      padding: 22px 24px;
+      background: #fffaf0;
+      box-shadow: 5px 8px 0 #183f3215;
+      transform: rotate(7deg);
+      border: 1px solid #183f322b;
+    }
+    .tag:before {
+      content: '';
+      display: block;
+      height: 12px;
+      width: 12px;
+      border: 1px solid #6d775b;
+      border-radius: 50%;
+      position: absolute;
+      left: 50%;
+      top: 10px;
+    }
+    .tag small {
+      font-size: 10px;
+      letter-spacing: 2px;
+      display: block;
+      margin: 13px 0;
+    }
+    .tag strong {
+      font-family: Georgia,serif;
+      font-size: 28px;
+      font-weight: 400;
+      display: block;
+      line-height: 1.1;
+    }
+    .tag p {
+      font-size: 12px;
+      line-height: 1.5;
+      margin-bottom: 0;
+    }
+    .seed-controls {
+      position: absolute;
+      left: 4%;
+      bottom: 28px;
+      z-index: 3;
+    }
+    .seed-controls p {
+      font-family: Georgia,serif;
+      font-style: italic;
+      font-size: 18px;
+    }
+    .seeds {
+      display: flex;
+      gap: 9px;
+      flex-wrap: wrap;
+    }
+    .seed {
+      border: 1px solid #183f3250;
+      border-radius: 40px;
+      padding: 12px 16px;
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .seed[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .seed:hover {
+      transform: translateY(-2px);
+    }
+    .ground {
+      height: 24px;
+      background: var(--ink);
+      clip-path: polygon(0 70%,3% 40%,6% 65%,10% 25%,14% 55%,18% 20%,22% 60%,28%
+        25%,34% 70%,40% 30%,45% 65%,51% 10%,56% 45%,61% 20%,66% 55%,71% 20%,78%
+        65%,85% 30%,92% 65%,100% 20%,100% 100%,0 100%);
+    }
+    .manifesto {
+      background: var(--ink);
+      color: var(--paper);
+      padding: 80px 12%;
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 55px;
+    }
+    .manifesto .eyebrow {
+      margin-top: 10px;
+      color: #d5d8be;
+    }
+    .manifesto h2 {
+      font-family: Georgia,serif;
+      font-weight: 400;
+      font-size: clamp(35px,4.1vw,60px);
+      line-height: 1.15;
+      letter-spacing: -1.5px;
+      margin: 0;
+    }
+    .manifesto h2 em {
+      color: #f1b586;
+    }
+    .growing {
+      padding: 95px 8% 110px;
+    }
+    .section-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #183f3240;
+      padding-bottom: 25px;
+    }
+    .section-top h2 {
+      font-family: Georgia,serif;
+      font-weight: 400;
+      font-size: 44px;
+      margin: 0;
+      letter-spacing: -1px;
+    }
+    .section-top p {
+      font-family: Georgia,serif;
+      font-style: italic;
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 65px;
+      padding-top: 48px;
+    }
+    .number {
+      font-family: Georgia,serif;
+      color: var(--orange);
+      font-size: 24px;
+    }
+    .steps h3 {
+      font-family: Georgia,serif;
+      font-size: 32px;
+      font-weight: 400;
+      margin: 22px 0 16px;
+    }
+    .steps p {
+      font-size: 15px;
+      line-height: 1.8;
+    }
+    .sprout {
+      height: 95px;
+      width: 100%;
+      color: var(--ink);
+      margin-top: 20px;
+    }
+    .closing {
+      background: #e9bcab;
+      position: relative;
+      text-align: center;
+      padding: 80px 20px 95px;
+      overflow: hidden;
+    }
+    .closing h2 {
+      font-family: Georgia,serif;
+      font-size: clamp(45px,6vw,80px);
+      font-weight: 400;
+      letter-spacing: -3px;
+      margin: 10px 0;
+    }
+    .closing p {
+      font-size: 15px;
+    }
+    .closing:before,
+    .closing:after {
+      content: '✳';
+      position: absolute;
+      font-size: 220px;
+      font-family: Georgia,serif;
+      font-weight: 400;
+      bottom: -80px;
+      color: var(--ink);
+    }
+    .closing:before {
+      left: 4%;
+      transform: rotate(20deg);
+    }
+    .closing:after {
+      right: 4%;
+      color: #c5754b;
+      transform: rotate(-20deg);
+    }
+    footer {
+      padding: 32px 6%;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      align-items: center;
+    }
+    .footer-links {
+      display: flex;
+      gap: 22px;
+    }
+    @media (min-width:1500px) {
+      .hero {
+        max-width: 1500px;
+        margin: auto;
+      }
+      .hero-copy {
+        padding-top: 100px;
+      }
+    }
+    @media (max-width:850px) {
+      header {
+        height: 85px;
+        padding: 0 6%;
+      }
+      nav {
+        gap: 20px;
+      }
+      nav a:first-child {
+        display: none;
+      }
+      .hero {
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }
+      .hero-copy {
+        padding: 55px 7% 0;
+      }
+      .hero h1 {
+        font-size: 78px;
+        letter-spacing: -4px;
+      }
+      .intro {
+        max-width: 430px;
+      }
+      .garden {
+        height: 610px;
+        min-height: 0;
+        margin-top: -15px;
+      }
+      .scene {
+        left: 0;
+        width: 100%;
+      }
+      .tag {
+        bottom: 130px;
+        right: 12%;
+      }
+      .seed-controls {
+        left: 7%;
+        bottom: 20px;
+      }
+      .manifesto {
+        grid-template-columns: 1fr;
+        gap: 15px;
+        padding: 60px 8%;
+      }
+      .steps {
+        gap: 28px;
+      }
+      .section-top {
+        align-items: start;
+        flex-direction: column;
+      }
+      .section-top p {
+        margin-bottom: 0;
+      }
+      .growing {
+        padding: 60px 8%;
+      }
+      .closing:before,
+      .closing:after {
+        font-size: 130px;
+        bottom: -55px;
+      }
+    }
+    @media (max-width:540px) {
+      .hero h1 {
+        font-size: 67px;
+      }
+      .hero-copy {
+        padding-top: 40px;
+      }
+      .eyebrow {
+        font-size: 10px;
+      }
+      .garden {
+        height: 550px;
+      }
+      .scene {
+        width: 118%;
+        left: -12%;
+      }
+      .tag {
+        right: 7%;
+        width: 185px;
+        padding: 20px;
+        bottom: 130px;
+      }
+      .tag strong {
+        font-size: 24px;
+      }
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 30px;
+      }
+      .steps article {
+        display: grid;
+        grid-template-columns: 35px 1fr;
+        column-gap: 16px;
+        border-bottom: 1px solid #183f3228;
+        padding-bottom: 30px;
+      }
+      .steps h3 {
+        margin: 0 0 10px;
+      }
+      .steps p {
+        grid-column: 2;
+        margin: 0;
+      }
+      .sprout {
+        display: none;
+      }
+      .number {
+        grid-column: 1;
+        grid-row: 1;
+      }
+      .section-top h2 {
+        font-size: 36px;
+      }
+      .closing {
+        padding: 60px 20px 80px;
+      }
+      .closing h2 {
+        font-size: 52px;
+      }
+      .footer-links {
+        gap: 14px;
+      }
+      footer .small {
+        display: none;
+      }
+      .nav-start {
+        padding: 10px 14px;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      *,
+      *:before,
+      *:after {
+        transition: none!important;
+        animation: none!important;
+      }
+    }
+    </style>
+  </head>
+  <body>
+    <header><a class="brand" href="https://yaks.app">yaks<i>.app</i></a><nav aria-label="Main"><a href="#how">How it grows</a><a href="https://yaks.app/docs">Field guide ↗</a><a class="nav-start" href="https://yaks.app/login">Start something</a></nav></header>
+    <main>
+      <section class="hero" aria-labelledby="title">
+        <div
+          class="hero-copy"><p class="eyebrow">A little idea. A world of possibility.</p><h1 id="title">Good things<br>start <em>small.</em></h1><p class="intro">That thing you wish existed? Give it a place to grow. Ask Claude or ChatGPT to build it. Make it yours with yaks.app.</p><a class="button" href="https://yaks.app/login">Plant your first idea <span aria-hidden="true">↗</span></a><p class="small">Build, host and share web apps.</p></div>
+        <div class="garden" data-seed="personal"
+          aria-label="An illustrated garden that changes with your selection">
+          <svg class="scene" viewBox="0 0 650 740" role="img"
+            aria-label="A paper-cut flower growing among broad green leaves">
+            <defs>
+              <pattern id="grain" width="7" height="7"
+                patternUnits="userSpaceOnUse">
+                <circle cx="2" cy="2" r=".6" fill="#183f32" opacity=".08" />
+              </pattern>
+            </defs>
+            <circle cx="356" cy="310" r="245" fill="#e9e7d1" />
+            <circle cx="530" cy="124" r="40" fill="#e9bcab" />
+            <path d="M305 645 C297 520 320 390 305 254" fill="none"
+              stroke="#214c39" stroke-width="16" />
+            <path d="M307 472 C210 455 160 401 160 329 C249 324 300 376 307 472"
+              fill="#68835b" />
+            <path d="M307 421 C400 418 455 359 461 291 C368 291 318 341 307 421"
+              fill="#315b40" />
+            <path d="M301 561 C199 553 107 494 90 413 C199 406 292 465 301 561"
+              fill="#9ba572" />
+            <path d="M314 533 C405 526 504 448 515 383 C397 382 326 456 314 533"
+              fill="#214c39" />
+            <g class="bloom">
+              <ellipse cx="305" cy="177" rx="46" ry="91" />
+              <ellipse cx="305" cy="177" rx="46" ry="91"
+                transform="rotate(60 305 254)" />
+              <ellipse cx="305" cy="177" rx="46" ry="91"
+                transform="rotate(120 305 254)" />
+              <ellipse cx="305" cy="177" rx="46" ry="91"
+                transform="rotate(180 305 254)" />
+              <ellipse cx="305" cy="177" rx="46" ry="91"
+                transform="rotate(240 305 254)" />
+              <ellipse cx="305" cy="177" rx="46" ry="91"
+                transform="rotate(300 305 254)" />
+            </g>
+            <circle cx="305" cy="254" r="48" fill="#f4d577" />
+            <circle cx="305" cy="254" r="35" fill="url(#grain)" />
+            <path
+              d="M75 640 Q90 562 69 495 M77 607 Q27 600 25 563 Q73 558 77 607 M81 575 Q125 574 134 532 Q85 526 81 575"
+              fill="#315b40" stroke="#315b40" stroke-width="5" />
+            <path d="M0 649 Q167 586 330 640 Q511 576 650 652 L650 740 L0 740"
+              fill="#c5c9a0" />
+            <path d="M0 687 Q167 618 348 683 Q508 634 650 681 L650 740 L0 740"
+              fill="#9ba572" />
+            <path
+              d="M105 195 Q128 169 145 193 Q127 216 105 195 M145 193 Q157 163 179 179 Q173 206 145 193"
+              fill="#e9bcab" />
+            <path
+              d="M533 581 L535 529 M535 549 Q496 547 499 516 Q536 519 535 549 M535 564 Q571 564 577 537 Q539 534 535 564"
+              fill="#315b40" stroke="#315b40" stroke-width="4" />
+          </svg>
+          <div class="tag"
+            aria-live="polite"><small>A seed of possibility</small><strong id="seed-title">Something<br>just for you.</strong><p id="seed-copy">Your own way to keep the things that matter.</p></div>
+          <div class="seed-controls">
+            <p>What would you like to grow?</p>
+            <div class="seeds"
+              aria-label="Choose an idea"><button class="seed" data-seed="personal" aria-pressed="true">For yourself</button><button class="seed" data-seed="together" aria-pressed="false">For your people</button><button class="seed" data-seed="everyday" aria-pressed="false">For your everyday</button></div>
+          </div>
+        </div>
+      </section>
+      <div class="ground" aria-hidden="true"></div>
+      <section class="manifesto">
+        <p class="eyebrow">Room to be your own thing</p>
+        <h2>The internet has room for<br><em>your kind of useful.</em></h2>
+      </section>
+      <section class="growing" id="how">
+        <div class="section-top">
+          <h2>From a thought to a thing.</h2>
+          <p>No green thumb required.</p>
+        </div>
+        <div class="steps">
+          <article><span class="number">01</span><h3>Say what you need.</h3><p>Start in a conversation with Claude or ChatGPT. Tell your assistant what you want your app to do, in your own words.</p><svg class="sprout" viewBox="0 0 240 95" aria-hidden="true"><ellipse cx="100" cy="65" rx="22" ry="13" fill="#e86b34" transform="rotate(-25 100 65)"/><path d="M25 82 Q110 64 215 82" fill="none" stroke="currentColor" stroke-width="2"/></svg></article>
+          <article><span class="number">02</span><h3>Give it a home.</h3><p>Your assistant builds it. yaks.app hosts it at your address, keeps its data, and makes it available on your phone.</p><svg class="sprout" viewBox="0 0 240 95" aria-hidden="true"><path d="M25 82 Q110 64 215 82 M110 76 L110 30" fill="none" stroke="currentColor" stroke-width="2"/><path d="M110 51 Q72 49 77 22 Q110 20 110 51 M110 41 Q143 40 145 14 Q112 13 110 41" fill="#68835b"/></svg></article>
+          <article><span class="number">03</span><h3>Let it grow.</h3><p>Share it with the people it’s for. When you need something more, keep asking for changes in the chats you already have.</p><svg class="sprout" viewBox="0 0 240 95" aria-hidden="true"><path d="M25 82 Q110 64 215 82 M110 76 L110 25" fill="none" stroke="currentColor" stroke-width="2"/><path d="M110 60 Q73 60 77 36 Q107 36 110 60 M110 59 Q141 58 145 35 Q112 36 110 59" fill="#68835b"/><g fill="#e86b34"><circle cx="99" cy="20" r="13"/><circle cx="120" cy="20" r="13"/><circle cx="110" cy="9" r="13"/><circle cx="110" cy="30" r="13"/></g><circle cx="110" cy="20" r="9" fill="#f4d577"/></svg></article>
+        </div>
+      </section>
+      <section
+        class="closing"><p class="eyebrow">A small beginning is still a beginning.</p><h2>What’s your seed of an idea?</h2><p>You bring the thought. We’ll give it a home.</p><a class="button" href="https://yaks.app/login">Let’s grow something <span aria-hidden="true">↗</span></a></section>
+    </main>
+    <footer><a class="brand" href="https://yaks.app">yaks<i>.app</i></a><p class="small">Build, host and share web apps.</p><div class="footer-links"><a href="https://yaks.app/docs">Field guide ↗</a><a href="https://yaks.app/login">Sign in ↗</a></div></footer>
+    <script>
+    let seeds = {
+      personal: [
+        'Something just for you.',
+        'Your own way to keep the things that matter.',
+      ],
+      together: [
+        'Something to share.',
+        'A little gathering place for your kind of people.',
+      ],
+      everyday: [
+        'Something that helps.',
+        'Make the repetitive bits of your day a little lighter.',
+      ],
+    }
+    document.querySelectorAll('.seed').forEach((button) =>
+      button.addEventListener('click', () => {
+        let seed = button.dataset.seed
+        document.querySelector('.garden').dataset.seed = seed
+        document.querySelector('#seed-title').textContent = seeds[seed][0]
+        document.querySelector('#seed-copy').textContent = seeds[seed][1]
+        document.querySelectorAll('.seed').forEach((item) =>
+          item.setAttribute('aria-pressed', String(item === button))
+        )
+      })
+    )
+    </script>
+    <script src="lab.js" defer></script>
+  </body>
+</html>

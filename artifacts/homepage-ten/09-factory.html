@@ -1,0 +1,944 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>yaks.app — The little app factory</title>
+    <meta name="description"
+      content="Big ideas. Little apps. Build, host and share web apps with Claude or ChatGPT and yaks.app.">
+    <style>
+    :root {
+      --ink: #172a28;
+      --paper: #fff9e9;
+      --red: #ed4a2c;
+      --blue: #2556db;
+      --yellow: #ffcf36;
+      --green: #c0e4bd;
+      --line: 2px solid var(--ink);
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: Arial,Helvetica,sans-serif;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button {
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+    }
+    a:focus-visible,
+    button:focus-visible {
+      outline: 3px solid var(--blue);
+      outline-offset: 5px;
+    }
+    .skip {
+      position: absolute;
+      left: 16px;
+      top: -80px;
+      background: white;
+      padding: 16px;
+      z-index: 20;
+    }
+    .skip:focus {
+      top: 12px;
+    }
+    .top {
+      height: 94px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 5vw;
+      border-bottom: var(--line);
+    }
+    .brand {
+      font-size: 30px;
+      font-weight: 900;
+      letter-spacing: -2px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand svg {
+      width: 38px;
+      height: 38px;
+    }
+    .top nav {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .pill {
+      border: var(--line);
+      border-radius: 999px;
+      padding: 13px 21px;
+      background: var(--yellow);
+      box-shadow: 3px 3px 0 var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 30px;
+      font-weight: 700;
+    }
+    .pill:hover {
+      transform: translate(-1px,-1px);
+      box-shadow: 5px 5px 0 var(--ink);
+    }
+    .hero {
+      position: relative;
+      padding: 56px 5vw 0;
+      overflow: hidden;
+    }
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 30px;
+    }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      letter-spacing: 1.6px;
+      font-weight: bold;
+      margin: 0 0 22px;
+    }
+    .dot {
+      height: 10px;
+      width: 10px;
+      background: var(--red);
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .hero h1 {
+      font-size: clamp(64px,7.7vw,116px);
+      line-height: .91;
+      letter-spacing: -7px;
+      margin: 0;
+      font-weight: 900;
+    }
+    .hero h1 em {
+      font-style: normal;
+      color: var(--blue);
+    }
+    .hero-copy {
+      max-width: 285px;
+      font-size: 17px;
+      line-height: 1.5;
+      padding-bottom: 3px;
+    }
+    .hero-copy p {
+      margin: 0 0 22px;
+    }
+    .hero-copy .pill {
+      background: var(--red);
+      color: #fff;
+      box-shadow: 4px 4px var(--ink);
+      border-color: var(--ink);
+    }
+    .floor {
+      margin-top: 45px;
+      border: var(--line);
+      border-radius: 18px 18px 0 0;
+      background: #dfeaf0;
+      background-image: radial-gradient(#8dacae 1px,transparent 1px);
+      background-size: 20px 20px;
+      position: relative;
+      min-height: 450px;
+      display: grid;
+      grid-template-columns: 1fr 265px;
+      align-items: center;
+      overflow: hidden;
+    }
+    .floor-label {
+      position: absolute;
+      top: 22px;
+      left: 24px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      background: var(--paper);
+      padding: 9px 12px;
+      border: var(--line);
+      border-radius: 4px;
+    }
+    .factory {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      height: auto;
+      max-height: 455px;
+    }
+    .part {
+      transition: transform .5s,opacity .5s;
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    .part.off {
+      opacity: .12;
+      transform: translateY(-24px);
+    }
+    .machine-light {
+      fill: #b8e1b4;
+    }
+    .working .machine-light {
+      fill: #ffcf36;
+    }
+    .control {
+      margin: 55px 24px 20px 0;
+      border: var(--line);
+      border-radius: 12px;
+      background: var(--paper);
+      padding: 21px 18px;
+      box-shadow: 5px 5px 0 #172a2820;
+      position: relative;
+      z-index: 1;
+    }
+    .control h2 {
+      font-size: 19px;
+      letter-spacing: -.6px;
+      margin: 0 0 8px;
+    }
+    .control p {
+      font-size: 12px;
+      line-height: 1.5;
+      margin: 0 0 17px;
+      color: #445951;
+    }
+    .switches {
+      display: grid;
+      gap: 9px;
+    }
+    .switch {
+      width: 100%;
+      background: white;
+      border: var(--line);
+      border-radius: 7px;
+      text-align: left;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .switch i {
+      width: 25px;
+      height: 25px;
+      border: var(--line);
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      font-style: normal;
+      background: #f0eee3;
+    }
+    .switch[aria-pressed=true] {
+      background: #edf3e8;
+    }
+    .switch[aria-pressed=true] i {
+      background: var(--yellow);
+    }
+    .switch span:last-child {
+      margin-left: auto;
+    }
+    .status {
+      margin: 17px 0 0!important;
+      font-size: 11px!important;
+      min-height: 18px;
+    }
+    .floor-footer {
+      background: var(--ink);
+      color: var(--paper);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 22px;
+      border-radius: 0 0 12px 12px;
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    .floor-footer span:first-child {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .floor-footer .dot {
+      background: var(--yellow);
+      width: 7px;
+      height: 7px;
+    }
+    .marquee {
+      padding: 27px 0;
+      overflow: hidden;
+      border-bottom: var(--line);
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -.7px;
+      display: flex;
+      gap: 36px;
+      white-space: nowrap;
+      margin-top: 45px;
+    }
+    .marquee span {
+      color: var(--red);
+    }
+    .how {
+      padding: 84px 5vw 80px;
+    }
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 25px;
+      margin-bottom: 34px;
+    }
+    .section-title h2 {
+      font-size: clamp(36px,4vw,62px);
+      line-height: 1;
+      letter-spacing: -3px;
+      margin: 0;
+      max-width: 650px;
+    }
+    .section-title p {
+      max-width: 250px;
+      line-height: 1.5;
+      font-size: 15px;
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      border: var(--line);
+      border-radius: 13px;
+      overflow: hidden;
+    }
+    .step {
+      padding: 28px 30px 32px;
+      position: relative;
+      min-height: 320px;
+    }
+    .step + .step {
+      border-left: var(--line);
+    }
+    .step:nth-child(1) {
+      background: #fbd5cb;
+    }
+    .step:nth-child(2) {
+      background: #ffdc68;
+    }
+    .step:nth-child(3) {
+      background: #c8dfc4;
+    }
+    .number {
+      font-size: 13px;
+      border: var(--line);
+      width: 33px;
+      height: 33px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--paper);
+    }
+    .step svg {
+      display: block;
+      width: 100%;
+      height: 105px;
+      margin: 5px auto 10px;
+    }
+    .step h3 {
+      font-size: 24px;
+      letter-spacing: -1px;
+      margin: 16px 0 12px;
+    }
+    .step p {
+      font-size: 15px;
+      line-height: 1.5;
+      margin: 0;
+      max-width: 275px;
+    }
+    .shelf {
+      background: var(--blue);
+      padding: 70px 5vw;
+      color: var(--paper);
+      border-top: var(--line);
+      border-bottom: var(--line);
+    }
+    .shelf .eyebrow {
+      color: #e1e6ff;
+    }
+    .shelf h2 {
+      font-size: clamp(40px,5vw,72px);
+      line-height: 1;
+      letter-spacing: -3px;
+      margin: 0 0 38px;
+    }
+    .shelf-grid {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 20px;
+    }
+    .app {
+      border: 2px solid var(--ink);
+      background: var(--paper);
+      color: var(--ink);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 7px 7px 0 #173887;
+      transition: transform .2s;
+    }
+    .app:hover {
+      transform: translateY(-6px);
+    }
+    .app-tag {
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      color: #485e58;
+    }
+    .app-symbol {
+      height: 110px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 62px;
+    }
+    .app h3 {
+      font-size: 24px;
+      letter-spacing: -1px;
+      margin: 15px 0 9px;
+    }
+    .app p {
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 0;
+    }
+    .end {
+      padding: 80px 5vw;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 30px;
+    }
+    .end h2 {
+      font-size: clamp(40px,5.5vw,80px);
+      line-height: 1;
+      letter-spacing: -4px;
+      margin: 0;
+    }
+    .end p {
+      max-width: 330px;
+      line-height: 1.6;
+      font-size: 16px;
+    }
+    .end .pill {
+      background: var(--yellow);
+      margin-top: 10px;
+    }
+    .footer {
+      padding: 24px 5vw;
+      border-top: var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+    .footer a:last-child {
+      text-decoration: underline;
+    }
+    .stamp {
+      position: absolute;
+      right: 30px;
+      top: 25px;
+      color: var(--blue);
+      font-size: 11px;
+      border: 2px solid var(--blue);
+      border-radius: 50%;
+      height: 72px;
+      width: 72px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      transform: rotate(12deg);
+      font-weight: 900;
+      line-height: 1.3;
+    }
+    .mini-label {
+      font-size: 10px;
+      font-family: Arial,Helvetica,sans-serif;
+      font-weight: bold;
+    }
+    .tiny {
+      font-size: 8px;
+      font-family: Arial,Helvetica,sans-serif;
+    }
+    .preview-bar {
+      fill: #2556db;
+    }
+    .preview-row {
+      fill: #c0e4bd;
+    }
+    .preview-dot {
+      fill: #ed4a2c;
+    }
+    @media (min-width:1450px) {
+      .hero,
+      .how,
+      .shelf,
+      .end {
+        padding-left: max(5vw,calc((100vw - 1320px)/2));
+        padding-right: max(5vw,calc((100vw - 1320px)/2));
+      }
+    }
+    @media (max-width:900px) {
+      .hero h1 {
+        letter-spacing: -4px;
+        font-size: 74px;
+      }
+      .hero-copy {
+        max-width: 240px;
+        font-size: 15px;
+      }
+      .floor {
+        grid-template-columns: 1fr 220px;
+      }
+      .control {
+        padding: 16px 12px;
+        margin-right: 16px;
+      }
+      .step {
+        padding: 24px 20px;
+      }
+      .hero {
+        padding-top: 40px;
+      }
+      .floor {
+        min-height: 360px;
+      }
+      .stamp {
+        display: none;
+      }
+    }
+    @media (max-width:650px) {
+      .top {
+        height: 76px;
+      }
+      .top nav {
+        gap: 18px;
+      }
+      .top nav a:first-child {
+        display: none;
+      }
+      .top .pill {
+        padding: 10px 14px;
+      }
+      .brand {
+        font-size: 26px;
+      }
+      .brand svg {
+        width: 30px;
+      }
+      .hero-top {
+        display: block;
+      }
+      .hero h1 {
+        font-size: clamp(57px,14vw,85px);
+        letter-spacing: -4px;
+      }
+      .hero-copy {
+        max-width: 100%;
+        margin-top: 25px;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+      .hero-copy p {
+        font-size: 14px;
+        margin: 0;
+        flex: 1;
+      }
+      .hero-copy .pill {
+        font-size: 13px;
+        gap: 12px;
+        white-space: nowrap;
+        padding: 12px 14px;
+      }
+      .floor {
+        margin-top: 30px;
+        display: block;
+        min-height: 0;
+        padding-top: 45px;
+      }
+      .floor-label {
+        top: 14px;
+        left: 14px;
+        font-size: 9px;
+        padding: 6px 8px;
+      }
+      .factory {
+        width: 125%;
+        margin-left: -12%;
+        max-height: none;
+      }
+      .control {
+        margin: 0 14px 16px;
+        padding: 17px;
+      }
+      .control p {
+        margin-bottom: 10px;
+      }
+      .switches {
+        grid-template-columns: repeat(3,1fr);
+        gap: 6px;
+      }
+      .switch {
+        padding: 8px 5px;
+        font-size: 11px;
+        display: grid;
+        justify-items: center;
+        gap: 5px;
+        text-align: center;
+      }
+      .switch span:last-child {
+        display: none;
+      }
+      .switch i {
+        width: 22px;
+        height: 22px;
+      }
+      .control .status {
+        margin-top: 11px!important;
+      }
+      .floor-footer {
+        font-size: 8px;
+        padding: 12px;
+        letter-spacing: .5px;
+      }
+      .marquee {
+        font-size: 18px;
+        padding: 22px 0;
+        margin-top: 30px;
+        gap: 22px;
+      }
+      .how {
+        padding: 52px 5vw;
+      }
+      .section-title {
+        display: block;
+      }
+      .section-title h2 {
+        letter-spacing: -2px;
+      }
+      .section-title p {
+        max-width: 100%;
+        font-size: 14px;
+      }
+      .steps,
+      .shelf-grid {
+        grid-template-columns: 1fr;
+      }
+      .step {
+        min-height: 0;
+        padding: 23px;
+        display: grid;
+        grid-template-columns: 42px 1fr;
+        gap: 10px 15px;
+      }
+      .step + .step {
+        border-left: 0;
+        border-top: var(--line);
+      }
+      .step svg {
+        grid-column: 2;
+        grid-row: 1 / 3;
+        height: 70px;
+        width: 130px;
+        justify-self: end;
+        margin: 0;
+      }
+      .step h3 {
+        grid-row: 3;
+        grid-column: 1 / 3;
+        margin: 0;
+      }
+      .step p {
+        grid-column: 1 / 3;
+        max-width: none;
+      }
+      .shelf {
+        padding: 50px 5vw;
+      }
+      .shelf h2 {
+        letter-spacing: -2px;
+      }
+      .app {
+        display: grid;
+        grid-template-columns: 1fr 90px;
+        gap: 10px;
+      }
+      .app-tag {
+        grid-column: 1 / 3;
+      }
+      .app-symbol {
+        grid-column: 2;
+        grid-row: 2 / 4;
+        height: 90px;
+        font-size: 52px;
+      }
+      .app h3 {
+        grid-column: 1;
+        margin: 0;
+      }
+      .app p {
+        grid-column: 1;
+      }
+      .end {
+        padding: 55px 5vw;
+        display: block;
+      }
+      .end h2 {
+        letter-spacing: -2px;
+      }
+      .end p {
+        margin-top: 25px;
+      }
+      .footer {
+        gap: 20px;
+        font-size: 11px;
+      }
+      .footer .brand {
+        font-size: 23px;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      *,
+      *:before,
+      *:after {
+        transition: none!important;
+        animation: none!important;
+      }
+    }
+    </style>
+    <script src="lab.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header
+      class="top"><a class="brand" href="https://yaks.app" aria-label="yaks.app home"><svg viewBox="0 0 40 40" aria-hidden="true"><rect x="6" y="12" width="28" height="23" rx="9" fill="#ed4a2c" stroke="#172a28" stroke-width="2"/><path d="M8 17Q0 14 4 5L14 13M32 17Q40 14 36 5L26 13" fill="#ffcf36" stroke="#172a28" stroke-width="2"/><circle cx="14" cy="23" r="2"/><circle cx="26" cy="23" r="2"/><path d="M17 29h6" stroke="#172a28" stroke-width="2"/></svg>yaks.app</a><nav aria-label="Main"><a href="#how">How it works</a><a href="https://yaks.app/docs">The manual</a><a class="pill" href="https://yaks.app/login">Start making ↗</a></nav></header>
+    <main id="main">
+      <section class="hero">
+        <div class="hero-top">
+          <div>
+            <p
+              class="eyebrow"><span class="dot"></span> The little app factory</p>
+            <h1>Big ideas.<br><em>Little apps.</em></h1>
+          </div>
+          <div
+            class="hero-copy"><p>Build, host and share web apps. You bring the idea. Claude or ChatGPT builds it. We keep it running.</p><a class="pill" href="https://yaks.app/login">Make your first app <span aria-hidden="true">↗</span></a></div>
+        </div>
+        <div class="floor">
+          <div class="floor-label">Workbench no. 001 · Try the demo</div>
+          <svg class="factory" viewBox="0 0 760 460" role="img"
+            aria-label="A colorful toy factory assembling a web app from building blocks">
+            <defs>
+              <pattern id="belt" width="22" height="22"
+                patternUnits="userSpaceOnUse" patternTransform="skewY(-25)">
+                <rect width="22" height="22" fill="#a9b7b4" />
+                <path d="M0 0v22" stroke="#788c88" stroke-width="2" />
+              </pattern>
+              <filter id="shadow">
+                <feGaussianBlur stdDeviation="7" />
+              </filter>
+            </defs>
+            <ellipse cx="385" cy="383" rx="310" ry="36" fill="#6a8b8c"
+              opacity=".22" filter="url(#shadow)" />
+            <g stroke="#172a28" stroke-width="2.2" stroke-linejoin="round">
+              <path d="M74 297 505 135 704 251 274 420Z" fill="#b2c9c9" />
+              <path d="m74 297 200 116v17L74 314Z" fill="#789c9a" />
+              <path d="m274 413 430-162v17L274 430Z" fill="#8bb1ab" />
+              <path d="m101 290 403-152 166 97-402 152Z" fill="url(#belt)" />
+              <path d="m101 290 167 97v13L101 303Z" fill="#6f8580" />
+              <path d="m268 387 402-152v13L268 400Z" fill="#a0b7ad" />
+              <path
+                d="m152 331 14 8v30l-14-8ZM218 369l14 8v30l-14-8ZM584 282l14-5v30l-14 5ZM641 260l14-5v30l-14 5Z"
+                fill="#4f6b65" />
+              <g id="data-block" class="part">
+                <path d="m143 244 62-24 47 27-62 24Z" fill="#ffe270" />
+                <path d="m143 244 47 27v47l-47-27Z" fill="#efb41e" />
+                <path d="m190 271 62-24v47l-62 24Z" fill="#ffcf36" />
+                <ellipse cx="194" cy="244" rx="19" ry="8" fill="#fff0ae" />
+                <path d="M176 235v10c0 10 38 10 38 0v-10" fill="#ffcf36" />
+                <ellipse cx="195" cy="235" rx="19" ry="8" fill="#ffe579" />
+              </g>
+              <g id="photos-block" class="part">
+                <path d="m248 205 62-23 47 27-62 23Z" fill="#ff987e" />
+                <path d="m248 205 47 27v47l-47-27Z" fill="#cb341e" />
+                <path d="m295 232 62-23v47l-62 23Z" fill="#ed4a2c" />
+                <path d="m304 242 37-14v23l-37 14Z" fill="#fff7dc" />
+                <path d="m309 255 9-13 8 4 6-10 6 11" fill="#ed4a2c"
+                  stroke="none" />
+                <circle cx="333" cy="234" r="3" fill="#ffcf36" stroke="none" />
+              </g>
+              <path d="m326 174 54-20 24 14-54 20Z" fill="#ffc4ac" />
+              <path d="m326 174 24 14v105l-24-14Z" fill="#cb341e" />
+              <path d="m350 188 54-20v105l-54 20Z" fill="#ef5b38" />
+              <path d="m364 105 145-54 28 16-146 55Z" fill="#ff9c7f" />
+              <path d="m364 105 27 17v63l-27-16Z" fill="#bd3922" />
+              <path d="m391 122 146-55v63l-146 55Z" fill="#ed4a2c" />
+              <path d="m503 130 34-13 23 13-34 13Z" fill="#ff9c7f" />
+              <path d="m503 130 23 13v104l-23-13Z" fill="#bd3922" />
+              <path d="m526 143 34-13v104l-34 13Z" fill="#ef5b38" />
+              <path d="m423 149 37-14v39l-37 14Z" fill="#8fa09c" />
+              <path d="m406 188 53-20 36 20-53 20Z" fill="#ffdf66" />
+              <path d="m406 188 36 20v18l-36-20Z" fill="#cf9b1b" />
+              <path d="m442 208 53-20v18l-53 20Z" fill="#ffcf36" />
+              <ellipse cx="469" cy="108" rx="8" ry="11" class="machine-light" />
+              <path d="m407 137 31-12m-31 20 31-12" stroke="#fff4d6"
+                stroke-width="3" />
+              <g id="friends-block" class="part">
+                <path d="m391 255 60-23 44 26-60 23Z" fill="#7395ef" />
+                <path d="m391 255 44 26v41l-44-25Z" fill="#173c9f" />
+                <path d="m435 281 60-23v41l-60 23Z" fill="#2556db" />
+                <path d="m449 295 30-11" stroke="#fff9e9" stroke-width="3" />
+                <circle cx="455" cy="282" r="4" fill="#fff9e9" stroke="none" />
+                <circle cx="472" cy="276" r="4" fill="#fff9e9" stroke="none" />
+              </g>
+              <path d="m555 194 69-26 40 23-69 26Z" fill="#d3efc8" />
+              <path d="m555 194 40 23v76l-40-23Z" fill="#79a76e" />
+              <path d="m595 217 69-26v76l-69 26Z" fill="#a8d399" />
+              <path d="m569 130 86-32 12 7-86 32Z" fill="#fff9e9" />
+              <path d="m569 130 12 7v106l-12-7Z" fill="#c5c5ae" />
+              <path d="m581 137 86-32v106l-86 32Z" fill="#fff9e9" />
+              <path d="m589 145 70-26v18l-70 26Z" class="preview-bar"
+                stroke="none" />
+              <path
+                d="m589 175 44-16v7l-44 16Zm0 16 62-23v7l-62 23Zm0 16 52-19v7l-52 19Z"
+                class="preview-row" stroke="none" />
+              <circle cx="647" cy="209" r="7" class="preview-dot"
+                stroke="none" />
+              <path d="m335 103 12-4V79l-12 4Z" fill="#172a28" />
+              <ellipse cx="341" cy="77" rx="11" ry="7" fill="#ffcf36" />
+              <path d="M341 58v-9m-17 16-7-5m41 1 7-7" stroke="#ed4a2c"
+                stroke-width="3" />
+            </g>
+            <g fill="#172a28">
+              <text x="86" y="372" transform="rotate(29 86 372)"
+                class="mini-label">Ideas go in</text>
+              <text x="551" y="341" transform="rotate(-21 551 341)"
+                class="mini-label">Good things come out ↗</text>
+            </g>
+          </svg>
+          <div class="control">
+            <h2>A little of this…</h2>
+            <p>Pick the pieces. Watch your app take shape.</p>
+            <div
+              class="switches"><button class="switch" type="button" data-part="data" aria-pressed="true"><i aria-hidden="true">▤</i>Save things<span aria-hidden="true">✓</span></button><button class="switch" type="button" data-part="photos" aria-pressed="true"><i aria-hidden="true">▧</i>Add photos<span aria-hidden="true">✓</span></button><button class="switch" type="button" data-part="friends" aria-pressed="true"><i aria-hidden="true">☺</i>Invite friends<span aria-hidden="true">✓</span></button></div>
+            <p class="status" role="status">3 pieces. One happy little app.</p>
+          </div>
+        </div>
+        <div
+          class="floor-footer"><span><i class="dot"></i> Powered by your imagination</span><span>Assembled with Claude or ChatGPT</span></div>
+      </section>
+      <div class="marquee"
+        aria-hidden="true">&nbsp; A place for your ideas <span>✳</span> Made to be useful <span>✳</span> Built to be yours <span>✳</span> A place for your ideas <span>✳</span> Made to be useful <span>✳</span></div>
+      <section class="how" id="how">
+        <div class="section-title">
+          <h2>Some assembly.<br>No instructions needed.</h2>
+          <p>If you can describe it, you can start making it. Here's the whole production line.</p>
+        </div>
+        <div class="steps">
+          <article
+            class="step"><span class="number">01</span><svg viewBox="0 0 220 110" aria-hidden="true"><path d="M34 20h137v58H89L67 96V78H34Z" fill="#fff9e9" stroke="#172a28" stroke-width="2"/><path d="M53 41h99M53 54h70" stroke="#ed4a2c" stroke-width="6"/><path d="m170 20 14-13m-4 30h19m-12 13 13 7" stroke="#172a28" stroke-width="2"/></svg><h3>Say the thing.</h3><p>Tell Claude or ChatGPT what you need. Your everyday problem is a perfectly good starting point.</p></article>
+          <article
+            class="step"><span class="number">02</span><svg viewBox="0 0 220 110" aria-hidden="true"><rect x="48" y="37" width="58" height="53" rx="7" fill="#ed4a2c" stroke="#172a28" stroke-width="2"/><rect x="104" y="15" width="58" height="53" rx="7" fill="#2556db" stroke="#172a28" stroke-width="2"/><rect x="105" y="69" width="58" height="28" rx="5" fill="#fff9e9" stroke="#172a28" stroke-width="2"/><path d="m62 62 11 11 20-25m25-8h29" fill="none" stroke="#fff9e9" stroke-width="4"/></svg><h3>Make it your own.</h3><p>Your assistant builds the app. Keep asking for changes until it fits the way you do things.</p></article>
+          <article
+            class="step"><span class="number">03</span><svg viewBox="0 0 220 110" aria-hidden="true"><path d="m56 63 93-42-29 75-23-25Z" fill="#fff9e9" stroke="#172a28" stroke-width="2"/><path d="m97 71 52-50-41 57v16l12-8" fill="#ffcf36" stroke="#172a28" stroke-width="2"/><path d="M40 80 24 88m37-3-17 15" stroke="#172a28" stroke-width="2"/></svg><h3>Let it out into the world.</h3><p>yaks.app hosts it at your address. Open it on your phone, save your stuff, and share it with your people.</p></article>
+        </div>
+      </section>
+      <section class="shelf">
+        <p class="eyebrow">There's no “too small”</p>
+        <h2>Useful comes<br>in all shapes.</h2>
+        <div class="shelf-grid">
+          <article class="app">
+            <div
+              class="app-tag"><span>For everyday life</span><span>01 /</span></div>
+            <div class="app-symbol" aria-hidden="true">✿</div>
+            <h3>A place to keep.</h3>
+            <p>Your recipes, plant notes, favorite finds. An app that remembers the way you do.</p>
+          </article>
+          <article class="app">
+            <div
+              class="app-tag"><span>For your people</span><span>02 /</span></div>
+            <div class="app-symbol" aria-hidden="true">◉</div>
+            <h3>A thing to share.</h3>
+            <p>The family plans, a club's collection, a shared project. One little home for being together.</p>
+          </article>
+          <article class="app">
+            <div
+              class="app-tag"><span>For the fun of it</span><span>03 /</span></div>
+            <div class="app-symbol" aria-hidden="true">✳</div>
+            <h3>A reason to play.</h3>
+            <p>A game, a curious experiment, something nobody has thought of yet. Make room for the idea.</p>
+          </article>
+        </div>
+      </section>
+      <section class="end">
+        <h2>Well, what<br>will you make?</h2>
+        <div><p>That idea you've been carrying around? Let's give it somewhere to live.</p><a class="pill" href="https://yaks.app/login">Open your little factory <span aria-hidden="true">↗</span></a></div>
+      </section>
+    </main>
+    <footer
+      class="footer"><a class="brand" href="https://yaks.app">yaks.app</a><span>Build, host and share web apps.</span><a href="https://yaks.app/docs">Read the manual ↗</a></footer>
+    <script>
+    let switches = [...document.querySelectorAll('.switch')]
+    let draw = () => {
+      let selected = switches.filter((button) =>
+        button.getAttribute('aria-pressed') === 'true'
+      )
+      document.querySelector('.status').textContent = selected.length
+        ? `${selected.length} ${
+          selected.length === 1 ? 'piece' : 'pieces'
+        }. One happy little app.`
+        : 'A blank canvas. Pick your first piece.'
+      switches.forEach((button) => {
+        let on = button.getAttribute('aria-pressed') === 'true'
+        document.querySelector(`#${button.dataset.part}-block`).classList.toggle(
+          'off',
+          !on,
+        )
+        button.querySelector('span').textContent = on ? '✓' : '+'
+      })
+      document.querySelector('.preview-row').style.opacity =
+        switches[0].getAttribute('aria-pressed') === 'true' ? '1' : '.12'
+      document.querySelector('.preview-bar').style.fill =
+        switches[1].getAttribute('aria-pressed') === 'true' ? '#2556db' : '#b8c4ba'
+      document.querySelector('.preview-dot').style.opacity =
+        switches[2].getAttribute('aria-pressed') === 'true' ? '1' : '.12'
+    }
+    switches.forEach((button) =>
+      button.addEventListener('click', () => {
+        button.setAttribute(
+          'aria-pressed',
+          String(button.getAttribute('aria-pressed') !== 'true'),
+        )
+        draw()
+      })
+    )
+    </script>
+  </body>
+</html>

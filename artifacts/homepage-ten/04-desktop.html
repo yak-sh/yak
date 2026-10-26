@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yaks.app — Pocket Desktop</title>
+    <meta name="description"
+      content="A little place for your big ideas. Build, host and share web apps with yaks.app.">
+    <style>
+    :root {
+      --ink: #242c38;
+      --blue: #b7d5e8;
+      --paper: #fffdf5;
+      --green: #d3e99a;
+      --pink: #efd0df;
+      --shadow: 5px 6px 0 #253341;
+      --line: 2px solid var(--ink);
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: #e9e7da;
+      color: var(--ink);
+      font-family: 'Trebuchet MS',Arial,sans-serif;
+    }
+    button,
+    a {
+      touch-action: manipulation;
+    }
+    button {
+      font: inherit;
+      color: inherit;
+      cursor: pointer;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 3px solid #5950b6;
+      outline-offset: 4px;
+    }
+    button:disabled {
+      cursor: default;
+    }
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+    .shell {
+      max-width: 1500px;
+      margin: 0 auto;
+      border-left: var(--line);
+      border-right: var(--line);
+    }
+    .menu {
+      height: 63px;
+      background: var(--paper);
+      border-bottom: var(--line);
+      display: flex;
+      align-items: center;
+      gap: 32px;
+      padding: 0 27px;
+    }
+    .brand {
+      font-size: 27px;
+      font-weight: 900;
+      letter-spacing: -1.5px;
+    }
+    .menu nav {
+      display: flex;
+      gap: 26px;
+      font-size: 13px;
+    }
+    .menu nav a:hover {
+      text-decoration: underline;
+    }
+    .menu .right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+    }
+    .online {
+      width: 8px;
+      height: 8px;
+      background: #5c7937;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .desktop {
+      position: relative;
+      isolation: isolate;
+      height: 780px;
+      background-color: var(--blue);
+      background-image: radial-gradient(#789fb5 1px,transparent 1px);
+      background-size: 10px 10px;
+      overflow: hidden;
+    }
+    .desktop:after {
+      content: 'A little place for your big ideas.';
+      position: absolute;
+      bottom: 30px;
+      right: 30px;
+      font-family: Georgia,serif;
+      font-size: 21px;
+      font-style: italic;
+      z-index: -1;
+    }
+    .desktop-label {
+      position: absolute;
+      top: 24px;
+      left: 28px;
+      font-size: 11px;
+      letter-spacing: .03em;
+    }
+    .icons {
+      position: absolute;
+      left: 22px;
+      top: 79px;
+      display: flex;
+      flex-direction: column;
+      gap: 29px;
+      width: 92px;
+    }
+    .desktop-icon {
+      padding: 0;
+      background: none;
+      border: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .desktop-icon > span:last-child {
+      background: #d8e8f3;
+      padding: 2px 6px;
+    }
+    .desktop-icon:hover > span:last-child {
+      background: var(--ink);
+      color: white;
+    }
+    .folder {
+      display: block;
+      position: relative;
+      width: 47px;
+      height: 34px;
+      margin-top: 8px;
+      border: var(--line);
+      background: #f3db80;
+      box-shadow: 2px 2px 0 #253341;
+    }
+    .folder:before {
+      content: '';
+      position: absolute;
+      top: -9px;
+      left: -2px;
+      width: 24px;
+      height: 9px;
+      background: #f3db80;
+      border: var(--line);
+      border-bottom: 0;
+      border-radius: 4px 4px 0 0;
+    }
+    .folder:after {
+      content: '↗';
+      position: absolute;
+      inset: 2px;
+      font-size: 24px;
+    }
+    .note-icon {
+      width: 38px;
+      height: 45px;
+      background: #fff9ba;
+      border: var(--line);
+      box-shadow: 2px 2px 0 #253341;
+      font-size: 30px;
+    }
+    .heart-icon {
+      font-size: 46px;
+      line-height: 1;
+      color: #a5476d;
+      text-shadow: 2px 2px 0 #fff;
+    }
+    .window {
+      background: var(--paper);
+      border: var(--line);
+      border-radius: 7px;
+      box-shadow: var(--shadow);
+      position: absolute;
+      overflow: hidden;
+      transition: box-shadow .15s;
+    }
+    .window[hidden] {
+      display: none;
+    }
+    .window.active {
+      box-shadow: 7px 8px 0 #253341;
+    }
+    .titlebar {
+      height: 37px;
+      border-bottom: var(--line);
+      background: #e4e1f2;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+    .drag {
+      flex: 1;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+      font-weight: bold;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .drag:active {
+      cursor: grabbing;
+    }
+    .window-controls {
+      display: flex;
+      gap: 6px;
+    }
+    .window-controls button {
+      width: 21px;
+      height: 21px;
+      padding: 0;
+      background: var(--paper);
+      border: 1.5px solid var(--ink);
+      border-radius: 3px;
+      font-size: 15px;
+      line-height: 17px;
+    }
+    .window-controls button:hover {
+      background: var(--ink);
+      color: var(--paper);
+    }
+    .welcome {
+      width: 54%;
+      top: 65px;
+      right: 6%;
+      z-index: 3;
+    }
+    .welcome .titlebar {
+      background: #d8c8ec;
+    }
+    .welcome-body {
+      padding: 31px 39px 32px;
+    }
+    .tag {
+      font-size: 11px;
+      display: inline-block;
+      border: 1px solid;
+      padding: 6px 10px;
+      border-radius: 4px;
+      background: #f4ecd0;
+    }
+    .welcome h1 {
+      font-family: Georgia,'Times New Roman',serif;
+      font-size: clamp(47px,5vw,73px);
+      font-weight: 400;
+      line-height: 1.03;
+      letter-spacing: -3px;
+      margin: 22px 0;
+    }
+    .welcome h1 em {
+      color: #615282;
+      font-weight: 400;
+    }
+    .welcome p {
+      font-size: 16px;
+      line-height: 1.5;
+      max-width: 420px;
+      margin: 0 0 25px;
+    }
+    .primary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 25px;
+      background: #d4e99d;
+      border: var(--line);
+      border-radius: 5px;
+      box-shadow: 3px 3px 0 var(--ink);
+      padding: 13px 18px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    .primary:hover {
+      transform: translate(2px,2px);
+      box-shadow: 1px 1px 0 var(--ink);
+    }
+    .welcome-bottom {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+    }
+    .welcome-bottom > span {
+      font-size: 11px;
+      line-height: 1.5;
+      max-width: 115px;
+    }
+    .folder-window {
+      width: 31%;
+      top: 250px;
+      left: 12%;
+      z-index: 4;
+      transform: rotate(-3deg);
+    }
+    .folder-window .titlebar {
+      background: #f1d4df;
+    }
+    .folder-toolbar {
+      border-bottom: 1px solid var(--ink);
+      display: flex;
+      justify-content: space-between;
+      padding: 11px 17px;
+      font-size: 11px;
+    }
+    .app-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 11px;
+      padding: 20px;
+      background: #f9f2e9;
+    }
+    .app-tile {
+      min-height: 103px;
+      background: #e2ead2;
+      border: 1.5px solid;
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+      transition: transform .15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .app-tile:hover {
+      transform: translateY(-3px);
+    }
+    .app-tile:nth-child(2) {
+      background: #e6def1;
+    }
+    .app-tile:nth-child(3) {
+      background: #f4ddb7;
+    }
+    .app-tile:nth-child(4) {
+      background: #d8e6ed;
+    }
+    .app-art {
+      font-family: Georgia,serif;
+      font-size: 33px;
+      line-height: 1.1;
+    }
+    .statusbar {
+      font-size: 11px;
+      border-top: 1px solid;
+      padding: 9px 15px;
+      background: var(--paper);
+    }
+    .note-window {
+      right: 9%;
+      top: 526px;
+      width: 40%;
+      z-index: 5;
+      transform: rotate(2deg);
+      background: #fff6b9;
+    }
+    .note-window .titlebar {
+      background: #f1df8e;
+    }
+    .note-body {
+      padding: 21px 25px 23px;
+    }
+    .note-body h2 {
+      font: italic 25px Georgia,serif;
+      margin: 0 0 15px;
+    }
+    .steps {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      gap: 13px;
+      font-size: 13px;
+    }
+    .steps li {
+      display: flex;
+      align-items: start;
+      gap: 10px;
+    }
+    .step-no {
+      border: 1px solid;
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+      font-size: 10px;
+    }
+    .desktop-tools {
+      position: absolute;
+      bottom: 26px;
+      left: 25px;
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      z-index: 20;
+    }
+    .desktop-tools button {
+      background: #e5edf0;
+      border: 1px solid;
+      border-radius: 3px;
+      padding: 9px 11px;
+      font-size: 11px;
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+    .desktop-tools span {
+      font-size: 11px;
+    }
+    .maximized {
+      inset: 48px 130px 76px!important;
+      width: auto!important;
+      height: auto!important;
+      transform: none!important;
+      z-index: 30!important;
+    }
+    .maximized .welcome-body {
+      max-width: 700px;
+      margin: 50px auto;
+    }
+    .maximized .app-grid {
+      height: calc(100% - 112px);
+    }
+    .maximized .note-body {
+      padding: 45px;
+    }
+    .maximized .steps {
+      font-size: 21px;
+      gap: 35px;
+    }
+    .dock {
+      border-top: var(--line);
+      border-bottom: var(--line);
+      padding: 11px 25px;
+      background: #eeeade;
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      font-size: 11px;
+    }
+    .dock div {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .dock kbd {
+      font-family: inherit;
+      border: 1px solid;
+      padding: 2px 5px;
+      background: white;
+      border-radius: 3px;
+    }
+    .below {
+      padding: 65px 7%;
+      background: var(--paper);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9%;
+    }
+    .below h2 {
+      font: 400 40px/1.1 Georgia,serif;
+      letter-spacing: -1px;
+      margin: 15px 0 20px;
+    }
+    .below p {
+      font-size: 15px;
+      line-height: 1.7;
+      max-width: 440px;
+    }
+    .small-label {
+      font-size: 11px;
+    }
+    .feature-list {
+      border-top: var(--line);
+      margin-top: 10px;
+    }
+    .feature {
+      display: flex;
+      gap: 20px;
+      padding: 19px 0;
+      border-bottom: 1px solid #b5b4a8;
+    }
+    .feature-icon {
+      width: 33px;
+      font-size: 25px;
+    }
+    .feature h3 {
+      font-size: 15px;
+      margin: 0 0 6px;
+    }
+    .feature p {
+      font-size: 13px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .footer {
+      background: #d8c8ec;
+      border-top: var(--line);
+      padding: 32px 7%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 30px;
+    }
+    .footer strong {
+      display: block;
+      font: 27px Georgia,serif;
+      margin-bottom: 6px;
+    }
+    .footer span {
+      font-size: 12px;
+    }
+    .footer a {
+      background: var(--paper);
+    }
+    .fineprint {
+      padding: 17px 7%;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+    .fineprint a {
+      text-decoration: underline;
+    }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      white-space: nowrap;
+      border: 0;
+    }
+    @media (min-width:1500px) {
+      .welcome h1 {
+        font-size: 73px;
+      }
+    }
+    @media (max-width:950px) and (min-width:761px) {
+      .welcome {
+        right: 4%;
+        width: 72%;
+      }
+      .welcome-body {
+        padding: 26px;
+      }
+      .welcome h1 {
+        font-size: 53px;
+      }
+      .folder-window {
+        left: 5%;
+        width: 33%;
+        top: 480px;
+      }
+      .note-window {
+        right: 5%;
+        width: 48%;
+        top: 620px;
+      }
+      .desktop {
+        height: 920px;
+      }
+    }
+    @media (max-width:760px) {
+      .shell {
+        border: 0;
+      }
+      .menu {
+        height: 59px;
+        padding: 0 20px;
+        gap: 23px;
+      }
+      .menu nav {
+        gap: 15px;
+      }
+      .menu nav a:first-child {
+        display: none;
+      }
+      .menu .right {
+        font-size: 10px;
+      }
+      .menu .right .online {
+        display: none;
+      }
+      .desktop {
+        height: auto;
+        min-height: 800px;
+        padding: 115px 20px 75px;
+        display: flex;
+        flex-direction: column;
+        gap: 27px;
+        overflow: hidden;
+      }
+      .desktop-label {
+        left: 20px;
+        top: 20px;
+      }
+      .desktop:after {
+        display: none;
+      }
+      .icons {
+        top: 52px;
+        left: 20px;
+        right: 20px;
+        flex-direction: row;
+        width: auto;
+        gap: 17px;
+      }
+      .desktop-icon {
+        flex-direction: row;
+        gap: 7px;
+        font-size: 11px;
+      }
+      .desktop-icon > span:first-child {
+        display: none;
+      }
+      .desktop-icon > span:last-child {
+        padding: 7px 9px;
+        border: 1px solid;
+        border-radius: 3px;
+      }
+      .window {
+        position: relative;
+        inset: auto!important;
+        width: 100%!important;
+        transform: none!important;
+      }
+      .welcome-body {
+        padding: 25px;
+      }
+      .welcome h1 {
+        font-size: 49px;
+        letter-spacing: -2px;
+      }
+      .welcome p {
+        font-size: 15px;
+      }
+      .welcome-bottom {
+        gap: 15px;
+      }
+      .welcome-bottom > span {
+        font-size: 10px;
+      }
+      .primary {
+        font-size: 13px;
+        padding: 12px;
+      }
+      .folder-window {
+        order: 2;
+      }
+      .note-window {
+        order: 3;
+      }
+      .note-body {
+        padding: 23px;
+      }
+      .desktop-tools {
+        bottom: 24px;
+        left: 20px;
+      }
+      .desktop-tools span {
+        display: none;
+      }
+      .drag {
+        cursor: default;
+        touch-action: auto;
+      }
+      .window-controls .maximize {
+        display: none;
+      }
+      .dock {
+        padding: 12px 20px;
+        line-height: 1.5;
+      }
+      .dock > div:last-child {
+        display: none;
+      }
+      .below {
+        padding: 45px 25px;
+        grid-template-columns: 1fr;
+        gap: 25px;
+      }
+      .below h2 {
+        font-size: 36px;
+      }
+      .footer {
+        padding: 30px 25px;
+        align-items: start;
+        flex-direction: column;
+        gap: 22px;
+      }
+      .fineprint {
+        padding: 20px 25px;
+        gap: 20px;
+        font-size: 10px;
+      }
+      .maximized .welcome-body {
+        margin: 0;
+      }
+      .maximized .app-grid {
+        height: auto;
+      }
+      .maximized .note-body {
+        padding: 23px;
+      }
+      .maximized .steps {
+        font-size: 13px;
+        gap: 13px;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      *,
+      *:before,
+      *:after {
+        transition: none!important;
+      }
+    }
+    </style>
+    <script src="lab.js" defer></script>
+  </head>
+  <body>
+    <div class="shell">
+      <header
+        class="menu"><a class="brand" href="https://yaks.app/">yaks.app</a><nav aria-label="Main navigation"><a href="#about">About</a><a href="https://yaks.app/docs">Help</a></nav><div class="right"><span class="online" aria-hidden="true"></span><span>Your imagination is welcome here.</span></div></header>
+      <main>
+        <section class="desktop" aria-label="Interactive desktop">
+          <div class="desktop-label">No. 04 / Pocket Desktop</div>
+          <div class="icons"
+            aria-label="Open windows"><button class="desktop-icon" data-open="welcome"><span class="folder" aria-hidden="true"></span><span>Welcome</span></button><button class="desktop-icon" data-open="apps"><span class="heart-icon" aria-hidden="true">♡</span><span>Little apps</span></button><button class="desktop-icon" data-open="notes"><span class="note-icon" aria-hidden="true">≡</span><span>Read me</span></button></div>
+          <section class="window welcome active" id="welcome"
+            aria-labelledby="welcome-title">
+            <div
+              class="titlebar"><span class="drag" tabindex="0" aria-label="Move welcome window with arrow keys">✦ welcome.app</span><div class="window-controls"><button data-hide="welcome" aria-label="Minimize welcome window">−</button><button class="maximize" data-max="welcome" aria-label="Maximize welcome window" aria-pressed="false">□</button></div></div>
+            <div
+              class="welcome-body"><span class="tag">Build, host and share web apps.</span><h1 id="welcome-title">Your next idea<br>has a <em>home.</em></h1><p>A little app for whatever's on your mind. Tell Claude or ChatGPT what you need. Your assistant builds it. yaks.app keeps it online.</p><div class="welcome-bottom"><a class="primary" href="https://yaks.app/login">Let's make something <span aria-hidden="true">↗</span></a><span>Bring an idea.<br>We'll make room.</span></div></div>
+          </section>
+          <section class="window folder-window" id="apps"
+            aria-labelledby="apps-title">
+            <div
+              class="titlebar"><span class="drag" tabindex="0" id="apps-title" aria-label="Move little apps window with arrow keys">♡ little-apps.folder</span><div class="window-controls"><button data-hide="apps" aria-label="Minimize little apps window">−</button><button class="maximize" data-max="apps" aria-label="Maximize little apps window" aria-pressed="false">□</button></div></div>
+            <div
+              class="folder-toolbar"><span>A few things you can open</span><span>4 items</span></div>
+            <div
+              class="app-grid"><a class="app-tile" href="https://yourname.yaks.app/garden/"><span class="app-art" aria-hidden="true">♧</span>Garden planner ↗</a><a class="app-tile" href="https://yourname.yaks.app/bookclub/"><span class="app-art" aria-hidden="true">▤</span>Book club ↗</a><a class="app-tile" href="https://yourname.yaks.app/recipes/"><span class="app-art" aria-hidden="true">◒</span>Recipe box ↗</a><a class="app-tile" href="https://yourname.yaks.app/trip/"><span class="app-art" aria-hidden="true">⌁</span>Trip planner ↗</a></div>
+            <div
+              class="statusbar">Small apps. A whole world of possibilities.</div>
+          </section>
+          <section class="window note-window" id="notes"
+            aria-labelledby="notes-title">
+            <div
+              class="titlebar"><span class="drag" tabindex="0" aria-label="Move read me window with arrow keys">☰ read-me.txt</span><div class="window-controls"><button data-hide="notes" aria-label="Minimize read me window">−</button><button class="maximize" data-max="notes" aria-label="Maximize read me window" aria-pressed="false">□</button></div></div>
+            <div class="note-body">
+              <h2 id="notes-title">From idea to your everyday.</h2>
+              <ol class="steps">
+                <li><span class="step-no">1</span><span>Connect yaks.app to Claude or ChatGPT.</span></li>
+                <li><span class="step-no">2</span><span>Tell your assistant what you'd like to make.</span></li>
+                <li><span class="step-no">3</span><span>Open your app. Share it. Make it your own.</span></li>
+              </ol>
+            </div>
+          </section>
+          <div
+            class="desktop-tools"><button id="reset">↺ Tidy desktop</button><span>Try moving a window.</span></div>
+          <p class="sr-only" id="desktop-status" role="status"
+            aria-live="polite"></p>
+        </section>
+        <div class="dock">
+          <div><span aria-hidden="true">▣</span> Your ideas deserve more than a forgotten tab.</div>
+          <div>Window selected? <kbd>←</kbd><kbd>↑</kbd><kbd>↓</kbd><kbd>→</kbd> to move</div>
+        </div>
+        <section class="below" id="about" aria-labelledby="about-title">
+          <div><span class="small-label">Built for the things you care about.</span><h2 id="about-title">The internet can feel<br>a little more like you.</h2><p>The way you organize your life. The people you bring together. That one useful thing you keep wishing existed. Make an app around it, and give it a place to stay.</p><a href="https://yaks.app/docs" style="font-size:13px;text-decoration:underline">Take a look at the guide ↗</a></div>
+          <div class="feature-list">
+            <article
+              class="feature"><span class="feature-icon" aria-hidden="true">✎</span><div><h3>Made in conversation</h3><p>Build with Claude or ChatGPT. Ask for changes as your idea takes shape.</p></div></article>
+            <article
+              class="feature"><span class="feature-icon" aria-hidden="true">⌂</span><div><h3>A place for your app</h3><p>Hosting, data and files, together. Your app has a home on yaks.app.</p></div></article>
+            <article
+              class="feature"><span class="feature-icon" aria-hidden="true">↗</span><div><h3>Only a link away</h3><p>Open it on your phone. Invite your friends. Use it together.</p></div></article>
+          </div>
+        </section>
+      </main>
+      <footer
+        class="footer"><div><strong>Got a little idea?</strong><span>There's a place for it here.</span></div><a class="primary" href="https://yaks.app/login">Make yourself at home <span aria-hidden="true">↗</span></a></footer>
+      <div
+        class="fineprint"><span>yaks.app / Build, host and share web apps.</span><a href="https://yaks.app/docs">Documentation ↗</a></div>
+    </div>
+    <script>
+    let desktop = document.querySelector('.desktop')
+    let windows = [...document.querySelectorAll('.window')]
+    let level = 6
+    let status = (message) => {
+      document.querySelector('#desktop-status').textContent = message
+    }
+    let activate = (panel) => {
+      windows.forEach((item) => item.classList.toggle('active', item === panel))
+      panel.style.zIndex = ++level
+    }
+    let restore = (panel) => {
+      panel.hidden = false
+      activate(panel)
+      panel.querySelector('.drag').focus({ preventScroll: true })
+      status('Window opened.')
+    }
+    document.querySelectorAll('[data-open]').forEach((button) =>
+      button.addEventListener(
+        'click',
+        () => restore(document.getElementById(button.dataset.open)),
+      )
+    )
+    document.querySelectorAll('[data-hide]').forEach((button) =>
+      button.addEventListener('click', () => {
+        document.getElementById(button.dataset.hide).hidden = true
+        document.querySelector(`[data-open="${button.dataset.hide}"]`).focus({
+          preventScroll: true,
+        })
+        status('Window minimized. Open it again using its desktop icon.')
+      })
+    )
+    document.querySelectorAll('[data-max]').forEach((button) =>
+      button.addEventListener('click', () => {
+        let panel = document.getElementById(button.dataset.max)
+        let full = panel.classList.toggle('maximized')
+        button.setAttribute('aria-pressed', String(full))
+        button.setAttribute('aria-label', `${full ? 'Restore' : 'Maximize'} window`)
+        activate(panel)
+      })
+    )
+    let move = (panel, x, y) => {
+      panel.style.left = `${
+        Math.max(0, Math.min(desktop.clientWidth - panel.offsetWidth - 8, x))
+      }px`
+      panel.style.top = `${
+        Math.max(0, Math.min(desktop.clientHeight - panel.offsetHeight - 8, y))
+      }px`
+      panel.style.right = 'auto'
+      panel.style.transform = 'none'
+    }
+    windows.forEach((panel) => {
+      panel.addEventListener('pointerdown', () => activate(panel))
+      let handle = panel.querySelector('.drag')
+      handle.addEventListener('keydown', (event) => {
+        let arrows = {
+          ArrowLeft: [-16, 0],
+          ArrowRight: [16, 0],
+          ArrowUp: [0, -16],
+          ArrowDown: [0, 16],
+        }
+        if (
+          !arrows[event.key] || window.innerWidth <= 760 ||
+          panel.classList.contains('maximized')
+        ) return
+        event.preventDefault()
+        activate(panel)
+        let [x, y] = arrows[event.key]
+        move(panel, panel.offsetLeft + x, panel.offsetTop + y)
+      })
+      handle.addEventListener('pointerdown', (event) => {
+        if (window.innerWidth <= 760 || panel.classList.contains('maximized')) {
+          return
+        }
+        let x = event.clientX - panel.offsetLeft
+        let y = event.clientY - panel.offsetTop
+        handle.setPointerCapture(event.pointerId)
+        let drag = (event) => move(panel, event.clientX - x, event.clientY - y)
+        let stop = () => {
+          handle.removeEventListener('pointermove', drag)
+          handle.removeEventListener('pointerup', stop)
+          handle.removeEventListener('pointercancel', stop)
+        }
+        handle.addEventListener('pointermove', drag)
+        handle.addEventListener('pointerup', stop)
+        handle.addEventListener('pointercancel', stop)
+      })
+    })
+    document.querySelector('#reset').addEventListener('click', () => {
+      windows.forEach((panel) => {
+        panel.hidden = false
+        panel.removeAttribute('style')
+        panel.classList.remove('maximized', 'active')
+        let button = panel.querySelector('[data-max]')
+        button.setAttribute('aria-pressed', 'false')
+        button.setAttribute('aria-label', 'Maximize window')
+      })
+      document.querySelector('#welcome').classList.add('active')
+      status('Desktop tidied. All three windows are open.')
+    })
+    </script>
+  </body>
+</html>

@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>yaks.app — The blueprint</title>
+    <meta name="description"
+      content="An idea, now in working order. Build, host and share web apps with yaks.app.">
+    <style>
+    :root {
+      --paper: #f3f1dc;
+      --ink: #183bea;
+      --line: #ffffff38;
+      --soft: #d4ddff;
+      --accent: #e5ff66;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: var(--ink);
+      color: var(--paper);
+      font-family: Arial,Helvetica,sans-serif;
+      background-image: linear-gradient(#fff05a00 23px,#ffffff08
+        24px),linear-gradient(90deg,#ffffff00 23px,#ffffff08 24px);
+      background-size: 24px 24px;
+    }
+    a {
+      color: inherit;
+      text-underline-offset: 5px;
+    }
+    button {
+      font: inherit;
+    }
+    button,
+    a {
+      touch-action: manipulation;
+    }
+    a:focus-visible,
+    button:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 6px;
+    }
+    .skip {
+      position: absolute;
+      top: -100px;
+      left: 20px;
+      z-index: 5;
+      background: var(--paper);
+      color: var(--ink);
+      padding: 15px;
+    }
+    .skip:focus {
+      top: 12px;
+    }
+    .sheet {
+      margin: 22px;
+      border: 1px solid var(--line);
+      position: relative;
+    }
+    .sheet:before,
+    .sheet:after {
+      content: '+';
+      font: 32px monospace;
+      position: absolute;
+      top: -19px;
+      left: -10px;
+      color: var(--paper);
+    }
+    .sheet:after {
+      left: auto;
+      right: -10px;
+    }
+    header {
+      height: 88px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 42px;
+      border-bottom: 1px solid var(--line);
+    }
+    .logo {
+      font-weight: 800;
+      font-size: 30px;
+      letter-spacing: -1.6px;
+      text-decoration: none;
+    }
+    .logo span {
+      font-weight: 400;
+      font-size: 17px;
+      letter-spacing: 0;
+      margin-left: 12px;
+    }
+    nav {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+      font-size: 14px;
+    }
+    nav a {
+      text-decoration: none;
+    }
+    .nav-cta {
+      border: 1px solid var(--paper);
+      padding: 12px 18px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: .95fr 1.05fr;
+      min-height: 780px;
+      position: relative;
+    }
+    .hero-copy {
+      padding: 64px 0 42px 42px;
+      position: relative;
+      z-index: 1;
+    }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 1.6px;
+      text-transform: uppercase;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .eyebrow:before {
+      content: '';
+      height: 7px;
+      width: 7px;
+      background: var(--accent);
+    }
+    h1 {
+      font-weight: 500;
+      font-size: clamp(64px,7.8vw,125px);
+      letter-spacing: -.075em;
+      line-height: .96;
+      margin: 42px 0 30px;
+    }
+    h1 em {
+      font-style: normal;
+      color: var(--accent);
+    }
+    .lead {
+      font-size: 18px;
+      line-height: 1.65;
+      max-width: 385px;
+    }
+    .action {
+      display: inline-flex;
+      align-items: center;
+      gap: 54px;
+      background: var(--accent);
+      color: #1533cf;
+      padding: 19px 24px;
+      font-weight: 700;
+      text-decoration: none;
+      margin-top: 18px;
+    }
+    .action span {
+      font-size: 25px;
+      line-height: 20px;
+    }
+    .fine {
+      font-size: 12px;
+      color: var(--soft);
+      margin-top: 22px;
+    }
+    .drawing {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      padding: 40px 20px 35px;
+    }
+    .drawing svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+    .drawing svg text {
+      font-family: Arial,Helvetica,sans-serif;
+    }
+    .drawing-tools {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+      max-width: 540px;
+      margin: 0 auto;
+      width: 100%;
+      border-top: 1px solid var(--line);
+      padding-top: 20px;
+    }
+    .drawing-tools p {
+      font-size: 12px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .drawing-tools button {
+      border: 1px solid var(--paper);
+      color: var(--paper);
+      background: transparent;
+      padding: 12px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .drawing-tools button:hover {
+      background: var(--paper);
+      color: var(--ink);
+    }
+    .layer {
+      transition: transform .65s cubic-bezier(.2,.8,.2,1);
+    }
+    .assembled .layer-interface {
+      transform: translateY(100px);
+    }
+    .assembled .layer-data {
+      transform: translateY(0);
+    }
+    .assembled .layer-host {
+      transform: translateY(-100px);
+    }
+    .assembled .exploded-label {
+      opacity: 0;
+    }
+    .exploded-label {
+      transition: opacity .3s;
+    }
+    .rail {
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 15px 42px;
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .rail span:last-child {
+      color: var(--accent);
+    }
+    .spec {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      padding: 0 42px;
+    }
+    .spec article {
+      padding: 46px 32px 46px 0;
+      border-right: 1px solid var(--line);
+    }
+    .spec article + article {
+      padding-left: 32px;
+    }
+    .spec article:last-child {
+      border: 0;
+    }
+    .spec .number {
+      font-size: 12px;
+      color: var(--accent);
+    }
+    h2 {
+      font-size: clamp(35px,4.5vw,65px);
+      font-weight: 400;
+      line-height: 1.05;
+      letter-spacing: -.055em;
+    }
+    h3 {
+      font-size: 25px;
+      letter-spacing: -.03em;
+      font-weight: 500;
+    }
+    .spec p {
+      font-size: 15px;
+      line-height: 1.7;
+      color: var(--soft);
+      max-width: 300px;
+    }
+    .examples {
+      background: var(--paper);
+      color: var(--ink);
+      padding: 65px 42px 55px;
+    }
+    .examples .eyebrow:before {
+      background: var(--ink);
+    }
+    .examples-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 30px;
+      align-items: flex-end;
+      margin: 15px 0 38px;
+    }
+    .examples-head h2 {
+      margin: 0;
+    }
+    .examples-head p {
+      max-width: 270px;
+      font-size: 15px;
+      line-height: 1.6;
+      margin: 0;
+    }
+    .projects {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 18px;
+    }
+    .project {
+      border: 1px solid #183bea77;
+      text-decoration: none;
+      position: relative;
+      padding: 20px;
+      min-height: 295px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: background .2s;
+    }
+    .project:hover {
+      background: #e5ff66;
+    }
+    .project .index {
+      font-size: 11px;
+      letter-spacing: 1px;
+    }
+    .project svg {
+      height: 135px;
+      width: 100%;
+      fill: none;
+      stroke: var(--ink);
+      stroke-width: 1.4;
+    }
+    .project h3 {
+      margin: 12px 0 5px;
+    }
+    .project p {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .project .arrow {
+      position: absolute;
+      right: 20px;
+      bottom: 24px;
+      font-size: 23px;
+    }
+    .ending {
+      padding: 65px 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 30px;
+    }
+    .ending h2 {
+      margin: 12px 0 0;
+    }
+    .ending .action {
+      margin: 0;
+      white-space: nowrap;
+    }
+    footer {
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 24px 42px;
+      font-size: 12px;
+    }
+    footer div {
+      display: flex;
+      gap: 22px;
+    }
+    @media (min-width:1600px) {
+      .sheet {
+        max-width: 1500px;
+        margin: 28px auto;
+      }
+    }
+    @media (max-width:900px) {
+      .hero {
+        min-height: 680px;
+      }
+      .hero-copy {
+        padding-left: 28px;
+      }
+      header {
+        padding: 0 28px;
+      }
+      .drawing {
+        padding: 10px;
+      }
+      .drawing-tools {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .spec {
+        padding: 0 28px;
+      }
+      .rail,
+      .examples,
+      .ending {
+        padding-left: 28px;
+        padding-right: 28px;
+      }
+      nav {
+        gap: 18px;
+      }
+      .logo span {
+        display: none;
+      }
+    }
+    @media (max-width:650px) {
+      .sheet {
+        margin: 12px;
+      }
+      .hero {
+        grid-template-columns: 1fr;
+      }
+      .hero-copy {
+        padding: 38px 24px 8px;
+      }
+      h1 {
+        font-size: 77px;
+        margin: 30px 0 22px;
+      }
+      .lead {
+        font-size: 17px;
+        max-width: 400px;
+      }
+      .drawing {
+        padding: 0 15px 30px;
+      }
+      .drawing svg {
+        max-height: 530px;
+      }
+      .drawing-tools {
+        flex-direction: row;
+        align-items: center;
+      }
+      .drawing-tools p {
+        font-size: 11px;
+      }
+      header {
+        height: 75px;
+        padding: 0 22px;
+      }
+      nav a:not(.nav-cta) {
+        display: none;
+      }
+      .logo {
+        font-size: 27px;
+      }
+      .rail {
+        padding: 15px 22px;
+        gap: 20px;
+        line-height: 1.6;
+      }
+      .rail span:nth-child(2) {
+        display: none;
+      }
+      .spec {
+        display: block;
+        padding: 0 24px;
+      }
+      .spec article,
+      .spec article + article {
+        padding: 30px 0;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .spec h3 {
+        margin: 12px 0;
+      }
+      .spec p {
+        max-width: none;
+      }
+      .examples {
+        padding: 40px 24px;
+      }
+      .examples-head {
+        display: block;
+      }
+      .examples-head p {
+        margin-top: 18px;
+        max-width: none;
+      }
+      .projects {
+        grid-template-columns: 1fr;
+      }
+      .project {
+        min-height: 265px;
+      }
+      .project svg {
+        height: 120px;
+      }
+      .ending {
+        display: block;
+        padding: 42px 24px;
+      }
+      .ending .action {
+        margin-top: 28px;
+      }
+      footer {
+        padding: 24px;
+        flex-direction: column;
+      }
+      .fine {
+        max-width: 300px;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      *,
+      *:before,
+      *:after {
+        transition: none!important;
+        animation: none!important;
+      }
+    }
+    </style>
+    <script src="lab.js" defer></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="sheet">
+      <header><a class="logo" href="https://yaks.app/">yaks.app <span>／ the blueprint</span></a><nav aria-label="Main"><a href="#how">The workings</a><a href="https://yaks.app/docs">Field notes</a><a class="nav-cta" href="https://yaks.app/login">Start building ↗</a></nav></header>
+      <main id="main">
+        <section class="hero" aria-labelledby="title">
+          <div
+            class="hero-copy"><div class="eyebrow">Build, host and share web apps</div><h1 id="title">An idea.<br>Now in<br><em>working<br>order.</em></h1><p class="lead">Describe what you need to Claude or ChatGPT. Your assistant builds it. yaks.app gives it a place to work.</p><a class="action" href="https://yaks.app/login">Make your first app <span aria-hidden="true">↗</span></a><p class="fine">Your own address. Your saved data. A link to share.</p></div>
+          <div class="drawing">
+            <svg id="assembly" viewBox="0 0 640 650" role="img"
+              aria-labelledby="diagram-title diagram-desc">
+              <title id="diagram-title">The anatomy of your app</title>
+              <desc
+                id="diagram-desc">An exploded drawing of three layers: your interface, saved data, and a home on the web. Use the button below to assemble the layers.</desc>
+              <defs>
+                <pattern id="hatch" width="8" height="8"
+                  patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <line x1="0" y1="0" x2="0" y2="8" stroke="#f3f1dc"
+                    stroke-width="1" opacity=".25" />
+                </pattern>
+              </defs>
+              <g fill="none" stroke="#d4ddff" stroke-width="1" opacity=".6">
+                <path d="M72 125V585M565 125V585M72 585H565"
+                  stroke-dasharray="4 6" />
+                <path
+                  d="M64 580L80 590M557 580L573 590M72 618H565M72 610V626M565 610V626" />
+                <path d="M92 85L355 26L588 142" stroke-dasharray="4 6" />
+                <circle cx="355" cy="26" r="5" />
+                <path d="M335 26H375M355 6V46" />
+              </g>
+              <text x="318" y="642" fill="#d4ddff" text-anchor="middle"
+                font-size="11"
+                letter-spacing="2">FIG. 01 — A PLACE FOR YOUR IDEA</text>
+              <g class="layer layer-host">
+                <path d="M80 424L353 322L572 436L299 543Z" fill="#1937cf"
+                  stroke="#f3f1dc" />
+                <path d="M80 424V446L299 565L572 458V436L299 543Z"
+                  fill="url(#hatch)" stroke="#f3f1dc" />
+                <path d="M299 543V565" stroke="#f3f1dc" />
+                <path d="M119 427L351 341L531 436L300 525Z" fill="none"
+                  stroke="#f3f1dc" stroke-dasharray="5 5" />
+                <ellipse cx="324" cy="426" rx="61" ry="28" fill="none"
+                  stroke="#e5ff66" />
+                <ellipse cx="324" cy="426" rx="28" ry="28" fill="none"
+                  stroke="#e5ff66" />
+                <path d="M263 426H385M275 410H373M275 442H373"
+                  stroke="#e5ff66" />
+              </g>
+              <g class="layer layer-data">
+                <path d="M80 301L353 199L572 313L299 420Z" fill="#1739dc"
+                  stroke="#f3f1dc" />
+                <path d="M80 301V323L299 442L572 335V313L299 420Z"
+                  fill="url(#hatch)" stroke="#f3f1dc" />
+                <path d="M299 420V442" stroke="#f3f1dc" />
+                <g fill="none" stroke="#e5ff66">
+                  <ellipse cx="269" cy="300" rx="53" ry="22" />
+                  <path
+                    d="M216 300V335C216 364 322 364 322 335V300M216 317C216 346 322 346 322 317" />
+                  <ellipse cx="387" cy="281" rx="35" ry="15" />
+                  <path
+                    d="M352 281V319C352 339 422 339 422 319V281M352 299C352 319 422 319 422 299" />
+                </g>
+              </g>
+              <g class="layer layer-interface">
+                <path d="M80 178L353 76L572 190L299 297Z" fill="#1739e0"
+                  stroke="#f3f1dc" />
+                <path d="M80 178V200L299 319L572 212V190L299 297Z"
+                  fill="url(#hatch)" stroke="#f3f1dc" />
+                <path d="M299 297V319" stroke="#f3f1dc" />
+                <path d="M111 178L353 91L542 190L300 282Z" fill="#2248f0"
+                  stroke="#f3f1dc" />
+                <path d="M132 189L374 102" stroke="#f3f1dc" />
+                <g fill="#e5ff66">
+                  <ellipse cx="134" cy="175" rx="3" ry="2" />
+                  <ellipse cx="146" cy="171" rx="3" ry="2" />
+                  <ellipse cx="158" cy="167" rx="3" ry="2" />
+                </g>
+                <path d="M166 193L265 157L334 192L235 230Z" fill="url(#hatch)"
+                  stroke="#f3f1dc" />
+                <path
+                  d="M284 150L361 122M298 158L390 125M313 166L376 143M331 177L425 143M346 185L440 151M250 238L349 201L376 215L278 253Z"
+                  fill="none" stroke="#f3f1dc" />
+                <path d="M368 200L462 165L495 183L401 218Z" fill="#e5ff66" />
+              </g>
+              <g class="exploded-label" fill="#f3f1dc" font-size="11">
+                <path d="M480 110H553L581 83" fill="none" stroke="#f3f1dc" />
+                <text x="578" y="70"
+                  text-anchor="end">01 / Your interface</text>
+                <path d="M438 260H551L580 237" fill="none" stroke="#f3f1dc" />
+                <text x="588" y="227"
+                  text-anchor="end">02 / What you save</text>
+                <path d="M453 403H551L581 379" fill="none" stroke="#f3f1dc" />
+                <text x="589" y="369"
+                  text-anchor="end">03 / A home online</text>
+              </g>
+            </svg>
+            <div
+              class="drawing-tools"><p id="drawing-status" aria-live="polite">Exploded view<br>Three parts. One working app.</p><button id="assemble" type="button" aria-pressed="false">Assemble the app ↓</button></div>
+          </div>
+        </section>
+        <div
+          class="rail"><span>Drawing no. 001</span><span>Designed around what you need</span><span>Ready for your idea ↙</span></div>
+        <section class="spec" id="how" aria-label="How it works">
+          <article><span class="number">01 / Specify</span><h3>Start with your words.</h3><p>Connect Claude or ChatGPT to your space. Tell your assistant what you need. Keep asking for changes as the idea takes shape.</p></article>
+          <article><span class="number">02 / Put it to work</span><h3>Give it a home.</h3><p>Your app lives at your own yaks.app address. Save data, photos and files, and open them from any device.</p></article>
+          <article><span class="number">03 / Open the doors</span><h3>Bring people in.</h3><p>Send a link. Invite people to edit. Build something you use together, with shared data and live experiences.</p></article>
+        </section>
+        <section class="examples" aria-labelledby="examples-title">
+          <div class="eyebrow">Working examples</div>
+          <div class="examples-head">
+            <h2 id="examples-title">Small plans.<br>Useful things.</h2>
+            <p>A few ideas, already built.<br>Open one and see what it does.</p>
+          </div>
+          <div class="projects">
+            <a class="project"
+              href="https://yourname.yaks.app/recipes/"><span class="index">A—01 / EVERYDAY</span><svg viewBox="0 0 240 135" aria-hidden="true"><path d="M65 22H173V118H65ZM75 12H183V108M85 2H193V98M80 40H158M80 50H145M80 95H158M80 105H132"/><circle cx="119" cy="74" r="14"/><path d="M119 54V94M99 74H139"/></svg><div><h3>A recipe box</h3><p>Good things, kept together.</p></div><span class="arrow" aria-hidden="true">↗</span></a>
+            <a class="project"
+              href="https://yourname.yaks.app/garden/"><span class="index">A—02 / GROWING</span><svg viewBox="0 0 240 135" aria-hidden="true"><path d="M120 120V35M120 75C75 80 70 40 75 25C103 25 120 44 120 75ZM120 95C162 98 178 70 176 48C143 48 120 68 120 95ZM50 122H190M110 122L100 132M130 122L140 132"/><path d="M120 60L82 34M120 83L166 58" stroke-dasharray="3 4"/></svg><div><h3>A garden diary</h3><p>Remember what grew, and when.</p></div><span class="arrow" aria-hidden="true">↗</span></a>
+            <a class="project"
+              href="https://yourname.yaks.app/trip/"><span class="index">A—03 / ELSEWHERE</span><svg viewBox="0 0 240 135" aria-hidden="true"><path d="M43 32L93 17L147 32L197 17V105L147 120L93 105L43 120ZM93 17V105M147 32V120"/><path d="M64 91C72 53 116 93 132 67S168 47 180 40" stroke-dasharray="5 4"/><circle cx="64" cy="91" r="5"/><circle cx="180" cy="40" r="5"/></svg><div><h3>A trip planner</h3><p>The whole plan, in one shared place.</p></div><span class="arrow" aria-hidden="true">↗</span></a>
+          </div>
+        </section>
+        <section
+          class="ending"><div><div class="eyebrow">Your next project</div><h2>What needs building?</h2></div><a class="action" href="https://yaks.app/login">Start free <span aria-hidden="true">↗</span></a></section>
+      </main>
+      <footer><span>yaks.app · Build, host and share web apps</span><div><a href="https://yaks.app/docs">Documentation</a><a href="https://yaks.app/pricing">Pricing</a><a href="https://yaks.app/privacy">Privacy</a></div></footer>
+    </div>
+    <script>
+    let button = document.querySelector('#assemble')
+    let assembly = document.querySelector('#assembly')
+    let status = document.querySelector('#drawing-status')
+    button.addEventListener('click', () => {
+      let assembled = button.getAttribute('aria-pressed') !== 'true'
+      button.setAttribute('aria-pressed', String(assembled))
+      assembly.classList.toggle('assembled', assembled)
+      button.textContent = assembled ? 'Explore the layers ↑' : 'Assemble the app ↓'
+      status.innerHTML = assembled
+        ? 'Assembled view<br>Your idea, ready for the web.'
+        : 'Exploded view<br>Three parts. One working app.'
+    })
+    </script>
+  </body>
+</html>

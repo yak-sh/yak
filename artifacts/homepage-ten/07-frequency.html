@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Frequency — yaks.app</title>
+    <meta name="description"
+      content="An idea worth putting out into the world. Build, host and share web apps with yaks.app.">
+    <style>
+    :root {
+      --ink: #f7eee7;
+      --muted: #beb0c2;
+      --floor: #241c2d;
+      --panel: #33283d;
+      --line: #56445f;
+      --coral: #ffad92;
+      --mint: #b4e1c6;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    body {
+      margin: 0;
+      background: var(--floor);
+      color: var(--ink);
+      font-family: Arial,Helvetica,sans-serif;
+    }
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+    button,
+    input {
+      font: inherit;
+    }
+    button,
+    a,
+    input {
+      touch-action: manipulation;
+    }
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible {
+      outline: 3px solid var(--mint);
+      outline-offset: 6px;
+    }
+    button {
+      cursor: pointer;
+    }
+    .wrap {
+      max-width: 1440px;
+      margin: auto;
+      padding: 0 5.2%;
+    }
+    .top {
+      height: 108px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--line);
+    }
+    .logo {
+      font-size: 30px;
+      letter-spacing: -1.8px;
+      font-weight: 800;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .logo-mark {
+      width: 27px;
+      height: 27px;
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .logo-mark i {
+      display: block;
+      background: var(--coral);
+      width: 4px;
+      border-radius: 5px;
+      height: 12px;
+    }
+    .logo-mark i:nth-child(2) {
+      height: 26px;
+    }
+    .logo-mark i:nth-child(3) {
+      height: 19px;
+    }
+    .logo-mark i:nth-child(4) {
+      height: 9px;
+    }
+    .nav {
+      display: flex;
+      gap: 36px;
+      font-size: 14px;
+    }
+    .nav a:hover {
+      color: var(--coral);
+    }
+    .nav .signin {
+      color: var(--coral);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.06fr 1fr;
+      gap: 6%;
+      padding: 77px 0 72px;
+      align-items: center;
+    }
+    .eyebrow {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+      letter-spacing: 1.2px;
+      margin: 0 0 25px;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--mint);
+      display: inline-block;
+    }
+    .hero h1 {
+      font-size: clamp(70px,7.8vw,112px);
+      line-height: .94;
+      letter-spacing: -7px;
+      font-weight: 500;
+      margin: 0 0 27px;
+    }
+    .hero h1 em {
+      font-family: Georgia,serif;
+      color: var(--coral);
+      font-weight: 400;
+    }
+    .lead {
+      max-width: 400px;
+      font-size: 17px;
+      line-height: 1.65;
+      color: var(--muted);
+    }
+    .action {
+      display: inline-flex;
+      gap: 32px;
+      align-items: center;
+      padding: 19px 24px;
+      border-radius: 4px;
+      background: var(--coral);
+      color: var(--floor);
+      font-weight: 700;
+      font-size: 14px;
+      margin-top: 16px;
+    }
+    .action:hover {
+      background: #ffc9b7;
+    }
+    .under {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 19px;
+    }
+    .device {
+      background: var(--panel);
+      border: 1px solid #695172;
+      border-radius: 16px;
+      box-shadow: 0 25px 70px #100b1b66,inset 0 1px #ffffff16;
+      position: relative;
+      padding: 24px 25px 28px;
+      transform: rotate(2deg);
+    }
+    .device::before,
+    .device::after {
+      content: '+';
+      position: absolute;
+      color: #8f789a;
+      font-size: 14px;
+      top: 9px;
+    }
+    .device::before {
+      left: 11px;
+    }
+    .device::after {
+      right: 11px;
+    }
+    .device-head {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      letter-spacing: 1.3px;
+      color: var(--muted);
+      padding: 6px 1px 20px;
+    }
+    .device-head strong {
+      font-size: 15px;
+      color: var(--ink);
+      letter-spacing: -.5px;
+    }
+    .display {
+      background: #1b1922;
+      border-radius: 5px;
+      border: 1px solid #15131c;
+      position: relative;
+      overflow: hidden;
+      height: 175px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scope {
+      width: 100%;
+      height: 100%;
+      opacity: .9;
+    }
+    .display-label {
+      position: absolute;
+      left: 16px;
+      top: 13px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      color: var(--mint);
+    }
+    .display-footer {
+      position: absolute;
+      bottom: 13px;
+      right: 14px;
+      font-size: 10px;
+      color: #93aa9b;
+    }
+    .console {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 20px 0 24px;
+      gap: 12px;
+    }
+    .play {
+      background: var(--mint);
+      border: 0;
+      color: #24372e;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+    .tempo {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      font-size: 10px;
+      letter-spacing: .7px;
+      color: var(--muted);
+      width: 36%;
+    }
+    .tempo label {
+      display: flex;
+      justify-content: space-between;
+    }
+    .tempo output {
+      color: var(--ink);
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--coral);
+      height: 12px;
+      margin: 0;
+    }
+    .sound {
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      color: var(--ink);
+      font-size: 11px;
+      padding: 11px 12px;
+    }
+    .sound[aria-pressed=true] {
+      border-color: var(--mint);
+      color: var(--mint);
+    }
+    .tracks {
+      display: grid;
+      grid-template-columns: 38px repeat(8,1fr);
+      gap: 7px;
+      align-items: center;
+    }
+    .track-name {
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .step {
+      aspect-ratio: 1;
+      border: 1px solid #645071;
+      border-radius: 4px;
+      background: #45354f;
+      box-shadow: inset 0 1px #ffffff0a;
+      min-width: 0;
+      padding: 0;
+    }
+    .step[aria-pressed=true] {
+      background: var(--coral);
+      border-color: var(--coral);
+    }
+    .step[data-track="1"][aria-pressed=true] {
+      background: var(--mint);
+      border-color: var(--mint);
+    }
+    .step[data-track="2"][aria-pressed=true] {
+      background: #c3acdf;
+      border-color: #c3acdf;
+    }
+    .step.current {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+    .step:hover {
+      filter: brightness(1.2);
+    }
+    .numbers {
+      display: grid;
+      grid-template-columns: 38px repeat(8,1fr);
+      gap: 7px;
+      margin-top: 10px;
+      text-align: center;
+      font-size: 9px;
+      color: var(--muted);
+    }
+    .presets {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 23px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+    .presets span {
+      font-size: 10px;
+      color: var(--muted);
+      margin-right: auto;
+    }
+    .preset {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      font-size: 10px;
+      border-radius: 20px;
+      padding: 7px 10px;
+    }
+    .preset[aria-pressed=true] {
+      background: var(--ink);
+      color: var(--floor);
+    }
+    .device-note {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+      margin: 22px 0 0;
+      transform: rotate(-2deg);
+    }
+    .status {
+      font-size: 11px;
+      color: var(--mint);
+      min-height: 15px;
+      margin: 13px 0 0;
+    }
+    .ticker {
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      padding: 23px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 25px;
+      align-items: center;
+    }
+    .ticker p {
+      margin: 0;
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: var(--muted);
+    }
+    .ticker strong {
+      font-size: 18px;
+      font-weight: 400;
+      letter-spacing: -.4px;
+    }
+    .ticker i {
+      color: var(--coral);
+      font-style: normal;
+      font-size: 23px;
+    }
+    .story {
+      display: grid;
+      grid-template-columns: 1fr 1.8fr;
+      padding: 92px 0 84px;
+      gap: 8%;
+    }
+    .section-tag {
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: var(--coral);
+      margin: 6px 0 22px;
+    }
+    .story h2 {
+      font-size: 44px;
+      line-height: 1.1;
+      font-weight: 400;
+      letter-spacing: -2px;
+      margin: 0;
+    }
+    .channels {
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      gap: 32px;
+    }
+    .channel {
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+    .channel .num {
+      font-family: Georgia,serif;
+      font-style: italic;
+      font-size: 33px;
+      color: var(--coral);
+    }
+    .channel h3 {
+      font-size: 19px;
+      font-weight: 400;
+      margin: 24px 0 12px;
+    }
+    .channel p {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--muted);
+      margin: 0;
+    }
+    .outro {
+      padding: 43px 0 47px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--line);
+      gap: 28px;
+    }
+    .outro h2 {
+      font-size: 32px;
+      letter-spacing: -1px;
+      font-weight: 400;
+      margin: 0;
+    }
+    .outro .action {
+      margin: 0;
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      border-top: 1px solid var(--line);
+      padding: 24px 0 36px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    @media (max-width:900px) {
+      .hero {
+        gap: 5%;
+        padding-top: 55px;
+      }
+      .hero h1 {
+        font-size: 76px;
+        letter-spacing: -5px;
+      }
+      .device {
+        padding: 22px 16px;
+      }
+      .tracks,
+      .numbers {
+        gap: 5px;
+        grid-template-columns: 30px repeat(8,1fr);
+      }
+      .sound {
+        padding: 10px 7px;
+      }
+      .story {
+        grid-template-columns: 1fr;
+        gap: 36px;
+      }
+      .story h2 {
+        max-width: 400px;
+      }
+      .ticker strong {
+        font-size: 15px;
+      }
+    }
+    @media (max-width:650px) {
+      .wrap {
+        padding: 0 7%;
+      }
+      .top {
+        height: 83px;
+      }
+      .logo {
+        font-size: 26px;
+      }
+      .nav {
+        gap: 23px;
+      }
+      .nav .docs {
+        display: none;
+      }
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 44px;
+        padding: 42px 0 44px;
+      }
+      .hero h1 {
+        font-size: 82px;
+        letter-spacing: -5px;
+      }
+      .lead {
+        max-width: 340px;
+        font-size: 16px;
+      }
+      .device {
+        max-width: 460px;
+        width: 100%;
+        margin: 0 auto;
+        transform: rotate(1deg);
+        padding: 22px 20px;
+      }
+      .tracks,
+      .numbers {
+        gap: 7px;
+        grid-template-columns: 35px repeat(8,1fr);
+      }
+      .device-note {
+        transform: none;
+      }
+      .ticker {
+        flex-wrap: wrap;
+        gap: 17px 8px;
+      }
+      .ticker p {
+        width: 100%;
+      }
+      .ticker strong {
+        font-size: 13px;
+      }
+      .ticker i {
+        font-size: 16px;
+      }
+      .story {
+        padding: 56px 0;
+      }
+      .story h2 {
+        font-size: 38px;
+      }
+      .channels {
+        grid-template-columns: 1fr;
+        gap: 28px;
+      }
+      .channel {
+        display: grid;
+        grid-template-columns: 38px 1fr;
+        column-gap: 17px;
+      }
+      .channel h3 {
+        margin: 7px 0 10px;
+      }
+      .channel p {
+        grid-column: 2;
+      }
+      .outro {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .outro h2 {
+        font-size: 30px;
+      }
+      .footer {
+        gap: 22px;
+        line-height: 1.6;
+      }
+      .presets span {
+        font-size: 9px;
+      }
+      .preset {
+        font-size: 9px;
+        padding: 7px 9px;
+      }
+    }
+    @media (max-width:380px) {
+      .device {
+        padding: 20px 13px;
+      }
+      .tracks,
+      .numbers {
+        grid-template-columns: 26px repeat(8,1fr);
+        gap: 4px;
+      }
+      .step {
+        min-height: 28px;
+      }
+      .presets {
+        gap: 4px;
+      }
+      .preset {
+        padding: 7px;
+      }
+      .tempo {
+        width: 30%;
+      }
+      .sound {
+        font-size: 10px;
+      }
+      .hero h1 {
+        font-size: 74px;
+      }
+    }
+    @media (prefers-reduced-motion:reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+      * {
+        animation: none!important;
+        transition: none!important;
+      }
+    }
+    </style>
+    <script src="lab.js" defer></script>
+  </head>
+  <body>
+    <div class="wrap">
+      <header
+        class="top"><a class="logo" href="https://yaks.app" aria-label="yaks.app home"><span class="logo-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>yaks.app</a><nav class="nav" aria-label="Main navigation"><a href="#how">The signal</a><a class="docs" href="https://yaks.app/docs">Docs</a><a class="signin" href="https://yaks.app/login">Tune in ↗</a></nav></header>
+      <main>
+        <section class="hero">
+          <div><p class="eyebrow"><span class="dot"></span> A new frequency for your ideas</p><h1>Make<br>some<br><em>signal.</em></h1><p class="lead">That idea on repeat in your head?<br>Let’s put it out into the world. Build, host and share web apps with yaks.app.</p><a class="action" href="https://yaks.app/login">Start making <span aria-hidden="true">↗</span></a><p class="under">You bring the idea. Claude or ChatGPT builds it.</p></div>
+          <div>
+            <div class="device"
+              aria-label="Interactive eight-step music sequencer">
+              <div
+                class="device-head"><strong>idea machine / 01</strong><span>yaks sound lab</span></div>
+              <div
+                class="display"><span class="display-label">Room for your own rhythm</span><svg class="scope" viewBox="0 0 420 170" preserveAspectRatio="none" aria-hidden="true"><defs><pattern id="grid" width="21" height="17" patternUnits="userSpaceOnUse"><path d="M21 0H0V17" fill="none" stroke="#39433b" stroke-width=".5"/></pattern></defs><rect width="420" height="170" fill="url(#grid)"/><path id="wave" d="M0 85 L40 85 48 76 55 97 63 43 72 128 82 75 95 85 120 85 127 80 136 92 145 58 154 108 163 82 180 85 210 85 218 72 229 104 240 30 252 140 263 63 275 91 285 85 310 85 320 74 330 100 340 52 350 118 362 77 380 85 420 85" fill="none" stroke="#b4e1c6" stroke-width="2"/></svg><span class="display-footer" id="display-state">Ready when you are</span></div>
+              <div
+                class="console"><button class="play" id="play" aria-label="Play sequencer" aria-pressed="false">▶</button><div class="tempo"><label for="tempo">Tempo <output id="bpm">108</output></label><input id="tempo" type="range" min="65" max="160" value="108" aria-label="Tempo in beats per minute"></div><button class="sound" id="sound" aria-pressed="false">Sound off ♪</button></div>
+              <div class="tracks" id="tracks"></div>
+              <div class="numbers"
+                aria-hidden="true"><span></span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span></div>
+              <div
+                class="presets"><span>Pick a starting point</span><button class="preset" data-preset="0" aria-pressed="true">Daydream</button><button class="preset" data-preset="1" aria-pressed="false">Night drive</button></div>
+              <p class="status" id="status"
+                aria-live="polite">Tap the pads. Make it yours.</p>
+            </div>
+            <p
+              class="device-note">A small playable idea. Imagine what yours could be.</p>
+          </div>
+        </section>
+        <div
+          class="ticker"><p>From thought to transmission</p><strong>01 / Say it</strong><i aria-hidden="true">→</i><strong>02 / Shape it</strong><i aria-hidden="true">→</i><strong>03 / Send it out</strong></div>
+        <section class="story" id="how">
+          <div>
+            <p class="section-tag">Find your wavelength</p>
+            <h2>The internet<br>needs your kind<br>of interesting.</h2>
+          </div>
+          <div class="channels">
+            <article
+              class="channel"><span class="num">01</span><h3>Talk it into being.</h3><p>Tell Claude or ChatGPT what you need. A little tool, a shared space, a world to explore. Start with your own situation.</p></article>
+            <article
+              class="channel"><span class="num">02</span><h3>Keep turning the dial.</h3><p>Your assistant builds the app. Ask for changes in the same conversation until it feels like yours.</p></article>
+            <article
+              class="channel"><span class="num">03</span><h3>Give it an address.</h3><p>yaks.app hosts your app and keeps its data. Open it on your phone. Send the link to your people.</p></article>
+          </div>
+        </section>
+        <section
+          class="outro"><h2>Something good starts with a signal.</h2><a class="action" href="https://yaks.app/login">Put your idea on air ↗</a></section>
+      </main>
+      <footer
+        class="footer"><span>yaks.app · Build, host and share web apps.</span><a href="https://yaks.app/docs">Read the manual ↗</a></footer>
+    </div>
+    <script>
+    let tracks = document.querySelector('#tracks')
+    let names = ['Kick', 'Tone', 'Tick']
+    let patterns = [[[0, 4], [0, 3, 6], [0, 2, 4, 6]], [[0, 3, 4], [1, 4, 7], [
+      0,
+      1,
+      2,
+      4,
+      6,
+      7,
+    ]]]
+    let pattern = patterns[0].map((row) => [...row])
+    let playing = false
+    let sounding = false
+    let position = -1
+    let timer
+    let context
+    let play = document.querySelector('#play')
+    let sound = document.querySelector('#sound')
+    let tempo = document.querySelector('#tempo')
+    let status = document.querySelector('#status')
+    let pads = []
+    let paint = () =>
+      pads.forEach((pad) => {
+        let row = Number(pad.dataset.track)
+        let step = Number(pad.dataset.step)
+        pad.setAttribute('aria-pressed', String(pattern[row].includes(step)))
+        pad.classList.toggle('current', playing && step === position)
+      })
+    names.forEach((name, row) => {
+      let label = document.createElement('span')
+      label.className = 'track-name'
+      label.textContent = name
+      tracks.append(label)
+      for (let step = 0; step < 8; step++) {
+        let pad = document.createElement('button')
+        pad.className = 'step'
+        pad.dataset.track = row
+        pad.dataset.step = step
+        pad.setAttribute('aria-label', name + ', step ' + (step + 1))
+        pad.addEventListener('click', () => {
+          pattern[row] = pattern[row].includes(step)
+            ? pattern[row].filter((value) => value !== step)
+            : [...pattern[row], step]
+          document.querySelectorAll('.preset').forEach((button) =>
+            button.setAttribute('aria-pressed', 'false')
+          )
+          paint()
+          status.textContent = 'Your rhythm. Keep experimenting.'
+        })
+        pads.push(pad)
+        tracks.append(pad)
+      }
+    })
+    let tone = (row) => {
+      if (!sounding || !context) return
+      let now = context.currentTime
+      let oscillator = context.createOscillator()
+      let gain = context.createGain()
+      oscillator.type = ['sine', 'triangle', 'square'][row]
+      oscillator.frequency.setValueAtTime(
+        [130, [220, 277.18, 329.63, 440][position % 4], 1500][row],
+        now,
+      )
+      if (row === 0) {
+        oscillator.frequency.exponentialRampToValueAtTime(42, now + .12)
+      }
+      gain.gain.setValueAtTime([.22, .1, .025][row], now)
+      gain.gain.exponentialRampToValueAtTime(.001, now + [.2, .25, .035][row])
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.start(now)
+      oscillator.stop(now + .3)
+      oscillator.onended = () => {
+        oscillator.disconnect()
+        gain.disconnect()
+      }
+    }
+    let tick = () => {
+      position = (position + 1) % 8
+      pattern.forEach((row, index) => {
+        if (row.includes(position)) tone(index)
+      })
+      paint()
+      document.querySelector('#display-state').textContent = 'Step ' +
+        (position + 1) + ' / 8 · ' + tempo.value + ' bpm'
+      timer = setTimeout(tick, 30000 / Number(tempo.value))
+    }
+    let stop = () => {
+      playing = false
+      clearTimeout(timer)
+      play.textContent = '▶'
+      play.setAttribute('aria-label', 'Play sequencer')
+      play.setAttribute('aria-pressed', 'false')
+      document.querySelector('#display-state').textContent = 'Ready when you are'
+      paint()
+    }
+    play.addEventListener('click', () => {
+      if (playing) return stop()
+      playing = true
+      position = -1
+      play.textContent = 'Ⅱ'
+      play.setAttribute('aria-label', 'Pause sequencer')
+      play.setAttribute('aria-pressed', 'true')
+      status.textContent = sounding
+        ? 'Playing your rhythm.'
+        : 'Playing silently. Turn sound on to listen.'
+      tick()
+    })
+    sound.addEventListener('click', async () => {
+      try {
+        if (!context) {
+          let Audio = window.AudioContext || window.webkitAudioContext
+          if (!Audio) throw new Error('Audio unavailable')
+          context = new Audio()
+        }
+        if (context.state === 'suspended') await context.resume()
+        sounding = !sounding
+        sound.setAttribute('aria-pressed', String(sounding))
+        sound.textContent = sounding ? 'Sound on ♪' : 'Sound off ♪'
+        status.textContent = sounding
+          ? (playing
+            ? 'Playing your rhythm with sound.'
+            : 'Sound enabled. Press play to listen.')
+          : 'Sound off. Your pattern is still here.'
+      } catch {
+        status.textContent =
+          'Audio is unavailable here. You can still edit and play the visual pattern.'
+      }
+    })
+    tempo.addEventListener('input', () => {
+      document.querySelector('#bpm').textContent = tempo.value
+    })
+    document.querySelectorAll('.preset').forEach((button) =>
+      button.addEventListener('click', () => {
+        pattern = patterns[Number(button.dataset.preset)].map((row) => [...row])
+        document.querySelectorAll('.preset').forEach((item) =>
+          item.setAttribute('aria-pressed', String(item === button))
+        )
+        status.textContent = button.textContent +
+          ' loaded. Change any pad to make it yours.'
+        paint()
+      })
+    )
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) stop()
+    })
+    paint()
+    </script>
+  </body>
+</html>
