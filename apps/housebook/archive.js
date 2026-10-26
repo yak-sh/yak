@@ -61,14 +61,20 @@ let document = async (response, url) => {
   return { body, mime, name }
 }
 
-// What a browser's download asks for. A request naming no encoding is what bot
-// screens refuse first: Akamai, in front of appliance makers' manuals
-// (whirlpool.com), answers it 403 whatever its user agent, and stalls one
-// that names itself a bot.
+// What a browser sends when a person opens the file's link, since the fetch is
+// theirs. Bot screens refuse less: from a Cloudflare Worker, Akamai in front of
+// appliance makers' manuals (whirlpool.com) answers 403 unless the request
+// carries a browser's user agent and its sec-fetch headers both.
 let asking = {
-  accept: 'application/pdf,image/*,*/*;q=0.8',
+  accept: 'application/pdf,*/*;q=0.8',
   'accept-encoding': 'gzip, deflate, br',
   'accept-language': 'en-US,en;q=0.9',
+  'sec-fetch-dest': 'document',
+  'sec-fetch-mode': 'navigate',
+  'sec-fetch-site': 'none',
+  'sec-fetch-user': '?1',
+  'user-agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
 }
 
 export let archive = (download = fetch) => async (req, env) => {
