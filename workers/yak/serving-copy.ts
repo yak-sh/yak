@@ -89,7 +89,15 @@ export class ServingCopy {
    */
   settle(revision: number, committed: number): boolean {
     if (revision !== this.#revision) return false
-    if (!this.#blocked) return true
+    // An open copy at another revision than the directory's committed one
+    // serves nothing a read can confirm: it moves to the committed revision.
+    if (!this.#blocked) {
+      if (committed === revision) return true
+      this.#answers = new Map()
+      this.#persist(committed, false, this.#answers)
+      this.#revision = committed
+      return true
+    }
     if (committed >= revision) return this.finish(revision)
     this.#persist(committed, false, this.#answers)
     this.#revision = committed

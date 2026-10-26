@@ -1259,6 +1259,23 @@ export class Store {
     }
   }
 
+  // A write that fails forgets the memory's copy, as `#atomic` does: a commit
+  // hook may have remembered a word the rollback took back. The serving fence
+  // remembers the directory revision a refused write raised, and a read that
+  // answered it would set the copy at a revision the directory never holds.
+  #forgetting<T>(body: () => T): T {
+    let forget = (e: unknown): never => {
+      this.#kv.clear()
+      throw e
+    }
+    try {
+      let out = body()
+      return (isPromise(out) ? out.catch(forget) : out) as T
+    } catch (e) {
+      return forget(e)
+    }
+  }
+
   // A store follows its vocabulary through its print, as the box does
   // (@yaks/sqlite `follow`, D-121389): a wake whose print the store recorded
   // runs no DDL, and one whose print is new adds what is missing and records
@@ -1639,7 +1656,10 @@ export class Store {
           let under = (revision: number) =>
             this.#copyWrite.run(
               revision,
-              () => trusted(opts, () => apply(bundles, opts)),
+              () =>
+                this.#forgetting(() =>
+                  trusted(opts, () => apply(bundles, opts))
+                ),
             )
           let batch = meta ? this.#copyBatch.getStore() : undefined
           if (batch != null) return under(batch)

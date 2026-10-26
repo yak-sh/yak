@@ -393,6 +393,60 @@ await proof(
   },
 )
 
+// A commit hook after the fence's refuses the write, and a read lands while
+// the write's mend is away: it is answered the committed revision, never the
+// one the rollback took back, and a later read is served (T-88868992).
+await proof(
+  'a read during a refused write is answered the committed revision',
+  async () => {
+    let f = await fixture()
+    let refuse = true
+    ;(await f.graph()).use({
+      name: 'test/refuse-at-commit',
+      hooks: {
+        commit: (b) => {
+          if (refuse) throw new Error('refused at commit')
+          return b
+        },
+      },
+    })
+    let during: number | undefined
+    f.onRevision(async () => {
+      f.onRevision(() => Promise.resolve())
+      let answer = await f.read()
+      during = Number(answer.headers.get(EPOCH))
+      f.core().publish(during, '.app', await answer.text())
+    })
+    let answer = await f.live(patch)
+    let error = (await answer.json()).message
+    refuse = false
+    let mended = await f.read(true)
+    let epoch = Number(mended.headers.get(EPOCH))
+    await mended.body?.cancel()
+    return () => {
+      ok(error.startsWith('refused at commit'), error)
+      equal([during, epoch], [f.initial, f.initial])
+      ok(f.core().valid(epoch))
+    }
+  },
+)
+
+// A copy left open at a revision the directory does not hold is moved to the
+// committed one by the next read that asks for a mend.
+await proof('an open copy at another revision is mended', async () => {
+  let f = await fixture()
+  f.core().finish(f.core().begin())
+  let stuck = f.core().valid(f.initial)
+  let mended = await f.read(true)
+  let epoch = Number(mended.headers.get(EPOCH))
+  await mended.body?.cancel()
+  return () => {
+    equal(stuck, false)
+    equal(epoch, f.initial)
+    ok(f.core().valid(epoch))
+  }
+})
+
 await proof(
   'a fence whose write is gone is lowered by a read that finds it',
   async () => {
