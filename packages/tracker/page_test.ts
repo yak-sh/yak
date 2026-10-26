@@ -28,7 +28,7 @@ type El = { tagName: string; href?: string; src?: string; type?: string }
 
 // A page whose server answers each address with the status `files` gives it,
 // or drops the connection for any other.
-let page = (files: Record<string, number>) => {
+let page = (files: Record<string, number>, scripts: string[] = []) => {
   let asked: string[] = []
   let sent: Blob[] = []
   let heard = new Map<string, (e: unknown) => unknown>()
@@ -54,6 +54,7 @@ let page = (files: Record<string, number>) => {
     document: {
       currentScript: { dataset: { yakAt: '/cookbook/', yakVersion: '5' } },
       baseURI: at,
+      scripts: scripts.map((src) => ({ src })),
       readyState: 'complete',
       body: { innerText: 'A cookbook with plenty on the page. '.repeat(4) },
     },
@@ -70,9 +71,10 @@ let page = (files: Record<string, number>) => {
     clearTimeout: () => {},
   }
   reporter(...globals.map((name) => scope[name]))
-  let said = () =>
-    Promise.all(sent.map(async (b) => JSON.parse(await b.text()).message))
-  return { win, heard, asked, said }
+  let bodies = () =>
+    Promise.all(sent.map(async (b) => JSON.parse(await b.text())))
+  let said = async () => (await bodies()).map((b) => b.message)
+  return { win, heard, asked, said, bodies }
 }
 
 // Fire `el`'s failed load. The listener answers with its handling, settled
@@ -118,6 +120,23 @@ test('a failure the browser raises with no error is filed by its message', async
   p.heard.get('error')!({ target: p.win, error: null, message, filename: at })
   equal(await p.said(), [message])
 })
+
+// A script from another origin throws, and the browser hides all but this.
+let muted = async (scripts: string[]) => {
+  let p = page({}, scripts)
+  let message = 'Script error.'
+  p.heard.get('error')!({ target: p.win, error: null, message, lineno: 0 })
+  return (await p.bodies()).map((b) => [b.message, b.stack])
+}
+
+test('a muted script error names the page and the scripts from elsewhere', async () =>
+  equal(await muted([`${at}main.js`, 'https://cdn.test/lib.js', '']), [[
+    'Script error.',
+    `    at ${at}\n    at https://cdn.test/lib.js`,
+  ]]))
+
+test('a muted script error in a page of only its own scripts names the page', async () =>
+  equal(await muted([`${at}main.js`]), [['Script error.', `    at ${at}`]]))
 
 let link = { tagName: 'LINK', href: file }
 

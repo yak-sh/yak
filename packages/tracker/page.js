@@ -91,6 +91,16 @@
   let here = location.href.split('#')[0]
   let foreign = (e) => e.lineno == 1 && (e.filename || '').split('#')[0] == here
 
+  // A script from another origin that throws is muted by the browser: the
+  // event says "Script error." with no file, line or error. What the page can
+  // still say is where it was and which scripts from elsewhere it held, as the
+  // frames of its stack. None at all points outside the page: an extension, or
+  // the browser itself.
+  let muted = (e) => e.error == null && !e.filename && !e.lineno
+  let strangers = () =>
+    Array.from(document.scripts || [], (s) => s.src)
+      .filter((src) => src && !mine(at(src) || location))
+
   // The page's own fetch, from before the wrapper below.
   let plain = globalThis.fetch
 
@@ -160,9 +170,12 @@
     if (foreign(e) || decided(e.error)) return
     // A notice the browser raises itself, such as a ResizeObserver loop, has
     // no error: its own message is the one that says what happened.
+    let from = muted(e) ? strangers() : []
     broke({
       message: (e.error == null && e.message) || said(e.error),
-      stack: e.error && e.error.stack,
+      stack: muted(e)
+        ? [location.href, ...from].map((u) => `    at ${u}`).join('\n')
+        : e.error && e.error.stack,
       url: e.filename || location.href,
       line: e.lineno,
       mechanism: 'onerror',
