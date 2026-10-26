@@ -238,6 +238,9 @@
           // in browsers we cannot reach, and the rule lives where we can.
           status: r.status,
           answer: why.slice(0, 2000),
+          // The server reported this answer itself where it caught it
+          // (report.ts `FILED`); the door files it no second time.
+          filed: r.headers.has('x-yak-filed'),
           mechanism: 'wrapper',
         })
         // The one thing this script does read the status for: whether to draw

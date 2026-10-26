@@ -53,6 +53,9 @@ let fail = fixture()
 let failResponse = await archive(() =>
   Promise.resolve(new Response('not found', { status: 404 }))
 )(request(), fail.env)
+let down = await archive(() =>
+  Promise.resolve(new Response('busy', { status: 503 }))
+)(request(), fixture().env)
 
 test('a downloaded manual stores its bytes and detected PDF type', async () => {
   assertEquals(saved.status, 200)
@@ -67,8 +70,9 @@ test('a visitor without write access cannot download or store a manual', () => {
 test('a download page and an unavailable file never become saved documents', () => {
   assertEquals(htmlResponse.status, 422)
   assertEquals(html.stored, [])
-  assertEquals(failResponse.status, 502)
+  assertEquals(failResponse.status, 422)
   assertEquals(fail.stored, [])
+  assertEquals(down.status, 502)
 })
 
 let kept = documents({

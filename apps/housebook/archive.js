@@ -61,6 +61,16 @@ let document = async (response, url) => {
   return { body, mime, name }
 }
 
+// What a browser's download asks for. A request naming no encoding is what bot
+// screens refuse first: Akamai, in front of appliance makers' manuals
+// (whirlpool.com), answers it 403 whatever its user agent, and stalls one
+// that names itself a bot.
+let asking = {
+  accept: 'application/pdf,image/*,*/*;q=0.8',
+  'accept-encoding': 'gzip, deflate, br',
+  'accept-language': 'en-US,en;q=0.9',
+}
+
 export let archive = (download = fetch) => async (req, env) => {
   if (!new URL(req.url).pathname.endsWith('/archive')) {
     return new Response('', { status: 404 })
@@ -85,7 +95,10 @@ export let archive = (download = fetch) => async (req, env) => {
   }
   let response
   try {
-    response = await download(url.href, { signal: AbortSignal.timeout(30000) })
+    response = await download(url.href, {
+      headers: asking,
+      signal: AbortSignal.timeout(30000),
+    })
   } catch (error) {
     return answer(
       `The source could not be reached (${error.message}). Your draft is kept; try again or upload the file.`,
@@ -94,6 +107,13 @@ export let archive = (download = fetch) => async (req, env) => {
   }
   if (!response.ok) {
     await response.body?.cancel()
+    // The source's own no (sign-in only, gone, or closed to downloads) is
+    // its answer, and retrying from here will not change it.
+    if (response.status < 500) {
+      return answer(
+        `${url.host} refused to send this file (${response.status}). Download it in your browser, then choose the file to upload. Your draft is kept.`,
+      )
+    }
     return answer(
       `The source answered ${response.status}. Your draft is kept; try again or upload the file.`,
       502,

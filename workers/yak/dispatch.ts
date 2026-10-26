@@ -60,6 +60,7 @@ import { oops } from './pages.ts'
 import type { Who } from './session.ts'
 import type { Dispatch } from './door.ts'
 import { failed, noted, refusal } from './unseen.ts'
+import { FILED } from '@yaks/tracker/report'
 import {
   type Bound,
   type Config,
@@ -659,11 +660,17 @@ let verdict = async (
     await res.body?.cancel()
     return null
   }
-  if (failed(res.status)) {
-    let message = `the app's worker answered ${res.status}`
-    await workerBreak(env, space, app, req, new Error(message))
-  }
-  return res
+  if (!failed(res.status)) return res
+  let message = `the app's worker answered ${res.status}`
+  await workerBreak(env, space, app, req, new Error(message))
+  // Filed here, so the page that hears it files it no second time.
+  let headers = new Headers(res.headers)
+  headers.set(FILED, '1')
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  })
 }
 
 // The app's own worker, or null to serve the files instead — which is what

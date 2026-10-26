@@ -289,6 +289,11 @@ let crumbs = (sent: unknown): Crumb[] | undefined => {
   return kept.length ? kept : undefined
 }
 
+/** The header a server sets on an answer whose failure it has already
+ * reported, where it caught it; the page reporter carries it as `filed`, and
+ * {@link broken} files that answer no second time. */
+export let FILED = 'x-yak-filed'
+
 /** A no the page was answered on purpose: a 4xx status. */
 export let meant = (_answer: string, status: number): boolean =>
   status >= 400 && status < 500
@@ -316,6 +321,7 @@ export let meant = (_answer: string, status: number): boolean =>
  *   'onerror',
  * ])
  * equal(broken(JSON.stringify({ message: '403 /apply', status: 403 })), [])
+ * equal(broken(JSON.stringify({ message: '502 /x', status: 502, filed: true })), [])
  * equal(broken('not json'), [])
  * ```
  */
@@ -340,6 +346,7 @@ export let broken = (
     // report with no status at all is a script error or an unhandled
     // rejection, and those are breaks.
     if (refusal(String(b.answer ?? ''), Number(b.status))) return []
+    if (b.filed === true) return []
     let message = saying(b)
     if (!message) return []
     let at = pathOf(r.url ?? b.url ?? b.documentURL)
