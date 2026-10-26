@@ -31,6 +31,7 @@ import {
   assertStringIncludes,
 } from '@std/assert'
 import { FakeTime } from '@std/testing/time'
+import { parse } from 'es-module-lexer/js'
 import type { Wire } from '@yaks/durable-object'
 import { test, until } from '@yaks/testing'
 import * as apps from './apps.ts'
@@ -122,6 +123,17 @@ await pageScript(ASSETS, '/', 0, true)
 
 // ---- the tests -------------------------------------------------------------
 
+// The platform's client as a page receives it: the module exporting `store`,
+// importing nothing more, so one request brings the whole of it
+// (client-assets.ts). `import.meta` is not an import.
+let served = (js: string) => {
+  let [imports, exports] = parse(js)
+  return {
+    imports: imports.filter((i) => i.d != -2).map((i) => i.n),
+    store: exports.some((e) => e.n == 'store'),
+  }
+}
+
 test('a page is served with its base and its reporter', async () => {
   await using scenario = platform()
   let { env, files } = scenario
@@ -136,11 +148,11 @@ test('a page is served with its base and its reporter', async () => {
   assert(html.includes('<base href="/cookbook/">'), html)
   assertEquals(woven(html).length, 3, html)
   assertStringIncludes(html, 'data-yak-at="/cookbook/" data-yak-version="1"')
-  // And the client an app imports is the platform's own file, beside the
-  // doors it wraps.
+  // And the client an app imports is the platform's own, beside the doors it
+  // wraps.
   let js = await apps.fetch(visit('/cookbook/api/client.js'), env)
   assertEquals(js.status, 200)
-  assert((await js.text()).includes('export let store ='))
+  assertEquals(served(await js.text()), { imports: [], store: true })
 })
 
 // The badge is the platform's, decided as a page is served: the same file
@@ -189,7 +201,7 @@ test("a release's module imports the client by the page's own path", async () =>
     res = await apps.fetch(new Request(url), env)
   }
   assertEquals(res.status, 200)
-  assertStringIncludes(await res.text(), 'export let store =')
+  assertEquals(served(await res.text()), { imports: [], store: true })
   assertEquals(new URL('.', url).pathname, '/cookbook/api/')
 })
 
