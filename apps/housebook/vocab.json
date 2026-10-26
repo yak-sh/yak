@@ -1,0 +1,131 @@
+{
+  "$defs": {
+    "house_item": {
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "location": {
+          "type": "string"
+        },
+        "brand": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "serial": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "string"
+        },
+        "manufactured": {
+          "type": "string"
+        },
+        "warranty": {
+          "type": "string"
+        },
+        "handover": {
+          "type": "boolean"
+        }
+      }
+    },
+    "house_record": {
+      "properties": {
+        "item": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "cost": {
+          "type": "number"
+        },
+        "provider": {
+          "type": "string"
+        }
+      }
+    },
+    "house_care": {
+      "properties": {
+        "item": {
+          "type": "string"
+        },
+        "due": {
+          "type": "string"
+        },
+        "months": {
+          "type": "number"
+        }
+      }
+    },
+    "house_contact": {
+      "properties": {
+        "trade": {
+          "type": "string"
+        },
+        "phone": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "website": {
+          "type": "string"
+        }
+      }
+    },
+    "house_file": {
+      "properties": {
+        "item": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "blob": {
+          "type": "string"
+        },
+        "mime": {
+          "type": "string"
+        }
+      }
+    },
+    "house_circuit": {
+      "properties": {
+        "slots": {
+          "type": "string"
+        },
+        "amps": {
+          "type": "string"
+        },
+        "side": {
+          "type": "string"
+        },
+        "off": {
+          "type": "boolean"
+        }
+      }
+    },
+    "house_profile": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "water": {
+          "type": "string"
+        },
+        "gas": {
+          "type": "string"
+        },
+        "electric": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
