@@ -11,17 +11,25 @@
 // graph.ts replaced: living beside that class dragged src/db.ts into the
 // object's graph and failed that check. That class is gone (T-33807).
 import type { Caller } from '@yaks/egress'
-import { hop, writing } from './lib/hops.ts'
+import { elapsed, heard, hop, WAITS, writing } from './lib/hops.ts'
 import { defect } from './defects.ts'
 import { stamp } from './running.ts'
 import { evicted, killed, opaque, retried, starved } from '@yaks/durable-object'
 
 // A store reports the statements it ran for this fetch, including any store
-// it asked in turn, and how long it waited to start when this fetch woke it.
-// Only the door sees every answer, so it is also where a parent request
-// collects those costs.
-let metered = async (send: () => Promise<Response>): Promise<Response> => {
-  let res = await send()
+// it asked in turn, how long it waited to start when this fetch woke it, and
+// what it waited on (`x-yak-waits`). Only the door sees every answer, so it is
+// also where a parent request collects those costs, and times the round trip
+// itself: `directory_wait` or `store_wait` (timing.ts).
+let metered = async (
+  name: string,
+  send: () => Promise<Response>,
+): Promise<Response> => {
+  let res = await elapsed(
+    name == PLATFORM_STORE ? 'directory_wait' : 'store_wait',
+    send,
+  )
+  heard(res.headers.get(WAITS))
   for (
     let [header, name] of [
       ['x-yak-hops', 'hops'],
@@ -215,7 +223,10 @@ export let doorOf = (
     // read this request remembers is never answered from before it (hops.ts
     // `writing`, directory.ts `directory`).
     let read = req.method == 'GET' || req.method == 'HEAD'
-    return metered(() => read ? send(req) : writing(name, () => send(req)))
+    return metered(
+      name,
+      () => read ? send(req) : writing(name, () => send(req)),
+    )
   }
   return Object.assign(ask, {
     consume: <T>(

@@ -7,6 +7,7 @@ import { cookieValue } from './lib/token.ts'
 import type { Fetcher } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
+import { elapsed } from './lib/hops.ts'
 import { evicted, lost, opaque, retried } from '@yaks/durable-object'
 export type DirectoryCopyTimer = {
   now(): number
@@ -30,8 +31,32 @@ export type ServingCopies = {
   idFromName(name: string): unknown
   get(id: unknown): ServingCopyDoor
 }
-export let copyOf = (env: Pick<Env, 'SERVING_COPY'>) =>
-  env.SERVING_COPY?.get(env.SERVING_COPY.idFromName('public'))
+export let copyOf = (env: Pick<Env, 'SERVING_COPY'>) => {
+  let copy = env.SERVING_COPY?.get(env.SERVING_COPY.idFromName('public'))
+  return copy && timedCopy(copy)
+}
+
+// Each call into the copy is a round trip to its object, summed on the
+// request's tally as `copy_wait` (timing.ts).
+let timedCopy = (copy: ServingCopyDoor): ServingCopyDoor => {
+  let timed = <T>(call: () => Promise<T>) => elapsed('copy_wait', call)
+  let { read, valid, publish, revision, settle } = copy
+  return {
+    ...read && { read: (key) => timed(() => copy.read!(key)) },
+    ...valid && { valid: (at) => timed(() => copy.valid!(at)) },
+    ...publish && {
+      publish: (at, key, body) => timed(() => copy.publish!(at, key, body)),
+    },
+    ...revision && { revision: () => timed(() => copy.revision!()) },
+    ...settle && {
+      settle: (at, committed) => timed(() => copy.settle!(at, committed)),
+    },
+    begin: () => timed(() => copy.begin()),
+    finish: (at) => timed(() => copy.finish(at)),
+    put: (at, key, body) => timed(() => copy.put(at, key, body)),
+    get: (key) => timed(() => copy.get(key)),
+  }
+}
 
 /** A directory write refused at commit for holding a fence older than one
  * already committed. Nothing of it was written. */

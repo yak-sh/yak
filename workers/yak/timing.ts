@@ -23,6 +23,12 @@
 // reached had to start first (graph.ts `#fetch`): what those stores waited
 // for while starting. Their compute is not in it, since a store's clock moves
 // only across I/O; the difference is in the stage that called them.
+//
+// Every `<name>_wait` is milliseconds spent waiting on one kind of service,
+// summed over the request wherever it waited (hops.ts `elapsed`), a store's
+// own waits included: `directory_wait` and `store_wait` at the door onto a
+// store (door.ts), `copy_wait` on the serving copy (directory-copy.ts),
+// `r2_wait` on the bucket.
 import { counts, type Tally, tallying } from './lib/hops.ts'
 
 export type Clock = ReturnType<typeof clock>
@@ -89,9 +95,9 @@ export let clock = () => {
         `stmts;dur=${tally.get('stmts') ?? 0}`,
         ...(tally.has('rows') ? [`rows;dur=${tally.get('rows')}`] : []),
         ...(tally.has('wake') ? [`wake;dur=${tally.get('wake')}`] : []),
-        ...['r2_wait', 'index_wait'].flatMap((name) =>
-          tally.has(name) ? [`${name};dur=${tally.get(name)}`] : []
-        ),
+        ...[...tally].filter(([name]) => name.endsWith('_wait')).map((
+          [name, ms],
+        ) => `${name};dur=${ms}`),
         `r2;dur=${r2}`,
         `total;dur=${Date.now() - born}`,
       ].map((mark) => mark.replace(/(^|, )(\w+);/g, `$1${prefix}$2;`)).join(

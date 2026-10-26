@@ -123,12 +123,27 @@ export let reported = (tally: Tally): Record<string, string> => {
   let { hops, r2 } = counts(tally)
   let header = (name: string) =>
     tally.has(name) ? { [`x-yak-${name}`]: String(tally.get(name)) } : {}
+  let waits = [...tally].filter(([name]) => name.endsWith('_wait'))
   return {
     'x-yak-hops': String(hops),
     'x-yak-stmts': String(tally.get('stmts') ?? 0),
     ...header('rows'),
     'x-yak-r2': String(r2),
     ...header('wake'),
+    ...waits.length
+      ? { [WAITS]: waits.map(([name, ms]) => `${name}=${ms}`).join(',') }
+      : {},
+  }
+}
+
+/** The header a store's answer names its waits in, `name=ms,…`. */
+export let WAITS = 'x-yak-waits'
+
+/** The waits a store's answer names, onto this request's tally. */
+export let heard = (header: string | null) => {
+  for (let said of header?.split(',') ?? []) {
+    let [name, ms] = said.split('=')
+    if (name?.endsWith('_wait') && /^\d+$/.test(ms ?? '')) hop(name, Number(ms))
   }
 }
 

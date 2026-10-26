@@ -297,6 +297,7 @@ import { type Meta, metaOf, minted } from './meta.ts'
 import { caught, defect, refusing } from './defects.ts'
 import {
   apart,
+  elapsed,
   hop,
   reported,
   type Tally,
@@ -3731,7 +3732,7 @@ export class Store {
           }
           if (logged(request)) answer = await this.#write(request)
           else {
-            let no = await this.#ready(request)
+            let no = await elapsed('ready_wait', () => this.#ready(request))
             if (no) answer = no
             else {
               // Writes kept during an outage land before a read is answered.
@@ -3740,9 +3741,9 @@ export class Store {
               if (
                 !['/writes', '/inspect'].includes(new URL(request.url).pathname)
               ) {
-                await this.#settle()
+                await elapsed('settle_wait', async () => await this.#settle())
               }
-              answer = await this.#serve(request)
+              answer = await elapsed('serve_wait', () => this.#serve(request))
             }
           }
         } finally {
