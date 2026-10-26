@@ -256,6 +256,7 @@
     }
   },
   "imports": {
+    "./apps/housebook/api/": "./workers/yak/public/",
     "preact-render-to-string": "npm:preact-render-to-string@6.7.0",
     "three": "npm:three@^0.186.1",
     "es-module-lexer": "npm:es-module-lexer@1.7.0",
