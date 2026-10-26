@@ -65,3 +65,20 @@ test('a handover includes maintenance history only when requested', () => {
   assert(page.includes('Service call'))
   assert(page.includes('$50'))
 })
+
+test('handover photos render inline and keep full-image links', () => {
+  let photo = {
+    entity: { eid: 'photo' },
+    doc: { title: 'Appliance label' },
+    house_file: { item: 'a', blob: 'image', mime: 'image/jpeg' },
+  }
+  let source = 'data:image/jpeg;base64,YQ=='
+  let page = handover(
+    { ...data, house_file: [photo] },
+    new Set(['a']),
+    false,
+    new Map([['photo', source]]),
+  )
+  assert(page.includes(`<img src="${source}" alt="Appliance label">`))
+  assert(page.includes(`<a href="${source}"><img`))
+})

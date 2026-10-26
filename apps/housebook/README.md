@@ -2,9 +2,10 @@
 
 A private house manual and logbook on yaks.app. The manual keeps equipment,
 finishes and systems; each item has specifications, documents, dated history and
-maintenance reminders. Completing a reminder writes a logbook entry and advances
-its date in one transaction. The electrical directory preserves circuit labels,
-including OFF markings.
+maintenance reminders. Image attachments display inline and supply the item’s
+card photo; an item without an image keeps its category icon. Completing a
+reminder writes a logbook entry and advances its date in one transaction. The
+electrical directory preserves circuit labels, including OFF markings.
 
 The browser uses `./api/client.js` for storage, uploads, live subscriptions and
 recoverable drafts. `model.js` holds date and input behavior; `editor.js` edits

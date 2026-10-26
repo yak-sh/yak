@@ -1,3 +1,4 @@
+import { imageUrl } from './media.js'
 import { date, id, safeUrl, text, title } from './model.js'
 
 let prose = (value) => `<p class="notes">${text(value)}</p>`
@@ -18,7 +19,7 @@ export let handover = (data, selected, includeLogs, files = new Map()) => {
     : []
   return `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${
     text(title(profile))
-  } · House manual</title><style>body{font:16px/1.6 system-ui;color:#20372f;max-width:850px;margin:50px auto;padding:0 24px}h1,h2{font-family:Georgia,serif}h1{font-size:42px}h2{border-top:1px solid #b7c6bd;padding-top:24px}dl{display:grid;grid-template-columns:180px 1fr;gap:5px}dt{color:#647368}dd{margin:0}.notes{white-space:pre-wrap}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:8px;border-bottom:1px solid #ddd}a{color:#285e4a}article{break-inside:avoid}small{color:#647368}@media print{body{margin:0}.print{display:none}}</style><body><small>Housebook · Handover manual</small><h1>${
+  } · House manual</title><style>body{font:16px/1.6 system-ui;color:#20372f;max-width:850px;margin:50px auto;padding:0 24px}h1,h2{font-family:Georgia,serif}h1{font-size:42px}h2{border-top:1px solid #b7c6bd;padding-top:24px}dl{display:grid;grid-template-columns:180px 1fr;gap:5px}dt{color:#647368}dd{margin:0}.notes{white-space:pre-wrap}table{border-collapse:collapse;width:100%}td,th{text-align:left;padding:8px;border-bottom:1px solid #ddd}a{color:#285e4a}article{break-inside:avoid}small{color:#647368}img{display:block;max-width:100%;max-height:450px;object-fit:contain;margin:12px 0}@media print{body{margin:0}.print{display:none}}</style><body><small>Housebook · Handover manual</small><h1>${
     text(title(profile))
   }</h1>${
     profile?.house_profile?.address ? prose(profile.house_profile.address) : ''
@@ -41,6 +42,12 @@ export let handover = (data, selected, includeLogs, files = new Map()) => {
         documents.filter((f) => f.house_file.item === id(row)).map((f) => {
           let href = files.get(id(f)) || safeUrl(f.house_file.url)
           return `<p>${
+            href && imageUrl(f)
+              ? `<a href="${text(href)}"><img src="${text(href)}" alt="${
+                text(title(f))
+              }"></a>`
+              : ''
+          }${
             href
               ? `<a href="${text(href)}"${
                 files.has(id(f)) ? ` download="${text(title(f))}"` : ''

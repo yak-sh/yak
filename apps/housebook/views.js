@@ -1,3 +1,4 @@
+import { fileUrl, imageUrl, preview } from './media.js'
 import { transfer } from './handover-view.js'
 import { button, el, empty, tag } from './dom.js'
 import { categories, date, due, id, itemName, safeUrl, title } from './model.js'
@@ -36,7 +37,14 @@ export let view = (
         type: 'button',
         onClick: () => open(id(row)),
       },
-      el('div', { class: 'item-symbol' }, symbol(row.house_item.category)),
+      preview(
+        data.house_file.find((file) =>
+          file.house_file.item === id(row) && imageUrl(file)
+        ),
+        'item-photo',
+        () =>
+          el('div', { class: 'item-symbol' }, symbol(row.house_item.category)),
+      ),
       el(
         'div',
         {},
@@ -64,11 +72,24 @@ export let view = (
       : null
   let doc = (row) => {
     let f = row.house_file,
-      url = f.blob ? `./api/blob/${f.blob}` : safeUrl(f.url)
+      url = fileUrl(row)
     return el(
       'article',
       { class: 'list-row' },
-      el('span', { class: 'file-icon' }, f.blob ? '▤' : '↗'),
+      imageUrl(row)
+        ? el(
+          'a',
+          {
+            href: url,
+            target: '_blank',
+            rel: 'noopener',
+            class: 'photo-link',
+            'aria-label': `Open ${title(row)}`,
+          },
+          preview(row, 'document-photo', () =>
+            el('span', { class: 'file-icon' }, '▤')),
+        )
+        : el('span', { class: 'file-icon' }, f.blob ? '▤' : '↗'),
       el(
         'div',
         { class: 'grow' },

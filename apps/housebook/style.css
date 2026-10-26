@@ -1204,3 +1204,38 @@ dialog form {
     break-inside: avoid;
   }
 }
+
+.item-photo {
+  width: 92px;
+  height: 110px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 7px;
+  background: #eef1e7;
+}
+.photo-link {
+  display: block;
+  flex-shrink: 0;
+  width: 108px;
+}
+.document-photo {
+  display: block;
+  width: 108px;
+  height: 96px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: #eef1e7;
+}
+@media (max-width: 500px) {
+  .item-photo {
+    width: 75px;
+    height: 90px;
+  }
+  .photo-link,
+  .document-photo {
+    width: 88px;
+  }
+  .document-photo {
+    height: 88px;
+  }
+}
