@@ -70,7 +70,7 @@ test('a visitor without write access cannot download or store a manual', () => {
 test('a download page and an unavailable file never become saved documents', () => {
   assertEquals(htmlResponse.status, 422)
   assertEquals(html.stored, [])
-  assertEquals(failResponse.status, 422)
+  assertEquals(failResponse.status, 502)
   assertEquals(fail.stored, [])
   assertEquals(down.status, 502)
 })

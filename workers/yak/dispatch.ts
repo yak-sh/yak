@@ -644,6 +644,18 @@ let threw = async (
   await workerBreak(env, space, app, req, error)
 }
 
+// What a worker's JSON answer says went wrong (`{error: {message}}`), so the
+// report names it: an outside site's refusal reads as the host and status it
+// gave. Any other body stays unread for the visitor.
+let saying = async (res: Response) => {
+  if (!/json/.test(res.headers.get('content-type') ?? '')) return ''
+  let said = await res.clone().json().catch(() => null) as
+    | { error?: { message?: unknown } }
+    | null
+  let m = said?.error?.message
+  return typeof m == 'string' && m ? `: ${m.slice(0, 500)}` : ''
+}
+
 // What the worker's answer means, whichever caller asked for it: a 404 is the
 // pass verdict — null, so the files answer behind it — a 4xx is the app's own
 // deliberate no and files nothing (unseen.ts `refusal`), and a 5xx is not a
@@ -661,7 +673,7 @@ let verdict = async (
     return null
   }
   if (!failed(res.status)) return res
-  let message = `the app's worker answered ${res.status}`
+  let message = `the app's worker answered ${res.status}${await saying(res)}`
   await workerBreak(env, space, app, req, new Error(message))
   // Filed here, so the page that hears it files it no second time.
   let headers = new Headers(res.headers)

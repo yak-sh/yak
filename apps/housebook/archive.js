@@ -107,15 +107,13 @@ export let archive = (download = fetch) => async (req, env) => {
   }
   if (!response.ok) {
     await response.body?.cancel()
-    // The source's own no (sign-in only, gone, or closed to downloads) is
-    // its answer, and retrying from here will not change it.
-    if (response.status < 500) {
-      return answer(
-        `${url.host} refused to send this file (${response.status}). Download it in your browser, then choose the file to upload. Your draft is kept.`,
-      )
-    }
+    // The person can act on a source's own no (sign-in only, gone, closed to
+    // downloads), but it is a site refusing us, not their input: a 502, so
+    // the platform reports it with what the site said.
     return answer(
-      `The source answered ${response.status}. Your draft is kept; try again or upload the file.`,
+      response.status < 500
+        ? `${url.host} refused to send this file (${response.status}). Download it in your browser, then choose the file to upload. Your draft is kept.`
+        : `${url.host} answered ${response.status}. Your draft is kept; try again or upload the file.`,
       502,
     )
   }

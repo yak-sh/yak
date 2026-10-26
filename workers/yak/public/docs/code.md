@@ -673,7 +673,8 @@ and nothing is swallowed here:
   stack — and the visitor gets the platform's soft "Something went wrong. Your
   assistant has been told." page with a 500.
 - **A 5xx you return** is filed the same way, since nobody chose it: the entity
-  records `the app's worker answered 503` and names the route.
+  records `the app's worker answered 503`, followed by the `error.message`
+  of a JSON answer, and names the route.
 - **A 4xx you return is not a break** and files nothing. That is your deliberate
   no — "no city by that name", or the 401 an outside service gave you for a
   mistyped key — and the rule is the status, so an outside service's refusal
