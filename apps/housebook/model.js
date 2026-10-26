@@ -114,7 +114,8 @@ export let fields = {
   house_file: [
     ['title', 'Document title', 'text', true],
     ['item', 'Related item', 'item'],
-    ['url', 'Link to a manual, receipt or reference', 'url'],
+    ['url', 'Document URL — a copy is saved in Housebook', 'url'],
+    ['reference', 'Website reference (a webpage, not a document)', 'checkbox'],
     ['body', 'Notes', 'textarea'],
   ],
   house_circuit: [

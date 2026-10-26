@@ -11,6 +11,7 @@ import { button, el } from './dom.js'
 import { id, nextDue, searchRows, title, today } from './model.js'
 import { view } from './views.js'
 import { editor } from './editor.js'
+import { documents } from './documents.js'
 import { download, embedded, handover } from './export.js'
 
 let names = [
@@ -92,21 +93,17 @@ let guards = async (kind, row, values) => {
     },
   }
 }
+let keepDocument = documents({ upload, fetch })
 let save = async (kind, row, values, file, newId) => {
   let { title: heading, body, ...props } = values
-  if (kind === 'house_file' && !file && !props.url && !row?.house_file?.blob) {
-    throw new Error('Choose a file or add a document link.')
-  }
-  if (file) {
-    let result = await upload(file)
-    props.blob = result.eid
-    props.mime = result.mime
+  if (kind === 'house_file') {
+    props = await keepDocument(props, row?.house_file, file)
   }
   let bundle = {
     entity: { eid: id(row) || newId },
     doc: { title: heading || props.slots, body: body || '' },
     [kind]: props,
-    ...await guards(kind, row, values),
+    ...await guards(kind, row, { title: heading, body, ...props }),
   }
   let result = await apply(bundle)
   if (result.pending) {

@@ -14,15 +14,17 @@ App files contain no house records. A person's records belong in the app store,
 so publishing code must never require copying their house data into a seed.
 
 To record a service visit, open an item and add a History entry. To keep a
-receipt, add a document and upload it or paste its URL. To prepare a handover,
-select the items to include and download the manual. Uploaded documents for
-those items are embedded; external links retain their original addresses.
-History is opt-in and contacts are excluded. House profile notes and shutoff
-locations are included.
+receipt, add a document and upload it or paste its direct download URL.
+Housebook downloads the file into its private storage and keeps the source URL.
+A failed download keeps the draft; a webpage is only a link when explicitly
+marked Website reference. To prepare a handover, select the items to include and
+download the manual. Saved documents for those items are embedded; website
+references retain their original addresses. History is opt-in and contacts are
+excluded. House profile notes and shutoff locations are included.
 
 Reminders appear inside the app; no email or push notifications are sent. A
 handover is a snapshot, not a transfer of the account or app ownership. It can
-be opened offline and printed to PDF. Referenced external documents still need
-an internet connection.
+be opened offline and printed to PDF. Website references still need an internet
+connection.
 
 Run `deno task test apps/housebook` for recurrence and handover behavior.

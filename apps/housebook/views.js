@@ -117,6 +117,15 @@ export let view = (
           ? el('p', { class: 'document-notes' }, row.doc.body)
           : null,
       ),
+      el(
+        'small',
+        {},
+        f.blob
+          ? 'Saved copy'
+          : f.reference
+          ? 'Website reference'
+          : 'Copy not saved yet',
+      ),
       rowActions('house_file', row),
     )
   }

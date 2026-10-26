@@ -121,10 +121,21 @@ export let editor =
         submit,
       ),
     )
+    let saving = false
+    let cancel = (event) => {
+      if (saving) event.preventDefault()
+    }
+    dialog.addEventListener('cancel', cancel)
+    cleanup.push(() => dialog.removeEventListener('cancel', cancel))
     form.addEventListener('submit', async (event) => {
       event.preventDefault()
-      submit.disabled = true
-      status.textContent = 'Saving…'
+      if (saving) return
+      saving = true
+      let controls = [...form.querySelectorAll('input,textarea,select,button')]
+      controls.forEach((control) => control.disabled = true)
+      status.textContent = kind === 'house_file'
+        ? 'Saving your document copy…'
+        : 'Saving…'
       try {
         let values = Object.fromEntries(
           [...inputs].map(([key, { input, type }]) => [
@@ -160,7 +171,8 @@ export let editor =
         status.textContent = error.message
         fail(error)
       } finally {
-        submit.disabled = false
+        saving = false
+        controls.forEach((control) => control.disabled = false)
       }
     })
     dialog.replaceChildren(form)

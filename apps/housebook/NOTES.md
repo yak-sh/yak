@@ -13,3 +13,7 @@ Jeff:
 
 > and of course, when we host the documents, the icon should match the actual
 > document instead of being an external arrow
+> oh also, you need to actually download and host those manuals. you can't just
+> link to them
+
+> including all new ones. that's how all links to manuals should work
