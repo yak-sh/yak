@@ -119,7 +119,11 @@
         },
         "lenses": {
           "type": "object",
-          "description": "package lens versions spoken by this immutable page deployment; absent on releases made before version capture"
+          "description": "the app's newest lens step count per package when this release was made, which a page of a release that records no speaks reads its session step from; absent on releases made before version capture"
+        },
+        "speaks": {
+          "type": "object",
+          "description": "the lens step per package this release's pages speak: its own vocabulary's steps and the session step it shipped with, recorded at deploy so a page's request reads no vocabulary file; absent on releases made before it was recorded"
         }
       },
       "description": "one release of an app: the files it shipped, and the worker built from them",

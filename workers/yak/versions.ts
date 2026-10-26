@@ -292,6 +292,9 @@ export let deployedOver = (
 // the second arrival finds its own row rather than a second one at that
 // version (T-40726). Another deploy racing for the same number mints another
 // eid, and the unique version refuses it.
+//
+// The row says what the release's pages speak (lenses.ts `ownSpeaks`), so a
+// page's request reads that and never the release's vocabulary file.
 export let record = async (
   dir: Directory,
   who: Who,
@@ -307,6 +310,7 @@ export let record = async (
   reload?: Reload,
   target?: Version,
   declaration = String(version),
+  speaks?: Record<string, number>,
 ) => {
   let all = await dir.deploys(app)
   let prior = all.find((v) => v.version == app.version)
@@ -344,7 +348,7 @@ export let record = async (
       ...target ? [] : [{
         entity: { eid },
         deploy: {
-          lenses: app.lenses,
+          ...speaks ? { speaks } : { lenses: app.lenses },
           app: app.eid,
           version,
           files: JSON.stringify(files),

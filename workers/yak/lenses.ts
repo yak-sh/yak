@@ -150,8 +150,21 @@ export let spoken = (request: Request): ReadOpts => {
   return said ? { speaks: JSON.parse(said) } : {}
 }
 
+/** What a release's pages speak: the lens steps its own vocabulary declares,
+ * and the session step it shipped with. A deploy records it (`deploy.speaks`). */
+export let ownSpeaks = (
+  name: string,
+  doc: VocabDoc,
+  session = sessionStep,
+): Record<string, number> => ({
+  ...versions([lensDocAt(name, doc)]),
+  [sessionPackage]: session,
+})
+
 // Only lens apps reach this lookup. A deploy's vocabulary bytes are immutable,
 // so repeated API calls from the same page never re-read the directory or R2.
+// A release records what its pages speak, so a page of one reads its row and
+// no file; one made before that reads its vocabulary file from the bucket.
 let kept = new Map<string, Record<string, number>>()
 export let pageSpeaks = async (
   request: Request,
@@ -173,21 +186,22 @@ export let pageSpeaks = async (
   let key = `${app.eid}/${n}`
   let speaks = kept.get(key)
   if (!speaks) {
-    let deploy = (await dir.deploys(app)).find((v) => v.version == n)
+    let deploy = await dir.deployAt(app, n)
     if (!deploy) throw new Refused(`no kept page version ${n}`)
-    let file = ['vocab.yml', 'vocab.json'].find((f) => deploy.files[f])
-    let doc: VocabDoc = {}
-    if (file) {
-      let bytes = await pins(blobs).get(
-        deploy.files[file],
+    speaks = deploy.speaks
+    if (!speaks) {
+      let file = ['vocab.yml', 'vocab.json'].find((f) => deploy.files[f])
+      let doc: VocabDoc = {}
+      if (file) {
+        let bytes = await pins(blobs).get(deploy.files[file])
+        if (!bytes) throw new Error(`no vocabulary for page version ${n}`)
+        doc = readDoc(new TextDecoder().decode(bytes), file)
+      }
+      speaks = ownSpeaks(
+        storeName(space, app),
+        doc,
+        deploy.lenses?.[sessionPackage] ?? 0,
       )
-      if (!bytes) throw new Error(`no vocabulary for page version ${n}`)
-      doc = readDoc(new TextDecoder().decode(bytes), file)
-    }
-    let name = storeName(space, app)
-    speaks = {
-      ...versions([lensDocAt(name, doc)]),
-      [sessionPackage]: deploy.lenses?.[sessionPackage] ?? 0,
     }
     // An old vocabulary with no step still speaks the app's version zero.
     kept.set(key, speaks)

@@ -15,6 +15,7 @@ import {
   latestSpeaks,
   lensDocAt,
   lensRule,
+  ownSpeaks,
   pageSpeaks,
   retainedLenses,
 } from './lenses.ts'
@@ -328,9 +329,10 @@ test('a code rollback retains an empty destination schema and immutable steps', 
   )
 })
 
-test('a current pinned page omits the bridge, while a rollback keeps its old version', async () => {
-  let lookups = 0
-  let reads = 0
+// A page of release `version` asks what it speaks: from the release's row
+// when the deploy recorded it, else from its vocabulary file in the bucket.
+let speaking = (deploys: Record<string, unknown>[]) => {
+  let lookups = 0, reads = 0
   let app = {
     eid: crypto.randomUUID(),
     slug: 'recipes',
@@ -338,18 +340,10 @@ test('a current pinned page omits the bridge, while a rollback keeps its old ver
     version: 2,
     lenses: latestSpeaks(name, next),
   } as App
-  let space = { slug: 'throwaway' } as Space
   let dir = {
-    deploys: () => {
+    deployAt: (_app: App, version: number) => {
       lookups++
-      return Promise.resolve([
-        { version: 1, files: { 'vocab.json': 'old' } },
-        {
-          version: 2,
-          files: { 'vocab.json': 'next' },
-          lenses: latestSpeaks(name, next),
-        },
-      ])
+      return Promise.resolve(deploys.find((d) => d.version == version) ?? null)
     },
   } as unknown as Directory
   let blobs = {
@@ -368,19 +362,51 @@ test('a current pinned page omits the bridge, while a rollback keeps its old ver
       }),
       dir,
       blobs,
-      space,
+      { slug: 'throwaway' } as Space,
       app,
       (source) => JSON.parse(source),
     )
-  assertEquals(await head(2), {})
-  assertEquals(await head(2), {})
-  assertEquals([lookups, reads], [1, 1])
-  app.version = 1
-  app.lenses = latestSpeaks(name, old, app.lenses)
-  assertEquals(await head(1), {
+  return { app, head, counts: () => [lookups, reads] }
+}
+
+test('a current pinned page omits the bridge, while a rollback keeps its old version', async () => {
+  let f = speaking([
+    { version: 1, files: { 'vocab.json': 'old' } },
+    {
+      version: 2,
+      files: { 'vocab.json': 'next' },
+      lenses: latestSpeaks(name, next),
+    },
+  ])
+  assertEquals(await f.head(2), {})
+  assertEquals(await f.head(2), {})
+  assertEquals(f.counts(), [1, 1])
+  f.app.version = 1
+  f.app.lenses = latestSpeaks(name, old, f.app.lenses)
+  assertEquals(await f.head(1), {
     'x-yak-speaks': JSON.stringify({ ...speaks, [sessionPackage]: 0 }),
   })
-  assertEquals(await head(2), {})
+  assertEquals(await f.head(2), {})
+})
+
+test('a page of a release that recorded what it speaks reads no vocabulary file', async () => {
+  let f = speaking([
+    {
+      version: 1,
+      files: { 'vocab.json': 'old' },
+      speaks: ownSpeaks(name, old),
+    },
+    {
+      version: 2,
+      files: { 'vocab.json': 'next' },
+      speaks: ownSpeaks(name, next),
+    },
+  ])
+  assertEquals(await f.head(2), {})
+  assertEquals(await f.head(1), {
+    'x-yak-speaks': JSON.stringify(ownSpeaks(name, old)),
+  })
+  assertEquals(f.counts(), [2, 0])
 })
 
 test('a later step gets its own mover stamp after the first step finished', async () => {

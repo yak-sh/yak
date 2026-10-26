@@ -104,7 +104,7 @@ import {
   url,
 } from './directory.ts'
 import * as dirPart from './directory.ts'
-import { latestSpeaks } from './lenses.ts'
+import { latestSpeaks, ownSpeaks } from './lenses.ts'
 import { sandboxed, sandboxing } from './installed.ts'
 import { appFolder, landed, listing, sandboxPath } from './ship.ts'
 import {
@@ -1355,6 +1355,10 @@ let published = async (
         reload,
         target,
         pointer,
+        ownSpeaks(
+          dirPart.storeName(space, app),
+          appDoc(source ?? {}, vocabFile),
+        ),
       ),
   )
   // Recording the release changed the directory epoch. Replace the app,

@@ -462,6 +462,7 @@ export type Row = {
     source?: string | null
     reload?: Reload | null
     lenses?: Record<string, number>
+    speaks?: Record<string, number>
   }
   restored?: {
     app: Id
@@ -1005,6 +1006,7 @@ export let deployOf = (r: Row) => ({
   source: r.deploy!.source ?? null,
   reload: r.deploy!.reload ?? null,
   lenses: r.deploy!.lenses as Record<string, number> | undefined,
+  speaks: r.deploy!.speaks as Record<string, number> | undefined,
 })
 
 /** One file written into an app (drafts.ts `Written`), as a row reads. */
@@ -1672,6 +1674,14 @@ export let directory = (via: Fetcher | Part, now = false) => {
       (await query(`.deploy.app=${app.eid}&?created`, true))
         .map(deployOf)
         .sort((a, b) => b.version - a.version),
+    // One release of the app, by its version.
+    deployAt: async (app: App, version: number) => {
+      let row = await one(
+        `.deploy.app=${app.eid}&.deploy.version=${version}&?created`,
+        true,
+      )
+      return row?.deploy ? deployOf(row) : null
+    },
     // Whether `source` is one of the app's own releases. A release is kept
     // under its space's handle, which no rename moves (D-131924), so the
     // source a deploy wrote is the source asked for.
