@@ -10,12 +10,21 @@
 // (Qwen3-Embedding, EmbeddingGemma) is kept narrower with `dim`, cut and
 // renormalized here, since the binding answers its full width.
 //
-// A text the model will not take is `Refused`, as a 4xx is over HTTP: the
-// sweep drops that one text and carries on. Anything else the binding throws —
+// A text the model will not take is `Refused`, as a 4xx is over HTTP: a batch
+// it rode in is asked again a text at a time (./sweep.ts), a text alone is
+// asked again as its opening half (./remote.ts `halving`), and one refused
+// even then is dropped while the sweep carries on. Anything else the binding throws —
 // a rate limit, an outage — is thrown as it came, and the work stays owed.
 
 import { Refused } from './embedder.ts'
-import { answered, type Batched, batched, type Load, space } from './remote.ts'
+import {
+  answered,
+  type Batched,
+  batched,
+  halving,
+  type Load,
+  space,
+} from './remote.ts'
 
 /** The slice of a Worker's `AI` binding this file calls. */
 export type Ai = {
@@ -34,25 +43,30 @@ export type WorkersAi = {
 
 // How the binding says the input itself was the problem, in its own words.
 let unfit = (e: unknown) =>
-  /invalid input|context (window|length)|too (long|many tokens)/i.test(
-    e instanceof Error ? e.message : String(e),
-  )
+  /invalid input|input too big|context (window|length)|too (long|many tokens)/i
+    .test(
+      e instanceof Error ? e.message : String(e),
+    )
 
 /** A {@link Batched} embedder that asks Workers AI for every vector,
  * batching the calls made together. */
 export let workersAi = (said: WorkersAi): Batched =>
-  batched(space(said), async (input) => {
-    let got: unknown
-    try {
-      got = await said.ai.run(said.model, { text: input })
-    } catch (e) {
-      if (!unfit(e)) throw e
-      throw new Refused(`@yaks/embedding: workers-ai refused — ${e}`)
-    }
-    return answered(
-      'workers-ai',
-      input,
-      (got as { data?: number[][] } | null)?.data,
-      said.dim,
-    )
-  }, said)
+  batched(
+    space(said),
+    halving(async (input) => {
+      let got: unknown
+      try {
+        got = await said.ai.run(said.model, { text: input })
+      } catch (e) {
+        if (!unfit(e)) throw e
+        throw new Refused(`@yaks/embedding: workers-ai refused — ${e}`)
+      }
+      return answered(
+        'workers-ai',
+        input,
+        (got as { data?: number[][] } | null)?.data,
+        said.dim,
+      )
+    }),
+    said,
+  )

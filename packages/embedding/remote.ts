@@ -246,6 +246,27 @@ export let batched = (
   }
 }
 
+/** `ask`, where one text asked alone and {@link Refused} is asked again as
+ * its opening half, down to {@link SHORTEST}: a model that will not take a
+ * whole text still embeds what it can read of it. */
+export let halving = (
+  ask: (input: string[]) => Promise<Float32Array[]>,
+): (input: string[]) => Promise<Float32Array[]> => {
+  let fit = async (input: string[]): Promise<Float32Array[]> => {
+    try {
+      return await ask(input)
+    } catch (error) {
+      let [text] = input
+      if (
+        !(error instanceof Refused) || input.length > 1 ||
+        text.length <= SHORTEST
+      ) throw error
+      return fit([text.slice(0, text.length >> 1)])
+    }
+  }
+  return fit
+}
+
 /** An {@link Embedder} that asks a server for every vector, batching the
  * calls made together. */
 export let remote = (said: Remote): Batched => {
@@ -279,18 +300,5 @@ export let remote = (said: Remote): Batched => {
       said.dim,
     )
   }
-  // One text, alone and refused, is asked again as its opening half.
-  let fit = async (input: string[]): Promise<Float32Array[]> => {
-    try {
-      return await ask(input)
-    } catch (error) {
-      let [text] = input
-      if (
-        !(error instanceof Refused) || input.length > 1 ||
-        text.length <= SHORTEST
-      ) throw error
-      return fit([text.slice(0, text.length >> 1)])
-    }
-  }
-  return batched(said.space ?? space(said), fit, said)
+  return batched(said.space ?? space(said), halving(ask), said)
 }

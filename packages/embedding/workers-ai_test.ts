@@ -39,3 +39,18 @@ test('an input the model will not take is Refused; an outage is not', async () =
   let error = await assertRejects(() => e(down.ai).embed('x'))
   assertEquals(error instanceof Refused, false)
 })
+
+test('a text too big for the model is asked again as its opening half', async () => {
+  let sent: number[] = []
+  let ai = {
+    run: (_: string, input: unknown) => {
+      let [text] = (input as { text: string[] }).text
+      sent.push(text.length)
+      return text.length > 300
+        ? Promise.reject(new Error('AiError: 3030: input too big'))
+        : Promise.resolve({ data: [[1, 0]] })
+    },
+  }
+  let v = await workersAi({ model: 'm', ai }).embed('x'.repeat(1000))
+  assertEquals([round(v), sent], [[1, 0], [1000, 500, 250]])
+})
