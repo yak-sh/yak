@@ -671,6 +671,11 @@ let router = {
 // router rather than written into a route, because every door has to slide
 // and the request is the same one at all of them — `fetch` below reads the
 // cookie the browser sent, whatever the router made of the request inside.
+//
+// Its answer on our zone also says how long the whole router took
+// (`gateway`, timing.ts), and `cold` on the first request an isolate serves:
+// a request's time that is in neither is the runtime's, before our code ran.
+let served = 0
 export let handler = {
   ...router,
   fetch: (req: Request, env: Env): Promise<Response> =>
@@ -678,6 +683,7 @@ export let handler = {
       env,
       {},
       async () => {
+        let at = Date.now(), cold = served++ == 0
         let res = await slid(req, env, await router.fetch(req, env))
         let host = hostOf(req, env)
         if (host != apex(env) && !host.endsWith(`.${apex(env)}`)) return res
@@ -689,6 +695,10 @@ export let handler = {
         headers.set(
           'strict-transport-security',
           'max-age=31536000; includeSubDomains',
+        )
+        headers.append(
+          'server-timing',
+          `gateway;dur=${Date.now() - at}${cold ? ', cold;dur=1' : ''}`,
         )
         return new Response(res.body, {
           status: res.status,
