@@ -94,6 +94,18 @@ export let sessionAt = async (
   return claims && (!claims.space || claims.space == space) ? claims : null
 }
 
+/** The person a session cookie names, before its reach is checked (`whoIs`
+ * checks that): what a door asks about beside the place, so one directory read
+ * answers both. Nobody for a signed-out browser. */
+export let sessionPerson = async (
+  req: Request,
+  secret: string | undefined,
+): Promise<string | null> => {
+  let token = cookieValue(req.headers.get('cookie'))
+  if (!token || !secret) return null
+  return (await verify(token, secret))?.person ?? null
+}
+
 export let whoIs = async (
   req: Request,
   secret: string | undefined,

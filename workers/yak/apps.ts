@@ -50,6 +50,7 @@ import {
   daysLeft,
   directory,
   META,
+  type Role,
   type Space,
   storeAt,
   storeName,
@@ -124,6 +125,7 @@ import { covers, PLATFORM_PATHS } from './router.ts'
 import {
   browsing,
   nobody,
+  sessionPerson,
   titling,
   vouched,
   type Who,
@@ -2829,10 +2831,17 @@ let served = async (
     ? publicDirectory(direct, copyOf(env), undefined, copied)
     : signedDirectory(direct, copyOf(env))
   let dir = directory(serving, edge)
-  let routing = edge ? c.time('route', () => dir.page(r.space!, r.app)) : null
-  let reading = routing
-    ? routing.then((route) => route.space)
-    : c.time('space', () => dir.space(r.space!))
+  // The space, the app at the address, the front page and the seat of the
+  // person the cookie names, in one read of the directory: every rung below
+  // asks one of them, and asking each in turn was a round trip apiece.
+  let person = edge ? null : await sessionPerson(req, env.SESSION_SECRET)
+  let routing = c.time('route', () => dir.page(r.space!, r.app, person))
+  let reading = routing.then((route) => route.space)
+  // A seat, from that read for the person it asked about, else the directory.
+  let seatOf = async (p: string) => {
+    let { role } = await routing
+    return p == person && role !== undefined ? role : dir.role(space!, p)
+  }
   if (!edge) {
     let page = await asked(visitor, env, c)
     if (page) {
@@ -2895,8 +2904,7 @@ let served = async (
     }
     let who = await c.time(
       'who',
-      () =>
-        whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p), space!.eid),
+      () => whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
     )
     if (!who.person) {
       return json(401, 'not_a_writer', NOBODY, signInAt(url.href, env))
@@ -2917,20 +2925,13 @@ let served = async (
   // only thing asked, never a grant, and only once the space is over.
   let quota = refusedVisit(space, req, env)
   if (quota) {
-    let who = await whoIs(
-      req,
-      env.SESSION_SECRET,
-      (p) => dir.role(space!, p),
-      space!.eid,
-    )
+    let who = await whoIs(req, env.SESSION_SECRET, seatOf, space!.eid)
     if (!who.role) return quota
     await quota.body?.cancel()
   }
   // The app at the address and the space's front page, in one read: every
   // rung below that needs the front page (rung 1½, rung 3) has it already.
-  let { app, home } = routing
-    ? await routing
-    : await c.time('app', () => dir.routing(space!, r.app))
+  let { app, home } = await routing
   // In the trash (erase.ts, T-34430): the address is held for it and answers
   // nothing while it waits. Not a 410 and not a redirect — to the web this is
   // an address with nothing at it, which is what a delete has always meant —
@@ -2943,8 +2944,7 @@ let served = async (
     }
     let who = await c.time(
       'who',
-      () =>
-        whoIs(req, env.SESSION_SECRET, (p) => dir.role(space!, p), space!.eid),
+      () => whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
     )
     return who.role == 'owner'
       ? binned({
@@ -3120,7 +3120,7 @@ let served = async (
     }
     bearer = {
       person: caller.person,
-      role: await dir.role(space, caller.person),
+      role: await seatOf(caller.person),
       until: caller.until,
       ...(caller.instrument ? { via: caller.instrument } : {}),
     }
@@ -3130,9 +3130,8 @@ let served = async (
       'who',
       () =>
         walls
-          ? presented(req, env, dir, space!, store, paper?.token, path)
-          : whoIs(req, env.SESSION_SECRET, (p) =>
-            dir.role(space!, p), space!.eid),
+          ? presented(req, env, seatOf, space!, store, paper?.token, path)
+          : whoIs(req, env.SESSION_SECRET, seatOf, space!.eid),
     )
   // And the page's own address for its relative URLs: a sandboxed page's
   // carries a token for whoever loaded it, dying with their cookie.
@@ -3357,7 +3356,7 @@ let served = async (
 let presented = async (
   req: Request,
   env: Env,
-  dir: ReturnType<typeof directory>,
+  roleOf: (person: string) => Promise<Role | null>,
   space: Space,
   store: string,
   token: string | undefined,
@@ -3367,14 +3366,12 @@ let presented = async (
   if (!sent) {
     return path.startsWith('/api/')
       ? nobody
-      : whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p), space.eid)
+      : whoIs(req, env.SESSION_SECRET, roleOf, space.eid)
   }
   let p = env.SESSION_SECRET
     ? await paged(sent, env.SESSION_SECRET, store)
     : null
-  if (!p) {
-    return whoIs(req, env.SESSION_SECRET, (p) => dir.role(space, p), space.eid)
-  }
+  if (!p) return whoIs(req, env.SESSION_SECRET, roleOf, space.eid)
   if (!p.person) {
     return {
       ...nobody,
@@ -3384,7 +3381,7 @@ let presented = async (
   }
   return {
     person: p.person,
-    role: await dir.role(space, p.person),
+    role: await roleOf(p.person),
     until: p.exp,
     ...(p.via ? { via: p.via } : {}),
   }
