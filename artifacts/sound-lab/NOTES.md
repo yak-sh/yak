@@ -19,3 +19,8 @@ is a bit too short to function properly now. the design should stretch to fill
 extra vertical space."
 
 Jeff: "two stop buttons while music is playing"
+
+Jeff: "oh, the _display_ shouldn't fill extra space. the pads probably should"
+
+Jeff: "and first it should use the extra space to remove the tab for mixer +
+arrangment"

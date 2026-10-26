@@ -1,6 +1,7 @@
 import { apply, me, query } from './api/client.js'
 import { engine } from './audio.js'
 import { transport } from './transport.js'
+import { workspace } from './workspace.js'
 import {
   advance,
   duration,
@@ -283,14 +284,12 @@ $('pads').innerHTML = tracks.map((track, t) =>
     track.name.replace('Closed ', '').replace('Percussion', 'Perc.')
   }</button>`
 ).join('')
-for (let name of ['mix', 'arrange']) {
-  click(name + '-tab', () => {
-    for (let panel of ['mix', 'arrange']) {
-      $(panel + '-panel').hidden = panel !== name
-      $(panel + '-tab').setAttribute('aria-pressed', panel === name)
-    }
-  })
-}
+workspace({
+  tabs: document.querySelector('.workspace-tabs'),
+  panels: { mix: $('mix-panel'), arrange: $('arrange-panel') },
+  buttons: { mix: $('mix-tab'), arrange: $('arrange-tab') },
+  room: matchMedia('(min-width: 1000px) and (min-height: 940px)'),
+})
 click('play', play)
 click('close-modal', close)
 click('undo', () => {

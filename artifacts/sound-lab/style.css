@@ -135,8 +135,8 @@ h2 {
   display: grid;
   grid-template-columns: 150px minmax(280px,1fr) 250px;
   gap: 20px;
-  flex: 1 0 178px;
-  min-height: 178px;
+  flex: 0 0 178px;
+  height: 178px;
   padding: 0 0 8px;
 }
 .transport {
@@ -368,6 +368,11 @@ h2 {
 .orange-button:hover {
   background: #ff7a50;
 }
+.sequencer {
+  display: flex;
+  flex-direction: column;
+  flex: 1 0 auto;
+}
 .section-head {
   display: flex;
   gap: 18px;
@@ -408,13 +413,24 @@ h2 {
   overflow: auto;
   padding: 3px 3px 5px;
   margin: 0 -3px;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+#grid {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 .step-row {
   display: grid;
   grid-template-columns: 105px repeat(var(--steps,32),minmax(20px,1fr));
   gap: 4px;
   min-width: 950px;
+  min-height: 28px;
   margin-bottom: 4px;
+  flex: 1;
 }
 .step-row.sixteen {
   min-width: 650px;
@@ -442,7 +458,8 @@ h2 {
 }
 .step {
   padding: 0;
-  height: 24px;
+  min-height: 24px;
+  height: auto;
   border: 1px solid #b9bcb1;
   border-radius: 3px;
   background: #c8cbc1;
@@ -481,6 +498,8 @@ h2 {
   background: #ffffff45;
 }
 .steps-header {
+  flex: 0 0 auto;
+  min-height: 0;
   font-family: monospace;
   font-size: 9px;
   color: var(--muted);
@@ -525,7 +544,21 @@ h2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 28px;
-  min-height: 112px;
+  min-height: 134px;
+  flex: .3 0 auto;
+}
+.arranger,
+.performance {
+  display: flex;
+  flex-direction: column;
+}
+.lower .chain,
+.lower .pads {
+  flex: 1;
+}
+.lower .section-head,
+.lower .sub {
+  flex-shrink: 0;
 }
 .lower > section {
   min-width: 0;
@@ -544,7 +577,8 @@ h2 {
 .chain button {
   font-family: monospace;
   font-size: 18px;
-  height: 39px;
+  min-height: 39px;
+  height: auto;
   position: relative;
   background: #c7cbbf;
 }
@@ -569,7 +603,8 @@ h2 {
   margin: 8px 0 5px;
 }
 .pad {
-  height: 51px;
+  min-height: 51px;
+  height: auto;
   padding: 5px 3px;
   position: relative;
   font-size: 9px;
@@ -779,6 +814,10 @@ dialog::backdrop {
 .mixer > .section-head {
   display: none;
 }
+.workspace-tabs[hidden] ~ .mixer > .section-head {
+  display: flex;
+  margin: 6px 0;
+}
 .footer-actions {
   display: flex;
   gap: 12px;
@@ -843,6 +882,21 @@ dialog::backdrop {
   }
 }
 @media (max-width:800px) {
+  .sequencer,
+  .lower {
+    flex: none;
+  }
+  .grid-scroll {
+    display: block;
+    flex: none;
+  }
+  #grid {
+    display: block;
+  }
+  .step-row {
+    min-height: 0;
+  }
+
   .frame {
     padding: 4px;
   }
