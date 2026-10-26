@@ -46,28 +46,35 @@ by the transport: 25 ms from its creation, not another 25 ms per lookup. The
 cache. The directory Store captures its committed epoch beside the query, before
 yielding, and returns it with the response.
 
-| Successful path                              | Directory work                                      | Serving-copy RPCs before acceptance    |
-| -------------------------------------------- | --------------------------------------------------- | -------------------------------------- |
-| Direct signed query                          | One directory fetch and body read                   | `publish` then `valid`                 |
-| Copied signed query                          | Directory fetch still starts; it may remain pending | `read` then `valid`                    |
-| Equal app Store request with policy metadata | No directory reread for this check                  | One `valid`, even at the same revision |
+| Successful path                        | Directory work                                      | Serving-copy RPCs before answering |
+| -------------------------------------- | --------------------------------------------------- | ---------------------------------- |
+| Direct signed query                    | One directory fetch and body read                   | None; `publish` follows the answer |
+| Copied signed query                    | Directory fetch still starts; it may remain pending | `read` then `valid`                |
+| App Store request with policy metadata | None, unless older than the Store's floor           | None                               |
 
-These are uncontended path counts, not totals for a whole page or MCP operation.
-Concurrent direct/fallback completion can do additional work. The RPC calls are
-not hop-free even when the body is warm.
+The directory is the authority, and its answer stands as read. A write it has
+fenced but not yet committed is one that read came before. The copy is filled
+behind the answer, in the request's background work: it takes a body of its own
+revision and no other, a body of its committed revision lowers a fence whose
+finish was lost, and a body it refuses while still fenced asks the directory to
+mend. A copy miss does not turn a slow directory request into a 503.
 
-Direct responses await publication and validate the epoch. Fallback reads return
-both body and epoch, then validate independently, catching a fence between read
-and acceptance. Each accepted body must match the transport's pinned revision; a
-mismatch, malformed epoch or failed validity check yields 503 rather than mixing
-revisions. A copy miss does not turn a slow directory request into a 503.
-Successful non-GET requests reset the transport's pin and deadline.
+Fallback reads return both body and epoch, then validate independently, catching
+a fence between read and acceptance: a copied body is never an unchecked
+authorization grant.
 
-The app Store checks `x-yak-policy` against the independent authority before
-remembering policy metadata. It does not skip `valid` for an equal revision and
-rechecks its local policy floor after the asynchronous check. Directory-derived
-policy metadata is carried through the ordinary directory/Store doors;
-possessing a copied body alone does not confer standing.
+The app Store takes the kernel's `x-yak-policy` at its word. It keeps a local
+policy floor: a request read at an older revision than one the Store already
+acted on is read again from the directory, so what the Store holds never goes
+back in time. Directory-derived policy metadata is carried through the ordinary
+directory/Store doors; possessing a copied body alone does not confer standing.
+
+Until T-132705 a direct answer also waited for `publish` and `valid`, and every
+Store request asked the copy `valid` and reread the directory whenever any
+directory write had moved the revision since the kernel read it. Measured live
+on jeff.yaks.app/housebook, those copy calls cost more than the directory reads
+they checked, on every signed request, and closed only the milliseconds between
+the kernel's read and the Store's.
 
 ## Persistence and body bounds
 
@@ -171,6 +178,5 @@ current standing, so a tool that removes its own membership still reports its
 result without leaking unseen details.
 
 For anonymous rendering, a versioned directory response may carry its epoch
-without an added copy RPC on the warm path. Any Store request still validates
-that epoch against the independent authority. A copied body is never an
-unchecked authorization grant.
+without an added copy RPC on the warm path. A copied body is never an unchecked
+authorization grant.

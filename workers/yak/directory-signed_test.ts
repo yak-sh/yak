@@ -5,6 +5,7 @@ import { fetch as appFetch } from './apps.ts'
 import * as dirPart from './directory.ts'
 import {
   EPOCH,
+  MEND,
   type ServingCopyDoor,
   signedDirectory,
 } from './directory-copy.ts'
@@ -90,7 +91,7 @@ let proof = async (name: string, run: () => Promise<() => void>) => {
 }
 
 await proof(
-  'direct answers publish before returning, and a write between reads fences only the next one',
+  'a direct answer stands at once and is copied behind it',
   async () => {
     let f = independent(), time = clock()
     let release!: () => void
@@ -114,19 +115,17 @@ await proof(
     )
     let first = observing(transport.fetch(query('first')))
     await flush()
-    let waited = first.pending()
+    let body = await first.answer().text()
     release()
     await flush()
-    let body = await first.answer().text()
     let stored = await f.door.read!('first')
     f.core().finish(f.core().begin())
-    let mixed = await transport.fetch(query('second'))
+    let next = await transport.fetch(query('second'))
     return () => {
-      ok(waited, 'a directory answer conferred standing before publication')
       equal(body, 'current')
       equal(stored, { revision: 0, body: 'current' })
       equal(f.publications.length, 2)
-      equal(mixed.status, 200)
+      equal(next.status, 200)
     }
   },
 )
@@ -190,35 +189,30 @@ await proof(
 )
 
 await proof(
-  'a fence held by a directory write is waited out, never refused',
+  'an answer read before a fenced write commits stands, and asks for a mend',
   async () => {
     let f = independent(), time = clock()
     f.core().begin()
-    let epochs = [0, 0, 1]
+    let mends: (string | null)[] = []
     let transport = signedDirectory(
       {
-        fetch: () =>
-          Promise.resolve(
-            new Response('page', {
-              headers: { [EPOCH]: String(epochs.shift()) },
-            }),
-          ),
+        fetch: (req) => {
+          mends.push(req.headers.get(MEND))
+          return Promise.resolve(
+            new Response('page', { headers: { [EPOCH]: '0' } }),
+          )
+        },
       },
       f.door,
       time,
     )
     let answer = observing(transport.fetch(query('page')))
-    await time.advance(0)
     await flush()
-    let fenced = answer.pending()
-    await time.advance(10)
-    await flush()
-    let still = answer.pending()
-    await time.advance(20)
+    let said = [answer.answer().status, await answer.answer().text()]
     await flush()
     return () => {
-      ok(fenced && still, 'the write had not committed yet')
-      equal(answer.answer().status, 200)
+      equal(said, [200, 'page'])
+      equal(mends, [null, '1'])
     }
   },
 )
@@ -229,18 +223,13 @@ let moving = () => Promise.reject(new Error('Network connection lost.'))
 
 // The refusal says what the last look saw, so its report names the cause.
 for (
-  let [what, fenced, fetch, why] of [
-    ['a fence that never clears', true, () =>
-      Promise.resolve(
-        new Response('page', { headers: { [EPOCH]: '0' } }),
-      ), 'the serving copy does not hold revision 0 current'],
+  let [what, fetch, why] of [
     [
       'a directory that never answers',
-      false,
       moving,
       'the directory did not answer: Network connection lost.',
     ],
-    ['a directory that keeps failing', false, () =>
+    ['a directory that keeps failing', () =>
       Promise.resolve(
         Response.json({ error: 'Error', message: 'internal error' }, {
           status: 500,
@@ -250,7 +239,6 @@ for (
 ) {
   await proof(`${what} is refused after the bounded wait`, async () => {
     let f = independent(), time = clock()
-    if (fenced) f.core().begin()
     let transport = signedDirectory({ fetch }, f.door, time)
     let answer = observing(transport.fetch(query('page')))
     for (let n = 0; n < 80; n++) {

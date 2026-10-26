@@ -58,17 +58,19 @@ and setup; this is the map and the feel.
   Durable Object and script), never by its address. A rename is a directory
   write (directory.ts `rename`); the address left behind redirects until
   another space takes it, which anyone may (D-131924).
-- **The serving fence**: a directory write raises a fence on the serving
-  copy (`directory-copy.ts`, `serving-copy.ts`) until it commits, and every
-  signed read and every store's check of a caller waits it out, at most
-  `FENCE_WAIT`. A directory or copy that can't answer for a moment (a throw,
-  a 5xx, no revision) is waited out the same way, never refused, and a read
-  that gives up says what its last look saw. A write resends its fence calls
-  while a deploy moves the copy, and holds its fence only until it commits,
-  not while its effects run on (`fenced`). A write of what no authorization
-  reads raises none (graph.ts `unfenced`: use receipts), so a new bookkeeping
-  word written often belongs there, or each write of it holds back every check
-  on the platform.
+- **The serving copy**: a copy of the directory's answers
+  (`directory-copy.ts`, `serving-copy.ts`) that stands in when the directory
+  stalls. The directory's own answer stands as read and is copied behind it,
+  off the request's path; a copied body answers only while the copy holds its
+  revision current. A directory write raises a fence on the copy until it
+  commits, so a copied body from before it never answers. A directory that
+  can't answer for a moment (a throw, a 5xx, no revision) is waited out, at
+  most `FENCE_WAIT`, never refused, and a read that gives up says what its last
+  look saw. A store takes the kernel's word at the revision it read, and
+  rereads the directory only for a request older than one it already acted on.
+  Every call on a request's path is a round trip someone waits for: the copy
+  once cost more than the directory reads it checked (T-132705), so keep its
+  calls behind the answer.
 - **Serving an app**: `apps.ts` serves its files and `./api/*`; `door.ts`
   hands the store the caller's standing, including its access mode
   (`x-yak-access`). Every HTML page leaving for a browser is woven the

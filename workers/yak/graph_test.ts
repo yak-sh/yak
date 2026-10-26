@@ -2202,76 +2202,20 @@ test('Store policy retains its durable floor across wake', async () => {
   )
 })
 
-let authorityFixture = async (policy?: number) => {
+// The kernel read what it vouches from the directory at a revision, and the
+// store takes it at that word: a current request asks the serving copy
+// nothing, however often it comes.
+let authority = async (policy: number, directory?: () => Promise<Response>) => {
   let ctx = state()
   await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy })
-  let current = 10, blocked = false, checks = 0
+  let checks = 0, reads = 0
   let copy = {
-    valid: (revision: number) => {
+    valid: () => {
       checks++
-      return Promise.resolve(!blocked && revision == current)
-    },
-    begin: () => Promise.resolve(++current),
-    finish: () => Promise.resolve(true),
-    put: () => Promise.resolve(false),
-    get: () => Promise.resolve(null),
-  }
-  let store = new Store(
-    ctx,
-    {
-      SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
-    },
-    undefined,
-    undefined,
-    fixtureLoad,
-  )
-  await store.door
-  return {
-    store,
-    checks: () => checks,
-    block: () => {
-      blocked = true
-    },
-  }
-}
-for (
-  let [standing, v] of [
-    ['public mode', { app: APP, access: 'public', policy: 9 }],
-    ['owner standing', { ...owner, access: 'private', policy: 9 }],
-    ['editor standing', {
-      app: APP,
-      access: 'open',
-      person: ADA,
-      role: 'editor',
-      policy: 9,
-    }],
-    ['unversioned standing', { ...owner, access: 'private' }],
-  ] as [string, Vouch][]
-) {
-  let f = await authorityFixture()
-  test(`Store authority rejects stale ${standing} without a newer local request`, async () => {
-    equal((await get(f.store, '/query?q=.recipe', v)).status, 503)
-  })
-}
-// The kernel read revision 10; commit a directory write before the store
-// checks it, and another while the store is rereading authorization.
-let racedAuthority = async (revoked = false) => {
-  let ctx = state()
-  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy: 10 })
-  let revision = 10, reads = 0, written = false
-  let copy = {
-    valid: (v: number) => {
-      let current = v == revision
-      // Commit immediately after the reread is accepted, before #learn's
-      // next check, so even its refreshed snapshot has to be read again.
-      if (current && v == 11 && !written) {
-        written = true
-        revision++
-      }
-      return Promise.resolve(current)
+      return Promise.resolve(true)
     },
     publish: () => Promise.resolve(true),
-    begin: () => Promise.resolve(++revision),
+    begin: () => Promise.resolve(policy + 1),
     finish: () => Promise.resolve(true),
     put: () => Promise.resolve(false),
     get: () => Promise.resolve(null),
@@ -2280,28 +2224,16 @@ let racedAuthority = async (revoked = false) => {
     ctx,
     {
       SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
-      STORE: {
-        idFromName: (name: string) => name,
-        get: () => ({
-          fetch: () => {
-            reads++
-            let epoch = revision
-            let rows: Bundle[] = [{
-              entity: { eid: APP },
-              app: { space: 'space', access: 'private' },
-            }]
-            if (!revoked || epoch == 11) {
-              rows.push({
-                entity: { eid: 'seat' },
-                member: { space: 'space', person: ADA, role: 'owner' },
-              })
-            }
-            let answer = new Response(JSON.stringify(rows), {
-              headers: { 'x-yak-directory-revision': String(epoch) },
-            })
-            return Promise.resolve(answer)
-          },
-        }),
+      ...directory && {
+        STORE: {
+          idFromName: (name: string) => name,
+          get: () => ({
+            fetch: () => {
+              reads++
+              return directory()
+            },
+          }),
+        },
       },
     },
     undefined,
@@ -2309,39 +2241,34 @@ let racedAuthority = async (revoked = false) => {
     fixtureLoad,
   )
   await store.door
-  revision++
-  return { store, reads: () => reads }
+  return { store, checks: () => checks, reads: () => reads }
 }
-for (let revoked of [false, true]) {
-  let f = await racedAuthority(revoked)
-  let answer = await get(f.store, '/query?q=.entity.eid=missing', {
-    ...owner,
-    access: 'private',
-    policy: 10,
+let current = await authority(10)
+let currentOwner = { ...owner, access: 'private', policy: 10 }
+let currentAnswers = [
+  (await get(current.store, '/query?q=.entity.eid=missing', currentOwner))
+    .status,
+  (await get(current.store, '/query?q=.entity.eid=missing', currentOwner))
+    .status,
+]
+test('Store takes a current request at the kernel’s word, asking the copy nothing', () => {
+  equal({ answers: currentAnswers, checks: current.checks() }, {
+    answers: [200, 200],
+    checks: 0,
   })
-  test(`Store rechecks a mid-request directory write${revoked ? ' without restoring a revoked role' : ''}`, () => {
-    equal(answer.status, revoked ? 403 : 200)
-    ok(f.reads() >= 2)
-  })
-}
+})
 
-// The kernel read revision 10 and a write has moved it to 11, so the store
-// asks the directory itself, and a deploy moving the directory or the copy
-// fails one call into it on the way (T-127751).
-let movingAuthority = async (at: 'directory' | 'copy', revoked: boolean) => {
-  let ctx = state()
-  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy: 10 })
-  let tripped = false
-  let trip = (here: string) => here == at && !tripped && (tripped = true)
-  let moving = () => Promise.reject(new Error('Network connection lost.'))
-  let copy = {
-    valid: (v: number) => trip('copy') ? moving() : Promise.resolve(v == 11),
-    publish: () => Promise.resolve(true),
-    begin: () => Promise.resolve(11),
-    finish: () => Promise.resolve(true),
-    put: () => Promise.resolve(false),
-    get: () => Promise.resolve(null),
-  }
+// A request read at an older revision than the store has acted on is read
+// again from the directory, which a deploy moving it fails for a moment
+// (T-127751), and a role the newer revision took away stays gone.
+for (
+  let [moving, revoked, status] of [
+    [false, false, 200],
+    [true, false, 200],
+    [true, true, 403],
+  ] as const
+) {
+  let tripped = !moving
   let rows: Bundle[] = [
     { entity: { eid: APP }, app: { space: 'space', access: 'private' } },
     ...revoked ? [] : [{
@@ -2349,149 +2276,24 @@ let movingAuthority = async (at: 'directory' | 'copy', revoked: boolean) => {
       member: { space: 'space', person: ADA, role: 'owner' },
     }],
   ]
-  let store = new Store(
-    ctx,
-    {
-      SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
-      STORE: {
-        idFromName: (name: string) => name,
-        get: () => ({
-          fetch: () =>
-            trip('directory') ? moving() : Promise.resolve(
-              new Response(JSON.stringify(rows), {
-                headers: { 'x-yak-directory-revision': '11' },
-              }),
-            ),
-        }),
-      },
-    },
-    undefined,
-    undefined,
-    fixtureLoad,
-  )
-  await store.door
-  return (await get(store, '/query?q=.entity.eid=missing', {
+  let f = await authority(11, () => {
+    if (!tripped) {
+      tripped = true
+      return Promise.reject(new Error('Network connection lost.'))
+    }
+    return Promise.resolve(
+      new Response(JSON.stringify(rows), {
+        headers: { 'x-yak-directory-revision': '11' },
+      }),
+    )
+  })
+  let answer = (await get(f.store, '/query?q=.entity.eid=missing', {
     ...owner,
     access: 'private',
     policy: 10,
   })).status
-}
-for (
-  let [at, revoked, status] of [
-    ['directory', false, 200],
-    ['directory', true, 403],
-    ['copy', false, 200],
-  ] as const
-) {
-  let answer = await movingAuthority(at, revoked)
-  test(`Store waits out a ${at} it cannot reach for a moment${revoked ? ' and still refuses a revoked role' : ''}`, () => {
+  test(`Store rereads an older request${moving ? ' past a directory moving for a moment' : ''}${revoked ? ' without restoring a revoked role' : ''}`, () => {
     equal(answer, status)
+    ok(f.reads() >= (moving ? 2 : 1))
   })
 }
-
-let acceptedAuthority = await authorityFixture(10)
-// Learn the private metadata and owner before timing the authorized read.
-let currentOwner = { ...owner, access: 'private', policy: 10 }
-equal(
-  (await get(
-    acceptedAuthority.store,
-    '/query?q=.entity.eid=missing',
-    currentOwner,
-  ))
-    .status,
-  200,
-)
-let acceptedAuthorityAnswer = await (async () => {
-  let before = acceptedAuthority.checks()
-  let status = (await get(
-    acceptedAuthority.store,
-    '/query?q=.entity.eid=missing',
-    currentOwner,
-  )).status
-  return { status, checks: acceptedAuthority.checks() - before }
-})()
-test('Store authority permits a current owner to read', () => {
-  equal(acceptedAuthorityAnswer, { status: 200, checks: 1 })
-})
-let repeatedAuthority = await authorityFixture(10)
-let repeatedAuthorityAnswers = await (async () => {
-  let f = repeatedAuthority
-  let current = { app: APP, access: 'private', policy: 10 }
-  let first = (await get(f.store, '/query?q=.recipe', current)).status
-  let before = f.checks()
-  let second = (await get(f.store, '/query?q=.recipe', current)).status
-  return { first, second, checks: f.checks() - before }
-})()
-test('Store authority checks equal requests each time', () => {
-  equal(repeatedAuthorityAnswers, { first: 401, second: 401, checks: 1 })
-})
-let revokedAuthority = await authorityFixture(10)
-test('Store authority rejects independently revoked current standing', async () => {
-  let f = revokedAuthority
-  f.block()
-  equal(
-    (await get(f.store, '/query?q=.recipe', {
-      ...owner,
-      access: 'private',
-      policy: 10,
-    })).status,
-    503,
-  )
-})
-
-let reorderedPolicy = await (async () => {
-  let ctx = state()
-  await cookbook(ctx, SCHEMA, { ...owner, access: 'private', policy: 10 })
-  let entered!: () => void, release!: (valid: boolean) => void
-  let checking = new Promise<void>((resolve) => entered = resolve)
-  let pending = new Promise<boolean>((resolve) => release = resolve)
-  let copy = {
-    valid: (revision: number) => {
-      if (revision == 10) {
-        entered()
-        return pending
-      }
-      return Promise.resolve(revision == 11)
-    },
-    begin: () => Promise.resolve(11),
-    finish: () => Promise.resolve(true),
-    put: () => Promise.resolve(false),
-    get: () => Promise.resolve(null),
-  }
-  let store = new Store(
-    ctx,
-    {
-      SERVING_COPY: { idFromName: (name: string) => name, get: () => copy },
-    },
-    undefined,
-    undefined,
-    fixtureLoad,
-  )
-  await store.door
-  return { store, checking, release }
-})()
-let reorderedPolicyAnswers = await (async () => {
-  let f = reorderedPolicy
-  let old = get(f.store, '/query?q=.recipe', {
-    ...owner,
-    access: 'public',
-    policy: 10,
-  })
-  await f.checking
-  let newer = (await get(f.store, '/query?q=.recipe', {
-    app: APP,
-    access: 'private',
-    policy: 11,
-  })).status
-  f.release(true)
-  let delayed = (await old).status
-  let retained = (await get(f.store, '/query?q=.recipe', {
-    app: APP,
-    access: 'private',
-    policy: 11,
-  })).status
-  return { newer, delayed, retained }
-})()
-test('a delayed successful authority response cannot lower a newer Store floor', () => {
-  equal(reorderedPolicyAnswers, { newer: 401, delayed: 503, retained: 401 })
-})

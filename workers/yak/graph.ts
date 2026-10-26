@@ -1,5 +1,4 @@
 import {
-  confirms,
   copyOf,
   EPOCH,
   FENCE_WAIT,
@@ -1867,20 +1866,21 @@ export class Store {
   // followed rather than argued with. Almost every request says what the
   // object already holds, and that costs a look at its memory: only news
   // opens a transaction.
+  //
+  // The kernel read what it says from the directory at a revision, and the
+  // store takes it at that word: it was the directory's answer when the
+  // request asked. Only an answer older than one this store already acted on
+  // is read again, so what the store holds never goes back in time.
   async #learn(req: Request) {
     let revision = this.#policy(req)
-    let copy = this.#bind.SERVING_COPY && copyOf(this.#bind as Env)
-    if (this.#appMetadata(req) && copy) {
+    if (this.#appMetadata(req) && this.#bind.SERVING_COPY) {
       if (revision == null) {
         throw Object.assign(new Refused('Serving authorization unavailable'), {
           status: 503,
         })
       }
       let began = Date.now()
-      while (
-        !await confirms(copy, revision) ||
-        revision < Number(this.#get('policy') ?? 0)
-      ) {
+      while (revision < Number(this.#get('policy') ?? 0)) {
         if (!this.#bind.STORE || Date.now() - began >= FENCE_WAIT) {
           throw Object.assign(
             new Refused('Serving authorization unavailable'),

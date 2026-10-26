@@ -1,9 +1,10 @@
 import { cookieValue } from './lib/token.ts'
-// Anonymous pages retain the hop-free warm path (publicDirectory). Signed
-// access uses signedDirectory: every body is checked against the independent
-// durable serving authority at the revision it was read. Directory
-// mutations revoke that revision before committing, not through cache purge.
-// Cold/fenced copies still wait for the directory; no TTL grants standing.
+// The directory answers every read itself, and a copy of its answers stands in
+// when it stalls: publicDirectory for anonymous pages, signedDirectory for
+// signed access, where a copied body stands only while the independent serving
+// copy holds its revision current. Directory mutations fence that revision
+// before committing, not through cache purge. Cold/fenced copies still wait
+// for the directory; no TTL grants standing.
 import type { Fetcher } from './door.ts'
 import type { Env } from './env.ts'
 import { background, defect } from './defects.ts'
@@ -76,8 +77,9 @@ export class Unfenced extends Error {
 // or its isolate went with a deploy between `begin` and `finish`. `mend`
 // lowers a fence no write of this isolate holds, at the revision the
 // directory has committed. A write that fails mends as it leaves, and a signed
-// read still fenced after its first look asks the directory to mend (MEND), so
-// a fence is up for as long as a write holds it and never longer.
+// read whose answer the copy refuses at a revision it still fences asks the
+// directory to mend (MEND), so a fence is up for as long as a write holds it
+// and never longer.
 //
 // A write holds its fence from the `begin` that raises it until it commits
 // (`released`, the directory's commit hook) or fails, and not while its effects
@@ -249,9 +251,11 @@ export let anonymousPage = (req: Request) =>
     req.headers.has(h)
   ) && !/\/(?:api|_web)(?:\/|$)|\/~/.test(new URL(req.url).pathname)
 
-/** A request-scoped, revision-pinned view of the independently revocable
- * directory. Bodies are data, not authority: every answer checks the current
- * fence, including warm directory answers. Never share this door across requests. */
+/** A request-scoped view of the directory that a stall cannot hang. The
+ * directory's own answer stands, and is copied behind it. A copied body is
+ * data, not authority: it answers only when the directory has not within the
+ * deadline, and only while the copy holds its revision current, unfenced. Never
+ * share this door across requests. */
 export let signedDirectory = (
   via: Fetcher,
   copy: ServingCopyDoor | undefined,
@@ -267,6 +271,23 @@ export let signedDirectory = (
     await current(copy, revision) === true
       ? new Response(body, { headers: { [EPOCH]: String(revision) } })
       : null
+  // The copy takes a body of its own revision and no other, and a body of
+  // its committed revision lowers a fence whose finish was lost. One it
+  // refuses while still fenced at that revision is a fence no write may hold
+  // any more, so the directory is asked to mend it.
+  let fill = async (
+    req: Request,
+    revision: number,
+    key: string,
+    body: string,
+  ) => {
+    if (await copy.publish?.(revision, key, body) !== false) return
+    if (await current(copy, revision) === true) return
+    let headers = new Headers(req.headers)
+    headers.set(EPOCH, '1')
+    headers.set(MEND, '1')
+    await (await via.fetch(new Request(req, { headers }))).body?.cancel()
+  }
   return {
     signed: true,
     fetch: (req) => {
@@ -324,30 +345,19 @@ export let signedDirectory = (
             void answer.body?.cancel()
             return 'the directory answered with no revision'
           }
-          let revision = Number(epoch)
           let body = await answer.text()
-          try {
-            await copy.publish?.(revision, key, body)
-          } catch { /* The copy is filled again by the next read. */ }
-          let standing = await current(copy, revision)
-          if (standing === true) {
-            return new Response(body, { headers: { [EPOCH]: epoch } })
-          }
-          headers.set(MEND, '1')
-          return standing
+          // The directory is the authority, and its answer stands as read: a
+          // write it has fenced but not yet committed is one this read came
+          // before. The copy is filled behind the answer, for a stall to fall
+          // back on (`fill`).
+          background(fill(req, Number(epoch), key, body).catch(() => {}))
+          return new Response(body, { headers: { [EPOCH]: epoch } })
         }
         void (async () => {
-          // Nothing has escaped before the first accepted answer. A directory
-          // write holds the fence until it commits, and until then no copied
-          // or read body may stand as authority. That is a wait, never an
-          // answer: reread with backoff until the fence clears, bounded by
-          // FENCE_WAIT. Each body stands on being current when accepted, so a
-          // write landing between a request's reads fences the next one for
-          // the write's duration and no longer.
-          //
-          // A directory or copy that cannot answer for a moment is waited out
-          // the same way, since it has said nothing: a deploy moves both
-          // objects, and the runtime fails a call into one while it moves.
+          // A directory that cannot answer for a moment has said nothing: a
+          // deploy moves it, and the runtime fails a call into it while it
+          // moves. That is a wait, never an answer: reread with backoff,
+          // bounded by FENCE_WAIT, while the copy may answer meanwhile.
           for (let pause = 10; !settled; pause = Math.min(pause * 2, 250)) {
             let answer = await look()
             if (settled) return
@@ -393,7 +403,3 @@ let current = async (
     return `the serving copy did not answer: ${said(e)}`
   }
 }
-
-/** Whether the copy says a revision is current. */
-export let confirms = async (copy: ServingCopyDoor, revision: number) =>
-  await current(copy, revision) === true
