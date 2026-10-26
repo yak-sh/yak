@@ -1239,3 +1239,13 @@ dialog form {
     height: 88px;
   }
 }
+
+.list-row .related-item a {
+  font-size: 12px;
+  font-weight: 500;
+}
+.file-icon {
+  min-width: 31px;
+  font-size: 15px;
+  font-weight: 600;
+}

@@ -1,6 +1,6 @@
 import { test } from '@yaks/testing'
 import { assertEquals } from '@std/assert'
-import { imageUrl } from './media.js'
+import { fileMark, imageUrl } from './media.js'
 
 test('uploaded photos and direct image links have previews without treating documents as images', () => {
   assertEquals(
@@ -35,5 +35,26 @@ test('uploaded photos and direct image links have previews without treating docu
       house_file: { url: 'javascript:alert(1)', mime: 'image/svg+xml' },
     }),
     '',
+  )
+})
+
+test('file marks identify hosted PDFs and files while website references keep an arrow', () => {
+  assertEquals(
+    fileMark({ house_file: { blob: 'pdf', mime: 'application/pdf' } }),
+    'PDF',
+  )
+  assertEquals(
+    fileMark({
+      house_file: { url: 'https://example.org/care.PDF?download=1' },
+    }),
+    'PDF',
+  )
+  assertEquals(
+    fileMark({ house_file: { blob: 'text', mime: 'text/plain' } }),
+    '▤',
+  )
+  assertEquals(
+    fileMark({ house_file: { url: 'https://example.org/codes' } }),
+    '↗',
   )
 })

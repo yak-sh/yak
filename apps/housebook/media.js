@@ -28,3 +28,14 @@ export let preview = (row, className, fallback) => {
     })
     : fallback()
 }
+
+export let fileMark = (row) => {
+  let file = row.house_file
+  let path = new URL(fileUrl(row) || '.', 'https://local.invalid').pathname
+  if (file.mime === 'application/pdf' || /\.pdf$/i.test(path)) return 'PDF'
+  if (
+    file.blob || (file.mime && file.mime !== 'text/html') ||
+    /\.(docx?|xlsx?|pptx?|odt|ods|txt|rtf|csv|zip)$/i.test(path)
+  ) return '▤'
+  return '↗'
+}

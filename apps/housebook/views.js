@@ -1,4 +1,4 @@
-import { fileUrl, imageUrl, preview } from './media.js'
+import { fileMark, fileUrl, imageUrl, preview } from './media.js'
 import { transfer } from './handover-view.js'
 import { button, el, empty, tag } from './dom.js'
 import { categories, date, due, id, itemName, safeUrl, title } from './model.js'
@@ -87,9 +87,9 @@ export let view = (
             'aria-label': `Open ${title(row)}`,
           },
           preview(row, 'document-photo', () =>
-            el('span', { class: 'file-icon' }, '▤')),
+            el('span', { class: 'file-icon' }, fileMark(row))),
         )
-        : el('span', { class: 'file-icon' }, f.blob ? '▤' : '↗'),
+        : el('span', { class: 'file-icon' }, fileMark(row)),
       el(
         'div',
         { class: 'grow' },
@@ -102,10 +102,20 @@ export let view = (
           : el('strong', {}, title(row)),
         el(
           'p',
-          {},
-          row.doc?.body ||
-            (f.item ? itemName(items(), f.item) : 'House reference'),
+          { class: 'related-item' },
+          f.item
+            ? el('a', {
+              href: '#item/' + f.item,
+              onClick: (event) => {
+                event.preventDefault()
+                open(f.item)
+              },
+            }, itemName(items(), f.item))
+            : 'House reference',
         ),
+        row.doc?.body
+          ? el('p', { class: 'document-notes' }, row.doc.body)
+          : null,
       ),
       rowActions('house_file', row),
     )
