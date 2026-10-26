@@ -243,6 +243,8 @@ h2 {
   margin: 1px 0;
   flex: 1;
   min-height: 30px;
+  /* Its bitmap follows its box; the box never follows its bitmap. */
+  contain: size;
 }
 .display-bottom {
   font-size: 10px;

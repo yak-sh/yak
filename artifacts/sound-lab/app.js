@@ -47,7 +47,7 @@ let status = (text, error = false) => {
   $('save-status').classList.toggle('error', error)
 }
 let fail = (error) => {
-  status(error.message || String(error), true)
+  status(error?.message || String(error), true)
   globalThis.reportError?.(error)
 }
 let storage = persistence({

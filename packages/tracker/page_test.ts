@@ -112,6 +112,13 @@ test("the page's own script failing past its first line is filed", async () =>
 test("a script file of the page's failing on its first line is filed", async () =>
   equal(await threw(`${at}app.js`, 1), ["Can't find variable: __firefox__"]))
 
+test('a failure the browser raises with no error is filed by its message', async () => {
+  let p = page({})
+  let message = 'ResizeObserver loop completed with undelivered notifications.'
+  p.heard.get('error')!({ target: p.win, error: null, message, filename: at })
+  equal(await p.said(), [message])
+})
+
 let link = { tagName: 'LINK', href: file }
 
 test('a stylesheet whose file answers was dropped, not missing', async () =>

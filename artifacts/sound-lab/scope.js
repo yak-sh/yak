@@ -10,8 +10,10 @@ export let scope = ({ canvas, audio, getView, playing, update }) => {
       ratio = Math.min(globalThis.devicePixelRatio || 1, 2)
     width = rect.width
     height = rect.height
-    canvas.width = Math.round(width * ratio)
-    canvas.height = Math.round(height * ratio)
+    let w = Math.round(width * ratio), h = Math.round(height * ratio)
+    if (canvas.width === w && canvas.height === h) return
+    canvas.width = w
+    canvas.height = h
     pen.setTransform(ratio, 0, 0, ratio, 0, 0)
   }
   let observer = new ResizeObserver(resize)

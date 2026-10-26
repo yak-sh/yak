@@ -142,8 +142,10 @@
       )
     }
     if (foreign(e)) return
+    // A notice the browser raises itself, such as a ResizeObserver loop, has
+    // no error: its own message is the one that says what happened.
     broke({
-      message: said(e.error) || e.message,
+      message: (e.error == null && e.message) || said(e.error),
       stack: e.error && e.error.stack,
       url: e.filename || location.href,
       line: e.lineno,
