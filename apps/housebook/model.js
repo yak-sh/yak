@@ -21,6 +21,15 @@ export let kinds = {
   house_circuit: 'circuit',
   house_profile: 'home details',
 }
+// Everything the house keeps, asked as one line, so a load is one request and
+// the page one subscription rather than one of each per kind.
+export let everything = `(${
+  Object.keys(kinds).map((kind) => '.' + kind).join('|')
+})&?doc&.limit=10000`
+export let byKind = (rows) =>
+  Object.fromEntries(
+    Object.keys(kinds).map((kind) => [kind, rows.filter((row) => row[kind])]),
+  )
 export let title = (row) => row?.doc?.title || 'Untitled'
 export let id = (row) => row?.entity?.eid
 export let today = () => new Date().toLocaleDateString('en-CA')

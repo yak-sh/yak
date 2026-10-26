@@ -8,22 +8,21 @@ import {
   was,
 } from './api/client.js'
 import { button, el } from './dom.js'
-import { id, nextDue, searchRows, title, today } from './model.js'
+import {
+  byKind,
+  everything,
+  id,
+  nextDue,
+  searchRows,
+  title,
+  today,
+} from './model.js'
 import { view } from './views.js'
 import { editor } from './editor.js'
 import { documents } from './documents.js'
 import { download, embedded, handover } from './export.js'
 
-let names = [
-  'house_item',
-  'house_record',
-  'house_care',
-  'house_contact',
-  'house_file',
-  'house_circuit',
-  'house_profile',
-]
-let data = Object.fromEntries(names.map((name) => [name, []]))
+let data = byKind([])
 let state = { page: 'overview', category: '', term: '', item: null }
 let selected = new Set(),
   initialized = false,
@@ -48,14 +47,8 @@ let act = (fn) => async (...args) => {
   }
 }
 let items = () => data.house_item
-let load = async () => {
-  let rows = await Promise.all(
-    names.map((name) => query(`.${name}&?doc&.limit=10000`)),
-  )
-  names.forEach((name, i) => data[name] = rows[i])
-}
 let refresh = async () => {
-  await load()
+  data = byKind(await query(everything))
   draw()
 }
 let navigate = (page, category = '') => {
@@ -353,8 +346,19 @@ let shell = () => {
   )
 }
 let start = async () => {
+  // The house's records are asked for while me() says who is looking, so the
+  // first rows and the answer arrive together; a visitor who may not read has
+  // the subscription ended unheard.
+  let filled
+  let first = new Promise((resolve) => filled = resolve)
+  stop.push(subscribe(everything, (rows) => {
+    data = byKind(rows)
+    filled()
+    if (content) draw()
+  }))
   who = await me()
   if (!who.reads) {
+    stop.forEach((fn) => fn())
     document.getElementById('app').replaceChildren(
       el(
         'p',
@@ -366,7 +370,7 @@ let start = async () => {
     return
   }
   desk = drafts({ by: who.person, report: fail })
-  await load()
+  await first
   edit = editor({
     dialog: document.getElementById('editor'),
     desk,
@@ -384,12 +388,6 @@ let start = async () => {
   }
   shell()
   draw()
-  names.forEach((name) =>
-    stop.push(subscribe(`.${name}&?doc&.limit=10000`, (rows) => {
-      data[name] = rows
-      draw()
-    }))
-  )
   addEventListener('beforeunload', () => {
     stop.forEach((fn) => fn())
     desk.close()

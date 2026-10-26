@@ -125,17 +125,15 @@ export let readiness = (
     web: () => Promise<void>
     catalog: () => Promise<void>
     cli?: () => Promise<void>
-    draft?: () => Promise<void>
-    outbox?: () => Promise<void>
+    client?: () => Promise<void>
   },
 ) => {
   let dependencies = Promise.resolve().then(make.dependencies)
   let web = Promise.resolve().then(make.web)
   let catalog = Promise.resolve().then(make.catalog)
   let cli = Promise.resolve().then(() => make.cli?.())
-  let draft = Promise.resolve().then(() => make.draft?.())
-  let outbox = Promise.resolve().then(() => make.outbox?.())
-  let all = Promise.allSettled([dependencies, web, catalog, cli, draft, outbox])
+  let client = Promise.resolve().then(() => make.client?.())
+  let all = Promise.allSettled([dependencies, web, catalog, cli, client])
     .then(
       (completed) => {
         for (let result of completed) {
@@ -161,17 +159,11 @@ let preparing = (root = dir, timeout = 600_000, quiet = false) =>
           join(root, 'public/_web'),
           '@yaks/browse/web',
         ], quiet), quiet),
-    draft: () =>
+    client: () =>
       timed(
-        'Draft assets',
-        () => generated('Draft asset', [join(root, 'draft-assets.ts')], quiet),
-        quiet,
-      ),
-    outbox: () =>
-      timed(
-        'Outbox assets',
+        'Client assets',
         () =>
-          generated('Outbox asset', [join(root, 'outbox-assets.ts')], quiet),
+          generated('Client asset', [join(root, 'client-assets.ts')], quiet),
         quiet,
       ),
     cli: () =>

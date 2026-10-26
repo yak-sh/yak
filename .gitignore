@@ -49,6 +49,9 @@ node_modules.lock/
 /workers/yak/public/_cli/
 /workers/yak/public/_compiler/
 
+# The browser client as one module, generated from public/client.js.
+/workers/yak/public/_client.js
+
 # Browser draft helper, generated from @yaks/draft.
 /workers/yak/public/_draft.js
 

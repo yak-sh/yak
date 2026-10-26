@@ -87,15 +87,35 @@ let refused = (r, body) => {
   return e
 }
 
-let door = (base) => async (path, init) => {
-  let version = pageVersion()
-  if (version != null) {
-    let headers = new Headers(init?.headers)
-    headers.set('x-yak-version', version)
-    init = { ...init, headers }
+// A read already on its way answers everyone who asks it meanwhile, as one
+// request: the outbox's `me` and the page's own on load, a subscription's
+// fill and the page's query of the same line. Each caller parses its own copy,
+// so no two share an object to change.
+let door = (base) => {
+  let flying = new Map()
+  let send = async (path, init) => {
+    let version = pageVersion()
+    if (version != null) {
+      let headers = new Headers(init?.headers)
+      headers.set('x-yak-version', version)
+      init = { ...init, headers }
+    }
+    let r = await fetch(new URL(path, base), init)
+    return { r, body: await r.text() }
   }
-  let r = await fetch(new URL(path, base), init)
-  let body = await r.text()
+  let sent = (path, init) => {
+    if (init) return send(path, init)
+    let held = flying.get(path)
+    if (!held) {
+      held = send(path).finally(() => flying.delete(path))
+      flying.set(path, held)
+    }
+    return held
+  }
+  return async (path, init) => answered(path, await sent(path, init))
+}
+
+let answered = (path, { r, body }) => {
   if (!r.ok) {
     let error = refused(r, body)
     // A timeout, overload or proxy HTML is not a deliberate store refusal.

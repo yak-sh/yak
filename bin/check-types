@@ -12,9 +12,8 @@ mkdir -p "$cache"
 exec 9>"$cache/check-types.lock"
 flock 9
 deno run --no-lock -A "$root/bin/compiler-packages.ts"
-deno run --no-lock -A "$root/workers/yak/draft-assets.ts"
 # The public client imports generated browser modules, including in doc checks.
-deno run --no-lock -A "$root/workers/yak/outbox-assets.ts"
+deno run --no-lock -A "$root/workers/yak/client-assets.ts"
 ln -s "$root" "$cache/typecheck.next.$$"
 mv -Tf "$cache/typecheck.next.$$" "$cache/typecheck"
 # Raycast is a Node/React host with its own tsconfig and dependencies, checked
