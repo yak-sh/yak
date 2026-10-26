@@ -134,7 +134,7 @@ import {
 import { asking } from './identity.ts'
 import { nameOf } from './signin.ts'
 import { written } from './reach.ts'
-import { borrowed, queried, sources, vocabulary } from './page-graph.ts'
+import { borrowed, homed, queried, sources, vocabulary } from './page-graph.ts'
 import { pageSocket } from './page-socket.ts'
 import { webAsset, webPage, webPath } from './web.ts'
 import { releaseStatus } from './release-status.ts'
@@ -146,7 +146,7 @@ import { misfit, Refused, Stale, status } from '@yaks/graph/errors'
 import { token } from '@yaks/graph/sha256'
 import { callStored } from './package-tools.ts'
 import { edits, mode, reads, writes } from '@yaks/member'
-import type { Door } from './door.ts'
+import { type Door, USES } from './door.ts'
 import { type Clock, clock, timed } from './timing.ts'
 import { asked, keep, keepable, passed, unkept } from './page-cache.ts'
 import { brokenIn, fault, noted, refusal, serving } from './unseen.ts'
@@ -1995,7 +1995,19 @@ let api = async (
       return json(426, 'expected_websocket')
     }
     if (!mayRead) return refused('not_a_reader')
-    let graph = await c.time('uses', () => sources(env, space, app, who))
+    // One round trip: the store answers the socket, or says which words the
+    // app uses from other homes (graph.ts `/ws`), and only then are they read.
+    let answer = await store(
+      sandboxed(app) ? '/ws' : '/ws?uses=1',
+      req,
+      headers,
+    )
+    let uses = answer.status == 204 ? answer.headers.get(USES) : null
+    if (uses == null) return answer
+    let graph = await c.time(
+      'uses',
+      () => homed(env, space, app, who, JSON.parse(uses)),
+    )
     if (graph.reach.length > 1) {
       return pageSocket(req, env, space, app, graph, headers)
     }

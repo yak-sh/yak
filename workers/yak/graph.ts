@@ -4641,7 +4641,17 @@ export class Store {
     // does not answer here — hibernation is the runtime's, so `sockets` takes
     // it — which would leave it the one door with no policy on it. So it asks
     // the same seam, by hand, at the handshake.
+    //
+    // A page's socket asks with `uses=1`, as its query does (`#paged`): an app
+    // that uses words from other homes is answered 204 with those words, not a
+    // socket, and the kernel opens one across every home (page-socket.ts).
     if (path == '/ws') {
+      let said = new URL(request.url).searchParams.get('uses') == '1'
+        ? this.#held(request, 'uses')
+        : '{}'
+      if (Object.keys(JSON.parse(said)).length) {
+        return new Response(null, { status: 204, headers: { [USES]: said } })
+      }
       let actor
       try {
         actor = await this.#auth(request)

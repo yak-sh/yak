@@ -74,11 +74,15 @@ export type Half = Socket & {
   emit: (type: string, data?: unknown) => void
   /** the frames sent since the last call, clearing them */
   taken: () => Frame[]
+  /** what a hibernatable socket keeps across hibernation, as the runtime's does */
+  serializeAttachment: (value: unknown) => void
+  deserializeAttachment: () => unknown
 }
 
 let half = (): Half => {
   let at: Record<string, ((event: Event & { data?: unknown }) => void)[]> = {}
   let sent: Frame[] = []
+  let attachment: unknown = null
   return {
     readyState: 1,
     accepted: false,
@@ -99,6 +103,10 @@ let half = (): Half => {
       for (let l of at[type] ?? []) l(event)
     },
     taken: () => sent.splice(0, sent.length),
+    serializeAttachment: (value) => {
+      attachment = structuredClone(value)
+    },
+    deserializeAttachment: () => attachment,
   }
 }
 

@@ -696,9 +696,13 @@ export let handler = {
           'strict-transport-security',
           'max-age=31536000; includeSubDomains',
         )
-        headers.append(
+        headers.set(
           'server-timing',
-          `gateway;dur=${Date.now() - at}${cold ? ', cold;dur=1' : ''}`,
+          [
+            headers.get('server-timing'),
+            `gateway;dur=${Date.now() - at}`,
+            cold ? 'cold;dur=1' : null,
+          ].filter(Boolean).join(', '),
         )
         return new Response(res.body, {
           status: res.status,

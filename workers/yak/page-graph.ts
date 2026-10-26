@@ -39,7 +39,7 @@ let appsAt = async (env: Env, space: Space, slugs: string[]) => {
 
 // The stores a page's graph is read from: its own, then the home of each
 // word it uses that the caller may read.
-let homed = async (
+export let homed = async (
   env: Env,
   space: Space,
   app: App,
