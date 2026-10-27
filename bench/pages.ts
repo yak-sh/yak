@@ -307,7 +307,7 @@ export let contentPages = (): Page[] => {
     name: 'map',
     path: '/?map',
     painted: `!!document.querySelector('.Shell_Body .Head_Title')
-      ?.textContent.includes('Schema') && ${rows}`,
+      ?.textContent.includes('Schema') && ${table}`,
   }, {
     name: 'inspect-package',
     path: '/' + packEid('@yaks/task'),
