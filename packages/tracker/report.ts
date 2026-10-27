@@ -294,6 +294,19 @@ let crumbs = (sent: unknown): Crumb[] | undefined => {
  * {@link broken} files that answer no second time. */
 export let FILED = 'x-yak-filed'
 
+// A fetch of the page's own origin that never had an answer, as the reporter's
+// fetch wrapper says it (`<path>: <message>`) in the words of the browser that
+// asked: Chrome, Safari, Firefox. That is the connection dropping or the person
+// leaving, never a break, and the wrapper has let it go since T-124729. But the
+// reporter is woven into each page as it loads, and a tab opened before then
+// still runs the one that filed it, untagged: the judgment is kept here too,
+// where every reporter's report arrives.
+let NO_ANSWER =
+  /^\/\S*: (?:Failed to fetch|Load failed|NetworkError when attempting to fetch resource\.)$/
+let unanswered = (b: Record<string, unknown>) =>
+  (b.mechanism == null || b.mechanism == 'wrapper') &&
+  NO_ANSWER.test(String(b.message ?? ''))
+
 /** A no the page was answered on purpose: a 4xx status. */
 export let meant = (_answer: string, status: number): boolean =>
   status >= 400 && status < 500
@@ -304,7 +317,9 @@ export let meant = (_answer: string, status: number): boolean =>
  * version?, breadcrumbs?}`, or the Reporting API's array of `{type, url,
  * body}`. Junk answers with nothing: a malformed body is the sender's bug, not
  * a break in the page. An answer the reporter saw that `refusal` calls a no
- * somebody meant (default {@link meant}) is the page working, not a break.
+ * somebody meant (default {@link meant}) is the page working, not a break,
+ * and so is a fetch of the page's own origin that had no answer, which the
+ * reporter in a tab opened before T-124729 still sends.
  *
  * ```ts
  * import { equal } from '@yaks/testing'
@@ -322,6 +337,13 @@ export let meant = (_answer: string, status: number): boolean =>
  * ])
  * equal(broken(JSON.stringify({ message: '403 /apply', status: 403 })), [])
  * equal(broken(JSON.stringify({ message: '502 /x', status: 502, filed: true })), [])
+ * let fetched = (message: string) =>
+ *   broken(JSON.stringify({ message, url: 'https://box.test/app/' })).length
+ * equal([
+ *   fetched('/app/api/release: Failed to fetch'),
+ *   fetched('/app/api/release: Load failed'),
+ *   fetched('/app/api/query: signal timed out'),
+ * ], [0, 0, 1])
  * equal(broken('not json'), [])
  * ```
  */
@@ -346,7 +368,7 @@ export let broken = (
     // report with no status at all is a script error or an unhandled
     // rejection, and those are breaks.
     if (refusal(String(b.answer ?? ''), Number(b.status))) return []
-    if (b.filed === true) return []
+    if (b.filed === true || unanswered(b)) return []
     let message = saying(b)
     if (!message) return []
     let at = pathOf(r.url ?? b.url ?? b.documentURL)
