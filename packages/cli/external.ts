@@ -93,9 +93,19 @@ export type Monitor = {
 type Report = (error: unknown, role?: string) => void | Promise<void>
 type After = (ms: number, run: () => void | Promise<void>) => () => void
 
+/** How long a duty role lost after start-up has to be taken up again before
+ * it is a failure. A worker its supervisor restarts in place declares its
+ * roles again within seconds. */
+export let GRACE = 30_000
+
 /** Continuous coverage, with one inspection/launch at a time. Notifications
  * inspect immediately; polling also catches vanished pids without exit rows.
- * Launch failures retry at most once per interval, even during a change storm. */
+ * What the first inspection finds uncovered is start-up: started at once and
+ * never reported. A role lost after that is reported and started only once it
+ * has stayed unserved for `grace`, since a stand-in started sooner races the
+ * restarting worker for its service leases and keeps them, on this web's
+ * code, for as long as this web runs. Launch failures retry at most once per
+ * interval, even during a change storm. */
 export let monitor = (options: {
   uncovered: () => Promise<string[]>
   start: (roles: string[], signal: AbortSignal) => Promise<void>
@@ -103,12 +113,17 @@ export let monitor = (options: {
   subscribe?: (changed: () => void) => () => void
   signal?: AbortSignal
   interval?: number
+  grace?: number
   after?: After
   now?: () => number
 }): Monitor => {
   let interval = options.interval ?? 1000
   if (!Number.isFinite(interval) || interval <= 0) {
     throw new RangeError('Duty coverage interval must be positive and finite')
+  }
+  let grace = options.grace ?? GRACE
+  if (!Number.isFinite(grace) || grace < 0) {
+    throw new RangeError('Duty coverage grace must be finite, not negative')
   }
   let after: After = options.after ?? ((ms, run) => {
     let timer = setTimeout(run, ms)
@@ -120,7 +135,8 @@ export let monitor = (options: {
   let cancel = () => {}
   let busy: Promise<void> | undefined
   let dirty = false
-  let absent: Set<string> | undefined
+  // Each uncovered role: since when, and whether its loss was reported.
+  let lost: Map<string, { since: number; said: boolean }> | undefined
   let retry = 0
   // A telemetry outage must not prevent restoring coverage or retrying it.
   let report = (error: unknown, role?: string) => {
@@ -134,27 +150,32 @@ export let monitor = (options: {
     try {
       let needed = await options.uncovered()
       if (stop.signal.aborted) return
-      // The first inspection discovers what this web must start. Only a
-      // role lost after that baseline is an unexpected coverage failure.
-      let previous = absent
-      absent = new Set(needed)
-      for (let role of needed) {
-        if (previous && !previous.has(role)) {
-          report(
-            new Error(`No live process serves duty role "${role}"`),
-            role,
-          )
-        }
+      // What the first inspection finds is start-up: due at once, and no
+      // loss to report. A role lost later is due once it outlasts the grace.
+      let at = now()
+      let before = lost
+      let found = (role: string) =>
+        before?.get(role) ??
+          (before
+            ? { since: at, said: false }
+            : { since: -Infinity, said: true })
+      let losses = lost = new Map(needed.map((role) => [role, found(role)]))
+      let due = needed.filter((role) => at - losses.get(role)!.since >= grace)
+      for (let role of due) {
+        let loss = losses.get(role)!
+        if (loss.said) continue
+        loss.said = true
+        report(new Error(`No live process serves duty role "${role}"`), role)
       }
-      if (!needed.length || stop.signal.aborted || now() < retry) return
+      if (!due.length || stop.signal.aborted || now() < retry) return
       // Set before launching: its own process writes can notify us too.
       retry = now() + interval
       try {
-        await options.start(needed, stop.signal)
+        await options.start(due, stop.signal)
       } catch (error) {
         retry = now() + interval
         if (!stop.signal.aborted) {
-          for (let role of needed) report(error, role)
+          for (let role of due) report(error, role)
         }
       }
     } catch (error) {

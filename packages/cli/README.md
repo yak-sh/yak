@@ -494,11 +494,15 @@ and leased services for independent `yak work` processes.
 A web checks coverage, including with `--no-duties`: it reads the unexited
 processes once, then follows the process rows its feed hears, and every second
 asks whether the pids of the processes known to serve a duty still live; a store
-with no feed is read whole each second. An uncovered duty role reports
-immediately to the tracker's durable spool, before an independent replacement is
-started. Failed launches are reported and retried; a draining process withdraws
-its duties before its in-flight work ends. Config `duties: false` disables this
-too, for deliberately inert hosts. Readiness identifies only this invocation's
+with no feed is read whole each second. What is uncovered when the web starts,
+it starts at once. A duty role lost after that has 30 seconds (`GRACE`) to be
+taken up again, as it is when systemd restarts a worker in place; one still
+unserved then reports to the tracker's durable spool, before an independent
+replacement is started. A replacement started sooner would race the restarting
+worker for its service leases and hold them, on the web's code, until the web
+ends. Failed launches are reported and retried; a draining process withdraws its
+duties before its in-flight work ends. Config `duties: false` disables this too,
+for deliberately inert hosts. Readiness identifies only this invocation's
 validated launcher, never a PID inherited from a different worker's environment.
 
 A **process layout** is the config's `processes` list of systemd unit templates.

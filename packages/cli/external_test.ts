@@ -197,7 +197,7 @@ let deferred = <T>() => {
   return { promise, resolve }
 }
 
-let fixture = (initial: string[] = []) => {
+let fixture = (initial: string[] = [], grace = 0) => {
   let time = clock()
   let needed = initial
   let inspect = () => Promise.resolve(needed)
@@ -228,6 +228,7 @@ let fixture = (initial: string[] = []) => {
     },
     signal: control.signal,
     interval: 100,
+    grace,
     now: time.now,
     after: time.after,
   })
@@ -268,41 +269,35 @@ test('initial uncovered duties start without reporting a startup failure', async
   await f.coverage.close()
 })
 
-// Prepare a real private monitor before the test timer; only immutable
-// observations cross into the assertions, never a live fixture or clock.
-let dutyLoss = await (async () => {
-  let f = fixture()
+test('a lost duty has the grace to come back before it is reported or stood in for', async () => {
+  let f = fixture([], 300)
+  let said = () => f.events.map((e) => [e.kind, e.role ?? e.roles])
+  let reports = () => said().filter(([kind]) => kind == 'report').length
   try {
     await f.coverage.checked
-    let initially = f.events.length
+    // A worker restarted in place takes its duties up again within the grace.
     f.needed(['wake'])
-    f.notify()
-    await until(() => f.events.some((e) => e.kind == 'start'))
-    let first = Object.freeze(
-      f.events.filter((e) => e.kind == 'report').map((e) => e.role),
-    )
+    await f.time.advance(200)
+    f.needed([])
+    await f.time.advance(100)
+    assertEquals(said(), [])
+    // One that stays lost is reported once, then stood in for.
+    f.needed(['wake'])
+    await f.time.advance(300)
+    assertEquals(said(), [])
+    await f.time.advance(100)
+    assertEquals(said(), [['report', 'wake'], ['start', ['wake']]])
+    await f.time.advance(100)
+    assertEquals(reports(), 1)
+    // Lost again after it recovered, it is a new loss.
     f.needed([])
     await f.time.advance(100)
     f.needed(['wake'])
-    await f.time.advance(100)
-    return Object.freeze({
-      initially,
-      first,
-      recovered: Object.freeze(
-        f.events.filter((e) => e.kind == 'report').map((e) => e.role),
-      ),
-      starts: f.events.filter((e) => e.kind == 'start').length,
-    })
+    await f.time.advance(400)
+    assertEquals(reports(), 2)
   } finally {
     await f.coverage.close()
   }
-})()
-
-test('covered duty loss notifies immediately and is reported again after recovery', () => {
-  assertEquals(dutyLoss.initially, 0)
-  assertEquals(dutyLoss.first, ['wake'])
-  assertEquals(dutyLoss.recovered, ['wake', 'wake'])
-  assertEquals(dutyLoss.starts, 2)
 })
 
 test('failed recovery retries on a bounded poll, without flooding missing reports', async () => {
