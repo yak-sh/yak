@@ -336,7 +336,7 @@ export async function measure(
     tmuxStarted = true
     await painted(capture, 'Person benchmark target')
     await timed('tui/query-navigation', async () => {
-      await tmux('send-keys', '-t', 'bench', 'h')
+      await tmux('send-keys', '-t', 'bench', 'H')
       await painted(capture, TASKS.toLocaleString('en-US'))
       await tmux('send-keys', '-t', 'bench', 'C-f')
       await painted(capture, 'Person benchmark target')

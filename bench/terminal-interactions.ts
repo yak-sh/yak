@@ -1,6 +1,7 @@
 /** Terminal input waits through the real branch CLI, PTY, HTTP and SQLite.
- * Comments are the terminal's writable text surface: i focuses the composer,
- * typing paints and saves a durable draft, Enter submits it. Inspector title,
+ * Comments are the terminal's writable text surface: G puts the cursor on the
+ * composer, the page's last item, and i types into it; typing paints and saves
+ * a durable draft, Enter submits it. H goes back, as h walks left. Inspector title,
  * body and component edits are deliberately browser-only (inspectIo.edits),
  * so this fixture does not pretend to exercise those unavailable controls.
  */
@@ -186,7 +187,7 @@ export async function measure(
     await timed('tui/query-to-answer', async () => {
       let state = JSON.parse(await Deno.readTextFile(env.TASKS_TUI_STATE))
       if (state.entries[state.at].path == '/?q=.task%20.count') {
-        await keys('h')
+        await keys('H')
         await paint('comment…')
       }
       await keys('/')
@@ -213,8 +214,9 @@ export async function measure(
         })
       }
     })
-    await keys('h')
+    await keys('H')
     await paint('comment…')
+    await keys('G')
     await keys('i')
     // Keystroke timing ends on usable input paint. Submission resets between
     // samples outside that timing; it is measured independently below.
